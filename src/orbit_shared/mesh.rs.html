@@ -162,7 +162,7 @@
 <a href=#162 id=162 data-nosnippet>162</a>    </span><span class="kw">fn </span>test_node_lease_expiry() {
 <a href=#163 id=163 data-nosnippet>163</a>        <span class="kw">let </span>node_id = NodeId::generate(<span class="string">"test"</span>.to_string());
 <a href=#164 id=164 data-nosnippet>164</a>        <span class="kw">let </span>now = Utc::now();
-<a href=#165 id=165 data-nosnippet>165</a>        
+<a href=#165 id=165 data-nosnippet>165</a>
 <a href=#166 id=166 data-nosnippet>166</a>        <span class="kw">let </span>expired_lease = NodeLease::new(
 <a href=#167 id=167 data-nosnippet>167</a>            node_id.clone(),
 <a href=#168 id=168 data-nosnippet>168</a>            now - Duration::minutes(<span class="number">1</span>), <span class="comment">// expired 1 minute ago
@@ -184,7 +184,7 @@
 <a href=#184 id=184 data-nosnippet>184</a>    </span><span class="kw">fn </span>test_node_info_creation() {
 <a href=#185 id=185 data-nosnippet>185</a>        <span class="kw">let </span>node_id = NodeId::generate(<span class="string">"test"</span>.to_string());
 <a href=#186 id=186 data-nosnippet>186</a>        <span class="kw">let </span>node_info = NodeInfo::new(node_id.clone(), <span class="string">"localhost"</span>.to_string(), <span class="number">8080</span>);
-<a href=#187 id=187 data-nosnippet>187</a>        
+<a href=#187 id=187 data-nosnippet>187</a>
 <a href=#188 id=188 data-nosnippet>188</a>        <span class="macro">assert_eq!</span>(node_info.id, node_id);
 <a href=#189 id=189 data-nosnippet>189</a>        <span class="macro">assert_eq!</span>(node_info.url, <span class="string">"localhost"</span>);
 <a href=#190 id=190 data-nosnippet>190</a>        <span class="macro">assert_eq!</span>(node_info.port, <span class="number">8080</span>);
