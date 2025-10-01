@@ -88,7 +88,7 @@
 <a href=#88 id=88 data-nosnippet>88</a>
 <a href=#89 id=89 data-nosnippet>89</a>    <span class="kw">pub fn </span>from_proto(timestamp: <span class="kw-2">&amp;</span>Timestamp) -&gt; DateTime&lt;Utc&gt; {
 <a href=#90 id=90 data-nosnippet>90</a>        DateTime::from_timestamp(timestamp.seconds, timestamp.nanos <span class="kw">as </span>u32)
-<a href=#91 id=91 data-nosnippet>91</a>            .unwrap_or_else(|| Utc::now())
+<a href=#91 id=91 data-nosnippet>91</a>            .unwrap_or_else(Utc::now)
 <a href=#92 id=92 data-nosnippet>92</a>    }
 <a href=#93 id=93 data-nosnippet>93</a>}
 <a href=#94 id=94 data-nosnippet>94</a>

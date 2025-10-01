@@ -153,7 +153,7 @@
 <a href=#153 id=153 data-nosnippet>153</a>
 <a href=#154 id=154 data-nosnippet>154</a>        <span class="kw">match </span>result.result {
 <a href=#155 id=155 data-nosnippet>155</a>            <span class="prelude-val">Ok</span>(value) =&gt; {
-<a href=#156 id=156 data-nosnippet>156</a>                serde_json::from_value(value).map_err(|e| OrbitError::SerializationError(e))
+<a href=#156 id=156 data-nosnippet>156</a>                serde_json::from_value(value).map_err(OrbitError::SerializationError)
 <a href=#157 id=157 data-nosnippet>157</a>            }
 <a href=#158 id=158 data-nosnippet>158</a>            <span class="prelude-val">Err</span>(error) =&gt; <span class="prelude-val">Err</span>(OrbitError::InvocationFailed {
 <a href=#159 id=159 data-nosnippet>159</a>                addressable_type: <span class="self">self</span>.reference.addressable_type.clone(),

@@ -137,7 +137,7 @@
 <a href=#137 id=137 data-nosnippet>137</a>        <span class="comment">// Ensure database directory exists
 <a href=#138 id=138 data-nosnippet>138</a>        </span><span class="kw">if let </span><span class="prelude-val">Some</span>(parent) = config.database_path.parent() {
 <a href=#139 id=139 data-nosnippet>139</a>            tokio::fs::create_dir_all(parent).<span class="kw">await</span>.map_err(|e| {
-<a href=#140 id=140 data-nosnippet>140</a>                OrbitError::internal(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"Failed to create database directory: {}"</span>, e))
+<a href=#140 id=140 data-nosnippet>140</a>                OrbitError::internal(<span class="macro">format!</span>(<span class="string">"Failed to create database directory: {}"</span>, e))
 <a href=#141 id=141 data-nosnippet>141</a>            })<span class="question-mark">?</span>;
 <a href=#142 id=142 data-nosnippet>142</a>        }
 <a href=#143 id=143 data-nosnippet>143</a>
@@ -147,7 +147,7 @@
 <a href=#147 id=147 data-nosnippet>147</a>        <span class="comment">// Configure connection pool
 <a href=#148 id=148 data-nosnippet>148</a>        </span><span class="kw">let </span>pool = SqlitePool::connect(<span class="kw-2">&amp;</span>database_url)
 <a href=#149 id=149 data-nosnippet>149</a>            .<span class="kw">await
-<a href=#150 id=150 data-nosnippet>150</a>            </span>.map_err(|e| OrbitError::internal(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"Failed to connect to database: {}"</span>, e)))<span class="question-mark">?</span>;
+<a href=#150 id=150 data-nosnippet>150</a>            </span>.map_err(|e| OrbitError::internal(<span class="macro">format!</span>(<span class="string">"Failed to connect to database: {}"</span>, e)))<span class="question-mark">?</span>;
 <a href=#151 id=151 data-nosnippet>151</a>
 <a href=#152 id=152 data-nosnippet>152</a>        <span class="kw">let </span>logger = <span class="self">Self </span>{
 <a href=#153 id=153 data-nosnippet>153</a>            pool,
@@ -214,7 +214,7 @@
 <a href=#214 id=214 data-nosnippet>214</a>        sqlx::query(schema_sql)
 <a href=#215 id=215 data-nosnippet>215</a>            .execute(<span class="kw-2">&amp;</span><span class="self">self</span>.pool)
 <a href=#216 id=216 data-nosnippet>216</a>            .<span class="kw">await
-<a href=#217 id=217 data-nosnippet>217</a>            </span>.map_err(|e| OrbitError::internal(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"Failed to initialize schema: {}"</span>, e)))<span class="question-mark">?</span>;
+<a href=#217 id=217 data-nosnippet>217</a>            </span>.map_err(|e| OrbitError::internal(<span class="macro">format!</span>(<span class="string">"Failed to initialize schema: {}"</span>, e)))<span class="question-mark">?</span>;
 <a href=#218 id=218 data-nosnippet>218</a>
 <a href=#219 id=219 data-nosnippet>219</a>        <span class="prelude-val">Ok</span>(())
 <a href=#220 id=220 data-nosnippet>220</a>    }
@@ -225,22 +225,22 @@
 <a href=#225 id=225 data-nosnippet>225</a>            sqlx::query(<span class="string">"PRAGMA journal_mode = WAL"</span>)
 <a href=#226 id=226 data-nosnippet>226</a>                .execute(<span class="kw-2">&amp;</span><span class="self">self</span>.pool)
 <a href=#227 id=227 data-nosnippet>227</a>                .<span class="kw">await
-<a href=#228 id=228 data-nosnippet>228</a>                </span>.map_err(|e| OrbitError::internal(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"Failed to enable WAL: {}"</span>, e)))<span class="question-mark">?</span>;
+<a href=#228 id=228 data-nosnippet>228</a>                </span>.map_err(|e| OrbitError::internal(<span class="macro">format!</span>(<span class="string">"Failed to enable WAL: {}"</span>, e)))<span class="question-mark">?</span>;
 <a href=#229 id=229 data-nosnippet>229</a>        }
 <a href=#230 id=230 data-nosnippet>230</a>
 <a href=#231 id=231 data-nosnippet>231</a>        <span class="comment">// Configure other performance settings
 <a href=#232 id=232 data-nosnippet>232</a>        </span>sqlx::query(<span class="string">"PRAGMA synchronous = NORMAL"</span>)
 <a href=#233 id=233 data-nosnippet>233</a>            .execute(<span class="kw-2">&amp;</span><span class="self">self</span>.pool)
 <a href=#234 id=234 data-nosnippet>234</a>            .<span class="kw">await
-<a href=#235 id=235 data-nosnippet>235</a>            </span>.map_err(|e| OrbitError::internal(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"Failed to set synchronous mode: {}"</span>, e)))<span class="question-mark">?</span>;
+<a href=#235 id=235 data-nosnippet>235</a>            </span>.map_err(|e| OrbitError::internal(<span class="macro">format!</span>(<span class="string">"Failed to set synchronous mode: {}"</span>, e)))<span class="question-mark">?</span>;
 <a href=#236 id=236 data-nosnippet>236</a>        sqlx::query(<span class="string">"PRAGMA cache_size = 10000"</span>)
 <a href=#237 id=237 data-nosnippet>237</a>            .execute(<span class="kw-2">&amp;</span><span class="self">self</span>.pool)
 <a href=#238 id=238 data-nosnippet>238</a>            .<span class="kw">await
-<a href=#239 id=239 data-nosnippet>239</a>            </span>.map_err(|e| OrbitError::internal(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"Failed to set cache size: {}"</span>, e)))<span class="question-mark">?</span>;
+<a href=#239 id=239 data-nosnippet>239</a>            </span>.map_err(|e| OrbitError::internal(<span class="macro">format!</span>(<span class="string">"Failed to set cache size: {}"</span>, e)))<span class="question-mark">?</span>;
 <a href=#240 id=240 data-nosnippet>240</a>        sqlx::query(<span class="string">"PRAGMA temp_store = memory"</span>)
 <a href=#241 id=241 data-nosnippet>241</a>            .execute(<span class="kw-2">&amp;</span><span class="self">self</span>.pool)
 <a href=#242 id=242 data-nosnippet>242</a>            .<span class="kw">await
-<a href=#243 id=243 data-nosnippet>243</a>            </span>.map_err(|e| OrbitError::internal(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"Failed to set temp store: {}"</span>, e)))<span class="question-mark">?</span>;
+<a href=#243 id=243 data-nosnippet>243</a>            </span>.map_err(|e| OrbitError::internal(<span class="macro">format!</span>(<span class="string">"Failed to set temp store: {}"</span>, e)))<span class="question-mark">?</span>;
 <a href=#244 id=244 data-nosnippet>244</a>
 <a href=#245 id=245 data-nosnippet>245</a>        <span class="prelude-val">Ok</span>(())
 <a href=#246 id=246 data-nosnippet>246</a>    }
@@ -269,14 +269,14 @@
 <a href=#269 id=269 data-nosnippet>269</a>    </span><span class="kw">async fn </span>write_batch_internal(<span class="kw-2">&amp;</span><span class="self">self</span>, entries: <span class="kw-2">&amp;</span>[TransactionLogEntry]) -&gt; OrbitResult&lt;()&gt; {
 <a href=#270 id=270 data-nosnippet>270</a>        <span class="kw">let </span><span class="kw-2">mut </span>tx =
 <a href=#271 id=271 data-nosnippet>271</a>            <span class="self">self</span>.pool.begin().<span class="kw">await</span>.map_err(|e| {
-<a href=#272 id=272 data-nosnippet>272</a>                OrbitError::internal(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"Failed to begin transaction: {}"</span>, e))
+<a href=#272 id=272 data-nosnippet>272</a>                OrbitError::internal(<span class="macro">format!</span>(<span class="string">"Failed to begin transaction: {}"</span>, e))
 <a href=#273 id=273 data-nosnippet>273</a>            })<span class="question-mark">?</span>;
 <a href=#274 id=274 data-nosnippet>274</a>
 <a href=#275 id=275 data-nosnippet>275</a>        <span class="kw">for </span>entry <span class="kw">in </span>entries {
 <a href=#276 id=276 data-nosnippet>276</a>            <span class="kw">let </span>persistent_entry = PersistentLogEntry::from(entry.clone());
 <a href=#277 id=277 data-nosnippet>277</a>
 <a href=#278 id=278 data-nosnippet>278</a>            <span class="kw">let </span>event_data = serde_json::to_string(<span class="kw-2">&amp;</span>entry.event)
-<a href=#279 id=279 data-nosnippet>279</a>                .map_err(|e| OrbitError::internal(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"Failed to serialize event: {}"</span>, e)))<span class="question-mark">?</span>;
+<a href=#279 id=279 data-nosnippet>279</a>                .map_err(|e| OrbitError::internal(<span class="macro">format!</span>(<span class="string">"Failed to serialize event: {}"</span>, e)))<span class="question-mark">?</span>;
 <a href=#280 id=280 data-nosnippet>280</a>
 <a href=#281 id=281 data-nosnippet>281</a>            <span class="kw">let </span>details_json = entry
 <a href=#282 id=282 data-nosnippet>282</a>                .details
@@ -299,12 +299,12 @@
 <a href=#299 id=299 data-nosnippet>299</a>            .bind(persistent_entry.checksum)
 <a href=#300 id=300 data-nosnippet>300</a>            .bind(persistent_entry.archived)
 <a href=#301 id=301 data-nosnippet>301</a>            .execute(<span class="kw-2">&amp;mut *</span>tx).<span class="kw">await
-<a href=#302 id=302 data-nosnippet>302</a>            </span>.map_err(|e| OrbitError::internal(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"Failed to insert log entry: {}"</span>, e)))<span class="question-mark">?</span>;
+<a href=#302 id=302 data-nosnippet>302</a>            </span>.map_err(|e| OrbitError::internal(<span class="macro">format!</span>(<span class="string">"Failed to insert log entry: {}"</span>, e)))<span class="question-mark">?</span>;
 <a href=#303 id=303 data-nosnippet>303</a>        }
 <a href=#304 id=304 data-nosnippet>304</a>
 <a href=#305 id=305 data-nosnippet>305</a>        tx.commit()
 <a href=#306 id=306 data-nosnippet>306</a>            .<span class="kw">await
-<a href=#307 id=307 data-nosnippet>307</a>            </span>.map_err(|e| OrbitError::internal(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"Failed to commit batch: {}"</span>, e)))<span class="question-mark">?</span>;
+<a href=#307 id=307 data-nosnippet>307</a>            </span>.map_err(|e| OrbitError::internal(<span class="macro">format!</span>(<span class="string">"Failed to commit batch: {}"</span>, e)))<span class="question-mark">?</span>;
 <a href=#308 id=308 data-nosnippet>308</a>
 <a href=#309 id=309 data-nosnippet>309</a>        <span class="prelude-val">Ok</span>(())
 <a href=#310 id=310 data-nosnippet>310</a>    }
@@ -392,7 +392,7 @@
 <a href=#392 id=392 data-nosnippet>392</a>        .bind(<span class="kw-2">&amp;</span>transaction_id.id)
 <a href=#393 id=393 data-nosnippet>393</a>        .fetch_all(<span class="kw-2">&amp;</span><span class="self">self</span>.pool)
 <a href=#394 id=394 data-nosnippet>394</a>        .<span class="kw">await
-<a href=#395 id=395 data-nosnippet>395</a>        </span>.map_err(|e| OrbitError::internal(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"Failed to query transaction log: {}"</span>, e)))<span class="question-mark">?</span>;
+<a href=#395 id=395 data-nosnippet>395</a>        </span>.map_err(|e| OrbitError::internal(<span class="macro">format!</span>(<span class="string">"Failed to query transaction log: {}"</span>, e)))<span class="question-mark">?</span>;
 <a href=#396 id=396 data-nosnippet>396</a>
 <a href=#397 id=397 data-nosnippet>397</a>        <span class="kw">let </span><span class="kw-2">mut </span>entries = Vec::new();
 <a href=#398 id=398 data-nosnippet>398</a>        <span class="kw">for </span>row <span class="kw">in </span>rows {
@@ -414,7 +414,7 @@
 <a href=#414 id=414 data-nosnippet>414</a>        .bind(end_time)
 <a href=#415 id=415 data-nosnippet>415</a>        .fetch_all(<span class="kw-2">&amp;</span><span class="self">self</span>.pool)
 <a href=#416 id=416 data-nosnippet>416</a>        .<span class="kw">await
-<a href=#417 id=417 data-nosnippet>417</a>        </span>.map_err(|e| OrbitError::internal(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"Failed to query time range: {}"</span>, e)))<span class="question-mark">?</span>;
+<a href=#417 id=417 data-nosnippet>417</a>        </span>.map_err(|e| OrbitError::internal(<span class="macro">format!</span>(<span class="string">"Failed to query time range: {}"</span>, e)))<span class="question-mark">?</span>;
 <a href=#418 id=418 data-nosnippet>418</a>
 <a href=#419 id=419 data-nosnippet>419</a>        <span class="kw">let </span><span class="kw-2">mut </span>entries = Vec::new();
 <a href=#420 id=420 data-nosnippet>420</a>        <span class="kw">for </span>row <span class="kw">in </span>rows {
@@ -431,7 +431,7 @@
 <a href=#431 id=431 data-nosnippet>431</a>        .bind(before_timestamp)
 <a href=#432 id=432 data-nosnippet>432</a>        .execute(<span class="kw-2">&amp;</span><span class="self">self</span>.pool)
 <a href=#433 id=433 data-nosnippet>433</a>        .<span class="kw">await
-<a href=#434 id=434 data-nosnippet>434</a>        </span>.map_err(|e| OrbitError::internal(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"Failed to archive entries: {}"</span>, e)))<span class="question-mark">?</span>;
+<a href=#434 id=434 data-nosnippet>434</a>        </span>.map_err(|e| OrbitError::internal(<span class="macro">format!</span>(<span class="string">"Failed to archive entries: {}"</span>, e)))<span class="question-mark">?</span>;
 <a href=#435 id=435 data-nosnippet>435</a>
 <a href=#436 id=436 data-nosnippet>436</a>        <span class="kw">let </span>archived_count = result.rows_affected();
 <a href=#437 id=437 data-nosnippet>437</a>        <span class="kw">if </span>archived_count &gt; <span class="number">0 </span>{
@@ -464,7 +464,7 @@
 <a href=#464 id=464 data-nosnippet>464</a>        )
 <a href=#465 id=465 data-nosnippet>465</a>        .fetch_one(<span class="kw-2">&amp;</span><span class="self">self</span>.pool)
 <a href=#466 id=466 data-nosnippet>466</a>        .<span class="kw">await
-<a href=#467 id=467 data-nosnippet>467</a>        </span>.map_err(|e| OrbitError::internal(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"Failed to get stats: {}"</span>, e)))<span class="question-mark">?</span>;
+<a href=#467 id=467 data-nosnippet>467</a>        </span>.map_err(|e| OrbitError::internal(<span class="macro">format!</span>(<span class="string">"Failed to get stats: {}"</span>, e)))<span class="question-mark">?</span>;
 <a href=#468 id=468 data-nosnippet>468</a>
 <a href=#469 id=469 data-nosnippet>469</a>        <span class="kw">let </span>database_size = tokio::fs::metadata(<span class="kw-2">&amp;</span><span class="self">self</span>.config.database_path)
 <a href=#470 id=470 data-nosnippet>470</a>            .<span class="kw">await
@@ -503,13 +503,13 @@
 <a href=#503 id=503 data-nosnippet>503</a>        </span>sqlx::query(<span class="string">"VACUUM"</span>)
 <a href=#504 id=504 data-nosnippet>504</a>            .execute(<span class="kw-2">&amp;</span><span class="self">self</span>.pool)
 <a href=#505 id=505 data-nosnippet>505</a>            .<span class="kw">await
-<a href=#506 id=506 data-nosnippet>506</a>            </span>.map_err(|e| OrbitError::internal(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"Failed to vacuum database: {}"</span>, e)))<span class="question-mark">?</span>;
+<a href=#506 id=506 data-nosnippet>506</a>            </span>.map_err(|e| OrbitError::internal(<span class="macro">format!</span>(<span class="string">"Failed to vacuum database: {}"</span>, e)))<span class="question-mark">?</span>;
 <a href=#507 id=507 data-nosnippet>507</a>
 <a href=#508 id=508 data-nosnippet>508</a>        <span class="comment">// Update statistics
 <a href=#509 id=509 data-nosnippet>509</a>        </span>sqlx::query(<span class="string">"ANALYZE"</span>)
 <a href=#510 id=510 data-nosnippet>510</a>            .execute(<span class="kw-2">&amp;</span><span class="self">self</span>.pool)
 <a href=#511 id=511 data-nosnippet>511</a>            .<span class="kw">await
-<a href=#512 id=512 data-nosnippet>512</a>            </span>.map_err(|e| OrbitError::internal(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"Failed to analyze database: {}"</span>, e)))<span class="question-mark">?</span>;
+<a href=#512 id=512 data-nosnippet>512</a>            </span>.map_err(|e| OrbitError::internal(<span class="macro">format!</span>(<span class="string">"Failed to analyze database: {}"</span>, e)))<span class="question-mark">?</span>;
 <a href=#513 id=513 data-nosnippet>513</a>
 <a href=#514 id=514 data-nosnippet>514</a>        <span class="macro">debug!</span>(<span class="string">"Transaction log maintenance completed"</span>);
 <a href=#515 id=515 data-nosnippet>515</a>        <span class="prelude-val">Ok</span>(())
@@ -529,13 +529,13 @@
 <a href=#529 id=529 data-nosnippet>529</a>        .fetch_optional(<span class="kw-2">&amp;</span><span class="self">self</span>.pool)
 <a href=#530 id=530 data-nosnippet>530</a>        .<span class="kw">await
 <a href=#531 id=531 data-nosnippet>531</a>        </span>.map_err(|e| {
-<a href=#532 id=532 data-nosnippet>532</a>            OrbitError::internal(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"Failed to recover transaction state: {}"</span>, e))
+<a href=#532 id=532 data-nosnippet>532</a>            OrbitError::internal(<span class="macro">format!</span>(<span class="string">"Failed to recover transaction state: {}"</span>, e))
 <a href=#533 id=533 data-nosnippet>533</a>        })<span class="question-mark">?</span>;
 <a href=#534 id=534 data-nosnippet>534</a>
 <a href=#535 id=535 data-nosnippet>535</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(row) = row {
 <a href=#536 id=536 data-nosnippet>536</a>            <span class="kw">let </span>event_data: String = row.get(<span class="string">"event_data"</span>);
 <a href=#537 id=537 data-nosnippet>537</a>            <span class="kw">let </span>event: TransactionEvent = serde_json::from_str(<span class="kw-2">&amp;</span>event_data).map_err(|e| {
-<a href=#538 id=538 data-nosnippet>538</a>                OrbitError::internal(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"Failed to deserialize event: {}"</span>, e))
+<a href=#538 id=538 data-nosnippet>538</a>                OrbitError::internal(<span class="macro">format!</span>(<span class="string">"Failed to deserialize event: {}"</span>, e))
 <a href=#539 id=539 data-nosnippet>539</a>            })<span class="question-mark">?</span>;
 <a href=#540 id=540 data-nosnippet>540</a>            <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(event))
 <a href=#541 id=541 data-nosnippet>541</a>        } <span class="kw">else </span>{
@@ -557,7 +557,7 @@
 <a href=#557 id=557 data-nosnippet>557</a>        <span class="kw">let </span>details_str: <span class="prelude-ty">Option</span>&lt;String&gt; = row.get(<span class="string">"details"</span>);
 <a href=#558 id=558 data-nosnippet>558</a>
 <a href=#559 id=559 data-nosnippet>559</a>        <span class="kw">let </span>id = Uuid::parse_str(<span class="kw-2">&amp;</span>id_str)
-<a href=#560 id=560 data-nosnippet>560</a>            .map_err(|e| OrbitError::internal(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"Invalid UUID: {}"</span>, e)))<span class="question-mark">?</span>;
+<a href=#560 id=560 data-nosnippet>560</a>            .map_err(|e| OrbitError::internal(<span class="macro">format!</span>(<span class="string">"Invalid UUID: {}"</span>, e)))<span class="question-mark">?</span>;
 <a href=#561 id=561 data-nosnippet>561</a>
 <a href=#562 id=562 data-nosnippet>562</a>        <span class="kw">let </span>transaction_id = TransactionId {
 <a href=#563 id=563 data-nosnippet>563</a>            id: transaction_id_str,
@@ -566,11 +566,11 @@
 <a href=#566 id=566 data-nosnippet>566</a>        };
 <a href=#567 id=567 data-nosnippet>567</a>
 <a href=#568 id=568 data-nosnippet>568</a>        <span class="kw">let </span>event: TransactionEvent = serde_json::from_str(<span class="kw-2">&amp;</span>event_data)
-<a href=#569 id=569 data-nosnippet>569</a>            .map_err(|e| OrbitError::internal(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"Failed to deserialize event: {}"</span>, e)))<span class="question-mark">?</span>;
+<a href=#569 id=569 data-nosnippet>569</a>            .map_err(|e| OrbitError::internal(<span class="macro">format!</span>(<span class="string">"Failed to deserialize event: {}"</span>, e)))<span class="question-mark">?</span>;
 <a href=#570 id=570 data-nosnippet>570</a>
 <a href=#571 id=571 data-nosnippet>571</a>        <span class="kw">let </span>details = <span class="kw">if let </span><span class="prelude-val">Some</span>(details_str) = details_str {
 <a href=#572 id=572 data-nosnippet>572</a>            <span class="prelude-val">Some</span>(serde_json::from_str(<span class="kw-2">&amp;</span>details_str).map_err(|e| {
-<a href=#573 id=573 data-nosnippet>573</a>                OrbitError::internal(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"Failed to deserialize details: {}"</span>, e))
+<a href=#573 id=573 data-nosnippet>573</a>                OrbitError::internal(<span class="macro">format!</span>(<span class="string">"Failed to deserialize details: {}"</span>, e))
 <a href=#574 id=574 data-nosnippet>574</a>            })<span class="question-mark">?</span>)
 <a href=#575 id=575 data-nosnippet>575</a>        } <span class="kw">else </span>{
 <a href=#576 id=576 data-nosnippet>576</a>            <span class="prelude-val">None
