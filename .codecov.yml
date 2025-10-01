@@ -1,0 +1,42 @@
+codecov:
+  require_ci_to_pass: yes
+  notify:
+    wait_for_ci: yes
+
+coverage:
+  precision: 2
+  round: down
+  range: "50...90"
+  
+  status:
+    project:
+      default:
+        target: auto
+        threshold: 1%
+        if_no_uploads: error
+        if_not_found: success
+        if_ci_failed: error
+    patch:
+      default:
+        target: 70%
+        threshold: 5%
+
+ignore:
+  - "**/*_test.rs"
+  - "**/tests/**"
+  - "**/examples/**"
+  - "**/benches/**"
+  - "**/target/**"
+
+comment:
+  layout: "reach,diff,flags,tree"
+  behavior: default
+  require_changes: no
+  require_base: no
+  require_head: yes
+
+flags:
+  unittests:
+    paths:
+      - "src/"
+      - "orbit-*/src/"
