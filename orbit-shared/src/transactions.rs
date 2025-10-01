@@ -426,7 +426,8 @@ impl TransactionCoordinator {
             vote_timeout,
             self.wait_for_votes(transaction_id, participants.len()),
         )
-        .await).is_err()
+        .await)
+            .is_err()
         {
             self.abort_phase(transaction_id, "Timeout waiting for votes")
                 .await?;

@@ -447,10 +447,7 @@ impl TransactionMessageSender for GrpcTransactionMessageSender {
 
         for target in targets {
             let target_node = self.node_resolver.resolve_addressable(target).await?;
-            targets_by_node
-                .entry(target_node)
-                .or_default()
-                .push(target);
+            targets_by_node.entry(target_node).or_default().push(target);
         }
 
         // Send to each node concurrently

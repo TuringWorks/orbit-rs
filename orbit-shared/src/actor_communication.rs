@@ -10,8 +10,10 @@ use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
 // Type aliases for complex types
-type PendingDiscoveryMap = Arc<RwLock<HashMap<AddressableReference, Vec<oneshot::Sender<Option<NodeId>>>>>>;
-type PendingResponseMap = Arc<RwLock<HashMap<ActorMessageId, oneshot::Sender<Result<serde_json::Value, String>>>>>;
+type PendingDiscoveryMap =
+    Arc<RwLock<HashMap<AddressableReference, Vec<oneshot::Sender<Option<NodeId>>>>>>;
+type PendingResponseMap =
+    Arc<RwLock<HashMap<ActorMessageId, oneshot::Sender<Result<serde_json::Value, String>>>>>;
 
 /// Actor message types for inter-actor communication
 #[derive(Debug, Clone, Serialize, Deserialize)]
