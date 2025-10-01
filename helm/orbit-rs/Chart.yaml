@@ -19,8 +19,8 @@ sources:
 icon: https://raw.githubusercontent.com/TuringWorks/orbit-rs/main/docs/assets/orbit-rs-logo.png
 
 maintainers:
-  - name: Ravindra Boddipalli
-    email: ravindra@turingworks.com
+  - name: rboddipalli@protonmail.com
+    email: rboddipalli@protonmail.com
 
 # dependencies:
 #   - name: prometheus
