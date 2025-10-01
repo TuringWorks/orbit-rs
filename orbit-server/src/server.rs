@@ -96,6 +96,7 @@ pub struct OrbitServer {
     node_info: NodeInfo,
     cluster_manager: ClusterManager,
     addressable_directory: AddressableDirectory,
+    #[allow(dead_code)]
     load_balancer: LoadBalancer,
     connection_service: OrbitConnectionService,
     health_service: OrbitHealthService,

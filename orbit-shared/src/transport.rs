@@ -120,7 +120,7 @@ impl ConnectionPool {
         debug!("Creating new gRPC connection to: {}", endpoint_url);
 
         let mut endpoint = Endpoint::from_shared(endpoint_url.to_string())
-            .map_err(|e| OrbitError::internal(&format!("Invalid endpoint URL: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("Invalid endpoint URL: {}", e)))?;
 
         // Configure endpoint
         endpoint = endpoint
@@ -140,7 +140,7 @@ impl ConnectionPool {
 
         // Create channel
         let channel = endpoint.connect().await.map_err(|e| {
-            OrbitError::network(&format!("Failed to connect to {}: {}", endpoint_url, e))
+            OrbitError::network(format!("Failed to connect to {}: {}", endpoint_url, e))
         })?;
 
         let client = TransactionServiceClient::new(channel)
@@ -319,7 +319,7 @@ impl GrpcTransactionMessageSender {
                         .update_metrics(endpoint_url, latency, false)
                         .await;
 
-                    last_error = Some(OrbitError::network(&format!(
+                    last_error = Some(OrbitError::network(format!(
                         "gRPC error: {} - {}",
                         status.code(),
                         status.message()
@@ -423,7 +423,7 @@ impl TransactionMessageSender for GrpcTransactionMessageSender {
         let response = self.send_with_retry(&endpoint_url, operation).await?;
 
         if !response.success {
-            return Err(OrbitError::network(&format!(
+            return Err(OrbitError::network(format!(
                 "Transaction message failed: {}",
                 response.error_message
             )));
@@ -491,7 +491,7 @@ impl TransactionMessageSender for GrpcTransactionMessageSender {
                     )
                     .await
                     .map_err(|_| OrbitError::timeout("broadcast timeout"))?
-                    .map_err(|e| OrbitError::network(&format!("Broadcast failed: {}", e)))?
+                    .map_err(|e| OrbitError::network(format!("Broadcast failed: {}", e)))?
                     .into_inner();
 
                     if response.failed_sends > 0 {
@@ -656,6 +656,7 @@ mod tests {
     use crate::addressable::Key;
 
     // Mock node resolver for testing
+    #[allow(dead_code)]
     struct MockNodeResolver;
 
     #[async_trait]

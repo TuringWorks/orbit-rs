@@ -153,7 +153,7 @@ impl<T: ?Sized> ActorReference<T> {
 
         match result.result {
             Ok(value) => {
-                serde_json::from_value(value).map_err(|e| OrbitError::SerializationError(e))
+                serde_json::from_value(value).map_err(OrbitError::SerializationError)
             }
             Err(error) => Err(OrbitError::InvocationFailed {
                 addressable_type: self.reference.addressable_type.clone(),

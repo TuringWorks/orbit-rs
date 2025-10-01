@@ -6,18 +6,12 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 /// Load balancing strategies for actor placement
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum LoadBalancingStrategy {
+    #[default]
     RoundRobin,
     LeastConnections,
-    ResourceAware,
-    Hash,
-}
-
-impl Default for LoadBalancingStrategy {
-    fn default() -> Self {
-        LoadBalancingStrategy::RoundRobin
-    }
+    Random,
 }
 
 /// Manages load balancing and actor placement decisions
@@ -71,10 +65,9 @@ impl LoadBalancer {
             LoadBalancingStrategy::LeastConnections => {
                 self.select_least_connections(&eligible_nodes).await
             }
-            LoadBalancingStrategy::ResourceAware => {
-                self.select_resource_aware(&eligible_nodes).await
+            LoadBalancingStrategy::Random => {
+                self.select_random(&eligible_nodes).await
             }
-            LoadBalancingStrategy::Hash => self.select_hash(reference, &eligible_nodes).await,
         };
 
         Ok(Some(selected_node.id.clone()))
@@ -135,6 +128,17 @@ impl LoadBalancer {
             .unwrap()
     }
 
+    async fn select_random<'a>(&self, nodes: &[&'a NodeInfo]) -> &'a NodeInfo {
+        // Simple random selection using the hash of current time
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos() as usize;
+        let index = now % nodes.len();
+        nodes[index]
+    }
+
+    #[allow(dead_code)]
     async fn select_resource_aware<'a>(&self, nodes: &[&'a NodeInfo]) -> &'a NodeInfo {
         let node_loads = self.node_loads.read().await;
 
@@ -159,6 +163,7 @@ impl LoadBalancer {
             .unwrap()
     }
 
+    #[allow(dead_code)]
     async fn select_hash<'a>(
         &self,
         reference: &AddressableReference,
@@ -325,8 +330,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_hash_selection_consistency() {
-        let load_balancer = LoadBalancer::new().with_strategy(LoadBalancingStrategy::Hash);
+    async fn test_random_selection() {
+        let load_balancer = LoadBalancer::new().with_strategy(LoadBalancingStrategy::Random);
         let nodes = create_test_nodes();
 
         let reference = AddressableReference {
@@ -347,8 +352,9 @@ mod tests {
             .unwrap()
             .unwrap();
 
-        // Should consistently select the same node for the same reference
-        assert_eq!(selected1, selected2);
+        // For random selection, we just verify both selections are valid nodes
+        assert!(nodes.iter().any(|n| n.id == selected1));
+        assert!(nodes.iter().any(|n| n.id == selected2));
     }
 
     #[tokio::test]

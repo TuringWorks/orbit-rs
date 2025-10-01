@@ -6,6 +6,7 @@ use orbit_shared::{
     exception::OrbitResult,
 };
 use serde::{Deserialize, Serialize};
+#[allow(clippy::single_component_path_imports)]
 use serde_json;
 use std::time::Duration;
 use tracing::{error, info};
@@ -62,6 +63,7 @@ pub struct CounterState {
 }
 
 /// Methods available on counter actors
+#[allow(async_fn_in_trait)]
 pub trait CounterMethods {
     async fn increment(&mut self, message: IncrementMessage) -> OrbitResult<i64>;
     async fn decrement(&mut self, message: DecrementMessage) -> OrbitResult<i64>;
@@ -170,6 +172,7 @@ pub struct CoordinatorStats {
     pub total_operations: u64,
 }
 
+#[allow(async_fn_in_trait)]
 pub trait CoordinatorMethods {
     async fn register_counter(&mut self, message: RegisterCounterMessage) -> OrbitResult<()>;
     async fn broadcast_increment(

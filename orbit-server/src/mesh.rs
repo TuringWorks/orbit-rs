@@ -34,7 +34,7 @@ impl AddressableDirectory {
         // Update node addressables mapping
         self.node_addressables
             .entry(node_id)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(reference.clone());
 
         tracing::debug!("Registered lease for {}", reference);

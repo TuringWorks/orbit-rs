@@ -54,6 +54,7 @@ impl BankAccount {
 /// Mock bank service that manages accounts and participates in transactions
 #[derive(Debug)]
 pub struct BankService {
+    #[allow(dead_code)]
     node_id: NodeId,
     accounts: Arc<RwLock<HashMap<String, BankAccount>>>,
     /// Pending transaction operations (for 2-phase commit)
@@ -106,7 +107,7 @@ impl BankService {
         for operation in operations {
             let banking_op: BankingOperation =
                 serde_json::from_value(operation.operation_data.clone())
-                    .map_err(|e| OrbitError::internal(&format!("Invalid operation data: {}", e)))?;
+                    .map_err(|e| OrbitError::internal(format!("Invalid operation data: {}", e)))?;
 
             // Extract account ID from the actor reference
             let account_id = match &operation.target_actor.key {
@@ -172,6 +173,7 @@ impl BankService {
         let _accounts = self.accounts.write().await;
 
         for operation in &operations {
+            #[allow(clippy::let_unit_value)]
             let _operation_data = match operation {
                 BankingOperation::Debit { .. }
                 | BankingOperation::Credit { .. }
@@ -279,6 +281,7 @@ pub struct MockTransactionMessageSender {
 }
 
 impl MockTransactionMessageSender {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self {
             participants: Arc::new(RwLock::new(HashMap::new())),

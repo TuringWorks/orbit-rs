@@ -10,6 +10,7 @@ use tonic::{Request, Response, Status, Streaming};
 /// Connection service implementation for handling message streams
 #[derive(Debug, Default, Clone)]
 pub struct OrbitConnectionService {
+    #[allow(dead_code)]
     connections: Arc<Mutex<HashMap<String, mpsc::UnboundedSender<MessageProto>>>>,
 }
 
@@ -142,6 +143,7 @@ impl health_service_server::HealthService for OrbitHealthService {
 mod tests {
     use super::health_service_server::HealthService;
     use super::*;
+    #[allow(unused_imports)]
     use tokio_test;
 
     #[tokio::test]

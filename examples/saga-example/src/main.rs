@@ -11,7 +11,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::sleep;
-use tracing::{debug, error, info, warn};
+use tracing::{error, info, warn};
+#[allow(unused_imports)]
+use tracing::debug;
 
 /// Order data structure
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -37,6 +39,7 @@ pub struct PaymentProcessingStep {
 }
 
 impl PaymentProcessingStep {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self {
             metadata: SagaStepMetadata {
@@ -157,6 +160,7 @@ pub struct InventoryReservationStep {
 }
 
 impl InventoryReservationStep {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self {
             metadata: SagaStepMetadata {
@@ -299,6 +303,7 @@ pub struct ShippingArrangementStep {
 }
 
 impl ShippingArrangementStep {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self {
             metadata: SagaStepMetadata {
@@ -424,6 +429,7 @@ pub struct OrderConfirmationStep {
 }
 
 impl OrderConfirmationStep {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self {
             metadata: SagaStepMetadata {

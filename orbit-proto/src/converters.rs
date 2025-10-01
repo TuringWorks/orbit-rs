@@ -88,7 +88,7 @@ impl TimestampConverter {
 
     pub fn from_proto(timestamp: &Timestamp) -> DateTime<Utc> {
         DateTime::from_timestamp(timestamp.seconds, timestamp.nanos as u32)
-            .unwrap_or_else(|| Utc::now())
+            .unwrap_or_else(Utc::now)
     }
 }
 

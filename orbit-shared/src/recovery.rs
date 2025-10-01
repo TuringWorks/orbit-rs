@@ -217,7 +217,7 @@ impl TransactionRecoveryManager {
 
         // Persist checkpoint to log
         let _checkpoint_data = serde_json::to_value(&checkpoint)
-            .map_err(|e| OrbitError::internal(&format!("Failed to serialize checkpoint: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("Failed to serialize checkpoint: {}", e)))?;
 
         // This would ideally be stored in a dedicated recovery log
         debug!(
