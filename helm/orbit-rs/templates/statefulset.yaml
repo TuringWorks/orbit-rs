@@ -16,7 +16,7 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        checksum/config: {{ include "orbit-rs.configmap" . | sha256sum }}
         prometheus.io/scrape: "true"
         prometheus.io/port: "{{ .Values.orbitServer.service.metricsPort }}"
         prometheus.io/path: "/metrics"
