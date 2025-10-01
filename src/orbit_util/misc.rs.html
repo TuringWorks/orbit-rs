@@ -50,6 +50,6 @@
 <a href=#50 id=50 data-nosnippet>50</a>    <span class="attr">#[test]
 <a href=#51 id=51 data-nosnippet>51</a>    </span><span class="kw">fn </span>test_random_int_range() {
 <a href=#52 id=52 data-nosnippet>52</a>        <span class="kw">let </span>n = RngUtils::random_int(<span class="number">10</span>, <span class="number">20</span>);
-<a href=#53 id=53 data-nosnippet>53</a>        <span class="macro">assert!</span>(n &gt;= <span class="number">10 </span>&amp;&amp; n &lt;= <span class="number">20</span>);
+<a href=#53 id=53 data-nosnippet>53</a>        <span class="macro">assert!</span>((<span class="number">10</span>..=<span class="number">20</span>).contains(<span class="kw-2">&amp;</span>n));
 <a href=#54 id=54 data-nosnippet>54</a>    }
 <a href=#55 id=55 data-nosnippet>55</a>}</code></pre></div></section></main></body></html>

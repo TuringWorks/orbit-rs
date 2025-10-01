@@ -395,7 +395,7 @@
 <a href=#395 id=395 data-nosnippet>395</a></span><span class="kw">mod </span>tests {
 <a href=#396 id=396 data-nosnippet>396</a>    <span class="kw">use super</span>::<span class="kw-2">*</span>;
 <a href=#397 id=397 data-nosnippet>397</a>    <span class="kw">use </span><span class="kw">crate</span>::consensus::{RaftConfig, RaftConsensus};
-<a href=#398 id=398 data-nosnippet>398</a>    <span class="kw">use </span>tokio::time::{timeout, Duration};
+<a href=#398 id=398 data-nosnippet>398</a>    <span class="kw">use </span>tokio::time::Duration;
 <a href=#399 id=399 data-nosnippet>399</a>
 <a href=#400 id=400 data-nosnippet>400</a>    <span class="attr">#[tokio::test]
 <a href=#401 id=401 data-nosnippet>401</a>    </span><span class="kw">async fn </span>test_grpc_transport_creation() {
@@ -439,6 +439,5 @@
 <a href=#439 id=439 data-nosnippet>439</a>        <span class="kw">let </span>_server = handler.into_server();
 <a href=#440 id=440 data-nosnippet>440</a>
 <a href=#441 id=441 data-nosnippet>441</a>        <span class="comment">// Server created successfully
-<a href=#442 id=442 data-nosnippet>442</a>        </span><span class="macro">assert!</span>(<span class="bool-val">true</span>);
-<a href=#443 id=443 data-nosnippet>443</a>    }
-<a href=#444 id=444 data-nosnippet>444</a>}</code></pre></div></section></main></body></html>
+<a href=#442 id=442 data-nosnippet>442</a>    </span>}
+<a href=#443 id=443 data-nosnippet>443</a>}</code></pre></div></section></main></body></html>
