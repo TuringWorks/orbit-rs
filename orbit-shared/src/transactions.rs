@@ -422,11 +422,11 @@ impl TransactionCoordinator {
 
         // Wait for votes with timeout
         let vote_timeout = transaction.timeout / 2; // Use half the transaction timeout
-        if let Err(_) = timeout(
+        if (timeout(
             vote_timeout,
             self.wait_for_votes(transaction_id, participants.len()),
         )
-        .await
+        .await).is_err()
         {
             self.abort_phase(transaction_id, "Timeout waiting for votes")
                 .await?;

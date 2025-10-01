@@ -50,35 +50,20 @@ impl fmt::Display for NodeId {
 }
 
 /// Capabilities that a node can provide
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct NodeCapabilities {
     pub addressable_types: Vec<String>,
     pub max_addressables: Option<u32>,
     pub tags: HashMap<String, String>,
 }
 
-impl Default for NodeCapabilities {
-    fn default() -> Self {
-        Self {
-            addressable_types: Vec::new(),
-            max_addressables: None,
-            tags: HashMap::new(),
-        }
-    }
-}
-
 /// Current status of a node
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum NodeStatus {
+    #[default]
     Active,
     Draining,
     Stopped,
-}
-
-impl Default for NodeStatus {
-    fn default() -> Self {
-        NodeStatus::Active
-    }
 }
 
 /// Information about a node in the cluster

@@ -271,7 +271,7 @@ impl ElectionStateManager {
             let mut state = self.state.write().await;
             state
                 .vote_for(candidate.clone(), term)
-                .map_err(|e| OrbitError::configuration(e))?;
+                .map_err(OrbitError::configuration)?;
         }
 
         self.save().await?;

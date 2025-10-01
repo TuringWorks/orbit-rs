@@ -468,7 +468,7 @@ impl ActorMessageRouter {
 
         // Wait for response with timeout
         match tokio::time::timeout(timeout, receiver).await {
-            Ok(Ok(result)) => result.map_err(|e| OrbitError::internal(e)),
+            Ok(Ok(result)) => result.map_err(OrbitError::internal),
             Ok(Err(_)) => Err(OrbitError::internal("Response channel closed")),
             Err(_) => {
                 // Clean up pending response on timeout
@@ -543,7 +543,7 @@ impl ActorMessageRouter {
         if let ActorMessage::Response { result, .. } = message {
             let mut pending = self.pending_responses.write().await;
             if let Some(sender) = pending.remove(&request_id) {
-                if let Err(_) = sender.send(result) {
+                if sender.send(result).is_err() {
                     warn!("Failed to deliver response for request: {:?}", request_id);
                 }
             } else {

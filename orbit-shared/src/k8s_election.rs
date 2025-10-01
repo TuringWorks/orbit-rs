@@ -700,6 +700,12 @@ pub struct MockLeaseClient {
     leases: Arc<RwLock<HashMap<String, K8sLease>>>,
 }
 
+impl Default for MockLeaseClient {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MockLeaseClient {
     pub fn new() -> Self {
         Self {

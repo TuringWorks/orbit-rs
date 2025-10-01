@@ -449,7 +449,7 @@ impl TransactionMessageSender for GrpcTransactionMessageSender {
             let target_node = self.node_resolver.resolve_addressable(target).await?;
             targets_by_node
                 .entry(target_node)
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(target);
         }
 
@@ -666,7 +666,7 @@ mod tests {
 
         async fn resolve_addressable(
             &self,
-            addressable: &AddressableReference,
+            _addressable: &AddressableReference,
         ) -> OrbitResult<NodeId> {
             Ok(NodeId::new("test-node".to_string(), "default".to_string()))
         }
