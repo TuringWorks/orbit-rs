@@ -11,9 +11,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::sleep;
-use tracing::{error, info, warn};
 #[allow(unused_imports)]
 use tracing::debug;
+use tracing::{error, info, warn};
 
 /// Order data structure
 #[derive(Debug, Clone, Serialize, Deserialize)]

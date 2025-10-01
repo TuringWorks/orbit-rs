@@ -152,9 +152,7 @@ impl<T: ?Sized> ActorReference<T> {
         let result = self.invocation_system.send_invocation(invocation).await?;
 
         match result.result {
-            Ok(value) => {
-                serde_json::from_value(value).map_err(OrbitError::SerializationError)
-            }
+            Ok(value) => serde_json::from_value(value).map_err(OrbitError::SerializationError),
             Err(error) => Err(OrbitError::InvocationFailed {
                 addressable_type: self.reference.addressable_type.clone(),
                 method: method.to_string(),

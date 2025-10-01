@@ -202,8 +202,9 @@ impl ConnectionPool {
             let metrics = self.connection_metrics.read().await;
             for (endpoint, metric) in metrics.iter() {
                 // Remove if idle too long OR too old
-                if now.duration_since(metric.last_used) > max_idle_time 
-                    || now.duration_since(metric.created_at) > max_connection_age {
+                if now.duration_since(metric.last_used) > max_idle_time
+                    || now.duration_since(metric.created_at) > max_connection_age
+                {
                     to_remove.push(endpoint.clone());
                 }
             }

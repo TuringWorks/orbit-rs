@@ -267,10 +267,11 @@ impl SqliteTransactionLogger {
 
     /// Internal batch write implementation
     async fn write_batch_internal(&self, entries: &[TransactionLogEntry]) -> OrbitResult<()> {
-        let mut tx =
-            self.pool.begin().await.map_err(|e| {
-                OrbitError::internal(format!("Failed to begin transaction: {}", e))
-            })?;
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .map_err(|e| OrbitError::internal(format!("Failed to begin transaction: {}", e)))?;
 
         for entry in entries {
             let persistent_entry = PersistentLogEntry::from(entry.clone());
@@ -528,15 +529,12 @@ impl PersistentTransactionLogger for SqliteTransactionLogger {
         .bind(&transaction_id.id)
         .fetch_optional(&self.pool)
         .await
-        .map_err(|e| {
-            OrbitError::internal(format!("Failed to recover transaction state: {}", e))
-        })?;
+        .map_err(|e| OrbitError::internal(format!("Failed to recover transaction state: {}", e)))?;
 
         if let Some(row) = row {
             let event_data: String = row.get("event_data");
-            let event: TransactionEvent = serde_json::from_str(&event_data).map_err(|e| {
-                OrbitError::internal(format!("Failed to deserialize event: {}", e))
-            })?;
+            let event: TransactionEvent = serde_json::from_str(&event_data)
+                .map_err(|e| OrbitError::internal(format!("Failed to deserialize event: {}", e)))?;
             Ok(Some(event))
         } else {
             Ok(None)

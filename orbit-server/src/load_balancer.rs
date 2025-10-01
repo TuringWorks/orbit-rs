@@ -65,9 +65,7 @@ impl LoadBalancer {
             LoadBalancingStrategy::LeastConnections => {
                 self.select_least_connections(&eligible_nodes).await
             }
-            LoadBalancingStrategy::Random => {
-                self.select_random(&eligible_nodes).await
-            }
+            LoadBalancingStrategy::Random => self.select_random(&eligible_nodes).await,
         };
 
         Ok(Some(selected_node.id.clone()))

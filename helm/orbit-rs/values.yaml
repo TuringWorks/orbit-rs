@@ -1,11 +1,9 @@
 # Default values for orbit-rs Helm chart
-
 # Global configuration
 global:
   imageRegistry: ""
   imagePullSecrets: []
   storageClass: ""
-
 # Orbit-RS server configuration
 orbitServer:
   # Image configuration
@@ -15,10 +13,8 @@ orbitServer:
     pullPolicy: IfNotPresent
     # Overrides the image tag whose default is the chart appVersion
     # tag: ""
-
   # Deployment configuration
   replicaCount: 3
-  
   # Pod configuration
   podAnnotations: {}
   podSecurityContext:
@@ -26,7 +22,6 @@ orbitServer:
     runAsUser: 1001
     runAsGroup: 1001
     fsGroup: 1001
-  
   securityContext:
     allowPrivilegeEscalation: false
     readOnlyRootFilesystem: true
@@ -35,7 +30,6 @@ orbitServer:
     capabilities:
       drop:
       - ALL
-
   # Service configuration
   service:
     type: ClusterIP
@@ -43,7 +37,6 @@ orbitServer:
     healthPort: 8080
     metricsPort: 9090
     annotations: {}
-    
   # External service (LoadBalancer)
   externalService:
     enabled: false
@@ -54,7 +47,6 @@ orbitServer:
     #   service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
     #   service.beta.kubernetes.io/azure-load-balancer-internal: "false"
     #   cloud.google.com/load-balancer-type: "External"
-
   # Ingress configuration
   ingress:
     enabled: false
@@ -73,7 +65,6 @@ orbitServer:
     #  - secretName: orbit-rs-tls
     #    hosts:
     #      - orbit-rs.local
-
   # Resource configuration
   resources:
     requests:
@@ -82,7 +73,6 @@ orbitServer:
     limits:
       memory: "2Gi"
       cpu: "1000m"
-
   # Health checks
   livenessProbe:
     enabled: true
@@ -94,7 +84,6 @@ orbitServer:
     timeoutSeconds: 5
     failureThreshold: 3
     successThreshold: 1
-
   readinessProbe:
     enabled: true
     httpGet:
@@ -105,7 +94,6 @@ orbitServer:
     timeoutSeconds: 3
     failureThreshold: 3
     successThreshold: 1
-
   startupProbe:
     enabled: true
     httpGet:
@@ -116,7 +104,6 @@ orbitServer:
     timeoutSeconds: 3
     failureThreshold: 30
     successThreshold: 1
-
   # Node selection
   nodeSelector: {}
   tolerations: []
@@ -133,15 +120,12 @@ orbitServer:
               values:
               - orbit-rs
           topologyKey: kubernetes.io/hostname
-
   # Environment variables
   env: []
   envFrom: []
-
   # Volume mounts (in addition to data volume)
   extraVolumeMounts: []
   extraVolumes: []
-
 # Persistence configuration
 persistence:
   enabled: true
@@ -149,7 +133,6 @@ persistence:
   accessMode: ReadWriteOnce
   size: 10Gi
   annotations: {}
-
 # Configuration
 config:
   # Server configuration
@@ -157,13 +140,11 @@ config:
     bindAddress: "0.0.0.0:50051"
     healthBindAddress: "0.0.0.0:8080"
     metricsBindAddress: "0.0.0.0:9090"
-  
   # Cluster configuration
   cluster:
     discoveryMode: "kubernetes"
     leaseDurationSeconds: 30
     leaseRenewIntervalSeconds: 10
-  
   # Transaction configuration
   transactions:
     databasePath: "/app/data/orbit_transactions.db"
@@ -171,42 +152,35 @@ config:
     enableWal: true
     recoveryTimeoutSeconds: 300
     maxRecoveryAttempts: 3
-  
   # Saga configuration
   saga:
     maxExecutionTimeSeconds: 3600
     defaultStepTimeoutSeconds: 300
     maxRetryAttempts: 3
     enableAutomaticFailover: true
-  
   # Logging configuration
   logging:
     level: "info"
     format: "json"
-  
   # Performance tuning
   performance:
     workerThreads: 4
     maxBlockingThreads: 512
     threadStackSize: 2097152
-  
   # TLS configuration
   tls:
     enabled: false
     # certFile: "/app/certs/tls.crt"
     # keyFile: "/app/certs/tls.key"
     # caFile: "/app/certs/ca.crt"
-
 # ServiceAccount configuration
 serviceAccount:
   create: true
   annotations: {}
   name: ""
-
 # RBAC configuration
 rbac:
   create: true
-
 # Monitoring configuration
 monitoring:
   # Enable/disable dependencies
@@ -221,14 +195,12 @@ monitoring:
     scrapeTimeout: 10s
     honorLabels: true
     additionalLabels: {}
-  
   # PodMonitor for Prometheus Operator
   podMonitor:
     enabled: false
     interval: 30s
     scrapeTimeout: 10s
     additionalLabels: {}
-  
   # Prometheus rules
   prometheusRule:
     enabled: false
@@ -243,13 +215,11 @@ monitoring:
         annotations:
           summary: "Orbit-RS server is down"
           description: "Orbit-RS server {{ $labels.instance }} has been down for more than 1 minute."
-  
   # Grafana dashboard
   grafanaDashboard:
     enabled: false
     label: grafana_dashboard
     labelValue: "1"
-
 # Autoscaling configuration
 autoscaling:
   enabled: false
@@ -257,13 +227,11 @@ autoscaling:
   maxReplicas: 10
   targetCPUUtilizationPercentage: 70
   targetMemoryUtilizationPercentage: 80
-
 # Pod Disruption Budget
 podDisruptionBudget:
   enabled: true
   minAvailable: 2
   # maxUnavailable: 1
-
 # Network Policy
 networkPolicy:
   enabled: false
@@ -272,14 +240,12 @@ networkPolicy:
     - Egress
   ingress: []
   egress: []
-
 # External dependencies (optional)
 dependencies:
   # etcd for distributed coordination
   etcd:
     enabled: false
     endpoints: []
-  
   # External database (if not using embedded SQLite)
   database:
     enabled: false
@@ -291,7 +257,6 @@ dependencies:
     password: ""
     existingSecret: ""
     existingSecretPasswordKey: password
-
 # Test configuration
 tests:
   enabled: true
