@@ -50,6 +50,6 @@ mod tests {
     #[test]
     fn test_random_int_range() {
         let n = RngUtils::random_int(10, 20);
-        assert!(n >= 10 && n <= 20);
+        assert!((10..=20).contains(&n));
     }
 }

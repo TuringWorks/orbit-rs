@@ -395,7 +395,7 @@ pub async fn start_raft_server(
 mod tests {
     use super::*;
     use crate::consensus::{RaftConfig, RaftConsensus};
-    use tokio::time::{timeout, Duration};
+    use tokio::time::Duration;
 
     #[tokio::test]
     async fn test_grpc_transport_creation() {
@@ -439,6 +439,5 @@ mod tests {
         let _server = handler.into_server();
 
         // Server created successfully
-        assert!(true);
     }
 }
