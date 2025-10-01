@@ -17,28 +17,28 @@ services:
       - ORBIT_DISCOVERY_DNS=orbit-server
       - ORBIT_ELECTION_METHOD=raft
       - ORBIT_ENABLE_RAFT_FALLBACK=false
-      
+
       # Node Configuration
       - RUST_LOG=info
       - RUST_BACKTRACE=1
       - ORBIT_NODE_ID=orbit-server-${HOSTNAME}
       - ORBIT_CLUSTER_NAME=orbit-compose-cluster
-      
+
       # Network Configuration
       - ORBIT_GRPC_PORT=50051
       - ORBIT_HEALTH_PORT=8080
       - ORBIT_METRICS_PORT=9090
-      
+
       # Election Timing
       - ORBIT_ELECTION_TIMEOUT_MIN=150ms
       - ORBIT_ELECTION_TIMEOUT_MAX=300ms
       - ORBIT_HEARTBEAT_INTERVAL=50ms
-      
+
       # Storage Configuration
       - ORBIT_DATA_DIR=/app/data
       - ORBIT_ELECTION_STATE_PATH=/app/data/election-state.json
       - ORBIT_TRANSACTION_LOG_PATH=/app/data/transactions.db
-      
+
     ports:
       - "50051"  # gRPC port (internal)
       - "8080"   # Health check port
@@ -121,7 +121,7 @@ volumes:
   orbit_data:
     driver: local
   orbit_logs:
-    driver: local  
+    driver: local
   prometheus_data:
     driver: local
   grafana_data:
@@ -140,7 +140,7 @@ services:
     deploy:
       replicas: 1
 
----  
+---
 # Override for production environment
 version: '3.8'
 services:

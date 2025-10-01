@@ -41,7 +41,7 @@ spec:
       annotations:
         summary: "Orbit-RS server is down"
         description: "Orbit-RS server {{ $labels.instance }} has been down for more than 1 minute."
-    
+
     - alert: OrbitServerHighMemoryUsage
       expr: container_memory_usage_bytes{container="orbit-server"} / container_spec_memory_limit_bytes{container="orbit-server"} > 0.9
       for: 5m
@@ -50,7 +50,7 @@ spec:
       annotations:
         summary: "Orbit-RS server high memory usage"
         description: "Orbit-RS server {{ $labels.instance }} memory usage is above 90% for more than 5 minutes."
-    
+
     - alert: OrbitServerHighCPUUsage
       expr: rate(container_cpu_usage_seconds_total{container="orbit-server"}[5m]) / container_spec_cpu_quota{container="orbit-server"} * 100 > 80
       for: 10m
@@ -59,7 +59,7 @@ spec:
       annotations:
         summary: "Orbit-RS server high CPU usage"
         description: "Orbit-RS server {{ $labels.instance }} CPU usage is above 80% for more than 10 minutes."
-    
+
     # Transaction-specific alerts
     - alert: OrbitTransactionFailureRate
       expr: rate(orbit_transactions_failed_total[5m]) / rate(orbit_transactions_total[5m]) > 0.1
@@ -69,7 +69,7 @@ spec:
       annotations:
         summary: "High transaction failure rate"
         description: "Transaction failure rate is above 10% for more than 2 minutes."
-    
+
     - alert: OrbitSagaCompensationRate
       expr: rate(orbit_sagas_compensated_total[5m]) / rate(orbit_sagas_total[5m]) > 0.2
       for: 5m
@@ -78,7 +78,7 @@ spec:
       annotations:
         summary: "High saga compensation rate"
         description: "Saga compensation rate is above 20% for more than 5 minutes."
-    
+
     - alert: OrbitRecoveryFailure
       expr: increase(orbit_recovery_failed_total[10m]) > 3
       for: 0m

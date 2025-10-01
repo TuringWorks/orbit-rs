@@ -13,7 +13,7 @@ global:
 kubernetes:
   namespace: "orbit-rs"
   service_name: "orbit-server"
-  
+
   # Leader election configuration
   leader_election:
     enabled: true
@@ -22,12 +22,12 @@ kubernetes:
     renew_deadline: 20s
     retry_period: 5s
     enable_raft_fallback: true
-  
+
   # Service discovery
   discovery:
     method: "kubernetes_api"
     service_account: "orbit-server"
-    
+
   # StatefulSet configuration
   statefulset:
     replicas: 3
@@ -49,7 +49,7 @@ kubernetes:
           value: "3"
         - name: ORBIT_DISCOVERY_DNS
           value: "orbit-server-headless.orbit-rs.svc.cluster.local"
-      
+
   # RBAC permissions for leader election
   rbac:
     enable_leader_election: true
@@ -71,18 +71,18 @@ docker_compose:
   service:
     name: "orbit-server"
     replicas: 3
-    
+
   # Leader election (uses Raft consensus)
   leader_election:
     enabled: true
     method: "raft"
     enable_k8s_fallback: false
-    
+
   # Node discovery
   discovery:
     method: "compose_dns"
     compose_project: "${COMPOSE_PROJECT_NAME}"
-    
+
   # Environment variables for compose
   environment:
     - DEPLOYMENT_MODE=docker_compose
@@ -99,28 +99,28 @@ standalone:
       - "node-1.orbit.local:50051"
       - "node-2.orbit.local:50051"
       - "node-3.orbit.local:50051"
-      
+
   # Leader election (Raft only)
   leader_election:
     enabled: true
     method: "raft"
     enable_k8s_fallback: false
-    
+
   # Node discovery methods
   discovery:
     method: "static"  # or "dns", "consul", "etcd"
-    
+
     # DNS discovery configuration
     dns:
       service_name: "orbit-cluster.local"
       port: 50051
-      
+
     # Consul discovery configuration
     consul:
       address: "consul.service.consul:8500"
       service_name: "orbit-server"
       health_check: true
-      
+
     # etcd discovery configuration
     etcd:
       endpoints:
@@ -137,7 +137,7 @@ security:
     cert_file: "/app/certs/tls.crt"
     key_file: "/app/certs/tls.key"
     ca_file: "/app/certs/ca.crt"
-    
+
   # Authentication
   auth:
     enabled: false
@@ -151,7 +151,7 @@ storage:
     path: "/app/data/election-state.json"
     backup_enabled: true
     backup_interval: "1h"
-    
+
   # Transaction logs
   transaction_logs:
     path: "/app/data/transactions.db"
@@ -164,18 +164,18 @@ monitoring:
     enabled: true
     port: 9090
     path: "/metrics"
-    
+
   # Health checks
   health:
     enabled: true
     port: 8080
     path: "/health"
-    
+
   # Logging
   logging:
     level: "info"
     format: "json"
-    
+
 # Performance tuning
 performance:
   # Resource limits
@@ -184,12 +184,12 @@ performance:
     memory_limit: "2Gi"
     cpu_request: "500m"
     memory_request: "1Gi"
-    
+
   # Connection pooling
   connection_pool:
     max_connections: 100
     idle_timeout: "30s"
-    
+
   # Batch processing
   batch:
     max_batch_size: 1000

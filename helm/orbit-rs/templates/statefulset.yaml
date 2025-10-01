@@ -168,7 +168,7 @@ spec:
         {{- include "orbit-rs.labels" . | nindent 8 }}
         app.kubernetes.io/component: data
     spec:
-      accessModes: 
+      accessModes:
         - {{ .Values.persistence.accessMode | quote }}
       {{- if .Values.persistence.storageClass }}
       {{- if eq "-" .Values.persistence.storageClass }}
