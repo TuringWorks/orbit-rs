@@ -6,8 +6,9 @@ authors.workspace = true
 license.workspace = true
 
 [[bin]]
-name = "main"
+name = "distributed-transactions"
 path = "src/main.rs"
+doc = false
 
 [dependencies]
 orbit-shared = { path = "../../orbit-shared" }

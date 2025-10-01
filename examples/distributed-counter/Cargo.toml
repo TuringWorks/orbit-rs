@@ -3,6 +3,11 @@ name = "distributed-counter"
 version = "0.1.0"
 edition = "2021"
 
+[[bin]]
+name = "distributed-counter"
+path = "src/main.rs"
+doc = false
+
 [dependencies]
 orbit-client = { path = "../../orbit-client" }
 orbit-server = { path = "../../orbit-server" }
