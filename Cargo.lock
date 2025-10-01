@@ -647,6 +647,7 @@ dependencies = [
  "orbit-server",
  "orbit-shared",
  "serde",
+ "serde_json",
  "tokio",
  "tracing",
  "tracing-subscriber",

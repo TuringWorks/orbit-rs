@@ -1,14 +1,14 @@
 use async_trait::async_trait;
-use orbit_client::{OrbitClient, OrbitClientConfig};
-use orbit_server::{OrbitServer, OrbitServerConfig};
+use orbit_client::OrbitClient;
+use orbit_server::OrbitServer;
 use orbit_shared::{
     addressable::{Addressable, AddressableReference, Key},
-    exception::{OrbitError, OrbitResult},
+    exception::OrbitResult,
 };
 use serde::{Deserialize, Serialize};
+use serde_json;
 use std::time::Duration;
-use tracing::{info, warn, error};
-use uuid::Uuid;
+use tracing::{info, error};
 
 /// A distributed counter actor that can coordinate with other counters
 #[derive(Debug, Clone)]
@@ -32,19 +32,6 @@ impl CounterActor {
 impl Addressable for CounterActor {
     fn addressable_type() -> &'static str {
         "CounterActor"
-    }
-
-    async fn on_activate(&mut self) -> OrbitResult<()> {
-        info!("Counter '{}' activated with value {}", self.name, self.value);
-        Ok(())
-    }
-
-    async fn on_deactivate(&mut self) -> OrbitResult<()> {
-        info!(
-            "Counter '{}' deactivated with final value {} after {} operations",
-            self.name, self.value, self.operation_count
-        );
-        Ok(())
     }
 }
 
@@ -164,19 +151,6 @@ impl Addressable for CounterCoordinatorActor {
     fn addressable_type() -> &'static str {
         "CounterCoordinatorActor"
     }
-
-    async fn on_activate(&mut self) -> OrbitResult<()> {
-        info!("Counter coordinator '{}' activated", self.name);
-        Ok(())
-    }
-
-    async fn on_deactivate(&mut self) -> OrbitResult<()> {
-        info!(
-            "Counter coordinator '{}' deactivated after {} total operations",
-            self.name, self.total_operations
-        );
-        Ok(())
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -273,15 +247,14 @@ async fn main() -> anyhow::Result<()> {
 
     // Start Orbit server
     info!("Starting Orbit server...");
-    let server_config = OrbitServerConfig::builder()
-        .port(8080)
-        .build();
-    
-    let server = OrbitServer::new(server_config);
+    let mut server = OrbitServer::builder()
+        .with_port(8080)
+        .build()
+        .await?;
     
     // Register actor types
-    server.register_addressable_type::<CounterActor>().await?;
-    server.register_addressable_type::<CounterCoordinatorActor>().await?;
+    server.register_addressable_type("CounterActor".to_string()).await?;
+    server.register_addressable_type("CounterCoordinatorActor".to_string()).await?;
     
     let _server_handle = tokio::spawn(async move {
         if let Err(e) = server.start().await {
@@ -293,116 +266,115 @@ async fn main() -> anyhow::Result<()> {
 
     // Connect client
     info!("Connecting Orbit client...");
-    let client_config = OrbitClientConfig::builder()
-        .server_url("http://localhost:8080".to_string())
-        .build();
-    
-    let client = OrbitClient::new(client_config).await?;
+    let client = OrbitClient::builder()
+        .with_server_urls(vec!["http://localhost:8080".to_string()])
+        .build()
+        .await?;
 
     // Create counter actors
-    let counter1_ref = AddressableReference::new(
-        "CounterActor".to_string(), 
-        Key::new("counter-1".to_string())
-    );
-    let counter2_ref = AddressableReference::new(
-        "CounterActor".to_string(), 
-        Key::new("counter-2".to_string())
-    );
-    let counter3_ref = AddressableReference::new(
-        "CounterActor".to_string(), 
-        Key::new("counter-3".to_string())
-    );
+    let counter1_ref = AddressableReference {
+        addressable_type: "CounterActor".to_string(),
+        key: Key::StringKey { key: "counter-1".to_string() }
+    };
+    let counter2_ref = AddressableReference {
+        addressable_type: "CounterActor".to_string(),
+        key: Key::StringKey { key: "counter-2".to_string() }
+    };
+    let counter3_ref = AddressableReference {
+        addressable_type: "CounterActor".to_string(),
+        key: Key::StringKey { key: "counter-3".to_string() }
+    };
 
     // Create coordinator actor
-    let coordinator_ref = AddressableReference::new(
-        "CounterCoordinatorActor".to_string(),
-        Key::new("main-coordinator".to_string())
-    );
+    let coordinator_ref = AddressableReference {
+        addressable_type: "CounterCoordinatorActor".to_string(),
+        key: Key::StringKey { key: "main-coordinator".to_string() }
+    };
 
-    let counter1 = client.actor_reference::<CounterActor>(&counter1_ref);
-    let counter2 = client.actor_reference::<CounterActor>(&counter2_ref);
-    let counter3 = client.actor_reference::<CounterActor>(&counter3_ref);
-    let coordinator = client.actor_reference::<CounterCoordinatorActor>(&coordinator_ref);
+    let counter1 = client.actor_reference::<CounterActor>(counter1_ref.key.clone()).await?;
+    let counter2 = client.actor_reference::<CounterActor>(counter2_ref.key.clone()).await?;
+    let counter3 = client.actor_reference::<CounterActor>(counter3_ref.key.clone()).await?;
+    let coordinator = client.actor_reference::<CounterCoordinatorActor>(coordinator_ref.key.clone()).await?;
 
     info!("Setting up distributed counter system...");
 
     // Register counters with coordinator
-    coordinator.invoke_method("register_counter", RegisterCounterMessage {
+    coordinator.invoke::<()>("register_counter", vec![serde_json::to_value(RegisterCounterMessage {
         counter_name: "counter-1".to_string(),
-    }).await?;
-    coordinator.invoke_method("register_counter", RegisterCounterMessage {
+    })?]).await?;
+    coordinator.invoke::<()>("register_counter", vec![serde_json::to_value(RegisterCounterMessage {
         counter_name: "counter-2".to_string(),
-    }).await?;
-    coordinator.invoke_method("register_counter", RegisterCounterMessage {
+    })?]).await?;
+    coordinator.invoke::<()>("register_counter", vec![serde_json::to_value(RegisterCounterMessage {
         counter_name: "counter-3".to_string(),
-    }).await?;
+    })?]).await?;
 
     // Perform individual counter operations
     info!("Performing individual counter operations...");
     
-    let val1: i64 = counter1.invoke_method("increment", IncrementMessage {
+    let val1: i64 = counter1.invoke("increment", vec![serde_json::to_value(IncrementMessage {
         amount: 5,
         requester: "main".to_string(),
-    }).await?;
+    })?]).await?;
     info!("Counter 1 value after increment: {}", val1);
 
-    let val2: i64 = counter2.invoke_method("increment", IncrementMessage {
+    let val2: i64 = counter2.invoke("increment", vec![serde_json::to_value(IncrementMessage {
         amount: 10,
         requester: "main".to_string(),
-    }).await?;
+    })?]).await?;
     info!("Counter 2 value after increment: {}", val2);
 
-    let val3: i64 = counter3.invoke_method("increment", IncrementMessage {
+    let val3: i64 = counter3.invoke("increment", vec![serde_json::to_value(IncrementMessage {
         amount: 15,
         requester: "main".to_string(),
-    }).await?;
+    })?]).await?;
     info!("Counter 3 value after increment: {}", val3);
 
     // Perform decrement operations
-    counter1.invoke_method::<i64>("decrement", DecrementMessage {
+    let _: i64 = counter1.invoke("decrement", vec![serde_json::to_value(DecrementMessage {
         amount: 2,
         requester: "main".to_string(),
-    }).await?;
+    })?]).await?;
 
     // Get all counter states
     info!("Getting individual counter states...");
-    let state1: CounterState = counter1.invoke_method("get_state", ()).await?;
-    let state2: CounterState = counter2.invoke_method("get_state", ()).await?;
-    let state3: CounterState = counter3.invoke_method("get_state", ()).await?;
+    let state1: CounterState = counter1.invoke("get_state", vec![]).await?;
+    let state2: CounterState = counter2.invoke("get_state", vec![]).await?;
+    let state3: CounterState = counter3.invoke("get_state", vec![]).await?;
 
     info!("Counter states: {:?}, {:?}, {:?}", state1, state2, state3);
 
     // Use coordinator for broadcast operations
     info!("Using coordinator for broadcast operations...");
-    let broadcast_results: Vec<i64> = coordinator.invoke_method("broadcast_increment", BroadcastIncrementMessage {
+    let broadcast_results: Vec<i64> = coordinator.invoke("broadcast_increment", vec![serde_json::to_value(BroadcastIncrementMessage {
         amount: 3,
-    }).await?;
+    })?]).await?;
     info!("Broadcast increment results: {:?}", broadcast_results);
 
     // Get coordinator stats
-    let coord_stats: CoordinatorStats = coordinator.invoke_method("get_stats", ()).await?;
+    let coord_stats: CoordinatorStats = coordinator.invoke("get_stats", vec![]).await?;
     info!("Coordinator stats: {:?}", coord_stats);
 
     // Demonstrate counter synchronization
     info!("Demonstrating counter synchronization...");
-    counter1.invoke_method::<()>("sync_with_counter", SyncMessage {
+    let _: () = counter1.invoke("sync_with_counter", vec![serde_json::to_value(SyncMessage {
         from_counter: "coordinator".to_string(),
         sync_value: 100,
-    }).await?;
+    })?]).await?;
 
-    let synced_value: i64 = counter1.invoke_method("get_value", ()).await?;
+    let synced_value: i64 = counter1.invoke("get_value", vec![]).await?;
     info!("Counter 1 value after sync: {}", synced_value);
 
     // Reset all counters
     info!("Resetting all counters...");
-    counter1.invoke_method::<()>("reset", ()).await?;
-    counter2.invoke_method::<()>("reset", ()).await?;
-    counter3.invoke_method::<()>("reset", ()).await?;
+    let _: () = counter1.invoke("reset", vec![]).await?;
+    let _: () = counter2.invoke("reset", vec![]).await?;
+    let _: () = counter3.invoke("reset", vec![]).await?;
 
     // Final state check
-    let final_val1: i64 = counter1.invoke_method("get_value", ()).await?;
-    let final_val2: i64 = counter2.invoke_method("get_value", ()).await?;
-    let final_val3: i64 = counter3.invoke_method("get_value", ()).await?;
+    let final_val1: i64 = counter1.invoke("get_value", vec![]).await?;
+    let final_val2: i64 = counter2.invoke("get_value", vec![]).await?;
+    let final_val3: i64 = counter3.invoke("get_value", vec![]).await?;
     info!("Final counter values: {}, {}, {}", final_val1, final_val2, final_val3);
 
     // Cleanup
