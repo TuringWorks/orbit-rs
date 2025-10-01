@@ -19,7 +19,7 @@ thiserror.workspace = true
 tokio.workspace = true
 async-trait = "0.1"
 uuid.workspace = true
-sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "sqlite", "chrono", "uuid"] }
+sqlx = { version = "0.8.1", default-features = false, features = ["runtime-tokio-rustls", "sqlite", "chrono", "uuid"] }
 tokio-util = "0.7"
 md5 = "0.7"
 tempfile = "3.0"
