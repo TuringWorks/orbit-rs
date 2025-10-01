@@ -7,7 +7,7 @@ fn main() -> Result<()> {
         .compile_protos(
             &[
                 "proto/messages.proto",
-                "proto/node.proto", 
+                "proto/node.proto",
                 "proto/addressable.proto",
                 "proto/connection.proto",
                 "proto/health.proto",

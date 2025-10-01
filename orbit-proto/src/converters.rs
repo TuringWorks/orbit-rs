@@ -1,8 +1,8 @@
 //! Protocol buffer converters between Rust domain objects and protobuf messages
 
-use orbit_shared::*;
 use crate::*;
 use chrono::{DateTime, Utc};
+use orbit_shared::*;
 use prost_types::Timestamp;
 
 /// Convert between Rust Key enum and KeyProto
@@ -16,7 +16,9 @@ impl KeyConverter {
             Key::Int64Key { key } => key_proto::Key::Int64Key(*key),
             Key::NoKey => key_proto::Key::NoKey(NoKeyProto {}),
         };
-        KeyProto { key: Some(key_oneof) }
+        KeyProto {
+            key: Some(key_oneof),
+        }
     }
 
     pub fn from_proto(proto: &KeyProto) -> OrbitResult<Key> {
@@ -61,9 +63,11 @@ impl AddressableReferenceConverter {
     }
 
     pub fn from_proto(proto: &AddressableReferenceProto) -> OrbitResult<AddressableReference> {
-        let key = proto.key.as_ref()
+        let key = proto
+            .key
+            .as_ref()
             .ok_or_else(|| OrbitError::internal("Missing key in AddressableReferenceProto"))?;
-        
+
         Ok(AddressableReference {
             addressable_type: proto.addressable_type.clone(),
             key: KeyConverter::from_proto(key)?,

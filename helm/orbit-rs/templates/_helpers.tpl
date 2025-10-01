@@ -1,3 +1,7 @@
+{{- define "orbit-rs.configmap" -}}
+{{- toYaml .Values.config -}}
+{{- end -}}
+
 {{/*
 Expand the name of the chart.
 */}}

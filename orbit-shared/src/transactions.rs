@@ -5,9 +5,9 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use tokio::sync::{RwLock, Mutex};
-use tokio::time::{Duration, Instant, timeout};
-use tracing::{info, warn, error};
+use tokio::sync::{Mutex, RwLock};
+use tokio::time::{timeout, Duration, Instant};
+use tracing::{error, info, warn};
 use uuid::Uuid;
 
 /// Unique identifier for distributed transactions
@@ -166,9 +166,7 @@ pub enum TransactionMessage {
         vote: TransactionVote,
     },
     /// Phase 2: Coordinator tells participants to commit
-    Commit {
-        transaction_id: TransactionId,
-    },
+    Commit { transaction_id: TransactionId },
     /// Phase 2: Coordinator tells participants to abort
     Abort {
         transaction_id: TransactionId,
@@ -182,9 +180,7 @@ pub enum TransactionMessage {
         error: Option<String>,
     },
     /// Query transaction status
-    QueryStatus {
-        transaction_id: TransactionId,
-    },
+    QueryStatus { transaction_id: TransactionId },
     /// Response to status query
     StatusResponse {
         transaction_id: TransactionId,
@@ -236,29 +232,45 @@ pub struct TransactionLogEntry {
 pub enum TransactionEvent {
     Started,
     PrepareRequested,
-    VoteReceived { participant: AddressableReference, vote: TransactionVote },
+    VoteReceived {
+        participant: AddressableReference,
+        vote: TransactionVote,
+    },
     CommitRequested,
-    AbortRequested { reason: String },
+    AbortRequested {
+        reason: String,
+    },
     Committed,
-    Aborted { reason: String },
+    Aborted {
+        reason: String,
+    },
     TimedOut,
-    Failed { error: String },
+    Failed {
+        error: String,
+    },
 }
 
 /// Trait for participating in distributed transactions
 #[async_trait]
 pub trait TransactionParticipant: Send + Sync {
     /// Prepare phase: Check if the participant can commit the transaction
-    async fn prepare(&self, transaction_id: &TransactionId, operations: &[TransactionOperation]) -> OrbitResult<TransactionVote>;
-    
+    async fn prepare(
+        &self,
+        transaction_id: &TransactionId,
+        operations: &[TransactionOperation],
+    ) -> OrbitResult<TransactionVote>;
+
     /// Commit phase: Execute the transaction operations
     async fn commit(&self, transaction_id: &TransactionId) -> OrbitResult<()>;
-    
+
     /// Abort phase: Rollback any changes made during prepare
     async fn abort(&self, transaction_id: &TransactionId, reason: &str) -> OrbitResult<()>;
-    
+
     /// Get current state of a transaction from participant's perspective
-    async fn get_transaction_state(&self, transaction_id: &TransactionId) -> OrbitResult<Option<TransactionState>>;
+    async fn get_transaction_state(
+        &self,
+        transaction_id: &TransactionId,
+    ) -> OrbitResult<Option<TransactionState>>;
 }
 
 /// Transaction coordinator that manages distributed transactions
@@ -272,7 +284,8 @@ pub struct TransactionCoordinator {
     /// Message sender for transaction protocol
     message_sender: Arc<dyn TransactionMessageSender>,
     /// Votes received from participants
-    participant_votes: Arc<RwLock<HashMap<TransactionId, HashMap<AddressableReference, TransactionVote>>>>,
+    participant_votes:
+        Arc<RwLock<HashMap<TransactionId, HashMap<AddressableReference, TransactionVote>>>>,
     /// Acknowledgments received from participants
     participant_acks: Arc<RwLock<HashMap<TransactionId, HashMap<AddressableReference, bool>>>>,
 }
@@ -280,8 +293,16 @@ pub struct TransactionCoordinator {
 /// Trait for sending transaction messages to participants
 #[async_trait]
 pub trait TransactionMessageSender: Send + Sync {
-    async fn send_message(&self, target: &AddressableReference, message: TransactionMessage) -> OrbitResult<()>;
-    async fn broadcast_message(&self, targets: &[AddressableReference], message: TransactionMessage) -> OrbitResult<()>;
+    async fn send_message(
+        &self,
+        target: &AddressableReference,
+        message: TransactionMessage,
+    ) -> OrbitResult<()>;
+    async fn broadcast_message(
+        &self,
+        targets: &[AddressableReference],
+        message: TransactionMessage,
+    ) -> OrbitResult<()>;
 }
 
 impl TransactionCoordinator {
@@ -321,8 +342,9 @@ impl TransactionCoordinator {
             active.insert(transaction_id.clone(), transaction);
         }
 
-        self.log_transaction_event(&transaction_id, TransactionEvent::Started, None).await?;
-        
+        self.log_transaction_event(&transaction_id, TransactionEvent::Started, None)
+            .await?;
+
         info!("Started transaction: {}", transaction_id);
         Ok(transaction_id)
     }
@@ -336,12 +358,16 @@ impl TransactionCoordinator {
         let mut active = self.active_transactions.write().await;
         if let Some(transaction) = active.get_mut(transaction_id) {
             if transaction.state != TransactionState::Preparing {
-                return Err(OrbitError::internal("Cannot add operations to non-preparing transaction"));
+                return Err(OrbitError::internal(
+                    "Cannot add operations to non-preparing transaction",
+                ));
             }
-            
-            transaction.participants.insert(operation.target_actor.clone());
+
+            transaction
+                .participants
+                .insert(operation.target_actor.clone());
             transaction.operations.push(operation);
-            
+
             Ok(())
         } else {
             Err(OrbitError::internal("Transaction not found"))
@@ -352,16 +378,17 @@ impl TransactionCoordinator {
     pub async fn commit_transaction(&self, transaction_id: &TransactionId) -> OrbitResult<()> {
         // Phase 1: Prepare
         self.prepare_phase(transaction_id).await?;
-        
+
         // Check if all participants voted yes
         let can_commit = self.check_votes(transaction_id).await?;
-        
+
         if can_commit {
             // Phase 2: Commit
             self.commit_phase(transaction_id).await?;
         } else {
             // Phase 2: Abort
-            self.abort_phase(transaction_id, "Not all participants voted yes").await?;
+            self.abort_phase(transaction_id, "Not all participants voted yes")
+                .await?;
         }
 
         Ok(())
@@ -371,14 +398,16 @@ impl TransactionCoordinator {
     async fn prepare_phase(&self, transaction_id: &TransactionId) -> OrbitResult<()> {
         let (transaction, participants) = {
             let active = self.active_transactions.read().await;
-            let transaction = active.get(transaction_id)
+            let transaction = active
+                .get(transaction_id)
                 .ok_or_else(|| OrbitError::internal("Transaction not found"))?
                 .clone();
             let participants: Vec<_> = transaction.participants.iter().cloned().collect();
             (transaction, participants)
         };
 
-        self.log_transaction_event(transaction_id, TransactionEvent::PrepareRequested, None).await?;
+        self.log_transaction_event(transaction_id, TransactionEvent::PrepareRequested, None)
+            .await?;
 
         // Send prepare message to all participants
         let prepare_message = TransactionMessage::Prepare {
@@ -387,12 +416,20 @@ impl TransactionCoordinator {
             timeout: transaction.timeout,
         };
 
-        self.message_sender.broadcast_message(&participants, prepare_message).await?;
+        self.message_sender
+            .broadcast_message(&participants, prepare_message)
+            .await?;
 
         // Wait for votes with timeout
         let vote_timeout = transaction.timeout / 2; // Use half the transaction timeout
-        if let Err(_) = timeout(vote_timeout, self.wait_for_votes(transaction_id, participants.len())).await {
-            self.abort_phase(transaction_id, "Timeout waiting for votes").await?;
+        if let Err(_) = timeout(
+            vote_timeout,
+            self.wait_for_votes(transaction_id, participants.len()),
+        )
+        .await
+        {
+            self.abort_phase(transaction_id, "Timeout waiting for votes")
+                .await?;
             return Err(OrbitError::timeout("prepare_phase"));
         }
 
@@ -400,9 +437,13 @@ impl TransactionCoordinator {
     }
 
     /// Wait for votes from all participants
-    async fn wait_for_votes(&self, transaction_id: &TransactionId, expected_votes: usize) -> OrbitResult<()> {
+    async fn wait_for_votes(
+        &self,
+        transaction_id: &TransactionId,
+        expected_votes: usize,
+    ) -> OrbitResult<()> {
         let poll_interval = Duration::from_millis(100);
-        
+
         loop {
             {
                 let votes = self.participant_votes.read().await;
@@ -414,7 +455,7 @@ impl TransactionCoordinator {
             }
             tokio::time::sleep(poll_interval).await;
         }
-        
+
         Ok(())
     }
 
@@ -428,11 +469,11 @@ impl TransactionCoordinator {
                     TransactionVote::No { reason } => {
                         warn!("Participant {} voted no: {}", participant, reason);
                         return Ok(false);
-                    },
+                    }
                     TransactionVote::Uncertain => {
                         warn!("Participant {} voted uncertain", participant);
                         return Ok(false);
-                    },
+                    }
                 }
             }
             Ok(true)
@@ -445,7 +486,8 @@ impl TransactionCoordinator {
     async fn commit_phase(&self, transaction_id: &TransactionId) -> OrbitResult<()> {
         let participants = {
             let active = self.active_transactions.read().await;
-            let transaction = active.get(transaction_id)
+            let transaction = active
+                .get(transaction_id)
                 .ok_or_else(|| OrbitError::internal("Transaction not found"))?;
             transaction.participants.iter().cloned().collect::<Vec<_>>()
         };
@@ -458,17 +500,21 @@ impl TransactionCoordinator {
             }
         }
 
-        self.log_transaction_event(transaction_id, TransactionEvent::CommitRequested, None).await?;
+        self.log_transaction_event(transaction_id, TransactionEvent::CommitRequested, None)
+            .await?;
 
         // Send commit message to all participants
         let commit_message = TransactionMessage::Commit {
             transaction_id: transaction_id.clone(),
         };
 
-        self.message_sender.broadcast_message(&participants, commit_message).await?;
+        self.message_sender
+            .broadcast_message(&participants, commit_message)
+            .await?;
 
         // Wait for acknowledgments
-        self.wait_for_acknowledgments(transaction_id, participants.len()).await?;
+        self.wait_for_acknowledgments(transaction_id, participants.len())
+            .await?;
 
         // Update final state
         {
@@ -478,8 +524,9 @@ impl TransactionCoordinator {
             }
         }
 
-        self.log_transaction_event(transaction_id, TransactionEvent::Committed, None).await?;
-        
+        self.log_transaction_event(transaction_id, TransactionEvent::Committed, None)
+            .await?;
+
         info!("Transaction {} committed successfully", transaction_id);
         Ok(())
     }
@@ -488,7 +535,8 @@ impl TransactionCoordinator {
     async fn abort_phase(&self, transaction_id: &TransactionId, reason: &str) -> OrbitResult<()> {
         let participants = {
             let active = self.active_transactions.read().await;
-            let transaction = active.get(transaction_id)
+            let transaction = active
+                .get(transaction_id)
                 .ok_or_else(|| OrbitError::internal("Transaction not found"))?;
             transaction.participants.iter().cloned().collect::<Vec<_>>()
         };
@@ -503,9 +551,12 @@ impl TransactionCoordinator {
 
         self.log_transaction_event(
             transaction_id,
-            TransactionEvent::AbortRequested { reason: reason.to_string() },
+            TransactionEvent::AbortRequested {
+                reason: reason.to_string(),
+            },
             None,
-        ).await?;
+        )
+        .await?;
 
         // Send abort message to all participants
         let abort_message = TransactionMessage::Abort {
@@ -513,10 +564,13 @@ impl TransactionCoordinator {
             reason: reason.to_string(),
         };
 
-        self.message_sender.broadcast_message(&participants, abort_message).await?;
+        self.message_sender
+            .broadcast_message(&participants, abort_message)
+            .await?;
 
         // Wait for acknowledgments
-        self.wait_for_acknowledgments(transaction_id, participants.len()).await?;
+        self.wait_for_acknowledgments(transaction_id, participants.len())
+            .await?;
 
         // Update final state
         {
@@ -528,25 +582,32 @@ impl TransactionCoordinator {
 
         self.log_transaction_event(
             transaction_id,
-            TransactionEvent::Aborted { reason: reason.to_string() },
+            TransactionEvent::Aborted {
+                reason: reason.to_string(),
+            },
             None,
-        ).await?;
+        )
+        .await?;
 
         warn!("Transaction {} aborted: {}", transaction_id, reason);
         Ok(())
     }
 
     /// Wait for acknowledgments from all participants
-    async fn wait_for_acknowledgments(&self, transaction_id: &TransactionId, expected_acks: usize) -> OrbitResult<()> {
+    async fn wait_for_acknowledgments(
+        &self,
+        transaction_id: &TransactionId,
+        expected_acks: usize,
+    ) -> OrbitResult<()> {
         let poll_interval = Duration::from_millis(100);
         let timeout_duration = self.config.default_timeout;
         let start_time = Instant::now();
-        
+
         loop {
             if start_time.elapsed() > timeout_duration {
                 return Err(OrbitError::timeout("wait_for_acknowledgments"));
             }
-            
+
             {
                 let acks = self.participant_acks.read().await;
                 if let Some(transaction_acks) = acks.get(transaction_id) {
@@ -557,19 +618,27 @@ impl TransactionCoordinator {
             }
             tokio::time::sleep(poll_interval).await;
         }
-        
+
         Ok(())
     }
 
     /// Handle incoming transaction messages
     pub async fn handle_message(&self, message: TransactionMessage) -> OrbitResult<()> {
         match message {
-            TransactionMessage::Vote { transaction_id, participant, vote } => {
-                self.handle_vote(transaction_id, participant, vote).await
-            },
-            TransactionMessage::Acknowledge { transaction_id, participant, success, error } => {
-                self.handle_acknowledgment(transaction_id, participant, success, error).await
-            },
+            TransactionMessage::Vote {
+                transaction_id,
+                participant,
+                vote,
+            } => self.handle_vote(transaction_id, participant, vote).await,
+            TransactionMessage::Acknowledge {
+                transaction_id,
+                participant,
+                success,
+                error,
+            } => {
+                self.handle_acknowledgment(transaction_id, participant, success, error)
+                    .await
+            }
             _ => {
                 warn!("Received unexpected message type for coordinator");
                 Ok(())
@@ -578,10 +647,16 @@ impl TransactionCoordinator {
     }
 
     /// Handle vote from participant
-    async fn handle_vote(&self, transaction_id: TransactionId, participant: AddressableReference, vote: TransactionVote) -> OrbitResult<()> {
+    async fn handle_vote(
+        &self,
+        transaction_id: TransactionId,
+        participant: AddressableReference,
+        vote: TransactionVote,
+    ) -> OrbitResult<()> {
         {
             let mut votes = self.participant_votes.write().await;
-            votes.entry(transaction_id.clone())
+            votes
+                .entry(transaction_id.clone())
                 .or_insert_with(HashMap::new)
                 .insert(participant.clone(), vote.clone());
         }
@@ -590,13 +665,20 @@ impl TransactionCoordinator {
             &transaction_id,
             TransactionEvent::VoteReceived { participant, vote },
             None,
-        ).await?;
+        )
+        .await?;
 
         Ok(())
     }
 
     /// Handle acknowledgment from participant
-    async fn handle_acknowledgment(&self, transaction_id: TransactionId, participant: AddressableReference, success: bool, error: Option<String>) -> OrbitResult<()> {
+    async fn handle_acknowledgment(
+        &self,
+        transaction_id: TransactionId,
+        participant: AddressableReference,
+        success: bool,
+        error: Option<String>,
+    ) -> OrbitResult<()> {
         {
             let mut acks = self.participant_acks.write().await;
             acks.entry(transaction_id.clone())
@@ -612,7 +694,12 @@ impl TransactionCoordinator {
     }
 
     /// Log a transaction event
-    async fn log_transaction_event(&self, transaction_id: &TransactionId, event: TransactionEvent, details: Option<serde_json::Value>) -> OrbitResult<()> {
+    async fn log_transaction_event(
+        &self,
+        transaction_id: &TransactionId,
+        event: TransactionEvent,
+        details: Option<serde_json::Value>,
+    ) -> OrbitResult<()> {
         if !self.config.enable_logging {
             return Ok(());
         }
@@ -639,7 +726,7 @@ impl TransactionCoordinator {
     /// Start background cleanup tasks
     pub async fn start_background_tasks(&self) -> OrbitResult<()> {
         let coordinator = Arc::new(self.clone());
-        
+
         // Start timeout cleanup task
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(coordinator.config.cleanup_interval);
@@ -670,7 +757,7 @@ impl TransactionCoordinator {
 
         for tx_id in to_remove {
             self.abort_phase(&tx_id, "Transaction timed out").await?;
-            
+
             // Remove from active transactions
             {
                 let mut active = self.active_transactions.write().await;
@@ -685,7 +772,8 @@ impl TransactionCoordinator {
                 acks.remove(&tx_id);
             }
 
-            self.log_transaction_event(&tx_id, TransactionEvent::TimedOut, None).await?;
+            self.log_transaction_event(&tx_id, TransactionEvent::TimedOut, None)
+                .await?;
         }
 
         Ok(())
@@ -699,9 +787,18 @@ impl TransactionCoordinator {
         TransactionStats {
             active_transactions: active.len(),
             total_log_entries: log.len(),
-            committed_count: log.iter().filter(|e| matches!(e.event, TransactionEvent::Committed)).count(),
-            aborted_count: log.iter().filter(|e| matches!(e.event, TransactionEvent::Aborted { .. })).count(),
-            timed_out_count: log.iter().filter(|e| matches!(e.event, TransactionEvent::TimedOut)).count(),
+            committed_count: log
+                .iter()
+                .filter(|e| matches!(e.event, TransactionEvent::Committed))
+                .count(),
+            aborted_count: log
+                .iter()
+                .filter(|e| matches!(e.event, TransactionEvent::Aborted { .. }))
+                .count(),
+            timed_out_count: log
+                .iter()
+                .filter(|e| matches!(e.event, TransactionEvent::TimedOut))
+                .count(),
         }
     }
 }
@@ -751,13 +848,21 @@ mod tests {
 
     #[async_trait]
     impl TransactionMessageSender for MockMessageSender {
-        async fn send_message(&self, target: &AddressableReference, message: TransactionMessage) -> OrbitResult<()> {
+        async fn send_message(
+            &self,
+            target: &AddressableReference,
+            message: TransactionMessage,
+        ) -> OrbitResult<()> {
             let mut messages = self.sent_messages.lock().await;
             messages.push((target.clone(), message));
             Ok(())
         }
 
-        async fn broadcast_message(&self, targets: &[AddressableReference], message: TransactionMessage) -> OrbitResult<()> {
+        async fn broadcast_message(
+            &self,
+            targets: &[AddressableReference],
+            message: TransactionMessage,
+        ) -> OrbitResult<()> {
             for target in targets {
                 self.send_message(target, message.clone()).await?;
             }
@@ -769,7 +874,11 @@ mod tests {
     async fn test_transaction_creation() {
         let node_id = NodeId::new("test-node".to_string(), "default".to_string());
         let message_sender = Arc::new(MockMessageSender::new());
-        let coordinator = TransactionCoordinator::new(node_id.clone(), TransactionConfig::default(), message_sender);
+        let coordinator = TransactionCoordinator::new(
+            node_id.clone(),
+            TransactionConfig::default(),
+            message_sender,
+        );
 
         let tx_id = coordinator.begin_transaction(None).await.unwrap();
         assert_eq!(tx_id.coordinator_node, node_id);
@@ -777,7 +886,9 @@ mod tests {
         let operation = TransactionOperation::new(
             AddressableReference {
                 addressable_type: "TestActor".to_string(),
-                key: Key::StringKey { key: "test-1".to_string() },
+                key: Key::StringKey {
+                    key: "test-1".to_string(),
+                },
             },
             "update".to_string(),
             serde_json::json!({"value": 42}),
@@ -790,15 +901,15 @@ mod tests {
     async fn test_transaction_timeout() {
         let node_id = NodeId::new("test-node".to_string(), "default".to_string());
         let timeout = Duration::from_millis(100);
-        
+
         let transaction = DistributedTransaction::new(node_id, timeout);
-        
+
         // Should not be timed out initially
         assert!(!transaction.is_timed_out());
-        
+
         // Wait for timeout
         tokio::time::sleep(Duration::from_millis(150)).await;
-        
+
         // Should be timed out now (in real test we'd manipulate timestamps)
         // For now, just verify the logic structure works
     }
@@ -807,15 +918,24 @@ mod tests {
     async fn test_transaction_vote_handling() {
         let node_id = NodeId::new("test-node".to_string(), "default".to_string());
         let message_sender = Arc::new(MockMessageSender::new());
-        let coordinator = TransactionCoordinator::new(node_id.clone(), TransactionConfig::default(), message_sender);
+        let coordinator = TransactionCoordinator::new(
+            node_id.clone(),
+            TransactionConfig::default(),
+            message_sender,
+        );
 
         let tx_id = TransactionId::new(node_id);
         let participant = AddressableReference {
             addressable_type: "TestActor".to_string(),
-            key: Key::StringKey { key: "test-1".to_string() },
+            key: Key::StringKey {
+                key: "test-1".to_string(),
+            },
         };
 
-        coordinator.handle_vote(tx_id.clone(), participant.clone(), TransactionVote::Yes).await.unwrap();
+        coordinator
+            .handle_vote(tx_id.clone(), participant.clone(), TransactionVote::Yes)
+            .await
+            .unwrap();
 
         let votes = coordinator.participant_votes.read().await;
         assert!(votes.contains_key(&tx_id));

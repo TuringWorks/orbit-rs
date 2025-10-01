@@ -1,10 +1,10 @@
 //! Main Orbit server implementation for hosting actors and managing the cluster
 
 use crate::*;
-use orbit_shared::*;
 use orbit_proto::*;
+use orbit_shared::*;
 use std::collections::HashMap;
-use tokio::time::{Duration, interval};
+use tokio::time::{interval, Duration};
 use tonic::transport::Server;
 
 /// Configuration for the Orbit server
@@ -105,7 +105,7 @@ impl OrbitServer {
     /// Create a new Orbit server with the given configuration
     pub async fn new(config: OrbitServerConfig) -> OrbitResult<Self> {
         let node_id = NodeId::generate(config.namespace.clone());
-        
+
         let capabilities = NodeCapabilities {
             addressable_types: vec![], // Will be populated as actors are registered
             max_addressables: config.max_addressables,
@@ -148,7 +148,9 @@ impl OrbitServer {
     /// Start the server and begin accepting connections
     pub async fn start(&mut self) -> OrbitResult<()> {
         // Register this node in the cluster
-        self.cluster_manager.register_node(self.node_info.clone()).await?;
+        self.cluster_manager
+            .register_node(self.node_info.clone())
+            .await?;
 
         // Start background tasks
         self.start_background_tasks().await;
@@ -181,11 +183,21 @@ impl OrbitServer {
 
     /// Register an addressable type that this server can host
     pub async fn register_addressable_type(&mut self, addressable_type: String) -> OrbitResult<()> {
-        if !self.node_info.capabilities.addressable_types.contains(&addressable_type) {
-            self.node_info.capabilities.addressable_types.push(addressable_type);
-            
+        if !self
+            .node_info
+            .capabilities
+            .addressable_types
+            .contains(&addressable_type)
+        {
+            self.node_info
+                .capabilities
+                .addressable_types
+                .push(addressable_type);
+
             // Update cluster with new capabilities
-            self.cluster_manager.update_node(self.node_info.clone()).await?;
+            self.cluster_manager
+                .update_node(self.node_info.clone())
+                .await?;
         }
         Ok(())
     }
@@ -227,11 +239,11 @@ impl OrbitServer {
             let mut interval = interval(cleanup_interval);
             loop {
                 interval.tick().await;
-                
+
                 if let Err(e) = cluster_manager.cleanup_expired_nodes().await {
                     tracing::warn!("Failed to cleanup expired nodes: {}", e);
                 }
-                
+
                 if let Err(e) = addressable_directory.cleanup_expired_leases().await {
                     tracing::warn!("Failed to cleanup expired leases: {}", e);
                 }
@@ -273,12 +285,17 @@ mod tests {
 
         assert_eq!(builder.config.namespace, "test");
         assert_eq!(builder.config.port, 8080);
-        assert_eq!(builder.config.tags.get("environment"), Some(&"test".to_string()));
+        assert_eq!(
+            builder.config.tags.get("environment"),
+            Some(&"test".to_string())
+        );
     }
 
     #[tokio::test]
     async fn test_server_creation() {
-        let server = OrbitServer::new(OrbitServerConfig::default()).await.unwrap();
+        let server = OrbitServer::new(OrbitServerConfig::default())
+            .await
+            .unwrap();
         assert_eq!(server.node_info.port, 50051);
         assert_eq!(server.node_info.status, NodeStatus::Active);
     }

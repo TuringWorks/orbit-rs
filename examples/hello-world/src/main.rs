@@ -23,14 +23,24 @@ async fn main() -> anyhow::Result<()> {
     // Create and start the server
     info!("Starting Orbit server on port 8080...");
     let mut server = OrbitServer::new(server_config).await?;
-    
+
     // Register some addressable types
-    server.register_addressable_type("GreeterActor".to_string()).await?;
-    server.register_addressable_type("CounterActor".to_string()).await?;
-    
-    info!("Server configured with node ID: {:?}", server.node_info().id);
-    info!("Addressable types: {:?}", server.node_info().capabilities.addressable_types);
-    
+    server
+        .register_addressable_type("GreeterActor".to_string())
+        .await?;
+    server
+        .register_addressable_type("CounterActor".to_string())
+        .await?;
+
+    info!(
+        "Server configured with node ID: {:?}",
+        server.node_info().id
+    );
+    info!(
+        "Addressable types: {:?}",
+        server.node_info().capabilities.addressable_types
+    );
+
     // In this simple example, we'll start the server which will run indefinitely
     // In a real application, you might want to handle graceful shutdown
     info!("Starting gRPC server - this will run until interrupted");

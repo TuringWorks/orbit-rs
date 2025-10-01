@@ -1,17 +1,17 @@
+use async_trait::async_trait;
 use orbit_shared::exception::{OrbitError, OrbitResult};
 use orbit_shared::mesh::NodeId;
 use orbit_shared::saga::{
-    SagaStep, SagaStepMetadata, SagaContext, StepResult,
-    SagaDefinition, SagaOrchestrator, SagaEventHandler, SagaExecution, SagaConfig
+    SagaConfig, SagaContext, SagaDefinition, SagaEventHandler, SagaExecution, SagaOrchestrator,
+    SagaStep, SagaStepMetadata, StepResult,
 };
-use orbit_shared::transaction_log::{SqliteTransactionLogger, PersistentLogConfig};
-use async_trait::async_trait;
+use orbit_shared::transaction_log::{PersistentLogConfig, SqliteTransactionLogger};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::sleep;
-use tracing::{info, warn, error, debug};
+use tracing::{debug, error, info, warn};
 
 /// Order data structure
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -58,28 +58,34 @@ impl PaymentProcessingStep {
     }
 
     async fn charge_payment(&self, order: &Order) -> OrbitResult<String> {
-        info!("Processing payment for order {} - Amount: ${}", order.order_id, order.total_amount);
-        
+        info!(
+            "Processing payment for order {} - Amount: ${}",
+            order.order_id, order.total_amount
+        );
+
         // Simulate payment processing
         sleep(Duration::from_millis(500)).await;
-        
+
         // Simulate payment failure for demonstration (10% chance)
         if order.order_id.ends_with('5') {
             return Err(OrbitError::internal("Payment failed: Insufficient funds"));
         }
-        
-        let payment_id = format!("payment_{}", uuid::Uuid::new_v4().to_string()[..8].to_uppercase());
+
+        let payment_id = format!(
+            "payment_{}",
+            uuid::Uuid::new_v4().to_string()[..8].to_uppercase()
+        );
         info!("Payment processed successfully: {}", payment_id);
-        
+
         Ok(payment_id)
     }
 
     async fn refund_payment(&self, payment_id: &str, amount: f64) -> OrbitResult<()> {
         info!("Refunding payment {} - Amount: ${}", payment_id, amount);
-        
+
         // Simulate refund processing
         sleep(Duration::from_millis(300)).await;
-        
+
         info!("Payment refunded successfully: {}", payment_id);
         Ok(())
     }
@@ -88,17 +94,20 @@ impl PaymentProcessingStep {
 #[async_trait]
 impl SagaStep for PaymentProcessingStep {
     async fn execute(&self, context: &SagaContext) -> OrbitResult<StepResult> {
-        let order: Order = context.get_typed_data("order")?.ok_or_else(|| {
-            OrbitError::internal("Order data not found in context")
-        })?;
+        let order: Order = context
+            .get_typed_data("order")?
+            .ok_or_else(|| OrbitError::internal("Order data not found in context"))?;
 
         match self.charge_payment(&order).await {
             Ok(payment_id) => {
                 // Store payment ID in context for compensation
                 let mut updated_context = context.clone();
                 updated_context.set_data("payment_id".to_string(), serde_json::json!(payment_id));
-                
-                info!("Payment step completed successfully for order {}", order.order_id);
+
+                info!(
+                    "Payment step completed successfully for order {}",
+                    order.order_id
+                );
                 Ok(StepResult::Success)
             }
             Err(e) => {
@@ -110,18 +119,24 @@ impl SagaStep for PaymentProcessingStep {
 
     async fn compensate(&self, context: &SagaContext) -> OrbitResult<StepResult> {
         let payment_id: Option<String> = context.get_typed_data("payment_id")?;
-        let order: Order = context.get_typed_data("order")?.ok_or_else(|| {
-            OrbitError::internal("Order data not found in context")
-        })?;
+        let order: Order = context
+            .get_typed_data("order")?
+            .ok_or_else(|| OrbitError::internal("Order data not found in context"))?;
 
         if let Some(payment_id) = payment_id {
             match self.refund_payment(&payment_id, order.total_amount).await {
                 Ok(()) => {
-                    info!("Payment compensation completed for order {}", order.order_id);
+                    info!(
+                        "Payment compensation completed for order {}",
+                        order.order_id
+                    );
                     Ok(StepResult::Success)
                 }
                 Err(e) => {
-                    error!("Payment compensation failed for order {}: {}", order.order_id, e);
+                    error!(
+                        "Payment compensation failed for order {}: {}",
+                        order.order_id, e
+                    );
                     Err(e)
                 }
             }
@@ -163,37 +178,44 @@ impl InventoryReservationStep {
 
     async fn reserve_inventory(&self, order: &Order) -> OrbitResult<Vec<String>> {
         info!("Reserving inventory for order {}", order.order_id);
-        
+
         let mut reservation_ids = Vec::new();
-        
+
         for item in &order.items {
-            info!("Reserving {} units of product {}", item.quantity, item.product_id);
-            
+            info!(
+                "Reserving {} units of product {}",
+                item.quantity, item.product_id
+            );
+
             // Simulate inventory check and reservation
             sleep(Duration::from_millis(100)).await;
-            
+
             // Simulate inventory shortage for demonstration
             if item.product_id == "PRODUCT_999" {
                 return Err(OrbitError::internal("Insufficient inventory"));
             }
-            
-            let reservation_id = format!("res_{}_{}", item.product_id, uuid::Uuid::new_v4().to_string()[..6].to_uppercase());
+
+            let reservation_id = format!(
+                "res_{}_{}",
+                item.product_id,
+                uuid::Uuid::new_v4().to_string()[..6].to_uppercase()
+            );
             reservation_ids.push(reservation_id.clone());
-            
+
             info!("Reserved inventory: {}", reservation_id);
         }
-        
+
         Ok(reservation_ids)
     }
 
     async fn release_inventory(&self, reservation_ids: &[String]) -> OrbitResult<()> {
         info!("Releasing inventory reservations: {:?}", reservation_ids);
-        
+
         for reservation_id in reservation_ids {
             sleep(Duration::from_millis(50)).await;
             info!("Released inventory reservation: {}", reservation_id);
         }
-        
+
         Ok(())
     }
 }
@@ -201,20 +223,29 @@ impl InventoryReservationStep {
 #[async_trait]
 impl SagaStep for InventoryReservationStep {
     async fn execute(&self, context: &SagaContext) -> OrbitResult<StepResult> {
-        let order: Order = context.get_typed_data("order")?.ok_or_else(|| {
-            OrbitError::internal("Order data not found in context")
-        })?;
+        let order: Order = context
+            .get_typed_data("order")?
+            .ok_or_else(|| OrbitError::internal("Order data not found in context"))?;
 
         match self.reserve_inventory(&order).await {
             Ok(reservation_ids) => {
                 let mut updated_context = context.clone();
-                updated_context.set_data("reservation_ids".to_string(), serde_json::json!(reservation_ids));
-                
-                info!("Inventory reservation step completed successfully for order {}", order.order_id);
+                updated_context.set_data(
+                    "reservation_ids".to_string(),
+                    serde_json::json!(reservation_ids),
+                );
+
+                info!(
+                    "Inventory reservation step completed successfully for order {}",
+                    order.order_id
+                );
                 Ok(StepResult::Success)
             }
             Err(e) => {
-                error!("Inventory reservation step failed for order {}: {}", order.order_id, e);
+                error!(
+                    "Inventory reservation step failed for order {}: {}",
+                    order.order_id, e
+                );
                 Ok(StepResult::PermanentFailure(e.to_string()))
             }
         }
@@ -222,19 +253,25 @@ impl SagaStep for InventoryReservationStep {
 
     async fn compensate(&self, context: &SagaContext) -> OrbitResult<StepResult> {
         let reservation_ids: Option<Vec<String>> = context.get_typed_data("reservation_ids")?;
-        let order: Order = context.get_typed_data("order")?.ok_or_else(|| {
-            OrbitError::internal("Order data not found in context")
-        })?;
+        let order: Order = context
+            .get_typed_data("order")?
+            .ok_or_else(|| OrbitError::internal("Order data not found in context"))?;
 
         if let Some(reservation_ids) = reservation_ids {
             if !reservation_ids.is_empty() {
                 match self.release_inventory(&reservation_ids).await {
                     Ok(()) => {
-                        info!("Inventory compensation completed for order {}", order.order_id);
+                        info!(
+                            "Inventory compensation completed for order {}",
+                            order.order_id
+                        );
                         Ok(StepResult::Success)
                     }
                     Err(e) => {
-                        error!("Inventory compensation failed for order {}: {}", order.order_id, e);
+                        error!(
+                            "Inventory compensation failed for order {}: {}",
+                            order.order_id, e
+                        );
                         Err(e)
                     }
                 }
@@ -243,7 +280,10 @@ impl SagaStep for InventoryReservationStep {
                 Ok(StepResult::Success)
             }
         } else {
-            info!("No inventory reservations to compensate for order {}", order.order_id);
+            info!(
+                "No inventory reservations to compensate for order {}",
+                order.order_id
+            );
             Ok(StepResult::Success)
         }
     }
@@ -279,23 +319,35 @@ impl ShippingArrangementStep {
     }
 
     async fn arrange_shipping(&self, order: &Order) -> OrbitResult<String> {
-        info!("Arranging shipping for order {} to {}", order.order_id, order.shipping_address);
-        
+        info!(
+            "Arranging shipping for order {} to {}",
+            order.order_id, order.shipping_address
+        );
+
         // Simulate shipping arrangement
         sleep(Duration::from_millis(300)).await;
-        
-        let tracking_number = format!("TRACK_{}", uuid::Uuid::new_v4().to_string()[..10].to_uppercase());
-        info!("Shipping arranged with tracking number: {}", tracking_number);
-        
+
+        let tracking_number = format!(
+            "TRACK_{}",
+            uuid::Uuid::new_v4().to_string()[..10].to_uppercase()
+        );
+        info!(
+            "Shipping arranged with tracking number: {}",
+            tracking_number
+        );
+
         Ok(tracking_number)
     }
 
     async fn cancel_shipping(&self, tracking_number: &str) -> OrbitResult<()> {
-        info!("Cancelling shipping with tracking number: {}", tracking_number);
-        
+        info!(
+            "Cancelling shipping with tracking number: {}",
+            tracking_number
+        );
+
         // Simulate shipping cancellation
         sleep(Duration::from_millis(200)).await;
-        
+
         info!("Shipping cancelled successfully: {}", tracking_number);
         Ok(())
     }
@@ -304,20 +356,29 @@ impl ShippingArrangementStep {
 #[async_trait]
 impl SagaStep for ShippingArrangementStep {
     async fn execute(&self, context: &SagaContext) -> OrbitResult<StepResult> {
-        let order: Order = context.get_typed_data("order")?.ok_or_else(|| {
-            OrbitError::internal("Order data not found in context")
-        })?;
+        let order: Order = context
+            .get_typed_data("order")?
+            .ok_or_else(|| OrbitError::internal("Order data not found in context"))?;
 
         match self.arrange_shipping(&order).await {
             Ok(tracking_number) => {
                 let mut updated_context = context.clone();
-                updated_context.set_data("tracking_number".to_string(), serde_json::json!(tracking_number));
-                
-                info!("Shipping arrangement step completed successfully for order {}", order.order_id);
+                updated_context.set_data(
+                    "tracking_number".to_string(),
+                    serde_json::json!(tracking_number),
+                );
+
+                info!(
+                    "Shipping arrangement step completed successfully for order {}",
+                    order.order_id
+                );
                 Ok(StepResult::Success)
             }
             Err(e) => {
-                error!("Shipping arrangement step failed for order {}: {}", order.order_id, e);
+                error!(
+                    "Shipping arrangement step failed for order {}: {}",
+                    order.order_id, e
+                );
                 Ok(StepResult::RetryableFailure(e.to_string()))
             }
         }
@@ -325,18 +386,24 @@ impl SagaStep for ShippingArrangementStep {
 
     async fn compensate(&self, context: &SagaContext) -> OrbitResult<StepResult> {
         let tracking_number: Option<String> = context.get_typed_data("tracking_number")?;
-        let order: Order = context.get_typed_data("order")?.ok_or_else(|| {
-            OrbitError::internal("Order data not found in context")
-        })?;
+        let order: Order = context
+            .get_typed_data("order")?
+            .ok_or_else(|| OrbitError::internal("Order data not found in context"))?;
 
         if let Some(tracking_number) = tracking_number {
             match self.cancel_shipping(&tracking_number).await {
                 Ok(()) => {
-                    info!("Shipping compensation completed for order {}", order.order_id);
+                    info!(
+                        "Shipping compensation completed for order {}",
+                        order.order_id
+                    );
                     Ok(StepResult::Success)
                 }
                 Err(e) => {
-                    error!("Shipping compensation failed for order {}: {}", order.order_id, e);
+                    error!(
+                        "Shipping compensation failed for order {}: {}",
+                        order.order_id, e
+                    );
                     Err(e)
                 }
             }
@@ -377,22 +444,34 @@ impl OrderConfirmationStep {
     }
 
     async fn send_confirmation(&self, order: &Order, tracking_number: &str) -> OrbitResult<()> {
-        info!("Sending order confirmation to customer {} for order {}", order.customer_id, order.order_id);
-        
+        info!(
+            "Sending order confirmation to customer {} for order {}",
+            order.customer_id, order.order_id
+        );
+
         // Simulate sending confirmation email
         sleep(Duration::from_millis(150)).await;
-        
-        info!("Order confirmation sent with tracking number: {}", tracking_number);
+
+        info!(
+            "Order confirmation sent with tracking number: {}",
+            tracking_number
+        );
         Ok(())
     }
 
     async fn send_cancellation_notice(&self, order: &Order) -> OrbitResult<()> {
-        info!("Sending order cancellation notice to customer {} for order {}", order.customer_id, order.order_id);
-        
+        info!(
+            "Sending order cancellation notice to customer {} for order {}",
+            order.customer_id, order.order_id
+        );
+
         // Simulate sending cancellation email
         sleep(Duration::from_millis(100)).await;
-        
-        info!("Order cancellation notice sent for order {}", order.order_id);
+
+        info!(
+            "Order cancellation notice sent for order {}",
+            order.order_id
+        );
         Ok(())
     }
 }
@@ -400,38 +479,50 @@ impl OrderConfirmationStep {
 #[async_trait]
 impl SagaStep for OrderConfirmationStep {
     async fn execute(&self, context: &SagaContext) -> OrbitResult<StepResult> {
-        let order: Order = context.get_typed_data("order")?.ok_or_else(|| {
-            OrbitError::internal("Order data not found in context")
-        })?;
-        
-        let tracking_number: String = context.get_typed_data("tracking_number")?.ok_or_else(|| {
-            OrbitError::internal("Tracking number not found in context")
-        })?;
+        let order: Order = context
+            .get_typed_data("order")?
+            .ok_or_else(|| OrbitError::internal("Order data not found in context"))?;
+
+        let tracking_number: String = context
+            .get_typed_data("tracking_number")?
+            .ok_or_else(|| OrbitError::internal("Tracking number not found in context"))?;
 
         match self.send_confirmation(&order, &tracking_number).await {
             Ok(()) => {
-                info!("Order confirmation step completed successfully for order {}", order.order_id);
+                info!(
+                    "Order confirmation step completed successfully for order {}",
+                    order.order_id
+                );
                 Ok(StepResult::Success)
             }
             Err(e) => {
-                error!("Order confirmation step failed for order {}: {}", order.order_id, e);
+                error!(
+                    "Order confirmation step failed for order {}: {}",
+                    order.order_id, e
+                );
                 Ok(StepResult::RetryableFailure(e.to_string()))
             }
         }
     }
 
     async fn compensate(&self, context: &SagaContext) -> OrbitResult<StepResult> {
-        let order: Order = context.get_typed_data("order")?.ok_or_else(|| {
-            OrbitError::internal("Order data not found in context")
-        })?;
+        let order: Order = context
+            .get_typed_data("order")?
+            .ok_or_else(|| OrbitError::internal("Order data not found in context"))?;
 
         match self.send_cancellation_notice(&order).await {
             Ok(()) => {
-                info!("Order confirmation compensation completed for order {}", order.order_id);
+                info!(
+                    "Order confirmation compensation completed for order {}",
+                    order.order_id
+                );
                 Ok(StepResult::Success)
             }
             Err(e) => {
-                error!("Order confirmation compensation failed for order {}: {}", order.order_id, e);
+                error!(
+                    "Order confirmation compensation failed for order {}: {}",
+                    order.order_id, e
+                );
                 Err(e)
             }
         }
@@ -453,13 +544,22 @@ impl SagaEventHandler for OrderSagaEventHandler {
     }
 
     async fn on_saga_completed(&self, execution: &SagaExecution) -> OrbitResult<()> {
-        info!("✅ Order saga completed successfully: {}", execution.saga_id);
+        info!(
+            "✅ Order saga completed successfully: {}",
+            execution.saga_id
+        );
         Ok(())
     }
 
     async fn on_saga_failed(&self, execution: &SagaExecution) -> OrbitResult<()> {
-        error!("❌ Order saga failed: {} - {}", execution.saga_id, 
-               execution.error_message.as_deref().unwrap_or("Unknown error"));
+        error!(
+            "❌ Order saga failed: {} - {}",
+            execution.saga_id,
+            execution
+                .error_message
+                .as_deref()
+                .unwrap_or("Unknown error")
+        );
         Ok(())
     }
 
@@ -468,13 +568,24 @@ impl SagaEventHandler for OrderSagaEventHandler {
         Ok(())
     }
 
-    async fn on_step_completed(&self, execution: &SagaExecution, step_id: &str, result: &StepResult) -> OrbitResult<()> {
+    async fn on_step_completed(
+        &self,
+        execution: &SagaExecution,
+        step_id: &str,
+        result: &StepResult,
+    ) -> OrbitResult<()> {
         match result {
             StepResult::Success => {
-                info!("✓ Step completed: {} in saga {}", step_id, execution.saga_id);
+                info!(
+                    "✓ Step completed: {} in saga {}",
+                    step_id, execution.saga_id
+                );
             }
             _ => {
-                warn!("⚠ Step completed with result: {:?} - {} in saga {}", result, step_id, execution.saga_id);
+                warn!(
+                    "⚠ Step completed with result: {:?} - {} in saga {}",
+                    result, step_id, execution.saga_id
+                );
             }
         }
         Ok(())
@@ -555,11 +666,15 @@ async fn main() -> OrbitResult<()> {
     let orchestrator = Arc::new(SagaOrchestrator::new(node_id, logger));
 
     // Register event handler
-    orchestrator.add_event_handler(Arc::new(OrderSagaEventHandler)).await;
+    orchestrator
+        .add_event_handler(Arc::new(OrderSagaEventHandler))
+        .await;
 
     // Register saga definition
     let saga_definition = create_order_processing_saga().await;
-    orchestrator.register_saga_definition(saga_definition).await?;
+    orchestrator
+        .register_saga_definition(saga_definition)
+        .await?;
 
     info!("✅ Saga orchestrator initialized and saga definition registered");
 
@@ -572,7 +687,9 @@ async fn main() -> OrbitResult<()> {
     let mut initial_context = HashMap::new();
     initial_context.insert("order".to_string(), serde_json::to_value(&order1)?);
 
-    let saga_id1 = orchestrator.start_saga("order_processing_saga", initial_context).await?;
+    let saga_id1 = orchestrator
+        .start_saga("order_processing_saga", initial_context)
+        .await?;
     info!("Started saga for successful order: {}", saga_id1);
 
     // Wait for completion
@@ -584,7 +701,9 @@ async fn main() -> OrbitResult<()> {
     let mut initial_context2 = HashMap::new();
     initial_context2.insert("order".to_string(), serde_json::to_value(&order2)?);
 
-    let saga_id2 = orchestrator.start_saga("order_processing_saga", initial_context2).await?;
+    let saga_id2 = orchestrator
+        .start_saga("order_processing_saga", initial_context2)
+        .await?;
     info!("Started saga for failing order: {}", saga_id2);
 
     // Wait for completion
@@ -603,7 +722,9 @@ async fn main() -> OrbitResult<()> {
     let mut initial_context3 = HashMap::new();
     initial_context3.insert("order".to_string(), serde_json::to_value(&order3)?);
 
-    let saga_id3 = orchestrator.start_saga("order_processing_saga", initial_context3).await?;
+    let saga_id3 = orchestrator
+        .start_saga("order_processing_saga", initial_context3)
+        .await?;
     info!("Started saga for inventory shortage order: {}", saga_id3);
 
     // Wait for completion
@@ -622,23 +743,35 @@ async fn main() -> OrbitResult<()> {
 
     // Check execution results
     info!("\n🔍 Checking execution results:");
-    
+
     if let Ok(Some(execution1)) = orchestrator.get_execution(&saga_id1).await {
-        info!("Saga 1 ({}): State = {:?}, Steps completed = {}", 
-              saga_id1, execution1.state, execution1.completed_steps.len());
+        info!(
+            "Saga 1 ({}): State = {:?}, Steps completed = {}",
+            saga_id1,
+            execution1.state,
+            execution1.completed_steps.len()
+        );
     }
 
     if let Ok(Some(execution2)) = orchestrator.get_execution(&saga_id2).await {
-        info!("Saga 2 ({}): State = {:?}, Steps compensated = {}", 
-              saga_id2, execution2.state, execution2.compensated_steps.len());
+        info!(
+            "Saga 2 ({}): State = {:?}, Steps compensated = {}",
+            saga_id2,
+            execution2.state,
+            execution2.compensated_steps.len()
+        );
     }
 
     if let Ok(Some(execution3)) = orchestrator.get_execution(&saga_id3).await {
-        info!("Saga 3 ({}): State = {:?}, Steps compensated = {}", 
-              saga_id3, execution3.state, execution3.compensated_steps.len());
+        info!(
+            "Saga 3 ({}): State = {:?}, Steps compensated = {}",
+            saga_id3,
+            execution3.state,
+            execution3.compensated_steps.len()
+        );
     }
 
     info!("\n✅ E-commerce Order Processing Saga Example completed!");
-    
+
     Ok(())
 }

@@ -1,0 +1,37 @@
+{{- if .Values.rbac.create -}}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: {{ .Release.Namespace }}
+  name: {{ include "orbit-rs.fullname" . }}
+  labels:
+    {{- include "orbit-rs.labels" . | nindent 4 }}
+    app.kubernetes.io/component: rbac
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["endpoints"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["coordination.k8s.io"]
+  resources: ["leases"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "orbit-rs.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "orbit-rs.labels" . | nindent 4 }}
+    app.kubernetes.io/component: rbac
+subjects:
+- kind: ServiceAccount
+  name: {{ include "orbit-rs.serviceAccountName" . }}
+  namespace: {{ .Release.Namespace }}
+roleRef:
+  kind: Role
+  name: {{ include "orbit-rs.fullname" . }}
+  apiGroup: rbac.authorization.k8s.io
+{{- end }}

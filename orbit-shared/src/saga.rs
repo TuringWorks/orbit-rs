@@ -8,7 +8,7 @@ use std::fmt;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{Mutex, RwLock};
-use tracing::{info, warn, error, debug};
+use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
 /// Unique identifier for a saga instance
@@ -126,25 +126,25 @@ pub struct SagaStepMetadata {
 pub trait SagaStep: Send + Sync {
     /// Execute the forward action of this step
     async fn execute(&self, context: &SagaContext) -> OrbitResult<StepResult>;
-    
+
     /// Execute the compensation action for this step
     async fn compensate(&self, context: &SagaContext) -> OrbitResult<StepResult>;
-    
+
     /// Get metadata for this step
     fn metadata(&self) -> &SagaStepMetadata;
-    
+
     /// Check if this step should be executed based on context
     async fn should_execute(&self, context: &SagaContext) -> OrbitResult<bool> {
         let _ = context;
         Ok(true) // Default implementation: always execute
     }
-    
+
     /// Prepare the step for execution (resource allocation, validation, etc.)
     async fn prepare(&self, context: &SagaContext) -> OrbitResult<()> {
         let _ = context;
         Ok(()) // Default implementation: no preparation needed
     }
-    
+
     /// Clean up after step execution (resource deallocation, etc.)
     async fn cleanup(&self, context: &SagaContext) -> OrbitResult<()> {
         let _ = context;
@@ -196,8 +196,9 @@ impl SagaContext {
     {
         match self.data.get(key) {
             Some(value) => {
-                let typed_value = serde_json::from_value(value.clone())
-                    .map_err(|e| OrbitError::internal(&format!("Failed to deserialize context data: {}", e)))?;
+                let typed_value = serde_json::from_value(value.clone()).map_err(|e| {
+                    OrbitError::internal(&format!("Failed to deserialize context data: {}", e))
+                })?;
                 Ok(Some(typed_value))
             }
             None => Ok(None),
@@ -259,7 +260,10 @@ impl SagaDefinition {
         for step in &self.steps {
             let step_id = &step.metadata().step_id;
             if !step_ids.insert(step_id.clone()) {
-                return Err(OrbitError::internal(&format!("Duplicate step ID: {}", step_id)));
+                return Err(OrbitError::internal(&format!(
+                    "Duplicate step ID: {}",
+                    step_id
+                )));
             }
         }
 
@@ -268,8 +272,8 @@ impl SagaDefinition {
             for dep in &step.metadata().dependencies {
                 if !step_ids.contains(dep) {
                     return Err(OrbitError::internal(&format!(
-                        "Step {} has invalid dependency: {}", 
-                        step.metadata().step_id, 
+                        "Step {} has invalid dependency: {}",
+                        step.metadata().step_id,
                         dep
                     )));
                 }
@@ -368,22 +372,27 @@ pub struct SagaStats {
 pub trait SagaEventHandler: Send + Sync {
     /// Called when a saga starts
     async fn on_saga_started(&self, execution: &SagaExecution) -> OrbitResult<()>;
-    
+
     /// Called when a saga completes successfully
     async fn on_saga_completed(&self, execution: &SagaExecution) -> OrbitResult<()>;
-    
+
     /// Called when a saga fails
     async fn on_saga_failed(&self, execution: &SagaExecution) -> OrbitResult<()>;
-    
+
     /// Called when a step starts
     async fn on_step_started(&self, execution: &SagaExecution, step_id: &str) -> OrbitResult<()>;
-    
+
     /// Called when a step completes
-    async fn on_step_completed(&self, execution: &SagaExecution, step_id: &str, result: &StepResult) -> OrbitResult<()>;
-    
+    async fn on_step_completed(
+        &self,
+        execution: &SagaExecution,
+        step_id: &str,
+        result: &StepResult,
+    ) -> OrbitResult<()>;
+
     /// Called when compensation starts
     async fn on_compensation_started(&self, execution: &SagaExecution) -> OrbitResult<()>;
-    
+
     /// Called when compensation completes
     async fn on_compensation_completed(&self, execution: &SagaExecution) -> OrbitResult<()>;
 }
@@ -400,10 +409,7 @@ pub struct SagaOrchestrator {
 }
 
 impl SagaOrchestrator {
-    pub fn new(
-        node_id: NodeId,
-        logger: Arc<dyn PersistentTransactionLogger>,
-    ) -> Self {
+    pub fn new(node_id: NodeId, logger: Arc<dyn PersistentTransactionLogger>) -> Self {
         Self {
             node_id,
             definitions: Arc::new(RwLock::new(HashMap::new())),
@@ -427,11 +433,11 @@ impl SagaOrchestrator {
     /// Register a saga definition
     pub async fn register_saga_definition(&self, definition: SagaDefinition) -> OrbitResult<()> {
         definition.validate()?;
-        
+
         let definition_name = definition.name.clone();
         let mut definitions = self.definitions.write().await;
         definitions.insert(definition_name.clone(), definition);
-        
+
         info!("Registered saga definition: {}", definition_name);
         Ok(())
     }
@@ -450,14 +456,17 @@ impl SagaOrchestrator {
     ) -> OrbitResult<SagaId> {
         let _definition = {
             let definitions = self.definitions.read().await;
-            definitions.get(definition_id)
-                .ok_or_else(|| OrbitError::internal(&format!("Saga definition not found: {}", definition_id)))?
+            definitions
+                .get(definition_id)
+                .ok_or_else(|| {
+                    OrbitError::internal(&format!("Saga definition not found: {}", definition_id))
+                })?
                 .clone()
         };
 
         let saga_id = SagaId::new(self.node_id.clone());
         let mut context = SagaContext::new(saga_id.clone(), self.node_id.clone());
-        
+
         // Set initial context data
         for (key, value) in initial_context {
             context.set_data(key, value);
@@ -502,11 +511,13 @@ impl SagaOrchestrator {
             let definitions = self.definitions.read().await;
             let executions = self.executions.read().await;
 
-            let execution = executions.get(saga_id)
+            let execution = executions
+                .get(saga_id)
                 .ok_or_else(|| OrbitError::internal("Saga execution not found"))?
                 .clone();
 
-            let definition = definitions.get(&execution.definition_id)
+            let definition = definitions
+                .get(&execution.definition_id)
                 .ok_or_else(|| OrbitError::internal("Saga definition not found"))?
                 .clone();
 
@@ -545,13 +556,18 @@ impl SagaOrchestrator {
             step.prepare(&execution.context).await?;
 
             // Execute step with retries
-            let result = self.execute_step_with_retries(step.as_ref(), &execution.context, &definition.config).await;
+            let result = self
+                .execute_step_with_retries(step.as_ref(), &execution.context, &definition.config)
+                .await;
 
             match result {
                 Ok(StepResult::Success) => {
                     execution.mark_step_completed(step_id.clone());
-                    execution.context.step_results.insert(step_id.clone(), StepResult::Success);
-                    
+                    execution
+                        .context
+                        .step_results
+                        .insert(step_id.clone(), StepResult::Success);
+
                     // Update statistics
                     {
                         let mut stats = self.stats.write().await;
@@ -560,7 +576,10 @@ impl SagaOrchestrator {
 
                     // Notify event handlers
                     for handler in handlers.iter() {
-                        if let Err(e) = handler.on_step_completed(&execution, &step_id, &StepResult::Success).await {
+                        if let Err(e) = handler
+                            .on_step_completed(&execution, &step_id, &StepResult::Success)
+                            .await
+                        {
                             error!("Saga event handler failed: {}", e);
                         }
                     }
@@ -623,7 +642,7 @@ impl SagaOrchestrator {
 
         info!("Saga completed successfully: {}", saga_id);
         self.update_execution(&execution).await?;
-        
+
         Ok(execution)
     }
 
@@ -634,7 +653,10 @@ impl SagaOrchestrator {
         context: &SagaContext,
         config: &SagaConfig,
     ) -> OrbitResult<StepResult> {
-        let max_retries = step.metadata().max_retries.unwrap_or(config.max_retry_attempts);
+        let max_retries = step
+            .metadata()
+            .max_retries
+            .unwrap_or(config.max_retry_attempts);
         let mut retry_count = 0;
         let mut backoff_delay = config.retry_backoff_initial;
 
@@ -648,28 +670,42 @@ impl SagaOrchestrator {
                 }
                 Ok(StepResult::RetryableFailure(msg)) => {
                     if retry_count >= max_retries {
-                        return Ok(StepResult::PermanentFailure(format!("Max retries exceeded: {}", msg)));
+                        return Ok(StepResult::PermanentFailure(format!(
+                            "Max retries exceeded: {}",
+                            msg
+                        )));
                     }
 
                     retry_count += 1;
-                    debug!("Retrying step {} (attempt {}): {}", step.metadata().step_id, retry_count, msg);
+                    debug!(
+                        "Retrying step {} (attempt {}): {}",
+                        step.metadata().step_id,
+                        retry_count,
+                        msg
+                    );
 
                     tokio::time::sleep(backoff_delay).await;
                     backoff_delay = Duration::from_millis(
-                        (backoff_delay.as_millis() as f64 * config.retry_backoff_multiplier) as u64
+                        (backoff_delay.as_millis() as f64 * config.retry_backoff_multiplier) as u64,
                     );
                 }
                 Err(_) => {
                     if retry_count >= max_retries {
-                        return Ok(StepResult::PermanentFailure("Max retries exceeded".to_string()));
+                        return Ok(StepResult::PermanentFailure(
+                            "Max retries exceeded".to_string(),
+                        ));
                     }
 
                     retry_count += 1;
-                    debug!("Retrying step {} (attempt {})", step.metadata().step_id, retry_count);
+                    debug!(
+                        "Retrying step {} (attempt {})",
+                        step.metadata().step_id,
+                        retry_count
+                    );
 
                     tokio::time::sleep(backoff_delay).await;
                     backoff_delay = Duration::from_millis(
-                        (backoff_delay.as_millis() as f64 * config.retry_backoff_multiplier) as u64
+                        (backoff_delay.as_millis() as f64 * config.retry_backoff_multiplier) as u64,
                     );
                 }
             }
@@ -695,13 +731,17 @@ impl SagaOrchestrator {
         // Compensate completed steps in reverse order
         let completed_steps = execution.completed_steps.clone();
         for step_id in completed_steps.iter().rev() {
-            if let Some(step) = definition.steps.iter().find(|s| &s.metadata().step_id == step_id) {
+            if let Some(step) = definition
+                .steps
+                .iter()
+                .find(|s| &s.metadata().step_id == step_id)
+            {
                 debug!("Compensating step: {}", step_id);
 
                 match step.compensate(&execution.context).await {
                     Ok(StepResult::Success) => {
                         execution.mark_step_compensated(step_id.clone());
-                        
+
                         // Update statistics
                         {
                             let mut stats = self.stats.write().await;
@@ -714,7 +754,7 @@ impl SagaOrchestrator {
                         error!("Failed to compensate step: {}", step_id);
                         execution.state = SagaState::Failed;
                         execution.completed_at = Some(chrono::Utc::now().timestamp_millis());
-                        
+
                         // Update statistics
                         {
                             let mut stats = self.stats.write().await;
@@ -791,10 +831,10 @@ impl SagaOrchestrator {
     /// Process saga execution queue
     async fn process_saga_queue(&self) {
         let mut interval = tokio::time::interval(Duration::from_millis(100));
-        
+
         loop {
             interval.tick().await;
-            
+
             let saga_id = {
                 let mut queue = self.execution_queue.lock().await;
                 queue.pop_front()
@@ -826,7 +866,7 @@ impl Clone for SagaOrchestrator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::transaction_log::{SqliteTransactionLogger, PersistentLogConfig};
+    use crate::transaction_log::{PersistentLogConfig, SqliteTransactionLogger};
     use tempfile::tempdir;
 
     // Mock saga step for testing
@@ -883,15 +923,15 @@ mod tests {
     async fn create_test_orchestrator() -> SagaOrchestrator {
         let temp_dir = tempdir().unwrap();
         let db_path = temp_dir.path().join("saga_test.db");
-        
+
         let log_config = PersistentLogConfig {
             database_path: db_path,
             ..Default::default()
         };
-        
+
         let logger = Arc::new(SqliteTransactionLogger::new(log_config).await.unwrap());
         let node_id = NodeId::new("test-node".to_string(), "default".to_string());
-        
+
         SagaOrchestrator::new(node_id, logger)
     }
 
@@ -911,12 +951,13 @@ mod tests {
     #[tokio::test]
     async fn test_saga_definition_validation() {
         let definition = SagaDefinition::new("test-saga".to_string(), "1.0".to_string());
-        
+
         // Empty saga should fail validation
         assert!(definition.validate().is_err());
 
-        let definition = definition.add_step(Arc::new(MockSagaStep::new("step1".to_string(), true)));
-        
+        let definition =
+            definition.add_step(Arc::new(MockSagaStep::new("step1".to_string(), true)));
+
         // Single step saga should pass validation
         assert!(definition.validate().is_ok());
     }
@@ -924,7 +965,7 @@ mod tests {
     #[tokio::test]
     async fn test_saga_orchestrator_registration() {
         let orchestrator = create_test_orchestrator().await;
-        
+
         let definition = SagaDefinition::new("test-saga".to_string(), "1.0".to_string())
             .add_step(Arc::new(MockSagaStep::new("step1".to_string(), true)));
 
@@ -935,14 +976,20 @@ mod tests {
     #[tokio::test]
     async fn test_successful_saga_execution() {
         let orchestrator = create_test_orchestrator().await;
-        
+
         let definition = SagaDefinition::new("test-saga".to_string(), "1.0".to_string())
             .add_step(Arc::new(MockSagaStep::new("step1".to_string(), true)))
             .add_step(Arc::new(MockSagaStep::new("step2".to_string(), true)));
 
-        orchestrator.register_saga_definition(definition).await.unwrap();
+        orchestrator
+            .register_saga_definition(definition)
+            .await
+            .unwrap();
 
-        let saga_id = orchestrator.start_saga("test-saga", HashMap::new()).await.unwrap();
+        let saga_id = orchestrator
+            .start_saga("test-saga", HashMap::new())
+            .await
+            .unwrap();
         let execution = orchestrator.execute_saga(&saga_id).await.unwrap();
 
         assert!(execution.is_completed());
@@ -953,14 +1000,20 @@ mod tests {
     #[tokio::test]
     async fn test_saga_failure_and_compensation() {
         let orchestrator = create_test_orchestrator().await;
-        
+
         let definition = SagaDefinition::new("test-saga".to_string(), "1.0".to_string())
             .add_step(Arc::new(MockSagaStep::new("step1".to_string(), true)))
             .add_step(Arc::new(MockSagaStep::new("step2".to_string(), false))); // This step will fail
 
-        orchestrator.register_saga_definition(definition).await.unwrap();
+        orchestrator
+            .register_saga_definition(definition)
+            .await
+            .unwrap();
 
-        let saga_id = orchestrator.start_saga("test-saga", HashMap::new()).await.unwrap();
+        let saga_id = orchestrator
+            .start_saga("test-saga", HashMap::new())
+            .await
+            .unwrap();
         let execution = orchestrator.execute_saga(&saga_id).await.unwrap();
 
         assert!(execution.has_failed());
@@ -979,7 +1032,10 @@ mod tests {
         context.set_data("key1".to_string(), serde_json::json!("value1"));
         context.set_data("key2".to_string(), serde_json::json!(42));
 
-        assert_eq!(context.get_data("key1").unwrap(), &serde_json::json!("value1"));
+        assert_eq!(
+            context.get_data("key1").unwrap(),
+            &serde_json::json!("value1")
+        );
         assert_eq!(context.get_data("key2").unwrap(), &serde_json::json!(42));
         assert!(context.get_data("key3").is_none());
 

@@ -209,6 +209,11 @@ rbac:
 
 # Monitoring configuration
 monitoring:
+  # Enable/disable dependencies
+  prometheus:
+    enabled: false
+  grafana:
+    enabled: false
   # ServiceMonitor for Prometheus Operator
   serviceMonitor:
     enabled: false

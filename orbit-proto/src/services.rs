@@ -1,11 +1,11 @@
 //! gRPC service implementations for Orbit
 
 use crate::*;
-use tonic::{Request, Response, Status, Streaming};
-use tokio::sync::mpsc;
 use std::collections::HashMap;
 use std::sync::Arc;
+use tokio::sync::mpsc;
 use tokio::sync::Mutex;
+use tonic::{Request, Response, Status, Streaming};
 
 /// Connection service implementation for handling message streams
 #[derive(Debug, Default, Clone)]
@@ -23,7 +23,8 @@ impl OrbitConnectionService {
 
 #[tonic::async_trait]
 impl connection_service_server::ConnectionService for OrbitConnectionService {
-    type OpenStreamStream = tokio_stream::wrappers::UnboundedReceiverStream<Result<MessageProto, Status>>;
+    type OpenStreamStream =
+        tokio_stream::wrappers::UnboundedReceiverStream<Result<MessageProto, Status>>;
 
     async fn open_stream(
         &self,
@@ -31,13 +32,13 @@ impl connection_service_server::ConnectionService for OrbitConnectionService {
     ) -> Result<Response<Self::OpenStreamStream>, Status> {
         let mut stream = request.into_inner();
         let (tx, rx) = mpsc::unbounded_channel();
-        
+
         // Handle incoming messages
         tokio::spawn(async move {
             while let Some(message) = stream.message().await? {
                 // Process the message here
                 tracing::info!("Received message: {:?}", message.message_id);
-                
+
                 // Echo the message back for now (implement actual routing logic later)
                 let response = MessageProto {
                     message_id: message.message_id,
@@ -46,7 +47,7 @@ impl connection_service_server::ConnectionService for OrbitConnectionService {
                     content: message.content,
                     attempts: message.attempts + 1,
                 };
-                
+
                 if tx.send(Ok(response)).is_err() {
                     break;
                 }
@@ -54,7 +55,9 @@ impl connection_service_server::ConnectionService for OrbitConnectionService {
             Ok::<(), Status>(())
         });
 
-        Ok(Response::new(tokio_stream::wrappers::UnboundedReceiverStream::new(rx)))
+        Ok(Response::new(
+            tokio_stream::wrappers::UnboundedReceiverStream::new(rx),
+        ))
     }
 
     async fn get_connection_info(
@@ -95,7 +98,8 @@ impl OrbitHealthService {
 
 #[tonic::async_trait]
 impl health_service_server::HealthService for OrbitHealthService {
-    type WatchStream = tokio_stream::wrappers::UnboundedReceiverStream<Result<HealthCheckResponse, Status>>;
+    type WatchStream =
+        tokio_stream::wrappers::UnboundedReceiverStream<Result<HealthCheckResponse, Status>>;
 
     async fn check(
         &self,
@@ -120,22 +124,24 @@ impl health_service_server::HealthService for OrbitHealthService {
         let response = HealthCheckResponse {
             status: status as i32,
         };
-        
+
         if tx.send(Ok(response)).is_err() {
             return Err(Status::internal("Failed to send initial health status"));
         }
 
         // In a real implementation, we would watch for status changes
         // For now, just send the current status and close
-        
-        Ok(Response::new(tokio_stream::wrappers::UnboundedReceiverStream::new(rx)))
+
+        Ok(Response::new(
+            tokio_stream::wrappers::UnboundedReceiverStream::new(rx),
+        ))
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::health_service_server::HealthService;
+    use super::*;
     use tokio_test;
 
     #[tokio::test]
@@ -152,6 +158,9 @@ mod tests {
         });
 
         let response = service.check(request).await.unwrap();
-        assert_eq!(response.into_inner().status, health_check_response::ServingStatus::Serving as i32);
+        assert_eq!(
+            response.into_inner().status,
+            health_check_response::ServingStatus::Serving as i32
+        );
     }
 }

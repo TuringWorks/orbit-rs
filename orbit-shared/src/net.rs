@@ -34,12 +34,12 @@ pub enum MessageTarget {
 /// Content of a message
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum MessageContent {
-    Error { 
-        description: Option<String> 
+    Error {
+        description: Option<String>,
     },
     ConnectionInfoRequest,
-    ConnectionInfoResponse { 
-        node_id: NodeId 
+    ConnectionInfoResponse {
+        node_id: NodeId,
     },
     InvocationRequest {
         destination: AddressableReference,
@@ -47,8 +47,8 @@ pub enum MessageContent {
         arguments: String, // JSON-serialized arguments
         reason: InvocationReason,
     },
-    InvocationResponse { 
-        data: String // JSON-serialized response
+    InvocationResponse {
+        data: String, // JSON-serialized response
     },
     InvocationResponseError {
         description: Option<String>,
@@ -95,22 +95,19 @@ impl Message {
     /// Get the destination string for routing purposes
     pub fn destination(&self) -> String {
         match &self.content {
-            MessageContent::InvocationRequest { destination, .. } => {
-                destination.key.to_string()
-            },
-            MessageContent::InvocationResponse { .. } => {
-                self.target
-                    .as_ref()
-                    .map(|t| match t {
-                        MessageTarget::Unicast { target_node } => target_node.to_string(),
-                        MessageTarget::RoutedUnicast { route } => {
-                            route.hops.first()
-                                .map(|node| node.to_string())
-                                .unwrap_or_default()
-                        }
-                    })
-                    .unwrap_or_default()
-            },
+            MessageContent::InvocationRequest { destination, .. } => destination.key.to_string(),
+            MessageContent::InvocationResponse { .. } => self
+                .target
+                .as_ref()
+                .map(|t| match t {
+                    MessageTarget::Unicast { target_node } => target_node.to_string(),
+                    MessageTarget::RoutedUnicast { route } => route
+                        .hops
+                        .first()
+                        .map(|node| node.to_string())
+                        .unwrap_or_default(),
+                })
+                .unwrap_or_default(),
             _ => String::new(),
         }
     }
@@ -151,7 +148,9 @@ mod tests {
     fn test_message_destination() {
         let reference = AddressableReference {
             addressable_type: "TestActor".to_string(),
-            key: Key::StringKey { key: "test-key".to_string() },
+            key: Key::StringKey {
+                key: "test-key".to_string(),
+            },
         };
 
         let content = MessageContent::InvocationRequest {
@@ -170,7 +169,7 @@ mod tests {
         let message = Message::new(MessageContent::ConnectionInfoRequest)
             .increment_attempts()
             .increment_attempts();
-        
+
         assert_eq!(message.attempts, 2);
     }
 }

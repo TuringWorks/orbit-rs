@@ -1,13 +1,13 @@
 //! Client-side addressable management and lifecycle
 
-use orbit_shared::*;
 use async_trait::async_trait;
+use orbit_shared::*;
 use std::any::{Any, TypeId};
 use std::collections::HashMap;
-use std::sync::Arc;
-use tokio::sync::{RwLock, Mutex};
-use tokio::time::{Duration, Instant};
 use std::fmt;
+use std::sync::Arc;
+use tokio::sync::{Mutex, RwLock};
+use tokio::time::{Duration, Instant};
 
 /// Reason for actor deactivation
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -59,7 +59,11 @@ pub trait ActorLifecycle: Send + Sync {
     }
 
     /// Called when the actor is deactivated
-    async fn on_deactivate(&self, _context: &ActorContext, _reason: DeactivationReason) -> OrbitResult<()> {
+    async fn on_deactivate(
+        &self,
+        _context: &ActorContext,
+        _reason: DeactivationReason,
+    ) -> OrbitResult<()> {
         Ok(())
     }
 }
@@ -109,7 +113,9 @@ impl ActorInstance {
         let mut is_active = self.is_active.lock().await;
         if *is_active {
             *is_active = false;
-            self.implementation.on_deactivate(&self.context, reason).await?;
+            self.implementation
+                .on_deactivate(&self.context, reason)
+                .await?;
         }
         Ok(())
     }
@@ -143,7 +149,7 @@ impl ActorRegistry {
         }
     }
 
-    pub async fn register_constructor<T>(&self, constructor: Arc<dyn ActorConstructor>) 
+    pub async fn register_constructor<T>(&self, constructor: Arc<dyn ActorConstructor>)
     where
         T: Addressable + 'static,
     {
@@ -169,18 +175,23 @@ impl ActorRegistry {
         let constructors = self.constructors.read().await;
         let constructor = constructors
             .get(&reference.addressable_type)
-            .ok_or_else(|| {
-                OrbitError::AddressableNotFound {
-                    reference: reference.to_string(),
-                }
+            .ok_or_else(|| OrbitError::AddressableNotFound {
+                reference: reference.to_string(),
             })?;
 
         let context = ActorContext::new(reference.clone());
         let implementation = constructor.construct(&context).await?;
-        let instance = Arc::new(ActorInstance::new(reference.clone(), implementation, context));
+        let instance = Arc::new(ActorInstance::new(
+            reference.clone(),
+            implementation,
+            context,
+        ));
 
         // Activate the instance
-        instance.implementation.on_activate(&instance.context).await?;
+        instance
+            .implementation
+            .on_activate(&instance.context)
+            .await?;
 
         // Store the instance
         {
@@ -260,7 +271,10 @@ where
     F: Fn() -> T + Send + Sync + 'static,
     T: ActorImplementation + 'static,
 {
-    async fn construct(&self, _context: &ActorContext) -> OrbitResult<Arc<dyn ActorImplementation>> {
+    async fn construct(
+        &self,
+        _context: &ActorContext,
+    ) -> OrbitResult<Arc<dyn ActorImplementation>> {
         let instance = (self.factory)();
         Ok(Arc::new(instance))
     }
@@ -292,15 +306,22 @@ mod tests {
     async fn test_actor_registry() {
         let registry = ActorRegistry::new();
         let constructor = Arc::new(DefaultActorConstructor::new(|| TestActor));
-        
-        registry.register_constructor::<TestActor>(constructor).await;
+
+        registry
+            .register_constructor::<TestActor>(constructor)
+            .await;
 
         let reference = AddressableReference {
             addressable_type: "TestActor".to_string(),
-            key: Key::StringKey { key: "test".to_string() },
+            key: Key::StringKey {
+                key: "test".to_string(),
+            },
         };
 
-        let instance = registry.get_or_create_instance(reference.clone()).await.unwrap();
+        let instance = registry
+            .get_or_create_instance(reference.clone())
+            .await
+            .unwrap();
         assert!(instance.is_active().await);
     }
 
@@ -308,7 +329,9 @@ mod tests {
     async fn test_actor_deactivation() {
         let reference = AddressableReference {
             addressable_type: "TestActor".to_string(),
-            key: Key::StringKey { key: "test".to_string() },
+            key: Key::StringKey {
+                key: "test".to_string(),
+            },
         };
 
         let context = ActorContext::new(reference.clone());
@@ -316,7 +339,10 @@ mod tests {
         let instance = ActorInstance::new(reference, implementation, context);
 
         assert!(instance.is_active().await);
-        instance.deactivate(DeactivationReason::Explicit).await.unwrap();
+        instance
+            .deactivate(DeactivationReason::Explicit)
+            .await
+            .unwrap();
         assert!(!instance.is_active().await);
     }
 }

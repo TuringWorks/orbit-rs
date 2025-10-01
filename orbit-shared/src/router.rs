@@ -45,7 +45,7 @@ mod tests {
     fn test_direct_route() {
         let node = NodeId::generate("test".to_string());
         let route = Route::direct(node.clone());
-        
+
         assert_eq!(route.len(), 1);
         assert_eq!(route.next_hop(), Some(&node));
     }
@@ -55,7 +55,7 @@ mod tests {
         let node1 = NodeId::generate("test".to_string());
         let node2 = NodeId::generate("test".to_string());
         let mut route = Route::new(vec![node1.clone(), node2.clone()]);
-        
+
         assert_eq!(route.advance(), Some(node1));
         assert_eq!(route.len(), 1);
         assert_eq!(route.next_hop(), Some(&node2));

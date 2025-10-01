@@ -1,7 +1,7 @@
 use crate::exception::{OrbitError, OrbitResult};
 use crate::mesh::NodeId;
 use crate::recovery::{RecoveryEventHandler, TransactionRecoveryManager};
-use crate::saga::{SagaId, SagaExecution, SagaOrchestrator, SagaState};
+use crate::saga::{SagaExecution, SagaId, SagaOrchestrator, SagaState};
 use crate::transaction_log::PersistentTransactionLogger;
 use crate::transactions::TransactionId;
 use async_trait::async_trait;
@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
-use tracing::{info, warn, error, debug};
+use tracing::{debug, error, info, warn};
 
 /// Configuration for saga recovery integration
 #[derive(Debug, Clone)]
@@ -105,7 +105,7 @@ impl SagaRecoveryManager {
     /// Create a recovery checkpoint for a saga execution
     pub async fn create_saga_checkpoint(&self, execution: &SagaExecution) -> OrbitResult<()> {
         let checkpoint = SagaRecoveryCheckpoint::from(execution);
-        
+
         // Store checkpoint in memory
         {
             let mut checkpoints = self.checkpoints.write().await;
@@ -115,7 +115,10 @@ impl SagaRecoveryManager {
         // Persist checkpoint to log
         self.persist_saga_checkpoint(&checkpoint).await?;
 
-        debug!("Created saga recovery checkpoint for: {}", checkpoint.saga_id);
+        debug!(
+            "Created saga recovery checkpoint for: {}",
+            checkpoint.saga_id
+        );
         Ok(())
     }
 
@@ -156,12 +159,19 @@ impl SagaRecoveryManager {
     }
 
     /// Recover sagas from a failed coordinator
-    pub async fn recover_sagas_from_coordinator(&self, failed_coordinator: &NodeId) -> OrbitResult<()> {
-        info!("Recovering sagas from failed coordinator: {}", failed_coordinator);
+    pub async fn recover_sagas_from_coordinator(
+        &self,
+        failed_coordinator: &NodeId,
+    ) -> OrbitResult<()> {
+        info!(
+            "Recovering sagas from failed coordinator: {}",
+            failed_coordinator
+        );
 
         let sagas_to_recover = {
             let checkpoints = self.checkpoints.read().await;
-            checkpoints.values()
+            checkpoints
+                .values()
                 .filter(|checkpoint| &checkpoint.coordinator_node == failed_coordinator)
                 .filter(|checkpoint| self.is_recoverable_state(&checkpoint.saga_state))
                 .cloned()
@@ -169,11 +179,18 @@ impl SagaRecoveryManager {
         };
 
         if sagas_to_recover.is_empty() {
-            info!("No sagas to recover from coordinator: {}", failed_coordinator);
+            info!(
+                "No sagas to recover from coordinator: {}",
+                failed_coordinator
+            );
             return Ok(());
         }
 
-        info!("Found {} sagas to recover from coordinator: {}", sagas_to_recover.len(), failed_coordinator);
+        info!(
+            "Found {} sagas to recover from coordinator: {}",
+            sagas_to_recover.len(),
+            failed_coordinator
+        );
 
         for checkpoint in sagas_to_recover {
             if let Err(e) = self.recover_saga_execution(&checkpoint).await {
@@ -186,11 +203,12 @@ impl SagaRecoveryManager {
 
     /// Check if saga state is recoverable
     fn is_recoverable_state(&self, state: &SagaState) -> bool {
-        matches!(state, 
-            SagaState::Initializing |
-            SagaState::Executing |
-            SagaState::Compensating |
-            SagaState::Paused
+        matches!(
+            state,
+            SagaState::Initializing
+                | SagaState::Executing
+                | SagaState::Compensating
+                | SagaState::Paused
         )
     }
 
@@ -200,7 +218,10 @@ impl SagaRecoveryManager {
 
         // Check recovery attempts
         if checkpoint.recovery_attempts >= self.config.max_recovery_attempts {
-            error!("Max recovery attempts exceeded for saga: {}", checkpoint.saga_id);
+            error!(
+                "Max recovery attempts exceeded for saga: {}",
+                checkpoint.saga_id
+            );
             return Err(OrbitError::internal("Max recovery attempts exceeded"));
         }
 
@@ -222,15 +243,22 @@ impl SagaRecoveryManager {
             SagaState::Compensating => {
                 // Saga was compensating - continue compensation
                 info!("Continuing saga compensation: {}", checkpoint.saga_id);
-                self.continue_saga_compensation(&recovered_execution).await?;
+                self.continue_saga_compensation(&recovered_execution)
+                    .await?;
             }
             SagaState::Paused => {
                 // Saga was paused - can be resumed when appropriate
-                info!("Saga is paused, will resume when requested: {}", checkpoint.saga_id);
+                info!(
+                    "Saga is paused, will resume when requested: {}",
+                    checkpoint.saga_id
+                );
                 self.store_paused_saga(&recovered_execution).await?;
             }
             _ => {
-                debug!("Saga {} is in non-recoverable state: {:?}", checkpoint.saga_id, checkpoint.saga_state);
+                debug!(
+                    "Saga {} is in non-recoverable state: {:?}",
+                    checkpoint.saga_id, checkpoint.saga_state
+                );
             }
         }
 
@@ -248,14 +276,17 @@ impl SagaRecoveryManager {
     }
 
     /// Reconstruct saga execution from checkpoint
-    async fn reconstruct_saga_execution(&self, checkpoint: &SagaRecoveryCheckpoint) -> OrbitResult<SagaExecution> {
+    async fn reconstruct_saga_execution(
+        &self,
+        checkpoint: &SagaRecoveryCheckpoint,
+    ) -> OrbitResult<SagaExecution> {
         use crate::saga::{SagaContext, SagaExecution};
 
         // Reconstruct saga context
         let mut context = SagaContext::new(checkpoint.saga_id.clone(), self.node_id.clone());
         context.data = checkpoint.context_data.clone();
         context.current_step = checkpoint.current_step.clone();
-        
+
         // Reconstruct execution state
         let mut execution = SagaExecution::new(
             checkpoint.saga_id.clone(),
@@ -276,19 +307,24 @@ impl SagaRecoveryManager {
     /// Restart saga execution from the beginning
     async fn restart_saga_execution(&self, execution: &SagaExecution) -> OrbitResult<()> {
         // Create a fresh saga execution
-        let saga_id = self.saga_orchestrator.start_saga(
-            &execution.definition_id,
-            execution.context.data.clone(),
-        ).await?;
+        let saga_id = self
+            .saga_orchestrator
+            .start_saga(&execution.definition_id, execution.context.data.clone())
+            .await?;
 
-        info!("Restarted saga with new ID: {} (original: {})", saga_id, execution.saga_id);
+        info!(
+            "Restarted saga with new ID: {} (original: {})",
+            saga_id, execution.saga_id
+        );
         Ok(())
     }
 
     /// Resume saga execution from current step
     async fn resume_saga_execution(&self, execution: &SagaExecution) -> OrbitResult<()> {
         // Submit execution to orchestrator for continuation
-        self.saga_orchestrator.execute_saga(&execution.saga_id).await?;
+        self.saga_orchestrator
+            .execute_saga(&execution.saga_id)
+            .await?;
         info!("Resumed saga execution: {}", execution.saga_id);
         Ok(())
     }
@@ -296,7 +332,9 @@ impl SagaRecoveryManager {
     /// Continue saga compensation process
     async fn continue_saga_compensation(&self, execution: &SagaExecution) -> OrbitResult<()> {
         // The orchestrator should handle compensation continuation
-        self.saga_orchestrator.execute_saga(&execution.saga_id).await?;
+        self.saga_orchestrator
+            .execute_saga(&execution.saga_id)
+            .await?;
         info!("Continued saga compensation: {}", execution.saga_id);
         Ok(())
     }
@@ -309,7 +347,10 @@ impl SagaRecoveryManager {
     }
 
     /// Persist saga checkpoint to storage
-    async fn persist_saga_checkpoint(&self, checkpoint: &SagaRecoveryCheckpoint) -> OrbitResult<()> {
+    async fn persist_saga_checkpoint(
+        &self,
+        checkpoint: &SagaRecoveryCheckpoint,
+    ) -> OrbitResult<()> {
         // In a real implementation, this would persist to the transaction log
         // For now, we'll just log the operation
         debug!("Persisting saga checkpoint: {}", checkpoint.saga_id);
@@ -351,16 +392,18 @@ impl SagaRecoveryManager {
 
     /// Clean up old saga checkpoints
     async fn cleanup_old_checkpoints(&self) -> OrbitResult<()> {
-        let cutoff_time = chrono::Utc::now().timestamp_millis() - 
-            (24 * 60 * 60 * 1000); // 24 hours
+        let cutoff_time = chrono::Utc::now().timestamp_millis() - (24 * 60 * 60 * 1000); // 24 hours
 
         let mut checkpoints = self.checkpoints.write().await;
         let mut to_remove = Vec::new();
 
         for (saga_id, checkpoint) in checkpoints.iter() {
             // Remove checkpoints for completed sagas or very old ones
-            if matches!(checkpoint.saga_state, SagaState::Completed | SagaState::Aborted | SagaState::Failed) ||
-               checkpoint.last_updated < cutoff_time {
+            if matches!(
+                checkpoint.saga_state,
+                SagaState::Completed | SagaState::Aborted | SagaState::Failed
+            ) || checkpoint.last_updated < cutoff_time
+            {
                 to_remove.push(saga_id.clone());
             }
         }
@@ -376,7 +419,7 @@ impl SagaRecoveryManager {
     /// Get saga recovery statistics
     pub async fn get_recovery_stats(&self) -> SagaRecoveryStats {
         let checkpoints = self.checkpoints.read().await;
-        
+
         let mut stats = SagaRecoveryStats {
             total_checkpoints: checkpoints.len() as u64,
             active_recoveries: 0,
@@ -441,8 +484,13 @@ impl SagaRecoveryEventHandler {
 #[async_trait]
 impl RecoveryEventHandler for SagaRecoveryEventHandler {
     async fn on_coordinator_failure(&self, failed_coordinator: &NodeId) -> OrbitResult<()> {
-        info!("Handling coordinator failure for sagas: {}", failed_coordinator);
-        self.saga_recovery_manager.recover_sagas_from_coordinator(failed_coordinator).await
+        info!(
+            "Handling coordinator failure for sagas: {}",
+            failed_coordinator
+        );
+        self.saga_recovery_manager
+            .recover_sagas_from_coordinator(failed_coordinator)
+            .await
     }
 
     async fn on_recovery_start(&self, _transaction_id: &TransactionId) -> OrbitResult<()> {
@@ -451,7 +499,11 @@ impl RecoveryEventHandler for SagaRecoveryEventHandler {
         Ok(())
     }
 
-    async fn on_recovery_complete(&self, _transaction_id: &TransactionId, success: bool) -> OrbitResult<()> {
+    async fn on_recovery_complete(
+        &self,
+        _transaction_id: &TransactionId,
+        success: bool,
+    ) -> OrbitResult<()> {
         if success {
             debug!("Transaction recovery completed successfully");
         } else {
@@ -471,7 +523,7 @@ impl RecoveryEventHandler for SagaRecoveryEventHandler {
 mod tests {
     use super::*;
     use crate::saga::SagaDefinition;
-    use crate::transaction_log::{SqliteTransactionLogger, PersistentLogConfig};
+    use crate::transaction_log::{PersistentLogConfig, SqliteTransactionLogger};
     use tempfile::tempdir;
 
     // Mock cluster manager for testing
@@ -494,7 +546,10 @@ mod tests {
             Ok(true) // Always win elections in tests
         }
 
-        async fn report_coordinator_failure(&self, _failed_coordinator: &NodeId) -> OrbitResult<()> {
+        async fn report_coordinator_failure(
+            &self,
+            _failed_coordinator: &NodeId,
+        ) -> OrbitResult<()> {
             Ok(())
         }
 
@@ -507,24 +562,30 @@ mod tests {
         }
     }
 
-    async fn create_test_recovery_manager() -> (SagaRecoveryManager, SagaOrchestrator, TransactionRecoveryManager) {
+    async fn create_test_recovery_manager() -> (
+        SagaRecoveryManager,
+        SagaOrchestrator,
+        TransactionRecoveryManager,
+    ) {
         let temp_dir = tempdir().unwrap();
         let db_path = temp_dir.path().join("saga_recovery_test.db");
-        
+
         let log_config = PersistentLogConfig {
             database_path: db_path,
             ..Default::default()
         };
-        
-        let logger: Arc<dyn PersistentTransactionLogger> = Arc::new(SqliteTransactionLogger::new(log_config).await.unwrap());
+
+        let logger: Arc<dyn PersistentTransactionLogger> =
+            Arc::new(SqliteTransactionLogger::new(log_config).await.unwrap());
         let node_id = NodeId::new("test-node".to_string(), "default".to_string());
-        
+
         let cluster_manager = Arc::new(MockClusterManager {
             nodes: vec![node_id.clone()],
             current_leader: Some(node_id.clone()),
         });
 
-        let saga_orchestrator = Arc::new(SagaOrchestrator::new(node_id.clone(), Arc::clone(&logger)));
+        let saga_orchestrator =
+            Arc::new(SagaOrchestrator::new(node_id.clone(), Arc::clone(&logger)));
         let recovery_manager = Arc::new(TransactionRecoveryManager::new(
             node_id.clone(),
             crate::recovery::RecoveryConfig::default(),
@@ -540,13 +601,17 @@ mod tests {
             Arc::clone(&logger),
         );
 
-        (saga_recovery_manager, (*saga_orchestrator).clone(), (*recovery_manager).clone())
+        (
+            saga_recovery_manager,
+            (*saga_orchestrator).clone(),
+            (*recovery_manager).clone(),
+        )
     }
 
     #[tokio::test]
     async fn test_saga_checkpoint_creation() {
         let (recovery_manager, orchestrator, _) = create_test_recovery_manager().await;
-        
+
         // Create mock saga step for testing
         struct MockSagaStep {
             metadata: crate::saga::SagaStepMetadata,
@@ -554,11 +619,17 @@ mod tests {
 
         #[async_trait]
         impl crate::saga::SagaStep for MockSagaStep {
-            async fn execute(&self, _context: &crate::saga::SagaContext) -> OrbitResult<crate::saga::StepResult> {
+            async fn execute(
+                &self,
+                _context: &crate::saga::SagaContext,
+            ) -> OrbitResult<crate::saga::StepResult> {
                 Ok(crate::saga::StepResult::Success)
             }
 
-            async fn compensate(&self, _context: &crate::saga::SagaContext) -> OrbitResult<crate::saga::StepResult> {
+            async fn compensate(
+                &self,
+                _context: &crate::saga::SagaContext,
+            ) -> OrbitResult<crate::saga::StepResult> {
                 Ok(crate::saga::StepResult::Success)
             }
 
@@ -583,11 +654,20 @@ mod tests {
         let definition = SagaDefinition::new("test-saga".to_string(), "1.0".to_string())
             .add_step(Arc::new(step));
 
-        orchestrator.register_saga_definition(definition).await.unwrap();
-        let saga_id = orchestrator.start_saga("test-saga", HashMap::new()).await.unwrap();
-        
+        orchestrator
+            .register_saga_definition(definition)
+            .await
+            .unwrap();
+        let saga_id = orchestrator
+            .start_saga("test-saga", HashMap::new())
+            .await
+            .unwrap();
+
         let execution = orchestrator.get_execution(&saga_id).await.unwrap().unwrap();
-        recovery_manager.create_saga_checkpoint(&execution).await.unwrap();
+        recovery_manager
+            .create_saga_checkpoint(&execution)
+            .await
+            .unwrap();
 
         let checkpoints = recovery_manager.checkpoints.read().await;
         assert!(checkpoints.contains_key(&saga_id));
@@ -596,7 +676,7 @@ mod tests {
     #[tokio::test]
     async fn test_saga_recovery_stats() {
         let (recovery_manager, orchestrator, _) = create_test_recovery_manager().await;
-        
+
         // Create mock saga step for testing
         struct MockSagaStep {
             metadata: crate::saga::SagaStepMetadata,
@@ -604,11 +684,17 @@ mod tests {
 
         #[async_trait]
         impl crate::saga::SagaStep for MockSagaStep {
-            async fn execute(&self, _context: &crate::saga::SagaContext) -> OrbitResult<crate::saga::StepResult> {
+            async fn execute(
+                &self,
+                _context: &crate::saga::SagaContext,
+            ) -> OrbitResult<crate::saga::StepResult> {
                 Ok(crate::saga::StepResult::Success)
             }
 
-            async fn compensate(&self, _context: &crate::saga::SagaContext) -> OrbitResult<crate::saga::StepResult> {
+            async fn compensate(
+                &self,
+                _context: &crate::saga::SagaContext,
+            ) -> OrbitResult<crate::saga::StepResult> {
                 Ok(crate::saga::StepResult::Success)
             }
 
@@ -633,11 +719,20 @@ mod tests {
         let definition = SagaDefinition::new("test-saga".to_string(), "1.0".to_string())
             .add_step(Arc::new(step));
 
-        orchestrator.register_saga_definition(definition).await.unwrap();
-        let saga_id = orchestrator.start_saga("test-saga", HashMap::new()).await.unwrap();
-        
+        orchestrator
+            .register_saga_definition(definition)
+            .await
+            .unwrap();
+        let saga_id = orchestrator
+            .start_saga("test-saga", HashMap::new())
+            .await
+            .unwrap();
+
         let execution = orchestrator.get_execution(&saga_id).await.unwrap().unwrap();
-        recovery_manager.create_saga_checkpoint(&execution).await.unwrap();
+        recovery_manager
+            .create_saga_checkpoint(&execution)
+            .await
+            .unwrap();
 
         let stats = recovery_manager.get_recovery_stats().await;
         assert_eq!(stats.total_checkpoints, 1);

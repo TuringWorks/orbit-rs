@@ -36,7 +36,6 @@ pub enum OrbitError {
 
     #[error("Internal error: {0}")]
     Internal(String),
-
 }
 
 impl OrbitError {

@@ -10,18 +10,15 @@ use std::time::Duration;
 use tokio::sync::RwLock;
 use tokio::time::{timeout, Instant};
 use tonic::transport::{Channel, Endpoint};
-use tonic::{Request, Status, Code};
-use tracing::{info, warn, error, debug};
+use tonic::{Code, Request, Status};
+use tracing::{debug, error, info, warn};
 
 // Include the generated protobuf code
 pub mod transaction_proto {
     tonic::include_proto!("orbit.transactions");
 }
 
-use transaction_proto::{
-    transaction_service_client::TransactionServiceClient,
-    *,
-};
+use transaction_proto::{transaction_service_client::TransactionServiceClient, *};
 
 /// Configuration for gRPC transport
 #[derive(Debug, Clone)]
@@ -95,7 +92,10 @@ impl ConnectionPool {
     }
 
     /// Get or create a connection to the specified endpoint
-    pub async fn get_connection(&self, endpoint_url: &str) -> OrbitResult<TransactionServiceClient<Channel>> {
+    pub async fn get_connection(
+        &self,
+        endpoint_url: &str,
+    ) -> OrbitResult<TransactionServiceClient<Channel>> {
         // Check if connection already exists
         {
             let connections = self.connections.read().await;
@@ -113,7 +113,10 @@ impl ConnectionPool {
     }
 
     /// Create a new connection to the endpoint
-    async fn create_connection(&self, endpoint_url: &str) -> OrbitResult<TransactionServiceClient<Channel>> {
+    async fn create_connection(
+        &self,
+        endpoint_url: &str,
+    ) -> OrbitResult<TransactionServiceClient<Channel>> {
         debug!("Creating new gRPC connection to: {}", endpoint_url);
 
         let mut endpoint = Endpoint::from_shared(endpoint_url.to_string())
@@ -152,13 +155,16 @@ impl ConnectionPool {
 
         {
             let mut metrics = self.connection_metrics.write().await;
-            metrics.insert(endpoint_url.to_string(), ConnectionMetrics {
-                created_at: Instant::now(),
-                last_used: Instant::now(),
-                request_count: 0,
-                error_count: 0,
-                average_latency_ms: 0.0,
-            });
+            metrics.insert(
+                endpoint_url.to_string(),
+                ConnectionMetrics {
+                    created_at: Instant::now(),
+                    last_used: Instant::now(),
+                    request_count: 0,
+                    error_count: 0,
+                    average_latency_ms: 0.0,
+                },
+            );
         }
 
         info!("Created new gRPC connection to: {}", endpoint_url);
@@ -170,7 +176,7 @@ impl ConnectionPool {
         if let Some(metrics) = self.connection_metrics.write().await.get_mut(endpoint_url) {
             metrics.last_used = Instant::now();
             metrics.request_count += 1;
-            
+
             if !success {
                 metrics.error_count += 1;
             }
@@ -180,7 +186,8 @@ impl ConnectionPool {
                 metrics.average_latency_ms = latency_ms;
             } else {
                 let alpha = 0.1; // Smoothing factor
-                metrics.average_latency_ms = alpha * latency_ms + (1.0 - alpha) * metrics.average_latency_ms;
+                metrics.average_latency_ms =
+                    alpha * latency_ms + (1.0 - alpha) * metrics.average_latency_ms;
             }
         }
     }
@@ -263,7 +270,7 @@ pub struct GrpcTransactionMessageSender {
 pub trait NodeResolver: Send + Sync {
     /// Resolve a node ID to its gRPC endpoint URL
     async fn resolve_node(&self, node_id: &NodeId) -> OrbitResult<String>;
-    
+
     /// Resolve an addressable reference to its hosting node
     async fn resolve_addressable(&self, addressable: &AddressableReference) -> OrbitResult<NodeId>;
 }
@@ -283,45 +290,52 @@ impl GrpcTransactionMessageSender {
     }
 
     /// Send message with retry logic
-    async fn send_with_retry<F, Fut, T>(
-        &self,
-        endpoint_url: &str,
-        operation: F,
-    ) -> OrbitResult<T>
+    async fn send_with_retry<F, Fut, T>(&self, endpoint_url: &str, operation: F) -> OrbitResult<T>
     where
         F: Fn(TransactionServiceClient<Channel>) -> Fut + Clone + Send + Sync,
         Fut: std::future::Future<Output = Result<T, Status>> + Send,
         T: Send,
     {
         let mut last_error = None;
-        
+
         for attempt in 0..=self.config.retry_attempts {
             let client = self.connection_pool.get_connection(endpoint_url).await?;
             let start_time = Instant::now();
-            
+
             match timeout(self.config.request_timeout, operation(client)).await {
                 Ok(Ok(result)) => {
                     let latency = start_time.elapsed().as_millis() as f64;
-                    self.connection_pool.update_metrics(endpoint_url, latency, true).await;
+                    self.connection_pool
+                        .update_metrics(endpoint_url, latency, true)
+                        .await;
                     return Ok(result);
-                },
+                }
                 Ok(Err(status)) => {
                     let latency = start_time.elapsed().as_millis() as f64;
-                    self.connection_pool.update_metrics(endpoint_url, latency, false).await;
-                    
+                    self.connection_pool
+                        .update_metrics(endpoint_url, latency, false)
+                        .await;
+
                     last_error = Some(OrbitError::network(&format!(
-                        "gRPC error: {} - {}", status.code(), status.message()
+                        "gRPC error: {} - {}",
+                        status.code(),
+                        status.message()
                     )));
 
                     // Don't retry on certain error types
-                    if matches!(status.code(), Code::InvalidArgument | Code::NotFound | Code::PermissionDenied) {
+                    if matches!(
+                        status.code(),
+                        Code::InvalidArgument | Code::NotFound | Code::PermissionDenied
+                    ) {
                         break;
                     }
-                },
+                }
                 Err(_) => {
                     let latency = start_time.elapsed().as_millis() as f64;
-                    self.connection_pool.update_metrics(endpoint_url, latency, false).await;
-                    
+                    self.connection_pool
+                        .update_metrics(endpoint_url, latency, false)
+                        .await;
+
                     last_error = Some(OrbitError::timeout("gRPC request timeout"));
                 }
             }
@@ -330,7 +344,8 @@ impl GrpcTransactionMessageSender {
             if attempt < self.config.retry_attempts {
                 let delay = Duration::from_millis(
                     (self.config.retry_backoff_initial.as_millis() as f64
-                     * self.config.retry_backoff_multiplier.powi(attempt as i32)) as u64
+                        * self.config.retry_backoff_multiplier.powi(attempt as i32))
+                        as u64,
                 );
                 tokio::time::sleep(delay).await;
             }
@@ -342,13 +357,16 @@ impl GrpcTransactionMessageSender {
     /// Start background maintenance tasks
     pub async fn start_background_tasks(&self) -> OrbitResult<()> {
         let connection_pool = Arc::clone(&self.connection_pool);
-        
+
         // Connection cleanup task
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(300)); // 5 minutes
             loop {
                 interval.tick().await;
-                if let Err(e) = connection_pool.cleanup_idle_connections(Duration::from_secs(600)).await {
+                if let Err(e) = connection_pool
+                    .cleanup_idle_connections(Duration::from_secs(600))
+                    .await
+                {
                     error!("Connection cleanup failed: {}", e);
                 }
             }
@@ -366,14 +384,18 @@ impl GrpcTransactionMessageSender {
 
 #[async_trait]
 impl TransactionMessageSender for GrpcTransactionMessageSender {
-    async fn send_message(&self, target: &AddressableReference, message: TransactionMessage) -> OrbitResult<()> {
+    async fn send_message(
+        &self,
+        target: &AddressableReference,
+        message: TransactionMessage,
+    ) -> OrbitResult<()> {
         // Resolve target to node
         let target_node = self.node_resolver.resolve_addressable(target).await?;
         let endpoint_url = self.node_resolver.resolve_node(&target_node).await?;
-        
+
         // Convert message to protobuf
         let proto_message = convert_message_to_proto(message)?;
-        
+
         // Create request
         let request = TransactionMessageRequest {
             sender_node_id: self.node_id.to_string(),
@@ -388,81 +410,111 @@ impl TransactionMessageSender for GrpcTransactionMessageSender {
         let operation = move |mut client: TransactionServiceClient<Channel>| {
             let req = request_clone.clone();
             async move {
-                client.send_transaction_message(Request::new(req)).await.map(|r| r.into_inner())
+                client
+                    .send_transaction_message(Request::new(req))
+                    .await
+                    .map(|r| r.into_inner())
             }
         };
 
         let response = self.send_with_retry(&endpoint_url, operation).await?;
-        
+
         if !response.success {
             return Err(OrbitError::network(&format!(
-                "Transaction message failed: {}", response.error_message
+                "Transaction message failed: {}",
+                response.error_message
             )));
         }
 
-        debug!("Sent transaction message to {} ({}ms)", target, response.processing_time_ms);
+        debug!(
+            "Sent transaction message to {} ({}ms)",
+            target, response.processing_time_ms
+        );
         Ok(())
     }
 
-    async fn broadcast_message(&self, targets: &[AddressableReference], message: TransactionMessage) -> OrbitResult<()> {
+    async fn broadcast_message(
+        &self,
+        targets: &[AddressableReference],
+        message: TransactionMessage,
+    ) -> OrbitResult<()> {
         if targets.is_empty() {
             return Ok(());
         }
 
         // Group targets by node to minimize network calls
         let mut targets_by_node: HashMap<NodeId, Vec<&AddressableReference>> = HashMap::new();
-        
+
         for target in targets {
             let target_node = self.node_resolver.resolve_addressable(target).await?;
-            targets_by_node.entry(target_node).or_insert_with(Vec::new).push(target);
+            targets_by_node
+                .entry(target_node)
+                .or_insert_with(Vec::new)
+                .push(target);
         }
 
         // Send to each node concurrently
-        let send_tasks: Vec<_> = targets_by_node.into_iter().map(|(node_id, node_targets)| {
-            let message = message.clone();
-            let node_resolver = Arc::clone(&self.node_resolver);
-            let connection_pool = Arc::clone(&self.connection_pool);
-            let config = self.config.clone();
-            let sender_node_id = self.node_id.clone();
-            
-            async move {
-                let endpoint_url = node_resolver.resolve_node(&node_id).await?;
-                let proto_message = convert_message_to_proto(message)?;
-                
-                let targets_proto: Vec<Target> = node_targets.iter().map(|target| Target {
-                    actor_type: target.addressable_type.clone(),
-                    actor_key: extract_key_string(&target.key),
-                }).collect();
+        let send_tasks: Vec<_> = targets_by_node
+            .into_iter()
+            .map(|(node_id, node_targets)| {
+                let message = message.clone();
+                let node_resolver = Arc::clone(&self.node_resolver);
+                let connection_pool = Arc::clone(&self.connection_pool);
+                let config = self.config.clone();
+                let sender_node_id = self.node_id.clone();
 
-                let request = BroadcastMessageRequest {
-                    sender_node_id: sender_node_id.to_string(),
-                    targets: targets_proto,
-                    message: Some(proto_message),
-                    timeout_ms: config.request_timeout.as_millis() as i64,
-                };
+                async move {
+                    let endpoint_url = node_resolver.resolve_node(&node_id).await?;
+                    let proto_message = convert_message_to_proto(message)?;
 
-                let client = connection_pool.get_connection(&endpoint_url).await?;
-                let response = timeout(
-                    config.request_timeout,
-                    client.clone().broadcast_transaction_message(Request::new(request))
-                ).await
-                .map_err(|_| OrbitError::timeout("broadcast timeout"))?
-                .map_err(|e| OrbitError::network(&format!("Broadcast failed: {}", e)))?
-                .into_inner();
+                    let targets_proto: Vec<Target> = node_targets
+                        .iter()
+                        .map(|target| Target {
+                            actor_type: target.addressable_type.clone(),
+                            actor_key: extract_key_string(&target.key),
+                        })
+                        .collect();
 
-                if response.failed_sends > 0 {
-                    warn!("Broadcast had {} failures: {:?}", response.failed_sends, response.errors);
+                    let request = BroadcastMessageRequest {
+                        sender_node_id: sender_node_id.to_string(),
+                        targets: targets_proto,
+                        message: Some(proto_message),
+                        timeout_ms: config.request_timeout.as_millis() as i64,
+                    };
+
+                    let client = connection_pool.get_connection(&endpoint_url).await?;
+                    let response = timeout(
+                        config.request_timeout,
+                        client
+                            .clone()
+                            .broadcast_transaction_message(Request::new(request)),
+                    )
+                    .await
+                    .map_err(|_| OrbitError::timeout("broadcast timeout"))?
+                    .map_err(|e| OrbitError::network(&format!("Broadcast failed: {}", e)))?
+                    .into_inner();
+
+                    if response.failed_sends > 0 {
+                        warn!(
+                            "Broadcast had {} failures: {:?}",
+                            response.failed_sends, response.errors
+                        );
+                    }
+
+                    OrbitResult::Ok(response.successful_sends as usize)
                 }
-
-                OrbitResult::Ok(response.successful_sends as usize)
-            }
-        }).collect();
+            })
+            .collect();
 
         // Execute all broadcasts concurrently
         let results: Vec<_> = try_join_all(send_tasks).await?;
         let total_successful: usize = results.iter().sum();
-        
-        info!("Broadcast completed: {} successful sends to {} targets", total_successful, targets.len());
+
+        info!(
+            "Broadcast completed: {} successful sends to {} targets",
+            total_successful,
+            targets.len()
+        );
         Ok(())
     }
 }
@@ -470,52 +522,64 @@ impl TransactionMessageSender for GrpcTransactionMessageSender {
 /// Convert transaction message to protobuf format
 fn convert_message_to_proto(message: TransactionMessage) -> OrbitResult<TransactionMessageProto> {
     let message_type = match message {
-        TransactionMessage::Prepare { transaction_id, operations, timeout } => {
-            transaction_message_proto::MessageType::Prepare(PrepareMessage {
-                transaction_id: Some(convert_transaction_id_to_proto(transaction_id)),
-                operations: operations.into_iter().map(convert_operation_to_proto).collect(),
-                timeout_ms: timeout.as_millis() as i64,
-            })
-        },
-        TransactionMessage::Vote { transaction_id, participant, vote } => {
-            transaction_message_proto::MessageType::Vote(VoteMessage {
-                transaction_id: Some(convert_transaction_id_to_proto(transaction_id)),
-                participant_type: participant.addressable_type,
-                participant_key: extract_key_string(&participant.key),
-                vote: Some(convert_vote_to_proto(vote)),
-            })
-        },
+        TransactionMessage::Prepare {
+            transaction_id,
+            operations,
+            timeout,
+        } => transaction_message_proto::MessageType::Prepare(PrepareMessage {
+            transaction_id: Some(convert_transaction_id_to_proto(transaction_id)),
+            operations: operations
+                .into_iter()
+                .map(convert_operation_to_proto)
+                .collect(),
+            timeout_ms: timeout.as_millis() as i64,
+        }),
+        TransactionMessage::Vote {
+            transaction_id,
+            participant,
+            vote,
+        } => transaction_message_proto::MessageType::Vote(VoteMessage {
+            transaction_id: Some(convert_transaction_id_to_proto(transaction_id)),
+            participant_type: participant.addressable_type,
+            participant_key: extract_key_string(&participant.key),
+            vote: Some(convert_vote_to_proto(vote)),
+        }),
         TransactionMessage::Commit { transaction_id } => {
             transaction_message_proto::MessageType::Commit(CommitMessage {
                 transaction_id: Some(convert_transaction_id_to_proto(transaction_id)),
             })
-        },
-        TransactionMessage::Abort { transaction_id, reason } => {
-            transaction_message_proto::MessageType::Abort(AbortMessage {
-                transaction_id: Some(convert_transaction_id_to_proto(transaction_id)),
-                reason,
-            })
-        },
-        TransactionMessage::Acknowledge { transaction_id, participant, success, error } => {
-            transaction_message_proto::MessageType::Acknowledge(AckMessage {
-                transaction_id: Some(convert_transaction_id_to_proto(transaction_id)),
-                participant_type: participant.addressable_type,
-                participant_key: extract_key_string(&participant.key),
-                success,
-                error,
-            })
-        },
+        }
+        TransactionMessage::Abort {
+            transaction_id,
+            reason,
+        } => transaction_message_proto::MessageType::Abort(AbortMessage {
+            transaction_id: Some(convert_transaction_id_to_proto(transaction_id)),
+            reason,
+        }),
+        TransactionMessage::Acknowledge {
+            transaction_id,
+            participant,
+            success,
+            error,
+        } => transaction_message_proto::MessageType::Acknowledge(AckMessage {
+            transaction_id: Some(convert_transaction_id_to_proto(transaction_id)),
+            participant_type: participant.addressable_type,
+            participant_key: extract_key_string(&participant.key),
+            success,
+            error,
+        }),
         TransactionMessage::QueryStatus { transaction_id } => {
             transaction_message_proto::MessageType::QueryStatus(QueryStatusMessage {
                 transaction_id: Some(convert_transaction_id_to_proto(transaction_id)),
             })
-        },
-        TransactionMessage::StatusResponse { transaction_id, state } => {
-            transaction_message_proto::MessageType::StatusResponse(StatusResponseMessage {
-                transaction_id: Some(convert_transaction_id_to_proto(transaction_id)),
-                state: Some(convert_state_to_proto(state)),
-            })
-        },
+        }
+        TransactionMessage::StatusResponse {
+            transaction_id,
+            state,
+        } => transaction_message_proto::MessageType::StatusResponse(StatusResponseMessage {
+            transaction_id: Some(convert_transaction_id_to_proto(transaction_id)),
+            state: Some(convert_state_to_proto(state)),
+        }),
     };
 
     Ok(TransactionMessageProto {
@@ -538,7 +602,9 @@ fn convert_operation_to_proto(op: TransactionOperation) -> TransactionOperationP
         target_actor_key: extract_key_string(&op.target_actor.key),
         operation_type: op.operation_type,
         operation_data: serde_json::to_string(&op.operation_data).unwrap_or_default(),
-        compensation_data: op.compensation_data.map(|d| serde_json::to_string(&d).unwrap_or_default()),
+        compensation_data: op
+            .compensation_data
+            .map(|d| serde_json::to_string(&d).unwrap_or_default()),
     }
 }
 
@@ -564,7 +630,9 @@ fn convert_state_to_proto(state: TransactionState) -> TransactionStateProto {
         TransactionState::Aborting => (transaction_state_proto::StateType::Aborting, None),
         TransactionState::Aborted => (transaction_state_proto::StateType::Aborted, None),
         TransactionState::TimedOut => (transaction_state_proto::StateType::TimedOut, None),
-        TransactionState::Failed { reason } => (transaction_state_proto::StateType::Failed, Some(reason)),
+        TransactionState::Failed { reason } => {
+            (transaction_state_proto::StateType::Failed, Some(reason))
+        }
     };
 
     TransactionStateProto {
@@ -596,7 +664,10 @@ mod tests {
             Ok(format!("http://{}:8080", node_id.key))
         }
 
-        async fn resolve_addressable(&self, addressable: &AddressableReference) -> OrbitResult<NodeId> {
+        async fn resolve_addressable(
+            &self,
+            addressable: &AddressableReference,
+        ) -> OrbitResult<NodeId> {
             Ok(NodeId::new("test-node".to_string(), "default".to_string()))
         }
     }
@@ -605,19 +676,22 @@ mod tests {
     async fn test_connection_pool_creation() {
         let config = TransportConfig::default();
         let pool = ConnectionPool::new(config);
-        
+
         let stats = pool.get_stats().await;
         assert_eq!(stats.total_connections, 0);
     }
 
     #[tokio::test]
     async fn test_message_conversion() {
-        let transaction_id = TransactionId::new(NodeId::new("test".to_string(), "default".to_string()));
-        let message = TransactionMessage::Commit { transaction_id: transaction_id.clone() };
-        
+        let transaction_id =
+            TransactionId::new(NodeId::new("test".to_string(), "default".to_string()));
+        let message = TransactionMessage::Commit {
+            transaction_id: transaction_id.clone(),
+        };
+
         let proto = convert_message_to_proto(message).unwrap();
         assert!(proto.message_type.is_some());
-        
+
         if let Some(transaction_message_proto::MessageType::Commit(commit)) = proto.message_type {
             assert!(commit.transaction_id.is_some());
             assert_eq!(commit.transaction_id.unwrap().id, transaction_id.id);
@@ -628,12 +702,14 @@ mod tests {
 
     #[test]
     fn test_key_extraction() {
-        let string_key = Key::StringKey { key: "test".to_string() };
+        let string_key = Key::StringKey {
+            key: "test".to_string(),
+        };
         assert_eq!(extract_key_string(&string_key), "test");
-        
+
         let int_key = Key::Int32Key { key: 42 };
         assert_eq!(extract_key_string(&int_key), "42");
-        
+
         let no_key = Key::NoKey;
         assert_eq!(extract_key_string(&no_key), "no-key");
     }

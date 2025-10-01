@@ -1,4 +1,4 @@
-use crate::cluster_manager::{EnhancedClusterManager, RecoveryRaftEventHandler, QuorumConfig};
+use crate::cluster_manager::{EnhancedClusterManager, QuorumConfig, RecoveryRaftEventHandler};
 use crate::consensus::RaftConfig;
 use crate::exception::{OrbitError, OrbitResult};
 use crate::k8s_election::UniversalElectionManager;
@@ -8,7 +8,7 @@ use crate::transaction_log::PersistentTransactionLogger;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
-use tracing::{info, warn, error};
+use tracing::{error, info, warn};
 
 /// Integrated recovery and leader election system
 /// This combines the leader election mechanism with the transaction recovery system
@@ -28,7 +28,10 @@ impl IntegratedRecoverySystem {
         logger: Arc<dyn PersistentTransactionLogger>,
         state_path: Option<std::path::PathBuf>,
     ) -> OrbitResult<Self> {
-        info!("Initializing integrated recovery system for node: {}", node_id);
+        info!(
+            "Initializing integrated recovery system for node: {}",
+            node_id
+        );
 
         // Create cluster manager with recovery integration
         let quorum_config = QuorumConfig {
@@ -61,19 +64,21 @@ impl IntegratedRecoverySystem {
         ));
 
         // Create recovery event handler and wire it to the Raft consensus
-        let recovery_event_handler = Arc::new(RecoveryRaftEventHandler::new(recovery_manager.clone()));
-        cluster_manager.raft_consensus.add_event_handler(recovery_event_handler).await;
+        let recovery_event_handler =
+            Arc::new(RecoveryRaftEventHandler::new(recovery_manager.clone()));
+        cluster_manager
+            .raft_consensus
+            .add_event_handler(recovery_event_handler)
+            .await;
 
         // Create election manager for universal deployment support
         let deployment_mode = UniversalElectionManager::detect_deployment_mode().await;
         let k8s_config = crate::k8s_election::K8sElectionConfig::default();
-        
-        let election_manager = Arc::new(UniversalElectionManager::new(
-            node_id.clone(),
-            deployment_mode,
-            k8s_config,
-            state_path,
-        ).await?);
+
+        let election_manager = Arc::new(
+            UniversalElectionManager::new(node_id.clone(), deployment_mode, k8s_config, state_path)
+                .await?,
+        );
 
         Ok(Self {
             node_id,
@@ -85,13 +90,19 @@ impl IntegratedRecoverySystem {
     }
 
     /// Start the integrated recovery system
-    pub async fn start(&self, transport: Option<Arc<dyn crate::consensus::RaftTransport>>) -> OrbitResult<()> {
+    pub async fn start(
+        &self,
+        transport: Option<Arc<dyn crate::consensus::RaftTransport>>,
+    ) -> OrbitResult<()> {
         let mut started = self.is_started.write().await;
         if *started {
             return Err(OrbitError::internal("Recovery system is already started"));
         }
 
-        info!("Starting integrated recovery system for node: {}", self.node_id);
+        info!(
+            "Starting integrated recovery system for node: {}",
+            self.node_id
+        );
 
         // Start the cluster manager (includes Raft consensus)
         if let Some(transport) = transport {
@@ -129,11 +140,17 @@ impl IntegratedRecoverySystem {
 
                 // Check current leader from both systems
                 let raft_leader = cluster_manager.raft_consensus.get_leader().await;
-                let election_leader = election_manager.get_current_leader().await.map(|s| NodeId::from_string(&s));
+                let election_leader = election_manager
+                    .get_current_leader()
+                    .await
+                    .map(|s| NodeId::from_string(&s));
 
                 // Sync leader information to recovery manager
                 let effective_leader = raft_leader.or(election_leader);
-                if let Err(e) = recovery_manager.update_cluster_leader(effective_leader.clone()).await {
+                if let Err(e) = recovery_manager
+                    .update_cluster_leader(effective_leader.clone())
+                    .await
+                {
                     error!("Failed to update cluster leader in recovery manager: {}", e);
                 }
 
@@ -155,10 +172,13 @@ impl IntegratedRecoverySystem {
         // Check for stale transactions that may need recovery
         let checkpoints = recovery_manager.get_checkpoints().await;
         let transaction_ids: Vec<_> = checkpoints.keys().take(10).cloned().collect();
-        
+
         for transaction_id in transaction_ids {
             // Check if transaction coordinator is still healthy
-            if let Some(coordinator) = recovery_manager.get_transaction_coordinator(&transaction_id).await {
+            if let Some(coordinator) = recovery_manager
+                .get_transaction_coordinator(&transaction_id)
+                .await
+            {
                 let coordinators = recovery_manager.coordinators.read().await;
                 if let Some(health) = coordinators.get(&coordinator) {
                     if !health.is_healthy {
@@ -166,8 +186,14 @@ impl IntegratedRecoverySystem {
                               coordinator, transaction_id);
 
                         // Reassign this transaction to current leader
-                        if let Err(e) = recovery_manager.reassign_transactions_to_leader(&coordinator).await {
-                            error!("Failed to reassign transactions from unhealthy coordinator: {}", e);
+                        if let Err(e) = recovery_manager
+                            .reassign_transactions_to_leader(&coordinator)
+                            .await
+                        {
+                            error!(
+                                "Failed to reassign transactions from unhealthy coordinator: {}",
+                                e
+                            );
                         }
                     }
                 }
@@ -197,7 +223,9 @@ impl IntegratedRecoverySystem {
     /// Force a recovery scan (useful for testing or manual intervention)
     pub async fn force_recovery_scan(&self) -> OrbitResult<()> {
         if !self.is_leader().await {
-            return Err(OrbitError::cluster("Only the leader can initiate recovery scans"));
+            return Err(OrbitError::cluster(
+                "Only the leader can initiate recovery scans",
+            ));
         }
 
         info!("Forcing comprehensive recovery scan...");
@@ -215,12 +243,20 @@ impl IntegratedRecoverySystem {
             .collect();
 
         for failed_coordinator in failed_coordinators {
-            let transactions = self.recovery_manager.find_transactions_needing_recovery(&failed_coordinator).await?;
+            let transactions = self
+                .recovery_manager
+                .find_transactions_needing_recovery(&failed_coordinator)
+                .await?;
             if !transactions.is_empty() {
-                info!("Found {} transactions needing recovery from {}", 
-                      transactions.len(), failed_coordinator);
-                
-                self.recovery_manager.become_coordinator(transactions).await?;
+                info!(
+                    "Found {} transactions needing recovery from {}",
+                    transactions.len(),
+                    failed_coordinator
+                );
+
+                self.recovery_manager
+                    .become_coordinator(transactions)
+                    .await?;
             }
         }
 
@@ -275,7 +311,7 @@ impl Clone for IntegratedRecoverySystem {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::transaction_log::{SqliteTransactionLogger, PersistentLogConfig};
+    use crate::transaction_log::{PersistentLogConfig, SqliteTransactionLogger};
     use tempfile::tempdir;
 
     async fn create_test_recovery_system() -> IntegratedRecoverySystem {
@@ -296,12 +332,9 @@ mod tests {
             NodeId::new("test-node-3".to_string(), "test".to_string()),
         ];
 
-        IntegratedRecoverySystem::new(
-            node_id,
-            cluster_nodes,
-            logger,
-            Some(state_path),
-        ).await.unwrap()
+        IntegratedRecoverySystem::new(node_id, cluster_nodes, logger, Some(state_path))
+            .await
+            .unwrap()
     }
 
     #[tokio::test]
@@ -314,11 +347,11 @@ mod tests {
     #[tokio::test]
     async fn test_integrated_recovery_system_startup() {
         let system = create_test_recovery_system().await;
-        
+
         // Start without transport (for testing)
         system.start(None).await.unwrap();
         assert!(system.is_running().await);
-        
+
         // Shutdown
         system.shutdown().await.unwrap();
         assert!(!system.is_running().await);

@@ -1,4 +1,4 @@
-use crate::addressable::{AddressableReference, AddressableInvocation};
+use crate::addressable::{AddressableInvocation, AddressableReference};
 use crate::exception::{OrbitError, OrbitResult};
 use crate::mesh::NodeId;
 use serde::{Deserialize, Serialize};
@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot, RwLock};
 use tokio::time::{Duration, Instant};
-use tracing::{info, warn, error, debug};
+use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
 /// Message types for actor-to-actor communication
@@ -127,7 +127,8 @@ pub struct ActorDiscoveryService {
     /// Maps nodes to the actors they host
     node_actors: Arc<RwLock<HashMap<NodeId, Vec<AddressableReference>>>>,
     /// Pending discovery requests
-    pending_discoveries: Arc<RwLock<HashMap<AddressableReference, Vec<oneshot::Sender<Option<NodeId>>>>>>,
+    pending_discoveries:
+        Arc<RwLock<HashMap<AddressableReference, Vec<oneshot::Sender<Option<NodeId>>>>>>,
     /// Local actor registry
     local_actors: Arc<RwLock<HashMap<AddressableReference, ActorHandle>>>,
 }
@@ -155,9 +156,9 @@ impl ActorDiscoveryService {
 
     /// Register a local actor
     pub async fn register_local_actor(
-        &self, 
+        &self,
         reference: AddressableReference,
-        sender: mpsc::UnboundedSender<ActorMessage>
+        sender: mpsc::UnboundedSender<ActorMessage>,
     ) -> OrbitResult<()> {
         let handle = ActorHandle {
             reference: reference.clone(),
@@ -175,7 +176,10 @@ impl ActorDiscoveryService {
     }
 
     /// Unregister a local actor
-    pub async fn unregister_local_actor(&self, reference: &AddressableReference) -> OrbitResult<()> {
+    pub async fn unregister_local_actor(
+        &self,
+        reference: &AddressableReference,
+    ) -> OrbitResult<()> {
         let mut local_actors = self.local_actors.write().await;
         if local_actors.remove(reference).is_some() {
             info!("Unregistered local actor: {}", reference);
@@ -184,7 +188,10 @@ impl ActorDiscoveryService {
     }
 
     /// Discover the location of an actor
-    pub async fn discover_actor(&self, reference: &AddressableReference) -> OrbitResult<Option<NodeId>> {
+    pub async fn discover_actor(
+        &self,
+        reference: &AddressableReference,
+    ) -> OrbitResult<Option<NodeId>> {
         // Check if we know the location
         {
             let locations = self.actor_locations.read().await;
@@ -210,13 +217,19 @@ impl ActorDiscoveryService {
     }
 
     /// Initiate discovery process for an actor
-    async fn initiate_actor_discovery(&self, reference: &AddressableReference) -> OrbitResult<Option<NodeId>> {
+    async fn initiate_actor_discovery(
+        &self,
+        reference: &AddressableReference,
+    ) -> OrbitResult<Option<NodeId>> {
         let (sender, receiver) = oneshot::channel();
-        
+
         // Add to pending discoveries
         {
             let mut pending = self.pending_discoveries.write().await;
-            pending.entry(reference.clone()).or_insert_with(Vec::new).push(sender);
+            pending
+                .entry(reference.clone())
+                .or_insert_with(Vec::new)
+                .push(sender);
         }
 
         // In a real implementation, this would send discovery requests to other nodes
@@ -233,7 +246,11 @@ impl ActorDiscoveryService {
     }
 
     /// Update actor location information
-    pub async fn update_actor_location(&self, reference: AddressableReference, node_id: NodeId) -> OrbitResult<()> {
+    pub async fn update_actor_location(
+        &self,
+        reference: AddressableReference,
+        node_id: NodeId,
+    ) -> OrbitResult<()> {
         // Update location mapping
         {
             let mut locations = self.actor_locations.write().await;
@@ -243,7 +260,10 @@ impl ActorDiscoveryService {
         // Update node actors mapping
         {
             let mut node_actors = self.node_actors.write().await;
-            node_actors.entry(node_id.clone()).or_insert_with(Vec::new).push(reference.clone());
+            node_actors
+                .entry(node_id.clone())
+                .or_insert_with(Vec::new)
+                .push(reference.clone());
         }
 
         // Notify any pending discoveries
@@ -296,7 +316,7 @@ impl ActorDiscoveryService {
     /// Start background services for actor discovery and health monitoring
     pub async fn start_background_services(&self) -> OrbitResult<()> {
         let discovery_service = Arc::new(self.clone());
-        
+
         // Start heartbeat service
         let heartbeat_service = discovery_service.clone();
         tokio::spawn(async move {
@@ -328,7 +348,7 @@ impl ActorDiscoveryService {
     /// Send heartbeat messages for all local actors
     async fn send_heartbeats(&self) -> OrbitResult<()> {
         let local_actors = self.local_actors.read().await;
-        
+
         for (reference, handle) in local_actors.iter() {
             let metrics = handle.metrics.read().await;
             let _heartbeat = ActorMessage::Heartbeat {
@@ -336,11 +356,11 @@ impl ActorDiscoveryService {
                 timestamp: chrono::Utc::now().timestamp_millis(),
                 metrics: metrics.clone(),
             };
-            
+
             // In a real implementation, this would be sent to the cluster
             debug!("Sending heartbeat for actor: {}", reference);
         }
-        
+
         Ok(())
     }
 
@@ -386,11 +406,15 @@ pub struct ActorMessageRouter {
     discovery_service: Arc<ActorDiscoveryService>,
     config: ActorCommunicationConfig,
     /// Pending responses waiting for replies
-    pending_responses: Arc<RwLock<HashMap<ActorMessageId, oneshot::Sender<Result<serde_json::Value, String>>>>>,
+    pending_responses:
+        Arc<RwLock<HashMap<ActorMessageId, oneshot::Sender<Result<serde_json::Value, String>>>>>,
 }
 
 impl ActorMessageRouter {
-    pub fn new(discovery_service: Arc<ActorDiscoveryService>, config: ActorCommunicationConfig) -> Self {
+    pub fn new(
+        discovery_service: Arc<ActorDiscoveryService>,
+        config: ActorCommunicationConfig,
+    ) -> Self {
         Self {
             discovery_service,
             config,
@@ -401,29 +425,28 @@ impl ActorMessageRouter {
     /// Send a message to another actor
     pub async fn send_message(&self, message: ActorMessage) -> OrbitResult<()> {
         match &message {
-            ActorMessage::Invoke { target, .. } | 
-            ActorMessage::Tell { target, .. } => {
+            ActorMessage::Invoke { target, .. } | ActorMessage::Tell { target, .. } => {
                 self.route_to_actor(target, message.clone()).await
-            },
+            }
             ActorMessage::Response { request_id, .. } => {
                 self.handle_response(request_id.clone(), message).await
-            },
+            }
             ActorMessage::LifecycleEvent { actor, .. } => {
                 self.broadcast_lifecycle_event(actor, message.clone()).await
-            },
+            }
             ActorMessage::Heartbeat { .. } => {
                 // Heartbeats are handled by the discovery service
                 Ok(())
-            },
+            }
         }
     }
 
     /// Send a message and wait for a response
     pub async fn send_and_wait(
-        &self, 
+        &self,
         target: AddressableReference,
         invocation: AddressableInvocation,
-        timeout: Duration
+        timeout: Duration,
     ) -> OrbitResult<serde_json::Value> {
         let message_id = ActorMessageId::new(invocation.reference.clone());
         let (sender, receiver) = oneshot::channel();
@@ -457,22 +480,29 @@ impl ActorMessageRouter {
     }
 
     /// Route a message to the appropriate actor
-    async fn route_to_actor(&self, target: &AddressableReference, message: ActorMessage) -> OrbitResult<()> {
+    async fn route_to_actor(
+        &self,
+        target: &AddressableReference,
+        message: ActorMessage,
+    ) -> OrbitResult<()> {
         // Try to find the actor locally first
         {
             let local_actors = self.discovery_service.local_actors.read().await;
             if let Some(handle) = local_actors.get(target) {
                 if let Err(e) = handle.sender.send(message) {
                     error!("Failed to send message to local actor {}: {}", target, e);
-                    return Err(OrbitError::internal(format!("Local actor send failed: {}", e)));
+                    return Err(OrbitError::internal(format!(
+                        "Local actor send failed: {}",
+                        e
+                    )));
                 }
-                
+
                 // Update last accessed time
                 {
                     let mut last_accessed = handle.last_accessed.write().await;
                     *last_accessed = Instant::now();
                 }
-                
+
                 return Ok(());
             }
         }
@@ -483,11 +513,11 @@ impl ActorMessageRouter {
                 // Forward message to the remote node
                 info!("Forwarding message to actor {} on node {}", target, node_id);
                 self.forward_to_node(&node_id, message).await
-            },
+            }
             None => {
                 warn!("Actor {} not found in cluster", target);
-                Err(OrbitError::AddressableNotFound { 
-                    reference: target.to_string() 
+                Err(OrbitError::AddressableNotFound {
+                    reference: target.to_string(),
                 })
             }
         }
@@ -498,14 +528,18 @@ impl ActorMessageRouter {
         // In a real implementation, this would use the network layer to send the message
         // to the appropriate node via gRPC or other transport
         debug!("Forwarding message to node: {}", _node_id);
-        
+
         // For now, we'll simulate successful forwarding
         tokio::time::sleep(Duration::from_millis(1)).await;
         Ok(())
     }
 
     /// Handle a response message
-    async fn handle_response(&self, request_id: ActorMessageId, message: ActorMessage) -> OrbitResult<()> {
+    async fn handle_response(
+        &self,
+        request_id: ActorMessageId,
+        message: ActorMessage,
+    ) -> OrbitResult<()> {
         if let ActorMessage::Response { result, .. } = message {
             let mut pending = self.pending_responses.write().await;
             if let Some(sender) = pending.remove(&request_id) {
@@ -520,7 +554,11 @@ impl ActorMessageRouter {
     }
 
     /// Broadcast a lifecycle event to interested parties
-    async fn broadcast_lifecycle_event(&self, _actor: &AddressableReference, _message: ActorMessage) -> OrbitResult<()> {
+    async fn broadcast_lifecycle_event(
+        &self,
+        _actor: &AddressableReference,
+        _message: ActorMessage,
+    ) -> OrbitResult<()> {
         // In a real implementation, this would notify subscribers to actor lifecycle events
         debug!("Broadcasting lifecycle event for actor: {}", _actor);
         Ok(())
@@ -536,17 +574,22 @@ mod tests {
     async fn test_actor_discovery_service() {
         let config = ActorCommunicationConfig::default();
         let discovery = ActorDiscoveryService::new(config);
-        
+
         let reference = AddressableReference {
             addressable_type: "TestActor".to_string(),
-            key: Key::StringKey { key: "test-1".to_string() },
+            key: Key::StringKey {
+                key: "test-1".to_string(),
+            },
         };
-        
+
         let (sender, _) = mpsc::unbounded_channel();
-        
+
         // Register local actor
-        discovery.register_local_actor(reference.clone(), sender).await.unwrap();
-        
+        discovery
+            .register_local_actor(reference.clone(), sender)
+            .await
+            .unwrap();
+
         // Discover should find it locally
         let result = discovery.discover_actor(&reference).await.unwrap();
         assert_eq!(result, None); // None indicates local
@@ -556,12 +599,14 @@ mod tests {
     async fn test_actor_message_id() {
         let reference = AddressableReference {
             addressable_type: "TestActor".to_string(),
-            key: Key::StringKey { key: "test-1".to_string() },
+            key: Key::StringKey {
+                key: "test-1".to_string(),
+            },
         };
-        
+
         let id1 = ActorMessageId::new(reference.clone());
         let id2 = ActorMessageId::new(reference);
-        
+
         assert_ne!(id1.id, id2.id); // Should be unique
         assert_eq!(id1.sender, id2.sender); // Same sender
     }
@@ -571,30 +616,35 @@ mod tests {
         let config = ActorCommunicationConfig::default();
         let discovery = Arc::new(ActorDiscoveryService::new(config.clone()));
         let router = ActorMessageRouter::new(discovery.clone(), config);
-        
+
         let reference = AddressableReference {
             addressable_type: "TestActor".to_string(),
-            key: Key::StringKey { key: "test-1".to_string() },
+            key: Key::StringKey {
+                key: "test-1".to_string(),
+            },
         };
-        
+
         let (sender, mut receiver) = mpsc::unbounded_channel();
-        discovery.register_local_actor(reference.clone(), sender).await.unwrap();
-        
+        discovery
+            .register_local_actor(reference.clone(), sender)
+            .await
+            .unwrap();
+
         // Send a tell message
         let message = ActorMessage::Tell {
             target: reference,
             message: serde_json::json!({"test": "value"}),
             message_type: "TestMessage".to_string(),
         };
-        
+
         router.send_message(message.clone()).await.unwrap();
-        
+
         // Should receive the message
         let received = receiver.recv().await.unwrap();
         match received {
             ActorMessage::Tell { message_type, .. } => {
                 assert_eq!(message_type, "TestMessage");
-            },
+            }
             _ => panic!("Unexpected message type"),
         }
     }

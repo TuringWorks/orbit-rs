@@ -274,7 +274,6 @@ async fn main() -> anyhow::Result<()> {
         .register_addressable_type("CounterCoordinatorActor".to_string())
         .await?;
 
-    
     let _server_handle = tokio::spawn(async move {
         if let Err(e) = server.start().await {
             error!("Server error: {}", e);

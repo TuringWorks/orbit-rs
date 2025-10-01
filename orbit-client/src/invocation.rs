@@ -78,7 +78,8 @@ impl InvocationSystem {
         };
 
         // Complete the pending invocation
-        self.complete_invocation(invocation_id, result.clone()).await;
+        self.complete_invocation(invocation_id, result.clone())
+            .await;
 
         Ok(result)
     }
@@ -219,7 +220,10 @@ mod tests {
         let actor_ref: ActorReference<dyn Addressable> = ActorReference::new(reference, system);
 
         let result: String = actor_ref
-            .invoke("greet", vec![serde_json::Value::String("World".to_string())])
+            .invoke(
+                "greet",
+                vec![serde_json::Value::String("World".to_string())],
+            )
             .await
             .unwrap();
 

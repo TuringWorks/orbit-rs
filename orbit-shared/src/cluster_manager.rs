@@ -1,13 +1,13 @@
-use crate::consensus::{RaftConsensus, RaftConfig, RaftEventHandler};
+use crate::consensus::{RaftConfig, RaftConsensus, RaftEventHandler};
 use crate::exception::{OrbitError, OrbitResult};
 use crate::mesh::NodeId;
-use crate::recovery::{ClusterManager, ClusterConfig};
+use crate::recovery::{ClusterConfig, ClusterManager};
 use async_trait::async_trait;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
-use tracing::{info, warn, error, debug};
+use tracing::{debug, error, info, warn};
 
 /// Enhanced cluster manager with split-brain protection
 pub struct EnhancedClusterManager {
@@ -74,47 +74,50 @@ impl SplitBrainDetector {
             partitions: Arc::new(RwLock::new(HashMap::new())),
         }
     }
-    
+
     /// Check if current cluster configuration might cause split-brain
     pub async fn check_split_brain_risk(
-        &self, 
+        &self,
         cluster_nodes: &[NodeId],
-        unreachable_nodes: &[NodeId]
+        unreachable_nodes: &[NodeId],
     ) -> bool {
         let reachable_count = cluster_nodes.len() - unreachable_nodes.len();
         let total_nodes = cluster_nodes.len();
-        
+
         // Classic split-brain condition: can't reach majority
         let majority_threshold = total_nodes / 2 + 1;
-        
+
         if reachable_count < majority_threshold {
             warn!(
-                "Split-brain risk detected: {} reachable out of {} total (need {})", 
+                "Split-brain risk detected: {} reachable out of {} total (need {})",
                 reachable_count, total_nodes, majority_threshold
             );
             return true;
         }
-        
+
         // Additional check: ensure minimum cluster size
         if reachable_count < self.min_cluster_size {
             warn!(
-                "Cluster too small: {} reachable (minimum {})", 
+                "Cluster too small: {} reachable (minimum {})",
                 reachable_count, self.min_cluster_size
             );
             return true;
         }
-        
+
         false
     }
-    
+
     /// Detect network partitions
-    pub async fn detect_partitions(&self, node_health: &HashMap<NodeId, NodeHealthStatus>) -> HashMap<String, Vec<NodeId>> {
+    pub async fn detect_partitions(
+        &self,
+        node_health: &HashMap<NodeId, NodeHealthStatus>,
+    ) -> HashMap<String, Vec<NodeId>> {
         let mut partitions = HashMap::new();
-        
+
         // Group nodes by connectivity patterns
         let mut reachable_nodes = Vec::new();
         let mut unreachable_nodes = Vec::new();
-        
+
         for (node_id, health) in node_health.iter() {
             if health.is_reachable {
                 reachable_nodes.push(node_id.clone());
@@ -122,21 +125,21 @@ impl SplitBrainDetector {
                 unreachable_nodes.push(node_id.clone());
             }
         }
-        
+
         if !reachable_nodes.is_empty() {
             partitions.insert("reachable".to_string(), reachable_nodes);
         }
-        
+
         if !unreachable_nodes.is_empty() {
             partitions.insert("unreachable".to_string(), unreachable_nodes);
         }
-        
+
         // Store detected partitions
         {
             let mut stored_partitions = self.partitions.write().await;
             *stored_partitions = partitions.clone();
         }
-        
+
         partitions
     }
 }
@@ -156,39 +159,49 @@ impl PartitionDetector {
             ping_attempts,
         }
     }
-    
+
     /// Check network connectivity to a node
     pub async fn check_connectivity(&self, target_node: &NodeId) -> bool {
         // In a real implementation, this would perform actual network checks
         // For now, simulate with a simple timeout
-        
+
         for attempt in 1..=self.ping_attempts {
-            debug!("Checking connectivity to {} (attempt {})", target_node, attempt);
-            
+            debug!(
+                "Checking connectivity to {} (attempt {})",
+                target_node, attempt
+            );
+
             // Simulate network check
             tokio::time::sleep(Duration::from_millis(10)).await;
-            
+
             // For demo purposes, assume 90% success rate
             if fastrand::f32() > 0.1 {
                 return true;
             }
         }
-        
-        warn!("Node {} appears unreachable after {} attempts", target_node, self.ping_attempts);
+
+        warn!(
+            "Node {} appears unreachable after {} attempts",
+            target_node, self.ping_attempts
+        );
         false
     }
-    
+
     /// Perform connectivity matrix check across all nodes
-    pub async fn check_cluster_connectivity(&self, nodes: &[NodeId], from_node: &NodeId) -> HashMap<NodeId, bool> {
+    pub async fn check_cluster_connectivity(
+        &self,
+        nodes: &[NodeId],
+        from_node: &NodeId,
+    ) -> HashMap<NodeId, bool> {
         let mut connectivity = HashMap::new();
-        
+
         for node in nodes {
             if node != from_node {
                 let is_reachable = self.check_connectivity(node).await;
                 connectivity.insert(node.clone(), is_reachable);
             }
         }
-        
+
         connectivity
     }
 }
@@ -205,17 +218,14 @@ impl EnhancedClusterManager {
             cluster_nodes,
             raft_config,
         ));
-        
+
         let split_brain_detector = Arc::new(SplitBrainDetector::new(
             quorum_config.min_quorum_size,
             Duration::from_secs(30),
         ));
-        
-        let partition_detector = Arc::new(PartitionDetector::new(
-            Duration::from_millis(500),
-            3,
-        ));
-        
+
+        let partition_detector = Arc::new(PartitionDetector::new(Duration::from_millis(500), 3));
+
         Self {
             node_id,
             raft_consensus,
@@ -225,84 +235,93 @@ impl EnhancedClusterManager {
             partition_detector,
         }
     }
-    
+
     /// Start the enhanced cluster manager
-    pub async fn start(&self, transport: Arc<dyn crate::consensus::RaftTransport>) -> OrbitResult<()> {
-        info!("Starting enhanced cluster manager for node: {}", self.node_id);
-        
+    pub async fn start(
+        &self,
+        transport: Arc<dyn crate::consensus::RaftTransport>,
+    ) -> OrbitResult<()> {
+        info!(
+            "Starting enhanced cluster manager for node: {}",
+            self.node_id
+        );
+
         // Start Raft consensus
         self.raft_consensus.start(transport).await?;
-        
+
         // Start health monitoring
         self.start_health_monitoring().await?;
-        
+
         // Start split-brain detection
         self.start_split_brain_monitoring().await?;
-        
+
         Ok(())
     }
-    
+
     /// Start health monitoring background task
     async fn start_health_monitoring(&self) -> OrbitResult<()> {
         let cluster_manager = self.clone();
-        
+
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(5));
-            
+
             loop {
                 interval.tick().await;
-                
+
                 if let Err(e) = cluster_manager.update_node_health().await {
                     error!("Health monitoring failed: {}", e);
                 }
             }
         });
-        
+
         Ok(())
     }
-    
+
     /// Start split-brain monitoring
     async fn start_split_brain_monitoring(&self) -> OrbitResult<()> {
         let cluster_manager = self.clone();
-        
+
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(15));
-            
+
             loop {
                 interval.tick().await;
-                
+
                 if let Err(e) = cluster_manager.check_cluster_health().await {
                     error!("Split-brain monitoring failed: {}", e);
                 }
             }
         });
-        
+
         Ok(())
     }
-    
+
     /// Update health status of all cluster nodes
     async fn update_node_health(&self) -> OrbitResult<()> {
         let cluster_nodes = self.get_cluster_nodes().await?;
-        let connectivity = self.partition_detector
+        let connectivity = self
+            .partition_detector
             .check_cluster_connectivity(&cluster_nodes, &self.node_id)
             .await;
-        
+
         let mut health_map = self.node_health.write().await;
         let now = Instant::now();
-        
+
         for node in &cluster_nodes {
             if node != &self.node_id {
                 let is_reachable = connectivity.get(node).copied().unwrap_or(false);
-                
-                let health = health_map.entry(node.clone()).or_insert_with(|| NodeHealthStatus {
-                    node_id: node.clone(),
-                    last_seen: now,
-                    consecutive_failures: 0,
-                    network_latency: None,
-                    is_reachable: true,
-                    partition_group: None,
-                });
-                
+
+                let health = health_map
+                    .entry(node.clone())
+                    .or_insert_with(|| NodeHealthStatus {
+                        node_id: node.clone(),
+                        last_seen: now,
+                        consecutive_failures: 0,
+                        network_latency: None,
+                        is_reachable: true,
+                        partition_group: None,
+                    });
+
                 if is_reachable {
                     health.last_seen = now;
                     health.consecutive_failures = 0;
@@ -313,75 +332,81 @@ impl EnhancedClusterManager {
                 }
             }
         }
-        
+
         Ok(())
     }
-    
+
     /// Check overall cluster health and split-brain risk
     async fn check_cluster_health(&self) -> OrbitResult<()> {
         let cluster_nodes = self.get_cluster_nodes().await?;
         let health_map = self.node_health.read().await;
-        
+
         let unreachable_nodes: Vec<NodeId> = health_map
             .values()
             .filter(|health| !health.is_reachable)
             .map(|health| health.node_id.clone())
             .collect();
-        
-        let split_brain_risk = self.split_brain_detector
+
+        let split_brain_risk = self
+            .split_brain_detector
             .check_split_brain_risk(&cluster_nodes, &unreachable_nodes)
             .await;
-        
+
         if split_brain_risk {
-            error!("Split-brain risk detected! Unreachable nodes: {:?}", unreachable_nodes);
-            
+            error!(
+                "Split-brain risk detected! Unreachable nodes: {:?}",
+                unreachable_nodes
+            );
+
             // In a production system, you might want to:
             // 1. Stop accepting new coordinator roles
             // 2. Increase election timeouts
             // 3. Alert monitoring systems
             // 4. Attempt network partition healing
         }
-        
+
         // Detect partitions
-        let partitions = self.split_brain_detector
+        let partitions = self
+            .split_brain_detector
             .detect_partitions(&health_map)
             .await;
-        
+
         if partitions.len() > 1 {
             warn!("Network partitions detected: {:?}", partitions);
         }
-        
+
         Ok(())
     }
-    
+
     /// Check if current node has quorum
     pub async fn has_quorum(&self) -> OrbitResult<bool> {
         let cluster_nodes = self.get_cluster_nodes().await?;
         let health_map = self.node_health.read().await;
-        
+
         let reachable_count = health_map
             .values()
             .filter(|health| health.is_reachable)
-            .count() + 1; // +1 for self
-        
+            .count()
+            + 1; // +1 for self
+
         let total_nodes = cluster_nodes.len();
         let majority = total_nodes / 2 + 1;
-        
+
         Ok(reachable_count >= majority && reachable_count >= self.quorum_config.min_quorum_size)
     }
-    
+
     /// Get nodes in the same partition as this node
     pub async fn get_partition_nodes(&self) -> OrbitResult<Vec<NodeId>> {
         let health_map = self.node_health.read().await;
-        
+
         let mut partition_nodes = vec![self.node_id.clone()]; // Include self
-        
+
         for health in health_map.values() {
             if health.is_reachable {
                 partition_nodes.push(health.node_id.clone());
             }
         }
-        
+
         Ok(partition_nodes)
     }
 }
@@ -406,7 +431,7 @@ impl ClusterManager for EnhancedClusterManager {
         let cluster_nodes = self.raft_consensus.get_cluster_nodes().await;
         Ok(cluster_nodes.clone())
     }
-    
+
     async fn is_leader(&self, node_id: &NodeId) -> OrbitResult<bool> {
         if node_id == &self.node_id {
             Ok(self.raft_consensus.is_leader().await)
@@ -416,32 +441,34 @@ impl ClusterManager for EnhancedClusterManager {
             Ok(current_leader.as_ref() == Some(node_id))
         }
     }
-    
+
     async fn start_election(&self, candidate: &NodeId) -> OrbitResult<bool> {
         // Only allow election if we have quorum
         if !self.has_quorum().await? {
             warn!("Cannot start election: no quorum available");
             return Ok(false);
         }
-        
+
         // Only this node can start its own election
         if candidate != &self.node_id {
-            return Err(OrbitError::configuration("Can only start election for self"));
+            return Err(OrbitError::configuration(
+                "Can only start election for self",
+            ));
         }
-        
+
         // Check if already leader
         if self.raft_consensus.is_leader().await {
             return Ok(true);
         }
-        
+
         // The election is handled by the Raft consensus algorithm
         // Return true to indicate election attempt was successful
         Ok(true)
     }
-    
+
     async fn report_coordinator_failure(&self, failed_coordinator: &NodeId) -> OrbitResult<()> {
         info!("Reporting coordinator failure: {}", failed_coordinator);
-        
+
         // Update health status
         {
             let mut health_map = self.node_health.write().await;
@@ -450,22 +477,25 @@ impl ClusterManager for EnhancedClusterManager {
                 health.consecutive_failures += 1;
             }
         }
-        
+
         // Check if we still have quorum after this failure
         if !self.has_quorum().await? {
-            warn!("Lost quorum after coordinator failure: {}", failed_coordinator);
+            warn!(
+                "Lost quorum after coordinator failure: {}",
+                failed_coordinator
+            );
         }
-        
+
         Ok(())
     }
-    
+
     async fn get_cluster_config(&self) -> OrbitResult<ClusterConfig> {
         let cluster_nodes = self.get_cluster_nodes().await?;
         let current_leader = self.raft_consensus.get_leader().await;
-        
+
         let total_nodes = cluster_nodes.len();
         let majority_threshold = total_nodes / 2 + 1;
-        
+
         Ok(ClusterConfig {
             total_nodes,
             majority_threshold,
@@ -481,42 +511,48 @@ pub struct RecoveryRaftEventHandler {
 
 impl RecoveryRaftEventHandler {
     pub fn new(recovery_manager: Arc<crate::recovery::TransactionRecoveryManager>) -> Self {
-        Self {
-            recovery_manager,
-        }
+        Self { recovery_manager }
     }
-    
+
     /// Initiate a comprehensive recovery scan when this node becomes leader
     async fn initiate_leader_recovery_scan(&self) -> OrbitResult<()> {
         info!("Starting leader recovery scan for orphaned transactions");
-        
+
         // Get all known coordinators and check their health
         let coordinators = self.recovery_manager.coordinators.read().await;
         let mut failed_coordinators = Vec::new();
-        
+
         for (node_id, health) in coordinators.iter() {
             if !health.is_healthy {
                 failed_coordinators.push(node_id.clone());
             }
         }
-        
+
         // Find transactions from failed coordinators that need recovery
         let mut all_transactions_to_recover = Vec::new();
         for failed_coordinator in &failed_coordinators {
-            let transactions = self.recovery_manager.find_transactions_needing_recovery(failed_coordinator).await?;
+            let transactions = self
+                .recovery_manager
+                .find_transactions_needing_recovery(failed_coordinator)
+                .await?;
             all_transactions_to_recover.extend(transactions);
         }
-        
+
         if !all_transactions_to_recover.is_empty() {
-            info!("Found {} total transactions needing recovery from {} failed coordinators", 
-                  all_transactions_to_recover.len(), failed_coordinators.len());
-            
+            info!(
+                "Found {} total transactions needing recovery from {} failed coordinators",
+                all_transactions_to_recover.len(),
+                failed_coordinators.len()
+            );
+
             // Since this node just became leader, it should take over these transactions
-            self.recovery_manager.become_coordinator(all_transactions_to_recover).await?;
+            self.recovery_manager
+                .become_coordinator(all_transactions_to_recover)
+                .await?;
         } else {
             info!("No orphaned transactions found during leader recovery scan");
         }
-        
+
         Ok(())
     }
 }
@@ -525,7 +561,7 @@ impl RecoveryRaftEventHandler {
 impl RaftEventHandler for RecoveryRaftEventHandler {
     async fn on_leader_elected(&self, leader_id: &NodeId, term: u64) -> OrbitResult<()> {
         info!("New leader elected: {} (term: {})", leader_id, term);
-        
+
         // Notify recovery manager about the new leader
         let handlers = self.recovery_manager.event_handlers.read().await;
         for handler in handlers.iter() {
@@ -533,51 +569,72 @@ impl RaftEventHandler for RecoveryRaftEventHandler {
                 error!("Recovery event handler failed: {}", e);
             }
         }
-        
+
         // If this node became leader, initiate recovery scan for orphaned transactions
-        if let Ok(cluster_config) = self.recovery_manager.cluster_manager.get_cluster_config().await {
+        if let Ok(cluster_config) = self
+            .recovery_manager
+            .cluster_manager
+            .get_cluster_config()
+            .await
+        {
             if cluster_config.current_leader.as_ref() == Some(leader_id) {
                 // This node is the new leader - scan for transactions that need recovery
                 info!("This node became leader, scanning for orphaned transactions...");
-                
+
                 // Trigger a comprehensive recovery check
                 if let Err(e) = self.initiate_leader_recovery_scan().await {
                     error!("Failed to initiate leader recovery scan: {}", e);
                 }
             }
         }
-        
+
         Ok(())
     }
-    
+
     async fn on_leader_lost(&self, former_leader_id: &NodeId, term: u64) -> OrbitResult<()> {
         warn!("Leader lost: {} (term: {})", former_leader_id, term);
-        
+
         // Report coordinator failure to trigger recovery process
-        if let Err(e) = self.recovery_manager.cluster_manager.report_coordinator_failure(former_leader_id).await {
+        if let Err(e) = self
+            .recovery_manager
+            .cluster_manager
+            .report_coordinator_failure(former_leader_id)
+            .await
+        {
             error!("Failed to report coordinator failure: {}", e);
         }
-        
+
         // Find and handle transactions coordinated by the failed leader
-        let transactions_needing_recovery = self.recovery_manager.find_transactions_needing_recovery(former_leader_id).await?;
-        
+        let transactions_needing_recovery = self
+            .recovery_manager
+            .find_transactions_needing_recovery(former_leader_id)
+            .await?;
+
         if !transactions_needing_recovery.is_empty() {
-            warn!("Found {} transactions needing recovery from failed leader {}", 
-                  transactions_needing_recovery.len(), former_leader_id);
-            
+            warn!(
+                "Found {} transactions needing recovery from failed leader {}",
+                transactions_needing_recovery.len(),
+                former_leader_id
+            );
+
             // The recovery manager will handle these through normal coordinator failure process
-            self.recovery_manager.initiate_recovery_process(transactions_needing_recovery).await?;
+            self.recovery_manager
+                .initiate_recovery_process(transactions_needing_recovery)
+                .await?;
         }
-        
+
         Ok(())
     }
-    
+
     async fn on_term_changed(&self, old_term: u64, new_term: u64) -> OrbitResult<()> {
-        info!("Raft term changed: {} -> {} - updating recovery state", old_term, new_term);
-        
+        info!(
+            "Raft term changed: {} -> {} - updating recovery state",
+            old_term, new_term
+        );
+
         // Update term information in recovery state if needed
         // This helps with recovery decision making and prevents split-brain scenarios
-        
+
         Ok(())
     }
 }

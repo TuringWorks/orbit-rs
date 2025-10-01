@@ -10,7 +10,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
 use tokio::time::Instant;
-use tracing::{info, warn, error, debug};
+use tracing::{debug, error, info, warn};
 
 /// Configuration for recovery mechanisms
 #[derive(Debug, Clone)]
@@ -127,16 +127,16 @@ pub struct CoordinatorHealth {
 pub trait ClusterManager: Send + Sync {
     /// Get all nodes in the cluster
     async fn get_cluster_nodes(&self) -> OrbitResult<Vec<NodeId>>;
-    
+
     /// Check if a node is the current leader/coordinator
     async fn is_leader(&self, node_id: &NodeId) -> OrbitResult<bool>;
-    
+
     /// Start leader election
     async fn start_election(&self, candidate: &NodeId) -> OrbitResult<bool>;
-    
+
     /// Notify cluster of coordinator failure
     async fn report_coordinator_failure(&self, failed_coordinator: &NodeId) -> OrbitResult<()>;
-    
+
     /// Get cluster configuration
     async fn get_cluster_config(&self) -> OrbitResult<ClusterConfig>;
 }
@@ -153,13 +153,17 @@ pub struct ClusterConfig {
 pub trait RecoveryEventHandler: Send + Sync {
     /// Called when a coordinator failure is detected
     async fn on_coordinator_failure(&self, failed_coordinator: &NodeId) -> OrbitResult<()>;
-    
+
     /// Called when recovery process starts
     async fn on_recovery_start(&self, transaction_id: &TransactionId) -> OrbitResult<()>;
-    
+
     /// Called when recovery process completes
-    async fn on_recovery_complete(&self, transaction_id: &TransactionId, success: bool) -> OrbitResult<()>;
-    
+    async fn on_recovery_complete(
+        &self,
+        transaction_id: &TransactionId,
+        success: bool,
+    ) -> OrbitResult<()>;
+
     /// Called when this node becomes coordinator
     async fn on_coordinator_elected(&self, new_coordinator: &NodeId) -> OrbitResult<()>;
 }
@@ -204,7 +208,7 @@ impl TransactionRecoveryManager {
     /// Create a checkpoint for a transaction
     pub async fn create_checkpoint(&self, transaction: &DistributedTransaction) -> OrbitResult<()> {
         let checkpoint = TransactionCheckpoint::from_transaction(transaction);
-        
+
         // Store checkpoint in memory
         {
             let mut checkpoints = self.checkpoints.write().await;
@@ -214,10 +218,13 @@ impl TransactionRecoveryManager {
         // Persist checkpoint to log
         let _checkpoint_data = serde_json::to_value(&checkpoint)
             .map_err(|e| OrbitError::internal(&format!("Failed to serialize checkpoint: {}", e)))?;
-        
+
         // This would ideally be stored in a dedicated recovery log
-        debug!("Created checkpoint for transaction: {}", checkpoint.transaction_id);
-        
+        debug!(
+            "Created checkpoint for transaction: {}",
+            checkpoint.transaction_id
+        );
+
         // Update statistics
         {
             let mut stats = self.stats.write().await;
@@ -239,18 +246,18 @@ impl TransactionRecoveryManager {
         if let Some(checkpoint) = checkpoints.get_mut(transaction_id) {
             checkpoint.current_state = state;
             checkpoint.last_updated = chrono::Utc::now().timestamp_millis();
-            
+
             if let Some(votes) = votes {
                 checkpoint.votes_received = votes;
             }
-            
+
             if let Some(acks) = acks {
                 checkpoint.acknowledgments_received = acks;
             }
-            
+
             debug!("Updated checkpoint for transaction: {}", transaction_id);
         }
-        
+
         Ok(())
     }
 
@@ -283,15 +290,18 @@ impl TransactionRecoveryManager {
     async fn initialize_coordinator_tracking(&self) -> OrbitResult<()> {
         let cluster_nodes = self.cluster_manager.get_cluster_nodes().await?;
         let mut coordinators = self.coordinators.write().await;
-        
+
         for node_id in cluster_nodes {
-            coordinators.insert(node_id.clone(), CoordinatorHealth {
-                node_id,
-                last_seen: Instant::now(),
-                is_healthy: true,
-                consecutive_failures: 0,
-                last_election_participation: None,
-            });
+            coordinators.insert(
+                node_id.clone(),
+                CoordinatorHealth {
+                    node_id,
+                    last_seen: Instant::now(),
+                    is_healthy: true,
+                    consecutive_failures: 0,
+                    last_election_participation: None,
+                },
+            );
         }
 
         Ok(())
@@ -354,16 +364,16 @@ impl TransactionRecoveryManager {
 
         for (node_id, health) in coordinators.iter_mut() {
             let time_since_last_seen = now.duration_since(health.last_seen);
-            
+
             if time_since_last_seen > self.config.health_check_timeout {
                 health.consecutive_failures += 1;
-                
+
                 if health.consecutive_failures >= 3 && health.is_healthy {
                     health.is_healthy = false;
                     failed_coordinators.push(node_id.clone());
-                    
+
                     warn!("Coordinator failure detected: {}", node_id);
-                    
+
                     // Update statistics
                     {
                         let mut stats = self.stats.write().await;
@@ -400,17 +410,25 @@ impl TransactionRecoveryManager {
         }
 
         // Notify cluster manager
-        self.cluster_manager.report_coordinator_failure(failed_coordinator).await?;
+        self.cluster_manager
+            .report_coordinator_failure(failed_coordinator)
+            .await?;
 
         // Find transactions that need recovery
-        let transactions_to_recover = self.find_transactions_needing_recovery(failed_coordinator).await?;
-        
+        let transactions_to_recover = self
+            .find_transactions_needing_recovery(failed_coordinator)
+            .await?;
+
         if !transactions_to_recover.is_empty() {
-            info!("Found {} transactions requiring recovery", transactions_to_recover.len());
-            
+            info!(
+                "Found {} transactions requiring recovery",
+                transactions_to_recover.len()
+            );
+
             // Start recovery process
             if self.config.enable_automatic_failover {
-                self.initiate_recovery_process(transactions_to_recover).await?;
+                self.initiate_recovery_process(transactions_to_recover)
+                    .await?;
             }
         }
 
@@ -418,14 +436,23 @@ impl TransactionRecoveryManager {
     }
 
     /// Find transactions that need recovery due to coordinator failure
-    pub async fn find_transactions_needing_recovery(&self, failed_coordinator: &NodeId) -> OrbitResult<Vec<TransactionCheckpoint>> {
+    pub async fn find_transactions_needing_recovery(
+        &self,
+        failed_coordinator: &NodeId,
+    ) -> OrbitResult<Vec<TransactionCheckpoint>> {
         let checkpoints = self.checkpoints.read().await;
         let mut transactions_to_recover = Vec::new();
 
         for checkpoint in checkpoints.values() {
             if &checkpoint.coordinator_node == failed_coordinator {
                 // Check if transaction is in a recoverable state
-                if matches!(checkpoint.current_state, TransactionState::Preparing | TransactionState::Prepared | TransactionState::Committing | TransactionState::Aborting) {
+                if matches!(
+                    checkpoint.current_state,
+                    TransactionState::Preparing
+                        | TransactionState::Prepared
+                        | TransactionState::Committing
+                        | TransactionState::Aborting
+                ) {
                     transactions_to_recover.push(checkpoint.clone());
                 }
             }
@@ -435,16 +462,22 @@ impl TransactionRecoveryManager {
     }
 
     /// Initiate recovery process for failed transactions
-    pub async fn initiate_recovery_process(&self, transactions: Vec<TransactionCheckpoint>) -> OrbitResult<()> {
-        info!("Initiating recovery process for {} transactions", transactions.len());
+    pub async fn initiate_recovery_process(
+        &self,
+        transactions: Vec<TransactionCheckpoint>,
+    ) -> OrbitResult<()> {
+        info!(
+            "Initiating recovery process for {} transactions",
+            transactions.len()
+        );
 
         // Check if this node should become the new coordinator
         let should_become_coordinator = self.should_become_coordinator().await?;
-        
+
         if should_become_coordinator {
             // Start election process
             let election_won = self.cluster_manager.start_election(&self.node_id).await?;
-            
+
             {
                 let mut stats = self.stats.write().await;
                 stats.elections_participated += 1;
@@ -452,7 +485,7 @@ impl TransactionRecoveryManager {
                     stats.elections_won += 1;
                 }
             }
-            
+
             if election_won {
                 info!("Won coordinator election, taking over failed transactions");
                 self.become_coordinator(transactions).await?;
@@ -465,15 +498,21 @@ impl TransactionRecoveryManager {
     /// Check if this node should become the new coordinator
     async fn should_become_coordinator(&self) -> OrbitResult<bool> {
         let cluster_config = self.cluster_manager.get_cluster_config().await?;
-        
+
         // Simple heuristic: become coordinator if no current leader exists
         // In a real implementation, this would use more sophisticated election algorithms
         Ok(cluster_config.current_leader.is_none())
     }
 
     /// Become the new coordinator and recover transactions
-    pub async fn become_coordinator(&self, transactions: Vec<TransactionCheckpoint>) -> OrbitResult<()> {
-        info!("Becoming new coordinator for {} transactions", transactions.len());
+    pub async fn become_coordinator(
+        &self,
+        transactions: Vec<TransactionCheckpoint>,
+    ) -> OrbitResult<()> {
+        info!(
+            "Becoming new coordinator for {} transactions",
+            transactions.len()
+        );
 
         // Notify event handlers
         let handlers = self.event_handlers.read().await;
@@ -488,7 +527,7 @@ impl TransactionRecoveryManager {
             let transaction_id = checkpoint.transaction_id.clone();
             if let Err(e) = self.recover_transaction(checkpoint).await {
                 error!("Failed to recover transaction {}: {}", transaction_id, e);
-                
+
                 let mut stats = self.stats.write().await;
                 stats.failed_recoveries += 1;
             } else {
@@ -496,7 +535,7 @@ impl TransactionRecoveryManager {
                 stats.successful_recoveries += 1;
                 stats.transactions_recovered += 1;
             }
-            
+
             let mut stats = self.stats.write().await;
             stats.total_recoveries += 1;
         }
@@ -520,21 +559,24 @@ impl TransactionRecoveryManager {
             TransactionState::Preparing => {
                 // Transaction was in prepare phase - need to determine if we should commit or abort
                 self.recover_preparing_transaction(&checkpoint).await?
-            },
+            }
             TransactionState::Prepared => {
                 // All participants voted yes - should commit
                 self.recover_prepared_transaction(&checkpoint).await?
-            },
+            }
             TransactionState::Committing => {
                 // Transaction was committing - continue commit
                 self.recover_committing_transaction(&checkpoint).await?
-            },
+            }
             TransactionState::Aborting => {
                 // Transaction was aborting - continue abort
                 self.recover_aborting_transaction(&checkpoint).await?
-            },
+            }
             _ => {
-                debug!("Transaction {} is in non-recoverable state: {:?}", checkpoint.transaction_id, checkpoint.current_state);
+                debug!(
+                    "Transaction {} is in non-recoverable state: {:?}",
+                    checkpoint.transaction_id, checkpoint.current_state
+                );
                 true
             }
         };
@@ -542,7 +584,10 @@ impl TransactionRecoveryManager {
         // Notify event handlers
         let handlers = self.event_handlers.read().await;
         for handler in handlers.iter() {
-            if let Err(e) = handler.on_recovery_complete(&checkpoint.transaction_id, success).await {
+            if let Err(e) = handler
+                .on_recovery_complete(&checkpoint.transaction_id, success)
+                .await
+            {
                 error!("Recovery event handler failed: {}", e);
             }
         }
@@ -551,58 +596,94 @@ impl TransactionRecoveryManager {
     }
 
     /// Recover transaction in preparing state
-    async fn recover_preparing_transaction(&self, checkpoint: &TransactionCheckpoint) -> OrbitResult<bool> {
-        info!("Recovering preparing transaction: {}", checkpoint.transaction_id);
-        
+    async fn recover_preparing_transaction(
+        &self,
+        checkpoint: &TransactionCheckpoint,
+    ) -> OrbitResult<bool> {
+        info!(
+            "Recovering preparing transaction: {}",
+            checkpoint.transaction_id
+        );
+
         // Query participants for their votes
         // If we have enough YES votes, proceed to commit
         // Otherwise, abort the transaction
-        
+
         // For now, we'll abort preparing transactions as the safest option
-        info!("Aborting preparing transaction {} for safety", checkpoint.transaction_id);
+        info!(
+            "Aborting preparing transaction {} for safety",
+            checkpoint.transaction_id
+        );
         Ok(true) // Simplified for now
     }
 
     /// Recover transaction in prepared state  
-    async fn recover_prepared_transaction(&self, checkpoint: &TransactionCheckpoint) -> OrbitResult<bool> {
-        info!("Recovering prepared transaction: {}", checkpoint.transaction_id);
-        
+    async fn recover_prepared_transaction(
+        &self,
+        checkpoint: &TransactionCheckpoint,
+    ) -> OrbitResult<bool> {
+        info!(
+            "Recovering prepared transaction: {}",
+            checkpoint.transaction_id
+        );
+
         // All participants voted yes, so we should commit
         // Send commit messages to all participants
-        
-        info!("Committing prepared transaction {}", checkpoint.transaction_id);
+
+        info!(
+            "Committing prepared transaction {}",
+            checkpoint.transaction_id
+        );
         Ok(true) // Simplified for now
     }
 
     /// Recover transaction in committing state
-    async fn recover_committing_transaction(&self, checkpoint: &TransactionCheckpoint) -> OrbitResult<bool> {
-        info!("Recovering committing transaction: {}", checkpoint.transaction_id);
-        
+    async fn recover_committing_transaction(
+        &self,
+        checkpoint: &TransactionCheckpoint,
+    ) -> OrbitResult<bool> {
+        info!(
+            "Recovering committing transaction: {}",
+            checkpoint.transaction_id
+        );
+
         // Transaction was committing - continue sending commit messages
         // and wait for acknowledgments
-        
-        info!("Continuing commit for transaction {}", checkpoint.transaction_id);
+
+        info!(
+            "Continuing commit for transaction {}",
+            checkpoint.transaction_id
+        );
         Ok(true) // Simplified for now
     }
 
     /// Recover transaction in aborting state
-    async fn recover_aborting_transaction(&self, checkpoint: &TransactionCheckpoint) -> OrbitResult<bool> {
-        info!("Recovering aborting transaction: {}", checkpoint.transaction_id);
-        
+    async fn recover_aborting_transaction(
+        &self,
+        checkpoint: &TransactionCheckpoint,
+    ) -> OrbitResult<bool> {
+        info!(
+            "Recovering aborting transaction: {}",
+            checkpoint.transaction_id
+        );
+
         // Transaction was aborting - continue sending abort messages
         // and wait for acknowledgments
-        
-        info!("Continuing abort for transaction {}", checkpoint.transaction_id);
+
+        info!(
+            "Continuing abort for transaction {}",
+            checkpoint.transaction_id
+        );
         Ok(true) // Simplified for now
     }
 
     /// Recover incomplete transactions on startup
     async fn recover_incomplete_transactions(&self) -> OrbitResult<()> {
         info!("Recovering incomplete transactions on startup");
-        
+
         // This would query the persistent log for incomplete transactions
         // and attempt to recover them
-        
+
         // For now, this is a placeholder
         debug!("Transaction recovery on startup completed");
         Ok(())
@@ -610,7 +691,8 @@ impl TransactionRecoveryManager {
 
     /// Clean up old checkpoints
     async fn cleanup_old_checkpoints(&self) -> OrbitResult<()> {
-        let cutoff_time = chrono::Utc::now().timestamp_millis() - self.config.max_recovery_age.as_millis() as i64;
+        let cutoff_time =
+            chrono::Utc::now().timestamp_millis() - self.config.max_recovery_age.as_millis() as i64;
         let mut checkpoints = self.checkpoints.write().await;
         let mut to_remove = Vec::new();
 
@@ -632,9 +714,12 @@ impl TransactionRecoveryManager {
     async fn monitor_recovery_progress(&self) -> OrbitResult<()> {
         let checkpoints = self.checkpoints.read().await;
         let active_recoveries = checkpoints.len();
-        
+
         if active_recoveries > 0 {
-            debug!("Monitoring {} active recovery checkpoints", active_recoveries);
+            debug!(
+                "Monitoring {} active recovery checkpoints",
+                active_recoveries
+            );
         }
 
         Ok(())
@@ -649,73 +734,95 @@ impl TransactionRecoveryManager {
     pub async fn get_checkpoints(&self) -> HashMap<TransactionId, TransactionCheckpoint> {
         self.checkpoints.read().await.clone()
     }
-    
+
     /// Register a transaction with its coordinator
-    pub async fn register_transaction_coordinator(&self, transaction_id: TransactionId, coordinator: NodeId) -> OrbitResult<()> {
+    pub async fn register_transaction_coordinator(
+        &self,
+        transaction_id: TransactionId,
+        coordinator: NodeId,
+    ) -> OrbitResult<()> {
         let mut mapping = self.transaction_coordinator_map.write().await;
         mapping.insert(transaction_id.clone(), coordinator.clone());
-        
-        debug!("Registered transaction {} with coordinator {}", transaction_id, coordinator);
+
+        debug!(
+            "Registered transaction {} with coordinator {}",
+            transaction_id, coordinator
+        );
         Ok(())
     }
-    
+
     /// Get the coordinator for a transaction
-    pub async fn get_transaction_coordinator(&self, transaction_id: &TransactionId) -> Option<NodeId> {
+    pub async fn get_transaction_coordinator(
+        &self,
+        transaction_id: &TransactionId,
+    ) -> Option<NodeId> {
         let mapping = self.transaction_coordinator_map.read().await;
         mapping.get(transaction_id).cloned()
     }
-    
+
     /// Remove transaction-coordinator mapping
-    pub async fn unregister_transaction_coordinator(&self, transaction_id: &TransactionId) -> OrbitResult<()> {
+    pub async fn unregister_transaction_coordinator(
+        &self,
+        transaction_id: &TransactionId,
+    ) -> OrbitResult<()> {
         let mut mapping = self.transaction_coordinator_map.write().await;
         mapping.remove(transaction_id);
-        
-        debug!("Unregistered transaction coordinator mapping for {}", transaction_id);
+
+        debug!(
+            "Unregistered transaction coordinator mapping for {}",
+            transaction_id
+        );
         Ok(())
     }
-    
+
     /// Update the current cluster leader
     pub async fn update_cluster_leader(&self, leader: Option<NodeId>) -> OrbitResult<()> {
         let mut current_leader = self.current_leader.write().await;
         *current_leader = leader.clone();
-        
+
         match leader {
             Some(leader_id) => info!("Updated cluster leader to: {}", leader_id),
             None => info!("Cleared cluster leader"),
         }
-        
+
         Ok(())
     }
-    
+
     /// Get current cluster leader
     pub async fn get_cluster_leader(&self) -> Option<NodeId> {
         self.current_leader.read().await.clone()
     }
-    
+
     /// Reassign transactions from a failed coordinator to the current leader
-    pub async fn reassign_transactions_to_leader(&self, failed_coordinator: &NodeId) -> OrbitResult<Vec<TransactionId>> {
-        let current_leader = self.get_cluster_leader().await
-            .ok_or_else(|| OrbitError::cluster("No current leader available for transaction reassignment"))?;
-        
+    pub async fn reassign_transactions_to_leader(
+        &self,
+        failed_coordinator: &NodeId,
+    ) -> OrbitResult<Vec<TransactionId>> {
+        let current_leader = self.get_cluster_leader().await.ok_or_else(|| {
+            OrbitError::cluster("No current leader available for transaction reassignment")
+        })?;
+
         let mut mapping = self.transaction_coordinator_map.write().await;
         let mut reassigned_transactions = Vec::new();
-        
+
         // Find all transactions owned by the failed coordinator
         let transactions_to_reassign: Vec<TransactionId> = mapping
             .iter()
             .filter(|(_, coordinator)| *coordinator == failed_coordinator)
             .map(|(tx_id, _)| tx_id.clone())
             .collect();
-        
+
         // Reassign them to the current leader
         for transaction_id in transactions_to_reassign {
             mapping.insert(transaction_id.clone(), current_leader.clone());
             reassigned_transactions.push(transaction_id.clone());
-            
-            info!("Reassigned transaction {} from failed coordinator {} to leader {}", 
-                  transaction_id, failed_coordinator, current_leader);
+
+            info!(
+                "Reassigned transaction {} from failed coordinator {} to leader {}",
+                transaction_id, failed_coordinator, current_leader
+            );
         }
-        
+
         Ok(reassigned_transactions)
     }
 }
@@ -741,7 +848,7 @@ impl Clone for TransactionRecoveryManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::transaction_log::{SqliteTransactionLogger, PersistentLogConfig};
+    use crate::transaction_log::{PersistentLogConfig, SqliteTransactionLogger};
     use tempfile::tempdir;
 
     // Mock cluster manager for testing
@@ -764,7 +871,10 @@ mod tests {
             Ok(true) // Always win elections in tests
         }
 
-        async fn report_coordinator_failure(&self, _failed_coordinator: &NodeId) -> OrbitResult<()> {
+        async fn report_coordinator_failure(
+            &self,
+            _failed_coordinator: &NodeId,
+        ) -> OrbitResult<()> {
             Ok(())
         }
 
@@ -781,19 +891,19 @@ mod tests {
     async fn test_recovery_manager_creation() {
         let temp_dir = tempdir().unwrap();
         let db_path = temp_dir.path().join("recovery_test.db");
-        
+
         let log_config = PersistentLogConfig {
             database_path: db_path,
             ..Default::default()
         };
-        
+
         let logger = Arc::new(SqliteTransactionLogger::new(log_config).await.unwrap());
         let node_id = NodeId::new("test-node".to_string(), "default".to_string());
         let cluster_manager = Arc::new(MockClusterManager {
             nodes: vec![node_id.clone()],
             current_leader: None,
         });
-        
+
         let recovery_manager = TransactionRecoveryManager::new(
             node_id,
             RecoveryConfig::default(),
@@ -809,19 +919,19 @@ mod tests {
     async fn test_checkpoint_management() {
         let temp_dir = tempdir().unwrap();
         let db_path = temp_dir.path().join("recovery_test.db");
-        
+
         let log_config = PersistentLogConfig {
             database_path: db_path,
             ..Default::default()
         };
-        
+
         let logger = Arc::new(SqliteTransactionLogger::new(log_config).await.unwrap());
         let node_id = NodeId::new("test-node".to_string(), "default".to_string());
         let cluster_manager = Arc::new(MockClusterManager {
             nodes: vec![node_id.clone()],
             current_leader: None,
         });
-        
+
         let recovery_manager = TransactionRecoveryManager::new(
             node_id.clone(),
             RecoveryConfig::default(),
@@ -830,25 +940,34 @@ mod tests {
         );
 
         let transaction = DistributedTransaction::new(node_id, Duration::from_secs(30));
-        
+
         // Create checkpoint
-        recovery_manager.create_checkpoint(&transaction).await.unwrap();
-        
+        recovery_manager
+            .create_checkpoint(&transaction)
+            .await
+            .unwrap();
+
         // Verify checkpoint exists
         let checkpoints = recovery_manager.get_checkpoints().await;
         assert!(checkpoints.contains_key(&transaction.transaction_id));
-        
+
         // Update checkpoint
-        recovery_manager.update_checkpoint(
-            &transaction.transaction_id,
-            TransactionState::Committed,
-            None,
-            None,
-        ).await.unwrap();
-        
+        recovery_manager
+            .update_checkpoint(
+                &transaction.transaction_id,
+                TransactionState::Committed,
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+
         // Remove checkpoint
-        recovery_manager.remove_checkpoint(&transaction.transaction_id).await.unwrap();
-        
+        recovery_manager
+            .remove_checkpoint(&transaction.transaction_id)
+            .await
+            .unwrap();
+
         let checkpoints = recovery_manager.get_checkpoints().await;
         assert!(!checkpoints.contains_key(&transaction.transaction_id));
     }

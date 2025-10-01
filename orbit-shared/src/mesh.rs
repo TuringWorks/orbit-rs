@@ -162,7 +162,7 @@ mod tests {
     fn test_node_lease_expiry() {
         let node_id = NodeId::generate("test".to_string());
         let now = Utc::now();
-        
+
         let expired_lease = NodeLease::new(
             node_id.clone(),
             now - Duration::minutes(1), // expired 1 minute ago
@@ -184,7 +184,7 @@ mod tests {
     fn test_node_info_creation() {
         let node_id = NodeId::generate("test".to_string());
         let node_info = NodeInfo::new(node_id.clone(), "localhost".to_string(), 8080);
-        
+
         assert_eq!(node_info.id, node_id);
         assert_eq!(node_info.url, "localhost");
         assert_eq!(node_info.port, 8080);

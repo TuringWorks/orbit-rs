@@ -32,7 +32,10 @@ macro_rules! actor_proxy {
 
 /// Trait for creating actor proxies
 pub trait ActorProxy<T: ?Sized> {
-    fn create_proxy(reference: AddressableReference, invocation_system: Arc<InvocationSystem>) -> ActorReference<T> {
+    fn create_proxy(
+        reference: AddressableReference,
+        invocation_system: Arc<InvocationSystem>,
+    ) -> ActorReference<T> {
         ActorReference::new(reference, invocation_system)
     }
 }

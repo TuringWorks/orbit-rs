@@ -1,12 +1,12 @@
 //! Orbit client implementation for connecting to and managing actors in a cluster
 
 use crate::*;
-use orbit_shared::*;
 use orbit_proto::*;
+use orbit_shared::*;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tokio::time::{Duration, interval};
+use tokio::time::{interval, Duration};
 use tonic::transport::{Channel, Endpoint};
 
 /// Configuration for the Orbit client
@@ -143,7 +143,10 @@ impl OrbitClient {
             key,
         };
 
-        Ok(ActorReference::new(reference, self.invocation_system.clone()))
+        Ok(ActorReference::new(
+            reference,
+            self.invocation_system.clone(),
+        ))
     }
 
     /// Deactivate a specific actor instance
@@ -214,7 +217,7 @@ impl OrbitClient {
 
     async fn get_node_id_from_server(&self, channel: &Channel) -> OrbitResult<NodeId> {
         let mut client = connection_service_client::ConnectionServiceClient::new(channel.clone());
-        
+
         let request = tonic::Request::new(ConnectionInfoRequestProto {});
         let response = client
             .get_connection_info(request)

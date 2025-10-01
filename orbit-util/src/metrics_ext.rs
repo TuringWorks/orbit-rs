@@ -9,7 +9,7 @@ impl MetricsExt {
         // For now, just use the basic metrics without labels to avoid lifetime issues
         // This can be enhanced later with proper metrics recorder setup
         metrics::counter!(name.clone()).increment(1);
-        
+
         // Add labels as additional separate metrics for context
         for (key, value) in labels {
             let metric_name = format!("{}.{}", name, key);
@@ -20,7 +20,7 @@ impl MetricsExt {
     /// Set a gauge value with labels
     pub fn set_gauge(name: String, value: f64, labels: HashMap<String, String>) {
         metrics::gauge!(name.clone()).set(value);
-        
+
         // Add context through separate labeled metrics
         for (key, label_value) in labels {
             let metric_name = format!("{}.{}", name, key);
@@ -31,7 +31,7 @@ impl MetricsExt {
     /// Record a histogram value with labels
     pub fn record_histogram(name: String, value: f64, labels: HashMap<String, String>) {
         metrics::histogram!(name.clone()).record(value);
-        
+
         // Add context through separate labeled metrics
         for (key, label_value) in labels {
             let metric_name = format!("{}.{}", name, key);
@@ -49,7 +49,7 @@ mod tests {
         let mut labels = HashMap::new();
         labels.insert("environment".to_string(), "test".to_string());
         labels.insert("service".to_string(), "orbit".to_string());
-        
+
         // These would normally be tested with a metrics recorder setup
         // For now, just test that the functions don't panic
         MetricsExt::increment_counter("test_counter".to_string(), labels.clone());

@@ -109,52 +109,53 @@ impl ElectionMetrics {
             performance: Arc::new(RwLock::new(ElectionPerformanceMetrics::default())),
         }
     }
-    
+
     /// Start recording an election
     pub async fn start_election(&self, term: u64) -> ElectionTracker {
         let now = Instant::now();
-        
+
         // Update timing metrics
         {
             let mut timing = self.timing.write().await;
             if let Some(last_time) = timing.last_election_time {
                 let time_between = now.duration_since(last_time);
-                
+
                 // Update average time between elections
                 let current_avg = timing.avg_time_between_elections;
                 timing.avg_time_between_elections = if current_avg == Duration::ZERO {
                     time_between
                 } else {
                     Duration::from_millis(
-                        (current_avg.as_millis() as u64 + time_between.as_millis() as u64) / 2
+                        (current_avg.as_millis() as u64 + time_between.as_millis() as u64) / 2,
                     )
                 };
             }
-            
+
             timing.last_election_time = Some(now);
         }
-        
+
         // Update outcome metrics
         {
             let mut outcomes = self.outcomes.write().await;
             outcomes.total_elections += 1;
         }
-        
+
         ElectionTracker {
             start_time: now,
             term,
             metrics: self.clone(),
         }
     }
-    
+
     /// Record vote request latency
     pub async fn record_vote_latency(&self, target_node: &NodeId, latency: Duration) {
         let mut network = self.network.write().await;
-        network.vote_request_latencies
+        network
+            .vote_request_latencies
             .entry(target_node.clone())
             .or_insert_with(Vec::new)
             .push(latency);
-            
+
         // Keep only last 100 measurements per node
         if let Some(latencies) = network.vote_request_latencies.get_mut(target_node) {
             if latencies.len() > 100 {
@@ -162,21 +163,28 @@ impl ElectionMetrics {
             }
         }
     }
-    
+
     /// Record message loss
-    pub async fn record_message_loss(&self, target_node: &NodeId, total_sent: u64, total_received: u64) {
+    pub async fn record_message_loss(
+        &self,
+        target_node: &NodeId,
+        total_sent: u64,
+        total_received: u64,
+    ) {
         let loss_rate = if total_sent > 0 {
             1.0 - (total_received as f64 / total_sent as f64)
         } else {
             0.0
         };
-        
+
         let mut network = self.network.write().await;
-        network.message_loss_rates.insert(target_node.clone(), loss_rate);
+        network
+            .message_loss_rates
+            .insert(target_node.clone(), loss_rate);
         network.total_messages_sent += total_sent;
         network.total_messages_received += total_received;
     }
-    
+
     /// Record network partition
     pub async fn record_partition(&self, affected_nodes: Vec<NodeId>) {
         let mut network = self.network.write().await;
@@ -187,7 +195,7 @@ impl ElectionMetrics {
             resolved: false,
         });
     }
-    
+
     /// Record partition resolution
     pub async fn record_partition_resolved(&self, partition_index: usize) {
         let mut network = self.network.write().await;
@@ -198,13 +206,13 @@ impl ElectionMetrics {
             }
         }
     }
-    
+
     /// Record performance metrics during election
     pub async fn record_performance(&self, cpu_usage: f64, memory_usage: u64) {
         let mut performance = self.performance.write().await;
         performance.cpu_usage_during_election.push(cpu_usage);
         performance.memory_usage_during_election.push(memory_usage);
-        
+
         // Keep only last 50 measurements
         if performance.cpu_usage_during_election.len() > 50 {
             performance.cpu_usage_during_election.remove(0);
@@ -213,60 +221,67 @@ impl ElectionMetrics {
             performance.memory_usage_during_election.remove(0);
         }
     }
-    
+
     /// Record heartbeat performance
-    pub async fn record_heartbeat(&self, interval: Duration, success: bool, network_delay: Option<Duration>) {
+    pub async fn record_heartbeat(
+        &self,
+        interval: Duration,
+        success: bool,
+        network_delay: Option<Duration>,
+    ) {
         let mut performance = self.performance.write().await;
         let heartbeat = &mut performance.heartbeat_performance;
-        
+
         // Update average interval
         let current_avg = heartbeat.avg_heartbeat_interval;
         heartbeat.avg_heartbeat_interval = if current_avg == Duration::ZERO {
             interval
         } else {
             Duration::from_millis(
-                (current_avg.as_millis() as u64 + interval.as_millis() as u64) / 2
+                (current_avg.as_millis() as u64 + interval.as_millis() as u64) / 2,
             )
         };
-        
+
         // Update success rate
         if !success {
             heartbeat.missed_heartbeats += 1;
         }
-        
+
         // Record network delay
         if let Some(delay) = network_delay {
             heartbeat.heartbeat_network_delays.push(delay);
-            
+
             // Keep only last 100 measurements
             if heartbeat.heartbeat_network_delays.len() > 100 {
                 heartbeat.heartbeat_network_delays.remove(0);
             }
         }
     }
-    
+
     /// Get comprehensive metrics summary
     pub async fn get_summary(&self) -> ElectionMetricsSummary {
         let timing = self.timing.read().await;
         let network = self.network.read().await;
         let outcomes = self.outcomes.read().await;
         let performance = self.performance.read().await;
-        
+
         ElectionMetricsSummary {
             // Timing metrics
             avg_election_duration: timing.avg_election_duration,
             fastest_election: timing.fastest_election,
             slowest_election: timing.slowest_election,
             avg_time_between_elections: timing.avg_time_between_elections,
-            
+
             // Network metrics
             avg_vote_latency: calculate_avg_latency(&network.vote_request_latencies),
             avg_message_loss_rate: calculate_avg_loss_rate(&network.message_loss_rates),
             partition_count: network.partition_events.len(),
-            unresolved_partitions: network.partition_events.iter()
+            unresolved_partitions: network
+                .partition_events
+                .iter()
                 .filter(|p| !p.resolved)
                 .count(),
-            
+
             // Outcome metrics
             total_elections: outcomes.total_elections,
             win_rate: if outcomes.total_elections > 0 {
@@ -280,28 +295,31 @@ impl ElectionMetrics {
                 0.0
             },
             avg_vote_percentage: if !outcomes.vote_percentages.is_empty() {
-                outcomes.vote_percentages.iter().sum::<f64>() / outcomes.vote_percentages.len() as f64
+                outcomes.vote_percentages.iter().sum::<f64>()
+                    / outcomes.vote_percentages.len() as f64
             } else {
                 0.0
             },
             avg_leadership_duration: if !outcomes.leadership_durations.is_empty() {
-                let total_millis: u64 = outcomes.leadership_durations.iter()
+                let total_millis: u64 = outcomes
+                    .leadership_durations
+                    .iter()
                     .map(|d| d.as_millis() as u64)
                     .sum();
                 Duration::from_millis(total_millis / outcomes.leadership_durations.len() as u64)
             } else {
                 Duration::ZERO
             },
-            
+
             // Performance metrics
             avg_cpu_during_election: if !performance.cpu_usage_during_election.is_empty() {
-                performance.cpu_usage_during_election.iter().sum::<f64>() 
+                performance.cpu_usage_during_election.iter().sum::<f64>()
                     / performance.cpu_usage_during_election.len() as f64
             } else {
                 0.0
             },
             avg_memory_during_election: if !performance.memory_usage_during_election.is_empty() {
-                performance.memory_usage_during_election.iter().sum::<u64>() 
+                performance.memory_usage_during_election.iter().sum::<u64>()
                     / performance.memory_usage_during_election.len() as u64
             } else {
                 0
@@ -310,11 +328,11 @@ impl ElectionMetrics {
             missed_heartbeats: performance.heartbeat_performance.missed_heartbeats,
         }
     }
-    
+
     /// Export metrics for external monitoring systems
     pub async fn export_prometheus(&self) -> String {
         let summary = self.get_summary().await;
-        
+
         format!(
             r#"# HELP orbit_election_duration_seconds Average election duration
 # TYPE orbit_election_duration_seconds gauge
@@ -376,21 +394,21 @@ impl ElectionTracker {
     /// Complete the election with outcome
     pub async fn complete(self, outcome: ElectionOutcome, vote_count: u32, total_nodes: u32) {
         let duration = self.start_time.elapsed();
-        
+
         // Update timing metrics
         {
             let mut timing = self.metrics.timing.write().await;
-            
+
             // Update average duration
             let current_avg = timing.avg_election_duration;
             timing.avg_election_duration = if current_avg == Duration::ZERO {
                 duration
             } else {
                 Duration::from_millis(
-                    (current_avg.as_millis() as u64 + duration.as_millis() as u64) / 2
+                    (current_avg.as_millis() as u64 + duration.as_millis() as u64) / 2,
                 )
             };
-            
+
             // Update fastest/slowest
             if timing.fastest_election.is_none() || duration < timing.fastest_election.unwrap() {
                 timing.fastest_election = Some(duration);
@@ -398,38 +416,38 @@ impl ElectionTracker {
             if timing.slowest_election.is_none() || duration > timing.slowest_election.unwrap() {
                 timing.slowest_election = Some(duration);
             }
-            
+
             // Add to recent durations
             timing.recent_durations.push(duration);
             if timing.recent_durations.len() > 50 {
                 timing.recent_durations.remove(0);
             }
         }
-        
+
         // Update outcome metrics
         {
             let mut outcomes = self.metrics.outcomes.write().await;
-            
+
             match outcome {
                 ElectionOutcome::Won => {
                     outcomes.elections_won += 1;
                     let vote_percentage = vote_count as f64 / total_nodes as f64;
                     outcomes.vote_percentages.push(vote_percentage);
-                },
+                }
                 ElectionOutcome::Lost => {
                     outcomes.elections_lost += 1;
-                },
+                }
                 ElectionOutcome::Timeout => {
                     outcomes.elections_timeout += 1;
-                },
+                }
                 ElectionOutcome::SplitVote => {
                     outcomes.split_votes += 1;
-                },
+                }
             }
         }
-        
+
         info!(
-            "Election completed: term={}, duration={:?}, outcome={:?}, votes={}/{}", 
+            "Election completed: term={}, duration={:?}, outcome={:?}, votes={}/{}",
             self.term, duration, outcome, vote_count, total_nodes
         );
     }
@@ -438,7 +456,7 @@ impl ElectionTracker {
 #[derive(Debug, Clone)]
 pub enum ElectionOutcome {
     Won,
-    Lost, 
+    Lost,
     Timeout,
     SplitVote,
 }
@@ -451,20 +469,20 @@ pub struct ElectionMetricsSummary {
     pub fastest_election: Option<Duration>,
     pub slowest_election: Option<Duration>,
     pub avg_time_between_elections: Duration,
-    
+
     // Network
     pub avg_vote_latency: Duration,
     pub avg_message_loss_rate: f64,
     pub partition_count: usize,
     pub unresolved_partitions: usize,
-    
+
     // Outcomes
     pub total_elections: u64,
     pub win_rate: f64,
     pub timeout_rate: f64,
     pub avg_vote_percentage: f64,
     pub avg_leadership_duration: Duration,
-    
+
     // Performance
     pub avg_cpu_during_election: f64,
     pub avg_memory_during_election: u64,
@@ -474,21 +492,14 @@ pub struct ElectionMetricsSummary {
 
 // Helper functions
 fn calculate_avg_latency(latencies: &HashMap<NodeId, Vec<Duration>>) -> Duration {
-    let all_latencies: Vec<Duration> = latencies
-        .values()
-        .flat_map(|v| v.iter())
-        .cloned()
-        .collect();
-        
+    let all_latencies: Vec<Duration> = latencies.values().flat_map(|v| v.iter()).cloned().collect();
+
     if all_latencies.is_empty() {
         return Duration::ZERO;
     }
-    
-    let total_millis: u64 = all_latencies
-        .iter()
-        .map(|d| d.as_millis() as u64)
-        .sum();
-        
+
+    let total_millis: u64 = all_latencies.iter().map(|d| d.as_millis() as u64).sum();
+
     Duration::from_millis(total_millis / all_latencies.len() as u64)
 }
 
@@ -496,7 +507,7 @@ fn calculate_avg_loss_rate(loss_rates: &HashMap<NodeId, f64>) -> f64 {
     if loss_rates.is_empty() {
         return 0.0;
     }
-    
+
     loss_rates.values().sum::<f64>() / loss_rates.len() as f64
 }
 

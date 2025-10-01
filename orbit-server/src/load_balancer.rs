@@ -68,8 +68,12 @@ impl LoadBalancer {
 
         let selected_node = match self.strategy {
             LoadBalancingStrategy::RoundRobin => self.select_round_robin(&eligible_nodes).await,
-            LoadBalancingStrategy::LeastConnections => self.select_least_connections(&eligible_nodes).await,
-            LoadBalancingStrategy::ResourceAware => self.select_resource_aware(&eligible_nodes).await,
+            LoadBalancingStrategy::LeastConnections => {
+                self.select_least_connections(&eligible_nodes).await
+            }
+            LoadBalancingStrategy::ResourceAware => {
+                self.select_resource_aware(&eligible_nodes).await
+            }
             LoadBalancingStrategy::Hash => self.select_hash(reference, &eligible_nodes).await,
         };
 
@@ -92,25 +96,34 @@ impl LoadBalancer {
     pub async fn get_load_stats(&self) -> LoadBalancerStats {
         let node_loads = self.node_loads.read().await;
         let total_nodes = node_loads.len();
-        let total_load: u32 = node_loads.values().map(|load| load.active_addressables).sum();
+        let total_load: u32 = node_loads
+            .values()
+            .map(|load| load.active_addressables)
+            .sum();
 
         LoadBalancerStats {
             strategy: self.strategy.clone(),
             total_nodes,
             total_load,
-            average_load: if total_nodes > 0 { total_load / total_nodes as u32 } else { 0 },
+            average_load: if total_nodes > 0 {
+                total_load / total_nodes as u32
+            } else {
+                0
+            },
         }
     }
 
     async fn select_round_robin<'a>(&self, nodes: &[&'a NodeInfo]) -> &'a NodeInfo {
-        let index = self.round_robin_counter
-            .fetch_add(1, std::sync::atomic::Ordering::SeqCst) % nodes.len();
+        let index = self
+            .round_robin_counter
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+            % nodes.len();
         nodes[index]
     }
 
     async fn select_least_connections<'a>(&self, nodes: &[&'a NodeInfo]) -> &'a NodeInfo {
         let node_loads = self.node_loads.read().await;
-        
+
         nodes
             .iter()
             .min_by_key(|node| {
@@ -124,23 +137,33 @@ impl LoadBalancer {
 
     async fn select_resource_aware<'a>(&self, nodes: &[&'a NodeInfo]) -> &'a NodeInfo {
         let node_loads = self.node_loads.read().await;
-        
+
         nodes
             .iter()
             .min_by(|a, b| {
                 let load_a = node_loads.get(&a.id).cloned().unwrap_or_default();
                 let load_b = node_loads.get(&b.id).cloned().unwrap_or_default();
-                
+
                 // Compare based on resource utilization score
-                let score_a = load_a.cpu_usage + (load_a.memory_usage * 0.5) + (load_a.active_addressables as f64 * 0.1);
-                let score_b = load_b.cpu_usage + (load_b.memory_usage * 0.5) + (load_b.active_addressables as f64 * 0.1);
-                
-                score_a.partial_cmp(&score_b).unwrap_or(std::cmp::Ordering::Equal)
+                let score_a = load_a.cpu_usage
+                    + (load_a.memory_usage * 0.5)
+                    + (load_a.active_addressables as f64 * 0.1);
+                let score_b = load_b.cpu_usage
+                    + (load_b.memory_usage * 0.5)
+                    + (load_b.active_addressables as f64 * 0.1);
+
+                score_a
+                    .partial_cmp(&score_b)
+                    .unwrap_or(std::cmp::Ordering::Equal)
             })
             .unwrap()
     }
 
-    async fn select_hash<'a>(&self, reference: &AddressableReference, nodes: &[&'a NodeInfo]) -> &'a NodeInfo {
+    async fn select_hash<'a>(
+        &self,
+        reference: &AddressableReference,
+        nodes: &[&'a NodeInfo],
+    ) -> &'a NodeInfo {
         // Use consistent hashing based on the addressable reference
         let hash = self.hash_reference(reference);
         let index = hash % nodes.len();
@@ -150,7 +173,7 @@ impl LoadBalancer {
     fn hash_reference(&self, reference: &AddressableReference) -> usize {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
-        
+
         let mut hasher = DefaultHasher::new();
         reference.hash(&mut hasher);
         hasher.finish() as usize
@@ -169,7 +192,8 @@ impl Clone for LoadBalancer {
             strategy: self.strategy.clone(),
             node_loads: self.node_loads.clone(),
             round_robin_counter: Arc::new(std::sync::atomic::AtomicUsize::new(
-                self.round_robin_counter.load(std::sync::atomic::Ordering::SeqCst)
+                self.round_robin_counter
+                    .load(std::sync::atomic::Ordering::SeqCst),
             )),
         }
     }
@@ -179,9 +203,9 @@ impl Clone for LoadBalancer {
 #[derive(Debug, Clone, Default)]
 pub struct NodeLoad {
     pub active_addressables: u32,
-    pub cpu_usage: f64,      // 0.0 to 1.0
-    pub memory_usage: f64,   // 0.0 to 1.0
-    pub network_usage: f64,  // 0.0 to 1.0
+    pub cpu_usage: f64,     // 0.0 to 1.0
+    pub memory_usage: f64,  // 0.0 to 1.0
+    pub network_usage: f64, // 0.0 to 1.0
 }
 
 /// Statistics about the load balancer
@@ -230,45 +254,72 @@ mod tests {
     async fn test_round_robin_selection() {
         let load_balancer = LoadBalancer::new().with_strategy(LoadBalancingStrategy::RoundRobin);
         let nodes = create_test_nodes();
-        
+
         let reference = AddressableReference {
             addressable_type: "TestActor".to_string(),
-            key: Key::StringKey { key: "test1".to_string() },
+            key: Key::StringKey {
+                key: "test1".to_string(),
+            },
         };
 
-        let selected1 = load_balancer.select_node(&reference, &nodes).await.unwrap().unwrap();
-        let selected2 = load_balancer.select_node(&reference, &nodes).await.unwrap().unwrap();
-        
+        let selected1 = load_balancer
+            .select_node(&reference, &nodes)
+            .await
+            .unwrap()
+            .unwrap();
+        let selected2 = load_balancer
+            .select_node(&reference, &nodes)
+            .await
+            .unwrap()
+            .unwrap();
+
         // Should alternate between nodes
         assert_ne!(selected1, selected2);
     }
 
     #[tokio::test]
     async fn test_least_connections_selection() {
-        let load_balancer = LoadBalancer::new().with_strategy(LoadBalancingStrategy::LeastConnections);
+        let load_balancer =
+            LoadBalancer::new().with_strategy(LoadBalancingStrategy::LeastConnections);
         let nodes = create_test_nodes();
-        
+
         // Set different loads
         let node1_id = nodes[0].id.clone();
         let node2_id = nodes[1].id.clone();
-        
-        load_balancer.update_node_load(node1_id.clone(), NodeLoad {
-            active_addressables: 10,
-            ..Default::default()
-        }).await;
-        
-        load_balancer.update_node_load(node2_id.clone(), NodeLoad {
-            active_addressables: 5,
-            ..Default::default()
-        }).await;
+
+        load_balancer
+            .update_node_load(
+                node1_id.clone(),
+                NodeLoad {
+                    active_addressables: 10,
+                    ..Default::default()
+                },
+            )
+            .await;
+
+        load_balancer
+            .update_node_load(
+                node2_id.clone(),
+                NodeLoad {
+                    active_addressables: 5,
+                    ..Default::default()
+                },
+            )
+            .await;
 
         let reference = AddressableReference {
             addressable_type: "TestActor".to_string(),
-            key: Key::StringKey { key: "test".to_string() },
+            key: Key::StringKey {
+                key: "test".to_string(),
+            },
         };
 
-        let selected = load_balancer.select_node(&reference, &nodes).await.unwrap().unwrap();
-        
+        let selected = load_balancer
+            .select_node(&reference, &nodes)
+            .await
+            .unwrap()
+            .unwrap();
+
         // Should select node2 (lower load)
         assert_eq!(selected, node2_id);
     }
@@ -277,15 +328,25 @@ mod tests {
     async fn test_hash_selection_consistency() {
         let load_balancer = LoadBalancer::new().with_strategy(LoadBalancingStrategy::Hash);
         let nodes = create_test_nodes();
-        
+
         let reference = AddressableReference {
             addressable_type: "TestActor".to_string(),
-            key: Key::StringKey { key: "consistent-key".to_string() },
+            key: Key::StringKey {
+                key: "consistent-key".to_string(),
+            },
         };
 
-        let selected1 = load_balancer.select_node(&reference, &nodes).await.unwrap().unwrap();
-        let selected2 = load_balancer.select_node(&reference, &nodes).await.unwrap().unwrap();
-        
+        let selected1 = load_balancer
+            .select_node(&reference, &nodes)
+            .await
+            .unwrap()
+            .unwrap();
+        let selected2 = load_balancer
+            .select_node(&reference, &nodes)
+            .await
+            .unwrap()
+            .unwrap();
+
         // Should consistently select the same node for the same reference
         assert_eq!(selected1, selected2);
     }
@@ -293,17 +354,23 @@ mod tests {
     #[tokio::test]
     async fn test_node_capability_filtering() {
         let load_balancer = LoadBalancer::new();
-        
+
         let mut nodes = create_test_nodes();
         nodes[1].capabilities.addressable_types = vec!["OtherActor".to_string()];
-        
+
         let reference = AddressableReference {
             addressable_type: "TestActor".to_string(),
-            key: Key::StringKey { key: "test".to_string() },
+            key: Key::StringKey {
+                key: "test".to_string(),
+            },
         };
 
-        let selected = load_balancer.select_node(&reference, &nodes).await.unwrap().unwrap();
-        
+        let selected = load_balancer
+            .select_node(&reference, &nodes)
+            .await
+            .unwrap()
+            .unwrap();
+
         // Should only select node1 (which supports TestActor)
         assert_eq!(selected, nodes[0].id);
     }
@@ -311,19 +378,29 @@ mod tests {
     #[tokio::test]
     async fn test_load_balancer_stats() {
         let load_balancer = LoadBalancer::new();
-        
+
         let node1_id = NodeId::new("node1".to_string(), "test".to_string());
         let node2_id = NodeId::new("node2".to_string(), "test".to_string());
-        
-        load_balancer.update_node_load(node1_id, NodeLoad {
-            active_addressables: 10,
-            ..Default::default()
-        }).await;
-        
-        load_balancer.update_node_load(node2_id, NodeLoad {
-            active_addressables: 20,
-            ..Default::default()
-        }).await;
+
+        load_balancer
+            .update_node_load(
+                node1_id,
+                NodeLoad {
+                    active_addressables: 10,
+                    ..Default::default()
+                },
+            )
+            .await;
+
+        load_balancer
+            .update_node_load(
+                node2_id,
+                NodeLoad {
+                    active_addressables: 20,
+                    ..Default::default()
+                },
+            )
+            .await;
 
         let stats = load_balancer.get_load_stats().await;
         assert_eq!(stats.total_nodes, 2);

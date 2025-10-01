@@ -69,10 +69,14 @@ pub struct AddressableInvocation {
 
 impl PartialEq for AddressableInvocation {
     fn eq(&self, other: &Self) -> bool {
-        self.reference == other.reference 
-            && self.method == other.method 
+        self.reference == other.reference
+            && self.method == other.method
             && self.args.len() == other.args.len()
-            && self.args.iter().zip(&other.args).all(|(a, b)| a.value == b.value && a.type_name == b.type_name)
+            && self
+                .args
+                .iter()
+                .zip(&other.args)
+                .all(|(a, b)| a.value == b.value && a.type_name == b.type_name)
     }
 }
 
@@ -110,7 +114,13 @@ mod tests {
 
     #[test]
     fn test_key_display() {
-        assert_eq!(Key::StringKey { key: "test".to_string() }.to_string(), "test");
+        assert_eq!(
+            Key::StringKey {
+                key: "test".to_string()
+            }
+            .to_string(),
+            "test"
+        );
         assert_eq!(Key::Int32Key { key: 42 }.to_string(), "42");
         assert_eq!(Key::Int64Key { key: 1000 }.to_string(), "1000");
         assert_eq!(Key::NoKey.to_string(), "no-key");
@@ -120,7 +130,9 @@ mod tests {
     fn test_addressable_reference_display() {
         let reference = AddressableReference {
             addressable_type: "TestActor".to_string(),
-            key: Key::StringKey { key: "test-key".to_string() },
+            key: Key::StringKey {
+                key: "test-key".to_string(),
+            },
         };
         assert_eq!(reference.to_string(), "TestActor:test-key");
     }
@@ -129,9 +141,11 @@ mod tests {
     fn test_addressable_invocation_equality() {
         let reference = AddressableReference {
             addressable_type: "TestActor".to_string(),
-            key: Key::StringKey { key: "test".to_string() },
+            key: Key::StringKey {
+                key: "test".to_string(),
+            },
         };
-        
+
         let invocation1 = AddressableInvocation {
             reference: reference.clone(),
             method: "test_method".to_string(),

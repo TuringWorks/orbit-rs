@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio::time::{Duration, Instant};
-use tracing::{info, error, debug};
+use tracing::{debug, error, info};
 use uuid::Uuid;
 
 /// Actor state snapshot containing serialized state and metadata
@@ -40,7 +40,7 @@ impl ActorSnapshot {
     ) -> Self {
         let now = chrono::Utc::now().timestamp_millis();
         let state_hash = Self::calculate_hash(&state_data);
-        
+
         Self {
             actor_reference,
             snapshot_id: Uuid::new_v4().to_string(),
@@ -66,7 +66,7 @@ impl ActorSnapshot {
 
     /// Calculate SHA-256 hash of the state data
     fn calculate_hash(data: &serde_json::Value) -> String {
-        use sha2::{Sha256, Digest};
+        use sha2::{Digest, Sha256};
         let serialized = serde_json::to_string(data).unwrap_or_default();
         let hash = Sha256::digest(serialized.as_bytes());
         format!("{:x}", hash)
@@ -145,28 +145,42 @@ pub struct PersistenceMetrics {
 pub trait PersistenceBackend: Send + Sync {
     /// Save an actor snapshot
     async fn save_snapshot(&self, snapshot: &ActorSnapshot) -> OrbitResult<()>;
-    
+
     /// Load the latest snapshot for an actor
-    async fn load_snapshot(&self, actor_ref: &AddressableReference) -> OrbitResult<Option<ActorSnapshot>>;
-    
+    async fn load_snapshot(
+        &self,
+        actor_ref: &AddressableReference,
+    ) -> OrbitResult<Option<ActorSnapshot>>;
+
     /// Load a specific snapshot version
-    async fn load_snapshot_version(&self, actor_ref: &AddressableReference, version: u64) -> OrbitResult<Option<ActorSnapshot>>;
-    
+    async fn load_snapshot_version(
+        &self,
+        actor_ref: &AddressableReference,
+        version: u64,
+    ) -> OrbitResult<Option<ActorSnapshot>>;
+
     /// List all snapshots for an actor
-    async fn list_snapshots(&self, actor_ref: &AddressableReference) -> OrbitResult<Vec<ActorSnapshot>>;
-    
+    async fn list_snapshots(
+        &self,
+        actor_ref: &AddressableReference,
+    ) -> OrbitResult<Vec<ActorSnapshot>>;
+
     /// Delete a specific snapshot
-    async fn delete_snapshot(&self, actor_ref: &AddressableReference, snapshot_id: &str) -> OrbitResult<()>;
-    
+    async fn delete_snapshot(
+        &self,
+        actor_ref: &AddressableReference,
+        snapshot_id: &str,
+    ) -> OrbitResult<()>;
+
     /// Delete all snapshots for an actor
     async fn delete_all_snapshots(&self, actor_ref: &AddressableReference) -> OrbitResult<()>;
-    
+
     /// Cleanup expired snapshots
     async fn cleanup_expired_snapshots(&self) -> OrbitResult<u64>;
-    
+
     /// Get backend health status
     async fn health_check(&self) -> OrbitResult<bool>;
-    
+
     /// Get storage statistics
     async fn get_storage_stats(&self) -> OrbitResult<PersistenceMetrics>;
 }
@@ -197,26 +211,28 @@ impl Default for MemoryPersistenceBackend {
 impl PersistenceBackend for MemoryPersistenceBackend {
     async fn save_snapshot(&self, snapshot: &ActorSnapshot) -> OrbitResult<()> {
         let start_time = Instant::now();
-        
+
         {
             let mut storage = self.storage.write().await;
-            let snapshots = storage.entry(snapshot.actor_reference.clone()).or_insert_with(Vec::new);
-            
+            let snapshots = storage
+                .entry(snapshot.actor_reference.clone())
+                .or_insert_with(Vec::new);
+
             // Remove existing snapshot with same version
             snapshots.retain(|s| s.version != snapshot.version);
-            
+
             // Add new snapshot
             snapshots.push(snapshot.clone());
-            
+
             // Sort by version (newest first)
             snapshots.sort_by(|a, b| b.version.cmp(&a.version));
-            
+
             // Limit number of snapshots
             if snapshots.len() > 10 {
                 snapshots.truncate(10);
             }
         }
-        
+
         // Update metrics
         {
             let mut metrics = self.metrics.write().await;
@@ -224,21 +240,25 @@ impl PersistenceBackend for MemoryPersistenceBackend {
             metrics.average_save_time_ms = start_time.elapsed().as_millis() as f64;
             metrics.last_operation_time = chrono::Utc::now().timestamp_millis();
         }
-        
+
         debug!("Saved snapshot for actor: {}", snapshot.actor_reference);
         Ok(())
     }
-    
-    async fn load_snapshot(&self, actor_ref: &AddressableReference) -> OrbitResult<Option<ActorSnapshot>> {
+
+    async fn load_snapshot(
+        &self,
+        actor_ref: &AddressableReference,
+    ) -> OrbitResult<Option<ActorSnapshot>> {
         let start_time = Instant::now();
-        
+
         let snapshot = {
             let storage = self.storage.read().await;
-            storage.get(actor_ref)
+            storage
+                .get(actor_ref)
                 .and_then(|snapshots| snapshots.first())
                 .cloned()
         };
-        
+
         // Update metrics
         {
             let mut metrics = self.metrics.write().await;
@@ -246,33 +266,43 @@ impl PersistenceBackend for MemoryPersistenceBackend {
             metrics.average_load_time_ms = start_time.elapsed().as_millis() as f64;
             metrics.last_operation_time = chrono::Utc::now().timestamp_millis();
         }
-        
+
         if snapshot.is_some() {
             debug!("Loaded snapshot for actor: {}", actor_ref);
         }
-        
+
         Ok(snapshot)
     }
-    
-    async fn load_snapshot_version(&self, actor_ref: &AddressableReference, version: u64) -> OrbitResult<Option<ActorSnapshot>> {
+
+    async fn load_snapshot_version(
+        &self,
+        actor_ref: &AddressableReference,
+        version: u64,
+    ) -> OrbitResult<Option<ActorSnapshot>> {
         let storage = self.storage.read().await;
-        let snapshot = storage.get(actor_ref)
+        let snapshot = storage
+            .get(actor_ref)
             .and_then(|snapshots| snapshots.iter().find(|s| s.version == version))
             .cloned();
-        
+
         Ok(snapshot)
     }
-    
-    async fn list_snapshots(&self, actor_ref: &AddressableReference) -> OrbitResult<Vec<ActorSnapshot>> {
+
+    async fn list_snapshots(
+        &self,
+        actor_ref: &AddressableReference,
+    ) -> OrbitResult<Vec<ActorSnapshot>> {
         let storage = self.storage.read().await;
-        let snapshots = storage.get(actor_ref)
-            .cloned()
-            .unwrap_or_default();
-        
+        let snapshots = storage.get(actor_ref).cloned().unwrap_or_default();
+
         Ok(snapshots)
     }
-    
-    async fn delete_snapshot(&self, actor_ref: &AddressableReference, snapshot_id: &str) -> OrbitResult<()> {
+
+    async fn delete_snapshot(
+        &self,
+        actor_ref: &AddressableReference,
+        snapshot_id: &str,
+    ) -> OrbitResult<()> {
         {
             let mut storage = self.storage.write().await;
             if let Some(snapshots) = storage.get_mut(actor_ref) {
@@ -282,18 +312,18 @@ impl PersistenceBackend for MemoryPersistenceBackend {
                 }
             }
         }
-        
+
         // Update metrics
         {
             let mut metrics = self.metrics.write().await;
             metrics.snapshots_deleted += 1;
             metrics.last_operation_time = chrono::Utc::now().timestamp_millis();
         }
-        
+
         debug!("Deleted snapshot {} for actor: {}", snapshot_id, actor_ref);
         Ok(())
     }
-    
+
     async fn delete_all_snapshots(&self, actor_ref: &AddressableReference) -> OrbitResult<()> {
         let count = {
             let mut storage = self.storage.write().await;
@@ -303,69 +333,69 @@ impl PersistenceBackend for MemoryPersistenceBackend {
                 0
             }
         };
-        
+
         // Update metrics
         {
             let mut metrics = self.metrics.write().await;
             metrics.snapshots_deleted += count as u64;
             metrics.last_operation_time = chrono::Utc::now().timestamp_millis();
         }
-        
+
         debug!("Deleted all snapshots for actor: {}", actor_ref);
         Ok(())
     }
-    
+
     async fn cleanup_expired_snapshots(&self) -> OrbitResult<u64> {
         let mut deleted_count = 0u64;
-        
+
         {
             let mut storage = self.storage.write().await;
             let mut to_remove = Vec::new();
-            
+
             for (actor_ref, snapshots) in storage.iter_mut() {
                 let original_len = snapshots.len();
                 snapshots.retain(|s| !s.is_expired());
                 deleted_count += (original_len - snapshots.len()) as u64;
-                
+
                 if snapshots.is_empty() {
                     to_remove.push(actor_ref.clone());
                 }
             }
-            
+
             for actor_ref in to_remove {
                 storage.remove(&actor_ref);
             }
         }
-        
+
         // Update metrics
         {
             let mut metrics = self.metrics.write().await;
             metrics.snapshots_deleted += deleted_count;
             metrics.last_operation_time = chrono::Utc::now().timestamp_millis();
         }
-        
+
         if deleted_count > 0 {
             info!("Cleaned up {} expired snapshots", deleted_count);
         }
-        
+
         Ok(deleted_count)
     }
-    
+
     async fn health_check(&self) -> OrbitResult<bool> {
         // For memory backend, always healthy
         Ok(true)
     }
-    
+
     async fn get_storage_stats(&self) -> OrbitResult<PersistenceMetrics> {
         let metrics = self.metrics.read().await;
-        
+
         // Calculate total storage bytes
         let storage = self.storage.read().await;
         let total_snapshots = storage.values().map(|v| v.len()).sum::<usize>();
-        
+
         let mut stats = metrics.clone();
         stats.total_storage_bytes = (total_snapshots * 1024) as u64; // Rough estimate
-        
+
         Ok(stats)
     }
 }
@@ -398,17 +428,20 @@ impl ActorStateManager {
             .map_err(|e| OrbitError::internal(format!("Failed to serialize state: {}", e)))?;
 
         let snapshot = ActorSnapshot::new(actor_ref.clone(), state_data, version);
-        
+
         // Save to backend
         self.backend.save_snapshot(&snapshot).await?;
-        
+
         // Update cache
         {
             let mut cache = self.cache.write().await;
             cache.insert(actor_ref.clone(), (snapshot, Instant::now()));
         }
-        
-        info!("Saved state for actor: {} (version: {})", actor_ref, version);
+
+        info!(
+            "Saved state for actor: {} (version: {})",
+            actor_ref, version
+        );
         Ok(())
     }
 
@@ -421,9 +454,15 @@ impl ActorStateManager {
         {
             let cache = self.cache.read().await;
             if let Some((snapshot, cached_at)) = cache.get(actor_ref) {
-                if cached_at.elapsed() < Duration::from_secs(60) { // Cache for 1 minute
-                    let state: T = serde_json::from_value(snapshot.state_data.clone())
-                        .map_err(|e| OrbitError::internal(format!("Failed to deserialize cached state: {}", e)))?;
+                if cached_at.elapsed() < Duration::from_secs(60) {
+                    // Cache for 1 minute
+                    let state: T =
+                        serde_json::from_value(snapshot.state_data.clone()).map_err(|e| {
+                            OrbitError::internal(format!(
+                                "Failed to deserialize cached state: {}",
+                                e
+                            ))
+                        })?;
                     return Ok(Some((state, snapshot.version)));
                 }
             }
@@ -445,7 +484,10 @@ impl ActorStateManager {
                 cache.insert(actor_ref.clone(), (snapshot.clone(), Instant::now()));
             }
 
-            info!("Loaded state for actor: {} (version: {})", actor_ref, snapshot.version);
+            info!(
+                "Loaded state for actor: {} (version: {})",
+                actor_ref, snapshot.version
+            );
             Ok(Some((state, snapshot.version)))
         } else {
             Ok(None)
@@ -458,9 +500,16 @@ impl ActorStateManager {
         actor_ref: &AddressableReference,
         version: u64,
     ) -> OrbitResult<Option<T>> {
-        if let Some(snapshot) = self.backend.load_snapshot_version(actor_ref, version).await? {
+        if let Some(snapshot) = self
+            .backend
+            .load_snapshot_version(actor_ref, version)
+            .await?
+        {
             if !snapshot.verify_integrity() {
-                error!("Snapshot integrity check failed for actor: {} (version: {})", actor_ref, version);
+                error!(
+                    "Snapshot integrity check failed for actor: {} (version: {})",
+                    actor_ref, version
+                );
                 return Err(OrbitError::internal("Snapshot integrity check failed"));
             }
 
@@ -476,19 +525,22 @@ impl ActorStateManager {
     /// Delete actor state
     pub async fn delete_state(&self, actor_ref: &AddressableReference) -> OrbitResult<()> {
         self.backend.delete_all_snapshots(actor_ref).await?;
-        
+
         // Remove from cache
         {
             let mut cache = self.cache.write().await;
             cache.remove(actor_ref);
         }
-        
+
         info!("Deleted state for actor: {}", actor_ref);
         Ok(())
     }
 
     /// Get state history for an actor
-    pub async fn get_state_history(&self, actor_ref: &AddressableReference) -> OrbitResult<Vec<ActorSnapshot>> {
+    pub async fn get_state_history(
+        &self,
+        actor_ref: &AddressableReference,
+    ) -> OrbitResult<Vec<ActorSnapshot>> {
         self.backend.list_snapshots(actor_ref).await
     }
 
@@ -496,7 +548,7 @@ impl ActorStateManager {
     pub async fn start_background_tasks(&self) -> OrbitResult<()> {
         let backend = Arc::clone(&self.backend);
         let _config = self.config.clone();
-        
+
         // Start cleanup task
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(300)); // 5 minutes
@@ -515,12 +567,12 @@ impl ActorStateManager {
             loop {
                 interval.tick().await;
                 let cutoff = Instant::now() - Duration::from_secs(300); // 5 minutes
-                
+
                 let mut cache_guard = cache.write().await;
                 cache_guard.retain(|_, (_, cached_at)| *cached_at > cutoff);
             }
         });
-        
+
         info!("Actor state manager background tasks started");
         Ok(())
     }
@@ -540,7 +592,7 @@ impl ActorStateManager {
 mod tests {
     use super::*;
     use crate::addressable::{AddressableReference, Key};
-    
+
     #[derive(Serialize, Deserialize, Debug, PartialEq)]
     struct TestState {
         value: i32,
@@ -552,7 +604,9 @@ mod tests {
         let backend = MemoryPersistenceBackend::new();
         let actor_ref = AddressableReference {
             addressable_type: "TestActor".to_string(),
-            key: Key::StringKey { key: "test-1".to_string() },
+            key: Key::StringKey {
+                key: "test-1".to_string(),
+            },
         };
 
         let state_data = serde_json::json!({"value": 42, "name": "test"});
@@ -579,7 +633,9 @@ mod tests {
 
         let actor_ref = AddressableReference {
             addressable_type: "TestActor".to_string(),
-            key: Key::StringKey { key: "test-1".to_string() },
+            key: Key::StringKey {
+                key: "test-1".to_string(),
+            },
         };
 
         let test_state = TestState {
@@ -588,7 +644,10 @@ mod tests {
         };
 
         // Save state
-        manager.save_state(&actor_ref, &test_state, 1).await.unwrap();
+        manager
+            .save_state(&actor_ref, &test_state, 1)
+            .await
+            .unwrap();
 
         // Load state
         let loaded: Option<(TestState, u64)> = manager.load_state(&actor_ref).await.unwrap();
@@ -603,7 +662,9 @@ mod tests {
         let state_data = serde_json::json!({"test": "data"});
         let actor_ref = AddressableReference {
             addressable_type: "TestActor".to_string(),
-            key: Key::StringKey { key: "test-1".to_string() },
+            key: Key::StringKey {
+                key: "test-1".to_string(),
+            },
         };
 
         let snapshot = ActorSnapshot::new(actor_ref, state_data, 1);
@@ -615,14 +676,16 @@ mod tests {
         let state_data = serde_json::json!({"test": "data"});
         let actor_ref = AddressableReference {
             addressable_type: "TestActor".to_string(),
-            key: Key::StringKey { key: "test-1".to_string() },
+            key: Key::StringKey {
+                key: "test-1".to_string(),
+            },
         };
 
         let snapshot = ActorSnapshot::new(actor_ref, state_data, 1).with_ttl(1); // 1 second TTL
-        
+
         // Should not be expired initially
         assert!(!snapshot.is_expired());
-        
+
         // Wait and check expiry (in real test, we'd manipulate the timestamp)
         // For now, just verify the logic works
     }

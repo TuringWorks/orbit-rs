@@ -1,5 +1,5 @@
-use crate::transactions::{TransactionId, TransactionEvent, TransactionLogEntry};
 use crate::exception::{OrbitError, OrbitResult};
+use crate::transactions::{TransactionEvent, TransactionId, TransactionLogEntry};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use sqlx::{sqlite::SqlitePool, Row};
@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};
 use tokio::time::{Duration, Instant};
-use tracing::{info, error, debug};
+use tracing::{debug, error, info};
 use uuid::Uuid;
 
 /// Configuration for persistent transaction log
@@ -60,7 +60,7 @@ impl From<TransactionLogEntry> for PersistentLogEntry {
     fn from(entry: TransactionLogEntry) -> Self {
         let serialized = serde_json::to_string(&entry).unwrap_or_default();
         let checksum = format!("{:x}", md5::compute(serialized.as_bytes()));
-        
+
         Self {
             id: Uuid::new_v4(),
             timestamp: entry.timestamp,
@@ -90,27 +90,37 @@ pub struct LogStats {
 pub trait PersistentTransactionLogger: Send + Sync {
     /// Write a single log entry
     async fn write_entry(&self, entry: &TransactionLogEntry) -> OrbitResult<()>;
-    
+
     /// Write multiple log entries in a batch
     async fn write_batch(&self, entries: &[TransactionLogEntry]) -> OrbitResult<()>;
-    
+
     /// Query log entries by transaction ID
-    async fn get_transaction_log(&self, transaction_id: &TransactionId) -> OrbitResult<Vec<PersistentLogEntry>>;
-    
+    async fn get_transaction_log(
+        &self,
+        transaction_id: &TransactionId,
+    ) -> OrbitResult<Vec<PersistentLogEntry>>;
+
     /// Query log entries within a time range
-    async fn get_entries_by_time_range(&self, start_time: i64, end_time: i64) -> OrbitResult<Vec<PersistentLogEntry>>;
-    
+    async fn get_entries_by_time_range(
+        &self,
+        start_time: i64,
+        end_time: i64,
+    ) -> OrbitResult<Vec<PersistentLogEntry>>;
+
     /// Archive old entries
     async fn archive_old_entries(&self, before_timestamp: i64) -> OrbitResult<u64>;
-    
+
     /// Get log statistics
     async fn get_stats(&self) -> OrbitResult<LogStats>;
-    
+
     /// Perform log maintenance (cleanup, optimization, etc.)
     async fn maintenance(&self) -> OrbitResult<()>;
-    
+
     /// Recover transaction state from logs
-    async fn recover_transaction_state(&self, transaction_id: &TransactionId) -> OrbitResult<Option<TransactionEvent>>;
+    async fn recover_transaction_state(
+        &self,
+        transaction_id: &TransactionId,
+    ) -> OrbitResult<Option<TransactionEvent>>;
 }
 
 /// SQLite-based persistent transaction logger
@@ -126,15 +136,17 @@ impl SqliteTransactionLogger {
     pub async fn new(config: PersistentLogConfig) -> OrbitResult<Self> {
         // Ensure database directory exists
         if let Some(parent) = config.database_path.parent() {
-            tokio::fs::create_dir_all(parent).await
-                .map_err(|e| OrbitError::internal(&format!("Failed to create database directory: {}", e)))?;
+            tokio::fs::create_dir_all(parent).await.map_err(|e| {
+                OrbitError::internal(&format!("Failed to create database directory: {}", e))
+            })?;
         }
 
         // Build connection string
         let database_url = format!("sqlite:{}?mode=rwc", config.database_path.display());
-        
+
         // Configure connection pool
-        let pool = SqlitePool::connect(&database_url).await
+        let pool = SqlitePool::connect(&database_url)
+            .await
             .map_err(|e| OrbitError::internal(&format!("Failed to connect to database: {}", e)))?;
 
         let logger = Self {
@@ -147,7 +159,10 @@ impl SqliteTransactionLogger {
         logger.initialize_schema().await?;
         logger.configure_database().await?;
 
-        info!("SQLite transaction logger initialized: {}", logger.config.database_path.display());
+        info!(
+            "SQLite transaction logger initialized: {}",
+            logger.config.database_path.display()
+        );
         Ok(logger)
     }
 
@@ -196,7 +211,9 @@ impl SqliteTransactionLogger {
             ON transaction_recovery(coordinator_node);
         "#;
 
-        sqlx::query(schema_sql).execute(&self.pool).await
+        sqlx::query(schema_sql)
+            .execute(&self.pool)
+            .await
             .map_err(|e| OrbitError::internal(&format!("Failed to initialize schema: {}", e)))?;
 
         Ok(())
@@ -206,16 +223,23 @@ impl SqliteTransactionLogger {
     async fn configure_database(&self) -> OrbitResult<()> {
         if self.config.enable_wal {
             sqlx::query("PRAGMA journal_mode = WAL")
-                .execute(&self.pool).await
+                .execute(&self.pool)
+                .await
                 .map_err(|e| OrbitError::internal(&format!("Failed to enable WAL: {}", e)))?;
         }
 
         // Configure other performance settings
-        sqlx::query("PRAGMA synchronous = NORMAL").execute(&self.pool).await
+        sqlx::query("PRAGMA synchronous = NORMAL")
+            .execute(&self.pool)
+            .await
             .map_err(|e| OrbitError::internal(&format!("Failed to set synchronous mode: {}", e)))?;
-        sqlx::query("PRAGMA cache_size = 10000").execute(&self.pool).await
+        sqlx::query("PRAGMA cache_size = 10000")
+            .execute(&self.pool)
+            .await
             .map_err(|e| OrbitError::internal(&format!("Failed to set cache size: {}", e)))?;
-        sqlx::query("PRAGMA temp_store = memory").execute(&self.pool).await
+        sqlx::query("PRAGMA temp_store = memory")
+            .execute(&self.pool)
+            .await
             .map_err(|e| OrbitError::internal(&format!("Failed to set temp store: {}", e)))?;
 
         Ok(())
@@ -243,16 +267,20 @@ impl SqliteTransactionLogger {
 
     /// Internal batch write implementation
     async fn write_batch_internal(&self, entries: &[TransactionLogEntry]) -> OrbitResult<()> {
-        let mut tx = self.pool.begin().await
-            .map_err(|e| OrbitError::internal(&format!("Failed to begin transaction: {}", e)))?;
+        let mut tx =
+            self.pool.begin().await.map_err(|e| {
+                OrbitError::internal(&format!("Failed to begin transaction: {}", e))
+            })?;
 
         for entry in entries {
             let persistent_entry = PersistentLogEntry::from(entry.clone());
-            
+
             let event_data = serde_json::to_string(&entry.event)
                 .map_err(|e| OrbitError::internal(&format!("Failed to serialize event: {}", e)))?;
-            
-            let details_json = entry.details.as_ref()
+
+            let details_json = entry
+                .details
+                .as_ref()
                 .map(|d| serde_json::to_string(d).unwrap_or_default());
 
             sqlx::query(
@@ -274,7 +302,8 @@ impl SqliteTransactionLogger {
             .map_err(|e| OrbitError::internal(&format!("Failed to insert log entry: {}", e)))?;
         }
 
-        tx.commit().await
+        tx.commit()
+            .await
             .map_err(|e| OrbitError::internal(&format!("Failed to commit batch: {}", e)))?;
 
         Ok(())
@@ -283,7 +312,7 @@ impl SqliteTransactionLogger {
     /// Start background maintenance tasks
     pub async fn start_background_tasks(&self) -> OrbitResult<()> {
         let logger = Arc::new(self.clone());
-        
+
         // Buffer flush task
         {
             let logger_clone = Arc::clone(&logger);
@@ -335,17 +364,17 @@ impl PersistentTransactionLogger for SqliteTransactionLogger {
         {
             let mut buffer = self.write_buffer.lock().await;
             buffer.push(entry.clone());
-            
+
             // Flush if buffer is full
             if buffer.len() >= self.config.batch_size {
                 let entries = buffer.clone();
                 buffer.clear();
                 drop(buffer); // Release lock before async call
-                
+
                 self.write_batch_internal(&entries).await?;
             }
         }
-        
+
         Ok(())
     }
 
@@ -353,12 +382,16 @@ impl PersistentTransactionLogger for SqliteTransactionLogger {
         self.write_batch_internal(entries).await
     }
 
-    async fn get_transaction_log(&self, transaction_id: &TransactionId) -> OrbitResult<Vec<PersistentLogEntry>> {
+    async fn get_transaction_log(
+        &self,
+        transaction_id: &TransactionId,
+    ) -> OrbitResult<Vec<PersistentLogEntry>> {
         let rows = sqlx::query(
-            "SELECT * FROM transaction_log WHERE transaction_id = ? ORDER BY timestamp ASC"
+            "SELECT * FROM transaction_log WHERE transaction_id = ? ORDER BY timestamp ASC",
         )
         .bind(&transaction_id.id)
-        .fetch_all(&self.pool).await
+        .fetch_all(&self.pool)
+        .await
         .map_err(|e| OrbitError::internal(&format!("Failed to query transaction log: {}", e)))?;
 
         let mut entries = Vec::new();
@@ -369,13 +402,18 @@ impl PersistentTransactionLogger for SqliteTransactionLogger {
         Ok(entries)
     }
 
-    async fn get_entries_by_time_range(&self, start_time: i64, end_time: i64) -> OrbitResult<Vec<PersistentLogEntry>> {
+    async fn get_entries_by_time_range(
+        &self,
+        start_time: i64,
+        end_time: i64,
+    ) -> OrbitResult<Vec<PersistentLogEntry>> {
         let rows = sqlx::query(
-            "SELECT * FROM transaction_log WHERE timestamp BETWEEN ? AND ? ORDER BY timestamp ASC"
+            "SELECT * FROM transaction_log WHERE timestamp BETWEEN ? AND ? ORDER BY timestamp ASC",
         )
         .bind(start_time)
         .bind(end_time)
-        .fetch_all(&self.pool).await
+        .fetch_all(&self.pool)
+        .await
         .map_err(|e| OrbitError::internal(&format!("Failed to query time range: {}", e)))?;
 
         let mut entries = Vec::new();
@@ -388,10 +426,11 @@ impl PersistentTransactionLogger for SqliteTransactionLogger {
 
     async fn archive_old_entries(&self, before_timestamp: i64) -> OrbitResult<u64> {
         let result = sqlx::query(
-            "UPDATE transaction_log SET archived = TRUE WHERE timestamp < ? AND archived = FALSE"
+            "UPDATE transaction_log SET archived = TRUE WHERE timestamp < ? AND archived = FALSE",
         )
         .bind(before_timestamp)
-        .execute(&self.pool).await
+        .execute(&self.pool)
+        .await
         .map_err(|e| OrbitError::internal(&format!("Failed to archive entries: {}", e)))?;
 
         let archived_count = result.rows_affected();
@@ -421,12 +460,14 @@ impl PersistentTransactionLogger for SqliteTransactionLogger {
                 COUNT(CASE WHEN archived = TRUE THEN 1 END) as archived,
                 MIN(timestamp) as oldest,
                 MAX(timestamp) as newest
-               FROM transaction_log"#
+               FROM transaction_log"#,
         )
-        .fetch_one(&self.pool).await
+        .fetch_one(&self.pool)
+        .await
         .map_err(|e| OrbitError::internal(&format!("Failed to get stats: {}", e)))?;
 
-        let database_size = tokio::fs::metadata(&self.config.database_path).await
+        let database_size = tokio::fs::metadata(&self.config.database_path)
+            .await
             .map(|m| m.len())
             .unwrap_or(0);
 
@@ -459,32 +500,43 @@ impl PersistentTransactionLogger for SqliteTransactionLogger {
         }
 
         // Vacuum database to reclaim space
-        sqlx::query("VACUUM").execute(&self.pool).await
+        sqlx::query("VACUUM")
+            .execute(&self.pool)
+            .await
             .map_err(|e| OrbitError::internal(&format!("Failed to vacuum database: {}", e)))?;
 
         // Update statistics
-        sqlx::query("ANALYZE").execute(&self.pool).await
+        sqlx::query("ANALYZE")
+            .execute(&self.pool)
+            .await
             .map_err(|e| OrbitError::internal(&format!("Failed to analyze database: {}", e)))?;
 
         debug!("Transaction log maintenance completed");
         Ok(())
     }
 
-    async fn recover_transaction_state(&self, transaction_id: &TransactionId) -> OrbitResult<Option<TransactionEvent>> {
+    async fn recover_transaction_state(
+        &self,
+        transaction_id: &TransactionId,
+    ) -> OrbitResult<Option<TransactionEvent>> {
         let row = sqlx::query(
             r#"SELECT event_data FROM transaction_log 
                WHERE transaction_id = ? 
                ORDER BY timestamp DESC 
-               LIMIT 1"#
+               LIMIT 1"#,
         )
         .bind(&transaction_id.id)
-        .fetch_optional(&self.pool).await
-        .map_err(|e| OrbitError::internal(&format!("Failed to recover transaction state: {}", e)))?;
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| {
+            OrbitError::internal(&format!("Failed to recover transaction state: {}", e))
+        })?;
 
         if let Some(row) = row {
             let event_data: String = row.get("event_data");
-            let event: TransactionEvent = serde_json::from_str(&event_data)
-                .map_err(|e| OrbitError::internal(&format!("Failed to deserialize event: {}", e)))?;
+            let event: TransactionEvent = serde_json::from_str(&event_data).map_err(|e| {
+                OrbitError::internal(&format!("Failed to deserialize event: {}", e))
+            })?;
             Ok(Some(event))
         } else {
             Ok(None)
@@ -494,7 +546,10 @@ impl PersistentTransactionLogger for SqliteTransactionLogger {
 
 impl SqliteTransactionLogger {
     /// Convert database row to persistent log entry
-    fn row_to_persistent_entry(&self, row: sqlx::sqlite::SqliteRow) -> OrbitResult<PersistentLogEntry> {
+    fn row_to_persistent_entry(
+        &self,
+        row: sqlx::sqlite::SqliteRow,
+    ) -> OrbitResult<PersistentLogEntry> {
         let id_str: String = row.get("id");
         let transaction_id_str: String = row.get("transaction_id");
         let coordinator_node_str: String = row.get("coordinator_node");
@@ -514,8 +569,9 @@ impl SqliteTransactionLogger {
             .map_err(|e| OrbitError::internal(&format!("Failed to deserialize event: {}", e)))?;
 
         let details = if let Some(details_str) = details_str {
-            Some(serde_json::from_str(&details_str)
-                .map_err(|e| OrbitError::internal(&format!("Failed to deserialize details: {}", e)))?)
+            Some(serde_json::from_str(&details_str).map_err(|e| {
+                OrbitError::internal(&format!("Failed to deserialize details: {}", e))
+            })?)
         } else {
             None
         };
@@ -564,14 +620,14 @@ mod tests {
     async fn test_sqlite_logger_initialization() {
         let temp_dir = tempdir().unwrap();
         let db_path = temp_dir.path().join("test.db");
-        
+
         let config = PersistentLogConfig {
             database_path: db_path,
             ..Default::default()
         };
 
         let logger = SqliteTransactionLogger::new(config).await.unwrap();
-        
+
         // Verify database file was created
         assert!(logger.config.database_path.exists());
     }
@@ -580,15 +636,16 @@ mod tests {
     async fn test_log_entry_persistence() {
         let temp_dir = tempdir().unwrap();
         let db_path = temp_dir.path().join("test.db");
-        
+
         let config = PersistentLogConfig {
             database_path: db_path,
             ..Default::default()
         };
 
         let logger = SqliteTransactionLogger::new(config).await.unwrap();
-        
-        let transaction_id = TransactionId::new(NodeId::new("test".to_string(), "region".to_string()));
+
+        let transaction_id =
+            TransactionId::new(NodeId::new("test".to_string(), "region".to_string()));
         let entry = TransactionLogEntry {
             timestamp: chrono::Utc::now().timestamp_millis(),
             transaction_id: transaction_id.clone(),
@@ -608,7 +665,7 @@ mod tests {
     async fn test_batch_operations() {
         let temp_dir = tempdir().unwrap();
         let db_path = temp_dir.path().join("test.db");
-        
+
         let config = PersistentLogConfig {
             database_path: db_path,
             batch_size: 2,
@@ -616,14 +673,21 @@ mod tests {
         };
 
         let logger = SqliteTransactionLogger::new(config).await.unwrap();
-        
-        let transaction_id = TransactionId::new(NodeId::new("test".to_string(), "region".to_string()));
-        let entries: Vec<_> = (0..5).map(|i| TransactionLogEntry {
-            timestamp: chrono::Utc::now().timestamp_millis() + i,
-            transaction_id: transaction_id.clone(),
-            event: if i % 2 == 0 { TransactionEvent::Started } else { TransactionEvent::Committed },
-            details: Some(serde_json::json!({"batch_index": i})),
-        }).collect();
+
+        let transaction_id =
+            TransactionId::new(NodeId::new("test".to_string(), "region".to_string()));
+        let entries: Vec<_> = (0..5)
+            .map(|i| TransactionLogEntry {
+                timestamp: chrono::Utc::now().timestamp_millis() + i,
+                transaction_id: transaction_id.clone(),
+                event: if i % 2 == 0 {
+                    TransactionEvent::Started
+                } else {
+                    TransactionEvent::Committed
+                },
+                details: Some(serde_json::json!({"batch_index": i})),
+            })
+            .collect();
 
         logger.write_batch(&entries).await.unwrap();
 

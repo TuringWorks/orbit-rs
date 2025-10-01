@@ -1,10 +1,10 @@
 //! Server-side mesh management and cluster coordination
 
+use dashmap::DashMap;
 use orbit_shared::*;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tokio::time::{Duration, interval};
-use dashmap::DashMap;
+use tokio::time::{interval, Duration};
 
 /// Manages the distributed directory of addressables
 #[derive(Debug, Clone)]
@@ -43,7 +43,9 @@ impl AddressableDirectory {
 
     /// Find which node hosts a specific addressable
     pub async fn find_addressable(&self, reference: &AddressableReference) -> Option<NodeId> {
-        self.leases.get(reference).map(|lease| lease.node_id.clone())
+        self.leases
+            .get(reference)
+            .map(|lease| lease.node_id.clone())
     }
 
     /// Remove an addressable lease
@@ -128,17 +130,15 @@ impl ClusterManager {
     /// Register this node in the cluster
     pub async fn register_node(&self, mut node_info: NodeInfo) -> OrbitResult<()> {
         let now = chrono::Utc::now();
-        let expires_at = now + chrono::Duration::from_std(self.lease_duration)
-            .map_err(|e| OrbitError::internal(format!("Invalid lease duration: {}", e)))?;
-        let renew_at = now + chrono::Duration::from_std(self.lease_duration / 2)
-            .map_err(|e| OrbitError::internal(format!("Invalid renew duration: {}", e)))?;
-        
-        let lease = NodeLease::new(
-            node_info.id.clone(),
-            expires_at,
-            renew_at,
-        );
-        
+        let expires_at = now
+            + chrono::Duration::from_std(self.lease_duration)
+                .map_err(|e| OrbitError::internal(format!("Invalid lease duration: {}", e)))?;
+        let renew_at = now
+            + chrono::Duration::from_std(self.lease_duration / 2)
+                .map_err(|e| OrbitError::internal(format!("Invalid renew duration: {}", e)))?;
+
+        let lease = NodeLease::new(node_info.id.clone(), expires_at, renew_at);
+
         node_info.lease = Some(lease);
         node_info.status = NodeStatus::Active;
 
@@ -262,24 +262,26 @@ mod tests {
     #[tokio::test]
     async fn test_addressable_directory() {
         let directory = AddressableDirectory::new();
-        
+
         let reference = AddressableReference {
             addressable_type: "TestActor".to_string(),
-            key: Key::StringKey { key: "test".to_string() },
+            key: Key::StringKey {
+                key: "test".to_string(),
+            },
         };
-        
+
         let node_id = NodeId::generate("test".to_string());
         let now = chrono::Utc::now();
-        
+
         let lease = AddressableLease {
             reference: reference.clone(),
             node_id: node_id.clone(),
             expires_at: now + chrono::Duration::minutes(5),
             renew_at: now + chrono::Duration::minutes(2),
         };
-        
+
         directory.register_lease(lease).await.unwrap();
-        
+
         let found_node = directory.find_addressable(&reference).await;
         assert_eq!(found_node, Some(node_id));
     }
@@ -287,12 +289,12 @@ mod tests {
     #[tokio::test]
     async fn test_cluster_manager() {
         let manager = ClusterManager::new(Duration::from_secs(60));
-        
+
         let node_id = NodeId::generate("test".to_string());
         let node_info = NodeInfo::new(node_id.clone(), "localhost".to_string(), 50051);
-        
+
         manager.register_node(node_info).await.unwrap();
-        
+
         let retrieved = manager.get_node(&node_id).await;
         assert!(retrieved.is_some());
         assert_eq!(retrieved.unwrap().status, NodeStatus::Active);
