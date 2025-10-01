@@ -633,7 +633,7 @@ impl Clone for UniversalElectionManager {
             k8s_config: self.k8s_config.clone(),
             raft_manager: self.raft_manager.clone(),
             state_manager: ElectionStateManager::new(
-                &std::env::temp_dir().join(format!("orbit-election-{}.json", self.node_id.key)),
+                std::env::temp_dir().join(format!("orbit-election-{}.json", self.node_id.key)),
                 self.node_id.clone(),
             ),
             current_leader: Arc::clone(&self.current_leader),

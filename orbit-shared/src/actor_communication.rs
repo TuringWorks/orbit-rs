@@ -9,7 +9,11 @@ use tokio::time::{Duration, Instant};
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
-/// Message types for actor-to-actor communication
+// Type aliases for complex types
+type PendingDiscoveryMap = Arc<RwLock<HashMap<AddressableReference, Vec<oneshot::Sender<Option<NodeId>>>>>>;
+type PendingResponseMap = Arc<RwLock<HashMap<ActorMessageId, oneshot::Sender<Result<serde_json::Value, String>>>>>;
+
+/// Actor message types for inter-actor communication
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ActorMessage {
     /// Direct method invocation on another actor
@@ -127,8 +131,7 @@ pub struct ActorDiscoveryService {
     /// Maps nodes to the actors they host
     node_actors: Arc<RwLock<HashMap<NodeId, Vec<AddressableReference>>>>,
     /// Pending discovery requests
-    pending_discoveries:
-        Arc<RwLock<HashMap<AddressableReference, Vec<oneshot::Sender<Option<NodeId>>>>>>,
+    pending_discoveries: PendingDiscoveryMap,
     /// Local actor registry
     local_actors: Arc<RwLock<HashMap<AddressableReference, ActorHandle>>>,
 }
@@ -406,8 +409,7 @@ pub struct ActorMessageRouter {
     discovery_service: Arc<ActorDiscoveryService>,
     config: ActorCommunicationConfig,
     /// Pending responses waiting for replies
-    pending_responses:
-        Arc<RwLock<HashMap<ActorMessageId, oneshot::Sender<Result<serde_json::Value, String>>>>>,
+    pending_responses: PendingResponseMap,
 }
 
 impl ActorMessageRouter {
