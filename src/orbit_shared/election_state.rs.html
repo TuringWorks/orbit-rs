@@ -271,7 +271,7 @@
 <a href=#271 id=271 data-nosnippet>271</a>            <span class="kw">let </span><span class="kw-2">mut </span>state = <span class="self">self</span>.state.write().<span class="kw">await</span>;
 <a href=#272 id=272 data-nosnippet>272</a>            state
 <a href=#273 id=273 data-nosnippet>273</a>                .vote_for(candidate.clone(), term)
-<a href=#274 id=274 data-nosnippet>274</a>                .map_err(|e| OrbitError::configuration(e))<span class="question-mark">?</span>;
+<a href=#274 id=274 data-nosnippet>274</a>                .map_err(OrbitError::configuration)<span class="question-mark">?</span>;
 <a href=#275 id=275 data-nosnippet>275</a>        }
 <a href=#276 id=276 data-nosnippet>276</a>
 <a href=#277 id=277 data-nosnippet>277</a>        <span class="self">self</span>.save().<span class="kw">await</span><span class="question-mark">?</span>;

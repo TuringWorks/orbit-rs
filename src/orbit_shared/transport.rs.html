@@ -449,7 +449,7 @@
 <a href=#449 id=449 data-nosnippet>449</a>            <span class="kw">let </span>target_node = <span class="self">self</span>.node_resolver.resolve_addressable(target).<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#450 id=450 data-nosnippet>450</a>            targets_by_node
 <a href=#451 id=451 data-nosnippet>451</a>                .entry(target_node)
-<a href=#452 id=452 data-nosnippet>452</a>                .or_insert_with(Vec::new)
+<a href=#452 id=452 data-nosnippet>452</a>                .or_default()
 <a href=#453 id=453 data-nosnippet>453</a>                .push(target);
 <a href=#454 id=454 data-nosnippet>454</a>        }
 <a href=#455 id=455 data-nosnippet>455</a>
@@ -666,7 +666,7 @@
 <a href=#666 id=666 data-nosnippet>666</a>
 <a href=#667 id=667 data-nosnippet>667</a>        <span class="kw">async fn </span>resolve_addressable(
 <a href=#668 id=668 data-nosnippet>668</a>            <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#669 id=669 data-nosnippet>669</a>            addressable: <span class="kw-2">&amp;</span>AddressableReference,
+<a href=#669 id=669 data-nosnippet>669</a>            _addressable: <span class="kw-2">&amp;</span>AddressableReference,
 <a href=#670 id=670 data-nosnippet>670</a>        ) -&gt; OrbitResult&lt;NodeId&gt; {
 <a href=#671 id=671 data-nosnippet>671</a>            <span class="prelude-val">Ok</span>(NodeId::new(<span class="string">"test-node"</span>.to_string(), <span class="string">"default"</span>.to_string()))
 <a href=#672 id=672 data-nosnippet>672</a>        }

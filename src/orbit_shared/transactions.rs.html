@@ -422,12 +422,12 @@
 <a href=#422 id=422 data-nosnippet>422</a>
 <a href=#423 id=423 data-nosnippet>423</a>        <span class="comment">// Wait for votes with timeout
 <a href=#424 id=424 data-nosnippet>424</a>        </span><span class="kw">let </span>vote_timeout = transaction.timeout / <span class="number">2</span>; <span class="comment">// Use half the transaction timeout
-<a href=#425 id=425 data-nosnippet>425</a>        </span><span class="kw">if let </span><span class="prelude-val">Err</span>(<span class="kw">_</span>) = timeout(
+<a href=#425 id=425 data-nosnippet>425</a>        </span><span class="kw">if </span>(timeout(
 <a href=#426 id=426 data-nosnippet>426</a>            vote_timeout,
 <a href=#427 id=427 data-nosnippet>427</a>            <span class="self">self</span>.wait_for_votes(transaction_id, participants.len()),
 <a href=#428 id=428 data-nosnippet>428</a>        )
-<a href=#429 id=429 data-nosnippet>429</a>        .<span class="kw">await
-<a href=#430 id=430 data-nosnippet>430</a>        </span>{
+<a href=#429 id=429 data-nosnippet>429</a>        .<span class="kw">await</span>).is_err()
+<a href=#430 id=430 data-nosnippet>430</a>        {
 <a href=#431 id=431 data-nosnippet>431</a>            <span class="self">self</span>.abort_phase(transaction_id, <span class="string">"Timeout waiting for votes"</span>)
 <a href=#432 id=432 data-nosnippet>432</a>                .<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#433 id=433 data-nosnippet>433</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(OrbitError::timeout(<span class="string">"prepare_phase"</span>));
