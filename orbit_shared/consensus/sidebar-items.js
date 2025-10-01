@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["RaftCommand","RaftState"],"struct":["AppendEntriesRequest","AppendEntriesResponse","LogEntry","RaftConfig","RaftConsensus","VoteRequest","VoteResponse"],"trait":["RaftEventHandler","RaftTransport"]};

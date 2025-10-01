@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ElectionOutcome"],"struct":["ElectionMetrics","ElectionMetricsSummary","ElectionNetworkMetrics","ElectionOutcomeMetrics","ElectionPerformanceMetrics","ElectionTimingMetrics","ElectionTracker","HeartbeatPerformanceMetrics","PartitionEvent"]};

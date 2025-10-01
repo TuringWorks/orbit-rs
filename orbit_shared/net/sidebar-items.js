@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["InvocationReason","MessageContent","MessageTarget"],"struct":["Message"]};
