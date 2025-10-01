@@ -79,12 +79,12 @@ impl GrpcRaftTransport {
         let channel = tokio::time::timeout(
             self.connection_timeout,
             tonic::transport::Endpoint::from_shared(address.clone())
-                .map_err(|e| OrbitError::internal(&format!("Invalid endpoint: {}", e)))?
+                .map_err(|e| OrbitError::internal(format!("Invalid endpoint: {}", e)))?
                 .connect(),
         )
         .await
-        .map_err(|_| OrbitError::timeout(&format!("Connection timeout to {}", address)))?
-        .map_err(|e| OrbitError::network(&format!("Connection failed to {}: {}", address, e)))?;
+        .map_err(|_| OrbitError::timeout(format!("Connection timeout to {}", address)))?
+        .map_err(|e| OrbitError::network(format!("Connection failed to {}: {}", address, e)))?;
 
         let client = RaftConsensusClient::new(channel);
 
@@ -150,7 +150,7 @@ impl RaftTransport for GrpcRaftTransport {
             Ok(Err(status)) => {
                 warn!("Vote request to {} failed: {}", target, status);
                 self.remove_client(target).await;
-                Err(OrbitError::network(&format!(
+                Err(OrbitError::network(format!(
                     "Vote request failed: {}",
                     status
                 )))
@@ -158,7 +158,7 @@ impl RaftTransport for GrpcRaftTransport {
             Err(_) => {
                 warn!("Vote request to {} timed out", target);
                 self.remove_client(target).await;
-                Err(OrbitError::timeout(&format!(
+                Err(OrbitError::timeout(format!(
                     "Vote request timeout to {}",
                     target
                 )))
@@ -209,7 +209,7 @@ impl RaftTransport for GrpcRaftTransport {
             Ok(Err(status)) => {
                 warn!("Append entries to {} failed: {}", target, status);
                 self.remove_client(target).await;
-                Err(OrbitError::network(&format!(
+                Err(OrbitError::network(format!(
                     "Append entries failed: {}",
                     status
                 )))
@@ -217,7 +217,7 @@ impl RaftTransport for GrpcRaftTransport {
             Err(_) => {
                 warn!("Append entries to {} timed out", target);
                 self.remove_client(target).await;
-                Err(OrbitError::timeout(&format!(
+                Err(OrbitError::timeout(format!(
                     "Append entries timeout to {}",
                     target
                 )))
@@ -386,7 +386,7 @@ pub async fn start_raft_server(
         .add_service(server)
         .serve(addr)
         .await
-        .map_err(|e| OrbitError::network(&format!("Failed to start Raft server: {}", e)))?;
+        .map_err(|e| OrbitError::network(format!("Failed to start Raft server: {}", e)))?;
 
     Ok(())
 }

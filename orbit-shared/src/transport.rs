@@ -196,11 +196,14 @@ impl ConnectionPool {
     pub async fn cleanup_idle_connections(&self, max_idle_time: Duration) -> OrbitResult<()> {
         let now = Instant::now();
         let mut to_remove = Vec::new();
+        let max_connection_age = Duration::from_secs(3600); // 1 hour max age
 
         {
             let metrics = self.connection_metrics.read().await;
             for (endpoint, metric) in metrics.iter() {
-                if now.duration_since(metric.last_used) > max_idle_time {
+                // Remove if idle too long OR too old
+                if now.duration_since(metric.last_used) > max_idle_time 
+                    || now.duration_since(metric.created_at) > max_connection_age {
                     to_remove.push(endpoint.clone());
                 }
             }

@@ -470,8 +470,15 @@ impl ActorMessageRouter {
 
         self.send_message(message).await?;
 
+        // Use provided timeout or fall back to config default
+        let effective_timeout = if timeout == Duration::ZERO {
+            self.config.message_timeout
+        } else {
+            timeout
+        };
+
         // Wait for response with timeout
-        match tokio::time::timeout(timeout, receiver).await {
+        match tokio::time::timeout(effective_timeout, receiver).await {
             Ok(Ok(result)) => result.map_err(OrbitError::internal),
             Ok(Err(_)) => Err(OrbitError::internal("Response channel closed")),
             Err(_) => {

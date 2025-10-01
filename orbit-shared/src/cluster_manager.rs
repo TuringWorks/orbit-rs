@@ -75,6 +75,11 @@ impl SplitBrainDetector {
         }
     }
 
+    /// Get the detection interval
+    pub fn get_detection_interval(&self) -> Duration {
+        self.detection_interval
+    }
+
     /// Check if current cluster configuration might cause split-brain
     pub async fn check_split_brain_risk(
         &self,
@@ -171,8 +176,8 @@ impl PartitionDetector {
                 target_node, attempt
             );
 
-            // Simulate network check
-            tokio::time::sleep(Duration::from_millis(10)).await;
+            // Simulate network check with timeout
+            tokio::time::sleep(self.ping_timeout.min(Duration::from_millis(100))).await;
 
             // For demo purposes, assume 90% success rate
             if fastrand::f32() > 0.1 {
