@@ -1,0 +1,187 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "orbit-rs.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "orbit-rs.labels" . | nindent 4 }}
+    app.kubernetes.io/component: server
+spec:
+  serviceName: {{ include "orbit-rs.fullname" . }}-headless
+  replicas: {{ .Values.orbitServer.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "orbit-rs.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: server
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "{{ .Values.orbitServer.service.metricsPort }}"
+        prometheus.io/path: "/metrics"
+        {{- with .Values.orbitServer.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "orbit-rs.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: server
+    spec:
+      serviceAccountName: {{ include "orbit-rs.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.orbitServer.podSecurityContext | nindent 8 }}
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+      - name: {{ .Chart.Name }}
+        securityContext:
+          {{- toYaml .Values.orbitServer.securityContext | nindent 12 }}
+        image: "{{ include "orbit-rs.image" . }}"
+        imagePullPolicy: {{ .Values.orbitServer.image.pullPolicy }}
+        command: ["/bin/bash"]
+        args: ["/app/scripts/entrypoint.sh"]
+        ports:
+        - name: grpc
+          containerPort: {{ .Values.orbitServer.service.grpcPort }}
+          protocol: TCP
+        - name: health
+          containerPort: {{ .Values.orbitServer.service.healthPort }}
+          protocol: TCP
+        - name: metrics
+          containerPort: {{ .Values.orbitServer.service.metricsPort }}
+          protocol: TCP
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: RUST_LOG
+          value: "{{ .Values.config.logging.level }}"
+        - name: RUST_BACKTRACE
+          value: "1"
+        {{- with .Values.orbitServer.env }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        {{- with .Values.orbitServer.envFrom }}
+        envFrom:
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        resources:
+          {{- toYaml .Values.orbitServer.resources | nindent 12 }}
+        {{- if .Values.orbitServer.livenessProbe.enabled }}
+        livenessProbe:
+          httpGet:
+            path: {{ .Values.orbitServer.livenessProbe.httpGet.path }}
+            port: {{ .Values.orbitServer.livenessProbe.httpGet.port }}
+          initialDelaySeconds: {{ .Values.orbitServer.livenessProbe.initialDelaySeconds }}
+          periodSeconds: {{ .Values.orbitServer.livenessProbe.periodSeconds }}
+          timeoutSeconds: {{ .Values.orbitServer.livenessProbe.timeoutSeconds }}
+          failureThreshold: {{ .Values.orbitServer.livenessProbe.failureThreshold }}
+          successThreshold: {{ .Values.orbitServer.livenessProbe.successThreshold }}
+        {{- end }}
+        {{- if .Values.orbitServer.readinessProbe.enabled }}
+        readinessProbe:
+          httpGet:
+            path: {{ .Values.orbitServer.readinessProbe.httpGet.path }}
+            port: {{ .Values.orbitServer.readinessProbe.httpGet.port }}
+          initialDelaySeconds: {{ .Values.orbitServer.readinessProbe.initialDelaySeconds }}
+          periodSeconds: {{ .Values.orbitServer.readinessProbe.periodSeconds }}
+          timeoutSeconds: {{ .Values.orbitServer.readinessProbe.timeoutSeconds }}
+          failureThreshold: {{ .Values.orbitServer.readinessProbe.failureThreshold }}
+          successThreshold: {{ .Values.orbitServer.readinessProbe.successThreshold }}
+        {{- end }}
+        {{- if .Values.orbitServer.startupProbe.enabled }}
+        startupProbe:
+          httpGet:
+            path: {{ .Values.orbitServer.startupProbe.httpGet.path }}
+            port: {{ .Values.orbitServer.startupProbe.httpGet.port }}
+          initialDelaySeconds: {{ .Values.orbitServer.startupProbe.initialDelaySeconds }}
+          periodSeconds: {{ .Values.orbitServer.startupProbe.periodSeconds }}
+          timeoutSeconds: {{ .Values.orbitServer.startupProbe.timeoutSeconds }}
+          failureThreshold: {{ .Values.orbitServer.startupProbe.failureThreshold }}
+          successThreshold: {{ .Values.orbitServer.startupProbe.successThreshold }}
+        {{- end }}
+        volumeMounts:
+        - name: data
+          mountPath: /app/data
+        - name: config
+          mountPath: /app/config
+          readOnly: true
+        - name: scripts
+          mountPath: /app/scripts
+          readOnly: true
+        - name: tmp
+          mountPath: /tmp
+        {{- with .Values.orbitServer.extraVolumeMounts }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      volumes:
+      - name: config
+        configMap:
+          name: {{ include "orbit-rs.fullname" . }}-config
+          defaultMode: 0644
+      - name: scripts
+        configMap:
+          name: {{ include "orbit-rs.fullname" . }}-scripts
+          defaultMode: 0755
+      - name: tmp
+        emptyDir: {}
+      {{- with .Values.orbitServer.extraVolumes }}
+      {{- toYaml . | nindent 6 }}
+      {{- end }}
+      {{- with .Values.orbitServer.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.orbitServer.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.orbitServer.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      terminationGracePeriodSeconds: 60
+  {{- if .Values.persistence.enabled }}
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+      {{- with .Values.persistence.annotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "orbit-rs.labels" . | nindent 8 }}
+        app.kubernetes.io/component: data
+    spec:
+      accessModes: 
+        - {{ .Values.persistence.accessMode | quote }}
+      {{- if .Values.persistence.storageClass }}
+      {{- if eq "-" .Values.persistence.storageClass }}
+      storageClassName: ""
+      {{- else }}
+      storageClassName: {{ .Values.persistence.storageClass | quote }}
+      {{- end }}
+      {{- end }}
+      resources:
+        requests:
+          storage: {{ .Values.persistence.size | quote }}
+  {{- end }}
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1

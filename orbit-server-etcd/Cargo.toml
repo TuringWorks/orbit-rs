@@ -1,0 +1,16 @@
+[package]
+name = "orbit-server-etcd"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Orbit etcd-based distributed directory implementation"
+
+[dependencies]
+orbit-util = { path = "../orbit-util" }
+orbit-shared = { path = "../orbit-shared" }
+orbit-server = { path = "../orbit-server" }
+etcd-rs = "1.0"
+tokio.workspace = true
+serde.workspace = true
+anyhow.workspace = true

@@ -1,0 +1,108 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: orbit-server-config
+  namespace: orbit-rs
+  labels:
+    app.kubernetes.io/name: orbit-rs
+    app.kubernetes.io/component: config
+data:
+  orbit-server.toml: |
+    # Orbit-RS Server Configuration
+
+    [server]
+    # Server bind address - use 0.0.0.0 to bind to all interfaces in container
+    bind_address = "0.0.0.0:50051"
+    
+    # Health check endpoint
+    health_bind_address = "0.0.0.0:8080"
+    
+    # Metrics endpoint for Prometheus
+    metrics_bind_address = "0.0.0.0:9090"
+    
+    # Node configuration
+    [node]
+    # Node ID will be generated from pod name + namespace
+    id = "${POD_NAME}"
+    namespace = "${POD_NAMESPACE}"
+    
+    # Cluster discovery configuration
+    [cluster]
+    # Use Kubernetes service discovery
+    discovery_mode = "kubernetes"
+    service_name = "orbit-server"
+    service_namespace = "orbit-rs"
+    
+    # Lease configuration for cluster membership
+    lease_duration_seconds = 30
+    lease_renew_interval_seconds = 10
+    
+    # Transaction configuration
+    [transactions]
+    # Database configuration
+    database_path = "/app/data/orbit_transactions.db"
+    max_connections = 10
+    enable_wal = true
+    
+    # Recovery configuration
+    recovery_timeout_seconds = 300
+    max_recovery_attempts = 3
+    
+    # Saga configuration
+    [saga]
+    max_execution_time_seconds = 3600
+    default_step_timeout_seconds = 300
+    max_retry_attempts = 3
+    enable_automatic_failover = true
+    
+    # Logging configuration
+    [logging]
+    level = "info"
+    format = "json"  # Use JSON for structured logging in Kubernetes
+    
+    # Performance tuning
+    [performance]
+    worker_threads = 4  # Will be overridden by container resources
+    max_blocking_threads = 512
+    thread_stack_size = 2097152  # 2MB
+    
+    # TLS configuration (optional)
+    [tls]
+    enabled = false
+    # cert_file = "/app/certs/tls.crt"
+    # key_file = "/app/certs/tls.key"
+    # ca_file = "/app/certs/ca.crt"
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: orbit-server-scripts
+  namespace: orbit-rs
+  labels:
+    app.kubernetes.io/name: orbit-rs
+    app.kubernetes.io/component: scripts
+data:
+  entrypoint.sh: |
+    #!/bin/bash
+    set -e
+    
+    # Set environment variables for configuration substitution
+    export POD_NAME=${HOSTNAME}
+    export POD_NAMESPACE=${POD_NAMESPACE:-orbit-rs}
+    export NODE_ID="${POD_NAME}.${POD_NAMESPACE}"
+    
+    # Create data directory if it doesn't exist
+    mkdir -p /app/data
+    
+    # Substitute environment variables in config
+    envsubst < /app/config/orbit-server.toml > /tmp/orbit-server.toml
+    
+    # Start the server
+    exec /app/orbit-server --config /tmp/orbit-server.toml "$@"
+  
+  health-check.sh: |
+    #!/bin/bash
+    # Health check script
+    curl -f http://localhost:8080/health || exit 1

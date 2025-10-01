@@ -1,0 +1,28 @@
+[package]
+name = "orbit-server"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Orbit server-side cluster management and actor hosting"
+
+[dependencies]
+orbit-util = { path = "../orbit-util" }
+orbit-shared = { path = "../orbit-shared" }
+orbit-proto = { path = "../orbit-proto" }
+tokio.workspace = true
+tokio-stream.workspace = true
+tonic.workspace = true
+futures.workspace = true
+dashmap.workspace = true
+serde.workspace = true
+tracing.workspace = true
+metrics.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+chrono.workspace = true
+petgraph = "0.6" # For graph algorithms (cluster management)
+
+[dev-dependencies]
+mockall.workspace = true
+tokio-test = "0.4"

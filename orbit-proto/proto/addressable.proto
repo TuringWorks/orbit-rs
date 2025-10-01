@@ -1,0 +1,34 @@
+syntax = "proto3";
+package orbit.shared;
+
+import "google/protobuf/timestamp.proto";
+import "node.proto";
+
+message KeyProto {
+    oneof key {
+        string string_key = 1;
+        int32 int32_key = 2;
+        int64 int64_key = 3;
+        NoKeyProto no_key = 4;
+    }
+}
+
+message NoKeyProto {
+}
+
+message AddressableReferenceProto {
+    string addressable_type = 1;
+    KeyProto key = 2;
+}
+
+message NamespacedAddressableReferenceProto {
+    string namespace = 1;
+    AddressableReferenceProto addressable_reference = 2;
+}
+
+message AddressableLeaseProto {
+    AddressableReferenceProto reference = 1;
+    NodeIdProto node_id = 2;
+    google.protobuf.Timestamp expires_at = 3;
+    google.protobuf.Timestamp renew_at = 4;
+}

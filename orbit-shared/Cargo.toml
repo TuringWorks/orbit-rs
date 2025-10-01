@@ -1,0 +1,34 @@
+[package]
+name = "orbit-shared"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Orbit shared data structures and interfaces"
+
+
+[dependencies]
+orbit-util = { path = "../orbit-util" }
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+chrono.workspace = true
+sha2 = "0.10"
+anyhow.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+async-trait = "0.1"
+uuid.workspace = true
+sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "sqlite", "chrono", "uuid"] }
+tokio-util = "0.7"
+md5 = "0.7"
+tempfile = "3.0"
+tonic = "0.12"
+prost = "0.13"
+futures.workspace = true
+tower = { version = "0.4", features = ["limit", "load-shed", "timeout"] }
+hyper = "0.14"
+fastrand = "2.0"
+
+[build-dependencies]
+tonic-build = "0.12"

@@ -1,0 +1,15 @@
+[package]
+name = "orbit-client-spring"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Orbit integration with Spring-like frameworks (Rust equivalent)"
+
+[dependencies]
+orbit-util = { path = "../orbit-util" }
+orbit-shared = { path = "../orbit-shared" }
+orbit-client = { path = "../orbit-client" }
+tokio.workspace = true
+serde.workspace = true
+anyhow.workspace = true

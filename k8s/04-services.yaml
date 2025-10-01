@@ -1,0 +1,110 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: orbit-server
+  namespace: orbit-rs
+  labels:
+    app.kubernetes.io/name: orbit-rs
+    app.kubernetes.io/component: service
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: orbit-rs
+    app.kubernetes.io/component: server
+  ports:
+  - name: grpc
+    port: 50051
+    targetPort: 50051
+    protocol: TCP
+  - name: health
+    port: 8080
+    targetPort: 8080
+    protocol: TCP
+  sessionAffinity: None
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: orbit-server-metrics
+  namespace: orbit-rs
+  labels:
+    app.kubernetes.io/name: orbit-rs
+    app.kubernetes.io/component: metrics
+    prometheus.io/service: "true"
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: orbit-rs
+    app.kubernetes.io/component: server
+  ports:
+  - name: metrics
+    port: 9090
+    targetPort: 9090
+    protocol: TCP
+
+---
+# External LoadBalancer service (optional - for external access)
+apiVersion: v1
+kind: Service
+metadata:
+  name: orbit-server-external
+  namespace: orbit-rs
+  labels:
+    app.kubernetes.io/name: orbit-rs
+    app.kubernetes.io/component: external-service
+  annotations:
+    # Cloud provider specific annotations
+    # service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    # service.beta.kubernetes.io/azure-load-balancer-internal: "false"
+    # cloud.google.com/load-balancer-type: "External"
+spec:
+  type: LoadBalancer
+  selector:
+    app.kubernetes.io/name: orbit-rs
+    app.kubernetes.io/component: server
+  ports:
+  - name: grpc
+    port: 50051
+    targetPort: 50051
+    protocol: TCP
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 3600
+
+---
+# Ingress for HTTP traffic (optional)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: orbit-server-ingress
+  namespace: orbit-rs
+  labels:
+    app.kubernetes.io/name: orbit-rs
+    app.kubernetes.io/component: ingress
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/backend-protocol: "GRPC"
+    nginx.ingress.kubernetes.io/grpc-backend: "true"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+spec:
+  tls:
+  - hosts:
+    - orbit-rs.yourdomain.com
+    secretName: orbit-rs-tls
+  rules:
+  - host: orbit-rs.yourdomain.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: orbit-server
+            port:
+              number: 50051

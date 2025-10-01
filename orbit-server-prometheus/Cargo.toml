@@ -1,0 +1,17 @@
+[package]
+name = "orbit-server-prometheus"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Orbit Prometheus metrics integration"
+
+[dependencies]
+orbit-util = { path = "../orbit-util" }
+orbit-shared = { path = "../orbit-shared" }
+orbit-server = { path = "../orbit-server" }
+metrics.workspace = true
+metrics-exporter-prometheus.workspace = true
+tokio.workspace = true
+serde.workspace = true
+anyhow.workspace = true

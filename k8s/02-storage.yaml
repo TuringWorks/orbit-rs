@@ -1,0 +1,61 @@
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: orbit-rs-ssd
+  labels:
+    app.kubernetes.io/name: orbit-rs
+    app.kubernetes.io/component: storage
+provisioner: kubernetes.io/gce-pd  # Change based on your cloud provider
+parameters:
+  type: pd-ssd  # Change based on your cloud provider
+  replication-type: regional-pd
+allowVolumeExpansion: true
+reclaimPolicy: Retain
+volumeBindingMode: WaitForFirstConsumer
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: orbit-server-data
+  namespace: orbit-rs
+  labels:
+    app.kubernetes.io/name: orbit-rs
+    app.kubernetes.io/component: storage
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: orbit-rs-ssd
+
+---
+# Alternative: Use StatefulSet for automatic PVC management
+apiVersion: v1
+kind: Service
+metadata:
+  name: orbit-server-headless
+  namespace: orbit-rs
+  labels:
+    app.kubernetes.io/name: orbit-rs
+    app.kubernetes.io/component: headless-service
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: orbit-rs
+    app.kubernetes.io/component: server
+  ports:
+  - name: grpc
+    port: 50051
+    targetPort: 50051
+    protocol: TCP
+  - name: health
+    port: 8080
+    targetPort: 8080
+    protocol: TCP
+  - name: metrics
+    port: 9090
+    targetPort: 9090
+    protocol: TCP

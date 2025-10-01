@@ -1,0 +1,239 @@
+# Orbit-RS Universal Deployment Configuration
+# Supports Kubernetes, Docker Compose, and Standalone deployments
+
+# Global configuration
+global:
+  cluster_name: "orbit-rs-cluster"
+  node_discovery_timeout: 30s
+  election_timeout_min: 150ms
+  election_timeout_max: 300ms
+  heartbeat_interval: 50ms
+
+# Kubernetes deployment configuration
+kubernetes:
+  namespace: "orbit-rs"
+  service_name: "orbit-server"
+  
+  # Leader election configuration
+  leader_election:
+    enabled: true
+    lease_name: "orbit-leader-election"
+    lease_duration: 30s
+    renew_deadline: 20s
+    retry_period: 5s
+    enable_raft_fallback: true
+  
+  # Service discovery
+  discovery:
+    method: "kubernetes_api"
+    service_account: "orbit-server"
+    
+  # StatefulSet configuration
+  statefulset:
+    replicas: 3
+    pod_template:
+      env:
+        - name: DEPLOYMENT_MODE
+          value: "kubernetes"
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: HOSTNAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: SERVICE_ACCOUNT
+          value: "orbit-server"
+        - name: ORBIT_REPLICA_COUNT
+          value: "3"
+        - name: ORBIT_DISCOVERY_DNS
+          value: "orbit-server-headless.orbit-rs.svc.cluster.local"
+      
+  # RBAC permissions for leader election
+  rbac:
+    enable_leader_election: true
+    lease_permissions:
+      - get
+      - list
+      - watch
+      - create
+      - update
+      - delete
+    pod_permissions:
+      - get
+      - list
+      - watch
+
+# Docker Compose deployment configuration
+docker_compose:
+  # Service configuration
+  service:
+    name: "orbit-server"
+    replicas: 3
+    
+  # Leader election (uses Raft consensus)
+  leader_election:
+    enabled: true
+    method: "raft"
+    enable_k8s_fallback: false
+    
+  # Node discovery
+  discovery:
+    method: "compose_dns"
+    compose_project: "${COMPOSE_PROJECT_NAME}"
+    
+  # Environment variables for compose
+  environment:
+    - DEPLOYMENT_MODE=docker_compose
+    - COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}
+    - COMPOSE_SERVICE=orbit-server
+    - ORBIT_REPLICA_COUNT=3
+    - ORBIT_DISCOVERY_DNS=orbit-server
+
+# Standalone deployment configuration
+standalone:
+  # Cluster configuration
+  cluster:
+    nodes:
+      - "node-1.orbit.local:50051"
+      - "node-2.orbit.local:50051"
+      - "node-3.orbit.local:50051"
+      
+  # Leader election (Raft only)
+  leader_election:
+    enabled: true
+    method: "raft"
+    enable_k8s_fallback: false
+    
+  # Node discovery methods
+  discovery:
+    method: "static"  # or "dns", "consul", "etcd"
+    
+    # DNS discovery configuration
+    dns:
+      service_name: "orbit-cluster.local"
+      port: 50051
+      
+    # Consul discovery configuration
+    consul:
+      address: "consul.service.consul:8500"
+      service_name: "orbit-server"
+      health_check: true
+      
+    # etcd discovery configuration
+    etcd:
+      endpoints:
+        - "etcd-1.orbit.local:2379"
+        - "etcd-2.orbit.local:2379"
+        - "etcd-3.orbit.local:2379"
+      key_prefix: "/orbit-rs/nodes"
+
+# Security configuration
+security:
+  # TLS configuration
+  tls:
+    enabled: true
+    cert_file: "/app/certs/tls.crt"
+    key_file: "/app/certs/tls.key"
+    ca_file: "/app/certs/ca.crt"
+    
+  # Authentication
+  auth:
+    enabled: false
+    method: "mtls"  # or "jwt", "rbac"
+
+# Storage configuration
+storage:
+  # Election state persistence
+  election_state:
+    enabled: true
+    path: "/app/data/election-state.json"
+    backup_enabled: true
+    backup_interval: "1h"
+    
+  # Transaction logs
+  transaction_logs:
+    path: "/app/data/transactions.db"
+    backup_enabled: true
+
+# Monitoring and observability
+monitoring:
+  # Metrics
+  metrics:
+    enabled: true
+    port: 9090
+    path: "/metrics"
+    
+  # Health checks
+  health:
+    enabled: true
+    port: 8080
+    path: "/health"
+    
+  # Logging
+  logging:
+    level: "info"
+    format: "json"
+    
+# Performance tuning
+performance:
+  # Resource limits
+  resources:
+    cpu_limit: "1000m"
+    memory_limit: "2Gi"
+    cpu_request: "500m"
+    memory_request: "1Gi"
+    
+  # Connection pooling
+  connection_pool:
+    max_connections: 100
+    idle_timeout: "30s"
+    
+  # Batch processing
+  batch:
+    max_batch_size: 1000
+    batch_timeout: "100ms"
+
+---
+# Environment-specific overrides
+
+# Development environment
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: orbit-rs-dev-config
+data:
+  DEPLOYMENT_MODE: "kubernetes"
+  ORBIT_LOG_LEVEL: "debug"
+  ORBIT_REPLICA_COUNT: "1"
+  ORBIT_ELECTION_TIMEOUT_MIN: "50ms"
+  ORBIT_ELECTION_TIMEOUT_MAX: "100ms"
+
+---
+# Staging environment
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: orbit-rs-staging-config
+data:
+  DEPLOYMENT_MODE: "kubernetes"
+  ORBIT_LOG_LEVEL: "info"
+  ORBIT_REPLICA_COUNT: "3"
+  ORBIT_ELECTION_TIMEOUT_MIN: "150ms"
+  ORBIT_ELECTION_TIMEOUT_MAX: "300ms"
+
+---
+# Production environment
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: orbit-rs-prod-config
+data:
+  DEPLOYMENT_MODE: "kubernetes"
+  ORBIT_LOG_LEVEL: "warn"
+  ORBIT_REPLICA_COUNT: "5"
+  ORBIT_ELECTION_TIMEOUT_MIN: "200ms"
+  ORBIT_ELECTION_TIMEOUT_MAX: "400ms"
+  ORBIT_ENABLE_TLS: "true"
+  ORBIT_ENABLE_AUTH: "true"

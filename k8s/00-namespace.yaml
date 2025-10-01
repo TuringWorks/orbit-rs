@@ -1,0 +1,67 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: orbit-rs
+  labels:
+    app.kubernetes.io/name: orbit-rs
+    app.kubernetes.io/component: namespace
+    app.kubernetes.io/version: "0.1.0"
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: orbit-server
+  namespace: orbit-rs
+  labels:
+    app.kubernetes.io/name: orbit-rs
+    app.kubernetes.io/component: service-account
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: orbit-server
+  labels:
+    app.kubernetes.io/name: orbit-rs
+    app.kubernetes.io/component: cluster-role
+rules:
+- apiGroups: [""]
+  resources: ["nodes", "pods", "services", "endpoints"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["create", "patch", "update"]
+- apiGroups: ["coordination.k8s.io"]
+  resources: ["leases"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  resourceNames: ["orbit-leader-election"]
+- apiGroups: ["coordination.k8s.io"]
+  resources: ["leases"]
+  verbs: ["create"]
+# Additional permissions for leader election
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["create", "patch"]
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["apps"]
+  resources: ["statefulsets"]
+  verbs: ["get", "list", "watch"]
+  resourceNames: ["orbit-server"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: orbit-server
+  labels:
+    app.kubernetes.io/name: orbit-rs
+    app.kubernetes.io/component: cluster-role-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: orbit-server
+subjects:
+- kind: ServiceAccount
+  name: orbit-server
+  namespace: orbit-rs

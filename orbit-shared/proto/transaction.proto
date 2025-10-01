@@ -1,0 +1,190 @@
+syntax = "proto3";
+
+package orbit.transactions;
+
+import "google/protobuf/timestamp.proto";
+
+service TransactionService {
+    // Send a transaction message to a participant
+    rpc SendTransactionMessage(TransactionMessageRequest) returns (TransactionMessageResponse);
+    
+    // Broadcast transaction message to multiple participants
+    rpc BroadcastTransactionMessage(BroadcastMessageRequest) returns (BroadcastMessageResponse);
+    
+    // Health check for transaction participants
+    rpc TransactionHealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
+    
+    // Get transaction status from coordinator
+    rpc GetTransactionStatus(TransactionStatusRequest) returns (TransactionStatusResponse);
+}
+
+// Request for sending transaction message
+message TransactionMessageRequest {
+    string sender_node_id = 1;
+    string target_actor_type = 2;
+    string target_actor_key = 3;
+    TransactionMessageProto message = 4;
+    int64 timeout_ms = 5;
+}
+
+// Response for transaction message
+message TransactionMessageResponse {
+    bool success = 1;
+    string error_message = 2;
+    int64 processing_time_ms = 3;
+}
+
+// Request for broadcasting message
+message BroadcastMessageRequest {
+    string sender_node_id = 1;
+    repeated Target targets = 2;
+    TransactionMessageProto message = 3;
+    int64 timeout_ms = 4;
+}
+
+// Target for broadcast
+message Target {
+    string actor_type = 1;
+    string actor_key = 2;
+}
+
+// Response for broadcast message
+message BroadcastMessageResponse {
+    int32 successful_sends = 1;
+    int32 failed_sends = 2;
+    repeated string errors = 3;
+}
+
+// Transaction message proto
+message TransactionMessageProto {
+    oneof message_type {
+        PrepareMessage prepare = 1;
+        VoteMessage vote = 2;
+        CommitMessage commit = 3;
+        AbortMessage abort = 4;
+        AckMessage acknowledge = 5;
+        QueryStatusMessage query_status = 6;
+        StatusResponseMessage status_response = 7;
+    }
+}
+
+// Prepare message (Phase 1)
+message PrepareMessage {
+    TransactionIdProto transaction_id = 1;
+    repeated TransactionOperationProto operations = 2;
+    int64 timeout_ms = 3;
+}
+
+// Vote message (Phase 1 response)
+message VoteMessage {
+    TransactionIdProto transaction_id = 1;
+    string participant_type = 2;
+    string participant_key = 3;
+    TransactionVoteProto vote = 4;
+}
+
+// Commit message (Phase 2)
+message CommitMessage {
+    TransactionIdProto transaction_id = 1;
+}
+
+// Abort message (Phase 2)
+message AbortMessage {
+    TransactionIdProto transaction_id = 1;
+    string reason = 2;
+}
+
+// Acknowledgment message
+message AckMessage {
+    TransactionIdProto transaction_id = 1;
+    string participant_type = 2;
+    string participant_key = 3;
+    bool success = 4;
+    optional string error = 5;
+}
+
+// Query status message
+message QueryStatusMessage {
+    TransactionIdProto transaction_id = 1;
+}
+
+// Status response message
+message StatusResponseMessage {
+    TransactionIdProto transaction_id = 1;
+    TransactionStateProto state = 2;
+}
+
+// Transaction ID
+message TransactionIdProto {
+    string id = 1;
+    string coordinator_node = 2;
+    int64 created_at = 3;
+}
+
+// Transaction operation
+message TransactionOperationProto {
+    string operation_id = 1;
+    string target_actor_type = 2;
+    string target_actor_key = 3;
+    string operation_type = 4;
+    string operation_data = 5; // JSON serialized
+    optional string compensation_data = 6; // JSON serialized
+}
+
+// Transaction vote
+message TransactionVoteProto {
+    enum VoteType {
+        YES = 0;
+        NO = 1;
+        UNCERTAIN = 2;
+    }
+    VoteType vote_type = 1;
+    optional string reason = 2;
+}
+
+// Transaction state
+message TransactionStateProto {
+    enum StateType {
+        PREPARING = 0;
+        PREPARED = 1;
+        COMMITTING = 2;
+        COMMITTED = 3;
+        ABORTING = 4;
+        ABORTED = 5;
+        TIMED_OUT = 6;
+        FAILED = 7;
+    }
+    StateType state_type = 1;
+    optional string details = 2;
+}
+
+// Health check request
+message HealthCheckRequest {
+    string node_id = 1;
+}
+
+// Health check response
+message HealthCheckResponse {
+    enum Status {
+        UNKNOWN = 0;
+        SERVING = 1;
+        NOT_SERVING = 2;
+    }
+    Status status = 1;
+    string version = 2;
+    int64 uptime_ms = 3;
+}
+
+// Transaction status request
+message TransactionStatusRequest {
+    TransactionIdProto transaction_id = 1;
+}
+
+// Transaction status response
+message TransactionStatusResponse {
+    bool found = 1;
+    TransactionStateProto state = 2;
+    repeated string participants = 3;
+    int64 created_at = 4;
+    int64 updated_at = 5;
+}

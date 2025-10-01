@@ -1,0 +1,21 @@
+[package]
+name = "orbit-benchmarks"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Orbit performance benchmarks"
+
+[dependencies]
+orbit-util = { path = "../orbit-util" }
+orbit-shared = { path = "../orbit-shared" }
+orbit-client = { path = "../orbit-client" }
+orbit-server = { path = "../orbit-server" }
+criterion = { version = "0.5", features = ["html_reports"] }
+tokio.workspace = true
+serde.workspace = true
+anyhow.workspace = true
+
+[[bench]]
+name = "actor_benchmarks"
+harness = false

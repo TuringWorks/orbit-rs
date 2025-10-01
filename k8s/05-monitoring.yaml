@@ -1,0 +1,226 @@
+---
+# ServiceMonitor for Prometheus Operator
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: orbit-server
+  namespace: orbit-rs
+  labels:
+    app.kubernetes.io/name: orbit-rs
+    app.kubernetes.io/component: monitoring
+spec:
+  selector:
+    matchLabels:
+      prometheus.io/service: "true"
+  endpoints:
+  - port: metrics
+    interval: 30s
+    path: /metrics
+    honorLabels: true
+
+---
+# Prometheus Rules for orbit-rs
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: orbit-rs-alerts
+  namespace: orbit-rs
+  labels:
+    app.kubernetes.io/name: orbit-rs
+    app.kubernetes.io/component: alerting
+spec:
+  groups:
+  - name: orbit-rs.rules
+    rules:
+    # High-level availability alerts
+    - alert: OrbitServerDown
+      expr: up{job="orbit-server-metrics"} == 0
+      for: 1m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Orbit-RS server is down"
+        description: "Orbit-RS server {{ $labels.instance }} has been down for more than 1 minute."
+    
+    - alert: OrbitServerHighMemoryUsage
+      expr: container_memory_usage_bytes{container="orbit-server"} / container_spec_memory_limit_bytes{container="orbit-server"} > 0.9
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Orbit-RS server high memory usage"
+        description: "Orbit-RS server {{ $labels.instance }} memory usage is above 90% for more than 5 minutes."
+    
+    - alert: OrbitServerHighCPUUsage
+      expr: rate(container_cpu_usage_seconds_total{container="orbit-server"}[5m]) / container_spec_cpu_quota{container="orbit-server"} * 100 > 80
+      for: 10m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Orbit-RS server high CPU usage"
+        description: "Orbit-RS server {{ $labels.instance }} CPU usage is above 80% for more than 10 minutes."
+    
+    # Transaction-specific alerts
+    - alert: OrbitTransactionFailureRate
+      expr: rate(orbit_transactions_failed_total[5m]) / rate(orbit_transactions_total[5m]) > 0.1
+      for: 2m
+      labels:
+        severity: warning
+      annotations:
+        summary: "High transaction failure rate"
+        description: "Transaction failure rate is above 10% for more than 2 minutes."
+    
+    - alert: OrbitSagaCompensationRate
+      expr: rate(orbit_sagas_compensated_total[5m]) / rate(orbit_sagas_total[5m]) > 0.2
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "High saga compensation rate"
+        description: "Saga compensation rate is above 20% for more than 5 minutes."
+    
+    - alert: OrbitRecoveryFailure
+      expr: increase(orbit_recovery_failed_total[10m]) > 3
+      for: 0m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Multiple recovery failures detected"
+        description: "More than 3 recovery failures detected in the last 10 minutes."
+
+---
+# Grafana Dashboard ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: orbit-rs-dashboard
+  namespace: orbit-rs
+  labels:
+    app.kubernetes.io/name: orbit-rs
+    app.kubernetes.io/component: dashboard
+    grafana_dashboard: "1"
+data:
+  orbit-rs-overview.json: |
+    {
+      "dashboard": {
+        "id": null,
+        "title": "Orbit-RS Overview",
+        "tags": ["orbit-rs", "distributed-transactions"],
+        "timezone": "browser",
+        "panels": [
+          {
+            "id": 1,
+            "title": "Transaction Rate",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "rate(orbit_transactions_total[5m])",
+                "legendFormat": "Transactions/sec"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "ops"
+              }
+            },
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}
+          },
+          {
+            "id": 2,
+            "title": "Transaction Success Rate",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "rate(orbit_transactions_completed_total[5m]) / rate(orbit_transactions_total[5m]) * 100",
+                "legendFormat": "Success Rate %"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "percent",
+                "min": 0,
+                "max": 100
+              }
+            },
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+          },
+          {
+            "id": 3,
+            "title": "Active Transactions",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "orbit_transactions_active",
+                "legendFormat": "Active Transactions"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 24, "x": 0, "y": 8}
+          },
+          {
+            "id": 4,
+            "title": "Saga Statistics",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "rate(orbit_sagas_completed_total[5m])",
+                "legendFormat": "Completed"
+              },
+              {
+                "expr": "rate(orbit_sagas_compensated_total[5m])",
+                "legendFormat": "Compensated"
+              },
+              {
+                "expr": "rate(orbit_sagas_failed_total[5m])",
+                "legendFormat": "Failed"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 24, "x": 0, "y": 16}
+          },
+          {
+            "id": 5,
+            "title": "Recovery Operations",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "rate(orbit_recovery_total[5m])",
+                "legendFormat": "Total Recoveries"
+              },
+              {
+                "expr": "rate(orbit_recovery_successful_total[5m])",
+                "legendFormat": "Successful"
+              },
+              {
+                "expr": "rate(orbit_recovery_failed_total[5m])",
+                "legendFormat": "Failed"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 24, "x": 0, "y": 24}
+          }
+        ],
+        "time": {
+          "from": "now-1h",
+          "to": "now"
+        },
+        "refresh": "30s"
+      }
+    }
+
+---
+# PodMonitor for additional pod-level metrics
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: orbit-server-pods
+  namespace: orbit-rs
+  labels:
+    app.kubernetes.io/name: orbit-rs
+    app.kubernetes.io/component: pod-monitoring
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: orbit-rs
+      app.kubernetes.io/component: server
+  podMetricsEndpoints:
+  - port: metrics
+    interval: 30s
+    path: /metrics

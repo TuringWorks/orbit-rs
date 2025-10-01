@@ -1,0 +1,9 @@
+syntax = "proto3";
+package orbit.shared;
+
+import "messages.proto";
+
+service ConnectionService {
+    rpc OpenStream(stream MessageProto) returns (stream MessageProto);
+    rpc GetConnectionInfo(ConnectionInfoRequestProto) returns (ConnectionInfoResponseProto);
+}

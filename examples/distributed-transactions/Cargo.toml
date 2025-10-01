@@ -1,0 +1,21 @@
+[package]
+name = "distributed-transactions-example"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "main"
+path = "src/main.rs"
+
+[dependencies]
+orbit-shared = { path = "../../orbit-shared" }
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+uuid.workspace = true
+anyhow.workspace = true
+async-trait = "0.1"

@@ -1,0 +1,37 @@
+syntax = "proto3";
+package orbit.shared;
+
+import "google/protobuf/timestamp.proto";
+
+message NodeIdProto {
+    string key = 1;
+    string namespace = 2;
+}
+
+message NodeCapabilitiesProto {
+    repeated string addressable_types = 1;
+    optional uint32 max_addressables = 2;
+    map<string, string> tags = 3;
+}
+
+message NodeInfoProto {
+    NodeIdProto id = 1;
+    string url = 2;
+    uint32 port = 3;
+    NodeCapabilitiesProto capabilities = 4;
+    NodeStatusProto status = 5;
+    optional NodeLeaseProto lease = 6;
+}
+
+enum NodeStatusProto {
+    ACTIVE = 0;
+    DRAINING = 1;
+    STOPPED = 2;
+}
+
+message NodeLeaseProto {
+    NodeIdProto node_id = 1;
+    google.protobuf.Timestamp expires_at = 2;
+    google.protobuf.Timestamp renew_at = 3;
+    optional string challenge_token = 4;
+}

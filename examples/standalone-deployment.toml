@@ -1,0 +1,143 @@
+# Orbit-RS Standalone Deployment Configuration
+# This configuration demonstrates how to deploy Orbit-RS in a standalone 
+# environment using Raft consensus for leader election
+
+[deployment]
+mode = "standalone"
+cluster_name = "orbit-standalone-cluster"
+
+[node]
+id = "node-1"
+namespace = "production"
+
+[network]
+grpc_port = 50051
+health_port = 8080
+metrics_port = 9090
+bind_address = "0.0.0.0"
+
+# Node discovery configuration
+[discovery]
+method = "static"  # Options: static, dns, consul, etcd
+
+# Static node configuration
+[[discovery.static_nodes]]
+id = "node-1"
+address = "192.168.1.10:50051"
+
+[[discovery.static_nodes]]
+id = "node-2" 
+address = "192.168.1.11:50051"
+
+[[discovery.static_nodes]]
+id = "node-3"
+address = "192.168.1.12:50051"
+
+# DNS-based discovery (alternative to static)
+[discovery.dns]
+service_name = "orbit-cluster.local"
+port = 50051
+query_interval = "30s"
+
+# Consul-based discovery (alternative)
+[discovery.consul]
+address = "consul.service.consul:8500"
+service_name = "orbit-server"
+health_check = true
+query_interval = "30s"
+
+# etcd-based discovery (alternative)  
+[discovery.etcd]
+endpoints = [
+    "etcd-1.orbit.local:2379",
+    "etcd-2.orbit.local:2379", 
+    "etcd-3.orbit.local:2379"
+]
+key_prefix = "/orbit-rs/nodes"
+query_interval = "30s"
+
+# Leader election configuration
+[election]
+method = "raft"  # Only Raft is supported for standalone
+enable_k8s_fallback = false
+
+# Raft consensus configuration
+[election.raft]
+election_timeout_min = "150ms"
+election_timeout_max = "300ms"
+heartbeat_interval = "50ms"
+max_entries_per_request = 100
+log_compaction_threshold = 1000
+
+# Quorum configuration
+[election.quorum]
+min_quorum_size = 2
+max_failures = 1
+quorum_timeout = "10s"
+dynamic_quorum = false
+
+# Storage configuration
+[storage]
+data_dir = "/var/lib/orbit-rs"
+election_state_file = "election-state.json"
+transaction_log_file = "transactions.db"
+backup_enabled = true
+backup_interval = "1h"
+
+# Performance configuration
+[performance]
+worker_threads = 4
+max_blocking_threads = 512
+connection_pool_size = 100
+max_concurrent_requests = 1000
+
+[performance.batch]
+max_batch_size = 1000
+batch_timeout = "100ms"
+
+# Security configuration
+[security]
+enable_tls = false
+cert_file = "/etc/orbit-rs/certs/server.crt"
+key_file = "/etc/orbit-rs/certs/server.key"
+ca_file = "/etc/orbit-rs/certs/ca.crt"
+
+[security.auth]
+enabled = false
+method = "mtls"  # Options: mtls, jwt
+
+# Monitoring configuration
+[monitoring]
+enable_metrics = true
+enable_health_checks = true
+enable_distributed_tracing = false
+
+[monitoring.logging]
+level = "info"
+format = "json"
+file = "/var/log/orbit-rs/server.log"
+max_size = "100MB"
+max_files = 10
+
+# Example environment-specific overrides
+[environments.development]
+[environments.development.monitoring.logging]
+level = "debug"
+format = "pretty"
+
+[environments.development.election.raft]
+election_timeout_min = "50ms"
+election_timeout_max = "100ms"
+heartbeat_interval = "25ms"
+
+[environments.production]
+[environments.production.security]
+enable_tls = true
+
+[environments.production.monitoring.logging]
+level = "warn"
+
+[environments.production.performance]
+worker_threads = 8
+max_blocking_threads = 1024
+connection_pool_size = 200

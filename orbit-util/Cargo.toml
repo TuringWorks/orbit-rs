@@ -1,0 +1,19 @@
+[package]
+name = "orbit-util"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Orbit utilities and base functionality"
+
+[dependencies]
+tracing.workspace = true
+tracing-subscriber.workspace = true
+metrics.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+rand = "0.8"
+anyhow.workspace = true
+thiserror.workspace = true

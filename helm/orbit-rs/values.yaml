@@ -1,0 +1,296 @@
+# Default values for orbit-rs Helm chart
+
+# Global configuration
+global:
+  imageRegistry: ""
+  imagePullSecrets: []
+  storageClass: ""
+
+# Orbit-RS server configuration
+orbitServer:
+  # Image configuration
+  image:
+    repository: orbit-rs/orbit-server
+    tag: "latest"
+    pullPolicy: IfNotPresent
+    # Overrides the image tag whose default is the chart appVersion
+    # tag: ""
+
+  # Deployment configuration
+  replicaCount: 3
+  
+  # Pod configuration
+  podAnnotations: {}
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 1001
+    runAsGroup: 1001
+    fsGroup: 1001
+  
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    runAsNonRoot: true
+    runAsUser: 1001
+    capabilities:
+      drop:
+      - ALL
+
+  # Service configuration
+  service:
+    type: ClusterIP
+    grpcPort: 50051
+    healthPort: 8080
+    metricsPort: 9090
+    annotations: {}
+    
+  # External service (LoadBalancer)
+  externalService:
+    enabled: false
+    type: LoadBalancer
+    annotations: {}
+    # Cloud provider specific annotations
+    # annotations:
+    #   service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    #   service.beta.kubernetes.io/azure-load-balancer-internal: "false"
+    #   cloud.google.com/load-balancer-type: "External"
+
+  # Ingress configuration
+  ingress:
+    enabled: false
+    className: "nginx"
+    annotations:
+      nginx.ingress.kubernetes.io/backend-protocol: "GRPC"
+      nginx.ingress.kubernetes.io/grpc-backend: "true"
+      nginx.ingress.kubernetes.io/ssl-redirect: "true"
+      # cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    hosts:
+      - host: orbit-rs.local
+        paths:
+          - path: /
+            pathType: Prefix
+    tls: []
+    #  - secretName: orbit-rs-tls
+    #    hosts:
+    #      - orbit-rs.local
+
+  # Resource configuration
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "250m"
+    limits:
+      memory: "2Gi"
+      cpu: "1000m"
+
+  # Health checks
+  livenessProbe:
+    enabled: true
+    httpGet:
+      path: /health/live
+      port: health
+    initialDelaySeconds: 30
+    periodSeconds: 30
+    timeoutSeconds: 5
+    failureThreshold: 3
+    successThreshold: 1
+
+  readinessProbe:
+    enabled: true
+    httpGet:
+      path: /health/ready
+      port: health
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 3
+    successThreshold: 1
+
+  startupProbe:
+    enabled: true
+    httpGet:
+      path: /health/startup
+      port: health
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 30
+    successThreshold: 1
+
+  # Node selection
+  nodeSelector: {}
+  tolerations: []
+  affinity:
+    # Pod anti-affinity to spread replicas across nodes
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+            - key: app.kubernetes.io/name
+              operator: In
+              values:
+              - orbit-rs
+          topologyKey: kubernetes.io/hostname
+
+  # Environment variables
+  env: []
+  envFrom: []
+
+  # Volume mounts (in addition to data volume)
+  extraVolumeMounts: []
+  extraVolumes: []
+
+# Persistence configuration
+persistence:
+  enabled: true
+  storageClass: ""  # Use default storage class
+  accessMode: ReadWriteOnce
+  size: 10Gi
+  annotations: {}
+
+# Configuration
+config:
+  # Server configuration
+  server:
+    bindAddress: "0.0.0.0:50051"
+    healthBindAddress: "0.0.0.0:8080"
+    metricsBindAddress: "0.0.0.0:9090"
+  
+  # Cluster configuration
+  cluster:
+    discoveryMode: "kubernetes"
+    leaseDurationSeconds: 30
+    leaseRenewIntervalSeconds: 10
+  
+  # Transaction configuration
+  transactions:
+    databasePath: "/app/data/orbit_transactions.db"
+    maxConnections: 10
+    enableWal: true
+    recoveryTimeoutSeconds: 300
+    maxRecoveryAttempts: 3
+  
+  # Saga configuration
+  saga:
+    maxExecutionTimeSeconds: 3600
+    defaultStepTimeoutSeconds: 300
+    maxRetryAttempts: 3
+    enableAutomaticFailover: true
+  
+  # Logging configuration
+  logging:
+    level: "info"
+    format: "json"
+  
+  # Performance tuning
+  performance:
+    workerThreads: 4
+    maxBlockingThreads: 512
+    threadStackSize: 2097152
+  
+  # TLS configuration
+  tls:
+    enabled: false
+    # certFile: "/app/certs/tls.crt"
+    # keyFile: "/app/certs/tls.key"
+    # caFile: "/app/certs/ca.crt"
+
+# ServiceAccount configuration
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+# RBAC configuration
+rbac:
+  create: true
+
+# Monitoring configuration
+monitoring:
+  # ServiceMonitor for Prometheus Operator
+  serviceMonitor:
+    enabled: false
+    interval: 30s
+    scrapeTimeout: 10s
+    honorLabels: true
+    additionalLabels: {}
+  
+  # PodMonitor for Prometheus Operator
+  podMonitor:
+    enabled: false
+    interval: 30s
+    scrapeTimeout: 10s
+    additionalLabels: {}
+  
+  # Prometheus rules
+  prometheusRule:
+    enabled: false
+    additionalLabels: {}
+    rules:
+      # Default alerting rules
+      - alert: OrbitServerDown
+        expr: up{job="orbit-server-metrics"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Orbit-RS server is down"
+          description: "Orbit-RS server {{ $labels.instance }} has been down for more than 1 minute."
+  
+  # Grafana dashboard
+  grafanaDashboard:
+    enabled: false
+    label: grafana_dashboard
+    labelValue: "1"
+
+# Autoscaling configuration
+autoscaling:
+  enabled: false
+  minReplicas: 3
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+# Pod Disruption Budget
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 2
+  # maxUnavailable: 1
+
+# Network Policy
+networkPolicy:
+  enabled: false
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress: []
+  egress: []
+
+# External dependencies (optional)
+dependencies:
+  # etcd for distributed coordination
+  etcd:
+    enabled: false
+    endpoints: []
+  
+  # External database (if not using embedded SQLite)
+  database:
+    enabled: false
+    type: postgresql  # postgresql, mysql
+    host: ""
+    port: 5432
+    database: orbit_rs
+    username: orbit_rs
+    password: ""
+    existingSecret: ""
+    existingSecretPasswordKey: password
+
+# Test configuration
+tests:
+  enabled: true
+  image:
+    repository: busybox
+    tag: latest
+    pullPolicy: IfNotPresent

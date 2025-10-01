@@ -1,0 +1,57 @@
+# Git
+.git
+.gitignore
+
+# Rust
+target/
+**/*.rs.bk
+Cargo.lock
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Documentation
+README.md
+docs/
+*.md
+
+# Kubernetes
+deploy/
+k8s/
+helm/
+
+# CI/CD
+.github/
+
+# Examples (if not needed for build)
+examples/*/target/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
+
+# Logs
+*.log
+logs/
+
+# Environment files
+.env
+.env.local
+.env.development
+.env.production
+
+# Test files
+**/*_test.rs
+
+# Benchmarks
+benches/
