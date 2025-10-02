@@ -19,7 +19,7 @@ sources:
 icon: https://raw.githubusercontent.com/TuringWorks/orbit-rs/main/docs/assets/orbit-rs-logo.png
 
 maintainers:
-  - name: rboddipalli@protonmail.com
+  - name: TuringWorks
     email: rboddipalli@protonmail.com
 
 # dependencies:
