@@ -19,7 +19,9 @@ thiserror.workspace = true
 tokio.workspace = true
 async-trait = "0.1"
 uuid.workspace = true
-sqlx = { version = "0.8.1", default-features = false, features = ["runtime-tokio-rustls", "sqlite", "chrono", "uuid"] }
+# Using SQLx fork with RSA vulnerability fix (RUSTSEC-2023-0071)
+# Repository: https://github.com/ravituringworks/sqlx-no-rsa
+sqlx = { git = "https://github.com/ravituringworks/sqlx-no-rsa.git", default-features = false, features = ["runtime-tokio", "tls-rustls", "sqlite", "chrono", "uuid"] }
 tokio-util = "0.7"
 md5 = "0.7"
 tempfile = "3.0"
