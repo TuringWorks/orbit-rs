@@ -3,7 +3,6 @@ use anyhow::Result;
 use kube::Client;
 use tracing::info;
 
-
 #[derive(Clone)]
 pub struct ActorController {
     #[allow(dead_code)]
@@ -33,7 +32,7 @@ impl ActorController {
             //         }
             //     })
             //     .await;
-            
+
             tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
         }
     }

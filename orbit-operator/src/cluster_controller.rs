@@ -23,16 +23,16 @@ use tracing::{info, warn};
 enum ControllerError {
     #[error("Kubernetes error: {0}")]
     KubeError(#[from] kube::Error),
-    
+
     #[error("JSON serialization error: {0}")]
     JsonSerializationError(#[from] serde_json::Error),
-    
+
     #[error("YAML serialization error: {0}")]
     YamlSerializationError(#[from] serde_yaml::Error),
-    
+
     #[error("Finalizer error: {0}")]
     FinalizerError(String),
-    
+
     #[error("Controller error: {0}")]
     Generic(String),
 }
@@ -77,7 +77,7 @@ impl ControllerContext {
     fn new(client: Client) -> Self {
         Self { client }
     }
-    
+
     fn recorder(&self, object_ref: k8s_openapi::api::core::v1::ObjectReference) -> Recorder {
         Recorder::new(
             self.client.clone(),
@@ -236,7 +236,12 @@ async fn create_service_account(
         Err(kube::Error::Api(ae)) if ae.code == 409 => {
             info!("ServiceAccount {} already exists", name);
         }
-        Err(e) => return Err(ControllerError::Generic(format!("Failed to create ServiceAccount: {}", e))),
+        Err(e) => {
+            return Err(ControllerError::Generic(format!(
+                "Failed to create ServiceAccount: {}",
+                e
+            )))
+        }
     }
 
     Ok(())
@@ -306,7 +311,12 @@ async fn create_config_map(
                 .await?;
             info!("Updated ConfigMap {}-config", name);
         }
-        Err(e) => return Err(ControllerError::Generic(format!("Failed to create ConfigMap: {}", e))),
+        Err(e) => {
+            return Err(ControllerError::Generic(format!(
+                "Failed to create ConfigMap: {}",
+                e
+            )))
+        }
     }
 
     Ok(())
@@ -366,7 +376,12 @@ async fn create_headless_service(
         Err(kube::Error::Api(ae)) if ae.code == 409 => {
             info!("Headless Service {}-headless already exists", name);
         }
-        Err(e) => return Err(ControllerError::Generic(format!("Failed to create headless Service: {}", e))),
+        Err(e) => {
+            return Err(ControllerError::Generic(format!(
+                "Failed to create headless Service: {}",
+                e
+            )))
+        }
     }
 
     Ok(())
@@ -427,7 +442,12 @@ async fn create_external_service(
         Err(kube::Error::Api(ae)) if ae.code == 409 => {
             info!("External Service {} already exists", name);
         }
-        Err(e) => return Err(ControllerError::Generic(format!("Failed to create external Service: {}", e))),
+        Err(e) => {
+            return Err(ControllerError::Generic(format!(
+                "Failed to create external Service: {}",
+                e
+            )))
+        }
     }
 
     Ok(())
@@ -653,7 +673,12 @@ async fn create_stateful_set(
                 .await?;
             info!("Updated StatefulSet {}", name);
         }
-        Err(e) => return Err(ControllerError::Generic(format!("Failed to create StatefulSet: {}", e))),
+        Err(e) => {
+            return Err(ControllerError::Generic(format!(
+                "Failed to create StatefulSet: {}",
+                e
+            )))
+        }
     }
 
     Ok(())

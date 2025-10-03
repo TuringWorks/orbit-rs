@@ -158,20 +158,22 @@ async fn start_health_server(addr: String) -> Result<()> {
         // 1. Check if Kubernetes API is accessible
         // 2. Check if controllers are initialized
         // In a production deployment, you would check actual connectivity
-        
+
         // For now, we return ready if the health server is running
         // In a real implementation, you'd check:
         // - Kubernetes client connectivity
         // - Controller initialization status
         // - Required CRDs are installed
-        
+
         let ready = true; // Would check actual readiness conditions
-        
+
         if ready {
             Ok(Response::builder()
                 .status(StatusCode::OK)
                 .header("content-type", "application/json")
-                .body(Body::from(r#"{"status":"ready","checks":{"k8s":"ok","controllers":"ok"}}"#))
+                .body(Body::from(
+                    r#"{"status":"ready","checks":{"k8s":"ok","controllers":"ok"}}"#,
+                ))
                 .unwrap())
         } else {
             Ok(Response::builder()
@@ -218,7 +220,7 @@ async fn start_metrics_server(addr: String) -> Result<()> {
         // Collect Prometheus metrics
         // In a production system, these would be actual counters/gauges
         // maintained by the controllers
-        
+
         let metrics = format!(
             r#"# HELP orbit_operator_info Information about the Orbit operator
 # TYPE orbit_operator_info gauge

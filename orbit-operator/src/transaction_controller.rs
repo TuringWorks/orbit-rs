@@ -3,7 +3,6 @@ use anyhow::Result;
 use kube::Client;
 use tracing::info;
 
-
 #[derive(Clone)]
 pub struct TransactionController {
     #[allow(dead_code)]
@@ -17,7 +16,7 @@ impl TransactionController {
 
     pub async fn run(self) -> Result<()> {
         info!("Starting OrbitTransaction controller");
-        
+
         // In a full implementation, this would:
         // 1. Watch for OrbitTransaction CRD changes
         // 2. Configure transaction coordinators
@@ -26,7 +25,7 @@ impl TransactionController {
         // 5. Configure recovery mechanisms and timeouts
         // 6. Monitor transaction health and performance
         // 7. Update status with coordinator information
-        
+
         // Basic reconciliation loop (placeholder)
         // A production implementation would use kube-runtime's Controller
         loop {
@@ -41,7 +40,7 @@ impl TransactionController {
             //         }
             //     })
             //     .await;
-            
+
             tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
         }
     }
