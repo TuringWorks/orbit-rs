@@ -6,6 +6,7 @@ use tracing::info;
 
 #[derive(Clone)]
 pub struct ActorController {
+    #[allow(dead_code)]
     client: Client,
 }
 
