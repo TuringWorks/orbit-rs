@@ -649,7 +649,7 @@ async fn create_stateful_set(
             // Update existing StatefulSet
             let patch = Patch::Merge(&statefulset);
             statefulsets
-                .patch(&name, &PatchParams::default(), &patch)
+                .patch(name, &PatchParams::default(), &patch)
                 .await?;
             info!("Updated StatefulSet {}", name);
         }

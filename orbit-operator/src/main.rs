@@ -73,7 +73,7 @@ async fn main() -> Result<()> {
             tracing_subscriber::fmt::layer()
                 .with_target(args.dev_mode)
                 .with_level(true)
-                .with_ansi(!std::env::var("NO_COLOR").is_ok()),
+                .with_ansi(std::env::var("NO_COLOR").is_err()),
         );
 
     subscriber.init();
