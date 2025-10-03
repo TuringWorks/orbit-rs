@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["WebSocketMessage"],"struct":["ActorInfo","BeginTransactionRequest","CreateActorRequest","ErrorResponse","InvokeActorRequest","PagedResponse","SubscribeRequest","SuccessResponse","TransactionInfo","TransactionOperation","UpdateActorStateRequest"]};

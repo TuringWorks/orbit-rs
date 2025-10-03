@@ -1,0 +1,9 @@
+(function() {
+    var implementors = Object.fromEntries([["orbit_protocols",[["impl <a class=\"trait\" href=\"orbit_shared/addressable/trait.Addressable.html\" title=\"trait orbit_shared::addressable::Addressable\">Addressable</a> for <a class=\"struct\" href=\"orbit_protocols/resp/actors/struct.HashActor.html\" title=\"struct orbit_protocols::resp::actors::HashActor\">HashActor</a>"],["impl <a class=\"trait\" href=\"orbit_shared/addressable/trait.Addressable.html\" title=\"trait orbit_shared::addressable::Addressable\">Addressable</a> for <a class=\"struct\" href=\"orbit_protocols/resp/actors/struct.KeyValueActor.html\" title=\"struct orbit_protocols::resp::actors::KeyValueActor\">KeyValueActor</a>"],["impl <a class=\"trait\" href=\"orbit_shared/addressable/trait.Addressable.html\" title=\"trait orbit_shared::addressable::Addressable\">Addressable</a> for <a class=\"struct\" href=\"orbit_protocols/resp/actors/struct.ListActor.html\" title=\"struct orbit_protocols::resp::actors::ListActor\">ListActor</a>"],["impl <a class=\"trait\" href=\"orbit_shared/addressable/trait.Addressable.html\" title=\"trait orbit_shared::addressable::Addressable\">Addressable</a> for <a class=\"struct\" href=\"orbit_protocols/resp/actors/struct.PubSubActor.html\" title=\"struct orbit_protocols::resp::actors::PubSubActor\">PubSubActor</a>"]]]]);
+    if (window.register_implementors) {
+        window.register_implementors(implementors);
+    } else {
+        window.pending_implementors = implementors;
+    }
+})()
+//{"start":57,"fragment_lengths":[1283]}
