@@ -61,7 +61,9 @@ where
 {
     config: BatchConfig,
     queue: Arc<Mutex<VecDeque<BatchedOperation<T>>>>,
-    processor: Arc<dyn Fn(Vec<T>) -> futures::future::BoxFuture<'static, OrbitResult<Vec<bool>>> + Send + Sync>,
+    processor: Arc<
+        dyn Fn(Vec<T>) -> futures::future::BoxFuture<'static, OrbitResult<Vec<bool>>> + Send + Sync,
+    >,
     stats: Arc<RwLock<BatchStats>>,
 }
 
@@ -71,7 +73,10 @@ where
 {
     pub fn new<F>(config: BatchConfig, processor: F) -> Self
     where
-        F: Fn(Vec<T>) -> futures::future::BoxFuture<'static, OrbitResult<Vec<bool>>> + Send + Sync + 'static,
+        F: Fn(Vec<T>) -> futures::future::BoxFuture<'static, OrbitResult<Vec<bool>>>
+            + Send
+            + Sync
+            + 'static,
     {
         Self {
             config,
@@ -128,10 +133,7 @@ where
                 return Ok(());
             }
 
-            let batch: Vec<T> = queue
-                .drain(0..batch_size)
-                .map(|op| op.operation)
-                .collect();
+            let batch: Vec<T> = queue.drain(0..batch_size).map(|op| op.operation).collect();
 
             batch
         };
@@ -148,9 +150,9 @@ where
         stats.total_batches += 1;
         stats.total_processed += batch_count;
         stats.successful_operations += results.iter().filter(|&&r| r).count();
-        stats.average_batch_size =
-            ((stats.average_batch_size * (stats.total_batches - 1) as f64) + batch_count as f64)
-                / stats.total_batches as f64;
+        stats.average_batch_size = ((stats.average_batch_size * (stats.total_batches - 1) as f64)
+            + batch_count as f64)
+            / stats.total_batches as f64;
         stats.average_processing_time_ms = ((stats.average_processing_time_ms
             * (stats.total_batches - 1) as f64)
             + batch_duration.as_millis() as f64)

@@ -211,12 +211,7 @@ impl DeadlockDetector {
     }
 
     /// Add a wait-for edge
-    pub async fn add_wait_for(
-        &self,
-        waiting_tx: String,
-        holding_tx: String,
-        resource_id: String,
-    ) {
+    pub async fn add_wait_for(&self, waiting_tx: String, holding_tx: String, resource_id: String) {
         let edge = WaitForEdge {
             waiting_transaction: waiting_tx.clone(),
             holding_transaction: holding_tx,
@@ -244,8 +239,7 @@ impl DeadlockDetector {
     pub async fn remove_transaction(&self, transaction_id: &str) {
         let mut edges = self.edges.write().await;
         edges.retain(|edge| {
-            edge.waiting_transaction != transaction_id
-                && edge.holding_transaction != transaction_id
+            edge.waiting_transaction != transaction_id && edge.holding_transaction != transaction_id
         });
 
         let mut tx_resources = self.transaction_resources.write().await;
@@ -702,10 +696,18 @@ mod tests {
 
         // Create a deadlock cycle: tx1 -> tx2 -> tx1
         detector
-            .add_wait_for("tx1".to_string(), "tx2".to_string(), "resource1".to_string())
+            .add_wait_for(
+                "tx1".to_string(),
+                "tx2".to_string(),
+                "resource1".to_string(),
+            )
             .await;
         detector
-            .add_wait_for("tx2".to_string(), "tx1".to_string(), "resource2".to_string())
+            .add_wait_for(
+                "tx2".to_string(),
+                "tx1".to_string(),
+                "resource2".to_string(),
+            )
             .await;
 
         let deadlock = detector.detect_deadlock().await;

@@ -125,9 +125,7 @@ impl TransactionPermission {
             TransactionPermission::TransactionCommit => "transaction:commit".to_string(),
             TransactionPermission::TransactionAbort => "transaction:abort".to_string(),
             TransactionPermission::TransactionRead => "transaction:read".to_string(),
-            TransactionPermission::TransactionParticipate => {
-                "transaction:participate".to_string()
-            }
+            TransactionPermission::TransactionParticipate => "transaction:participate".to_string(),
             TransactionPermission::TransactionCoordinate => "transaction:coordinate".to_string(),
             TransactionPermission::Custom(scope) => scope.clone(),
         }
@@ -138,10 +136,7 @@ impl TransactionPermission {
 #[async_trait]
 pub trait AuthenticationProvider: Send + Sync {
     /// Authenticate a request and return a token
-    async fn authenticate(
-        &self,
-        credentials: &HashMap<String, String>,
-    ) -> OrbitResult<AuthToken>;
+    async fn authenticate(&self, credentials: &HashMap<String, String>) -> OrbitResult<AuthToken>;
 
     /// Validate an authentication token
     async fn validate_token(&self, token: &AuthToken) -> OrbitResult<bool>;
@@ -192,10 +187,7 @@ impl InMemoryAuthProvider {
 
 #[async_trait]
 impl AuthenticationProvider for InMemoryAuthProvider {
-    async fn authenticate(
-        &self,
-        credentials: &HashMap<String, String>,
-    ) -> OrbitResult<AuthToken> {
+    async fn authenticate(&self, credentials: &HashMap<String, String>) -> OrbitResult<AuthToken> {
         let username = credentials
             .get("username")
             .ok_or_else(|| OrbitError::internal("Username required"))?;
@@ -289,10 +281,8 @@ impl AuthorizationProvider for ScopeBasedAuthorizationProvider {
             return Ok(false);
         }
 
-        let required_scopes: Vec<String> = required_permissions
-            .iter()
-            .map(|p| p.to_scope())
-            .collect();
+        let required_scopes: Vec<String> =
+            required_permissions.iter().map(|p| p.to_scope()).collect();
 
         Ok(token.has_all_scopes(&required_scopes))
     }
@@ -402,7 +392,11 @@ impl TransactionSecurityManager {
     }
 
     /// Create a security context for system operations
-    pub fn create_system_context(&self, transaction_id: String, node_id: NodeId) -> SecurityContext {
+    pub fn create_system_context(
+        &self,
+        transaction_id: String,
+        node_id: NodeId,
+    ) -> SecurityContext {
         let token = AuthToken::new(
             "orbit-system".to_string(),
             "system".to_string(),
@@ -435,12 +429,7 @@ pub struct AuditLogEntry {
 }
 
 impl AuditLogEntry {
-    pub fn new(
-        transaction_id: String,
-        operation: String,
-        node_id: NodeId,
-        success: bool,
-    ) -> Self {
+    pub fn new(transaction_id: String, operation: String, node_id: NodeId, success: bool) -> Self {
         Self {
             timestamp: SystemTime::now(),
             transaction_id,
@@ -622,7 +611,10 @@ mod tests {
         let token = AuthToken::new(
             "test-issuer".to_string(),
             "test-user".to_string(),
-            vec!["transaction:initiate".to_string(), "transaction:commit".to_string()],
+            vec![
+                "transaction:initiate".to_string(),
+                "transaction:commit".to_string(),
+            ],
             Duration::from_secs(3600),
         );
 
