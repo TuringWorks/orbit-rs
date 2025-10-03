@@ -184,6 +184,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
+### Kubernetes Deployment
+
+Deploy Orbit-RS on Kubernetes using the native operator:
+
+```bash
+# Deploy the operator
+kubectl apply -f orbit-operator/deploy/crds.yaml
+kubectl apply -f orbit-operator/deploy/rbac.yaml
+kubectl apply -f orbit-operator/deploy/operator.yaml
+
+# Deploy an Orbit cluster
+kubectl apply -f orbit-operator/deploy/examples.yaml
+```
+
+Or use Helm charts:
+
+```bash
+helm install orbit-cluster ./helm/orbit-rs \
+  --set replicaCount=3 \
+  --set image.tag=latest
+```
+
+See [Kubernetes Deployment Guide](docs/KUBERNETES_DEPLOYMENT.md) for detailed instructions.
+
 ## Project Structure
 
 - **orbit-util**: Utilities and base functionality
@@ -195,6 +219,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 - **orbit-server-prometheus**: Prometheus metrics integration
 - **orbit-application**: Application-level utilities
 - **orbit-benchmarks**: Performance benchmarks
+- **orbit-operator**: Kubernetes operator with custom CRDs
 
 ## 🎯 Current Status
 
