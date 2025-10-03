@@ -1,4 +1,3 @@
-use anyhow::Result;
 use futures::StreamExt;
 use k8s_openapi::api::apps::v1::{StatefulSet, StatefulSetSpec};
 use k8s_openapi::api::core::v1::{
@@ -6,7 +5,7 @@ use k8s_openapi::api::core::v1::{
     ServiceSpec,
 };
 use kube::{
-    api::{Api, ListParams, Patch, PatchParams, PostParams},
+    api::{Api, Patch, PatchParams, PostParams},
     client::Client,
     runtime::{
         controller::{Action, Controller},
@@ -18,7 +17,9 @@ use kube::{
 };
 use serde_json::json;
 use std::{collections::BTreeMap, sync::Arc, time::Duration};
-use tracing::{error, info, warn};
+use tracing::{info, warn};
+
+type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
 
 use crate::crd::{ClusterCondition, ClusterPhase, OrbitCluster, OrbitClusterStatus};
 
