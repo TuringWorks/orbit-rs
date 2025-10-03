@@ -151,7 +151,8 @@ async fn cluster_reconcile(cluster: &OrbitCluster, ctx: Arc<ControllerContext>) 
     .await?;
 
     // Publish successful event
-    ctx.recorder
+    let object_ref = cluster.object_ref(&());
+    ctx.recorder(object_ref)
         .publish(Event {
             type_: EventType::Normal,
             reason: "Created".into(),
@@ -160,7 +161,7 @@ async fn cluster_reconcile(cluster: &OrbitCluster, ctx: Arc<ControllerContext>) 
             secondary: None,
         })
         .await
-        .map_err(|e| anyhow::anyhow!("Failed to publish event: {}", e))?;
+        .map_err(|e| ControllerError::Generic(format!("Failed to publish event: {}", e)))?;
 
     Ok(Action::requeue(Duration::from_secs(300)))
 }
