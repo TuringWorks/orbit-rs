@@ -9,7 +9,7 @@ use tracing::{debug, warn};
 use orbit_client::OrbitClient;
 use orbit_shared::Key;
 use crate::error::{ProtocolError, ProtocolResult};
-use super::{RespValue, actors::{KeyValueActor, HashActor, ListActor, PubSubActor}};
+use super::{RespValue, actors::{KeyValueActor, HashActor, ListActor, PubSubActor}, VectorActor, Vector, VectorSearchParams, SimilarityMetric, VectorIndexConfig};
 
 /// Redis command handler that translates Redis commands to Orbit actor operations
 pub struct CommandHandler {
@@ -83,6 +83,19 @@ impl CommandHandler {
             "UNSUBSCRIBE" => self.cmd_unsubscribe(args).await,
             "PSUBSCRIBE" => self.cmd_psubscribe(args).await,
             "PUNSUBSCRIBE" => self.cmd_punsubscribe(args).await,
+            
+            // Vector commands (Redis vector similarity)
+            "FT.CREATE" => self.cmd_ft_create(args).await,
+            "FT.ADD" => self.cmd_ft_add(args).await,
+            "FT.SEARCH" => self.cmd_ft_search(args).await,
+            "FT.INFO" => self.cmd_ft_info(args).await,
+            "FT.DEL" => self.cmd_ft_del(args).await,
+            "VECTOR.ADD" => self.cmd_vector_add(args).await,
+            "VECTOR.GET" => self.cmd_vector_get(args).await,
+            "VECTOR.SEARCH" => self.cmd_vector_search(args).await,
+            "VECTOR.DEL" => self.cmd_vector_del(args).await,
+            "VECTOR.KNN" => self.cmd_vector_knn(args).await,
+            "VECTOR.STATS" => self.cmd_vector_stats(args).await,
             
             // Server commands
             "INFO" => self.cmd_info(args).await,
@@ -742,5 +755,496 @@ impl CommandHandler {
         ];
 
         Ok(RespValue::array(commands.into_iter().map(RespValue::array).collect()))
+    }
+
+    // Vector commands (Redis vector similarity search)
+
+    async fn cmd_ft_create(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        if args.len() < 3 {
+            return Err(ProtocolError::RespError("ERR wrong number of arguments for 'FT.CREATE' command".to_string()));
+        }
+
+        let index_name = args[0].as_string()
+            .ok_or_else(|| ProtocolError::RespError("ERR invalid index name".to_string()))?;
+        
+        // Parse vector index schema
+        let mut dimension = None;
+        let mut metric = SimilarityMetric::Cosine;
+        
+        for i in (1..args.len()).step_by(2) {
+            if i + 1 < args.len() {
+                let key = args[i].as_string().unwrap_or_default();
+                let value = args[i + 1].as_string().unwrap_or_default();
+                
+                match key.as_str() {
+                    "DIM" => {
+                        dimension = value.parse::<usize>().ok();
+                    }
+                    "DISTANCE_METRIC" => {
+                        metric = match value.as_str() {
+                            "COSINE" => SimilarityMetric::Cosine,
+                            "L2" => SimilarityMetric::Euclidean,
+                            "IP" => SimilarityMetric::DotProduct,
+                            _ => SimilarityMetric::Cosine,
+                        };
+                    }
+                    _ => {}
+                }
+            }
+        }
+        
+        let dimension = dimension.ok_or_else(|| {
+            ProtocolError::RespError("ERR vector dimension is required".to_string())
+        })?;
+
+        // Get VectorActor reference
+        let actor_ref = self.orbit_client.actor_reference::<VectorActor>(
+            Key::StringKey { key: index_name.clone() }
+        ).await.map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+
+        // Create vector index
+        let config = VectorIndexConfig::new(index_name.clone(), dimension, metric);
+        let config_value = serde_json::to_value(config)
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization failed: {}", e)))?;
+        actor_ref.invoke("create_index", vec![config_value])
+            .await.map_err(|e| ProtocolError::RespError(format!("ERR index creation failed: {}", e)))?;
+
+        debug!("FT.CREATE {} DIM {} METRIC {:?}", index_name, dimension, metric);
+        Ok(RespValue::ok())
+    }
+
+    async fn cmd_ft_add(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        if args.len() < 3 {
+            return Err(ProtocolError::RespError("ERR wrong number of arguments for 'FT.ADD' command".to_string()));
+        }
+
+        let index_name = args[0].as_string()
+            .ok_or_else(|| ProtocolError::RespError("ERR invalid index name".to_string()))?;
+        let vector_id = args[1].as_string()
+            .ok_or_else(|| ProtocolError::RespError("ERR invalid vector ID".to_string()))?;
+        let vector_data_str = args[2].as_string()
+            .ok_or_else(|| ProtocolError::RespError("ERR invalid vector data".to_string()))?;
+
+        // Parse vector data from comma-separated string
+        let vector_data: Result<Vec<f32>, _> = vector_data_str
+            .split(',')
+            .map(|s| s.trim().parse::<f32>())
+            .collect();
+        
+        let vector_data = vector_data.map_err(|_| {
+            ProtocolError::RespError("ERR invalid vector format, expected comma-separated floats".to_string())
+        })?;
+
+        // Parse optional metadata
+        let mut metadata = std::collections::HashMap::new();
+        for i in (3..args.len()).step_by(2) {
+            if i + 1 < args.len() {
+                if let (Some(key), Some(value)) = (args[i].as_string(), args[i + 1].as_string()) {
+                    metadata.insert(key, value);
+                }
+            }
+        }
+
+        let vector = if metadata.is_empty() {
+            Vector::new(vector_id.clone(), vector_data)
+        } else {
+            Vector::with_metadata(vector_id.clone(), vector_data, metadata)
+        };
+
+        // Get VectorActor reference
+        let actor_ref = self.orbit_client.actor_reference::<VectorActor>(
+            Key::StringKey { key: index_name.clone() }
+        ).await.map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+
+        // Add vector to index
+        let vector_value = serde_json::to_value(vector)
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization failed: {}", e)))?;
+        actor_ref.invoke("add_vector", vec![vector_value])
+            .await.map_err(|e| ProtocolError::RespError(format!("ERR vector add failed: {}", e)))?;
+
+        debug!("FT.ADD {} {} (dim: {})", index_name, vector_id, vector_data_str.split(',').count());
+        Ok(RespValue::ok())
+    }
+
+    async fn cmd_ft_search(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        if args.len() < 3 {
+            return Err(ProtocolError::RespError("ERR wrong number of arguments for 'FT.SEARCH' command".to_string()));
+        }
+
+        let index_name = args[0].as_string()
+            .ok_or_else(|| ProtocolError::RespError("ERR invalid index name".to_string()))?;
+        let query_vector_str = args[1].as_string()
+            .ok_or_else(|| ProtocolError::RespError("ERR invalid query vector".to_string()))?;
+        let limit = args[2].as_integer().unwrap_or(10) as usize;
+
+        // Parse query vector
+        let query_vector: Result<Vec<f32>, _> = query_vector_str
+            .split(',')
+            .map(|s| s.trim().parse::<f32>())
+            .collect();
+        
+        let query_vector = query_vector.map_err(|_| {
+            ProtocolError::RespError("ERR invalid query vector format".to_string())
+        })?;
+
+        // Parse optional parameters
+        let mut metric = SimilarityMetric::Cosine;
+        let mut threshold = None;
+        
+        for i in (3..args.len()).step_by(2) {
+            if i + 1 < args.len() {
+                let key = args[i].as_string().unwrap_or_default().to_uppercase();
+                let value = args[i + 1].as_string().unwrap_or_default();
+                
+                match key.as_str() {
+                    "DISTANCE_METRIC" => {
+                        metric = match value.as_str() {
+                            "COSINE" => SimilarityMetric::Cosine,
+                            "L2" => SimilarityMetric::Euclidean,
+                            "IP" => SimilarityMetric::DotProduct,
+                            _ => SimilarityMetric::Cosine,
+                        };
+                    }
+                    "THRESHOLD" => {
+                        threshold = value.parse::<f32>().ok();
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        let params = VectorSearchParams {
+            query_vector,
+            metric,
+            limit,
+            threshold,
+            metadata_filters: std::collections::HashMap::new(),
+        };
+
+        // Get VectorActor reference
+        let actor_ref = self.orbit_client.actor_reference::<VectorActor>(
+            Key::StringKey { key: index_name.clone() }
+        ).await.map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+
+        // Search vectors
+        let params_value = serde_json::to_value(params)
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization failed: {}", e)))?;
+        let results: Vec<crate::vector_store::VectorSearchResult> = actor_ref.invoke("search_vectors", vec![params_value])
+            .await.map_err(|e| ProtocolError::RespError(format!("ERR search failed: {}", e)))?;
+
+        // Format results as RESP array
+        let mut response = Vec::new();
+        response.push(RespValue::integer(results.len() as i64));
+        
+        let result_count = results.len();
+        for result in results {
+            let vector_data = result.vector.data.iter()
+                .map(|f| f.to_string())
+                .collect::<Vec<_>>()
+                .join(",");
+            
+            response.push(RespValue::array(vec![
+                RespValue::bulk_string_from_str(&result.vector.id),
+                RespValue::bulk_string_from_str(&format!("{:.6}", result.score)),
+                RespValue::bulk_string_from_str(&vector_data),
+            ]));
+        }
+
+        debug!("FT.SEARCH {} (found {} results)", index_name, result_count);
+        Ok(RespValue::array(response))
+    }
+
+    async fn cmd_ft_info(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        if args.is_empty() {
+            return Err(ProtocolError::RespError("ERR wrong number of arguments for 'FT.INFO' command".to_string()));
+        }
+
+        let index_name = args[0].as_string()
+            .ok_or_else(|| ProtocolError::RespError("ERR invalid index name".to_string()))?;
+
+        // Get VectorActor reference
+        let actor_ref = self.orbit_client.actor_reference::<VectorActor>(
+            Key::StringKey { key: index_name.clone() }
+        ).await.map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+
+        // Get vector store statistics
+        let stats: crate::vector_store::VectorStats = actor_ref.invoke("get_stats", vec![])
+            .await.map_err(|e| ProtocolError::RespError(format!("ERR info failed: {}", e)))?;
+
+        let info = vec![
+            RespValue::bulk_string_from_str("index_name"),
+            RespValue::bulk_string_from_str(&index_name),
+            RespValue::bulk_string_from_str("vector_count"),
+            RespValue::integer(stats.vector_count as i64),
+            RespValue::bulk_string_from_str("index_count"),
+            RespValue::integer(stats.index_count as i64),
+            RespValue::bulk_string_from_str("avg_dimension"),
+            RespValue::bulk_string_from_str(&stats.avg_dimension.to_string()),
+            RespValue::bulk_string_from_str("min_dimension"),
+            RespValue::integer(stats.min_dimension as i64),
+            RespValue::bulk_string_from_str("max_dimension"),
+            RespValue::integer(stats.max_dimension as i64),
+        ];
+
+        debug!("FT.INFO {}", index_name);
+        Ok(RespValue::array(info))
+    }
+
+    async fn cmd_ft_del(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        if args.len() != 2 {
+            return Err(ProtocolError::RespError("ERR wrong number of arguments for 'FT.DEL' command".to_string()));
+        }
+
+        let index_name = args[0].as_string()
+            .ok_or_else(|| ProtocolError::RespError("ERR invalid index name".to_string()))?;
+        let vector_id = args[1].as_string()
+            .ok_or_else(|| ProtocolError::RespError("ERR invalid vector ID".to_string()))?;
+
+        // Get VectorActor reference
+        let actor_ref = self.orbit_client.actor_reference::<VectorActor>(
+            Key::StringKey { key: index_name.clone() }
+        ).await.map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+
+        // Remove vector
+        let removed: bool = actor_ref.invoke("remove_vector", vec![vector_id.clone().into()])
+            .await.map_err(|e| ProtocolError::RespError(format!("ERR vector delete failed: {}", e)))?;
+
+        debug!("FT.DEL {} {} -> {}", index_name, vector_id, removed);
+        Ok(RespValue::integer(if removed { 1 } else { 0 }))
+    }
+
+    // Simplified vector commands
+
+    async fn cmd_vector_add(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        // VECTOR.ADD <key> <id> <vector>
+        if args.len() != 3 {
+            return Err(ProtocolError::RespError("ERR wrong number of arguments for 'VECTOR.ADD' command".to_string()));
+        }
+
+        let key = args[0].as_string()
+            .ok_or_else(|| ProtocolError::RespError("ERR invalid key".to_string()))?;
+        let vector_id = args[1].as_string()
+            .ok_or_else(|| ProtocolError::RespError("ERR invalid vector ID".to_string()))?;
+        let vector_data_str = args[2].as_string()
+            .ok_or_else(|| ProtocolError::RespError("ERR invalid vector data".to_string()))?;
+
+        // Parse vector data
+        let vector_data: Result<Vec<f32>, _> = vector_data_str
+            .split(',')
+            .map(|s| s.trim().parse::<f32>())
+            .collect();
+        
+        let vector_data = vector_data.map_err(|_| {
+            ProtocolError::RespError("ERR invalid vector format".to_string())
+        })?;
+
+        let vector = Vector::new(vector_id.clone(), vector_data);
+
+        // Get VectorActor reference
+        let actor_ref = self.orbit_client.actor_reference::<VectorActor>(
+            Key::StringKey { key: key.clone() }
+        ).await.map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+
+        // Add vector
+        let vector_value = serde_json::to_value(vector)
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization failed: {}", e)))?;
+        actor_ref.invoke("add_vector", vec![vector_value])
+            .await.map_err(|e| ProtocolError::RespError(format!("ERR vector add failed: {}", e)))?;
+
+        debug!("VECTOR.ADD {} {}", key, vector_id);
+        Ok(RespValue::ok())
+    }
+
+    async fn cmd_vector_get(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        // VECTOR.GET <key> <id>
+        if args.len() != 2 {
+            return Err(ProtocolError::RespError("ERR wrong number of arguments for 'VECTOR.GET' command".to_string()));
+        }
+
+        let key = args[0].as_string()
+            .ok_or_else(|| ProtocolError::RespError("ERR invalid key".to_string()))?;
+        let vector_id = args[1].as_string()
+            .ok_or_else(|| ProtocolError::RespError("ERR invalid vector ID".to_string()))?;
+
+        // Get VectorActor reference
+        let actor_ref = self.orbit_client.actor_reference::<VectorActor>(
+            Key::StringKey { key: key.clone() }
+        ).await.map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+
+        // Get vector
+        let vector: Option<Vector> = actor_ref.invoke("get_vector", vec![vector_id.clone().into()])
+            .await.map_err(|e| ProtocolError::RespError(format!("ERR vector get failed: {}", e)))?;
+
+        match vector {
+            Some(v) => {
+                let vector_data = v.data.iter()
+                    .map(|f| f.to_string())
+                    .collect::<Vec<_>>()
+                    .join(",");
+                debug!("VECTOR.GET {} {} -> found", key, vector_id);
+                Ok(RespValue::bulk_string_from_str(vector_data))
+            }
+            None => {
+                debug!("VECTOR.GET {} {} -> not found", key, vector_id);
+                Ok(RespValue::null())
+            }
+        }
+    }
+
+    async fn cmd_vector_search(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        // VECTOR.SEARCH <key> <query_vector> <limit>
+        if args.len() < 3 {
+            return Err(ProtocolError::RespError("ERR wrong number of arguments for 'VECTOR.SEARCH' command".to_string()));
+        }
+
+        let key = args[0].as_string()
+            .ok_or_else(|| ProtocolError::RespError("ERR invalid key".to_string()))?;
+        let query_vector_str = args[1].as_string()
+            .ok_or_else(|| ProtocolError::RespError("ERR invalid query vector".to_string()))?;
+        let limit = args[2].as_integer().unwrap_or(10) as usize;
+
+        // Parse query vector
+        let query_vector: Result<Vec<f32>, _> = query_vector_str
+            .split(',')
+            .map(|s| s.trim().parse::<f32>())
+            .collect();
+        
+        let query_vector = query_vector.map_err(|_| {
+            ProtocolError::RespError("ERR invalid query vector format".to_string())
+        })?;
+
+        let params = VectorSearchParams::new(query_vector, SimilarityMetric::Cosine, limit);
+
+        // Get VectorActor reference
+        let actor_ref = self.orbit_client.actor_reference::<VectorActor>(
+            Key::StringKey { key: key.clone() }
+        ).await.map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+
+        // Search vectors
+        let params_value = serde_json::to_value(params)
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization failed: {}", e)))?;
+        let results: Vec<crate::vector_store::VectorSearchResult> = actor_ref.invoke("search_vectors", vec![params_value])
+            .await.map_err(|e| ProtocolError::RespError(format!("ERR search failed: {}", e)))?;
+
+        // Format results
+        let mut response = Vec::new();
+        for result in results {
+            response.push(RespValue::array(vec![
+                RespValue::bulk_string_from_str(&result.vector.id),
+                RespValue::bulk_string_from_str(&format!("{:.6}", result.score)),
+            ]));
+        }
+
+        debug!("VECTOR.SEARCH {} (found {} results)", key, response.len());
+        Ok(RespValue::array(response))
+    }
+
+    async fn cmd_vector_knn(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        // VECTOR.KNN <key> <query_vector> <k>
+        if args.len() != 3 {
+            return Err(ProtocolError::RespError("ERR wrong number of arguments for 'VECTOR.KNN' command".to_string()));
+        }
+
+        let key = args[0].as_string()
+            .ok_or_else(|| ProtocolError::RespError("ERR invalid key".to_string()))?;
+        let query_vector_str = args[1].as_string()
+            .ok_or_else(|| ProtocolError::RespError("ERR invalid query vector".to_string()))?;
+        let k = args[2].as_integer().unwrap_or(5) as usize;
+
+        // Parse query vector
+        let query_vector: Result<Vec<f32>, _> = query_vector_str
+            .split(',')
+            .map(|s| s.trim().parse::<f32>())
+            .collect();
+        
+        let query_vector = query_vector.map_err(|_| {
+            ProtocolError::RespError("ERR invalid query vector format".to_string())
+        })?;
+
+        // Get VectorActor reference
+        let actor_ref = self.orbit_client.actor_reference::<VectorActor>(
+            Key::StringKey { key: key.clone() }
+        ).await.map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+
+        // Perform KNN search
+        let query_value = serde_json::to_value(query_vector)
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization failed: {}", e)))?;
+        let k_value = serde_json::to_value(k)
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization failed: {}", e)))?;
+        let metric_value = serde_json::to_value(None::<SimilarityMetric>)
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization failed: {}", e)))?;
+        let results: Vec<crate::vector_store::VectorSearchResult> = actor_ref.invoke("knn_search", vec![query_value, k_value, metric_value])
+            .await.map_err(|e| ProtocolError::RespError(format!("ERR KNN search failed: {}", e)))?;
+
+        // Format results
+        let mut response = Vec::new();
+        for result in results {
+            response.push(RespValue::array(vec![
+                RespValue::bulk_string_from_str(&result.vector.id),
+                RespValue::bulk_string_from_str(&format!("{:.6}", result.score)),
+            ]));
+        }
+
+        debug!("VECTOR.KNN {} k={} (found {} results)", key, k, response.len());
+        Ok(RespValue::array(response))
+    }
+
+    async fn cmd_vector_del(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        // VECTOR.DEL <key> <id>
+        if args.len() != 2 {
+            return Err(ProtocolError::RespError("ERR wrong number of arguments for 'VECTOR.DEL' command".to_string()));
+        }
+
+        let key = args[0].as_string()
+            .ok_or_else(|| ProtocolError::RespError("ERR invalid key".to_string()))?;
+        let vector_id = args[1].as_string()
+            .ok_or_else(|| ProtocolError::RespError("ERR invalid vector ID".to_string()))?;
+
+        // Get VectorActor reference
+        let actor_ref = self.orbit_client.actor_reference::<VectorActor>(
+            Key::StringKey { key: key.clone() }
+        ).await.map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+
+        // Remove vector
+        let removed: bool = actor_ref.invoke("remove_vector", vec![vector_id.clone().into()])
+            .await.map_err(|e| ProtocolError::RespError(format!("ERR vector delete failed: {}", e)))?;
+
+        debug!("VECTOR.DEL {} {} -> {}", key, vector_id, removed);
+        Ok(RespValue::integer(if removed { 1 } else { 0 }))
+    }
+
+    async fn cmd_vector_stats(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        // VECTOR.STATS <key>
+        if args.len() != 1 {
+            return Err(ProtocolError::RespError("ERR wrong number of arguments for 'VECTOR.STATS' command".to_string()));
+        }
+
+        let key = args[0].as_string()
+            .ok_or_else(|| ProtocolError::RespError("ERR invalid key".to_string()))?;
+
+        // Get VectorActor reference
+        let actor_ref = self.orbit_client.actor_reference::<VectorActor>(
+            Key::StringKey { key: key.clone() }
+        ).await.map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+
+        // Get statistics
+        let stats: crate::vector_store::VectorStats = actor_ref.invoke("get_stats", vec![])
+            .await.map_err(|e| ProtocolError::RespError(format!("ERR stats failed: {}", e)))?;
+
+        let info = vec![
+            RespValue::bulk_string_from_str("vector_count"),
+            RespValue::integer(stats.vector_count as i64),
+            RespValue::bulk_string_from_str("index_count"),
+            RespValue::integer(stats.index_count as i64),
+            RespValue::bulk_string_from_str("avg_dimension"),
+            RespValue::bulk_string_from_str(&stats.avg_dimension.to_string()),
+            RespValue::bulk_string_from_str("min_dimension"),
+            RespValue::integer(stats.min_dimension as i64),
+            RespValue::bulk_string_from_str("max_dimension"),
+            RespValue::integer(stats.max_dimension as i64),
+        ];
+
+        debug!("VECTOR.STATS {}", key);
+        Ok(RespValue::array(info))
     }
 }

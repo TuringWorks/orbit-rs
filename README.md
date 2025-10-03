@@ -348,9 +348,62 @@ Each Redis command maps to corresponding Orbit actor operations:
 - List commands → `ListActor`
 - Pub/Sub commands → `PubSubActor`
 
+### PostgreSQL Wire Protocol with Vector Support ✅
+
+Connect to Orbit actors using any PostgreSQL client through the PostgreSQL wire protocol with native vector operations:
+
+```bash
+# Start the PostgreSQL-compatible server example
+cargo run --example pgvector-store
+
+# Connect with psql
+psql -h 127.0.0.1 -p 5433 -d orbit
+
+# Create tables with vector support
+CREATE EXTENSION IF NOT EXISTS vector;
+
+CREATE TABLE documents (
+    id SERIAL PRIMARY KEY,
+    title VARCHAR(255) NOT NULL,
+    content TEXT,
+    embedding VECTOR(768),
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+# Create vector indexes for similarity search
+CREATE INDEX embedding_hnsw_idx 
+ON documents USING hnsw (embedding) 
+WITH (m = 16, ef_construction = 64);
+
+# Insert documents with embeddings
+INSERT INTO documents (title, content, embedding) VALUES 
+('AI in Healthcare', 'Article about AI applications...', '[0.1, 0.2, ...]');
+
+# Perform vector similarity searches
+SELECT title, content, embedding <-> '[0.1, 0.2, ...]' AS distance
+FROM documents 
+ORDER BY distance 
+LIMIT 5;
+```
+
+**Supported PostgreSQL Features:**
+- **DDL Operations**: CREATE/ALTER/DROP TABLE, INDEX, VIEW, SCHEMA, EXTENSION
+- **Vector Data Types**: VECTOR(n), HALFVEC(n), SPARSEVEC(n) with pgvector compatibility
+- **Vector Indexes**: IVFFLAT and HNSW with configurable parameters
+- **Vector Operations**: Distance operators (<->, <#>, <=>) and similarity functions
+- **ANSI SQL Types**: All standard SQL data types including JSON, arrays, geometric types
+- **Complex DDL**: Constraints, foreign keys, check constraints, table options
+- **Schema Management**: Full schema creation and organization
+- **PostgreSQL Compatibility**: Wire protocol compatible with psql, pgAdmin, and other tools
+
+**Architecture Highlights:**
+- **Modular SQL Parser**: Comprehensive lexer, parser, and AST for ANSI SQL compliance
+- **Vector Integration**: Seamless pgvector compatibility with native vector operations  
+- **Actor Mapping**: SQL tables can be mapped to Orbit actor types and collections
+- **Distributed Queries**: Foundation for distributed query execution across Orbit clusters
+
 ### Other Protocol Adapters 🚧
 
-- **PostgreSQL Wire Protocol**: Connect using any PostgreSQL client (psql, pgAdmin, etc.)
 - **REST API**: HTTP/JSON interface for web applications
 - **Neo4j Bolt Protocol**: Graph database compatibility for Cypher queries
 
@@ -410,7 +463,13 @@ The project includes a comprehensive GitHub Actions CI/CD pipeline with automate
 - **orbit-server**: Server-side cluster management
 - **orbit-server-etcd**: etcd-based distributed directory
 - **orbit-server-prometheus**: Prometheus metrics integration
-- **orbit-protocols**: Protocol adapters (Redis RESP, PostgreSQL, REST API, Neo4j Bolt)
+- **orbit-protocols**: Protocol adapters with comprehensive SQL support
+  - Redis RESP protocol adapter
+  - PostgreSQL wire protocol with ANSI SQL DDL support
+  - Vector operations (pgvector compatible)
+  - Modular SQL parser (lexer, AST, executor)
+  - Neo4j Bolt protocol (planned)
+  - REST API (planned)
 - **orbit-application**: Application-level utilities
 - **orbit-benchmarks**: Performance benchmarks
 - **orbit-operator**: Kubernetes operator with custom CRDs
@@ -466,6 +525,16 @@ The project includes a comprehensive GitHub Actions CI/CD pipeline with automate
 - [x] **Performance Optimization**: Adaptive batching, connection pooling, and resource management
 
 ### 🚧 Future Enhancements
+
+**Protocol Adapters** ✅
+- [x] **Redis RESP Protocol**: Complete Redis compatibility with actor mapping
+- [x] **PostgreSQL Wire Protocol**: Full DDL support with vector operations
+- [x] **ANSI SQL Compliance**: Comprehensive DDL parser and executor
+- [x] **Vector Operations**: pgvector compatible with IVFFLAT/HNSW indexes
+- [x] **SQL Type System**: All PostgreSQL data types including vectors
+- [ ] **PostgreSQL DML**: SELECT, INSERT, UPDATE, DELETE (in progress)
+- [ ] **Transaction Support**: SQL transaction control language
+- [ ] **Advanced SQL**: Stored procedures, triggers, window functions
 
 **Ecosystem Integration**
 - [x] **Kubernetes Operator**: Custom CRDs for cluster, actor, and transaction management

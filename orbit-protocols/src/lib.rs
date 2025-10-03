@@ -18,8 +18,9 @@
 
 pub mod error;
 pub mod resp;
-pub mod postgres_wire;
-pub mod cypher;
 pub mod rest;
+pub mod postgres_wire;
+pub mod bolt;
+pub mod vector_store;
 
 pub use error::{ProtocolError, ProtocolResult};

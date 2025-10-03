@@ -569,10 +569,19 @@ pub mod type_oids {
     pub const INT2: i32 = 21;
     pub const INT4: i32 = 23;
     pub const TEXT: i32 = 25;
+    pub const FLOAT4: i32 = 700;
+    pub const FLOAT8: i32 = 701;
     pub const JSON: i32 = 114;
     pub const JSONB: i32 = 3802;
     pub const VARCHAR: i32 = 1043;
     pub const TIMESTAMP: i32 = 1114;
     pub const TIMESTAMPTZ: i32 = 1184;
     pub const UUID: i32 = 2950;
+    
+    // pgvector extension types
+    // Note: In real pgvector, these OIDs are assigned dynamically
+    // We use high numbers to avoid conflicts with standard types
+    pub const VECTOR: i32 = 16385;     // vector type
+    pub const HALFVEC: i32 = 16386;    // halfvec type (half precision)
+    pub const SPARSEVEC: i32 = 16387;  // sparsevec type
 }

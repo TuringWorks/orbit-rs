@@ -2824,18 +2824,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "orbit-client-spring"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "orbit-client",
- "orbit-shared",
- "orbit-util",
- "serde",
- "tokio",
-]
-
-[[package]]
 name = "orbit-operator"
 version = "0.1.0"
 dependencies = [
@@ -3147,6 +3135,21 @@ checksum = "3672b37090dbd86368a4145bc067582552b29c27377cad4e0a306c97f9bd7772"
 dependencies = [
  "fixedbitset 0.5.7",
  "indexmap 2.11.4",
+]
+
+[[package]]
+name = "pgvector-store-example"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "orbit-client",
+ "orbit-protocols",
+ "orbit-shared",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
 ]
 
 [[package]]
@@ -4017,20 +4020,6 @@ name = "ryu"
 version = "1.0.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "28d3b2b1366ec20994f1fd18c3c594f05c5dd4bc44d8bb0c1c632c8d6829481f"
-
-[[package]]
-name = "saga-example"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "orbit-shared",
- "serde",
- "serde_json",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "uuid",
-]
 
 [[package]]
 name = "same-file"
@@ -5353,6 +5342,19 @@ name = "vcpkg"
 version = "0.2.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
+
+[[package]]
+name = "vector-store-example"
+version = "0.1.0"
+dependencies = [
+ "orbit-client",
+ "orbit-protocols",
+ "orbit-shared",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
 
 [[package]]
 name = "version_check"

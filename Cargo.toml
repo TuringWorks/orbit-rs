@@ -3,22 +3,22 @@ resolver = "2"
 
 members = [
     "orbit-util",
-    "orbit-shared",
+    "orbit-shared", 
     "orbit-proto",
     "orbit-client",
     "orbit-server",
-    "orbit-client-spring",
-    "orbit-server-etcd",
+    "orbit-server-etcd", 
     "orbit-server-prometheus",
+    "orbit-protocols",
     "orbit-application",
     "orbit-benchmarks",
     "orbit-operator",
-    "orbit-protocols",
     "examples/hello-world",
     "examples/distributed-counter",
     "examples/distributed-transactions",
-    "examples/saga-example",
     "examples/resp-server",
+    "examples/vector-store",
+    "examples/pgvector-store",
 ]
 
 [workspace.package]

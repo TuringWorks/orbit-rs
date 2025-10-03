@@ -6,6 +6,8 @@ use std::collections::HashMap;
 use serde_json::Value as JsonValue;
 
 use crate::error::{ProtocolError, ProtocolResult};
+use crate::postgres_wire::vector_engine::VectorQueryEngine;
+use orbit_client::OrbitClient;
 
 /// Query result types
 #[derive(Debug, Clone)]
@@ -75,6 +77,8 @@ pub struct QueryEngine {
     // In-memory storage for demonstration
     // TODO: Replace with OrbitClient integration
     actors: Arc<RwLock<HashMap<String, ActorRecord>>>,
+    // Optional vector query engine for pgvector compatibility
+    vector_engine: Option<VectorQueryEngine>,
 }
 
 impl QueryEngine {
@@ -82,11 +86,30 @@ impl QueryEngine {
     pub fn new() -> Self {
         Self {
             actors: Arc::new(RwLock::new(HashMap::new())),
+            vector_engine: None,
+        }
+    }
+    
+    /// Create a new query engine with vector support
+    pub fn new_with_vector_support(orbit_client: OrbitClient) -> Self {
+        Self {
+            actors: Arc::new(RwLock::new(HashMap::new())),
+            vector_engine: Some(VectorQueryEngine::new(orbit_client)),
         }
     }
 
     /// Execute a SQL query
     pub async fn execute_query(&self, sql: &str) -> ProtocolResult<QueryResult> {
+        let sql_upper = sql.trim().to_uppercase();
+        
+        // Check if this is a vector-related query
+        if let Some(ref vector_engine) = self.vector_engine {
+            if self.is_vector_query(&sql_upper) {
+                return vector_engine.execute_vector_query(sql).await;
+            }
+        }
+        
+        // Handle regular SQL queries
         let statement = self.parse_sql(sql)?;
 
         match statement {
@@ -110,6 +133,16 @@ impl QueryEngine {
                 where_clause,
             } => self.execute_delete(&table, where_clause).await,
         }
+    }
+    
+    /// Check if a query is vector-related
+    fn is_vector_query(&self, sql: &str) -> bool {
+        sql.contains("CREATE EXTENSION VECTOR") ||
+        sql.contains("VECTOR(") ||
+        sql.contains("HALFVEC(") ||
+        sql.contains("<->") || sql.contains("<#>") || sql.contains("<=>") ||
+        sql.contains("VECTOR_DIMS") || sql.contains("VECTOR_NORM") ||
+        (sql.contains("CREATE INDEX") && (sql.contains("USING IVFFLAT") || sql.contains("USING HNSW")))
     }
 
     /// Parse SQL statement

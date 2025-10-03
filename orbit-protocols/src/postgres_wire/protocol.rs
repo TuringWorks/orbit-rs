@@ -2,6 +2,7 @@
 
 use bytes::BytesMut;
 use std::collections::HashMap;
+use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tracing::{debug, error, info, warn};
@@ -30,7 +31,7 @@ pub struct PostgresWireProtocol {
     username: Option<String>,
     database: Option<String>,
     parameters: HashMap<String, String>,
-    query_engine: QueryEngine,
+    query_engine: Arc<QueryEngine>,
     process_id: i32,
     secret_key: i32,
     prepared_statements: HashMap<String, String>,
@@ -45,9 +46,24 @@ impl PostgresWireProtocol {
             username: None,
             database: None,
             parameters: HashMap::new(),
-            query_engine: QueryEngine::new(),
+            query_engine: Arc::new(QueryEngine::new()),
             process_id: std::process::id() as i32,
-            secret_key: rand::random(),
+            secret_key: Self::random(),
+            prepared_statements: HashMap::new(),
+            portals: HashMap::new(),
+        }
+    }
+    
+    /// Create a new PostgreSQL protocol handler with custom query engine
+    pub fn new_with_query_engine(query_engine: Arc<QueryEngine>) -> Self {
+        Self {
+            state: ConnectionState::Initial,
+            username: None,
+            database: None,
+            parameters: HashMap::new(),
+            query_engine,
+            process_id: std::process::id() as i32,
+            secret_key: Self::random(),
             prepared_statements: HashMap::new(),
             portals: HashMap::new(),
         }

@@ -36,6 +36,10 @@ pub use actors::{
     KeyValueActor, HashActor, ListActor, PubSubActor,
     KeyValueActorMethods, HashActorMethods, ListActorMethods, PubSubActorMethods
 };
+pub use crate::vector_store::{
+    VectorActor, VectorActorMethods, Vector, VectorSearchParams, 
+    VectorSearchResult, SimilarityMetric, VectorIndexConfig, VectorStats
+};
 pub use codec::RespCodec;
 pub use commands::CommandHandler;
 pub use server::RespServer;
