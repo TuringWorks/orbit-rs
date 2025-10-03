@@ -6,6 +6,7 @@ use tracing::info;
 
 #[derive(Clone)]
 pub struct TransactionController {
+    #[allow(dead_code)]
     client: Client,
 }
 
