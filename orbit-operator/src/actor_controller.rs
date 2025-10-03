@@ -3,7 +3,6 @@ use anyhow::Result;
 use kube::Client;
 use tracing::info;
 
-use crate::actor_crd::OrbitActor;
 
 #[derive(Clone)]
 pub struct ActorController {

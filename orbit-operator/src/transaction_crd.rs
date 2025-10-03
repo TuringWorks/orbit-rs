@@ -1,7 +1,6 @@
 use kube::CustomResource;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
 
 /// OrbitTransaction represents a managed distributed transaction configuration
 #[derive(CustomResource, Deserialize, Serialize, Clone, Debug, JsonSchema)]

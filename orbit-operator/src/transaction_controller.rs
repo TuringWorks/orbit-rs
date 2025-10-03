@@ -3,7 +3,6 @@ use anyhow::Result;
 use kube::Client;
 use tracing::info;
 
-use crate::transaction_crd::OrbitTransaction;
 
 #[derive(Clone)]
 pub struct TransactionController {
