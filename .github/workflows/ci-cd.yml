@@ -1,3 +1,8 @@
+# Continuous Integration and Deployment Pipeline
+# Purpose: Full build, Docker image creation, security scanning, and Kubernetes deployment
+# Runs on: Pushes to main/develop, tags, and PRs
+# Focus: Production-ready builds, container images, Helm charts, and cloud deployments
+# Note: ci.yml handles multi-version Rust testing - this workflow focuses on deployment
 name: CI/CD Pipeline
 
 on:
@@ -175,7 +180,7 @@ jobs:
   deploy-staging:
     needs: [docker-build, security-scan, helm-checks]
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/develop'
+    if: github.ref == 'refs/heads/develop' && secrets.KUBE_CONFIG_STAGING != ''
     environment:
       name: staging
       url: https://orbit-rs-staging.yourdomain.com
@@ -215,7 +220,7 @@ jobs:
   deploy-production:
     needs: [docker-build, security-scan, helm-checks]
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') && secrets.KUBE_CONFIG_PRODUCTION != ''
     environment:
       name: production
       url: https://orbit-rs.yourdomain.com
@@ -287,16 +292,71 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  # Notification on failure
+  # Notification on failure using GitHub Issues
   notify-failure:
     needs: [rust-checks, docker-build, security-scan, helm-checks]
     runs-on: ubuntu-latest
     if: failure() && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+    permissions:
+      issues: write
     steps:
-    - name: Notify on failure
-      uses: 8398a7/action-slack@v3
+    - name: Create issue on failure
+      uses: actions/github-script@v7
       with:
-        status: failure
-        fields: repo,commit,author,action,eventName,ref,workflow,job,took
-      env:
-        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          const title = `CI/CD Pipeline Failed - ${context.workflow} (${context.ref})`;
+          const body = `## Pipeline Failure Report
+          
+          **Workflow:** ${context.workflow}
+          **Run:** [#${context.runNumber}](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})
+          **Commit:** ${context.sha}
+          **Branch:** ${context.ref}
+          **Author:** @${context.actor}
+          **Event:** ${context.eventName}
+          **Timestamp:** ${new Date().toISOString()}
+          
+          ### Failed Jobs
+          Please check the [workflow run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for details.
+          
+          ### Action Required
+          - Review the failed jobs and error logs
+          - Fix the issues in a new commit
+          - Ensure all tests pass before merging
+          
+          This issue was automatically created by the CI/CD pipeline.`;
+          
+          // Check if there's already an open issue for this workflow failure
+          const issues = await github.rest.issues.listForRepo({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            state: 'open',
+            labels: ['ci-failure', 'automated'],
+            per_page: 10
+          });
+          
+          const existingIssue = issues.data.find(issue => 
+            issue.title.includes(context.workflow) && 
+            issue.title.includes(context.ref.replace('refs/heads/', ''))
+          );
+          
+          if (existingIssue) {
+            // Add a comment to existing issue
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: existingIssue.number,
+              body: `## New Failure Detected\n\n${body}`
+            });
+            console.log(`Added comment to existing issue #${existingIssue.number}`);
+          } else {
+            // Create a new issue
+            const issue = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: title,
+              body: body,
+              labels: ['ci-failure', 'automated', 'bug']
+            });
+            console.log(`Created issue #${issue.data.number}`);
+          }

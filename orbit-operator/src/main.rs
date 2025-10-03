@@ -6,15 +6,15 @@ use tokio::signal;
 use tracing::{info, warn};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-mod crd;
-mod actor_crd;
-mod transaction_crd;
-mod cluster_controller;
 mod actor_controller;
+mod actor_crd;
+mod cluster_controller;
+mod crd;
 mod transaction_controller;
+mod transaction_crd;
 
-use cluster_controller::ClusterController;
 use actor_controller::ActorController;
+use cluster_controller::ClusterController;
 use transaction_controller::TransactionController;
 
 #[derive(Parser)]
@@ -46,7 +46,11 @@ struct Args {
     leader_election_namespace: Option<String>,
 
     /// Leader election lease name
-    #[arg(long, env = "LEADER_ELECTION_NAME", default_value = "orbit-operator-leader-election")]
+    #[arg(
+        long,
+        env = "LEADER_ELECTION_NAME",
+        default_value = "orbit-operator-leader-election"
+    )]
     leader_election_name: String,
 }
 
@@ -91,7 +95,7 @@ async fn main() -> Result<()> {
 
     // Start controllers
     info!("Starting controllers...");
-    
+
     let cluster_controller = ClusterController::new(client.clone());
     let actor_controller = ActorController::new(client.clone());
     let transaction_controller = TransactionController::new(client.clone());
@@ -137,10 +141,10 @@ async fn main() -> Result<()> {
 }
 
 async fn start_health_server(addr: String) -> Result<()> {
-    use std::convert::Infallible;
-    use std::net::SocketAddr;
     use hyper::service::{make_service_fn, service_fn};
     use hyper::{Body, Request, Response, Server, StatusCode};
+    use std::convert::Infallible;
+    use std::net::SocketAddr;
 
     async fn health_handler(_req: Request<Body>) -> Result<Response<Body>, Infallible> {
         Ok(Response::builder()
@@ -190,9 +194,8 @@ async fn start_health_server(addr: String) -> Result<()> {
         }
     }
 
-    let make_svc = make_service_fn(|_conn| async {
-        Ok::<_, Infallible>(service_fn(handle_request))
-    });
+    let make_svc =
+        make_service_fn(|_conn| async { Ok::<_, Infallible>(service_fn(handle_request)) });
 
     let addr: SocketAddr = addr.parse()?;
     let server = Server::bind(&addr).serve(make_svc);
@@ -207,10 +210,10 @@ async fn start_health_server(addr: String) -> Result<()> {
 }
 
 async fn start_metrics_server(addr: String) -> Result<()> {
-    use std::convert::Infallible;
-    use std::net::SocketAddr;
     use hyper::service::{make_service_fn, service_fn};
     use hyper::{Body, Request, Response, Server, StatusCode};
+    use std::convert::Infallible;
+    use std::net::SocketAddr;
 
     async fn metrics_handler(_req: Request<Body>) -> Result<Response<Body>, Infallible> {
         // Collect Prometheus metrics
@@ -280,9 +283,8 @@ orbit_reconciliation_errors_total{{controller="transaction"}} 0
         }
     }
 
-    let make_svc = make_service_fn(|_conn| async {
-        Ok::<_, Infallible>(service_fn(handle_request))
-    });
+    let make_svc =
+        make_service_fn(|_conn| async { Ok::<_, Infallible>(service_fn(handle_request)) });
 
     let addr: SocketAddr = addr.parse()?;
     let server = Server::bind(&addr).serve(make_svc);

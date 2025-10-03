@@ -20,7 +20,7 @@ use serde_json::json;
 use std::{collections::BTreeMap, sync::Arc, time::Duration};
 use tracing::{error, info, warn};
 
-use crate::crd::{OrbitCluster, OrbitClusterStatus, ClusterPhase, ClusterCondition};
+use crate::crd::{ClusterCondition, ClusterPhase, OrbitCluster, OrbitClusterStatus};
 
 pub const ORBIT_CLUSTER_FINALIZER: &str = "orbit-cluster.orbit.turingworks.com/finalizer";
 
@@ -69,7 +69,10 @@ impl ControllerContext {
     }
 }
 
-async fn reconcile_cluster(cluster: Arc<OrbitCluster>, ctx: Arc<ControllerContext>) -> Result<Action> {
+async fn reconcile_cluster(
+    cluster: Arc<OrbitCluster>,
+    ctx: Arc<ControllerContext>,
+) -> Result<Action> {
     let ns = cluster.namespace().unwrap_or_default();
     let name = cluster.name_any();
 
@@ -166,12 +169,16 @@ async fn cluster_cleanup(cluster: &OrbitCluster, ctx: Arc<ControllerContext>) ->
 
     // Delete Services
     let services: Api<Service> = Api::namespaced(client.clone(), &ns);
-    let _ = services.delete(&format!("{}-headless", name), &Default::default()).await;
+    let _ = services
+        .delete(&format!("{}-headless", name), &Default::default())
+        .await;
     let _ = services.delete(&name, &Default::default()).await;
 
     // Delete ConfigMap
     let configmaps: Api<ConfigMap> = Api::namespaced(client.clone(), &ns);
-    let _ = configmaps.delete(&format!("{}-config", name), &Default::default()).await;
+    let _ = configmaps
+        .delete(&format!("{}-config", name), &Default::default())
+        .await;
 
     // Delete ServiceAccount
     let service_accounts: Api<ServiceAccount> = Api::namespaced(client.clone(), &ns);
@@ -222,7 +229,7 @@ async fn create_config_map(
     let configmaps: Api<ConfigMap> = Api::namespaced(client.clone(), ns);
 
     let mut data = BTreeMap::new();
-    
+
     // Create orbit-server.yaml configuration
     let config = json!({
         "server": {
@@ -249,7 +256,10 @@ async fn create_config_map(
         }
     });
 
-    data.insert("orbit-server.yaml".to_string(), serde_yaml::to_string(&config)?);
+    data.insert(
+        "orbit-server.yaml".to_string(),
+        serde_yaml::to_string(&config)?,
+    );
 
     let cm = ConfigMap {
         metadata: k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta {
@@ -269,7 +279,9 @@ async fn create_config_map(
         Err(kube::Error::Api(ae)) if ae.code == 409 => {
             // Update existing ConfigMap
             let patch = Patch::Merge(&cm);
-            configmaps.patch(&format!("{}-config", name), &PatchParams::default(), &patch).await?;
+            configmaps
+                .patch(&format!("{}-config", name), &PatchParams::default(), &patch)
+                .await?;
             info!("Updated ConfigMap {}-config", name);
         }
         Err(e) => return Err(anyhow::anyhow!("Failed to create ConfigMap: {}", e)),
@@ -301,14 +313,22 @@ async fn create_headless_service(
                 k8s_openapi::api::core::v1::ServicePort {
                     name: Some("grpc".to_string()),
                     port: cluster.spec.service.grpc_port as i32,
-                    target_port: Some(k8s_openapi::apimachinery::pkg::util::intstr::IntOrString::String("grpc".to_string())),
+                    target_port: Some(
+                        k8s_openapi::apimachinery::pkg::util::intstr::IntOrString::String(
+                            "grpc".to_string(),
+                        ),
+                    ),
                     protocol: Some("TCP".to_string()),
                     ..Default::default()
                 },
                 k8s_openapi::api::core::v1::ServicePort {
                     name: Some("health".to_string()),
                     port: cluster.spec.service.health_port as i32,
-                    target_port: Some(k8s_openapi::apimachinery::pkg::util::intstr::IntOrString::String("health".to_string())),
+                    target_port: Some(
+                        k8s_openapi::apimachinery::pkg::util::intstr::IntOrString::String(
+                            "health".to_string(),
+                        ),
+                    ),
                     protocol: Some("TCP".to_string()),
                     ..Default::default()
                 },
@@ -354,14 +374,22 @@ async fn create_external_service(
                 k8s_openapi::api::core::v1::ServicePort {
                     name: Some("grpc".to_string()),
                     port: cluster.spec.service.grpc_port as i32,
-                    target_port: Some(k8s_openapi::apimachinery::pkg::util::intstr::IntOrString::String("grpc".to_string())),
+                    target_port: Some(
+                        k8s_openapi::apimachinery::pkg::util::intstr::IntOrString::String(
+                            "grpc".to_string(),
+                        ),
+                    ),
                     protocol: Some("TCP".to_string()),
                     ..Default::default()
                 },
                 k8s_openapi::api::core::v1::ServicePort {
                     name: Some("metrics".to_string()),
                     port: cluster.spec.service.metrics_port as i32,
-                    target_port: Some(k8s_openapi::apimachinery::pkg::util::intstr::IntOrString::String("metrics".to_string())),
+                    target_port: Some(
+                        k8s_openapi::apimachinery::pkg::util::intstr::IntOrString::String(
+                            "metrics".to_string(),
+                        ),
+                    ),
                     protocol: Some("TCP".to_string()),
                     ..Default::default()
                 },
@@ -598,7 +626,9 @@ async fn create_stateful_set(
         Err(kube::Error::Api(ae)) if ae.code == 409 => {
             // Update existing StatefulSet
             let patch = Patch::Merge(&statefulset);
-            statefulsets.patch(&name, &PatchParams::default(), &patch).await?;
+            statefulsets
+                .patch(&name, &PatchParams::default(), &patch)
+                .await?;
             info!("Updated StatefulSet {}", name);
         }
         Err(e) => return Err(anyhow::anyhow!("Failed to create StatefulSet: {}", e)),
@@ -619,7 +649,12 @@ async fn update_cluster_status(
 
     let condition = ClusterCondition {
         condition_type: "Ready".to_string(),
-        status: if matches!(phase, ClusterPhase::Running) { "True" } else { "False" }.to_string(),
+        status: if matches!(phase, ClusterPhase::Running) {
+            "True"
+        } else {
+            "False"
+        }
+        .to_string(),
         last_transition_time: Some(chrono::Utc::now()),
         reason: Some(format!("{:?}", phase)),
         message: Some(message.to_string()),
@@ -639,7 +674,9 @@ async fn update_cluster_status(
     });
 
     let patch = Patch::Merge(&status_patch);
-    clusters.patch_status(&name, &PatchParams::default(), &patch).await?;
+    clusters
+        .patch_status(&name, &PatchParams::default(), &patch)
+        .await?;
 
     Ok(())
 }
@@ -647,22 +684,42 @@ async fn update_cluster_status(
 fn create_labels(cluster: &OrbitCluster) -> BTreeMap<String, String> {
     let mut labels = BTreeMap::new();
     labels.insert("app.kubernetes.io/name".to_string(), "orbit-rs".to_string());
-    labels.insert("app.kubernetes.io/component".to_string(), "server".to_string());
+    labels.insert(
+        "app.kubernetes.io/component".to_string(),
+        "server".to_string(),
+    );
     labels.insert("app.kubernetes.io/instance".to_string(), cluster.name_any());
-    labels.insert("app.kubernetes.io/managed-by".to_string(), "orbit-operator".to_string());
-    labels.insert("orbit.turingworks.com/cluster".to_string(), cluster.name_any());
+    labels.insert(
+        "app.kubernetes.io/managed-by".to_string(),
+        "orbit-operator".to_string(),
+    );
+    labels.insert(
+        "orbit.turingworks.com/cluster".to_string(),
+        cluster.name_any(),
+    );
     labels
 }
 
 fn create_selector_labels(cluster: &OrbitCluster) -> BTreeMap<String, String> {
     let mut labels = BTreeMap::new();
     labels.insert("app.kubernetes.io/name".to_string(), "orbit-rs".to_string());
-    labels.insert("app.kubernetes.io/component".to_string(), "server".to_string());
+    labels.insert(
+        "app.kubernetes.io/component".to_string(),
+        "server".to_string(),
+    );
     labels.insert("app.kubernetes.io/instance".to_string(), cluster.name_any());
     labels
 }
 
-fn error_policy(cluster: Arc<OrbitCluster>, error: &anyhow::Error, _ctx: Arc<ControllerContext>) -> Action {
-    warn!("Reconcile failed for OrbitCluster {}: {}", cluster.name_any(), error);
+fn error_policy(
+    cluster: Arc<OrbitCluster>,
+    error: &anyhow::Error,
+    _ctx: Arc<ControllerContext>,
+) -> Action {
+    warn!(
+        "Reconcile failed for OrbitCluster {}: {}",
+        cluster.name_any(),
+        error
+    );
     Action::requeue(Duration::from_secs(60))
 }

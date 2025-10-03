@@ -1,0 +1,48 @@
+# cargo-deny configuration for Orbit-RS
+# https://embarkstudios.github.io/cargo-deny/
+
+[advisories]
+db-path = "~/.cargo/advisory-db"
+db-urls = ["https://github.com/rustsec/advisory-db"]
+vulnerability = "deny"
+unmaintained = "warn"
+yanked = "warn"
+notice = "warn"
+ignore = [
+    # RSA timing vulnerability - no fix available, acceptable for internal use
+    "RUSTSEC-2023-0071",
+]
+
+[licenses]
+unlicensed = "deny"
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Unicode-DFS-2016",
+]
+copyleft = "warn"
+confidence-threshold = 0.8
+
+[bans]
+multiple-versions = "warn"
+wildcards = "allow"
+highlight = "all"
+
+# Skip checking for certain crates that have multiple versions in the dependency tree
+skip = [
+    { name = "bitflags" },
+    { name = "syn" },
+    { name = "windows-sys" },
+    { name = "windows_x86_64_msvc" },
+]
+
+[sources]
+unknown-registry = "warn"
+unknown-git = "warn"
+allow-git = [
+    "https://github.com/ravituringworks/sqlx-no-rsa.git",
+]

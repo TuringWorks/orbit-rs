@@ -1,3 +1,8 @@
+# Continuous Integration Workflow
+# Purpose: Fast feedback on code quality, testing, and security
+# Runs on: All pushes and PRs to main/develop branches
+# Focus: Rust testing across multiple toolchain versions, security audits, code coverage
+# Note: ci-cd.yml handles Docker builds and deployment - this workflow focuses on Rust validation
 name: CI
 
 on:
@@ -71,7 +76,7 @@ jobs:
     - name: Build examples
       run: |
         cargo build --package hello-world
-        cargo build --package distributed-transactions-example
+        cargo build --package distributed-transactions
         cargo build --package distributed-counter
         cargo build --package saga-example
 
@@ -114,6 +119,8 @@ jobs:
 
     - name: Upload to codecov.io
       uses: codecov/codecov-action@v4
+      if: ${{ secrets.CODECOV_TOKEN != '' }}
+      continue-on-error: true
       with:
         files: ./coverage/cobertura.xml
         token: ${{ secrets.CODECOV_TOKEN }}
