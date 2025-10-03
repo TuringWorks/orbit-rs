@@ -67,6 +67,8 @@ The Rust implementation maintains the same core architecture as the original Kot
 
 - Rust 1.70+
 - Protocol Buffers compiler (`protoc`)
+- (Optional) Docker for containerized deployment
+- (Optional) Kubernetes cluster for operator deployment
 
 ### Installation
 
