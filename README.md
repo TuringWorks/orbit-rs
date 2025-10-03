@@ -247,12 +247,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 - [ ] Metrics Integration - Prometheus monitoring and observability
 
 **Ecosystem Integration**
-
-**Ecosystem Integration**
+- [x] **Kubernetes Operator**: Custom CRDs for cluster, actor, and transaction management
+- [x] **Helm Charts**: Production-ready Kubernetes deployment with Helm
+- [x] **Docker Support**: Multi-platform container builds (linux/amd64, linux/arm64)
+- [x] **Service Discovery**: DNS-based and etcd-based discovery mechanisms
 - [ ] Spring Boot integration
-- [ ] Kubernetes deployment manifests
-- [ ] Docker containerization
-- [ ] Cloud provider integrations
+- [ ] Cloud provider integrations (AWS, Azure, GCP)
 
 ## Migration from Kotlin/JVM
 
