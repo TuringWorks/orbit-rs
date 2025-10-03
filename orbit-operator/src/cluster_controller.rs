@@ -303,7 +303,7 @@ async fn create_config_map(
                 .await?;
             info!("Updated ConfigMap {}-config", name);
         }
-        Err(e) => return Err(anyhow::anyhow!("Failed to create ConfigMap: {}", e)),
+        Err(e) => return Err(ControllerError::Generic(format!("Failed to create ConfigMap: {}", e))),
     }
 
     Ok(())
@@ -363,7 +363,7 @@ async fn create_headless_service(
         Err(kube::Error::Api(ae)) if ae.code == 409 => {
             info!("Headless Service {}-headless already exists", name);
         }
-        Err(e) => return Err(anyhow::anyhow!("Failed to create headless Service: {}", e)),
+        Err(e) => return Err(ControllerError::Generic(format!("Failed to create headless Service: {}", e))),
     }
 
     Ok(())
