@@ -1,3 +1,8 @@
+# Continuous Integration Workflow
+# Purpose: Fast feedback on code quality, testing, and security
+# Runs on: All pushes and PRs to main/develop branches
+# Focus: Rust testing across multiple toolchain versions, security audits, code coverage
+# Note: ci-cd.yml handles Docker builds and deployment - this workflow focuses on Rust validation
 name: CI
 
 on:

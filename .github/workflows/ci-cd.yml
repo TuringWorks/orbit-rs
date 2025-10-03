@@ -1,3 +1,8 @@
+# Continuous Integration and Deployment Pipeline
+# Purpose: Full build, Docker image creation, security scanning, and Kubernetes deployment
+# Runs on: Pushes to main/develop, tags, and PRs
+# Focus: Production-ready builds, container images, Helm charts, and cloud deployments
+# Note: ci.yml handles multi-version Rust testing - this workflow focuses on deployment
 name: CI/CD Pipeline
 
 on:
