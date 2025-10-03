@@ -1,0 +1,152 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: orbit-operator-system
+  labels:
+    app.kubernetes.io/name: orbit-operator
+    app.kubernetes.io/component: namespace
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: orbit-operator
+  namespace: orbit-operator-system
+  labels:
+    app.kubernetes.io/name: orbit-operator
+    app.kubernetes.io/component: service-account
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: orbit-operator
+  labels:
+    app.kubernetes.io/name: orbit-operator
+    app.kubernetes.io/component: rbac
+rules:
+# Core Kubernetes resources for managing Orbit clusters
+- apiGroups: [""]
+  resources: ["pods", "services", "configmaps", "secrets", "serviceaccounts", "persistentvolumeclaims"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: ["apps"]
+  resources: ["statefulsets", "deployments", "replicasets"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: ["networking.k8s.io"]
+  resources: ["ingresses", "networkpolicies"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+# Orbit custom resources
+- apiGroups: ["orbit.turingworks.com"]
+  resources: ["orbitclusters", "orbitactors", "orbittransactions"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: ["orbit.turingworks.com"]
+  resources: ["orbitclusters/status", "orbitactors/status", "orbittransactions/status"]
+  verbs: ["get", "update", "patch"]
+# RBAC for operator itself
+- apiGroups: ["rbac.authorization.k8s.io"]
+  resources: ["roles", "rolebindings", "clusterroles", "clusterrolebindings"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+# Events for status reporting
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["create", "patch"]
+# Monitoring resources
+- apiGroups: ["monitoring.coreos.com"]
+  resources: ["servicemonitors", "podmonitors", "prometheusrules"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+# Autoscaling
+- apiGroups: ["autoscaling"]
+  resources: ["horizontalpodautoscalers"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+# Pod disruption budgets
+- apiGroups: ["policy"]
+  resources: ["poddisruptionbudgets"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+# Leader election (for operator HA)
+- apiGroups: ["coordination.k8s.io"]
+  resources: ["leases"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+# Node information for placement decisions
+- apiGroups: [""]
+  resources: ["nodes"]
+  verbs: ["get", "list", "watch"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: orbit-operator
+  labels:
+    app.kubernetes.io/name: orbit-operator
+    app.kubernetes.io/component: rbac
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: orbit-operator
+subjects:
+- kind: ServiceAccount
+  name: orbit-operator
+  namespace: orbit-operator-system
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: orbit-operator-leader-election
+  namespace: orbit-operator-system
+  labels:
+    app.kubernetes.io/name: orbit-operator
+    app.kubernetes.io/component: rbac
+rules:
+- apiGroups: ["coordination.k8s.io"]
+  resources: ["leases"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["create", "patch"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: orbit-operator-leader-election
+  namespace: orbit-operator-system
+  labels:
+    app.kubernetes.io/name: orbit-operator
+    app.kubernetes.io/component: rbac
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: orbit-operator-leader-election
+subjects:
+- kind: ServiceAccount
+  name: orbit-operator
+  namespace: orbit-operator-system
+
+---
+# Additional RBAC for Orbit clusters to manage their own resources
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: orbit-cluster-server
+  labels:
+    app.kubernetes.io/name: orbit-operator
+    app.kubernetes.io/component: rbac
+rules:
+# Kubernetes leader election for Orbit servers
+- apiGroups: ["coordination.k8s.io"]
+  resources: ["leases"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+# Pod and node information for cluster management
+- apiGroups: [""]
+  resources: ["pods", "nodes"]
+  verbs: ["get", "list", "watch"]
+# Service discovery
+- apiGroups: [""]
+  resources: ["services", "endpoints"]
+  verbs: ["get", "list", "watch"]
+# Events for cluster status
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["create", "patch"]

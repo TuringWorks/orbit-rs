@@ -1,0 +1,60 @@
+[package]
+name = "orbit-operator"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Kubernetes operator for Orbit-RS distributed actor system"
+repository.workspace = true
+
+[dependencies]
+# Workspace dependencies
+orbit-shared = { path = "../orbit-shared" }
+orbit-proto = { path = "../orbit-proto" }
+
+# Kubernetes operator dependencies
+kube = { version = "0.95", features = ["runtime", "derive", "client", "rustls-tls", "ws"] }
+k8s-openapi = { version = "0.22", features = ["latest"] }
+controller-rs = "0.1"
+
+# Async runtime and utilities
+tokio = { workspace = true, features = ["full"] }
+tokio-stream = { workspace = true }
+futures = { workspace = true }
+
+# Serialization and schema
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_yaml = "0.9"
+jsonschema = "0.18"
+
+# Error handling
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+
+# Logging and observability
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+# Time utilities
+chrono = { workspace = true }
+uuid = { workspace = true }
+
+# Configuration
+clap = { version = "4.0", features = ["derive", "env"] }
+
+# Metrics
+metrics = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3.0"
+kube-client = { version = "0.95", features = ["test"] }
+
+[[bin]]
+name = "orbit-operator"
+path = "src/main.rs"
+
+[features]
+default = ["rustls-tls"]
+rustls-tls = ["kube/rustls-tls"]
+openssl-tls = ["kube/openssl-tls"]

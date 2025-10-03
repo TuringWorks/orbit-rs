@@ -12,6 +12,7 @@ members = [
     "orbit-server-prometheus",
     "orbit-application",
     "orbit-benchmarks",
+    "orbit-operator",
     "examples/hello-world",
     "examples/distributed-counter",
     "examples/distributed-transactions",
@@ -27,6 +28,15 @@ description = "Orbit - Build distributed and scalable online services (Rust impl
 repository = "https://github.com/TuringWorks/orbit-rs"
 
 [workspace.dependencies]
+# Kubernetes operator dependencies  
+kube = "0.95"
+k8s-openapi = "0.22"
+controller-rs = "0.1"
+jsonschema = "0.18"
+serde_yaml = "0.9"
+clap = "4.0"
+hyper = "0.14"
+
 # Core async runtime
 tokio = { version = "1.0", features = ["full"] }
 tokio-stream = "0.1"
