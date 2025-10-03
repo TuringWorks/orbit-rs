@@ -58,7 +58,7 @@ async fn main() -> Result<()> {
     let args = Args::parse();
 
     // Initialize tracing
-    let log_level = match args.log_level.as_str() {
+    let _log_level = match args.log_level.as_str() {
         "trace" => tracing::Level::TRACE,
         "debug" => tracing::Level::DEBUG,
         "info" => tracing::Level::INFO,
