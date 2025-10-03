@@ -104,11 +104,11 @@ async fn main() -> Result<()> {
     });
 
     let actor_task = tokio::spawn(async move {
-        actor_controller.run().await;
+        let _ = actor_controller.run().await;
     });
 
     let transaction_task = tokio::spawn(async move {
-        transaction_controller.run().await;
+        let _ = transaction_controller.run().await;
     });
 
     info!("All controllers started successfully");
