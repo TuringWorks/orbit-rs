@@ -96,16 +96,81 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive .gitignore for Rust projects
 - CI/CD ready project structure
 
+## [0.2.0] - 2024-12-20
+
+### Added
+- **Kubernetes Operator** (`orbit-operator`): Native Kubernetes support with custom CRDs
+  - `OrbitCluster` CRD for cluster deployment management
+  - `OrbitActor` CRD for actor configuration and scaling policies
+  - `OrbitTransaction` CRD for transaction coordination settings
+  - StatefulSet management with persistent storage
+  - ConfigMap-based configuration management
+  - Service discovery via Kubernetes DNS
+  - RBAC policies and security controls
+
+- **CI/CD Pipeline**: Comprehensive automation
+  - GitHub Actions workflows for testing, linting, and security scanning
+  - Automated `cargo fmt`, `cargo clippy` checks with strict warnings
+  - Multi-platform Docker builds (linux/amd64, linux/arm64)
+  - Security scanning with `cargo-deny` and Trivy
+  - SBOM generation for compliance
+  - Automated deployment workflows
+
+- **Deployment Infrastructure**
+  - Helm charts for production Kubernetes deployment
+  - Docker Compose configurations for local development
+  - Multi-environment support (development, production)
+  - DNS-based service discovery
+  - Raft consensus for leader election
+
+### Changed
+- **Upgraded to k8s-openapi 0.23 and kube 0.95**
+  - Fixed all Kubernetes API compatibility issues
+  - Updated `Recorder::new` API to include `ObjectReference` parameter
+  - Changed `ConfigMapVolumeSource.name` from `Option<String>` to `String`
+  - Updated `DateTime<Utc>` serialization with `schemars` chrono feature
+
+- **Error Handling Improvements**
+  - Created custom `ControllerError` enum with `thiserror` for Kubernetes operator
+  - Replaced `anyhow::Error` with proper `std::error::Error` implementation
+  - Added proper error context and chain support
+  - Improved error messages and diagnostics
+
+- **Test Coverage Expansion**
+  - Increased from 42 to 79 unit tests across all workspace crates
+  - Added comprehensive integration tests
+  - BDD scenarios with Cucumber for behavior-driven testing
+  - Multiple working examples (hello-world, distributed-counter, distributed-transactions, saga)
+
+### Fixed
+- **Kubernetes Operator Compilation Errors** (19 issues resolved)
+  - Fixed `Recorder` API compatibility with k8s-openapi 0.23
+  - Resolved `DateTime<Utc>` JsonSchema serialization issues
+  - Fixed `ConfigMapVolumeSource` type compatibility
+  - Corrected environment variable handling with `option_env!` macro
+  - Removed unused imports and resolved clippy warnings
+
+- **Build System**
+  - Regenerated `Cargo.lock` after corruption fix
+  - Added missing dependencies (`hyper`, `schemars` with chrono feature)
+  - Fixed formatting issues across all modules
+
+### Dependencies
+- Added `kube` v0.95 for Kubernetes client functionality
+- Added `k8s-openapi` v0.23 with v1_31 feature
+- Added `hyper` v0.14 for HTTP client functionality
+- Added `schemars` v0.8 with chrono feature for JsonSchema support
+- Updated `thiserror` for custom error types
+
 ## [Unreleased]
 
 ### Planned Features
 - **Saga Pattern Support**: Long-running transaction workflows with compensation actions
-- **Performance Optimization**: Enhanced connection pooling, batch operations, and resource management
-- **Security Features**: Transaction authentication, authorization, and encryption
-- **Distributed Locks**: Deadlock detection, prevention, and distributed lock coordination
-- **Metrics Integration**: Prometheus metrics for comprehensive monitoring and observability
-- **Docker Integration**: Container images and deployment manifests
-- **Kubernetes Support**: Helm charts and operator for cloud-native deployments
+- **Enhanced Observability**: Distributed tracing with OpenTelemetry
+- **Multi-Region Support**: Cross-region cluster coordination and replication
+- **Advanced Placement Strategies**: Custom actor placement algorithms
+- **Cloud Provider Integrations**: Native support for AWS, Azure, and GCP
+- **Service Mesh Integration**: Support for Istio and Linkerd
 
 ---
 
