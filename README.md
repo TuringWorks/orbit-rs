@@ -298,6 +298,26 @@ If you're migrating from the original Kotlin/JVM implementation, see our compreh
 - [Dependency Mapping](DEPENDENCY_MAPPING.md) - Kotlin to Rust dependency mappings
 - [API Documentation](https://docs.rs/orbit-rs) - Complete API reference
 
+## 🔄 CI/CD Pipeline
+
+The project includes a comprehensive CI/CD pipeline with:
+
+- **Continuous Integration**:
+  - Automated formatting checks (`cargo fmt`)
+  - Linting with Clippy (`cargo clippy -D warnings`)
+  - Unit and integration tests across all crates
+  - Build verification for all examples
+  - Security scanning with `cargo-deny`
+  - Vulnerability scanning with Trivy
+
+- **Continuous Deployment**:
+  - Multi-platform Docker builds (linux/amd64, linux/arm64)
+  - SBOM generation for security compliance
+  - Container image publishing to registry
+  - Kubernetes deployment manifests
+
+All checks run on every pull request and commit to ensure code quality and security.
+
 ## 🧪 Testing
 
 The project includes comprehensive test coverage:
@@ -318,10 +338,11 @@ cargo run --package distributed-counter
 ```
 
 **Test Results:**
-- **Unit Tests**: 42 tests passing
+- **Unit Tests**: 79 tests passing across all workspace crates
 - **Integration Tests**: Framework ready, scenarios defined
 - **BDD Tests**: Cucumber scenarios with step definitions
 - **Examples**: Multiple working examples demonstrating key patterns
+- **CI/CD**: Automated testing, linting, and security scanning on every commit
 
 ## 📝 Examples Structure
 
