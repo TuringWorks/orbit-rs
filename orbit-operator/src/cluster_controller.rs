@@ -19,7 +19,22 @@ use serde_json::json;
 use std::{collections::BTreeMap, sync::Arc, time::Duration};
 use tracing::{info, warn};
 
-type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
+#[derive(Debug, thiserror::Error)]
+enum ControllerError {
+    #[error("Kubernetes error: {0}")]
+    KubeError(#[from] kube::Error),
+    
+    #[error("Serialization error: {0}")]
+    SerializationError(#[from] serde_json::Error),
+    
+    #[error("Finalizer error: {0}")]
+    FinalizerError(String),
+    
+    #[error("Controller error: {0}")]
+    Generic(String),
+}
+
+type Result<T> = std::result::Result<T, ControllerError>;
 
 use crate::crd::{ClusterCondition, ClusterPhase, OrbitCluster, OrbitClusterStatus};
 
@@ -88,7 +103,7 @@ async fn reconcile_cluster(
         }
     })
     .await
-    .map_err(|e| anyhow::anyhow!("Finalizer error: {}", e))
+    .map_err(|e| ControllerError::FinalizerError(format!("{}", e)))
 }
 
 async fn cluster_reconcile(cluster: &OrbitCluster, ctx: Arc<ControllerContext>) -> Result<Action> {
@@ -714,7 +729,7 @@ fn create_selector_labels(cluster: &OrbitCluster) -> BTreeMap<String, String> {
 
 fn error_policy(
     cluster: Arc<OrbitCluster>,
-    error: &anyhow::Error,
+    error: &ControllerError,
     _ctx: Arc<ControllerContext>,
 ) -> Action {
     warn!(
