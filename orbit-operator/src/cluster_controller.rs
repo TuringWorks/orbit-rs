@@ -424,7 +424,7 @@ async fn create_external_service(
         Err(kube::Error::Api(ae)) if ae.code == 409 => {
             info!("External Service {} already exists", name);
         }
-        Err(e) => return Err(anyhow::anyhow!("Failed to create external Service: {}", e)),
+        Err(e) => return Err(ControllerError::Generic(format!("Failed to create external Service: {}", e))),
     }
 
     Ok(())
