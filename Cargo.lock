@@ -3713,7 +3713,7 @@ dependencies = [
 [[package]]
 name = "sqlx"
 version = "0.9.0-alpha.1"
-source = "git+https://github.com/ravituringworks/sqlx-no-rsa.git#9c571889f23712adf4d1ed9667a4873ab6bbf8ef"
+source = "git+https://github.com/ravituringworks/sqlx-no-rsa.git#0e77c6c56d1e6f7d32f0496852b11b3964fdb21d"
 dependencies = [
  "sqlx-core",
  "sqlx-macros",
@@ -3725,7 +3725,7 @@ dependencies = [
 [[package]]
 name = "sqlx-core"
 version = "0.9.0-alpha.1"
-source = "git+https://github.com/ravituringworks/sqlx-no-rsa.git#9c571889f23712adf4d1ed9667a4873ab6bbf8ef"
+source = "git+https://github.com/ravituringworks/sqlx-no-rsa.git#0e77c6c56d1e6f7d32f0496852b11b3964fdb21d"
 dependencies = [
  "base64 0.22.1",
  "bytes",
@@ -3762,7 +3762,7 @@ dependencies = [
 [[package]]
 name = "sqlx-macros"
 version = "0.9.0-alpha.1"
-source = "git+https://github.com/ravituringworks/sqlx-no-rsa.git#9c571889f23712adf4d1ed9667a4873ab6bbf8ef"
+source = "git+https://github.com/ravituringworks/sqlx-no-rsa.git#0e77c6c56d1e6f7d32f0496852b11b3964fdb21d"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3774,7 +3774,7 @@ dependencies = [
 [[package]]
 name = "sqlx-macros-core"
 version = "0.9.0-alpha.1"
-source = "git+https://github.com/ravituringworks/sqlx-no-rsa.git#9c571889f23712adf4d1ed9667a4873ab6bbf8ef"
+source = "git+https://github.com/ravituringworks/sqlx-no-rsa.git#0e77c6c56d1e6f7d32f0496852b11b3964fdb21d"
 dependencies = [
  "cfg-if",
  "dotenvy",
@@ -3798,7 +3798,7 @@ dependencies = [
 [[package]]
 name = "sqlx-mysql"
 version = "0.9.0-alpha.1"
-source = "git+https://github.com/ravituringworks/sqlx-no-rsa.git#9c571889f23712adf4d1ed9667a4873ab6bbf8ef"
+source = "git+https://github.com/ravituringworks/sqlx-no-rsa.git#0e77c6c56d1e6f7d32f0496852b11b3964fdb21d"
 dependencies = [
  "atoi",
  "base64 0.22.1",
@@ -3839,7 +3839,7 @@ dependencies = [
 [[package]]
 name = "sqlx-postgres"
 version = "0.9.0-alpha.1"
-source = "git+https://github.com/ravituringworks/sqlx-no-rsa.git#9c571889f23712adf4d1ed9667a4873ab6bbf8ef"
+source = "git+https://github.com/ravituringworks/sqlx-no-rsa.git#0e77c6c56d1e6f7d32f0496852b11b3964fdb21d"
 dependencies = [
  "atoi",
  "base64 0.22.1",
@@ -3876,7 +3876,7 @@ dependencies = [
 [[package]]
 name = "sqlx-sqlite"
 version = "0.9.0-alpha.1"
-source = "git+https://github.com/ravituringworks/sqlx-no-rsa.git#9c571889f23712adf4d1ed9667a4873ab6bbf8ef"
+source = "git+https://github.com/ravituringworks/sqlx-no-rsa.git#0e77c6c56d1e6f7d32f0496852b11b3964fdb21d"
 dependencies = [
  "atoi",
  "chrono",
@@ -4479,9 +4479,15 @@ dependencies = [
 
 [[package]]
 name = "typenum"
-version = "1.18.0"
+version = "1.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1dccffe3ce07af9386bfd29e80c0ab1a8205a2fc34e4bcd40364df902cfa8f3f"
+checksum = "562d481066bde0658276a35467c4af00bdc6ee726305698a55b86e61d7ad82bb"
+
+[[package]]
+name = "ucd-trie"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2896d95c02a80c6d6a5d6e953d479f5ddf2dfdb6a244441010e373ac0fb88971"
 
 [[package]]
 name = "ucd-trie"
