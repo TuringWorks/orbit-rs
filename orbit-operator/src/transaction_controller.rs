@@ -17,11 +17,11 @@ impl TransactionController {
 
     pub async fn run(self) {
         info!("Starting OrbitTransaction controller");
-        
+
         // TODO: Implement full transaction controller with reconciliation logic
-        // This would manage transaction coordinator configuration, 
+        // This would manage transaction coordinator configuration,
         // persistence settings, and monitoring
-        
+
         loop {
             tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
         }
