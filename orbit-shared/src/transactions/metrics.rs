@@ -19,22 +19,7 @@ impl TransactionMetrics {
     pub fn new(node_id: NodeId) -> Self {
         let metrics_prefix = format!("orbit.transaction.{}", node_id);
         
-        // Register all metrics
-        register_counter!(format!("{}.started.total", metrics_prefix));
-        register_counter!(format!("{}.committed.total", metrics_prefix));
-        register_counter!(format!("{}.aborted.total", metrics_prefix));
-        register_counter!(format!("{}.failed.total", metrics_prefix));
-        register_counter!(format!("{}.timeout.total", metrics_prefix));
-        
-        register_gauge!(format!("{}.active", metrics_prefix));
-        register_gauge!(format!("{}.queued", metrics_prefix));
-        
-        register_histogram!(format!("{}.duration.seconds", metrics_prefix));
-        register_histogram!(format!("{}.prepare_duration.seconds", metrics_prefix));
-        register_histogram!(format!("{}.commit_duration.seconds", metrics_prefix));
-        register_histogram!(format!("{}.participants.count", metrics_prefix));
-
-        info!("Transaction metrics registered with prefix: {}", metrics_prefix);
+        info!("Transaction metrics initialized with prefix: {}", metrics_prefix);
 
         Self {
             node_id,
@@ -45,8 +30,8 @@ impl TransactionMetrics {
 
     /// Record transaction start
     pub async fn record_transaction_started(&self, transaction_id: &str) {
-        counter!(format!("{}.started.total", self.metrics_prefix), 1);
-        gauge!(format!("{}.active", self.metrics_prefix), 1.0);
+        counter!(format!("{}.started.total", self.metrics_prefix)).increment(1);
+        gauge!(format!("{}.active", self.metrics_prefix)).increment(1.0);
         
         let mut start_times = self.start_times.write().await;
         start_times.insert(transaction_id.to_string(), Instant::now());
@@ -56,14 +41,12 @@ impl TransactionMetrics {
 
     /// Record transaction commit
     pub async fn record_transaction_committed(&self, transaction_id: &str) {
-        counter!(format!("{}.committed.total", self.metrics_prefix), 1);
-        gauge!(format!("{}.active", self.metrics_prefix), -1.0);
+        counter!(format!("{}.committed.total", self.metrics_prefix)).increment(1);
+        gauge!(format!("{}.active", self.metrics_prefix)).decrement(1.0);
         
         if let Some(duration) = self.get_duration(transaction_id).await {
-            histogram!(
-                format!("{}.duration.seconds", self.metrics_prefix),
-                duration.as_secs_f64()
-            );
+            histogram!(format!("{}.duration.seconds", self.metrics_prefix))
+                .record(duration.as_secs_f64());
         }
         
         debug!("Transaction committed: {}", transaction_id);
@@ -71,8 +54,8 @@ impl TransactionMetrics {
 
     /// Record transaction abort
     pub async fn record_transaction_aborted(&self, transaction_id: &str) {
-        counter!(format!("{}.aborted.total", self.metrics_prefix), 1);
-        gauge!(format!("{}.active", self.metrics_prefix), -1.0);
+        counter!(format!("{}.aborted.total", self.metrics_prefix)).increment(1);
+        gauge!(format!("{}.active", self.metrics_prefix)).decrement(1.0);
         
         if let Some(duration) = self.get_duration(transaction_id).await {
             histogram!(
@@ -86,8 +69,8 @@ impl TransactionMetrics {
 
     /// Record transaction failure
     pub async fn record_transaction_failed(&self, transaction_id: &str, _reason: &str) {
-        counter!(format!("{}.failed.total", self.metrics_prefix), 1);
-        gauge!(format!("{}.active", self.metrics_prefix), -1.0);
+        counter!(format!("{}.failed.total", self.metrics_prefix)).increment(1);
+        gauge!(format!("{}.active", self.metrics_prefix)).decrement(1.0);
         
         if let Some(duration) = self.get_duration(transaction_id).await {
             histogram!(
@@ -101,8 +84,8 @@ impl TransactionMetrics {
 
     /// Record transaction timeout
     pub async fn record_transaction_timeout(&self, transaction_id: &str) {
-        counter!(format!("{}.timeout.total", self.metrics_prefix), 1);
-        gauge!(format!("{}.active", self.metrics_prefix), -1.0);
+        counter!(format!("{}.timeout.total", self.metrics_prefix)).increment(1);
+        gauge!(format!("{}.active", self.metrics_prefix)).decrement(1.0);
         
         if let Some(duration) = self.get_duration(transaction_id).await {
             histogram!(
@@ -164,24 +147,7 @@ impl SagaMetrics {
     pub fn new(node_id: NodeId) -> Self {
         let metrics_prefix = format!("orbit.saga.{}", node_id);
         
-        // Register saga metrics
-        register_counter!(format!("{}.started.total", metrics_prefix));
-        register_counter!(format!("{}.completed.total", metrics_prefix));
-        register_counter!(format!("{}.failed.total", metrics_prefix));
-        register_counter!(format!("{}.compensated.total", metrics_prefix));
-        register_counter!(format!("{}.step.executed.total", metrics_prefix));
-        register_counter!(format!("{}.step.compensated.total", metrics_prefix));
-        register_counter!(format!("{}.step.failed.total", metrics_prefix));
-        
-        register_gauge!(format!("{}.active", metrics_prefix));
-        register_gauge!(format!("{}.queued", metrics_prefix));
-        
-        register_histogram!(format!("{}.duration.seconds", metrics_prefix));
-        register_histogram!(format!("{}.step.duration.seconds", metrics_prefix));
-        register_histogram!(format!("{}.compensation.duration.seconds", metrics_prefix));
-        register_histogram!(format!("{}.steps.count", metrics_prefix));
-
-        info!("Saga metrics registered with prefix: {}", metrics_prefix);
+        info!("Saga metrics initialized with prefix: {}", metrics_prefix);
 
         Self {
             node_id,
@@ -192,8 +158,8 @@ impl SagaMetrics {
 
     /// Record saga started
     pub async fn record_saga_started(&self, saga_id: &str) {
-        counter!(format!("{}.started.total", self.metrics_prefix), 1);
-        gauge!(format!("{}.active", self.metrics_prefix), 1.0);
+        counter!(format!("{}.started.total", self.metrics_prefix)).increment(1);
+        gauge!(format!("{}.active", self.metrics_prefix)).increment(1.0);
         
         let mut start_times = self.start_times.write().await;
         start_times.insert(saga_id.to_string(), Instant::now());
@@ -203,8 +169,8 @@ impl SagaMetrics {
 
     /// Record saga completed
     pub async fn record_saga_completed(&self, saga_id: &str, step_count: usize) {
-        counter!(format!("{}.completed.total", self.metrics_prefix), 1);
-        gauge!(format!("{}.active", self.metrics_prefix), -1.0);
+        counter!(format!("{}.completed.total", self.metrics_prefix)).increment(1);
+        gauge!(format!("{}.active", self.metrics_prefix)).decrement(1.0);
         histogram!(format!("{}.steps.count", self.metrics_prefix), step_count as f64);
         
         if let Some(duration) = self.get_duration(saga_id).await {
@@ -219,8 +185,8 @@ impl SagaMetrics {
 
     /// Record saga failed
     pub async fn record_saga_failed(&self, saga_id: &str) {
-        counter!(format!("{}.failed.total", self.metrics_prefix), 1);
-        gauge!(format!("{}.active", self.metrics_prefix), -1.0);
+        counter!(format!("{}.failed.total", self.metrics_prefix)).increment(1);
+        gauge!(format!("{}.active", self.metrics_prefix)).decrement(1.0);
         
         if let Some(duration) = self.get_duration(saga_id).await {
             histogram!(
@@ -234,8 +200,8 @@ impl SagaMetrics {
 
     /// Record saga compensated
     pub async fn record_saga_compensated(&self, saga_id: &str) {
-        counter!(format!("{}.compensated.total", self.metrics_prefix), 1);
-        gauge!(format!("{}.active", self.metrics_prefix), -1.0);
+        counter!(format!("{}.compensated.total", self.metrics_prefix)).increment(1);
+        gauge!(format!("{}.active", self.metrics_prefix)).decrement(1.0);
         
         if let Some(duration) = self.get_duration(saga_id).await {
             histogram!(
@@ -249,7 +215,7 @@ impl SagaMetrics {
 
     /// Record step executed
     pub fn record_step_executed(&self, step_id: &str, duration: Duration) {
-        counter!(format!("{}.step.executed.total", self.metrics_prefix), 1);
+        counter!(format!("{}.step.executed.total", self.metrics_prefix)).increment(1);
         histogram!(
             format!("{}.step.duration.seconds", self.metrics_prefix),
             duration.as_secs_f64()
@@ -259,7 +225,7 @@ impl SagaMetrics {
 
     /// Record step compensated
     pub fn record_step_compensated(&self, step_id: &str, duration: Duration) {
-        counter!(format!("{}.step.compensated.total", self.metrics_prefix), 1);
+        counter!(format!("{}.step.compensated.total", self.metrics_prefix)).increment(1);
         histogram!(
             format!("{}.compensation.duration.seconds", self.metrics_prefix),
             duration.as_secs_f64()
@@ -269,7 +235,7 @@ impl SagaMetrics {
 
     /// Record step failed
     pub fn record_step_failed(&self, step_id: &str) {
-        counter!(format!("{}.step.failed.total", self.metrics_prefix), 1);
+        counter!(format!("{}.step.failed.total", self.metrics_prefix)).increment(1);
         debug!("Saga step failed: {}", step_id);
     }
 
@@ -296,20 +262,7 @@ impl LockMetrics {
     pub fn new(node_id: NodeId) -> Self {
         let metrics_prefix = format!("orbit.locks.{}", node_id);
         
-        // Register lock metrics
-        register_counter!(format!("{}.acquired.total", metrics_prefix));
-        register_counter!(format!("{}.released.total", metrics_prefix));
-        register_counter!(format!("{}.timeout.total", metrics_prefix));
-        register_counter!(format!("{}.deadlock.detected.total", metrics_prefix));
-        register_counter!(format!("{}.deadlock.resolved.total", metrics_prefix));
-        
-        register_gauge!(format!("{}.held.count", metrics_prefix));
-        register_gauge!(format!("{}.waiting.count", metrics_prefix));
-        
-        register_histogram!(format!("{}.wait.duration.seconds", metrics_prefix));
-        register_histogram!(format!("{}.hold.duration.seconds", metrics_prefix));
-
-        info!("Lock metrics registered with prefix: {}", metrics_prefix);
+        info!("Lock metrics initialized with prefix: {}", metrics_prefix);
 
         Self {
             node_id,
@@ -319,15 +272,15 @@ impl LockMetrics {
 
     /// Record lock acquired
     pub fn record_lock_acquired(&self, resource_id: &str) {
-        counter!(format!("{}.acquired.total", self.metrics_prefix), 1);
-        gauge!(format!("{}.held.count", self.metrics_prefix), 1.0);
+        counter!(format!("{}.acquired.total", self.metrics_prefix)).increment(1);
+        gauge!(format!("{}.held.count", self.metrics_prefix)).increment(1.0);
         debug!("Lock acquired: {}", resource_id);
     }
 
     /// Record lock released
     pub fn record_lock_released(&self, resource_id: &str, hold_duration: Duration) {
-        counter!(format!("{}.released.total", self.metrics_prefix), 1);
-        gauge!(format!("{}.held.count", self.metrics_prefix), -1.0);
+        counter!(format!("{}.released.total", self.metrics_prefix)).increment(1);
+        gauge!(format!("{}.held.count", self.metrics_prefix)).decrement(1.0);
         histogram!(
             format!("{}.hold.duration.seconds", self.metrics_prefix),
             hold_duration.as_secs_f64()
@@ -337,7 +290,7 @@ impl LockMetrics {
 
     /// Record lock timeout
     pub fn record_lock_timeout(&self, resource_id: &str, wait_duration: Duration) {
-        counter!(format!("{}.timeout.total", self.metrics_prefix), 1);
+        counter!(format!("{}.timeout.total", self.metrics_prefix)).increment(1);
         histogram!(
             format!("{}.wait.duration.seconds", self.metrics_prefix),
             wait_duration.as_secs_f64()
@@ -347,13 +300,13 @@ impl LockMetrics {
 
     /// Record deadlock detected
     pub fn record_deadlock_detected(&self, transaction_count: usize) {
-        counter!(format!("{}.deadlock.detected.total", self.metrics_prefix), 1);
+        counter!(format!("{}.deadlock.detected.total", self.metrics_prefix)).increment(1);
         debug!("Deadlock detected involving {} transactions", transaction_count);
     }
 
     /// Record deadlock resolved
     pub fn record_deadlock_resolved(&self, victim_transaction: &str) {
-        counter!(format!("{}.deadlock.resolved.total", self.metrics_prefix), 1);
+        counter!(format!("{}.deadlock.resolved.total", self.metrics_prefix)).increment(1);
         debug!("Deadlock resolved by aborting transaction: {}", victim_transaction);
     }
 

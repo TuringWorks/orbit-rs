@@ -17,8 +17,8 @@ pub mod security;
 // Re-export core transaction types
 pub use core::{
     DistributedTransaction, TransactionConfig, TransactionCoordinator, TransactionEvent,
-    TransactionId, TransactionLogEntry, TransactionMessage, TransactionOperation,
-    TransactionParticipant, TransactionState, TransactionVote,
+    TransactionId, TransactionLogEntry, TransactionMessage, TransactionMessageSender,
+    TransactionOperation, TransactionParticipant, TransactionState, TransactionVote,
 };
 
 // Re-export advanced features
