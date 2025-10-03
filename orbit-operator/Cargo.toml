@@ -15,7 +15,6 @@ orbit-proto = { path = "../orbit-proto" }
 # Kubernetes operator dependencies
 kube = { version = "0.95", features = ["runtime", "derive", "client", "rustls-tls", "ws"] }
 k8s-openapi = { version = "0.22", features = ["latest"] }
-controller-rs = "0.1"
 
 # Async runtime and utilities
 tokio = { workspace = true, features = ["full"] }
@@ -48,7 +47,7 @@ metrics = { workspace = true }
 
 [dev-dependencies]
 tempfile = "3.0"
-kube-client = { version = "0.95", features = ["test"] }
+kube = { version = "0.95", features = ["runtime", "derive", "client", "rustls-tls"] }
 
 [[bin]]
 name = "orbit-operator"
