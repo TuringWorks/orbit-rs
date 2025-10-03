@@ -1,7 +1,6 @@
 use anyhow::Result;
 use clap::Parser;
 use kube::Client;
-use std::sync::Arc;
 use tokio::signal;
 use tracing::{info, warn};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
