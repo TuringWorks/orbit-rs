@@ -233,7 +233,7 @@ async fn create_service_account(
         Err(kube::Error::Api(ae)) if ae.code == 409 => {
             info!("ServiceAccount {} already exists", name);
         }
-        Err(e) => return Err(anyhow::anyhow!("Failed to create ServiceAccount: {}", e)),
+        Err(e) => return Err(ControllerError::Generic(format!("Failed to create ServiceAccount: {}", e))),
     }
 
     Ok(())
