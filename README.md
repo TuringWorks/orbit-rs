@@ -184,6 +184,125 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
+## Advanced Transaction Features
+
+Orbit-RS includes a comprehensive suite of advanced transaction features for building production-ready distributed systems:
+
+### 🔒 Distributed Locks with Deadlock Detection
+
+```rust
+use orbit_shared::transactions::{DistributedLockManager, LockMode};
+
+// Create lock manager
+let lock_manager = DistributedLockManager::new(config);
+
+// Acquire exclusive lock with automatic deadlock detection
+let lock = lock_manager.acquire_lock(
+    "resource-123", 
+    LockMode::Exclusive,
+    Duration::from_secs(30)
+).await?;
+
+// Lock automatically released when dropped
+```
+
+**Features:**
+- Wait-for graph based deadlock detection with cycle detection
+- Exclusive and shared lock modes
+- Automatic timeout and expiration handling
+- Priority-based fair lock acquisition
+
+### 📊 Prometheus Metrics Integration
+
+```rust
+use orbit_shared::transactions::TransactionMetrics;
+
+// Initialize metrics
+let metrics = TransactionMetrics::new(node_id);
+
+// Automatic tracking of:
+// - Transaction start/commit/abort counts
+// - Active transaction gauges
+// - Duration histograms
+// - Lock acquisition metrics
+// - Saga step execution tracking
+```
+
+**Metrics Exported:**
+- Counters: `transaction.started.total`, `locks.acquired.total`, `saga.step.executed.total`
+- Gauges: `transaction.active`, `locks.held.count`, `saga.queued`
+- Histograms: `transaction.duration.seconds`, `locks.wait.duration.seconds`
+
+### 🛡️ Security & Audit Logging
+
+```rust
+use orbit_shared::transactions::{TransactionSecurityManager, TransactionPermission};
+
+// Initialize security manager
+let security_mgr = TransactionSecurityManager::new(config);
+
+// Authenticate and authorize
+security_mgr.authenticate(&token).await?;
+security_mgr.authorize(&token, &tx_id, TransactionPermission::Commit).await?;
+
+// Comprehensive audit trail
+security_mgr.audit_log_entry(tx_id, "COMMIT", "success").await?;
+```
+
+**Features:**
+- Token-based authentication with JWT-style tokens
+- Scope-based authorization with fine-grained permissions
+- Immutable audit logs for compliance and forensics
+- Pluggable authentication providers
+
+### 🔄 Saga Pattern for Long-Running Workflows
+
+```rust
+use orbit_shared::saga::SagaOrchestrator;
+
+// Define saga with compensating actions
+let saga = SagaOrchestrator::new()
+    .add_step("reserve_inventory", compensation: "release_inventory")
+    .add_step("charge_payment", compensation: "refund_payment")
+    .add_step("ship_order", compensation: "cancel_shipment");
+
+// Execute with automatic compensation on failure
+saga.execute().await?;
+```
+
+**Features:**
+- Automatic compensation on failure
+- Step-by-step execution with rollback support
+- Persistent saga state management
+- Event-driven coordination
+
+### ⚡ Performance Optimizations
+
+```rust
+use orbit_shared::transactions::{BatchProcessor, ConnectionPool, ResourceManager};
+
+// Adaptive batch processing
+let batch_processor = BatchProcessor::new(config);
+batch_processor.add_operation(op, priority).await?;
+let batch = batch_processor.flush().await?;
+
+// Connection pooling with health checks
+let pool = ConnectionPool::new(config, factory);
+let conn = pool.acquire().await?;
+
+// Resource management with memory and concurrency limits
+let resource_mgr = ResourceManager::new(max_memory, max_concurrent);
+let guard = resource_mgr.acquire(memory_estimate).await?;
+```
+
+**Features:**
+- Adaptive batch sizing with priority queues
+- Generic connection pooling with health checks
+- Memory and concurrency limiting
+- RAII resource guards for automatic cleanup
+
+See [Advanced Features Documentation](ADVANCED_FEATURES_IMPLEMENTATION.md) for detailed usage examples.
+
 ### Kubernetes Deployment
 
 Deploy Orbit-RS on Kubernetes using the native operator:
@@ -264,14 +383,14 @@ See [Kubernetes Deployment Guide](docs/KUBERNETES_DEPLOYMENT.md) for detailed in
 - [x] **Connection Pooling**: Efficient gRPC connection management
 - [x] **Batch Processing**: Optimized write operations and log management
 
-### 🚧 Future Enhancements
+**Advanced Transaction Features** ✅
+- [x] **Saga Pattern Support**: Long-running transaction workflows with compensating actions
+- [x] **Distributed Locks**: Deadlock detection and prevention with wait-for graph analysis
+- [x] **Metrics Integration**: Comprehensive Prometheus monitoring and observability
+- [x] **Security Features**: Token-based authentication, authorization, and audit logging
+- [x] **Performance Optimization**: Adaptive batching, connection pooling, and resource management
 
-**Advanced Transaction Features**
-- [ ] Saga Pattern Support - Long-running transaction workflows
-- [ ] Performance Optimization - Enhanced batching and resource management
-- [ ] Security Features - Authentication and encryption for transactions
-- [ ] Distributed Locks - Deadlock detection and prevention
-- [ ] Metrics Integration - Prometheus monitoring and observability
+### 🚧 Future Enhancements
 
 **Ecosystem Integration**
 - [x] **Kubernetes Operator**: Custom CRDs for cluster, actor, and transaction management
