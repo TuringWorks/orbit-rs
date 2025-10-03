@@ -32,7 +32,7 @@ impl Default for BatchConfig {
 }
 
 /// A batched operation
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct BatchedOperation<T> {
     pub operation: T,
     pub timestamp: Instant,
@@ -474,9 +474,8 @@ impl ResourceManager {
     /// Acquire resources for an operation
     pub async fn acquire(&self, memory_estimate: usize) -> OrbitResult<ResourceGuard> {
         // Acquire concurrency permit
-        let permit = self
-            .concurrency_limiter
-            .acquire()
+        let permit = Arc::clone(&self.concurrency_limiter)
+            .acquire_owned()
             .await
             .map_err(|e| OrbitError::internal(format!("Concurrency limiter error: {}", e)))?;
 
@@ -507,7 +506,7 @@ impl ResourceManager {
 pub struct ResourceGuard {
     memory_estimate: usize,
     current_memory: Arc<RwLock<usize>>,
-    _permit: tokio::sync::SemaphorePermit<'static>,
+    _permit: tokio::sync::OwnedSemaphorePermit,
 }
 
 impl Drop for ResourceGuard {

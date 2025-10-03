@@ -110,7 +110,7 @@ impl TransactionMetrics {
 
     /// Record queued transactions
     pub fn record_queued_transactions(&self, count: usize) {
-        gauge!(format!("{}.queued", self.metrics_prefix), count as f64);
+        gauge!(format!("{}.queued", self.metrics_prefix)).set(count as f64);
     }
 
     /// Get duration since transaction started
@@ -211,7 +211,7 @@ impl SagaMetrics {
 
     /// Record queued sagas
     pub fn record_queued_sagas(&self, count: usize) {
-        gauge!(format!("{}.queued", self.metrics_prefix), count as f64);
+        gauge!(format!("{}.queued", self.metrics_prefix)).set(count as f64);
     }
 
     /// Get duration since saga started
@@ -282,7 +282,7 @@ impl LockMetrics {
 
     /// Record waiting locks
     pub fn record_waiting_locks(&self, count: usize) {
-        gauge!(format!("{}.waiting.count", self.metrics_prefix), count as f64);
+        gauge!(format!("{}.waiting.count", self.metrics_prefix)).set(count as f64);
     }
 }
 
