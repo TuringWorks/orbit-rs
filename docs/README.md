@@ -41,6 +41,11 @@
 
 ## Deployment
 
+### CI/CD and Secrets
+- **[Secrets Configuration Guide](SECRETS_CONFIGURATION_GUIDE.md)** - Complete guide for configuring GitHub Actions secrets
+- [Secrets Preparation Script](../scripts/prepare-secrets.sh) - Automated kubeconfig preparation
+- [CI/CD Pipeline]../.github/workflows/ci-cd.yml) - GitHub Actions workflow
+
 ### Kubernetes
 - [Kubernetes Deployment Guide](KUBERNETES_DEPLOYMENT.md) - Complete K8s deployment
 - [Operator Usage](KUBERNETES_DEPLOYMENT.md#operator-usage) - Custom resource definitions
