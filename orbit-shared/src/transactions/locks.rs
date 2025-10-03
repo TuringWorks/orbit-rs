@@ -270,7 +270,7 @@ impl DeadlockDetector {
 
             graph
                 .entry(edge.waiting_transaction.clone())
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(edge.holding_transaction.clone());
         }
 
@@ -310,11 +310,10 @@ impl DeadlockDetector {
         let mut visited = HashSet::new();
         let mut path = Vec::new();
 
-        self.dfs_helper(graph, start, start, &mut visited, &mut path)
+        Self::dfs_helper(graph, start, start, &mut visited, &mut path)
     }
 
     fn dfs_helper(
-        &self,
         graph: &HashMap<String, Vec<String>>,
         current: &str,
         target: &str,
@@ -335,7 +334,7 @@ impl DeadlockDetector {
 
         if let Some(neighbors) = graph.get(current) {
             for neighbor in neighbors {
-                if let Some(cycle) = self.dfs_helper(graph, neighbor, target, visited, path) {
+                if let Some(cycle) = Self::dfs_helper(graph, neighbor, target, visited, path) {
                     return Some(cycle);
                 }
             }

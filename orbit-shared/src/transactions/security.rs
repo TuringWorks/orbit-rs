@@ -8,6 +8,9 @@ use std::time::{Duration, SystemTime};
 use tokio::sync::RwLock;
 use tracing::{debug, info};
 
+/// Type alias for user credentials storage (username -> (password, scopes))
+type UserCredentials = HashMap<String, (String, Vec<String>)>;
+
 /// Authentication token for transactions
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuthToken {
@@ -164,7 +167,7 @@ pub trait AuthorizationProvider: Send + Sync {
 
 /// Simple in-memory authentication provider (for testing/demo)
 pub struct InMemoryAuthProvider {
-    users: Arc<RwLock<HashMap<String, (String, Vec<String>)>>>, // username -> (password, scopes)
+    users: Arc<RwLock<UserCredentials>>,
     tokens: Arc<RwLock<HashMap<String, AuthToken>>>,
     token_ttl: Duration,
 }

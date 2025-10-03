@@ -7,6 +7,10 @@ use tokio::sync::{Mutex, RwLock, Semaphore};
 use tokio::time::timeout;
 use tracing::{debug, info, warn};
 
+/// Type alias for batch processor function
+type BatchProcessorFn<T> =
+    dyn Fn(Vec<T>) -> futures::future::BoxFuture<'static, OrbitResult<Vec<bool>>> + Send + Sync;
+
 /// Configuration for batch processing
 #[derive(Debug, Clone)]
 pub struct BatchConfig {
@@ -61,9 +65,7 @@ where
 {
     config: BatchConfig,
     queue: Arc<Mutex<VecDeque<BatchedOperation<T>>>>,
-    processor: Arc<
-        dyn Fn(Vec<T>) -> futures::future::BoxFuture<'static, OrbitResult<Vec<bool>>> + Send + Sync,
-    >,
+    processor: Arc<BatchProcessorFn<T>>,
     stats: Arc<RwLock<BatchStats>>,
 }
 

@@ -10,7 +10,7 @@ use tracing::{debug, info};
 /// Transaction metrics collector
 #[derive(Clone)]
 pub struct TransactionMetrics {
-    node_id: NodeId,
+    _node_id: NodeId,
     metrics_prefix: String,
     start_times: Arc<RwLock<HashMap<String, Instant>>>,
 }
@@ -25,7 +25,7 @@ impl TransactionMetrics {
         );
 
         Self {
-            node_id,
+            _node_id: node_id,
             metrics_prefix,
             start_times: Arc::new(RwLock::new(HashMap::new())),
         }
@@ -136,7 +136,7 @@ impl TransactionMetrics {
 /// Saga metrics collector
 #[derive(Clone)]
 pub struct SagaMetrics {
-    node_id: NodeId,
+    _node_id: NodeId,
     metrics_prefix: String,
     start_times: Arc<RwLock<HashMap<String, Instant>>>,
 }
@@ -148,7 +148,7 @@ impl SagaMetrics {
         info!("Saga metrics initialized with prefix: {}", metrics_prefix);
 
         Self {
-            node_id,
+            _node_id: node_id,
             metrics_prefix,
             start_times: Arc::new(RwLock::new(HashMap::new())),
         }
@@ -242,7 +242,7 @@ impl SagaMetrics {
 /// Lock metrics collector
 #[derive(Clone)]
 pub struct LockMetrics {
-    node_id: NodeId,
+    _node_id: NodeId,
     metrics_prefix: String,
 }
 
@@ -253,7 +253,7 @@ impl LockMetrics {
         info!("Lock metrics initialized with prefix: {}", metrics_prefix);
 
         Self {
-            node_id,
+            _node_id: node_id,
             metrics_prefix,
         }
     }
