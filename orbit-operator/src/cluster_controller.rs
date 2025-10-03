@@ -602,7 +602,7 @@ async fn create_stateful_set(
                         k8s_openapi::api::core::v1::Volume {
                             name: "config".to_string(),
                             config_map: Some(k8s_openapi::api::core::v1::ConfigMapVolumeSource {
-                                name: Some(format!("{}-config", name)),
+                                name: format!("{}-config", name),
                                 default_mode: Some(0o644),
                                 ..Default::default()
                             }),
