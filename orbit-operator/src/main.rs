@@ -263,7 +263,7 @@ orbit_reconciliation_errors_total{{controller="transaction"}} 0
 "#,
             env!("CARGO_PKG_VERSION"),
             env!("CARGO_PKG_VERSION"),
-            env!("CARGO_PKG_RUST_VERSION").unwrap_or("unknown")
+            option_env!("CARGO_PKG_RUST_VERSION").unwrap_or("unknown")
         );
 
         Ok(Response::builder()
