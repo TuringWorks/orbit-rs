@@ -32,6 +32,13 @@
 - [Performance Optimizations](#performance-optimizations) - Batching and pooling
 - [Saga Pattern](#saga-pattern) - Long-running workflows
 
+### Network Layer
+- **[Network Layer Guide](NETWORK_LAYER.md)** - Complete gRPC infrastructure documentation
+- [Protocol Buffers](#protocol-buffers) - Message serialization
+- [gRPC Services](#grpc-services) - Service definitions and usage
+- [Transport Layer](#transport-layer) - Connection pooling and retry logic
+- [Raft Transport](#raft-transport) - Consensus communication
+
 ## Deployment
 
 ### Kubernetes
@@ -62,6 +69,92 @@
 - [Saga Pattern](../examples/saga-example/) - Order processing workflow
 
 ## Advanced Topics
+
+### Network Layer
+
+High-performance gRPC-based network infrastructure with connection pooling, retry logic, and comprehensive monitoring.
+
+**Key Features:**
+- Protocol Buffer integration with `tonic`
+- Bidirectional streaming for actor messages
+- Connection pooling with automatic cleanup
+- Exponential backoff retry logic
+- Health check service
+
+**Quick Example:**
+```rust
+use orbit_shared::transport::{GrpcTransactionMessageSender, TransportConfig};
+
+let sender = GrpcTransactionMessageSender::new(
+    node_id,
+    node_resolver,
+    TransportConfig::default(),
+);
+
+sender.start_background_tasks().await?;
+sender.send_message(&target, message).await?;
+```
+
+**Documentation:** [Network Layer Guide](NETWORK_LAYER.md)
+
+### Protocol Buffers
+
+Complete Protocol Buffer definitions for all core types and services.
+
+**Defined Protocols:**
+- `messages.proto` - Actor invocation and routing
+- `node.proto` - Cluster node information
+- `addressable.proto` - Actor references and leases
+- `connection.proto` - Connection service
+- `health.proto` - Health monitoring
+
+**Documentation:** [Protocol Buffers Section](NETWORK_LAYER.md#protocol-buffer-definitions)
+
+### gRPC Services
+
+Four fully implemented gRPC services for distributed communication:
+
+1. **ConnectionService** - Bidirectional actor message streaming
+2. **HealthService** - Standard health checks and monitoring
+3. **RaftConsensusService** - Consensus protocol messages
+4. **TransactionService** - Distributed transaction coordination
+
+**Documentation:** [gRPC Services Section](NETWORK_LAYER.md#grpc-services)
+
+### Transport Layer
+
+Production-ready transport with advanced features:
+
+**Connection Pooling:**
+- Automatic connection caching and reuse
+- Health-based cleanup
+- Per-connection metrics tracking
+
+**Retry Logic:**
+- Exponential backoff strategy
+- Smart error classification
+- Timeout enforcement
+
+**Performance:**
+- HTTP/2 with adaptive flow control
+- TCP keepalive
+- Concurrent request handling
+- Broadcast optimization
+
+**Documentation:** [Transport Layer Section](NETWORK_LAYER.md#transport-layer)
+
+### Raft Transport
+
+Specialized gRPC transport for Raft consensus protocol:
+
+**Features:**
+- Vote request/response handling
+- Log replication via append entries
+- Concurrent heartbeat broadcasting
+- Dynamic node address updates
+- Automatic reconnection
+
+**Documentation:** [Raft Transport Section](NETWORK_LAYER.md#raft-consensus-transport-orbit-sharedsrcraft_transportrs)
 
 ### Distributed Locks
 

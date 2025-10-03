@@ -412,10 +412,16 @@ If you're migrating from the original Kotlin/JVM implementation, see our compreh
 
 ## Documentation
 
+### Core Documentation
 - [Architecture Documentation](ORBIT_ARCHITECTURE.md) - Detailed system architecture
 - [Migration Guide](MIGRATION_GUIDE.md) - Complete migration documentation
 - [Dependency Mapping](DEPENDENCY_MAPPING.md) - Kotlin to Rust dependency mappings
 - [API Documentation](https://docs.rs/orbit-rs) - Complete API reference
+
+### Feature Guides
+- [Advanced Transaction Features](docs/ADVANCED_TRANSACTION_FEATURES.md) - Distributed locks, metrics, security, performance
+- [Network Layer Guide](docs/NETWORK_LAYER.md) - gRPC services, Protocol Buffers, transport layer
+- [Documentation Index](docs/README.md) - Complete documentation hub with quick references
 
 ## 🔄 CI/CD Pipeline
 
