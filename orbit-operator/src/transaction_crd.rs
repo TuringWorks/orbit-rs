@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 )]
 #[kube(status = "OrbitTransactionStatus")]
 #[kube(shortname = "otx")]
+#[allow(dead_code)]
 pub struct OrbitTransactionSpec {
     /// Target cluster for transaction management
     pub cluster_ref: ClusterReference,
@@ -39,6 +40,7 @@ pub struct OrbitTransactionSpec {
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, JsonSchema)]
+#[allow(dead_code)]
 pub struct ClusterReference {
     /// Name of the OrbitCluster
     pub name: String,
@@ -48,6 +50,7 @@ pub struct ClusterReference {
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, JsonSchema, Default)]
+#[allow(dead_code)]
 pub struct CoordinatorConfig {
     /// Maximum concurrent transactions
     #[serde(default = "default_max_concurrent_transactions")]
@@ -67,6 +70,7 @@ pub struct CoordinatorConfig {
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, JsonSchema, Default)]
+#[allow(dead_code)]
 pub struct TimeoutConfig {
     /// Default transaction timeout in seconds
     #[serde(default = "default_transaction_timeout")]
@@ -98,6 +102,7 @@ pub struct TimeoutConfig {
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, JsonSchema, Default)]
+#[allow(dead_code)]
 pub struct PersistenceConfig {
     /// Storage backend type
     #[serde(default = "default_storage_backend")]
@@ -128,6 +133,7 @@ pub struct PersistenceConfig {
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, JsonSchema, Default)]
+#[allow(dead_code)]
 pub struct RecoveryConfig {
     /// Enable automatic recovery
     #[serde(default = "default_enable_recovery")]
@@ -155,6 +161,7 @@ pub struct RecoveryConfig {
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, JsonSchema, Default)]
+#[allow(dead_code)]
 pub struct TransactionMonitoringConfig {
     /// Enable metrics collection
     #[serde(default = "default_enable_metrics")]
@@ -174,6 +181,7 @@ pub struct TransactionMonitoringConfig {
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, JsonSchema, Default)]
+#[allow(dead_code)]
 pub struct AlertThresholds {
     /// Alert when transaction failure rate exceeds this percentage
     #[serde(default = "default_failure_rate_threshold")]
@@ -193,6 +201,7 @@ pub struct AlertThresholds {
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, JsonSchema)]
+#[allow(dead_code)]
 pub struct OrbitTransactionStatus {
     /// Current phase of the transaction system
     pub phase: Option<TransactionPhase>,
@@ -221,6 +230,7 @@ pub struct OrbitTransactionStatus {
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, JsonSchema)]
+#[allow(dead_code)]
 pub enum TransactionPhase {
     Pending,
     Initializing,
@@ -231,6 +241,7 @@ pub enum TransactionPhase {
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, JsonSchema)]
+#[allow(dead_code)]
 pub struct CoordinatorStatus {
     /// Node ID of the current coordinator
     pub node_id: String,
@@ -249,6 +260,7 @@ pub struct CoordinatorStatus {
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, JsonSchema)]
+#[allow(dead_code)]
 pub struct TransactionCondition {
     /// Type of condition
     pub condition_type: String,
@@ -267,6 +279,7 @@ pub struct TransactionCondition {
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, JsonSchema)]
+#[allow(dead_code)]
 pub struct TransactionMetrics {
     /// Average transaction duration in milliseconds
     pub avg_duration_ms: f64,
@@ -291,122 +304,152 @@ pub struct TransactionMetrics {
 }
 
 // Default value functions
+#[allow(dead_code)]
 fn default_max_concurrent_transactions() -> u32 {
     100
 }
 
+#[allow(dead_code)]
 fn default_batch_size() -> u32 {
     10
 }
 
+#[allow(dead_code)]
 fn default_enable_clustering() -> bool {
     true
 }
 
+#[allow(dead_code)]
 fn default_heartbeat_interval() -> u32 {
     30
 }
 
+#[allow(dead_code)]
 fn default_transaction_timeout() -> u32 {
     300
 }
 
+#[allow(dead_code)]
 fn default_max_timeout() -> u32 {
     3600
 }
 
+#[allow(dead_code)]
 fn default_prepare_timeout() -> u32 {
     30
 }
 
+#[allow(dead_code)]
 fn default_commit_timeout() -> u32 {
     30
 }
 
+#[allow(dead_code)]
 fn default_abort_timeout() -> u32 {
     30
 }
 
+#[allow(dead_code)]
 fn default_max_retries() -> u32 {
     3
 }
 
+#[allow(dead_code)]
 fn default_retry_backoff_ms() -> u32 {
     1000
 }
 
+#[allow(dead_code)]
 fn default_storage_backend() -> String {
     "sqlite".to_string()
 }
 
+#[allow(dead_code)]
 fn default_max_db_connections() -> u32 {
     10
 }
 
+#[allow(dead_code)]
 fn default_connection_timeout() -> u32 {
     30
 }
 
+#[allow(dead_code)]
 fn default_enable_wal() -> bool {
     true
 }
 
+#[allow(dead_code)]
 fn default_log_retention_days() -> u32 {
     30
 }
 
+#[allow(dead_code)]
 fn default_enable_compression() -> bool {
     true
 }
 
+#[allow(dead_code)]
 fn default_enable_recovery() -> bool {
     true
 }
 
+#[allow(dead_code)]
 fn default_recovery_interval() -> u32 {
     60
 }
 
+#[allow(dead_code)]
 fn default_max_recovery_attempts() -> u32 {
     3
 }
 
+#[allow(dead_code)]
 fn default_recovery_timeout() -> u32 {
     300
 }
 
+#[allow(dead_code)]
 fn default_enable_failover() -> bool {
     true
 }
 
+#[allow(dead_code)]
 fn default_failover_timeout() -> u32 {
     180
 }
 
+#[allow(dead_code)]
 fn default_enable_metrics() -> bool {
     true
 }
 
+#[allow(dead_code)]
 fn default_metrics_interval() -> u32 {
     30
 }
 
+#[allow(dead_code)]
 fn default_enable_tracing() -> bool {
     false
 }
 
+#[allow(dead_code)]
 fn default_failure_rate_threshold() -> f32 {
     5.0
 }
 
+#[allow(dead_code)]
 fn default_duration_threshold() -> f32 {
     30.0
 }
 
+#[allow(dead_code)]
 fn default_concurrent_threshold() -> u32 {
     80
 }
 
+#[allow(dead_code)]
 fn default_recovery_rate_threshold() -> f32 {
     10.0
 }

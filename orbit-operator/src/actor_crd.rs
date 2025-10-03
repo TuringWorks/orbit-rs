@@ -14,6 +14,7 @@ use std::collections::BTreeMap;
 )]
 #[kube(status = "OrbitActorStatus")]
 #[kube(shortname = "oa")]
+#[allow(dead_code)]
 pub struct OrbitActorSpec {
     /// Actor type identifier
     pub actor_type: String,
@@ -39,6 +40,7 @@ pub struct OrbitActorSpec {
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, JsonSchema)]
+#[allow(dead_code)]
 pub struct ClusterReference {
     /// Name of the OrbitCluster
     pub name: String,
@@ -48,6 +50,7 @@ pub struct ClusterReference {
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, JsonSchema, Default)]
+#[allow(dead_code)]
 pub struct ActorConfig {
     /// Actor activation timeout in seconds
     #[serde(default = "default_activation_timeout")]
@@ -75,6 +78,7 @@ pub struct ActorConfig {
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, JsonSchema, Default)]
+#[allow(dead_code)]
 pub struct ScalingConfig {
     /// Minimum number of actor instances
     #[serde(default = "default_min_instances")]
@@ -98,6 +102,7 @@ pub struct ScalingConfig {
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, JsonSchema)]
+#[allow(dead_code)]
 pub struct OrbitActorStatus {
     /// Current phase of the actor deployment
     pub phase: Option<ActorPhase>,
@@ -124,6 +129,7 @@ pub struct OrbitActorStatus {
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, JsonSchema)]
+#[allow(dead_code)]
 pub enum ActorPhase {
     Pending,
     Deploying,
@@ -135,6 +141,7 @@ pub enum ActorPhase {
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, JsonSchema)]
+#[allow(dead_code)]
 pub struct ActorCondition {
     /// Type of condition
     pub condition_type: String,
@@ -153,6 +160,7 @@ pub struct ActorCondition {
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, JsonSchema)]
+#[allow(dead_code)]
 pub struct ActorMetrics {
     /// Total number of invocations
     pub total_invocations: u64,
@@ -174,39 +182,48 @@ pub struct ActorMetrics {
 }
 
 // Default value functions for ActorConfig
+#[allow(dead_code)]
 fn default_activation_timeout() -> u32 {
     30
 }
 
+#[allow(dead_code)]
 fn default_deactivation_timeout() -> u32 {
     30
 }
 
+#[allow(dead_code)]
 fn default_max_actors_per_node() -> u32 {
     1000
 }
 
+#[allow(dead_code)]
 fn default_serialization_format() -> String {
     "json".to_string()
 }
 
 // Default value functions for ScalingConfig
+#[allow(dead_code)]
 fn default_min_instances() -> u32 {
     1
 }
 
+#[allow(dead_code)]
 fn default_max_instances() -> u32 {
     100
 }
 
+#[allow(dead_code)]
 fn default_target_cpu() -> u32 {
     70
 }
 
+#[allow(dead_code)]
 fn default_target_memory() -> u32 {
     80
 }
 
+#[allow(dead_code)]
 fn default_scaling_policy() -> String {
     "horizontal".to_string()
 }
