@@ -32,7 +32,10 @@ pub mod commands;
 pub mod server;
 pub mod types;
 
-pub use actors::{KeyValueActor, HashActor, ListActor, PubSubActor};
+pub use actors::{
+    KeyValueActor, HashActor, ListActor, PubSubActor,
+    KeyValueActorMethods, HashActorMethods, ListActorMethods, PubSubActorMethods
+};
 pub use codec::RespCodec;
 pub use commands::CommandHandler;
 pub use server::RespServer;

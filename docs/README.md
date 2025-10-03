@@ -8,7 +8,7 @@
 
 ## Architecture
 
-- [Architecture Documentation](../ORBIT_ARCHITECTURE.md) - Detailed system architecture
+- [Architecture Documentation](architecture/ORBIT_ARCHITECTURE.md) - Detailed system architecture
 - [Module Structure](../README.md#project-structure) - Workspace organization
 - [Migration Guide](../MIGRATION_GUIDE.md) - Kotlin/JVM to Rust migration
 
@@ -39,6 +39,12 @@
 - [Transport Layer](#transport-layer) - Connection pooling and retry logic
 - [Raft Transport](#raft-transport) - Consensus communication
 
+### Protocol Adapters
+- **[Redis RESP Protocol](protocols/RESP_INTEGRATION_COMPLETE.md)** - Complete Redis protocol implementation ✅
+- [PostgreSQL Wire Protocol](protocols/POSTGRES_FINAL_REPORT.md) - Database protocol adapter 🚧
+- [REST API](protocols/FINAL_REPORT.md) - HTTP/JSON interface 🚧
+- [Neo4j Bolt Protocol](protocols/NEXT_STEPS.md) - Graph database protocol (planned)
+
 ## Deployment
 
 ### CI/CD and Secrets
@@ -58,9 +64,14 @@
 ## Reference
 
 - [API Documentation](https://docs.rs/orbit-rs) - Complete API reference
-- [Dependency Mapping](../DEPENDENCY_MAPPING.md) - JVM to Rust dependencies
+- [Dependency Mapping](development/DEPENDENCY_MAPPING.md) - JVM to Rust dependencies
 - [Project Status](../PROJECT_STATUS.md) - Current implementation status
 - [Change Log](../CHANGELOG.md) - Version history
+
+## Development Resources
+
+- [Secrets Configuration Index](development/SECRETS_CONFIGURATION_INDEX.md) - Complete CI/CD setup guide
+- [Work in Progress Documents](wip/) - Development progress reports and implementation summaries
 
 ## Examples
 

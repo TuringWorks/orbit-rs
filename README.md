@@ -26,6 +26,7 @@ Orbit is a framework for building distributed systems using virtual actors. A vi
 - 🔄 **Recovery Mechanisms**: Coordinator failover and transaction recovery
 - 💾 **Persistent Logging**: Durable transaction audit trails with SQLite
 - 🌐 **gRPC Transport**: High-performance network layer with connection pooling
+- 🔌 **Protocol Adapters**: Redis (RESP), PostgreSQL wire protocol, REST API, and Neo4j Bolt support
 
 ## Key Features
 
@@ -301,7 +302,59 @@ let guard = resource_mgr.acquire(memory_estimate).await?;
 - Memory and concurrency limiting
 - RAII resource guards for automatic cleanup
 
-See [Advanced Features Documentation](ADVANCED_FEATURES_IMPLEMENTATION.md) for detailed usage examples.
+See [Advanced Features Documentation](docs/wip/ADVANCED_FEATURES_IMPLEMENTATION.md) for detailed usage examples.
+
+## Protocol Adapters
+
+Orbit-RS provides multiple protocol adapters enabling clients to interact with the actor system using familiar protocols:
+
+### Redis Protocol (RESP) Support ✅
+
+Connect to Orbit actors using any Redis client through the RESP protocol adapter:
+
+```bash
+# Start the RESP server example
+cargo run --example resp-server
+
+# Connect with redis-cli
+redis-cli -h 127.0.0.1 -p 6380
+
+# Use Redis commands that operate on Orbit actors
+> SET mykey "hello world"
+OK
+> GET mykey  
+"hello world"
+> HSET myhash field1 "value1"
+(integer) 1
+> HGET myhash field1
+"value1"
+> LPUSH mylist item1 item2
+(integer) 2
+> PUBLISH mychannel "hello subscribers"
+(integer) 0
+```
+
+**Supported Redis Commands:**
+- **Key-Value**: GET, SET (with expiration), DEL, EXISTS, TTL, EXPIRE
+- **Hash Operations**: HGET, HSET, HGETALL, HDEL, HEXISTS, HKEYS, HVALS, HLEN
+- **List Operations**: LPUSH, RPUSH, LPOP, RPOP, LRANGE, LLEN, LINDEX
+- **Pub/Sub**: PUBLISH, SUBSCRIBE, UNSUBSCRIBE, PSUBSCRIBE, PUNSUBSCRIBE
+- **Connection**: PING, ECHO, SELECT
+- **Server**: INFO, DBSIZE, FLUSHDB, COMMAND
+
+Each Redis command maps to corresponding Orbit actor operations:
+- String commands → `KeyValueActor`
+- Hash commands → `HashActor`  
+- List commands → `ListActor`
+- Pub/Sub commands → `PubSubActor`
+
+### Other Protocol Adapters 🚧
+
+- **PostgreSQL Wire Protocol**: Connect using any PostgreSQL client (psql, pgAdmin, etc.)
+- **REST API**: HTTP/JSON interface for web applications
+- **Neo4j Bolt Protocol**: Graph database compatibility for Cypher queries
+
+See [Protocol Documentation](docs/protocols/) for detailed implementation guides.
 
 ### Kubernetes Deployment
 
@@ -332,10 +385,10 @@ See [Kubernetes Deployment Guide](docs/KUBERNETES_DEPLOYMENT.md) for detailed in
 The project includes a comprehensive GitHub Actions CI/CD pipeline with automated deployments to staging and production Kubernetes environments.
 
 **Setting up CI/CD:**
-- 📖 [Secrets Configuration Guide](docs/SECRETS_CONFIGURATION_GUIDE.md) - Complete walkthrough
-- 🚀 [Quick Start Index](SECRETS_CONFIGURATION_INDEX.md) - Navigate all documentation
-- 🛠️ [prepare-secrets.sh](scripts/prepare-secrets.sh) - Automated secret preparation
-- 📋 [Implementation Summary](SECRETS_CONFIGURATION_IMPLEMENTATION_SUMMARY.md) - What was implemented
+- 📚 [Secrets Configuration Guide](docs/SECRETS_CONFIGURATION_GUIDE.md) - Complete walkthrough
+- 🚀 [Quick Start Index](docs/development/SECRETS_CONFIGURATION_INDEX.md) - Navigate all documentation
+- 🛜️ [prepare-secrets.sh](scripts/prepare-secrets.sh) - Automated secret preparation
+- 📋 [Implementation Summary](docs/wip/SECRETS_CONFIGURATION_IMPLEMENTATION_SUMMARY.md) - What was implemented
 
 **Quick Setup:**
 ```bash
@@ -357,6 +410,7 @@ The project includes a comprehensive GitHub Actions CI/CD pipeline with automate
 - **orbit-server**: Server-side cluster management
 - **orbit-server-etcd**: etcd-based distributed directory
 - **orbit-server-prometheus**: Prometheus metrics integration
+- **orbit-protocols**: Protocol adapters (Redis RESP, PostgreSQL, REST API, Neo4j Bolt)
 - **orbit-application**: Application-level utilities
 - **orbit-benchmarks**: Performance benchmarks
 - **orbit-operator**: Kubernetes operator with custom CRDs
@@ -434,14 +488,15 @@ If you're migrating from the original Kotlin/JVM implementation, see our compreh
 ## Documentation
 
 ### Core Documentation
-- [Architecture Documentation](ORBIT_ARCHITECTURE.md) - Detailed system architecture
+- [Architecture Documentation](docs/architecture/ORBIT_ARCHITECTURE.md) - Detailed system architecture
 - [Migration Guide](MIGRATION_GUIDE.md) - Complete migration documentation
-- [Dependency Mapping](DEPENDENCY_MAPPING.md) - Kotlin to Rust dependency mappings
+- [Dependency Mapping](docs/development/DEPENDENCY_MAPPING.md) - Kotlin to Rust dependency mappings
 - [API Documentation](https://docs.rs/orbit-rs) - Complete API reference
 
 ### Feature Guides
 - [Advanced Transaction Features](docs/ADVANCED_TRANSACTION_FEATURES.md) - Distributed locks, metrics, security, performance
 - [Network Layer Guide](docs/NETWORK_LAYER.md) - gRPC services, Protocol Buffers, transport layer
+- [Protocol Adapters](docs/protocols/RESP_INTEGRATION_COMPLETE.md) - Redis RESP protocol integration
 - [Documentation Index](docs/README.md) - Complete documentation hub with quick references
 
 ## 🔄 CI/CD Pipeline

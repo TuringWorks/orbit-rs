@@ -3801,6 +3801,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "resp-server-example"
+version = "0.1.0"
+dependencies = [
+ "orbit-client",
+ "orbit-protocols",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "retain_mut"
 version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"

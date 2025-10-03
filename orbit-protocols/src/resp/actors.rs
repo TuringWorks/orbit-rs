@@ -4,6 +4,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 use orbit_shared::addressable::{Addressable, ActorWithStringKey};
+use orbit_shared::exception::OrbitResult;
+use async_trait::async_trait;
 
 /// Actor for storing key-value pairs (Redis STRING type)
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -83,6 +85,53 @@ impl Addressable for KeyValueActor {
 
 impl ActorWithStringKey for KeyValueActor {}
 
+/// Async trait for KeyValueActor methods
+#[async_trait]
+pub trait KeyValueActorMethods: Addressable {
+    async fn get_value(&self) -> OrbitResult<Option<String>>;
+    async fn set_value(&mut self, value: String) -> OrbitResult<()>;
+    async fn delete_value(&mut self) -> OrbitResult<bool>;
+    async fn set_expiration(&mut self, seconds: u64) -> OrbitResult<()>;
+    async fn get_ttl(&self) -> OrbitResult<i64>;
+    async fn exists(&self) -> OrbitResult<bool>;
+}
+
+#[async_trait]
+impl KeyValueActorMethods for KeyValueActor {
+    async fn get_value(&self) -> OrbitResult<Option<String>> {
+        Ok(if self.is_expired() { None } else { self.value.clone() })
+    }
+    
+    async fn set_value(&mut self, value: String) -> OrbitResult<()> {
+        self.value = Some(value);
+        Ok(())
+    }
+    
+    async fn delete_value(&mut self) -> OrbitResult<bool> {
+        let existed = self.value.is_some();
+        self.value = None;
+        self.expiration = None;
+        Ok(existed)
+    }
+    
+    async fn set_expiration(&mut self, seconds: u64) -> OrbitResult<()> {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        self.expiration = Some(now + seconds);
+        Ok(())
+    }
+    
+    async fn get_ttl(&self) -> OrbitResult<i64> {
+        Ok(self.get_ttl())
+    }
+    
+    async fn exists(&self) -> OrbitResult<bool> {
+        Ok(self.value.is_some() && !self.is_expired())
+    }
+}
+
 /// Actor for storing hash maps (Redis HASH type)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HashActor {
@@ -144,6 +193,54 @@ impl Addressable for HashActor {
 }
 
 impl ActorWithStringKey for HashActor {}
+
+/// Async trait for HashActor methods
+#[async_trait]
+pub trait HashActorMethods: Addressable {
+    async fn hget(&self, field: &str) -> OrbitResult<Option<String>>;
+    async fn hset(&mut self, field: String, value: String) -> OrbitResult<bool>;
+    async fn hdel(&mut self, field: &str) -> OrbitResult<bool>;
+    async fn hexists(&self, field: &str) -> OrbitResult<bool>;
+    async fn hkeys(&self) -> OrbitResult<Vec<String>>;
+    async fn hvals(&self) -> OrbitResult<Vec<String>>;
+    async fn hgetall(&self) -> OrbitResult<Vec<(String, String)>>;
+    async fn hlen(&self) -> OrbitResult<usize>;
+}
+
+#[async_trait]
+impl HashActorMethods for HashActor {
+    async fn hget(&self, field: &str) -> OrbitResult<Option<String>> {
+        Ok(self.hget(field).cloned())
+    }
+    
+    async fn hset(&mut self, field: String, value: String) -> OrbitResult<bool> {
+        Ok(self.hset(field, value))
+    }
+    
+    async fn hdel(&mut self, field: &str) -> OrbitResult<bool> {
+        Ok(self.hdel(field))
+    }
+    
+    async fn hexists(&self, field: &str) -> OrbitResult<bool> {
+        Ok(self.hexists(field))
+    }
+    
+    async fn hkeys(&self) -> OrbitResult<Vec<String>> {
+        Ok(self.hkeys())
+    }
+    
+    async fn hvals(&self) -> OrbitResult<Vec<String>> {
+        Ok(self.hvals())
+    }
+    
+    async fn hgetall(&self) -> OrbitResult<Vec<(String, String)>> {
+        Ok(self.hgetall())
+    }
+    
+    async fn hlen(&self) -> OrbitResult<usize> {
+        Ok(self.hlen())
+    }
+}
 
 /// Actor for storing lists (Redis LIST type)
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -238,6 +335,49 @@ impl Addressable for ListActor {
 
 impl ActorWithStringKey for ListActor {}
 
+/// Async trait for ListActor methods
+#[async_trait]
+pub trait ListActorMethods: Addressable {
+    async fn lpush(&mut self, values: Vec<String>) -> OrbitResult<usize>;
+    async fn rpush(&mut self, values: Vec<String>) -> OrbitResult<usize>;
+    async fn lpop(&mut self, count: usize) -> OrbitResult<Vec<String>>;
+    async fn rpop(&mut self, count: usize) -> OrbitResult<Vec<String>>;
+    async fn lrange(&self, start: i64, stop: i64) -> OrbitResult<Vec<String>>;
+    async fn llen(&self) -> OrbitResult<usize>;
+    async fn lindex(&self, index: i64) -> OrbitResult<Option<String>>;
+}
+
+#[async_trait]
+impl ListActorMethods for ListActor {
+    async fn lpush(&mut self, values: Vec<String>) -> OrbitResult<usize> {
+        Ok(self.lpush(values))
+    }
+    
+    async fn rpush(&mut self, values: Vec<String>) -> OrbitResult<usize> {
+        Ok(self.rpush(values))
+    }
+    
+    async fn lpop(&mut self, count: usize) -> OrbitResult<Vec<String>> {
+        Ok(self.lpop(count))
+    }
+    
+    async fn rpop(&mut self, count: usize) -> OrbitResult<Vec<String>> {
+        Ok(self.rpop(count))
+    }
+    
+    async fn lrange(&self, start: i64, stop: i64) -> OrbitResult<Vec<String>> {
+        Ok(self.lrange(start, stop))
+    }
+    
+    async fn llen(&self) -> OrbitResult<usize> {
+        Ok(self.llen())
+    }
+    
+    async fn lindex(&self, index: i64) -> OrbitResult<Option<String>> {
+        Ok(self.lindex(index).cloned())
+    }
+}
+
 /// Actor for managing pub/sub channels
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PubSubActor {
@@ -291,6 +431,35 @@ impl Addressable for PubSubActor {
 }
 
 impl ActorWithStringKey for PubSubActor {}
+
+/// Async trait for PubSubActor methods
+#[async_trait]
+pub trait PubSubActorMethods: Addressable {
+    async fn subscribe(&mut self, subscriber_id: String) -> OrbitResult<()>;
+    async fn unsubscribe(&mut self, subscriber_id: &str) -> OrbitResult<bool>;
+    async fn publish(&mut self, message: String) -> OrbitResult<usize>;
+    async fn subscriber_count(&self) -> OrbitResult<usize>;
+}
+
+#[async_trait]
+impl PubSubActorMethods for PubSubActor {
+    async fn subscribe(&mut self, subscriber_id: String) -> OrbitResult<()> {
+        self.subscribe(subscriber_id);
+        Ok(())
+    }
+    
+    async fn unsubscribe(&mut self, subscriber_id: &str) -> OrbitResult<bool> {
+        Ok(self.unsubscribe(subscriber_id))
+    }
+    
+    async fn publish(&mut self, message: String) -> OrbitResult<usize> {
+        Ok(self.publish(message))
+    }
+    
+    async fn subscriber_count(&self) -> OrbitResult<usize> {
+        Ok(self.subscriber_count())
+    }
+}
 
 #[cfg(test)]
 mod tests {
