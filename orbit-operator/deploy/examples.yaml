@@ -1,0 +1,134 @@
+---
+apiVersion: orbit.turingworks.com/v1
+kind: OrbitCluster
+metadata:
+  name: example-cluster
+  namespace: default
+  labels:
+    app.kubernetes.io/name: orbit-rs
+    app.kubernetes.io/instance: example
+spec:
+  replicas: 3
+  image:
+    repository: orbit-rs/orbit-server
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  cluster:
+    discoveryMode: kubernetes
+    electionMethod: kubernetes
+    leaseDuration: 30
+    leaseRenewInterval: 10
+    enableRaftFallback: true
+  transactions:
+    databasePath: "/app/data/orbit_transactions.db"
+    maxConnections: 10
+    enableWal: true
+    recoveryTimeout: 300
+    maxRecoveryAttempts: 3
+  resources:
+    cpuRequest: "250m"
+    memoryRequest: "512Mi"
+    cpuLimit: "1000m"
+    memoryLimit: "2Gi"
+  storage:
+    size: "10Gi"
+    accessMode: "ReadWriteOnce"
+    # storageClass: "fast-ssd"  # Uncomment to specify storage class
+  service:
+    serviceType: ClusterIP
+    grpcPort: 50051
+    healthPort: 8080
+    metricsPort: 9090
+    annotations:
+      # service.beta.kubernetes.io/aws-load-balancer-type: "nlb"  # For AWS
+  monitoring:
+    enabled: true
+    serviceMonitor: false  # Set to true if Prometheus Operator is available
+    scrapeInterval: "30s"
+  env:
+    RUST_LOG: "info"
+    RUST_BACKTRACE: "1"
+    # Custom environment variables for your deployment
+
+---
+apiVersion: orbit.turingworks.com/v1
+kind: OrbitActor
+metadata:
+  name: greeter-actor
+  namespace: default
+  labels:
+    app.kubernetes.io/name: orbit-rs
+    app.kubernetes.io/component: actor
+spec:
+  actorType: "GreeterActor"
+  clusterRef:
+    name: example-cluster
+    # namespace: default  # Optional, defaults to same namespace
+  config:
+    activationTimeout: 30
+    deactivationTimeout: 30
+    idleTimeout: 300  # Deactivate after 5 minutes of inactivity
+    maxActorsPerNode: 1000
+    persistenceEnabled: false
+    serializationFormat: "json"
+  scaling:
+    minInstances: 1
+    maxInstances: 50
+    targetCpuUtilization: 70
+    targetMemoryUtilization: 80
+    scalingPolicy: "horizontal"
+  env:
+    ACTOR_LOG_LEVEL: "debug"
+  properties:
+    greeting_template: "Hello, {name}!"
+    max_greeting_length: 100
+
+---
+apiVersion: orbit.turingworks.com/v1
+kind: OrbitTransaction
+metadata:
+  name: banking-transactions
+  namespace: default
+  labels:
+    app.kubernetes.io/name: orbit-rs
+    app.kubernetes.io/component: transaction
+spec:
+  clusterRef:
+    name: example-cluster
+  coordinator:
+    maxConcurrentTransactions: 100
+    batchSize: 10
+    enableClustering: true
+    heartbeatInterval: 30
+  timeouts:
+    defaultTimeout: 300
+    maxTimeout: 3600
+    prepareTimeout: 30
+    commitTimeout: 30
+    abortTimeout: 30
+    maxRetries: 3
+    retryBackoffMs: 1000
+  persistence:
+    storageBackend: "sqlite"
+    # databaseUrl: "postgresql://user:pass@host:5432/orbit_transactions"  # For external DB
+    maxConnections: 10
+    connectionTimeout: 30
+    enableWal: true
+    logRetentionDays: 30
+    enableCompression: true
+  recovery:
+    enableRecovery: true
+    recoveryInterval: 60
+    maxRecoveryAttempts: 3
+    recoveryTimeout: 300
+    enableFailover: true
+    failoverTimeout: 180
+  monitoring:
+    enableMetrics: true
+    metricsInterval: 30
+    enableTracing: false
+    alertThresholds:
+      failureRatePercentage: 5.0
+      durationThresholdSeconds: 30.0
+      concurrentTransactionsThreshold: 80
+      recoveryRateThreshold: 10.0

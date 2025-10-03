@@ -1,0 +1,626 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: orbitclusters.orbit.turingworks.com
+  labels:
+    app.kubernetes.io/name: orbit-operator
+    app.kubernetes.io/component: crd
+spec:
+  group: orbit.turingworks.com
+  versions:
+  - name: v1
+    served: true
+    storage: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          spec:
+            type: object
+            properties:
+              replicas:
+                type: integer
+                minimum: 1
+                maximum: 100
+                default: 3
+                description: "Number of Orbit server replicas"
+              image:
+                type: object
+                properties:
+                  repository:
+                    type: string
+                    description: "Container image repository"
+                  tag:
+                    type: string
+                    default: "latest"
+                    description: "Image tag"
+                  pullPolicy:
+                    type: string
+                    enum: ["Always", "IfNotPresent", "Never"]
+                    default: "IfNotPresent"
+                    description: "Image pull policy"
+                  pullSecrets:
+                    type: array
+                    items:
+                      type: string
+                    description: "Image pull secrets"
+                required:
+                - repository
+              cluster:
+                type: object
+                properties:
+                  discoveryMode:
+                    type: string
+                    enum: ["kubernetes", "etcd", "dns"]
+                    default: "kubernetes"
+                  electionMethod:
+                    type: string
+                    enum: ["kubernetes", "raft"]
+                    default: "kubernetes"
+                  leaseDuration:
+                    type: integer
+                    minimum: 10
+                    maximum: 300
+                    default: 30
+                  leaseRenewInterval:
+                    type: integer
+                    minimum: 5
+                    maximum: 150
+                    default: 10
+                  enableRaftFallback:
+                    type: boolean
+                    default: true
+              transactions:
+                type: object
+                properties:
+                  databasePath:
+                    type: string
+                    default: "/app/data/orbit_transactions.db"
+                  maxConnections:
+                    type: integer
+                    minimum: 1
+                    maximum: 100
+                    default: 10
+                  enableWal:
+                    type: boolean
+                    default: true
+                  recoveryTimeout:
+                    type: integer
+                    minimum: 60
+                    maximum: 3600
+                    default: 300
+                  maxRecoveryAttempts:
+                    type: integer
+                    minimum: 1
+                    maximum: 10
+                    default: 3
+              resources:
+                type: object
+                properties:
+                  cpuRequest:
+                    type: string
+                    default: "250m"
+                  memoryRequest:
+                    type: string
+                    default: "512Mi"
+                  cpuLimit:
+                    type: string
+                    default: "1000m"
+                  memoryLimit:
+                    type: string
+                    default: "2Gi"
+              storage:
+                type: object
+                properties:
+                  storageClass:
+                    type: string
+                    description: "Storage class name"
+                  size:
+                    type: string
+                    default: "10Gi"
+                    description: "Storage size"
+                  accessMode:
+                    type: string
+                    enum: ["ReadWriteOnce", "ReadOnlyMany", "ReadWriteMany"]
+                    default: "ReadWriteOnce"
+              service:
+                type: object
+                properties:
+                  serviceType:
+                    type: string
+                    enum: ["ClusterIP", "LoadBalancer", "NodePort"]
+                    default: "ClusterIP"
+                  grpcPort:
+                    type: integer
+                    minimum: 1024
+                    maximum: 65535
+                    default: 50051
+                  healthPort:
+                    type: integer
+                    minimum: 1024
+                    maximum: 65535
+                    default: 8080
+                  metricsPort:
+                    type: integer
+                    minimum: 1024
+                    maximum: 65535
+                    default: 9090
+                  annotations:
+                    type: object
+                    additionalProperties:
+                      type: string
+              monitoring:
+                type: object
+                properties:
+                  enabled:
+                    type: boolean
+                    default: true
+                  serviceMonitor:
+                    type: boolean
+                    default: false
+                  scrapeInterval:
+                    type: string
+                    default: "30s"
+              env:
+                type: object
+                additionalProperties:
+                  type: string
+                description: "Additional environment variables"
+            required:
+            - image
+          status:
+            type: object
+            properties:
+              phase:
+                type: string
+                enum: ["Pending", "Creating", "Running", "Scaling", "Updating", "Failed", "Terminating"]
+              readyReplicas:
+                type: integer
+              replicas:
+                type: integer
+              conditions:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    conditionType:
+                      type: string
+                    status:
+                      type: string
+                    lastTransitionTime:
+                      type: string
+                      format: date-time
+                    reason:
+                      type: string
+                    message:
+                      type: string
+              leader:
+                type: object
+                properties:
+                  nodeId:
+                    type: string
+                  podName:
+                    type: string
+                  electedAt:
+                    type: string
+                    format: date-time
+                  leaseExpiresAt:
+                    type: string
+                    format: date-time
+              observedGeneration:
+                type: integer
+    additionalPrinterColumns:
+    - name: Phase
+      type: string
+      jsonPath: .status.phase
+    - name: Replicas
+      type: integer
+      jsonPath: .spec.replicas
+    - name: Ready
+      type: integer
+      jsonPath: .status.readyReplicas
+    - name: Leader
+      type: string
+      jsonPath: .status.leader.podName
+    - name: Age
+      type: date
+      jsonPath: .metadata.creationTimestamp
+    subresources:
+      status: {}
+  scope: Namespaced
+  names:
+    plural: orbitclusters
+    singular: orbitcluster
+    kind: OrbitCluster
+    shortNames:
+    - oc
+
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: orbitactors.orbit.turingworks.com
+  labels:
+    app.kubernetes.io/name: orbit-operator
+    app.kubernetes.io/component: crd
+spec:
+  group: orbit.turingworks.com
+  versions:
+  - name: v1
+    served: true
+    storage: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          spec:
+            type: object
+            properties:
+              actorType:
+                type: string
+                description: "Actor type identifier"
+              clusterRef:
+                type: object
+                properties:
+                  name:
+                    type: string
+                  namespace:
+                    type: string
+                required:
+                - name
+              config:
+                type: object
+                properties:
+                  activationTimeout:
+                    type: integer
+                    default: 30
+                  deactivationTimeout:
+                    type: integer
+                    default: 30
+                  idleTimeout:
+                    type: integer
+                    default: 0
+                  maxActorsPerNode:
+                    type: integer
+                    default: 1000
+                  persistenceEnabled:
+                    type: boolean
+                    default: false
+                  serializationFormat:
+                    type: string
+                    enum: ["json", "protobuf", "messagepack"]
+                    default: "json"
+              scaling:
+                type: object
+                properties:
+                  minInstances:
+                    type: integer
+                    default: 1
+                  maxInstances:
+                    type: integer
+                    default: 100
+                  targetCpuUtilization:
+                    type: integer
+                    default: 70
+                  targetMemoryUtilization:
+                    type: integer
+                    default: 80
+                  scalingPolicy:
+                    type: string
+                    enum: ["horizontal", "vertical"]
+                    default: "horizontal"
+              env:
+                type: object
+                additionalProperties:
+                  type: string
+              properties:
+                type: object
+                additionalProperties: true
+            required:
+            - actorType
+            - clusterRef
+          status:
+            type: object
+            properties:
+              phase:
+                type: string
+                enum: ["Pending", "Deploying", "Running", "Scaling", "Updating", "Failed", "Terminating"]
+              activeInstances:
+                type: integer
+              readyInstances:
+                type: integer
+              conditions:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    conditionType:
+                      type: string
+                    status:
+                      type: string
+                    lastTransitionTime:
+                      type: string
+                      format: date-time
+                    reason:
+                      type: string
+                    message:
+                      type: string
+              nodeDistribution:
+                type: object
+                additionalProperties:
+                  type: integer
+              observedGeneration:
+                type: integer
+              metrics:
+                type: object
+                properties:
+                  totalInvocations:
+                    type: integer
+                  avgResponseTimeMs:
+                    type: number
+                  cpuUtilization:
+                    type: number
+                  memoryUtilization:
+                    type: number
+                  errorRate:
+                    type: number
+                  lastUpdated:
+                    type: string
+                    format: date-time
+    additionalPrinterColumns:
+    - name: Actor Type
+      type: string
+      jsonPath: .spec.actorType
+    - name: Phase
+      type: string
+      jsonPath: .status.phase
+    - name: Active
+      type: integer
+      jsonPath: .status.activeInstances
+    - name: Ready
+      type: integer
+      jsonPath: .status.readyInstances
+    - name: Age
+      type: date
+      jsonPath: .metadata.creationTimestamp
+    subresources:
+      status: {}
+  scope: Namespaced
+  names:
+    plural: orbitactors
+    singular: orbitactor
+    kind: OrbitActor
+    shortNames:
+    - oa
+
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: orbittransactions.orbit.turingworks.com
+  labels:
+    app.kubernetes.io/name: orbit-operator
+    app.kubernetes.io/component: crd
+spec:
+  group: orbit.turingworks.com
+  versions:
+  - name: v1
+    served: true
+    storage: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          spec:
+            type: object
+            properties:
+              clusterRef:
+                type: object
+                properties:
+                  name:
+                    type: string
+                  namespace:
+                    type: string
+                required:
+                - name
+              coordinator:
+                type: object
+                properties:
+                  maxConcurrentTransactions:
+                    type: integer
+                    default: 100
+                  batchSize:
+                    type: integer
+                    default: 10
+                  enableClustering:
+                    type: boolean
+                    default: true
+                  heartbeatInterval:
+                    type: integer
+                    default: 30
+              timeouts:
+                type: object
+                properties:
+                  defaultTimeout:
+                    type: integer
+                    default: 300
+                  maxTimeout:
+                    type: integer
+                    default: 3600
+                  prepareTimeout:
+                    type: integer
+                    default: 30
+                  commitTimeout:
+                    type: integer
+                    default: 30
+                  abortTimeout:
+                    type: integer
+                    default: 30
+                  maxRetries:
+                    type: integer
+                    default: 3
+                  retryBackoffMs:
+                    type: integer
+                    default: 1000
+              persistence:
+                type: object
+                properties:
+                  storageBackend:
+                    type: string
+                    enum: ["sqlite", "postgresql", "mysql"]
+                    default: "sqlite"
+                  databaseUrl:
+                    type: string
+                  maxConnections:
+                    type: integer
+                    default: 10
+                  connectionTimeout:
+                    type: integer
+                    default: 30
+                  enableWal:
+                    type: boolean
+                    default: true
+                  logRetentionDays:
+                    type: integer
+                    default: 30
+                  enableCompression:
+                    type: boolean
+                    default: true
+              recovery:
+                type: object
+                properties:
+                  enableRecovery:
+                    type: boolean
+                    default: true
+                  recoveryInterval:
+                    type: integer
+                    default: 60
+                  maxRecoveryAttempts:
+                    type: integer
+                    default: 3
+                  recoveryTimeout:
+                    type: integer
+                    default: 300
+                  enableFailover:
+                    type: boolean
+                    default: true
+                  failoverTimeout:
+                    type: integer
+                    default: 180
+              monitoring:
+                type: object
+                properties:
+                  enableMetrics:
+                    type: boolean
+                    default: true
+                  metricsInterval:
+                    type: integer
+                    default: 30
+                  enableTracing:
+                    type: boolean
+                    default: false
+                  alertThresholds:
+                    type: object
+                    properties:
+                      failureRatePercentage:
+                        type: number
+                        default: 5.0
+                      durationThresholdSeconds:
+                        type: number
+                        default: 30.0
+                      concurrentTransactionsThreshold:
+                        type: integer
+                        default: 80
+                      recoveryRateThreshold:
+                        type: number
+                        default: 10.0
+            required:
+            - clusterRef
+          status:
+            type: object
+            properties:
+              phase:
+                type: string
+                enum: ["Pending", "Initializing", "Running", "Recovering", "Failed", "Terminating"]
+              activeTransactions:
+                type: integer
+              completedTransactions:
+                type: integer
+              failedTransactions:
+                type: integer
+              coordinator:
+                type: object
+                properties:
+                  nodeId:
+                    type: string
+                  podName:
+                    type: string
+                  startedAt:
+                    type: string
+                    format: date-time
+                  transactionsCoordinated:
+                    type: integer
+                  healthStatus:
+                    type: string
+              conditions:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    conditionType:
+                      type: string
+                    status:
+                      type: string
+                    lastTransitionTime:
+                      type: string
+                      format: date-time
+                    reason:
+                      type: string
+                    message:
+                      type: string
+              metrics:
+                type: object
+                properties:
+                  avgDurationMs:
+                    type: number
+                  successRate:
+                    type: number
+                  transactionsPerSecond:
+                    type: number
+                  currentActive:
+                    type: integer
+                  peakConcurrent:
+                    type: integer
+                  recoveryOperations:
+                    type: integer
+                  lastUpdated:
+                    type: string
+                    format: date-time
+              observedGeneration:
+                type: integer
+    additionalPrinterColumns:
+    - name: Phase
+      type: string
+      jsonPath: .status.phase
+    - name: Active
+      type: integer
+      jsonPath: .status.activeTransactions
+    - name: Success Rate
+      type: string
+      jsonPath: .status.metrics.successRate
+    - name: Coordinator
+      type: string
+      jsonPath: .status.coordinator.podName
+    - name: Age
+      type: date
+      jsonPath: .metadata.creationTimestamp
+    subresources:
+      status: {}
+  scope: Namespaced
+  names:
+    plural: orbittransactions
+    singular: orbittransaction
+    kind: OrbitTransaction
+    shortNames:
+    - otx
