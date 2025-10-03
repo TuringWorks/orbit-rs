@@ -68,20 +68,22 @@ impl ClusterController {
 #[derive(Clone)]
 struct ControllerContext {
     client: Client,
-    recorder: Recorder,
 }
 
 impl ControllerContext {
     fn new(client: Client) -> Self {
-        let recorder = Recorder::new(
-            client.clone(),
+        Self { client }
+    }
+    
+    fn recorder(&self, object_ref: k8s_openapi::api::core::v1::ObjectReference) -> Recorder {
+        Recorder::new(
+            self.client.clone(),
             Reporter {
                 controller: "orbit-cluster-controller".into(),
                 instance: std::env::var("POD_NAME").ok(),
             },
-        );
-
-        Self { client, recorder }
+            object_ref,
+        )
     }
 }
 
