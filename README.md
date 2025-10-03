@@ -327,6 +327,27 @@ helm install orbit-cluster ./helm/orbit-rs \
 
 See [Kubernetes Deployment Guide](docs/KUBERNETES_DEPLOYMENT.md) for detailed instructions.
 
+### CI/CD Pipeline
+
+The project includes a comprehensive GitHub Actions CI/CD pipeline with automated deployments to staging and production Kubernetes environments.
+
+**Setting up CI/CD:**
+- 📖 [Secrets Configuration Guide](docs/SECRETS_CONFIGURATION_GUIDE.md) - Complete walkthrough
+- 🚀 [Quick Start Index](SECRETS_CONFIGURATION_INDEX.md) - Navigate all documentation
+- 🛠️ [prepare-secrets.sh](scripts/prepare-secrets.sh) - Automated secret preparation
+- 📋 [Implementation Summary](SECRETS_CONFIGURATION_IMPLEMENTATION_SUMMARY.md) - What was implemented
+
+**Quick Setup:**
+```bash
+# Prepare secrets for GitHub Actions
+./scripts/prepare-secrets.sh staging
+./scripts/prepare-secrets.sh production
+
+# Add to GitHub: Settings → Secrets and variables → Actions
+# - KUBE_CONFIG_STAGING (from staging-kubeconfig-base64.txt)
+# - KUBE_CONFIG_PRODUCTION (from production-kubeconfig-base64.txt)
+```
+
 ## Project Structure
 
 - **orbit-util**: Utilities and base functionality
