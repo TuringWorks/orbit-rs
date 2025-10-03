@@ -2674,6 +2674,7 @@ dependencies = [
  "futures",
  "hyper 0.14.32",
  "md5",
+ "metrics",
  "orbit-util",
  "prost 0.13.5",
  "serde",

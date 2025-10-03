@@ -31,6 +31,7 @@ futures.workspace = true
 tower = { version = "0.4", features = ["limit", "load-shed", "timeout"] }
 hyper = "0.14"
 fastrand = "2.0"
+metrics = "0.23"
 
 [build-dependencies]
 tonic-build = "0.12"

@@ -24,3 +24,6 @@ pub use exception::*;
 pub use mesh::*;
 pub use net::*;
 pub use router::*;
+
+// Re-export advanced transaction features
+pub use transactions::*;
