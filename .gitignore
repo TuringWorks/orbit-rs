@@ -171,8 +171,9 @@ perf.data*
 # Profiling
 *.prof
 
-# Core dumps
-core.*
+# Core dumps (but not core.rs source files)
+core
+core.[0-9]*
 
 # Environment variables
 .env
