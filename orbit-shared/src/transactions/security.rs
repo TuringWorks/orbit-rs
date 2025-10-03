@@ -198,18 +198,18 @@ impl AuthenticationProvider for InMemoryAuthProvider {
     ) -> OrbitResult<AuthToken> {
         let username = credentials
             .get("username")
-            .ok_or_else(|| OrbitError::unauthorized("Username required"))?;
+            .ok_or_else(|| OrbitError::internal("Username required"))?;
         let password = credentials
             .get("password")
-            .ok_or_else(|| OrbitError::unauthorized("Password required"))?;
+            .ok_or_else(|| OrbitError::internal("Password required"))?;
 
         let users = self.users.read().await;
         let (stored_password, scopes) = users
             .get(username)
-            .ok_or_else(|| OrbitError::unauthorized("Invalid credentials"))?;
+            .ok_or_else(|| OrbitError::internal("Invalid credentials"))?;
 
         if stored_password != password {
-            return Err(OrbitError::unauthorized("Invalid credentials"));
+            return Err(OrbitError::internal("Invalid credentials"));
         }
 
         let token = AuthToken::new(
@@ -237,7 +237,7 @@ impl AuthenticationProvider for InMemoryAuthProvider {
 
     async fn refresh_token(&self, token: &AuthToken) -> OrbitResult<AuthToken> {
         if !self.validate_token(token).await? {
-            return Err(OrbitError::unauthorized("Invalid token"));
+            return Err(OrbitError::internal("Invalid token"));
         }
 
         let new_token = AuthToken::new(
@@ -380,7 +380,7 @@ impl TransactionSecurityManager {
         let token = context
             .auth_token
             .as_ref()
-            .ok_or_else(|| OrbitError::unauthorized("No authentication token"))?;
+            .ok_or_else(|| OrbitError::internal("No authentication token"))?;
 
         self.authz_provider
             .authorize(token, required_permissions)
@@ -396,7 +396,7 @@ impl TransactionSecurityManager {
         let token = context
             .auth_token
             .as_ref()
-            .ok_or_else(|| OrbitError::unauthorized("No authentication token"))?;
+            .ok_or_else(|| OrbitError::internal("No authentication token"))?;
 
         self.auth_provider.validate_token(token).await
     }
@@ -509,7 +509,8 @@ impl AuditLogger for InMemoryAuditLogger {
 
         // Keep only the latest entries
         if entries.len() > self.max_entries {
-            entries.drain(0..entries.len() - self.max_entries);
+            let excess = entries.len() - self.max_entries;
+            entries.drain(0..excess);
         }
 
         Ok(())

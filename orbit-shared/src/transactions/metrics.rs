@@ -58,10 +58,7 @@ impl TransactionMetrics {
         gauge!(format!("{}.active", self.metrics_prefix)).decrement(1.0);
         
         if let Some(duration) = self.get_duration(transaction_id).await {
-            histogram!(
-                format!("{}.duration.seconds", self.metrics_prefix),
-                duration.as_secs_f64()
-            );
+            histogram!(format!("{}.duration.seconds", self.metrics_prefix)).record(duration.as_secs_f64());
         }
         
         debug!("Transaction aborted: {}", transaction_id);
@@ -73,10 +70,7 @@ impl TransactionMetrics {
         gauge!(format!("{}.active", self.metrics_prefix)).decrement(1.0);
         
         if let Some(duration) = self.get_duration(transaction_id).await {
-            histogram!(
-                format!("{}.duration.seconds", self.metrics_prefix),
-                duration.as_secs_f64()
-            );
+            histogram!(format!("{}.duration.seconds", self.metrics_prefix)).record(duration.as_secs_f64());
         }
         
         debug!("Transaction failed: {}", transaction_id);
@@ -88,10 +82,7 @@ impl TransactionMetrics {
         gauge!(format!("{}.active", self.metrics_prefix)).decrement(1.0);
         
         if let Some(duration) = self.get_duration(transaction_id).await {
-            histogram!(
-                format!("{}.duration.seconds", self.metrics_prefix),
-                duration.as_secs_f64()
-            );
+            histogram!(format!("{}.duration.seconds", self.metrics_prefix)).record(duration.as_secs_f64());
         }
         
         debug!("Transaction timed out: {}", transaction_id);
@@ -99,26 +90,20 @@ impl TransactionMetrics {
 
     /// Record prepare phase duration
     pub async fn record_prepare_duration(&self, transaction_id: &str, duration: Duration) {
-        histogram!(
-            format!("{}.prepare_duration.seconds", self.metrics_prefix),
-            duration.as_secs_f64()
-        );
+        histogram!(format!("{}.duration.seconds", self.metrics_prefix)).record(duration.as_secs_f64());
         debug!("Transaction {} prepare phase took {:?}", transaction_id, duration);
     }
 
     /// Record commit phase duration
     pub async fn record_commit_duration(&self, transaction_id: &str, duration: Duration) {
-        histogram!(
-            format!("{}.commit_duration.seconds", self.metrics_prefix),
-            duration.as_secs_f64()
-        );
+        histogram!(format!("{}.duration.seconds", self.metrics_prefix)).record(duration.as_secs_f64());
         debug!("Transaction {} commit phase took {:?}", transaction_id, duration);
     }
 
     /// Record number of participants
     pub fn record_participant_count(&self, count: usize) {
         histogram!(
-            format!("{}.participants.count", self.metrics_prefix),
+            format!("{}.participants.count", self.metrics_prefix)).record(
             count as f64
         );
     }
@@ -171,13 +156,10 @@ impl SagaMetrics {
     pub async fn record_saga_completed(&self, saga_id: &str, step_count: usize) {
         counter!(format!("{}.completed.total", self.metrics_prefix)).increment(1);
         gauge!(format!("{}.active", self.metrics_prefix)).decrement(1.0);
-        histogram!(format!("{}.steps.count", self.metrics_prefix), step_count as f64);
+        histogram!(format!("{}.steps.count", self.metrics_prefix)).record(step_count as f64);
         
         if let Some(duration) = self.get_duration(saga_id).await {
-            histogram!(
-                format!("{}.duration.seconds", self.metrics_prefix),
-                duration.as_secs_f64()
-            );
+            histogram!(format!("{}.duration.seconds", self.metrics_prefix)).record(duration.as_secs_f64());
         }
         
         debug!("Saga completed: {} with {} steps", saga_id, step_count);
@@ -189,10 +171,7 @@ impl SagaMetrics {
         gauge!(format!("{}.active", self.metrics_prefix)).decrement(1.0);
         
         if let Some(duration) = self.get_duration(saga_id).await {
-            histogram!(
-                format!("{}.duration.seconds", self.metrics_prefix),
-                duration.as_secs_f64()
-            );
+            histogram!(format!("{}.duration.seconds", self.metrics_prefix)).record(duration.as_secs_f64());
         }
         
         debug!("Saga failed: {}", saga_id);
@@ -204,10 +183,7 @@ impl SagaMetrics {
         gauge!(format!("{}.active", self.metrics_prefix)).decrement(1.0);
         
         if let Some(duration) = self.get_duration(saga_id).await {
-            histogram!(
-                format!("{}.duration.seconds", self.metrics_prefix),
-                duration.as_secs_f64()
-            );
+            histogram!(format!("{}.duration.seconds", self.metrics_prefix)).record(duration.as_secs_f64());
         }
         
         debug!("Saga compensated: {}", saga_id);
@@ -216,20 +192,14 @@ impl SagaMetrics {
     /// Record step executed
     pub fn record_step_executed(&self, step_id: &str, duration: Duration) {
         counter!(format!("{}.step.executed.total", self.metrics_prefix)).increment(1);
-        histogram!(
-            format!("{}.step.duration.seconds", self.metrics_prefix),
-            duration.as_secs_f64()
-        );
+        histogram!(format!("{}.duration.seconds", self.metrics_prefix)).record(duration.as_secs_f64());
         debug!("Saga step executed: {} in {:?}", step_id, duration);
     }
 
     /// Record step compensated
     pub fn record_step_compensated(&self, step_id: &str, duration: Duration) {
         counter!(format!("{}.step.compensated.total", self.metrics_prefix)).increment(1);
-        histogram!(
-            format!("{}.compensation.duration.seconds", self.metrics_prefix),
-            duration.as_secs_f64()
-        );
+        histogram!(format!("{}.duration.seconds", self.metrics_prefix)).record(duration.as_secs_f64());
         debug!("Saga step compensated: {} in {:?}", step_id, duration);
     }
 
@@ -282,7 +252,7 @@ impl LockMetrics {
         counter!(format!("{}.released.total", self.metrics_prefix)).increment(1);
         gauge!(format!("{}.held.count", self.metrics_prefix)).decrement(1.0);
         histogram!(
-            format!("{}.hold.duration.seconds", self.metrics_prefix),
+            format!("{}.hold.duration.seconds", self.metrics_prefix)).record(
             hold_duration.as_secs_f64()
         );
         debug!("Lock released: {} after {:?}", resource_id, hold_duration);
@@ -292,7 +262,7 @@ impl LockMetrics {
     pub fn record_lock_timeout(&self, resource_id: &str, wait_duration: Duration) {
         counter!(format!("{}.timeout.total", self.metrics_prefix)).increment(1);
         histogram!(
-            format!("{}.wait.duration.seconds", self.metrics_prefix),
+            format!("{}.wait.duration.seconds", self.metrics_prefix)).record(
             wait_duration.as_secs_f64()
         );
         debug!("Lock timeout: {} after waiting {:?}", resource_id, wait_duration);

@@ -483,7 +483,7 @@ impl ResourceManager {
         // Check memory availability
         let mut current = self.current_memory.write().await;
         if *current + memory_estimate > self.max_memory {
-            return Err(OrbitError::resource_exhausted("Memory limit exceeded"));
+            return Err(OrbitError::internal("Memory limit exceeded"));
         }
 
         *current += memory_estimate;
