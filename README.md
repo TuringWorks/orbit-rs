@@ -6,8 +6,9 @@
 
 A high-performance, distributed virtual actor system framework reimplemented in Rust, inspired by Microsoft Orleans and the original Java Orbit framework.
 
-[![Tests](https://img.shields.io/badge/tests-42%20passing-green)]()
+[![Tests](https://img.shields.io/badge/tests-79%20passing-green)]()
 [![Coverage](https://img.shields.io/badge/coverage-comprehensive-blue)]()
+[![CI/CD](https://img.shields.io/badge/CI%2FCD-verified-brightgreen)]()
 
 ## Overview
 
