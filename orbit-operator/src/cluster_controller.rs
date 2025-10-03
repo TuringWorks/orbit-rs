@@ -24,8 +24,11 @@ enum ControllerError {
     #[error("Kubernetes error: {0}")]
     KubeError(#[from] kube::Error),
     
-    #[error("Serialization error: {0}")]
-    SerializationError(#[from] serde_json::Error),
+    #[error("JSON serialization error: {0}")]
+    JsonSerializationError(#[from] serde_json::Error),
+    
+    #[error("YAML serialization error: {0}")]
+    YamlSerializationError(#[from] serde_yaml::Error),
     
     #[error("Finalizer error: {0}")]
     FinalizerError(String),
@@ -650,7 +653,7 @@ async fn create_stateful_set(
                 .await?;
             info!("Updated StatefulSet {}", name);
         }
-        Err(e) => return Err(anyhow::anyhow!("Failed to create StatefulSet: {}", e)),
+        Err(e) => return Err(ControllerError::Generic(format!("Failed to create StatefulSet: {}", e))),
     }
 
     Ok(())
