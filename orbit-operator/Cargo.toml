@@ -47,7 +47,7 @@ metrics = { workspace = true }
 
 [dev-dependencies]
 tempfile = "3.0"
-kube-client = { version = "0.95", features = ["test"] }
+kube = { version = "0.95", features = ["runtime", "derive", "client", "rustls-tls"] }
 
 [[bin]]
 name = "orbit-operator"
