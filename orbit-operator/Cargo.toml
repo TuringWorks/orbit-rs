@@ -26,6 +26,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 serde_yaml = "0.9"
 jsonschema = "0.18"
+schemars = "0.8"
 
 # Error handling
 anyhow = { workspace = true }
@@ -44,6 +45,9 @@ clap = { version = "4.0", features = ["derive", "env"] }
 
 # Metrics
 metrics = { workspace = true }
+
+# HTTP server for health/metrics
+hyper = { version = "0.14", features = ["server", "http1", "http2", "tcp", "runtime"] }
 
 [dev-dependencies]
 tempfile = "3.0"
