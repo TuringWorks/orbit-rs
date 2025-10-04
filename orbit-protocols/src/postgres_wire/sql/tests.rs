@@ -383,7 +383,6 @@ mod tests {
 
     // TODO: Fix this test - currently failing, will revisit later
 
-
     // #[test]
     // fn test_select_with_joins() {
     //        let sql = "SELECT u.name, d.department_name FROM users u INNER JOIN departments d ON u.dept_id = d.id";
@@ -949,7 +948,6 @@ mod tests {
 
     // TODO: Fix this test - currently failing, will revisit later
 
-
     // #[test]
     // fn test_revoke_basic() {
     //        let sql = "REVOKE SELECT ON users FROM analyst";
@@ -959,7 +957,6 @@ mod tests {
     //    }
 
     // TODO: Fix this test - currently failing, will revisit later
-
 
     // #[test]
     // fn test_revoke_multiple_privileges() {
@@ -975,7 +972,6 @@ mod tests {
 
     // TODO: Fix this test - currently failing, will revisit later
 
-
     // #[test]
     // fn test_revoke_grant_option() {
     //        let sql = "REVOKE GRANT OPTION FOR SELECT ON customers FROM manager";
@@ -990,7 +986,6 @@ mod tests {
 
     // TODO: Fix this test - currently failing, will revisit later
 
-
     // #[test]
     // fn test_revoke_cascade() {
     //        let sql = "REVOKE ALL PRIVILEGES ON orders FROM admin CASCADE";
@@ -1004,7 +999,6 @@ mod tests {
     //    }
 
     // TODO: Fix this test - currently failing, will revisit later
-
 
     // #[test]
     // fn test_revoke_restrict() {
@@ -1164,7 +1158,6 @@ mod tests {
 
     // TODO: Fix this test - currently failing, will revisit later
 
-
     // #[test]
     // fn test_release_savepoint() {
     //        let sql = "RELEASE SAVEPOINT checkpoint1";
@@ -1246,7 +1239,6 @@ mod tests {
 
     // TODO: Fix this test - currently failing, will revisit later
 
-
     // #[test]
     // fn test_subquery_in_select() {
     //        let sql = "SELECT name, (SELECT COUNT(*) FROM orders WHERE orders.user_id = users.id) as order_count FROM users";
@@ -1260,7 +1252,6 @@ mod tests {
     //    }
 
     // TODO: Fix this test - currently failing, will revisit later
-
 
     // #[test]
     // fn test_subquery_in_where() {
@@ -1276,7 +1267,6 @@ mod tests {
 
     // TODO: Fix this test - currently failing, will revisit later
 
-
     // #[test]
     // fn test_exists_subquery() {
     //        let sql = "SELECT * FROM users WHERE EXISTS (SELECT 1 FROM orders WHERE orders.user_id = users.id)";
@@ -1290,7 +1280,6 @@ mod tests {
     //    }
 
     // TODO: Fix this test - currently failing, will revisit later
-
 
     // #[test]
     // fn test_not_exists_subquery() {
@@ -1306,7 +1295,6 @@ mod tests {
 
     // TODO: Fix this test - currently failing, will revisit later
 
-
     // #[test]
     // fn test_cte_basic() {
     //        let sql = "WITH active_users AS (SELECT * FROM users WHERE status = 'active') SELECT * FROM active_users";
@@ -1317,15 +1305,14 @@ mod tests {
 
     // TODO: Fix this test - currently failing, will revisit later
 
-
     // #[test]
     // fn test_cte_multiple() {
-    //        let sql = "WITH 
+    //        let sql = "WITH
     //            active_users AS (SELECT * FROM users WHERE status = 'active'),
     //            recent_orders AS (SELECT * FROM orders WHERE created_at > '2023-01-01')
-    //        SELECT u.name, COUNT(o.id) 
-    //        FROM active_users u 
-    //        LEFT JOIN recent_orders o ON u.id = o.user_id 
+    //        SELECT u.name, COUNT(o.id)
+    //        FROM active_users u
+    //        LEFT JOIN recent_orders o ON u.id = o.user_id
     //        GROUP BY u.name";
     //        let mut engine = SqlEngine::new();
     //        let result = engine.parse(sql);
@@ -1337,7 +1324,6 @@ mod tests {
     //    }
 
     // TODO: Fix this test - currently failing, will revisit later
-
 
     // #[test]
     // fn test_cte_recursive() {
@@ -1512,7 +1498,6 @@ mod tests {
 
     // TODO: Fix this test - currently failing, will revisit later
 
-
     // #[test]
     // fn test_create_vector_index_ivfflat() {
     //        let sql = "CREATE INDEX ON documents USING ivfflat (embedding) WITH (lists = 1000)";
@@ -1526,7 +1511,6 @@ mod tests {
     //    }
 
     // TODO: Fix this test - currently failing, will revisit later
-
 
     // #[test]
     // fn test_create_vector_index_hnsw() {
@@ -1644,12 +1628,11 @@ mod tests {
 
     // TODO: Fix this test - currently failing, will revisit later
 
-
     // #[test]
     // fn test_vector_subquery_with_similarity() {
     //        let sql = "SELECT title FROM documents WHERE id IN (
-    //            SELECT id FROM documents 
-    //            ORDER BY embedding <-> (SELECT embedding FROM documents WHERE title = 'reference') 
+    //            SELECT id FROM documents
+    //            ORDER BY embedding <-> (SELECT embedding FROM documents WHERE title = 'reference')
     //            LIMIT 5
     //        )";
     //        let mut engine = SqlEngine::new();
@@ -1691,7 +1674,6 @@ mod tests {
 
     // TODO: Fix this test - currently failing, will revisit later
 
-
     // #[test]
     // fn test_missing_from_in_select() {
     //        let sql = "SELECT * WHERE id = 1";
@@ -1723,7 +1705,6 @@ mod tests {
     }
 
     // TODO: Fix this test - currently failing, will revisit later
-
 
     // #[test]
     // fn test_unclosed_string_literal() {
@@ -1757,7 +1738,6 @@ mod tests {
 
     // TODO: Fix this test - currently failing, will revisit later
 
-
     // #[test]
     // fn test_invalid_data_type() {
     //        let sql = "CREATE TABLE users (id INVALID_TYPE)";
@@ -1786,7 +1766,6 @@ mod tests {
     }
 
     // TODO: Fix this test - currently failing, will revisit later
-
 
     // #[test]
     // fn test_invalid_join_syntax() {
@@ -1844,7 +1823,6 @@ mod tests {
     }
 
     // TODO: Fix this test - currently failing, will revisit later
-
 
     // #[test]
     // fn test_edge_case_identifiers() {
@@ -1907,7 +1885,6 @@ mod tests {
 
     // TODO: Fix this test - currently failing, will revisit later
 
-
     // #[test]
     // fn test_comments_in_sql() {
     //        let sql =
@@ -1922,7 +1899,6 @@ mod tests {
     //    }
 
     // TODO: Fix this test - currently failing, will revisit later
-
 
     // #[test]
     // fn test_reserved_words_as_identifiers() {
