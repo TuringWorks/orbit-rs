@@ -4,6 +4,7 @@
 //! Orbit's actor-based storage system and vector operations.
 
 pub mod ddl_executor;
+pub mod dml_executor;
 
 use crate::error::{ProtocolError, ProtocolResult};
 use crate::postgres_wire::sql::ast::Statement;
@@ -72,26 +73,18 @@ impl SqlExecutor {
                 ddl_executor::execute_drop_extension(self, stmt).await
             }
             
-            // DML Statements (placeholder)
-            Statement::Select(_) => {
-                Err(ProtocolError::PostgresError(
-                    "SELECT statement execution not yet implemented".to_string()
-                ))
+            // DML Statements
+            Statement::Select(stmt) => {
+                dml_executor::execute_select(self, stmt).await
             }
-            Statement::Insert(_) => {
-                Err(ProtocolError::PostgresError(
-                    "INSERT statement execution not yet implemented".to_string()
-                ))
+            Statement::Insert(stmt) => {
+                dml_executor::execute_insert(self, stmt).await
             }
-            Statement::Update(_) => {
-                Err(ProtocolError::PostgresError(
-                    "UPDATE statement execution not yet implemented".to_string()
-                ))
+            Statement::Update(stmt) => {
+                dml_executor::execute_update(self, stmt).await
             }
-            Statement::Delete(_) => {
-                Err(ProtocolError::PostgresError(
-                    "DELETE statement execution not yet implemented".to_string()
-                ))
+            Statement::Delete(stmt) => {
+                dml_executor::execute_delete(self, stmt).await
             }
             
             // DCL Statements (placeholder)

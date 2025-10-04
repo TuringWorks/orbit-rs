@@ -236,41 +236,21 @@ impl SqlParser {
         }
     }
     
-    // Placeholder implementations for other statement types
+    // DML statement implementations
     fn parse_select_statement(&mut self) -> ParseResult<Statement> {
-        Err(ParseError {
-            message: "SELECT statement parsing not yet implemented".to_string(),
-            position: self.position,
-            expected: vec![],
-            found: self.current_token.clone(),
-        })
+        dml::parse_select(self)
     }
     
     fn parse_insert_statement(&mut self) -> ParseResult<Statement> {
-        Err(ParseError {
-            message: "INSERT statement parsing not yet implemented".to_string(),
-            position: self.position,
-            expected: vec![],
-            found: self.current_token.clone(),
-        })
+        dml::parse_insert(self)
     }
     
     fn parse_update_statement(&mut self) -> ParseResult<Statement> {
-        Err(ParseError {
-            message: "UPDATE statement parsing not yet implemented".to_string(),
-            position: self.position,
-            expected: vec![],
-            found: self.current_token.clone(),
-        })
+        dml::parse_update(self)
     }
     
     fn parse_delete_statement(&mut self) -> ParseResult<Statement> {
-        Err(ParseError {
-            message: "DELETE statement parsing not yet implemented".to_string(),
-            position: self.position,
-            expected: vec![],
-            found: self.current_token.clone(),
-        })
+        dml::parse_delete(self)
     }
     
     fn parse_grant_statement(&mut self) -> ParseResult<Statement> {
