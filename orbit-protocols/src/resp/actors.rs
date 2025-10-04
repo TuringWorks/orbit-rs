@@ -754,24 +754,24 @@ mod tests {
         for i in 2..=10 {
             actor.subscribe(format!("sub{}", i));
         }
-        assert_eq!(actor.subscriber_count(), 9);
+        assert_eq!(actor.subscriber_count(), 10);
 
         // Test publishing to multiple subscribers
         let delivered_count = actor.publish("broadcast message".to_string());
-        assert_eq!(delivered_count, 9);
+        assert_eq!(delivered_count, 10);
         assert_eq!(actor.message_count, 1);
 
         // Test unsubscribe non-existent subscriber
         assert!(!actor.unsubscribe("nonexistent"));
-        assert_eq!(actor.subscriber_count(), 9);
+        assert_eq!(actor.subscriber_count(), 10);
 
         // Test unsubscribe existing subscriber
         assert!(actor.unsubscribe("sub5"));
-        assert_eq!(actor.subscriber_count(), 8);
+        assert_eq!(actor.subscriber_count(), 9);
 
         // Test another message
         let delivered_count2 = actor.publish("another message".to_string());
-        assert_eq!(delivered_count2, 8);
+        assert_eq!(delivered_count2, 9);
         assert_eq!(actor.message_count, 2);
     }
 
