@@ -181,11 +181,11 @@ mod tests {
         // Very unlikely to be the same
         assert_ne!(n1, n2, "Two random u64s should be different");
 
-        // Test multiple values to ensure they're in valid range
+        // Test multiple values to ensure they're generated successfully
         for _ in 0..10 {
             let n = RngUtils::random_u64();
-            // Should be within u64 range (which is always true, but good for documentation)
-            assert!(n <= u64::MAX);
+            // Just verify the function returns a valid u64 (any value is valid)
+            let _ = n; // Use the value to avoid unused variable warning
         }
     }
 

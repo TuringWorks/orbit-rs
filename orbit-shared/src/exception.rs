@@ -180,7 +180,9 @@ mod tests {
         // Test successful result
         let success: OrbitResult<String> = Ok("success".to_string());
         assert!(success.is_ok());
-        assert_eq!(success.unwrap(), "success");
+        if let Ok(value) = success {
+            assert_eq!(value, "success");
+        }
 
         // Test error result
         let error: OrbitResult<String> = Err(OrbitError::network("Failed"));
