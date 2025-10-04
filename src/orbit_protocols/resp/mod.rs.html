@@ -32,15 +32,15 @@
 <a href=#32 id=32 data-nosnippet>32</a><span class="kw">pub mod </span>server;
 <a href=#33 id=33 data-nosnippet>33</a><span class="kw">pub mod </span>types;
 <a href=#34 id=34 data-nosnippet>34</a>
-<a href=#35 id=35 data-nosnippet>35</a><span class="kw">pub use </span>actors::{
-<a href=#36 id=36 data-nosnippet>36</a>    KeyValueActor, HashActor, ListActor, PubSubActor,
-<a href=#37 id=37 data-nosnippet>37</a>    KeyValueActorMethods, HashActorMethods, ListActorMethods, PubSubActorMethods
+<a href=#35 id=35 data-nosnippet>35</a><span class="kw">pub use </span><span class="kw">crate</span>::vector_store::{
+<a href=#36 id=36 data-nosnippet>36</a>    SimilarityMetric, Vector, VectorActor, VectorActorMethods, VectorIndexConfig,
+<a href=#37 id=37 data-nosnippet>37</a>    VectorSearchParams, VectorSearchResult, VectorStats,
 <a href=#38 id=38 data-nosnippet>38</a>};
-<a href=#39 id=39 data-nosnippet>39</a><span class="kw">pub use </span><span class="kw">crate</span>::vector_store::{
-<a href=#40 id=40 data-nosnippet>40</a>    VectorActor, VectorActorMethods, Vector, VectorSearchParams, 
-<a href=#41 id=41 data-nosnippet>41</a>    VectorSearchResult, SimilarityMetric, VectorIndexConfig, VectorStats
+<a href=#39 id=39 data-nosnippet>39</a><span class="kw">pub use </span>actors::{
+<a href=#40 id=40 data-nosnippet>40</a>    HashActor, HashActorMethods, KeyValueActor, KeyValueActorMethods, ListActor, ListActorMethods,
+<a href=#41 id=41 data-nosnippet>41</a>    PubSubActor, PubSubActorMethods,
 <a href=#42 id=42 data-nosnippet>42</a>};
 <a href=#43 id=43 data-nosnippet>43</a><span class="kw">pub use </span>codec::RespCodec;
 <a href=#44 id=44 data-nosnippet>44</a><span class="kw">pub use </span>commands::CommandHandler;
 <a href=#45 id=45 data-nosnippet>45</a><span class="kw">pub use </span>server::RespServer;
-<a href=#46 id=46 data-nosnippet>46</a><span class="kw">pub use </span>types::{RespValue, RespArray};</code></pre></div></section></main></body></html>
+<a href=#46 id=46 data-nosnippet>46</a><span class="kw">pub use </span>types::{RespArray, RespValue};</code></pre></div></section></main></body></html>

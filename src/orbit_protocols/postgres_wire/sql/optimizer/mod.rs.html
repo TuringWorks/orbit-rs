@@ -11,38 +11,38 @@
 <a href=#11 id=11 data-nosnippet>11</a>//! - **Execution Plan Generator**: Converts optimized AST to execution plans
 <a href=#12 id=12 data-nosnippet>12</a>//! - **Statistics Collector**: Maintains table and index statistics
 <a href=#13 id=13 data-nosnippet>13</a>
-<a href=#14 id=14 data-nosnippet>14</a></span><span class="kw">pub mod </span>rules;
-<a href=#15 id=15 data-nosnippet>15</a><span class="kw">pub mod </span>costs;
-<a href=#16 id=16 data-nosnippet>16</a><span class="kw">pub mod </span>planner;
+<a href=#14 id=14 data-nosnippet>14</a></span><span class="kw">pub mod </span>costs;
+<a href=#15 id=15 data-nosnippet>15</a><span class="kw">pub mod </span>planner;
+<a href=#16 id=16 data-nosnippet>16</a><span class="kw">pub mod </span>rules;
 <a href=#17 id=17 data-nosnippet>17</a><span class="kw">pub mod </span>stats;
 <a href=#18 id=18 data-nosnippet>18</a>
-<a href=#19 id=19 data-nosnippet>19</a><span class="kw">use </span><span class="kw">crate</span>::postgres_wire::sql::ast::<span class="kw-2">*</span>;
-<a href=#20 id=20 data-nosnippet>20</a><span class="kw">use </span><span class="kw">crate</span>::error::ProtocolResult;
+<a href=#19 id=19 data-nosnippet>19</a><span class="kw">use </span><span class="kw">crate</span>::error::ProtocolResult;
+<a href=#20 id=20 data-nosnippet>20</a><span class="kw">use </span><span class="kw">crate</span>::postgres_wire::sql::ast::<span class="kw-2">*</span>;
 <a href=#21 id=21 data-nosnippet>21</a>
 <a href=#22 id=22 data-nosnippet>22</a><span class="doccomment">/// Query optimization configuration
 <a href=#23 id=23 data-nosnippet>23</a></span><span class="attr">#[derive(Debug, Clone)]
 <a href=#24 id=24 data-nosnippet>24</a></span><span class="kw">pub struct </span>OptimizerConfig {
 <a href=#25 id=25 data-nosnippet>25</a>    <span class="doccomment">/// Enable rule-based optimization
 <a href=#26 id=26 data-nosnippet>26</a>    </span><span class="kw">pub </span>enable_rule_based: bool,
-<a href=#27 id=27 data-nosnippet>27</a>    
+<a href=#27 id=27 data-nosnippet>27</a>
 <a href=#28 id=28 data-nosnippet>28</a>    <span class="doccomment">/// Enable cost-based optimization
 <a href=#29 id=29 data-nosnippet>29</a>    </span><span class="kw">pub </span>enable_cost_based: bool,
-<a href=#30 id=30 data-nosnippet>30</a>    
+<a href=#30 id=30 data-nosnippet>30</a>
 <a href=#31 id=31 data-nosnippet>31</a>    <span class="doccomment">/// Maximum optimization passes
 <a href=#32 id=32 data-nosnippet>32</a>    </span><span class="kw">pub </span>max_passes: usize,
-<a href=#33 id=33 data-nosnippet>33</a>    
+<a href=#33 id=33 data-nosnippet>33</a>
 <a href=#34 id=34 data-nosnippet>34</a>    <span class="doccomment">/// Enable join reordering
 <a href=#35 id=35 data-nosnippet>35</a>    </span><span class="kw">pub </span>enable_join_reorder: bool,
-<a href=#36 id=36 data-nosnippet>36</a>    
+<a href=#36 id=36 data-nosnippet>36</a>
 <a href=#37 id=37 data-nosnippet>37</a>    <span class="doccomment">/// Enable predicate pushdown
 <a href=#38 id=38 data-nosnippet>38</a>    </span><span class="kw">pub </span>enable_predicate_pushdown: bool,
-<a href=#39 id=39 data-nosnippet>39</a>    
+<a href=#39 id=39 data-nosnippet>39</a>
 <a href=#40 id=40 data-nosnippet>40</a>    <span class="doccomment">/// Enable projection pushdown
 <a href=#41 id=41 data-nosnippet>41</a>    </span><span class="kw">pub </span>enable_projection_pushdown: bool,
-<a href=#42 id=42 data-nosnippet>42</a>    
+<a href=#42 id=42 data-nosnippet>42</a>
 <a href=#43 id=43 data-nosnippet>43</a>    <span class="doccomment">/// Enable constant folding
 <a href=#44 id=44 data-nosnippet>44</a>    </span><span class="kw">pub </span>enable_constant_folding: bool,
-<a href=#45 id=45 data-nosnippet>45</a>    
+<a href=#45 id=45 data-nosnippet>45</a>
 <a href=#46 id=46 data-nosnippet>46</a>    <span class="doccomment">/// Enable subquery optimization
 <a href=#47 id=47 data-nosnippet>47</a>    </span><span class="kw">pub </span>enable_subquery_optimization: bool,
 <a href=#48 id=48 data-nosnippet>48</a>}
@@ -99,78 +99,82 @@
 <a href=#99 id=99 data-nosnippet>99</a>
 <a href=#100 id=100 data-nosnippet>100</a>        <span class="comment">// Step 2: Apply cost-based optimizations
 <a href=#101 id=101 data-nosnippet>101</a>        </span><span class="kw">let </span>cost_optimized = <span class="kw">if </span><span class="self">self</span>.config.enable_cost_based {
-<a href=#102 id=102 data-nosnippet>102</a>            <span class="self">self</span>.cost_optimizer.optimize(optimized_statement, <span class="kw-2">&amp;</span><span class="self">self</span>.stats)<span class="question-mark">?
-<a href=#103 id=103 data-nosnippet>103</a>        </span>} <span class="kw">else </span>{
-<a href=#104 id=104 data-nosnippet>104</a>            optimized_statement
-<a href=#105 id=105 data-nosnippet>105</a>        };
-<a href=#106 id=106 data-nosnippet>106</a>
-<a href=#107 id=107 data-nosnippet>107</a>        <span class="comment">// Step 3: Generate execution plan
-<a href=#108 id=108 data-nosnippet>108</a>        </span><span class="self">self</span>.planner.generate_plan(cost_optimized)
-<a href=#109 id=109 data-nosnippet>109</a>    }
-<a href=#110 id=110 data-nosnippet>110</a>
-<a href=#111 id=111 data-nosnippet>111</a>    <span class="doccomment">/// Update table statistics for cost-based optimization
-<a href=#112 id=112 data-nosnippet>112</a>    </span><span class="kw">pub fn </span>update_statistics(<span class="kw-2">&amp;mut </span><span class="self">self</span>, table_name: <span class="kw-2">&amp;</span>str, stats: stats::TableStatistics) {
-<a href=#113 id=113 data-nosnippet>113</a>        <span class="self">self</span>.stats.update_table_stats(table_name, stats);
-<a href=#114 id=114 data-nosnippet>114</a>    }
-<a href=#115 id=115 data-nosnippet>115</a>
-<a href=#116 id=116 data-nosnippet>116</a>    <span class="doccomment">/// Get current optimizer statistics
-<a href=#117 id=117 data-nosnippet>117</a>    </span><span class="kw">pub fn </span>get_statistics(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>stats::StatisticsCollector {
-<a href=#118 id=118 data-nosnippet>118</a>        <span class="kw-2">&amp;</span><span class="self">self</span>.stats
-<a href=#119 id=119 data-nosnippet>119</a>    }
-<a href=#120 id=120 data-nosnippet>120</a>
-<a href=#121 id=121 data-nosnippet>121</a>    <span class="doccomment">/// Explain query optimization steps
-<a href=#122 id=122 data-nosnippet>122</a>    </span><span class="kw">pub fn </span>explain_optimization(<span class="kw-2">&amp;mut </span><span class="self">self</span>, statement: Statement) -&gt; ProtocolResult&lt;Vec&lt;String&gt;&gt; {
-<a href=#123 id=123 data-nosnippet>123</a>        <span class="kw">let </span><span class="kw-2">mut </span>steps = Vec::new();
-<a href=#124 id=124 data-nosnippet>124</a>
-<a href=#125 id=125 data-nosnippet>125</a>        steps.push(<span class="macro">format!</span>(<span class="string">"Original query: {:#?}"</span>, statement));
-<a href=#126 id=126 data-nosnippet>126</a>
-<a href=#127 id=127 data-nosnippet>127</a>        <span class="comment">// Rule-based optimization steps
-<a href=#128 id=128 data-nosnippet>128</a>        </span><span class="kw">if </span><span class="self">self</span>.config.enable_rule_based {
-<a href=#129 id=129 data-nosnippet>129</a>            <span class="kw">let </span>(optimized, rule_steps) = <span class="self">self</span>.rule_optimizer.optimize_with_steps(statement.clone())<span class="question-mark">?</span>;
-<a href=#130 id=130 data-nosnippet>130</a>            steps.extend(rule_steps);
-<a href=#131 id=131 data-nosnippet>131</a>            steps.push(<span class="macro">format!</span>(<span class="string">"After rule-based optimization: {:#?}"</span>, optimized));
-<a href=#132 id=132 data-nosnippet>132</a>        }
-<a href=#133 id=133 data-nosnippet>133</a>
-<a href=#134 id=134 data-nosnippet>134</a>        <span class="comment">// Cost-based optimization steps
-<a href=#135 id=135 data-nosnippet>135</a>        </span><span class="kw">if </span><span class="self">self</span>.config.enable_cost_based {
-<a href=#136 id=136 data-nosnippet>136</a>            <span class="kw">let </span>statement = <span class="kw">if </span><span class="self">self</span>.config.enable_rule_based {
-<a href=#137 id=137 data-nosnippet>137</a>                <span class="self">self</span>.rule_optimizer.optimize(statement)<span class="question-mark">?
-<a href=#138 id=138 data-nosnippet>138</a>            </span>} <span class="kw">else </span>{
-<a href=#139 id=139 data-nosnippet>139</a>                statement
-<a href=#140 id=140 data-nosnippet>140</a>            };
-<a href=#141 id=141 data-nosnippet>141</a>            
-<a href=#142 id=142 data-nosnippet>142</a>            <span class="kw">let </span>(optimized, cost_steps) = <span class="self">self</span>.cost_optimizer.optimize_with_steps(statement, <span class="kw-2">&amp;</span><span class="self">self</span>.stats)<span class="question-mark">?</span>;
-<a href=#143 id=143 data-nosnippet>143</a>            steps.extend(cost_steps);
-<a href=#144 id=144 data-nosnippet>144</a>            steps.push(<span class="macro">format!</span>(<span class="string">"After cost-based optimization: {:#?}"</span>, optimized));
-<a href=#145 id=145 data-nosnippet>145</a>        }
-<a href=#146 id=146 data-nosnippet>146</a>
-<a href=#147 id=147 data-nosnippet>147</a>        <span class="prelude-val">Ok</span>(steps)
-<a href=#148 id=148 data-nosnippet>148</a>    }
-<a href=#149 id=149 data-nosnippet>149</a>}
+<a href=#102 id=102 data-nosnippet>102</a>            <span class="self">self</span>.cost_optimizer
+<a href=#103 id=103 data-nosnippet>103</a>                .optimize(optimized_statement, <span class="kw-2">&amp;</span><span class="self">self</span>.stats)<span class="question-mark">?
+<a href=#104 id=104 data-nosnippet>104</a>        </span>} <span class="kw">else </span>{
+<a href=#105 id=105 data-nosnippet>105</a>            optimized_statement
+<a href=#106 id=106 data-nosnippet>106</a>        };
+<a href=#107 id=107 data-nosnippet>107</a>
+<a href=#108 id=108 data-nosnippet>108</a>        <span class="comment">// Step 3: Generate execution plan
+<a href=#109 id=109 data-nosnippet>109</a>        </span><span class="self">self</span>.planner.generate_plan(cost_optimized)
+<a href=#110 id=110 data-nosnippet>110</a>    }
+<a href=#111 id=111 data-nosnippet>111</a>
+<a href=#112 id=112 data-nosnippet>112</a>    <span class="doccomment">/// Update table statistics for cost-based optimization
+<a href=#113 id=113 data-nosnippet>113</a>    </span><span class="kw">pub fn </span>update_statistics(<span class="kw-2">&amp;mut </span><span class="self">self</span>, table_name: <span class="kw-2">&amp;</span>str, stats: stats::TableStatistics) {
+<a href=#114 id=114 data-nosnippet>114</a>        <span class="self">self</span>.stats.update_table_stats(table_name, stats);
+<a href=#115 id=115 data-nosnippet>115</a>    }
+<a href=#116 id=116 data-nosnippet>116</a>
+<a href=#117 id=117 data-nosnippet>117</a>    <span class="doccomment">/// Get current optimizer statistics
+<a href=#118 id=118 data-nosnippet>118</a>    </span><span class="kw">pub fn </span>get_statistics(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>stats::StatisticsCollector {
+<a href=#119 id=119 data-nosnippet>119</a>        <span class="kw-2">&amp;</span><span class="self">self</span>.stats
+<a href=#120 id=120 data-nosnippet>120</a>    }
+<a href=#121 id=121 data-nosnippet>121</a>
+<a href=#122 id=122 data-nosnippet>122</a>    <span class="doccomment">/// Explain query optimization steps
+<a href=#123 id=123 data-nosnippet>123</a>    </span><span class="kw">pub fn </span>explain_optimization(<span class="kw-2">&amp;mut </span><span class="self">self</span>, statement: Statement) -&gt; ProtocolResult&lt;Vec&lt;String&gt;&gt; {
+<a href=#124 id=124 data-nosnippet>124</a>        <span class="kw">let </span><span class="kw-2">mut </span>steps = Vec::new();
+<a href=#125 id=125 data-nosnippet>125</a>
+<a href=#126 id=126 data-nosnippet>126</a>        steps.push(<span class="macro">format!</span>(<span class="string">"Original query: {:#?}"</span>, statement));
+<a href=#127 id=127 data-nosnippet>127</a>
+<a href=#128 id=128 data-nosnippet>128</a>        <span class="comment">// Rule-based optimization steps
+<a href=#129 id=129 data-nosnippet>129</a>        </span><span class="kw">if </span><span class="self">self</span>.config.enable_rule_based {
+<a href=#130 id=130 data-nosnippet>130</a>            <span class="kw">let </span>(optimized, rule_steps) =
+<a href=#131 id=131 data-nosnippet>131</a>                <span class="self">self</span>.rule_optimizer.optimize_with_steps(statement.clone())<span class="question-mark">?</span>;
+<a href=#132 id=132 data-nosnippet>132</a>            steps.extend(rule_steps);
+<a href=#133 id=133 data-nosnippet>133</a>            steps.push(<span class="macro">format!</span>(<span class="string">"After rule-based optimization: {:#?}"</span>, optimized));
+<a href=#134 id=134 data-nosnippet>134</a>        }
+<a href=#135 id=135 data-nosnippet>135</a>
+<a href=#136 id=136 data-nosnippet>136</a>        <span class="comment">// Cost-based optimization steps
+<a href=#137 id=137 data-nosnippet>137</a>        </span><span class="kw">if </span><span class="self">self</span>.config.enable_cost_based {
+<a href=#138 id=138 data-nosnippet>138</a>            <span class="kw">let </span>statement = <span class="kw">if </span><span class="self">self</span>.config.enable_rule_based {
+<a href=#139 id=139 data-nosnippet>139</a>                <span class="self">self</span>.rule_optimizer.optimize(statement)<span class="question-mark">?
+<a href=#140 id=140 data-nosnippet>140</a>            </span>} <span class="kw">else </span>{
+<a href=#141 id=141 data-nosnippet>141</a>                statement
+<a href=#142 id=142 data-nosnippet>142</a>            };
+<a href=#143 id=143 data-nosnippet>143</a>
+<a href=#144 id=144 data-nosnippet>144</a>            <span class="kw">let </span>(optimized, cost_steps) = <span class="self">self
+<a href=#145 id=145 data-nosnippet>145</a>                </span>.cost_optimizer
+<a href=#146 id=146 data-nosnippet>146</a>                .optimize_with_steps(statement, <span class="kw-2">&amp;</span><span class="self">self</span>.stats)<span class="question-mark">?</span>;
+<a href=#147 id=147 data-nosnippet>147</a>            steps.extend(cost_steps);
+<a href=#148 id=148 data-nosnippet>148</a>            steps.push(<span class="macro">format!</span>(<span class="string">"After cost-based optimization: {:#?}"</span>, optimized));
+<a href=#149 id=149 data-nosnippet>149</a>        }
 <a href=#150 id=150 data-nosnippet>150</a>
-<a href=#151 id=151 data-nosnippet>151</a><span class="attr">#[cfg(test)]
-<a href=#152 id=152 data-nosnippet>152</a></span><span class="kw">mod </span>tests {
-<a href=#153 id=153 data-nosnippet>153</a>    <span class="kw">use super</span>::<span class="kw-2">*</span>;
+<a href=#151 id=151 data-nosnippet>151</a>        <span class="prelude-val">Ok</span>(steps)
+<a href=#152 id=152 data-nosnippet>152</a>    }
+<a href=#153 id=153 data-nosnippet>153</a>}
 <a href=#154 id=154 data-nosnippet>154</a>
-<a href=#155 id=155 data-nosnippet>155</a>    <span class="attr">#[test]
-<a href=#156 id=156 data-nosnippet>156</a>    </span><span class="kw">fn </span>test_optimizer_creation() {
-<a href=#157 id=157 data-nosnippet>157</a>        <span class="kw">let </span>optimizer = QueryOptimizer::default();
-<a href=#158 id=158 data-nosnippet>158</a>        <span class="macro">assert!</span>(optimizer.config.enable_rule_based);
-<a href=#159 id=159 data-nosnippet>159</a>        <span class="macro">assert!</span>(optimizer.config.enable_cost_based);
-<a href=#160 id=160 data-nosnippet>160</a>    }
-<a href=#161 id=161 data-nosnippet>161</a>
-<a href=#162 id=162 data-nosnippet>162</a>    <span class="attr">#[test]
-<a href=#163 id=163 data-nosnippet>163</a>    </span><span class="kw">fn </span>test_optimizer_config() {
-<a href=#164 id=164 data-nosnippet>164</a>        <span class="kw">let </span>config = OptimizerConfig {
-<a href=#165 id=165 data-nosnippet>165</a>            enable_rule_based: <span class="bool-val">false</span>,
-<a href=#166 id=166 data-nosnippet>166</a>            enable_cost_based: <span class="bool-val">true</span>,
-<a href=#167 id=167 data-nosnippet>167</a>            max_passes: <span class="number">5</span>,
-<a href=#168 id=168 data-nosnippet>168</a>            ..Default::default()
-<a href=#169 id=169 data-nosnippet>169</a>        };
-<a href=#170 id=170 data-nosnippet>170</a>        
-<a href=#171 id=171 data-nosnippet>171</a>        <span class="kw">let </span>optimizer = QueryOptimizer::new(config);
-<a href=#172 id=172 data-nosnippet>172</a>        <span class="macro">assert!</span>(!optimizer.config.enable_rule_based);
-<a href=#173 id=173 data-nosnippet>173</a>        <span class="macro">assert!</span>(optimizer.config.enable_cost_based);
-<a href=#174 id=174 data-nosnippet>174</a>        <span class="macro">assert_eq!</span>(optimizer.config.max_passes, <span class="number">5</span>);
-<a href=#175 id=175 data-nosnippet>175</a>    }
-<a href=#176 id=176 data-nosnippet>176</a>}</code></pre></div></section></main></body></html>
+<a href=#155 id=155 data-nosnippet>155</a><span class="attr">#[cfg(test)]
+<a href=#156 id=156 data-nosnippet>156</a></span><span class="kw">mod </span>tests {
+<a href=#157 id=157 data-nosnippet>157</a>    <span class="kw">use super</span>::<span class="kw-2">*</span>;
+<a href=#158 id=158 data-nosnippet>158</a>
+<a href=#159 id=159 data-nosnippet>159</a>    <span class="attr">#[test]
+<a href=#160 id=160 data-nosnippet>160</a>    </span><span class="kw">fn </span>test_optimizer_creation() {
+<a href=#161 id=161 data-nosnippet>161</a>        <span class="kw">let </span>optimizer = QueryOptimizer::default();
+<a href=#162 id=162 data-nosnippet>162</a>        <span class="macro">assert!</span>(optimizer.config.enable_rule_based);
+<a href=#163 id=163 data-nosnippet>163</a>        <span class="macro">assert!</span>(optimizer.config.enable_cost_based);
+<a href=#164 id=164 data-nosnippet>164</a>    }
+<a href=#165 id=165 data-nosnippet>165</a>
+<a href=#166 id=166 data-nosnippet>166</a>    <span class="attr">#[test]
+<a href=#167 id=167 data-nosnippet>167</a>    </span><span class="kw">fn </span>test_optimizer_config() {
+<a href=#168 id=168 data-nosnippet>168</a>        <span class="kw">let </span>config = OptimizerConfig {
+<a href=#169 id=169 data-nosnippet>169</a>            enable_rule_based: <span class="bool-val">false</span>,
+<a href=#170 id=170 data-nosnippet>170</a>            enable_cost_based: <span class="bool-val">true</span>,
+<a href=#171 id=171 data-nosnippet>171</a>            max_passes: <span class="number">5</span>,
+<a href=#172 id=172 data-nosnippet>172</a>            ..Default::default()
+<a href=#173 id=173 data-nosnippet>173</a>        };
+<a href=#174 id=174 data-nosnippet>174</a>
+<a href=#175 id=175 data-nosnippet>175</a>        <span class="kw">let </span>optimizer = QueryOptimizer::new(config);
+<a href=#176 id=176 data-nosnippet>176</a>        <span class="macro">assert!</span>(!optimizer.config.enable_rule_based);
+<a href=#177 id=177 data-nosnippet>177</a>        <span class="macro">assert!</span>(optimizer.config.enable_cost_based);
+<a href=#178 id=178 data-nosnippet>178</a>        <span class="macro">assert_eq!</span>(optimizer.config.max_passes, <span class="number">5</span>);
+<a href=#179 id=179 data-nosnippet>179</a>    }
+<a href=#180 id=180 data-nosnippet>180</a>}</code></pre></div></section></main></body></html>

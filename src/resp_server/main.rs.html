@@ -16,7 +16,7 @@
 <a href=#16 id=16 data-nosnippet>16</a>//!   "Hello Orbit"
 <a href=#17 id=17 data-nosnippet>17</a>
 <a href=#18 id=18 data-nosnippet>18</a></span><span class="kw">use </span>std::error::Error;
-<a href=#19 id=19 data-nosnippet>19</a><span class="kw">use </span>tracing::{info, error};
+<a href=#19 id=19 data-nosnippet>19</a><span class="kw">use </span>tracing::{error, info};
 <a href=#20 id=20 data-nosnippet>20</a><span class="kw">use </span>tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 <a href=#21 id=21 data-nosnippet>21</a>
 <a href=#22 id=22 data-nosnippet>22</a><span class="kw">use </span>orbit_client::OrbitClient;
@@ -50,7 +50,7 @@
 <a href=#50 id=50 data-nosnippet>50</a>
 <a href=#51 id=51 data-nosnippet>51</a>    <span class="comment">// Create RESP server
 <a href=#52 id=52 data-nosnippet>52</a>    </span><span class="kw">let </span>server = RespServer::new(<span class="string">"127.0.0.1:6379"</span>, orbit_client);
-<a href=#53 id=53 data-nosnippet>53</a>    
+<a href=#53 id=53 data-nosnippet>53</a>
 <a href=#54 id=54 data-nosnippet>54</a>    <span class="macro">info!</span>(<span class="string">"🌐 RESP server listening on 127.0.0.1:6379"</span>);
 <a href=#55 id=55 data-nosnippet>55</a>    <span class="macro">info!</span>(<span class="string">"📡 Redis clients can now connect using: redis-cli -h localhost -p 6379"</span>);
 <a href=#56 id=56 data-nosnippet>56</a>    <span class="macro">info!</span>(<span class="string">""</span>);
@@ -84,7 +84,7 @@
 <a href=#84 id=84 data-nosnippet>84</a>        .with_server_urls(<span class="macro">vec!</span>[<span class="string">"http://localhost:50056"</span>.to_string()]) <span class="comment">// Default orbit-server gRPC port
 <a href=#85 id=85 data-nosnippet>85</a>        </span>.build()
 <a href=#86 id=86 data-nosnippet>86</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#87 id=87 data-nosnippet>87</a>    
+<a href=#87 id=87 data-nosnippet>87</a>
 <a href=#88 id=88 data-nosnippet>88</a>    <span class="prelude-val">Ok</span>(client)
 <a href=#89 id=89 data-nosnippet>89</a>}
 <a href=#90 id=90 data-nosnippet>90</a>
@@ -92,13 +92,13 @@
 <a href=#92 id=92 data-nosnippet>92</a></span><span class="kw">async fn </span>create_mock_orbit_client() -&gt; <span class="prelude-ty">Result</span>&lt;OrbitClient, Box&lt;<span class="kw">dyn </span>Error&gt;&gt; {
 <a href=#93 id=93 data-nosnippet>93</a>    <span class="macro">info!</span>(<span class="string">"⚠️  Using mock OrbitClient for demonstration"</span>);
 <a href=#94 id=94 data-nosnippet>94</a>    <span class="macro">info!</span>(<span class="string">"   In production, ensure orbit-server is running and accessible"</span>);
-<a href=#95 id=95 data-nosnippet>95</a>    
+<a href=#95 id=95 data-nosnippet>95</a>
 <a href=#96 id=96 data-nosnippet>96</a>    <span class="comment">// Create a minimal OrbitClient for demonstration
 <a href=#97 id=97 data-nosnippet>97</a>    // This won't actually connect to a cluster but allows the RESP server to start
 <a href=#98 id=98 data-nosnippet>98</a>    </span><span class="kw">let </span>client = OrbitClient::builder()
 <a href=#99 id=99 data-nosnippet>99</a>        .with_namespace(<span class="string">"redis-demo-mock"</span>)
 <a href=#100 id=100 data-nosnippet>100</a>        .build()
 <a href=#101 id=101 data-nosnippet>101</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#102 id=102 data-nosnippet>102</a>    
+<a href=#102 id=102 data-nosnippet>102</a>
 <a href=#103 id=103 data-nosnippet>103</a>    <span class="prelude-val">Ok</span>(client)
 <a href=#104 id=104 data-nosnippet>104</a>}</code></pre></div></section></main></body></html>
