@@ -214,7 +214,7 @@
 <a href=#214 id=214 data-nosnippet>214</a>        pos: <span class="kw-2">&amp;mut </span>usize,
 <a href=#215 id=215 data-nosnippet>215</a>    ) -&gt; ProtocolResult&lt;Expression&gt; {
 <a href=#216 id=216 data-nosnippet>216</a>        <span class="kw">if </span><span class="kw-2">*</span>pos &gt;= tokens.len() {
-<a href=#217 id=217 data-nosnippet>217</a>              <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="kw">crate</span>::error::ProtocolError::ParseError(
+<a href=#217 id=217 data-nosnippet>217</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="kw">crate</span>::error::ProtocolError::ParseError(
 <a href=#218 id=218 data-nosnippet>218</a>                <span class="string">"Unexpected end of tokens"</span>.to_string(),
 <a href=#219 id=219 data-nosnippet>219</a>            ));
 <a href=#220 id=220 data-nosnippet>220</a>        }
@@ -255,7 +255,7 @@
 <a href=#255 id=255 data-nosnippet>255</a>        pos: <span class="kw-2">&amp;mut </span>usize,
 <a href=#256 id=256 data-nosnippet>256</a>    ) -&gt; ProtocolResult&lt;Expression&gt; {
 <a href=#257 id=257 data-nosnippet>257</a>        <span class="kw">if </span><span class="kw-2">*</span>pos &gt;= tokens.len() {
-<a href=#258 id=258 data-nosnippet>258</a>              <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="kw">crate</span>::error::ProtocolError::ParseError(
+<a href=#258 id=258 data-nosnippet>258</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="kw">crate</span>::error::ProtocolError::ParseError(
 <a href=#259 id=259 data-nosnippet>259</a>                <span class="string">"Unexpected end of tokens"</span>.to_string(),
 <a href=#260 id=260 data-nosnippet>260</a>            ));
 <a href=#261 id=261 data-nosnippet>261</a>        }
@@ -342,7 +342,7 @@
 <a href=#342 id=342 data-nosnippet>342</a>                </span><span class="kw">let </span>expr = <span class="self">self</span>.parse_expression(tokens, pos)<span class="question-mark">?</span>;
 <a href=#343 id=343 data-nosnippet>343</a>
 <a href=#344 id=344 data-nosnippet>344</a>                <span class="kw">if </span><span class="kw-2">*</span>pos &gt;= tokens.len() || !<span class="macro">matches!</span>(tokens[<span class="kw-2">*</span>pos], Token::RightParen) {
-<a href=#345 id=345 data-nosnippet>345</a>                      <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="kw">crate</span>::error::ProtocolError::ParseError(
+<a href=#345 id=345 data-nosnippet>345</a>                    <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="kw">crate</span>::error::ProtocolError::ParseError(
 <a href=#346 id=346 data-nosnippet>346</a>                        <span class="string">"Expected ')' after expression"</span>.to_string(),
 <a href=#347 id=347 data-nosnippet>347</a>                    ));
 <a href=#348 id=348 data-nosnippet>348</a>                }
@@ -350,7 +350,7 @@
 <a href=#350 id=350 data-nosnippet>350</a>
 <a href=#351 id=351 data-nosnippet>351</a>                </span><span class="prelude-val">Ok</span>(expr)
 <a href=#352 id=352 data-nosnippet>352</a>            }
-<a href=#353 id=353 data-nosnippet>353</a>              <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(<span class="kw">crate</span>::error::ProtocolError::ParseError(<span class="macro">format!</span>(
+<a href=#353 id=353 data-nosnippet>353</a>            <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(<span class="kw">crate</span>::error::ProtocolError::ParseError(<span class="macro">format!</span>(
 <a href=#354 id=354 data-nosnippet>354</a>                <span class="string">"Unexpected token in expression: {:?}"</span>,
 <a href=#355 id=355 data-nosnippet>355</a>                tokens[<span class="kw-2">*</span>pos]
 <a href=#356 id=356 data-nosnippet>356</a>            ))),
