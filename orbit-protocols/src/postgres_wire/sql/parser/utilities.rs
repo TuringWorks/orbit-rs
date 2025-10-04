@@ -1,24 +1,24 @@
 //! Parser Utilities
-//! 
+//!
 //! Common parsing functions shared across different statement types
 
+use super::{ParseError, ParseResult, SqlParser};
 use crate::postgres_wire::sql::{
     ast::*,
     lexer::Token,
     types::{SqlType, SqlValue},
 };
-use super::{ParseResult, ParseError, SqlParser};
 
 /// Parse a table name (with optional schema qualification)
 pub fn parse_table_name(parser: &mut SqlParser) -> ParseResult<TableName> {
     if let Some(Token::Identifier(name)) = &parser.current_token {
         let first_name = name.clone();
         parser.advance()?;
-        
+
         // Check for schema qualification
         if parser.matches(&[Token::Dot]) {
             parser.advance()?;
-            
+
             if let Some(Token::Identifier(table_name)) = &parser.current_token {
                 let table_name = table_name.clone();
                 parser.advance()?;
@@ -78,11 +78,11 @@ pub fn parse_data_type(parser: &mut SqlParser) -> ParseResult<SqlType> {
         Some(Token::Decimal) | Some(Token::Numeric) => {
             let is_numeric = matches!(parser.current_token, Some(Token::Numeric));
             parser.advance()?;
-            
+
             // Parse optional precision and scale
             let (precision, scale) = if parser.matches(&[Token::LeftParen]) {
                 parser.advance()?;
-                
+
                 let precision = if let Some(Token::NumericLiteral(num)) = &parser.current_token {
                     let p = num.parse::<u8>().map_err(|_| ParseError {
                         message: "Invalid precision value".to_string(),
@@ -100,7 +100,7 @@ pub fn parse_data_type(parser: &mut SqlParser) -> ParseResult<SqlType> {
                         found: parser.current_token.clone(),
                     });
                 };
-                
+
                 let scale = if parser.matches(&[Token::Comma]) {
                     parser.advance()?;
                     if let Some(Token::NumericLiteral(num)) = &parser.current_token {
@@ -123,13 +123,13 @@ pub fn parse_data_type(parser: &mut SqlParser) -> ParseResult<SqlType> {
                 } else {
                     None
                 };
-                
+
                 parser.expect(Token::RightParen)?;
                 (precision, scale)
             } else {
                 (None, None)
             };
-            
+
             if is_numeric {
                 Ok(SqlType::Numeric { precision, scale })
             } else {
@@ -358,7 +358,7 @@ pub fn parse_literal_value(parser: &mut SqlParser) -> ParseResult<SqlValue> {
         Some(Token::NumericLiteral(n)) => {
             let value = n.clone();
             parser.advance()?;
-            
+
             // Try to parse as different numeric types
             if value.contains('.') {
                 if let Ok(f) = value.parse::<f64>() {

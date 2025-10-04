@@ -8,8 +8,8 @@ use tokio::net::TcpStream;
 use tracing::{debug, error, info};
 
 use super::messages::{
-    AuthenticationResponse, BackendMessage, FieldDescription, FrontendMessage,
-    TransactionStatus, type_oids,
+    type_oids, AuthenticationResponse, BackendMessage, FieldDescription, FrontendMessage,
+    TransactionStatus,
 };
 use super::query_engine::{QueryEngine, QueryResult};
 use crate::error::{ProtocolError, ProtocolResult};
@@ -53,7 +53,7 @@ impl PostgresWireProtocol {
             portals: HashMap::new(),
         }
     }
-    
+
     /// Create a new PostgreSQL protocol handler with custom query engine
     pub fn new_with_query_engine(query_engine: Arc<QueryEngine>) -> Self {
         Self {
@@ -72,15 +72,13 @@ impl PostgresWireProtocol {
     /// Handle a client connection
     pub async fn handle_connection(&mut self, mut stream: TcpStream) -> ProtocolResult<()> {
         info!("New PostgreSQL client connection");
-        
+
         let mut read_buf = BytesMut::with_capacity(8192);
         let mut write_buf = BytesMut::with_capacity(8192);
 
         loop {
             // Read data from client
-            let n = stream
-                .read_buf(&mut read_buf)
-                .await?;
+            let n = stream.read_buf(&mut read_buf).await?;
 
             if n == 0 {
                 info!("Client disconnected");
@@ -106,9 +104,7 @@ impl PostgresWireProtocol {
 
                 // Flush write buffer
                 if !write_buf.is_empty() {
-                    stream
-                        .write_all(&write_buf)
-                        .await?;
+                    stream.write_all(&write_buf).await?;
                     write_buf.clear();
                 }
             }
@@ -128,7 +124,8 @@ impl PostgresWireProtocol {
                 protocol_version,
                 parameters,
             } => {
-                self.handle_startup(protocol_version, parameters, buf).await?;
+                self.handle_startup(protocol_version, parameters, buf)
+                    .await?;
             }
             FrontendMessage::Password { password } => {
                 self.handle_password(&password, buf).await?;
@@ -150,7 +147,14 @@ impl PostgresWireProtocol {
                 params,
                 result_formats,
             } => {
-                self.handle_bind(&portal, &statement, param_formats, params, result_formats, buf)?;
+                self.handle_bind(
+                    &portal,
+                    &statement,
+                    param_formats,
+                    params,
+                    result_formats,
+                    buf,
+                )?;
             }
             FrontendMessage::Execute { portal, max_rows } => {
                 self.handle_execute(&portal, max_rows, buf).await?;
@@ -185,7 +189,10 @@ impl PostgresWireProtocol {
         parameters: HashMap<String, String>,
         buf: &mut BytesMut,
     ) -> ProtocolResult<()> {
-        info!("Startup: protocol_version={}, parameters={:?}", protocol_version, parameters);
+        info!(
+            "Startup: protocol_version={}, parameters={:?}",
+            protocol_version, parameters
+        );
 
         self.username = parameters.get("user").cloned();
         self.database = parameters.get("database").cloned();
@@ -234,11 +241,7 @@ impl PostgresWireProtocol {
     }
 
     /// Handle password message
-    async fn handle_password(
-        &mut self,
-        _password: &str,
-        buf: &mut BytesMut,
-    ) -> ProtocolResult<()> {
+    async fn handle_password(&mut self, _password: &str, buf: &mut BytesMut) -> ProtocolResult<()> {
         // For trust authentication, this shouldn't be called
         BackendMessage::Authentication(AuthenticationResponse::Ok).encode(buf);
         self.state = ConnectionState::Authenticated;
@@ -287,10 +290,10 @@ impl PostgresWireProtocol {
         buf: &mut BytesMut,
     ) -> ProtocolResult<()> {
         debug!("Parse: name={}, query={}", statement_name, query);
-        
+
         self.prepared_statements
             .insert(statement_name.to_string(), query.to_string());
-        
+
         BackendMessage::ParseComplete.encode(buf);
         Ok(())
     }
@@ -306,10 +309,10 @@ impl PostgresWireProtocol {
         buf: &mut BytesMut,
     ) -> ProtocolResult<()> {
         debug!("Bind: portal={}, statement={}", portal, statement);
-        
+
         self.portals
             .insert(portal.to_string(), (statement.to_string(), params));
-        
+
         BackendMessage::BindComplete.encode(buf);
         Ok(())
     }

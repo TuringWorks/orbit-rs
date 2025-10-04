@@ -16,11 +16,11 @@
 
 #![warn(missing_docs)]
 
-pub mod error;
-pub mod resp;
-pub mod postgres_wire;
-pub mod mcp;
 pub mod bolt;
+pub mod error;
+pub mod mcp;
+pub mod postgres_wire;
+pub mod resp;
 pub mod vector_store;
 
 pub use error::{ProtocolError, ProtocolResult};

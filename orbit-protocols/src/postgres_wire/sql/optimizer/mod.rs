@@ -11,38 +11,38 @@
 //! - **Execution Plan Generator**: Converts optimized AST to execution plans
 //! - **Statistics Collector**: Maintains table and index statistics
 
-pub mod rules;
 pub mod costs;
 pub mod planner;
+pub mod rules;
 pub mod stats;
 
-use crate::postgres_wire::sql::ast::*;
 use crate::error::ProtocolResult;
+use crate::postgres_wire::sql::ast::*;
 
 /// Query optimization configuration
 #[derive(Debug, Clone)]
 pub struct OptimizerConfig {
     /// Enable rule-based optimization
     pub enable_rule_based: bool,
-    
+
     /// Enable cost-based optimization
     pub enable_cost_based: bool,
-    
+
     /// Maximum optimization passes
     pub max_passes: usize,
-    
+
     /// Enable join reordering
     pub enable_join_reorder: bool,
-    
+
     /// Enable predicate pushdown
     pub enable_predicate_pushdown: bool,
-    
+
     /// Enable projection pushdown
     pub enable_projection_pushdown: bool,
-    
+
     /// Enable constant folding
     pub enable_constant_folding: bool,
-    
+
     /// Enable subquery optimization
     pub enable_subquery_optimization: bool,
 }
@@ -99,7 +99,8 @@ impl QueryOptimizer {
 
         // Step 2: Apply cost-based optimizations
         let cost_optimized = if self.config.enable_cost_based {
-            self.cost_optimizer.optimize(optimized_statement, &self.stats)?
+            self.cost_optimizer
+                .optimize(optimized_statement, &self.stats)?
         } else {
             optimized_statement
         };
@@ -126,7 +127,8 @@ impl QueryOptimizer {
 
         // Rule-based optimization steps
         if self.config.enable_rule_based {
-            let (optimized, rule_steps) = self.rule_optimizer.optimize_with_steps(statement.clone())?;
+            let (optimized, rule_steps) =
+                self.rule_optimizer.optimize_with_steps(statement.clone())?;
             steps.extend(rule_steps);
             steps.push(format!("After rule-based optimization: {:#?}", optimized));
         }
@@ -138,8 +140,10 @@ impl QueryOptimizer {
             } else {
                 statement
             };
-            
-            let (optimized, cost_steps) = self.cost_optimizer.optimize_with_steps(statement, &self.stats)?;
+
+            let (optimized, cost_steps) = self
+                .cost_optimizer
+                .optimize_with_steps(statement, &self.stats)?;
             steps.extend(cost_steps);
             steps.push(format!("After cost-based optimization: {:#?}", optimized));
         }
@@ -167,7 +171,7 @@ mod tests {
             max_passes: 5,
             ..Default::default()
         };
-        
+
         let optimizer = QueryOptimizer::new(config);
         assert!(!optimizer.config.enable_rule_based);
         assert!(optimizer.config.enable_cost_based);

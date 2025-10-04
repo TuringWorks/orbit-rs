@@ -12,31 +12,31 @@ pub type McpResult<T> = Result<T, McpError>;
 pub enum McpError {
     /// Invalid request format or parameters
     InvalidRequest(String),
-    
+
     /// Method not found
     MethodNotFound(String),
-    
+
     /// Authentication required
     AuthenticationRequired,
-    
+
     /// Permission denied
     PermissionDenied(String),
-    
+
     /// Resource not found
     ResourceNotFound(String),
-    
+
     /// Rate limit exceeded
     RateLimitExceeded,
-    
+
     /// Internal server error
     InternalError(String),
-    
+
     /// Tool execution error
     ToolError(String),
-    
+
     /// SQL execution error
     SqlError(String),
-    
+
     /// Actor system error
     ActorError(String),
 }
@@ -65,13 +65,13 @@ impl std::error::Error for McpError {}
 pub struct McpRequest {
     /// JSON-RPC version (must be "2.0")
     pub jsonrpc: String,
-    
+
     /// Request ID
     pub id: Option<serde_json::Value>,
-    
+
     /// Method name
     pub method: String,
-    
+
     /// Method parameters
     #[serde(default)]
     pub params: HashMap<String, serde_json::Value>,
@@ -102,7 +102,7 @@ impl McpResponse {
             result,
         }
     }
-    
+
     /// Create an error response
     pub fn error(id: Option<serde_json::Value>, error: McpError) -> Self {
         Self::Error {
@@ -118,13 +118,13 @@ impl McpResponse {
 pub struct McpTool {
     /// Tool name
     pub name: String,
-    
+
     /// Tool description
     pub description: String,
-    
+
     /// Input schema (JSON Schema)
     pub input_schema: serde_json::Value,
-    
+
     /// Whether the tool is dangerous (requires confirmation)
     #[serde(default)]
     pub dangerous: bool,
@@ -135,15 +135,15 @@ pub struct McpTool {
 pub struct McpToolResult {
     /// Whether the tool execution was successful
     pub success: bool,
-    
+
     /// Result data
     #[serde(skip_serializing_if = "Option::is_none")]
     pub content: Option<serde_json::Value>,
-    
+
     /// Error message if execution failed
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
-    
+
     /// Metadata about the execution
     #[serde(default)]
     pub metadata: HashMap<String, serde_json::Value>,
@@ -159,7 +159,7 @@ impl McpToolResult {
             metadata: HashMap::new(),
         }
     }
-    
+
     /// Create a successful tool result with metadata
     pub fn success_with_metadata(
         content: serde_json::Value,
@@ -172,7 +172,7 @@ impl McpToolResult {
             metadata,
         }
     }
-    
+
     /// Create an error tool result
     pub fn error(error: String) -> Self {
         Self {
@@ -189,14 +189,14 @@ impl McpToolResult {
 pub struct McpResource {
     /// Resource URI
     pub uri: String,
-    
+
     /// Resource name
     pub name: String,
-    
+
     /// Resource description
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
-    
+
     /// MIME type
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mime_type: Option<String>,
@@ -207,10 +207,10 @@ pub struct McpResource {
 pub struct McpResourceContent {
     /// Resource URI
     pub uri: String,
-    
+
     /// MIME type
     pub mime_type: String,
-    
+
     /// Resource content (can be text or binary data encoded as base64)
     #[serde(flatten)]
     pub content: McpResourceData,
@@ -229,11 +229,11 @@ pub enum McpResourceData {
 pub struct McpPrompt {
     /// Prompt name
     pub name: String,
-    
+
     /// Prompt description
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
-    
+
     /// Prompt arguments schema
     #[serde(skip_serializing_if = "Option::is_none")]
     pub arguments: Option<serde_json::Value>,
@@ -245,7 +245,7 @@ pub struct McpPromptResult {
     /// Prompt description
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
-    
+
     /// Prompt messages
     pub messages: Vec<McpPromptMessage>,
 }
@@ -255,7 +255,7 @@ pub struct McpPromptResult {
 pub struct McpPromptMessage {
     /// Message role (user, assistant, system)
     pub role: String,
-    
+
     /// Message content
     pub content: McpPromptContent,
 }
@@ -264,12 +264,12 @@ pub struct McpPromptMessage {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum McpPromptContent {
-    Text { 
+    Text {
         #[serde(rename = "type")]
         content_type: String, // "text"
-        text: String 
+        text: String,
     },
-    Image { 
+    Image {
         #[serde(rename = "type")]
         content_type: String, // "image"
         data: String, // base64 encoded
@@ -282,17 +282,17 @@ pub enum McpPromptContent {
 pub struct ActorQueryParams {
     /// Actor ID to query
     pub actor_id: Option<String>,
-    
+
     /// Actor type filter
     pub actor_type: Option<String>,
-    
+
     /// State query (SQL-like filter)
     pub state_query: Option<String>,
-    
+
     /// Maximum number of results
     #[serde(default = "default_limit")]
     pub limit: usize,
-    
+
     /// Result offset
     #[serde(default)]
     pub offset: usize,
@@ -307,14 +307,14 @@ fn default_limit() -> usize {
 pub struct ActorCreateParams {
     /// Actor ID (must be unique)
     pub actor_id: String,
-    
+
     /// Actor type
     pub actor_type: String,
-    
+
     /// Initial state (JSON object)
     #[serde(default)]
     pub initial_state: serde_json::Value,
-    
+
     /// Actor configuration
     #[serde(default)]
     pub config: HashMap<String, serde_json::Value>,
@@ -325,18 +325,18 @@ pub struct ActorCreateParams {
 pub struct ActorMessageParams {
     /// Target actor ID
     pub actor_id: String,
-    
+
     /// Message type/method
     pub message_type: String,
-    
+
     /// Message payload
     #[serde(default)]
     pub payload: serde_json::Value,
-    
+
     /// Whether to wait for response
     #[serde(default)]
     pub wait_for_response: bool,
-    
+
     /// Response timeout in milliseconds
     #[serde(default = "default_timeout")]
     pub timeout_ms: u64,
@@ -351,15 +351,15 @@ fn default_timeout() -> u64 {
 pub struct SqlQueryParams {
     /// SQL query string
     pub query: String,
-    
+
     /// Query parameters (for parameterized queries)
     #[serde(default)]
     pub parameters: Vec<serde_json::Value>,
-    
+
     /// Maximum number of results
     #[serde(default = "default_limit")]
     pub limit: usize,
-    
+
     /// Whether to include query plan/analysis
     #[serde(default)]
     pub include_plan: bool,
@@ -370,22 +370,22 @@ pub struct SqlQueryParams {
 pub struct VectorSearchParams {
     /// Query vector
     pub vector: Vec<f32>,
-    
+
     /// Table/collection to search
     pub table: String,
-    
+
     /// Vector column name
     #[serde(default = "default_vector_column")]
     pub vector_column: String,
-    
+
     /// Number of nearest neighbors
     #[serde(default = "default_k")]
     pub k: usize,
-    
+
     /// Distance metric (l2, cosine, inner_product)
     #[serde(default = "default_distance_metric")]
     pub distance_metric: String,
-    
+
     /// Additional WHERE clause filters
     pub filters: Option<String>,
 }

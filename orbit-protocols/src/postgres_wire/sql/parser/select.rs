@@ -1,9 +1,9 @@
 //! SELECT Statement Parser Implementation
 
+use crate::error::ProtocolResult;
 use crate::postgres_wire::sql::ast::*;
 use crate::postgres_wire::sql::lexer::Token;
 use crate::postgres_wire::sql::parser::expressions::ExpressionParser;
-use crate::error::ProtocolResult;
 
 /// Parser for SELECT statements
 pub struct SelectParser {
@@ -18,20 +18,26 @@ impl SelectParser {
     }
 
     /// Parse a comprehensive SELECT statement
-    pub fn parse_select(&mut self, tokens: &[Token], pos: &mut usize) -> ProtocolResult<SelectStatement> {
+    pub fn parse_select(
+        &mut self,
+        tokens: &[Token],
+        pos: &mut usize,
+    ) -> ProtocolResult<SelectStatement> {
         // Parse WITH clause if present
         let with = if self.matches_at(tokens, *pos, &Token::With) {
             Some(self.parse_with_clause(tokens, pos)?)
         } else {
             None
         };
-        
+
         // Expect SELECT keyword
         if *pos >= tokens.len() || !matches!(tokens[*pos], Token::Select) {
-            return Err(crate::error::ProtocolError::ParseError("Expected SELECT".to_string()).into());
+            return Err(
+                crate::error::ProtocolError::ParseError("Expected SELECT".to_string()).into(),
+            );
         }
         *pos += 1;
-        
+
         // Parse DISTINCT/ALL
         let distinct = if self.matches_at(tokens, *pos, &Token::Distinct) {
             *pos += 1;
@@ -50,10 +56,10 @@ impl SelectParser {
         } else {
             None
         };
-        
+
         // Parse SELECT list
         let select_list = self.parse_select_list(tokens, pos)?;
-        
+
         // Parse FROM clause if present
         let from_clause = if self.matches_at(tokens, *pos, &Token::From) {
             *pos += 1;
@@ -61,7 +67,7 @@ impl SelectParser {
         } else {
             None
         };
-        
+
         // Parse WHERE clause if present
         let where_clause = if self.matches_at(tokens, *pos, &Token::Where) {
             *pos += 1;
@@ -69,7 +75,7 @@ impl SelectParser {
         } else {
             None
         };
-        
+
         // Parse GROUP BY clause if present
         let group_by = if self.matches_at(tokens, *pos, &Token::Group) {
             *pos += 1;
@@ -78,7 +84,7 @@ impl SelectParser {
         } else {
             None
         };
-        
+
         // Parse HAVING clause if present
         let having = if self.matches_at(tokens, *pos, &Token::Having) {
             *pos += 1;
@@ -86,7 +92,7 @@ impl SelectParser {
         } else {
             None
         };
-        
+
         // Parse ORDER BY clause if present
         let order_by = if self.matches_at(tokens, *pos, &Token::Order) {
             *pos += 1;
@@ -95,7 +101,7 @@ impl SelectParser {
         } else {
             None
         };
-        
+
         // Parse LIMIT clause if present
         let limit = if self.matches_at(tokens, *pos, &Token::Limit) {
             *pos += 1;
@@ -120,12 +126,14 @@ impl SelectParser {
         } else {
             None
         };
-        
+
         // Parse OFFSET clause if present
         let offset = if self.matches_at(tokens, *pos, &Token::Offset) {
             *pos += 1;
             if let Ok(expr) = self.expression_parser.parse_expression(tokens, pos) {
-                if let Expression::Literal(crate::postgres_wire::sql::types::SqlValue::Integer(n)) = expr {
+                if let Expression::Literal(crate::postgres_wire::sql::types::SqlValue::Integer(n)) =
+                    expr
+                {
                     Some(n as u64)
                 } else {
                     None
@@ -136,7 +144,7 @@ impl SelectParser {
         } else {
             None
         };
-        
+
         Ok(SelectStatement {
             with,
             select_list,
@@ -158,52 +166,71 @@ impl SelectParser {
             std::mem::discriminant(token) == std::mem::discriminant(expected)
         })
     }
-    
-    fn expect_token(&self, tokens: &[Token], pos: &mut usize, expected: &Token) -> ProtocolResult<()> {
+
+    fn expect_token(
+        &self,
+        tokens: &[Token],
+        pos: &mut usize,
+        expected: &Token,
+    ) -> ProtocolResult<()> {
         if self.matches_at(tokens, *pos, expected) {
             *pos += 1;
             Ok(())
         } else {
-            Err(crate::error::ProtocolError::ParseError(
-                format!("Expected {:?}, found {:?}", expected, tokens.get(*pos))
-            ).into())
+            Err(crate::error::ProtocolError::ParseError(format!(
+                "Expected {:?}, found {:?}",
+                expected,
+                tokens.get(*pos)
+            ))
+            .into())
         }
     }
-    
-    fn parse_with_clause(&mut self, tokens: &[Token], pos: &mut usize) -> ProtocolResult<WithClause> {
+
+    fn parse_with_clause(
+        &mut self,
+        tokens: &[Token],
+        pos: &mut usize,
+    ) -> ProtocolResult<WithClause> {
         self.expect_token(tokens, pos, &Token::With)?;
-        
-        let recursive = if self.matches_at(tokens, *pos, &Token::Identifier("RECURSIVE".to_string())) {
-            *pos += 1;
-            true
-        } else {
-            false
-        };
-        
+
+        let recursive =
+            if self.matches_at(tokens, *pos, &Token::Identifier("RECURSIVE".to_string())) {
+                *pos += 1;
+                true
+            } else {
+                false
+            };
+
         let mut ctes = Vec::new();
         loop {
             ctes.push(self.parse_cte(tokens, pos)?);
-            
+
             if self.matches_at(tokens, *pos, &Token::Comma) {
                 *pos += 1;
             } else {
                 break;
             }
         }
-        
+
         Ok(WithClause { recursive, ctes })
     }
-    
-    fn parse_cte(&mut self, tokens: &[Token], pos: &mut usize) -> ProtocolResult<CommonTableExpression> {
+
+    fn parse_cte(
+        &mut self,
+        tokens: &[Token],
+        pos: &mut usize,
+    ) -> ProtocolResult<CommonTableExpression> {
         let name = if let Token::Identifier(n) = tokens.get(*pos).ok_or_else(|| {
             crate::error::ProtocolError::ParseError("Expected CTE name".to_string())
         })? {
             *pos += 1;
             n.clone()
         } else {
-            return Err(crate::error::ProtocolError::ParseError("Expected CTE name".to_string()).into());
+            return Err(
+                crate::error::ProtocolError::ParseError("Expected CTE name".to_string()).into(),
+            );
         };
-        
+
         let columns = if self.matches_at(tokens, *pos, &Token::LeftParen) {
             *pos += 1;
             let cols = self.parse_identifier_list(tokens, pos)?;
@@ -212,21 +239,29 @@ impl SelectParser {
         } else {
             None
         };
-        
+
         // Expect AS
         self.expect_token(tokens, pos, &Token::As)?;
         self.expect_token(tokens, pos, &Token::LeftParen)?;
-        
+
         let query = Box::new(self.parse_select(tokens, pos)?);
-        
+
         self.expect_token(tokens, pos, &Token::RightParen)?;
-        
-        Ok(CommonTableExpression { name, columns, query })
+
+        Ok(CommonTableExpression {
+            name,
+            columns,
+            query,
+        })
     }
-    
-    fn parse_identifier_list(&mut self, tokens: &[Token], pos: &mut usize) -> ProtocolResult<Vec<String>> {
+
+    fn parse_identifier_list(
+        &mut self,
+        tokens: &[Token],
+        pos: &mut usize,
+    ) -> ProtocolResult<Vec<String>> {
         let mut identifiers = Vec::new();
-        
+
         loop {
             if let Token::Identifier(name) = tokens.get(*pos).ok_or_else(|| {
                 crate::error::ProtocolError::ParseError("Expected identifier".to_string())
@@ -236,18 +271,22 @@ impl SelectParser {
             } else {
                 break;
             }
-            
+
             if self.matches_at(tokens, *pos, &Token::Comma) {
                 *pos += 1;
             } else {
                 break;
             }
         }
-        
+
         Ok(identifiers)
     }
-    
-    fn parse_select_list(&mut self, tokens: &[Token], pos: &mut usize) -> ProtocolResult<Vec<SelectItem>> {
+
+    fn parse_select_list(
+        &mut self,
+        tokens: &[Token],
+        pos: &mut usize,
+    ) -> ProtocolResult<Vec<SelectItem>> {
         let mut select_items = Vec::new();
 
         loop {
@@ -261,19 +300,20 @@ impl SelectParser {
                 select_items.push(SelectItem::Wildcard);
             } else if let Token::Identifier(name) = &tokens[*pos] {
                 // Check for qualified wildcard (table.*)
-                if *pos + 2 < tokens.len() 
-                    && matches!(tokens[*pos + 1], Token::Dot) 
-                    && matches!(tokens[*pos + 2], Token::Multiply) {
+                if *pos + 2 < tokens.len()
+                    && matches!(tokens[*pos + 1], Token::Dot)
+                    && matches!(tokens[*pos + 2], Token::Multiply)
+                {
                     let qualifier = name.clone();
                     *pos += 3; // consume table, dot, asterisk
                     select_items.push(SelectItem::QualifiedWildcard { qualifier });
                 } else {
                     // Parse as expression (could be column, function, etc.)
                     let expr = self.expression_parser.parse_expression(tokens, pos)?;
-                    
+
                     // Check for alias
                     let alias = self.parse_alias(tokens, pos)?;
-                    
+
                     select_items.push(SelectItem::Expression { expr, alias });
                 }
             } else {
@@ -292,17 +332,20 @@ impl SelectParser {
         }
 
         if select_items.is_empty() {
-            return Err(crate::error::ProtocolError::ParseError("Expected SELECT list".to_string()).into());
+            return Err(crate::error::ProtocolError::ParseError(
+                "Expected SELECT list".to_string(),
+            )
+            .into());
         }
 
         Ok(select_items)
     }
-    
+
     fn parse_alias(&mut self, tokens: &[Token], pos: &mut usize) -> ProtocolResult<Option<String>> {
         if self.matches_at(tokens, *pos, &Token::As) {
             *pos += 1;
         }
-        
+
         if let Some(Token::Identifier(alias_name)) = tokens.get(*pos) {
             *pos += 1;
             Ok(Some(alias_name.clone()))
@@ -310,10 +353,14 @@ impl SelectParser {
             Ok(None)
         }
     }
-    
-    fn parse_from_clause(&mut self, tokens: &[Token], pos: &mut usize) -> ProtocolResult<FromClause> {
+
+    fn parse_from_clause(
+        &mut self,
+        tokens: &[Token],
+        pos: &mut usize,
+    ) -> ProtocolResult<FromClause> {
         let left = self.parse_table_reference(tokens, pos)?;
-        
+
         // Check for JOINs
         if self.is_join_keyword(tokens, *pos) {
             self.parse_join(tokens, pos, left)
@@ -321,29 +368,43 @@ impl SelectParser {
             Ok(left)
         }
     }
-    
-    fn parse_table_reference(&mut self, tokens: &[Token], pos: &mut usize) -> ProtocolResult<FromClause> {
+
+    fn parse_table_reference(
+        &mut self,
+        tokens: &[Token],
+        pos: &mut usize,
+    ) -> ProtocolResult<FromClause> {
         if self.matches_at(tokens, *pos, &Token::LeftParen) {
             *pos += 1;
-            
+
             // Could be subquery or table function
             if self.matches_at(tokens, *pos, &Token::Select) {
                 let query = Box::new(self.parse_select(tokens, pos)?);
                 self.expect_token(tokens, pos, &Token::RightParen)?;
                 let alias = self.parse_table_alias(tokens, pos)?;
-                Ok(FromClause::Subquery { query, alias: alias.unwrap_or_else(|| TableAlias { name: "".to_string(), columns: None }) })
+                Ok(FromClause::Subquery {
+                    query,
+                    alias: alias.unwrap_or_else(|| TableAlias {
+                        name: "".to_string(),
+                        columns: None,
+                    }),
+                })
             } else {
                 // Table function or nested table reference
                 let expr = self.expression_parser.parse_expression(tokens, pos)?;
                 self.expect_token(tokens, pos, &Token::RightParen)?;
                 let alias = self.parse_table_alias(tokens, pos)?;
-                
+
                 if let Expression::Function(func) = expr {
-                    Ok(FromClause::TableFunction { function: *func, alias })
+                    Ok(FromClause::TableFunction {
+                        function: *func,
+                        alias,
+                    })
                 } else {
                     Err(crate::error::ProtocolError::ParseError(
-                        "Expected table function in parentheses".to_string()
-                    ).into())
+                        "Expected table function in parentheses".to_string(),
+                    )
+                    .into())
                 }
             }
         } else if let Token::Identifier(table_name) = tokens.get(*pos).ok_or_else(|| {
@@ -352,39 +413,46 @@ impl SelectParser {
             let mut schema = None;
             let mut name = table_name.clone();
             *pos += 1;
-            
+
             // Check for schema.table
             if self.matches_at(tokens, *pos, &Token::Dot) {
                 *pos += 1;
                 if let Token::Identifier(table_part) = tokens.get(*pos).ok_or_else(|| {
-                    crate::error::ProtocolError::ParseError("Expected table name after schema".to_string())
+                    crate::error::ProtocolError::ParseError(
+                        "Expected table name after schema".to_string(),
+                    )
                 })? {
                     schema = Some(name);
                     name = table_part.clone();
                     *pos += 1;
                 }
             }
-            
+
             let table = TableName { schema, name };
             let alias = self.parse_table_alias(tokens, pos)?;
-            
+
             Ok(FromClause::Table { name: table, alias })
         } else {
-            Err(crate::error::ProtocolError::ParseError(
-                "Expected table reference".to_string()
-            ).into())
+            Err(
+                crate::error::ProtocolError::ParseError("Expected table reference".to_string())
+                    .into(),
+            )
         }
     }
-    
-    fn parse_table_alias(&mut self, tokens: &[Token], pos: &mut usize) -> ProtocolResult<Option<TableAlias>> {
+
+    fn parse_table_alias(
+        &mut self,
+        tokens: &[Token],
+        pos: &mut usize,
+    ) -> ProtocolResult<Option<TableAlias>> {
         if self.matches_at(tokens, *pos, &Token::As) {
             *pos += 1;
         }
-        
+
         if let Some(Token::Identifier(alias_name)) = tokens.get(*pos) {
             let name = alias_name.clone();
             *pos += 1;
-            
+
             let columns = if self.matches_at(tokens, *pos, &Token::LeftParen) {
                 *pos += 1;
                 let cols = self.parse_identifier_list(tokens, pos)?;
@@ -393,23 +461,34 @@ impl SelectParser {
             } else {
                 None
             };
-            
+
             Ok(Some(TableAlias { name, columns }))
         } else {
             Ok(None)
         }
     }
-    
+
     fn is_join_keyword(&self, tokens: &[Token], pos: usize) -> bool {
-        matches!(tokens.get(pos), 
-            Some(Token::Join) | Some(Token::Inner) | Some(Token::Left) | 
-            Some(Token::Right) | Some(Token::Full) | Some(Token::Cross) | 
-            Some(Token::Natural))
+        matches!(
+            tokens.get(pos),
+            Some(Token::Join)
+                | Some(Token::Inner)
+                | Some(Token::Left)
+                | Some(Token::Right)
+                | Some(Token::Full)
+                | Some(Token::Cross)
+                | Some(Token::Natural)
+        )
     }
-    
-    fn parse_join(&mut self, tokens: &[Token], pos: &mut usize, left: FromClause) -> ProtocolResult<FromClause> {
+
+    fn parse_join(
+        &mut self,
+        tokens: &[Token],
+        pos: &mut usize,
+        left: FromClause,
+    ) -> ProtocolResult<FromClause> {
         let mut current_left = left;
-        
+
         while self.is_join_keyword(tokens, *pos) {
             let (join_type, natural) = self.parse_join_type(tokens, pos)?;
             let right = self.parse_table_reference(tokens, pos)?;
@@ -418,7 +497,7 @@ impl SelectParser {
             } else {
                 self.parse_join_condition(tokens, pos)?
             };
-            
+
             current_left = FromClause::Join {
                 left: Box::new(current_left),
                 join_type,
@@ -426,18 +505,22 @@ impl SelectParser {
                 condition,
             };
         }
-        
+
         Ok(current_left)
     }
-    
-    fn parse_join_type(&mut self, tokens: &[Token], pos: &mut usize) -> ProtocolResult<(JoinType, bool)> {
+
+    fn parse_join_type(
+        &mut self,
+        tokens: &[Token],
+        pos: &mut usize,
+    ) -> ProtocolResult<(JoinType, bool)> {
         let natural = if self.matches_at(tokens, *pos, &Token::Natural) {
             *pos += 1;
             true
         } else {
             false
         };
-        
+
         let join_type = if self.matches_at(tokens, *pos, &Token::Inner) {
             *pos += 1;
             self.expect_token(tokens, pos, &Token::Join)?;
@@ -472,11 +555,15 @@ impl SelectParser {
             self.expect_token(tokens, pos, &Token::Join)?;
             JoinType::Inner
         };
-        
+
         Ok((join_type, natural))
     }
-    
-    fn parse_join_condition(&mut self, tokens: &[Token], pos: &mut usize) -> ProtocolResult<JoinCondition> {
+
+    fn parse_join_condition(
+        &mut self,
+        tokens: &[Token],
+        pos: &mut usize,
+    ) -> ProtocolResult<JoinCondition> {
         if self.matches_at(tokens, *pos, &Token::On) {
             *pos += 1;
             let expr = self.expression_parser.parse_expression(tokens, pos)?;
@@ -489,33 +576,42 @@ impl SelectParser {
             Ok(JoinCondition::Using(columns))
         } else {
             Err(crate::error::ProtocolError::ParseError(
-                "Expected ON or USING in join condition".to_string()
-            ).into())
+                "Expected ON or USING in join condition".to_string(),
+            )
+            .into())
         }
     }
-    
-    fn parse_expression_list(&mut self, tokens: &[Token], pos: &mut usize) -> ProtocolResult<Vec<Expression>> {
+
+    fn parse_expression_list(
+        &mut self,
+        tokens: &[Token],
+        pos: &mut usize,
+    ) -> ProtocolResult<Vec<Expression>> {
         let mut expressions = Vec::new();
-        
+
         loop {
             expressions.push(self.expression_parser.parse_expression(tokens, pos)?);
-            
+
             if self.matches_at(tokens, *pos, &Token::Comma) {
                 *pos += 1;
             } else {
                 break;
             }
         }
-        
+
         Ok(expressions)
     }
-    
-    fn parse_order_by_list(&mut self, tokens: &[Token], pos: &mut usize) -> ProtocolResult<Vec<OrderByItem>> {
+
+    fn parse_order_by_list(
+        &mut self,
+        tokens: &[Token],
+        pos: &mut usize,
+    ) -> ProtocolResult<Vec<OrderByItem>> {
         let mut items = Vec::new();
-        
+
         loop {
             let expression = self.expression_parser.parse_expression(tokens, pos)?;
-            
+
             let direction = if self.matches_at(tokens, *pos, &Token::Asc) {
                 *pos += 1;
                 Some(SortDirection::Ascending)
@@ -525,7 +621,7 @@ impl SelectParser {
             } else {
                 None
             };
-            
+
             let nulls = if self.matches_at(tokens, *pos, &Token::Nulls) {
                 *pos += 1;
                 if self.matches_at(tokens, *pos, &Token::First) {
@@ -540,16 +636,20 @@ impl SelectParser {
             } else {
                 None
             };
-            
-            items.push(OrderByItem { expression, direction, nulls });
-            
+
+            items.push(OrderByItem {
+                expression,
+                direction,
+                nulls,
+            });
+
             if self.matches_at(tokens, *pos, &Token::Comma) {
                 *pos += 1;
             } else {
                 break;
             }
         }
-        
+
         Ok(items)
     }
 }

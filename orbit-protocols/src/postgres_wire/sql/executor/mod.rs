@@ -1,5 +1,5 @@
 //! SQL Execution Engine
-//! 
+//!
 //! This module provides execution of parsed SQL statements against
 //! Orbit's actor-based storage system and vector operations.
 
@@ -7,8 +7,8 @@ pub mod ddl_executor;
 pub mod dml_executor;
 
 use crate::error::{ProtocolError, ProtocolResult};
-use crate::postgres_wire::sql::ast::Statement;
 use crate::postgres_wire::query_engine::QueryResult;
+use crate::postgres_wire::sql::ast::Statement;
 use orbit_client::OrbitClient;
 
 /// SQL execution result
@@ -23,133 +23,83 @@ pub struct SqlExecutor {
 impl SqlExecutor {
     /// Create a new SQL executor
     pub fn new() -> Self {
-        Self {
-            orbit_client: None,
-        }
+        Self { orbit_client: None }
     }
-    
+
     /// Create a new SQL executor with OrbitClient support
     pub fn new_with_vector_support(orbit_client: OrbitClient) -> Self {
         Self {
             orbit_client: Some(orbit_client),
         }
     }
-    
+
     /// Execute a parsed SQL statement
     pub async fn execute(&self, statement: Statement) -> ProtocolResult<ExecutionResult> {
         match statement {
             // DDL Statements
-            Statement::CreateTable(stmt) => {
-                ddl_executor::execute_create_table(self, stmt).await
-            }
-            Statement::CreateIndex(stmt) => {
-                ddl_executor::execute_create_index(self, stmt).await
-            }
-            Statement::CreateView(stmt) => {
-                ddl_executor::execute_create_view(self, stmt).await
-            }
-            Statement::CreateSchema(stmt) => {
-                ddl_executor::execute_create_schema(self, stmt).await
-            }
+            Statement::CreateTable(stmt) => ddl_executor::execute_create_table(self, stmt).await,
+            Statement::CreateIndex(stmt) => ddl_executor::execute_create_index(self, stmt).await,
+            Statement::CreateView(stmt) => ddl_executor::execute_create_view(self, stmt).await,
+            Statement::CreateSchema(stmt) => ddl_executor::execute_create_schema(self, stmt).await,
             Statement::CreateExtension(stmt) => {
                 ddl_executor::execute_create_extension(self, stmt).await
             }
-            Statement::AlterTable(stmt) => {
-                ddl_executor::execute_alter_table(self, stmt).await
-            }
-            Statement::DropTable(stmt) => {
-                ddl_executor::execute_drop_table(self, stmt).await
-            }
-            Statement::DropIndex(stmt) => {
-                ddl_executor::execute_drop_index(self, stmt).await
-            }
-            Statement::DropView(stmt) => {
-                ddl_executor::execute_drop_view(self, stmt).await
-            }
-            Statement::DropSchema(stmt) => {
-                ddl_executor::execute_drop_schema(self, stmt).await
-            }
+            Statement::AlterTable(stmt) => ddl_executor::execute_alter_table(self, stmt).await,
+            Statement::DropTable(stmt) => ddl_executor::execute_drop_table(self, stmt).await,
+            Statement::DropIndex(stmt) => ddl_executor::execute_drop_index(self, stmt).await,
+            Statement::DropView(stmt) => ddl_executor::execute_drop_view(self, stmt).await,
+            Statement::DropSchema(stmt) => ddl_executor::execute_drop_schema(self, stmt).await,
             Statement::DropExtension(stmt) => {
                 ddl_executor::execute_drop_extension(self, stmt).await
             }
-            
+
             // DML Statements
-            Statement::Select(stmt) => {
-                dml_executor::execute_select(self, stmt).await
-            }
-            Statement::Insert(stmt) => {
-                dml_executor::execute_insert(self, stmt).await
-            }
-            Statement::Update(stmt) => {
-                dml_executor::execute_update(self, stmt).await
-            }
-            Statement::Delete(stmt) => {
-                dml_executor::execute_delete(self, stmt).await
-            }
-            
+            Statement::Select(stmt) => dml_executor::execute_select(self, stmt).await,
+            Statement::Insert(stmt) => dml_executor::execute_insert(self, stmt).await,
+            Statement::Update(stmt) => dml_executor::execute_update(self, stmt).await,
+            Statement::Delete(stmt) => dml_executor::execute_delete(self, stmt).await,
+
             // DCL Statements (placeholder)
-            Statement::Grant(_) => {
-                Err(ProtocolError::PostgresError(
-                    "GRANT statement execution not yet implemented".to_string()
-                ))
-            }
-            Statement::Revoke(_) => {
-                Err(ProtocolError::PostgresError(
-                    "REVOKE statement execution not yet implemented".to_string()
-                ))
-            }
-            
+            Statement::Grant(_) => Err(ProtocolError::PostgresError(
+                "GRANT statement execution not yet implemented".to_string(),
+            )),
+            Statement::Revoke(_) => Err(ProtocolError::PostgresError(
+                "REVOKE statement execution not yet implemented".to_string(),
+            )),
+
             // TCL Statements (placeholder)
-            Statement::Begin(_) => {
-                Err(ProtocolError::PostgresError(
-                    "BEGIN statement execution not yet implemented".to_string()
-                ))
-            }
-            Statement::Commit(_) => {
-                Err(ProtocolError::PostgresError(
-                    "COMMIT statement execution not yet implemented".to_string()
-                ))
-            }
-            Statement::Rollback(_) => {
-                Err(ProtocolError::PostgresError(
-                    "ROLLBACK statement execution not yet implemented".to_string()
-                ))
-            }
-            Statement::Savepoint(_) => {
-                Err(ProtocolError::PostgresError(
-                    "SAVEPOINT statement execution not yet implemented".to_string()
-                ))
-            }
-            Statement::ReleaseSavepoint(_) => {
-                Err(ProtocolError::PostgresError(
-                    "RELEASE SAVEPOINT statement execution not yet implemented".to_string()
-                ))
-            }
-            
+            Statement::Begin(_) => Err(ProtocolError::PostgresError(
+                "BEGIN statement execution not yet implemented".to_string(),
+            )),
+            Statement::Commit(_) => Err(ProtocolError::PostgresError(
+                "COMMIT statement execution not yet implemented".to_string(),
+            )),
+            Statement::Rollback(_) => Err(ProtocolError::PostgresError(
+                "ROLLBACK statement execution not yet implemented".to_string(),
+            )),
+            Statement::Savepoint(_) => Err(ProtocolError::PostgresError(
+                "SAVEPOINT statement execution not yet implemented".to_string(),
+            )),
+            Statement::ReleaseSavepoint(_) => Err(ProtocolError::PostgresError(
+                "RELEASE SAVEPOINT statement execution not yet implemented".to_string(),
+            )),
+
             // Utility Statements (placeholder)
-            Statement::Explain(_) => {
-                Err(ProtocolError::PostgresError(
-                    "EXPLAIN statement execution not yet implemented".to_string()
-                ))
-            }
-            Statement::Show(_) => {
-                Err(ProtocolError::PostgresError(
-                    "SHOW statement execution not yet implemented".to_string()
-                ))
-            }
-            Statement::Use(_) => {
-                Err(ProtocolError::PostgresError(
-                    "USE statement execution not yet implemented".to_string()
-                ))
-            }
-            Statement::Describe(_) => {
-                Err(ProtocolError::PostgresError(
-                    "DESCRIBE statement execution not yet implemented".to_string()
-                ))
-            }
+            Statement::Explain(_) => Err(ProtocolError::PostgresError(
+                "EXPLAIN statement execution not yet implemented".to_string(),
+            )),
+            Statement::Show(_) => Err(ProtocolError::PostgresError(
+                "SHOW statement execution not yet implemented".to_string(),
+            )),
+            Statement::Use(_) => Err(ProtocolError::PostgresError(
+                "USE statement execution not yet implemented".to_string(),
+            )),
+            Statement::Describe(_) => Err(ProtocolError::PostgresError(
+                "DESCRIBE statement execution not yet implemented".to_string(),
+            )),
         }
     }
-    
+
     /// Get reference to OrbitClient if available
     pub fn orbit_client(&self) -> Option<&OrbitClient> {
         self.orbit_client.as_ref()

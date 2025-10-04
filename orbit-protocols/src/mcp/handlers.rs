@@ -1,6 +1,6 @@
 //! MCP request handlers
 
-use super::types::{McpRequest, McpResponse, McpError};
+use super::types::{McpError, McpRequest, McpResponse};
 use serde_json::json;
 
 /// Handle MCP requests
@@ -13,10 +13,7 @@ pub async fn handle_request(request: McpRequest) -> McpResponse {
         "resources/read" => handle_resource_read(&request).await,
         "prompts/list" => handle_prompts_list(&request),
         "prompts/get" => handle_prompt_get(&request).await,
-        _ => McpResponse::error(
-            request.id,
-            McpError::MethodNotFound(request.method),
-        ),
+        _ => McpResponse::error(request.id, McpError::MethodNotFound(request.method)),
     }
 }
 
@@ -42,7 +39,7 @@ fn handle_initialize(request: &McpRequest) -> McpResponse {
             "version": "0.1.0"
         }
     });
-    
+
     McpResponse::success(request.id.clone(), result)
 }
 
@@ -57,12 +54,13 @@ fn handle_tools_list(request: &McpRequest) -> McpResponse {
 async fn handle_tool_call(request: &McpRequest) -> McpResponse {
     if let (Some(name), Some(arguments)) = (
         request.params.get("name").and_then(|v| v.as_str()),
-        request.params.get("arguments").and_then(|v| v.as_object())
+        request.params.get("arguments").and_then(|v| v.as_object()),
     ) {
-        let arguments_map = arguments.iter()
+        let arguments_map = arguments
+            .iter()
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect();
-            
+
         let tool_result = super::tools::execute_tool(name, arguments_map).await;
         let result = json!({ "content": [tool_result] });
         McpResponse::success(request.id.clone(), result)

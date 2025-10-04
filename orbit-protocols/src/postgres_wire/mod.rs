@@ -32,14 +32,14 @@
 
 pub mod messages;
 pub mod protocol;
-pub mod server;
 pub mod query_engine;
-pub mod vector_engine;
+pub mod server;
 pub mod sql;
+pub mod vector_engine;
 
-pub use messages::{BackendMessage, FrontendMessage, FieldDescription, TransactionStatus};
+pub use messages::{BackendMessage, FieldDescription, FrontendMessage, TransactionStatus};
 pub use protocol::PostgresWireProtocol;
-pub use server::PostgresServer;
 pub use query_engine::{QueryEngine, QueryResult};
+pub use server::PostgresServer;
+pub use sql::{SqlEngine, SqlExecutor, SqlParser};
 pub use vector_engine::VectorQueryEngine;
-pub use sql::{SqlEngine, SqlParser, SqlExecutor};

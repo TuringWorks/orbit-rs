@@ -74,20 +74,14 @@ pub enum FrontendMessage {
         result_formats: Vec<i16>,
     },
     /// Execute portal
-    Execute {
-        portal: String,
-        max_rows: i32,
-    },
+    Execute { portal: String, max_rows: i32 },
     /// Describe prepared statement or portal
     Describe {
         target: DescribeTarget,
         name: String,
     },
     /// Close prepared statement or portal
-    Close {
-        target: CloseTarget,
-        name: String,
-    },
+    Close { target: CloseTarget, name: String },
     /// Flush output
     Flush,
     /// Sync (end of extended query)
@@ -116,10 +110,7 @@ pub enum BackendMessage {
     /// Authentication response
     Authentication(AuthenticationResponse),
     /// Backend key data for cancellation
-    BackendKeyData {
-        process_id: i32,
-        secret_key: i32,
-    },
+    BackendKeyData { process_id: i32, secret_key: i32 },
     /// Bind complete
     BindComplete,
     /// Close complete
@@ -192,7 +183,7 @@ impl FrontendMessage {
         if buf.len() >= 4 {
             let mut peek = Cursor::new(&buf[..]);
             let len = peek.get_i32() as usize;
-            
+
             if len >= 8 && buf.len() >= len {
                 // Check if this looks like a startup message
                 let protocol_version = (&buf[4..8]).get_i32();
@@ -204,7 +195,7 @@ impl FrontendMessage {
         }
 
         let msg_type = buf[0];
-        
+
         // Check if we have enough data for the length
         if buf.len() < 5 {
             return Ok(None);
@@ -214,14 +205,14 @@ impl FrontendMessage {
             let mut cursor = Cursor::new(&buf[1..5]);
             cursor.get_i32() as usize
         };
-        
+
         if buf.len() < 1 + len {
             return Ok(None); // Not enough data yet
         }
 
         // Copy the message data before advancing buffer
         let msg_data = buf[5..1 + len].to_vec();
-        
+
         // Remove message from buffer
         buf.advance(1 + len);
 
@@ -476,7 +467,8 @@ impl BackendMessage {
                 buf.put_u8(b'I');
                 buf.put_i32(4); // Length
             }
-            BackendMessage::ErrorResponse { fields } | BackendMessage::NoticeResponse { fields } => {
+            BackendMessage::ErrorResponse { fields }
+            | BackendMessage::NoticeResponse { fields } => {
                 let msg_type = if matches!(self, BackendMessage::ErrorResponse { .. }) {
                     b'E'
                 } else {
@@ -541,15 +533,15 @@ impl BackendMessage {
 fn read_cstring(cursor: &mut Cursor<&[u8]>) -> ProtocolResult<String> {
     let start = cursor.position() as usize;
     let buf = cursor.get_ref();
-    
+
     let end = buf[start..]
         .iter()
         .position(|&b| b == 0)
         .ok_or_else(|| ProtocolError::PostgresError("Unterminated string".to_string()))?;
-    
+
     let s = String::from_utf8(buf[start..start + end].to_vec())
         .map_err(|e| ProtocolError::PostgresError(format!("Invalid UTF-8: {}", e)))?;
-    
+
     cursor.set_position((start + end + 1) as u64);
     Ok(s)
 }
@@ -577,11 +569,11 @@ pub mod type_oids {
     pub const TIMESTAMP: i32 = 1114;
     pub const TIMESTAMPTZ: i32 = 1184;
     pub const UUID: i32 = 2950;
-    
+
     // pgvector extension types
     // Note: In real pgvector, these OIDs are assigned dynamically
     // We use high numbers to avoid conflicts with standard types
-    pub const VECTOR: i32 = 16385;     // vector type
-    pub const HALFVEC: i32 = 16386;    // halfvec type (half precision)
-    pub const SPARSEVEC: i32 = 16387;  // sparsevec type
+    pub const VECTOR: i32 = 16385; // vector type
+    pub const HALFVEC: i32 = 16386; // halfvec type (half precision)
+    pub const SPARSEVEC: i32 = 16387; // sparsevec type
 }

@@ -21,13 +21,13 @@
 //! - SQL injection protection through parameterized queries
 //! - Rate limiting and resource quotas
 
+pub mod handlers;
 pub mod server;
 pub mod tools;
 pub mod types;
-pub mod handlers;
 
 pub use server::McpServer;
-pub use types::{McpRequest, McpResponse, McpTool, McpError, McpResult};
+pub use types::{McpError, McpRequest, McpResponse, McpResult, McpTool};
 
 use serde::{Deserialize, Serialize};
 
@@ -37,16 +37,16 @@ pub struct McpConfig {
     /// Server name and version
     pub name: String,
     pub version: String,
-    
+
     /// Security configuration
     pub require_authentication: bool,
     pub allowed_origins: Vec<String>,
-    
+
     /// Resource limits
     pub max_concurrent_requests: usize,
     pub request_timeout_ms: u64,
     pub max_query_result_size: usize,
-    
+
     /// Feature flags
     pub enable_sql_queries: bool,
     pub enable_actor_management: bool,
@@ -96,10 +96,7 @@ impl McpCapabilities {
                 "schemas".to_string(),
                 "metrics".to_string(),
             ],
-            prompts: vec![
-                "sql_help".to_string(),
-                "actor_patterns".to_string(),
-            ],
+            prompts: vec!["sql_help".to_string(), "actor_patterns".to_string()],
         }
     }
 }

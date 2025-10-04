@@ -1,6 +1,6 @@
 //! MCP server implementation
 
-use super::{McpConfig, McpCapabilities};
+use super::{McpCapabilities, McpConfig};
 
 /// MCP server
 pub struct McpServer {

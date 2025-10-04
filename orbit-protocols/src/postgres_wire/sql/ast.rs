@@ -18,30 +18,30 @@ pub enum Statement {
     DropIndex(DropIndexStatement),
     DropView(DropViewStatement),
     DropSchema(DropSchemaStatement),
-    
+
     // Data Manipulation Language (DML)
     Select(SelectStatement),
     Insert(InsertStatement),
     Update(UpdateStatement),
     Delete(DeleteStatement),
-    
+
     // Data Control Language (DCL)
     Grant(GrantStatement),
     Revoke(RevokeStatement),
-    
+
     // Transaction Control Language (TCL)
     Begin(BeginStatement),
     Commit(CommitStatement),
     Rollback(RollbackStatement),
     Savepoint(SavepointStatement),
     ReleaseSavepoint(ReleaseSavepointStatement),
-    
+
     // Utility statements
     Explain(ExplainStatement),
     Show(ShowStatement),
     Use(UseStatement),
     Describe(DescribeStatement),
-    
+
     // Extensions
     CreateExtension(CreateExtensionStatement),
     DropExtension(DropExtensionStatement),
@@ -95,11 +95,23 @@ pub struct AlterTableStatement {
 #[derive(Debug, Clone, PartialEq)]
 pub enum AlterTableAction {
     AddColumn(ColumnDefinition),
-    DropColumn { name: String, cascade: bool },
-    AlterColumn { name: String, action: AlterColumnAction },
+    DropColumn {
+        name: String,
+        cascade: bool,
+    },
+    AlterColumn {
+        name: String,
+        action: AlterColumnAction,
+    },
     AddConstraint(TableConstraint),
-    DropConstraint { name: String, cascade: bool },
-    RenameColumn { old_name: String, new_name: String },
+    DropConstraint {
+        name: String,
+        cascade: bool,
+    },
+    RenameColumn {
+        old_name: String,
+        new_name: String,
+    },
     RenameTable(String),
 }
 
@@ -157,8 +169,8 @@ pub enum ColumnConstraint {
     Default(Expression),
     PrimaryKey,
     Unique,
-    References { 
-        table: TableName, 
+    References {
+        table: TableName,
         columns: Option<Vec<String>>,
         on_delete: Option<ReferentialAction>,
         on_update: Option<ReferentialAction>,
@@ -168,13 +180,13 @@ pub enum ColumnConstraint {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum TableConstraint {
-    PrimaryKey { 
-        name: Option<String>, 
-        columns: Vec<String> 
+    PrimaryKey {
+        name: Option<String>,
+        columns: Vec<String>,
     },
-    Unique { 
-        name: Option<String>, 
-        columns: Vec<String> 
+    Unique {
+        name: Option<String>,
+        columns: Vec<String>,
     },
     ForeignKey {
         name: Option<String>,
@@ -184,9 +196,9 @@ pub enum TableConstraint {
         on_delete: Option<ReferentialAction>,
         on_update: Option<ReferentialAction>,
     },
-    Check { 
-        name: Option<String>, 
-        expression: Expression 
+    Check {
+        name: Option<String>,
+        expression: Expression,
     },
 }
 
@@ -219,8 +231,13 @@ pub enum IndexType {
     Gist,
     Gin,
     // Vector indexes
-    IvfFlat { lists: Option<i32> },
-    Hnsw { m: Option<i32>, ef_construction: Option<i32> },
+    IvfFlat {
+        lists: Option<i32>,
+    },
+    Hnsw {
+        m: Option<i32>,
+        ef_construction: Option<i32>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -262,10 +279,12 @@ pub struct CommonTableExpression {
 #[derive(Debug, Clone, PartialEq)]
 pub enum SelectItem {
     Wildcard,
-    QualifiedWildcard { qualifier: String },
-    Expression { 
-        expr: Expression, 
-        alias: Option<String> 
+    QualifiedWildcard {
+        qualifier: String,
+    },
+    Expression {
+        expr: Expression,
+        alias: Option<String>,
     },
 }
 
@@ -387,7 +406,7 @@ pub enum ConflictTarget {
 #[derive(Debug, Clone, PartialEq)]
 pub enum ConflictAction {
     DoNothing,
-    DoUpdate { 
+    DoUpdate {
         set: Vec<Assignment>,
         where_clause: Option<Expression>,
     },
@@ -432,7 +451,7 @@ pub enum Expression {
     Literal(SqlValue),
     Column(ColumnRef),
     Parameter(u32),
-    
+
     // Operators
     Binary {
         left: Box<Expression>,
@@ -443,7 +462,7 @@ pub enum Expression {
         operator: UnaryOperator,
         operand: Box<Expression>,
     },
-    
+
     // Functions and aggregates
     Function(Box<FunctionCall>),
     WindowFunction {
@@ -452,10 +471,10 @@ pub enum Expression {
         order_by: Vec<OrderByItem>,
         frame: Option<WindowFrame>,
     },
-    
+
     // Conditional expressions
     Case(CaseExpression),
-    
+
     // Subqueries and lists
     Subquery(Box<SelectStatement>),
     Exists(Box<SelectStatement>),
@@ -464,7 +483,7 @@ pub enum Expression {
         list: InList,
         negated: bool,
     },
-    
+
     // Range conditions
     Between {
         expr: Box<Expression>,
@@ -472,7 +491,7 @@ pub enum Expression {
         high: Box<Expression>,
         negated: bool,
     },
-    
+
     // Pattern matching
     Like {
         expr: Box<Expression>,
@@ -481,19 +500,19 @@ pub enum Expression {
         case_insensitive: bool,
         negated: bool,
     },
-    
+
     // Null checks
     IsNull {
         expr: Box<Expression>,
         negated: bool,
     },
-    
+
     // Type casting
     Cast {
         expr: Box<Expression>,
         target_type: SqlType,
     },
-    
+
     // Array and row operations
     Array(Vec<Expression>),
     Row(Vec<Expression>),
@@ -506,7 +525,7 @@ pub enum Expression {
         start: Option<Box<Expression>>,
         end: Option<Box<Expression>>,
     },
-    
+
     // Vector operations
     VectorSimilarity {
         left: Box<Expression>,
@@ -524,58 +543,90 @@ pub struct ColumnRef {
 #[derive(Debug, Clone, PartialEq)]
 pub enum BinaryOperator {
     // Arithmetic
-    Plus, Minus, Multiply, Divide, Modulo, Power,
-    
+    Plus,
+    Minus,
+    Multiply,
+    Divide,
+    Modulo,
+    Power,
+
     // Comparison
-    Equal, NotEqual, LessThan, LessThanOrEqual,
-    GreaterThan, GreaterThanOrEqual,
-    
+    Equal,
+    NotEqual,
+    LessThan,
+    LessThanOrEqual,
+    GreaterThan,
+    GreaterThanOrEqual,
+
     // Logical
-    And, Or,
-    
+    And,
+    Or,
+
     // String
-    Concat, Like, ILike, Similar,
-    
+    Concat,
+    Like,
+    ILike,
+    Similar,
+
     // Array
-    Contains, ContainedBy, Overlap,
-    
+    Contains,
+    ContainedBy,
+    Overlap,
+
     // JSON
-    JsonExtract, JsonExtractText,
-    JsonContains, JsonContainedBy,
-    
+    JsonExtract,
+    JsonExtractText,
+    JsonContains,
+    JsonContainedBy,
+
     // Pattern matching
-    Match, NotMatch,
-    
+    Match,
+    NotMatch,
+
     // Null tests
-    Is, IsNot,
-    
+    Is,
+    IsNot,
+
     // Set operations
-    In, NotIn,
-    
-    // Vector operations  
-    VectorDistance, VectorInnerProduct, VectorCosineDistance,
-    
+    In,
+    NotIn,
+
+    // Vector operations
+    VectorDistance,
+    VectorInnerProduct,
+    VectorCosineDistance,
+
     // Bitwise
-    BitwiseAnd, BitwiseOr, BitwiseXor,
-    LeftShift, RightShift,
+    BitwiseAnd,
+    BitwiseOr,
+    BitwiseXor,
+    LeftShift,
+    RightShift,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum UnaryOperator {
-    Plus, Minus, Not,
+    Plus,
+    Minus,
+    Not,
     BitwiseNot,
-    IsNull, IsNotNull,
-    IsTrue, IsNotTrue, IsFalse, IsNotFalse,
-    IsUnknown, IsNotUnknown,
+    IsNull,
+    IsNotNull,
+    IsTrue,
+    IsNotTrue,
+    IsFalse,
+    IsNotFalse,
+    IsUnknown,
+    IsNotUnknown,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum VectorOperator {
-    L2Distance,        // <->
-    InnerProduct,      // <#>
-    CosineDistance,    // <=>
-    L1Distance,        // Custom extension
-    HammingDistance,   // Custom extension
+    L2Distance,      // <->
+    InnerProduct,    // <#>
+    CosineDistance,  // <=>
+    L1Distance,      // Custom extension
+    HammingDistance, // Custom extension
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -601,11 +652,22 @@ pub enum WindowFunctionType {
     PercentRank,
     CumeDist,
     Ntile(Box<Expression>),
-    Lag { expr: Box<Expression>, offset: Option<Box<Expression>>, default: Option<Box<Expression>> },
-    Lead { expr: Box<Expression>, offset: Option<Box<Expression>>, default: Option<Box<Expression>> },
+    Lag {
+        expr: Box<Expression>,
+        offset: Option<Box<Expression>>,
+        default: Option<Box<Expression>>,
+    },
+    Lead {
+        expr: Box<Expression>,
+        offset: Option<Box<Expression>>,
+        default: Option<Box<Expression>>,
+    },
     FirstValue(Box<Expression>),
     LastValue(Box<Expression>),
-    NthValue { expr: Box<Expression>, n: Box<Expression> },
+    NthValue {
+        expr: Box<Expression>,
+        n: Box<Expression>,
+    },
     Aggregate(Box<FunctionCall>),
 }
 
@@ -658,14 +720,14 @@ impl TableName {
             name: name.into(),
         }
     }
-    
+
     pub fn with_schema(schema: impl Into<String>, name: impl Into<String>) -> Self {
         Self {
             schema: Some(schema.into()),
             name: name.into(),
         }
     }
-    
+
     pub fn full_name(&self) -> String {
         match &self.schema {
             Some(schema) => format!("{}.{}", schema, self.name),

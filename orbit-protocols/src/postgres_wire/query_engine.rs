@@ -1,9 +1,9 @@
 //! SQL query engine for actor operations
 
+use serde_json::Value as JsonValue;
+use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use std::collections::HashMap;
-use serde_json::Value as JsonValue;
 
 use crate::error::{ProtocolError, ProtocolResult};
 use crate::postgres_wire::vector_engine::VectorQueryEngine;
@@ -89,7 +89,7 @@ impl QueryEngine {
             vector_engine: None,
         }
     }
-    
+
     /// Create a new query engine with vector support
     pub fn new_with_vector_support(orbit_client: OrbitClient) -> Self {
         Self {
@@ -101,14 +101,14 @@ impl QueryEngine {
     /// Execute a SQL query
     pub async fn execute_query(&self, sql: &str) -> ProtocolResult<QueryResult> {
         let sql_upper = sql.trim().to_uppercase();
-        
+
         // Check if this is a vector-related query
         if let Some(ref vector_engine) = self.vector_engine {
             if self.is_vector_query(&sql_upper) {
                 return vector_engine.execute_vector_query(sql).await;
             }
         }
-        
+
         // Handle regular SQL queries
         let statement = self.parse_sql(sql)?;
 
@@ -134,15 +134,19 @@ impl QueryEngine {
             } => self.execute_delete(&table, where_clause).await,
         }
     }
-    
+
     /// Check if a query is vector-related
     fn is_vector_query(&self, sql: &str) -> bool {
-        sql.contains("CREATE EXTENSION VECTOR") ||
-        sql.contains("VECTOR(") ||
-        sql.contains("HALFVEC(") ||
-        sql.contains("<->") || sql.contains("<#>") || sql.contains("<=>") ||
-        sql.contains("VECTOR_DIMS") || sql.contains("VECTOR_NORM") ||
-        (sql.contains("CREATE INDEX") && (sql.contains("USING IVFFLAT") || sql.contains("USING HNSW")))
+        sql.contains("CREATE EXTENSION VECTOR")
+            || sql.contains("VECTOR(")
+            || sql.contains("HALFVEC(")
+            || sql.contains("<->")
+            || sql.contains("<#>")
+            || sql.contains("<=>")
+            || sql.contains("VECTOR_DIMS")
+            || sql.contains("VECTOR_NORM")
+            || (sql.contains("CREATE INDEX")
+                && (sql.contains("USING IVFFLAT") || sql.contains("USING HNSW")))
     }
 
     /// Parse SQL statement
@@ -170,13 +174,17 @@ impl QueryEngine {
     fn parse_select(&self, sql: &str) -> ProtocolResult<Statement> {
         // Simple parser: SELECT columns FROM table [WHERE condition]
         let parts: Vec<&str> = sql.split_whitespace().collect();
-        
+
         if parts.len() < 4 || parts[0].to_uppercase() != "SELECT" {
-            return Err(ProtocolError::PostgresError("Invalid SELECT syntax".to_string()));
+            return Err(ProtocolError::PostgresError(
+                "Invalid SELECT syntax".to_string(),
+            ));
         }
 
         // Find FROM
-        let from_idx = parts.iter().position(|&p| p.to_uppercase() == "FROM")
+        let from_idx = parts
+            .iter()
+            .position(|&p| p.to_uppercase() == "FROM")
             .ok_or_else(|| ProtocolError::PostgresError("Missing FROM clause".to_string()))?;
 
         // Parse columns
@@ -184,7 +192,10 @@ impl QueryEngine {
         let columns: Vec<String> = if columns_str == "*" {
             vec!["*".to_string()]
         } else {
-            columns_str.split(',').map(|s| s.trim().to_string()).collect()
+            columns_str
+                .split(',')
+                .map(|s| s.trim().to_string())
+                .collect()
         };
 
         // Parse table
@@ -209,9 +220,11 @@ impl QueryEngine {
     fn parse_insert(&self, sql: &str) -> ProtocolResult<Statement> {
         // Simple parser: INSERT INTO table (columns) VALUES (values)
         let sql = sql.to_uppercase();
-        
+
         if !sql.contains("INSERT INTO") || !sql.contains("VALUES") {
-            return Err(ProtocolError::PostgresError("Invalid INSERT syntax".to_string()));
+            return Err(ProtocolError::PostgresError(
+                "Invalid INSERT syntax".to_string(),
+            ));
         }
 
         // Extract table name
@@ -247,15 +260,19 @@ impl QueryEngine {
     fn parse_update(&self, sql: &str) -> ProtocolResult<Statement> {
         // Simple parser: UPDATE table SET col=val [WHERE condition]
         let parts: Vec<&str> = sql.split_whitespace().collect();
-        
+
         if parts.len() < 4 || parts[0].to_uppercase() != "UPDATE" {
-            return Err(ProtocolError::PostgresError("Invalid UPDATE syntax".to_string()));
+            return Err(ProtocolError::PostgresError(
+                "Invalid UPDATE syntax".to_string(),
+            ));
         }
 
         let table = parts[1].to_string();
 
         // Find SET
-        let set_idx = parts.iter().position(|&p| p.to_uppercase() == "SET")
+        let set_idx = parts
+            .iter()
+            .position(|&p| p.to_uppercase() == "SET")
             .ok_or_else(|| ProtocolError::PostgresError("Missing SET clause".to_string()))?;
 
         // Find WHERE or end
@@ -270,7 +287,11 @@ impl QueryEngine {
                 let kv: Vec<&str> = s.split('=').collect();
                 (
                     kv[0].trim().to_string(),
-                    kv[1].trim().trim_matches('\'').trim_matches('"').to_string(),
+                    kv[1]
+                        .trim()
+                        .trim_matches('\'')
+                        .trim_matches('"')
+                        .to_string(),
                 )
             })
             .collect();
@@ -293,13 +314,17 @@ impl QueryEngine {
     fn parse_delete(&self, sql: &str) -> ProtocolResult<Statement> {
         // Simple parser: DELETE FROM table [WHERE condition]
         let parts: Vec<&str> = sql.split_whitespace().collect();
-        
+
         if parts.len() < 3 || parts[0].to_uppercase() != "DELETE" {
-            return Err(ProtocolError::PostgresError("Invalid DELETE syntax".to_string()));
+            return Err(ProtocolError::PostgresError(
+                "Invalid DELETE syntax".to_string(),
+            ));
         }
 
         // Find FROM
-        let from_idx = parts.iter().position(|&p| p.to_uppercase() == "FROM")
+        let from_idx = parts
+            .iter()
+            .position(|&p| p.to_uppercase() == "FROM")
             .ok_or_else(|| ProtocolError::PostgresError("Missing FROM clause".to_string()))?;
 
         let table = parts[from_idx + 1].to_string();
@@ -322,7 +347,9 @@ impl QueryEngine {
     fn parse_where_clause(&self, parts: &[&str]) -> ProtocolResult<WhereClause> {
         // Simple parser: column operator value
         if parts.len() < 3 {
-            return Err(ProtocolError::PostgresError("Invalid WHERE clause".to_string()));
+            return Err(ProtocolError::PostgresError(
+                "Invalid WHERE clause".to_string(),
+            ));
         }
 
         let column = parts[0].to_string();
@@ -430,12 +457,10 @@ impl QueryEngine {
             }
         }
 
-        let actor_id = actor_id.ok_or_else(|| {
-            ProtocolError::PostgresError("Missing actor_id".to_string())
-        })?;
-        let actor_type = actor_type.ok_or_else(|| {
-            ProtocolError::PostgresError("Missing actor_type".to_string())
-        })?;
+        let actor_id =
+            actor_id.ok_or_else(|| ProtocolError::PostgresError("Missing actor_id".to_string()))?;
+        let actor_type = actor_type
+            .ok_or_else(|| ProtocolError::PostgresError("Missing actor_type".to_string()))?;
 
         let record = ActorRecord {
             actor_id: actor_id.clone(),

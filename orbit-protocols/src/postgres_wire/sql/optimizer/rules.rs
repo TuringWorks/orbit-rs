@@ -4,10 +4,10 @@
 //! transformation rules to improve query performance. These optimizations
 //! are heuristic-based and don't require statistics.
 
+use super::OptimizerConfig;
 use crate::error::ProtocolResult;
 use crate::postgres_wire::sql::ast::*;
 use crate::postgres_wire::sql::types::SqlValue;
-use super::OptimizerConfig;
 
 /// Rule-based optimizer that applies transformation rules
 pub struct RuleBasedOptimizer {
@@ -30,12 +30,12 @@ impl RuleBasedOptimizer {
         while passes < self.config.max_passes {
             let previous = current.clone();
             current = self.apply_optimization_pass(current)?;
-            
+
             // Stop if no changes were made
             if self.statements_equal(&previous, &current) {
                 break;
             }
-            
+
             passes += 1;
         }
 
@@ -43,7 +43,10 @@ impl RuleBasedOptimizer {
     }
 
     /// Apply rule-based optimizations and return steps for explanation
-    pub fn optimize_with_steps(&mut self, statement: Statement) -> ProtocolResult<(Statement, Vec<String>)> {
+    pub fn optimize_with_steps(
+        &mut self,
+        statement: Statement,
+    ) -> ProtocolResult<(Statement, Vec<String>)> {
         let mut current = statement;
         let mut steps = Vec::new();
         let mut passes = 0;
@@ -51,12 +54,12 @@ impl RuleBasedOptimizer {
         while passes < self.config.max_passes {
             let previous = current.clone();
             current = self.apply_optimization_pass_with_steps(current, &mut steps)?;
-            
+
             // Stop if no changes were made
             if self.statements_equal(&previous, &current) {
                 break;
             }
-            
+
             passes += 1;
         }
 
@@ -88,7 +91,11 @@ impl RuleBasedOptimizer {
     }
 
     /// Apply optimization pass with step tracking
-    fn apply_optimization_pass_with_steps(&mut self, statement: Statement, steps: &mut Vec<String>) -> ProtocolResult<Statement> {
+    fn apply_optimization_pass_with_steps(
+        &mut self,
+        statement: Statement,
+        steps: &mut Vec<String>,
+    ) -> ProtocolResult<Statement> {
         match statement {
             Statement::Select(select) => {
                 let optimized_select = self.optimize_select_with_steps(select, steps)?;
@@ -129,7 +136,11 @@ impl RuleBasedOptimizer {
     }
 
     /// Optimize SELECT statement with step tracking
-    fn optimize_select_with_steps(&mut self, mut select: SelectStatement, steps: &mut Vec<String>) -> ProtocolResult<SelectStatement> {
+    fn optimize_select_with_steps(
+        &mut self,
+        mut select: SelectStatement,
+        steps: &mut Vec<String>,
+    ) -> ProtocolResult<SelectStatement> {
         // 1. Predicate pushdown
         if self.config.enable_predicate_pushdown {
             let before = select.clone();
@@ -171,14 +182,20 @@ impl RuleBasedOptimizer {
     }
 
     /// Apply projection pushdown optimization
-    fn apply_projection_pushdown(&self, select: SelectStatement) -> ProtocolResult<SelectStatement> {
+    fn apply_projection_pushdown(
+        &self,
+        select: SelectStatement,
+    ) -> ProtocolResult<SelectStatement> {
         // Placeholder implementation
         // Would eliminate unnecessary columns early in the query plan
         Ok(select)
     }
 
     /// Apply constant folding optimization
-    fn apply_constant_folding(&self, mut select: SelectStatement) -> ProtocolResult<SelectStatement> {
+    fn apply_constant_folding(
+        &self,
+        mut select: SelectStatement,
+    ) -> ProtocolResult<SelectStatement> {
         // Fold constants in WHERE clause
         if let Some(where_clause) = select.where_clause {
             select.where_clause = Some(self.fold_constants_in_expression(where_clause)?);
@@ -200,7 +217,10 @@ impl RuleBasedOptimizer {
     }
 
     /// Apply subquery optimization
-    fn apply_subquery_optimization(&self, select: SelectStatement) -> ProtocolResult<SelectStatement> {
+    fn apply_subquery_optimization(
+        &self,
+        select: SelectStatement,
+    ) -> ProtocolResult<SelectStatement> {
         // Placeholder implementation
         // Would convert correlated subqueries to joins where possible
         Ok(select)
@@ -209,17 +229,23 @@ impl RuleBasedOptimizer {
     /// Fold constants in an expression
     fn fold_constants_in_expression(&self, expr: Expression) -> ProtocolResult<Expression> {
         match expr {
-            Expression::Binary { left, operator, right } => {
+            Expression::Binary {
+                left,
+                operator,
+                right,
+            } => {
                 let folded_left = self.fold_constants_in_expression(*left)?;
                 let folded_right = self.fold_constants_in_expression(*right)?;
-                
+
                 // Try to evaluate constant expressions
-                if let (Expression::Literal(left_val), Expression::Literal(right_val)) = (&folded_left, &folded_right) {
+                if let (Expression::Literal(left_val), Expression::Literal(right_val)) =
+                    (&folded_left, &folded_right)
+                {
                     if let Some(result) = self.evaluate_binary_op(left_val, &operator, right_val) {
                         return Ok(Expression::Literal(result));
                     }
                 }
-                
+
                 Ok(Expression::Binary {
                     left: Box::new(folded_left),
                     operator,
@@ -228,14 +254,14 @@ impl RuleBasedOptimizer {
             }
             Expression::Unary { operator, operand } => {
                 let folded_operand = self.fold_constants_in_expression(*operand)?;
-                
+
                 // Try to evaluate constant expressions
                 if let Expression::Literal(val) = &folded_operand {
                     if let Some(result) = self.evaluate_unary_op(&operator, val) {
                         return Ok(Expression::Literal(result));
                     }
                 }
-                
+
                 Ok(Expression::Unary {
                     operator,
                     operand: Box::new(folded_operand),
@@ -247,9 +273,14 @@ impl RuleBasedOptimizer {
     }
 
     /// Evaluate binary operations on constants
-    fn evaluate_binary_op(&self, left: &SqlValue, op: &BinaryOperator, right: &SqlValue) -> Option<SqlValue> {
+    fn evaluate_binary_op(
+        &self,
+        left: &SqlValue,
+        op: &BinaryOperator,
+        right: &SqlValue,
+    ) -> Option<SqlValue> {
         use crate::postgres_wire::sql::types::SqlValue;
-        
+
         match (left, op, right) {
             (SqlValue::Integer(a), BinaryOperator::Plus, SqlValue::Integer(b)) => {
                 Some(SqlValue::Integer(a + b))
@@ -276,7 +307,7 @@ impl RuleBasedOptimizer {
     /// Evaluate unary operations on constants
     fn evaluate_unary_op(&self, op: &UnaryOperator, operand: &SqlValue) -> Option<SqlValue> {
         use crate::postgres_wire::sql::types::SqlValue;
-        
+
         match (op, operand) {
             (UnaryOperator::Not, SqlValue::Boolean(b)) => Some(SqlValue::Boolean(!*b)),
             (UnaryOperator::Minus, SqlValue::Integer(i)) => Some(SqlValue::Integer(-*i)),
@@ -356,17 +387,11 @@ mod tests {
         let optimizer = RuleBasedOptimizer::new(&config);
 
         // Test NOT operation
-        let result = optimizer.evaluate_unary_op(
-            &UnaryOperator::Not,
-            &SqlValue::Boolean(true),
-        );
+        let result = optimizer.evaluate_unary_op(&UnaryOperator::Not, &SqlValue::Boolean(true));
         assert_eq!(result, Some(SqlValue::Boolean(false)));
 
         // Test unary minus
-        let result = optimizer.evaluate_unary_op(
-            &UnaryOperator::Minus,
-            &SqlValue::Integer(42),
-        );
+        let result = optimizer.evaluate_unary_op(&UnaryOperator::Minus, &SqlValue::Integer(42));
         assert_eq!(result, Some(SqlValue::Integer(-42)));
     }
 }

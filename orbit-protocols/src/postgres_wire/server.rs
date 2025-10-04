@@ -1,8 +1,8 @@
 //! PostgreSQL TCP server
 
+use std::sync::Arc;
 use tokio::net::TcpListener;
 use tracing::{error, info};
-use std::sync::Arc;
 
 use super::{protocol::PostgresWireProtocol, query_engine::QueryEngine};
 use crate::error::ProtocolResult;
@@ -21,7 +21,7 @@ impl PostgresServer {
             query_engine: None,
         }
     }
-    
+
     /// Create a new PostgreSQL server with custom query engine
     pub fn new_with_query_engine(bind_addr: impl Into<String>, query_engine: QueryEngine) -> Self {
         Self {
@@ -41,7 +41,7 @@ impl PostgresServer {
                 Ok((stream, addr)) => {
                     info!("New connection from {}", addr);
                     let query_engine = self.query_engine.clone();
-                    
+
                     tokio::spawn(async move {
                         let mut protocol = if let Some(engine) = query_engine {
                             PostgresWireProtocol::new_with_query_engine(engine)

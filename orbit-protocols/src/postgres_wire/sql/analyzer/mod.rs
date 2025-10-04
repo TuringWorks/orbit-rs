@@ -1,5 +1,5 @@
 //! SQL Analyzer Module
-//! 
+//!
 //! This module provides semantic analysis, type checking, and optimization
 //! for parsed SQL statements.
 

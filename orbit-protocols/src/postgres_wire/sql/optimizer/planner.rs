@@ -4,8 +4,8 @@
 //! The execution plan represents the physical operations needed to
 //! execute the query efficiently.
 
-use crate::postgres_wire::sql::ast::*;
 use crate::error::ProtocolResult;
+use crate::postgres_wire::sql::ast::*;
 use std::fmt;
 
 /// Physical execution plan for a query
@@ -18,7 +18,7 @@ pub enum ExecutionPlan {
         projection: Vec<String>,
         estimated_rows: usize,
     },
-    
+
     /// Index scan operation
     IndexScan {
         table: String,
@@ -27,7 +27,7 @@ pub enum ExecutionPlan {
         projection: Vec<String>,
         estimated_rows: usize,
     },
-    
+
     /// Nested loop join
     NestedLoopJoin {
         left: Box<ExecutionPlan>,
@@ -36,16 +36,16 @@ pub enum ExecutionPlan {
         join_type: JoinType,
         estimated_rows: usize,
     },
-    
+
     /// Hash join
     HashJoin {
-        build: Box<ExecutionPlan>,  // Smaller relation for building hash table
-        probe: Box<ExecutionPlan>,  // Larger relation for probing
+        build: Box<ExecutionPlan>, // Smaller relation for building hash table
+        probe: Box<ExecutionPlan>, // Larger relation for probing
         condition: Option<Expression>,
         join_type: JoinType,
         estimated_rows: usize,
     },
-    
+
     /// Merge join (requires sorted inputs)
     MergeJoin {
         left: Box<ExecutionPlan>,
@@ -54,14 +54,14 @@ pub enum ExecutionPlan {
         join_type: JoinType,
         estimated_rows: usize,
     },
-    
+
     /// Sort operation
     Sort {
         input: Box<ExecutionPlan>,
         order_by: Vec<OrderByItem>,
         estimated_rows: usize,
     },
-    
+
     /// Limit operation
     Limit {
         input: Box<ExecutionPlan>,
@@ -69,7 +69,7 @@ pub enum ExecutionPlan {
         offset: Option<usize>,
         estimated_rows: usize,
     },
-    
+
     /// Aggregation operation
     Aggregate {
         input: Box<ExecutionPlan>,
@@ -78,7 +78,7 @@ pub enum ExecutionPlan {
         having: Option<Expression>,
         estimated_rows: usize,
     },
-    
+
     /// Insert operation
     Insert {
         table: String,
@@ -86,7 +86,7 @@ pub enum ExecutionPlan {
         source: Box<ExecutionPlan>,
         estimated_rows: usize,
     },
-    
+
     /// Update operation
     Update {
         table: String,
@@ -94,27 +94,27 @@ pub enum ExecutionPlan {
         filter: Option<Expression>,
         estimated_rows: usize,
     },
-    
+
     /// Delete operation
     Delete {
         table: String,
         filter: Option<Expression>,
         estimated_rows: usize,
     },
-    
+
     /// Values (constant table) operation
     Values {
         values: Vec<Vec<Expression>>,
         estimated_rows: usize,
     },
-    
+
     /// Projection (SELECT list processing)
     Projection {
         input: Box<ExecutionPlan>,
         expressions: Vec<SelectItem>,
         estimated_rows: usize,
     },
-    
+
     /// Filter (WHERE clause processing)
     Filter {
         input: Box<ExecutionPlan>,
@@ -162,9 +162,7 @@ pub struct ExecutionPlanner {
 impl ExecutionPlanner {
     /// Create a new execution planner
     pub fn new() -> Self {
-        Self {
-            next_plan_id: 1,
-        }
+        Self { next_plan_id: 1 }
     }
 
     /// Generate an execution plan for a statement
@@ -175,7 +173,7 @@ impl ExecutionPlanner {
             Statement::Update(update) => self.plan_update(update),
             Statement::Delete(delete) => self.plan_delete(delete),
             _ => Err(crate::error::ProtocolError::Other(
-                "Unsupported statement type for execution planning".to_string()
+                "Unsupported statement type for execution planning".to_string(),
             )),
         }
     }
@@ -204,8 +202,12 @@ impl ExecutionPlanner {
 
         // Add GROUP BY and aggregations
         if select.group_by.is_some() || self.has_aggregates(&select.select_list) {
-            plan = self.plan_aggregation(plan, select.group_by.unwrap_or_default(), 
-                                       &select.select_list, select.having)?;
+            plan = self.plan_aggregation(
+                plan,
+                select.group_by.unwrap_or_default(),
+                &select.select_list,
+                select.having,
+            )?;
         }
 
         // Add ORDER BY
@@ -220,13 +222,17 @@ impl ExecutionPlanner {
         // Add LIMIT/OFFSET
         if let Some(limit) = select.limit {
             let count = match limit.count {
-                Some(Expression::Literal(crate::postgres_wire::sql::types::SqlValue::Integer(n))) => Some(n as usize),
+                Some(Expression::Literal(crate::postgres_wire::sql::types::SqlValue::Integer(
+                    n,
+                ))) => Some(n as usize),
                 _ => None,
             };
             let offset = select.offset.map(|n| n as usize);
 
             plan = ExecutionPlan::Limit {
-                estimated_rows: count.unwrap_or(plan.estimated_rows()).min(plan.estimated_rows()),
+                estimated_rows: count
+                    .unwrap_or(plan.estimated_rows())
+                    .min(plan.estimated_rows()),
                 input: Box::new(plan),
                 count,
                 offset,
@@ -254,10 +260,15 @@ impl ExecutionPlanner {
                     estimated_rows: 1000, // Default estimate
                 })
             }
-            FromClause::Join { left, right, join_type, condition } => {
+            FromClause::Join {
+                left,
+                right,
+                join_type,
+                condition,
+            } => {
                 let left_plan = self.plan_from_clause(*left)?;
                 let right_plan = self.plan_from_clause(*right)?;
-                
+
                 // Choose join algorithm (simplified - just use nested loop for now)
                 // Note: join_type is already the correct type from AST
 
@@ -272,23 +283,24 @@ impl ExecutionPlanner {
                     join_type: match join_type {
                         crate::postgres_wire::sql::ast::JoinType::Inner => JoinType::Inner,
                         crate::postgres_wire::sql::ast::JoinType::LeftOuter => JoinType::LeftOuter,
-                        crate::postgres_wire::sql::ast::JoinType::RightOuter => JoinType::RightOuter,
+                        crate::postgres_wire::sql::ast::JoinType::RightOuter => {
+                            JoinType::RightOuter
+                        }
                         crate::postgres_wire::sql::ast::JoinType::FullOuter => JoinType::FullOuter,
                         crate::postgres_wire::sql::ast::JoinType::Cross => JoinType::Cross,
                         _ => JoinType::Inner, // Default for unsupported join types
                     },
                 })
             }
-            FromClause::Subquery { query, alias: _ } => {
-                self.plan_select(*query)
-            }
-            FromClause::Values { values, alias: _ } => {
-                Ok(ExecutionPlan::Values {
-                    estimated_rows: values.len(),
-                    values,
-                })
-            }
-            FromClause::TableFunction { function: _, alias: _ } => {
+            FromClause::Subquery { query, alias: _ } => self.plan_select(*query),
+            FromClause::Values { values, alias: _ } => Ok(ExecutionPlan::Values {
+                estimated_rows: values.len(),
+                values,
+            }),
+            FromClause::TableFunction {
+                function: _,
+                alias: _,
+            } => {
                 // Placeholder for table functions
                 Ok(ExecutionPlan::TableScan {
                     table: "table_function".to_string(),
@@ -303,15 +315,11 @@ impl ExecutionPlanner {
     /// Plan INSERT statement
     fn plan_insert(&mut self, insert: InsertStatement) -> ProtocolResult<ExecutionPlan> {
         let source_plan = match insert.source {
-            InsertSource::Values(value_lists) => {
-                ExecutionPlan::Values {
-                    estimated_rows: value_lists.len(),
-                    values: value_lists,
-                }
-            }
-            InsertSource::Query(query) => {
-                self.plan_select(*query)?
-            }
+            InsertSource::Values(value_lists) => ExecutionPlan::Values {
+                estimated_rows: value_lists.len(),
+                values: value_lists,
+            },
+            InsertSource::Query(query) => self.plan_select(*query)?,
             InsertSource::DefaultValues => {
                 ExecutionPlan::Values {
                     estimated_rows: 1,
@@ -348,12 +356,21 @@ impl ExecutionPlanner {
     }
 
     /// Plan aggregation operations
-    fn plan_aggregation(&mut self, input: ExecutionPlan, group_by: Vec<Expression>, 
-                       select_list: &[SelectItem], having: Option<Expression>) -> ProtocolResult<ExecutionPlan> {
+    fn plan_aggregation(
+        &mut self,
+        input: ExecutionPlan,
+        group_by: Vec<Expression>,
+        select_list: &[SelectItem],
+        having: Option<Expression>,
+    ) -> ProtocolResult<ExecutionPlan> {
         let aggregates = self.extract_aggregates(select_list)?;
-        
+
         Ok(ExecutionPlan::Aggregate {
-            estimated_rows: if group_by.is_empty() { 1 } else { input.estimated_rows() / 10 },
+            estimated_rows: if group_by.is_empty() {
+                1
+            } else {
+                input.estimated_rows() / 10
+            },
             input: Box::new(input),
             group_by,
             aggregates,
@@ -380,22 +397,26 @@ impl ExecutionPlanner {
                     FunctionName::Simple(n) => n,
                     FunctionName::Qualified { name, .. } => name,
                 };
-                matches!(name.to_uppercase().as_str(), "COUNT" | "SUM" | "AVG" | "MIN" | "MAX")
+                matches!(
+                    name.to_uppercase().as_str(),
+                    "COUNT" | "SUM" | "AVG" | "MIN" | "MAX"
+                )
             }
             Expression::Binary { left, right, .. } => {
                 self.expression_has_aggregate(left) || self.expression_has_aggregate(right)
             }
-            Expression::Unary { operand, .. } => {
-                self.expression_has_aggregate(operand)
-            }
+            Expression::Unary { operand, .. } => self.expression_has_aggregate(operand),
             _ => false,
         }
     }
 
     /// Extract aggregate functions from select list
-    fn extract_aggregates(&self, select_list: &[SelectItem]) -> ProtocolResult<Vec<AggregateFunction>> {
+    fn extract_aggregates(
+        &self,
+        select_list: &[SelectItem],
+    ) -> ProtocolResult<Vec<AggregateFunction>> {
         let mut aggregates = Vec::new();
-        
+
         for item in select_list {
             if let SelectItem::Expression { expr, alias } = item {
                 if let Some(agg) = self.extract_aggregate_from_expression(expr, alias.clone())? {
@@ -403,12 +424,16 @@ impl ExecutionPlanner {
                 }
             }
         }
-        
+
         Ok(aggregates)
     }
 
     /// Extract aggregate function from a single expression
-    fn extract_aggregate_from_expression(&self, expr: &Expression, alias: Option<String>) -> ProtocolResult<Option<AggregateFunction>> {
+    fn extract_aggregate_from_expression(
+        &self,
+        expr: &Expression,
+        alias: Option<String>,
+    ) -> ProtocolResult<Option<AggregateFunction>> {
         if let Expression::Function(func_call) = expr {
             let name = match &func_call.name {
                 FunctionName::Simple(n) => n,
@@ -424,7 +449,7 @@ impl ExecutionPlanner {
             };
 
             let argument = func_call.args.first().cloned();
-            
+
             return Ok(Some(AggregateFunction {
                 function,
                 argument,
@@ -432,7 +457,7 @@ impl ExecutionPlanner {
                 alias,
             }));
         }
-        
+
         Ok(None)
     }
 
@@ -448,20 +473,20 @@ impl ExecutionPlan {
     /// Get estimated number of rows this plan will produce
     pub fn estimated_rows(&self) -> usize {
         match self {
-            ExecutionPlan::TableScan { estimated_rows, .. } |
-            ExecutionPlan::IndexScan { estimated_rows, .. } |
-            ExecutionPlan::NestedLoopJoin { estimated_rows, .. } |
-            ExecutionPlan::HashJoin { estimated_rows, .. } |
-            ExecutionPlan::MergeJoin { estimated_rows, .. } |
-            ExecutionPlan::Sort { estimated_rows, .. } |
-            ExecutionPlan::Limit { estimated_rows, .. } |
-            ExecutionPlan::Aggregate { estimated_rows, .. } |
-            ExecutionPlan::Insert { estimated_rows, .. } |
-            ExecutionPlan::Update { estimated_rows, .. } |
-            ExecutionPlan::Delete { estimated_rows, .. } |
-            ExecutionPlan::Values { estimated_rows, .. } |
-            ExecutionPlan::Projection { estimated_rows, .. } |
-            ExecutionPlan::Filter { estimated_rows, .. } => *estimated_rows,
+            ExecutionPlan::TableScan { estimated_rows, .. }
+            | ExecutionPlan::IndexScan { estimated_rows, .. }
+            | ExecutionPlan::NestedLoopJoin { estimated_rows, .. }
+            | ExecutionPlan::HashJoin { estimated_rows, .. }
+            | ExecutionPlan::MergeJoin { estimated_rows, .. }
+            | ExecutionPlan::Sort { estimated_rows, .. }
+            | ExecutionPlan::Limit { estimated_rows, .. }
+            | ExecutionPlan::Aggregate { estimated_rows, .. }
+            | ExecutionPlan::Insert { estimated_rows, .. }
+            | ExecutionPlan::Update { estimated_rows, .. }
+            | ExecutionPlan::Delete { estimated_rows, .. }
+            | ExecutionPlan::Values { estimated_rows, .. }
+            | ExecutionPlan::Projection { estimated_rows, .. }
+            | ExecutionPlan::Filter { estimated_rows, .. } => *estimated_rows,
         }
     }
 
@@ -526,7 +551,7 @@ mod tests {
     #[test]
     fn test_table_scan_plan() {
         let mut planner = ExecutionPlanner::new();
-        
+
         // Create a simple SELECT * FROM users
         let select = SelectStatement {
             with: None,
@@ -546,16 +571,14 @@ mod tests {
         };
 
         let plan = planner.plan_select(select).unwrap();
-        
+
         match plan {
-            ExecutionPlan::Projection { input, .. } => {
-                match input.as_ref() {
-                    ExecutionPlan::TableScan { table, .. } => {
-                        assert_eq!(table, "users");
-                    }
-                    _ => panic!("Expected TableScan as input to Projection"),
+            ExecutionPlan::Projection { input, .. } => match input.as_ref() {
+                ExecutionPlan::TableScan { table, .. } => {
+                    assert_eq!(table, "users");
                 }
-            }
+                _ => panic!("Expected TableScan as input to Projection"),
+            },
             _ => panic!("Expected Projection plan"),
         }
     }
@@ -563,22 +586,20 @@ mod tests {
     #[test]
     fn test_insert_plan() {
         let mut planner = ExecutionPlanner::new();
-        
+
         let insert = InsertStatement {
             table: TableName::new("users"),
             columns: Some(vec!["name".to_string(), "email".to_string()]),
-            source: InsertSource::Values(vec![
-                vec![
-                    Expression::Literal(SqlValue::Text("John".to_string())),
-                    Expression::Literal(SqlValue::Text("john@example.com".to_string())),
-                ]
-            ]),
+            source: InsertSource::Values(vec![vec![
+                Expression::Literal(SqlValue::Text("John".to_string())),
+                Expression::Literal(SqlValue::Text("john@example.com".to_string())),
+            ]]),
             on_conflict: None,
             returning: None,
         };
 
         let plan = planner.plan_insert(insert).unwrap();
-        
+
         match plan {
             ExecutionPlan::Insert { table, columns, .. } => {
                 assert_eq!(table, "users");
@@ -591,31 +612,27 @@ mod tests {
     #[test]
     fn test_aggregate_detection() {
         let planner = ExecutionPlanner::new();
-        
-        let select_list = vec![
-            SelectItem::Expression {
-                expr: Expression::Function(Box::new(FunctionCall {
-                    name: FunctionName::Simple("COUNT".to_string()),
-                    args: vec![], // Simplified for test
-                    distinct: false,
-                    order_by: None,
-                    filter: None,
-                })),
-                alias: None,
-            }
-        ];
+
+        let select_list = vec![SelectItem::Expression {
+            expr: Expression::Function(Box::new(FunctionCall {
+                name: FunctionName::Simple("COUNT".to_string()),
+                args: vec![], // Simplified for test
+                distinct: false,
+                order_by: None,
+                filter: None,
+            })),
+            alias: None,
+        }];
 
         assert!(planner.has_aggregates(&select_list));
-        
-        let non_agg_list = vec![
-            SelectItem::Expression {
-                expr: Expression::Column(ColumnRef {
-                    table: None,
-                    name: "id".to_string(),
-                }),
-                alias: None,
-            }
-        ];
+
+        let non_agg_list = vec![SelectItem::Expression {
+            expr: Expression::Column(ColumnRef {
+                table: None,
+                name: "id".to_string(),
+            }),
+            alias: None,
+        }];
 
         assert!(!planner.has_aggregates(&non_agg_list));
     }

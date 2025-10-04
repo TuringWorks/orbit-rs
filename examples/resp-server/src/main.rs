@@ -16,7 +16,7 @@
 //!   "Hello Orbit"
 
 use std::error::Error;
-use tracing::{info, error};
+use tracing::{error, info};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use orbit_client::OrbitClient;
@@ -50,7 +50,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     // Create RESP server
     let server = RespServer::new("127.0.0.1:6379", orbit_client);
-    
+
     info!("🌐 RESP server listening on 127.0.0.1:6379");
     info!("📡 Redis clients can now connect using: redis-cli -h localhost -p 6379");
     info!("");
@@ -84,7 +84,7 @@ async fn create_orbit_client() -> Result<OrbitClient, Box<dyn Error>> {
         .with_server_urls(vec!["http://localhost:50056".to_string()]) // Default orbit-server gRPC port
         .build()
         .await?;
-    
+
     Ok(client)
 }
 
@@ -92,13 +92,13 @@ async fn create_orbit_client() -> Result<OrbitClient, Box<dyn Error>> {
 async fn create_mock_orbit_client() -> Result<OrbitClient, Box<dyn Error>> {
     info!("⚠️  Using mock OrbitClient for demonstration");
     info!("   In production, ensure orbit-server is running and accessible");
-    
+
     // Create a minimal OrbitClient for demonstration
     // This won't actually connect to a cluster but allows the RESP server to start
     let client = OrbitClient::builder()
         .with_namespace("redis-demo-mock")
         .build()
         .await?;
-    
+
     Ok(client)
 }

@@ -1,11 +1,11 @@
 //! Actor definitions for RESP protocol storage
 
+use async_trait::async_trait;
+use orbit_shared::addressable::{ActorWithStringKey, Addressable};
+use orbit_shared::exception::OrbitResult;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
-use orbit_shared::addressable::{Addressable, ActorWithStringKey};
-use orbit_shared::exception::OrbitResult;
-use async_trait::async_trait;
 
 /// Actor for storing key-value pairs (Redis STRING type)
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -99,21 +99,25 @@ pub trait KeyValueActorMethods: Addressable {
 #[async_trait]
 impl KeyValueActorMethods for KeyValueActor {
     async fn get_value(&self) -> OrbitResult<Option<String>> {
-        Ok(if self.is_expired() { None } else { self.value.clone() })
+        Ok(if self.is_expired() {
+            None
+        } else {
+            self.value.clone()
+        })
     }
-    
+
     async fn set_value(&mut self, value: String) -> OrbitResult<()> {
         self.value = Some(value);
         Ok(())
     }
-    
+
     async fn delete_value(&mut self) -> OrbitResult<bool> {
         let existed = self.value.is_some();
         self.value = None;
         self.expiration = None;
         Ok(existed)
     }
-    
+
     async fn set_expiration(&mut self, seconds: u64) -> OrbitResult<()> {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -122,11 +126,11 @@ impl KeyValueActorMethods for KeyValueActor {
         self.expiration = Some(now + seconds);
         Ok(())
     }
-    
+
     async fn get_ttl(&self) -> OrbitResult<i64> {
         Ok(self.get_ttl())
     }
-    
+
     async fn exists(&self) -> OrbitResult<bool> {
         Ok(self.value.is_some() && !self.is_expired())
     }
@@ -170,7 +174,8 @@ impl HashActor {
     }
 
     pub fn hgetall(&self) -> Vec<(String, String)> {
-        self.fields.iter()
+        self.fields
+            .iter()
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect()
     }
@@ -212,31 +217,31 @@ impl HashActorMethods for HashActor {
     async fn hget(&self, field: &str) -> OrbitResult<Option<String>> {
         Ok(self.hget(field).cloned())
     }
-    
+
     async fn hset(&mut self, field: String, value: String) -> OrbitResult<bool> {
         Ok(self.hset(field, value))
     }
-    
+
     async fn hdel(&mut self, field: &str) -> OrbitResult<bool> {
         Ok(self.hdel(field))
     }
-    
+
     async fn hexists(&self, field: &str) -> OrbitResult<bool> {
         Ok(self.hexists(field))
     }
-    
+
     async fn hkeys(&self) -> OrbitResult<Vec<String>> {
         Ok(self.hkeys())
     }
-    
+
     async fn hvals(&self) -> OrbitResult<Vec<String>> {
         Ok(self.hvals())
     }
-    
+
     async fn hgetall(&self) -> OrbitResult<Vec<(String, String)>> {
         Ok(self.hgetall())
     }
-    
+
     async fn hlen(&self) -> OrbitResult<usize> {
         Ok(self.hlen())
     }
@@ -250,9 +255,7 @@ pub struct ListActor {
 
 impl ListActor {
     pub fn new() -> Self {
-        Self {
-            items: Vec::new(),
-        }
+        Self { items: Vec::new() }
     }
 
     pub fn lpush(&mut self, values: Vec<String>) -> usize {
@@ -280,18 +283,18 @@ impl ListActor {
 
     pub fn lrange(&self, start: i64, stop: i64) -> Vec<String> {
         let len = self.items.len() as i64;
-        
+
         // Convert negative indices
-        let start = if start < 0 { 
-            (len + start).max(0) 
-        } else { 
-            start.min(len) 
+        let start = if start < 0 {
+            (len + start).max(0)
+        } else {
+            start.min(len)
         } as usize;
-        
-        let stop = if stop < 0 { 
-            (len + stop + 1).max(0) 
-        } else { 
-            (stop + 1).min(len) 
+
+        let stop = if stop < 0 {
+            (len + stop + 1).max(0)
+        } else {
+            (stop + 1).min(len)
         } as usize;
 
         if start >= self.items.len() || start >= stop {
@@ -312,7 +315,7 @@ impl ListActor {
         } else {
             index
         };
-        
+
         if idx >= 0 && (idx as usize) < self.items.len() {
             Some(&self.items[idx as usize])
         } else {
@@ -352,27 +355,27 @@ impl ListActorMethods for ListActor {
     async fn lpush(&mut self, values: Vec<String>) -> OrbitResult<usize> {
         Ok(self.lpush(values))
     }
-    
+
     async fn rpush(&mut self, values: Vec<String>) -> OrbitResult<usize> {
         Ok(self.rpush(values))
     }
-    
+
     async fn lpop(&mut self, count: usize) -> OrbitResult<Vec<String>> {
         Ok(self.lpop(count))
     }
-    
+
     async fn rpop(&mut self, count: usize) -> OrbitResult<Vec<String>> {
         Ok(self.rpop(count))
     }
-    
+
     async fn lrange(&self, start: i64, stop: i64) -> OrbitResult<Vec<String>> {
         Ok(self.lrange(start, stop))
     }
-    
+
     async fn llen(&self) -> OrbitResult<usize> {
         Ok(self.llen())
     }
-    
+
     async fn lindex(&self, index: i64) -> OrbitResult<Option<String>> {
         Ok(self.lindex(index).cloned())
     }
@@ -447,15 +450,15 @@ impl PubSubActorMethods for PubSubActor {
         self.subscribe(subscriber_id);
         Ok(())
     }
-    
+
     async fn unsubscribe(&mut self, subscriber_id: &str) -> OrbitResult<bool> {
         Ok(self.unsubscribe(subscriber_id))
     }
-    
+
     async fn publish(&mut self, message: String) -> OrbitResult<usize> {
         Ok(self.publish(message))
     }
-    
+
     async fn subscriber_count(&self) -> OrbitResult<usize> {
         Ok(self.subscriber_count())
     }

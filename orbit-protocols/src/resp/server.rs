@@ -1,14 +1,14 @@
 //! RESP protocol server
 
+use futures::{SinkExt, StreamExt};
 use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
 use tokio_util::codec::Framed;
-use futures::{SinkExt, StreamExt};
-use tracing::{info, error, debug};
+use tracing::{debug, error, info};
 
-use orbit_client::OrbitClient;
+use super::{types::RespValue, CommandHandler, RespCodec};
 use crate::error::ProtocolResult;
-use super::{RespCodec, CommandHandler, types::RespValue};
+use orbit_client::OrbitClient;
 
 /// RESP protocol server
 pub struct RespServer {
@@ -58,7 +58,7 @@ impl RespServer {
             match result {
                 Ok(command) => {
                     debug!("Received command: {}", command);
-                    
+
                     let response = handler.handle_command(command).await.unwrap_or_else(|e| {
                         error!("Command error: {}", e);
                         RespValue::error(format!("ERR {}", e))

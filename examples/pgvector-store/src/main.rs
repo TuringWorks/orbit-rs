@@ -1,5 +1,5 @@
 //! pgvector-Compatible PostgreSQL Interface for Orbit Vector Store
-//! 
+//!
 //! This example demonstrates how to use Orbit-RS as a **PostgreSQL-compatible vector database**
 //! using the pgvector extension syntax. The example provides full compatibility with pgvector
 //! commands, allowing existing PostgreSQL applications to seamlessly use Orbit's vector capabilities.
@@ -13,15 +13,15 @@
 //! - 🎯 **Vector functions** (vector_dims, vector_norm)
 //! - ⚡ **High-performance similarity search**
 
-use std::collections::HashMap;
-use tracing::info;
+use anyhow::Result;
 use orbit_client::OrbitClientBuilder;
 use orbit_protocols::{
     postgres_wire::{PostgresServer, QueryEngine},
-    vector_store::{Vector, VectorActor, VectorIndexConfig, SimilarityMetric}
+    vector_store::{SimilarityMetric, Vector, VectorActor, VectorIndexConfig},
 };
 use orbit_shared::Key;
-use anyhow::Result;
+use std::collections::HashMap;
+use tracing::info;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -50,7 +50,7 @@ async fn main() -> Result<()> {
 
     info!("🎯 pgvector-compatible PostgreSQL server listening on 127.0.0.1:5433");
     info!("🔗 Connect with: psql -h 127.0.0.1 -p 5433 -d postgres -U postgres");
-    
+
     // Print usage examples
     print_pgvector_examples();
 
@@ -63,51 +63,54 @@ async fn main() -> Result<()> {
 /// Set up sample vector data for demonstration
 async fn setup_sample_data(orbit_client: &orbit_client::OrbitClient) -> Result<()> {
     info!("📊 Setting up sample vector data...");
-    
+
     // Create sample documents table data
-    let documents_actor_ref = orbit_client.actor_reference::<VectorActor>(
-        Key::StringKey {
-            key: "table_documents".to_string()
-        }
-    ).await.map_err(|e| anyhow::anyhow!("Failed to get documents actor: {}", e))?;
-    
+    let documents_actor_ref = orbit_client
+        .actor_reference::<VectorActor>(Key::StringKey {
+            key: "table_documents".to_string(),
+        })
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to get documents actor: {}", e))?;
+
     // Create vector index for documents
     let index_config = VectorIndexConfig::new(
         "documents_embedding_idx".to_string(),
         384, // Standard sentence transformer dimension
-        SimilarityMetric::Cosine
+        SimilarityMetric::Cosine,
     );
-    
+
     let config_value = serde_json::to_value(index_config)?;
-    documents_actor_ref.invoke::<()>("create_index", vec![config_value])
-        .await.map_err(|e| anyhow::anyhow!("Failed to create index: {}", e))?;
+    documents_actor_ref
+        .invoke::<()>("create_index", vec![config_value])
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to create index: {}", e))?;
 
     // Add sample document vectors
     let sample_docs = vec![
         (
             "doc_1",
             "PostgreSQL is a powerful, open source object-relational database system.",
-            create_sample_embedding(384, 0.1)
+            create_sample_embedding(384, 0.1),
         ),
         (
-            "doc_2", 
+            "doc_2",
             "Vector databases enable semantic search and similarity matching.",
-            create_sample_embedding(384, 0.2)
+            create_sample_embedding(384, 0.2),
         ),
         (
             "doc_3",
             "Machine learning embeddings represent text as high-dimensional vectors.",
-            create_sample_embedding(384, 0.3)
+            create_sample_embedding(384, 0.3),
         ),
         (
             "doc_4",
             "Similarity search finds the most relevant documents for a query.",
-            create_sample_embedding(384, 0.4)
+            create_sample_embedding(384, 0.4),
         ),
         (
             "doc_5",
             "pgvector is a PostgreSQL extension for vector similarity search.",
-            create_sample_embedding(384, 0.5)
+            create_sample_embedding(384, 0.5),
         ),
     ];
 
@@ -116,38 +119,55 @@ async fn setup_sample_data(orbit_client: &orbit_client::OrbitClient) -> Result<(
             ("content".to_string(), content.to_string()),
             ("doc_type".to_string(), "article".to_string()),
         ]);
-        
+
         let vector = Vector::with_metadata(doc_id.to_string(), embedding, metadata);
         let vector_value = serde_json::to_value(vector)?;
-        
-        documents_actor_ref.invoke::<()>("add_vector", vec![vector_value])
-            .await.map_err(|e| anyhow::anyhow!("Failed to add vector: {}", e))?;
-        
+
+        documents_actor_ref
+            .invoke::<()>("add_vector", vec![vector_value])
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to add vector: {}", e))?;
+
         info!("📄 Added document: {}", doc_id);
     }
 
     // Create products table data for e-commerce example
-    let products_actor_ref = orbit_client.actor_reference::<VectorActor>(
-        Key::StringKey {
-            key: "table_products".to_string()
-        }
-    ).await.map_err(|e| anyhow::anyhow!("Failed to get products actor: {}", e))?;
-    
+    let products_actor_ref = orbit_client
+        .actor_reference::<VectorActor>(Key::StringKey {
+            key: "table_products".to_string(),
+        })
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to get products actor: {}", e))?;
+
     let products_index_config = VectorIndexConfig::new(
         "products_features_idx".to_string(),
         128, // Product feature vectors
-        SimilarityMetric::Euclidean
+        SimilarityMetric::Euclidean,
     );
-    
+
     let products_config_value = serde_json::to_value(products_index_config)?;
-    products_actor_ref.invoke::<()>("create_index", vec![products_config_value])
-        .await.map_err(|e| anyhow::anyhow!("Failed to create products index: {}", e))?;
+    products_actor_ref
+        .invoke::<()>("create_index", vec![products_config_value])
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to create products index: {}", e))?;
 
     // Add sample product vectors
     let sample_products = vec![
-        ("prod_1", "Wireless Bluetooth Headphones", create_sample_embedding(128, 0.7)),
-        ("prod_2", "Noise-Cancelling Earbuds", create_sample_embedding(128, 0.8)),
-        ("prod_3", "Gaming Keyboard RGB", create_sample_embedding(128, 0.9)),
+        (
+            "prod_1",
+            "Wireless Bluetooth Headphones",
+            create_sample_embedding(128, 0.7),
+        ),
+        (
+            "prod_2",
+            "Noise-Cancelling Earbuds",
+            create_sample_embedding(128, 0.8),
+        ),
+        (
+            "prod_3",
+            "Gaming Keyboard RGB",
+            create_sample_embedding(128, 0.9),
+        ),
     ];
 
     for (prod_id, name, features) in sample_products {
@@ -155,12 +175,14 @@ async fn setup_sample_data(orbit_client: &orbit_client::OrbitClient) -> Result<(
             ("name".to_string(), name.to_string()),
             ("category".to_string(), "electronics".to_string()),
         ]);
-        
+
         let vector = Vector::with_metadata(prod_id.to_string(), features, metadata);
         let vector_value = serde_json::to_value(vector)?;
-        
-        products_actor_ref.invoke::<()>("add_vector", vec![vector_value])
-            .await.map_err(|e| anyhow::anyhow!("Failed to add product vector: {}", e))?;
+
+        products_actor_ref
+            .invoke::<()>("add_vector", vec![vector_value])
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to add product vector: {}", e))?;
     }
 
     info!("✅ Sample data setup complete");
@@ -191,7 +213,7 @@ fn print_pgvector_examples() {
     info!("   CREATE TABLE documents (");
     info!("     id SERIAL PRIMARY KEY,");
     info!("     content TEXT,");
-    info!("     embedding VECTOR(384)");  
+    info!("     embedding VECTOR(384)");
     info!("   );");
     info!("");
     info!("   CREATE TABLE products (");
@@ -217,7 +239,7 @@ fn print_pgvector_examples() {
     info!("   FROM documents ORDER BY distance LIMIT 5;");
     info!("");
     info!("   -- Euclidean distance");
-    info!("   SELECT name, features <-> '[0.7, 0.8, ...]' AS distance");  
+    info!("   SELECT name, features <-> '[0.7, 0.8, ...]' AS distance");
     info!("   FROM products ORDER BY distance LIMIT 3;");
     info!("");
     info!("   -- Inner product similarity");
@@ -230,7 +252,7 @@ fn print_pgvector_examples() {
     info!("");
     info!("🔗 Similarity Operators:");
     info!("   <->  Euclidean distance (L2)");
-    info!("   <#>  Inner product (dot product)");  
+    info!("   <#>  Inner product (dot product)");
     info!("   <=>  Cosine distance");
     info!("");
     info!("📚 Index Types:");
@@ -238,16 +260,20 @@ fn print_pgvector_examples() {
     info!("   hnsw     - Hierarchical Navigable Small World (high accuracy)");
     info!("");
     info!("💡 Try these sample queries with the pre-loaded data:");
-    
+
     let sample_query_vector = create_sample_embedding(384, 0.15);
-    let sample_vector_str = sample_query_vector.iter()
+    let sample_vector_str = sample_query_vector
+        .iter()
         .take(5)
         .map(|f| format!("{:.3}", f))
         .collect::<Vec<_>>()
         .join(", ");
-        
+
     info!("   SELECT content FROM table_documents");
-    info!("   WHERE embedding <=> '[{}, ...]' < 0.8", sample_vector_str);
+    info!(
+        "   WHERE embedding <=> '[{}, ...]' < 0.8",
+        sample_vector_str
+    );
     info!("");
     info!("🎯 Use Cases:");
     info!("   • Semantic document search");

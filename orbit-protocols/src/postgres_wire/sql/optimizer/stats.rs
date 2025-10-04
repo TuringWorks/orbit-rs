@@ -131,13 +131,22 @@ impl StatisticsCollector {
     }
 
     /// Update statistics for a column
-    pub fn update_column_stats(&mut self, table_name: &str, column_name: &str, stats: ColumnStatistics) {
+    pub fn update_column_stats(
+        &mut self,
+        table_name: &str,
+        column_name: &str,
+        stats: ColumnStatistics,
+    ) {
         let key = format!("{}.{}", table_name, column_name);
         self.column_stats.insert(key, stats);
     }
 
     /// Get statistics for a column
-    pub fn get_column_stats(&self, table_name: &str, column_name: &str) -> Option<&ColumnStatistics> {
+    pub fn get_column_stats(
+        &self,
+        table_name: &str,
+        column_name: &str,
+    ) -> Option<&ColumnStatistics> {
         let key = format!("{}.{}", table_name, column_name);
         self.column_stats.get(&key)
     }
@@ -166,7 +175,13 @@ impl StatisticsCollector {
     }
 
     /// Estimate the selectivity of a range predicate (column > value, column < value, etc.)
-    pub fn estimate_range_selectivity(&self, table_name: &str, column_name: &str, _operator: &str, _value: &str) -> f64 {
+    pub fn estimate_range_selectivity(
+        &self,
+        table_name: &str,
+        column_name: &str,
+        _operator: &str,
+        _value: &str,
+    ) -> f64 {
         if let Some(_col_stats) = self.get_column_stats(table_name, column_name) {
             // In a full implementation, this would use histogram data
             // to estimate how many rows fall within the range
@@ -177,7 +192,13 @@ impl StatisticsCollector {
     }
 
     /// Estimate join selectivity between two columns
-    pub fn estimate_join_selectivity(&self, left_table: &str, left_column: &str, right_table: &str, right_column: &str) -> f64 {
+    pub fn estimate_join_selectivity(
+        &self,
+        left_table: &str,
+        left_column: &str,
+        right_table: &str,
+        right_column: &str,
+    ) -> f64 {
         let left_stats = self.get_column_stats(left_table, left_column);
         let right_stats = self.get_column_stats(right_table, right_column);
 
@@ -201,27 +222,37 @@ impl StatisticsCollector {
         // 1. Scan the table to count rows
         // 2. Sample data to estimate column distributions
         // 3. Update the statistics structures
-        
+
         // For now, just insert default statistics
         self.update_table_stats(table_name, TableStatistics::default());
-        
+
         // Add some sample column statistics
-        self.update_column_stats(table_name, "id", ColumnStatistics {
-            distinct_count: 1000,
-            null_fraction: 0.0,
-            correlation: 1.0,
-            ..Default::default()
-        });
+        self.update_column_stats(
+            table_name,
+            "id",
+            ColumnStatistics {
+                distinct_count: 1000,
+                null_fraction: 0.0,
+                correlation: 1.0,
+                ..Default::default()
+            },
+        );
 
         Ok(())
     }
 
     /// Auto-update statistics based on data changes
-    pub fn auto_update_stats(&mut self, table_name: &str, rows_inserted: usize, rows_updated: usize, rows_deleted: usize) {
+    pub fn auto_update_stats(
+        &mut self,
+        table_name: &str,
+        rows_inserted: usize,
+        rows_updated: usize,
+        rows_deleted: usize,
+    ) {
         if let Some(stats) = self.table_stats.get_mut(table_name) {
             // Update row count
             stats.row_count = stats.row_count + rows_inserted - rows_deleted;
-            
+
             // In a real implementation, would also update column statistics
             // based on the nature of the changes
         }
@@ -237,7 +268,7 @@ impl StatisticsCollector {
         // Rough estimate
         self.table_stats.len() * 200 +  // Table stats
         self.column_stats.len() * 500 + // Column stats (larger due to histograms)
-        self.index_stats.len() * 100    // Index stats
+        self.index_stats.len() * 100 // Index stats
     }
 
     /// Clear all statistics
@@ -250,7 +281,7 @@ impl StatisticsCollector {
     /// Export statistics to a format suitable for persistence
     pub fn export_stats(&self) -> HashMap<String, serde_json::Value> {
         let mut export = HashMap::new();
-        
+
         // Export table stats
         for (table_name, stats) in &self.table_stats {
             export.insert(
@@ -261,7 +292,7 @@ impl StatisticsCollector {
                     "average_row_size": stats.average_row_size,
                     "null_frac": stats.null_frac,
                     "distinct_values": stats.distinct_values,
-                })
+                }),
             );
         }
 
@@ -290,7 +321,7 @@ mod tests {
     #[test]
     fn test_table_statistics_update() {
         let mut collector = StatisticsCollector::new();
-        
+
         let stats = TableStatistics {
             row_count: 10000,
             rows_per_page: 100,
@@ -298,9 +329,9 @@ mod tests {
             null_frac: 0.05,
             distinct_values: 5000,
         };
-        
+
         collector.update_table_stats("test_table", stats.clone());
-        
+
         let retrieved = collector.get_table_stats("test_table").unwrap();
         assert_eq!(retrieved.row_count, 10000);
         assert_eq!(retrieved.average_row_size, 200);
@@ -309,7 +340,7 @@ mod tests {
     #[test]
     fn test_column_statistics_update() {
         let mut collector = StatisticsCollector::new();
-        
+
         let stats = ColumnStatistics {
             distinct_count: 500,
             null_fraction: 0.02,
@@ -317,10 +348,12 @@ mod tests {
             correlation: 0.8,
             ..Default::default()
         };
-        
+
         collector.update_column_stats("test_table", "test_column", stats);
-        
-        let retrieved = collector.get_column_stats("test_table", "test_column").unwrap();
+
+        let retrieved = collector
+            .get_column_stats("test_table", "test_column")
+            .unwrap();
         assert_eq!(retrieved.distinct_count, 500);
         assert_eq!(retrieved.correlation, 0.8);
     }
@@ -328,16 +361,20 @@ mod tests {
     #[test]
     fn test_selectivity_estimation() {
         let mut collector = StatisticsCollector::new();
-        
+
         // Add column with known distinct count
-        collector.update_column_stats("users", "id", ColumnStatistics {
-            distinct_count: 1000,
-            ..Default::default()
-        });
-        
+        collector.update_column_stats(
+            "users",
+            "id",
+            ColumnStatistics {
+                distinct_count: 1000,
+                ..Default::default()
+            },
+        );
+
         let selectivity = collector.estimate_equality_selectivity("users", "id");
         assert_eq!(selectivity, 0.001); // 1/1000
-        
+
         // Test with unknown column
         let selectivity = collector.estimate_equality_selectivity("unknown", "column");
         assert_eq!(selectivity, 0.1); // Default
@@ -346,17 +383,25 @@ mod tests {
     #[test]
     fn test_join_selectivity_estimation() {
         let mut collector = StatisticsCollector::new();
-        
-        collector.update_column_stats("orders", "user_id", ColumnStatistics {
-            distinct_count: 500,
-            ..Default::default()
-        });
-        
-        collector.update_column_stats("users", "id", ColumnStatistics {
-            distinct_count: 1000,
-            ..Default::default()
-        });
-        
+
+        collector.update_column_stats(
+            "orders",
+            "user_id",
+            ColumnStatistics {
+                distinct_count: 500,
+                ..Default::default()
+            },
+        );
+
+        collector.update_column_stats(
+            "users",
+            "id",
+            ColumnStatistics {
+                distinct_count: 1000,
+                ..Default::default()
+            },
+        );
+
         let selectivity = collector.estimate_join_selectivity("orders", "user_id", "users", "id");
         assert_eq!(selectivity, 0.001); // 1/max(500, 1000) = 1/1000
     }
@@ -364,15 +409,18 @@ mod tests {
     #[test]
     fn test_auto_update_stats() {
         let mut collector = StatisticsCollector::new();
-        
-        collector.update_table_stats("test_table", TableStatistics {
-            row_count: 1000,
-            ..Default::default()
-        });
-        
+
+        collector.update_table_stats(
+            "test_table",
+            TableStatistics {
+                row_count: 1000,
+                ..Default::default()
+            },
+        );
+
         // Simulate some data changes
         collector.auto_update_stats("test_table", 100, 50, 25);
-        
+
         let stats = collector.get_table_stats("test_table").unwrap();
         assert_eq!(stats.row_count, 1075); // 1000 + 100 - 25
     }
@@ -380,11 +428,11 @@ mod tests {
     #[test]
     fn test_memory_usage_estimation() {
         let mut collector = StatisticsCollector::new();
-        
+
         collector.update_table_stats("table1", TableStatistics::default());
         collector.update_column_stats("table1", "col1", ColumnStatistics::default());
         collector.update_index_stats("idx1", IndexStatistics::default());
-        
+
         let usage = collector.memory_usage_bytes();
         assert!(usage > 0);
         assert!(usage <= 1000); // Should be reasonable for small dataset
@@ -393,16 +441,19 @@ mod tests {
     #[test]
     fn test_stats_export() {
         let mut collector = StatisticsCollector::new();
-        
-        collector.update_table_stats("test_table", TableStatistics {
-            row_count: 5000,
-            average_row_size: 150,
-            ..Default::default()
-        });
-        
+
+        collector.update_table_stats(
+            "test_table",
+            TableStatistics {
+                row_count: 5000,
+                average_row_size: 150,
+                ..Default::default()
+            },
+        );
+
         let export = collector.export_stats();
         assert!(export.contains_key("table:test_table"));
-        
+
         if let Some(table_data) = export.get("table:test_table") {
             assert_eq!(table_data["row_count"], 5000);
             assert_eq!(table_data["average_row_size"], 150);

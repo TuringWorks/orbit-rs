@@ -1,11 +1,11 @@
 //! DDL Statement Execution
-//! 
+//!
 //! This module handles execution of DDL statements (CREATE, ALTER, DROP)
 
-use crate::error::ProtocolResult;
-use crate::postgres_wire::sql::ast::*;
-use crate::postgres_wire::query_engine::QueryResult;
 use super::SqlExecutor;
+use crate::error::ProtocolResult;
+use crate::postgres_wire::query_engine::QueryResult;
+use crate::postgres_wire::sql::ast::*;
 
 /// Execute CREATE TABLE statement
 pub async fn execute_create_table(
@@ -14,11 +14,11 @@ pub async fn execute_create_table(
 ) -> ProtocolResult<QueryResult> {
     // For now, just return success with metadata about what would be created
     // TODO: Integrate with Orbit's actor system to create virtual tables
-    
+
     println!("Would create table: {}", stmt.name);
     println!("Columns: {:?}", stmt.columns);
     println!("Constraints: {:?}", stmt.constraints);
-    
+
     // Return a mock success result
     Ok(QueryResult::Select {
         columns: vec!["status".to_string()],
@@ -38,7 +38,7 @@ pub async fn execute_create_index(
     println!("Would create index on table: {}", stmt.table);
     println!("Index type: {:?}", stmt.index_type);
     println!("Columns: {:?}", stmt.columns);
-    
+
     Ok(QueryResult::Select {
         columns: vec!["status".to_string()],
         rows: vec![vec![Some(format!(
@@ -55,13 +55,10 @@ pub async fn execute_create_view(
 ) -> ProtocolResult<QueryResult> {
     println!("Would create view: {}", stmt.name);
     println!("Materialized: {}", stmt.materialized);
-    
+
     Ok(QueryResult::Select {
         columns: vec!["status".to_string()],
-        rows: vec![vec![Some(format!(
-            "View '{}' would be created",
-            stmt.name
-        ))]],
+        rows: vec![vec![Some(format!("View '{}' would be created", stmt.name))]],
     })
 }
 
@@ -71,7 +68,7 @@ pub async fn execute_create_schema(
     stmt: CreateSchemaStatement,
 ) -> ProtocolResult<QueryResult> {
     println!("Would create schema: {}", stmt.name);
-    
+
     Ok(QueryResult::Select {
         columns: vec!["status".to_string()],
         rows: vec![vec![Some(format!(
@@ -87,13 +84,13 @@ pub async fn execute_create_extension(
     stmt: CreateExtensionStatement,
 ) -> ProtocolResult<QueryResult> {
     println!("Would create extension: {}", stmt.name);
-    
+
     // Special handling for vector extension
     if stmt.name.to_lowercase() == "vector" {
         Ok(QueryResult::Select {
             columns: vec!["status".to_string()],
             rows: vec![vec![Some(
-                "Vector extension is already available in Orbit".to_string()
+                "Vector extension is already available in Orbit".to_string(),
             )]],
         })
     } else {
@@ -114,7 +111,7 @@ pub async fn execute_alter_table(
 ) -> ProtocolResult<QueryResult> {
     println!("Would alter table: {}", stmt.name);
     println!("Actions: {:?}", stmt.actions);
-    
+
     Ok(QueryResult::Select {
         columns: vec!["status".to_string()],
         rows: vec![vec![Some(format!(
@@ -131,7 +128,7 @@ pub async fn execute_drop_table(
     stmt: DropTableStatement,
 ) -> ProtocolResult<QueryResult> {
     println!("Would drop tables: {:?}", stmt.names);
-    
+
     Ok(QueryResult::Select {
         columns: vec!["status".to_string()],
         rows: vec![vec![Some(format!(
@@ -147,7 +144,7 @@ pub async fn execute_drop_index(
     stmt: DropIndexStatement,
 ) -> ProtocolResult<QueryResult> {
     println!("Would drop indexes: {:?}", stmt.names);
-    
+
     Ok(QueryResult::Select {
         columns: vec!["status".to_string()],
         rows: vec![vec![Some(format!(
@@ -163,7 +160,7 @@ pub async fn execute_drop_view(
     stmt: DropViewStatement,
 ) -> ProtocolResult<QueryResult> {
     println!("Would drop views: {:?}", stmt.names);
-    
+
     Ok(QueryResult::Select {
         columns: vec!["status".to_string()],
         rows: vec![vec![Some(format!(
@@ -179,7 +176,7 @@ pub async fn execute_drop_schema(
     stmt: DropSchemaStatement,
 ) -> ProtocolResult<QueryResult> {
     println!("Would drop schemas: {:?}", stmt.names);
-    
+
     Ok(QueryResult::Select {
         columns: vec!["status".to_string()],
         rows: vec![vec![Some(format!(
@@ -195,7 +192,7 @@ pub async fn execute_drop_extension(
     stmt: DropExtensionStatement,
 ) -> ProtocolResult<QueryResult> {
     println!("Would drop extensions: {:?}", stmt.names);
-    
+
     Ok(QueryResult::Select {
         columns: vec!["status".to_string()],
         rows: vec![vec![Some(format!(

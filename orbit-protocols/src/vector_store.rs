@@ -1,13 +1,13 @@
 //! Vector Store Module
-//! 
+//!
 //! Provides vector storage and similarity search capabilities similar to Redis vector database
 //! and PostgreSQL pgvector extensions. Supports high-dimensional vector operations for
 //! machine learning embeddings and semantic search applications.
 
-use std::collections::HashMap;
-use serde::{Deserialize, Serialize};
-use orbit_shared::{Addressable, OrbitResult};
 use async_trait::async_trait;
+use orbit_shared::{Addressable, OrbitResult};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 /// High-dimensional vector with metadata
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -223,13 +223,21 @@ impl VectorSimilarity {
             SimilarityMetric::Euclidean => {
                 // Convert distance to similarity (higher = more similar)
                 let distance = Self::euclidean_distance(a, b);
-                if distance == 0.0 { 1.0 } else { 1.0 / (1.0 + distance) }
+                if distance == 0.0 {
+                    1.0
+                } else {
+                    1.0 / (1.0 + distance)
+                }
             }
             SimilarityMetric::DotProduct => Self::dot_product(a, b),
             SimilarityMetric::Manhattan => {
                 // Convert distance to similarity
                 let distance = Self::manhattan_distance(a, b);
-                if distance == 0.0 { 1.0 } else { 1.0 / (1.0 + distance) }
+                if distance == 0.0 {
+                    1.0
+                } else {
+                    1.0 / (1.0 + distance)
+                }
             }
         }
     }
@@ -383,7 +391,11 @@ impl VectorActor {
         }
 
         // Sort by score (descending - higher scores first)
-        results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+        results.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
 
         // Apply limit
         results.truncate(params.limit);
@@ -392,9 +404,14 @@ impl VectorActor {
     }
 
     /// Find k nearest neighbors
-    pub fn knn_search(&self, query_vector: Vec<f32>, k: usize, metric: Option<SimilarityMetric>) -> Vec<VectorSearchResult> {
+    pub fn knn_search(
+        &self,
+        query_vector: Vec<f32>,
+        k: usize,
+        metric: Option<SimilarityMetric>,
+    ) -> Vec<VectorSearchResult> {
         let metric = metric.unwrap_or(self.default_metric);
-        
+
         let params = VectorSearchParams {
             query_vector,
             metric,
@@ -478,34 +495,42 @@ impl Addressable for VectorActor {
 pub trait VectorActorMethods {
     /// Add a vector to the store
     async fn add_vector(&mut self, vector: Vector) -> OrbitResult<()>;
-    
+
     /// Get a vector by ID
     async fn get_vector(&self, id: String) -> OrbitResult<Option<Vector>>;
-    
+
     /// Remove a vector by ID
     async fn remove_vector(&mut self, id: String) -> OrbitResult<bool>;
-    
+
     /// Search for similar vectors
-    async fn search_vectors(&self, params: VectorSearchParams) -> OrbitResult<Vec<VectorSearchResult>>;
-    
+    async fn search_vectors(
+        &self,
+        params: VectorSearchParams,
+    ) -> OrbitResult<Vec<VectorSearchResult>>;
+
     /// Perform k-nearest neighbors search
-    async fn knn_search(&self, query_vector: Vec<f32>, k: usize, metric: Option<SimilarityMetric>) -> OrbitResult<Vec<VectorSearchResult>>;
-    
+    async fn knn_search(
+        &self,
+        query_vector: Vec<f32>,
+        k: usize,
+        metric: Option<SimilarityMetric>,
+    ) -> OrbitResult<Vec<VectorSearchResult>>;
+
     /// Create a vector index
     async fn create_index(&mut self, config: VectorIndexConfig) -> OrbitResult<()>;
-    
+
     /// Drop a vector index
     async fn drop_index(&mut self, name: String) -> OrbitResult<bool>;
-    
+
     /// List all vector indices
     async fn list_indices(&self) -> OrbitResult<Vec<VectorIndexConfig>>;
-    
+
     /// Get vector store statistics
     async fn get_stats(&self) -> OrbitResult<VectorStats>;
-    
+
     /// List all vector IDs
     async fn list_vector_ids(&self) -> OrbitResult<Vec<String>>;
-    
+
     /// Get vector count
     async fn vector_count(&self) -> OrbitResult<usize>;
 }
@@ -526,11 +551,19 @@ impl VectorActorMethods for VectorActor {
         Ok(self.remove_vector(&id).is_some())
     }
 
-    async fn search_vectors(&self, params: VectorSearchParams) -> OrbitResult<Vec<VectorSearchResult>> {
+    async fn search_vectors(
+        &self,
+        params: VectorSearchParams,
+    ) -> OrbitResult<Vec<VectorSearchResult>> {
         Ok(self.search_vectors(params))
     }
 
-    async fn knn_search(&self, query_vector: Vec<f32>, k: usize, metric: Option<SimilarityMetric>) -> OrbitResult<Vec<VectorSearchResult>> {
+    async fn knn_search(
+        &self,
+        query_vector: Vec<f32>,
+        k: usize,
+        metric: Option<SimilarityMetric>,
+    ) -> OrbitResult<Vec<VectorSearchResult>> {
         Ok(self.knn_search(query_vector, k, metric))
     }
 
@@ -596,20 +629,20 @@ mod tests {
     #[test]
     fn test_vector_actor_operations() {
         let mut actor = VectorActor::new();
-        
+
         // Add vectors
         let vec1 = Vector::new("v1".to_string(), vec![1.0, 2.0, 3.0]);
         let vec2 = Vector::new("v2".to_string(), vec![2.0, 3.0, 4.0]);
-        
+
         assert!(actor.add_vector(vec1.clone()).is_ok());
         assert!(actor.add_vector(vec2.clone()).is_ok());
         assert_eq!(actor.vector_count(), 2);
-        
+
         // Get vector
         let retrieved = actor.get_vector("v1");
         assert!(retrieved.is_some());
         assert_eq!(retrieved.unwrap().id, "v1");
-        
+
         // Search vectors
         let params = VectorSearchParams::new(vec![1.0, 2.0, 3.0], SimilarityMetric::Cosine, 10);
         let results = actor.search_vectors(params);

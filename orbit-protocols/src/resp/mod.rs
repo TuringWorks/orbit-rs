@@ -32,15 +32,15 @@ pub mod commands;
 pub mod server;
 pub mod types;
 
-pub use actors::{
-    KeyValueActor, HashActor, ListActor, PubSubActor,
-    KeyValueActorMethods, HashActorMethods, ListActorMethods, PubSubActorMethods
-};
 pub use crate::vector_store::{
-    VectorActor, VectorActorMethods, Vector, VectorSearchParams, 
-    VectorSearchResult, SimilarityMetric, VectorIndexConfig, VectorStats
+    SimilarityMetric, Vector, VectorActor, VectorActorMethods, VectorIndexConfig,
+    VectorSearchParams, VectorSearchResult, VectorStats,
+};
+pub use actors::{
+    HashActor, HashActorMethods, KeyValueActor, KeyValueActorMethods, ListActor, ListActorMethods,
+    PubSubActor, PubSubActorMethods,
 };
 pub use codec::RespCodec;
 pub use commands::CommandHandler;
 pub use server::RespServer;
-pub use types::{RespValue, RespArray};
+pub use types::{RespArray, RespValue};

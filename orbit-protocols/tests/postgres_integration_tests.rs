@@ -2,18 +2,18 @@
 //!
 //! These tests verify the full protocol implementation using the tokio-postgres client
 
-use tokio_postgres::{NoTls, Error};
 use std::time::Duration;
+use tokio_postgres::{Error, NoTls};
 
 /// Helper to start test server on a random port
 async fn start_test_server() -> (orbit_protocols::postgres_wire::PostgresServer, u16) {
     use tokio::net::TcpListener;
-    
+
     // Find available port
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let port = listener.local_addr().unwrap().port();
     drop(listener);
-    
+
     let server = orbit_protocols::postgres_wire::PostgresServer::new(format!("127.0.0.1:{}", port));
     (server, port)
 }
@@ -120,9 +120,7 @@ async fn test_update_actor() -> Result<(), Box<dyn std::error::Error>> {
 
     // Update actor
     let result = client
-        .simple_query(
-            "UPDATE actors SET state = '{\"balance\": 500}' WHERE actor_id = 'user:200'"
-        )
+        .simple_query("UPDATE actors SET state = '{\"balance\": 500}' WHERE actor_id = 'user:200'")
         .await?;
 
     assert!(!result.is_empty());
@@ -219,7 +217,10 @@ async fn test_select_all_actors() -> Result<(), Box<dyn std::error::Error>> {
     let rows = client.simple_query("SELECT * FROM actors").await?;
 
     // Count actual rows (filter out non-row messages)
-    let row_count = rows.iter().filter(|msg| matches!(msg, tokio_postgres::SimpleQueryMessage::Row(_))).count();
+    let row_count = rows
+        .iter()
+        .filter(|msg| matches!(msg, tokio_postgres::SimpleQueryMessage::Row(_)))
+        .count();
     assert!(row_count >= 3);
 
     Ok(())
@@ -246,7 +247,7 @@ async fn test_prepared_statement() -> Result<(), Box<dyn std::error::Error>> {
 
     // For now, just test that we can send Parse/Bind/Execute messages
     // The full prepared statement support needs more implementation
-    
+
     // Use simple query as workaround
     for i in 1..=3 {
         client
@@ -258,9 +259,7 @@ async fn test_prepared_statement() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Verify at least one insert worked
-    let rows = client
-        .simple_query("SELECT * FROM actors")
-        .await?;
+    let rows = client.simple_query("SELECT * FROM actors").await?;
 
     assert!(!rows.is_empty());
 
@@ -288,7 +287,7 @@ async fn test_empty_query() -> Result<(), Box<dyn std::error::Error>> {
 
     // Execute empty query
     let result = client.simple_query("").await;
-    
+
     // Should handle empty query gracefully
     assert!(result.is_ok() || result.is_err());
 
@@ -306,7 +305,7 @@ async fn test_multiple_connections() -> Result<(), Box<dyn std::error::Error>> {
 
     // Create multiple connections
     let mut handles = vec![];
-    
+
     for i in 0..3 {
         let port = port;
         let handle = tokio::spawn(async move {
@@ -314,7 +313,8 @@ async fn test_multiple_connections() -> Result<(), Box<dyn std::error::Error>> {
                 &format!("host=localhost port={} user=test{} dbname=test", port, i),
                 NoTls,
             )
-            .await.unwrap();
+            .await
+            .unwrap();
 
             tokio::spawn(async move {
                 let _ = connection.await;
@@ -331,7 +331,7 @@ async fn test_multiple_connections() -> Result<(), Box<dyn std::error::Error>> {
                 .await
                 .unwrap();
         });
-        
+
         handles.push(handle);
     }
 

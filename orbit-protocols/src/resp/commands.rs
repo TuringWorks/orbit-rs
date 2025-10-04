@@ -1,15 +1,18 @@
 //! RESP protocol command handler
-//! 
+//!
 //! Implements Redis-compatible commands that operate on Orbit actors.
 //! Each Redis data type (string, hash, list) maps to a corresponding Orbit actor type.
 
 use std::sync::Arc;
 use tracing::{debug, warn};
 
+use super::{
+    actors::{HashActor, KeyValueActor, ListActor, PubSubActor},
+    RespValue, SimilarityMetric, Vector, VectorActor, VectorIndexConfig, VectorSearchParams,
+};
+use crate::error::{ProtocolError, ProtocolResult};
 use orbit_client::OrbitClient;
 use orbit_shared::Key;
-use crate::error::{ProtocolError, ProtocolResult};
-use super::{RespValue, actors::{KeyValueActor, HashActor, ListActor, PubSubActor}, VectorActor, Vector, VectorSearchParams, SimilarityMetric, VectorIndexConfig};
 
 /// Redis command handler that translates Redis commands to Orbit actor operations
 pub struct CommandHandler {
@@ -28,27 +31,36 @@ impl CommandHandler {
     pub async fn handle_command(&self, command: RespValue) -> ProtocolResult<RespValue> {
         let args = match command {
             RespValue::Array(args) => args,
-            _ => return Err(ProtocolError::RespError("Command must be an array".to_string())),
+            _ => {
+                return Err(ProtocolError::RespError(
+                    "Command must be an array".to_string(),
+                ))
+            }
         };
 
         if args.is_empty() {
             return Err(ProtocolError::RespError("Empty command".to_string()));
         }
 
-        let command_name = args[0].as_string()
+        let command_name = args[0]
+            .as_string()
             .ok_or_else(|| ProtocolError::RespError("Command name must be a string".to_string()))?
             .to_uppercase();
 
         let args = &args[1..];
 
-        debug!("Executing command: {} with {} args", command_name, args.len());
+        debug!(
+            "Executing command: {} with {} args",
+            command_name,
+            args.len()
+        );
 
         match command_name.as_str() {
             // Connection commands
             "PING" => self.cmd_ping(args).await,
             "ECHO" => self.cmd_echo(args).await,
             "SELECT" => self.cmd_select(args).await,
-            
+
             // String/Key commands
             "GET" => self.cmd_get(args).await,
             "SET" => self.cmd_set(args).await,
@@ -57,7 +69,7 @@ impl CommandHandler {
             "TTL" => self.cmd_ttl(args).await,
             "EXPIRE" => self.cmd_expire(args).await,
             "KEYS" => self.cmd_keys(args).await,
-            
+
             // Hash commands
             "HGET" => self.cmd_hget(args).await,
             "HSET" => self.cmd_hset(args).await,
@@ -67,7 +79,7 @@ impl CommandHandler {
             "HKEYS" => self.cmd_hkeys(args).await,
             "HVALS" => self.cmd_hvals(args).await,
             "HLEN" => self.cmd_hlen(args).await,
-            
+
             // List commands
             "LPUSH" => self.cmd_lpush(args).await,
             "RPUSH" => self.cmd_rpush(args).await,
@@ -76,14 +88,14 @@ impl CommandHandler {
             "LRANGE" => self.cmd_lrange(args).await,
             "LLEN" => self.cmd_llen(args).await,
             "LINDEX" => self.cmd_lindex(args).await,
-            
+
             // Pub/Sub commands
             "PUBLISH" => self.cmd_publish(args).await,
             "SUBSCRIBE" => self.cmd_subscribe(args).await,
             "UNSUBSCRIBE" => self.cmd_unsubscribe(args).await,
             "PSUBSCRIBE" => self.cmd_psubscribe(args).await,
             "PUNSUBSCRIBE" => self.cmd_punsubscribe(args).await,
-            
+
             // Vector commands (Redis vector similarity)
             "FT.CREATE" => self.cmd_ft_create(args).await,
             "FT.ADD" => self.cmd_ft_add(args).await,
@@ -96,16 +108,19 @@ impl CommandHandler {
             "VECTOR.DEL" => self.cmd_vector_del(args).await,
             "VECTOR.KNN" => self.cmd_vector_knn(args).await,
             "VECTOR.STATS" => self.cmd_vector_stats(args).await,
-            
+
             // Server commands
             "INFO" => self.cmd_info(args).await,
             "DBSIZE" => self.cmd_dbsize(args).await,
             "FLUSHDB" => self.cmd_flushdb(args).await,
             "COMMAND" => self.cmd_command(args).await,
-            
+
             _ => {
                 warn!("Unknown command: {}", command_name);
-                Err(ProtocolError::RespError(format!("ERR unknown command '{}'", command_name)))
+                Err(ProtocolError::RespError(format!(
+                    "ERR unknown command '{}'",
+                    command_name
+                )))
             }
         }
     }
@@ -122,14 +137,18 @@ impl CommandHandler {
 
     async fn cmd_echo(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
         if args.len() != 1 {
-            return Err(ProtocolError::RespError("ERR wrong number of arguments for 'echo' command".to_string()));
+            return Err(ProtocolError::RespError(
+                "ERR wrong number of arguments for 'echo' command".to_string(),
+            ));
         }
         Ok(args[0].clone())
     }
 
     async fn cmd_select(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
         if args.len() != 1 {
-            return Err(ProtocolError::RespError("ERR wrong number of arguments for 'select' command".to_string()));
+            return Err(ProtocolError::RespError(
+                "ERR wrong number of arguments for 'select' command".to_string(),
+            ));
         }
         // Redis database selection - we'll just accept it and return OK
         Ok(RespValue::ok())
@@ -139,33 +158,46 @@ impl CommandHandler {
 
     async fn cmd_get(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
         if args.len() != 1 {
-            return Err(ProtocolError::RespError("ERR wrong number of arguments for 'get' command".to_string()));
+            return Err(ProtocolError::RespError(
+                "ERR wrong number of arguments for 'get' command".to_string(),
+            ));
         }
 
-        let key = args[0].as_string()
+        let key = args[0]
+            .as_string()
             .ok_or_else(|| ProtocolError::RespError("ERR invalid key".to_string()))?;
 
         // Get KeyValueActor reference
-        let actor_ref = self.orbit_client.actor_reference::<KeyValueActor>(
-            Key::StringKey { key: key.clone() }
-        ).await.map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+        let actor_ref = self
+            .orbit_client
+            .actor_reference::<KeyValueActor>(Key::StringKey { key: key.clone() })
+            .await
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
 
         // Invoke get_value method on the actor
-        let value: Option<String> = actor_ref.invoke("get_value", vec![])
-            .await.map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
-        
+        let value: Option<String> = actor_ref
+            .invoke("get_value", vec![])
+            .await
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+
         debug!("GET {} -> {:?}", key, value);
-        Ok(value.map(|v| RespValue::bulk_string_from_str(v)).unwrap_or(RespValue::null()))
+        Ok(value
+            .map(|v| RespValue::bulk_string_from_str(v))
+            .unwrap_or(RespValue::null()))
     }
 
     async fn cmd_set(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
         if args.len() < 2 {
-            return Err(ProtocolError::RespError("ERR wrong number of arguments for 'set' command".to_string()));
+            return Err(ProtocolError::RespError(
+                "ERR wrong number of arguments for 'set' command".to_string(),
+            ));
         }
 
-        let key = args[0].as_string()
+        let key = args[0]
+            .as_string()
             .ok_or_else(|| ProtocolError::RespError("ERR invalid key".to_string()))?;
-        let value = args[1].as_string()
+        let value = args[1]
+            .as_string()
             .ok_or_else(|| ProtocolError::RespError("ERR invalid value".to_string()))?;
 
         // Parse optional arguments (EX, PX, NX, XX)
@@ -198,27 +230,40 @@ impl CommandHandler {
         }
 
         // Get KeyValueActor reference
-        let actor_ref = self.orbit_client.actor_reference::<KeyValueActor>(
-            Key::StringKey { key: key.clone() }
-        ).await.map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+        let actor_ref = self
+            .orbit_client
+            .actor_reference::<KeyValueActor>(Key::StringKey { key: key.clone() })
+            .await
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
 
         // Invoke set_value method on the actor
-        actor_ref.invoke::<()>("set_value", vec![value.clone().into()])
-            .await.map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+        actor_ref
+            .invoke::<()>("set_value", vec![value.clone().into()])
+            .await
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
 
         // Set expiration if provided
         if let Some(seconds) = expiration_seconds {
-            actor_ref.invoke::<()>("set_expiration", vec![seconds.into()])
-                .await.map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+            actor_ref
+                .invoke::<()>("set_expiration", vec![seconds.into()])
+                .await
+                .map_err(|e| {
+                    ProtocolError::RespError(format!("ERR actor invocation failed: {}", e))
+                })?;
         }
 
-        debug!("SET {} {} (expiration: {:?})", key, value, expiration_seconds);
+        debug!(
+            "SET {} {} (expiration: {:?})",
+            key, value, expiration_seconds
+        );
         Ok(RespValue::ok())
     }
 
     async fn cmd_del(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
         if args.is_empty() {
-            return Err(ProtocolError::RespError("ERR wrong number of arguments for 'del' command".to_string()));
+            return Err(ProtocolError::RespError(
+                "ERR wrong number of arguments for 'del' command".to_string(),
+            ));
         }
 
         let mut deleted_count = 0i64;
@@ -235,7 +280,9 @@ impl CommandHandler {
 
     async fn cmd_exists(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
         if args.is_empty() {
-            return Err(ProtocolError::RespError("ERR wrong number of arguments for 'exists' command".to_string()));
+            return Err(ProtocolError::RespError(
+                "ERR wrong number of arguments for 'exists' command".to_string(),
+            ));
         }
 
         let mut exists_count = 0i64;
@@ -253,10 +300,13 @@ impl CommandHandler {
 
     async fn cmd_ttl(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
         if args.len() != 1 {
-            return Err(ProtocolError::RespError("ERR wrong number of arguments for 'ttl' command".to_string()));
+            return Err(ProtocolError::RespError(
+                "ERR wrong number of arguments for 'ttl' command".to_string(),
+            ));
         }
 
-        let key = args[0].as_string()
+        let key = args[0]
+            .as_string()
             .ok_or_else(|| ProtocolError::RespError("ERR invalid key".to_string()))?;
 
         // TODO: Replace with actual OrbitClient TTL check
@@ -266,12 +316,16 @@ impl CommandHandler {
 
     async fn cmd_expire(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
         if args.len() != 2 {
-            return Err(ProtocolError::RespError("ERR wrong number of arguments for 'expire' command".to_string()));
+            return Err(ProtocolError::RespError(
+                "ERR wrong number of arguments for 'expire' command".to_string(),
+            ));
         }
 
-        let key = args[0].as_string()
+        let key = args[0]
+            .as_string()
             .ok_or_else(|| ProtocolError::RespError("ERR invalid key".to_string()))?;
-        let seconds = args[1].as_integer()
+        let seconds = args[1]
+            .as_integer()
             .ok_or_else(|| ProtocolError::RespError("ERR invalid timeout".to_string()))?;
 
         // TODO: Replace with actual OrbitClient expiration setting
@@ -281,10 +335,13 @@ impl CommandHandler {
 
     async fn cmd_keys(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
         if args.len() != 1 {
-            return Err(ProtocolError::RespError("ERR wrong number of arguments for 'keys' command".to_string()));
+            return Err(ProtocolError::RespError(
+                "ERR wrong number of arguments for 'keys' command".to_string(),
+            ));
         }
 
-        let pattern = args[0].as_string()
+        let pattern = args[0]
+            .as_string()
             .ok_or_else(|| ProtocolError::RespError("ERR invalid pattern".to_string()))?;
 
         // TODO: Replace with actual OrbitClient directory listing
@@ -296,33 +353,46 @@ impl CommandHandler {
 
     async fn cmd_hget(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
         if args.len() != 2 {
-            return Err(ProtocolError::RespError("ERR wrong number of arguments for 'hget' command".to_string()));
+            return Err(ProtocolError::RespError(
+                "ERR wrong number of arguments for 'hget' command".to_string(),
+            ));
         }
 
-        let key = args[0].as_string()
+        let key = args[0]
+            .as_string()
             .ok_or_else(|| ProtocolError::RespError("ERR invalid key".to_string()))?;
-        let field = args[1].as_string()
+        let field = args[1]
+            .as_string()
             .ok_or_else(|| ProtocolError::RespError("ERR invalid field".to_string()))?;
 
         // Get HashActor reference
-        let actor_ref = self.orbit_client.actor_reference::<HashActor>(
-            Key::StringKey { key: key.clone() }
-        ).await.map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+        let actor_ref = self
+            .orbit_client
+            .actor_reference::<HashActor>(Key::StringKey { key: key.clone() })
+            .await
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
 
         // Invoke hget method on the actor
-        let value: Option<String> = actor_ref.invoke("hget", vec![field.clone().into()])
-            .await.map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
-        
+        let value: Option<String> = actor_ref
+            .invoke("hget", vec![field.clone().into()])
+            .await
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+
         debug!("HGET {} {} -> {:?}", key, field, value);
-        Ok(value.map(|v| RespValue::bulk_string_from_str(v)).unwrap_or(RespValue::null()))
+        Ok(value
+            .map(|v| RespValue::bulk_string_from_str(v))
+            .unwrap_or(RespValue::null()))
     }
 
     async fn cmd_hset(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
         if args.len() < 3 || args.len() % 2 == 0 {
-            return Err(ProtocolError::RespError("ERR wrong number of arguments for 'hset' command".to_string()));
+            return Err(ProtocolError::RespError(
+                "ERR wrong number of arguments for 'hset' command".to_string(),
+            ));
         }
 
-        let key = args[0].as_string()
+        let key = args[0]
+            .as_string()
             .ok_or_else(|| ProtocolError::RespError("ERR invalid key".to_string()))?;
 
         let mut fields_set = 0i64;
@@ -330,21 +400,29 @@ impl CommandHandler {
             if i + 1 >= args.len() {
                 break;
             }
-            
-            let field = args[i].as_string()
+
+            let field = args[i]
+                .as_string()
                 .ok_or_else(|| ProtocolError::RespError("ERR invalid field".to_string()))?;
-            let value = args[i + 1].as_string()
+            let value = args[i + 1]
+                .as_string()
                 .ok_or_else(|| ProtocolError::RespError("ERR invalid value".to_string()))?;
 
             // Get HashActor reference
-            let actor_ref = self.orbit_client.actor_reference::<HashActor>(
-                Key::StringKey { key: key.clone() }
-            ).await.map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            let actor_ref = self
+                .orbit_client
+                .actor_reference::<HashActor>(Key::StringKey { key: key.clone() })
+                .await
+                .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
 
             // Invoke hset method on the actor
-            let was_new: bool = actor_ref.invoke("hset", vec![field.clone().into(), value.clone().into()])
-                .await.map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
-            
+            let was_new: bool = actor_ref
+                .invoke("hset", vec![field.clone().into(), value.clone().into()])
+                .await
+                .map_err(|e| {
+                    ProtocolError::RespError(format!("ERR actor invocation failed: {}", e))
+                })?;
+
             debug!("HSET {} {} {} -> new: {}", key, field, value, was_new);
             if was_new {
                 fields_set += 1;
@@ -356,10 +434,13 @@ impl CommandHandler {
 
     async fn cmd_hgetall(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
         if args.len() != 1 {
-            return Err(ProtocolError::RespError("ERR wrong number of arguments for 'hgetall' command".to_string()));
+            return Err(ProtocolError::RespError(
+                "ERR wrong number of arguments for 'hgetall' command".to_string(),
+            ));
         }
 
-        let key = args[0].as_string()
+        let key = args[0]
+            .as_string()
             .ok_or_else(|| ProtocolError::RespError("ERR invalid key".to_string()))?;
 
         // TODO: Replace with actual OrbitClient hash actor invocation
@@ -369,10 +450,13 @@ impl CommandHandler {
 
     async fn cmd_hdel(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
         if args.len() < 2 {
-            return Err(ProtocolError::RespError("ERR wrong number of arguments for 'hdel' command".to_string()));
+            return Err(ProtocolError::RespError(
+                "ERR wrong number of arguments for 'hdel' command".to_string(),
+            ));
         }
 
-        let key = args[0].as_string()
+        let key = args[0]
+            .as_string()
             .ok_or_else(|| ProtocolError::RespError("ERR invalid key".to_string()))?;
 
         let mut deleted_count = 0i64;
@@ -389,12 +473,16 @@ impl CommandHandler {
 
     async fn cmd_hexists(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
         if args.len() != 2 {
-            return Err(ProtocolError::RespError("ERR wrong number of arguments for 'hexists' command".to_string()));
+            return Err(ProtocolError::RespError(
+                "ERR wrong number of arguments for 'hexists' command".to_string(),
+            ));
         }
 
-        let key = args[0].as_string()
+        let key = args[0]
+            .as_string()
             .ok_or_else(|| ProtocolError::RespError("ERR invalid key".to_string()))?;
-        let field = args[1].as_string()
+        let field = args[1]
+            .as_string()
             .ok_or_else(|| ProtocolError::RespError("ERR invalid field".to_string()))?;
 
         // TODO: Replace with actual OrbitClient hash field existence check
@@ -404,10 +492,13 @@ impl CommandHandler {
 
     async fn cmd_hkeys(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
         if args.len() != 1 {
-            return Err(ProtocolError::RespError("ERR wrong number of arguments for 'hkeys' command".to_string()));
+            return Err(ProtocolError::RespError(
+                "ERR wrong number of arguments for 'hkeys' command".to_string(),
+            ));
         }
 
-        let key = args[0].as_string()
+        let key = args[0]
+            .as_string()
             .ok_or_else(|| ProtocolError::RespError("ERR invalid key".to_string()))?;
 
         // TODO: Replace with actual OrbitClient hash keys retrieval
@@ -417,10 +508,13 @@ impl CommandHandler {
 
     async fn cmd_hvals(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
         if args.len() != 1 {
-            return Err(ProtocolError::RespError("ERR wrong number of arguments for 'hvals' command".to_string()));
+            return Err(ProtocolError::RespError(
+                "ERR wrong number of arguments for 'hvals' command".to_string(),
+            ));
         }
 
-        let key = args[0].as_string()
+        let key = args[0]
+            .as_string()
             .ok_or_else(|| ProtocolError::RespError("ERR invalid key".to_string()))?;
 
         // TODO: Replace with actual OrbitClient hash values retrieval
@@ -430,10 +524,13 @@ impl CommandHandler {
 
     async fn cmd_hlen(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
         if args.len() != 1 {
-            return Err(ProtocolError::RespError("ERR wrong number of arguments for 'hlen' command".to_string()));
+            return Err(ProtocolError::RespError(
+                "ERR wrong number of arguments for 'hlen' command".to_string(),
+            ));
         }
 
-        let key = args[0].as_string()
+        let key = args[0]
+            .as_string()
             .ok_or_else(|| ProtocolError::RespError("ERR invalid key".to_string()))?;
 
         // TODO: Replace with actual OrbitClient hash length retrieval
@@ -445,10 +542,13 @@ impl CommandHandler {
 
     async fn cmd_lpush(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
         if args.len() < 2 {
-            return Err(ProtocolError::RespError("ERR wrong number of arguments for 'lpush' command".to_string()));
+            return Err(ProtocolError::RespError(
+                "ERR wrong number of arguments for 'lpush' command".to_string(),
+            ));
         }
 
-        let key = args[0].as_string()
+        let key = args[0]
+            .as_string()
             .ok_or_else(|| ProtocolError::RespError("ERR invalid key".to_string()))?;
 
         let mut values = Vec::new();
@@ -461,24 +561,31 @@ impl CommandHandler {
         }
 
         // Get ListActor reference
-        let actor_ref = self.orbit_client.actor_reference::<ListActor>(
-            Key::StringKey { key: key.clone() }
-        ).await.map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+        let actor_ref = self
+            .orbit_client
+            .actor_reference::<ListActor>(Key::StringKey { key: key.clone() })
+            .await
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
 
         // Invoke lpush method on the actor
-        let new_length: i64 = actor_ref.invoke("lpush", vec![values.clone().into()])
-            .await.map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
-        
+        let new_length: i64 = actor_ref
+            .invoke("lpush", vec![values.clone().into()])
+            .await
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+
         debug!("LPUSH {} {:?} -> length: {}", key, values, new_length);
         Ok(RespValue::integer(new_length))
     }
 
     async fn cmd_rpush(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
         if args.len() < 2 {
-            return Err(ProtocolError::RespError("ERR wrong number of arguments for 'rpush' command".to_string()));
+            return Err(ProtocolError::RespError(
+                "ERR wrong number of arguments for 'rpush' command".to_string(),
+            ));
         }
 
-        let key = args[0].as_string()
+        let key = args[0]
+            .as_string()
             .ok_or_else(|| ProtocolError::RespError("ERR invalid key".to_string()))?;
 
         let mut values = Vec::new();
@@ -497,10 +604,13 @@ impl CommandHandler {
 
     async fn cmd_lpop(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
         if args.is_empty() || args.len() > 2 {
-            return Err(ProtocolError::RespError("ERR wrong number of arguments for 'lpop' command".to_string()));
+            return Err(ProtocolError::RespError(
+                "ERR wrong number of arguments for 'lpop' command".to_string(),
+            ));
         }
 
-        let key = args[0].as_string()
+        let key = args[0]
+            .as_string()
             .ok_or_else(|| ProtocolError::RespError("ERR invalid key".to_string()))?;
 
         let count = if args.len() == 2 {
@@ -516,10 +626,13 @@ impl CommandHandler {
 
     async fn cmd_rpop(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
         if args.is_empty() || args.len() > 2 {
-            return Err(ProtocolError::RespError("ERR wrong number of arguments for 'rpop' command".to_string()));
+            return Err(ProtocolError::RespError(
+                "ERR wrong number of arguments for 'rpop' command".to_string(),
+            ));
         }
 
-        let key = args[0].as_string()
+        let key = args[0]
+            .as_string()
             .ok_or_else(|| ProtocolError::RespError("ERR invalid key".to_string()))?;
 
         let count = if args.len() == 2 {
@@ -535,27 +648,38 @@ impl CommandHandler {
 
     async fn cmd_lrange(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
         if args.len() != 3 {
-            return Err(ProtocolError::RespError("ERR wrong number of arguments for 'lrange' command".to_string()));
+            return Err(ProtocolError::RespError(
+                "ERR wrong number of arguments for 'lrange' command".to_string(),
+            ));
         }
 
-        let key = args[0].as_string()
+        let key = args[0]
+            .as_string()
             .ok_or_else(|| ProtocolError::RespError("ERR invalid key".to_string()))?;
-        let start = args[1].as_integer()
+        let start = args[1]
+            .as_integer()
             .ok_or_else(|| ProtocolError::RespError("ERR invalid start index".to_string()))?;
-        let stop = args[2].as_integer()
+        let stop = args[2]
+            .as_integer()
             .ok_or_else(|| ProtocolError::RespError("ERR invalid stop index".to_string()))?;
 
         // TODO: Replace with actual OrbitClient list actor invocation
-        debug!("LRANGE {} {} {} (placeholder implementation)", key, start, stop);
+        debug!(
+            "LRANGE {} {} {} (placeholder implementation)",
+            key, start, stop
+        );
         Ok(RespValue::array(vec![])) // Empty list for now
     }
 
     async fn cmd_llen(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
         if args.len() != 1 {
-            return Err(ProtocolError::RespError("ERR wrong number of arguments for 'llen' command".to_string()));
+            return Err(ProtocolError::RespError(
+                "ERR wrong number of arguments for 'llen' command".to_string(),
+            ));
         }
 
-        let key = args[0].as_string()
+        let key = args[0]
+            .as_string()
             .ok_or_else(|| ProtocolError::RespError("ERR invalid key".to_string()))?;
 
         // TODO: Replace with actual OrbitClient list actor invocation
@@ -565,12 +689,16 @@ impl CommandHandler {
 
     async fn cmd_lindex(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
         if args.len() != 2 {
-            return Err(ProtocolError::RespError("ERR wrong number of arguments for 'lindex' command".to_string()));
+            return Err(ProtocolError::RespError(
+                "ERR wrong number of arguments for 'lindex' command".to_string(),
+            ));
         }
 
-        let key = args[0].as_string()
+        let key = args[0]
+            .as_string()
             .ok_or_else(|| ProtocolError::RespError("ERR invalid key".to_string()))?;
-        let index = args[1].as_integer()
+        let index = args[1]
+            .as_integer()
             .ok_or_else(|| ProtocolError::RespError("ERR invalid index".to_string()))?;
 
         // TODO: Replace with actual OrbitClient list actor invocation
@@ -582,37 +710,50 @@ impl CommandHandler {
 
     async fn cmd_publish(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
         if args.len() != 2 {
-            return Err(ProtocolError::RespError("ERR wrong number of arguments for 'publish' command".to_string()));
+            return Err(ProtocolError::RespError(
+                "ERR wrong number of arguments for 'publish' command".to_string(),
+            ));
         }
 
-        let channel = args[0].as_string()
+        let channel = args[0]
+            .as_string()
             .ok_or_else(|| ProtocolError::RespError("ERR invalid channel".to_string()))?;
-        let message = args[1].as_string()
+        let message = args[1]
+            .as_string()
             .ok_or_else(|| ProtocolError::RespError("ERR invalid message".to_string()))?;
 
         // Get PubSubActor reference
-        let actor_ref = self.orbit_client.actor_reference::<PubSubActor>(
-            Key::StringKey { key: channel.clone() }
-        ).await.map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+        let actor_ref = self
+            .orbit_client
+            .actor_reference::<PubSubActor>(Key::StringKey {
+                key: channel.clone(),
+            })
+            .await
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
 
         // Invoke publish method on the actor
-        let subscriber_count: i64 = actor_ref.invoke("publish", vec![message.clone().into()])
-            .await.map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
-        
-        debug!("PUBLISH {} {} -> subscribers: {}", channel, message, subscriber_count);
+        let subscriber_count: i64 = actor_ref
+            .invoke("publish", vec![message.clone().into()])
+            .await
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+
+        debug!(
+            "PUBLISH {} {} -> subscribers: {}",
+            channel, message, subscriber_count
+        );
         Ok(RespValue::integer(subscriber_count))
     }
 
     async fn cmd_subscribe(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
         if args.is_empty() {
-            return Err(ProtocolError::RespError("ERR wrong number of arguments for 'subscribe' command".to_string()));
+            return Err(ProtocolError::RespError(
+                "ERR wrong number of arguments for 'subscribe' command".to_string(),
+            ));
         }
 
         // TODO: Implement subscription logic with pub/sub actor
         // This requires connection state management
-        let channels: Vec<_> = args.iter()
-            .filter_map(|arg| arg.as_string())
-            .collect();
+        let channels: Vec<_> = args.iter().filter_map(|arg| arg.as_string()).collect();
 
         debug!("SUBSCRIBE {:?} (placeholder implementation)", channels);
         Ok(RespValue::array(vec![
@@ -634,7 +775,9 @@ impl CommandHandler {
 
     async fn cmd_psubscribe(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
         if args.is_empty() {
-            return Err(ProtocolError::RespError("ERR wrong number of arguments for 'psubscribe' command".to_string()));
+            return Err(ProtocolError::RespError(
+                "ERR wrong number of arguments for 'psubscribe' command".to_string(),
+            ));
         }
 
         // TODO: Implement pattern subscription logic
@@ -737,45 +880,128 @@ impl CommandHandler {
         // Return list of supported commands
         let commands = vec![
             // Connection
-            vec![RespValue::bulk_string_from_str("ping"), RespValue::integer(-1), RespValue::integer(1), RespValue::integer(0), RespValue::integer(0)],
-            vec![RespValue::bulk_string_from_str("echo"), RespValue::integer(2), RespValue::integer(1), RespValue::integer(1), RespValue::integer(1)],
-            vec![RespValue::bulk_string_from_str("select"), RespValue::integer(2), RespValue::integer(1), RespValue::integer(1), RespValue::integer(1)],
+            vec![
+                RespValue::bulk_string_from_str("ping"),
+                RespValue::integer(-1),
+                RespValue::integer(1),
+                RespValue::integer(0),
+                RespValue::integer(0),
+            ],
+            vec![
+                RespValue::bulk_string_from_str("echo"),
+                RespValue::integer(2),
+                RespValue::integer(1),
+                RespValue::integer(1),
+                RespValue::integer(1),
+            ],
+            vec![
+                RespValue::bulk_string_from_str("select"),
+                RespValue::integer(2),
+                RespValue::integer(1),
+                RespValue::integer(1),
+                RespValue::integer(1),
+            ],
             // String
-            vec![RespValue::bulk_string_from_str("get"), RespValue::integer(2), RespValue::integer(1), RespValue::integer(1), RespValue::integer(1)],
-            vec![RespValue::bulk_string_from_str("set"), RespValue::integer(-3), RespValue::integer(1), RespValue::integer(1), RespValue::integer(1)],
-            vec![RespValue::bulk_string_from_str("del"), RespValue::integer(-2), RespValue::integer(1), RespValue::integer(-1), RespValue::integer(1)],
-            vec![RespValue::bulk_string_from_str("exists"), RespValue::integer(-2), RespValue::integer(1), RespValue::integer(-1), RespValue::integer(1)],
-            vec![RespValue::bulk_string_from_str("ttl"), RespValue::integer(2), RespValue::integer(1), RespValue::integer(1), RespValue::integer(1)],
-            vec![RespValue::bulk_string_from_str("expire"), RespValue::integer(3), RespValue::integer(1), RespValue::integer(1), RespValue::integer(1)],
-            vec![RespValue::bulk_string_from_str("keys"), RespValue::integer(2), RespValue::integer(0), RespValue::integer(0), RespValue::integer(0)],
+            vec![
+                RespValue::bulk_string_from_str("get"),
+                RespValue::integer(2),
+                RespValue::integer(1),
+                RespValue::integer(1),
+                RespValue::integer(1),
+            ],
+            vec![
+                RespValue::bulk_string_from_str("set"),
+                RespValue::integer(-3),
+                RespValue::integer(1),
+                RespValue::integer(1),
+                RespValue::integer(1),
+            ],
+            vec![
+                RespValue::bulk_string_from_str("del"),
+                RespValue::integer(-2),
+                RespValue::integer(1),
+                RespValue::integer(-1),
+                RespValue::integer(1),
+            ],
+            vec![
+                RespValue::bulk_string_from_str("exists"),
+                RespValue::integer(-2),
+                RespValue::integer(1),
+                RespValue::integer(-1),
+                RespValue::integer(1),
+            ],
+            vec![
+                RespValue::bulk_string_from_str("ttl"),
+                RespValue::integer(2),
+                RespValue::integer(1),
+                RespValue::integer(1),
+                RespValue::integer(1),
+            ],
+            vec![
+                RespValue::bulk_string_from_str("expire"),
+                RespValue::integer(3),
+                RespValue::integer(1),
+                RespValue::integer(1),
+                RespValue::integer(1),
+            ],
+            vec![
+                RespValue::bulk_string_from_str("keys"),
+                RespValue::integer(2),
+                RespValue::integer(0),
+                RespValue::integer(0),
+                RespValue::integer(0),
+            ],
             // Server
-            vec![RespValue::bulk_string_from_str("info"), RespValue::integer(-1), RespValue::integer(0), RespValue::integer(0), RespValue::integer(0)],
-            vec![RespValue::bulk_string_from_str("dbsize"), RespValue::integer(1), RespValue::integer(0), RespValue::integer(0), RespValue::integer(0)],
-            vec![RespValue::bulk_string_from_str("command"), RespValue::integer(-1), RespValue::integer(0), RespValue::integer(0), RespValue::integer(0)],
+            vec![
+                RespValue::bulk_string_from_str("info"),
+                RespValue::integer(-1),
+                RespValue::integer(0),
+                RespValue::integer(0),
+                RespValue::integer(0),
+            ],
+            vec![
+                RespValue::bulk_string_from_str("dbsize"),
+                RespValue::integer(1),
+                RespValue::integer(0),
+                RespValue::integer(0),
+                RespValue::integer(0),
+            ],
+            vec![
+                RespValue::bulk_string_from_str("command"),
+                RespValue::integer(-1),
+                RespValue::integer(0),
+                RespValue::integer(0),
+                RespValue::integer(0),
+            ],
         ];
 
-        Ok(RespValue::array(commands.into_iter().map(RespValue::array).collect()))
+        Ok(RespValue::array(
+            commands.into_iter().map(RespValue::array).collect(),
+        ))
     }
 
     // Vector commands (Redis vector similarity search)
 
     async fn cmd_ft_create(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
         if args.len() < 3 {
-            return Err(ProtocolError::RespError("ERR wrong number of arguments for 'FT.CREATE' command".to_string()));
+            return Err(ProtocolError::RespError(
+                "ERR wrong number of arguments for 'FT.CREATE' command".to_string(),
+            ));
         }
 
-        let index_name = args[0].as_string()
+        let index_name = args[0]
+            .as_string()
             .ok_or_else(|| ProtocolError::RespError("ERR invalid index name".to_string()))?;
-        
+
         // Parse vector index schema
         let mut dimension = None;
         let mut metric = SimilarityMetric::Cosine;
-        
+
         for i in (1..args.len()).step_by(2) {
             if i + 1 < args.len() {
                 let key = args[i].as_string().unwrap_or_default();
                 let value = args[i + 1].as_string().unwrap_or_default();
-                
+
                 match key.as_str() {
                     "DIM" => {
                         dimension = value.parse::<usize>().ok();
@@ -792,37 +1018,51 @@ impl CommandHandler {
                 }
             }
         }
-        
+
         let dimension = dimension.ok_or_else(|| {
             ProtocolError::RespError("ERR vector dimension is required".to_string())
         })?;
 
         // Get VectorActor reference
-        let actor_ref = self.orbit_client.actor_reference::<VectorActor>(
-            Key::StringKey { key: index_name.clone() }
-        ).await.map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+        let actor_ref = self
+            .orbit_client
+            .actor_reference::<VectorActor>(Key::StringKey {
+                key: index_name.clone(),
+            })
+            .await
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
 
         // Create vector index
         let config = VectorIndexConfig::new(index_name.clone(), dimension, metric);
         let config_value = serde_json::to_value(config)
             .map_err(|e| ProtocolError::RespError(format!("ERR serialization failed: {}", e)))?;
-        actor_ref.invoke::<()>("create_index", vec![config_value])
-            .await.map_err(|e| ProtocolError::RespError(format!("ERR index creation failed: {}", e)))?;
+        actor_ref
+            .invoke::<()>("create_index", vec![config_value])
+            .await
+            .map_err(|e| ProtocolError::RespError(format!("ERR index creation failed: {}", e)))?;
 
-        debug!("FT.CREATE {} DIM {} METRIC {:?}", index_name, dimension, metric);
+        debug!(
+            "FT.CREATE {} DIM {} METRIC {:?}",
+            index_name, dimension, metric
+        );
         Ok(RespValue::ok())
     }
 
     async fn cmd_ft_add(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
         if args.len() < 3 {
-            return Err(ProtocolError::RespError("ERR wrong number of arguments for 'FT.ADD' command".to_string()));
+            return Err(ProtocolError::RespError(
+                "ERR wrong number of arguments for 'FT.ADD' command".to_string(),
+            ));
         }
 
-        let index_name = args[0].as_string()
+        let index_name = args[0]
+            .as_string()
             .ok_or_else(|| ProtocolError::RespError("ERR invalid index name".to_string()))?;
-        let vector_id = args[1].as_string()
+        let vector_id = args[1]
+            .as_string()
             .ok_or_else(|| ProtocolError::RespError("ERR invalid vector ID".to_string()))?;
-        let vector_data_str = args[2].as_string()
+        let vector_data_str = args[2]
+            .as_string()
             .ok_or_else(|| ProtocolError::RespError("ERR invalid vector data".to_string()))?;
 
         // Parse vector data from comma-separated string
@@ -830,9 +1070,11 @@ impl CommandHandler {
             .split(',')
             .map(|s| s.trim().parse::<f32>())
             .collect();
-        
+
         let vector_data = vector_data.map_err(|_| {
-            ProtocolError::RespError("ERR invalid vector format, expected comma-separated floats".to_string())
+            ProtocolError::RespError(
+                "ERR invalid vector format, expected comma-separated floats".to_string(),
+            )
         })?;
 
         // Parse optional metadata
@@ -852,28 +1094,43 @@ impl CommandHandler {
         };
 
         // Get VectorActor reference
-        let actor_ref = self.orbit_client.actor_reference::<VectorActor>(
-            Key::StringKey { key: index_name.clone() }
-        ).await.map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+        let actor_ref = self
+            .orbit_client
+            .actor_reference::<VectorActor>(Key::StringKey {
+                key: index_name.clone(),
+            })
+            .await
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
 
         // Add vector to index
         let vector_value = serde_json::to_value(vector)
             .map_err(|e| ProtocolError::RespError(format!("ERR serialization failed: {}", e)))?;
-        actor_ref.invoke::<()>("add_vector", vec![vector_value])
-            .await.map_err(|e| ProtocolError::RespError(format!("ERR vector add failed: {}", e)))?;
+        actor_ref
+            .invoke::<()>("add_vector", vec![vector_value])
+            .await
+            .map_err(|e| ProtocolError::RespError(format!("ERR vector add failed: {}", e)))?;
 
-        debug!("FT.ADD {} {} (dim: {})", index_name, vector_id, vector_data_str.split(',').count());
+        debug!(
+            "FT.ADD {} {} (dim: {})",
+            index_name,
+            vector_id,
+            vector_data_str.split(',').count()
+        );
         Ok(RespValue::ok())
     }
 
     async fn cmd_ft_search(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
         if args.len() < 3 {
-            return Err(ProtocolError::RespError("ERR wrong number of arguments for 'FT.SEARCH' command".to_string()));
+            return Err(ProtocolError::RespError(
+                "ERR wrong number of arguments for 'FT.SEARCH' command".to_string(),
+            ));
         }
 
-        let index_name = args[0].as_string()
+        let index_name = args[0]
+            .as_string()
             .ok_or_else(|| ProtocolError::RespError("ERR invalid index name".to_string()))?;
-        let query_vector_str = args[1].as_string()
+        let query_vector_str = args[1]
+            .as_string()
             .ok_or_else(|| ProtocolError::RespError("ERR invalid query vector".to_string()))?;
         let limit = args[2].as_integer().unwrap_or(10) as usize;
 
@@ -882,20 +1139,19 @@ impl CommandHandler {
             .split(',')
             .map(|s| s.trim().parse::<f32>())
             .collect();
-        
-        let query_vector = query_vector.map_err(|_| {
-            ProtocolError::RespError("ERR invalid query vector format".to_string())
-        })?;
+
+        let query_vector = query_vector
+            .map_err(|_| ProtocolError::RespError("ERR invalid query vector format".to_string()))?;
 
         // Parse optional parameters
         let mut metric = SimilarityMetric::Cosine;
         let mut threshold = None;
-        
+
         for i in (3..args.len()).step_by(2) {
             if i + 1 < args.len() {
                 let key = args[i].as_string().unwrap_or_default().to_uppercase();
                 let value = args[i + 1].as_string().unwrap_or_default();
-                
+
                 match key.as_str() {
                     "DISTANCE_METRIC" => {
                         metric = match value.as_str() {
@@ -922,27 +1178,36 @@ impl CommandHandler {
         };
 
         // Get VectorActor reference
-        let actor_ref = self.orbit_client.actor_reference::<VectorActor>(
-            Key::StringKey { key: index_name.clone() }
-        ).await.map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+        let actor_ref = self
+            .orbit_client
+            .actor_reference::<VectorActor>(Key::StringKey {
+                key: index_name.clone(),
+            })
+            .await
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
 
         // Search vectors
         let params_value = serde_json::to_value(params)
             .map_err(|e| ProtocolError::RespError(format!("ERR serialization failed: {}", e)))?;
-        let results: Vec<crate::vector_store::VectorSearchResult> = actor_ref.invoke("search_vectors", vec![params_value])
-            .await.map_err(|e| ProtocolError::RespError(format!("ERR search failed: {}", e)))?;
+        let results: Vec<crate::vector_store::VectorSearchResult> = actor_ref
+            .invoke("search_vectors", vec![params_value])
+            .await
+            .map_err(|e| ProtocolError::RespError(format!("ERR search failed: {}", e)))?;
 
         // Format results as RESP array
         let mut response = Vec::new();
         response.push(RespValue::integer(results.len() as i64));
-        
+
         let result_count = results.len();
         for result in results {
-            let vector_data = result.vector.data.iter()
+            let vector_data = result
+                .vector
+                .data
+                .iter()
                 .map(|f| f.to_string())
                 .collect::<Vec<_>>()
                 .join(",");
-            
+
             response.push(RespValue::array(vec![
                 RespValue::bulk_string_from_str(&result.vector.id),
                 RespValue::bulk_string_from_str(&format!("{:.6}", result.score)),
@@ -956,20 +1221,30 @@ impl CommandHandler {
 
     async fn cmd_ft_info(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
         if args.is_empty() {
-            return Err(ProtocolError::RespError("ERR wrong number of arguments for 'FT.INFO' command".to_string()));
+            return Err(ProtocolError::RespError(
+                "ERR wrong number of arguments for 'FT.INFO' command".to_string(),
+            ));
         }
 
-        let index_name = args[0].as_string()
+        let index_name = args[0]
+            .as_string()
             .ok_or_else(|| ProtocolError::RespError("ERR invalid index name".to_string()))?;
 
         // Get VectorActor reference
-        let actor_ref = self.orbit_client.actor_reference::<VectorActor>(
-            Key::StringKey { key: index_name.clone() }
-        ).await.map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+        let actor_ref = self
+            .orbit_client
+            .actor_reference::<VectorActor>(Key::StringKey {
+                key: index_name.clone(),
+            })
+            .await
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
 
         // Get vector store statistics
-        let stats: crate::vector_store::VectorStats = actor_ref.invoke("get_stats", vec![])
-            .await.map_err(|e| ProtocolError::RespError(format!("ERR info failed: {}", e)))?;
+        let stats: crate::vector_store::VectorStats =
+            actor_ref
+                .invoke("get_stats", vec![])
+                .await
+                .map_err(|e| ProtocolError::RespError(format!("ERR info failed: {}", e)))?;
 
         let info = vec![
             RespValue::bulk_string_from_str("index_name"),
@@ -992,22 +1267,32 @@ impl CommandHandler {
 
     async fn cmd_ft_del(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
         if args.len() != 2 {
-            return Err(ProtocolError::RespError("ERR wrong number of arguments for 'FT.DEL' command".to_string()));
+            return Err(ProtocolError::RespError(
+                "ERR wrong number of arguments for 'FT.DEL' command".to_string(),
+            ));
         }
 
-        let index_name = args[0].as_string()
+        let index_name = args[0]
+            .as_string()
             .ok_or_else(|| ProtocolError::RespError("ERR invalid index name".to_string()))?;
-        let vector_id = args[1].as_string()
+        let vector_id = args[1]
+            .as_string()
             .ok_or_else(|| ProtocolError::RespError("ERR invalid vector ID".to_string()))?;
 
         // Get VectorActor reference
-        let actor_ref = self.orbit_client.actor_reference::<VectorActor>(
-            Key::StringKey { key: index_name.clone() }
-        ).await.map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+        let actor_ref = self
+            .orbit_client
+            .actor_reference::<VectorActor>(Key::StringKey {
+                key: index_name.clone(),
+            })
+            .await
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
 
         // Remove vector
-        let removed: bool = actor_ref.invoke("remove_vector", vec![vector_id.clone().into()])
-            .await.map_err(|e| ProtocolError::RespError(format!("ERR vector delete failed: {}", e)))?;
+        let removed: bool = actor_ref
+            .invoke("remove_vector", vec![vector_id.clone().into()])
+            .await
+            .map_err(|e| ProtocolError::RespError(format!("ERR vector delete failed: {}", e)))?;
 
         debug!("FT.DEL {} {} -> {}", index_name, vector_id, removed);
         Ok(RespValue::integer(if removed { 1 } else { 0 }))
@@ -1018,14 +1303,19 @@ impl CommandHandler {
     async fn cmd_vector_add(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
         // VECTOR.ADD <key> <id> <vector>
         if args.len() != 3 {
-            return Err(ProtocolError::RespError("ERR wrong number of arguments for 'VECTOR.ADD' command".to_string()));
+            return Err(ProtocolError::RespError(
+                "ERR wrong number of arguments for 'VECTOR.ADD' command".to_string(),
+            ));
         }
 
-        let key = args[0].as_string()
+        let key = args[0]
+            .as_string()
             .ok_or_else(|| ProtocolError::RespError("ERR invalid key".to_string()))?;
-        let vector_id = args[1].as_string()
+        let vector_id = args[1]
+            .as_string()
             .ok_or_else(|| ProtocolError::RespError("ERR invalid vector ID".to_string()))?;
-        let vector_data_str = args[2].as_string()
+        let vector_data_str = args[2]
+            .as_string()
             .ok_or_else(|| ProtocolError::RespError("ERR invalid vector data".to_string()))?;
 
         // Parse vector data
@@ -1033,23 +1323,26 @@ impl CommandHandler {
             .split(',')
             .map(|s| s.trim().parse::<f32>())
             .collect();
-        
-        let vector_data = vector_data.map_err(|_| {
-            ProtocolError::RespError("ERR invalid vector format".to_string())
-        })?;
+
+        let vector_data = vector_data
+            .map_err(|_| ProtocolError::RespError("ERR invalid vector format".to_string()))?;
 
         let vector = Vector::new(vector_id.clone(), vector_data);
 
         // Get VectorActor reference
-        let actor_ref = self.orbit_client.actor_reference::<VectorActor>(
-            Key::StringKey { key: key.clone() }
-        ).await.map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+        let actor_ref = self
+            .orbit_client
+            .actor_reference::<VectorActor>(Key::StringKey { key: key.clone() })
+            .await
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
 
         // Add vector
         let vector_value = serde_json::to_value(vector)
             .map_err(|e| ProtocolError::RespError(format!("ERR serialization failed: {}", e)))?;
-        actor_ref.invoke::<()>("add_vector", vec![vector_value])
-            .await.map_err(|e| ProtocolError::RespError(format!("ERR vector add failed: {}", e)))?;
+        actor_ref
+            .invoke::<()>("add_vector", vec![vector_value])
+            .await
+            .map_err(|e| ProtocolError::RespError(format!("ERR vector add failed: {}", e)))?;
 
         debug!("VECTOR.ADD {} {}", key, vector_id);
         Ok(RespValue::ok())
@@ -1058,26 +1351,36 @@ impl CommandHandler {
     async fn cmd_vector_get(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
         // VECTOR.GET <key> <id>
         if args.len() != 2 {
-            return Err(ProtocolError::RespError("ERR wrong number of arguments for 'VECTOR.GET' command".to_string()));
+            return Err(ProtocolError::RespError(
+                "ERR wrong number of arguments for 'VECTOR.GET' command".to_string(),
+            ));
         }
 
-        let key = args[0].as_string()
+        let key = args[0]
+            .as_string()
             .ok_or_else(|| ProtocolError::RespError("ERR invalid key".to_string()))?;
-        let vector_id = args[1].as_string()
+        let vector_id = args[1]
+            .as_string()
             .ok_or_else(|| ProtocolError::RespError("ERR invalid vector ID".to_string()))?;
 
         // Get VectorActor reference
-        let actor_ref = self.orbit_client.actor_reference::<VectorActor>(
-            Key::StringKey { key: key.clone() }
-        ).await.map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+        let actor_ref = self
+            .orbit_client
+            .actor_reference::<VectorActor>(Key::StringKey { key: key.clone() })
+            .await
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
 
         // Get vector
-        let vector: Option<Vector> = actor_ref.invoke("get_vector", vec![vector_id.clone().into()])
-            .await.map_err(|e| ProtocolError::RespError(format!("ERR vector get failed: {}", e)))?;
+        let vector: Option<Vector> = actor_ref
+            .invoke("get_vector", vec![vector_id.clone().into()])
+            .await
+            .map_err(|e| ProtocolError::RespError(format!("ERR vector get failed: {}", e)))?;
 
         match vector {
             Some(v) => {
-                let vector_data = v.data.iter()
+                let vector_data = v
+                    .data
+                    .iter()
                     .map(|f| f.to_string())
                     .collect::<Vec<_>>()
                     .join(",");
@@ -1094,12 +1397,16 @@ impl CommandHandler {
     async fn cmd_vector_search(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
         // VECTOR.SEARCH <key> <query_vector> <limit>
         if args.len() < 3 {
-            return Err(ProtocolError::RespError("ERR wrong number of arguments for 'VECTOR.SEARCH' command".to_string()));
+            return Err(ProtocolError::RespError(
+                "ERR wrong number of arguments for 'VECTOR.SEARCH' command".to_string(),
+            ));
         }
 
-        let key = args[0].as_string()
+        let key = args[0]
+            .as_string()
             .ok_or_else(|| ProtocolError::RespError("ERR invalid key".to_string()))?;
-        let query_vector_str = args[1].as_string()
+        let query_vector_str = args[1]
+            .as_string()
             .ok_or_else(|| ProtocolError::RespError("ERR invalid query vector".to_string()))?;
         let limit = args[2].as_integer().unwrap_or(10) as usize;
 
@@ -1108,23 +1415,26 @@ impl CommandHandler {
             .split(',')
             .map(|s| s.trim().parse::<f32>())
             .collect();
-        
-        let query_vector = query_vector.map_err(|_| {
-            ProtocolError::RespError("ERR invalid query vector format".to_string())
-        })?;
+
+        let query_vector = query_vector
+            .map_err(|_| ProtocolError::RespError("ERR invalid query vector format".to_string()))?;
 
         let params = VectorSearchParams::new(query_vector, SimilarityMetric::Cosine, limit);
 
         // Get VectorActor reference
-        let actor_ref = self.orbit_client.actor_reference::<VectorActor>(
-            Key::StringKey { key: key.clone() }
-        ).await.map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+        let actor_ref = self
+            .orbit_client
+            .actor_reference::<VectorActor>(Key::StringKey { key: key.clone() })
+            .await
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
 
         // Search vectors
         let params_value = serde_json::to_value(params)
             .map_err(|e| ProtocolError::RespError(format!("ERR serialization failed: {}", e)))?;
-        let results: Vec<crate::vector_store::VectorSearchResult> = actor_ref.invoke("search_vectors", vec![params_value])
-            .await.map_err(|e| ProtocolError::RespError(format!("ERR search failed: {}", e)))?;
+        let results: Vec<crate::vector_store::VectorSearchResult> = actor_ref
+            .invoke("search_vectors", vec![params_value])
+            .await
+            .map_err(|e| ProtocolError::RespError(format!("ERR search failed: {}", e)))?;
 
         // Format results
         let mut response = Vec::new();
@@ -1142,12 +1452,16 @@ impl CommandHandler {
     async fn cmd_vector_knn(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
         // VECTOR.KNN <key> <query_vector> <k>
         if args.len() != 3 {
-            return Err(ProtocolError::RespError("ERR wrong number of arguments for 'VECTOR.KNN' command".to_string()));
+            return Err(ProtocolError::RespError(
+                "ERR wrong number of arguments for 'VECTOR.KNN' command".to_string(),
+            ));
         }
 
-        let key = args[0].as_string()
+        let key = args[0]
+            .as_string()
             .ok_or_else(|| ProtocolError::RespError("ERR invalid key".to_string()))?;
-        let query_vector_str = args[1].as_string()
+        let query_vector_str = args[1]
+            .as_string()
             .ok_or_else(|| ProtocolError::RespError("ERR invalid query vector".to_string()))?;
         let k = args[2].as_integer().unwrap_or(5) as usize;
 
@@ -1156,15 +1470,16 @@ impl CommandHandler {
             .split(',')
             .map(|s| s.trim().parse::<f32>())
             .collect();
-        
-        let query_vector = query_vector.map_err(|_| {
-            ProtocolError::RespError("ERR invalid query vector format".to_string())
-        })?;
+
+        let query_vector = query_vector
+            .map_err(|_| ProtocolError::RespError("ERR invalid query vector format".to_string()))?;
 
         // Get VectorActor reference
-        let actor_ref = self.orbit_client.actor_reference::<VectorActor>(
-            Key::StringKey { key: key.clone() }
-        ).await.map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+        let actor_ref = self
+            .orbit_client
+            .actor_reference::<VectorActor>(Key::StringKey { key: key.clone() })
+            .await
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
 
         // Perform KNN search
         let query_value = serde_json::to_value(query_vector)
@@ -1173,8 +1488,10 @@ impl CommandHandler {
             .map_err(|e| ProtocolError::RespError(format!("ERR serialization failed: {}", e)))?;
         let metric_value = serde_json::to_value(None::<SimilarityMetric>)
             .map_err(|e| ProtocolError::RespError(format!("ERR serialization failed: {}", e)))?;
-        let results: Vec<crate::vector_store::VectorSearchResult> = actor_ref.invoke("knn_search", vec![query_value, k_value, metric_value])
-            .await.map_err(|e| ProtocolError::RespError(format!("ERR KNN search failed: {}", e)))?;
+        let results: Vec<crate::vector_store::VectorSearchResult> = actor_ref
+            .invoke("knn_search", vec![query_value, k_value, metric_value])
+            .await
+            .map_err(|e| ProtocolError::RespError(format!("ERR KNN search failed: {}", e)))?;
 
         // Format results
         let mut response = Vec::new();
@@ -1185,29 +1502,42 @@ impl CommandHandler {
             ]));
         }
 
-        debug!("VECTOR.KNN {} k={} (found {} results)", key, k, response.len());
+        debug!(
+            "VECTOR.KNN {} k={} (found {} results)",
+            key,
+            k,
+            response.len()
+        );
         Ok(RespValue::array(response))
     }
 
     async fn cmd_vector_del(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
         // VECTOR.DEL <key> <id>
         if args.len() != 2 {
-            return Err(ProtocolError::RespError("ERR wrong number of arguments for 'VECTOR.DEL' command".to_string()));
+            return Err(ProtocolError::RespError(
+                "ERR wrong number of arguments for 'VECTOR.DEL' command".to_string(),
+            ));
         }
 
-        let key = args[0].as_string()
+        let key = args[0]
+            .as_string()
             .ok_or_else(|| ProtocolError::RespError("ERR invalid key".to_string()))?;
-        let vector_id = args[1].as_string()
+        let vector_id = args[1]
+            .as_string()
             .ok_or_else(|| ProtocolError::RespError("ERR invalid vector ID".to_string()))?;
 
         // Get VectorActor reference
-        let actor_ref = self.orbit_client.actor_reference::<VectorActor>(
-            Key::StringKey { key: key.clone() }
-        ).await.map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+        let actor_ref = self
+            .orbit_client
+            .actor_reference::<VectorActor>(Key::StringKey { key: key.clone() })
+            .await
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
 
         // Remove vector
-        let removed: bool = actor_ref.invoke("remove_vector", vec![vector_id.clone().into()])
-            .await.map_err(|e| ProtocolError::RespError(format!("ERR vector delete failed: {}", e)))?;
+        let removed: bool = actor_ref
+            .invoke("remove_vector", vec![vector_id.clone().into()])
+            .await
+            .map_err(|e| ProtocolError::RespError(format!("ERR vector delete failed: {}", e)))?;
 
         debug!("VECTOR.DEL {} {} -> {}", key, vector_id, removed);
         Ok(RespValue::integer(if removed { 1 } else { 0 }))
@@ -1216,20 +1546,28 @@ impl CommandHandler {
     async fn cmd_vector_stats(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
         // VECTOR.STATS <key>
         if args.len() != 1 {
-            return Err(ProtocolError::RespError("ERR wrong number of arguments for 'VECTOR.STATS' command".to_string()));
+            return Err(ProtocolError::RespError(
+                "ERR wrong number of arguments for 'VECTOR.STATS' command".to_string(),
+            ));
         }
 
-        let key = args[0].as_string()
+        let key = args[0]
+            .as_string()
             .ok_or_else(|| ProtocolError::RespError("ERR invalid key".to_string()))?;
 
         // Get VectorActor reference
-        let actor_ref = self.orbit_client.actor_reference::<VectorActor>(
-            Key::StringKey { key: key.clone() }
-        ).await.map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+        let actor_ref = self
+            .orbit_client
+            .actor_reference::<VectorActor>(Key::StringKey { key: key.clone() })
+            .await
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
 
         // Get statistics
-        let stats: crate::vector_store::VectorStats = actor_ref.invoke("get_stats", vec![])
-            .await.map_err(|e| ProtocolError::RespError(format!("ERR stats failed: {}", e)))?;
+        let stats: crate::vector_store::VectorStats =
+            actor_ref
+                .invoke("get_stats", vec![])
+                .await
+                .map_err(|e| ProtocolError::RespError(format!("ERR stats failed: {}", e)))?;
 
         let info = vec![
             RespValue::bulk_string_from_str("vector_count"),
