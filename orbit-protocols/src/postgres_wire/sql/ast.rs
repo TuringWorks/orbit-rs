@@ -547,6 +547,15 @@ pub enum BinaryOperator {
     // Pattern matching
     Match, NotMatch,
     
+    // Null tests
+    Is, IsNot,
+    
+    // Set operations
+    In, NotIn,
+    
+    // Vector operations  
+    VectorDistance, VectorInnerProduct, VectorCosineDistance,
+    
     // Bitwise
     BitwiseAnd, BitwiseOr, BitwiseXor,
     LeftShift, RightShift,

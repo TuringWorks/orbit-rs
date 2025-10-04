@@ -20,6 +20,10 @@ pub enum ProtocolError {
     #[error("Cypher query error: {0}")]
     CypherError(String),
 
+    /// SQL parsing error
+    #[error("SQL parse error: {0}")]
+    ParseError(String),
+
     /// REST API error
     #[error("REST API error: {0}")]
     RestError(String),

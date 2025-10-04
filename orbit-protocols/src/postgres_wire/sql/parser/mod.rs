@@ -255,57 +255,27 @@ impl SqlParser {
     }
     
     fn parse_grant_statement(&mut self) -> ParseResult<Statement> {
-        Err(ParseError {
-            message: "GRANT statement parsing not yet implemented".to_string(),
-            position: self.position,
-            expected: vec![],
-            found: self.current_token.clone(),
-        })
+        dcl::parse_grant(self)
     }
     
     fn parse_revoke_statement(&mut self) -> ParseResult<Statement> {
-        Err(ParseError {
-            message: "REVOKE statement parsing not yet implemented".to_string(),
-            position: self.position,
-            expected: vec![],
-            found: self.current_token.clone(),
-        })
+        dcl::parse_revoke(self)
     }
     
     fn parse_begin_statement(&mut self) -> ParseResult<Statement> {
-        Err(ParseError {
-            message: "BEGIN statement parsing not yet implemented".to_string(),
-            position: self.position,
-            expected: vec![],
-            found: self.current_token.clone(),
-        })
+        tcl::parse_begin(self)
     }
     
     fn parse_commit_statement(&mut self) -> ParseResult<Statement> {
-        Err(ParseError {
-            message: "COMMIT statement parsing not yet implemented".to_string(),
-            position: self.position,
-            expected: vec![],
-            found: self.current_token.clone(),
-        })
+        tcl::parse_commit(self)
     }
     
     fn parse_rollback_statement(&mut self) -> ParseResult<Statement> {
-        Err(ParseError {
-            message: "ROLLBACK statement parsing not yet implemented".to_string(),
-            position: self.position,
-            expected: vec![],
-            found: self.current_token.clone(),
-        })
+        tcl::parse_rollback(self)
     }
     
     fn parse_savepoint_statement(&mut self) -> ParseResult<Statement> {
-        Err(ParseError {
-            message: "SAVEPOINT statement parsing not yet implemented".to_string(),
-            position: self.position,
-            expected: vec![],
-            found: self.current_token.clone(),
-        })
+        tcl::parse_savepoint(self)
     }
 }
 

@@ -25,11 +25,21 @@ pub enum Token {
     Grant, Revoke, Begin, Commit, Rollback, Savepoint,
     Transaction, Isolation, Level, Read, Write, Only,
     Uncommitted, Committed, Repeatable, Serializable,
+    To, Option, For, Restrict, Public, Execute, Usage,
+    Function, Sequence, Database, Work, No, Chain, Release,
     
     // Keywords - Functions and operators
     Case, When, Then, Else, End, In, Between, Like, ILike, Similar,
     Is, Not, And, Or, Exists, Any, Some,
     Cast, As, If, Replace,
+    
+    // Aggregate Functions
+    Count, Sum, Avg, Min, Max,
+    
+    // Window Functions
+    Over, Partition, RowNumber, Rank, DenseRank, PercentRank, CumeDist,
+    Ntile, Lag, Lead, FirstValue, LastValue, NthValue,
+    Rows, Range, Unbounded, Preceding, Following, CurrentRow,
     
     // Keywords - Data types
     Boolean, SmallInt, Integer, BigInt, Decimal, Numeric, Real, DoublePrecision,
@@ -181,6 +191,20 @@ impl Lexer {
             ("COMMITTED", Token::Committed),
             ("REPEATABLE", Token::Repeatable),
             ("SERIALIZABLE", Token::Serializable),
+            ("TO", Token::To),
+            ("OPTION", Token::Option),
+            ("FOR", Token::For),
+            ("RESTRICT", Token::Restrict),
+            ("PUBLIC", Token::Public),
+            ("EXECUTE", Token::Execute),
+            ("USAGE", Token::Usage),
+            ("FUNCTION", Token::Function),
+            ("SEQUENCE", Token::Sequence),
+            ("DATABASE", Token::Database),
+            ("WORK", Token::Work),
+            ("NO", Token::No),
+            ("CHAIN", Token::Chain),
+            ("RELEASE", Token::Release),
             
             // Expression Keywords
             ("CASE", Token::Case),
@@ -204,6 +228,34 @@ impl Lexer {
             ("AS", Token::As),
             ("IF", Token::If),
             ("REPLACE", Token::Replace),
+            
+            // Aggregate Functions
+            ("COUNT", Token::Count),
+            ("SUM", Token::Sum),
+            ("AVG", Token::Avg),
+            ("MIN", Token::Min),
+            ("MAX", Token::Max),
+            
+            // Window Functions
+            ("OVER", Token::Over),
+            ("PARTITION", Token::Partition),
+            ("ROW_NUMBER", Token::RowNumber),
+            ("RANK", Token::Rank),
+            ("DENSE_RANK", Token::DenseRank),
+            ("PERCENT_RANK", Token::PercentRank),
+            ("CUME_DIST", Token::CumeDist),
+            ("NTILE", Token::Ntile),
+            ("LAG", Token::Lag),
+            ("LEAD", Token::Lead),
+            ("FIRST_VALUE", Token::FirstValue),
+            ("LAST_VALUE", Token::LastValue),
+            ("NTH_VALUE", Token::NthValue),
+            ("ROWS", Token::Rows),
+            ("RANGE", Token::Range),
+            ("UNBOUNDED", Token::Unbounded),
+            ("PRECEDING", Token::Preceding),
+            ("FOLLOWING", Token::Following),
+            ("CURRENT", Token::CurrentRow),
             
             // Data Types
             ("BOOLEAN", Token::Boolean),

@@ -27,7 +27,7 @@ impl ExpressionParser {
             if matches!(tokens[*pos], Token::Or) {
                 *pos += 1;
                 let right = self.parse_and_expression(tokens, pos)?;
-                left = Expression::BinaryOp {
+                left = Expression::Binary {
                     left: Box::new(left),
                     operator: BinaryOperator::Or,
                     right: Box::new(right),
@@ -48,7 +48,7 @@ impl ExpressionParser {
             if matches!(tokens[*pos], Token::And) {
                 *pos += 1;
                 let right = self.parse_equality_expression(tokens, pos)?;
-                left = Expression::BinaryOp {
+                left = Expression::Binary {
                     left: Box::new(left),
                     operator: BinaryOperator::And,
                     right: Box::new(right),
@@ -86,7 +86,7 @@ impl ExpressionParser {
             }
             
             let right = self.parse_comparison_expression(tokens, pos)?;
-            left = Expression::BinaryOp {
+            left = Expression::Binary {
                 left: Box::new(left),
                 operator,
                 right: Box::new(right),
@@ -117,7 +117,7 @@ impl ExpressionParser {
             
             *pos += 1;
             let right = self.parse_additive_expression(tokens, pos)?;
-            left = Expression::BinaryOp {
+            left = Expression::Binary {
                 left: Box::new(left),
                 operator,
                 right: Box::new(right),
@@ -141,7 +141,7 @@ impl ExpressionParser {
             
             *pos += 1;
             let right = self.parse_multiplicative_expression(tokens, pos)?;
-            left = Expression::BinaryOp {
+            left = Expression::Binary {
                 left: Box::new(left),
                 operator,
                 right: Box::new(right),
@@ -165,7 +165,7 @@ impl ExpressionParser {
             
             *pos += 1;
             let right = self.parse_unary_expression(tokens, pos)?;
-            left = Expression::BinaryOp {
+            left = Expression::Binary {
                 left: Box::new(left),
                 operator,
                 right: Box::new(right),
@@ -185,7 +185,7 @@ impl ExpressionParser {
             Token::Not => {
                 *pos += 1;
                 let expr = self.parse_unary_expression(tokens, pos)?;
-                Ok(Expression::UnaryOp {
+                Ok(Expression::Unary {
                     operator: UnaryOperator::Not,
                     operand: Box::new(expr),
                 })
@@ -193,7 +193,7 @@ impl ExpressionParser {
             Token::Minus => {
                 *pos += 1;
                 let expr = self.parse_unary_expression(tokens, pos)?;
-                Ok(Expression::UnaryOp {
+                Ok(Expression::Unary {
                     operator: UnaryOperator::Minus,
                     operand: Box::new(expr),
                 })
@@ -201,7 +201,7 @@ impl ExpressionParser {
             Token::Plus => {
                 *pos += 1;
                 let expr = self.parse_unary_expression(tokens, pos)?;
-                Ok(Expression::UnaryOp {
+                Ok(Expression::Unary {
                     operator: UnaryOperator::Plus,
                     operand: Box::new(expr),
                 })
@@ -219,58 +219,60 @@ impl ExpressionParser {
         match &tokens[*pos] {
             Token::StringLiteral(s) => {
                 *pos += 1;
-                Ok(Expression::Literal(Literal::String(s.clone())))
+                Ok(Expression::Literal(crate::postgres_wire::sql::types::SqlValue::Text(s.clone())))
             }
             Token::NumericLiteral(n) => {
                 *pos += 1;
-                Ok(Expression::Literal(Literal::Number(n.clone())))
+                // Try to parse as integer first, then as decimal
+                if let Ok(i) = n.parse::<i32>() {
+                    Ok(Expression::Literal(crate::postgres_wire::sql::types::SqlValue::Integer(i)))
+                } else if let Ok(f) = n.parse::<f64>() {
+                    Ok(Expression::Literal(crate::postgres_wire::sql::types::SqlValue::DoublePrecision(f)))
+                } else {
+                    Ok(Expression::Literal(crate::postgres_wire::sql::types::SqlValue::Text(n.clone())))
+                }
             }
             Token::BooleanLiteral(b) => {
                 *pos += 1;
-                Ok(Expression::Literal(Literal::Boolean(*b)))
+                Ok(Expression::Literal(crate::postgres_wire::sql::types::SqlValue::Boolean(*b)))
             }
             Token::Null => {
                 *pos += 1;
-                Ok(Expression::Literal(Literal::Null))
+                Ok(Expression::Literal(crate::postgres_wire::sql::types::SqlValue::Null))
             }
             Token::Identifier(name) => {
-                *pos += 1;
-                
                 // Check for function call
-                if *pos < tokens.len() && matches!(tokens[*pos], Token::LeftParen) {
-                    *pos += 1; // consume '('
-                    
-                    let mut args = Vec::new();
-                    
-                    // Parse arguments
-                    if *pos < tokens.len() && !matches!(tokens[*pos], Token::RightParen) {
-                        loop {
-                            args.push(self.parse_expression(tokens, pos)?);
-                            
-                            if *pos < tokens.len() && matches!(tokens[*pos], Token::Comma) {
-                                *pos += 1; // consume ','
-                            } else {
-                                break;
-                            }
-                        }
-                    }
-                    
-                    if *pos >= tokens.len() || !matches!(tokens[*pos], Token::RightParen) {
-                        return Err(crate::error::ProtocolError::ParseError("Expected ')' after function arguments".to_string()).into());
-                    }
-                    *pos += 1; // consume ')'
-                    
-                    Ok(Expression::FunctionCall {
-                        name: name.clone(),
-                        args,
-                    })
+                if *pos + 1 < tokens.len() && matches!(tokens[*pos + 1], Token::LeftParen) {
+                    self.parse_function_call(tokens, pos, name.clone())
                 } else {
-                    // Regular column reference
-                    Ok(Expression::Identifier {
+                    *pos += 1;
+                    // Regular column reference  
+                    Ok(Expression::Column(crate::postgres_wire::sql::ast::ColumnRef {
                         table: None,
-                        column: name.clone(),
-                    })
+                        name: name.clone(),
+                    }))
                 }
+            }
+            
+            // Handle aggregate function keywords
+            Token::Count | Token::Sum | Token::Avg | Token::Min | Token::Max => {
+                let func_name = match &tokens[*pos] {
+                    Token::Count => "COUNT".to_string(),
+                    Token::Sum => "SUM".to_string(),
+                    Token::Avg => "AVG".to_string(),
+                    Token::Min => "MIN".to_string(),
+                    Token::Max => "MAX".to_string(),
+                    _ => unreachable!(),
+                };
+                self.parse_function_call(tokens, pos, func_name)
+            }
+            
+            // Handle window function keywords
+            Token::RowNumber | Token::Rank | Token::DenseRank | Token::PercentRank | 
+            Token::CumeDist | Token::Ntile | Token::Lag | Token::Lead | 
+            Token::FirstValue | Token::LastValue | Token::NthValue => {
+                self.parse_window_function(tokens, pos)
+            }
             }
             Token::LeftParen => {
                 *pos += 1; // consume '('
@@ -285,6 +287,407 @@ impl ExpressionParser {
             }
             _ => Err(crate::error::ProtocolError::ParseError(format!("Unexpected token in expression: {:?}", tokens[*pos])).into()),
         }
+    }
+    
+    /// Parse a function call with proper DISTINCT and FILTER support
+    fn parse_function_call(&mut self, tokens: &[Token], pos: &mut usize, func_name: String) -> ProtocolResult<Expression> {
+        *pos += 1; // consume function name
+        
+        if *pos >= tokens.len() || !matches!(tokens[*pos], Token::LeftParen) {
+            return Err(crate::error::ProtocolError::ParseError("Expected '(' after function name".to_string()).into());
+        }
+        *pos += 1; // consume '('
+        
+        // Check for DISTINCT/ALL
+        let distinct = if *pos < tokens.len() && matches!(tokens[*pos], Token::Distinct) {
+            *pos += 1;
+            true
+        } else if *pos < tokens.len() && matches!(tokens[*pos], Token::All) {
+            *pos += 1;
+            false
+        } else {
+            false
+        };
+        
+        let mut args = Vec::new();
+        
+        // Parse arguments
+        if *pos < tokens.len() && !matches!(tokens[*pos], Token::RightParen) {
+            loop {
+                // Handle special case for COUNT(*)
+                if func_name.to_uppercase() == "COUNT" && matches!(tokens[*pos], Token::Multiply) {
+                    *pos += 1;
+                    args.push(Expression::Column(ColumnRef {
+                        table: None,
+                        name: "*".to_string(),
+                    }));
+                } else {
+                    args.push(self.parse_expression(tokens, pos)?);
+                }
+                
+                if *pos < tokens.len() && matches!(tokens[*pos], Token::Comma) {
+                    *pos += 1; // consume ','
+                } else {
+                    break;
+                }
+            }
+        }
+        
+        if *pos >= tokens.len() || !matches!(tokens[*pos], Token::RightParen) {
+            return Err(crate::error::ProtocolError::ParseError("Expected ')' after function arguments".to_string()).into());
+        }
+        *pos += 1; // consume ')'
+        
+        // Parse optional ORDER BY clause for aggregate functions
+        let order_by = if *pos < tokens.len() && matches!(tokens[*pos], Token::Order) {
+            *pos += 1;
+            if *pos < tokens.len() && matches!(tokens[*pos], Token::By) {
+                *pos += 1;
+                Some(self.parse_order_by_list(tokens, pos)?)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        
+        // Parse optional FILTER clause
+        let filter = if *pos < tokens.len() && matches!(tokens[*pos], Token::Identifier(ref s)) && s.to_uppercase() == "FILTER" {
+            *pos += 1;
+            if *pos < tokens.len() && matches!(tokens[*pos], Token::LeftParen) {
+                *pos += 1;
+                if *pos < tokens.len() && matches!(tokens[*pos], Token::Where) {
+                    *pos += 1;
+                    let filter_expr = self.parse_expression(tokens, pos)?;
+                    if *pos < tokens.len() && matches!(tokens[*pos], Token::RightParen) {
+                        *pos += 1;
+                        Some(Box::new(filter_expr))
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        
+        // Check if this is followed by an OVER clause (window function)
+        if *pos < tokens.len() && matches!(tokens[*pos], Token::Over) {
+            self.parse_window_over_clause(tokens, pos, func_name, args, distinct, order_by, filter)
+        } else {
+            Ok(Expression::Function(Box::new(FunctionCall {
+                name: FunctionName::Simple(func_name),
+                args,
+                distinct,
+                order_by,
+                filter,
+            })))
+        }
+    }
+    
+    /// Parse window function expressions
+    fn parse_window_function(&mut self, tokens: &[Token], pos: &mut usize) -> ProtocolResult<Expression> {
+        let window_func = match &tokens[*pos] {
+            Token::RowNumber => {
+                *pos += 1;
+                self.expect_token(tokens, pos, &Token::LeftParen)?;
+                self.expect_token(tokens, pos, &Token::RightParen)?;
+                WindowFunctionType::RowNumber
+            }
+            Token::Rank => {
+                *pos += 1;
+                self.expect_token(tokens, pos, &Token::LeftParen)?;
+                self.expect_token(tokens, pos, &Token::RightParen)?;
+                WindowFunctionType::Rank
+            }
+            Token::DenseRank => {
+                *pos += 1;
+                self.expect_token(tokens, pos, &Token::LeftParen)?;
+                self.expect_token(tokens, pos, &Token::RightParen)?;
+                WindowFunctionType::DenseRank
+            }
+            Token::PercentRank => {
+                *pos += 1;
+                self.expect_token(tokens, pos, &Token::LeftParen)?;
+                self.expect_token(tokens, pos, &Token::RightParen)?;
+                WindowFunctionType::PercentRank
+            }
+            Token::CumeDist => {
+                *pos += 1;
+                self.expect_token(tokens, pos, &Token::LeftParen)?;
+                self.expect_token(tokens, pos, &Token::RightParen)?;
+                WindowFunctionType::CumeDist
+            }
+            Token::Ntile => {
+                *pos += 1;
+                self.expect_token(tokens, pos, &Token::LeftParen)?;
+                let n = Box::new(self.parse_expression(tokens, pos)?);
+                self.expect_token(tokens, pos, &Token::RightParen)?;
+                WindowFunctionType::Ntile(n)
+            }
+            Token::Lag => {
+                *pos += 1;
+                self.expect_token(tokens, pos, &Token::LeftParen)?;
+                let expr = Box::new(self.parse_expression(tokens, pos)?);
+                
+                let offset = if self.matches_at(tokens, *pos, &Token::Comma) {
+                    *pos += 1;
+                    Some(Box::new(self.parse_expression(tokens, pos)?))
+                } else {
+                    None
+                };
+                
+                let default = if self.matches_at(tokens, *pos, &Token::Comma) {
+                    *pos += 1;
+                    Some(Box::new(self.parse_expression(tokens, pos)?))
+                } else {
+                    None
+                };
+                
+                self.expect_token(tokens, pos, &Token::RightParen)?;
+                WindowFunctionType::Lag { expr, offset, default }
+            }
+            Token::Lead => {
+                *pos += 1;
+                self.expect_token(tokens, pos, &Token::LeftParen)?;
+                let expr = Box::new(self.parse_expression(tokens, pos)?);
+                
+                let offset = if self.matches_at(tokens, *pos, &Token::Comma) {
+                    *pos += 1;
+                    Some(Box::new(self.parse_expression(tokens, pos)?))
+                } else {
+                    None
+                };
+                
+                let default = if self.matches_at(tokens, *pos, &Token::Comma) {
+                    *pos += 1;
+                    Some(Box::new(self.parse_expression(tokens, pos)?))
+                } else {
+                    None
+                };
+                
+                self.expect_token(tokens, pos, &Token::RightParen)?;
+                WindowFunctionType::Lead { expr, offset, default }
+            }
+            Token::FirstValue => {
+                *pos += 1;
+                self.expect_token(tokens, pos, &Token::LeftParen)?;
+                let expr = Box::new(self.parse_expression(tokens, pos)?);
+                self.expect_token(tokens, pos, &Token::RightParen)?;
+                WindowFunctionType::FirstValue(expr)
+            }
+            Token::LastValue => {
+                *pos += 1;
+                self.expect_token(tokens, pos, &Token::LeftParen)?;
+                let expr = Box::new(self.parse_expression(tokens, pos)?);
+                self.expect_token(tokens, pos, &Token::RightParen)?;
+                WindowFunctionType::LastValue(expr)
+            }
+            Token::NthValue => {
+                *pos += 1;
+                self.expect_token(tokens, pos, &Token::LeftParen)?;
+                let expr = Box::new(self.parse_expression(tokens, pos)?);
+                self.expect_token(tokens, pos, &Token::Comma)?;
+                let n = Box::new(self.parse_expression(tokens, pos)?);
+                self.expect_token(tokens, pos, &Token::RightParen)?;
+                WindowFunctionType::NthValue { expr, n }
+            }
+            _ => return Err(crate::error::ProtocolError::ParseError("Invalid window function".to_string()).into()),
+        };
+        
+        // Parse OVER clause
+        self.expect_token(tokens, pos, &Token::Over)?;
+        let (partition_by, order_by, frame) = self.parse_over_clause(tokens, pos)?;
+        
+        Ok(Expression::WindowFunction {
+            function: window_func,
+            partition_by,
+            order_by,
+            frame,
+        })
+    }
+    
+    /// Parse window OVER clause for aggregate functions used as window functions
+    fn parse_window_over_clause(&mut self, tokens: &[Token], pos: &mut usize, func_name: String, args: Vec<Expression>, distinct: bool, order_by: Option<Vec<OrderByItem>>, filter: Option<Box<Expression>>) -> ProtocolResult<Expression> {
+        *pos += 1; // consume OVER
+        let (partition_by, window_order_by, frame) = self.parse_over_clause(tokens, pos)?;
+        
+        let aggregate_func = FunctionCall {
+            name: FunctionName::Simple(func_name),
+            args,
+            distinct,
+            order_by,
+            filter,
+        };
+        
+        Ok(Expression::WindowFunction {
+            function: WindowFunctionType::Aggregate(Box::new(aggregate_func)),
+            partition_by,
+            order_by: window_order_by,
+            frame,
+        })
+    }
+    
+    /// Parse the contents of an OVER clause
+    fn parse_over_clause(&mut self, tokens: &[Token], pos: &mut usize) -> ProtocolResult<(Vec<Expression>, Vec<OrderByItem>, Option<WindowFrame>)> {
+        self.expect_token(tokens, pos, &Token::LeftParen)?;
+        
+        // Parse PARTITION BY
+        let partition_by = if self.matches_at(tokens, *pos, &Token::Partition) {
+            *pos += 1;
+            self.expect_token(tokens, pos, &Token::By)?;
+            self.parse_expression_list(tokens, pos)?
+        } else {
+            Vec::new()
+        };
+        
+        // Parse ORDER BY
+        let order_by = if self.matches_at(tokens, *pos, &Token::Order) {
+            *pos += 1;
+            self.expect_token(tokens, pos, &Token::By)?;
+            self.parse_order_by_list(tokens, pos)?
+        } else {
+            Vec::new()
+        };
+        
+        // Parse optional window frame
+        let frame = if self.matches_at(tokens, *pos, &Token::Rows) || self.matches_at(tokens, *pos, &Token::Range) {
+            Some(self.parse_window_frame(tokens, pos)?)
+        } else {
+            None
+        };
+        
+        self.expect_token(tokens, pos, &Token::RightParen)?;
+        
+        Ok((partition_by, order_by, frame))
+    }
+    
+    /// Parse window frame specification
+    fn parse_window_frame(&mut self, tokens: &[Token], pos: &mut usize) -> ProtocolResult<WindowFrame> {
+        // Skip ROWS or RANGE for now, we'll just parse the bounds
+        *pos += 1;
+        
+        let start_bound = self.parse_frame_bound(tokens, pos)?;
+        
+        let end_bound = if self.matches_at(tokens, *pos, &Token::And) {
+            *pos += 1;
+            Some(self.parse_frame_bound(tokens, pos)?)
+        } else {
+            None
+        };
+        
+        Ok(WindowFrame { start_bound, end_bound })
+    }
+    
+    /// Parse window frame bound
+    fn parse_frame_bound(&mut self, tokens: &[Token], pos: &mut usize) -> ProtocolResult<FrameBound> {
+        if self.matches_at(tokens, *pos, &Token::Unbounded) {
+            *pos += 1;
+            if self.matches_at(tokens, *pos, &Token::Preceding) {
+                *pos += 1;
+                Ok(FrameBound::UnboundedPreceding)
+            } else if self.matches_at(tokens, *pos, &Token::Following) {
+                *pos += 1;
+                Ok(FrameBound::UnboundedFollowing)
+            } else {
+                Err(crate::error::ProtocolError::ParseError("Expected PRECEDING or FOLLOWING after UNBOUNDED".to_string()).into())
+            }
+        } else if self.matches_at(tokens, *pos, &Token::CurrentRow) {
+            *pos += 1;
+            Ok(FrameBound::CurrentRow)
+        } else {
+            let expr = Box::new(self.parse_expression(tokens, pos)?);
+            if self.matches_at(tokens, *pos, &Token::Preceding) {
+                *pos += 1;
+                Ok(FrameBound::Preceding(expr))
+            } else if self.matches_at(tokens, *pos, &Token::Following) {
+                *pos += 1;
+                Ok(FrameBound::Following(expr))
+            } else {
+                Err(crate::error::ProtocolError::ParseError("Expected PRECEDING or FOLLOWING".to_string()).into())
+            }
+        }
+    }
+    
+    // Helper methods
+    fn matches_at(&self, tokens: &[Token], pos: usize, expected: &Token) -> bool {
+        tokens.get(pos).map_or(false, |token| {
+            std::mem::discriminant(token) == std::mem::discriminant(expected)
+        })
+    }
+    
+    fn expect_token(&self, tokens: &[Token], pos: &mut usize, expected: &Token) -> ProtocolResult<()> {
+        if self.matches_at(tokens, *pos, expected) {
+            *pos += 1;
+            Ok(())
+        } else {
+            Err(crate::error::ProtocolError::ParseError(
+                format!("Expected {:?}, found {:?}", expected, tokens.get(*pos))
+            ).into())
+        }
+    }
+    
+    fn parse_expression_list(&mut self, tokens: &[Token], pos: &mut usize) -> ProtocolResult<Vec<Expression>> {
+        let mut expressions = Vec::new();
+        
+        loop {
+            expressions.push(self.parse_expression(tokens, pos)?);
+            
+            if self.matches_at(tokens, *pos, &Token::Comma) {
+                *pos += 1;
+            } else {
+                break;
+            }
+        }
+        
+        Ok(expressions)
+    }
+    
+    fn parse_order_by_list(&mut self, tokens: &[Token], pos: &mut usize) -> ProtocolResult<Vec<OrderByItem>> {
+        let mut items = Vec::new();
+        
+        loop {
+            let expression = self.parse_expression(tokens, pos)?;
+            
+            let direction = if self.matches_at(tokens, *pos, &Token::Asc) {
+                *pos += 1;
+                Some(SortDirection::Ascending)
+            } else if self.matches_at(tokens, *pos, &Token::Desc) {
+                *pos += 1;
+                Some(SortDirection::Descending)
+            } else {
+                None
+            };
+            
+            let nulls = if self.matches_at(tokens, *pos, &Token::Nulls) {
+                *pos += 1;
+                if self.matches_at(tokens, *pos, &Token::First) {
+                    *pos += 1;
+                    Some(NullsOrder::First)
+                } else if self.matches_at(tokens, *pos, &Token::Last) {
+                    *pos += 1;
+                    Some(NullsOrder::Last)
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+            
+            items.push(OrderByItem { expression, direction, nulls });
+            
+            if self.matches_at(tokens, *pos, &Token::Comma) {
+                *pos += 1;
+            } else {
+                break;
+            }
+        }
+        
+        Ok(items)
     }
 }
 

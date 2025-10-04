@@ -18,8 +18,8 @@
 
 pub mod error;
 pub mod resp;
-pub mod rest;
 pub mod postgres_wire;
+pub mod mcp;
 pub mod bolt;
 pub mod vector_store;
 
