@@ -9,13 +9,13 @@ use orbit_protocols::mcp::types::*;
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use tokio;
-use tracing::{info, warn, error};
+use tracing::{error, info, warn};
 
 #[tokio::main]
 async fn main() -> Result<()> {
     // Initialize logging
     tracing_subscriber::init();
-    
+
     let matches = Command::new("MCP Basic Client")
         .version("1.0")
         .author("Orbit Team")
@@ -25,20 +25,20 @@ async fn main() -> Result<()> {
                 .long("server-url")
                 .value_name("URL")
                 .help("MCP server URL to connect to")
-                .default_value("http://localhost:8080")
+                .default_value("http://localhost:8080"),
         )
         .arg(
             Arg::new("tool")
                 .long("tool")
                 .value_name("TOOL_NAME")
-                .help("Tool to execute")
+                .help("Tool to execute"),
         )
         .arg(
             Arg::new("params")
                 .long("params")
                 .value_name("JSON")
                 .help("JSON parameters for the tool")
-                .default_value("{}")
+                .default_value("{}"),
         )
         .get_matches();
 
@@ -46,29 +46,36 @@ async fn main() -> Result<()> {
     let tool_name = matches.get_one::<String>("tool");
     let params_str = matches.get_one::<String>("params").unwrap();
     let params: Value = serde_json::from_str(params_str)?;
-    
+
     info!("Starting MCP Basic Client");
     info!("Server URL: {}", server_url);
 
     // Create MCP client
     let mut client = McpClient::new(server_url.clone()).await?;
-    
+
     // Initialize connection
     info!("Initializing MCP connection...");
     client.initialize().await?;
-    
+
     // List available tools
     info!("Listing available tools...");
     let tools = client.list_tools().await?;
-    
+
     println!("Available tools:");
     for tool in &tools {
-        println!("  - {}: {}", tool.name, tool.description.as_deref().unwrap_or("No description"));
+        println!(
+            "  - {}: {}",
+            tool.name,
+            tool.description.as_deref().unwrap_or("No description")
+        );
         if !tool.input_schema.as_object().unwrap().is_empty() {
-            println!("    Schema: {}", serde_json::to_string_pretty(&tool.input_schema)?);
+            println!(
+                "    Schema: {}",
+                serde_json::to_string_pretty(&tool.input_schema)?
+            );
         }
     }
-    
+
     // Execute specific tool if requested
     if let Some(tool_name) = tool_name {
         info!("Executing tool: {}", tool_name);
@@ -83,14 +90,18 @@ async fn main() -> Result<()> {
             }
         }
     }
-    
+
     // List available resources
     info!("Listing available resources...");
     match client.list_resources().await {
         Ok(resources) => {
             println!("\nAvailable resources:");
             for resource in &resources {
-                println!("  - {}: {}", resource.uri, resource.name.as_deref().unwrap_or("No name"));
+                println!(
+                    "  - {}: {}",
+                    resource.uri,
+                    resource.name.as_deref().unwrap_or("No name")
+                );
                 if let Some(description) = &resource.description {
                     println!("    Description: {}", description);
                 }
@@ -103,16 +114,23 @@ async fn main() -> Result<()> {
             warn!("Failed to list resources: {}", e);
         }
     }
-    
+
     // Test prompts if available
     info!("Listing available prompts...");
     match client.list_prompts().await {
         Ok(prompts) => {
             println!("\nAvailable prompts:");
             for prompt in &prompts {
-                println!("  - {}: {}", prompt.name, prompt.description.as_deref().unwrap_or("No description"));
+                println!(
+                    "  - {}: {}",
+                    prompt.name,
+                    prompt.description.as_deref().unwrap_or("No description")
+                );
                 if !prompt.arguments.is_empty() {
-                    println!("    Arguments: {:?}", prompt.arguments.iter().map(|a| &a.name).collect::<Vec<_>>());
+                    println!(
+                        "    Arguments: {:?}",
+                        prompt.arguments.iter().map(|a| &a.name).collect::<Vec<_>>()
+                    );
                 }
             }
         }
@@ -120,7 +138,7 @@ async fn main() -> Result<()> {
             warn!("Failed to list prompts: {}", e);
         }
     }
-    
+
     info!("MCP client session completed successfully");
     Ok(())
 }
@@ -138,10 +156,10 @@ impl McpClient {
             capabilities: None,
         })
     }
-    
+
     async fn initialize(&mut self) -> Result<()> {
         info!("Initializing MCP session with server: {}", self.server_url);
-        
+
         // In a real implementation, this would establish an actual connection
         // and perform the MCP handshake
         self.capabilities = Some(ServerCapabilities {
@@ -150,13 +168,13 @@ impl McpClient {
             prompts: Some(true),
             ..Default::default()
         });
-        
+
         Ok(())
     }
-    
+
     async fn list_tools(&self) -> Result<Vec<Tool>> {
         info!("Requesting tools list from server");
-        
+
         // Mock response - in real implementation, this would be an HTTP/WebSocket call
         Ok(vec![
             Tool {
@@ -212,10 +230,10 @@ impl McpClient {
             },
         ])
     }
-    
+
     async fn call_tool(&self, name: &str, params: Value) -> Result<CallToolResult> {
         info!("Calling tool '{}' with params: {}", name, params);
-        
+
         // Mock tool execution - in real implementation, this would call the actual MCP server
         let result = match name {
             "calculate" => {
@@ -255,9 +273,9 @@ impl McpClient {
                     json!({"error": "Missing vector parameter"})
                 }
             }
-            _ => json!({"error": format!("Unknown tool: {}", name)})
+            _ => json!({"error": format!("Unknown tool: {}", name)}),
         };
-        
+
         Ok(CallToolResult {
             content: vec![ToolResultContent::Text {
                 text: serde_json::to_string_pretty(&result)?,
@@ -265,10 +283,10 @@ impl McpClient {
             is_error: result.get("error").is_some(),
         })
     }
-    
+
     async fn list_resources(&self) -> Result<Vec<Resource>> {
         info!("Requesting resources list from server");
-        
+
         Ok(vec![
             Resource {
                 uri: "file:///data/users.csv".to_string(),
@@ -290,10 +308,10 @@ impl McpClient {
             },
         ])
     }
-    
+
     async fn list_prompts(&self) -> Result<Vec<Prompt>> {
         info!("Requesting prompts list from server");
-        
+
         Ok(vec![
             Prompt {
                 name: "analyze_data".to_string(),

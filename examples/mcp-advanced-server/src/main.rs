@@ -13,17 +13,14 @@ use axum::{
 };
 use clap::Parser;
 use orbit_protocols::mcp::{
-    handlers::McpRequestHandler,
-    server::McpServer,
-    types::*,
-    tools::ToolRegistry,
+    handlers::McpRequestHandler, server::McpServer, tools::ToolRegistry, types::*,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{collections::HashMap, sync::Arc};
 use tokio::net::TcpListener;
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
-use tracing::{info, warn, error};
+use tracing::{error, info, warn};
 use uuid::Uuid;
 
 #[derive(Parser, Debug)]
@@ -54,7 +51,7 @@ struct Args {
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = Args::parse();
-    
+
     // Initialize tracing
     tracing_subscriber::fmt()
         .with_env_filter(args.log_level.as_str())
@@ -105,10 +102,10 @@ async fn main() -> Result<()> {
 
     let addr = format!("{}:{}", args.host, args.port);
     let listener = TcpListener::bind(&addr).await?;
-    
+
     info!("MCP Server listening on {}", addr);
     info!("Available at: http://{}/", addr);
-    
+
     axum::serve(listener, app).await?;
 
     Ok(())
@@ -178,7 +175,7 @@ impl ServerState {
 
         let mut sessions = self.session_data.write().await;
         sessions.insert(session_id.clone(), session);
-        
+
         info!("Created new session: {}", session_id);
         session_id
     }
@@ -204,9 +201,15 @@ async fn initialize_handler(
     State(state): State<AppState>,
     Json(request): Json<InitializeRequest>,
 ) -> Result<Json<InitializeResult>, StatusCode> {
-    info!("Initialize request from client: {}", request.client_info.name);
+    info!(
+        "Initialize request from client: {}",
+        request.client_info.name
+    );
 
-    let session_id = state.server_state.create_session(request.capabilities).await;
+    let session_id = state
+        .server_state
+        .create_session(request.capabilities)
+        .await;
 
     Ok(Json(InitializeResult {
         protocol_version: "2024-11-05".to_string(),
@@ -236,7 +239,11 @@ async fn call_tool_handler(
 ) -> Result<Json<CallToolResult>, StatusCode> {
     info!("Calling tool: {} with params: {:?}", name, request.params);
 
-    match state.tool_registry.execute_tool(&name, request.params).await {
+    match state
+        .tool_registry
+        .execute_tool(&name, request.params)
+        .await
+    {
         Ok(result) => Ok(Json(result)),
         Err(e) => {
             error!("Tool execution failed: {}", e);
@@ -299,18 +306,17 @@ async fn read_resource_handler(
             let sessions_data: Vec<_> = sessions.values().collect();
             serde_json::to_string_pretty(&sessions_data).unwrap_or_else(|_| "{}".to_string())
         }
-        "file:///tmp/data.json" => {
-            json!({
-                "users": [
-                    {"id": 1, "name": "Alice", "email": "alice@example.com"},
-                    {"id": 2, "name": "Bob", "email": "bob@example.com"}
-                ],
-                "metadata": {
-                    "last_updated": chrono::Utc::now().to_rfc3339(),
-                    "version": "1.0"
-                }
-            }).to_string()
-        }
+        "file:///tmp/data.json" => json!({
+            "users": [
+                {"id": 1, "name": "Alice", "email": "alice@example.com"},
+                {"id": 2, "name": "Bob", "email": "bob@example.com"}
+            ],
+            "metadata": {
+                "last_updated": chrono::Utc::now().to_rfc3339(),
+                "version": "1.0"
+            }
+        })
+        .to_string(),
         _ => return Err(StatusCode::NOT_FOUND),
     };
 
@@ -324,7 +330,9 @@ async fn list_prompts_handler() -> Json<ListPromptsResult> {
         prompts: vec![
             Prompt {
                 name: "sql_query_generator".to_string(),
-                description: Some("Generate SQL queries based on natural language description".to_string()),
+                description: Some(
+                    "Generate SQL queries based on natural language description".to_string(),
+                ),
                 arguments: vec![
                     PromptArgument {
                         name: "description".to_string(),
@@ -349,7 +357,9 @@ async fn list_prompts_handler() -> Json<ListPromptsResult> {
                     },
                     PromptArgument {
                         name: "analysis_type".to_string(),
-                        description: Some("Type of analysis (descriptive, diagnostic, predictive)".to_string()),
+                        description: Some(
+                            "Type of analysis (descriptive, diagnostic, predictive)".to_string(),
+                        ),
                         required: Some(false),
                     },
                 ],
@@ -366,9 +376,15 @@ async fn get_prompt_handler(
 
     let messages = match name.as_str() {
         "sql_query_generator" => {
-            let description = params.get("description").unwrap_or(&"Select all records".to_string()).clone();
-            let schema_info = params.get("table_schema").map(|s| s.as_str()).unwrap_or("No schema provided");
-            
+            let description = params
+                .get("description")
+                .unwrap_or(&"Select all records".to_string())
+                .clone();
+            let schema_info = params
+                .get("table_schema")
+                .map(|s| s.as_str())
+                .unwrap_or("No schema provided");
+
             vec![
                 PromptMessage::User {
                     content: UserContent::Text {
@@ -386,9 +402,15 @@ async fn get_prompt_handler(
             ]
         }
         "data_analysis" => {
-            let dataset = params.get("dataset").unwrap_or(&"No dataset specified".to_string()).clone();
-            let analysis_type = params.get("analysis_type").unwrap_or(&"descriptive".to_string()).clone();
-            
+            let dataset = params
+                .get("dataset")
+                .unwrap_or(&"No dataset specified".to_string())
+                .clone();
+            let analysis_type = params
+                .get("analysis_type")
+                .unwrap_or(&"descriptive".to_string())
+                .clone();
+
             vec![
                 PromptMessage::User {
                     content: UserContent::Text {
@@ -442,9 +464,7 @@ async fn register_tools(registry: &mut ToolRegistry, state: Arc<ServerState>) ->
             let state = state.clone();
             move |params: Value| {
                 let state = state.clone();
-                Box::pin(async move {
-                    sql_query_tool(params, state).await
-                })
+                Box::pin(async move { sql_query_tool(params, state).await })
             }
         },
     );
@@ -468,13 +488,7 @@ async fn register_tools(registry: &mut ToolRegistry, state: Arc<ServerState>) ->
             },
             "required": ["expression"]
         }),
-        {
-            move |params: Value| {
-                Box::pin(async move {
-                    calculator_tool(params).await
-                })
-            }
-        },
+        { move |params: Value| Box::pin(async move { calculator_tool(params).await }) },
     );
 
     // Vector Search Tool (if enabled)
@@ -507,9 +521,7 @@ async fn register_tools(registry: &mut ToolRegistry, state: Arc<ServerState>) ->
                 let state = state.clone();
                 move |params: Value| {
                     let state = state.clone();
-                    Box::pin(async move {
-                        vector_search_tool(params, state).await
-                    })
+                    Box::pin(async move { vector_search_tool(params, state).await })
                 }
             },
         );
@@ -538,13 +550,7 @@ async fn register_tools(registry: &mut ToolRegistry, state: Arc<ServerState>) ->
             },
             "required": ["data"]
         }),
-        {
-            move |params: Value| {
-                Box::pin(async move {
-                    data_analysis_tool(params).await
-                })
-            }
-        },
+        { move |params: Value| Box::pin(async move { data_analysis_tool(params).await }) },
     );
 
     info!("Registered {} tools", registry.tool_count().await);
@@ -554,13 +560,12 @@ async fn register_tools(registry: &mut ToolRegistry, state: Arc<ServerState>) ->
 // Tool Implementations
 
 async fn sql_query_tool(params: Value, state: Arc<ServerState>) -> Result<CallToolResult> {
-    let query = params.get("query")
+    let query = params
+        .get("query")
         .and_then(|v| v.as_str())
         .ok_or_else(|| anyhow::anyhow!("Missing query parameter"))?;
 
-    let limit = params.get("limit")
-        .and_then(|v| v.as_i64())
-        .unwrap_or(100);
+    let limit = params.get("limit").and_then(|v| v.as_i64()).unwrap_or(100);
 
     info!("Executing SQL query: {} (limit: {})", query, limit);
 
@@ -589,11 +594,13 @@ async fn sql_query_tool(params: Value, state: Arc<ServerState>) -> Result<CallTo
 }
 
 async fn calculator_tool(params: Value) -> Result<CallToolResult> {
-    let expression = params.get("expression")
+    let expression = params
+        .get("expression")
         .and_then(|v| v.as_str())
         .ok_or_else(|| anyhow::anyhow!("Missing expression parameter"))?;
 
-    let precision = params.get("precision")
+    let precision = params
+        .get("precision")
         .and_then(|v| v.as_i64())
         .unwrap_or(10) as usize;
 
@@ -636,7 +643,11 @@ async fn calculator_tool(params: Value) -> Result<CallToolResult> {
             if parts.len() == 2 {
                 let a: f64 = parts[0].parse().unwrap_or(0.0);
                 let b: f64 = parts[1].parse().unwrap_or(1.0);
-                if b != 0.0 { a / b } else { f64::INFINITY }
+                if b != 0.0 {
+                    a / b
+                } else {
+                    f64::INFINITY
+                }
             } else {
                 0.0
             }
@@ -660,20 +671,24 @@ async fn calculator_tool(params: Value) -> Result<CallToolResult> {
 }
 
 async fn vector_search_tool(params: Value, state: Arc<ServerState>) -> Result<CallToolResult> {
-    let query_vector = params.get("query_vector")
+    let query_vector = params
+        .get("query_vector")
         .and_then(|v| v.as_array())
         .ok_or_else(|| anyhow::anyhow!("Missing query_vector parameter"))?;
 
-    let k = params.get("k")
-        .and_then(|v| v.as_i64())
-        .unwrap_or(10) as usize;
+    let k = params.get("k").and_then(|v| v.as_i64()).unwrap_or(10) as usize;
 
-    let threshold = params.get("threshold")
+    let threshold = params
+        .get("threshold")
         .and_then(|v| v.as_f64())
         .unwrap_or(0.5);
 
-    info!("Performing vector search with {} dimensions, k={}, threshold={}", 
-          query_vector.len(), k, threshold);
+    info!(
+        "Performing vector search with {} dimensions, k={}, threshold={}",
+        query_vector.len(),
+        k,
+        threshold
+    );
 
     // Mock vector search results
     let results = json!({
@@ -688,7 +703,7 @@ async fn vector_search_tool(params: Value, state: Arc<ServerState>) -> Result<Ca
                 "content": "This document contains similar content to your query."
             },
             {
-                "id": "doc_2", 
+                "id": "doc_2",
                 "similarity": 0.87,
                 "metadata": {"title": "Related Article", "category": "analysis"},
                 "content": "Another relevant document with high similarity."
@@ -716,16 +731,21 @@ async fn vector_search_tool(params: Value, state: Arc<ServerState>) -> Result<Ca
 }
 
 async fn data_analysis_tool(params: Value) -> Result<CallToolResult> {
-    let data = params.get("data")
+    let data = params
+        .get("data")
         .and_then(|v| v.as_array())
         .ok_or_else(|| anyhow::anyhow!("Missing data parameter"))?;
 
-    let numbers: Result<Vec<f64>, _> = data.iter()
-        .map(|v| v.as_f64().ok_or_else(|| anyhow::anyhow!("Invalid number in data array")))
+    let numbers: Result<Vec<f64>, _> = data
+        .iter()
+        .map(|v| {
+            v.as_f64()
+                .ok_or_else(|| anyhow::anyhow!("Invalid number in data array"))
+        })
         .collect();
 
     let numbers = numbers?;
-    
+
     if numbers.is_empty() {
         return Err(anyhow::anyhow!("Data array cannot be empty"));
     }
@@ -737,17 +757,15 @@ async fn data_analysis_tool(params: Value) -> Result<CallToolResult> {
 
     let mut sorted = numbers.clone();
     sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
-    
+
     let median = if sorted.len() % 2 == 0 {
         (sorted[sorted.len() / 2 - 1] + sorted[sorted.len() / 2]) / 2.0
     } else {
         sorted[sorted.len() / 2]
     };
 
-    let variance = numbers.iter()
-        .map(|x| (x - mean).powi(2))
-        .sum::<f64>() / n;
-    
+    let variance = numbers.iter().map(|x| (x - mean).powi(2)).sum::<f64>() / n;
+
     let std_dev = variance.sqrt();
 
     let min = sorted.first().copied().unwrap_or(0.0);
@@ -834,7 +852,7 @@ struct ListToolsResult {
     tools: Vec<Tool>,
 }
 
-#[derive(Debug, Serialize)]  
+#[derive(Debug, Serialize)]
 struct ListResourcesResult {
     resources: Vec<Resource>,
 }
