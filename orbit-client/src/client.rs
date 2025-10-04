@@ -289,7 +289,7 @@ mod tests {
             "http://server1:50051".to_string(),
             "http://server2:50051".to_string(),
         ];
-        
+
         let builder = OrbitClient::builder()
             .with_namespace("production")
             .with_server_urls(urls.clone())
@@ -338,7 +338,10 @@ mod tests {
         let stats = ClientStats {
             namespace: "test".to_string(),
             server_connections: 3,
-            node_id: Some(NodeId { key: "node-123".to_string(), namespace: "default".to_string() }),
+            node_id: Some(NodeId {
+                key: "node-123".to_string(),
+                namespace: "default".to_string(),
+            }),
         };
 
         let debug_str = format!("{:?}", stats);
@@ -384,11 +387,11 @@ mod tests {
     #[test]
     fn test_config_edge_values() {
         let config = OrbitClientConfig {
-            namespace: String::new(), // Empty namespace
-            server_urls: vec![], // Empty server list
+            namespace: String::new(),                   // Empty namespace
+            server_urls: vec![],                        // Empty server list
             connection_timeout: Duration::from_secs(0), // Zero timeout
-            retry_attempts: 0, // No retries
-            actor_timeout: Duration::from_millis(1), // Very short timeout
+            retry_attempts: 0,                          // No retries
+            actor_timeout: Duration::from_millis(1),    // Very short timeout
         };
 
         assert_eq!(config.namespace, "");
@@ -408,8 +411,8 @@ mod tests {
             namespace: "x".repeat(1000), // Very long namespace
             server_urls: large_urls.clone(),
             connection_timeout: Duration::from_secs(3600), // 1 hour
-            retry_attempts: u32::MAX, // Maximum retries
-            actor_timeout: Duration::from_secs(86400), // 24 hours
+            retry_attempts: u32::MAX,                      // Maximum retries
+            actor_timeout: Duration::from_secs(86400),     // 24 hours
         };
 
         assert_eq!(config.namespace.len(), 1000);
@@ -444,9 +447,7 @@ mod tests {
             "grpc://service.internal:9090".to_string(),
         ];
 
-        let config = OrbitClient::builder()
-            .with_server_urls(urls.clone())
-            .config;
+        let config = OrbitClient::builder().with_server_urls(urls.clone()).config;
 
         assert_eq!(config.server_urls, urls);
     }
@@ -454,13 +455,12 @@ mod tests {
     #[test]
     fn test_duration_edge_cases() {
         // Test minimum duration
-        let builder1 = OrbitClient::builder()
-            .with_connection_timeout(Duration::from_nanos(1));
+        let builder1 = OrbitClient::builder().with_connection_timeout(Duration::from_nanos(1));
         assert_eq!(builder1.config.connection_timeout, Duration::from_nanos(1));
 
         // Test maximum reasonable duration
-        let builder2 = OrbitClient::builder()
-            .with_actor_timeout(Duration::from_secs(u64::MAX / 1000));
+        let builder2 =
+            OrbitClient::builder().with_actor_timeout(Duration::from_secs(u64::MAX / 1000));
         // Should not panic, duration should be set
         assert!(builder2.config.actor_timeout > Duration::from_secs(0));
     }
@@ -489,8 +489,20 @@ mod tests {
         let builder_size = std::mem::size_of::<OrbitClientBuilder>();
 
         // These are reasonable limits - adjust if structures grow legitimately
-        assert!(config_size < 1024, "OrbitClientConfig is too large: {} bytes", config_size);
-        assert!(stats_size < 512, "ClientStats is too large: {} bytes", stats_size);
-        assert!(builder_size < 1024, "OrbitClientBuilder is too large: {} bytes", builder_size);
+        assert!(
+            config_size < 1024,
+            "OrbitClientConfig is too large: {} bytes",
+            config_size
+        );
+        assert!(
+            stats_size < 512,
+            "ClientStats is too large: {} bytes",
+            stats_size
+        );
+        assert!(
+            builder_size < 1024,
+            "OrbitClientBuilder is too large: {} bytes",
+            builder_size
+        );
     }
 }

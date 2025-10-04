@@ -39,7 +39,7 @@ mod tests {
         let s = RngUtils::random_string();
         assert_eq!(s.len(), 16);
         assert!(s.chars().all(|c| c.is_alphanumeric()));
-        
+
         // Test that multiple calls produce different results
         let s2 = RngUtils::random_string();
         assert_ne!(s, s2, "Random strings should be different");
@@ -50,7 +50,7 @@ mod tests {
         let s = RngUtils::random_string_with_length(10);
         assert_eq!(s.len(), 10);
         assert!(s.chars().all(|c| c.is_alphanumeric()));
-        
+
         // Test various lengths
         let lengths = [1, 5, 32, 100, 256];
         for &len in &lengths {
@@ -75,20 +75,24 @@ mod tests {
             let s = RngUtils::random_string_with_length(8);
             strings.insert(s);
         }
-        
+
         // With 8-character alphanumeric strings, we should have high uniqueness
         // Allow some small chance of collision but expect mostly unique strings
-        assert!(strings.len() > 95, "Expected high uniqueness, got {} unique strings out of 100", strings.len());
+        assert!(
+            strings.len() > 95,
+            "Expected high uniqueness, got {} unique strings out of 100",
+            strings.len()
+        );
     }
 
     #[test]
     fn test_random_string_character_distribution() {
         let s = RngUtils::random_string_with_length(1000);
-        
+
         let mut has_digit = false;
         let mut has_lowercase = false;
         let mut has_uppercase = false;
-        
+
         for c in s.chars() {
             if c.is_ascii_digit() {
                 has_digit = true;
@@ -98,22 +102,32 @@ mod tests {
                 has_uppercase = true;
             }
         }
-        
+
         // With 1000 characters, we should see all types
         assert!(has_digit, "Should contain at least one digit");
-        assert!(has_lowercase, "Should contain at least one lowercase letter");
-        assert!(has_uppercase, "Should contain at least one uppercase letter");
+        assert!(
+            has_lowercase,
+            "Should contain at least one lowercase letter"
+        );
+        assert!(
+            has_uppercase,
+            "Should contain at least one uppercase letter"
+        );
     }
 
     #[test]
     fn test_random_int_range() {
         let n = RngUtils::random_int(10, 20);
         assert!((10..=20).contains(&n));
-        
+
         // Test multiple values to ensure they're within range
         for _ in 0..100 {
             let n = RngUtils::random_int(1, 10);
-            assert!((1..=10).contains(&n), "Random int {} not in range 1..=10", n);
+            assert!(
+                (1..=10).contains(&n),
+                "Random int {} not in range 1..=10",
+                n
+            );
         }
     }
 
@@ -122,15 +136,15 @@ mod tests {
         // Test same min and max
         let n = RngUtils::random_int(5, 5);
         assert_eq!(n, 5);
-        
+
         // Test negative ranges
         let n = RngUtils::random_int(-10, -5);
         assert!((-10..=-5).contains(&n));
-        
+
         // Test crossing zero
         let n = RngUtils::random_int(-5, 5);
         assert!((-5..=5).contains(&n));
-        
+
         // Test large values
         let n = RngUtils::random_int(i32::MAX - 10, i32::MAX);
         assert!((i32::MAX - 10..=i32::MAX).contains(&n));
@@ -140,17 +154,22 @@ mod tests {
     fn test_random_int_distribution() {
         // Test that we get reasonable distribution across range
         let mut counts = [0; 10];
-        
+
         for _ in 0..1000 {
             let n = RngUtils::random_int(0, 9);
             counts[n as usize] += 1;
         }
-        
+
         // Each number should appear at least a few times
         // With uniform distribution and 1000 samples, each should get ~100
         // Allow for some variance but ensure no number is completely missing
         for (i, &count) in counts.iter().enumerate() {
-            assert!(count > 50, "Number {} appeared only {} times, expected more", i, count);
+            assert!(
+                count > 50,
+                "Number {} appeared only {} times, expected more",
+                i,
+                count
+            );
         }
     }
 
@@ -158,10 +177,10 @@ mod tests {
     fn test_random_u64() {
         let n1 = RngUtils::random_u64();
         let n2 = RngUtils::random_u64();
-        
+
         // Very unlikely to be the same
         assert_ne!(n1, n2, "Two random u64s should be different");
-        
+
         // Test multiple values to ensure they're in valid range
         for _ in 0..10 {
             let n = RngUtils::random_u64();
@@ -177,15 +196,19 @@ mod tests {
         for _ in 0..100 {
             values.push(RngUtils::random_u64());
         }
-        
+
         // All values should be unique (very high probability)
         let unique_count = values.iter().collect::<HashSet<_>>().len();
-        assert!(unique_count > 95, "Expected high uniqueness for u64s, got {}", unique_count);
-        
+        assert!(
+            unique_count > 95,
+            "Expected high uniqueness for u64s, got {}",
+            unique_count
+        );
+
         // Should have some spread across the range
         let min_val = values.iter().min().unwrap();
         let max_val = values.iter().max().unwrap();
-        
+
         // With 100 random u64s, the range should be quite large
         // This is probabilistic but very likely to pass
         assert!(max_val > min_val, "Max should be greater than min");
@@ -195,18 +218,26 @@ mod tests {
     fn test_alphanumeric_characters() {
         // Verify that the character set includes what we expect
         let s = RngUtils::random_string_with_length(10000);
-        
+
         let mut char_set = HashSet::new();
         for c in s.chars() {
             char_set.insert(c);
             // Ensure each character is alphanumeric
-            assert!(c.is_alphanumeric(), "Character '{}' should be alphanumeric", c);
+            assert!(
+                c.is_alphanumeric(),
+                "Character '{}' should be alphanumeric",
+                c
+            );
             assert!(c.is_ascii(), "Character '{}' should be ASCII", c);
         }
-        
+
         // With 10000 characters, we should see a good variety
         // Alphanumeric includes [a-zA-Z0-9] = 62 characters
-        assert!(char_set.len() > 50, "Should see most alphanumeric characters, got {}", char_set.len());
+        assert!(
+            char_set.len() > 50,
+            "Should see most alphanumeric characters, got {}",
+            char_set.len()
+        );
     }
 
     #[test]
@@ -215,35 +246,35 @@ mod tests {
         use std::sync::Arc;
         use std::sync::Mutex;
         use std::thread;
-        
+
         let results = Arc::new(Mutex::new(Vec::new()));
         let mut handles = Vec::new();
-        
+
         for _ in 0..10 {
             let results_clone = Arc::clone(&results);
             let handle = thread::spawn(move || {
                 let s = RngUtils::random_string_with_length(8);
                 let n = RngUtils::random_int(1, 100);
                 let u = RngUtils::random_u64();
-                
+
                 results_clone.lock().unwrap().push((s, n, u));
             });
             handles.push(handle);
         }
-        
+
         for handle in handles {
             handle.join().unwrap();
         }
-        
+
         let results = results.lock().unwrap();
         assert_eq!(results.len(), 10);
-        
+
         // Verify all results are valid
         for (s, n, _u) in results.iter() {
             assert_eq!(s.len(), 8);
             assert!((1..=100).contains(n));
         }
-        
+
         // Verify uniqueness (high probability)
         let strings: HashSet<_> = results.iter().map(|(s, _, _)| s).collect();
         assert!(strings.len() > 8, "Most strings should be unique");

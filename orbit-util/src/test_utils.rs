@@ -1,8 +1,8 @@
-use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
-use tokio::time::{Duration, sleep};
 use serde::{Deserialize, Serialize};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 use thiserror::Error;
+use tokio::time::{sleep, Duration};
 
 // Minimal test types (to avoid circular dependency with orbit-shared)
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -36,13 +36,13 @@ impl OrbitError {
     pub fn network<S: Into<String>>(msg: S) -> Self {
         OrbitError::NetworkError(msg.into())
     }
-    
+
     pub fn timeout<S: Into<String>>(operation: S) -> Self {
         OrbitError::Timeout {
             operation: operation.into(),
         }
     }
-    
+
     pub fn internal<S: Into<String>>(msg: S) -> Self {
         OrbitError::Internal(msg.into())
     }
@@ -95,7 +95,9 @@ impl TestUtils {
     /// Generate test keys of different types
     pub fn test_keys() -> Vec<Key> {
         vec![
-            Key::StringKey { key: "test-string".to_string() },
+            Key::StringKey {
+                key: "test-string".to_string(),
+            },
             Key::Int32Key { key: 42 },
             Key::Int64Key { key: 1000000 },
             Key::NoKey,
@@ -126,16 +128,16 @@ impl TestUtils {
     }
 
     /// Validate JSON serialization roundtrip
-    pub fn assert_json_roundtrip<T>(original: &T) -> OrbitResult<()> 
-    where 
-        T: serde::Serialize + for<'de> serde::Deserialize<'de> + PartialEq + std::fmt::Debug 
+    pub fn assert_json_roundtrip<T>(original: &T) -> OrbitResult<()>
+    where
+        T: serde::Serialize + for<'de> serde::Deserialize<'de> + PartialEq + std::fmt::Debug,
     {
         let json = serde_json::to_string(original)
             .map_err(|e| OrbitError::internal(format!("Serialization failed: {}", e)))?;
-        
+
         let deserialized: T = serde_json::from_str(&json)
             .map_err(|e| OrbitError::internal(format!("Deserialization failed: {}", e)))?;
-        
+
         if original == &deserialized {
             Ok(())
         } else {
@@ -145,7 +147,9 @@ impl TestUtils {
 
     /// Generate large test datasets for performance/edge case testing
     pub fn large_test_dataset(size: usize) -> Vec<String> {
-        (0..size).map(|i| format!("large-data-item-{:06}", i)).collect()
+        (0..size)
+            .map(|i| format!("large-data-item-{:06}", i))
+            .collect()
     }
 
     /// Create a mock future that resolves after a delay (for timeout testing)
@@ -158,11 +162,13 @@ impl TestUtils {
     pub fn deterministic_random_string(seed: u64, length: usize) -> String {
         // Simple deterministic "random" generator for tests
         let mut value = seed;
-        (0..length).map(|_| {
-            value = value.wrapping_mul(1103515245).wrapping_add(12345);
-            let char_val = (value / 65536) % 26;
-            (b'a' + char_val as u8) as char
-        }).collect()
+        (0..length)
+            .map(|_| {
+                value = value.wrapping_mul(1103515245).wrapping_add(12345);
+                let char_val = (value / 65536) % 26;
+                (b'a' + char_val as u8) as char
+            })
+            .collect()
     }
 
     /// Mock retry logic for testing resilience patterns
@@ -190,15 +196,11 @@ impl TestUtils {
     }
 
     /// Validate concurrent access patterns  
-    pub async fn concurrent_test_runner<F>(
-        tasks: Vec<F>,
-    ) -> Vec<Result<(), String>>
+    pub async fn concurrent_test_runner<F>(tasks: Vec<F>) -> Vec<Result<(), String>>
     where
         F: std::future::Future<Output = Result<(), String>> + Send + 'static,
     {
-        let handles: Vec<_> = tasks.into_iter()
-            .map(|task| tokio::spawn(task))
-            .collect();
+        let handles: Vec<_> = tasks.into_iter().map(|task| tokio::spawn(task)).collect();
 
         let mut results = Vec::new();
         for handle in handles {
@@ -231,9 +233,11 @@ mod tests {
 
     #[test]
     fn test_mock_addressable_reference() {
-        let key = Key::StringKey { key: "test".to_string() };
+        let key = Key::StringKey {
+            key: "test".to_string(),
+        };
         let addr_ref = TestUtils::mock_addressable_reference("TestActor", key.clone());
-        
+
         assert_eq!(addr_ref.addressable_type, "TestActor");
         assert_eq!(addr_ref.key, key);
     }
@@ -254,7 +258,7 @@ mod tests {
         let start = std::time::Instant::now();
         TestUtils::simulate_work(10).await;
         let elapsed = start.elapsed();
-        
+
         // Should be approximately 10ms, allow some variance
         assert!(elapsed >= Duration::from_millis(8));
         assert!(elapsed <= Duration::from_millis(50)); // Generous upper bound for CI
@@ -269,7 +273,7 @@ mod tests {
     #[test]
     fn test_assert_in_range() {
         TestUtils::assert_in_range(5, 1, 10); // Should pass
-        
+
         // Test that it panics when out of range
         let result = std::panic::catch_unwind(|| {
             TestUtils::assert_in_range(15, 1, 10);
@@ -281,7 +285,7 @@ mod tests {
     fn test_atomic_counter() {
         let counter = TestUtils::atomic_counter();
         assert_eq!(counter.load(Ordering::SeqCst), 0);
-        
+
         counter.fetch_add(5, Ordering::SeqCst);
         assert_eq!(counter.load(Ordering::SeqCst), 5);
     }
@@ -290,7 +294,7 @@ mod tests {
     fn test_test_keys() {
         let keys = TestUtils::test_keys();
         assert_eq!(keys.len(), 4);
-        
+
         // Verify we have all key types
         assert!(matches!(keys[0], Key::StringKey { .. }));
         assert!(matches!(keys[1], Key::Int32Key { .. }));
@@ -302,11 +306,11 @@ mod tests {
     fn test_network_error_scenarios() {
         let errors = TestUtils::network_error_scenarios();
         assert!(errors.len() >= 4);
-        
+
         // All should be error types
         for error in &errors {
             match error {
-                OrbitError::NetworkError(_) | OrbitError::Timeout { .. } => {},
+                OrbitError::NetworkError(_) | OrbitError::Timeout { .. } => {}
                 _ => panic!("Expected network or timeout error"),
             }
         }
@@ -328,7 +332,7 @@ mod tests {
         let original = "test_string".to_string();
         let result = TestUtils::assert_json_roundtrip(&original);
         assert!(result.is_ok());
-        
+
         // Test with complex data
         let complex_data = vec![1, 2, 3, 4, 5];
         let result = TestUtils::assert_json_roundtrip(&complex_data);
@@ -348,7 +352,7 @@ mod tests {
         let start = std::time::Instant::now();
         let result = TestUtils::delayed_result("delayed", 10).await;
         let elapsed = start.elapsed();
-        
+
         assert_eq!(result, "delayed");
         assert!(elapsed >= Duration::from_millis(8));
     }
@@ -357,11 +361,11 @@ mod tests {
     fn test_deterministic_random_string() {
         let str1 = TestUtils::deterministic_random_string(42, 10);
         let str2 = TestUtils::deterministic_random_string(42, 10);
-        
+
         // Same seed should produce same result
         assert_eq!(str1, str2);
         assert_eq!(str1.len(), 10);
-        
+
         // Different seed should produce different result
         let str3 = TestUtils::deterministic_random_string(43, 10);
         assert_ne!(str1, str3);
@@ -378,7 +382,7 @@ mod tests {
                 Ok("success")
             }
         };
-        
+
         let result = TestUtils::mock_retry_operation(operation, 5, 1).await;
         assert_eq!(result, Ok("success"));
         assert_eq!(attempt_count, 3);

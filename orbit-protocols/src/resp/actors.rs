@@ -485,13 +485,14 @@ mod tests {
     fn test_keyvalue_actor_expiration() {
         let mut actor = KeyValueActor::new();
         actor.set_value("expire_me".to_string());
-        
+
         // Test immediate expiration
         actor.set_expiration(0);
         assert!(actor.is_expired() || actor.get_ttl() == 0);
-        
+
         // Reset for future expiration test
-        actor.expiration = Some((chrono::Utc::now() - chrono::Duration::seconds(1)).timestamp() as u64);
+        actor.expiration =
+            Some((chrono::Utc::now() - chrono::Duration::seconds(1)).timestamp() as u64);
         assert!(actor.is_expired());
     }
 
@@ -499,7 +500,7 @@ mod tests {
     fn test_keyvalue_actor_without_expiration() {
         let mut actor = KeyValueActor::new();
         actor.set_value("no_expire".to_string());
-        
+
         assert!(!actor.is_expired());
         assert_eq!(actor.get_ttl(), -1); // Indicates no expiration
     }
@@ -507,7 +508,7 @@ mod tests {
     #[test]
     fn test_keyvalue_actor_addressable_trait() {
         assert_eq!(KeyValueActor::addressable_type(), "KeyValueActor");
-        
+
         let actor = KeyValueActor::new();
         // Test that it implements the required traits
         let _: &dyn Addressable = &actor;
@@ -517,15 +518,15 @@ mod tests {
     #[test]
     fn test_keyvalue_actor_methods() {
         let mut actor = KeyValueActor::new();
-        
+
         actor.set_value("test".to_string());
-        
+
         let value = actor.get_value();
         assert_eq!(value, Some(&"test".to_string()));
-        
+
         let ttl = actor.get_ttl();
         assert_eq!(ttl, -1);
-        
+
         let expired = actor.is_expired();
         assert!(!expired);
     }
@@ -549,25 +550,25 @@ mod tests {
     #[test]
     fn test_hash_actor_comprehensive() {
         let mut actor = HashActor::new();
-        
+
         // Test multiple fields
         assert!(actor.hset("field1".to_string(), "value1".to_string()));
         assert!(actor.hset("field2".to_string(), "value2".to_string()));
         assert!(!actor.hset("field1".to_string(), "updated_value1".to_string())); // Update existing
-        
+
         assert_eq!(actor.hlen(), 2);
         assert_eq!(actor.hget("field1"), Some(&"updated_value1".to_string()));
-        
+
         let all_fields = actor.hgetall();
         assert_eq!(all_fields.len(), 2);
         assert!(all_fields.iter().any(|(k, _)| k == "field1"));
         assert!(all_fields.iter().any(|(k, _)| k == "field2"));
-        
+
         // Test non-existent field
         assert_eq!(actor.hget("nonexistent"), None);
         assert!(!actor.hexists("nonexistent"));
         assert!(!actor.hdel("nonexistent"));
-        
+
         // Test deletion
         assert!(actor.hdel("field1"));
         assert_eq!(actor.hlen(), 1);
@@ -577,39 +578,39 @@ mod tests {
     #[test]
     fn test_hash_actor_edge_cases() {
         let mut actor = HashActor::new();
-        
+
         // Test empty values
         assert!(actor.hset("".to_string(), "".to_string()));
         assert_eq!(actor.hget(""), Some(&"".to_string()));
-        
+
         // Test large values
         let large_field = "x".repeat(1000);
         let large_value = "y".repeat(10000);
         assert!(actor.hset(large_field.clone(), large_value.clone()));
         assert_eq!(actor.hget(&large_field), Some(&large_value));
-        
+
         assert_eq!(actor.hlen(), 2); // Empty field + large field
     }
 
     #[test]
     fn test_hash_actor_methods() {
         let mut actor = HashActor::new();
-        
+
         let set_result = actor.hset("field".to_string(), "value".to_string());
         assert!(set_result);
-        
+
         let get_result = actor.hget("field");
         assert_eq!(get_result, Some(&"value".to_string()));
-        
+
         let exists_result = actor.hexists("field");
         assert!(exists_result);
-        
+
         let len_result = actor.hlen();
         assert_eq!(len_result, 1);
-        
+
         let all_result = actor.hgetall();
         assert_eq!(all_result.len(), 1);
-        
+
         let del_result = actor.hdel("field");
         assert!(del_result);
     }
@@ -636,32 +637,35 @@ mod tests {
     #[test]
     fn test_list_actor_comprehensive() {
         let mut actor = ListActor::new();
-        
+
         // Test rpush and lpush
         let lpush_count = actor.lpush(vec!["first".to_string(), "second".to_string()]);
         assert_eq!(lpush_count, 2);
-        
+
         let rpush_count = actor.rpush(vec!["third".to_string(), "fourth".to_string()]);
         assert_eq!(rpush_count, 4);
-        
+
         // List should be: [second, first, third, fourth]
         assert_eq!(actor.llen(), 4);
-        
+
         // Test lindex
         assert_eq!(actor.lindex(0), Some(&"second".to_string()));
         assert_eq!(actor.lindex(-1), Some(&"fourth".to_string()));
         assert_eq!(actor.lindex(10), None); // Out of bounds
-        
+
         // Test lrange with different ranges
         assert_eq!(actor.lrange(0, 1), vec!["second", "first"]);
         assert_eq!(actor.lrange(-2, -1), vec!["third", "fourth"]);
-        assert_eq!(actor.lrange(0, 100), vec!["second", "first", "third", "fourth"]); // Beyond bounds
-        
+        assert_eq!(
+            actor.lrange(0, 100),
+            vec!["second", "first", "third", "fourth"]
+        ); // Beyond bounds
+
         // Test rpop
         let rpop_result = actor.rpop(2);
         assert_eq!(rpop_result, vec!["fourth", "third"]);
         assert_eq!(actor.llen(), 2);
-        
+
         // Test lpop with more than available
         let lpop_result = actor.lpop(5);
         assert_eq!(lpop_result, vec!["second", "first"]);
@@ -671,23 +675,23 @@ mod tests {
     #[test]
     fn test_list_actor_edge_cases() {
         let mut actor = ListActor::new();
-        
+
         // Test operations on empty list
         assert_eq!(actor.lpop(1), Vec::<String>::new());
         assert_eq!(actor.rpop(1), Vec::<String>::new());
         assert_eq!(actor.lrange(0, -1), Vec::<String>::new());
         assert_eq!(actor.lindex(0), None);
-        
+
         // Test with empty vectors
         assert_eq!(actor.lpush(vec![]), 0);
         assert_eq!(actor.rpush(vec![]), 0);
-        
+
         // Test with single elements
         actor.lpush(vec!["single".to_string()]);
         assert_eq!(actor.llen(), 1);
         assert_eq!(actor.lindex(0), Some(&"single".to_string()));
         assert_eq!(actor.lindex(-1), Some(&"single".to_string()));
-        
+
         // Test popping more than available
         let all_popped = actor.lpop(10);
         assert_eq!(all_popped, vec!["single"]);
@@ -697,25 +701,25 @@ mod tests {
     #[test]
     fn test_list_actor_methods() {
         let mut actor = ListActor::new();
-        
+
         let lpush_result = actor.lpush(vec!["test".to_string()]);
         assert_eq!(lpush_result, 1);
-        
+
         let rpush_result = actor.rpush(vec!["test2".to_string()]);
         assert_eq!(rpush_result, 2);
-        
+
         let len_result = actor.llen();
         assert_eq!(len_result, 2);
-        
+
         let range_result = actor.lrange(0, -1);
         assert_eq!(range_result, vec!["test", "test2"]);
-        
+
         let index_result = actor.lindex(0);
         assert_eq!(index_result, Some(&"test".to_string()));
-        
+
         let lpop_result = actor.lpop(1);
         assert_eq!(lpop_result, vec!["test"]);
-        
+
         let rpop_result = actor.rpop(1);
         assert_eq!(rpop_result, vec!["test2"]);
     }
@@ -740,31 +744,31 @@ mod tests {
     #[test]
     fn test_pubsub_actor_comprehensive() {
         let mut actor = PubSubActor::new();
-        
+
         // Test duplicate subscription
         actor.subscribe("sub1".to_string());
         actor.subscribe("sub1".to_string()); // Duplicate
         assert_eq!(actor.subscriber_count(), 1); // Should not add duplicate
-        
+
         // Test multiple subscribers
         for i in 2..=10 {
             actor.subscribe(format!("sub{}", i));
         }
         assert_eq!(actor.subscriber_count(), 9);
-        
+
         // Test publishing to multiple subscribers
         let delivered_count = actor.publish("broadcast message".to_string());
         assert_eq!(delivered_count, 9);
         assert_eq!(actor.message_count, 1);
-        
+
         // Test unsubscribe non-existent subscriber
         assert!(!actor.unsubscribe("nonexistent"));
         assert_eq!(actor.subscriber_count(), 9);
-        
+
         // Test unsubscribe existing subscriber
         assert!(actor.unsubscribe("sub5"));
         assert_eq!(actor.subscriber_count(), 8);
-        
+
         // Test another message
         let delivered_count2 = actor.publish("another message".to_string());
         assert_eq!(delivered_count2, 8);
@@ -774,24 +778,24 @@ mod tests {
     #[test]
     fn test_pubsub_actor_edge_cases() {
         let mut actor = PubSubActor::new();
-        
+
         // Test publishing with no subscribers
         let count = actor.publish("no one listening".to_string());
         assert_eq!(count, 0);
         assert_eq!(actor.message_count, 1);
-        
+
         // Test empty subscriber ID
         actor.subscribe("".to_string());
         assert_eq!(actor.subscriber_count(), 1);
         assert!(actor.unsubscribe(""));
         assert_eq!(actor.subscriber_count(), 0);
-        
+
         // Test large subscriber list
         for i in 0..1000 {
             actor.subscribe(format!("subscriber_{}", i));
         }
         assert_eq!(actor.subscriber_count(), 1000);
-        
+
         let delivered = actor.publish("mass message".to_string());
         assert_eq!(delivered, 1000);
     }
@@ -799,18 +803,18 @@ mod tests {
     #[test]
     fn test_pubsub_actor_methods() {
         let mut actor = PubSubActor::new();
-        
+
         actor.subscribe("sub".to_string());
-        
+
         let count_result = actor.subscriber_count();
         assert_eq!(count_result, 1);
-        
+
         let pub_result = actor.publish("message".to_string());
         assert_eq!(pub_result, 1);
-        
+
         let unsub_result = actor.unsubscribe("sub");
         assert!(unsub_result);
-        
+
         let final_count = actor.subscriber_count();
         assert_eq!(final_count, 0);
     }
@@ -819,13 +823,13 @@ mod tests {
     fn test_actor_defaults() {
         let kv_default = KeyValueActor::default();
         assert_eq!(kv_default.value, None);
-        
+
         let hash_default = HashActor::default();
         assert_eq!(hash_default.fields.len(), 0);
-        
+
         let list_default = ListActor::default();
         assert_eq!(list_default.items.len(), 0);
-        
+
         let pubsub_default = PubSubActor::default();
         assert_eq!(pubsub_default.subscribers.len(), 0);
         assert_eq!(pubsub_default.message_count, 0);
@@ -834,28 +838,28 @@ mod tests {
     #[test]
     fn test_actor_serialization() {
         // Test that all actors can be serialized and deserialized
-        
+
         // KeyValueActor
         let mut kv = KeyValueActor::new();
         kv.set_value("serialize_me".to_string());
         let kv_json = serde_json::to_string(&kv).unwrap();
         let kv_deserialized: KeyValueActor = serde_json::from_str(&kv_json).unwrap();
         assert_eq!(kv.value, kv_deserialized.value);
-        
+
         // HashActor
         let mut hash = HashActor::new();
         hash.hset("field".to_string(), "value".to_string());
         let hash_json = serde_json::to_string(&hash).unwrap();
         let hash_deserialized: HashActor = serde_json::from_str(&hash_json).unwrap();
         assert_eq!(hash.fields, hash_deserialized.fields);
-        
+
         // ListActor
         let mut list = ListActor::new();
         list.lpush(vec!["item".to_string()]);
         let list_json = serde_json::to_string(&list).unwrap();
         let list_deserialized: ListActor = serde_json::from_str(&list_json).unwrap();
         assert_eq!(list.items, list_deserialized.items);
-        
+
         // PubSubActor
         let mut pubsub = PubSubActor::new();
         pubsub.subscribe("test_sub".to_string());
@@ -871,15 +875,15 @@ mod tests {
         let kv = KeyValueActor::new();
         let debug_str = format!("{:?}", kv);
         assert!(debug_str.contains("KeyValueActor"));
-        
+
         let hash = HashActor::new();
         let debug_str = format!("{:?}", hash);
         assert!(debug_str.contains("HashActor"));
-        
+
         let list = ListActor::new();
         let debug_str = format!("{:?}", list);
         assert!(debug_str.contains("ListActor"));
-        
+
         let pubsub = PubSubActor::new();
         let debug_str = format!("{:?}", pubsub);
         assert!(debug_str.contains("PubSubActor"));
