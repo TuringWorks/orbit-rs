@@ -192,7 +192,7 @@
 <a href=#192 id=192 data-nosnippet>192</a><span class="doccomment">/// Create a sample embedding vector with deterministic values
 <a href=#193 id=193 data-nosnippet>193</a></span><span class="kw">fn </span>create_sample_embedding(dimension: usize, seed: f32) -&gt; Vec&lt;f32&gt; {
 <a href=#194 id=194 data-nosnippet>194</a>    (<span class="number">0</span>..dimension)
-<a href=#195 id=195 data-nosnippet>195</a>        .map(|i| ((seed + i <span class="kw">as </span>f32 * <span class="number">0.01</span>).sin() * <span class="number">0.5</span>))
+<a href=#195 id=195 data-nosnippet>195</a>        .map(|i| (seed + i <span class="kw">as </span>f32 * <span class="number">0.01</span>).sin() * <span class="number">0.5</span>)
 <a href=#196 id=196 data-nosnippet>196</a>        .collect()
 <a href=#197 id=197 data-nosnippet>197</a>}
 <a href=#198 id=198 data-nosnippet>198</a>
