@@ -203,12 +203,12 @@
 <a href=#203 id=203 data-nosnippet>203</a>        ).<span class="kw">await</span>.map_err(|e| ProtocolError::RespError(<span class="macro">format!</span>(<span class="string">"ERR actor error: {}"</span>, e)))<span class="question-mark">?</span>;
 <a href=#204 id=204 data-nosnippet>204</a>
 <a href=#205 id=205 data-nosnippet>205</a>        <span class="comment">// Invoke set_value method on the actor
-<a href=#206 id=206 data-nosnippet>206</a>        </span>actor_ref.invoke(<span class="string">"set_value"</span>, <span class="macro">vec!</span>[value.clone().into()])
+<a href=#206 id=206 data-nosnippet>206</a>        </span>actor_ref.invoke::&lt;()&gt;(<span class="string">"set_value"</span>, <span class="macro">vec!</span>[value.clone().into()])
 <a href=#207 id=207 data-nosnippet>207</a>            .<span class="kw">await</span>.map_err(|e| ProtocolError::RespError(<span class="macro">format!</span>(<span class="string">"ERR actor invocation failed: {}"</span>, e)))<span class="question-mark">?</span>;
 <a href=#208 id=208 data-nosnippet>208</a>
 <a href=#209 id=209 data-nosnippet>209</a>        <span class="comment">// Set expiration if provided
 <a href=#210 id=210 data-nosnippet>210</a>        </span><span class="kw">if let </span><span class="prelude-val">Some</span>(seconds) = expiration_seconds {
-<a href=#211 id=211 data-nosnippet>211</a>            actor_ref.invoke(<span class="string">"set_expiration"</span>, <span class="macro">vec!</span>[seconds.into()])
+<a href=#211 id=211 data-nosnippet>211</a>            actor_ref.invoke::&lt;()&gt;(<span class="string">"set_expiration"</span>, <span class="macro">vec!</span>[seconds.into()])
 <a href=#212 id=212 data-nosnippet>212</a>                .<span class="kw">await</span>.map_err(|e| ProtocolError::RespError(<span class="macro">format!</span>(<span class="string">"ERR actor invocation failed: {}"</span>, e)))<span class="question-mark">?</span>;
 <a href=#213 id=213 data-nosnippet>213</a>        }
 <a href=#214 id=214 data-nosnippet>214</a>
@@ -806,7 +806,7 @@
 <a href=#806 id=806 data-nosnippet>806</a>        </span><span class="kw">let </span>config = VectorIndexConfig::new(index_name.clone(), dimension, metric);
 <a href=#807 id=807 data-nosnippet>807</a>        <span class="kw">let </span>config_value = serde_json::to_value(config)
 <a href=#808 id=808 data-nosnippet>808</a>            .map_err(|e| ProtocolError::RespError(<span class="macro">format!</span>(<span class="string">"ERR serialization failed: {}"</span>, e)))<span class="question-mark">?</span>;
-<a href=#809 id=809 data-nosnippet>809</a>        actor_ref.invoke(<span class="string">"create_index"</span>, <span class="macro">vec!</span>[config_value])
+<a href=#809 id=809 data-nosnippet>809</a>        actor_ref.invoke::&lt;()&gt;(<span class="string">"create_index"</span>, <span class="macro">vec!</span>[config_value])
 <a href=#810 id=810 data-nosnippet>810</a>            .<span class="kw">await</span>.map_err(|e| ProtocolError::RespError(<span class="macro">format!</span>(<span class="string">"ERR index creation failed: {}"</span>, e)))<span class="question-mark">?</span>;
 <a href=#811 id=811 data-nosnippet>811</a>
 <a href=#812 id=812 data-nosnippet>812</a>        <span class="macro">debug!</span>(<span class="string">"FT.CREATE {} DIM {} METRIC {:?}"</span>, index_name, dimension, metric);
@@ -859,7 +859,7 @@
 <a href=#859 id=859 data-nosnippet>859</a>        <span class="comment">// Add vector to index
 <a href=#860 id=860 data-nosnippet>860</a>        </span><span class="kw">let </span>vector_value = serde_json::to_value(vector)
 <a href=#861 id=861 data-nosnippet>861</a>            .map_err(|e| ProtocolError::RespError(<span class="macro">format!</span>(<span class="string">"ERR serialization failed: {}"</span>, e)))<span class="question-mark">?</span>;
-<a href=#862 id=862 data-nosnippet>862</a>        actor_ref.invoke(<span class="string">"add_vector"</span>, <span class="macro">vec!</span>[vector_value])
+<a href=#862 id=862 data-nosnippet>862</a>        actor_ref.invoke::&lt;()&gt;(<span class="string">"add_vector"</span>, <span class="macro">vec!</span>[vector_value])
 <a href=#863 id=863 data-nosnippet>863</a>            .<span class="kw">await</span>.map_err(|e| ProtocolError::RespError(<span class="macro">format!</span>(<span class="string">"ERR vector add failed: {}"</span>, e)))<span class="question-mark">?</span>;
 <a href=#864 id=864 data-nosnippet>864</a>
 <a href=#865 id=865 data-nosnippet>865</a>        <span class="macro">debug!</span>(<span class="string">"FT.ADD {} {} (dim: {})"</span>, index_name, vector_id, vector_data_str.split(<span class="string">','</span>).count());
@@ -1048,7 +1048,7 @@
 <a href=#1048 id=1048 data-nosnippet>1048</a>        <span class="comment">// Add vector
 <a href=#1049 id=1049 data-nosnippet>1049</a>        </span><span class="kw">let </span>vector_value = serde_json::to_value(vector)
 <a href=#1050 id=1050 data-nosnippet>1050</a>            .map_err(|e| ProtocolError::RespError(<span class="macro">format!</span>(<span class="string">"ERR serialization failed: {}"</span>, e)))<span class="question-mark">?</span>;
-<a href=#1051 id=1051 data-nosnippet>1051</a>        actor_ref.invoke(<span class="string">"add_vector"</span>, <span class="macro">vec!</span>[vector_value])
+<a href=#1051 id=1051 data-nosnippet>1051</a>        actor_ref.invoke::&lt;()&gt;(<span class="string">"add_vector"</span>, <span class="macro">vec!</span>[vector_value])
 <a href=#1052 id=1052 data-nosnippet>1052</a>            .<span class="kw">await</span>.map_err(|e| ProtocolError::RespError(<span class="macro">format!</span>(<span class="string">"ERR vector add failed: {}"</span>, e)))<span class="question-mark">?</span>;
 <a href=#1053 id=1053 data-nosnippet>1053</a>
 <a href=#1054 id=1054 data-nosnippet>1054</a>        <span class="macro">debug!</span>(<span class="string">"VECTOR.ADD {} {}"</span>, key, vector_id);

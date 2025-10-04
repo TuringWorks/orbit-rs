@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["costs","planner","rules","stats"],"struct":["OptimizerConfig","QueryOptimizer"]};

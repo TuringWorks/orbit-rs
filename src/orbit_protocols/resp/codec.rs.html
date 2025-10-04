@@ -163,7 +163,7 @@
 <a href=#163 id=163 data-nosnippet>163</a>            </span>}
 <a href=#164 id=164 data-nosnippet>164</a>
 <a href=#165 id=165 data-nosnippet>165</a>            <span class="kw">let </span>remaining = <span class="kw-2">&amp;</span>src[pos..];
-<a href=#166 id=166 data-nosnippet>166</a>            <span class="kw">let </span><span class="kw-2">mut </span>temp_buf = BytesMut::from(<span class="kw-2">&amp;</span>remaining[..]);
+<a href=#166 id=166 data-nosnippet>166</a>            <span class="kw">let </span>temp_buf = BytesMut::from(<span class="kw-2">&amp;</span>remaining[..]);
 <a href=#167 id=167 data-nosnippet>167</a>
 <a href=#168 id=168 data-nosnippet>168</a>            <span class="kw">match </span>parse_resp_value(<span class="kw-2">&amp;</span>temp_buf)<span class="question-mark">? </span>{
 <a href=#169 id=169 data-nosnippet>169</a>                <span class="prelude-val">Some</span>((value, consumed)) =&gt; {

@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["analyzer","ast","executor","lexer","parser","types"],"struct":["SqlEngine"]};
+window.SIDEBAR_ITEMS = {"mod":["analyzer","ast","executor","lexer","optimizer","parser","types"],"struct":["SqlEngine"]};
