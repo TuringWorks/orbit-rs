@@ -26,7 +26,7 @@ pub enum Token {
     Transaction, Isolation, Level, Read, Write, Only,
     Uncommitted, Committed, Repeatable, Serializable,
     To, Option, For, Restrict, Public, Execute, Usage,
-    Function, Sequence, Database, Work, No, Chain, Release,
+    Function, Sequence, Database, Work, No, Chain, Release, Do,
     
     // Keywords - Functions and operators
     Case, When, Then, Else, End, In, Between, Like, ILike, Similar,
@@ -205,6 +205,7 @@ impl Lexer {
             ("NO", Token::No),
             ("CHAIN", Token::Chain),
             ("RELEASE", Token::Release),
+            ("DO", Token::Do),
             
             // Expression Keywords
             ("CASE", Token::Case),
@@ -591,7 +592,16 @@ impl Lexer {
                         '<' => {
                             self.advance();
                             return match self.current_char {
-                                Some('=') => { self.advance(); Token::LessThanOrEqual }
+                                Some('=') => {
+                                    if self.peek() == Some('>') {
+                                        // <=> vector cosine distance
+                                        self.advance(); self.advance();
+                                        Token::VectorCosineDistance
+                                    } else {
+                                        self.advance();
+                                        Token::LessThanOrEqual
+                                    }
+                                }
                                 Some('>') => { self.advance(); Token::NotEqual }
                                 Some('-') if self.peek() == Some('>') => {
                                     self.advance(); self.advance();

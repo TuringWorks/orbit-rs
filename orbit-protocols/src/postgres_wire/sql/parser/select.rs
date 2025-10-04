@@ -304,7 +304,7 @@ impl SelectParser {
             *pos += 1;
         }
         
-        if let Token::Identifier(alias_name) = tokens.get(*pos) {
+        if let Some(Token::Identifier(alias_name)) = tokens.get(*pos) {
             *pos += 1;
             Ok(Some(alias_name.clone()))
         } else {
@@ -332,7 +332,7 @@ impl SelectParser {
                 let query = Box::new(self.parse_select(tokens, pos)?);
                 self.expect_token(tokens, pos, &Token::RightParen)?;
                 let alias = self.parse_table_alias(tokens, pos)?;
-                Ok(FromClause::Subquery { query, alias })
+                Ok(FromClause::Subquery { query, alias: alias.unwrap_or_else(|| TableAlias { name: "".to_string(), columns: None }) })
             } else {
                 // Table function or nested table reference
                 let expr = self.expression_parser.parse_expression(tokens, pos)?;
@@ -382,7 +382,7 @@ impl SelectParser {
             *pos += 1;
         }
         
-        if let Token::Identifier(alias_name) = tokens.get(*pos) {
+        if let Some(Token::Identifier(alias_name)) = tokens.get(*pos) {
             let name = alias_name.clone();
             *pos += 1;
             

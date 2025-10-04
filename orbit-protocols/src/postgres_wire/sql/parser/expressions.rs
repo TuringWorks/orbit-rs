@@ -273,7 +273,6 @@ impl ExpressionParser {
             Token::FirstValue | Token::LastValue | Token::NthValue => {
                 self.parse_window_function(tokens, pos)
             }
-            }
             Token::LeftParen => {
                 *pos += 1; // consume '('
                 let expr = self.parse_expression(tokens, pos)?;
@@ -352,16 +351,24 @@ impl ExpressionParser {
         };
         
         // Parse optional FILTER clause
-        let filter = if *pos < tokens.len() && matches!(tokens[*pos], Token::Identifier(ref s)) && s.to_uppercase() == "FILTER" {
-            *pos += 1;
-            if *pos < tokens.len() && matches!(tokens[*pos], Token::LeftParen) {
-                *pos += 1;
-                if *pos < tokens.len() && matches!(tokens[*pos], Token::Where) {
+        let filter = if *pos < tokens.len() {
+            if let Token::Identifier(s) = &tokens[*pos] {
+                if s.to_uppercase() == "FILTER" {
                     *pos += 1;
-                    let filter_expr = self.parse_expression(tokens, pos)?;
-                    if *pos < tokens.len() && matches!(tokens[*pos], Token::RightParen) {
+                    if *pos < tokens.len() && matches!(tokens[*pos], Token::LeftParen) {
                         *pos += 1;
-                        Some(Box::new(filter_expr))
+                        if *pos < tokens.len() && matches!(tokens[*pos], Token::Where) {
+                            *pos += 1;
+                            let filter_expr = self.parse_expression(tokens, pos)?;
+                            if *pos < tokens.len() && matches!(tokens[*pos], Token::RightParen) {
+                                *pos += 1;
+                                Some(Box::new(filter_expr))
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        }
                     } else {
                         None
                     }
