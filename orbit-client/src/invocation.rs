@@ -70,11 +70,17 @@ impl InvocationSystem {
 
         tokio::time::sleep(Duration::from_millis(1)).await;
 
+        // Mock different return types based on method name
+        let result_value = match invocation.method.as_str() {
+            "count" => serde_json::Value::Number(serde_json::Number::from(42)),
+            _ => serde_json::Value::String("Hello from actor!".to_string()),
+        };
+
         let result = InvocationResult {
             invocation_id,
             reference: invocation.reference,
             method: invocation.method,
-            result: Ok(serde_json::Value::String("Hello from actor!".to_string())),
+            result: Ok(result_value),
         };
 
         // Complete the pending invocation

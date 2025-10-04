@@ -239,4 +239,206 @@ mod tests {
         }
         assert_eq!(consumed, 22);
     }
+
+    #[test]
+    fn test_codec_new() {
+        let _codec = RespCodec::new();
+        let _default_codec = RespCodec::default();
+        // Just verify they can be created
+    }
+
+    #[test]
+    fn test_codec_decode_simple() {
+        let mut codec = RespCodec::new();
+        let mut buf = BytesMut::from("+OK\r\n");
+        let result = codec.decode(&mut buf).unwrap();
+        assert_eq!(result, Some(RespValue::simple_string("OK")));
+        assert!(buf.is_empty());
+    }
+
+    #[test]
+    fn test_codec_encode() {
+        let mut codec = RespCodec::new();
+        let mut buf = BytesMut::new();
+        
+        // Test encoding simple string
+        let value = RespValue::simple_string("Hello");
+        codec.encode(value, &mut buf).unwrap();
+        assert_eq!(buf, BytesMut::from("+Hello\r\n"));
+        
+        // Test encoding integer
+        buf.clear();
+        let value = RespValue::integer(42);
+        codec.encode(value, &mut buf).unwrap();
+        assert_eq!(buf, BytesMut::from(":42\r\n"));
+        
+        // Test encoding bulk string
+        buf.clear();
+        let value = RespValue::bulk_string_from_str("world");
+        codec.encode(value, &mut buf).unwrap();
+        assert_eq!(buf, BytesMut::from("$5\r\nworld\r\n"));
+    }
+
+    #[test]
+    fn test_codec_decode_incomplete() {
+        let mut codec = RespCodec::new();
+        
+        // Test incomplete simple string
+        let mut buf = BytesMut::from("+OK");
+        let result = codec.decode(&mut buf).unwrap();
+        assert_eq!(result, None);
+        
+        // Complete the message
+        buf.extend_from_slice(b"\r\n");
+        let result = codec.decode(&mut buf).unwrap();
+        assert_eq!(result, Some(RespValue::simple_string("OK")));
+    }
+
+    #[test]
+    fn test_parse_error() {
+        let buf = BytesMut::from(&b"-ERR something went wrong\r\n"[..]);
+        let (val, consumed) = parse_error(&buf).unwrap().unwrap();
+        assert_eq!(val, RespValue::Error("ERR something went wrong".to_string()));
+        assert_eq!(consumed, 27);
+    }
+
+    #[test]
+    fn test_parse_empty_bulk_string() {
+        let buf = BytesMut::from(&b"$0\r\n\r\n"[..]);
+        let (val, consumed) = parse_bulk_string(&buf).unwrap().unwrap();
+        assert_eq!(val, RespValue::BulkString("".as_bytes().into()));
+        assert_eq!(consumed, 6);
+    }
+
+    #[test]
+    fn test_parse_empty_array() {
+        let buf = BytesMut::from(&b"*0\r\n"[..]);
+        let (val, consumed) = parse_array(&buf).unwrap().unwrap();
+        match val {
+            RespValue::Array(arr) => assert_eq!(arr.len(), 0),
+            _ => panic!("Expected array"),
+        }
+        assert_eq!(consumed, 4);
+    }
+
+    #[test]
+    fn test_parse_null_array() {
+        let buf = BytesMut::from(&b"*-1\r\n"[..]);
+        let (val, consumed) = parse_array(&buf).unwrap().unwrap();
+        assert_eq!(val, RespValue::NullArray);
+        assert_eq!(consumed, 5);
+    }
+
+    #[test]
+    fn test_parse_mixed_array() {
+        let buf = BytesMut::from(&b"*3\r\n+OK\r\n:42\r\n$5\r\nhello\r\n"[..]);
+        let (val, consumed) = parse_array(&buf).unwrap().unwrap();
+        match val {
+            RespValue::Array(arr) => {
+                assert_eq!(arr.len(), 3);
+                assert_eq!(arr[0], RespValue::SimpleString("OK".to_string()));
+                assert_eq!(arr[1], RespValue::Integer(42));
+                assert_eq!(arr[2], RespValue::BulkString("hello".as_bytes().into()));
+            }
+            _ => panic!("Expected array"),
+        }
+        assert_eq!(consumed, 25);
+    }
+
+    #[test]
+    fn test_parse_incomplete_bulk_string() {
+        let buf = BytesMut::from(&b"$5\r\nhel"[..]);
+        let result = parse_bulk_string(&buf).unwrap();
+        assert_eq!(result, None); // Need more data
+    }
+
+    #[test]
+    fn test_parse_incomplete_array() {
+        let buf = BytesMut::from(&b"*2\r\n+OK\r\n"[..]);
+        let result = parse_array(&buf).unwrap();
+        assert_eq!(result, None); // Need more data for second element
+    }
+
+    #[test]
+    fn test_invalid_type_byte() {
+        let buf = BytesMut::from(&b"@invalid\r\n"[..]);
+        let result = parse_resp_value(&buf);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_invalid_integer() {
+        let buf = BytesMut::from(&b":not_a_number\r\n"[..]);
+        let result = parse_integer(&buf);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_invalid_bulk_string_length() {
+        let buf = BytesMut::from(&b"$invalid\r\n"[..]);
+        let result = parse_bulk_string(&buf);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_invalid_array_count() {
+        let buf = BytesMut::from(&b"*invalid\r\n"[..]);
+        let result = parse_array(&buf);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_find_crlf() {
+        let buf = BytesMut::from(&b"hello\r\nworld"[..]);
+        let pos = find_crlf(&buf, 0);
+        assert_eq!(pos, Some(5));
+        
+        let pos = find_crlf(&buf, 6);
+        assert_eq!(pos, None);
+    }
+
+    #[test]
+    fn test_codec_multiple_decode() {
+        let mut codec = RespCodec::new();
+        let mut buf = BytesMut::from("+OK\r\n:42\r\n$5\r\nhello\r\n");
+        
+        // Decode first message
+        let result1 = codec.decode(&mut buf).unwrap();
+        assert_eq!(result1, Some(RespValue::simple_string("OK")));
+        
+        // Decode second message
+        let result2 = codec.decode(&mut buf).unwrap();
+        assert_eq!(result2, Some(RespValue::integer(42)));
+        
+        // Decode third message
+        let result3 = codec.decode(&mut buf).unwrap();
+        assert_eq!(result3, Some(RespValue::bulk_string_from_str("hello")));
+        
+        // No more data
+        let result4 = codec.decode(&mut buf).unwrap();
+        assert_eq!(result4, None);
+        assert!(buf.is_empty());
+    }
+
+    #[test]
+    fn test_codec_encode_all_types() {
+        let mut codec = RespCodec::new();
+        let mut buf = BytesMut::new();
+        
+        let test_values = vec![
+            (RespValue::simple_string("test"), "+test\r\n"),
+            (RespValue::error("ERROR"), "-ERROR\r\n"),
+            (RespValue::integer(-123), ":-123\r\n"),
+            (RespValue::bulk_string_from_str("data"), "$4\r\ndata\r\n"),
+            (RespValue::NullBulkString, "$-1\r\n"),
+            (RespValue::array(vec![]), "*0\r\n"),
+            (RespValue::NullArray, "*-1\r\n"),
+        ];
+        
+        for (value, expected) in test_values {
+            buf.clear();
+            codec.encode(value, &mut buf).unwrap();
+            assert_eq!(buf, BytesMut::from(expected));
+        }
+    }
 }
