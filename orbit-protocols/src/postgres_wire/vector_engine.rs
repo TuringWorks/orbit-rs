@@ -5,12 +5,10 @@
 
 use std::sync::Arc;
 use std::collections::HashMap;
-use serde_json::Value as JsonValue;
 use tokio::sync::RwLock;
 
 use crate::error::{ProtocolError, ProtocolResult};
 use crate::vector_store::{Vector, VectorActor, VectorIndexConfig, SimilarityMetric, VectorSearchParams};
-use crate::postgres_wire::messages::type_oids;
 use super::query_engine::QueryResult;
 use orbit_client::OrbitClient;
 use orbit_shared::Key;
@@ -212,7 +210,7 @@ impl VectorQueryEngine {
         let paren_idx = using_part.find('(')
             .ok_or_else(|| ProtocolError::PostgresError("Missing column specification".to_string()))?;
             
-        let index_method = using_part[..paren_idx].trim();
+        let _index_method = using_part[..paren_idx].trim();
         
         // Extract column and operator class
         let close_paren = using_part.rfind(')')

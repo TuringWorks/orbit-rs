@@ -29,7 +29,6 @@ pub mod handlers;
 pub use server::McpServer;
 pub use types::{McpRequest, McpResponse, McpTool, McpError, McpResult};
 
-use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 
 /// MCP server configuration

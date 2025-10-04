@@ -2,7 +2,6 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use crate::error::ProtocolResult;
 
 /// Result type for MCP operations
 pub type McpResult<T> = Result<T, McpError>;

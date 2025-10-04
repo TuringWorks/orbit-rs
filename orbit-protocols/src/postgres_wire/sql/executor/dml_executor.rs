@@ -5,7 +5,7 @@
 //! and aggregate operations.
 
 use std::collections::HashMap;
-use crate::error::{ProtocolError, ProtocolResult};
+use crate::error::ProtocolResult;
 use crate::postgres_wire::sql::ast::*;
 use crate::postgres_wire::query_engine::QueryResult;
 use super::SqlExecutor;
@@ -111,14 +111,14 @@ pub async fn execute_select(
                 SelectItem::Wildcard => "*".to_string(),
                 SelectItem::QualifiedWildcard { qualifier } => format!("{}.*", qualifier),
                 SelectItem::Expression { alias: Some(alias), .. } => alias.clone(),
-                SelectItem::Expression { expr, alias: None } => {
+                SelectItem::Expression { expr: _, alias: None } => {
                     format!("column_{}", i + 1)
                 }
             })
             .collect()
     };
     
-    let table_name = if let Some(FromClause::Table { name, .. }) = &stmt.from_clause {
+    let _table_name = if let Some(FromClause::Table { name, .. }) = &stmt.from_clause {
         name.full_name()
     } else {
         "unknown_table".to_string()

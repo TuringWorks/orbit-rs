@@ -163,7 +163,7 @@ fn parse_array(src: &BytesMut) -> ProtocolResult<Option<(RespValue, usize)>> {
             }
 
             let remaining = &src[pos..];
-            let mut temp_buf = BytesMut::from(&remaining[..]);
+            let temp_buf = BytesMut::from(&remaining[..]);
 
             match parse_resp_value(&temp_buf)? {
                 Some((value, consumed)) => {

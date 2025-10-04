@@ -3,7 +3,6 @@
 //! This module defines the complete AST for ANSI SQL statements including
 //! DDL, DML, DCL, and TCL operations, with extensions for vector operations.
 
-use std::collections::HashMap;
 use crate::postgres_wire::sql::types::{SqlType, SqlValue};
 
 /// Top-level SQL statement

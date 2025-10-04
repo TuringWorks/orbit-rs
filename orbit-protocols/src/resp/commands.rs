@@ -203,12 +203,12 @@ impl CommandHandler {
         ).await.map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
 
         // Invoke set_value method on the actor
-        actor_ref.invoke("set_value", vec![value.clone().into()])
+        actor_ref.invoke::<()>("set_value", vec![value.clone().into()])
             .await.map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
 
         // Set expiration if provided
         if let Some(seconds) = expiration_seconds {
-            actor_ref.invoke("set_expiration", vec![seconds.into()])
+            actor_ref.invoke::<()>("set_expiration", vec![seconds.into()])
                 .await.map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
         }
 
@@ -806,7 +806,7 @@ impl CommandHandler {
         let config = VectorIndexConfig::new(index_name.clone(), dimension, metric);
         let config_value = serde_json::to_value(config)
             .map_err(|e| ProtocolError::RespError(format!("ERR serialization failed: {}", e)))?;
-        actor_ref.invoke("create_index", vec![config_value])
+        actor_ref.invoke::<()>("create_index", vec![config_value])
             .await.map_err(|e| ProtocolError::RespError(format!("ERR index creation failed: {}", e)))?;
 
         debug!("FT.CREATE {} DIM {} METRIC {:?}", index_name, dimension, metric);
@@ -859,7 +859,7 @@ impl CommandHandler {
         // Add vector to index
         let vector_value = serde_json::to_value(vector)
             .map_err(|e| ProtocolError::RespError(format!("ERR serialization failed: {}", e)))?;
-        actor_ref.invoke("add_vector", vec![vector_value])
+        actor_ref.invoke::<()>("add_vector", vec![vector_value])
             .await.map_err(|e| ProtocolError::RespError(format!("ERR vector add failed: {}", e)))?;
 
         debug!("FT.ADD {} {} (dim: {})", index_name, vector_id, vector_data_str.split(',').count());
@@ -1048,7 +1048,7 @@ impl CommandHandler {
         // Add vector
         let vector_value = serde_json::to_value(vector)
             .map_err(|e| ProtocolError::RespError(format!("ERR serialization failed: {}", e)))?;
-        actor_ref.invoke("add_vector", vec![vector_value])
+        actor_ref.invoke::<()>("add_vector", vec![vector_value])
             .await.map_err(|e| ProtocolError::RespError(format!("ERR vector add failed: {}", e)))?;
 
         debug!("VECTOR.ADD {} {}", key, vector_id);

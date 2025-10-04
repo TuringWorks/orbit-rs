@@ -11,7 +11,7 @@ pub fn get_available_tools() -> Vec<McpTool> {
 /// Execute an MCP tool
 pub async fn execute_tool(
     tool_name: &str,
-    parameters: HashMap<String, serde_json::Value>,
+    _parameters: HashMap<String, serde_json::Value>,
 ) -> McpToolResult {
     McpToolResult::error(format!("Tool '{}' not yet implemented", tool_name))
 }

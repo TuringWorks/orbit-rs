@@ -3,7 +3,6 @@
 use crate::postgres_wire::sql::ast::*;
 use crate::postgres_wire::sql::lexer::Token;
 use crate::postgres_wire::sql::parser::expressions::ExpressionParser;
-use crate::postgres_wire::sql::parser::{ParseResult, ParseError};
 use crate::error::ProtocolResult;
 
 /// Parser for SELECT statements

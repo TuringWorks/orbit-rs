@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info};
 
 use super::messages::{
     AuthenticationResponse, BackendMessage, FieldDescription, FrontendMessage,

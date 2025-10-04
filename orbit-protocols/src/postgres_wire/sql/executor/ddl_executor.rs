@@ -2,7 +2,7 @@
 //! 
 //! This module handles execution of DDL statements (CREATE, ALTER, DROP)
 
-use crate::error::{ProtocolError, ProtocolResult};
+use crate::error::ProtocolResult;
 use crate::postgres_wire::sql::ast::*;
 use crate::postgres_wire::query_engine::QueryResult;
 use super::SqlExecutor;

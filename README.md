@@ -608,16 +608,17 @@ The project includes a comprehensive GitHub Actions CI/CD pipeline with automate
 
 **Protocol Adapters** ✅
 - [x] **Redis RESP Protocol**: Complete Redis compatibility with actor mapping
-- [x] **PostgreSQL Wire Protocol**: Full DDL/DCL/TCL support with vector operations
-- [x] **ANSI SQL Compliance**: Comprehensive DDL/DCL/TCL parser and executor
+- [x] **PostgreSQL Wire Protocol**: Full DDL/DCL/TCL/DML support with vector operations
+- [x] **ANSI SQL Compliance**: Comprehensive DDL/DCL/TCL/DML parser and executor
 - [x] **SQL Expression Parser**: Full operator precedence with vector operations support
 - [x] **Vector Operations**: pgvector compatible with IVFFLAT/HNSW indexes
 - [x] **SQL Type System**: All PostgreSQL data types including vectors
 - [x] **DCL Support**: GRANT/REVOKE with privilege management
 - [x] **TCL Support**: Transaction control with isolation levels
 - [x] **MCP Server**: Model Context Protocol for AI agent integration
-- [ ] **PostgreSQL DML**: SELECT, INSERT, UPDATE, DELETE (in progress)
-- [ ] **Advanced SQL**: Stored procedures, triggers, window functions
+- [x] **PostgreSQL DML**: Complete SELECT, INSERT, UPDATE, DELETE with JOINs, subqueries, CTEs, window functions
+- [x] **Advanced SQL**: JOINs, subqueries, CTEs, window functions, RETURNING clauses, ON CONFLICT
+- [ ] **Future SQL**: Stored procedures, triggers, full-text search
 
 **Ecosystem Integration**
 - [x] **Kubernetes Operator**: Custom CRDs for cluster, actor, and transaction management

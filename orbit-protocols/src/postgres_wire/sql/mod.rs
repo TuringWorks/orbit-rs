@@ -24,6 +24,7 @@ pub mod ast;
 pub mod parser;
 pub mod analyzer;
 pub mod executor;
+pub mod optimizer;
 pub mod types;
 
 #[cfg(test)]
@@ -35,7 +36,7 @@ pub use parser::{SqlParser, ParseResult};
 pub use executor::{SqlExecutor, ExecutionResult};
 pub use types::{SqlType, SqlValue};
 
-use crate::error::{ProtocolError, ProtocolResult};
+use crate::error::ProtocolResult;
 
 /// Main SQL engine that coordinates parsing, analysis, and execution
 pub struct SqlEngine {

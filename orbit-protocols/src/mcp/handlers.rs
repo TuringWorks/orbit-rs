@@ -1,7 +1,7 @@
 //! MCP request handlers
 
 use super::types::{McpRequest, McpResponse, McpError};
-use serde_json::{json, Value};
+use serde_json::json;
 
 /// Handle MCP requests
 pub async fn handle_request(request: McpRequest) -> McpResponse {

@@ -5,7 +5,7 @@
 use crate::postgres_wire::sql::{
     ast::*,
     lexer::Token,
-    types::{SqlType, SqlValue},
+    types::SqlValue,
 };
 use super::{ParseResult, ParseError, SqlParser, utilities};
 
