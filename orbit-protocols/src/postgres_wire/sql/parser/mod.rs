@@ -8,6 +8,7 @@ pub mod dml;
 pub mod dcl;
 pub mod tcl;
 pub mod expressions;
+pub mod select;
 pub mod utilities;
 
 use crate::error::{ProtocolError, ProtocolResult};

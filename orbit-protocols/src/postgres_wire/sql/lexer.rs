@@ -19,6 +19,7 @@ pub enum Token {
     Where, Group, By, Having, Order, Limit, Offset,
     Join, Inner, Left, Right, Full, Outer, Cross, On, Using, Natural,
     Union, Intersect, Except, All, Distinct,
+    Asc, Desc, Nulls, First, Last,
     
     // Keywords - DCL/TCL
     Grant, Revoke, Begin, Commit, Rollback, Savepoint,
@@ -157,6 +158,11 @@ impl Lexer {
             ("EXCEPT", Token::Except),
             ("ALL", Token::All),
             ("DISTINCT", Token::Distinct),
+            ("ASC", Token::Asc),
+            ("DESC", Token::Desc),
+            ("NULLS", Token::Nulls),
+            ("FIRST", Token::First),
+            ("LAST", Token::Last),
             
             // Control Keywords
             ("GRANT", Token::Grant),

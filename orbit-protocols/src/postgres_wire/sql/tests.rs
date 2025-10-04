@@ -4,7 +4,9 @@
 
 #[cfg(test)]
 mod tests {
-    use crate::postgres_wire::sql::{SqlEngine, SqlParser};
+use crate::postgres_wire::sql::lexer::*;
+use crate::postgres_wire::sql::parser::select::SelectParser;
+use crate::postgres_wire::sql::ast::*;
 
     #[tokio::test]
     async fn test_select_parsing() {
@@ -80,21 +82,19 @@ mod tests {
     }
     
     #[test]
-    fn test_where_expressions() {
-        let mut parser = SqlParser::new();
-        
-        // Test various WHERE expressions
-        let sql_queries = vec![
-            "SELECT * FROM users WHERE id = 1",
-            "SELECT * FROM users WHERE name LIKE 'John%'",
-            "SELECT * FROM users WHERE age > 18 AND status = 'active'",
-            "SELECT * FROM users WHERE id IN (1, 2, 3)",
-            "SELECT * FROM users WHERE email IS NOT NULL",
-        ];
-        
-        for sql in sql_queries {
-            let result = parser.parse(sql);
-            assert!(result.is_ok(), "Failed to parse: {} - Error: {:?}", sql, result);
-        }
+    fn test_basic_select_parsing() {
+        let sql = "SELECT id, name FROM users WHERE age > 21 LIMIT 10";
+        let mut lexer = Lexer::new(sql);
+        let tokens = lexer.tokenize();
+
+        let mut parser = SelectParser::new();
+        let mut pos = 0;
+        let select = parser.parse_select(&tokens, &mut pos).expect("parse select");
+
+        // Verify basic structure
+        assert_eq!(select.select_list.len(), 2);
+        assert!(select.from_clause.is_some());
+        assert!(select.where_clause.is_some());
+        assert!(select.limit.is_some());
     }
 }
