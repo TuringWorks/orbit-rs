@@ -912,13 +912,13 @@
 <a href=#912 id=912 data-nosnippet>912</a>
 <a href=#913 id=913 data-nosnippet>913</a>    <span class="attr">#[test]
 <a href=#914 id=914 data-nosnippet>914</a>    </span><span class="kw">fn </span>test_basic_tokens() {
-<a href=#915 id=915 data-nosnippet>915</a>        <span class="kw">let </span><span class="kw-2">mut </span>lexer = Lexer::new(<span class="string">"SELECT * FROM table WHERE id = 1"</span>);
+<a href=#915 id=915 data-nosnippet>915</a>        <span class="kw">let </span><span class="kw-2">mut </span>lexer = Lexer::new(<span class="string">"SELECT * FROM users WHERE id = 1"</span>);
 <a href=#916 id=916 data-nosnippet>916</a>        <span class="kw">let </span>tokens = lexer.tokenize();
 <a href=#917 id=917 data-nosnippet>917</a>
 <a href=#918 id=918 data-nosnippet>918</a>        <span class="macro">assert_eq!</span>(tokens[<span class="number">0</span>], Token::Select);
 <a href=#919 id=919 data-nosnippet>919</a>        <span class="macro">assert_eq!</span>(tokens[<span class="number">1</span>], Token::Multiply);
 <a href=#920 id=920 data-nosnippet>920</a>        <span class="macro">assert_eq!</span>(tokens[<span class="number">2</span>], Token::From);
-<a href=#921 id=921 data-nosnippet>921</a>        <span class="macro">assert_eq!</span>(tokens[<span class="number">3</span>], Token::Identifier(<span class="string">"table"</span>.to_string()));
+<a href=#921 id=921 data-nosnippet>921</a>        <span class="macro">assert_eq!</span>(tokens[<span class="number">3</span>], Token::Identifier(<span class="string">"users"</span>.to_string()));
 <a href=#922 id=922 data-nosnippet>922</a>        <span class="macro">assert_eq!</span>(tokens[<span class="number">4</span>], Token::Where);
 <a href=#923 id=923 data-nosnippet>923</a>        <span class="macro">assert_eq!</span>(tokens[<span class="number">5</span>], Token::Identifier(<span class="string">"id"</span>.to_string()));
 <a href=#924 id=924 data-nosnippet>924</a>        <span class="macro">assert_eq!</span>(tokens[<span class="number">6</span>], Token::Equal);
