@@ -5,9 +5,9 @@
 #[cfg(test)]
 mod tests {
     use crate::postgres_wire::sql::ast::*;
-    use crate::postgres_wire::sql::lexer::*;
     use crate::postgres_wire::sql::lexer::{Lexer, Token};
     use crate::postgres_wire::sql::parser::select::SelectParser;
+    use crate::postgres_wire::sql::SqlEngine;
 
     #[tokio::test]
     async fn test_select_parsing() {
