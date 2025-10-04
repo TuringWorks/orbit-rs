@@ -42,7 +42,7 @@
     &amp;mut self,
     table_name: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.90.0/std/primitive.str.html">str</a>,
     rows_inserted: <a class="primitive" href="https://doc.rust-lang.org/1.90.0/std/primitive.usize.html">usize</a>,
-    rows_updated: <a class="primitive" href="https://doc.rust-lang.org/1.90.0/std/primitive.usize.html">usize</a>,
+    _rows_updated: <a class="primitive" href="https://doc.rust-lang.org/1.90.0/std/primitive.usize.html">usize</a>,
     rows_deleted: <a class="primitive" href="https://doc.rust-lang.org/1.90.0/std/primitive.usize.html">usize</a>,
 )</h4></section></summary><div class="docblock"><p>Auto-update statistics based on data changes</p>
 </div></details><details class="toggle method-toggle" open><summary><section id="method.get_tables_with_stats" class="method"><a class="src rightside" href="../../../../../src/orbit_protocols/postgres_wire/sql/optimizer/stats.rs.html#262-264">Source</a><h4 class="code-header">pub fn <a href="#method.get_tables_with_stats" class="fn">get_tables_with_stats</a>(&amp;self) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.90.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;&amp;<a class="struct" href="https://doc.rust-lang.org/1.90.0/alloc/string/struct.String.html" title="struct alloc::string::String">String</a>&gt;</h4></section></summary><div class="docblock"><p>Get all table names with statistics</p>

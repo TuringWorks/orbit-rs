@@ -200,7 +200,7 @@
 <a href=#200 id=200 data-nosnippet>200</a>    };
 <a href=#201 id=201 data-nosnippet>201</a>
 <a href=#202 id=202 data-nosnippet>202</a>    <span class="comment">// Create SELECT statement with ORDER BY and LIMIT
-<a href=#203 id=203 data-nosnippet>203</a>    </span><span class="prelude-val">Ok</span>(Statement::Select(SelectStatement {
+<a href=#203 id=203 data-nosnippet>203</a>    </span><span class="prelude-val">Ok</span>(Statement::Select(Box::new(SelectStatement {
 <a href=#204 id=204 data-nosnippet>204</a>        with: <span class="prelude-val">None</span>,
 <a href=#205 id=205 data-nosnippet>205</a>        select_list,
 <a href=#206 id=206 data-nosnippet>206</a>        distinct,
@@ -212,7 +212,7 @@
 <a href=#212 id=212 data-nosnippet>212</a>        limit,
 <a href=#213 id=213 data-nosnippet>213</a>        offset,
 <a href=#214 id=214 data-nosnippet>214</a>        for_clause: <span class="prelude-val">None</span>,
-<a href=#215 id=215 data-nosnippet>215</a>    }))
+<a href=#215 id=215 data-nosnippet>215</a>    })))
 <a href=#216 id=216 data-nosnippet>216</a>}
 <a href=#217 id=217 data-nosnippet>217</a>
 <a href=#218 id=218 data-nosnippet>218</a><span class="doccomment">/// Parse FROM clause
@@ -506,7 +506,7 @@
 <a href=#506 id=506 data-nosnippet>506</a>        <span class="comment">// INSERT ... SELECT
 <a href=#507 id=507 data-nosnippet>507</a>        </span><span class="kw">let </span>select_stmt = parse_select(parser)<span class="question-mark">?</span>;
 <a href=#508 id=508 data-nosnippet>508</a>        <span class="kw">if let </span>Statement::Select(select) = select_stmt {
-<a href=#509 id=509 data-nosnippet>509</a>            InsertSource::Query(Box::new(select))
+<a href=#509 id=509 data-nosnippet>509</a>            InsertSource::Query(select)
 <a href=#510 id=510 data-nosnippet>510</a>        } <span class="kw">else </span>{
 <a href=#511 id=511 data-nosnippet>511</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(ParseError {
 <a href=#512 id=512 data-nosnippet>512</a>                message: <span class="string">"Expected SELECT statement after INSERT INTO table"</span>.to_string(),

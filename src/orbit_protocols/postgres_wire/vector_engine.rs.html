@@ -105,7 +105,7 @@
 <a href=#105 id=105 data-nosnippet>105</a>        // Example: CREATE TABLE documents (id SERIAL, content TEXT, embedding VECTOR(384));
 <a href=#106 id=106 data-nosnippet>106</a>
 <a href=#107 id=107 data-nosnippet>107</a>        </span><span class="kw">let </span>sql_clean = sql.trim().to_uppercase();
-<a href=#108 id=108 data-nosnippet>108</a>        <span class="kw">let </span>sql_clean = sql_clean.replace(<span class="string">'\n'</span>, <span class="string">" "</span>).replace(<span class="string">'\t'</span>, <span class="string">" "</span>);
+<a href=#108 id=108 data-nosnippet>108</a>        <span class="kw">let </span>sql_clean = sql_clean.replace([<span class="string">'\n'</span>, <span class="string">'\t'</span>], <span class="string">" "</span>);
 <a href=#109 id=109 data-nosnippet>109</a>
 <a href=#110 id=110 data-nosnippet>110</a>        <span class="comment">// Extract table name
 <a href=#111 id=111 data-nosnippet>111</a>        </span><span class="kw">let </span>parts: Vec&lt;<span class="kw-2">&amp;</span>str&gt; = sql_clean.split_whitespace().collect();
