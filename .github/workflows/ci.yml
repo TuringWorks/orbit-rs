@@ -76,7 +76,7 @@ jobs:
     - name: Build examples
       run: |
         cargo build --package hello-world
-        cargo build --package distributed-transactions
+        cargo build --package distributed-transactions-example
         cargo build --package distributed-counter
         cargo build --package saga-example
 

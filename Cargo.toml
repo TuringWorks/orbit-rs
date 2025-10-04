@@ -19,6 +19,9 @@ members = [
     "examples/resp-server",
     "examples/vector-store",
     "examples/pgvector-store",
+    "examples/saga-example",
+    "examples/mcp-advanced-server",
+    "examples/mcp-basic-client",
 ]
 
 [workspace.package]
