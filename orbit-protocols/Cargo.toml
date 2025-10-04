@@ -70,3 +70,5 @@ resp = []
 postgres-wire = []
 cypher = []
 rest = []
+# Enable integration tests that require network access
+integration = []

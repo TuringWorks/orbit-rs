@@ -1,6 +1,14 @@
 //! End-to-end integration tests for PostgreSQL Wire Protocol
 //!
 //! These tests verify the full protocol implementation using the tokio-postgres client
+//!
+//! Note: These tests require network access and a runnable server context.
+//! They are compiled and run only when one of the following is set:
+//! - Cargo feature: `integration` (cargo test --features integration)
+//! - Build-time env var: CARGO_FEATURE_INTEGRATION=1 (CARGO_FEATURE_INTEGRATION=1 cargo test)
+
+// Only compile this test crate when integration tests are explicitly enabled
+#![cfg(feature = "integration")]
 
 use std::time::Duration;
 use tokio_postgres::{Error, NoTls};
