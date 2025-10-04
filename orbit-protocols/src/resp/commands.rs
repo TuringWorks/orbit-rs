@@ -385,7 +385,7 @@ impl CommandHandler {
     }
 
     async fn cmd_hset(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
-        if args.len() < 3 || args.len() % 2 == 0 {
+        if args.len() < 3 || args.len().is_multiple_of(2) {
             return Err(ProtocolError::RespError(
                 "ERR wrong number of arguments for 'hset' command".to_string(),
             ));
