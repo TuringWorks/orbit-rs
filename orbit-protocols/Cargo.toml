@@ -3,7 +3,7 @@ name = "orbit-protocols"
 version = "0.1.0"
 edition = "2021"
 authors = ["TuringWorks"]
-license = "MIT"
+license = "BSD-3-Clause OR MIT"
 description = "Protocol adapters for Orbit distributed actor system (RESP, PostgreSQL Wire, Cypher)"
 repository = "https://github.com/TuringWorks/orbit-rs"
 

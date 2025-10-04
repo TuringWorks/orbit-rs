@@ -25,7 +25,7 @@ members = [
 version = "0.1.0"
 edition = "2021"
 authors = ["Ravindra Boddipalli <ravindra@turingworks.com>"]
-license = "BSD-3-Clause"
+license = "BSD-3-Clause OR MIT"
 description = "Orbit - Build distributed and scalable online services (Rust implementation)"
 repository = "https://github.com/TuringWorks/orbit-rs"
 

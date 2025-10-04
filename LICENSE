@@ -1,29 +1,30 @@
-BSD 3-Clause License
+# Orbit-RS Dual License
 
-Copyright (c) 2024, Orbit-RS Contributors
-All rights reserved.
+This project is dual licensed under your choice of either:
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
+## Option 1: BSD 3-Clause License
+See [LICENSE-BSD](LICENSE-BSD) for the full license text.
 
-1. Redistributions of source code must retain the above copyright notice, this
-   list of conditions and the following disclaimer.
+## Option 2: MIT License  
+See [LICENSE-MIT](LICENSE-MIT) for the full license text.
 
-2. Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
+## Using This Software
 
-3. Neither the name of the copyright holder nor the names of its
-   contributors may be used to endorse or promote products derived from
-   this software without specific prior written permission.
+You may choose either license when using, modifying, or distributing this software. You do not need to use both licenses - simply choose the one that best fits your needs.
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
-FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+### Why Dual License?
+
+We provide dual licensing to give you maximum flexibility:
+
+- **MIT License**: Very permissive and widely compatible with other open source projects
+- **BSD 3-Clause License**: Also very permissive but includes an additional clause regarding endorsements
+
+Both licenses are OSI-approved and allow commercial and non-commercial use, modification, and distribution.
+
+### Contributing
+
+By contributing to this project, you agree that your contributions will be licensed under both licenses, allowing users to choose either license for their use of the complete codebase including your contributions.
+
+---
+
+Copyright (c) 2024 Orbit-RS Contributors

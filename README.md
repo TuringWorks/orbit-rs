@@ -1,7 +1,7 @@
 # Orbit - Rust Implementation
 
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](#)
-[![License](https://img.shields.io/badge/license-BSD--3--Clause-blue.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-BSD--3--Clause%20OR%20MIT-blue.svg)](#license)
 [![Rust Version](https://img.shields.io/badge/rust-1.70+-red.svg)](https://www.rust-lang.org/)
 
 A high-performance, distributed virtual actor system framework reimplemented in Rust, inspired by Microsoft Orleans and the original Java Orbit framework.
@@ -401,6 +401,8 @@ WHERE NOT deleted AND (category IN ('ai', 'ml', 'research'));
 
 **Supported PostgreSQL Features:**
 - **DDL Operations**: CREATE/ALTER/DROP TABLE, INDEX, VIEW, SCHEMA, EXTENSION
+- **DCL Operations**: GRANT/REVOKE permissions with role-based access control
+- **TCL Operations**: BEGIN/COMMIT/ROLLBACK transactions with isolation levels
 - **Vector Data Types**: VECTOR(n), HALFVEC(n), SPARSEVEC(n) with pgvector compatibility
 - **Vector Indexes**: IVFFLAT and HNSW with configurable parameters
 - **Vector Operations**: Distance operators (<->, <#>, <=>) and similarity functions
@@ -409,6 +411,33 @@ WHERE NOT deleted AND (category IN ('ai', 'ml', 'research'));
 - **Schema Management**: Full schema creation and organization
 - **Expression Parser**: Comprehensive SQL expression parsing with operator precedence
 - **PostgreSQL Compatibility**: Wire protocol compatible with psql, pgAdmin, and other tools
+- **MCP Integration**: AI agents can execute SQL through Model Context Protocol
+
+**AI Agent Integration with MCP:**
+
+Orbit-RS includes a Model Context Protocol (MCP) server that enables AI agents to interact with the actor system using a standardized protocol:
+
+```rust
+use orbit_protocols::mcp::{McpServer, McpConfig};
+
+// Configure MCP server for AI agents
+let mcp_config = McpConfig {
+    name: "orbit-mcp-server".to_string(),
+    version: "0.1.0".to_string(),
+    capabilities: McpCapabilities::default()
+        .with_tools()
+        .with_resources()
+        .with_prompts(),
+};
+
+let mcp_server = McpServer::new(mcp_config).await?;
+
+// AI agents can now:
+// - Execute SQL queries against the actor system
+// - Manage actor lifecycles and state
+// - Access vector operations for AI/ML workloads
+// - Query system resources and metrics
+```
 
 **SQL Expression Parser Engine:**
 
@@ -515,9 +544,10 @@ The project includes a comprehensive GitHub Actions CI/CD pipeline with automate
 - **orbit-server-prometheus**: Prometheus metrics integration
 - **orbit-protocols**: Protocol adapters with comprehensive SQL support
   - Redis RESP protocol adapter
-  - PostgreSQL wire protocol with ANSI SQL DDL support
+  - PostgreSQL wire protocol with ANSI SQL DDL/DCL/TCL support
   - Vector operations (pgvector compatible)
   - Modular SQL parser (lexer, AST, executor)
+  - MCP (Model Context Protocol) server for AI agent integration
   - Neo4j Bolt protocol (planned)
   - REST API (planned)
 - **orbit-application**: Application-level utilities
@@ -578,13 +608,15 @@ The project includes a comprehensive GitHub Actions CI/CD pipeline with automate
 
 **Protocol Adapters** ✅
 - [x] **Redis RESP Protocol**: Complete Redis compatibility with actor mapping
-- [x] **PostgreSQL Wire Protocol**: Full DDL support with vector operations
-- [x] **ANSI SQL Compliance**: Comprehensive DDL parser and executor
+- [x] **PostgreSQL Wire Protocol**: Full DDL/DCL/TCL support with vector operations
+- [x] **ANSI SQL Compliance**: Comprehensive DDL/DCL/TCL parser and executor
 - [x] **SQL Expression Parser**: Full operator precedence with vector operations support
 - [x] **Vector Operations**: pgvector compatible with IVFFLAT/HNSW indexes
 - [x] **SQL Type System**: All PostgreSQL data types including vectors
+- [x] **DCL Support**: GRANT/REVOKE with privilege management
+- [x] **TCL Support**: Transaction control with isolation levels
+- [x] **MCP Server**: Model Context Protocol for AI agent integration
 - [ ] **PostgreSQL DML**: SELECT, INSERT, UPDATE, DELETE (in progress)
-- [ ] **Transaction Support**: SQL transaction control language
 - [ ] **Advanced SQL**: Stored procedures, triggers, window functions
 
 **Ecosystem Integration**
@@ -801,8 +833,18 @@ With the comprehensive SQL expression parser now complete, the immediate focus i
 - [x] **Service Mesh Integration**: Istio and Linkerd compatibility
 - [x] **Monitoring Stack**: Prometheus, Grafana, and alerting integration
 
+### ✅ Phase 7.5: AI Integration (Complete)
+- [x] **MCP Server**: Model Context Protocol server implementation
+- [x] **MCP Types**: Complete MCP protocol types and message handling
+- [x] **MCP Handlers**: Request routing and response formatting
+- [x] **AI Agent Tools**: Framework for exposing orbit capabilities to AI agents
+- [x] **SQL Integration**: AI agents can execute SQL through MCP
+- [x] **Actor Management**: AI agents can manage actor lifecycles through MCP
+
 ### 🚧 Phase 8: SQL Query Engine (In Progress)
 - [x] **DDL Operations**: CREATE/ALTER/DROP TABLE, INDEX, VIEW, SCHEMA, EXTENSION
+- [x] **DCL Operations**: GRANT/REVOKE permissions with privilege management
+- [x] **TCL Operations**: BEGIN/COMMIT/ROLLBACK with isolation levels and savepoints
 - [x] **Expression Parser**: Full operator precedence with vector operations
 - [ ] **SELECT Statements**: Basic SELECT with WHERE, ORDER BY, LIMIT
 - [ ] **INSERT Operations**: Single and batch insert operations
@@ -863,7 +905,20 @@ With the comprehensive SQL expression parser now complete, the immediate focus i
 
 ## License
 
-This project is licensed under the BSD 3-Clause License - see the [LICENSE](LICENSE) file for details.
+This project is dual licensed under your choice of:
+
+* **BSD 3-Clause License** ([LICENSE-BSD](LICENSE-BSD))
+* **MIT License** ([LICENSE-MIT](LICENSE-MIT))
+
+You may choose either license when using this project. See the respective license files for details.
+
+### Why Dual License?
+
+We provide dual licensing to give you flexibility in how you use Orbit-RS:
+- **MIT License**: Very permissive, widely compatible with other projects
+- **BSD 3-Clause**: Also permissive but includes an additional clause about endorsements
+
+Choose the license that best fits your project's needs.
 
 ## Credits
 
