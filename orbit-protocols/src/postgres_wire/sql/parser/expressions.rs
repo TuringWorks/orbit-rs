@@ -214,7 +214,7 @@ impl ExpressionParser {
         pos: &mut usize,
     ) -> ProtocolResult<Expression> {
         if *pos >= tokens.len() {
-              return Err(crate::error::ProtocolError::ParseError(
+            return Err(crate::error::ProtocolError::ParseError(
                 "Unexpected end of tokens".to_string(),
             ));
         }
@@ -255,7 +255,7 @@ impl ExpressionParser {
         pos: &mut usize,
     ) -> ProtocolResult<Expression> {
         if *pos >= tokens.len() {
-              return Err(crate::error::ProtocolError::ParseError(
+            return Err(crate::error::ProtocolError::ParseError(
                 "Unexpected end of tokens".to_string(),
             ));
         }
@@ -342,7 +342,7 @@ impl ExpressionParser {
                 let expr = self.parse_expression(tokens, pos)?;
 
                 if *pos >= tokens.len() || !matches!(tokens[*pos], Token::RightParen) {
-                      return Err(crate::error::ProtocolError::ParseError(
+                    return Err(crate::error::ProtocolError::ParseError(
                         "Expected ')' after expression".to_string(),
                     ));
                 }
@@ -350,7 +350,7 @@ impl ExpressionParser {
 
                 Ok(expr)
             }
-              _ => Err(crate::error::ProtocolError::ParseError(format!(
+            _ => Err(crate::error::ProtocolError::ParseError(format!(
                 "Unexpected token in expression: {:?}",
                 tokens[*pos]
             ))),

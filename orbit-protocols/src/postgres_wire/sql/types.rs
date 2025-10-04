@@ -148,15 +148,24 @@ pub enum SqlValue {
     Line(f64, f64, f64),          // Ax + By + C = 0
     Lseg((f64, f64), (f64, f64)), // Line segment: start and end points
     Box((f64, f64), (f64, f64)),  // Rectangle: upper-right and lower-left corners
-    Path { points: Vec<(f64, f64)>, open: bool },
+    Path {
+        points: Vec<(f64, f64)>,
+        open: bool,
+    },
     Polygon(Vec<(f64, f64)>),
-    Circle { center: (f64, f64), radius: f64 },
+    Circle {
+        center: (f64, f64),
+        radius: f64,
+    },
     Tsvector(Vec<TsVectorElement>),
     Tsquery(String), // Simplified representation
     Vector(Vec<f32>),
     HalfVec(Vec<f32>),          // Using f32 for now until half crate is added
     SparseVec(Vec<(u32, f32)>), // (index, value) pairs
-    Custom { type_name: String, data: Vec<u8> },
+    Custom {
+        type_name: String,
+        data: Vec<u8>,
+    },
 }
 
 /// PostgreSQL interval type representation
@@ -541,7 +550,6 @@ impl SqlValue {
         }
     }
 }
-
 
 impl std::fmt::Display for SqlValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
