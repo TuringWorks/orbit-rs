@@ -260,6 +260,8 @@ pub struct ClientStats {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use mockall::predicate::*;
+    use tokio::time::Duration;
 
     #[tokio::test]
     async fn test_client_builder() {
@@ -277,5 +279,218 @@ mod tests {
         assert_eq!(config.namespace, "default");
         assert_eq!(config.server_urls.len(), 1);
         assert_eq!(config.retry_attempts, 3);
+        assert_eq!(config.actor_timeout, Duration::from_secs(300));
+        assert_eq!(config.connection_timeout, Duration::from_secs(10));
+    }
+
+    #[test]
+    fn test_client_builder_all_options() {
+        let urls = vec![
+            "http://server1:50051".to_string(),
+            "http://server2:50051".to_string(),
+        ];
+        
+        let builder = OrbitClient::builder()
+            .with_namespace("production")
+            .with_server_urls(urls.clone())
+            .with_connection_timeout(Duration::from_secs(15))
+            .with_retry_attempts(5)
+            .with_actor_timeout(Duration::from_secs(600));
+
+        assert_eq!(builder.config.namespace, "production");
+        assert_eq!(builder.config.server_urls, urls);
+        assert_eq!(builder.config.connection_timeout, Duration::from_secs(15));
+        assert_eq!(builder.config.retry_attempts, 5);
+        assert_eq!(builder.config.actor_timeout, Duration::from_secs(600));
+    }
+
+    #[test]
+    fn test_client_builder_default() {
+        let builder = OrbitClientBuilder::default();
+        assert_eq!(builder.config.namespace, "default");
+    }
+
+    #[test]
+    fn test_client_config_clone_and_debug() {
+        let config = OrbitClientConfig {
+            namespace: "test".to_string(),
+            server_urls: vec!["http://test:50051".to_string()],
+            connection_timeout: Duration::from_secs(5),
+            retry_attempts: 2,
+            actor_timeout: Duration::from_secs(120),
+        };
+
+        let cloned = config.clone();
+        assert_eq!(config.namespace, cloned.namespace);
+        assert_eq!(config.server_urls, cloned.server_urls);
+        assert_eq!(config.connection_timeout, cloned.connection_timeout);
+        assert_eq!(config.retry_attempts, cloned.retry_attempts);
+        assert_eq!(config.actor_timeout, cloned.actor_timeout);
+
+        // Test Debug implementation
+        let debug_str = format!("{:?}", config);
+        assert!(debug_str.contains("test"));
+        assert!(debug_str.contains("OrbitClientConfig"));
+    }
+
+    #[test]
+    fn test_client_stats_debug() {
+        let stats = ClientStats {
+            namespace: "test".to_string(),
+            server_connections: 3,
+            node_id: Some(NodeId { key: "node-123".to_string(), namespace: "default".to_string() }),
+        };
+
+        let debug_str = format!("{:?}", stats);
+        assert!(debug_str.contains("test"));
+        assert!(debug_str.contains("3"));
+        assert!(debug_str.contains("node-123"));
+
+        let cloned = stats.clone();
+        assert_eq!(stats.namespace, cloned.namespace);
+        assert_eq!(stats.server_connections, cloned.server_connections);
+        assert_eq!(stats.node_id, cloned.node_id);
+    }
+
+    #[test]
+    fn test_client_stats_without_node_id() {
+        let stats = ClientStats {
+            namespace: "test".to_string(),
+            server_connections: 0,
+            node_id: None,
+        };
+
+        assert_eq!(stats.namespace, "test");
+        assert_eq!(stats.server_connections, 0);
+        assert!(stats.node_id.is_none());
+    }
+
+    #[test]
+    fn test_builder_fluent_interface() {
+        // Test that builder methods can be chained
+        let config = OrbitClient::builder()
+            .with_namespace("chain-test")
+            .with_retry_attempts(10)
+            .with_connection_timeout(Duration::from_secs(30))
+            .with_actor_timeout(Duration::from_secs(900))
+            .config;
+
+        assert_eq!(config.namespace, "chain-test");
+        assert_eq!(config.retry_attempts, 10);
+        assert_eq!(config.connection_timeout, Duration::from_secs(30));
+        assert_eq!(config.actor_timeout, Duration::from_secs(900));
+    }
+
+    #[test]
+    fn test_config_edge_values() {
+        let config = OrbitClientConfig {
+            namespace: String::new(), // Empty namespace
+            server_urls: vec![], // Empty server list
+            connection_timeout: Duration::from_secs(0), // Zero timeout
+            retry_attempts: 0, // No retries
+            actor_timeout: Duration::from_millis(1), // Very short timeout
+        };
+
+        assert_eq!(config.namespace, "");
+        assert_eq!(config.server_urls.len(), 0);
+        assert_eq!(config.connection_timeout, Duration::from_secs(0));
+        assert_eq!(config.retry_attempts, 0);
+        assert_eq!(config.actor_timeout, Duration::from_millis(1));
+    }
+
+    #[test]
+    fn test_config_large_values() {
+        let large_urls: Vec<String> = (0..1000)
+            .map(|i| format!("http://server{}:50051", i))
+            .collect();
+
+        let config = OrbitClientConfig {
+            namespace: "x".repeat(1000), // Very long namespace
+            server_urls: large_urls.clone(),
+            connection_timeout: Duration::from_secs(3600), // 1 hour
+            retry_attempts: u32::MAX, // Maximum retries
+            actor_timeout: Duration::from_secs(86400), // 24 hours
+        };
+
+        assert_eq!(config.namespace.len(), 1000);
+        assert_eq!(config.server_urls.len(), 1000);
+        assert_eq!(config.server_urls, large_urls);
+        assert_eq!(config.connection_timeout, Duration::from_secs(3600));
+        assert_eq!(config.retry_attempts, u32::MAX);
+        assert_eq!(config.actor_timeout, Duration::from_secs(86400));
+    }
+
+    #[test]
+    fn test_string_conversions() {
+        // Test with different string types
+        let builder1 = OrbitClient::builder().with_namespace("str_slice");
+        assert_eq!(builder1.config.namespace, "str_slice");
+
+        let builder2 = OrbitClient::builder().with_namespace(String::from("owned_string"));
+        assert_eq!(builder2.config.namespace, "owned_string");
+
+        let namespace: &str = "borrowed";
+        let builder3 = OrbitClient::builder().with_namespace(namespace);
+        assert_eq!(builder3.config.namespace, "borrowed");
+    }
+
+    #[test]
+    fn test_server_url_handling() {
+        // Test various URL formats
+        let urls = vec![
+            "http://localhost:50051".to_string(),
+            "https://secure.example.com:443".to_string(),
+            "http://192.168.1.100:8080".to_string(),
+            "grpc://service.internal:9090".to_string(),
+        ];
+
+        let config = OrbitClient::builder()
+            .with_server_urls(urls.clone())
+            .config;
+
+        assert_eq!(config.server_urls, urls);
+    }
+
+    #[test]
+    fn test_duration_edge_cases() {
+        // Test minimum duration
+        let builder1 = OrbitClient::builder()
+            .with_connection_timeout(Duration::from_nanos(1));
+        assert_eq!(builder1.config.connection_timeout, Duration::from_nanos(1));
+
+        // Test maximum reasonable duration
+        let builder2 = OrbitClient::builder()
+            .with_actor_timeout(Duration::from_secs(u64::MAX / 1000));
+        // Should not panic, duration should be set
+        assert!(builder2.config.actor_timeout > Duration::from_secs(0));
+    }
+
+    #[tokio::test]
+    async fn test_builder_creates_different_instances() {
+        // Verify that builder creates fresh instances each time
+        let builder1 = OrbitClient::builder().with_namespace("first");
+        let builder2 = OrbitClient::builder().with_namespace("second");
+
+        assert_eq!(builder1.config.namespace, "first");
+        assert_eq!(builder2.config.namespace, "second");
+        assert_ne!(builder1.config.namespace, builder2.config.namespace);
+    }
+
+    // Note: Integration tests that require actual server connections
+    // would be placed in a separate integration test module or
+    // use mock servers. These are unit tests for the configuration
+    // and builder pattern aspects that can run without external dependencies.
+
+    #[test]
+    fn test_memory_usage() {
+        // Ensure config structures don't consume excessive memory
+        let config_size = std::mem::size_of::<OrbitClientConfig>();
+        let stats_size = std::mem::size_of::<ClientStats>();
+        let builder_size = std::mem::size_of::<OrbitClientBuilder>();
+
+        // These are reasonable limits - adjust if structures grow legitimately
+        assert!(config_size < 1024, "OrbitClientConfig is too large: {} bytes", config_size);
+        assert!(stats_size < 512, "ClientStats is too large: {} bytes", stats_size);
+        assert!(builder_size < 1024, "OrbitClientBuilder is too large: {} bytes", builder_size);
     }
 }
