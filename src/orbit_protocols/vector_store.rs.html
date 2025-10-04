@@ -652,7 +652,7 @@
 <a href=#652 id=652 data-nosnippet>652</a>        <span class="comment">// Search vectors
 <a href=#653 id=653 data-nosnippet>653</a>        </span><span class="kw">let </span>params = VectorSearchParams::new(<span class="macro">vec!</span>[<span class="number">1.0</span>, <span class="number">2.0</span>, <span class="number">3.0</span>], SimilarityMetric::Cosine, <span class="number">10</span>);
 <a href=#654 id=654 data-nosnippet>654</a>        <span class="kw">let </span>results = actor.search_vectors(params);
-<a href=#655 id=655 data-nosnippet>655</a>        <span class="macro">assert!</span>(results.len() &gt;= <span class="number">1</span>);
+<a href=#655 id=655 data-nosnippet>655</a>        <span class="macro">assert!</span>(!results.is_empty());
 <a href=#656 id=656 data-nosnippet>656</a>        <span class="macro">assert_eq!</span>(results[<span class="number">0</span>].vector.id, <span class="string">"v1"</span>); <span class="comment">// Should be exact match
 <a href=#657 id=657 data-nosnippet>657</a>    </span>}
 <a href=#658 id=658 data-nosnippet>658</a>}</code></pre></div></section></main></body></html>

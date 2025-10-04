@@ -74,7 +74,7 @@
 <a href=#74 id=74 data-nosnippet>74</a>
 <a href=#75 id=75 data-nosnippet>75</a>    <span class="kw">let </span>config_value = serde_json::to_value(index_config)<span class="question-mark">?</span>;
 <a href=#76 id=76 data-nosnippet>76</a>    vector_actor_ref
-<a href=#77 id=77 data-nosnippet>77</a>        .invoke(<span class="string">"create_index"</span>, <span class="macro">vec!</span>[config_value])
+<a href=#77 id=77 data-nosnippet>77</a>        .invoke::&lt;()&gt;(<span class="string">"create_index"</span>, <span class="macro">vec!</span>[config_value])
 <a href=#78 id=78 data-nosnippet>78</a>        .<span class="kw">await
 <a href=#79 id=79 data-nosnippet>79</a>        </span>.map_err(|e| <span class="macro">format!</span>(<span class="string">"Failed to create index: {}"</span>, e))<span class="question-mark">?</span>;
 <a href=#80 id=80 data-nosnippet>80</a>
@@ -148,7 +148,7 @@
 <a href=#148 id=148 data-nosnippet>148</a>        <span class="kw">let </span>vector_value = serde_json::to_value(vector)<span class="question-mark">?</span>;
 <a href=#149 id=149 data-nosnippet>149</a>
 <a href=#150 id=150 data-nosnippet>150</a>        vector_actor_ref
-<a href=#151 id=151 data-nosnippet>151</a>            .invoke(<span class="string">"add_vector"</span>, <span class="macro">vec!</span>[vector_value])
+<a href=#151 id=151 data-nosnippet>151</a>            .invoke::&lt;()&gt;(<span class="string">"add_vector"</span>, <span class="macro">vec!</span>[vector_value])
 <a href=#152 id=152 data-nosnippet>152</a>            .<span class="kw">await
 <a href=#153 id=153 data-nosnippet>153</a>            </span>.map_err(|e| <span class="macro">format!</span>(<span class="string">"Failed to add vector {}: {}"</span>, id, e))<span class="question-mark">?</span>;
 <a href=#154 id=154 data-nosnippet>154</a>
