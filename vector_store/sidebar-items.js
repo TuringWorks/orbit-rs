@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["create_sample_vector","main","print_usage_examples","setup_vector_data"]};

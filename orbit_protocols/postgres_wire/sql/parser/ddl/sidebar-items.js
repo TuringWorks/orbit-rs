@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["parse_alter_table","parse_create_extension","parse_create_index","parse_create_schema","parse_create_table","parse_create_view","parse_drop_extension","parse_drop_index","parse_drop_schema","parse_drop_table","parse_drop_view"]};

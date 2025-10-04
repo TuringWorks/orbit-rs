@@ -1,0 +1,1 @@
+searchState.loadedDescShard("vector_store", 0, "Vector Store Example")

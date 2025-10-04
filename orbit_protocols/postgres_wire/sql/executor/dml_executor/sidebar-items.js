@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["execute_delete","execute_insert","execute_select","execute_update"]};

@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["cypher","error","postgres_wire","resp","rest"]};
+window.SIDEBAR_ITEMS = {"mod":["bolt","error","mcp","postgres_wire","resp","vector_store"]};

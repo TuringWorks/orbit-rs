@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["McpError","McpPromptContent","McpResourceData","McpResponse"],"struct":["ActorCreateParams","ActorMessageParams","ActorQueryParams","McpPrompt","McpPromptMessage","McpPromptResult","McpRequest","McpResource","McpResourceContent","McpTool","McpToolResult","SqlQueryParams","VectorSearchParams"],"type":["McpResult"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["create_sample_embedding","main","print_pgvector_examples","setup_sample_data"]};

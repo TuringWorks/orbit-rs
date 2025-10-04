@@ -569,10 +569,19 @@
 <a href=#569 id=569 data-nosnippet>569</a>    <span class="kw">pub const </span>INT2: i32 = <span class="number">21</span>;
 <a href=#570 id=570 data-nosnippet>570</a>    <span class="kw">pub const </span>INT4: i32 = <span class="number">23</span>;
 <a href=#571 id=571 data-nosnippet>571</a>    <span class="kw">pub const </span>TEXT: i32 = <span class="number">25</span>;
-<a href=#572 id=572 data-nosnippet>572</a>    <span class="kw">pub const </span>JSON: i32 = <span class="number">114</span>;
-<a href=#573 id=573 data-nosnippet>573</a>    <span class="kw">pub const </span>JSONB: i32 = <span class="number">3802</span>;
-<a href=#574 id=574 data-nosnippet>574</a>    <span class="kw">pub const </span>VARCHAR: i32 = <span class="number">1043</span>;
-<a href=#575 id=575 data-nosnippet>575</a>    <span class="kw">pub const </span>TIMESTAMP: i32 = <span class="number">1114</span>;
-<a href=#576 id=576 data-nosnippet>576</a>    <span class="kw">pub const </span>TIMESTAMPTZ: i32 = <span class="number">1184</span>;
-<a href=#577 id=577 data-nosnippet>577</a>    <span class="kw">pub const </span>UUID: i32 = <span class="number">2950</span>;
-<a href=#578 id=578 data-nosnippet>578</a>}</code></pre></div></section></main></body></html>
+<a href=#572 id=572 data-nosnippet>572</a>    <span class="kw">pub const </span>FLOAT4: i32 = <span class="number">700</span>;
+<a href=#573 id=573 data-nosnippet>573</a>    <span class="kw">pub const </span>FLOAT8: i32 = <span class="number">701</span>;
+<a href=#574 id=574 data-nosnippet>574</a>    <span class="kw">pub const </span>JSON: i32 = <span class="number">114</span>;
+<a href=#575 id=575 data-nosnippet>575</a>    <span class="kw">pub const </span>JSONB: i32 = <span class="number">3802</span>;
+<a href=#576 id=576 data-nosnippet>576</a>    <span class="kw">pub const </span>VARCHAR: i32 = <span class="number">1043</span>;
+<a href=#577 id=577 data-nosnippet>577</a>    <span class="kw">pub const </span>TIMESTAMP: i32 = <span class="number">1114</span>;
+<a href=#578 id=578 data-nosnippet>578</a>    <span class="kw">pub const </span>TIMESTAMPTZ: i32 = <span class="number">1184</span>;
+<a href=#579 id=579 data-nosnippet>579</a>    <span class="kw">pub const </span>UUID: i32 = <span class="number">2950</span>;
+<a href=#580 id=580 data-nosnippet>580</a>    
+<a href=#581 id=581 data-nosnippet>581</a>    <span class="comment">// pgvector extension types
+<a href=#582 id=582 data-nosnippet>582</a>    // Note: In real pgvector, these OIDs are assigned dynamically
+<a href=#583 id=583 data-nosnippet>583</a>    // We use high numbers to avoid conflicts with standard types
+<a href=#584 id=584 data-nosnippet>584</a>    </span><span class="kw">pub const </span>VECTOR: i32 = <span class="number">16385</span>;     <span class="comment">// vector type
+<a href=#585 id=585 data-nosnippet>585</a>    </span><span class="kw">pub const </span>HALFVEC: i32 = <span class="number">16386</span>;    <span class="comment">// halfvec type (half precision)
+<a href=#586 id=586 data-nosnippet>586</a>    </span><span class="kw">pub const </span>SPARSEVEC: i32 = <span class="number">16387</span>;  <span class="comment">// sparsevec type
+<a href=#587 id=587 data-nosnippet>587</a></span>}</code></pre></div></section></main></body></html>

@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["abort_transaction","begin_transaction","commit_transaction","create_actor","delete_actor","get_actor","health_check","invoke_actor","list_actors","openapi_spec","update_actor"],"struct":["ApiState","PaginationParams"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["parse_delete","parse_insert","parse_select","parse_update"]};

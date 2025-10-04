@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"mod":["bolt","cypher_parser","graph_engine","server"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["ddl_executor","dml_executor"],"struct":["SqlExecutor"],"type":["ExecutionResult"]};

@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["messages","protocol","query_engine","server"]};
+window.SIDEBAR_ITEMS = {"mod":["messages","protocol","query_engine","server","sql","vector_engine"]};

@@ -1,0 +1,1 @@
+searchState.loadedDescShard("pgvector_store", 0, "pgvector-Compatible PostgreSQL Interface for Orbit Vector …\nCreate a sample embedding vector with deterministic values\nPrint comprehensive pgvector usage examples\nSet up sample vector data for demonstration")
