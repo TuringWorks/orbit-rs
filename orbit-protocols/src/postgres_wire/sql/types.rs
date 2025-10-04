@@ -125,7 +125,7 @@ pub enum SqlValue {
     Tsvector(Vec<TsVectorElement>),
     Tsquery(String), // Simplified representation
     Vector(Vec<f32>),
-    HalfVec(Vec<f16::f16>),
+    HalfVec(Vec<f32>), // Using f32 for now until half crate is added
     SparseVec(Vec<(u32, f32)>), // (index, value) pairs
     Custom { type_name: String, data: Vec<u8> },
 }
@@ -386,7 +386,7 @@ impl SqlValue {
                 format!("[{}]", elements.join(","))
             }
             SqlValue::HalfVec(v) => {
-                let elements: Vec<String> = v.iter().map(|f| f.to_f32().to_string()).collect();
+                let elements: Vec<String> = v.iter().map(|f| f.to_string()).collect();
                 format!("[{}]", elements.join(","))
             }
             SqlValue::Point(x, y) => format!("({},{})", x, y),

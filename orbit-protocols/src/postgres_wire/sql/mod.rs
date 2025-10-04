@@ -26,6 +26,9 @@ pub mod analyzer;
 pub mod executor;
 pub mod types;
 
+#[cfg(test)]
+mod tests;
+
 pub use ast::{Statement, SelectStatement, Expression};
 pub use lexer::{Lexer, Token};
 pub use parser::{SqlParser, ParseResult};
@@ -58,7 +61,7 @@ impl SqlEngine {
     }
 
     /// Parse and execute a SQL statement
-    pub async fn execute(&self, sql: &str) -> ProtocolResult<ExecutionResult> {
+    pub async fn execute(&mut self, sql: &str) -> ProtocolResult<ExecutionResult> {
         // Parse the SQL into an AST
         let statement = self.parser.parse(sql)?;
         
@@ -67,7 +70,7 @@ impl SqlEngine {
     }
 
     /// Parse a SQL statement without executing it (for validation/analysis)
-    pub fn parse(&self, sql: &str) -> ProtocolResult<Statement> {
+    pub fn parse(&mut self, sql: &str) -> ProtocolResult<Statement> {
         self.parser.parse(sql)
     }
 

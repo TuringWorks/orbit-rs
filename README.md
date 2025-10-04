@@ -384,6 +384,19 @@ SELECT title, content, embedding <-> '[0.1, 0.2, ...]' AS distance
 FROM documents 
 ORDER BY distance 
 LIMIT 5;
+
+# Complex expressions with proper precedence
+SELECT * FROM documents 
+WHERE (score > 0.8 AND category = 'research') 
+   OR (embedding <-> '[0.1, 0.2, ...]' < 0.5 AND published_at > '2024-01-01');
+
+# Function calls and arithmetic operations
+SELECT 
+    title,
+    COALESCE(score * 100, 0) + bonus_points AS final_score,
+    GREATEST(created_at, updated_at) AS last_modified
+FROM documents
+WHERE NOT deleted AND (category IN ('ai', 'ml', 'research'));
 ```
 
 **Supported PostgreSQL Features:**
@@ -394,10 +407,47 @@ LIMIT 5;
 - **ANSI SQL Types**: All standard SQL data types including JSON, arrays, geometric types
 - **Complex DDL**: Constraints, foreign keys, check constraints, table options
 - **Schema Management**: Full schema creation and organization
+- **Expression Parser**: Comprehensive SQL expression parsing with operator precedence
 - **PostgreSQL Compatibility**: Wire protocol compatible with psql, pgAdmin, and other tools
+
+**SQL Expression Parser Engine:**
+
+The PostgreSQL wire protocol includes a comprehensive expression parser with full operator precedence support:
+
+```rust
+use orbit_protocols::postgres_wire::sql::parser::ExpressionParser;
+use orbit_protocols::postgres_wire::sql::lexer::Lexer;
+
+// Parse complex SQL expressions
+let mut lexer = Lexer::new();
+let tokens = lexer.tokenize("score * 100 + bonus > threshold AND NOT deleted")?;
+let mut parser = ExpressionParser::new();
+let mut pos = 0;
+let expression = parser.parse_expression(&tokens, &mut pos)?;
+```
+
+**Operator Precedence (lowest to highest):**
+1. **OR** - Logical disjunction
+2. **AND** - Logical conjunction  
+3. **Equality** - `=`, `!=`, `<>`, `IS`, `IS NOT`
+4. **Comparison** - `<`, `<=`, `>`, `>=`, `LIKE`, `ILIKE`, `IN`, vector operators (`<->`, `<#>`, `<=>`)
+5. **Additive** - `+`, `-`, `||` (concatenation)
+6. **Multiplicative** - `*`, `/`, `%`
+7. **Unary** - `NOT`, unary `-`, unary `+`
+8. **Primary** - Literals, identifiers, function calls, parenthesized expressions
+
+**Supported Expression Types:**
+- **Literals**: Strings, numbers, booleans, NULL
+- **Identifiers**: Column references with optional table qualification
+- **Function Calls**: `COALESCE(a, b)`, `GREATEST(x, y)`, `COUNT(*)` with argument parsing
+- **Binary Operations**: All SQL operators including vector distance operations
+- **Unary Operations**: Logical NOT, arithmetic negation/positive
+- **Parenthesized Expressions**: Explicit precedence control with nested parsing
+- **Vector Operations**: pgvector compatibility with `<->` (L2), `<#>` (inner product), `<=>` (cosine)
 
 **Architecture Highlights:**
 - **Modular SQL Parser**: Comprehensive lexer, parser, and AST for ANSI SQL compliance
+- **Expression Engine**: Full SQL expression parser with proper operator precedence and associativity
 - **Vector Integration**: Seamless pgvector compatibility with native vector operations  
 - **Actor Mapping**: SQL tables can be mapped to Orbit actor types and collections
 - **Distributed Queries**: Foundation for distributed query execution across Orbit clusters
@@ -530,6 +580,7 @@ The project includes a comprehensive GitHub Actions CI/CD pipeline with automate
 - [x] **Redis RESP Protocol**: Complete Redis compatibility with actor mapping
 - [x] **PostgreSQL Wire Protocol**: Full DDL support with vector operations
 - [x] **ANSI SQL Compliance**: Comprehensive DDL parser and executor
+- [x] **SQL Expression Parser**: Full operator precedence with vector operations support
 - [x] **Vector Operations**: pgvector compatible with IVFFLAT/HNSW indexes
 - [x] **SQL Type System**: All PostgreSQL data types including vectors
 - [ ] **PostgreSQL DML**: SELECT, INSERT, UPDATE, DELETE (in progress)

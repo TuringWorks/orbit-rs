@@ -446,7 +446,7 @@ pub enum Expression {
     },
     
     // Functions and aggregates
-    Function(FunctionCall),
+    Function(Box<FunctionCall>),
     WindowFunction {
         function: WindowFunctionType,
         partition_by: Vec<Expression>,
@@ -576,7 +576,7 @@ pub struct FunctionCall {
     pub args: Vec<Expression>,
     pub distinct: bool,
     pub order_by: Option<Vec<OrderByItem>>,
-    pub filter: Option<Expression>,
+    pub filter: Option<Box<Expression>>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -592,13 +592,13 @@ pub enum WindowFunctionType {
     DenseRank,
     PercentRank,
     CumeDist,
-    Ntile(Expression),
-    Lag { expr: Expression, offset: Option<Expression>, default: Option<Expression> },
-    Lead { expr: Expression, offset: Option<Expression>, default: Option<Expression> },
-    FirstValue(Expression),
-    LastValue(Expression),
-    NthValue { expr: Expression, n: Expression },
-    Aggregate(FunctionCall),
+    Ntile(Box<Expression>),
+    Lag { expr: Box<Expression>, offset: Option<Box<Expression>>, default: Option<Box<Expression>> },
+    Lead { expr: Box<Expression>, offset: Option<Box<Expression>>, default: Option<Box<Expression>> },
+    FirstValue(Box<Expression>),
+    LastValue(Box<Expression>),
+    NthValue { expr: Box<Expression>, n: Box<Expression> },
+    Aggregate(Box<FunctionCall>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -610,9 +610,9 @@ pub struct WindowFrame {
 #[derive(Debug, Clone, PartialEq)]
 pub enum FrameBound {
     UnboundedPreceding,
-    Preceding(Expression),
+    Preceding(Box<Expression>),
     CurrentRow,
-    Following(Expression),
+    Following(Box<Expression>),
     UnboundedFollowing,
 }
 
@@ -625,8 +625,8 @@ pub struct CaseExpression {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct WhenClause {
-    pub condition: Expression,
-    pub result: Expression,
+    pub condition: Box<Expression>,
+    pub result: Box<Expression>,
 }
 
 #[derive(Debug, Clone, PartialEq)]

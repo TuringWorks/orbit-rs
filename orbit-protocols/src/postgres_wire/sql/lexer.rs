@@ -11,7 +11,8 @@ pub enum Token {
     // Keywords - DDL
     Create, Alter, Drop, Table, Index, View, Schema, Extension,
     Constraint, Primary, Key, Foreign, References, Check, Unique,
-    NotNull, Null, Default,
+    NotNull, Null, Default, Add, Column, Materialized,
+    Authorization, Version, Cascade,
     
     // Keywords - DML
     Select, Insert, Update, Delete, From, Into, Values, Set,
@@ -27,7 +28,7 @@ pub enum Token {
     // Keywords - Functions and operators
     Case, When, Then, Else, End, In, Between, Like, ILike, Similar,
     Is, Not, And, Or, Exists, Any, Some,
-    Cast, As, If, Exists, Replace,
+    Cast, As, If, Replace,
     
     // Keywords - Data types
     Boolean, SmallInt, Integer, BigInt, Decimal, Numeric, Real, DoublePrecision,
@@ -118,6 +119,12 @@ impl Lexer {
             ("UNIQUE", Token::Unique),
             ("NULL", Token::Null),
             ("DEFAULT", Token::Default),
+            ("ADD", Token::Add),
+            ("COLUMN", Token::Column),
+            ("MATERIALIZED", Token::Materialized),
+            ("AUTHORIZATION", Token::Authorization),
+            ("VERSION", Token::Version),
+            ("CASCADE", Token::Cascade),
             
             // DML Keywords
             ("SELECT", Token::Select),
@@ -525,7 +532,7 @@ impl Lexer {
                         }
                         '<' => {
                             self.advance();
-                            match self.current_char {
+                            return match self.current_char {
                                 Some('=') => { self.advance(); Token::LessThanOrEqual }
                                 Some('>') => { self.advance(); Token::NotEqual }
                                 Some('-') if self.peek() == Some('>') => {
@@ -536,41 +543,37 @@ impl Lexer {
                                     self.advance(); self.advance();
                                     Token::VectorInnerProduct
                                 }
-                                Some('=') if self.peek() == Some('>') => {
-                                    self.advance(); self.advance();
-                                    Token::VectorCosineDistance
-                                }
                                 Some('<') => { self.advance(); Token::LeftShift }
                                 _ => Token::LessThan
-                            }
+                            };
                         }
                         '>' => {
                             self.advance();
-                            match self.current_char {
+                            return match self.current_char {
                                 Some('=') => { self.advance(); Token::GreaterThanOrEqual }
                                 Some('>') => { self.advance(); Token::RightShift }
                                 _ => Token::GreaterThan
-                            }
+                            };
                         }
                         
                         '|' if self.peek() == Some('|') => {
                             self.advance(); self.advance();
-                            Token::Concat
+                            return Token::Concat;
                         }
-                        '|' => { self.advance(); Token::BitwiseOr }
-                        '&' => { self.advance(); Token::BitwiseAnd }
-                        '~' => { self.advance(); Token::BitwiseNot }
+                        '|' => { self.advance(); return Token::BitwiseOr; }
+                        '&' => { self.advance(); return Token::BitwiseAnd; }
+                        '~' => { self.advance(); return Token::BitwiseNot; }
                         
-                        '(' => { self.advance(); Token::LeftParen }
-                        ')' => { self.advance(); Token::RightParen }
-                        '[' => { self.advance(); Token::LeftBracket }
-                        ']' => { self.advance(); Token::RightBracket }
-                        '{' => { self.advance(); Token::LeftBrace }
-                        '}' => { self.advance(); Token::RightBrace }
-                        ',' => { self.advance(); Token::Comma }
-                        ';' => { self.advance(); Token::Semicolon }
-                        '.' => { self.advance(); Token::Dot }
-                        ':' => { self.advance(); Token::Colon }
+                        '(' => { self.advance(); return Token::LeftParen; }
+                        ')' => { self.advance(); return Token::RightParen; }
+                        '[' => { self.advance(); return Token::LeftBracket; }
+                        ']' => { self.advance(); return Token::RightBracket; }
+                        '{' => { self.advance(); return Token::LeftBrace; }
+                        '}' => { self.advance(); return Token::RightBrace; }
+                        ',' => { self.advance(); return Token::Comma; }
+                        ';' => { self.advance(); return Token::Semicolon; }
+                        '.' => { self.advance(); return Token::Dot; }
+                        ':' => { self.advance(); return Token::Colon; }
                         
                         _ => {
                             // Unknown character, skip it
