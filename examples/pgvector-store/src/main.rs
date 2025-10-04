@@ -192,7 +192,7 @@ async fn setup_sample_data(orbit_client: &orbit_client::OrbitClient) -> Result<(
 /// Create a sample embedding vector with deterministic values
 fn create_sample_embedding(dimension: usize, seed: f32) -> Vec<f32> {
     (0..dimension)
-        .map(|i| ((seed + i as f32 * 0.01).sin() * 0.5))
+        .map(|i| (seed + i as f32 * 0.01).sin() * 0.5)
         .collect()
 }
 
