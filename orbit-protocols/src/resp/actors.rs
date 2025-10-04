@@ -259,7 +259,7 @@ impl ListActor {
     }
 
     pub fn lpush(&mut self, values: Vec<String>) -> usize {
-        for value in values.into_iter().rev() {
+        for value in values {
             self.items.insert(0, value);
         }
         self.items.len()

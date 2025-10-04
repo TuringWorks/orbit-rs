@@ -912,13 +912,13 @@ mod tests {
 
     #[test]
     fn test_basic_tokens() {
-        let mut lexer = Lexer::new("SELECT * FROM table WHERE id = 1");
+        let mut lexer = Lexer::new("SELECT * FROM users WHERE id = 1");
         let tokens = lexer.tokenize();
 
         assert_eq!(tokens[0], Token::Select);
         assert_eq!(tokens[1], Token::Multiply);
         assert_eq!(tokens[2], Token::From);
-        assert_eq!(tokens[3], Token::Identifier("table".to_string()));
+        assert_eq!(tokens[3], Token::Identifier("users".to_string()));
         assert_eq!(tokens[4], Token::Where);
         assert_eq!(tokens[5], Token::Identifier("id".to_string()));
         assert_eq!(tokens[6], Token::Equal);

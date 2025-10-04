@@ -9,6 +9,7 @@
 use crate::error::ProtocolResult;
 use crate::postgres_wire::sql::ast::*;
 use crate::postgres_wire::sql::lexer::Token;
+use crate::postgres_wire::sql::types::SqlType;
 
 /// Expression parser with operator precedence handling
 pub struct ExpressionParser;
@@ -337,6 +338,13 @@ impl ExpressionParser {
             | Token::FirstValue
             | Token::LastValue
             | Token::NthValue => self.parse_window_function(tokens, pos),
+
+            // Handle CASE expressions
+            Token::Case => self.parse_case_expression(tokens, pos),
+
+            // Handle CAST expressions
+            Token::Cast => self.parse_cast_expression(tokens, pos),
+
             Token::LeftParen => {
                 *pos += 1; // consume '('
                 let expr = self.parse_expression(tokens, pos)?;
@@ -844,6 +852,196 @@ impl ExpressionParser {
         }
 
         Ok(items)
+    }
+
+    /// Parse a CASE expression
+    fn parse_case_expression(
+        &mut self,
+        tokens: &[Token],
+        pos: &mut usize,
+    ) -> ProtocolResult<Expression> {
+        *pos += 1; // consume 'CASE'
+
+        // Check for CASE WHEN vs CASE expression WHEN
+        let case_expr = if !matches!(tokens.get(*pos), Some(Token::When)) {
+            // CASE expression WHEN ...
+            Some(Box::new(self.parse_expression(tokens, pos)?))
+        } else {
+            // CASE WHEN ...
+            None
+        };
+
+        let mut when_clauses = Vec::new();
+
+        // Parse WHEN clauses
+        while *pos < tokens.len() && matches!(tokens[*pos], Token::When) {
+            *pos += 1; // consume 'WHEN'
+            let condition = Box::new(self.parse_expression(tokens, pos)?);
+
+            if *pos >= tokens.len() || !matches!(tokens[*pos], Token::Then) {
+                return Err(crate::error::ProtocolError::ParseError(
+                    "Expected THEN after WHEN condition".to_string(),
+                ));
+            }
+            *pos += 1; // consume 'THEN'
+
+            let result = Box::new(self.parse_expression(tokens, pos)?);
+
+            when_clauses.push(WhenClause { condition, result });
+        }
+
+        if when_clauses.is_empty() {
+            return Err(crate::error::ProtocolError::ParseError(
+                "CASE expression must have at least one WHEN clause".to_string(),
+            ));
+        }
+
+        // Parse optional ELSE clause
+        let else_clause = if *pos < tokens.len() && matches!(tokens[*pos], Token::Else) {
+            *pos += 1; // consume 'ELSE'
+            Some(Box::new(self.parse_expression(tokens, pos)?))
+        } else {
+            None
+        };
+
+        // Expect END
+        if *pos >= tokens.len() || !matches!(tokens[*pos], Token::End) {
+            return Err(crate::error::ProtocolError::ParseError(
+                "Expected END to close CASE expression".to_string(),
+            ));
+        }
+        *pos += 1; // consume 'END'
+
+        Ok(Expression::Case(CaseExpression {
+            operand: case_expr,
+            when_clauses,
+            else_clause,
+        }))
+    }
+
+    /// Parse a CAST expression
+    fn parse_cast_expression(
+        &mut self,
+        tokens: &[Token],
+        pos: &mut usize,
+    ) -> ProtocolResult<Expression> {
+        *pos += 1; // consume 'CAST'
+
+        if *pos >= tokens.len() || !matches!(tokens[*pos], Token::LeftParen) {
+            return Err(crate::error::ProtocolError::ParseError(
+                "Expected '(' after CAST".to_string(),
+            ));
+        }
+        *pos += 1; // consume '('
+
+        let expression = Box::new(self.parse_expression(tokens, pos)?);
+
+        if *pos >= tokens.len() || !matches!(tokens[*pos], Token::As) {
+            return Err(crate::error::ProtocolError::ParseError(
+                "Expected AS in CAST expression".to_string(),
+            ));
+        }
+        *pos += 1; // consume 'AS'
+
+        let target_type = self.parse_sql_type(tokens, pos)?;
+
+        if *pos >= tokens.len() || !matches!(tokens[*pos], Token::RightParen) {
+            return Err(crate::error::ProtocolError::ParseError(
+                "Expected ')' after CAST data type".to_string(),
+            ));
+        }
+        *pos += 1; // consume ')'
+
+        Ok(Expression::Cast {
+            expr: expression,
+            target_type,
+        })
+    }
+
+    /// Parse a SQL type for CAST expressions
+    fn parse_sql_type(&mut self, tokens: &[Token], pos: &mut usize) -> ProtocolResult<SqlType> {
+        if *pos >= tokens.len() {
+            return Err(crate::error::ProtocolError::ParseError(
+                "Expected data type".to_string(),
+            ));
+        }
+
+        match &tokens[*pos] {
+            Token::Integer => {
+                *pos += 1;
+                Ok(SqlType::Integer)
+            }
+            Token::BigInt => {
+                *pos += 1;
+                Ok(SqlType::BigInt)
+            }
+            Token::SmallInt => {
+                *pos += 1;
+                Ok(SqlType::SmallInt)
+            }
+            Token::Real => {
+                *pos += 1;
+                Ok(SqlType::Real)
+            }
+            Token::DoublePrecision => {
+                *pos += 1;
+                Ok(SqlType::DoublePrecision)
+            }
+            Token::Boolean => {
+                *pos += 1;
+                Ok(SqlType::Boolean)
+            }
+            Token::Text => {
+                *pos += 1;
+                Ok(SqlType::Text)
+            }
+            Token::Varchar => {
+                *pos += 1;
+                // Check for optional length specification
+                if *pos < tokens.len() && matches!(tokens[*pos], Token::LeftParen) {
+                    *pos += 1;
+                    if let Some(Token::NumericLiteral(len_str)) = tokens.get(*pos) {
+                        if let Ok(length) = len_str.parse::<u32>() {
+                            *pos += 1;
+                            if *pos < tokens.len() && matches!(tokens[*pos], Token::RightParen) {
+                                *pos += 1;
+                                return Ok(SqlType::Varchar(Some(length)));
+                            }
+                        }
+                    }
+                    return Err(crate::error::ProtocolError::ParseError(
+                        "Invalid VARCHAR length specification".to_string(),
+                    ));
+                }
+                Ok(SqlType::Varchar(None))
+            }
+            Token::Timestamp => {
+                *pos += 1;
+                Ok(SqlType::Timestamp {
+                    with_timezone: false,
+                })
+            }
+            Token::Date => {
+                *pos += 1;
+                Ok(SqlType::Date)
+            }
+            Token::Time => {
+                *pos += 1;
+                Ok(SqlType::Time {
+                    with_timezone: false,
+                })
+            }
+            Token::Identifier(type_name) => {
+                *pos += 1;
+                Ok(SqlType::Custom {
+                    type_name: type_name.clone(),
+                })
+            }
+            _ => Err(crate::error::ProtocolError::ParseError(format!(
+                "Unexpected token in data type: {:?}",
+                tokens[*pos]
+            ))),
+        }
     }
 }
 

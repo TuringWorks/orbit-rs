@@ -37,9 +37,9 @@ impl From<ParseError> for ProtocolError {
 
 /// Main SQL Parser
 pub struct SqlParser {
-    tokens: Vec<Token>,
-    position: usize,
-    current_token: Option<Token>,
+    pub tokens: Vec<Token>,
+    pub position: usize,
+    pub current_token: Option<Token>,
 }
 
 impl SqlParser {

@@ -2,8 +2,30 @@
 //!
 //! This module handles parsing of SELECT, INSERT, UPDATE, DELETE statements
 
+use super::expressions::ExpressionParser;
 use super::{utilities, ParseError, ParseResult, SqlParser};
 use crate::postgres_wire::sql::{ast::*, lexer::Token, types::SqlValue};
+
+/// Helper function to parse expressions using the proper expression parser
+fn parse_expression_with_parser(parser: &mut SqlParser) -> ParseResult<Expression> {
+    let mut expr_parser = ExpressionParser::new();
+    let tokens = &parser.tokens;
+    let mut pos = parser.position;
+    let expr = expr_parser
+        .parse_expression(tokens, &mut pos)
+        .map_err(|e| ParseError {
+            message: e.to_string(),
+            position: parser.position,
+            expected: vec!["expression".to_string()],
+            found: parser.current_token.clone(),
+        })?;
+
+    // Update parser position
+    parser.position = pos;
+    parser.current_token = parser.tokens.get(parser.position).cloned();
+
+    Ok(expr)
+}
 
 /// Parse SELECT statement
 pub fn parse_select(parser: &mut SqlParser) -> ParseResult<Statement> {
@@ -112,8 +134,8 @@ pub fn parse_select(parser: &mut SqlParser) -> ParseResult<Statement> {
                 SelectItem::Expression { expr, alias }
             }
         } else {
-            // Try to parse as expression
-            let expr = utilities::parse_expression(parser)?;
+            // Try to parse as expression using proper expression parser
+            let expr = parse_expression_with_parser(parser)?;
 
             // Check for alias
             let alias = if parser.matches(&[Token::As]) {
@@ -169,11 +191,11 @@ pub fn parse_select(parser: &mut SqlParser) -> ParseResult<Statement> {
     // Parse LIMIT clause
     let (limit, offset) = if parser.matches(&[Token::Limit]) {
         parser.advance()?;
-        let limit_expr = utilities::parse_expression(parser)?;
+        let limit_expr = parse_expression_with_parser(parser)?;
 
         let offset = if parser.matches(&[Token::Offset]) {
             parser.advance()?;
-            let offset_expr = utilities::parse_expression(parser)?;
+            let offset_expr = parse_expression_with_parser(parser)?;
             if let Expression::Literal(SqlValue::Integer(n)) = offset_expr {
                 Some(n as u64)
             } else {
@@ -263,107 +285,7 @@ fn parse_from_clause(parser: &mut SqlParser) -> ParseResult<FromClause> {
 
 /// Parse WHERE expression with basic comparison operators
 fn parse_where_expression(parser: &mut SqlParser) -> ParseResult<Expression> {
-    parse_comparison_expression(parser)
-}
-
-/// Parse comparison expressions (=, !=, <, >, etc.)
-fn parse_comparison_expression(parser: &mut SqlParser) -> ParseResult<Expression> {
-    let left = utilities::parse_expression(parser)?;
-
-    if parser.matches(&[
-        Token::Equal,
-        Token::NotEqual,
-        Token::LessThan,
-        Token::LessThanOrEqual,
-        Token::GreaterThan,
-        Token::GreaterThanOrEqual,
-    ]) {
-        let operator = match &parser.current_token {
-            Some(Token::Equal) => BinaryOperator::Equal,
-            Some(Token::NotEqual) => BinaryOperator::NotEqual,
-            Some(Token::LessThan) => BinaryOperator::LessThan,
-            Some(Token::LessThanOrEqual) => BinaryOperator::LessThanOrEqual,
-            Some(Token::GreaterThan) => BinaryOperator::GreaterThan,
-            Some(Token::GreaterThanOrEqual) => BinaryOperator::GreaterThanOrEqual,
-            _ => {
-                return Err(ParseError {
-                    message: "Expected comparison operator".to_string(),
-                    position: parser.position,
-                    expected: vec!["=, !=, <, <=, >, >=".to_string()],
-                    found: parser.current_token.clone(),
-                })
-            }
-        };
-
-        parser.advance()?;
-        let right = utilities::parse_expression(parser)?;
-
-        Ok(Expression::Binary {
-            left: Box::new(left),
-            operator,
-            right: Box::new(right),
-        })
-    } else if parser.matches(&[Token::Like]) {
-        parser.advance()?;
-        let pattern = utilities::parse_expression(parser)?;
-
-        Ok(Expression::Like {
-            expr: Box::new(left),
-            pattern: Box::new(pattern),
-            escape: None,
-            case_insensitive: false,
-            negated: false,
-        })
-    } else if parser.matches(&[Token::In]) {
-        parser.advance()?;
-        parser.expect(Token::LeftParen)?;
-
-        let mut values = Vec::new();
-        while !parser.matches(&[Token::RightParen]) {
-            let value = utilities::parse_expression(parser)?;
-            values.push(value);
-
-            if parser.matches(&[Token::Comma]) {
-                parser.advance()?;
-            } else {
-                break;
-            }
-        }
-
-        parser.expect(Token::RightParen)?;
-
-        Ok(Expression::In {
-            expr: Box::new(left),
-            list: InList::Expressions(values),
-            negated: false,
-        })
-    } else if parser.matches(&[Token::Is]) {
-        parser.advance()?;
-        if parser.matches(&[Token::Null]) {
-            parser.advance()?;
-            Ok(Expression::IsNull {
-                expr: Box::new(left),
-                negated: false,
-            })
-        } else if parser.matches(&[Token::Not]) {
-            parser.advance()?;
-            parser.expect(Token::Null)?;
-            Ok(Expression::IsNull {
-                expr: Box::new(left),
-                negated: true,
-            })
-        } else {
-            Err(ParseError {
-                message: "Expected NULL after IS".to_string(),
-                position: parser.position,
-                expected: vec!["NULL".to_string(), "NOT NULL".to_string()],
-                found: parser.current_token.clone(),
-            })
-        }
-    } else {
-        // Just return the left expression if no comparison operator
-        Ok(left)
-    }
+    parse_expression_with_parser(parser)
 }
 
 /// Parse ORDER BY clause
@@ -371,7 +293,7 @@ fn parse_order_by_clause(parser: &mut SqlParser) -> ParseResult<Vec<OrderByItem>
     let mut items = Vec::new();
 
     loop {
-        let expression = utilities::parse_expression(parser)?;
+        let expression = parse_expression_with_parser(parser)?;
 
         // Parse optional ASC/DESC
         let direction = if let Some(Token::Identifier(dir)) = &parser.current_token {
