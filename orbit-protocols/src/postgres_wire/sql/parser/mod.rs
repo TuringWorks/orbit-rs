@@ -58,7 +58,7 @@ impl SqlParser {
         let mut lexer = Lexer::new(input);
         self.tokens = lexer.tokenize();
         self.position = 0;
-        self.current_token = self.tokens.get(0).cloned();
+        self.current_token = self.tokens.first().cloned();
 
         // Parse the statement
         self.parse_statement().map_err(|e| e.into())
@@ -125,6 +125,7 @@ impl SqlParser {
     }
 
     /// Peek at the next token without advancing
+    #[allow(dead_code)]
     fn peek(&self) -> Option<&Token> {
         self.tokens.get(self.position + 1)
     }

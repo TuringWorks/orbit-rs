@@ -4,6 +4,12 @@
 
 pub struct BoltProtocol;
 
+impl Default for BoltProtocol {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl BoltProtocol {
     pub fn new() -> Self {
         Self

@@ -258,7 +258,7 @@ impl Lexer {
     /// Create a new lexer with SQL input
     pub fn new(input: &str) -> Self {
         let chars: Vec<char> = input.chars().collect();
-        let current_char = chars.get(0).copied();
+        let current_char = chars.first().copied();
 
         let mut lexer = Self {
             input: chars,
@@ -469,6 +469,7 @@ impl Lexer {
     }
 
     /// Peek at character at offset without advancing
+    #[allow(dead_code)]
     fn peek_offset(&self, offset: usize) -> Option<char> {
         self.input.get(self.position + offset).copied()
     }
@@ -611,7 +612,7 @@ impl Lexer {
         }
 
         // Check for decimal point
-        if self.current_char == Some('.') && self.peek().map_or(false, |c| c.is_ascii_digit()) {
+        if self.current_char == Some('.') && self.peek().is_some_and(|c| c.is_ascii_digit()) {
             number.push('.');
             self.advance();
 
@@ -722,7 +723,7 @@ impl Lexer {
 
                         // Numeric literals
                         c if c.is_ascii_digit() => return self.read_numeric_literal(),
-                        '.' if self.peek().map_or(false, |c| c.is_ascii_digit()) => {
+                        '.' if self.peek().is_some_and(|c| c.is_ascii_digit()) => {
                             return self.read_numeric_literal()
                         }
 

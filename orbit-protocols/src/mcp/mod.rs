@@ -80,23 +80,29 @@ pub struct McpCapabilities {
     pub prompts: Vec<String>,
 }
 
+impl Default for McpCapabilities {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl McpCapabilities {
     pub fn new() -> Self {
         Self {
             tools: vec![
                 "actor_create".to_string(),
-                "actor_query".to_string(),
-                "actor_send_message".to_string(),
-                "sql_query".to_string(),
-                "vector_search".to_string(),
-                "system_health".to_string(),
+                "actor_delete".to_string(),
+                "actor_list".to_string(),
+                "actor_search".to_string(),
+                "vector_create".to_string(),
+                "vector_query".to_string(),
+                "vector_upsert".to_string(),
+                "vector_delete".to_string(),
+                "system_info".to_string(),
+                "system_stats".to_string(),
             ],
-            resources: vec![
-                "actors".to_string(),
-                "schemas".to_string(),
-                "metrics".to_string(),
-            ],
-            prompts: vec!["sql_help".to_string(), "actor_patterns".to_string()],
+            resources: vec!["memory://actors".to_string()],
+            prompts: vec!["system_analysis".to_string()],
         }
     }
 }

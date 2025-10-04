@@ -256,6 +256,12 @@ pub struct VectorActor {
     pub default_metric: SimilarityMetric,
 }
 
+impl Default for VectorActor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl VectorActor {
     /// Create a new empty vector actor
     pub fn new() -> Self {
@@ -540,7 +546,7 @@ pub trait VectorActorMethods {
 impl VectorActorMethods for VectorActor {
     async fn add_vector(&mut self, vector: Vector) -> OrbitResult<()> {
         self.add_vector(vector)
-            .map_err(|e| orbit_shared::OrbitError::internal(e))
+            .map_err(orbit_shared::OrbitError::internal)
     }
 
     async fn get_vector(&self, id: String) -> OrbitResult<Option<Vector>> {
@@ -569,7 +575,7 @@ impl VectorActorMethods for VectorActor {
 
     async fn create_index(&mut self, config: VectorIndexConfig) -> OrbitResult<()> {
         self.create_index(config)
-            .map_err(|e| orbit_shared::OrbitError::internal(e))
+            .map_err(orbit_shared::OrbitError::internal)
     }
 
     async fn drop_index(&mut self, name: String) -> OrbitResult<bool> {

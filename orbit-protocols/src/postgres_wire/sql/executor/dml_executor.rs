@@ -12,6 +12,7 @@ use std::collections::HashMap;
 
 /// In-memory table data structure for demonstration
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 struct Table {
     name: String,
     columns: Vec<ColumnInfo>,
@@ -19,21 +20,25 @@ struct Table {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 struct ColumnInfo {
     name: String,
     data_type: String,
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 struct Row {
     values: Vec<Option<String>>,
 }
 
 /// Query execution context
+#[allow(dead_code)]
 struct ExecutionContext {
     tables: HashMap<String, Table>,
 }
 
+#[allow(dead_code)]
 impl ExecutionContext {
     fn new() -> Self {
         let mut tables = HashMap::new();

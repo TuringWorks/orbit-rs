@@ -246,7 +246,7 @@ impl StatisticsCollector {
         &mut self,
         table_name: &str,
         rows_inserted: usize,
-        rows_updated: usize,
+        _rows_updated: usize,
         rows_deleted: usize,
     ) {
         if let Some(stats) = self.table_stats.get_mut(table_name) {

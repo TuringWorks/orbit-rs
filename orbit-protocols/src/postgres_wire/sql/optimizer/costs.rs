@@ -88,8 +88,8 @@ impl CostBasedOptimizer {
     ) -> ProtocolResult<Statement> {
         match statement {
             Statement::Select(select) => {
-                let optimized_select = self.optimize_select(select, stats)?;
-                Ok(Statement::Select(optimized_select))
+                let optimized_select = self.optimize_select(*select, stats)?;
+                Ok(Statement::Select(Box::new(optimized_select)))
             }
             // For other statement types, return as-is for now
             other => Ok(other),
@@ -102,14 +102,14 @@ impl CostBasedOptimizer {
         statement: Statement,
         stats: &StatisticsCollector,
     ) -> ProtocolResult<(Statement, Vec<String>)> {
-        let mut steps = Vec::new();
+        let steps = Vec::new();
 
         match statement {
             Statement::Select(select) => {
                 let (optimized_select, select_steps) =
-                    self.optimize_select_with_steps(select, stats)?;
-                steps.extend(select_steps);
-                Ok((Statement::Select(optimized_select), steps))
+                    self.optimize_select_with_steps(*select, stats)?;
+                let steps = select_steps;
+                Ok((Statement::Select(Box::new(optimized_select)), steps))
             }
             other => Ok((other, steps)),
         }
@@ -169,7 +169,7 @@ impl CostBasedOptimizer {
     fn optimize_join_order(
         &self,
         select: SelectStatement,
-        stats: &StatisticsCollector,
+        _stats: &StatisticsCollector,
     ) -> ProtocolResult<SelectStatement> {
         // For now, this is a placeholder implementation
         // In a full implementation, this would:
@@ -184,7 +184,7 @@ impl CostBasedOptimizer {
     fn optimize_access_methods(
         &self,
         select: SelectStatement,
-        stats: &StatisticsCollector,
+        _stats: &StatisticsCollector,
     ) -> ProtocolResult<SelectStatement> {
         // Placeholder implementation
         // Would analyze WHERE conditions and choose appropriate access methods
@@ -195,7 +195,7 @@ impl CostBasedOptimizer {
     fn optimize_join_algorithms(
         &self,
         select: SelectStatement,
-        stats: &StatisticsCollector,
+        _stats: &StatisticsCollector,
     ) -> ProtocolResult<SelectStatement> {
         // Placeholder implementation
         // Would choose between nested loop, hash join, and merge join
@@ -227,7 +227,7 @@ impl CostBasedOptimizer {
     pub fn estimate_index_scan_cost(
         &self,
         table_name: &str,
-        index_name: &str,
+        _index_name: &str,
         selectivity: f64,
         stats: &StatisticsCollector,
     ) -> QueryCost {
@@ -313,7 +313,7 @@ impl CostBasedOptimizer {
     }
 
     /// Estimate selectivity of a predicate
-    pub fn estimate_selectivity(&self, expr: &Expression, stats: &StatisticsCollector) -> f64 {
+    pub fn estimate_selectivity(&self, expr: &Expression, _stats: &StatisticsCollector) -> f64 {
         match expr {
             Expression::Binary {
                 left: _,

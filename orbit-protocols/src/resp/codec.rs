@@ -8,6 +8,7 @@ use crate::error::{ProtocolError, ProtocolResult};
 
 /// RESP protocol codec
 pub struct RespCodec {
+    #[allow(dead_code)]
     max_frame_size: usize,
 }
 
@@ -166,7 +167,7 @@ fn parse_array(src: &BytesMut) -> ProtocolResult<Option<(RespValue, usize)>> {
             }
 
             let remaining = &src[pos..];
-            let temp_buf = BytesMut::from(&remaining[..]);
+            let temp_buf = BytesMut::from(remaining);
 
             match parse_resp_value(&temp_buf)? {
                 Some((value, consumed)) => {
@@ -185,12 +186,7 @@ fn parse_array(src: &BytesMut) -> ProtocolResult<Option<(RespValue, usize)>> {
 
 /// Find CRLF position starting from offset
 fn find_crlf(buf: &BytesMut, start: usize) -> Option<usize> {
-    for i in start..buf.len().saturating_sub(1) {
-        if buf[i] == b'\r' && buf[i + 1] == b'\n' {
-            return Some(i);
-        }
-    }
-    None
+    (start..buf.len().saturating_sub(1)).find(|&i| buf[i] == b'\r' && buf[i + 1] == b'\n')
 }
 
 #[cfg(test)]
@@ -199,7 +195,7 @@ mod tests {
 
     #[test]
     fn test_parse_simple_string() {
-        let mut buf = BytesMut::from(&b"+OK\r\n"[..]);
+        let buf = BytesMut::from(&b"+OK\r\n"[..]);
         let (val, consumed) = parse_simple_string(&buf).unwrap().unwrap();
         assert_eq!(val, RespValue::SimpleString("OK".to_string()));
         assert_eq!(consumed, 5);
@@ -207,7 +203,7 @@ mod tests {
 
     #[test]
     fn test_parse_integer() {
-        let mut buf = BytesMut::from(&b":1000\r\n"[..]);
+        let buf = BytesMut::from(&b":1000\r\n"[..]);
         let (val, consumed) = parse_integer(&buf).unwrap().unwrap();
         assert_eq!(val, RespValue::Integer(1000));
         assert_eq!(consumed, 7);
@@ -215,7 +211,7 @@ mod tests {
 
     #[test]
     fn test_parse_bulk_string() {
-        let mut buf = BytesMut::from(&b"$6\r\nfoobar\r\n"[..]);
+        let buf = BytesMut::from(&b"$6\r\nfoobar\r\n"[..]);
         let (val, consumed) = parse_bulk_string(&buf).unwrap().unwrap();
         assert_eq!(val, RespValue::BulkString("foobar".as_bytes().into()));
         assert_eq!(consumed, 12);
@@ -223,7 +219,7 @@ mod tests {
 
     #[test]
     fn test_parse_null_bulk_string() {
-        let mut buf = BytesMut::from(&b"$-1\r\n"[..]);
+        let buf = BytesMut::from(&b"$-1\r\n"[..]);
         let (val, consumed) = parse_bulk_string(&buf).unwrap().unwrap();
         assert_eq!(val, RespValue::NullBulkString);
         assert_eq!(consumed, 5);
@@ -231,7 +227,7 @@ mod tests {
 
     #[test]
     fn test_parse_array() {
-        let mut buf = BytesMut::from(&b"*2\r\n$3\r\nfoo\r\n$3\r\nbar\r\n"[..]);
+        let buf = BytesMut::from(&b"*2\r\n$3\r\nfoo\r\n$3\r\nbar\r\n"[..]);
         let (val, consumed) = parse_array(&buf).unwrap().unwrap();
         match val {
             RespValue::Array(arr) => {

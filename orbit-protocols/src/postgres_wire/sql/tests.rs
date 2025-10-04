@@ -1643,7 +1643,7 @@ mod tests {
     fn test_invalid_column_name() {
         let sql = "SELECT 123invalid_identifier FROM users";
         let mut engine = SqlEngine::new();
-        let result = engine.parse(sql);
+        let _result = engine.parse(sql);
         // This might be valid as a numeric literal, so let's test a clearly invalid case
         let sql2 = "SELECT FROM users";
         let result2 = engine.parse(sql2);
@@ -1743,7 +1743,7 @@ mod tests {
         // semantic validation would be handled at execution time
         let sql = "INSERT INTO users (name, email, age) VALUES ('John', 'john@test.com')";
         let mut engine = SqlEngine::new();
-        let result = engine.parse(sql);
+        let _result = engine.parse(sql);
         // This might actually parse successfully as syntax is valid, semantic errors are runtime
         // Let's test a clearly invalid syntax instead
         let sql2 = "INSERT INTO users () VALUES";

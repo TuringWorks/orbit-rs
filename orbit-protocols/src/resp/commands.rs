@@ -182,7 +182,7 @@ impl CommandHandler {
 
         debug!("GET {} -> {:?}", key, value);
         Ok(value
-            .map(|v| RespValue::bulk_string_from_str(v))
+            .map(RespValue::bulk_string_from_str)
             .unwrap_or(RespValue::null()))
     }
 
@@ -380,7 +380,7 @@ impl CommandHandler {
 
         debug!("HGET {} {} -> {:?}", key, field, value);
         Ok(value
-            .map(|v| RespValue::bulk_string_from_str(v))
+            .map(RespValue::bulk_string_from_str)
             .unwrap_or(RespValue::null()))
     }
 
@@ -1210,7 +1210,7 @@ impl CommandHandler {
 
             response.push(RespValue::array(vec![
                 RespValue::bulk_string_from_str(&result.vector.id),
-                RespValue::bulk_string_from_str(&format!("{:.6}", result.score)),
+                RespValue::bulk_string_from_str(format!("{:.6}", result.score)),
                 RespValue::bulk_string_from_str(&vector_data),
             ]));
         }
@@ -1254,7 +1254,7 @@ impl CommandHandler {
             RespValue::bulk_string_from_str("index_count"),
             RespValue::integer(stats.index_count as i64),
             RespValue::bulk_string_from_str("avg_dimension"),
-            RespValue::bulk_string_from_str(&stats.avg_dimension.to_string()),
+            RespValue::bulk_string_from_str(stats.avg_dimension.to_string()),
             RespValue::bulk_string_from_str("min_dimension"),
             RespValue::integer(stats.min_dimension as i64),
             RespValue::bulk_string_from_str("max_dimension"),
@@ -1441,7 +1441,7 @@ impl CommandHandler {
         for result in results {
             response.push(RespValue::array(vec![
                 RespValue::bulk_string_from_str(&result.vector.id),
-                RespValue::bulk_string_from_str(&format!("{:.6}", result.score)),
+                RespValue::bulk_string_from_str(format!("{:.6}", result.score)),
             ]));
         }
 
@@ -1498,7 +1498,7 @@ impl CommandHandler {
         for result in results {
             response.push(RespValue::array(vec![
                 RespValue::bulk_string_from_str(&result.vector.id),
-                RespValue::bulk_string_from_str(&format!("{:.6}", result.score)),
+                RespValue::bulk_string_from_str(format!("{:.6}", result.score)),
             ]));
         }
 
@@ -1575,7 +1575,7 @@ impl CommandHandler {
             RespValue::bulk_string_from_str("index_count"),
             RespValue::integer(stats.index_count as i64),
             RespValue::bulk_string_from_str("avg_dimension"),
-            RespValue::bulk_string_from_str(&stats.avg_dimension.to_string()),
+            RespValue::bulk_string_from_str(stats.avg_dimension.to_string()),
             RespValue::bulk_string_from_str("min_dimension"),
             RespValue::integer(stats.min_dimension as i64),
             RespValue::bulk_string_from_str("max_dimension"),

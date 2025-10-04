@@ -54,7 +54,7 @@ impl SqlExecutor {
             }
 
             // DML Statements
-            Statement::Select(stmt) => dml_executor::execute_select(self, stmt).await,
+            Statement::Select(stmt) => dml_executor::execute_select(self, *stmt).await,
             Statement::Insert(stmt) => dml_executor::execute_insert(self, stmt).await,
             Statement::Update(stmt) => dml_executor::execute_update(self, stmt).await,
             Statement::Delete(stmt) => dml_executor::execute_delete(self, stmt).await,

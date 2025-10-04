@@ -70,8 +70,8 @@ impl RuleBasedOptimizer {
     fn apply_optimization_pass(&mut self, statement: Statement) -> ProtocolResult<Statement> {
         match statement {
             Statement::Select(select) => {
-                let optimized_select = self.optimize_select(select)?;
-                Ok(Statement::Select(optimized_select))
+                let optimized_select = self.optimize_select(*select)?;
+                Ok(Statement::Select(Box::new(optimized_select)))
             }
             Statement::Insert(insert) => {
                 let optimized_insert = self.optimize_insert(insert)?;
@@ -98,8 +98,8 @@ impl RuleBasedOptimizer {
     ) -> ProtocolResult<Statement> {
         match statement {
             Statement::Select(select) => {
-                let optimized_select = self.optimize_select_with_steps(select, steps)?;
-                Ok(Statement::Select(optimized_select))
+                let optimized_select = self.optimize_select_with_steps(*select, steps)?;
+                Ok(Statement::Select(Box::new(optimized_select)))
             }
             other => Ok(other),
         }

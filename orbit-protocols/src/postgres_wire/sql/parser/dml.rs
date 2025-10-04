@@ -200,7 +200,7 @@ pub fn parse_select(parser: &mut SqlParser) -> ParseResult<Statement> {
     };
 
     // Create SELECT statement with ORDER BY and LIMIT
-    Ok(Statement::Select(SelectStatement {
+    Ok(Statement::Select(Box::new(SelectStatement {
         with: None,
         select_list,
         distinct,
@@ -212,7 +212,7 @@ pub fn parse_select(parser: &mut SqlParser) -> ParseResult<Statement> {
         limit,
         offset,
         for_clause: None,
-    }))
+    })))
 }
 
 /// Parse FROM clause
@@ -506,7 +506,7 @@ pub fn parse_insert(parser: &mut SqlParser) -> ParseResult<Statement> {
         // INSERT ... SELECT
         let select_stmt = parse_select(parser)?;
         if let Statement::Select(select) = select_stmt {
-            InsertSource::Query(Box::new(select))
+            InsertSource::Query(select)
         } else {
             return Err(ParseError {
                 message: "Expected SELECT statement after INSERT INTO table".to_string(),

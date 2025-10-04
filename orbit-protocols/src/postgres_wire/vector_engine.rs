@@ -105,7 +105,7 @@ impl VectorQueryEngine {
         // Example: CREATE TABLE documents (id SERIAL, content TEXT, embedding VECTOR(384));
 
         let sql_clean = sql.trim().to_uppercase();
-        let sql_clean = sql_clean.replace('\n', " ").replace('\t', " ");
+        let sql_clean = sql_clean.replace(['\n', '\t'], " ");
 
         // Extract table name
         let parts: Vec<&str> = sql_clean.split_whitespace().collect();

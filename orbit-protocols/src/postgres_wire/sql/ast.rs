@@ -20,7 +20,7 @@ pub enum Statement {
     DropSchema(DropSchemaStatement),
 
     // Data Manipulation Language (DML)
-    Select(SelectStatement),
+    Select(Box<SelectStatement>),
     Insert(InsertStatement),
     Update(UpdateStatement),
     Delete(DeleteStatement),

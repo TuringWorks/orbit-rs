@@ -3,6 +3,7 @@
 use super::{McpCapabilities, McpConfig};
 
 /// MCP server
+#[allow(dead_code)]
 pub struct McpServer {
     config: McpConfig,
     capabilities: McpCapabilities,

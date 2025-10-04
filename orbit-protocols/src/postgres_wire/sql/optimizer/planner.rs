@@ -156,6 +156,7 @@ pub enum AggregateFunctionType {
 
 /// Execution plan generator
 pub struct ExecutionPlanner {
+    #[allow(dead_code)]
     next_plan_id: usize,
 }
 
@@ -168,7 +169,7 @@ impl ExecutionPlanner {
     /// Generate an execution plan for a statement
     pub fn generate_plan(&mut self, statement: Statement) -> ProtocolResult<ExecutionPlan> {
         match statement {
-            Statement::Select(select) => self.plan_select(select),
+            Statement::Select(select) => self.plan_select(*select),
             Statement::Insert(insert) => self.plan_insert(insert),
             Statement::Update(update) => self.plan_update(update),
             Statement::Delete(delete) => self.plan_delete(delete),
