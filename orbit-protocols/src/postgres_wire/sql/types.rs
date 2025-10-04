@@ -112,8 +112,9 @@ pub enum SqlType {
 }
 
 /// SQL Runtime Values
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub enum SqlValue {
+    #[default]
     Null,
     Boolean(bool),
     SmallInt(i16),
@@ -541,11 +542,6 @@ impl SqlValue {
     }
 }
 
-impl Default for SqlValue {
-    fn default() -> Self {
-        SqlValue::Null
-    }
-}
 
 impl std::fmt::Display for SqlValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

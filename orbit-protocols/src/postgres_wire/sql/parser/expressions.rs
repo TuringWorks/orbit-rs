@@ -2,6 +2,10 @@
 //!
 //! This module handles parsing of SQL expressions with proper precedence and associativity
 
+#![allow(clippy::useless_conversion)]
+#![allow(clippy::too_many_arguments)]
+#![allow(clippy::unnecessary_map_or)]
+
 use crate::error::ProtocolResult;
 use crate::postgres_wire::sql::ast::*;
 use crate::postgres_wire::sql::lexer::Token;
@@ -210,10 +214,9 @@ impl ExpressionParser {
         pos: &mut usize,
     ) -> ProtocolResult<Expression> {
         if *pos >= tokens.len() {
-            return Err(crate::error::ProtocolError::ParseError(
+              return Err(crate::error::ProtocolError::ParseError(
                 "Unexpected end of tokens".to_string(),
-            )
-            .into());
+            ));
         }
 
         match &tokens[*pos] {
@@ -252,10 +255,9 @@ impl ExpressionParser {
         pos: &mut usize,
     ) -> ProtocolResult<Expression> {
         if *pos >= tokens.len() {
-            return Err(crate::error::ProtocolError::ParseError(
+              return Err(crate::error::ProtocolError::ParseError(
                 "Unexpected end of tokens".to_string(),
-            )
-            .into());
+            ));
         }
 
         match &tokens[*pos] {
@@ -340,20 +342,18 @@ impl ExpressionParser {
                 let expr = self.parse_expression(tokens, pos)?;
 
                 if *pos >= tokens.len() || !matches!(tokens[*pos], Token::RightParen) {
-                    return Err(crate::error::ProtocolError::ParseError(
+                      return Err(crate::error::ProtocolError::ParseError(
                         "Expected ')' after expression".to_string(),
-                    )
-                    .into());
+                    ));
                 }
                 *pos += 1; // consume ')'
 
                 Ok(expr)
             }
-            _ => Err(crate::error::ProtocolError::ParseError(format!(
+              _ => Err(crate::error::ProtocolError::ParseError(format!(
                 "Unexpected token in expression: {:?}",
                 tokens[*pos]
-            ))
-            .into()),
+            ))),
         }
     }
 

@@ -4,7 +4,7 @@
 //! works correctly with real Redis clients.
 
 use orbit_client::OrbitClient;
-use orbit_protocols::resp::{HashActor, KeyValueActor, ListActor, RespServer};
+use orbit_protocols::resp::RespServer;
 use redis::{Commands, Connection, RedisResult};
 use tokio::time::{sleep, Duration};
 

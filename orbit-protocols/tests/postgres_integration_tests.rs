@@ -174,9 +174,8 @@ async fn test_delete_actor() -> Result<(), Box<dyn std::error::Error>> {
         .await?;
 
     // Should be empty or return empty result
-    match rows.first() {
-        Some(tokio_postgres::SimpleQueryMessage::Row(_)) => panic!("Actor should be deleted"),
-        _ => {}
+    if let Some(tokio_postgres::SimpleQueryMessage::Row(_)) = rows.first() {
+        panic!("Actor should be deleted")
     }
 
     Ok(())
@@ -307,7 +306,6 @@ async fn test_multiple_connections() -> Result<(), Box<dyn std::error::Error>> {
     let mut handles = vec![];
 
     for i in 0..3 {
-        let port = port;
         let handle = tokio::spawn(async move {
             let (client, connection) = tokio_postgres::connect(
                 &format!("host=localhost port={} user=test{} dbname=test", port, i),

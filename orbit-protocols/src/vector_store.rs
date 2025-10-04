@@ -652,7 +652,7 @@ mod tests {
         // Search vectors
         let params = VectorSearchParams::new(vec![1.0, 2.0, 3.0], SimilarityMetric::Cosine, 10);
         let results = actor.search_vectors(params);
-        assert!(results.len() >= 1);
+        assert!(!results.is_empty());
         assert_eq!(results[0].vector.id, "v1"); // Should be exact match
     }
 }

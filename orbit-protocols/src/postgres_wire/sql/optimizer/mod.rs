@@ -84,6 +84,7 @@ impl QueryOptimizer {
     }
 
     /// Create a new optimizer with default configuration
+    #[allow(clippy::should_implement_trait)]
     pub fn default() -> Self {
         Self::new(OptimizerConfig::default())
     }

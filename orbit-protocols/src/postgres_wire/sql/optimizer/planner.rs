@@ -391,6 +391,7 @@ impl ExecutionPlanner {
     }
 
     /// Check if an expression contains aggregate functions
+    #[allow(clippy::only_used_in_recursion)]
     fn expression_has_aggregate(&self, expr: &Expression) -> bool {
         match expr {
             Expression::Function(func_call) => {

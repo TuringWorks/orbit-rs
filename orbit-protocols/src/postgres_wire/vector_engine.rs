@@ -593,9 +593,8 @@ impl VectorQueryEngine {
     /// Parse vector literal like '[0.1, 0.2, 0.3]' or '{0.1, 0.2, 0.3}'
     fn parse_vector_literal(&self, vector_str: &str) -> ProtocolResult<Vec<f32>> {
         let vector_str = vector_str.trim();
-        let vector_str = if vector_str.starts_with('[') && vector_str.ends_with(']') {
-            &vector_str[1..vector_str.len() - 1]
-        } else if vector_str.starts_with('{') && vector_str.ends_with('}') {
+        let vector_str = if (vector_str.starts_with('[') && vector_str.ends_with(']')) || 
+                           (vector_str.starts_with('{') && vector_str.ends_with('}')) {
             &vector_str[1..vector_str.len() - 1]
         } else {
             vector_str

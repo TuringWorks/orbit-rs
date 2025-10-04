@@ -74,7 +74,7 @@ async fn setup_vector_data(
 
     let config_value = serde_json::to_value(index_config)?;
     vector_actor_ref
-        .invoke("create_index", vec![config_value])
+        .invoke::<()>("create_index", vec![config_value])
         .await
         .map_err(|e| format!("Failed to create index: {}", e))?;
 
@@ -148,7 +148,7 @@ async fn setup_vector_data(
         let vector_value = serde_json::to_value(vector)?;
 
         vector_actor_ref
-            .invoke("add_vector", vec![vector_value])
+            .invoke::<()>("add_vector", vec![vector_value])
             .await
             .map_err(|e| format!("Failed to add vector {}: {}", id, e))?;
 

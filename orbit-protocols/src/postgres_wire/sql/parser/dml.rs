@@ -624,23 +624,19 @@ fn parse_on_conflict_clause(parser: &mut SqlParser) -> ParseResult<OnConflictCla
                     parser.expect(Token::Set)?;
 
                     let mut set_clauses = Vec::new();
-                    loop {
-                        if let Some(Token::Identifier(col_name)) = &parser.current_token {
-                            let column = col_name.clone();
+                    while let Some(Token::Identifier(col_name)) = &parser.current_token {
+                        let column = col_name.clone();
+                        parser.advance()?;
+                        parser.expect(Token::Equal)?;
+                        let value = utilities::parse_expression(parser)?;
+
+                        set_clauses.push(Assignment {
+                            target: AssignmentTarget::Column(column),
+                            value,
+                        });
+
+                        if parser.matches(&[Token::Comma]) {
                             parser.advance()?;
-                            parser.expect(Token::Equal)?;
-                            let value = utilities::parse_expression(parser)?;
-
-                            set_clauses.push(Assignment {
-                                target: AssignmentTarget::Column(column),
-                                value,
-                            });
-
-                            if parser.matches(&[Token::Comma]) {
-                                parser.advance()?;
-                            } else {
-                                break;
-                            }
                         } else {
                             break;
                         }

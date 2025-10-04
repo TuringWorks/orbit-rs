@@ -1,5 +1,10 @@
 //! SELECT Statement Parser Implementation
 
+#![allow(clippy::useless_conversion)]
+#![allow(clippy::collapsible_match)]
+#![allow(clippy::while_let_loop)]
+#![allow(clippy::unnecessary_map_or)]
+
 use crate::error::ProtocolResult;
 use crate::postgres_wire::sql::ast::*;
 use crate::postgres_wire::sql::lexer::Token;

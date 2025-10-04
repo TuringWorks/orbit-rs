@@ -9,11 +9,11 @@
 //! Then connect with a Redis client:
 //!   redis-cli -h localhost -p 6379
 //!   > PING
-//!   PONG
+//! > PONG
 //!   > SET mykey "Hello Orbit"
-//!   OK
+//! > OK
 //!   > GET mykey
-//!   "Hello Orbit"
+//! > "Hello Orbit"
 
 use std::error::Error;
 use tracing::{error, info};

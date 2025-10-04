@@ -292,7 +292,7 @@ mod tests {
     fn test_create_sample_embedding() {
         let embedding = create_sample_embedding(10, 0.5);
         assert_eq!(embedding.len(), 10);
-        assert!(embedding.iter().all(|&x| x >= -1.0 && x <= 1.0));
+        assert!(embedding.iter().all(|&x| (-1.0..=1.0).contains(&x)));
     }
 
     #[tokio::test]

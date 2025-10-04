@@ -3,6 +3,7 @@
 //! Complete test suite for SQL parsing, lexing, and execution functionality
 
 #[cfg(test)]
+#[allow(clippy::module_inception)]
 mod tests {
     use crate::postgres_wire::sql::ast::*;
     use crate::postgres_wire::sql::lexer::{Lexer, Token};
@@ -163,7 +164,7 @@ mod tests {
             .filter(|t| !matches!(t, Token::Eof | Token::Whitespace | Token::Comment(_)))
             .collect();
 
-        let expected = vec![Token::Count, Token::Sum, Token::Avg, Token::Min, Token::Max];
+        let expected = [Token::Count, Token::Sum, Token::Avg, Token::Min, Token::Max];
         assert_eq!(
             tokens.len(),
             expected.len(),
@@ -185,7 +186,7 @@ mod tests {
             .filter(|t| !matches!(t, Token::Eof | Token::Whitespace | Token::Comment(_)))
             .collect();
 
-        let expected = vec![
+        let expected = [
             Token::RowNumber,
             Token::Rank,
             Token::DenseRank,

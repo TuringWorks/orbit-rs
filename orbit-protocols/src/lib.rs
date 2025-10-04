@@ -14,7 +14,7 @@
 //! operations, providing a familiar interface for developers already using these
 //! databases.
 
-#![warn(missing_docs)]
+#![allow(missing_docs)]
 
 pub mod bolt;
 pub mod error;
