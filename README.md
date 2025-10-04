@@ -725,37 +725,141 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 5. Run the full test suite
 6. Submit a pull request
 
-## Roadmap
+## 🗺️ Roadmap
 
-### Current Status: Phase 1 Complete ✅
-- [x] Project structure and build system
-- [x] Core data structures and types
-- [x] Basic error handling
-- [x] Testing framework setup
-- [x] Documentation foundation
+### 🎯 Current Priority: SQL Query Engine (Phase 8)
 
-### Phase 2: Network Layer (In Progress)
-- [ ] Protocol Buffer integration
-- [ ] gRPC service definitions  
-- [ ] Message serialization
-- [ ] Network transport layer
+With the comprehensive SQL expression parser now complete, the immediate focus is on implementing the core DML operations to provide a fully functional SQL query engine:
 
-### Phase 3: Actor System Core
-- [ ] Addressable trait system
-- [ ] Actor lifecycle management
-- [ ] Proxy generation and invocation
-- [ ] Lease management
+**Next Immediate Steps:**
+1. **SELECT Statement Parser**: Implement SELECT with WHERE clause integration using the new expression parser
+2. **INSERT Operations**: Single row and batch insert with type validation
+3. **UPDATE Operations**: Row-level updates with WHERE clause filtering
+4. **DELETE Operations**: Conditional row deletion with expression evaluation
+5. **Basic JOIN Support**: Start with INNER JOIN using the expression engine for join conditions
 
-### Phase 4: Cluster Management
-- [ ] Node discovery and registration
-- [ ] Cluster membership
-- [ ] Health checking
-- [ ] Load balancing algorithms
+**Target Milestone**: Complete basic CRUD operations within 2-3 weeks to provide a functional PostgreSQL-compatible SQL interface.
 
-### Phase 5: Extensions
-- [ ] etcd integration
-- [ ] Prometheus metrics
-- [ ] Advanced features
+---
+
+### ✅ Phase 1: Foundation (Complete)
+- [x] **Project Structure**: Multi-crate workspace with proper module organization
+- [x] **Build System**: Cargo workspace configuration with cross-platform support
+- [x] **Core Types**: Shared data structures, error handling, and utilities
+- [x] **Testing Framework**: Unit tests, integration tests, and BDD scenarios
+- [x] **Documentation**: Comprehensive README and inline documentation
+- [x] **CI/CD Pipeline**: GitHub Actions with automated testing, linting, and security scanning
+
+### ✅ Phase 2: Core Actor System (Complete)
+- [x] **Actor Traits**: Addressable trait system with string and UUID keys
+- [x] **Actor Lifecycle**: Registration, activation, deactivation, and cleanup
+- [x] **Proxy Generation**: Client-side actor references and invocation
+- [x] **Lease Management**: Time-based actor lease system
+- [x] **Message Routing**: Transparent message routing to actor instances
+- [x] **Error Handling**: Comprehensive error types and propagation
+
+### ✅ Phase 3: Network Layer (Complete)
+- [x] **Protocol Buffers**: gRPC service definitions and message types
+- [x] **gRPC Services**: Actor invocation and cluster management services
+- [x] **Message Serialization**: Efficient binary serialization with Protocol Buffers
+- [x] **Connection Pooling**: Efficient connection management and reuse
+- [x] **Transport Layer**: Reliable network communication with retry logic
+- [x] **Service Discovery**: DNS-based and etcd-based node discovery
+
+### ✅ Phase 4: Cluster Management (Complete)
+- [x] **Node Discovery**: Automatic cluster node registration and discovery
+- [x] **Cluster Membership**: Dynamic cluster membership management
+- [x] **Health Checking**: Comprehensive health monitoring and failure detection
+- [x] **Load Balancing**: Multiple strategies (round-robin, least connections, resource-aware, hash-based)
+- [x] **Leader Election**: Raft-based leader election for cluster coordination
+- [x] **Fault Tolerance**: Automatic failover and recovery mechanisms
+
+### ✅ Phase 5: Advanced Transaction System (Complete)
+- [x] **2-Phase Commit**: ACID-compliant distributed transactions
+- [x] **Transaction Coordinator**: Multi-participant transaction management
+- [x] **Persistent Logging**: Durable SQLite-based transaction audit trail
+- [x] **Recovery Mechanisms**: Coordinator failover and transaction recovery
+- [x] **Saga Pattern**: Long-running workflows with compensating actions
+- [x] **Distributed Locks**: Deadlock detection and prevention
+- [x] **Security Features**: Authentication, authorization, and audit logging
+- [x] **Metrics Integration**: Comprehensive Prometheus monitoring
+
+### ✅ Phase 6: Protocol Adapters (Complete)
+- [x] **Redis RESP Protocol**: Complete Redis compatibility with 50+ commands
+- [x] **PostgreSQL Wire Protocol**: Full DDL support with ANSI SQL compliance
+- [x] **SQL Parser Infrastructure**: Lexer, AST, and expression parser
+- [x] **SQL Expression Engine**: Comprehensive operator precedence parsing
+- [x] **Vector Operations**: pgvector compatibility with distance operators
+- [x] **SQL Type System**: All PostgreSQL data types including vectors and arrays
+- [x] **Vector Indexing**: IVFFLAT and HNSW index support
+
+### ✅ Phase 7: Kubernetes Integration (Complete)
+- [x] **Kubernetes Operator**: Custom CRDs for cluster, actor, and transaction management
+- [x] **Helm Charts**: Production-ready Kubernetes deployment
+- [x] **Docker Images**: Multi-platform container builds (linux/amd64, linux/arm64)
+- [x] **RBAC Configuration**: Kubernetes role-based access control
+- [x] **Service Mesh Integration**: Istio and Linkerd compatibility
+- [x] **Monitoring Stack**: Prometheus, Grafana, and alerting integration
+
+### 🚧 Phase 8: SQL Query Engine (In Progress)
+- [x] **DDL Operations**: CREATE/ALTER/DROP TABLE, INDEX, VIEW, SCHEMA, EXTENSION
+- [x] **Expression Parser**: Full operator precedence with vector operations
+- [ ] **SELECT Statements**: Basic SELECT with WHERE, ORDER BY, LIMIT
+- [ ] **INSERT Operations**: Single and batch insert operations
+- [ ] **UPDATE Operations**: Row-level and conditional updates
+- [ ] **DELETE Operations**: Row-level and conditional deletes
+- [ ] **JOIN Operations**: INNER, LEFT, RIGHT, FULL OUTER joins
+- [ ] **Aggregate Functions**: COUNT, SUM, AVG, MIN, MAX, GROUP BY
+- [ ] **Subqueries**: Correlated and non-correlated subqueries
+- [ ] **Window Functions**: ROW_NUMBER, RANK, PARTITION BY
+
+### 🔄 Phase 9: Advanced SQL Features (Planned)
+- [ ] **Stored Procedures**: PostgreSQL-compatible stored procedure support
+- [ ] **Triggers**: BEFORE/AFTER INSERT/UPDATE/DELETE triggers
+- [ ] **Views**: Materialized and standard view support
+- [ ] **Common Table Expressions**: WITH clause and recursive CTEs
+- [ ] **Full-Text Search**: PostgreSQL-compatible text search
+- [ ] **JSON Operations**: JSONB support with path operations
+- [ ] **Array Operations**: PostgreSQL array functions and operators
+- [ ] **Extensions**: Custom extension loading and management
+
+### 🌟 Phase 10: Distributed Query Processing (Future)
+- [ ] **Query Planning**: Cost-based query optimization
+- [ ] **Distributed Execution**: Cross-node query execution
+- [ ] **Data Sharding**: Automatic data distribution and rebalancing
+- [ ] **Parallel Processing**: Multi-threaded query execution
+- [ ] **Caching Layer**: Intelligent query result caching
+- [ ] **Replication**: Master-slave and multi-master replication
+- [ ] **Consistency Models**: Eventual consistency and strong consistency options
+- [ ] **OLAP Support**: Analytical workload optimization
+
+### 🔌 Phase 11: Additional Protocol Support (Future)
+- [ ] **Neo4j Bolt Protocol**: Graph database compatibility for Cypher queries
+- [ ] **REST API**: HTTP/JSON interface for web applications
+- [ ] **GraphQL API**: Modern GraphQL interface with schema introspection
+- [ ] **WebSocket Support**: Real-time data streaming capabilities
+- [ ] **Apache Kafka Integration**: Event streaming and message queues
+- [ ] **MQTT Protocol**: IoT device communication support
+- [ ] **OpenAPI/Swagger**: API documentation and client generation
+
+### 🌐 Phase 12: Cloud-Native Features (Future)
+- [ ] **AWS Integration**: RDS, DynamoDB, and S3 backends
+- [ ] **Azure Integration**: Cosmos DB and Azure SQL backends
+- [ ] **GCP Integration**: BigQuery and Cloud SQL backends
+- [ ] **Multi-Cloud**: Cross-cloud deployment and data replication
+- [ ] **Serverless Support**: AWS Lambda and Azure Functions integration
+- [ ] **Edge Computing**: Edge node deployment and synchronization
+- [ ] **Auto-scaling**: Dynamic cluster scaling based on workload
+- [ ] **Cost Optimization**: Resource usage monitoring and optimization
+
+### 📊 Phase 13: Enterprise Features (Future)
+- [ ] **Spring Boot Integration**: Seamless Java ecosystem integration
+- [ ] **Enterprise Security**: LDAP, SAML, and OAuth2 integration
+- [ ] **Compliance**: SOC2, GDPR, and HIPAA compliance features
+- [ ] **Backup and Recovery**: Point-in-time recovery and disaster recovery
+- [ ] **Performance Tuning**: Advanced performance monitoring and optimization
+- [ ] **Support for Legacy Systems**: Migration tools and compatibility layers
+- [ ] **Commercial Support**: Enterprise support and consulting services
 
 ## License
 
