@@ -16,9 +16,9 @@
 //!   - /app/config/orbit-server.toml (in Docker)
 //!   - /etc/orbit/orbit-server.toml (system-wide)
 
+use clap::Parser;
 use std::error::Error;
 use std::path::PathBuf;
-use clap::Parser;
 use tracing::{info, warn};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -68,7 +68,7 @@ struct Args {
     #[arg(
         short = 'H',
         long,
-        value_name = "PORT", 
+        value_name = "PORT",
         help = "HTTP/REST API port",
         default_value = "8080"
     )]
@@ -85,12 +85,7 @@ struct Args {
     metrics_port: u16,
 
     /// Node ID (auto-generated if not provided)
-    #[arg(
-        short = 'n',
-        long,
-        value_name = "ID",
-        help = "Unique node identifier"
-    )]
+    #[arg(short = 'n', long, value_name = "ID", help = "Unique node identifier")]
     node_id: Option<String>,
 
     /// Cluster seed nodes
@@ -142,7 +137,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 .with_target(true)
                 .with_thread_ids(args.dev_mode)
                 .with_file(args.dev_mode)
-                .with_line_number(args.dev_mode)
+                .with_line_number(args.dev_mode),
         )
         .init();
 
@@ -155,15 +150,24 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     // Load configuration
     let mut config = load_config(&args).await?;
-    
+
     // Override with command line arguments
     apply_cli_overrides(&mut config, &args);
 
     info!("🎯 Configuration loaded and CLI overrides applied");
 
-    info!("📡 gRPC server will listen on {}:{}", args.bind, args.grpc_port);
-    info!("🌍 HTTP API will listen on {}:{}", args.bind, args.http_port);
-    info!("📊 Metrics will be exposed on {}:{}", args.bind, args.metrics_port);
+    info!(
+        "📡 gRPC server will listen on {}:{}",
+        args.bind, args.grpc_port
+    );
+    info!(
+        "🌍 HTTP API will listen on {}:{}",
+        args.bind, args.http_port
+    );
+    info!(
+        "📊 Metrics will be exposed on {}:{}",
+        args.bind, args.metrics_port
+    );
 
     // Log seed nodes
     if !args.seed_nodes.is_empty() {
@@ -194,17 +198,23 @@ async fn load_config(args: &Args) -> Result<OrbitServerConfig, Box<dyn Error>> {
     // For now, always use default configuration
     // TODO: Implement TOML config file loading
     if args.config.exists() {
-        info!("📖 Config file found: {:?} (using defaults for now)", args.config);
+        info!(
+            "📖 Config file found: {:?} (using defaults for now)",
+            args.config
+        );
     } else {
-        info!("📄 Config file not found: {:?}. Using defaults.", args.config);
+        info!(
+            "📄 Config file not found: {:?}. Using defaults.",
+            args.config
+        );
     }
 
     let mut config = OrbitServerConfig::default();
-    
+
     // Apply basic overrides from CLI
     config.bind_address = args.bind.clone();
     config.port = args.grpc_port;
-    
+
     Ok(config)
 }
 
@@ -212,7 +222,7 @@ async fn load_config(args: &Args) -> Result<OrbitServerConfig, Box<dyn Error>> {
 fn apply_cli_overrides(_config: &mut OrbitServerConfig, args: &Args) {
     // Apply CLI overrides to config
     // This would override specific config values based on CLI args
-    
+
     if args.dev_mode {
         info!("🔧 Applying development mode configuration overrides");
         // Set development-friendly defaults
