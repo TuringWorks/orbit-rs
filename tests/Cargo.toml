@@ -64,41 +64,7 @@ test-logging = []
 test-metrics = []
 mock-services = []
 
-[[test]]
-name = "mock_simple"
-path = "tests/mock_simple.rs"
-
-# Neo4j Tests
-[[test]]
-name = "neo4j_integration"
-path = "neo4j/integration_tests.rs"
-required-features = ["neo4j-features"]
-harness = false
-
-# ArangoDB Tests
-[[test]]
-name = "arangodb_integration"
-path = "arangodb/integration_tests.rs"
-required-features = ["arangodb-features"]
-harness = false
-
-# GraphML Tests
-[[test]]
-name = "graphml_integration"
-path = "graphml/integration_tests.rs"
-required-features = ["graphml-features"]
-harness = false
-
-# GraphRAG Tests
-[[test]]
-name = "graphrag_integration"
-path = "graphrag/integration_tests.rs"
-required-features = ["graphrag-features"]
-harness = false
-
-# Time Series Tests
-[[test]]
-name = "timeseries_integration"
-path = "timeseries/integration_tests.rs"
-required-features = ["timeseries-features"]
-harness = false
+# Test binaries will be added as integration tests are implemented
+# [[test]]
+# name = "mock_simple"
+# path = "tests/mock_simple.rs"
