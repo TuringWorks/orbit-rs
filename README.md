@@ -1,11 +1,10 @@
 # Orbit - Rust Implementation
 
-[![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](#)
+[![CI](https://github.com/TuringWorks/orbit-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/TuringWorks/orbit-rs/actions/workflows/ci.yml)
+[![CI/CD Pipeline](https://github.com/TuringWorks/orbit-rs/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/TuringWorks/orbit-rs/actions/workflows/ci-cd.yml)
+[![CodeQL](https://github.com/TuringWorks/orbit-rs/actions/workflows/codeql.yml/badge.svg)](https://github.com/TuringWorks/orbit-rs/actions/workflows/codeql.yml)
 [![License](https://img.shields.io/badge/license-BSD--3--Clause%20OR%20MIT-blue.svg)](#license)
 [![Rust Version](https://img.shields.io/badge/rust-1.70+-red.svg)](https://www.rust-lang.org/)
-[![Tests](https://img.shields.io/badge/tests-79%20passing-green)]()
-[![Coverage](https://img.shields.io/badge/coverage-comprehensive-blue)]()
-[![CI/CD](https://img.shields.io/badge/CI%2FCD-verified-brightgreen)]()
 
 A high-performance, distributed virtual actor system framework reimplemented in Rust, inspired by Microsoft Orleans and the original Java Orbit framework.
 
