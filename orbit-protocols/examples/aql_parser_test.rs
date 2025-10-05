@@ -6,7 +6,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Testing AQL Parser");
 
     let parser = AqlParser::new();
-    
+
     // Test basic FOR query
     let query1 = "FOR doc IN users RETURN doc";
     match parser.parse(query1) {
@@ -32,7 +32,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Test graph traversal
-    let query3 = "FOR vertex, edge, path IN 1..3 OUTBOUND 'users/john' GRAPH 'social' RETURN vertex";
+    let query3 =
+        "FOR vertex, edge, path IN 1..3 OUTBOUND 'users/john' GRAPH 'social' RETURN vertex";
     match parser.parse(query3) {
         Ok(parsed) => {
             println!("✅ Successfully parsed query 3: {:?}", parsed);

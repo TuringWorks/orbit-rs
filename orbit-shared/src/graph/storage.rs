@@ -41,9 +41,14 @@ impl InMemoryGraphStorage {
     }
 
     /// Update the label index when a node's labels change
-    async fn update_label_index(&self, node_id: &NodeId, old_labels: &[String], new_labels: &[String]) {
+    async fn update_label_index(
+        &self,
+        node_id: &NodeId,
+        old_labels: &[String],
+        new_labels: &[String],
+    ) {
         let mut label_index = self.label_index.write().await;
-        
+
         // Remove from old labels
         for label in old_labels {
             if let Some(node_ids) = label_index.get_mut(label) {
@@ -53,19 +58,25 @@ impl InMemoryGraphStorage {
                 }
             }
         }
-        
+
         // Add to new labels
         for label in new_labels {
-            label_index.entry(label.clone()).or_default().push(node_id.clone());
+            label_index
+                .entry(label.clone())
+                .or_default()
+                .push(node_id.clone());
         }
     }
 
     /// Update the relationship type index
     async fn update_rel_type_index(&self, rel_id: &RelationshipId, rel_type: &str, add: bool) {
         let mut rel_type_index = self.rel_type_index.write().await;
-        
+
         if add {
-            rel_type_index.entry(rel_type.to_string()).or_default().push(rel_id.clone());
+            rel_type_index
+                .entry(rel_type.to_string())
+                .or_default()
+                .push(rel_id.clone());
         } else if let Some(rel_ids) = rel_type_index.get_mut(rel_type) {
             rel_ids.retain(|id| id != rel_id);
             if rel_ids.is_empty() {
@@ -76,18 +87,24 @@ impl InMemoryGraphStorage {
 
     /// Update relationship indexes for a node
     async fn update_relationship_indexes(
-        &self, 
-        rel_id: &RelationshipId, 
-        start_node: &NodeId, 
+        &self,
+        rel_id: &RelationshipId,
+        start_node: &NodeId,
         end_node: &NodeId,
-        add: bool
+        add: bool,
     ) {
         let mut outgoing = self.outgoing_rels.write().await;
         let mut incoming = self.incoming_rels.write().await;
-        
+
         if add {
-            outgoing.entry(start_node.clone()).or_default().push(rel_id.clone());
-            incoming.entry(end_node.clone()).or_default().push(rel_id.clone());
+            outgoing
+                .entry(start_node.clone())
+                .or_default()
+                .push(rel_id.clone());
+            incoming
+                .entry(end_node.clone())
+                .or_default()
+                .push(rel_id.clone());
         } else {
             if let Some(rels) = outgoing.get_mut(start_node) {
                 rels.retain(|id| id != rel_id);
@@ -131,13 +148,16 @@ impl GraphStorage for InMemoryGraphStorage {
     ) -> OrbitResult<GraphNode> {
         let node = GraphNode::new(labels.clone(), properties);
         let node_id = node.id.clone();
-        
+
         // Store the node
-        self.nodes.write().await.insert(node_id.clone(), node.clone());
-        
+        self.nodes
+            .write()
+            .await
+            .insert(node_id.clone(), node.clone());
+
         // Update label index
         self.update_label_index(&node_id, &[], &labels).await;
-        
+
         info!(node_id = %node_id, labels = ?labels, "Created graph node");
         Ok(node)
     }
@@ -156,7 +176,7 @@ impl GraphStorage for InMemoryGraphStorage {
         properties: HashMap<String, serde_json::Value>,
     ) -> OrbitResult<()> {
         let mut nodes = self.nodes.write().await;
-        
+
         match nodes.get_mut(node_id) {
             Some(node) => {
                 for (key, value) in properties {
@@ -167,7 +187,9 @@ impl GraphStorage for InMemoryGraphStorage {
             }
             None => {
                 warn!(node_id = %node_id, "Attempted to update non-existent node");
-                Err(OrbitError::NodeNotFound { node_id: node_id.to_string() })
+                Err(OrbitError::NodeNotFound {
+                    node_id: node_id.to_string(),
+                })
             }
         }
     }
@@ -178,7 +200,7 @@ impl GraphStorage for InMemoryGraphStorage {
         let relationships_to_delete: Vec<RelationshipId> = {
             let outgoing = self.outgoing_rels.read().await;
             let incoming = self.incoming_rels.read().await;
-            
+
             let mut rels = Vec::new();
             if let Some(out_rels) = outgoing.get(node_id) {
                 rels.extend(out_rels.clone());
@@ -203,10 +225,10 @@ impl GraphStorage for InMemoryGraphStorage {
         if let Some(node) = node {
             // Update label index
             self.update_label_index(node_id, &node.labels, &[]).await;
-            
+
             // Remove node
             let removed = self.nodes.write().await.remove(node_id).is_some();
-            
+
             if removed {
                 info!(node_id = %node_id, "Deleted graph node");
             }
@@ -219,25 +241,28 @@ impl GraphStorage for InMemoryGraphStorage {
     #[instrument(skip(self, labels), fields(labels_count = labels.len()))]
     async fn add_labels(&self, node_id: &NodeId, labels: Vec<String>) -> OrbitResult<()> {
         let mut nodes = self.nodes.write().await;
-        
+
         match nodes.get_mut(node_id) {
             Some(node) => {
                 let old_labels = node.labels.clone();
                 node.add_labels(labels.clone());
                 let new_labels = node.labels.clone();
-                
+
                 // Drop the write lock before updating index
                 drop(nodes);
-                
+
                 // Update label index
-                self.update_label_index(node_id, &old_labels, &new_labels).await;
-                
+                self.update_label_index(node_id, &old_labels, &new_labels)
+                    .await;
+
                 info!(node_id = %node_id, labels = ?labels, "Added labels to node");
                 Ok(())
             }
             None => {
                 warn!(node_id = %node_id, "Attempted to add labels to non-existent node");
-                Err(OrbitError::NodeNotFound { node_id: node_id.to_string() })
+                Err(OrbitError::NodeNotFound {
+                    node_id: node_id.to_string(),
+                })
             }
         }
     }
@@ -245,25 +270,28 @@ impl GraphStorage for InMemoryGraphStorage {
     #[instrument(skip(self, labels), fields(labels_count = labels.len()))]
     async fn remove_labels(&self, node_id: &NodeId, labels: Vec<String>) -> OrbitResult<()> {
         let mut nodes = self.nodes.write().await;
-        
+
         match nodes.get_mut(node_id) {
             Some(node) => {
                 let old_labels = node.labels.clone();
                 node.remove_labels(labels.clone());
                 let new_labels = node.labels.clone();
-                
+
                 // Drop the write lock before updating index
                 drop(nodes);
-                
+
                 // Update label index
-                self.update_label_index(node_id, &old_labels, &new_labels).await;
-                
+                self.update_label_index(node_id, &old_labels, &new_labels)
+                    .await;
+
                 info!(node_id = %node_id, labels = ?labels, "Removed labels from node");
                 Ok(())
             }
             None => {
                 warn!(node_id = %node_id, "Attempted to remove labels from non-existent node");
-                Err(OrbitError::NodeNotFound { node_id: node_id.to_string() })
+                Err(OrbitError::NodeNotFound {
+                    node_id: node_id.to_string(),
+                })
             }
         }
     }
@@ -277,7 +305,9 @@ impl GraphStorage for InMemoryGraphStorage {
             }
             None => {
                 warn!(node_id = %node_id, "Attempted to get labels from non-existent node");
-                Err(OrbitError::NodeNotFound { node_id: node_id.to_string() })
+                Err(OrbitError::NodeNotFound {
+                    node_id: node_id.to_string(),
+                })
             }
         }
     }
@@ -293,10 +323,14 @@ impl GraphStorage for InMemoryGraphStorage {
         // Verify both nodes exist
         let nodes = self.nodes.read().await;
         if !nodes.contains_key(start_node) {
-            return Err(OrbitError::NodeNotFound { node_id: start_node.to_string() });
+            return Err(OrbitError::NodeNotFound {
+                node_id: start_node.to_string(),
+            });
         }
         if !nodes.contains_key(end_node) {
-            return Err(OrbitError::NodeNotFound { node_id: end_node.to_string() });
+            return Err(OrbitError::NodeNotFound {
+                node_id: end_node.to_string(),
+            });
         }
         drop(nodes);
 
@@ -309,10 +343,14 @@ impl GraphStorage for InMemoryGraphStorage {
         let rel_id = relationship.id.clone();
 
         // Store relationship
-        self.relationships.write().await.insert(rel_id.clone(), relationship.clone());
-        
+        self.relationships
+            .write()
+            .await
+            .insert(rel_id.clone(), relationship.clone());
+
         // Update indexes
-        self.update_relationship_indexes(&rel_id, start_node, end_node, true).await;
+        self.update_relationship_indexes(&rel_id, start_node, end_node, true)
+            .await;
         self.update_rel_type_index(&rel_id, &rel_type, true).await;
 
         info!(
@@ -385,7 +423,10 @@ impl GraphStorage for InMemoryGraphStorage {
     }
 
     #[instrument(skip(self))]
-    async fn get_relationship(&self, rel_id: &RelationshipId) -> OrbitResult<Option<GraphRelationship>> {
+    async fn get_relationship(
+        &self,
+        rel_id: &RelationshipId,
+    ) -> OrbitResult<Option<GraphRelationship>> {
         let relationship = self.relationships.read().await.get(rel_id).cloned();
         debug!(rel_id = %rel_id, found = relationship.is_some(), "Retrieved relationship");
         Ok(relationship)
@@ -398,7 +439,7 @@ impl GraphStorage for InMemoryGraphStorage {
         properties: HashMap<String, serde_json::Value>,
     ) -> OrbitResult<()> {
         let mut relationships = self.relationships.write().await;
-        
+
         match relationships.get_mut(rel_id) {
             Some(relationship) => {
                 for (key, value) in properties {
@@ -409,7 +450,10 @@ impl GraphStorage for InMemoryGraphStorage {
             }
             None => {
                 warn!(rel_id = %rel_id, "Attempted to update non-existent relationship");
-                Err(OrbitError::Internal(format!("Relationship {} not found", rel_id)))
+                Err(OrbitError::Internal(format!(
+                    "Relationship {} not found",
+                    rel_id
+                )))
             }
         }
     }
@@ -424,12 +468,14 @@ impl GraphStorage for InMemoryGraphStorage {
 
         if let Some(rel) = relationship {
             // Update indexes
-            self.update_relationship_indexes(&rel_id, &rel.start_node, &rel.end_node, false).await;
-            self.update_rel_type_index(&rel_id, &rel.rel_type, false).await;
-            
+            self.update_relationship_indexes(rel_id, &rel.start_node, &rel.end_node, false)
+                .await;
+            self.update_rel_type_index(rel_id, &rel.rel_type, false)
+                .await;
+
             // Remove relationship
             let removed = self.relationships.write().await.remove(rel_id).is_some();
-            
+
             if removed {
                 info!(rel_id = %rel_id, "Deleted relationship");
             }
@@ -519,7 +565,11 @@ impl GraphStorage for InMemoryGraphStorage {
             Some(ids) => ids.len() as u64,
             None => 0,
         };
-        debug!(rel_type = rel_type, count = count, "Counted relationships by type");
+        debug!(
+            rel_type = rel_type,
+            count = count,
+            "Counted relationships by type"
+        );
         Ok(count)
     }
 }
@@ -531,37 +581,49 @@ mod tests {
     #[tokio::test]
     async fn test_node_crud_operations() {
         let storage = InMemoryGraphStorage::new();
-        
+
         // Create node
         let labels = vec!["Person".to_string(), "Employee".to_string()];
         let mut properties = HashMap::new();
-        properties.insert("name".to_string(), serde_json::Value::String("Alice".to_string()));
-        properties.insert("age".to_string(), serde_json::Value::Number(serde_json::Number::from(30)));
-        
-        let node = storage.create_node(labels.clone(), properties.clone()).await.unwrap();
+        properties.insert(
+            "name".to_string(),
+            serde_json::Value::String("Alice".to_string()),
+        );
+        properties.insert(
+            "age".to_string(),
+            serde_json::Value::Number(serde_json::Number::from(30)),
+        );
+
+        let node = storage
+            .create_node(labels.clone(), properties.clone())
+            .await
+            .unwrap();
         assert_eq!(node.labels, labels);
         assert_eq!(node.properties, properties);
-        
+
         // Get node
         let retrieved = storage.get_node(&node.id).await.unwrap();
         assert!(retrieved.is_some());
         assert_eq!(retrieved.unwrap().id, node.id);
-        
+
         // Update node
         let mut updates = HashMap::new();
-        updates.insert("age".to_string(), serde_json::Value::Number(serde_json::Number::from(31)));
+        updates.insert(
+            "age".to_string(),
+            serde_json::Value::Number(serde_json::Number::from(31)),
+        );
         storage.update_node(&node.id, updates).await.unwrap();
-        
+
         let updated = storage.get_node(&node.id).await.unwrap().unwrap();
         assert_eq!(
             updated.get_property("age"),
             Some(&serde_json::Value::Number(serde_json::Number::from(31)))
         );
-        
+
         // Delete node
         let deleted = storage.delete_node(&node.id).await.unwrap();
         assert!(deleted);
-        
+
         let not_found = storage.get_node(&node.id).await.unwrap();
         assert!(not_found.is_none());
     }
@@ -569,61 +631,89 @@ mod tests {
     #[tokio::test]
     async fn test_relationship_crud_operations() {
         let storage = InMemoryGraphStorage::new();
-        
+
         // Create nodes first
-        let node1 = storage.create_node(vec!["Person".to_string()], HashMap::new()).await.unwrap();
-        let node2 = storage.create_node(vec!["Person".to_string()], HashMap::new()).await.unwrap();
-        
+        let node1 = storage
+            .create_node(vec!["Person".to_string()], HashMap::new())
+            .await
+            .unwrap();
+        let node2 = storage
+            .create_node(vec!["Person".to_string()], HashMap::new())
+            .await
+            .unwrap();
+
         // Create relationship
         let mut rel_props = HashMap::new();
-        rel_props.insert("since".to_string(), serde_json::Value::String("2023".to_string()));
-        
-        let relationship = storage.create_relationship(
-            &node1.id,
-            &node2.id,
-            "KNOWS".to_string(),
-            rel_props.clone()
-        ).await.unwrap();
-        
+        rel_props.insert(
+            "since".to_string(),
+            serde_json::Value::String("2023".to_string()),
+        );
+
+        let relationship = storage
+            .create_relationship(&node1.id, &node2.id, "KNOWS".to_string(), rel_props.clone())
+            .await
+            .unwrap();
+
         assert_eq!(relationship.start_node, node1.id);
         assert_eq!(relationship.end_node, node2.id);
         assert_eq!(relationship.rel_type, "KNOWS");
         assert_eq!(relationship.properties, rel_props);
-        
+
         // Get relationships
-        let outgoing = storage.get_relationships(&node1.id, Direction::Outgoing, None).await.unwrap();
+        let outgoing = storage
+            .get_relationships(&node1.id, Direction::Outgoing, None)
+            .await
+            .unwrap();
         assert_eq!(outgoing.len(), 1);
         assert_eq!(outgoing[0].id, relationship.id);
-        
-        let incoming = storage.get_relationships(&node2.id, Direction::Incoming, None).await.unwrap();
+
+        let incoming = storage
+            .get_relationships(&node2.id, Direction::Incoming, None)
+            .await
+            .unwrap();
         assert_eq!(incoming.len(), 1);
         assert_eq!(incoming[0].id, relationship.id);
-        
+
         // Delete relationship
         let deleted = storage.delete_relationship(&relationship.id).await.unwrap();
         assert!(deleted);
-        
-        let no_rels = storage.get_relationships(&node1.id, Direction::Outgoing, None).await.unwrap();
+
+        let no_rels = storage
+            .get_relationships(&node1.id, Direction::Outgoing, None)
+            .await
+            .unwrap();
         assert!(no_rels.is_empty());
     }
 
     #[tokio::test]
     async fn test_label_operations() {
         let storage = InMemoryGraphStorage::new();
-        
-        let node = storage.create_node(vec!["Person".to_string()], HashMap::new()).await.unwrap();
-        
+
+        let node = storage
+            .create_node(vec!["Person".to_string()], HashMap::new())
+            .await
+            .unwrap();
+
         // Add labels
-        storage.add_labels(&node.id, vec!["Employee".to_string(), "Manager".to_string()]).await.unwrap();
-        
+        storage
+            .add_labels(
+                &node.id,
+                vec!["Employee".to_string(), "Manager".to_string()],
+            )
+            .await
+            .unwrap();
+
         let labels = storage.get_labels(&node.id).await.unwrap();
         assert!(labels.contains(&"Person".to_string()));
         assert!(labels.contains(&"Employee".to_string()));
         assert!(labels.contains(&"Manager".to_string()));
-        
+
         // Remove labels
-        storage.remove_labels(&node.id, vec!["Employee".to_string()]).await.unwrap();
-        
+        storage
+            .remove_labels(&node.id, vec!["Employee".to_string()])
+            .await
+            .unwrap();
+
         let labels = storage.get_labels(&node.id).await.unwrap();
         assert!(labels.contains(&"Person".to_string()));
         assert!(!labels.contains(&"Employee".to_string()));
@@ -633,26 +723,47 @@ mod tests {
     #[tokio::test]
     async fn test_find_nodes_by_label() {
         let storage = InMemoryGraphStorage::new();
-        
+
         // Create nodes with different labels
-        let _node1 = storage.create_node(vec!["Person".to_string()], HashMap::new()).await.unwrap();
-        let _node2 = storage.create_node(vec!["Person".to_string(), "Employee".to_string()], HashMap::new()).await.unwrap();
-        let _node3 = storage.create_node(vec!["Company".to_string()], HashMap::new()).await.unwrap();
-        
+        let _node1 = storage
+            .create_node(vec!["Person".to_string()], HashMap::new())
+            .await
+            .unwrap();
+        let _node2 = storage
+            .create_node(
+                vec!["Person".to_string(), "Employee".to_string()],
+                HashMap::new(),
+            )
+            .await
+            .unwrap();
+        let _node3 = storage
+            .create_node(vec!["Company".to_string()], HashMap::new())
+            .await
+            .unwrap();
+
         // Find by label
-        let persons = storage.find_nodes_by_label("Person", None, None).await.unwrap();
+        let persons = storage
+            .find_nodes_by_label("Person", None, None)
+            .await
+            .unwrap();
         assert_eq!(persons.len(), 2);
-        
-        let employees = storage.find_nodes_by_label("Employee", None, None).await.unwrap();
+
+        let employees = storage
+            .find_nodes_by_label("Employee", None, None)
+            .await
+            .unwrap();
         assert_eq!(employees.len(), 1);
-        
-        let companies = storage.find_nodes_by_label("Company", None, None).await.unwrap();
+
+        let companies = storage
+            .find_nodes_by_label("Company", None, None)
+            .await
+            .unwrap();
         assert_eq!(companies.len(), 1);
-        
+
         // Count by label
         let person_count = storage.count_nodes_by_label("Person").await.unwrap();
         assert_eq!(person_count, 2);
-        
+
         let employee_count = storage.count_nodes_by_label("Employee").await.unwrap();
         assert_eq!(employee_count, 1);
     }

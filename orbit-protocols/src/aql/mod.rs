@@ -31,11 +31,11 @@ pub mod aql_parser;
 pub mod data_model;
 
 pub use aql_parser::{AqlParser, AqlQuery};
-pub use data_model::{AqlDocument, AqlCollection, AqlValue};
+pub use data_model::{AqlCollection, AqlDocument, AqlValue};
 
 // TODO: Add more AQL features
 // - Advanced aggregation functions
-// - Geospatial operations  
+// - Geospatial operations
 // - Full-text search integration
 // - User-defined functions
 // - Streaming query results

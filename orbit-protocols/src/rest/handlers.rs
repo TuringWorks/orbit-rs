@@ -25,7 +25,7 @@ pub struct PaginationParams {
     /// Page number (0-indexed)
     #[param(example = 0)]
     pub page: Option<usize>,
-    
+
     /// Page size (default: 50, max: 1000)
     #[param(example = 50)]
     pub page_size: Option<usize>,
@@ -50,23 +50,21 @@ pub async fn list_actors(
 ) -> impl IntoResponse {
     let page = params.page.unwrap_or(0);
     let page_size = params.page_size.unwrap_or(50).min(1000);
-    
+
     // TODO: Implement actual actor listing via OrbitClient
     // This would require adding a directory query API to orbit-client
-    let actors = vec![
-        ActorInfo {
-            actor_type: "GreeterActor".to_string(),
-            key: serde_json::json!({"StringKey": {"key": "greeter-1"}}),
-            state: serde_json::json!({"greetings": 42}),
-            node_id: Some("node-1".to_string()),
-            status: "active".to_string(),
-            last_activity: Some("2024-01-15T10:30:00Z".to_string()),
-        },
-    ];
-    
+    let actors = vec![ActorInfo {
+        actor_type: "GreeterActor".to_string(),
+        key: serde_json::json!({"StringKey": {"key": "greeter-1"}}),
+        state: serde_json::json!({"greetings": 42}),
+        node_id: Some("node-1".to_string()),
+        status: "active".to_string(),
+        last_activity: Some("2024-01-15T10:30:00Z".to_string()),
+    }];
+
     let total = actors.len();
     let response = PagedResponse::new(actors, total, page, page_size);
-    
+
     (StatusCode::OK, Json(SuccessResponse::new(response)))
 }
 
@@ -95,7 +93,7 @@ pub async fn get_actor(
     // 1. Parse key to appropriate Key type
     // 2. Get actor reference via orbit_client.actor_reference()
     // 3. Retrieve state via custom state query method
-    
+
     let actor_info = ActorInfo {
         actor_type: actor_type.clone(),
         key: serde_json::json!({"StringKey": {"key": key}}),
@@ -104,7 +102,7 @@ pub async fn get_actor(
         status: "active".to_string(),
         last_activity: Some(chrono::Utc::now().to_rfc3339()),
     };
-    
+
     (StatusCode::OK, Json(SuccessResponse::new(actor_info)))
 }
 
@@ -131,7 +129,7 @@ pub async fn create_actor(
     // 2. Create actor reference
     // 3. If initial_state provided, set it
     // 4. Trigger activation via a method call
-    
+
     let actor_info = ActorInfo {
         actor_type: request.actor_type.clone(),
         key: request.key.clone(),
@@ -140,7 +138,7 @@ pub async fn create_actor(
         status: "active".to_string(),
         last_activity: Some(chrono::Utc::now().to_rfc3339()),
     };
-    
+
     (
         StatusCode::CREATED,
         Json(SuccessResponse::with_message(
@@ -176,7 +174,7 @@ pub async fn update_actor(
     // TODO: Implement state update
     // 1. Get actor reference
     // 2. Call state update method based on strategy (replace/merge)
-    
+
     let actor_info = ActorInfo {
         actor_type: actor_type.clone(),
         key: serde_json::json!({"StringKey": {"key": key}}),
@@ -185,7 +183,7 @@ pub async fn update_actor(
         status: "active".to_string(),
         last_activity: Some(chrono::Utc::now().to_rfc3339()),
     };
-    
+
     (
         StatusCode::OK,
         Json(SuccessResponse::with_message(
@@ -219,7 +217,7 @@ pub async fn delete_actor(
     // TODO: Implement actor deactivation
     // 1. Get actor reference
     // 2. Call deactivate method or send shutdown signal
-    
+
     (
         StatusCode::OK,
         Json(SuccessResponse::with_message(
@@ -257,12 +255,12 @@ pub async fn invoke_actor(
     // 2. Serialize arguments
     // 3. Invoke method via orbit_client
     // 4. Deserialize and return result
-    
+
     let result = serde_json::json!({
         "method": request.method,
         "result": "Method executed successfully"
     });
-    
+
     (StatusCode::OK, Json(SuccessResponse::new(result)))
 }
 
@@ -285,7 +283,7 @@ pub async fn begin_transaction(
 ) -> impl IntoResponse {
     // TODO: Implement transaction begin
     // Requires access to TransactionCoordinator via orbit_client
-    
+
     let tx_info = TransactionInfo {
         transaction_id: uuid::Uuid::new_v4().to_string(),
         status: "preparing".to_string(),
@@ -293,7 +291,7 @@ pub async fn begin_transaction(
         created_at: chrono::Utc::now().to_rfc3339(),
         completed_at: None,
     };
-    
+
     (
         StatusCode::CREATED,
         Json(SuccessResponse::with_message(
@@ -324,7 +322,7 @@ pub async fn commit_transaction(
     Path(transaction_id): Path<String>,
 ) -> impl IntoResponse {
     // TODO: Implement transaction commit
-    
+
     let tx_info = TransactionInfo {
         transaction_id: transaction_id.clone(),
         status: "committed".to_string(),
@@ -332,7 +330,7 @@ pub async fn commit_transaction(
         created_at: chrono::Utc::now().to_rfc3339(),
         completed_at: Some(chrono::Utc::now().to_rfc3339()),
     };
-    
+
     (
         StatusCode::OK,
         Json(SuccessResponse::with_message(
@@ -363,7 +361,7 @@ pub async fn abort_transaction(
     Path(transaction_id): Path<String>,
 ) -> impl IntoResponse {
     // TODO: Implement transaction abort
-    
+
     let tx_info = TransactionInfo {
         transaction_id: transaction_id.clone(),
         status: "aborted".to_string(),
@@ -371,7 +369,7 @@ pub async fn abort_transaction(
         created_at: chrono::Utc::now().to_rfc3339(),
         completed_at: Some(chrono::Utc::now().to_rfc3339()),
     };
-    
+
     (
         StatusCode::OK,
         Json(SuccessResponse::with_message(
@@ -400,7 +398,7 @@ pub async fn health_check() -> impl IntoResponse {
 /// OpenAPI documentation endpoint
 pub async fn openapi_spec() -> impl IntoResponse {
     use utoipa::OpenApi;
-    
+
     #[derive(OpenApi)]
     #[openapi(
         paths(
@@ -444,6 +442,6 @@ pub async fn openapi_spec() -> impl IntoResponse {
         )
     )]
     struct ApiDoc;
-    
+
     Json(ApiDoc::openapi())
 }

@@ -224,7 +224,10 @@ struct TokenParser {
 
 impl TokenParser {
     fn new(tokens: Vec<Token>) -> Self {
-        Self { tokens, position: 0 }
+        Self {
+            tokens,
+            position: 0,
+        }
     }
 
     fn current_token(&self) -> Option<&Token> {
@@ -352,7 +355,7 @@ impl TokenParser {
             if rel_part.starts_with('-') {
                 let relationship = self.parse_relationship_pattern()?;
                 elements.push(PatternElement::Relationship(relationship));
-                
+
                 // Parse the target node
                 if let Some(Token::LeftParen) = self.current_token() {
                     let node = self.parse_node_pattern()?;
@@ -395,7 +398,7 @@ impl TokenParser {
                 let key = key.clone();
                 self.advance();
                 self.expect_token(Token::Colon)?;
-                
+
                 let value = match self.current_token() {
                     Some(Token::String(s)) => {
                         let s = s.clone();
@@ -408,18 +411,21 @@ impl TokenParser {
                         if let Ok(int_val) = n.parse::<i64>() {
                             serde_json::Value::Number(serde_json::Number::from(int_val))
                         } else {
-                            return Err(ProtocolError::CypherError(
-                                format!("Invalid number: {}", n)
-                            ));
+                            return Err(ProtocolError::CypherError(format!(
+                                "Invalid number: {}",
+                                n
+                            )));
                         }
                     }
-                    _ => return Err(ProtocolError::CypherError(
-                        "Expected property value".to_string()
-                    ))
+                    _ => {
+                        return Err(ProtocolError::CypherError(
+                            "Expected property value".to_string(),
+                        ))
+                    }
                 };
-                
+
                 properties.insert(key, value);
-                
+
                 if let Some(Token::Comma) = self.current_token() {
                     self.advance();
                 } else {
@@ -443,10 +449,12 @@ impl TokenParser {
         if let Some(Token::Identifier(rel_str)) = self.current_token() {
             let rel_str = rel_str.clone();
             self.advance();
-            
+
             // Parse relationship type from string like "-[:KNOWS]->"
             let rel_type = if rel_str.contains(':') {
-                rel_str.split(':').nth(1)
+                rel_str
+                    .split(':')
+                    .nth(1)
                     .and_then(|s| s.split(']').next())
                     .map(|s| s.to_string())
             } else {
@@ -469,7 +477,7 @@ impl TokenParser {
             })
         } else {
             Err(ProtocolError::CypherError(
-                "Expected relationship pattern".to_string()
+                "Expected relationship pattern".to_string(),
             ))
         }
     }
@@ -480,7 +488,7 @@ impl TokenParser {
             let prop = prop.clone();
             self.advance();
             self.expect_token(Token::Equals)?;
-            
+
             let value = match self.current_token() {
                 Some(Token::String(s)) => {
                     let s = s.clone();
@@ -492,19 +500,19 @@ impl TokenParser {
                     self.advance();
                     serde_json::Value::String(n)
                 }
-                _ => return Err(ProtocolError::CypherError(
-                    "Expected condition value".to_string()
-                ))
+                _ => {
+                    return Err(ProtocolError::CypherError(
+                        "Expected condition value".to_string(),
+                    ))
+                }
             };
-            
+
             Ok(Condition::PropertyEquals {
                 property: prop,
-                value
+                value,
             })
         } else {
-            Err(ProtocolError::CypherError(
-                "Expected condition".to_string()
-            ))
+            Err(ProtocolError::CypherError("Expected condition".to_string()))
         }
     }
 }
@@ -609,7 +617,7 @@ mod tests {
         let parser = CypherParser::new();
         let query = "MATCH (n:Person) RETURN n";
         let result = parser.parse(query);
-        
+
         assert!(result.is_ok());
         let parsed = result.unwrap();
         assert_eq!(parsed.clauses.len(), 2); // MATCH and RETURN
@@ -620,7 +628,7 @@ mod tests {
         let parser = CypherParser::new();
         let query = "CREATE (n:Person {name: 'Alice'}) RETURN n";
         let result = parser.parse(query);
-        
+
         assert!(result.is_ok());
         let parsed = result.unwrap();
         assert_eq!(parsed.clauses.len(), 2); // CREATE and RETURN
@@ -630,7 +638,7 @@ mod tests {
     fn test_tokenization() {
         let parser = CypherParser::with_debug(true);
         let result = parser.tokenize("MATCH (n:Person)");
-        
+
         assert!(result.is_ok());
         let tokens = result.unwrap();
         assert!(!tokens.is_empty());
@@ -642,7 +650,7 @@ mod tests {
         let parser = CypherParser::new();
         let query = "INVALID SYNTAX HERE";
         let result = parser.parse(query);
-        
+
         assert!(result.is_err());
     }
 
@@ -650,7 +658,7 @@ mod tests {
     fn test_empty_query() {
         let parser = CypherParser::new();
         let result = parser.parse("");
-        
+
         assert!(result.is_err());
     }
 }

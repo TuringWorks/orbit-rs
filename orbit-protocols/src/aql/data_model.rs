@@ -3,10 +3,10 @@
 //! This module defines the core data types used in AQL operations,
 //! supporting document, graph, and key-value data models.
 
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use chrono::{DateTime, Utc};
 use orbit_shared::graph::{GraphNode, GraphRelationship};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 /// AQL value type supporting all ArangoDB data types
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -38,9 +38,11 @@ impl From<serde_json::Value> for AqlValue {
             serde_json::Value::Array(arr) => {
                 AqlValue::Array(arr.into_iter().map(AqlValue::from).collect())
             }
-            serde_json::Value::Object(obj) => {
-                AqlValue::Object(obj.into_iter().map(|(k, v)| (k, AqlValue::from(v))).collect())
-            }
+            serde_json::Value::Object(obj) => AqlValue::Object(
+                obj.into_iter()
+                    .map(|(k, v)| (k, AqlValue::from(v)))
+                    .collect(),
+            ),
         }
     }
 }
@@ -55,9 +57,11 @@ impl From<AqlValue> for serde_json::Value {
             AqlValue::Array(arr) => {
                 serde_json::Value::Array(arr.into_iter().map(serde_json::Value::from).collect())
             }
-            AqlValue::Object(obj) => {
-                serde_json::Value::Object(obj.into_iter().map(|(k, v)| (k, serde_json::Value::from(v))).collect())
-            }
+            AqlValue::Object(obj) => serde_json::Value::Object(
+                obj.into_iter()
+                    .map(|(k, v)| (k, serde_json::Value::from(v)))
+                    .collect(),
+            ),
             AqlValue::DateTime(dt) => serde_json::Value::String(dt.to_rfc3339()),
         }
     }
@@ -85,7 +89,7 @@ impl AqlDocument {
     pub fn new(collection: &str, key: String, data: HashMap<String, AqlValue>) -> Self {
         let id = format!("{}/{}", collection, key);
         let revision = format!("_{}", chrono::Utc::now().timestamp());
-        
+
         Self {
             key,
             id,
@@ -112,14 +116,23 @@ impl AqlDocument {
     /// Convert to JSON value
     pub fn to_json(&self) -> serde_json::Value {
         let mut obj = serde_json::Map::new();
-        obj.insert("_key".to_string(), serde_json::Value::String(self.key.clone()));
-        obj.insert("_id".to_string(), serde_json::Value::String(self.id.clone()));
-        obj.insert("_rev".to_string(), serde_json::Value::String(self.revision.clone()));
-        
+        obj.insert(
+            "_key".to_string(),
+            serde_json::Value::String(self.key.clone()),
+        );
+        obj.insert(
+            "_id".to_string(),
+            serde_json::Value::String(self.id.clone()),
+        );
+        obj.insert(
+            "_rev".to_string(),
+            serde_json::Value::String(self.revision.clone()),
+        );
+
         for (key, value) in &self.data {
             obj.insert(key.clone(), serde_json::Value::from(value.clone()));
         }
-        
+
         serde_json::Value::Object(obj)
     }
 }
@@ -222,10 +235,16 @@ pub struct AqlEdge {
 
 impl AqlEdge {
     /// Create a new AQL edge
-    pub fn new(collection: &str, key: String, from: String, to: String, data: HashMap<String, AqlValue>) -> Self {
+    pub fn new(
+        collection: &str,
+        key: String,
+        from: String,
+        to: String,
+        data: HashMap<String, AqlValue>,
+    ) -> Self {
         let id = format!("{}/{}", collection, key);
         let revision = format!("_{}", chrono::Utc::now().timestamp());
-        
+
         Self {
             key,
             id,
@@ -239,18 +258,19 @@ impl AqlEdge {
     /// Convert to graph relationship
     pub fn to_graph_relationship(&self) -> GraphRelationship {
         use orbit_shared::graph::{GraphRelationship, NodeId, RelationshipId};
-        
+
         // Extract collection name from _from and _to
-        let start_node = NodeId::from_str(&self.from);
-        let end_node = NodeId::from_str(&self.to);
-        let rel_id = RelationshipId::from_str(&self.id);
-        
+        let start_node = NodeId::from_string(&self.from);
+        let end_node = NodeId::from_string(&self.to);
+        let rel_id = RelationshipId::from_string(&self.id);
+
         // Convert data to serde_json::Value for compatibility
-        let properties: std::collections::HashMap<String, serde_json::Value> = self.data
+        let properties: std::collections::HashMap<String, serde_json::Value> = self
+            .data
             .iter()
             .map(|(k, v)| (k.clone(), serde_json::Value::from(v.clone())))
             .collect();
-            
+
         GraphRelationship::with_id(
             rel_id,
             start_node,
@@ -268,15 +288,16 @@ impl AqlDocument {
     /// Convert to graph node
     pub fn to_graph_node(&self, labels: Vec<String>) -> GraphNode {
         use orbit_shared::graph::{GraphNode, NodeId};
-        
-        let node_id = NodeId::from_str(&self.id);
-        
+
+        let node_id = NodeId::from_string(&self.id);
+
         // Convert data to serde_json::Value for compatibility
-        let properties: std::collections::HashMap<String, serde_json::Value> = self.data
+        let properties: std::collections::HashMap<String, serde_json::Value> = self
+            .data
             .iter()
             .map(|(k, v)| (k.clone(), serde_json::Value::from(v.clone())))
             .collect();
-            
+
         GraphNode::with_id(node_id, labels, properties)
     }
 }
@@ -342,14 +363,17 @@ mod tests {
     fn test_aql_document_creation() {
         let mut data = HashMap::new();
         data.insert("name".to_string(), AqlValue::String("Alice".to_string()));
-        data.insert("age".to_string(), AqlValue::Number(serde_json::Number::from(30)));
-        
+        data.insert(
+            "age".to_string(),
+            AqlValue::Number(serde_json::Number::from(30)),
+        );
+
         let doc = AqlDocument::new("users", "alice".to_string(), data);
-        
+
         assert_eq!(doc.key, "alice");
         assert_eq!(doc.id, "users/alice");
-        assert_eq!(doc.get("name"), Some(&AqlValue::String("Alice".to_string())));
-        assert_eq!(doc.get("_key"), Some(&AqlValue::String("alice".to_string())));
+        assert_eq!(doc.get("name"), Some(AqlValue::String("Alice".to_string())));
+        assert_eq!(doc.get("_key"), Some(AqlValue::String("alice".to_string())));
     }
 
     #[test]
@@ -360,21 +384,30 @@ mod tests {
             "active": true,
             "tags": ["rust", "database"]
         });
-        
+
         let aql_val = AqlValue::from(json_val.clone());
         let back_to_json = serde_json::Value::from(aql_val);
-        
+
         assert_eq!(json_val, back_to_json);
     }
 
     #[test]
     fn test_aql_edge_creation() {
         let mut data = HashMap::new();
-        data.insert("weight".to_string(), AqlValue::Number(serde_json::Number::from(1)));
+        data.insert(
+            "weight".to_string(),
+            AqlValue::Number(serde_json::Number::from(1)),
+        );
         data.insert("label".to_string(), AqlValue::String("knows".to_string()));
-        
-        let edge = AqlEdge::new("relationships", "edge1".to_string(), "users/alice".to_string(), "users/bob".to_string(), data);
-        
+
+        let edge = AqlEdge::new(
+            "relationships",
+            "edge1".to_string(),
+            "users/alice".to_string(),
+            "users/bob".to_string(),
+            data,
+        );
+
         assert_eq!(edge.key, "edge1");
         assert_eq!(edge.id, "relationships/edge1");
         assert_eq!(edge.from, "users/alice");
@@ -386,10 +419,19 @@ mod tests {
         let mut bind_vars = AqlBindVars::new();
         bind_vars
             .bind("name".to_string(), AqlValue::String("Alice".to_string()))
-            .bind("age".to_string(), AqlValue::Number(serde_json::Number::from(30)));
-        
-        assert_eq!(bind_vars.get("name"), Some(&AqlValue::String("Alice".to_string())));
-        assert_eq!(bind_vars.get("age"), Some(&AqlValue::Number(serde_json::Number::from(30))));
+            .bind(
+                "age".to_string(),
+                AqlValue::Number(serde_json::Number::from(30)),
+            );
+
+        assert_eq!(
+            bind_vars.get("name"),
+            Some(&AqlValue::String("Alice".to_string()))
+        );
+        assert_eq!(
+            bind_vars.get("age"),
+            Some(&AqlValue::Number(serde_json::Number::from(30)))
+        );
         assert_eq!(bind_vars.get("missing"), None);
     }
 
@@ -397,12 +439,15 @@ mod tests {
     fn test_document_to_graph_node_conversion() {
         let mut data = HashMap::new();
         data.insert("name".to_string(), AqlValue::String("Alice".to_string()));
-        data.insert("age".to_string(), AqlValue::Number(serde_json::Number::from(30)));
-        
+        data.insert(
+            "age".to_string(),
+            AqlValue::Number(serde_json::Number::from(30)),
+        );
+
         let doc = AqlDocument::new("users", "alice".to_string(), data);
         let labels = vec!["Person".to_string(), "User".to_string()];
         let graph_node = doc.to_graph_node(labels.clone());
-        
+
         assert_eq!(graph_node.labels, labels);
         assert!(graph_node.has_label("Person"));
         assert!(graph_node.has_label("User"));
