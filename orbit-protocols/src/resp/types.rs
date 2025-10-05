@@ -198,6 +198,12 @@ impl From<Bytes> for RespValue {
     }
 }
 
+impl From<Vec<RespValue>> for RespValue {
+    fn from(arr: Vec<RespValue>) -> Self {
+        RespValue::Array(arr)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -499,11 +505,5 @@ mod tests {
         let debug_str = format!("{:?}", val);
         assert!(debug_str.contains("SimpleString"));
         assert!(debug_str.contains("test"));
-    }
-}
-
-impl From<Vec<RespValue>> for RespValue {
-    fn from(arr: Vec<RespValue>) -> Self {
-        RespValue::Array(arr)
     }
 }

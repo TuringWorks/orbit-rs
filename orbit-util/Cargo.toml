@@ -18,3 +18,5 @@ rand = "0.8"
 anyhow.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
+async-trait = "0.1"
+dashmap.workspace = true

@@ -8,6 +8,7 @@ orbit-client = { path = "../orbit-client" }
 orbit-server = { path = "../orbit-server" }
 orbit-shared = { path = "../orbit-shared" }
 orbit-proto = { path = "../orbit-proto" }
+orbit-util = { path = "../orbit-util" }
 tokio = { version = "1.0", features = ["full"] }
 tokio-test = "0.4"
 tracing = "0.1"
@@ -19,9 +20,5 @@ uuid = { version = "1.0", features = ["v4"] }
 cucumber = "0.20"
 
 [[test]]
-name = "integration"
-harness = false
-
-[[test]]
-name = "bdd"
-harness = false
+name = "mock_simple"
+path = "tests/mock_simple.rs"

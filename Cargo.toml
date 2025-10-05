@@ -13,6 +13,7 @@ members = [
     "orbit-application",
     "orbit-benchmarks",
     "orbit-operator",
+    "tests",
     "examples/hello-world",
     "examples/distributed-counter",
     "examples/distributed-transactions",
