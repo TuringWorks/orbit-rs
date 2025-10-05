@@ -24,7 +24,6 @@ COPY orbit-client/Cargo.toml ./orbit-client/
 COPY orbit-server/Cargo.toml ./orbit-server/
 COPY orbit-server-etcd/Cargo.toml ./orbit-server-etcd/
 COPY orbit-server-prometheus/Cargo.toml ./orbit-server-prometheus/
-COPY orbit-client-spring/Cargo.toml ./orbit-client-spring/
 COPY orbit-protocols/Cargo.toml ./orbit-protocols/
 COPY orbit-operator/Cargo.toml ./orbit-operator/
 COPY orbit-application/Cargo.toml ./orbit-application/
@@ -41,7 +40,7 @@ COPY examples/saga-example/Cargo.toml ./examples/saga-example/
 # Create dummy source files to cache dependencies
 RUN mkdir -p orbit-util/src orbit-shared/src orbit-proto/src orbit-client/src \
     orbit-server/src orbit-server-etcd/src orbit-server-prometheus/src \
-    orbit-client-spring/src orbit-protocols/src orbit-operator/src \
+    orbit-protocols/src orbit-operator/src \
     orbit-application/src orbit-benchmarks/src tests/src \
     orbit-proto/proto examples/hello-world/src examples/distributed-counter/src \
     examples/distributed-transactions/src examples/resp-server/src \
@@ -49,6 +48,7 @@ RUN mkdir -p orbit-util/src orbit-shared/src orbit-proto/src orbit-client/src \
 
 # Create minimal main.rs files
 RUN echo "fn main() {}" > orbit-server/src/main.rs && \
+    echo "fn main() {}" > orbit-operator/src/main.rs && \
     echo "fn main() {}" > examples/hello-world/src/main.rs && \
     echo "fn main() {}" > examples/distributed-counter/src/main.rs && \
     echo "fn main() {}" > examples/distributed-transactions/src/main.rs && \
@@ -65,7 +65,6 @@ RUN echo "" > orbit-util/src/lib.rs && \
     echo "" > orbit-server/src/lib.rs && \
     echo "" > orbit-server-etcd/src/lib.rs && \
     echo "" > orbit-server-prometheus/src/lib.rs && \
-    echo "" > orbit-client-spring/src/lib.rs && \
     echo "" > orbit-protocols/src/lib.rs && \
     echo "" > orbit-operator/src/lib.rs && \
     echo "" > orbit-application/src/lib.rs && \

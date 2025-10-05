@@ -3259,6 +3259,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
+ "clap",
  "dashmap",
  "futures",
  "metrics",
@@ -3268,12 +3269,14 @@ dependencies = [
  "orbit-util",
  "petgraph 0.6.5",
  "serde",
+ "serde_json",
  "thiserror 1.0.69",
  "tokio",
  "tokio-stream",
  "tokio-test",
  "tonic 0.12.3",
  "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
