@@ -17,12 +17,13 @@ FAILED_CHECKS=()
 # Function to run a check and track failures
 run_check() {
     local check_name="$1"
-    local check_script="$2"
+    shift
+    local check_script_and_args=($@)
     
     echo ""
     echo "🔄 Running $check_name..."
     
-    if bash "$CHECKS_DIR/$check_script"; then
+    if bash "$CHECKS_DIR/${check_script_and_args[0]}" "${check_script_and_args[@]:1}"; then
         echo "✅ $check_name completed successfully"
     else
         echo "❌ $check_name failed"
@@ -33,8 +34,8 @@ run_check() {
 # Run all Rust checks
 run_check "Code Formatting" "check_formatting.sh"
 run_check "Clippy Linting" "check_clippy.sh" 
-run_check "Release Build" "check_build.sh release"
-run_check "Tests" "check_tests.sh all"
+run_check "Release Build" "check_build.sh" "release"
+run_check "Tests" "check_tests.sh" "all"
 run_check "Security Audit" "check_security.sh"
 run_check "Example Builds" "check_examples.sh"
 

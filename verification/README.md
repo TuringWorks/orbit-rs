@@ -45,9 +45,19 @@ verification/
 ./verification/quick_check.sh
 ```
 
+### Fast Mode (Skip Slow Checks with Timeouts)
+```bash
+./verification/verify_all.sh --fast
+```
+
 ### Run Only Essential Checks (Skip Slow Ones)
 ```bash
 ./verification/verify_all.sh --skip-optional
+```
+
+### Run with Custom Timeout
+```bash
+./verification/verify_all.sh --timeout=600  # 10 minutes
 ```
 
 ### Run Specific Stage
@@ -67,13 +77,24 @@ verification/
 ### Required (macOS)
 - **Rust**: Install via [rustup.rs](https://rustup.rs/)
 - **Protocol Buffers**: `brew install protobuf`
+- **GNU coreutils** (for timeout support): `brew install coreutils`
 
-### Optional Tools
+### Required Rust Components
+```bash
+rustup component add rustfmt
+rustup component add clippy
+```
+
+### Optional Tools (Auto-installed)
+- **cargo-tarpaulin**: For code coverage (comprehensive mode)
+- **cargo-llvm-cov**: Alternative coverage tool (comprehensive mode)
+- **cargo-audit**: For security vulnerability scanning
+- **cargo-deny**: For license and dependency checking
+- **cargo-benchmarks**: For performance testing (if orbit-benchmarks package exists)
+
+### System Tools
 - **Docker**: For container build checks
 - **Helm**: For Kubernetes chart validation
-- **cargo-tarpaulin**: For code coverage (auto-installed)
-- **cargo-audit**: For security audits (auto-installed)
-- **cargo-deny**: For dependency validation (auto-installed)
 
 ## 📊 Check Details
 
@@ -102,22 +123,47 @@ verification/
 
 ## 💡 Usage Examples
 
-### Before Committing
+### Development Workflow
 ```bash
-# Fastest check during development
+# Quick check during development (1-3 minutes)
 ./verification/quick_check.sh
 
-# Quick validation of Rust code
+# Fast mode for pre-commit validation
+./verification/verify_all.sh --fast
+
+# Quick validation of Rust code only
 ./verification/verify_all.sh --stage rust
 
 # If Rust checks pass, run all checks
 ./verification/verify_all.sh
 ```
 
+### Pre-commit Hook
+Add to `.git/hooks/pre-commit`:
+```bash
+#!/bin/bash
+./verification/quick_check.sh
+```
+
 ### CI/CD Troubleshooting
 ```bash
 # Run only the failing stage with verbose output
 ./verification/verify_all.sh --stage rust --verbose
+
+# If tests are slow, use fast mode with longer timeout
+./verification/verify_all.sh --fast --timeout=600
+```
+
+### Coverage Analysis
+```bash
+# Use tarpaulin (default)
+./verification/checks/check_coverage.sh
+
+# Use llvm-cov instead
+COVERAGE_METHOD=llvm-cov ./verification/checks/check_coverage.sh
+
+# Use both coverage tools
+COVERAGE_METHOD=both ./verification/checks/check_coverage.sh
 ```
 
 ### Individual Check
@@ -127,12 +173,18 @@ verification/
 
 # Run just Docker build
 ./verification/checks/check_docker.sh
+
+# Run security audit with custom timeout
+CHECK_TIMEOUT=600 ./verification/checks/check_security.sh
 ```
 
 ### Before Release
 ```bash
-# Run complete validation including optional checks
+# Run complete validation including all optional checks
 ./verification/verify_all.sh
+
+# Run with extended timeout for comprehensive coverage
+./verification/verify_all.sh --timeout=900
 ```
 
 ## 🔍 Troubleshooting
@@ -154,9 +206,43 @@ rustup component add clippy
 brew install protobuf
 ```
 
+**Timeout errors (macOS)**
+Install GNU coreutils for proper timeout support:
+```bash
+brew install coreutils
+```
+
+**Formatting issues**
+```bash
+cargo fmt --all
+```
+
+**Clippy warnings**
+```bash
+cargo clippy --fix --all-targets --features="resp,postgres-wire,cypher,rest"
+```
+
+**Test failures**
+```bash
+cargo test --workspace -- --nocapture
+```
+
+**Vulnerability check failures**
+Update `deny.toml` or run:
+```bash
+cargo deny check
+```
+
+**Coverage generation fails**
+Try alternative coverage tool:
+```bash
+COVERAGE_METHOD=llvm-cov ./verification/checks/check_coverage.sh
+```
+
 **Docker checks fail**
 - Make sure Docker Desktop is running
 - Check if you have sufficient disk space
+- Ensure all workspace members are properly configured
 
 **Helm checks fail**
 - Install Helm: [helm.sh/docs/intro/install](https://helm.sh/docs/intro/install/)
@@ -164,10 +250,39 @@ brew install protobuf
 
 ## 📈 Performance Tips
 
-- Use `--skip-optional` for faster feedback during development
-- Run `--stage rust` first to catch basic issues quickly
+- Use `--fast` mode for quickest feedback during development (skips slow operations)
+- Use `--skip-optional` to skip coverage, benchmarks, Docker, and Helm
+- Run `--stage rust` first to catch basic issues quickly (formatting, linting, building, testing)
 - Use `--verbose` only when debugging specific failures
 - Coverage and benchmarks are the slowest checks - consider running them separately
+- Set `COVERAGE_METHOD=llvm-cov` for faster coverage analysis than tarpaulin
+- Use custom timeouts with `--timeout=SECONDS` for slow network environments
+
+## 📧 Exit Codes
+
+- **0** - All checks passed successfully
+- **1** - One or more checks failed
+- **124/143** - Timeout (when timeout commands are available)
+
+## ⚙️ Configuration
+
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SKIP_SLOW` | `false` | Skip slow operations (coverage HTML, benchmarks) |
+| `COVERAGE_METHOD` | `tarpaulin` | Coverage tool: `tarpaulin`, `llvm-cov`, or `both` |
+| `COVERAGE_TIMEOUT` | `300` | Timeout for coverage operations (seconds) |
+| `CHECK_TIMEOUT` | `300` | Timeout for individual checks (seconds) |
+| `CARGO_TERM_COLOR` | `always` | Cargo color output (set by verbose mode) |
+| `RUST_BACKTRACE` | `1` | Rust backtrace (set by verbose mode) |
+
+### Configuration Files
+
+Validation behavior is controlled by:
+- `deny.toml` - cargo-deny configuration for dependency/license checks
+- `Cargo.toml` - Package features and dependencies
+- `.github/workflows/` - CI workflow definitions (mirrored by verification scripts)
 
 ## 🔄 Continuous Integration Mapping
 

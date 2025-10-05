@@ -18,13 +18,24 @@ echo ""
 
 # Parse command line arguments
 SKIP_OPTIONAL=""
+FAST_MODE=""
 STAGE=""
 VERBOSE=""
+TIMEOUT_SECONDS=300
 
 while [[ $# -gt 0 ]]; do
     case $1 in
         --skip-optional)
             SKIP_OPTIONAL="true"
+            shift
+            ;;
+        --fast)
+            FAST_MODE="true"
+            SKIP_OPTIONAL="true"
+            shift
+            ;;
+        --timeout=*)
+            TIMEOUT_SECONDS="${1#*=}"
             shift
             ;;
         --stage)
@@ -40,6 +51,8 @@ while [[ $# -gt 0 ]]; do
             echo ""
             echo "Options:"
             echo "  --skip-optional    Skip optional checks (coverage, benchmarks, docker, helm)"
+            echo "  --fast             Fast mode - skip slow checks and enable timeouts"
+            echo "  --timeout=SECONDS  Set timeout for long operations (default: 300s)"
             echo "  --stage STAGE      Run only specific stage: rust|quality|infrastructure"
             echo "  --verbose, -v      Enable verbose output"
             echo "  --help, -h         Show this help message"
@@ -51,7 +64,9 @@ while [[ $# -gt 0 ]]; do
             echo ""
             echo "Examples:"
             echo "  $0                          # Run all checks"
+            echo "  $0 --fast                   # Fast mode - skip slow checks"
             echo "  $0 --skip-optional          # Skip slow/optional checks"
+            echo "  $0 --timeout=600            # Set 10-minute timeout"
             echo "  $0 --stage rust             # Run only Rust checks"
             echo "  $0 --stage quality --verbose # Run quality checks with verbose output"
             exit 0
@@ -64,11 +79,23 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Set environment variables for verbose mode
+# Set environment variables based on options
 if [ "$VERBOSE" = "true" ]; then
     export CARGO_TERM_COLOR=always
     export RUST_BACKTRACE=1
     echo "🔍 Verbose mode enabled"
+fi
+
+if [ "$FAST_MODE" = "true" ]; then
+    export SKIP_SLOW="true"
+    export COVERAGE_TIMEOUT="$TIMEOUT_SECONDS"
+    echo "⚡ Fast mode enabled (skipping slow operations, timeout: ${TIMEOUT_SECONDS}s)"
+fi
+
+# Export timeout for all checks
+export CHECK_TIMEOUT="$TIMEOUT_SECONDS"
+
+if [ "$VERBOSE" = "true" ] || [ "$FAST_MODE" = "true" ]; then
     echo ""
 fi
 
@@ -153,7 +180,11 @@ else
         run_stage "Quality Checks" "quality_checks.sh"
         run_stage "Infrastructure Checks" "infrastructure_checks.sh"
     else
-        echo "⏩ Skipping optional stages (quality and infrastructure)"
+        if [ "$FAST_MODE" = "true" ]; then
+            echo "⚡ Fast mode: Skipping optional stages (quality and infrastructure)"
+        else
+            echo "⏩ Skipping optional stages (quality and infrastructure)"
+        fi
         echo ""
     fi
 fi
