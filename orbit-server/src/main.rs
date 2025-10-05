@@ -209,11 +209,11 @@ async fn load_config(args: &Args) -> Result<OrbitServerConfig, Box<dyn Error>> {
         );
     }
 
-    let mut config = OrbitServerConfig::default();
-
-    // Apply basic overrides from CLI
-    config.bind_address = args.bind.clone();
-    config.port = args.grpc_port;
+    let config = OrbitServerConfig {
+        bind_address: args.bind.clone(),
+        port: args.grpc_port,
+        ..Default::default()
+    };
 
     Ok(config)
 }
