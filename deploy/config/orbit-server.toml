@@ -1,0 +1,100 @@
+# Orbit-RS Server Configuration for Docker Deployment
+# This configuration is optimized for containerized environments
+
+[deployment]
+mode = "docker"
+cluster_name = "orbit-docker-cluster"
+
+[node]
+id = "orbit-server"
+namespace = "default"
+
+[network]
+grpc_port = 50051
+health_port = 8080
+metrics_port = 9090
+bind_address = "0.0.0.0"
+
+# Node discovery configuration
+[discovery]
+method = "dns"  # Use DNS discovery for Docker environments
+
+# DNS-based discovery for Docker Compose or Kubernetes
+[discovery.dns]
+service_name = "orbit-server"
+port = 50051
+query_interval = "30s"
+
+# Leader election configuration
+[election]
+method = "raft"
+enable_k8s_fallback = true  # Allow Kubernetes fallback if available
+
+# Raft consensus configuration
+[election.raft]
+election_timeout_min = "150ms"
+election_timeout_max = "300ms"
+heartbeat_interval = "50ms"
+max_entries_per_request = 100
+log_compaction_threshold = 1000
+
+# Storage configuration
+[storage]
+data_dir = "/app/data"
+election_state_file = "election-state.json"
+transaction_log_file = "transactions.db"
+backup_enabled = true
+backup_interval = "1h"
+
+# Performance configuration
+[performance]
+worker_threads = 4
+max_blocking_threads = 512
+connection_pool_size = 100
+max_concurrent_requests = 1000
+
+[performance.batch]
+max_batch_size = 1000
+batch_timeout = "100ms"
+
+# Security configuration
+[security]
+enable_tls = false
+cert_file = "/app/certs/tls.crt"
+key_file = "/app/certs/tls.key"
+ca_file = "/app/certs/ca.crt"
+
+[security.auth]
+enabled = false
+method = "mtls"
+
+# Monitoring configuration
+[monitoring]
+enable_metrics = true
+enable_health_checks = true
+enable_distributed_tracing = false
+
+[monitoring.logging]
+level = "info"
+format = "json"
+file = "stdout"  # Log to stdout for container environments
+
+# Environment-specific configurations
+[environments.docker]
+[environments.docker.monitoring.logging]
+level = "info"
+format = "json"
+
+[environments.kubernetes]
+[environments.kubernetes.discovery]
+method = "kubernetes_api"
+
+[environments.kubernetes.election]
+method = "k8s_lease"  # Use Kubernetes lease API for leader election
+
+[environments.production]
+[environments.production.security]
+enable_tls = true
+
+[environments.production.monitoring.logging]
+level = "warn"

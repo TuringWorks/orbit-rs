@@ -23,10 +23,11 @@ README.md
 docs/
 *.md
 
-# Kubernetes
-deploy/
+# Kubernetes (but keep deploy/config)
 k8s/
 helm/
+deploy/
+!deploy/config/
 
 # CI/CD
 .github/

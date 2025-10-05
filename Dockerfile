@@ -76,6 +76,7 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
     libssl3 \
     libsqlite3-0 \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Create app user
@@ -88,8 +89,10 @@ RUN mkdir -p /app/data /app/logs /app/config && \
 # Copy binary from builder stage
 COPY --from=builder /usr/src/orbit-rs/target/release/orbit-server /app/orbit-server
 
-# Copy any configuration files
+# Copy configuration files (with fallback handling)
 COPY deploy/config/ /app/config/
+# Also copy example configs for reference
+COPY config/ /app/config/reference/
 
 # Set ownership
 RUN chown -R orbit:orbit /app
@@ -105,7 +108,7 @@ EXPOSE 50051 8080 9090
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD /app/orbit-server --health-check || exit 1
+    CMD curl -f http://localhost:8080/health || exit 1
 
 # Set entrypoint
 ENTRYPOINT ["/app/orbit-server"]
