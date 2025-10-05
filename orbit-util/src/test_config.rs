@@ -83,8 +83,8 @@ impl TestConfig {
         };
 
         // Configure verbose logging
-        let verbose_logging = env::var("RUST_LOG").is_ok() 
-            || env::var("ORBIT_TEST_VERBOSE").as_deref() == Ok("true");
+        let verbose_logging =
+            env::var("RUST_LOG").is_ok() || env::var("ORBIT_TEST_VERBOSE").as_deref() == Ok("true");
 
         // Configure connection timeout
         let connection_timeout = if let Ok(timeout_str) = env::var("ORBIT_TEST_TIMEOUT") {
@@ -119,12 +119,13 @@ impl TestConfig {
         } else {
             0.0
         };
-        
-        let (simulate_network_delay, network_delay) = if env::var("ORBIT_TEST_NETWORK_DELAY").as_deref() == Ok("true") {
-            (true, Duration::from_millis(10))
-        } else {
-            (false, Duration::from_millis(10))
-        };
+
+        let (simulate_network_delay, network_delay) =
+            if env::var("ORBIT_TEST_NETWORK_DELAY").as_deref() == Ok("true") {
+                (true, Duration::from_millis(10))
+            } else {
+                (false, Duration::from_millis(10))
+            };
 
         let mock_config = crate::mocks::MockConfig {
             simulate_network_delay,
@@ -162,7 +163,10 @@ impl TestConfig {
     pub fn description(&self) -> String {
         match self.mode {
             TestMode::Mock => "Using mock implementations".to_string(),
-            TestMode::Real => format!("Using real services: orbit={}", self.service_urls.orbit_server),
+            TestMode::Real => format!(
+                "Using real services: orbit={}",
+                self.service_urls.orbit_server
+            ),
             TestMode::Skip => "Skipping tests that require external services".to_string(),
         }
     }
@@ -202,7 +206,7 @@ impl UniversalTestSetup {
     /// Create a new universal test setup
     pub async fn new() -> anyhow::Result<Self> {
         let config = TestConfig::from_env();
-        
+
         if config.verbose_logging {
             eprintln!("🔧 {}", config.description());
         }
@@ -220,10 +224,7 @@ impl UniversalTestSetup {
             None
         };
 
-        Ok(Self {
-            config,
-            mock_setup,
-        })
+        Ok(Self { config, mock_setup })
     }
 
     /// Start the test setup
@@ -238,7 +239,10 @@ impl UniversalTestSetup {
     /// Register actor types (only relevant for mock mode)
     pub async fn register_actor_types(&self, types: &[&str]) -> anyhow::Result<()> {
         if let Some(mock_setup) = &self.mock_setup {
-            mock_setup.register_actor_types(types).await.map_err(|e| anyhow::anyhow!(e))?;
+            mock_setup
+                .register_actor_types(types)
+                .await
+                .map_err(|e| anyhow::anyhow!(e))?;
         }
         Ok(())
     }
@@ -280,18 +284,21 @@ pub fn print_test_info() {
     println!("   Description: {}", config.description());
     println!("   Verbose logging: {}", config.verbose_logging);
     println!("   Connection timeout: {:?}", config.connection_timeout);
-    
+
     if config.use_real_services() {
         println!("   Service URLs:");
         println!("     OrbitServer: {}", config.service_urls.orbit_server);
         println!("     Redis: {}", config.service_urls.redis_server);
         println!("     PostgreSQL: {}", config.service_urls.postgres_server);
     }
-    
+
     if config.use_mocks() {
         println!("   Mock configuration:");
         println!("     Failure rate: {}", config.mock_config.failure_rate);
-        println!("     Network delay: {}", config.mock_config.simulate_network_delay);
+        println!(
+            "     Network delay: {}",
+            config.mock_config.simulate_network_delay
+        );
         println!("     Max actors: {}", config.mock_config.max_actors);
     }
 }
@@ -314,11 +321,11 @@ mod tests {
         // Set environment variable
         env::set_var("ORBIT_TEST_MODE", "real");
         env::set_var("ORBIT_TEST_VERBOSE", "true");
-        
+
         let config = TestConfig::from_env();
         assert_eq!(config.mode, TestMode::Real);
         assert!(config.verbose_logging);
-        
+
         // Clean up
         env::remove_var("ORBIT_TEST_MODE");
         env::remove_var("ORBIT_TEST_VERBOSE");
@@ -328,10 +335,10 @@ mod tests {
     fn test_ci_detection() {
         // Set CI environment variable
         env::set_var("CI", "true");
-        
+
         let config = TestConfig::from_env();
         assert_eq!(config.mode, TestMode::Mock);
-        
+
         // Clean up
         env::remove_var("CI");
     }

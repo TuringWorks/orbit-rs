@@ -32,7 +32,7 @@ macro_rules! skip_if_no_server {
 /// Helper to start test server or skip test if not possible
 async fn start_test_server_or_skip() -> Result<(), Box<dyn std::error::Error>> {
     eprintln!("Attempting to start RESP test server...");
-    
+
     // Try to create Orbit client
     let orbit_client = match create_mock_orbit_client().await {
         Ok(client) => {
@@ -66,7 +66,7 @@ async fn start_test_server_or_skip() -> Result<(), Box<dyn std::error::Error>> {
 /// Create a mock OrbitClient for testing
 async fn create_mock_orbit_client() -> Result<OrbitClient, Box<dyn std::error::Error>> {
     eprintln!("Creating OrbitClient for RESP integration tests...");
-    
+
     // Try to create a real OrbitClient, but don't require actual server connection
     // This will allow the RESP server to start even without a running orbit-server
     let client = OrbitClient::builder()
@@ -74,7 +74,7 @@ async fn create_mock_orbit_client() -> Result<OrbitClient, Box<dyn std::error::E
         .with_server_urls(vec!["http://localhost:50051".to_string()])
         .build()
         .await?;
-    
+
     eprintln!("✅ Successfully created OrbitClient");
     Ok(client)
 }

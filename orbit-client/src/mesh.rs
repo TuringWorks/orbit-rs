@@ -35,7 +35,7 @@ mod tests {
         // Test that we can create multiple instances
         let leaser1 = AddressableLeaser::new();
         let leaser2 = AddressableLeaser::new();
-        
+
         // Since it's a unit struct, all instances are equivalent
         let size1 = std::mem::size_of_val(&leaser1);
         let size2 = std::mem::size_of_val(&leaser2);

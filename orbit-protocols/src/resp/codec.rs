@@ -260,18 +260,18 @@ mod tests {
     fn test_codec_encode() {
         let mut codec = RespCodec::new();
         let mut buf = BytesMut::new();
-        
+
         // Test encoding simple string
         let value = RespValue::simple_string("Hello");
         codec.encode(value, &mut buf).unwrap();
         assert_eq!(buf, BytesMut::from("+Hello\r\n"));
-        
+
         // Test encoding integer
         buf.clear();
         let value = RespValue::integer(42);
         codec.encode(value, &mut buf).unwrap();
         assert_eq!(buf, BytesMut::from(":42\r\n"));
-        
+
         // Test encoding bulk string
         buf.clear();
         let value = RespValue::bulk_string_from_str("world");
@@ -282,12 +282,12 @@ mod tests {
     #[test]
     fn test_codec_decode_incomplete() {
         let mut codec = RespCodec::new();
-        
+
         // Test incomplete simple string
         let mut buf = BytesMut::from("+OK");
         let result = codec.decode(&mut buf).unwrap();
         assert_eq!(result, None);
-        
+
         // Complete the message
         buf.extend_from_slice(b"\r\n");
         let result = codec.decode(&mut buf).unwrap();
@@ -298,7 +298,10 @@ mod tests {
     fn test_parse_error() {
         let buf = BytesMut::from(&b"-ERR something went wrong\r\n"[..]);
         let (val, consumed) = parse_error(&buf).unwrap().unwrap();
-        assert_eq!(val, RespValue::Error("ERR something went wrong".to_string()));
+        assert_eq!(
+            val,
+            RespValue::Error("ERR something went wrong".to_string())
+        );
         assert_eq!(consumed, 27);
     }
 
@@ -392,7 +395,7 @@ mod tests {
         let buf = BytesMut::from(&b"hello\r\nworld"[..]);
         let pos = find_crlf(&buf, 0);
         assert_eq!(pos, Some(5));
-        
+
         let pos = find_crlf(&buf, 6);
         assert_eq!(pos, None);
     }
@@ -401,19 +404,19 @@ mod tests {
     fn test_codec_multiple_decode() {
         let mut codec = RespCodec::new();
         let mut buf = BytesMut::from("+OK\r\n:42\r\n$5\r\nhello\r\n");
-        
+
         // Decode first message
         let result1 = codec.decode(&mut buf).unwrap();
         assert_eq!(result1, Some(RespValue::simple_string("OK")));
-        
+
         // Decode second message
         let result2 = codec.decode(&mut buf).unwrap();
         assert_eq!(result2, Some(RespValue::integer(42)));
-        
+
         // Decode third message
         let result3 = codec.decode(&mut buf).unwrap();
         assert_eq!(result3, Some(RespValue::bulk_string_from_str("hello")));
-        
+
         // No more data
         let result4 = codec.decode(&mut buf).unwrap();
         assert_eq!(result4, None);
@@ -424,7 +427,7 @@ mod tests {
     fn test_codec_encode_all_types() {
         let mut codec = RespCodec::new();
         let mut buf = BytesMut::new();
-        
+
         let test_values = vec![
             (RespValue::simple_string("test"), "+test\r\n"),
             (RespValue::error("ERROR"), "-ERROR\r\n"),
@@ -434,7 +437,7 @@ mod tests {
             (RespValue::array(vec![]), "*0\r\n"),
             (RespValue::NullArray, "*-1\r\n"),
         ];
-        
+
         for (value, expected) in test_values {
             buf.clear();
             codec.encode(value, &mut buf).unwrap();

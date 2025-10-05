@@ -213,7 +213,7 @@ mod tests {
     fn test_simple_string_creation() {
         let val = RespValue::simple_string("hello");
         assert_eq!(val, RespValue::SimpleString("hello".to_string()));
-        
+
         let val = RespValue::simple_string(String::from("world"));
         assert_eq!(val, RespValue::SimpleString("world".to_string()));
     }
@@ -228,7 +228,7 @@ mod tests {
     fn test_integer_creation() {
         let val = RespValue::integer(42);
         assert_eq!(val, RespValue::Integer(42));
-        
+
         let val = RespValue::integer(-100);
         assert_eq!(val, RespValue::Integer(-100));
     }
@@ -237,7 +237,7 @@ mod tests {
     fn test_bulk_string_creation() {
         let val = RespValue::bulk_string(Bytes::from("hello"));
         assert_eq!(val, RespValue::BulkString(Bytes::from("hello")));
-        
+
         let val = RespValue::bulk_string_from_str("world");
         assert_eq!(val, RespValue::BulkString(Bytes::from("world")));
     }
@@ -269,16 +269,16 @@ mod tests {
     fn test_as_string() {
         let val = RespValue::simple_string("hello");
         assert_eq!(val.as_string(), Some("hello".to_string()));
-        
+
         let val = RespValue::bulk_string_from_str("world");
         assert_eq!(val.as_string(), Some("world".to_string()));
-        
+
         let val = RespValue::integer(42);
         assert_eq!(val.as_string(), None);
-        
+
         let val = RespValue::NullBulkString;
         assert_eq!(val.as_string(), None);
-        
+
         // Test invalid UTF-8
         let invalid_bytes = Bytes::from(vec![0xff, 0xfe, 0xfd]);
         let val = RespValue::BulkString(invalid_bytes);
@@ -289,23 +289,20 @@ mod tests {
     fn test_as_integer() {
         let val = RespValue::integer(42);
         assert_eq!(val.as_integer(), Some(42));
-        
+
         let val = RespValue::integer(-100);
         assert_eq!(val.as_integer(), Some(-100));
-        
+
         let val = RespValue::simple_string("hello");
         assert_eq!(val.as_integer(), None);
     }
 
     #[test]
     fn test_as_array() {
-        let arr = vec![
-            RespValue::simple_string("foo"),
-            RespValue::integer(123),
-        ];
+        let arr = vec![RespValue::simple_string("foo"), RespValue::integer(123)];
         let val = RespValue::Array(arr.clone());
         assert_eq!(val.as_array(), Some(&arr));
-        
+
         let val = RespValue::integer(42);
         assert_eq!(val.as_array(), None);
     }
@@ -314,7 +311,7 @@ mod tests {
     fn test_is_null() {
         assert!(RespValue::NullBulkString.is_null());
         assert!(RespValue::NullArray.is_null());
-        
+
         assert!(!RespValue::simple_string("hello").is_null());
         assert!(!RespValue::integer(42).is_null());
         assert!(!RespValue::array(vec![]).is_null());
@@ -339,7 +336,7 @@ mod tests {
         let val = RespValue::integer(1000);
         let serialized = val.serialize();
         assert_eq!(serialized, Bytes::from(":1000\r\n"));
-        
+
         let val = RespValue::integer(-42);
         let serialized = val.serialize();
         assert_eq!(serialized, Bytes::from(":-42\r\n"));
@@ -350,7 +347,7 @@ mod tests {
         let val = RespValue::bulk_string_from_str("foobar");
         let serialized = val.serialize();
         assert_eq!(serialized, Bytes::from("$6\r\nfoobar\r\n"));
-        
+
         let val = RespValue::bulk_string_from_str("");
         let serialized = val.serialize();
         assert_eq!(serialized, Bytes::from("$0\r\n\r\n"));
@@ -371,7 +368,7 @@ mod tests {
         ]);
         let serialized = val.serialize();
         assert_eq!(serialized, Bytes::from("*2\r\n$3\r\nfoo\r\n$3\r\nbar\r\n"));
-        
+
         // Empty array
         let val = RespValue::array(vec![]);
         let serialized = val.serialize();
@@ -422,7 +419,7 @@ mod tests {
     fn test_display_bulk_string() {
         let val = RespValue::bulk_string_from_str("hello world");
         assert_eq!(format!("{}", val), "\"hello world\"");
-        
+
         // Test binary data display
         let val = RespValue::BulkString(Bytes::from(vec![0xff, 0xfe, 0xfd]));
         assert_eq!(format!("{}", val), "<binary:3 bytes>");
@@ -442,7 +439,7 @@ mod tests {
             RespValue::null(),
         ]);
         assert_eq!(format!("{}", val), "[1, \"hello\", null]");
-        
+
         // Empty array
         let val = RespValue::array(vec![]);
         assert_eq!(format!("{}", val), "[]");
@@ -494,7 +491,7 @@ mod tests {
         let val1 = RespValue::simple_string("hello");
         let val2 = RespValue::simple_string("hello");
         let val3 = RespValue::simple_string("world");
-        
+
         assert_eq!(val1, val2);
         assert_ne!(val1, val3);
     }

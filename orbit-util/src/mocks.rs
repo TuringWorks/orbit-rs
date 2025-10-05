@@ -1,13 +1,13 @@
 //! Comprehensive mock framework for Orbit components
-//! 
+//!
 //! This module provides mock implementations of OrbitClient, OrbitServer, and other
 //! Orbit components for use in testing. The mocks can be configured to simulate various
 //! scenarios including success, failure, and edge cases.
 
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 
 /// Configuration for mock behavior
@@ -141,7 +141,7 @@ impl MockOrbitClient {
     /// Get or create actor state
     pub async fn get_or_create_actor(&self, actor_id: &str, actor_type: &str) -> MockActorState {
         let mut registry = self.actor_registry.write().await;
-        
+
         if let Some(actor) = registry.get_mut(actor_id) {
             actor.last_access = std::time::SystemTime::now();
             if !actor.is_active {
@@ -154,29 +154,33 @@ impl MockOrbitClient {
         } else {
             let mut actor = MockActorState::new(actor_id.to_string(), actor_type.to_string());
             actor.is_active = true;
-            
+
             if self.config.verbose_logging {
                 eprintln!("✨ Mock: Created new actor {} ({})", actor_id, actor_type);
             }
-            
+
             registry.insert(actor_id.to_string(), actor.clone());
             actor
         }
     }
 
     /// Update actor state
-    pub async fn update_actor_state(&self, actor_id: &str, new_state: serde_json::Value) -> Result<(), String> {
+    pub async fn update_actor_state(
+        &self,
+        actor_id: &str,
+        new_state: serde_json::Value,
+    ) -> Result<(), String> {
         let mut registry = self.actor_registry.write().await;
-        
+
         if let Some(actor) = registry.get_mut(actor_id) {
             actor.state = new_state;
             actor.message_count += 1;
             actor.last_access = std::time::SystemTime::now();
-            
+
             if self.config.verbose_logging {
                 eprintln!("📝 Mock: Updated actor {} state", actor_id);
             }
-            
+
             Ok(())
         } else {
             Err(format!("Actor {} not found", actor_id))
@@ -184,7 +188,13 @@ impl MockOrbitClient {
     }
 
     /// Simulate actor method invocation
-    pub async fn invoke_actor_method<T, R>(&self, actor_id: &str, actor_type: &str, method: &str, args: T) -> Result<R, String>
+    pub async fn invoke_actor_method<T, R>(
+        &self,
+        actor_id: &str,
+        actor_type: &str,
+        method: &str,
+        args: T,
+    ) -> Result<R, String>
     where
         T: Serialize,
         R: for<'de> Deserialize<'de> + Default,
@@ -192,67 +202,100 @@ impl MockOrbitClient {
         self.simulate_network_delay().await;
 
         if self.should_fail() {
-            return Err(format!("Mock failure: Actor invocation failed for {}.{}", actor_type, method));
+            return Err(format!(
+                "Mock failure: Actor invocation failed for {}.{}",
+                actor_type, method
+            ));
         }
 
         let actor = self.get_or_create_actor(actor_id, actor_type).await;
-        
+
         if self.config.verbose_logging {
-            eprintln!("📞 Mock: Invoking {}.{}() on actor {}", actor_type, method, actor_id);
+            eprintln!(
+                "📞 Mock: Invoking {}.{}() on actor {}",
+                actor_type, method, actor_id
+            );
         }
 
         // Simulate different method behaviors
         let result = match method {
-            "get_state" => {
-                serde_json::from_value(actor.state.clone()).unwrap_or_default()
-            }
+            "get_state" => serde_json::from_value(actor.state.clone()).unwrap_or_default(),
             "get_message_count" => {
                 serde_json::from_value(serde_json::json!(actor.message_count)).unwrap_or_default()
             }
             "process_message" | "send_message" => {
                 // Update message count and return a mock response
                 let new_count = actor.message_count + 1;
-                self.update_actor_state(actor_id, serde_json::json!({
-                    "message_count": new_count,
-                    "last_message": args
-                })).await.ok();
-                
+                self.update_actor_state(
+                    actor_id,
+                    serde_json::json!({
+                        "message_count": new_count,
+                        "last_message": args
+                    }),
+                )
+                .await
+                .ok();
+
                 serde_json::from_value(serde_json::json!({
                     "processed": true,
                     "actor_id": actor_id,
                     "response_time_ms": 1
-                })).unwrap_or_default()
+                }))
+                .unwrap_or_default()
             }
             "increment" => {
                 // Mock counter increment
-                let current_value: i64 = actor.state.get("value").and_then(|v| v.as_i64()).unwrap_or(0);
-                let increment_amount: i64 = serde_json::from_value(serde_json::to_value(args).unwrap_or_default()).unwrap_or(1);
+                let current_value: i64 = actor
+                    .state
+                    .get("value")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(0);
+                let increment_amount: i64 =
+                    serde_json::from_value(serde_json::to_value(args).unwrap_or_default())
+                        .unwrap_or(1);
                 let new_value = current_value + increment_amount;
                 let new_count = actor.message_count + 1;
-                
-                self.update_actor_state(actor_id, serde_json::json!({
-                    "value": new_value,
-                    "message_count": new_count
-                })).await.ok();
-                
+
+                self.update_actor_state(
+                    actor_id,
+                    serde_json::json!({
+                        "value": new_value,
+                        "message_count": new_count
+                    }),
+                )
+                .await
+                .ok();
+
                 serde_json::from_value(serde_json::json!({
                     "new_value": new_value,
                     "message_count": new_count
-                })).unwrap_or_default()
+                }))
+                .unwrap_or_default()
             }
             "get_value" => {
-                let value: i64 = actor.state.get("value").and_then(|v| v.as_i64()).unwrap_or(0);
+                let value: i64 = actor
+                    .state
+                    .get("value")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(0);
                 serde_json::from_value(serde_json::json!(value)).unwrap_or_default()
             }
             "set_state" | "set_value" => {
-                self.update_actor_state(actor_id, serde_json::to_value(args).unwrap_or_default()).await.ok();
+                self.update_actor_state(actor_id, serde_json::to_value(args).unwrap_or_default())
+                    .await
+                    .ok();
                 serde_json::from_value(serde_json::json!(())).unwrap_or_default()
             }
             "reset" => {
-                self.update_actor_state(actor_id, serde_json::json!({
-                    "value": 0,
-                    "message_count": 0
-                })).await.ok();
+                self.update_actor_state(
+                    actor_id,
+                    serde_json::json!({
+                        "value": 0,
+                        "message_count": 0
+                    }),
+                )
+                .await
+                .ok();
                 serde_json::from_value(serde_json::json!(())).unwrap_or_default()
             }
             _ => {
@@ -275,11 +318,11 @@ impl MockOrbitClient {
         let mut registry = self.actor_registry.write().await;
         if let Some(actor) = registry.get_mut(actor_id) {
             actor.is_active = false;
-            
+
             if self.config.verbose_logging {
                 eprintln!("😴 Mock: Deactivated actor {}", actor_id);
             }
-            
+
             Ok(())
         } else {
             Err(format!("Actor {} not found", actor_id))
@@ -291,7 +334,7 @@ impl MockOrbitClient {
         let registry = self.actor_registry.read().await;
         let active_actors = registry.values().filter(|a| a.is_active).count();
         let total_actors = registry.len();
-        
+
         MockClientStats {
             namespace: self.namespace.clone(),
             node_id: self.node_id.clone(),
@@ -306,12 +349,12 @@ impl MockOrbitClient {
         if self.config.verbose_logging {
             eprintln!("🛑 Mock: Shutting down OrbitClient");
         }
-        
+
         let mut registry = self.actor_registry.write().await;
         for actor in registry.values_mut() {
             actor.is_active = false;
         }
-        
+
         Ok(())
     }
 }
@@ -358,7 +401,7 @@ impl MockOrbitServer {
         let mut types = self.registered_types.lock().unwrap();
         if !types.contains(&actor_type.to_string()) {
             types.push(actor_type.to_string());
-            
+
             if self.config.verbose_logging {
                 eprintln!("📋 Mock: Registered actor type {}", actor_type);
             }
@@ -373,22 +416,22 @@ impl MockOrbitServer {
         }
 
         *self.is_running.lock().unwrap() = true;
-        
+
         if self.config.verbose_logging {
             eprintln!("🚀 Mock: OrbitServer started on port {}", self.port);
         }
-        
+
         Ok(())
     }
 
     /// Stop the mock server
     pub async fn stop(&self) -> Result<(), String> {
         *self.is_running.lock().unwrap() = false;
-        
+
         if self.config.verbose_logging {
             eprintln!("🛑 Mock: OrbitServer stopped");
         }
-        
+
         Ok(())
     }
 
@@ -401,7 +444,7 @@ impl MockOrbitServer {
     pub async fn get_stats(&self) -> MockServerStats {
         let registry = self.actor_registry.read().await;
         let types = self.registered_types.lock().unwrap();
-        
+
         MockServerStats {
             port: self.port,
             is_running: self.is_running(),
@@ -455,7 +498,9 @@ impl MockActorReference {
         T: Serialize,
         R: for<'de> Deserialize<'de> + Default,
     {
-        self.client.invoke_actor_method(&self.actor_id, &self.actor_type, method, args).await
+        self.client
+            .invoke_actor_method(&self.actor_id, &self.actor_type, method, args)
+            .await
     }
 }
 
@@ -526,7 +571,7 @@ impl MockTestSetupBuilder {
     pub async fn build(self) -> MockTestSetup {
         let server = MockOrbitServer::with_config(self.server_port, self.server_config);
         let client = MockOrbitClient::with_config(self.namespace, self.client_config);
-        
+
         MockTestSetup {
             server,
             client,
@@ -570,12 +615,8 @@ impl MockTestSetup {
             .last()
             .unwrap_or("UnknownActor")
             .to_string();
-            
-        MockActorReference::new(
-            actor_id.into(),
-            type_name,
-            self.client.clone(),
-        )
+
+        MockActorReference::new(actor_id.into(), type_name, self.client.clone())
     }
 
     /// Register actor types on the server
@@ -607,14 +648,14 @@ macro_rules! mock_test_setup {
     () => {
         $crate::mocks::MockTestSetup::new().await
     };
-    
+
     (namespace: $ns:expr) => {
         $crate::mocks::MockTestSetup::builder()
             .with_namespace($ns)
             .build()
             .await
     };
-    
+
     (namespace: $ns:expr, port: $port:expr) => {
         $crate::mocks::MockTestSetup::builder()
             .with_namespace($ns)
@@ -622,7 +663,7 @@ macro_rules! mock_test_setup {
             .build()
             .await
     };
-    
+
     (verbose: true) => {
         $crate::mocks::MockTestSetup::builder()
             .with_verbose_logging(true)
@@ -649,11 +690,14 @@ mod tests {
     #[tokio::test]
     async fn test_mock_client_basic_operations() {
         let client = MockOrbitClient::new("test".to_string());
-        
+
         // Test actor invocation
-        let result: String = client.invoke_actor_method("test-actor", "TestActor", "get_state", ()).await.unwrap();
+        let result: String = client
+            .invoke_actor_method("test-actor", "TestActor", "get_state", ())
+            .await
+            .unwrap();
         assert_eq!(result, String::default());
-        
+
         // Test actor creation
         let actor = client.get_or_create_actor("test-actor", "TestActor").await;
         assert_eq!(actor.actor_id, "test-actor");
@@ -663,14 +707,14 @@ mod tests {
     #[tokio::test]
     async fn test_mock_server_operations() {
         let server = MockOrbitServer::new(8080);
-        
+
         assert!(!server.is_running());
-        
+
         server.register_actor_type("TestActor").await.unwrap();
         server.start().await.unwrap();
-        
+
         assert!(server.is_running());
-        
+
         server.stop().await.unwrap();
         assert!(!server.is_running());
     }
@@ -679,12 +723,12 @@ mod tests {
     async fn test_mock_test_setup() {
         let setup = MockTestSetup::new().await;
         setup.start().await.unwrap();
-        
+
         // Test actor reference creation
         let actor = setup.actor_reference::<String>("test-actor");
         let result: String = actor.invoke_method("get_state", ()).await.unwrap();
         assert_eq!(result, String::default());
-        
+
         setup.cleanup().await.unwrap();
     }
 
@@ -694,10 +738,12 @@ mod tests {
             failure_rate: 1.0, // Always fail
             ..Default::default()
         };
-        
+
         let client = MockOrbitClient::with_config("test".to_string(), config);
-        
-        let result: Result<String, _> = client.invoke_actor_method("test-actor", "TestActor", "get_state", ()).await;
+
+        let result: Result<String, _> = client
+            .invoke_actor_method("test-actor", "TestActor", "get_state", ())
+            .await;
         assert!(result.is_err());
     }
 }

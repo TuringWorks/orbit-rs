@@ -114,14 +114,19 @@ mod tests {
             },
         };
         let system = Arc::new(InvocationSystem::new());
-        
+
         // Test create_proxy method
-        let actor_ref: ActorReference<dyn TestActor> = 
+        let actor_ref: ActorReference<dyn TestActor> =
             ActorReference::<dyn TestActor>::create_proxy(reference, system);
-        
+
         // Verify the reference was set correctly
         assert_eq!(actor_ref.reference().addressable_type, "TestActor");
-        assert_eq!(actor_ref.reference().key, Key::StringKey { key: "test".to_string() });
+        assert_eq!(
+            actor_ref.reference().key,
+            Key::StringKey {
+                key: "test".to_string()
+            }
+        );
     }
 
     #[test]
@@ -133,14 +138,14 @@ mod tests {
             },
         };
         let system = Arc::new(InvocationSystem::new());
-        
+
         // Create untyped reference
-        let untyped_ref: ActorReference<dyn Addressable> = 
+        let untyped_ref: ActorReference<dyn Addressable> =
             ActorReference::new(reference.clone(), system);
-        
+
         // Convert to typed reference
         let typed_ref: ActorReference<dyn TestActor> = untyped_ref.typed();
-        
+
         // Verify the reference was preserved correctly
         assert_eq!(typed_ref.reference().addressable_type, "TestActor");
         assert_eq!(typed_ref.reference().key, reference.key);
@@ -149,7 +154,7 @@ mod tests {
     #[tokio::test]
     async fn test_proxy_with_different_key_types() {
         let system = Arc::new(InvocationSystem::new());
-        
+
         // Test with StringKey
         let string_ref = AddressableReference {
             addressable_type: "TestActor".to_string(),
@@ -157,21 +162,20 @@ mod tests {
                 key: "test_string".to_string(),
             },
         };
-        let string_actor: ActorReference<dyn TestActor> = 
+        let string_actor: ActorReference<dyn TestActor> =
             ActorReference::new(string_ref, system.clone());
-        
+
         // Test with Int32Key
         let int_ref = AddressableReference {
             addressable_type: "TestActor".to_string(),
             key: Key::Int32Key { key: 123 },
         };
-        let int_actor: ActorReference<dyn TestActor> = 
-            ActorReference::new(int_ref, system);
-        
+        let int_actor: ActorReference<dyn TestActor> = ActorReference::new(int_ref, system);
+
         // Test that all proxies can invoke methods
         let result1 = string_actor.greet("String".to_string()).await.unwrap();
         let result2 = int_actor.greet("Int".to_string()).await.unwrap();
-        
+
         assert_eq!(result1, "Hello from actor!");
         assert_eq!(result2, "Hello from actor!");
     }
@@ -200,7 +204,7 @@ mod tests {
         struct _NonSerializable {
             _private: std::marker::PhantomData<*const u8>,
         }
-        
+
         // We can't actually test serialization errors easily with the current setup
         // since String is always serializable, but we can test the structure
         let reference = AddressableReference {
@@ -212,7 +216,7 @@ mod tests {
 
         let system = Arc::new(InvocationSystem::new());
         let actor_ref: ActorReference<dyn TestActor> = ActorReference::new(reference, system);
-        
+
         // Test with valid serializable input
         let result = actor_ref.greet("Valid".to_string()).await;
         assert!(result.is_ok());
