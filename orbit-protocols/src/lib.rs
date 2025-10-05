@@ -16,6 +16,7 @@
 
 #![allow(missing_docs)]
 
+pub mod aql;
 pub mod bolt;
 pub mod cypher;
 pub mod error;
