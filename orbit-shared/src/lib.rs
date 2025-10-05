@@ -5,6 +5,7 @@ pub mod consensus;
 pub mod election_metrics;
 pub mod election_state;
 pub mod exception;
+pub mod graph;
 pub mod integrated_recovery;
 pub mod k8s_election;
 pub mod mesh;
@@ -21,6 +22,9 @@ pub mod transport;
 
 pub use addressable::*;
 pub use exception::*;
+// Re-export specific graph types to avoid conflicts
+pub use graph::{Direction, GraphNode, GraphRelationship, GraphStorage, InMemoryGraphStorage};
+pub use graph::{NodeId as GraphNodeId, RelationshipId as GraphRelationshipId};
 pub use mesh::*;
 pub use net::*;
 pub use router::*;
