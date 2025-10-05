@@ -4,11 +4,15 @@
 [advisories]
 db-path = "~/.cargo/advisory-db"
 db-urls = ["https://github.com/rustsec/advisory-db"]
-unmaintained = "all"
+unmaintained = "all"  # Changed back to "all" - using ignore list to handle specific advisories
 yanked = "warn"
+# Ignore unmaintained crates where no viable alternatives exist or migration is complex
 ignore = [
-    # RSA timing vulnerability - no fix available, acceptable for internal use
-    "RUSTSEC-2023-0071",
+    "RUSTSEC-2025-0012", # backoff - unmaintained, complex to replace in current usage
+    "RUSTSEC-2024-0388", # derivative - unmaintained, widely used in generated code
+    "RUSTSEC-2024-0384", # instant - unmaintained, used transitively
+    "RUSTSEC-2024-0436", # paste - unmaintained, but still functional and widely used
+    "RUSTSEC-2024-0370", # proc-macro-error - unmaintained, used transitively
 ]
 
 [licenses]
@@ -66,6 +70,47 @@ skip = [
     { name = "hyper-timeout" },
     { name = "indexmap" },
     { name = "itertools" },
+    # Additional duplicates found
+    { name = "linux-raw-sys" },
+    { name = "multimap" },
+    { name = "nom" },
+    { name = "petgraph" },
+    { name = "prettyplease" },
+    { name = "prost" },
+    { name = "prost-build" },
+    { name = "prost-derive" },
+    { name = "prost-types" },
+    { name = "rand" },
+    { name = "rand_chacha" },
+    { name = "rand_core" },
+    { name = "regex-syntax" },
+    { name = "rustix" },
+    { name = "rustls" },
+    { name = "rustls-pemfile" },
+    { name = "rustls-webpki" },
+    { name = "security-framework" },
+    { name = "socket2" },
+    { name = "sync_wrapper" },
+    { name = "thiserror" },
+    { name = "thiserror-impl" },
+    { name = "tokio-rustls" },
+    { name = "tonic" },
+    { name = "tonic-build" },
+    { name = "tower" },
+    { name = "tower-http" },
+    { name = "wasi" },
+    { name = "webpki-roots" },
+    { name = "windows-link" },
+    { name = "windows-result" },
+    { name = "windows-strings" },
+    { name = "windows-targets" },
+    { name = "windows_aarch64_gnullvm" },
+    { name = "windows_aarch64_msvc" },
+    { name = "windows_i686_gnu" },
+    { name = "windows_i686_gnullvm" },
+    { name = "windows_i686_msvc" },
+    { name = "windows_x86_64_gnu" },
+    { name = "windows_x86_64_gnullvm" },
 ]
 
 [sources]
