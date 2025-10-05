@@ -203,20 +203,65 @@ The development roadmap is actively tracked in our GitHub project:
 
 ## Future Phases (2025+)
 
-### Phase 12: Distributed Query Processing
-- Cost-based query optimization
-- Cross-node query execution
-- Data sharding and rebalancing
-- Parallel processing
-- Intelligent query result caching
-- Master-slave and multi-master replication
+### Phase 12: Time Series Database Features
+**Target:** Q1 2025 | **Estimated Effort:** 22-34 weeks
 
-### Phase 13: Additional Protocol Support
+#### [Redis Time Series Compatibility](protocols/REDIS_TIMESERIES.md) (8-10 weeks)
+- **TimeSeriesActor**: Distributed time-series data management with actor-based partitioning
+- **Core commands**: TS.CREATE, TS.ADD, TS.GET, TS.RANGE, TS.REVRANGE
+- **Aggregation rules**: TS.CREATERULE, TS.DELETERULE with automated downsampling
+- **Multi-series operations**: TS.MRANGE, TS.MREVRANGE, TS.MGET with label filtering
+- **Statistical functions**: Built-in aggregators (AVG, SUM, MIN, MAX, STDDEV)
+- **Retention policies**: Automatic data expiration and compression
+- **Labeling system**: Multi-dimensional time series organization
+
+#### [PostgreSQL TimescaleDB Compatibility](protocols/POSTGRESQL_TIMESCALE.md) (10-12 weeks)
+- **Hypertables**: Distributed time-partitioned tables with automatic chunking
+- **Time functions**: time_bucket(), time_bucket_gapfill(), locf(), interpolate()
+- **Continuous aggregates**: Materialized views with automatic refresh policies
+- **Compression**: Column-store compression for historical data
+- **Data retention**: Automatic chunk expiration with configurable policies
+- **Advanced analytics**: Hyperfunctions for time-series analysis
+- **Multi-dimensional partitioning**: Time and space partitioning
+
+#### Performance & Integration (4-6 weeks)
+- **SIMD optimizations**: Vectorized time-series operations and aggregations
+- **Distributed chunks**: Intelligent chunk placement across cluster nodes
+- **Query optimization**: Time-series specific query planning and execution
+- **Grafana integration**: Native data sources for both Redis TS and TimescaleDB
+- **Migration tools**: Automated migration from RedisTimeSeries and TimescaleDB
+
+### Phase 13: Distributed Query Processing & Advanced Analytics
+**Target:** Q2 2025 | **Estimated Effort:** 18-24 weeks
+
+#### Distributed Query Engine (8-10 weeks)
+- Cost-based query optimization with time-series aware planning
+- Cross-node query execution with intelligent chunk routing
+- Data sharding and rebalancing with time-aware partitioning
+- Parallel processing with SIMD-optimized aggregations
+- Intelligent query result caching for time-series workloads
+
+#### Advanced Time Series Analytics (6-8 weeks)
+- **Real-time analytics**: Stream processing integration with Apache Kafka
+- **Machine learning**: Built-in time-series ML functions (forecasting, anomaly detection)
+- **Pattern detection**: Automatic pattern recognition and alerting
+- **Cross-correlation**: Multi-variate time series analysis
+- **Window functions**: Advanced sliding window operations
+
+#### Master-Slave Replication (4-6 weeks)
+- Time-series aware replication with chunk-level synchronization
+- Multi-master clustering for write scalability
+- Consensus-based leader election for time series coordination
+
+### Phase 14: Additional Protocol Support
+**Target:** Q3 2025 | **Estimated Effort:** 16-20 weeks
+
 - Neo4j Bolt Protocol for graph database compatibility
 - REST API with OpenAPI/Swagger documentation
-- GraphQL API with schema introspection
+- GraphQL API with schema introspection  
 - WebSocket support for real-time applications
 - Apache Kafka integration for event streaming
+- InfluxDB Line Protocol compatibility
 
 ### Phase 14: Cloud-Native Features
 - AWS, Azure, and GCP integrations
@@ -269,9 +314,14 @@ We welcome contributions to help achieve these roadmap goals:
 - **Phase 9** (Q2 2024): Query Optimization & Performance - 19-25 weeks
 - **Phase 10** (Q3 2024): Production Readiness - 21-29 weeks  
 - **Phase 11** (Q4 2024): Advanced Features - 25-31 weeks
-- **Phase 12+** (2025): Distributed Processing & Cloud-Native
+- **Phase 12** (Q1 2025): Time Series Database Features - 22-34 weeks
+- **Phase 13** (Q2 2025): Distributed Query Processing & Advanced Analytics - 18-24 weeks
+- **Phase 14** (Q3 2025): Additional Protocol Support - 16-20 weeks
 
-**Total Development Estimate for Phases 9-11**: 65-85 weeks
+**Total Development Estimate**:
+- **Phases 9-11** (2024): 65-85 weeks
+- **Phases 12-14** (2025): 56-78 weeks
+- **Grand Total**: 121-163 weeks (~2.3-3.1 years)
 
 The roadmap provides a comprehensive path from the current production-ready SQL engine to a fully-featured, enterprise-grade distributed actor system with advanced database capabilities.
 

@@ -11,6 +11,8 @@ Protocol adapters act as translation layers between external protocols and the O
 - ✅ **Redis Protocol (RESP)** - Complete Redis compatibility with 50+ commands
 - ✅ **PostgreSQL Wire Protocol** - Full DDL/DML support with vector operations
 - ✅ **Model Context Protocol (MCP)** - AI agent integration
+- 🚧 **Redis Time Series** - Time-series database with RedisTimeSeries compatibility (Phase 12)
+- 🚧 **PostgreSQL TimescaleDB** - Advanced time-series analytics and hypertables (Phase 12)
 - 🚧 **REST API** - HTTP/JSON interface for web applications (planned)
 - 🚧 **Neo4j Bolt Protocol** - Graph database compatibility (planned)
 
@@ -421,6 +423,93 @@ port = 8080
 capabilities = ["tools", "resources", "prompts"]
 ```
 
+## Upcoming Time Series Features 🚀
+
+Orbit-RS will add comprehensive time-series database capabilities in **Phase 12 (Q1 2025)**, providing compatibility with two major time-series ecosystems.
+
+### Redis Time Series Compatibility
+**Full RedisTimeSeries module compatibility** - [📖 Detailed Documentation](REDIS_TIMESERIES.md)
+
+#### Key Features
+- **TimeSeriesActor**: Distributed time-series management with automatic partitioning
+- **Core Commands**: TS.CREATE, TS.ADD, TS.GET, TS.RANGE, TS.REVRANGE
+- **Aggregation Rules**: TS.CREATERULE, TS.DELETERULE with automated downsampling
+- **Multi-Series Operations**: TS.MRANGE, TS.MREVRANGE, TS.MGET with label filtering
+- **Built-in Functions**: AVG, SUM, MIN, MAX, COUNT, STDDEV, VAR
+- **Retention Policies**: Automatic data expiration and compression
+- **Labeling System**: Multi-dimensional time series organization
+
+#### Example Usage
+```python
+import redis
+r = redis.Redis(host='localhost', port=6380)  # Orbit-RS RESP server
+
+# Create time series with retention
+r.execute_command('TS.CREATE', 'sensor:temp:001', 
+                 'RETENTION', 3600000,
+                 'LABELS', 'sensor_id', '001', 'type', 'temperature')
+
+# Add readings
+import time
+now = int(time.time() * 1000)
+r.execute_command('TS.ADD', 'sensor:temp:001', now, 23.5)
+r.execute_command('TS.ADD', 'sensor:temp:001', now + 1000, 24.1)
+
+# Query with aggregation
+results = r.execute_command('TS.RANGE', 'sensor:temp:001',
+                           now - 300000, now,
+                           'AGGREGATION', 'AVG', 60000)
+print(f"1-minute averages: {results}")
+```
+
+### PostgreSQL TimescaleDB Compatibility
+**Complete TimescaleDB extension compatibility** - [📖 Detailed Documentation](POSTGRESQL_TIMESCALE.md)
+
+#### Key Features
+- **Hypertables**: Distributed time-partitioned tables with automatic chunking
+- **Time Functions**: time_bucket(), time_bucket_gapfill(), locf(), interpolate()
+- **Continuous Aggregates**: Materialized views with automatic refresh policies
+- **Compression**: Column-store compression for historical data
+- **Data Retention**: Automatic chunk expiration with configurable policies
+- **Multi-dimensional Partitioning**: Time and space partitioning
+- **Advanced Analytics**: Hyperfunctions for time-series analysis
+
+#### Example Usage
+```sql
+-- Enable TimescaleDB extension
+CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;
+
+-- Create hypertable
+CREATE TABLE sensor_data (
+    timestamp TIMESTAMPTZ NOT NULL,
+    sensor_id TEXT NOT NULL,
+    temperature DOUBLE PRECISION,
+    humidity DOUBLE PRECISION
+);
+
+SELECT create_hypertable('sensor_data', 'timestamp',
+    chunk_time_interval => INTERVAL '1 hour');
+
+-- Time bucket aggregation
+SELECT 
+    time_bucket('15 minutes', timestamp) AS bucket,
+    sensor_id,
+    AVG(temperature) as avg_temp,
+    MAX(temperature) - MIN(temperature) as temp_range
+FROM sensor_data
+WHERE timestamp >= NOW() - INTERVAL '4 hours'
+GROUP BY bucket, sensor_id
+ORDER BY bucket DESC;
+```
+
+### Integration Benefits
+- **Distributed Architecture**: Time series data distributed across cluster nodes
+- **ACID Transactions**: Full transaction support for time series operations
+- **Vector Integration**: Combine time series with vector similarity search
+- **Real-time Analytics**: Stream processing with Apache Kafka integration
+- **High Availability**: Automatic failover and replication for time series
+- **Migration Tools**: Seamless migration from RedisTimeSeries and TimescaleDB
+
 ## Future Protocols 🚧
 
 ### REST API
@@ -442,6 +531,7 @@ Graph database compatibility featuring:
 - **MQTT** - IoT device communication
 - **WebSocket** - Real-time web applications
 - **GraphQL** - Modern API interface
+- **InfluxDB Line Protocol** - Time series data ingestion
 
 ## Best Practices
 
