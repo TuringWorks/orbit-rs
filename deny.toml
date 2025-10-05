@@ -23,12 +23,21 @@ allow = [
     "OpenSSL",
     "Unicode-3.0",
     "Zlib",
+    "BlueOak-1.0.0",
 ]
 confidence-threshold = 0.8
 
 # Allow specific crates that don't have license fields but are safe
 [[licenses.exceptions]]
 name = "jsonpath-rust"
+allow = ["MIT"]
+
+[[licenses.exceptions]]
+name = "orbit-integration-tests"
+allow = ["MIT"]
+
+[[licenses.exceptions]]
+name = "saga-example"
 allow = ["MIT"]
 
 [bans]
@@ -42,6 +51,21 @@ skip = [
     { name = "syn" },
     { name = "windows-sys" },
     { name = "windows_x86_64_msvc" },
+    { name = "axum" },
+    { name = "axum-core" },
+    { name = "base64" },
+    { name = "core-foundation" },
+    { name = "fixedbitset" },
+    { name = "getrandom" },
+    { name = "h2" },
+    { name = "hashbrown" },
+    { name = "heck" },
+    { name = "http" },
+    { name = "http-body" },
+    { name = "hyper" },
+    { name = "hyper-timeout" },
+    { name = "indexmap" },
+    { name = "itertools" },
 ]
 
 [sources]
