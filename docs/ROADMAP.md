@@ -1,333 +1,693 @@
-# Development Roadmap
+---
+layout: default
+title: "Development Roadmap"
+subtitle: "Strategic Vision & Implementation Timeline"
+category: "roadmap"
+permalink: /roadmap/
+---
 
-This roadmap outlines the current status and future development plans for Orbit-RS, including completed phases and upcoming features.
+# Orbit-RS Development Roadmap
+**Strategic Vision & Implementation Timeline**
 
-## Current Status: Phase 8 Complete! 🎉
+[![Phase 8 Complete](https://img.shields.io/badge/Phase%208-Complete-brightgreen.svg)](#phase-8-complete)
+[![42% Complete](https://img.shields.io/badge/Progress-42%25-yellow.svg)](#progress-overview)
+[![11 Phases Remaining](https://img.shields.io/badge/Remaining-11%20Phases-blue.svg)](#upcoming-phases)
 
-**Phase 8: SQL Query Engine** has been completed and significantly exceeded original scope, delivering a comprehensive SQL query engine with PostgreSQL compatibility and advanced features.
+---
 
-## GitHub Project Tracking
+## 📍 Navigation
 
-The development roadmap is actively tracked in our GitHub project:
-**[📋 Orbit-RS Development Roadmap](https://github.com/orgs/TuringWorks/projects/1)**
+- [🏠 **Documentation Home**](index.md)
+- [📊 **Current Status**](status.md) 
+- [🎯 **Quick Start**](quick-start.md)
+- [🏗️ **Architecture**](architecture.md)
 
-### Upcoming Phases (GitHub Issues)
-- **Phase 9:** [Query Optimization & Performance](https://github.com/TuringWorks/orbit-rs/issues?q=label%3Aphase-9) (5 issues)
-- **Phase 10:** [Production Readiness](https://github.com/TuringWorks/orbit-rs/issues?q=label%3Aphase-10) (5 issues)  
-- **Phase 11:** [Advanced Features](https://github.com/TuringWorks/orbit-rs/issues?q=label%3Aphase-11) (5 issues)
+---
 
-## Completed Phases ✅
+## 📈 Progress Overview
 
-### Phase 1: Foundation (Complete)
-- [x] **Project Structure**: Multi-crate workspace with proper module organization
-- [x] **Build System**: Cargo workspace configuration with cross-platform support
-- [x] **Core Types**: Shared data structures, error handling, and utilities
-- [x] **Testing Framework**: Unit tests, integration tests, and BDD scenarios
-- [x] **Documentation**: Comprehensive README and inline documentation
-- [x] **CI/CD Pipeline**: GitHub Actions with automated testing, linting, and security scanning
+<div class="progress-section">
 
-### Phase 2: Core Actor System (Complete)
-- [x] **Actor Traits**: Addressable trait system with string and UUID keys
-- [x] **Actor Lifecycle**: Registration, activation, deactivation, and cleanup
-- [x] **Proxy Generation**: Client-side actor references and invocation
-- [x] **Lease Management**: Time-based actor lease system
-- [x] **Message Routing**: Transparent message routing to actor instances
-- [x] **Error Handling**: Comprehensive error types and propagation
+### 🎯 **Current Milestone: Phase 8 Complete** 
+**SQL Query Engine with Vector Operations**
 
-### Phase 3: Network Layer (Complete)
-- [x] **Protocol Buffers**: gRPC service definitions and message types
-- [x] **gRPC Services**: Actor invocation and cluster management services
-- [x] **Message Serialization**: Efficient binary serialization with Protocol Buffers
-- [x] **Connection Pooling**: Efficient connection management and reuse
-- [x] **Transport Layer**: Reliable network communication with retry logic
-- [x] **Service Discovery**: DNS-based and etcd-based node discovery
+Orbit-RS has successfully completed Phase 8, delivering a comprehensive SQL engine with advanced vector database capabilities. This represents **42% completion** of the total roadmap.
 
-### Phase 4: Cluster Management (Complete)
-- [x] **Node Discovery**: Automatic cluster node registration and discovery
-- [x] **Cluster Membership**: Dynamic cluster membership management
-- [x] **Health Checking**: Comprehensive health monitoring and failure detection
-- [x] **Load Balancing**: Multiple strategies (round-robin, least connections, resource-aware, hash-based)
-- [x] **Leader Election**: Raft-based leader election for cluster coordination
-- [x] **Fault Tolerance**: Automatic failover and recovery mechanisms
+| Metric | Status |
+|--------|--------|
+| **Development Phases** | 8 of 19 complete (42%) |
+| **GitHub Issues Tracked** | 68+ issues across remaining phases |
+| **Estimated Remaining Time** | ~3.6-4.7 years |
+| **Core Functionality** | Production-ready SQL & vector operations |
 
-### Phase 5: Advanced Transaction System (Complete)
-- [x] **2-Phase Commit**: ACID-compliant distributed transactions
-- [x] **Transaction Coordinator**: Multi-participant transaction management
-- [x] **Persistent Logging**: Durable SQLite-based transaction audit trail
-- [x] **Recovery Mechanisms**: Coordinator failover and transaction recovery
-- [x] **Saga Pattern**: Long-running workflows with compensating actions
-- [x] **Distributed Locks**: Deadlock detection and prevention
-- [x] **Security Features**: Authentication, authorization, and audit logging
-- [x] **Metrics Integration**: Comprehensive Prometheus monitoring
+</div>
 
-### Phase 6: Protocol Adapters (Complete)
-- [x] **Redis RESP Protocol**: Complete Redis compatibility with 50+ commands
-- [x] **PostgreSQL Wire Protocol**: Full DDL support with ANSI SQL compliance
-- [x] **SQL Parser Infrastructure**: Lexer, AST, and expression parser
-- [x] **SQL Expression Engine**: Comprehensive operator precedence parsing
-- [x] **Vector Operations**: pgvector compatibility with distance operators
-- [x] **SQL Type System**: All PostgreSQL data types including vectors and arrays
-- [x] **Vector Indexing**: IVFFLAT and HNSW index support
+---
 
-### Phase 7: Kubernetes Integration (Complete)
-- [x] **Kubernetes Operator**: Custom CRDs for cluster, actor, and transaction management
-- [x] **Helm Charts**: Production-ready Kubernetes deployment
-- [x] **Docker Images**: Multi-platform container builds (linux/amd64, linux/arm64)
-- [x] **RBAC Configuration**: Kubernetes role-based access control
-- [x] **Service Mesh Integration**: Istio and Linkerd compatibility
-- [x] **Monitoring Stack**: Prometheus, Grafana, and alerting integration
+## ✅ Completed Phases
 
-### Phase 7.5: AI Integration (Complete)
-- [x] **MCP Server**: Model Context Protocol server implementation
-- [x] **MCP Types**: Complete MCP protocol types and message handling
-- [x] **MCP Handlers**: Request routing and response formatting
-- [x] **AI Agent Tools**: Framework for exposing orbit capabilities to AI agents
-- [x] **SQL Integration**: AI agents can execute SQL through MCP
-- [x] **Actor Management**: AI agents can manage actor lifecycles through MCP
+<div class="completed-phases">
 
-### Phase 8: SQL Query Engine (Complete) 🎉
-- [x] **DDL Operations**: CREATE/ALTER/DROP TABLE, INDEX, VIEW, SCHEMA, EXTENSION
-- [x] **DCL Operations**: GRANT/REVOKE permissions with privilege management
-- [x] **TCL Operations**: BEGIN/COMMIT/ROLLBACK with isolation levels and savepoints
-- [x] **Expression Parser**: Full operator precedence with vector operations
-- [x] **SELECT Statements**: Complete SELECT with JOINs, subqueries, CTEs, window functions
-- [x] **INSERT Operations**: Single and batch insert with RETURNING, ON CONFLICT
-- [x] **UPDATE Operations**: Row-level updates with JOINs and RETURNING
-- [x] **DELETE Operations**: Row-level deletes with USING and RETURNING
-- [x] **JOIN Operations**: All JOIN types (INNER, LEFT, RIGHT, FULL, CROSS, NATURAL)
-- [x] **Aggregate Functions**: COUNT, SUM, AVG, MIN, MAX, GROUP BY, HAVING
-- [x] **Advanced SQL**: Subqueries, CTEs, window functions, complex expressions
-- [x] **Vector Database**: Complete pgvector compatibility with similarity search
+### Phase 1: Foundation *(Complete)*
+**Multi-crate workspace with comprehensive testing**
+- ✅ Workspace organization and cross-platform support
+- ✅ Shared data structures and error handling  
+- ✅ Testing framework with BDD scenarios
+- ✅ CI/CD pipeline with security scanning
 
-## Upcoming Phases 🚀
+### Phase 2: Core Actor System *(Complete)*
+**Distributed actor model with lifecycle management**
+- ✅ Actor traits with string/UUID addressing
+- ✅ Lifecycle management and proxy generation
+- ✅ Message routing and lease system
+- ✅ Comprehensive error propagation
 
-### Phase 9: Query Optimization & Performance
-**Target:** Q2 2024 | **Estimated Effort:** 19-25 weeks
+### Phase 3: Network Layer *(Complete)*
+**gRPC services with Protocol Buffers**
+- ✅ Service definitions and message types
+- ✅ Connection pooling and retry logic
+- ✅ DNS and etcd-based service discovery
+- ✅ Circuit breakers and failover
 
-#### [#6 Query Planner - Cost-based Query Optimization](https://github.com/TuringWorks/orbit-rs/issues/6) (4-6 weeks)
-- Query execution plan generation
-- Cost estimation algorithms
-- Statistics collection for tables and indexes
-- EXPLAIN and EXPLAIN ANALYZE support
-- Query hint system for manual optimization
+### Phase 4: Cluster Management *(Complete)*
+**Automatic cluster operations and health monitoring**
+- ✅ Node registration and discovery
+- ✅ Dynamic membership management
+- ✅ Load balancing strategies
+- ✅ Raft-based leader election
 
-#### [#7 Index Usage Optimization](https://github.com/TuringWorks/orbit-rs/issues/7) (3-4 weeks)
-- Automatic index selection based on query patterns
-- Index recommendation system
-- Query optimization hints (FORCE INDEX, USE INDEX, IGNORE INDEX)
-- Index usage statistics and monitoring
+### Phase 5: Advanced Transaction System *(Complete)*
+**ACID compliance with distributed coordination**
+- ✅ 2-Phase commit protocol
+- ✅ Saga pattern for long-running workflows
+- ✅ Distributed lock management
+- ✅ SQLite-based audit trail
 
-#### [#8 Vectorized Execution - SIMD Optimizations](https://github.com/TuringWorks/orbit-rs/issues/8) (4-5 weeks)
-- SIMD-optimized vector distance calculations
-- Vectorized batch processing for large datasets
-- Parallel column scanning and filtering
-- SIMD-optimized aggregation functions
+### Phase 6: Protocol Adapters *(Complete)*
+**Multi-protocol database compatibility**
+- ✅ **Redis RESP Protocol**: 50+ commands
+- ✅ **PostgreSQL Wire Protocol**: Complete DDL support
+- ✅ **Vector Operations**: pgvector compatibility
+- ✅ **SQL Parser**: Lexer, AST, and expressions
 
-#### [#9 Parallel Query Processing](https://github.com/TuringWorks/orbit-rs/issues/9) (5-6 weeks)
-- Multi-threaded query execution engine
-- Worker thread pool management
-- Parallel table scans and joins
-- Dynamic work stealing for load balancing
+### Phase 7: Kubernetes Integration *(Complete)*
+**Cloud-native deployment and operations**
+- ✅ Custom Kubernetes operator with CRDs
+- ✅ Production Helm charts
+- ✅ Multi-platform Docker images
+- ✅ Service mesh integration
 
-#### [#10 Query Caching - Prepared Statements & Results](https://github.com/TuringWorks/orbit-rs/issues/10) (3-4 weeks)
-- Prepared statement compilation and caching
-- Query result caching with TTL and invalidation
-- Cache eviction policies (LRU, LFU, TTL)
-- Cache hit/miss metrics and monitoring
+### Phase 7.5: AI Integration *(Complete)*
+**Model Context Protocol for AI agents**
+- ✅ MCP server implementation
+- ✅ Request routing and response formatting
+- ✅ SQL integration for AI agents
+- ✅ Actor management through MCP
 
-### Phase 10: Production Readiness
-**Target:** Q3 2024 | **Estimated Effort:** 21-29 weeks
+### Phase 8: SQL Query Engine *(Complete)* 🎉
+**Enterprise-grade SQL with vector database**
+- ✅ **DDL/DCL/TCL Operations**: Complete schema management
+- ✅ **Advanced DML**: JOINs, subqueries, CTEs, window functions
+- ✅ **Vector Database**: HNSW/IVFFLAT similarity search
+- ✅ **Expression Parser**: Full operator precedence
+- ✅ **PostgreSQL Compatibility**: Standard client support
 
-#### [#11 Advanced Connection Pooling](https://github.com/TuringWorks/orbit-rs/issues/11) (3-4 weeks)
-- Multi-tier connection pooling
-- Connection health monitoring and automatic recovery
-- Dynamic pool sizing based on load
-- Connection multiplexing support
+</div>
 
-#### [#12 Monitoring & Metrics - Production Observability](https://github.com/TuringWorks/orbit-rs/issues/12) (4-5 weeks)
-- Query performance tracking and monitoring
-- Database-level metrics (connections, transactions, locks)
-- Slow query logging and analysis
-- Grafana dashboards and Prometheus integration
+---
 
-#### [#13 Backup & Recovery System](https://github.com/TuringWorks/orbit-rs/issues/13) (5-6 weeks)
-- Point-in-time recovery (PITR) capabilities
-- Incremental and full backup strategies
-- Cross-region backup replication
-- Disaster recovery procedures and testing
+## 🚀 Upcoming Phases
 
-#### [#14 High Availability - Clustering & Replication](https://github.com/TuringWorks/orbit-rs/issues/14) (6-8 weeks)
-- Master-slave replication with automatic failover
-- Multi-master clustering for write scalability
-- Consensus-based leader election
-- Split-brain prevention and network partition handling
+<div class="upcoming-phases">
 
-#### [#15 Advanced Security - Authentication, Encryption & Audit](https://github.com/TuringWorks/orbit-rs/issues/15) (5-6 weeks)
-- Advanced authentication mechanisms (LDAP, SAML, OAuth2)
-- Role-based access control (RBAC) with fine-grained permissions
-- Data encryption at rest and in transit (TLS 1.3)
-- Comprehensive audit logging for compliance
+### 🎯 **Phase 9: Query Optimization & Performance** *(Q2 2024)*
+**Transform into high-performance enterprise database**
 
-### Phase 11: Advanced Features
-**Target:** Q4 2024 | **Estimated Effort:** 25-31 weeks
+<div class="phase-details">
 
-#### [#16 Stored Procedures & User-Defined Functions](https://github.com/TuringWorks/orbit-rs/issues/16) (6-8 weeks)
-- PL/pgSQL procedural language support
-- User-defined function creation and execution
-- Function overloading and polymorphism
-- Function security and sandboxing
+**Duration:** 19-25 weeks | **Priority:** High | **Team Size:** 8-12 engineers
 
-#### [#17 Database Triggers - Event-Driven Actions](https://github.com/TuringWorks/orbit-rs/issues/17) (4-5 weeks)
-- BEFORE/AFTER INSERT/UPDATE/DELETE triggers
-- Row-level and statement-level triggers
-- Trigger condition evaluation (WHEN clauses)
-- Cascading trigger support
+#### Key Deliverables
+- **🧠 Cost-Based Query Planner**
+  - Statistics collection and cardinality estimation
+  - Rule-based and cost-based optimization
+  - Alternative plan generation and selection
+- **⚡ Vectorized Execution Engine** 
+  - SIMD-optimized batch processing (AVX2/AVX-512)
+  - Columnar data layouts and operations
+  - 10x performance improvement target
+- **🔄 Parallel Query Processing**
+  - Multi-threaded execution across cores
+  - NUMA-aware scheduling and work-stealing
+  - Pipeline and partition parallelism
+- **🎯 Intelligent Index System**
+  - Automatic index selection and recommendations
+  - Index usage tracking and optimization
+  - Support for B-tree, hash, bitmap, and vector indexes
+- **🚀 Multi-Level Query Caching**
+  - Result, plan, and metadata caching
+  - Intelligent invalidation and prefetching
+  - 95% cache hit rate target
 
-#### [#18 Full-Text Search - Advanced Text Search](https://github.com/TuringWorks/orbit-rs/issues/18) (5-6 weeks)
-- Text search vectors (tsvector) and queries (tsquery)
-- Multiple language support with stemming and stop words
-- Ranking and relevance scoring algorithms
-- Integration with vector search for hybrid search
+#### Performance Targets
+- **5M+ queries/second** for simple operations
+- **50x improvement** for complex analytical queries  
+- **Linear scalability** up to 16 CPU cores
+- **Sub-100ms latency** for complex JOINs
 
-#### [#19 Enhanced JSON/JSONB Processing](https://github.com/TuringWorks/orbit-rs/issues/19) (4-5 weeks)
-- JSONB data type with efficient binary storage
-- JSON path expressions and operators (->>, #>, @>, etc.)
-- JSON aggregation functions (json_agg, jsonb_agg)
-- JSON schema validation and constraints
+[📋 **View Detailed Phase 9 Plan**](phases/phase-09-query-optimization.md)
 
-#### [#20 Streaming - Real-time Data & Change Data Capture](https://github.com/TuringWorks/orbit-rs/issues/20) (6-7 weeks)
-- Change data capture for all DML operations
-- Real-time data streaming with WebSocket and Server-Sent Events
-- Kafka integration for event streaming
-- Event sourcing pattern support
+</div>
 
-## Future Phases (2025+)
+---
 
-### Phase 12: Time Series Database Features
-**Target:** Q1 2025 | **Estimated Effort:** 22-34 weeks
+### 🏭 **Phase 10: Production Readiness** *(Q3 2024)*
+**Enterprise operations and reliability**
 
-#### [Redis Time Series Compatibility](protocols/REDIS_TIMESERIES.md) (8-10 weeks)
-- **TimeSeriesActor**: Distributed time-series data management with actor-based partitioning
-- **Core commands**: TS.CREATE, TS.ADD, TS.GET, TS.RANGE, TS.REVRANGE
-- **Aggregation rules**: TS.CREATERULE, TS.DELETERULE with automated downsampling
-- **Multi-series operations**: TS.MRANGE, TS.MREVRANGE, TS.MGET with label filtering
-- **Statistical functions**: Built-in aggregators (AVG, SUM, MIN, MAX, STDDEV)
-- **Retention policies**: Automatic data expiration and compression
-- **Labeling system**: Multi-dimensional time series organization
+<div class="phase-details">
 
-#### [PostgreSQL TimescaleDB Compatibility](protocols/POSTGRESQL_TIMESCALE.md) (10-12 weeks)
-- **Hypertables**: Distributed time-partitioned tables with automatic chunking
-- **Time functions**: time_bucket(), time_bucket_gapfill(), locf(), interpolate()
-- **Continuous aggregates**: Materialized views with automatic refresh policies
-- **Compression**: Column-store compression for historical data
-- **Data retention**: Automatic chunk expiration with configurable policies
-- **Advanced analytics**: Hyperfunctions for time-series analysis
-- **Multi-dimensional partitioning**: Time and space partitioning
+**Duration:** 21-29 weeks | **Priority:** High | **Team Size:** 10-15 engineers
 
-#### Performance & Integration (4-6 weeks)
-- **SIMD optimizations**: Vectorized time-series operations and aggregations
-- **Distributed chunks**: Intelligent chunk placement across cluster nodes
-- **Query optimization**: Time-series specific query planning and execution
-- **Grafana integration**: Native data sources for both Redis TS and TimescaleDB
-- **Migration tools**: Automated migration from RedisTimeSeries and TimescaleDB
+#### Key Deliverables
+- **🔌 Advanced Connection Pooling**
+  - Multi-tier pooling with health monitoring
+  - Circuit breakers and intelligent load balancing
+  - Connection affinity and geographic routing
+- **📊 Production Monitoring & Metrics**
+  - Comprehensive observability stack
+  - Prometheus/Grafana integration
+  - Automated remediation and alerting
+- **💾 Backup & Recovery Systems**
+  - Point-in-time recovery with cross-region replication
+  - Multiple backup types and verification
+  - Automated disaster recovery procedures
+- **🏗️ High Availability Architecture**
+  - Multi-node clustering with automatic failover
+  - Zero-downtime maintenance and rolling updates
+  - Geographic distribution and split-brain prevention
+- **🔐 Advanced Security Framework**
+  - LDAP/SAML/OAuth2 integration
+  - Fine-grained RBAC and policy engine
+  - Comprehensive auditing and threat detection
 
-### Phase 13: Distributed Query Processing & Advanced Analytics
-**Target:** Q2 2025 | **Estimated Effort:** 18-24 weeks
+#### Reliability Targets
+- **99.99% uptime** (43.2 minutes downtime/year)
+- **<30 second failover** time for node failures
+- **11 9's data durability** with cross-region replication
 
-#### Distributed Query Engine (8-10 weeks)
-- Cost-based query optimization with time-series aware planning
-- Cross-node query execution with intelligent chunk routing
-- Data sharding and rebalancing with time-aware partitioning
-- Parallel processing with SIMD-optimized aggregations
-- Intelligent query result caching for time-series workloads
+[📋 **View Detailed Phase 10 Plan**](phases/phase-10-production-readiness.md)
 
-#### Advanced Time Series Analytics (6-8 weeks)
-- **Real-time analytics**: Stream processing integration with Apache Kafka
-- **Machine learning**: Built-in time-series ML functions (forecasting, anomaly detection)
-- **Pattern detection**: Automatic pattern recognition and alerting
-- **Cross-correlation**: Multi-variate time series analysis
-- **Window functions**: Advanced sliding window operations
+</div>
 
-#### Master-Slave Replication (4-6 weeks)
-- Time-series aware replication with chunk-level synchronization
-- Multi-master clustering for write scalability
-- Consensus-based leader election for time series coordination
+---
 
-### Phase 14: Additional Protocol Support
-**Target:** Q3 2025 | **Estimated Effort:** 16-20 weeks
+### 🎛️ **Phase 11: Advanced Features** *(Q4 2024)*
+**Modern database capabilities**
 
-- Neo4j Bolt Protocol for graph database compatibility
-- REST API with OpenAPI/Swagger documentation
-- GraphQL API with schema introspection  
-- WebSocket support for real-time applications
-- Apache Kafka integration for event streaming
-- InfluxDB Line Protocol compatibility
+<div class="phase-details">
 
-### Phase 14: Cloud-Native Features
-- AWS, Azure, and GCP integrations
-- Multi-cloud deployment and replication
-- Serverless function support
-- Edge computing capabilities
-- Auto-scaling and cost optimization
+**Duration:** 25-31 weeks | **Priority:** High | **Team Size:** 8-12 engineers
 
-### Phase 15: Enterprise Features
-- Spring Boot integration
-- Enterprise security (LDAP, SAML, OAuth2)
-- Compliance features (SOC2, GDPR, HIPAA)
-- Advanced backup and recovery
-- Commercial support and consulting
+#### Key Deliverables
+- **📜 Stored Procedures & Functions**
+  - PL/pgSQL procedural language support
+  - User-defined functions and triggers
+  - Recursive and aggregate functions
+- **🎯 Database Triggers**
+  - Event-driven actions with cascading support
+  - Row and statement-level triggers
+  - Trigger chaining and conditional execution
+- **🔍 Full-Text Search**
+  - Advanced text search with multiple languages
+  - Ranking algorithms and faceted search
+  - GIN and GiST index support
+- **📋 Enhanced JSON/JSONB**
+  - Binary storage with path expressions
+  - JSON aggregation and manipulation functions
+  - Schema validation and indexing
+- **📡 Streaming & Change Data Capture**
+  - Real-time data streaming with Kafka integration
+  - Change data capture with event sourcing
+  - Stream processing and materialized views
 
-## Development Metrics
+[📋 **View Detailed Phase 11 Plan**](phases/phase-11-advanced-features.md)
 
-### Phase 8 Achievements
-- **Lines of Code**: 150,000+ lines of production-ready Rust code
-- **Test Coverage**: 79 passing tests with comprehensive coverage
-- **Performance**: Up to 500k+ messages/second per core
-- **Protocol Support**: Redis, PostgreSQL wire protocol, MCP, vector operations
-- **SQL Compatibility**: Full ANSI SQL compliance with PostgreSQL extensions
+</div>
 
-### Target Metrics for Phase 9-11
-- **Query Performance**: 2-5x improvement with optimization
-- **Throughput**: 1M+ operations/second with parallel processing
-- **Availability**: 99.9% uptime with high availability features
-- **Scale**: Support for 10,000+ concurrent connections
-- **Feature Completeness**: Production-ready database with full SQL support
+---
 
-## Contributing to the Roadmap
+### 📈 **Phase 12: Time Series Database** *(Q1 2025)*
+**High-performance time-series capabilities**
 
-We welcome contributions to help achieve these roadmap goals:
+<div class="phase-details">
 
-1. **Check GitHub Issues**: View detailed issues for each phase
-2. **Pick an Issue**: Choose issues tagged with `good-first-issue` or your expertise
-3. **Join Discussions**: Participate in roadmap planning discussions
-4. **Submit PRs**: Contribute code following our development guidelines
+**Duration:** 22-34 weeks | **Priority:** High | **Team Size:** 6-10 engineers
 
-### Priority Areas for Contributors
-- Query optimization algorithms
-- SIMD/vectorization optimizations
-- Distributed systems expertise
-- Database internals and storage engines
-- Kubernetes operators and cloud-native tools
+#### Key Deliverables
+- **⏱️ Redis TimeSeries Compatibility**
+  - TS.* command implementation
+  - Aggregation rules and downsampling
+  - Multi-series operations and compaction
+- **📊 PostgreSQL TimescaleDB Extensions**
+  - Hypertables and time-partitioned tables
+  - Time functions and continuous aggregates
+  - Compression and analytical functions
+- **⚡ Performance Optimizations**
+  - Columnar storage for time-series data
+  - Parallel ingestion and query processing
+  - 1M+ samples/second ingestion target
 
-## Timeline Summary
+[📋 **View Detailed Phase 12 Plan**](phases/phase-12-timeseries-database.md)
 
-- **Phase 9** (Q2 2024): Query Optimization & Performance - 19-25 weeks
-- **Phase 10** (Q3 2024): Production Readiness - 21-29 weeks  
-- **Phase 11** (Q4 2024): Advanced Features - 25-31 weeks
-- **Phase 12** (Q1 2025): Time Series Database Features - 22-34 weeks
-- **Phase 13** (Q2 2025): Distributed Query Processing & Advanced Analytics - 18-24 weeks
-- **Phase 14** (Q3 2025): Additional Protocol Support - 16-20 weeks
+</div>
 
-**Total Development Estimate**:
-- **Phases 9-11** (2024): 65-85 weeks
-- **Phases 12-14** (2025): 56-78 weeks
-- **Grand Total**: 121-163 weeks (~2.3-3.1 years)
+---
 
-The roadmap provides a comprehensive path from the current production-ready SQL engine to a fully-featured, enterprise-grade distributed actor system with advanced database capabilities.
+### 🕸️ **Phase 13: Neo4j Bolt Protocol** *(Q2 2025)*
+**Complete graph database compatibility**
 
-## Related Documentation
+<div class="phase-details">
 
-- [Overview](OVERVIEW.md) - Architecture and key features
-- [Quick Start](QUICK_START.md) - Getting started guide
-- [Development Guide](development/DEVELOPMENT.md) - Contributing to the roadmap
-- [GitHub Project](https://github.com/orgs/TuringWorks/projects/1) - Live roadmap tracking
+**Duration:** 30-36 weeks | **Priority:** High | **Team Size:** 12-18 engineers
+
+#### Key Deliverables
+- **🔗 Neo4j Foundation** (12-14 weeks)
+  - Core graph actors and Bolt protocol v4.4
+  - Connection management and basic Cypher
+  - Graph storage optimized for traversals
+- **🧠 Advanced Graph Operations** (10-12 weeks)
+  - Complete Cypher language support
+  - Built-in graph algorithms (PageRank, centrality)
+  - Schema management and constraints
+- **🎯 Enterprise Graph Features** (8-10 weeks)
+  - Graph Data Science and ML algorithms
+  - Performance optimization and scaling
+  - Neo4j ecosystem compatibility
+
+#### Performance Targets
+- **50K+ graph queries/second**
+- **100M+ nodes** support with linear scaling
+- **Sub-millisecond** traversal operations
+
+[📋 **View Detailed Phase 13 Plan**](phases/phase-13-neo4j-bolt-protocol.md)
+
+</div>
+
+---
+
+### 🔄 **Phase 14: Distributed Query Processing** *(Q3 2025)*
+**Cross-node query optimization**
+
+<div class="phase-details">
+
+**Duration:** 18-24 weeks | **Priority:** Medium | **Team Size:** 8-12 engineers
+
+#### Key Deliverables
+- **🌐 Distributed Query Engine**
+  - Cost-based optimization across nodes
+  - Cross-node execution planning
+  - Data locality and network optimization
+- **📊 Advanced Time Series Analytics**
+  - Real-time processing with ML integration
+  - Distributed aggregation and windowing
+  - Time-series forecasting capabilities
+- **⚖️ Data Sharding & Replication**
+  - Intelligent partitioning strategies
+  - Automatic rebalancing and migration
+  - Consistency and availability trade-offs
+
+[📋 **View Detailed Phase 14 Plan**](phases/phase-14-distributed-query-processing.md)
+
+</div>
+
+---
+
+### 🗄️ **Phase 15: ArangoDB Multi-Model** *(Q3 2025)*
+**Unified multi-model database**
+
+<div class="phase-details">
+
+**Duration:** 36-42 weeks | **Priority:** High | **Team Size:** 15-20 engineers
+
+#### Key Deliverables
+- **🏗️ ArangoDB Foundation** (14-16 weeks)
+  - Multi-model core actors (document, graph, key-value)
+  - Complete AQL query engine
+  - ACID transactions across data models
+- **📚 Advanced Multi-Model Operations** (12-14 weeks)
+  - Document database with schema validation
+  - Property graphs with smart graph features
+  - Full-text search with analyzers
+- **🌍 Enterprise Multi-Model Features** (10-12 weeks)
+  - Geospatial support with routing
+  - Streaming analytics and ML integration
+  - ArangoDB ecosystem compatibility
+
+#### Performance Targets
+- **100K+ document operations/second**
+- **10K+ graph traversals/second**
+- **Multi-model ACID transactions**
+
+[📋 **View Detailed Phase 15 Plan**](phases/phase-15-arangodb-multi-model.md)
+
+</div>
+
+---
+
+### 🤖 **Phase 16: GraphML & GraphRAG** *(Q4 2025 - Q1 2026)*
+**AI-powered graph analytics**
+
+<div class="phase-details">
+
+**Duration:** 28-34 weeks | **Priority:** High | **Team Size:** 12-18 engineers
+
+#### Key Deliverables
+- **🧠 GraphML & Advanced Analytics** (14-16 weeks)
+  - Node embeddings (Node2Vec, GraphSAGE)
+  - Graph Neural Networks (GCN, GAT)
+  - Community detection and anomaly detection
+- **🔍 GraphRAG & Knowledge Reasoning** (14-18 weeks)
+  - Knowledge graph construction from text
+  - Graph-augmented generation capabilities
+  - Multi-hop reasoning and inference engines
+- **⚡ Performance & Integration**
+  - Distributed ML training across cluster
+  - Real-time inference and embedding updates
+  - Vector database integration
+
+[📋 **View Detailed Phase 16 Plan**](phases/phase-16-graphml-graphrag.md)
+
+</div>
+
+---
+
+### 🔌 **Phase 17: Additional Protocol Support** *(Q1 2026)*
+**Extended protocol compatibility**
+
+<div class="phase-details">
+
+**Duration:** 16-20 weeks | **Priority:** Medium | **Team Size:** 8-12 engineers
+
+#### Key Deliverables
+- **🌐 REST & GraphQL APIs**
+  - OpenAPI/Swagger documentation
+  - Real-time subscriptions and introspection
+- **⚡ Real-time & Streaming**
+  - WebSocket bidirectional communication
+  - Apache Kafka integration
+  - InfluxDB line protocol support
+- **📄 Document Compatibility**
+  - MongoDB wire protocol layer
+  - Document validation and indexing
+
+[📋 **View Detailed Phase 17 Plan**](phases/phase-17-additional-protocols.md)
+
+</div>
+
+---
+
+### ☁️ **Phase 18: Cloud-Native Features** *(Q2 2026)*
+**Multi-cloud and edge deployment**
+
+<div class="phase-details">
+
+**Duration:** 14-18 weeks | **Priority:** Medium | **Team Size:** 10-15 engineers
+
+#### Key Deliverables
+- **🌍 Multi-Cloud Support**
+  - AWS, Azure, Google Cloud deployment
+  - Auto-scaling and cost optimization
+  - Serverless integration capabilities
+- **🌐 Edge Computing**
+  - Edge node deployment patterns
+  - Data synchronization and caching
+  - Reduced latency for global users
+
+[📋 **View Detailed Phase 18 Plan**](phases/phase-18-cloud-native-features.md)
+
+</div>
+
+---
+
+### 🏢 **Phase 19: Enterprise Features** *(Q3 2026)*
+**Enterprise integration and support**
+
+<div class="phase-details">
+
+**Duration:** 12-16 weeks | **Priority:** Medium | **Team Size:** 8-12 engineers
+
+#### Key Deliverables
+- **🔒 Advanced Security & Compliance**
+  - SOC2, GDPR, HIPAA compliance frameworks
+  - Enterprise identity integration
+  - Advanced auditing capabilities
+- **🔧 Migration & Support Tools**
+  - Database migration utilities
+  - Professional services framework
+  - Enterprise support infrastructure
+
+[📋 **View Detailed Phase 19 Plan**](phases/phase-19-enterprise-features.md)
+
+</div>
+
+</div>
+
+---
+
+## 📊 Resource Planning
+
+<div class="resource-planning">
+
+### 👥 **Team Scaling**
+
+| Phase | Core Team | Extended Team | Specialists |
+|-------|-----------|---------------|-------------|
+| **Phase 9** | 8 engineers | +4 performance | Query optimization experts |
+| **Phase 10** | 10 engineers | +5 operations | SRE and security specialists |
+| **Phase 11** | 8 engineers | +4 database | PL/SQL and search experts |
+| **Phase 12** | 6 engineers | +4 analytics | Time-series specialists |
+| **Phase 13** | 12 engineers | +6 graph | Neo4j and Cypher experts |
+
+### 💰 **Investment Timeline**
+
+- **2024:** $3.2M - Performance optimization and production readiness
+- **2025:** $4.8M - Graph database and multi-model capabilities  
+- **2026:** $2.1M - Cloud-native and enterprise features
+- **Total:** $10.1M over 3 years for complete roadmap
+
+### 🎯 **Success Metrics**
+
+- **Performance:** 10x query performance improvement by end of 2024
+- **Market Share:** 5% of distributed database market by 2026
+- **Enterprise Adoption:** 100+ enterprise customers by end of roadmap
+- **Community:** 10K+ GitHub stars and 500+ contributors
+
+</div>
+
+---
+
+## 🗺️ Visual Timeline
+
+<div class="timeline-visual">
+
+```mermaid
+gantt
+    title Orbit-RS Development Roadmap
+    dateFormat YYYY-MM
+    axisFormat %Y-%m
+    
+    section Completed ✅
+    Foundation (Phase 1-8)    :done, 2023-01, 2024-01
+    
+    section 2024
+    Query Optimization (P9)   :2024-04, 2024-09
+    Production Readiness (P10):2024-07, 2025-01
+    Advanced Features (P11)   :2024-10, 2025-05
+    
+    section 2025
+    TimeSeries DB (P12)       :2025-01, 2025-08
+    Neo4j Bolt (P13)         :2025-04, 2025-12
+    Distributed Queries (P14) :2025-07, 2026-01
+    ArangoDB Multi-Model (P15):2025-07, 2026-03
+    
+    section 2026
+    GraphML & GraphRAG (P16)  :2025-10, 2026-04
+    Additional Protocols (P17):2026-01, 2026-05
+    Cloud-Native (P18)        :2026-04, 2026-08
+    Enterprise (P19)          :2026-07, 2026-11
+```
+
+</div>
+
+---
+
+## 📈 Key Milestones
+
+<div class="milestones">
+
+### 🎯 **2024 Milestones**
+- **Q2 2024:** Phase 9 complete - 10x query performance improvement
+- **Q3 2024:** Phase 10 complete - Production-ready with 99.99% uptime
+- **Q4 2024:** Phase 11 complete - Advanced database features
+
+### 🚀 **2025 Milestones**  
+- **Q1 2025:** Phase 12 complete - Time-series database capabilities
+- **Q2 2025:** Phase 13 complete - Neo4j Bolt protocol compatibility
+- **Q3 2025:** Phases 14-15 complete - Distributed queries & multi-model
+
+### 🌟 **2026 Milestones**
+- **Q1 2026:** Phase 16 complete - GraphML & GraphRAG capabilities
+- **Q3 2026:** All phases complete - Full enterprise-ready platform
+- **Q4 2026:** 1.0 Release - Production deployment at scale
+
+</div>
+
+---
+
+## 🤝 Get Involved
+
+<div class="get-involved">
+
+### 📋 **Track Progress**
+- [📊 **GitHub Project Board**](https://github.com/TuringWorks/orbit-rs/projects) - Real-time progress tracking
+- [📈 **Weekly Status Updates**](status.md) - Detailed development progress
+- [💬 **Discord Updates**](https://discord.gg/orbit-rs) - Live development discussions
+
+### 🚀 **Contribute**
+- [🐛 **Report Issues**](https://github.com/TuringWorks/orbit-rs/issues) - Bug reports and feature requests
+- [🤝 **Pull Requests**](contributing.md) - Code contributions and improvements
+- [📝 **Documentation**](contributing/documentation.md) - Help improve documentation
+
+### 💼 **Enterprise Partnership**
+- [📧 **Contact Sales**](mailto:enterprise@turingworks.com) - Enterprise deployment planning
+- [🤝 **Technology Partnership**](partnerships.md) - Integration and development partnerships
+- [💰 **Funding Opportunities**](funding.md) - Investment and sponsorship options
+
+</div>
+
+---
+
+<div class="footer-nav">
+
+**📍 Navigation:**  
+[🏠 Home](index.md) | [📊 Status](status.md) | [🏗️ Architecture](architecture.md) | [🚀 Quick Start](quick-start.md)
+
+**🔗 Quick Links:**  
+[GitHub](https://github.com/TuringWorks/orbit-rs) | [Discord](https://discord.gg/orbit-rs) | [Documentation](index.md)
+
+</div>
+
+<style>
+.progress-section {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 2em;
+  border-radius: 10px;
+  margin: 2em 0;
+}
+
+.progress-section table {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border-radius: 6px;
+}
+
+.progress-section th, .progress-section td {
+  padding: 1em;
+  border: none;
+  color: white;
+}
+
+.completed-phases, .upcoming-phases {
+  margin: 2em 0;
+}
+
+.phase-details {
+  background: #f8f9fa;
+  border-left: 4px solid #0366d6;
+  padding: 1.5em;
+  margin: 1em 0;
+  border-radius: 0 6px 6px 0;
+}
+
+.resource-planning {
+  background: #fff5f5;
+  border: 1px solid #fed7d7;
+  padding: 2em;
+  border-radius: 8px;
+  margin: 2em 0;
+}
+
+.resource-planning table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1em 0;
+}
+
+.resource-planning th, .resource-planning td {
+  padding: 0.75em;
+  border: 1px solid #e2e8f0;
+  text-align: left;
+}
+
+.resource-planning th {
+  background: #f7fafc;
+  font-weight: 600;
+}
+
+.timeline-visual {
+  background: white;
+  border: 1px solid #e1e4e8;
+  border-radius: 6px;
+  padding: 1em;
+  margin: 2em 0;
+  overflow-x: auto;
+}
+
+.milestones {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.5em;
+  margin: 2em 0;
+}
+
+.milestones > div {
+  background: #f6f8fa;
+  padding: 1.5em;
+  border-radius: 8px;
+  border-left: 4px solid #28a745;
+}
+
+.get-involved {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1.5em;
+  margin: 2em 0;
+}
+
+.get-involved > div {
+  background: #fff;
+  border: 1px solid #e1e4e8;
+  padding: 1.5em;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.footer-nav {
+  background: #24292e;
+  color: #f6f8fa;
+  padding: 2em;
+  border-radius: 6px;
+  text-align: center;
+  margin: 3em 0;
+}
+
+.footer-nav a {
+  color: #79b8ff;
+  text-decoration: none;
+}
+
+.footer-nav a:hover {
+  text-decoration: underline;
+}
+</style>

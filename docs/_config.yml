@@ -1,0 +1,104 @@
+title: Orbit-RS Documentation
+description: The Next-Generation Distributed Database System
+url: https://turingworks.github.io
+baseurl: /orbit-rs
+
+# GitHub Pages and Jekyll configuration
+theme: minima
+plugins:
+  - jekyll-feed
+  - jekyll-sitemap
+  - jekyll-seo-tag
+
+# Navigation structure
+header_pages:
+  - index.md
+  - quick-start.md
+  - architecture.md
+  - roadmap-new.md
+  - status.md
+  - contributing.md
+
+# Site configuration
+markdown: kramdown
+highlighter: rouge
+kramdown:
+  input: GFM
+  syntax_highlighter: rouge
+
+# SEO and social
+author: TuringWorks
+twitter:
+  username: TuringWorksAI
+facebook:
+  username: TuringWorksAI
+social:
+  name: TuringWorks
+  links:
+    - https://github.com/TuringWorks/orbit-rs
+    - https://discord.gg/orbit-rs
+    - https://twitter.com/TuringWorksAI
+
+# Collections for organized content
+collections:
+  phases:
+    output: true
+    permalink: /:collection/:name/
+  features:
+    output: true
+    permalink: /:collection/:name/
+  operations:
+    output: true
+    permalink: /:collection/:name/
+  deployment:
+    output: true
+    permalink: /:collection/:name/
+  tutorials:
+    output: true
+    permalink: /:collection/:name/
+
+# Default front matter
+defaults:
+  - scope:
+      path: ""
+      type: "posts"
+    values:
+      layout: "post"
+      author: "TuringWorks Team"
+  - scope:
+      path: ""
+      type: "phases"
+    values:
+      layout: "default"
+      category: "development"
+  - scope:
+      path: ""
+      type: "features"
+    values:
+      layout: "default"
+      category: "features"
+  - scope:
+      path: ""
+      type: "operations"
+    values:
+      layout: "default"
+      category: "operations"
+
+# Exclude from processing
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - node_modules
+  - vendor/bundle/
+  - vendor/cache/
+  - vendor/gems/
+  - vendor/ruby/
+  - target/
+  - _site/
+  - .sass-cache/
+  - .jekyll-cache/
+  - gemfiles/
+
+# Include additional files
+include:
+  - _pages

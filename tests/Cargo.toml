@@ -10,16 +10,95 @@ orbit-server = { path = "../orbit-server" }
 orbit-shared = { path = "../orbit-shared" }
 orbit-proto = { path = "../orbit-proto" }
 orbit-util = { path = "../orbit-util" }
+orbit-protocols = { path = "../orbit-protocols" }
 tokio = { version = "1.0", features = ["full"] }
 tokio-test = "0.4"
 tracing = "0.1"
 tracing-subscriber = "0.3"
 async-trait = "0.1"
 serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 anyhow = "1.0"
 uuid = { version = "1.0", features = ["v4"] }
-cucumber = "0.20"
+cucumber = "0.21"
+proptest = "1.4"
+mockall = "0.13"
+rand = "0.8"
+futures = "0.3"
+
+[features]
+default = []
+
+# Phase-specific feature flags
+phase-9-features = []
+phase-10-features = []
+phase-11-features = []
+phase-12-features = ["timeseries-features"]
+phase-13-features = ["neo4j-features"]
+phase-14-features = ["distributed-features"]
+phase-15-features = ["arangodb-features"]
+phase-16-features = ["graphml-features", "graphrag-features"]
+phase-17-features = ["protocol-features"]
+phase-18-features = ["cloud-features"]
+phase-19-features = ["enterprise-features"]
+
+# Technology-specific feature flags
+neo4j-features = []
+arangodb-features = []
+graphml-features = []
+graphrag-features = []
+timeseries-features = []
+distributed-features = []
+protocol-features = []
+cloud-features = []
+enterprise-features = []
+
+# Test-specific feature flags
+property-tests = ["proptest"]
+integration-tests = []
+performance-tests = []
+compatibility-tests = []
+
+# Development and debugging flags
+test-logging = []
+test-metrics = []
+mock-services = []
 
 [[test]]
 name = "mock_simple"
 path = "tests/mock_simple.rs"
+
+# Neo4j Tests
+[[test]]
+name = "neo4j_integration"
+path = "neo4j/integration_tests.rs"
+required-features = ["neo4j-features"]
+harness = false
+
+# ArangoDB Tests
+[[test]]
+name = "arangodb_integration"
+path = "arangodb/integration_tests.rs"
+required-features = ["arangodb-features"]
+harness = false
+
+# GraphML Tests
+[[test]]
+name = "graphml_integration"
+path = "graphml/integration_tests.rs"
+required-features = ["graphml-features"]
+harness = false
+
+# GraphRAG Tests
+[[test]]
+name = "graphrag_integration"
+path = "graphrag/integration_tests.rs"
+required-features = ["graphrag-features"]
+harness = false
+
+# Time Series Tests
+[[test]]
+name = "timeseries_integration"
+path = "timeseries/integration_tests.rs"
+required-features = ["timeseries-features"]
+harness = false
