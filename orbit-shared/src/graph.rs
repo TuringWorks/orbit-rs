@@ -17,16 +17,16 @@ pub use storage::InMemoryGraphStorage;
 
 /// Unique identifier for a graph node
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct NodeId(pub String);
+pub struct NodeId(String);
 
 impl NodeId {
-    /// Create a new random node ID
-    pub fn new() -> Self {
-        Self(format!("node_{}", Uuid::new_v4()))
+    /// Create a new node ID
+    pub fn new(id: String) -> Self {
+        Self(id)
     }
 
-    /// Create a node ID from a string
-    pub fn from_str(id: &str) -> Self {
+    /// Create from string reference
+    pub fn from_string(id: &str) -> Self {
         Self(id.to_string())
     }
 
@@ -38,7 +38,7 @@ impl NodeId {
 
 impl Default for NodeId {
     fn default() -> Self {
-        Self::new()
+        Self::new(format!("node_{}", Uuid::new_v4()))
     }
 }
 
@@ -59,7 +59,7 @@ impl RelationshipId {
     }
 
     /// Create a relationship ID from a string
-    pub fn from_str(id: &str) -> Self {
+    pub fn from_string(id: &str) -> Self {
         Self(id.to_string())
     }
 
@@ -114,7 +114,7 @@ impl GraphNode {
     pub fn new(labels: Vec<String>, properties: HashMap<String, serde_json::Value>) -> Self {
         let now = chrono::Utc::now();
         Self {
-            id: NodeId::new(),
+            id: NodeId::default(),
             labels,
             properties,
             created_at: now,
@@ -306,7 +306,10 @@ pub trait GraphStorage: Send + Sync {
     ) -> OrbitResult<Vec<GraphRelationship>>;
 
     /// Get a relationship by ID
-    async fn get_relationship(&self, rel_id: &RelationshipId) -> OrbitResult<Option<GraphRelationship>>;
+    async fn get_relationship(
+        &self,
+        rel_id: &RelationshipId,
+    ) -> OrbitResult<Option<GraphRelationship>>;
 
     /// Update relationship properties
     async fn update_relationship(
@@ -341,8 +344,14 @@ mod tests {
     fn test_node_creation() {
         let labels = vec!["Person".to_string(), "Employee".to_string()];
         let mut properties = HashMap::new();
-        properties.insert("name".to_string(), serde_json::Value::String("Alice".to_string()));
-        properties.insert("age".to_string(), serde_json::Value::Number(serde_json::Number::from(30)));
+        properties.insert(
+            "name".to_string(),
+            serde_json::Value::String("Alice".to_string()),
+        );
+        properties.insert(
+            "age".to_string(),
+            serde_json::Value::Number(serde_json::Number::from(30)),
+        );
 
         let node = GraphNode::new(labels.clone(), properties.clone());
 
@@ -377,34 +386,40 @@ mod tests {
         // Set properties
         node.set_property("name", "Alice");
         node.set_property("age", 30);
-        
+
         assert_eq!(
-            node.get_property("name"), 
+            node.get_property("name"),
             Some(&serde_json::Value::String("Alice".to_string()))
         );
         assert_eq!(
-            node.get_property("age"), 
+            node.get_property("age"),
             Some(&serde_json::Value::Number(serde_json::Number::from(30)))
         );
 
         // Remove property
         let removed = node.remove_property("age");
-        assert_eq!(removed, Some(serde_json::Value::Number(serde_json::Number::from(30))));
+        assert_eq!(
+            removed,
+            Some(serde_json::Value::Number(serde_json::Number::from(30)))
+        );
         assert_eq!(node.get_property("age"), None);
     }
 
     #[test]
     fn test_relationship_creation() {
-        let start_node = NodeId::from_str("node1");
-        let end_node = NodeId::from_str("node2");
+        let start_node = NodeId::from_string("node1");
+        let end_node = NodeId::from_string("node2");
         let mut properties = HashMap::new();
-        properties.insert("since".to_string(), serde_json::Value::String("2023".to_string()));
+        properties.insert(
+            "since".to_string(),
+            serde_json::Value::String("2023".to_string()),
+        );
 
         let relationship = GraphRelationship::new(
             start_node.clone(),
             end_node.clone(),
             "KNOWS".to_string(),
-            properties.clone()
+            properties.clone(),
         );
 
         assert_eq!(relationship.start_node, start_node);
@@ -415,14 +430,10 @@ mod tests {
 
     #[test]
     fn test_relationship_property_operations() {
-        let start_node = NodeId::from_str("node1");
-        let end_node = NodeId::from_str("node2");
-        let mut relationship = GraphRelationship::new(
-            start_node,
-            end_node,
-            "KNOWS".to_string(),
-            HashMap::new()
-        );
+        let start_node = NodeId::from_string("node1");
+        let end_node = NodeId::from_string("node2");
+        let mut relationship =
+            GraphRelationship::new(start_node, end_node, "KNOWS".to_string(), HashMap::new());
 
         // Set properties
         relationship.set_property("strength", 0.8);
@@ -430,7 +441,9 @@ mod tests {
 
         assert_eq!(
             relationship.get_property("strength"),
-            Some(&serde_json::Value::Number(serde_json::Number::from_f64(0.8).unwrap()))
+            Some(&serde_json::Value::Number(
+                serde_json::Number::from_f64(0.8).unwrap()
+            ))
         );
         assert_eq!(
             relationship.get_property("verified"),

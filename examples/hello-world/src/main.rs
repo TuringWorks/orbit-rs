@@ -1,3 +1,4 @@
+use orbit_server::persistence::config::PersistenceProviderConfig;
 use orbit_server::{OrbitServer, OrbitServerConfig};
 use std::time::Duration;
 use tracing::info;
@@ -18,6 +19,7 @@ async fn main() -> anyhow::Result<()> {
         cleanup_interval: Duration::from_secs(60),
         max_addressables: Some(1000),
         tags: std::collections::HashMap::new(),
+        persistence: PersistenceProviderConfig::default_memory(),
     };
 
     // Create and start the server

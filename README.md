@@ -14,6 +14,7 @@ A high-performance, distributed virtual actor system framework reimplemented in 
 - **[📖 Documentation Index](docs/README.md)** - Navigate all documentation
 - **[🎯 Overview](docs/OVERVIEW.md)** - Architecture, features, and key benefits  
 - **[🚀 Quick Start](docs/QUICK_START.md)** - Get up and running in minutes
+- **[⚙️ Virtual Actor Persistence](docs/VIRTUAL_ACTOR_PERSISTENCE.md)** - Actor state management and lifecycle
 - **[💎 Transaction Features](docs/features/TRANSACTION_FEATURES.md)** - Advanced distributed transactions
 - **[🔌 Protocol Adapters](docs/protocols/PROTOCOL_ADAPTERS.md)** - Redis, PostgreSQL, MCP support
 - **[☸️ Deployment](docs/deployment/DEPLOYMENT.md)** - Kubernetes, CI/CD, production setup

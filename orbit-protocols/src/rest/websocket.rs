@@ -7,14 +7,10 @@ use axum::{
     },
     response::IntoResponse,
 };
-use futures::{
-    stream::{SplitSink, SplitStream},
-    SinkExt, StreamExt,
-};
-use serde::{Deserialize, Serialize};
+use futures::{SinkExt, StreamExt};
 use std::{collections::HashMap, sync::Arc};
-use tokio::sync::{broadcast, Mutex, RwLock};
-use tracing::{error, info, warn};
+use tokio::sync::{broadcast, RwLock};
+use tracing::{error, info};
 
 use super::handlers::ApiState;
 use super::models::*;
@@ -23,39 +19,38 @@ use super::models::*;
 pub struct WebSocketHandler {
     /// Broadcast channel for actor events
     actor_events: broadcast::Sender<WebSocketMessage>,
-    
+
     /// Active subscriptions
+    #[allow(dead_code)]
     subscriptions: Arc<RwLock<HashMap<String, Vec<String>>>>,
 }
 
 impl WebSocketHandler {
     pub fn new() -> Self {
         let (actor_events, _) = broadcast::channel(1000);
-        
+
         Self {
             actor_events,
             subscriptions: Arc::new(RwLock::new(HashMap::new())),
         }
     }
-    
+
     /// Broadcast an event to all subscribers
     pub async fn broadcast_event(&self, event: WebSocketMessage) {
         if let Err(e) = self.actor_events.send(event) {
             error!("Failed to broadcast event: {}", e);
         }
     }
-    
+
     /// Handle new WebSocket connection for actor events
     pub async fn handle_actor_socket(
         ws: WebSocketUpgrade,
         Path((actor_type, key)): Path<(String, String)>,
         State(state): State<ApiState>,
     ) -> impl IntoResponse {
-        ws.on_upgrade(move |socket| {
-            Self::actor_websocket(socket, actor_type, key, state)
-        })
+        ws.on_upgrade(move |socket| Self::actor_websocket(socket, actor_type, key, state))
     }
-    
+
     /// Handle new WebSocket connection for system events
     pub async fn handle_events_socket(
         ws: WebSocketUpgrade,
@@ -63,35 +58,30 @@ impl WebSocketHandler {
     ) -> impl IntoResponse {
         ws.on_upgrade(move |socket| Self::events_websocket(socket, state))
     }
-    
+
     /// WebSocket handler for specific actor
-    async fn actor_websocket(
-        socket: WebSocket,
-        actor_type: String,
-        key: String,
-        state: ApiState,
-    ) {
+    async fn actor_websocket(socket: WebSocket, actor_type: String, key: String, _state: ApiState) {
         let (mut sender, mut receiver) = socket.split();
         let subscription_id = uuid::Uuid::new_v4().to_string();
-        
+
         info!(
             "WebSocket connected for actor {}/{} (subscription: {})",
             actor_type, key, subscription_id
         );
-        
+
         // Send subscription acknowledgment
         let ack = WebSocketMessage::SubscriptionAck {
             subscription_id: subscription_id.clone(),
             filters: vec![format!("actor:{}:{}", actor_type, key)],
         };
-        
+
         if let Ok(json) = serde_json::to_string(&ack) {
             let _ = sender.send(Message::Text(json)).await;
         }
-        
+
         // TODO: Subscribe to actor state changes via OrbitClient
         // For now, just handle incoming messages and keep connection alive
-        
+
         while let Some(msg) = receiver.next().await {
             match msg {
                 Ok(Message::Text(text)) => {
@@ -115,26 +105,29 @@ impl WebSocketHandler {
             }
         }
     }
-    
+
     /// WebSocket handler for system events
     async fn events_websocket(socket: WebSocket, state: ApiState) {
         let (mut sender, mut receiver) = socket.split();
         let subscription_id = uuid::Uuid::new_v4().to_string();
-        
-        info!("WebSocket connected for system events (subscription: {})", subscription_id);
-        
+
+        info!(
+            "WebSocket connected for system events (subscription: {})",
+            subscription_id
+        );
+
         // Send subscription acknowledgment
         let ack = WebSocketMessage::SubscriptionAck {
             subscription_id: subscription_id.clone(),
             filters: vec!["system:*".to_string()],
         };
-        
+
         if let Ok(json) = serde_json::to_string(&ack) {
             let _ = sender.send(Message::Text(json)).await;
         }
-        
+
         // Spawn task to forward events
-        let mut event_rx = state.orbit_client.clone(); // TODO: Get event stream from orbit_client
+        let _event_rx = state.orbit_client.clone(); // TODO: Get event stream from orbit_client
         tokio::spawn(async move {
             loop {
                 tokio::select! {
@@ -184,7 +177,7 @@ impl EventBroadcaster {
     pub fn new(ws_handler: Arc<WebSocketHandler>) -> Self {
         Self { ws_handler }
     }
-    
+
     /// Broadcast actor state change
     pub async fn actor_state_changed(
         &self,
@@ -199,7 +192,7 @@ impl EventBroadcaster {
         };
         self.ws_handler.broadcast_event(event).await;
     }
-    
+
     /// Broadcast actor activation
     pub async fn actor_activated(
         &self,
@@ -214,13 +207,13 @@ impl EventBroadcaster {
         };
         self.ws_handler.broadcast_event(event).await;
     }
-    
+
     /// Broadcast actor deactivation
     pub async fn actor_deactivated(&self, actor_type: String, key: serde_json::Value) {
         let event = WebSocketMessage::ActorDeactivated { actor_type, key };
         self.ws_handler.broadcast_event(event).await;
     }
-    
+
     /// Broadcast transaction event
     pub async fn transaction_event(
         &self,
@@ -235,7 +228,7 @@ impl EventBroadcaster {
         };
         self.ws_handler.broadcast_event(event).await;
     }
-    
+
     /// Broadcast system event
     pub async fn system_event(&self, event_type: String, data: serde_json::Value) {
         let event = WebSocketMessage::SystemEvent { event_type, data };

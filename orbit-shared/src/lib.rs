@@ -10,12 +10,14 @@ pub mod integrated_recovery;
 pub mod k8s_election;
 pub mod mesh;
 pub mod net;
+pub mod orbitql;
 pub mod persistence;
 pub mod raft_transport;
 pub mod recovery;
 pub mod router;
 pub mod saga;
 pub mod saga_recovery;
+pub mod timeseries;
 pub mod transaction_log;
 pub mod transactions;
 pub mod transport;
@@ -29,5 +31,18 @@ pub use mesh::*;
 pub use net::*;
 pub use router::*;
 
-// Re-export advanced transaction features
-pub use transactions::*;
+// Re-export advanced transaction features (excluding conflicting core module)
+pub use transactions::{
+    locks, metrics, performance, security, DistributedTransaction, TransactionCoordinator,
+    TransactionId,
+};
+
+// Re-export time series functionality (excluding conflicting core module)
+pub use timeseries::{
+    aggregation, compression, partitioning, postgresql, query, redis, retention, storage,
+    AggregationType, CompressionType, DataPoint, QueryResult, RetentionPolicy, SeriesId,
+    StorageBackend, TimeRange, TimeSeriesConfig, TimeSeriesMetadata, TimeSeriesValue, Timestamp,
+};
+
+// Re-export OrbitQL functionality
+pub use orbitql::{OrbitQLEngine, QueryContext, QueryParams, QueryStats, QueryValue};

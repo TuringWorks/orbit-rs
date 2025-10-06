@@ -1,8 +1,6 @@
 //! REST API server implementation
 
 use axum::{
-    middleware,
-    response::IntoResponse,
     routing::{delete, get, post, put},
     Router,
 };
@@ -15,24 +13,24 @@ use tower_http::{
 };
 use tracing::info;
 
-use crate::error::{ProtocolError, ProtocolResult};
 use super::{
     handlers::{self, ApiState},
     websocket::WebSocketHandler,
 };
+use crate::error::{ProtocolError, ProtocolResult};
 
 /// REST API server configuration
 #[derive(Debug, Clone)]
 pub struct RestApiConfig {
     /// Server bind address
     pub bind_address: String,
-    
+
     /// Enable CORS (Cross-Origin Resource Sharing)
     pub enable_cors: bool,
-    
+
     /// Enable request tracing
     pub enable_tracing: bool,
-    
+
     /// API version prefix (default: "/api/v1")
     pub api_prefix: String,
 }
@@ -64,18 +62,18 @@ impl RestApiServer {
             ws_handler: Arc::new(WebSocketHandler::new()),
         }
     }
-    
+
     /// Create server with default configuration
     pub fn with_defaults(orbit_client: OrbitClient) -> Self {
         Self::new(orbit_client, RestApiConfig::default())
     }
-    
+
     /// Build the axum router
     fn build_router(&self) -> Router {
         let state = ApiState {
             orbit_client: self.orbit_client.clone(),
         };
-        
+
         // API v1 routes
         let api_routes = Router::new()
             // Actor management
@@ -103,18 +101,15 @@ impl RestApiServer {
                 "/ws/actors/:actor_type/:key",
                 get(WebSocketHandler::handle_actor_socket),
             )
-            .route(
-                "/ws/events",
-                get(WebSocketHandler::handle_events_socket),
-            )
+            .route("/ws/events", get(WebSocketHandler::handle_events_socket))
             .with_state(state);
-        
+
         // Root router with versioned API
         let mut app = Router::new()
             .route("/health", get(handlers::health_check))
             .route("/openapi.json", get(handlers::openapi_spec))
             .nest(&self.config.api_prefix, api_routes);
-        
+
         // Add CORS layer
         if self.config.enable_cors {
             let cors = CorsLayer::new()
@@ -123,15 +118,15 @@ impl RestApiServer {
                 .allow_headers(Any);
             app = app.layer(cors);
         }
-        
+
         // Add tracing layer
         if self.config.enable_tracing {
             app = app.layer(TraceLayer::new_for_http());
         }
-        
+
         app
     }
-    
+
     /// Start the REST API server
     pub async fn run(self) -> ProtocolResult<()> {
         let addr: SocketAddr = self
@@ -139,27 +134,27 @@ impl RestApiServer {
             .bind_address
             .parse()
             .map_err(|e| ProtocolError::RestError(format!("Invalid bind address: {}", e)))?;
-        
+
         let router = self.build_router();
-        
+
         info!("Starting REST API server on {}", addr);
         info!(
             "OpenAPI documentation available at http://{}/openapi.json",
             addr
         );
         info!("Health check available at http://{}/health", addr);
-        
+
         let listener = TcpListener::bind(addr)
             .await
             .map_err(|e| ProtocolError::RestError(format!("Failed to bind: {}", e)))?;
-        
+
         axum::serve(listener, router)
             .await
             .map_err(|e| ProtocolError::RestError(format!("Server error: {}", e)))?;
-        
+
         Ok(())
     }
-    
+
     /// Get a reference to the WebSocket handler for event broadcasting
     pub fn ws_handler(&self) -> Arc<WebSocketHandler> {
         self.ws_handler.clone()
@@ -177,27 +172,27 @@ impl RestApiServerBuilder {
             config: RestApiConfig::default(),
         }
     }
-    
+
     pub fn bind_address(mut self, address: impl Into<String>) -> Self {
         self.config.bind_address = address.into();
         self
     }
-    
+
     pub fn enable_cors(mut self, enable: bool) -> Self {
         self.config.enable_cors = enable;
         self
     }
-    
+
     pub fn enable_tracing(mut self, enable: bool) -> Self {
         self.config.enable_tracing = enable;
         self
     }
-    
+
     pub fn api_prefix(mut self, prefix: impl Into<String>) -> Self {
         self.config.api_prefix = prefix.into();
         self
     }
-    
+
     pub fn build(self, orbit_client: OrbitClient) -> RestApiServer {
         RestApiServer::new(orbit_client, self.config)
     }
@@ -212,7 +207,7 @@ impl Default for RestApiServerBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_config_default() {
         let config = RestApiConfig::default();
@@ -221,14 +216,14 @@ mod tests {
         assert!(config.enable_tracing);
         assert_eq!(config.api_prefix, "/api/v1");
     }
-    
+
     #[test]
     fn test_builder() {
         let builder = RestApiServerBuilder::new()
             .bind_address("127.0.0.1:3000")
             .enable_cors(false)
             .api_prefix("/v2");
-        
+
         assert_eq!(builder.config.bind_address, "127.0.0.1:3000");
         assert!(!builder.config.enable_cors);
         assert_eq!(builder.config.api_prefix, "/v2");

@@ -4,7 +4,10 @@
 //! integrating with the graph storage layer and translating parsed queries
 //! into graph operations.
 
-use crate::cypher::cypher_parser::{CypherClause, CypherQuery, NodePattern, Pattern, PatternElement, RelationshipDirection, RelationshipPattern, ReturnItem};
+use crate::cypher::cypher_parser::{
+    CypherClause, CypherQuery, NodePattern, Pattern, PatternElement, RelationshipDirection,
+    RelationshipPattern, ReturnItem,
+};
 use crate::error::{ProtocolError, ProtocolResult};
 use orbit_shared::graph::{Direction, GraphNode, GraphRelationship, GraphStorage};
 use std::collections::HashMap;
@@ -29,9 +32,13 @@ impl<S: GraphStorage> GraphEngine<S> {
     pub async fn execute_query(&self, query: &str) -> ProtocolResult<QueryResult> {
         let parser = super::cypher_parser::CypherParser::new();
         let parsed_query = parser.parse(query)?;
-        
-        debug!(query = query, clauses_count = parsed_query.clauses.len(), "Executing Cypher query");
-        
+
+        debug!(
+            query = query,
+            clauses_count = parsed_query.clauses.len(),
+            "Executing Cypher query"
+        );
+
         self.execute_parsed_query(parsed_query).await
     }
 
@@ -55,9 +62,13 @@ impl<S: GraphStorage> GraphEngine<S> {
                     result_relationships.extend(rels);
                 }
                 CypherClause::Return { items } => {
-                    return self.execute_return_clause(items, &context, result_nodes, result_relationships).await;
+                    return self
+                        .execute_return_clause(items, &context, result_nodes, result_relationships)
+                        .await;
                 }
-                CypherClause::Where { condition: _condition } => {
+                CypherClause::Where {
+                    condition: _condition,
+                } => {
                     warn!("WHERE clause not yet fully implemented");
                     // TODO: Implement WHERE clause filtering
                 }
@@ -91,7 +102,9 @@ impl<S: GraphStorage> GraphEngine<S> {
                     nodes.extend(matched_nodes);
                 }
                 PatternElement::Relationship(rel_pattern) => {
-                    let matched_rels = self.match_relationship_pattern(rel_pattern, context).await?;
+                    let matched_rels = self
+                        .match_relationship_pattern(rel_pattern, context)
+                        .await?;
                     if let Some(var) = &rel_pattern.variable {
                         context.bind_relationships(var.clone(), matched_rels.clone());
                     }
@@ -100,7 +113,11 @@ impl<S: GraphStorage> GraphEngine<S> {
             }
         }
 
-        info!(nodes_count = nodes.len(), relationships_count = relationships.len(), "Executed MATCH clause");
+        info!(
+            nodes_count = nodes.len(),
+            relationships_count = relationships.len(),
+            "Executed MATCH clause"
+        );
         Ok((nodes, relationships))
     }
 
@@ -124,7 +141,10 @@ impl<S: GraphStorage> GraphEngine<S> {
                 }
                 PatternElement::Relationship(rel_pattern) => {
                     // For CREATE relationships, we need start and end nodes from context
-                    if let Some(created_rel) = self.create_relationship_from_pattern(rel_pattern, context).await? {
+                    if let Some(created_rel) = self
+                        .create_relationship_from_pattern(rel_pattern, context)
+                        .await?
+                    {
                         if let Some(var) = &rel_pattern.variable {
                             context.bind_relationships(var.clone(), vec![created_rel.clone()]);
                         }
@@ -134,7 +154,11 @@ impl<S: GraphStorage> GraphEngine<S> {
             }
         }
 
-        info!(nodes_count = nodes.len(), relationships_count = relationships.len(), "Executed CREATE clause");
+        info!(
+            nodes_count = nodes.len(),
+            relationships_count = relationships.len(),
+            "Executed CREATE clause"
+        );
         Ok((nodes, relationships))
     }
 
@@ -152,7 +176,7 @@ impl<S: GraphStorage> GraphEngine<S> {
 
         for item in items {
             columns.push(item.expression.clone());
-            
+
             // Check if it's a bound variable
             if let Some(bound_nodes) = context.get_nodes(&item.expression) {
                 result_nodes.extend(bound_nodes.clone());
@@ -187,7 +211,7 @@ impl<S: GraphStorage> GraphEngine<S> {
         }
 
         let mut matched_nodes = Vec::new();
-        
+
         // For each label, find matching nodes
         for label in &pattern.labels {
             let property_filters = if pattern.properties.is_empty() {
@@ -195,12 +219,13 @@ impl<S: GraphStorage> GraphEngine<S> {
             } else {
                 Some(pattern.properties.clone())
             };
-            
-            let nodes = self.storage
+
+            let nodes = self
+                .storage
                 .find_nodes_by_label(label, property_filters, None)
                 .await
                 .map_err(|e| ProtocolError::ActorError(e.to_string()))?;
-            
+
             matched_nodes.extend(nodes);
         }
 
@@ -217,23 +242,24 @@ impl<S: GraphStorage> GraphEngine<S> {
         // For relationship matching, we need nodes from context
         // This is a simplified implementation
         let mut matched_relationships = Vec::new();
-        
+
         // Get all nodes from context to search their relationships
-        for (_var, nodes) in &context.bound_nodes {
+        for nodes in context.bound_nodes.values() {
             for node in nodes {
                 let direction = match pattern.direction {
                     RelationshipDirection::Outgoing => Direction::Outgoing,
                     RelationshipDirection::Incoming => Direction::Incoming,
                     RelationshipDirection::Both => Direction::Both,
                 };
-                
+
                 let rel_types = pattern.rel_type.as_ref().map(|t| vec![t.clone()]);
-                
-                let relationships = self.storage
+
+                let relationships = self
+                    .storage
                     .get_relationships(&node.id, direction, rel_types)
                     .await
                     .map_err(|e| ProtocolError::ActorError(e.to_string()))?;
-                
+
                 matched_relationships.extend(relationships);
             }
         }
@@ -244,11 +270,12 @@ impl<S: GraphStorage> GraphEngine<S> {
 
     /// Create a node from pattern
     async fn create_node_from_pattern(&self, pattern: &NodePattern) -> ProtocolResult<GraphNode> {
-        let node = self.storage
+        let node = self
+            .storage
             .create_node(pattern.labels.clone(), pattern.properties.clone())
             .await
             .map_err(|e| ProtocolError::ActorError(e.to_string()))?;
-        
+
         info!(node_id = %node.id, labels = ?pattern.labels, "Created node from pattern");
         Ok(node)
     }
@@ -262,17 +289,18 @@ impl<S: GraphStorage> GraphEngine<S> {
         // For relationship creation, we need start and end nodes
         // This is a simplified implementation that takes the first available nodes
         let all_nodes: Vec<_> = context.bound_nodes.values().flatten().collect();
-        
+
         if all_nodes.len() < 2 {
             warn!("Insufficient nodes in context for relationship creation");
             return Ok(None);
         }
-        
+
         let start_node = &all_nodes[0].id;
         let end_node = &all_nodes[1].id;
         let rel_type = pattern.rel_type.as_deref().unwrap_or("RELATED");
-        
-        let relationship = self.storage
+
+        let relationship = self
+            .storage
             .create_relationship(
                 start_node,
                 end_node,
@@ -281,7 +309,7 @@ impl<S: GraphStorage> GraphEngine<S> {
             )
             .await
             .map_err(|e| ProtocolError::ActorError(e.to_string()))?;
-        
+
         info!(
             rel_id = %relationship.id,
             start = %start_node,
@@ -289,7 +317,7 @@ impl<S: GraphStorage> GraphEngine<S> {
             rel_type = rel_type,
             "Created relationship from pattern"
         );
-        
+
         Ok(Some(relationship))
     }
 }
@@ -351,10 +379,10 @@ mod tests {
     async fn test_create_node_query() {
         let engine = create_test_engine().await;
         let query = "CREATE (n:Person {name: 'Alice'}) RETURN n";
-        
+
         let result = engine.execute_query(query).await;
         assert!(result.is_ok());
-        
+
         let query_result = result.unwrap();
         assert_eq!(query_result.nodes.len(), 1);
         assert!(query_result.nodes[0].has_label("Person"));
@@ -363,15 +391,17 @@ mod tests {
     #[tokio::test]
     async fn test_match_node_query() {
         let engine = create_test_engine().await;
-        
+
         // First create a node
-        let create_result = engine.execute_query("CREATE (n:Person {name: 'Alice'})").await;
+        let create_result = engine
+            .execute_query("CREATE (n:Person {name: 'Alice'})")
+            .await;
         assert!(create_result.is_ok());
-        
+
         // Then match it
         let match_result = engine.execute_query("MATCH (n:Person) RETURN n").await;
         assert!(match_result.is_ok());
-        
+
         let query_result = match_result.unwrap();
         assert_eq!(query_result.nodes.len(), 1);
     }

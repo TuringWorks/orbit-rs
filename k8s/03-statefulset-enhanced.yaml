@@ -1,0 +1,533 @@
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: orbit-server
+  namespace: orbit-rs
+  labels:
+    app.kubernetes.io/name: orbit-rs
+    app.kubernetes.io/component: server
+    app.kubernetes.io/version: "0.1.0"
+spec:
+  serviceName: orbit-server-headless
+  replicas: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: orbit-rs
+      app.kubernetes.io/component: server
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: orbit-rs
+        app.kubernetes.io/component: server
+        app.kubernetes.io/version: "0.1.0"
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: orbit-server
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+      containers:
+      - name: orbit-server
+        image: orbit-rs/orbit-server:latest
+        imagePullPolicy: IfNotPresent
+        command: ["/bin/bash"]
+        args: ["/app/scripts/entrypoint.sh"]
+        ports:
+        - name: grpc
+          containerPort: 50051
+          protocol: TCP
+        - name: health
+          containerPort: 8080
+          protocol: TCP
+        - name: metrics
+          containerPort: 9090
+          protocol: TCP
+        env:
+        # Basic pod information
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: RUST_LOG
+          value: "info"
+        - name: RUST_BACKTRACE
+          value: "1"
+        
+        # Persistence Backend Configuration
+        - name: ORBIT_PERSISTENCE_BACKEND
+          value: "memory"  # Change this to: memory, cow_btree, lsm_tree, rocksdb, s3, azure, gcp
+        
+        # Memory Backend Configuration
+        - name: ORBIT_MEMORY_MAX_ENTRIES
+          value: "1000000"
+        - name: ORBIT_MEMORY_DISK_BACKUP
+          value: "false"
+        - name: ORBIT_MEMORY_BACKUP_PATH
+          value: "/app/data/orbit_backup.json"
+        - name: ORBIT_MEMORY_BACKUP_INTERVAL
+          value: "300"
+        
+        # COW B+ Tree Backend Configuration
+        - name: ORBIT_COW_DATA_DIR
+          value: "/app/data/cow_btree"
+        - name: ORBIT_COW_MAX_KEYS_PER_NODE
+          value: "256"
+        - name: ORBIT_COW_WAL_BUFFER_SIZE
+          value: "1048576"  # 1MB
+        - name: ORBIT_COW_ENABLE_COMPRESSION
+          value: "true"
+        - name: ORBIT_COW_WAL_SYNC_INTERVAL
+          value: "5"
+        
+        # LSM-Tree Backend Configuration
+        - name: ORBIT_LSM_DATA_DIR
+          value: "/app/data/lsm_tree"
+        - name: ORBIT_LSM_MEMTABLE_SIZE
+          value: "67108864"  # 64MB
+        - name: ORBIT_LSM_MAX_MEMTABLES
+          value: "10"
+        - name: ORBIT_LSM_BLOOM_FP_RATE
+          value: "0.01"
+        - name: ORBIT_LSM_ENABLE_COMPACTION
+          value: "true"
+        - name: ORBIT_LSM_COMPACTION_THRESHOLD
+          value: "4"
+        
+        # RocksDB Backend Configuration
+        - name: ORBIT_ROCKSDB_DATA_DIR
+          value: "/app/data/rocksdb"
+        - name: ORBIT_ROCKSDB_ENABLE_WAL
+          value: "true"
+        - name: ORBIT_ROCKSDB_MAX_BACKGROUND_JOBS
+          value: "4"
+        - name: ORBIT_ROCKSDB_WRITE_BUFFER_SIZE
+          value: "134217728"  # 128MB
+        - name: ORBIT_ROCKSDB_MAX_WRITE_BUFFER_NUMBER
+          value: "3"
+        - name: ORBIT_ROCKSDB_TARGET_FILE_SIZE_BASE
+          value: "67108864"  # 64MB
+        - name: ORBIT_ROCKSDB_ENABLE_STATISTICS
+          value: "true"
+        - name: ORBIT_ROCKSDB_BLOCK_CACHE_SIZE
+          value: "268435456"  # 256MB
+        
+        # S3 Backend Configuration (from secrets)
+        - name: ORBIT_S3_ENDPOINT
+          value: ""  # Set via ConfigMap or override
+        - name: ORBIT_S3_REGION
+          value: ""  # Set via ConfigMap or override
+        - name: ORBIT_S3_BUCKET
+          value: ""  # Set via ConfigMap or override
+        - name: ORBIT_S3_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: orbit-server-secrets
+              key: s3-access-key-id
+              optional: true
+        - name: ORBIT_S3_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: orbit-server-secrets
+              key: s3-secret-access-key
+              optional: true
+        - name: ORBIT_S3_PREFIX
+          value: "orbit"
+        - name: ORBIT_S3_ENABLE_SSL
+          value: "true"
+        - name: ORBIT_S3_CONNECTION_TIMEOUT
+          value: "30"
+        - name: ORBIT_S3_RETRY_COUNT
+          value: "3"
+        
+        # Azure Backend Configuration (from secrets)
+        - name: ORBIT_AZURE_ACCOUNT_NAME
+          value: ""  # Set via ConfigMap or override
+        - name: ORBIT_AZURE_ACCOUNT_KEY
+          valueFrom:
+            secretKeyRef:
+              name: orbit-server-secrets
+              key: azure-account-key
+              optional: true
+        - name: ORBIT_AZURE_CONTAINER_NAME
+          value: ""  # Set via ConfigMap or override
+        - name: ORBIT_AZURE_PREFIX
+          value: "orbit"
+        - name: ORBIT_AZURE_CONNECTION_TIMEOUT
+          value: "30"
+        - name: ORBIT_AZURE_RETRY_COUNT
+          value: "3"
+        
+        # GCP Backend Configuration (from secrets)
+        - name: ORBIT_GCP_PROJECT_ID
+          value: ""  # Set via ConfigMap or override
+        - name: ORBIT_GCP_BUCKET_NAME
+          value: ""  # Set via ConfigMap or override
+        - name: ORBIT_GCP_CREDENTIALS_PATH
+          value: "/app/gcp/credentials.json"
+        - name: ORBIT_GCP_SERVICE_ACCOUNT_KEY
+          valueFrom:
+            secretKeyRef:
+              name: orbit-server-secrets
+              key: gcp-service-account-key
+              optional: true
+        - name: ORBIT_GCP_PREFIX
+          value: "orbit"
+        - name: ORBIT_GCP_CONNECTION_TIMEOUT
+          value: "30"
+        - name: ORBIT_GCP_RETRY_COUNT
+          value: "3"
+        
+        # Universal Election Manager Configuration
+        - name: DEPLOYMENT_MODE
+          value: "kubernetes"
+        - name: HOSTNAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: SERVICE_ACCOUNT
+          value: "orbit-server"
+        - name: ORBIT_REPLICA_COUNT
+          value: "3"
+        - name: ORBIT_DISCOVERY_DNS
+          value: "orbit-server-headless.orbit-rs.svc.cluster.local"
+        - name: ORBIT_ELECTION_METHOD
+          value: "kubernetes"
+        - name: ORBIT_ENABLE_RAFT_FALLBACK
+          value: "true"
+        - name: ORBIT_LEASE_DURATION
+          value: "30"
+        - name: ORBIT_RENEW_DEADLINE
+          value: "20"
+        - name: ORBIT_RETRY_PERIOD
+          value: "5"
+        
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        
+        livenessProbe:
+          httpGet:
+            path: /health/live
+            port: health
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+          successThreshold: 1
+        
+        readinessProbe:
+          httpGet:
+            path: /health/ready
+            port: health
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+          successThreshold: 1
+        
+        startupProbe:
+          httpGet:
+            path: /health/startup
+            port: health
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 30
+          successThreshold: 1
+        
+        volumeMounts:
+        # Data volume (only needed for local storage backends)
+        - name: data
+          mountPath: /app/data
+        # Config volume
+        - name: config
+          mountPath: /app/config
+          readOnly: true
+        # Scripts volume
+        - name: scripts
+          mountPath: /app/scripts
+          readOnly: true
+        # Temporary volume
+        - name: tmp
+          mountPath: /tmp
+        # GCP credentials volume (only if using GCP backend)
+        - name: gcp-credentials
+          mountPath: /app/gcp
+          readOnly: true
+        
+      volumes:
+      - name: config
+        configMap:
+          name: orbit-server-config
+          defaultMode: 0644
+      - name: scripts
+        configMap:
+          name: orbit-server-scripts
+          defaultMode: 0755
+      - name: tmp
+        emptyDir: {}
+      # GCP credentials (only mounted if secret exists)
+      - name: gcp-credentials
+        secret:
+          secretName: orbit-server-secrets
+          optional: true
+          items:
+          - key: gcp-service-account-key
+            path: credentials.json
+      
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app.kubernetes.io/name
+                  operator: In
+                  values:
+                  - orbit-rs
+                - key: app.kubernetes.io/component
+                  operator: In
+                  values:
+                  - server
+              topologyKey: kubernetes.io/hostname
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            preference:
+              matchExpressions:
+              - key: kubernetes.io/arch
+                operator: In
+                values:
+                - amd64
+      
+      tolerations:
+      - key: node.kubernetes.io/not-ready
+        operator: Exists
+        effect: NoExecute
+        tolerationSeconds: 300
+      - key: node.kubernetes.io/unreachable
+        operator: Exists
+        effect: NoExecute
+        tolerationSeconds: 300
+      
+      terminationGracePeriodSeconds: 60
+
+  # Volume claim templates - only used for local storage backends
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+      labels:
+        app.kubernetes.io/name: orbit-rs
+        app.kubernetes.io/component: data
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: orbit-rs-ssd
+      resources:
+        requests:
+          storage: 10Gi
+  
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+
+---
+# Alternative: Deployment for cloud-only backends (no persistent volumes needed)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orbit-server-cloud
+  namespace: orbit-rs
+  labels:
+    app.kubernetes.io/name: orbit-rs
+    app.kubernetes.io/component: server-cloud
+    app.kubernetes.io/version: "0.1.0"
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: orbit-rs
+      app.kubernetes.io/component: server-cloud
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: orbit-rs
+        app.kubernetes.io/component: server-cloud
+        app.kubernetes.io/version: "0.1.0"
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: orbit-server
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+      containers:
+      - name: orbit-server
+        image: orbit-rs/orbit-server:latest
+        imagePullPolicy: IfNotPresent
+        command: ["/bin/bash"]
+        args: ["/app/scripts/entrypoint.sh"]
+        ports:
+        - name: grpc
+          containerPort: 50051
+          protocol: TCP
+        - name: health
+          containerPort: 8080
+          protocol: TCP
+        - name: metrics
+          containerPort: 9090
+          protocol: TCP
+        env:
+        # Basic pod information
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        
+        # IMPORTANT: Set to cloud backend
+        - name: ORBIT_PERSISTENCE_BACKEND
+          value: "s3"  # or azure, gcp
+        
+        # S3 Configuration
+        - name: ORBIT_S3_ENDPOINT
+          value: "https://s3.amazonaws.com"
+        - name: ORBIT_S3_REGION
+          value: "us-west-2"
+        - name: ORBIT_S3_BUCKET
+          value: "orbit-production-state"
+        - name: ORBIT_S3_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: orbit-server-secrets
+              key: s3-access-key-id
+        - name: ORBIT_S3_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: orbit-server-secrets
+              key: s3-secret-access-key
+        
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        
+        volumeMounts:
+        - name: config
+          mountPath: /app/config
+          readOnly: true
+        - name: scripts
+          mountPath: /app/scripts
+          readOnly: true
+        - name: tmp
+          mountPath: /tmp
+      
+      volumes:
+      - name: config
+        configMap:
+          name: orbit-server-config
+          defaultMode: 0644
+      - name: scripts
+        configMap:
+          name: orbit-server-scripts
+          defaultMode: 0755
+      - name: tmp
+        emptyDir: {}
+
+---
+# ConfigMap with deployment-specific configurations
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: orbit-deployment-examples
+  namespace: orbit-rs
+  labels:
+    app.kubernetes.io/name: orbit-rs
+    app.kubernetes.io/component: examples
+data:
+  # Example: Memory Backend
+  memory-backend.yaml: |
+    env:
+    - name: ORBIT_PERSISTENCE_BACKEND
+      value: "memory"
+    - name: ORBIT_MEMORY_MAX_ENTRIES
+      value: "1000000"
+    - name: ORBIT_MEMORY_DISK_BACKUP
+      value: "true"
+    # Uses StatefulSet with small persistent volume for backup
+
+  # Example: RocksDB Backend
+  rocksdb-backend.yaml: |
+    env:
+    - name: ORBIT_PERSISTENCE_BACKEND
+      value: "rocksdb"
+    - name: ORBIT_ROCKSDB_DATA_DIR
+      value: "/app/data/rocksdb"
+    - name: ORBIT_ROCKSDB_WRITE_BUFFER_SIZE
+      value: "268435456"  # 256MB
+    - name: ORBIT_ROCKSDB_BLOCK_CACHE_SIZE
+      value: "536870912"  # 512MB
+    # Requires StatefulSet with large SSD persistent volumes
+
+  # Example: S3 Backend
+  s3-backend.yaml: |
+    env:
+    - name: ORBIT_PERSISTENCE_BACKEND
+      value: "s3"
+    - name: ORBIT_S3_ENDPOINT
+      value: "https://s3.amazonaws.com"
+    - name: ORBIT_S3_REGION
+      value: "us-west-2"
+    - name: ORBIT_S3_BUCKET
+      value: "my-orbit-cluster"
+    # Uses Deployment (no persistent volumes needed)
+    # Requires S3 credentials in secrets
+
+  # Example: High-Performance LSM-Tree
+  lsm-tree-backend.yaml: |
+    env:
+    - name: ORBIT_PERSISTENCE_BACKEND
+      value: "lsm_tree"
+    - name: ORBIT_LSM_DATA_DIR
+      value: "/app/data/lsm_tree"
+    - name: ORBIT_LSM_MEMTABLE_SIZE
+      value: "134217728"  # 128MB
+    - name: ORBIT_LSM_MAX_MEMTABLES
+      value: "16"
+    - name: ORBIT_LSM_COMPACTION_THRESHOLD
+      value: "8"
+    # Requires StatefulSet with high-IOPS SSD volumes
+    # Needs more CPU for compaction

@@ -3,8 +3,8 @@
 //! This module provides comprehensive AQL parsing capabilities supporting
 //! document queries, graph traversals, aggregations, and complex operations.
 
-use crate::error::{ProtocolError, ProtocolResult};
 use crate::aql::data_model::AqlValue;
+use crate::error::{ProtocolError, ProtocolResult};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tracing::{debug, instrument, warn};
@@ -203,7 +203,9 @@ impl AqlParser {
 
         if !current_token.is_empty() {
             if in_quotes {
-                return Err(ProtocolError::ParseError("Unterminated string literal".to_string()));
+                return Err(ProtocolError::ParseError(
+                    "Unterminated string literal".to_string(),
+                ));
             }
             tokens.push(self.classify_token(&current_token));
         }
@@ -301,7 +303,7 @@ enum AqlToken {
     Desc,
     Distinct,
     Aggregate,
-    
+
     // Graph traversal keywords
     Outbound,
     Inbound,
@@ -345,7 +347,10 @@ struct AqlTokenParser {
 
 impl AqlTokenParser {
     fn new(tokens: Vec<AqlToken>) -> Self {
-        Self { tokens, position: 0 }
+        Self {
+            tokens,
+            position: 0,
+        }
     }
 
     fn current_token(&self) -> Option<&AqlToken> {
@@ -393,7 +398,10 @@ impl AqlTokenParser {
                     clauses.push(self.parse_remove_clause()?);
                 }
                 Some(token) => {
-                    return Err(ProtocolError::ParseError(format!("Unexpected token: {:?}", token)));
+                    return Err(ProtocolError::ParseError(format!(
+                        "Unexpected token: {:?}",
+                        token
+                    )));
                 }
                 None => break,
             }
@@ -416,13 +424,17 @@ impl AqlTokenParser {
                 self.advance();
                 name
             }
-            _ => return Err(ProtocolError::ParseError("Expected variable name in FOR clause".to_string())),
+            _ => {
+                return Err(ProtocolError::ParseError(
+                    "Expected variable name in FOR clause".to_string(),
+                ))
+            }
         };
 
         // Check for traversal syntax (vertex, edge, path)
         let mut edge_var = None;
         let mut path_var = None;
-        
+
         if matches!(self.current_token(), Some(AqlToken::Comma)) {
             self.advance(); // consume comma
             edge_var = match self.current_token() {
@@ -431,7 +443,11 @@ impl AqlTokenParser {
                     self.advance();
                     Some(name)
                 }
-                _ => return Err(ProtocolError::ParseError("Expected edge variable".to_string())),
+                _ => {
+                    return Err(ProtocolError::ParseError(
+                        "Expected edge variable".to_string(),
+                    ))
+                }
             };
 
             if matches!(self.current_token(), Some(AqlToken::Comma)) {
@@ -442,7 +458,11 @@ impl AqlTokenParser {
                         self.advance();
                         Some(name)
                     }
-                    _ => return Err(ProtocolError::ParseError("Expected path variable".to_string())),
+                    _ => {
+                        return Err(ProtocolError::ParseError(
+                            "Expected path variable".to_string(),
+                        ))
+                    }
                 };
             }
         }
@@ -450,17 +470,21 @@ impl AqlTokenParser {
         // Expect IN keyword
         match self.current_token() {
             Some(AqlToken::In) => self.advance(),
-            _ => return Err(ProtocolError::ParseError("Expected IN keyword in FOR clause".to_string())),
+            _ => {
+                return Err(ProtocolError::ParseError(
+                    "Expected IN keyword in FOR clause".to_string(),
+                ))
+            }
         };
 
         // Check for traversal depth range (e.g., 1..3)
         let mut min_depth = None;
         let mut max_depth = None;
-        
+
         if let Some(AqlToken::Number(n)) = self.current_token() {
             min_depth = Some(n.as_u64().unwrap_or(1) as u32);
             self.advance();
-            
+
             if matches!(self.current_token(), Some(AqlToken::Range)) {
                 self.advance(); // consume ..
                 if let Some(AqlToken::Number(n)) = self.current_token() {
@@ -499,7 +523,11 @@ impl AqlTokenParser {
                 self.advance();
                 name
             }
-            _ => return Err(ProtocolError::ParseError("Expected data source in FOR clause".to_string())),
+            _ => {
+                return Err(ProtocolError::ParseError(
+                    "Expected data source in FOR clause".to_string(),
+                ))
+            }
         };
 
         // Check for GRAPH keyword for graph traversals
@@ -511,7 +539,11 @@ impl AqlTokenParser {
                     self.advance();
                     Some(name)
                 }
-                _ => return Err(ProtocolError::ParseError("Expected graph name after GRAPH keyword".to_string())),
+                _ => {
+                    return Err(ProtocolError::ParseError(
+                        "Expected graph name after GRAPH keyword".to_string(),
+                    ))
+                }
             }
         } else {
             None
@@ -546,19 +578,30 @@ impl AqlTokenParser {
                 self.advance();
                 name
             }
-            _ => return Err(ProtocolError::ParseError("Expected variable name in LET clause".to_string())),
+            _ => {
+                return Err(ProtocolError::ParseError(
+                    "Expected variable name in LET clause".to_string(),
+                ))
+            }
         };
 
         // Expect assignment operator
         match self.current_token() {
             Some(AqlToken::Assignment) => self.advance(),
-            _ => return Err(ProtocolError::ParseError("Expected = in LET clause".to_string())),
+            _ => {
+                return Err(ProtocolError::ParseError(
+                    "Expected = in LET clause".to_string(),
+                ))
+            }
         };
 
         // Parse expression (simplified)
         let expression = self.parse_expression()?;
 
-        Ok(AqlClause::Let { variable, expression })
+        Ok(AqlClause::Let {
+            variable,
+            expression,
+        })
     }
 
     fn parse_filter_clause(&mut self) -> ProtocolResult<AqlClause> {
@@ -569,17 +612,14 @@ impl AqlTokenParser {
 
     fn parse_collect_clause(&mut self) -> ProtocolResult<AqlClause> {
         self.advance(); // consume COLLECT
-        
+
         let mut groups = Vec::new();
-        
-        loop {
-            let variable = match self.current_token() {
-                Some(AqlToken::Identifier(name)) => {
-                    let name = name.clone();
-                    self.advance();
-                    name
-                }
-                _ => break,
+
+        while let Some(AqlToken::Identifier(name)) = self.current_token() {
+            let variable = {
+                let name = name.clone();
+                self.advance();
+                name
             };
 
             // Optional assignment
@@ -590,7 +630,10 @@ impl AqlTokenParser {
                 None
             };
 
-            groups.push(CollectGroup { variable, expression });
+            groups.push(CollectGroup {
+                variable,
+                expression,
+            });
 
             if matches!(self.current_token(), Some(AqlToken::Comma)) {
                 self.advance();
@@ -604,9 +647,9 @@ impl AqlTokenParser {
 
     fn parse_sort_clause(&mut self) -> ProtocolResult<AqlClause> {
         self.advance(); // consume SORT
-        
+
         let mut items = Vec::new();
-        
+
         loop {
             let expression = self.parse_expression()?;
             let direction = match self.current_token() {
@@ -621,7 +664,10 @@ impl AqlTokenParser {
                 _ => SortDirection::Asc,
             };
 
-            items.push(SortItem { expression, direction });
+            items.push(SortItem {
+                expression,
+                direction,
+            });
 
             if matches!(self.current_token(), Some(AqlToken::Comma)) {
                 self.advance();
@@ -640,16 +686,16 @@ impl AqlTokenParser {
             Some(AqlToken::Number(n)) => {
                 let val = n.as_u64().unwrap_or(0);
                 self.advance();
-                
+
                 // Check if there's a comma for offset, count syntax
                 if matches!(self.current_token(), Some(AqlToken::Comma)) {
                     self.advance();
                     Some(val as u32)
                 } else {
                     // Single number means count only
-                    return Ok(AqlClause::Limit { 
-                        offset: None, 
-                        count: val as u32 
+                    return Ok(AqlClause::Limit {
+                        offset: None,
+                        count: val as u32,
                     });
                 }
             }
@@ -662,7 +708,11 @@ impl AqlTokenParser {
                 self.advance();
                 val
             }
-            _ => return Err(ProtocolError::ParseError("Expected count in LIMIT clause".to_string())),
+            _ => {
+                return Err(ProtocolError::ParseError(
+                    "Expected count in LIMIT clause".to_string(),
+                ))
+            }
         };
 
         Ok(AqlClause::Limit { offset, count })
@@ -680,18 +730,25 @@ impl AqlTokenParser {
 
         let expression = self.parse_expression()?;
 
-        Ok(AqlClause::Return { distinct, expression })
+        Ok(AqlClause::Return {
+            distinct,
+            expression,
+        })
     }
 
     fn parse_insert_clause(&mut self) -> ProtocolResult<AqlClause> {
         self.advance(); // consume INSERT
-        
+
         let document = self.parse_expression()?;
-        
+
         // Expect INTO
         match self.current_token() {
             Some(AqlToken::Into) => self.advance(),
-            _ => return Err(ProtocolError::ParseError("Expected INTO in INSERT clause".to_string())),
+            _ => {
+                return Err(ProtocolError::ParseError(
+                    "Expected INTO in INSERT clause".to_string(),
+                ))
+            }
         };
 
         let collection = match self.current_token() {
@@ -700,21 +757,32 @@ impl AqlTokenParser {
                 self.advance();
                 name
             }
-            _ => return Err(ProtocolError::ParseError("Expected collection name in INSERT clause".to_string())),
+            _ => {
+                return Err(ProtocolError::ParseError(
+                    "Expected collection name in INSERT clause".to_string(),
+                ))
+            }
         };
 
-        Ok(AqlClause::Insert { document, collection })
+        Ok(AqlClause::Insert {
+            document,
+            collection,
+        })
     }
 
     fn parse_update_clause(&mut self) -> ProtocolResult<AqlClause> {
         self.advance(); // consume UPDATE
-        
+
         let key = self.parse_expression()?;
-        
+
         // Expect WITH
         match self.current_token() {
             Some(AqlToken::With) => self.advance(),
-            _ => return Err(ProtocolError::ParseError("Expected WITH in UPDATE clause".to_string())),
+            _ => {
+                return Err(ProtocolError::ParseError(
+                    "Expected WITH in UPDATE clause".to_string(),
+                ))
+            }
         };
 
         let document = self.parse_expression()?;
@@ -722,7 +790,11 @@ impl AqlTokenParser {
         // Expect IN
         match self.current_token() {
             Some(AqlToken::In) => self.advance(),
-            _ => return Err(ProtocolError::ParseError("Expected IN in UPDATE clause".to_string())),
+            _ => {
+                return Err(ProtocolError::ParseError(
+                    "Expected IN in UPDATE clause".to_string(),
+                ))
+            }
         };
 
         let collection = match self.current_token() {
@@ -731,21 +803,33 @@ impl AqlTokenParser {
                 self.advance();
                 name
             }
-            _ => return Err(ProtocolError::ParseError("Expected collection name in UPDATE clause".to_string())),
+            _ => {
+                return Err(ProtocolError::ParseError(
+                    "Expected collection name in UPDATE clause".to_string(),
+                ))
+            }
         };
 
-        Ok(AqlClause::Update { key, document, collection })
+        Ok(AqlClause::Update {
+            key,
+            document,
+            collection,
+        })
     }
 
     fn parse_remove_clause(&mut self) -> ProtocolResult<AqlClause> {
         self.advance(); // consume REMOVE
-        
+
         let key = self.parse_expression()?;
-        
+
         // Expect IN
         match self.current_token() {
             Some(AqlToken::In) => self.advance(),
-            _ => return Err(ProtocolError::ParseError("Expected IN in REMOVE clause".to_string())),
+            _ => {
+                return Err(ProtocolError::ParseError(
+                    "Expected IN in REMOVE clause".to_string(),
+                ))
+            }
         };
 
         let collection = match self.current_token() {
@@ -754,7 +838,11 @@ impl AqlTokenParser {
                 self.advance();
                 name
             }
-            _ => return Err(ProtocolError::ParseError("Expected collection name in REMOVE clause".to_string())),
+            _ => {
+                return Err(ProtocolError::ParseError(
+                    "Expected collection name in REMOVE clause".to_string(),
+                ))
+            }
         };
 
         Ok(AqlClause::Remove { key, collection })
@@ -766,7 +854,7 @@ impl AqlTokenParser {
             Some(AqlToken::Identifier(name)) => {
                 let name = name.clone();
                 self.advance();
-                
+
                 // Check for property access
                 if matches!(self.current_token(), Some(AqlToken::Dot)) {
                     self.advance(); // consume .
@@ -776,11 +864,15 @@ impl AqlTokenParser {
                             self.advance();
                             prop
                         }
-                        _ => return Err(ProtocolError::ParseError("Expected property name after .".to_string())),
+                        _ => {
+                            return Err(ProtocolError::ParseError(
+                                "Expected property name after .".to_string(),
+                            ))
+                        }
                     };
-                    Ok(AqlExpression::PropertyAccess { 
-                        object: name, 
-                        property 
+                    Ok(AqlExpression::PropertyAccess {
+                        object: name,
+                        property,
                     })
                 } else {
                     Ok(AqlExpression::Variable(name))
@@ -805,21 +897,17 @@ impl AqlTokenParser {
                 self.advance();
                 Ok(AqlExpression::Literal(AqlValue::Null))
             }
-            Some(AqlToken::LeftBrace) => {
-                self.parse_object_expression()
-            }
-            Some(AqlToken::LeftBracket) => {
-                self.parse_array_expression()
-            }
+            Some(AqlToken::LeftBrace) => self.parse_object_expression(),
+            Some(AqlToken::LeftBracket) => self.parse_array_expression(),
             _ => Err(ProtocolError::ParseError("Expected expression".to_string())),
         }
     }
 
     fn parse_object_expression(&mut self) -> ProtocolResult<AqlExpression> {
         self.advance(); // consume {
-        
+
         let mut properties = HashMap::new();
-        
+
         while !matches!(self.current_token(), Some(AqlToken::RightBrace)) {
             let key = match self.current_token() {
                 Some(AqlToken::Identifier(k)) | Some(AqlToken::String(k)) => {
@@ -827,13 +915,21 @@ impl AqlTokenParser {
                     self.advance();
                     k
                 }
-                _ => return Err(ProtocolError::ParseError("Expected property key".to_string())),
+                _ => {
+                    return Err(ProtocolError::ParseError(
+                        "Expected property key".to_string(),
+                    ))
+                }
             };
 
             // Expect colon
             match self.current_token() {
                 Some(AqlToken::Colon) => self.advance(),
-                _ => return Err(ProtocolError::ParseError("Expected : in object literal".to_string())),
+                _ => {
+                    return Err(ProtocolError::ParseError(
+                        "Expected : in object literal".to_string(),
+                    ))
+                }
             };
 
             let value = self.parse_expression()?;
@@ -849,7 +945,11 @@ impl AqlTokenParser {
         // Consume closing brace
         match self.current_token() {
             Some(AqlToken::RightBrace) => self.advance(),
-            _ => return Err(ProtocolError::ParseError("Expected } to close object".to_string())),
+            _ => {
+                return Err(ProtocolError::ParseError(
+                    "Expected } to close object".to_string(),
+                ))
+            }
         };
 
         Ok(AqlExpression::Object(properties))
@@ -857,9 +957,9 @@ impl AqlTokenParser {
 
     fn parse_array_expression(&mut self) -> ProtocolResult<AqlExpression> {
         self.advance(); // consume [
-        
+
         let mut elements = Vec::new();
-        
+
         while !matches!(self.current_token(), Some(AqlToken::RightBracket)) {
             let element = self.parse_expression()?;
             elements.push(element);
@@ -874,7 +974,11 @@ impl AqlTokenParser {
         // Consume closing bracket
         match self.current_token() {
             Some(AqlToken::RightBracket) => self.advance(),
-            _ => return Err(ProtocolError::ParseError("Expected ] to close array".to_string())),
+            _ => {
+                return Err(ProtocolError::ParseError(
+                    "Expected ] to close array".to_string(),
+                ))
+            }
         };
 
         Ok(AqlExpression::Array(elements))
@@ -882,7 +986,7 @@ impl AqlTokenParser {
 
     fn parse_condition(&mut self) -> ProtocolResult<AqlCondition> {
         let left = self.parse_expression()?;
-        
+
         let operator = match self.current_token() {
             Some(AqlToken::Equals) => {
                 self.advance();
@@ -908,7 +1012,11 @@ impl AqlTokenParser {
                 self.advance();
                 ComparisonOperator::GreaterOrEqual
             }
-            _ => return Err(ProtocolError::ParseError("Expected comparison operator".to_string())),
+            _ => {
+                return Err(ProtocolError::ParseError(
+                    "Expected comparison operator".to_string(),
+                ))
+            }
         };
 
         let right = self.parse_expression()?;
@@ -953,22 +1061,13 @@ pub enum AqlClause {
         expression: AqlExpression,
     },
     /// FILTER clause for filtering
-    Filter {
-        condition: AqlCondition,
-    },
+    Filter { condition: AqlCondition },
     /// COLLECT clause for grouping
-    Collect {
-        groups: Vec<CollectGroup>,
-    },
+    Collect { groups: Vec<CollectGroup> },
     /// SORT clause for ordering
-    Sort {
-        items: Vec<SortItem>,
-    },
+    Sort { items: Vec<SortItem> },
     /// LIMIT clause for pagination
-    Limit {
-        offset: Option<u32>,
-        count: u32,
-    },
+    Limit { offset: Option<u32>, count: u32 },
     /// RETURN clause for result projection
     Return {
         distinct: bool,
@@ -1000,10 +1099,7 @@ pub enum AqlExpression {
     /// Literal value
     Literal(AqlValue),
     /// Property access (obj.prop)
-    PropertyAccess {
-        object: String,
-        property: String,
-    },
+    PropertyAccess { object: String, property: String },
     /// Object literal
     Object(HashMap<String, AqlExpression>),
     /// Array literal
@@ -1072,7 +1168,7 @@ mod tests {
         let parser = AqlParser::new();
         let query = "FOR doc IN users RETURN doc";
         let result = parser.parse(query);
-        
+
         assert!(result.is_ok());
         let parsed = result.unwrap();
         assert_eq!(parsed.clauses.len(), 2); // FOR and RETURN
@@ -1083,7 +1179,7 @@ mod tests {
         let parser = AqlParser::new();
         let query = "FOR doc IN users FILTER doc.age > 25 RETURN doc";
         let result = parser.parse(query);
-        
+
         assert!(result.is_ok());
         let parsed = result.unwrap();
         assert_eq!(parsed.clauses.len(), 3); // FOR, FILTER, and RETURN
@@ -1092,9 +1188,10 @@ mod tests {
     #[test]
     fn test_graph_traversal_query() {
         let parser = AqlParser::new();
-        let query = "FOR vertex, edge, path IN 1..3 OUTBOUND 'users/john' GRAPH 'social' RETURN vertex";
+        let query =
+            "FOR vertex, edge, path IN 1..3 OUTBOUND 'users/john' GRAPH 'social' RETURN vertex";
         let result = parser.parse(query);
-        
+
         assert!(result.is_ok());
         let parsed = result.unwrap();
         assert_eq!(parsed.clauses.len(), 2); // FOR_TRAVERSAL and RETURN
@@ -1105,7 +1202,7 @@ mod tests {
         let parser = AqlParser::new();
         let query = "INSERT {name: 'Alice', age: 30} INTO users";
         let result = parser.parse(query);
-        
+
         assert!(result.is_ok());
         let parsed = result.unwrap();
         assert_eq!(parsed.clauses.len(), 1); // INSERT
@@ -1115,7 +1212,7 @@ mod tests {
     fn test_tokenization() {
         let parser = AqlParser::with_debug(true);
         let result = parser.tokenize("FOR doc IN users");
-        
+
         assert!(result.is_ok());
         let tokens = result.unwrap();
         assert!(!tokens.is_empty());
@@ -1126,7 +1223,7 @@ mod tests {
         let parser = AqlParser::new();
         let query = "INVALID SYNTAX HERE";
         let result = parser.parse(query);
-        
+
         assert!(result.is_err());
     }
 
@@ -1134,7 +1231,7 @@ mod tests {
     fn test_empty_query() {
         let parser = AqlParser::new();
         let result = parser.parse("");
-        
+
         assert!(result.is_err());
     }
 }

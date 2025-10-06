@@ -121,6 +121,7 @@ Orbit-RS is ideal for building:
 ## Next Steps
 
 - [Quick Start Guide](QUICK_START.md) - Get up and running quickly
+- [Virtual Actor Persistence](VIRTUAL_ACTOR_PERSISTENCE.md) - Actor state management and lifecycle
 - [Transaction Features](features/TRANSACTION_FEATURES.md) - Advanced transaction capabilities
 - [Protocol Adapters](protocols/PROTOCOL_ADAPTERS.md) - Multi-protocol support
 - [Development Guide](development/DEVELOPMENT.md) - Contributing and development

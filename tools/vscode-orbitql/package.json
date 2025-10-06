@@ -1,0 +1,96 @@
+{
+  "name": "orbitql",
+  "displayName": "OrbitQL Language Support",
+  "description": "OrbitQL language support with syntax highlighting, autocomplete, and error detection",
+  "version": "0.1.0",
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "main": "./out/extension.js",
+  "activationEvents": [
+    "onLanguage:orbitql"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "orbitql",
+        "aliases": [
+          "OrbitQL",
+          "orbitql"
+        ],
+        "extensions": [
+          ".oql",
+          ".orbitql"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "orbitql",
+        "scopeName": "source.orbitql",
+        "path": "./syntaxes/orbitql.tmGrammar.json"
+      }
+    ],
+    "configuration": {
+      "title": "OrbitQL",
+      "properties": {
+        "orbitql.server.path": {
+          "type": "string",
+          "default": "orbitql-lsp",
+          "description": "Path to the OrbitQL language server executable"
+        },
+        "orbitql.server.args": {
+          "type": "array",
+          "default": [],
+          "description": "Arguments passed to the OrbitQL language server"
+        },
+        "orbitql.trace.server": {
+          "type": "string",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "off",
+          "description": "Traces the communication between VS Code and the language server"
+        },
+        "orbitql.completion.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable completion suggestions"
+        },
+        "orbitql.diagnostics.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable error and warning diagnostics"
+        },
+        "orbitql.hover.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable hover information"
+        },
+        "orbitql.formatting.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable code formatting"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/vscode": "^1.74.0",
+    "typescript": "^5.3.0"
+  }
+}
