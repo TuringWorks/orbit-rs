@@ -38,6 +38,10 @@ pub struct OrbitClusterSpec {
     #[serde(default)]
     pub storage: StorageConfig,
 
+    /// Persistence backend configuration
+    #[serde(default)]
+    pub persistence: PersistenceConfig,
+
     /// Service configuration
     #[serde(default)]
     pub service: ServiceConfig,
@@ -184,6 +188,104 @@ pub struct MonitoringConfig {
     /// Metrics scrape interval
     #[serde(default = "default_scrape_interval")]
     pub scrape_interval: String,
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug, JsonSchema, Default)]
+pub struct PersistenceConfig {
+    /// Persistence backend type
+    #[serde(default = "default_persistence_backend")]
+    pub backend: String,
+
+    /// Memory backend configuration
+    #[serde(default)]
+    pub memory: Option<MemoryPersistenceConfig>,
+
+    /// Local storage backend configuration (COW B+Tree, LSM-Tree, RocksDB)
+    #[serde(default)]
+    pub local: Option<LocalStorageConfig>,
+
+    /// Cloud storage configuration (S3, Azure, GCP)
+    #[serde(default)]
+    pub cloud: Option<CloudStorageConfig>,
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug, JsonSchema)]
+pub struct MemoryPersistenceConfig {
+    /// Maximum entries in memory
+    #[serde(default = "default_memory_max_entries")]
+    pub max_entries: u64,
+
+    /// Enable disk backup
+    #[serde(default)]
+    pub enable_disk_backup: bool,
+
+    /// Backup file path
+    #[serde(default = "default_memory_backup_path")]
+    pub backup_path: String,
+
+    /// Backup sync interval in seconds
+    #[serde(default = "default_memory_sync_interval")]
+    pub sync_interval: u32,
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug, JsonSchema)]
+pub struct LocalStorageConfig {
+    /// Storage backend type (cow_btree, lsm_tree, rocksdb)
+    pub backend_type: String,
+
+    /// Data directory path
+    #[serde(default = "default_local_data_dir")]
+    pub data_dir: String,
+
+    /// Enable compression
+    #[serde(default = "default_enable_compression")]
+    pub enable_compression: bool,
+
+    /// Write buffer size in bytes
+    #[serde(default = "default_write_buffer_size")]
+    pub write_buffer_size: u64,
+
+    /// Cache size in bytes
+    #[serde(default = "default_cache_size")]
+    pub cache_size: u64,
+
+    /// Backend-specific configuration
+    #[serde(default)]
+    pub config: BTreeMap<String, String>,
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug, JsonSchema)]
+pub struct CloudStorageConfig {
+    /// Cloud provider (s3, azure, gcp)
+    pub provider: String,
+
+    /// Storage endpoint URL
+    pub endpoint: Option<String>,
+
+    /// Region/location
+    pub region: Option<String>,
+
+    /// Bucket/container name
+    pub bucket: String,
+
+    /// Object prefix
+    #[serde(default = "default_cloud_prefix")]
+    pub prefix: String,
+
+    /// Connection timeout in seconds
+    #[serde(default = "default_cloud_timeout")]
+    pub connection_timeout: u32,
+
+    /// Retry count
+    #[serde(default = "default_cloud_retry_count")]
+    pub retry_count: u32,
+
+    /// Enable SSL/TLS
+    #[serde(default = "default_enable_ssl")]
+    pub enable_ssl: bool,
+
+    /// Credentials secret name
+    pub credentials_secret: Option<String>,
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, JsonSchema)]
@@ -351,4 +453,53 @@ fn default_enable_metrics() -> bool {
 
 fn default_scrape_interval() -> String {
     "30s".to_string()
+}
+
+// Persistence configuration defaults
+fn default_persistence_backend() -> String {
+    "memory".to_string()
+}
+
+fn default_memory_max_entries() -> u64 {
+    1000000
+}
+
+fn default_memory_backup_path() -> String {
+    "/app/data/orbit_backup.json".to_string()
+}
+
+fn default_memory_sync_interval() -> u32 {
+    300
+}
+
+fn default_local_data_dir() -> String {
+    "/app/data".to_string()
+}
+
+fn default_enable_compression() -> bool {
+    true
+}
+
+fn default_write_buffer_size() -> u64 {
+    134217728  // 128MB
+}
+
+fn default_cache_size() -> u64 {
+    268435456  // 256MB
+}
+
+fn default_cloud_prefix() -> String {
+    "orbit".to_string()
+}
+
+fn default_cloud_timeout() -> u32 {
+    30
+}
+
+fn default_cloud_retry_count() -> u32 {
+    3
+}
+
+fn default_enable_ssl() -> bool {
+    true
 }
