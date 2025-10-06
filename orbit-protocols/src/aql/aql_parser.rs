@@ -615,14 +615,11 @@ impl AqlTokenParser {
 
         let mut groups = Vec::new();
 
-        loop {
-            let variable = match self.current_token() {
-                Some(AqlToken::Identifier(name)) => {
-                    let name = name.clone();
-                    self.advance();
-                    name
-                }
-                _ => break,
+        while let Some(AqlToken::Identifier(name)) = self.current_token() {
+            let variable = {
+                let name = name.clone();
+                self.advance();
+                name
             };
 
             // Optional assignment

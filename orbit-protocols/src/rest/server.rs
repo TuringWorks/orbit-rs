@@ -1,8 +1,6 @@
 //! REST API server implementation
 
 use axum::{
-    middleware,
-    response::IntoResponse,
     routing::{delete, get, post, put},
     Router,
 };

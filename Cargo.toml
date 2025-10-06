@@ -22,6 +22,7 @@ members = [
     "examples/pgvector-store",
     "examples/saga-example",
     "examples/timeseries-demo",
+    "examples/orbitql-example",
 ]
 
 [workspace.package]

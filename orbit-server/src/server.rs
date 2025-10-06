@@ -1,9 +1,12 @@
 //! Main Orbit server implementation for hosting actors and managing the cluster
 
+use crate::persistence::config::PersistenceProviderConfig;
+use crate::persistence::*;
 use crate::*;
 use orbit_proto::*;
 use orbit_shared::*;
 use std::collections::HashMap;
+use std::sync::Arc;
 use tokio::time::{interval, Duration};
 use tonic::transport::Server;
 
@@ -17,6 +20,7 @@ pub struct OrbitServerConfig {
     pub cleanup_interval: Duration,
     pub max_addressables: Option<u32>,
     pub tags: HashMap<String, String>,
+    pub persistence: PersistenceProviderConfig,
 }
 
 impl Default for OrbitServerConfig {
@@ -29,6 +33,7 @@ impl Default for OrbitServerConfig {
             cleanup_interval: Duration::from_secs(60), // 1 minute
             max_addressables: None,
             tags: HashMap::new(),
+            persistence: PersistenceProviderConfig::default_memory(),
         }
     }
 }
@@ -79,6 +84,11 @@ impl OrbitServerBuilder {
         self
     }
 
+    pub fn with_persistence(mut self, persistence: PersistenceProviderConfig) -> Self {
+        self.config.persistence = persistence;
+        self
+    }
+
     pub async fn build(self) -> OrbitResult<OrbitServer> {
         OrbitServer::new(self.config).await
     }
@@ -100,6 +110,8 @@ pub struct OrbitServer {
     load_balancer: LoadBalancer,
     connection_service: OrbitConnectionService,
     health_service: OrbitHealthService,
+    #[allow(dead_code)]
+    persistence_registry: Arc<PersistenceProviderRegistry>,
 }
 
 impl OrbitServer {
@@ -122,6 +134,9 @@ impl OrbitServer {
             lease: None,
         };
 
+        // Initialize persistence provider registry
+        let persistence_registry = Arc::new(config.persistence.create_registry().await?);
+
         let cluster_manager = ClusterManager::new(config.lease_duration);
         let addressable_directory = AddressableDirectory::new();
         let load_balancer = LoadBalancer::new();
@@ -136,6 +151,7 @@ impl OrbitServer {
             load_balancer,
             connection_service,
             health_service,
+            persistence_registry,
         };
 
         Ok(server)

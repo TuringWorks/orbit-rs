@@ -6,15 +6,15 @@
 //! - Multi-terabyte storage with compression and optimization
 //! - Advanced querying with aggregations and windowing functions
 
-pub mod core;
-pub mod storage;
+pub mod aggregation;
 pub mod compression;
+pub mod core;
+pub mod partitioning;
+pub mod postgresql;
 pub mod query;
 pub mod redis;
-pub mod postgresql;
-pub mod aggregation;
 pub mod retention;
-pub mod partitioning;
+pub mod storage;
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};

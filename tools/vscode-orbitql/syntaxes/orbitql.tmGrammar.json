@@ -1,0 +1,158 @@
+{
+    "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+    "name": "OrbitQL",
+    "patterns": [
+        {
+            "include": "#keywords"
+        },
+        {
+            "include": "#strings"
+        },
+        {
+            "include": "#numbers"
+        },
+        {
+            "include": "#comments"
+        },
+        {
+            "include": "#functions"
+        },
+        {
+            "include": "#operators"
+        },
+        {
+            "include": "#identifiers"
+        }
+    ],
+    "repository": {
+        "keywords": {
+            "patterns": [
+                {
+                    "name": "keyword.control.orbitql",
+                    "match": "(?i)\\b(SELECT|FROM|WHERE|JOIN|LEFT|RIGHT|INNER|OUTER|GROUP BY|ORDER BY|HAVING|LIMIT|OFFSET|DISTINCT|INSERT|INTO|VALUES|UPDATE|SET|DELETE|CREATE|DROP|ALTER|TABLE|INDEX|DATABASE|SCHEMA|TRANSACTION|COMMIT|ROLLBACK|BEGIN|END)\\b"
+                },
+                {
+                    "name": "keyword.orbitql.specific",
+                    "match": "(?i)\\b(RELATE|FETCH|LIVE|GRAPH|TRAVERSE|CONNECT|SUBSCRIBE|NOTIFY|EMIT)\\b"
+                },
+                {
+                    "name": "keyword.operator.logical.orbitql",
+                    "match": "(?i)\\b(AND|OR|NOT|IN|EXISTS|BETWEEN|LIKE|IS|NULL)\\b"
+                },
+                {
+                    "name": "keyword.other.orbitql",
+                    "match": "(?i)\\b(AS|ASC|DESC|TRUE|FALSE|NULL|IF|ELSE|CASE|WHEN|THEN|WITH)\\b"
+                }
+            ]
+        },
+        "strings": {
+            "patterns": [
+                {
+                    "name": "string.quoted.single.orbitql",
+                    "begin": "'",
+                    "end": "'",
+                    "patterns": [
+                        {
+                            "name": "constant.character.escape.orbitql",
+                            "match": "\\\\."
+                        }
+                    ]
+                },
+                {
+                    "name": "string.quoted.double.orbitql",
+                    "begin": "\"",
+                    "end": "\"",
+                    "patterns": [
+                        {
+                            "name": "constant.character.escape.orbitql",
+                            "match": "\\\\."
+                        }
+                    ]
+                }
+            ]
+        },
+        "numbers": {
+            "patterns": [
+                {
+                    "name": "constant.numeric.decimal.orbitql",
+                    "match": "\\b\\d+\\.\\d+\\b"
+                },
+                {
+                    "name": "constant.numeric.integer.orbitql",
+                    "match": "\\b\\d+\\b"
+                }
+            ]
+        },
+        "comments": {
+            "patterns": [
+                {
+                    "name": "comment.line.double-dash.orbitql",
+                    "begin": "--",
+                    "end": "$"
+                },
+                {
+                    "name": "comment.block.orbitql",
+                    "begin": "/\\*",
+                    "end": "\\*/"
+                }
+            ]
+        },
+        "functions": {
+            "patterns": [
+                {
+                    "name": "entity.name.function.builtin.orbitql",
+                    "match": "(?i)\\b(COUNT|SUM|AVG|MIN|MAX|NOW|LEN|UPPER|LOWER|TRIM|SUBSTRING|CONCAT|REPLACE)\\b(?=\\s*\\()"
+                },
+                {
+                    "name": "entity.name.function.orbitql.specific",
+                    "match": "(?i)\\b(time::[a-zA-Z_][a-zA-Z0-9_]*|math::[a-zA-Z_][a-zA-Z0-9_]*|string::[a-zA-Z_][a-zA-Z0-9_]*|array::[a-zA-Z_][a-zA-Z0-9_]*|graph::[a-zA-Z_][a-zA-Z0-9_]*)\\b(?=\\s*\\()"
+                },
+                {
+                    "name": "entity.name.function.user-defined.orbitql",
+                    "match": "\\b[a-zA-Z_][a-zA-Z0-9_]*\\b(?=\\s*\\()"
+                }
+            ]
+        },
+        "operators": {
+            "patterns": [
+                {
+                    "name": "keyword.operator.comparison.orbitql",
+                    "match": "(=|!=|<>|<|>|<=|>=)"
+                },
+                {
+                    "name": "keyword.operator.arithmetic.orbitql",
+                    "match": "(\\+|\\-|\\*|/|%)"
+                },
+                {
+                    "name": "keyword.operator.orbitql.graph",
+                    "match": "(->|<-|<->)"
+                },
+                {
+                    "name": "keyword.operator.assignment.orbitql",
+                    "match": ":="
+                }
+            ]
+        },
+        "identifiers": {
+            "patterns": [
+                {
+                    "name": "variable.other.table.orbitql",
+                    "match": "\\b[a-zA-Z_][a-zA-Z0-9_]*\\b(?=\\s*\\.)"
+                },
+                {
+                    "name": "variable.other.column.orbitql",
+                    "match": "(?<=\\.)\\b[a-zA-Z_][a-zA-Z0-9_]*\\b"
+                },
+                {
+                    "name": "variable.parameter.orbitql",
+                    "match": "\\$[a-zA-Z_][a-zA-Z0-9_]*\\b"
+                },
+                {
+                    "name": "variable.other.orbitql",
+                    "match": "\\b[a-zA-Z_][a-zA-Z0-9_]*\\b"
+                }
+            ]
+        }
+    },
+    "scopeName": "source.orbitql"
+}

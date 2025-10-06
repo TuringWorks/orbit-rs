@@ -44,6 +44,12 @@ pub enum Filter {
     LabelExists(String),
 }
 
+impl Default for TimeSeriesQuery {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TimeSeriesQuery {
     pub fn new() -> Self {
         Self {
@@ -97,6 +103,12 @@ impl TimeSeriesQuery {
 /// Time series query executor
 pub struct QueryExecutor {
     // TODO: Add reference to time series engine
+}
+
+impl Default for QueryExecutor {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl QueryExecutor {

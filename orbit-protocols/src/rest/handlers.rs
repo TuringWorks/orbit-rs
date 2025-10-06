@@ -7,7 +7,7 @@ use axum::{
     Json,
 };
 use orbit_client::OrbitClient;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use std::sync::Arc;
 use utoipa::IntoParams;
 
@@ -45,7 +45,7 @@ pub struct PaginationParams {
     tag = "actors"
 )]
 pub async fn list_actors(
-    State(state): State<ApiState>,
+    State(_state): State<ApiState>,
     Query(params): Query<PaginationParams>,
 ) -> impl IntoResponse {
     let page = params.page.unwrap_or(0);
@@ -86,7 +86,7 @@ pub async fn list_actors(
     tag = "actors"
 )]
 pub async fn get_actor(
-    State(state): State<ApiState>,
+    State(_state): State<ApiState>,
     Path((actor_type, key)): Path<(String, String)>,
 ) -> impl IntoResponse {
     // TODO: Implement actor state retrieval
@@ -121,7 +121,7 @@ pub async fn get_actor(
     tag = "actors"
 )]
 pub async fn create_actor(
-    State(state): State<ApiState>,
+    State(_state): State<ApiState>,
     Json(request): Json<CreateActorRequest>,
 ) -> impl IntoResponse {
     // TODO: Implement actor creation
@@ -167,7 +167,7 @@ pub async fn create_actor(
     tag = "actors"
 )]
 pub async fn update_actor(
-    State(state): State<ApiState>,
+    State(_state): State<ApiState>,
     Path((actor_type, key)): Path<(String, String)>,
     Json(request): Json<UpdateActorStateRequest>,
 ) -> impl IntoResponse {
@@ -211,7 +211,7 @@ pub async fn update_actor(
     tag = "actors"
 )]
 pub async fn delete_actor(
-    State(state): State<ApiState>,
+    State(_state): State<ApiState>,
     Path((actor_type, key)): Path<(String, String)>,
 ) -> impl IntoResponse {
     // TODO: Implement actor deactivation
@@ -246,8 +246,8 @@ pub async fn delete_actor(
     tag = "actors"
 )]
 pub async fn invoke_actor(
-    State(state): State<ApiState>,
-    Path((actor_type, key)): Path<(String, String)>,
+    State(_state): State<ApiState>,
+    Path((_actor_type, _key)): Path<(String, String)>,
     Json(request): Json<InvokeActorRequest>,
 ) -> impl IntoResponse {
     // TODO: Implement method invocation
@@ -278,8 +278,8 @@ pub async fn invoke_actor(
     tag = "transactions"
 )]
 pub async fn begin_transaction(
-    State(state): State<ApiState>,
-    Json(request): Json<BeginTransactionRequest>,
+    State(_state): State<ApiState>,
+    Json(_request): Json<BeginTransactionRequest>,
 ) -> impl IntoResponse {
     // TODO: Implement transaction begin
     // Requires access to TransactionCoordinator via orbit_client
@@ -318,7 +318,7 @@ pub async fn begin_transaction(
     tag = "transactions"
 )]
 pub async fn commit_transaction(
-    State(state): State<ApiState>,
+    State(_state): State<ApiState>,
     Path(transaction_id): Path<String>,
 ) -> impl IntoResponse {
     // TODO: Implement transaction commit
@@ -357,7 +357,7 @@ pub async fn commit_transaction(
     tag = "transactions"
 )]
 pub async fn abort_transaction(
-    State(state): State<ApiState>,
+    State(_state): State<ApiState>,
     Path(transaction_id): Path<String>,
 ) -> impl IntoResponse {
     // TODO: Implement transaction abort

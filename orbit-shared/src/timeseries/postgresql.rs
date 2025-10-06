@@ -168,12 +168,10 @@ impl Default for CompressionConfig {
         Self {
             compress_after: Duration::from_secs(86400 * 7), // 1 week
             segment_by: vec!["series_id".to_string()],
-            order_by: vec![
-                OrderByColumn {
-                    column: "timestamp".to_string(),
-                    direction: SortDirection::Asc,
-                },
-            ],
+            order_by: vec![OrderByColumn {
+                column: "timestamp".to_string(),
+                direction: SortDirection::Asc,
+            }],
         }
     }
 }
@@ -201,6 +199,7 @@ impl Default for ContinuousAggregatesConfig {
 
 /// TimescaleDB operations and management
 pub struct TimescaleDB {
+    #[allow(dead_code)]
     config: PostgreSQLConfig,
     // TODO: Add connection pool when implementing
 }
@@ -365,7 +364,9 @@ impl TimescaleDB {
     }
 
     /// Get database statistics
-    pub async fn get_statistics(&self) -> Result<TimescaleStatistics, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn get_statistics(
+        &self,
+    ) -> Result<TimescaleStatistics, Box<dyn std::error::Error + Send + Sync>> {
         // TODO: Implement statistics collection
         Err("Not implemented".into())
     }
@@ -481,9 +482,9 @@ mod tests {
         let agg = TimescaleAggregation::Average;
         let serialized = serde_json::to_string(&agg).unwrap();
         let deserialized: TimescaleAggregation = serde_json::from_str(&serialized).unwrap();
-        
+
         match deserialized {
-            TimescaleAggregation::Average => {},
+            TimescaleAggregation::Average => {}
             _ => panic!("Serialization/deserialization failed"),
         }
     }

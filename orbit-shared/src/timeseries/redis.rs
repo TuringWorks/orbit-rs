@@ -79,6 +79,7 @@ impl Default for RedisConfig {
 
 /// Redis TimeSeries commands and operations
 pub struct RedisTimeSeries {
+    #[allow(dead_code)]
     config: RedisConfig,
     // TODO: Add Redis connection client when implementing
 }
@@ -263,9 +264,9 @@ mod tests {
         let policy = DuplicatePolicy::Last;
         let serialized = serde_json::to_string(&policy).unwrap();
         let deserialized: DuplicatePolicy = serde_json::from_str(&serialized).unwrap();
-        
+
         match deserialized {
-            DuplicatePolicy::Last => {},
+            DuplicatePolicy::Last => {}
             _ => panic!("Serialization/deserialization failed"),
         }
     }

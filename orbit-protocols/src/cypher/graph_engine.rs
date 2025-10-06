@@ -244,7 +244,7 @@ impl<S: GraphStorage> GraphEngine<S> {
         let mut matched_relationships = Vec::new();
 
         // Get all nodes from context to search their relationships
-        for (_var, nodes) in &context.bound_nodes {
+        for nodes in context.bound_nodes.values() {
             for node in nodes {
                 let direction = match pattern.direction {
                     RelationshipDirection::Outgoing => Direction::Outgoing,

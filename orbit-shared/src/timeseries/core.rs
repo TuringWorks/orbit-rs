@@ -1,12 +1,12 @@
 //! Core time series engine implementation
 
 use super::*;
-use crate::timeseries::storage::{StorageEngine, MemoryStorage, RedisStorage, PostgreSQLStorage};
-use anyhow::{Result, anyhow};
+use crate::timeseries::storage::{MemoryStorage, PostgreSQLStorage, RedisStorage, StorageEngine};
+use anyhow::{anyhow, Result};
 use std::sync::Arc;
-use tokio::sync::RwLock;
-use tracing::{info, warn, error, debug};
 use std::time::Instant;
+use tokio::sync::RwLock;
+use tracing::{debug, info};
 
 /// Main time series engine
 pub struct TimeSeriesEngine {
@@ -19,10 +19,13 @@ pub struct TimeSeriesEngine {
 impl TimeSeriesEngine {
     /// Create a new time series engine with the given configuration
     pub async fn new(config: TimeSeriesConfig) -> Result<Self> {
-        info!("Initializing Time Series Engine with backend: {:?}", config.storage_backend);
-        
+        info!(
+            "Initializing Time Series Engine with backend: {:?}",
+            config.storage_backend
+        );
+
         let storage = Self::create_storage_backend(&config).await?;
-        
+
         Ok(Self {
             metrics_enabled: config.enable_metrics,
             config,
@@ -32,42 +35,52 @@ impl TimeSeriesEngine {
     }
 
     /// Create the appropriate storage backend
-    async fn create_storage_backend(config: &TimeSeriesConfig) -> Result<Box<dyn StorageEngine + Send + Sync>> {
+    async fn create_storage_backend(
+        config: &TimeSeriesConfig,
+    ) -> Result<Box<dyn StorageEngine + Send + Sync>> {
         match &config.storage_backend {
             StorageBackend::Memory => {
                 info!("Using in-memory storage backend");
                 Ok(Box::new(MemoryStorage::new(config.memory_limit_mb)))
-            },
+            }
             StorageBackend::Redis => {
                 info!("Using Redis TimeSeries backend");
-                let redis_config = config.redis_config.as_ref()
+                let redis_config = config
+                    .redis_config
+                    .as_ref()
                     .ok_or_else(|| anyhow!("Redis config required for Redis backend"))?;
                 Ok(Box::new(RedisStorage::new(redis_config).await?))
-            },
+            }
             StorageBackend::PostgreSQL => {
                 info!("Using PostgreSQL TimescaleDB backend");
-                let pg_config = config.postgresql_config.as_ref()
+                let pg_config = config
+                    .postgresql_config
+                    .as_ref()
                     .ok_or_else(|| anyhow!("PostgreSQL config required for PostgreSQL backend"))?;
                 Ok(Box::new(PostgreSQLStorage::new(pg_config).await?))
-            },
+            }
             StorageBackend::HybridRedisPostgres => {
                 info!("Using hybrid Redis+PostgreSQL backend");
                 // TODO: Implement hybrid storage that uses Redis for hot data and PostgreSQL for cold data
-                return Err(anyhow!("Hybrid storage not yet implemented"));
-            },
+                Err(anyhow!("Hybrid storage not yet implemented"))
+            }
             StorageBackend::CustomDisk => {
                 info!("Using custom disk storage backend");
                 // TODO: Implement custom high-performance disk storage
-                return Err(anyhow!("Custom disk storage not yet implemented"));
+                Err(anyhow!("Custom disk storage not yet implemented"))
             }
         }
     }
 
     /// Create a new time series
-    pub async fn create_series(&self, name: String, labels: HashMap<String, String>) -> Result<SeriesId> {
+    pub async fn create_series(
+        &self,
+        name: String,
+        labels: HashMap<String, String>,
+    ) -> Result<SeriesId> {
         let series_id = Uuid::new_v4();
         let now = Utc::now();
-        
+
         let metadata = TimeSeriesMetadata {
             series_id,
             name: name.clone(),
@@ -86,14 +99,18 @@ impl TimeSeriesEngine {
 
         // Initialize series in storage
         self.storage.create_series(series_id, &metadata).await?;
-        
+
         info!("Created time series: {} with ID: {}", name, series_id);
         Ok(series_id)
     }
 
     /// Insert a single data point
     pub async fn insert_point(&self, series_id: SeriesId, data_point: DataPoint) -> Result<()> {
-        let start = if self.metrics_enabled { Some(Instant::now()) } else { None };
+        let start = if self.metrics_enabled {
+            Some(Instant::now())
+        } else {
+            None
+        };
 
         // Validate series exists
         {
@@ -115,8 +132,16 @@ impl TimeSeriesEngine {
     }
 
     /// Insert multiple data points in batch
-    pub async fn insert_batch(&self, series_id: SeriesId, data_points: Vec<DataPoint>) -> Result<()> {
-        let start = if self.metrics_enabled { Some(Instant::now()) } else { None };
+    pub async fn insert_batch(
+        &self,
+        series_id: SeriesId,
+        data_points: Vec<DataPoint>,
+    ) -> Result<()> {
+        let start = if self.metrics_enabled {
+            Some(Instant::now())
+        } else {
+            None
+        };
 
         if data_points.is_empty() {
             return Ok(());
@@ -131,11 +156,17 @@ impl TimeSeriesEngine {
         }
 
         // Insert batch
-        self.storage.insert_batch(series_id, data_points.clone()).await?;
+        self.storage
+            .insert_batch(series_id, data_points.clone())
+            .await?;
 
         if let Some(start_time) = start {
             let duration = start_time.elapsed();
-            info!("Batch insert of {} points took: {:?}", data_points.len(), duration);
+            info!(
+                "Batch insert of {} points took: {:?}",
+                data_points.len(),
+                duration
+            );
         }
 
         Ok(())
@@ -143,12 +174,17 @@ impl TimeSeriesEngine {
 
     /// Query time series data within a time range
     pub async fn query(&self, series_id: SeriesId, time_range: TimeRange) -> Result<QueryResult> {
-        let start = if self.metrics_enabled { Some(Instant::now()) } else { None };
+        let start = if self.metrics_enabled {
+            Some(Instant::now())
+        } else {
+            None
+        };
 
         // Get metadata
         let metadata = {
             let metadata_map = self.series_metadata.read().await;
-            metadata_map.get(&series_id)
+            metadata_map
+                .get(&series_id)
                 .ok_or_else(|| anyhow!("Series {} does not exist", series_id))?
                 .clone()
         };
@@ -174,24 +210,32 @@ impl TimeSeriesEngine {
 
     /// Query with aggregation
     pub async fn query_aggregate(
-        &self, 
-        series_id: SeriesId, 
+        &self,
+        series_id: SeriesId,
         time_range: TimeRange,
         aggregation: AggregationType,
-        window_size_seconds: u64
+        window_size_seconds: u64,
     ) -> Result<QueryResult> {
-        let start = if self.metrics_enabled { Some(Instant::now()) } else { None };
+        let start = if self.metrics_enabled {
+            Some(Instant::now())
+        } else {
+            None
+        };
 
         // Get metadata
         let metadata = {
             let metadata_map = self.series_metadata.read().await;
-            metadata_map.get(&series_id)
+            metadata_map
+                .get(&series_id)
                 .ok_or_else(|| anyhow!("Series {} does not exist", series_id))?
                 .clone()
         };
 
         // Query and aggregate
-        let data_points = self.storage.query_aggregate(series_id, time_range, aggregation, window_size_seconds).await?;
+        let data_points = self
+            .storage
+            .query_aggregate(series_id, time_range, aggregation, window_size_seconds)
+            .await?;
         let total_points = data_points.len();
 
         let execution_time_ms = if let Some(start_time) = start {
@@ -218,13 +262,18 @@ impl TimeSeriesEngine {
     /// Get series metadata
     pub async fn get_series_metadata(&self, series_id: SeriesId) -> Result<TimeSeriesMetadata> {
         let metadata_map = self.series_metadata.read().await;
-        metadata_map.get(&series_id)
+        metadata_map
+            .get(&series_id)
             .ok_or_else(|| anyhow!("Series {} does not exist", series_id))
             .cloned()
     }
 
     /// Update series metadata
-    pub async fn update_series_metadata(&self, series_id: SeriesId, metadata: TimeSeriesMetadata) -> Result<()> {
+    pub async fn update_series_metadata(
+        &self,
+        series_id: SeriesId,
+        metadata: TimeSeriesMetadata,
+    ) -> Result<()> {
         {
             let mut metadata_map = self.series_metadata.write().await;
             if !metadata_map.contains_key(&series_id) {
@@ -233,7 +282,9 @@ impl TimeSeriesEngine {
             metadata_map.insert(series_id, metadata.clone());
         }
 
-        self.storage.update_series_metadata(series_id, &metadata).await?;
+        self.storage
+            .update_series_metadata(series_id, &metadata)
+            .await?;
         info!("Updated metadata for series: {}", series_id);
         Ok(())
     }
@@ -250,7 +301,7 @@ impl TimeSeriesEngine {
 
         // Delete from storage
         self.storage.delete_series(series_id).await?;
-        
+
         info!("Deleted time series: {}", series_id);
         Ok(())
     }
@@ -269,14 +320,16 @@ impl TimeSeriesEngine {
     /// Apply retention policies
     pub async fn apply_retention_policies(&self) -> Result<()> {
         info!("Applying retention policies");
-        
+
         let metadata_map = self.series_metadata.read().await;
         for (series_id, metadata) in metadata_map.iter() {
             if let Some(retention_policy) = &metadata.retention_policy {
-                self.storage.apply_retention(*series_id, retention_policy).await?;
+                self.storage
+                    .apply_retention(*series_id, retention_policy)
+                    .await?;
             }
         }
-        
+
         Ok(())
     }
 }
@@ -296,7 +349,7 @@ pub struct StorageStats {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::timeseries::{TimeSeriesValue, DataPoint};
+    use crate::timeseries::{DataPoint, TimeSeriesValue};
 
     #[tokio::test]
     async fn test_create_series() {
@@ -307,7 +360,10 @@ mod tests {
         labels.insert("host".to_string(), "server1".to_string());
         labels.insert("metric".to_string(), "cpu_usage".to_string());
 
-        let series_id = engine.create_series("cpu_usage".to_string(), labels).await.unwrap();
+        let series_id = engine
+            .create_series("cpu_usage".to_string(), labels)
+            .await
+            .unwrap();
         assert!(!series_id.is_nil());
 
         let metadata = engine.get_series_metadata(series_id).await.unwrap();
@@ -320,7 +376,10 @@ mod tests {
         let config = TimeSeriesConfig::default();
         let engine = TimeSeriesEngine::new(config).await.unwrap();
 
-        let series_id = engine.create_series("test_metric".to_string(), HashMap::new()).await.unwrap();
+        let series_id = engine
+            .create_series("test_metric".to_string(), HashMap::new())
+            .await
+            .unwrap();
 
         // Insert some data points
         let now = Utc::now();
@@ -337,7 +396,10 @@ mod tests {
             },
         ];
 
-        engine.insert_batch(series_id, data_points.clone()).await.unwrap();
+        engine
+            .insert_batch(series_id, data_points.clone())
+            .await
+            .unwrap();
 
         // Query the data
         let time_range = TimeRange {

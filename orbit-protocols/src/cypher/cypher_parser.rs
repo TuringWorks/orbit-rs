@@ -305,18 +305,13 @@ impl TokenParser {
         self.expect_token(Token::Return)?;
         let mut items = Vec::new();
 
-        loop {
-            match self.current_token() {
-                Some(Token::Identifier(name)) => {
-                    let name = name.clone();
-                    self.advance();
-                    items.push(ReturnItem {
-                        expression: name.clone(),
-                        alias: None,
-                    });
-                }
-                _ => break,
-            }
+        while let Some(Token::Identifier(name)) = self.current_token() {
+            let name = name.clone();
+            self.advance();
+            items.push(ReturnItem {
+                expression: name.clone(),
+                alias: None,
+            });
 
             match self.current_token() {
                 Some(Token::Comma) => {

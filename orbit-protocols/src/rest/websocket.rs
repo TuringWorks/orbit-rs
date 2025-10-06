@@ -7,14 +7,10 @@ use axum::{
     },
     response::IntoResponse,
 };
-use futures::{
-    stream::{SplitSink, SplitStream},
-    SinkExt, StreamExt,
-};
-use serde::{Deserialize, Serialize};
+use futures::{SinkExt, StreamExt};
 use std::{collections::HashMap, sync::Arc};
-use tokio::sync::{broadcast, Mutex, RwLock};
-use tracing::{error, info, warn};
+use tokio::sync::{broadcast, RwLock};
+use tracing::{error, info};
 
 use super::handlers::ApiState;
 use super::models::*;
@@ -25,6 +21,7 @@ pub struct WebSocketHandler {
     actor_events: broadcast::Sender<WebSocketMessage>,
 
     /// Active subscriptions
+    #[allow(dead_code)]
     subscriptions: Arc<RwLock<HashMap<String, Vec<String>>>>,
 }
 
@@ -63,7 +60,7 @@ impl WebSocketHandler {
     }
 
     /// WebSocket handler for specific actor
-    async fn actor_websocket(socket: WebSocket, actor_type: String, key: String, state: ApiState) {
+    async fn actor_websocket(socket: WebSocket, actor_type: String, key: String, _state: ApiState) {
         let (mut sender, mut receiver) = socket.split();
         let subscription_id = uuid::Uuid::new_v4().to_string();
 
@@ -130,7 +127,7 @@ impl WebSocketHandler {
         }
 
         // Spawn task to forward events
-        let mut event_rx = state.orbit_client.clone(); // TODO: Get event stream from orbit_client
+        let _event_rx = state.orbit_client.clone(); // TODO: Get event stream from orbit_client
         tokio::spawn(async move {
             loop {
                 tokio::select! {

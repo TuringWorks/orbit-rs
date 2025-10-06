@@ -1,0 +1,99 @@
+# Orbit Server Persistence Configuration Example
+# This file demonstrates various persistence provider configurations
+# including dynamic health monitoring and failover capabilities
+
+[defaults]
+addressable = "memory"
+cluster = "memory"
+
+# Dynamic provider configuration with health monitoring and failover
+[dynamic]
+enable_performance_monitoring = true
+performance_window = 300
+enable_auto_scaling = false
+
+[dynamic.health_monitor]
+check_interval = 30
+check_timeout = 5
+failure_threshold = 3
+success_threshold = 2
+enable_circuit_breaker = true
+circuit_breaker_timeout = 300
+
+[dynamic.failover]
+enable_auto_failover = true
+strategy = "Priority"  # Options: "RoundRobin", "Priority", "LowestLatency", "LoadBased"
+max_attempts = 3
+retry_delay = 10
+enable_failback = true
+failback_delay = 300
+
+[providers.memory]
+type = "Memory"
+max_entries = 100000
+disk_backup = { path = "/tmp/orbit-backup.json", sync_interval = 300, compression = "Gzip" }
+
+[providers.s3]
+type = "S3"
+endpoint = "http://localhost:9000"
+region = "us-east-1"
+bucket = "orbit-data"
+access_key_id = "minioadmin"
+secret_access_key = "minioadmin"
+prefix = "orbit"
+enable_ssl = false
+connection_timeout = 30
+retry_count = 3
+
+[providers.azure]
+type = "Azure"
+account_name = "orbitdata"
+account_key = "your-account-key-here"
+container_name = "orbit"
+prefix = "orbit"
+connection_timeout = 30
+retry_count = 3
+
+[providers.gcp]
+type = "GoogleCloud"
+project_id = "your-project-id"
+bucket_name = "orbit-data"
+credentials_path = "/path/to/service-account.json"
+prefix = "orbit"
+connection_timeout = 30
+retry_count = 3
+
+[providers.etcd]
+type = "Etcd"
+endpoints = ["http://localhost:2379"]
+prefix = "orbit"
+lease_ttl = 300
+connection_timeout = 30
+
+[providers.redis]
+type = "Redis"
+url = "redis://localhost:6379"
+cluster_mode = false
+database = 0
+prefix = "orbit"
+pool_size = 10
+retry_count = 3
+
+[providers.composite]
+type = "Composite"
+sync_interval = 60
+health_check_interval = 30
+failover_threshold = 3
+
+[providers.composite.primary]
+type = "Memory"
+max_entries = 50000
+
+[providers.composite.backup]
+type = "S3"
+endpoint = "http://localhost:9000"
+region = "us-east-1"
+bucket = "orbit-backup"
+access_key_id = "minioadmin"
+secret_access_key = "minioadmin"
+enable_ssl = false

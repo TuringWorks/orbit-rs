@@ -19,11 +19,11 @@ FAILED_CHECKS=()
 # Function to run a check and track failures
 run_check() {
     local check_name="$1"
-    local check_script="$2"
+    shift
     
     echo "🔄 $check_name..."
     
-    if bash "$CHECKS_DIR/$check_script" > /dev/null 2>&1; then
+    if (cd "$CHECKS_DIR" && bash "$@") > /dev/null 2>&1; then
         echo "✅ $check_name"
     else
         echo "❌ $check_name"
@@ -34,8 +34,8 @@ run_check() {
 # Run essential checks
 run_check "Code Formatting" "check_formatting.sh"
 run_check "Clippy Lints" "check_clippy.sh"
-run_check "Build" "check_build.sh dev"
-run_check "Tests" "check_tests.sh workspace"
+run_check "Build" "check_build.sh" "dev"
+run_check "Tests" "check_tests.sh" "workspace"
 
 echo ""
 echo "======================"

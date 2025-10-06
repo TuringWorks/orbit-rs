@@ -32,6 +32,19 @@ tower = { version = "0.4", features = ["limit", "load-shed", "timeout"] }
 hyper = "0.14"
 fastrand = "2.0"
 metrics = "0.23"
+# LSP dependencies
+tower-lsp = "0.20"
+tokio-stream = { version = "0.1", features = ["sync"] }
+async-stream = "0.3"
+tracing-subscriber = "0.3"
+
+[[bin]]
+name = "orbitql-lsp"
+path = "src/bin/orbitql-lsp.rs"
+
+[[bin]]
+name = "orbitql-lsp-simple"
+path = "src/bin/orbitql-lsp-simple.rs"
 
 [build-dependencies]
 tonic-build = "0.12"

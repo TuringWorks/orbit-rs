@@ -29,6 +29,12 @@ thiserror.workspace = true
 chrono.workspace = true
 clap = { version = "4.0", features = ["derive", "env"] }
 petgraph = "0.6" # For graph algorithms (cluster management)
+# Persistence provider dependencies
+async-trait = "0.1"
+reqwest = { version = "0.12", features = ["json"] }
+urlencoding = "2.1"
+flate2 = "1.0" # For compression
+toml = "0.8" # For configuration file support
 
 [dev-dependencies]
 mockall.workspace = true

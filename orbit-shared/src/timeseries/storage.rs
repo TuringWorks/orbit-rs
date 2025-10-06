@@ -2,49 +2,58 @@
 
 use super::*;
 use crate::timeseries::core::StorageStats;
-use async_trait::async_trait;
 use anyhow::Result;
+use async_trait::async_trait;
 use std::collections::BTreeMap;
-use tokio::sync::RwLock;
 use std::sync::Arc;
-use tracing::{info, debug, error};
+use tokio::sync::RwLock;
+use tracing::{debug, info};
 
 /// Storage engine trait for time series data
 #[async_trait]
 pub trait StorageEngine {
     /// Create a new time series
-    async fn create_series(&self, series_id: SeriesId, metadata: &TimeSeriesMetadata) -> Result<()>;
-    
+    async fn create_series(&self, series_id: SeriesId, metadata: &TimeSeriesMetadata)
+        -> Result<()>;
+
     /// Insert a single data point
     async fn insert_point(&self, series_id: SeriesId, data_point: DataPoint) -> Result<()>;
-    
+
     /// Insert multiple data points in batch
     async fn insert_batch(&self, series_id: SeriesId, data_points: Vec<DataPoint>) -> Result<()>;
-    
+
     /// Query data points within a time range
     async fn query(&self, series_id: SeriesId, time_range: TimeRange) -> Result<Vec<DataPoint>>;
-    
+
     /// Query with aggregation
     async fn query_aggregate(
-        &self, 
-        series_id: SeriesId, 
+        &self,
+        series_id: SeriesId,
         time_range: TimeRange,
         aggregation: AggregationType,
-        window_size_seconds: u64
+        window_size_seconds: u64,
     ) -> Result<Vec<DataPoint>>;
-    
+
     /// Update series metadata
-    async fn update_series_metadata(&self, series_id: SeriesId, metadata: &TimeSeriesMetadata) -> Result<()>;
-    
+    async fn update_series_metadata(
+        &self,
+        series_id: SeriesId,
+        metadata: &TimeSeriesMetadata,
+    ) -> Result<()>;
+
     /// Delete a time series
     async fn delete_series(&self, series_id: SeriesId) -> Result<()>;
-    
+
     /// Apply retention policy
-    async fn apply_retention(&self, series_id: SeriesId, retention_policy: &RetentionPolicy) -> Result<()>;
-    
+    async fn apply_retention(
+        &self,
+        series_id: SeriesId,
+        retention_policy: &RetentionPolicy,
+    ) -> Result<()>;
+
     /// Get storage statistics
     async fn get_stats(&self) -> Result<StorageStats>;
-    
+
     /// Compact storage
     async fn compact(&self) -> Result<()>;
 }
@@ -69,7 +78,9 @@ impl MemoryStorage {
 
     async fn estimate_point_size(&self, data_point: &DataPoint) -> usize {
         let base_size = std::mem::size_of::<DataPoint>();
-        let labels_size: usize = data_point.labels.iter()
+        let labels_size: usize = data_point
+            .labels
+            .iter()
             .map(|(k, v)| k.len() + v.len())
             .sum();
         let value_size = match &data_point.value {
@@ -90,17 +101,21 @@ impl MemoryStorage {
 
 #[async_trait]
 impl StorageEngine for MemoryStorage {
-    async fn create_series(&self, series_id: SeriesId, metadata: &TimeSeriesMetadata) -> Result<()> {
+    async fn create_series(
+        &self,
+        series_id: SeriesId,
+        metadata: &TimeSeriesMetadata,
+    ) -> Result<()> {
         {
             let mut data_map = self.data.write().await;
             data_map.insert(series_id, BTreeMap::new());
         }
-        
+
         {
             let mut metadata_map = self.metadata.write().await;
             metadata_map.insert(series_id, metadata.clone());
         }
-        
+
         debug!("Created series {} in memory storage", series_id);
         Ok(())
     }
@@ -111,8 +126,7 @@ impl StorageEngine for MemoryStorage {
 
         {
             let mut data_map = self.data.write().await;
-            let series_data = data_map.entry(series_id)
-                .or_insert_with(BTreeMap::new);
+            let series_data = data_map.entry(series_id).or_insert_with(BTreeMap::new);
             series_data.insert(data_point.timestamp, data_point);
         }
 
@@ -132,14 +146,13 @@ impl StorageEngine for MemoryStorage {
             }
             total
         };
-        
+
         self.check_memory_limit(total_size).await?;
 
         {
             let mut data_map = self.data.write().await;
-            let series_data = data_map.entry(series_id)
-                .or_insert_with(BTreeMap::new);
-            
+            let series_data = data_map.entry(series_id).or_insert_with(BTreeMap::new);
+
             for data_point in data_points {
                 series_data.insert(data_point.timestamp, data_point);
             }
@@ -155,8 +168,9 @@ impl StorageEngine for MemoryStorage {
 
     async fn query(&self, series_id: SeriesId, time_range: TimeRange) -> Result<Vec<DataPoint>> {
         let data_map = self.data.read().await;
-        
-        let series_data = data_map.get(&series_id)
+
+        let series_data = data_map
+            .get(&series_id)
             .ok_or_else(|| anyhow::anyhow!("Series not found"))?;
 
         let mut result = Vec::new();
@@ -174,10 +188,10 @@ impl StorageEngine for MemoryStorage {
         series_id: SeriesId,
         time_range: TimeRange,
         aggregation: AggregationType,
-        window_size_seconds: u64
+        window_size_seconds: u64,
     ) -> Result<Vec<DataPoint>> {
         let raw_data = self.query(series_id, time_range).await?;
-        
+
         if raw_data.is_empty() {
             return Ok(Vec::new());
         }
@@ -188,7 +202,7 @@ impl StorageEngine for MemoryStorage {
 
         for point in raw_data {
             let window_start = (point.timestamp / window_size_nanos) * window_size_nanos;
-            windows.entry(window_start).or_insert_with(Vec::new).push(point);
+            windows.entry(window_start).or_default().push(point);
         }
 
         // Aggregate each window
@@ -206,7 +220,11 @@ impl StorageEngine for MemoryStorage {
         Ok(result)
     }
 
-    async fn update_series_metadata(&self, series_id: SeriesId, metadata: &TimeSeriesMetadata) -> Result<()> {
+    async fn update_series_metadata(
+        &self,
+        series_id: SeriesId,
+        metadata: &TimeSeriesMetadata,
+    ) -> Result<()> {
         let mut metadata_map = self.metadata.write().await;
         metadata_map.insert(series_id, metadata.clone());
         Ok(())
@@ -235,16 +253,18 @@ impl StorageEngine for MemoryStorage {
         Ok(())
     }
 
-    async fn apply_retention(&self, series_id: SeriesId, retention_policy: &RetentionPolicy) -> Result<()> {
-        let cutoff_time = Utc::now().timestamp_nanos_opt().unwrap_or(0) 
+    async fn apply_retention(
+        &self,
+        series_id: SeriesId,
+        retention_policy: &RetentionPolicy,
+    ) -> Result<()> {
+        let cutoff_time = Utc::now().timestamp_nanos_opt().unwrap_or(0)
             - (retention_policy.duration_seconds as i64 * 1_000_000_000);
 
         let mut data_map = self.data.write().await;
         if let Some(series_data) = data_map.get_mut(&series_id) {
-            let keys_to_remove: Vec<_> = series_data
-                .range(..cutoff_time)
-                .map(|(k, _)| *k)
-                .collect();
+            let keys_to_remove: Vec<_> =
+                series_data.range(..cutoff_time).map(|(k, _)| *k).collect();
 
             for key in keys_to_remove {
                 series_data.remove(&key);
@@ -257,11 +277,9 @@ impl StorageEngine for MemoryStorage {
     async fn get_stats(&self) -> Result<StorageStats> {
         let data_map = self.data.read().await;
         let memory_usage = *self.current_memory_usage.read().await;
-        
+
         let total_series = data_map.len() as u64;
-        let total_data_points: u64 = data_map.values()
-            .map(|series| series.len() as u64)
-            .sum();
+        let total_data_points: u64 = data_map.values().map(|series| series.len() as u64).sum();
 
         Ok(StorageStats {
             total_series,
@@ -301,7 +319,11 @@ impl RedisStorage {
 
 #[async_trait]
 impl StorageEngine for RedisStorage {
-    async fn create_series(&self, _series_id: SeriesId, _metadata: &TimeSeriesMetadata) -> Result<()> {
+    async fn create_series(
+        &self,
+        _series_id: SeriesId,
+        _metadata: &TimeSeriesMetadata,
+    ) -> Result<()> {
         // TODO: Implement Redis TimeSeries creation
         Err(anyhow::anyhow!("Redis storage not yet implemented"))
     }
@@ -326,13 +348,17 @@ impl StorageEngine for RedisStorage {
         _series_id: SeriesId,
         _time_range: TimeRange,
         _aggregation: AggregationType,
-        _window_size_seconds: u64
+        _window_size_seconds: u64,
     ) -> Result<Vec<DataPoint>> {
         // TODO: Implement Redis TimeSeries aggregation
         Err(anyhow::anyhow!("Redis storage not yet implemented"))
     }
 
-    async fn update_series_metadata(&self, _series_id: SeriesId, _metadata: &TimeSeriesMetadata) -> Result<()> {
+    async fn update_series_metadata(
+        &self,
+        _series_id: SeriesId,
+        _metadata: &TimeSeriesMetadata,
+    ) -> Result<()> {
         Err(anyhow::anyhow!("Redis storage not yet implemented"))
     }
 
@@ -340,7 +366,11 @@ impl StorageEngine for RedisStorage {
         Err(anyhow::anyhow!("Redis storage not yet implemented"))
     }
 
-    async fn apply_retention(&self, _series_id: SeriesId, _retention_policy: &RetentionPolicy) -> Result<()> {
+    async fn apply_retention(
+        &self,
+        _series_id: SeriesId,
+        _retention_policy: &RetentionPolicy,
+    ) -> Result<()> {
         Err(anyhow::anyhow!("Redis storage not yet implemented"))
     }
 
@@ -370,7 +400,11 @@ impl PostgreSQLStorage {
 
 #[async_trait]
 impl StorageEngine for PostgreSQLStorage {
-    async fn create_series(&self, _series_id: SeriesId, _metadata: &TimeSeriesMetadata) -> Result<()> {
+    async fn create_series(
+        &self,
+        _series_id: SeriesId,
+        _metadata: &TimeSeriesMetadata,
+    ) -> Result<()> {
         // TODO: Implement PostgreSQL hypertable creation
         Err(anyhow::anyhow!("PostgreSQL storage not yet implemented"))
     }
@@ -395,13 +429,17 @@ impl StorageEngine for PostgreSQLStorage {
         _series_id: SeriesId,
         _time_range: TimeRange,
         _aggregation: AggregationType,
-        _window_size_seconds: u64
+        _window_size_seconds: u64,
     ) -> Result<Vec<DataPoint>> {
         // TODO: Implement PostgreSQL aggregation
         Err(anyhow::anyhow!("PostgreSQL storage not yet implemented"))
     }
 
-    async fn update_series_metadata(&self, _series_id: SeriesId, _metadata: &TimeSeriesMetadata) -> Result<()> {
+    async fn update_series_metadata(
+        &self,
+        _series_id: SeriesId,
+        _metadata: &TimeSeriesMetadata,
+    ) -> Result<()> {
         Err(anyhow::anyhow!("PostgreSQL storage not yet implemented"))
     }
 
@@ -409,7 +447,11 @@ impl StorageEngine for PostgreSQLStorage {
         Err(anyhow::anyhow!("PostgreSQL storage not yet implemented"))
     }
 
-    async fn apply_retention(&self, _series_id: SeriesId, _retention_policy: &RetentionPolicy) -> Result<()> {
+    async fn apply_retention(
+        &self,
+        _series_id: SeriesId,
+        _retention_policy: &RetentionPolicy,
+    ) -> Result<()> {
         Err(anyhow::anyhow!("PostgreSQL storage not yet implemented"))
     }
 
@@ -423,12 +465,16 @@ impl StorageEngine for PostgreSQLStorage {
 }
 
 /// Aggregate values according to aggregation type
-fn aggregate_values(points: &[DataPoint], aggregation: &AggregationType) -> Option<TimeSeriesValue> {
+fn aggregate_values(
+    points: &[DataPoint],
+    aggregation: &AggregationType,
+) -> Option<TimeSeriesValue> {
     if points.is_empty() {
         return None;
     }
 
-    let numeric_values: Vec<f64> = points.iter()
+    let numeric_values: Vec<f64> = points
+        .iter()
         .filter_map(|p| match &p.value {
             TimeSeriesValue::Float(f) => Some(*f),
             TimeSeriesValue::Integer(i) => Some(*i as f64),
@@ -441,42 +487,36 @@ fn aggregate_values(points: &[DataPoint], aggregation: &AggregationType) -> Opti
     }
 
     match aggregation {
-        AggregationType::Sum => {
-            Some(TimeSeriesValue::Float(numeric_values.iter().sum()))
-        },
-        AggregationType::Average => {
-            Some(TimeSeriesValue::Float(numeric_values.iter().sum::<f64>() / numeric_values.len() as f64))
-        },
-        AggregationType::Min => {
-            numeric_values.iter().min_by(|a, b| a.partial_cmp(b).unwrap())
-                .map(|&v| TimeSeriesValue::Float(v))
-        },
-        AggregationType::Max => {
-            numeric_values.iter().max_by(|a, b| a.partial_cmp(b).unwrap())
-                .map(|&v| TimeSeriesValue::Float(v))
-        },
-        AggregationType::Count => {
-            Some(TimeSeriesValue::Integer(points.len() as i64))
-        },
+        AggregationType::Sum => Some(TimeSeriesValue::Float(numeric_values.iter().sum())),
+        AggregationType::Average => Some(TimeSeriesValue::Float(
+            numeric_values.iter().sum::<f64>() / numeric_values.len() as f64,
+        )),
+        AggregationType::Min => numeric_values
+            .iter()
+            .min_by(|a, b| a.partial_cmp(b).unwrap())
+            .map(|&v| TimeSeriesValue::Float(v)),
+        AggregationType::Max => numeric_values
+            .iter()
+            .max_by(|a, b| a.partial_cmp(b).unwrap())
+            .map(|&v| TimeSeriesValue::Float(v)),
+        AggregationType::Count => Some(TimeSeriesValue::Integer(points.len() as i64)),
         AggregationType::StdDev => {
             let mean = numeric_values.iter().sum::<f64>() / numeric_values.len() as f64;
-            let variance = numeric_values.iter()
+            let variance = numeric_values
+                .iter()
                 .map(|&v| (v - mean).powi(2))
-                .sum::<f64>() / numeric_values.len() as f64;
+                .sum::<f64>()
+                / numeric_values.len() as f64;
             Some(TimeSeriesValue::Float(variance.sqrt()))
-        },
-        AggregationType::First => {
-            Some(points.first()?.value.clone())
-        },
-        AggregationType::Last => {
-            Some(points.last()?.value.clone())
-        },
+        }
+        AggregationType::First => Some(points.first()?.value.clone()),
+        AggregationType::Last => Some(points.last()?.value.clone()),
         AggregationType::Percentile(p) => {
             let mut sorted = numeric_values.clone();
             sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
             let index = ((*p / 100.0) * (sorted.len() - 1) as f64).round() as usize;
             sorted.get(index).map(|&v| TimeSeriesValue::Float(v))
-        },
+        }
     }
 }
 
@@ -507,8 +547,11 @@ mod tests {
             value: TimeSeriesValue::Float(42.0),
             labels: HashMap::new(),
         };
-        
-        storage.insert_point(series_id, data_point.clone()).await.unwrap();
+
+        storage
+            .insert_point(series_id, data_point.clone())
+            .await
+            .unwrap();
 
         // Query data
         let time_range = TimeRange {
