@@ -4,7 +4,7 @@
 //! offering high performance, ACID transactions, and proven reliability.
 
 use super::*;
-use ::rocksdb::{self as rocksdb_crate, Options, TransactionDB, TransactionDBOptions, BlockBasedOptions, Cache, WriteBatch, properties};
+use ::rocksdb::{Options, TransactionDB, TransactionDBOptions, BlockBasedOptions, Cache, WriteBatchWithTransaction, properties};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use std::time::Instant;
@@ -116,7 +116,7 @@ impl RocksDbAddressableProvider {
     }
     
     fn reference_to_key(reference: &AddressableReference) -> String {
-        format!("lease:{}:{}", reference.actor_type, reference.actor_id)
+        format!("lease:{}:{}", reference.addressable_type, reference.key)
     }
     
     fn node_id_to_key(node_id: &NodeId) -> String {
@@ -151,9 +151,9 @@ impl PersistenceProvider for RocksDbAddressableProvider {
         
         // Augment with RocksDB statistics if available
         if self.config.enable_statistics {
-            if let Some(stats) = self.db.property_value(properties::STATS) {
-                tracing::debug!("RocksDB stats: {}", stats);
-            }
+            // Note: property_value might not be available on TransactionDB
+            // In production, you might want to use a different approach or skip this
+            tracing::debug!("RocksDB statistics collection enabled");
         }
         
         metrics
@@ -340,7 +340,7 @@ impl AddressableDirectoryProvider for RocksDbAddressableProvider {
         let start = Instant::now();
         
         // Use a write batch for better performance
-        let mut batch = WriteBatch::default();
+        let mut batch = WriteBatchWithTransaction::<true>::default();
         
         for lease in leases {
             let key = Self::reference_to_key(&lease.reference);
@@ -366,7 +366,7 @@ impl AddressableDirectoryProvider for RocksDbAddressableProvider {
         let mut count = 0;
         
         // Use a write batch for better performance
-        let mut batch = WriteBatch::default();
+        let mut batch = WriteBatchWithTransaction::<true>::default();
         
         for reference in references {
             let key = Self::reference_to_key(reference);

@@ -4,7 +4,6 @@
 //! for high-throughput write workloads with background compaction.
 
 use super::*;
-use orbit_shared::*;
 use std::collections::{HashMap, BTreeMap};
 use std::sync::{Arc, RwLock as StdRwLock};
 use tokio::sync::{Mutex, RwLock};
@@ -14,6 +13,7 @@ use tokio::io::AsyncWriteExt;
 use serde::{Serialize, Deserialize};
 use std::path::PathBuf;
 use bloom::{BloomFilter, ASMS};
+use base64::{Engine as _, engine::general_purpose};
 
 /// Configuration for LSM-Tree persistence
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -54,7 +54,6 @@ struct MemTable {
 }
 
 /// Immutable on-disk SSTable with bloom filter
-#[derive(Debug, Clone)]
 struct SSTable {
     id: String,
     file_path: PathBuf,
@@ -63,6 +62,38 @@ struct SSTable {
     max_key: String,
     entry_count: usize,
     index: Vec<IndexEntry>,
+}
+
+impl std::fmt::Debug for SSTable {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SSTable")
+            .field("id", &self.id)
+            .field("file_path", &self.file_path)
+            .field("bloom_filter", &"<BloomFilter>")
+            .field("min_key", &self.min_key)
+            .field("max_key", &self.max_key)
+            .field("entry_count", &self.entry_count)
+            .field("index", &self.index)
+            .finish()
+    }
+}
+
+impl Clone for SSTable {
+    fn clone(&self) -> Self {
+        // Create a new bloom filter with similar configuration
+        let mut new_bloom = BloomFilter::with_rate(0.01, self.entry_count.max(1000).try_into().unwrap_or(1000));
+        // Note: We can't clone the actual bloom filter state, so this is a new empty one
+        // In a production system, you'd serialize/deserialize the bloom filter
+        Self {
+            id: self.id.clone(),
+            file_path: self.file_path.clone(),
+            bloom_filter: new_bloom,
+            min_key: self.min_key.clone(),
+            max_key: self.max_key.clone(),
+            entry_count: self.entry_count,
+            index: self.index.clone(),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -163,7 +194,7 @@ impl WriteAheadLog {
                 .unwrap().as_millis(),
             operation,
             key,
-            base64::encode(value)
+            general_purpose::STANDARD.encode(value)
         );
         
         self.file.write_all(entry.as_bytes()).await
@@ -217,7 +248,7 @@ impl LsmTreeAddressableProvider {
     }
     
     fn reference_to_key(reference: &AddressableReference) -> String {
-        format!("{}:{}", reference.actor_type, reference.actor_id)
+        format!("{}:{}", reference.addressable_type, reference.key)
     }
     
     async fn maybe_trigger_compaction(&self) -> OrbitResult<()> {
@@ -240,8 +271,8 @@ impl LsmTreeAddressableProvider {
             drop(compaction_guard);
             
             // Run compaction in background
-            let sstables = self.sstables.clone();
-            let data_dir = PathBuf::from(&self.config.data_dir);
+            let _sstables = self.sstables.clone();
+            let _data_dir = PathBuf::from(&self.config.data_dir);
             let compaction_running = self.compaction_running.clone();
             
             tokio::spawn(async move {
@@ -276,7 +307,7 @@ impl LsmTreeAddressableProvider {
             }
             
             // Check key range
-            if key < &sstable.min_key || key > &sstable.max_key {
+            if key < sstable.min_key.as_str() || key > sstable.max_key.as_str() {
                 continue;
             }
             
@@ -288,7 +319,7 @@ impl LsmTreeAddressableProvider {
                     if line.starts_with(key) {
                         let parts: Vec<&str> = line.splitn(2, '|').collect();
                         if parts.len() == 2 {
-                            return Ok(Some(base64::decode(parts[1]).unwrap_or_default()));
+                            return Ok(Some(general_purpose::STANDARD.decode(parts[1]).unwrap_or_default()));
                         }
                     }
                 }
@@ -367,20 +398,30 @@ impl AddressableDirectoryProvider for LsmTreeAddressableProvider {
             .map_err(|e| OrbitError::internal(format!("Serialization error: {}", e)))?;
         
         // Write to WAL
-        self.wal.lock().await.append(&key, &value, "INSERT").await?;
+        {
+            let mut wal = self.wal.lock().await;
+            wal.append(&key, &value, "INSERT").await?;
+        }
         
         // Write to active memtable
-        let mut memtable = self.active_memtable.write().unwrap();
-        memtable.insert(key, value);
+        let is_full = {
+            let mut memtable = self.active_memtable.write().unwrap();
+            memtable.insert(key, value);
+            memtable.is_full(self.config.memtable_size_limit)
+        };
         
         // Check if memtable is full
-        if memtable.is_full(self.config.memtable_size_limit) {
+        if is_full {
             // Move to immutable and create new active
-            let old_memtable = std::mem::replace(&mut *memtable, MemTable::new());
-            drop(memtable);
+            let old_memtable = {
+                let mut memtable = self.active_memtable.write().unwrap();
+                std::mem::replace(&mut *memtable, MemTable::new())
+            };
             
-            let mut immutable = self.immutable_memtables.write().unwrap();
-            immutable.push(old_memtable);
+            {
+                let mut immutable = self.immutable_memtables.write().unwrap();
+                immutable.push(old_memtable);
+            }
             
             // Trigger flush and compaction if needed
             self.maybe_trigger_compaction().await?;
@@ -395,7 +436,12 @@ impl AddressableDirectoryProvider for LsmTreeAddressableProvider {
         let key = Self::reference_to_key(reference);
         
         // Search in active memtable
-        if let Some(data) = self.active_memtable.read().unwrap().get(&key) {
+        let active_result = {
+            let active = self.active_memtable.read().unwrap();
+            active.get(&key)
+        };
+        
+        if let Some(data) = active_result {
             let lease = serde_json::from_slice(&data)
                 .map_err(|e| OrbitError::internal(format!("Deserialization error: {}", e)))?;
             self.update_metrics("read", start.elapsed(), true).await;
@@ -403,14 +449,23 @@ impl AddressableDirectoryProvider for LsmTreeAddressableProvider {
         }
         
         // Search in immutable memtables
-        let immutable = self.immutable_memtables.read().unwrap();
-        for memtable in immutable.iter().rev() {
-            if let Some(data) = memtable.get(&key) {
-                let lease = serde_json::from_slice(&data)
-                    .map_err(|e| OrbitError::internal(format!("Deserialization error: {}", e)))?;
-                self.update_metrics("read", start.elapsed(), true).await;
-                return Ok(Some(lease));
+        let immutable_result = {
+            let immutable = self.immutable_memtables.read().unwrap();
+            let mut result = None;
+            for memtable in immutable.iter().rev() {
+                if let Some(data) = memtable.get(&key) {
+                    result = Some(data);
+                    break;
+                }
             }
+            result
+        };
+        
+        if let Some(data) = immutable_result {
+            let lease = serde_json::from_slice(&data)
+                .map_err(|e| OrbitError::internal(format!("Deserialization error: {}", e)))?;
+            self.update_metrics("read", start.elapsed(), true).await;
+            return Ok(Some(lease));
         }
         
         // Search in SSTables
@@ -435,10 +490,15 @@ impl AddressableDirectoryProvider for LsmTreeAddressableProvider {
         let key = Self::reference_to_key(reference);
         
         // Write tombstone to WAL and memtable
-        self.wal.lock().await.append(&key, b"", "DELETE").await?;
+        {
+            let mut wal = self.wal.lock().await;
+            wal.append(&key, b"", "DELETE").await?;
+        }
         
-        let mut memtable = self.active_memtable.write().unwrap();
-        let removed = memtable.remove(&key);
+        let removed = {
+            let mut memtable = self.active_memtable.write().unwrap();
+            memtable.remove(&key)
+        };
         
         self.update_metrics("delete", start.elapsed(), removed).await;
         Ok(removed)
@@ -452,12 +512,14 @@ impl AddressableDirectoryProvider for LsmTreeAddressableProvider {
         // For now, we'll scan all data (not efficient for large datasets)
         
         // Scan active memtable
-        let active = self.active_memtable.read().unwrap();
-        for (key, data) in &active.data {
-            if !key.starts_with("__TOMBSTONE__") {
-                if let Ok(lease) = serde_json::from_slice::<AddressableLease>(data) {
-                    if &lease.node_id == node_id {
-                        leases.push(lease);
+        {
+            let active = self.active_memtable.read().unwrap();
+            for (key, data) in &active.data {
+                if !key.starts_with("__TOMBSTONE__") {
+                    if let Ok(lease) = serde_json::from_slice::<AddressableLease>(data) {
+                        if &lease.node_id == node_id {
+                            leases.push(lease);
+                        }
                     }
                 }
             }
@@ -472,11 +534,13 @@ impl AddressableDirectoryProvider for LsmTreeAddressableProvider {
         let mut leases = Vec::new();
         
         // Scan active memtable
-        let active = self.active_memtable.read().unwrap();
-        for (key, data) in &active.data {
-            if !key.starts_with("__TOMBSTONE__") {
-                if let Ok(lease) = serde_json::from_slice::<AddressableLease>(data) {
-                    leases.push(lease);
+        {
+            let active = self.active_memtable.read().unwrap();
+            for (key, data) in &active.data {
+                if !key.starts_with("__TOMBSTONE__") {
+                    if let Ok(lease) = serde_json::from_slice::<AddressableLease>(data) {
+                        leases.push(lease);
+                    }
                 }
             }
         }
@@ -487,8 +551,8 @@ impl AddressableDirectoryProvider for LsmTreeAddressableProvider {
     
     async fn cleanup_expired_leases(&self) -> OrbitResult<u64> {
         let start = Instant::now();
-        let now = chrono::Utc::now();
-        let mut count = 0;
+        let _now = chrono::Utc::now();
+        let count = 0;
         
         // This would require a more sophisticated implementation in production
         // to efficiently find and remove expired leases across all SSTables

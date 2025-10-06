@@ -4,7 +4,6 @@
 //! using a Copy-on-Write B+ Tree data structure with Write-Ahead Logging (WAL).
 
 use super::*;
-use orbit_shared::*;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock as StdRwLock};
 use tokio::sync::{Mutex, RwLock};
@@ -336,7 +335,7 @@ impl CowBTreeAddressableProvider {
     }
     
     fn reference_to_key(reference: &AddressableReference) -> String {
-        format!("{}:{}", reference.actor_type, reference.actor_id)
+        format!("{}:{}", reference.addressable_type, reference.key)
     }
 }
 
@@ -417,15 +416,19 @@ impl AddressableDirectoryProvider for CowBTreeAddressableProvider {
         let key = Self::reference_to_key(&lease.reference);
         
         // Log to WAL
-        let mut wal = self.wal.lock().await;
-        wal.append_entry(WALOperation::InsertLease { 
-            key: key.clone(), 
-            lease: lease.clone() 
-        }).await?;
+        {
+            let mut wal = self.wal.lock().await;
+            wal.append_entry(WALOperation::InsertLease { 
+                key: key.clone(), 
+                lease: lease.clone() 
+            }).await?;
+        }
         
         // Insert into B+ tree
-        let mut root = self.root.write().unwrap();
-        let success = root.insert_addressable_lease(key, lease.clone());
+        let success = {
+            let mut root = self.root.write().unwrap();
+            root.insert_addressable_lease(key, lease.clone())
+        };
         
         self.update_metrics("write", start.elapsed(), success).await;
         Ok(())
@@ -435,10 +438,12 @@ impl AddressableDirectoryProvider for CowBTreeAddressableProvider {
         let start = Instant::now();
         let key = Self::reference_to_key(reference);
         
-        let root = self.root.read().unwrap();
-        let result = match root.find_key_index(&key) {
-            Ok(idx) => root.addressable_values[idx].clone(),
-            Err(_) => None,
+        let result = {
+            let root = self.root.read().unwrap();
+            match root.find_key_index(&key) {
+                Ok(idx) => root.addressable_values[idx].clone(),
+                Err(_) => None,
+            }
         };
         
         self.update_metrics("read", start.elapsed(), true).await;
@@ -450,15 +455,19 @@ impl AddressableDirectoryProvider for CowBTreeAddressableProvider {
         let key = Self::reference_to_key(&lease.reference);
         
         // Log to WAL
-        let mut wal = self.wal.lock().await;
-        wal.append_entry(WALOperation::UpdateLease { 
-            key: key.clone(), 
-            lease: lease.clone() 
-        }).await?;
+        {
+            let mut wal = self.wal.lock().await;
+            wal.append_entry(WALOperation::UpdateLease { 
+                key: key.clone(), 
+                lease: lease.clone() 
+            }).await?;
+        }
         
         // Update in B+ tree
-        let mut root = self.root.write().unwrap();
-        root.insert_addressable_lease(key, lease.clone());
+        {
+            let mut root = self.root.write().unwrap();
+            root.insert_addressable_lease(key, lease.clone());
+        }
         
         self.update_metrics("write", start.elapsed(), true).await;
         Ok(())
@@ -469,20 +478,24 @@ impl AddressableDirectoryProvider for CowBTreeAddressableProvider {
         let key = Self::reference_to_key(reference);
         
         // Log to WAL
-        let mut wal = self.wal.lock().await;
-        wal.append_entry(WALOperation::DeleteLease { 
-            key: key.clone() 
-        }).await?;
+        {
+            let mut wal = self.wal.lock().await;
+            wal.append_entry(WALOperation::DeleteLease { 
+                key: key.clone() 
+            }).await?;
+        }
         
         // Remove from B+ tree
-        let mut root = self.root.write().unwrap();
-        let removed = match root.find_key_index(&key) {
-            Ok(idx) => {
-                root.keys.remove(idx);
-                root.addressable_values.remove(idx);
-                true
+        let removed = {
+            let mut root = self.root.write().unwrap();
+            match root.find_key_index(&key) {
+                Ok(idx) => {
+                    root.keys.remove(idx);
+                    root.addressable_values.remove(idx);
+                    true
+                }
+                Err(_) => false,
             }
-            Err(_) => false,
         };
         
         self.update_metrics("delete", start.elapsed(), removed).await;
@@ -491,16 +504,19 @@ impl AddressableDirectoryProvider for CowBTreeAddressableProvider {
     
     async fn list_node_leases(&self, node_id: &NodeId) -> OrbitResult<Vec<AddressableLease>> {
         let start = Instant::now();
-        let mut leases = Vec::new();
         
-        let root = self.root.read().unwrap();
-        for (i, value) in root.addressable_values.iter().enumerate() {
-            if let Some(lease) = value {
-                if &lease.node_id == node_id {
-                    leases.push(lease.clone());
+        let leases = {
+            let root = self.root.read().unwrap();
+            let mut leases = Vec::new();
+            for (_i, value) in root.addressable_values.iter().enumerate() {
+                if let Some(lease) = value {
+                    if &lease.node_id == node_id {
+                        leases.push(lease.clone());
+                    }
                 }
             }
-        }
+            leases
+        };
         
         self.update_metrics("read", start.elapsed(), true).await;
         Ok(leases)
@@ -509,11 +525,13 @@ impl AddressableDirectoryProvider for CowBTreeAddressableProvider {
     async fn list_all_leases(&self) -> OrbitResult<Vec<AddressableLease>> {
         let start = Instant::now();
         
-        let root = self.root.read().unwrap();
-        let leases: Vec<AddressableLease> = root.addressable_values
-            .iter()
-            .filter_map(|v| v.clone())
-            .collect();
+        let leases = {
+            let root = self.root.read().unwrap();
+            root.addressable_values
+                .iter()
+                .filter_map(|v| v.clone())
+                .collect::<Vec<AddressableLease>>()
+        };
         
         self.update_metrics("read", start.elapsed(), true).await;
         Ok(leases)
@@ -522,25 +540,30 @@ impl AddressableDirectoryProvider for CowBTreeAddressableProvider {
     async fn cleanup_expired_leases(&self) -> OrbitResult<u64> {
         let start = Instant::now();
         let now = chrono::Utc::now();
-        let mut count = 0;
         
-        let mut root = self.root.write().unwrap();
-        let mut indices_to_remove = Vec::new();
-        
-        for (i, value) in root.addressable_values.iter().enumerate() {
-            if let Some(lease) = value {
-                if lease.expires_at < now {
-                    indices_to_remove.push(i);
+        let count = {
+            let mut root = self.root.write().unwrap();
+            let mut indices_to_remove = Vec::new();
+            let mut count = 0;
+            
+            // Find expired leases
+            for (i, value) in root.addressable_values.iter().enumerate() {
+                if let Some(lease) = value {
+                    if lease.expires_at < now {
+                        indices_to_remove.push(i);
+                    }
                 }
             }
-        }
-        
-        // Remove in reverse order to maintain indices
-        for &idx in indices_to_remove.iter().rev() {
-            root.keys.remove(idx);
-            root.addressable_values.remove(idx);
-            count += 1;
-        }
+            
+            // Remove expired leases (in reverse order to maintain indices)
+            indices_to_remove.reverse();
+            for idx in indices_to_remove {
+                root.keys.remove(idx);
+                root.addressable_values.remove(idx);
+                count += 1;
+            }
+            count
+        };
         
         self.update_metrics("delete", start.elapsed(), true).await;
         Ok(count)
