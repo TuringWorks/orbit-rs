@@ -5,6 +5,7 @@ use tokio::sync::Mutex;
 use std::time::{Instant, SystemTime};
 use tokio::fs::{File, OpenOptions};
 use tokio::io::AsyncWriteExt;
+use serde::{Serialize, Deserialize};
 
 const MAX_KEYS_PER_NODE: usize = 16; // Small for demonstration, would be ~100-500 in production
 const WAL_BUFFER_SIZE: usize = 1024 * 1024; // 1MB WAL buffer
@@ -161,12 +162,50 @@ impl WriteAheadLog {
             .append(true)
             .open(path)
             .await?;
+        
+        // Determine the next sequence number by reading existing entries
+        let sequence = Self::get_last_sequence(path).await.unwrap_or(0) + 1;
             
         Ok(Self {
             file,
-            sequence: 0,
+            sequence,
             buffer: Vec::with_capacity(WAL_BUFFER_SIZE),
         })
+    }
+    
+    /// Get the last sequence number from the WAL file
+    async fn get_last_sequence(path: &std::path::Path) -> Result<u64, PersistenceError> {
+        if !path.exists() {
+            return Ok(0);
+        }
+        
+        let content = tokio::fs::read(path).await?;
+        let mut last_sequence = 0u64;
+        let mut offset = 0;
+        
+        while offset + 4 <= content.len() {
+            // Read entry length
+            let len_bytes = &content[offset..offset + 4];
+            let entry_len = u32::from_le_bytes([
+                len_bytes[0], len_bytes[1], len_bytes[2], len_bytes[3]
+            ]) as usize;
+            offset += 4;
+            
+            if offset + entry_len <= content.len() {
+                let entry_data = &content[offset..offset + entry_len];
+                
+                // Try to parse the entry to get sequence number
+                if let Ok(entry) = serde_json::from_slice::<WALEntry>(entry_data) {
+                    last_sequence = entry.sequence;
+                }
+                
+                offset += entry_len;
+            } else {
+                break; // Incomplete entry
+            }
+        }
+        
+        Ok(last_sequence)
     }
     
     async fn append(&mut self, operation: WALOperation) -> Result<(), PersistenceError> {
@@ -177,6 +216,7 @@ impl WriteAheadLog {
         };
         
         let serialized = serde_json::to_vec(&entry)?;
+        println!("[WAL] Appending entry {} with {} bytes", self.sequence, serialized.len());
         self.buffer.extend_from_slice(&(serialized.len() as u32).to_le_bytes());
         self.buffer.extend_from_slice(&serialized);
         
@@ -189,9 +229,12 @@ impl WriteAheadLog {
     }
     
     async fn flush(&mut self) -> Result<(), PersistenceError> {
-        self.file.write_all(&self.buffer).await?;
-        self.file.sync_all().await?;
-        self.buffer.clear();
+        if !self.buffer.is_empty() {
+            println!("[WAL] Flushing {} bytes to disk", self.buffer.len());
+            self.file.write_all(&self.buffer).await?;
+            self.file.sync_all().await?;
+            self.buffer.clear();
+        }
         Ok(())
     }
 }
@@ -205,7 +248,7 @@ impl CowBTreePersistence {
         
         let root = BTreeNode::new_leaf(1);
         
-        Ok(Self {
+        let mut persistence = Self {
             root: Arc::new(RwLock::new(root)),
             wal: Arc::new(Mutex::new(wal)),
             snapshots: Arc::new(RwLock::new(HashMap::new())),
@@ -213,13 +256,112 @@ impl CowBTreePersistence {
             data_dir: data_dir.to_path_buf(),
             operation_count: Arc::new(Mutex::new(0)),
             total_memory_used: Arc::new(Mutex::new(0)),
-        })
+        };
+        
+        // Replay WAL entries to recover state
+        persistence.replay_wal(&wal_path).await?;
+        
+        Ok(persistence)
     }
     
     async fn next_version(&self) -> u64 {
         let mut counter = self.version_counter.lock().await;
         *counter += 1;
         *counter
+    }
+    
+    /// Replay WAL entries to recover the tree state
+    async fn replay_wal(&mut self, wal_path: &std::path::Path) -> Result<(), PersistenceError> {
+        if !wal_path.exists() {
+            return Ok(()); // No WAL file to replay
+        }
+        
+        println!("Replaying WAL from: {:?}", wal_path);
+        
+        let content = tokio::fs::read(wal_path).await?;
+        let mut offset = 0;
+        let mut replayed_count = 0;
+        
+        while offset + 4 <= content.len() {
+            // Read entry length
+            let len_bytes = &content[offset..offset + 4];
+            let entry_len = u32::from_le_bytes([
+                len_bytes[0], len_bytes[1], len_bytes[2], len_bytes[3]
+            ]) as usize;
+            offset += 4;
+            
+            if offset + entry_len <= content.len() {
+                let entry_data = &content[offset..offset + entry_len];
+                
+                // Parse and apply the entry
+                match serde_json::from_slice::<WALEntry>(entry_data) {
+                    Ok(entry) => {
+                        match entry.operation {
+                            WALOperation::Insert { key, lease } => {
+                                // Apply the insert without logging to WAL again
+                                self.apply_insert_for_recovery(key, lease).await?;
+                                replayed_count += 1;
+                            }
+                            WALOperation::Delete { key: _ } => {
+                                // Delete operations would be handled here
+                                // For the demo, we primarily focus on inserts
+                            }
+                            WALOperation::Update { key, lease } => {
+                                // Apply update without logging
+                                self.apply_insert_for_recovery(key, lease).await?;
+                                replayed_count += 1;
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("Warning: Failed to parse WAL entry: {}", e);
+                        // Continue processing other entries
+                    }
+                }
+                
+                offset += entry_len;
+            } else {
+                eprintln!("Warning: Incomplete WAL entry found at end of file");
+                break;
+            }
+        }
+        
+        println!("WAL replay completed. Replayed {} operations", replayed_count);
+        Ok(())
+    }
+    
+    /// Force flush the WAL to disk (for testing/demo purposes)
+    pub async fn flush_wal(&self) -> Result<(), PersistenceError> {
+        let mut wal = self.wal.lock().await;
+        wal.flush().await
+    }
+    
+    /// Apply an insert operation during recovery (without WAL logging)
+    async fn apply_insert_for_recovery(&mut self, key: ActorKey, lease: ActorLease) -> Result<(), PersistenceError> {
+        let new_version = self.next_version().await;
+        
+        // COW update of the tree (same logic as cow_insert but without WAL logging)
+        let (new_root, memory_delta) = {
+            let root = self.root.read().unwrap();
+            self.cow_insert_recursive(&*root, key, lease, new_version)?
+        };
+        
+        // Atomic root replacement
+        {
+            let mut root = self.root.write().unwrap();
+            *root = new_root;
+        }
+        
+        // Update memory tracking
+        {
+            let mut total_memory = self.total_memory_used.lock().await;
+            *total_memory = (*total_memory as i64 + memory_delta) as u64;
+        }
+        
+        let mut op_count = self.operation_count.lock().await;
+        *op_count += 1;
+        
+        Ok(())
     }
     
     /// Insert or update a lease with COW semantics
@@ -558,6 +700,142 @@ impl serde::Serialize for WALEntry {
         state.serialize_field("timestamp", &self.timestamp)?;
         state.serialize_field("operation", &self.operation)?;
         state.end()
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for WALOperation {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        use serde::de::{self, MapAccess, Visitor};
+        use std::fmt;
+        
+        struct WALOperationVisitor;
+        
+        impl<'de> Visitor<'de> for WALOperationVisitor {
+            type Value = WALOperation;
+            
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("a WALOperation struct")
+            }
+            
+            fn visit_map<V>(self, mut map: V) -> Result<WALOperation, V::Error>
+            where
+                V: MapAccess<'de>,
+            {
+                let mut op_type: Option<String> = None;
+                let mut key: Option<ActorKey> = None;
+                let mut lease: Option<ActorLease> = None;
+                
+                while let Some(k) = map.next_key()? {
+                    match k {
+                        "type" => {
+                            if op_type.is_some() {
+                                return Err(de::Error::duplicate_field("type"));
+                            }
+                            op_type = Some(map.next_value()?);
+                        }
+                        "key" => {
+                            if key.is_some() {
+                                return Err(de::Error::duplicate_field("key"));
+                            }
+                            key = Some(map.next_value()?);
+                        }
+                        "lease" => {
+                            if lease.is_some() {
+                                return Err(de::Error::duplicate_field("lease"));
+                            }
+                            lease = Some(map.next_value()?);
+                        }
+                        _ => {
+                            let _: serde_json::Value = map.next_value()?;
+                        }
+                    }
+                }
+                
+                let op_type = op_type.ok_or_else(|| de::Error::missing_field("type"))?;
+                let key = key.ok_or_else(|| de::Error::missing_field("key"))?;
+                
+                match op_type.as_str() {
+                    "Insert" => {
+                        let lease = lease.ok_or_else(|| de::Error::missing_field("lease"))?;
+                        Ok(WALOperation::Insert { key, lease })
+                    }
+                    "Update" => {
+                        let lease = lease.ok_or_else(|| de::Error::missing_field("lease"))?;
+                        Ok(WALOperation::Update { key, lease })
+                    }
+                    "Delete" => Ok(WALOperation::Delete { key }),
+                    _ => Err(de::Error::unknown_variant(&op_type, &["Insert", "Update", "Delete"])),
+                }
+            }
+        }
+        
+        deserializer.deserialize_map(WALOperationVisitor)
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for WALEntry {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        use serde::de::{self, MapAccess, Visitor};
+        use std::fmt;
+        
+        struct WALEntryVisitor;
+        
+        impl<'de> Visitor<'de> for WALEntryVisitor {
+            type Value = WALEntry;
+            
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("a WALEntry struct")
+            }
+            
+            fn visit_map<V>(self, mut map: V) -> Result<WALEntry, V::Error>
+            where
+                V: MapAccess<'de>,
+            {
+                let mut sequence: Option<u64> = None;
+                let mut timestamp: Option<SystemTime> = None;
+                let mut operation: Option<WALOperation> = None;
+                
+                while let Some(key) = map.next_key()? {
+                    match key {
+                        "sequence" => {
+                            if sequence.is_some() {
+                                return Err(de::Error::duplicate_field("sequence"));
+                            }
+                            sequence = Some(map.next_value()?);
+                        }
+                        "timestamp" => {
+                            if timestamp.is_some() {
+                                return Err(de::Error::duplicate_field("timestamp"));
+                            }
+                            timestamp = Some(map.next_value()?);
+                        }
+                        "operation" => {
+                            if operation.is_some() {
+                                return Err(de::Error::duplicate_field("operation"));
+                            }
+                            operation = Some(map.next_value()?);
+                        }
+                        _ => {
+                            let _: serde_json::Value = map.next_value()?;
+                        }
+                    }
+                }
+                
+                let sequence = sequence.ok_or_else(|| de::Error::missing_field("sequence"))?;
+                let timestamp = timestamp.ok_or_else(|| de::Error::missing_field("timestamp"))?;
+                let operation = operation.ok_or_else(|| de::Error::missing_field("operation"))?;
+                
+                Ok(WALEntry { sequence, timestamp, operation })
+            }
+        }
+        
+        deserializer.deserialize_map(WALEntryVisitor)
     }
 }
 

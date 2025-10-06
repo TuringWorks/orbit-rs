@@ -1,4 +1,7 @@
+pub mod config;
 pub mod cow_btree;
+pub mod lsm_tree;
+pub mod persistence_factory;
 pub mod rocksdb_impl;
 pub mod workload;
 pub mod metrics;
