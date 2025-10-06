@@ -1,0 +1,266 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: orbit-server-config
+  namespace: orbit-rs
+  labels:
+    app.kubernetes.io/name: orbit-rs
+    app.kubernetes.io/component: config
+data:
+  orbit-server.toml: |
+    # Orbit-RS Server Configuration with Persistence Backend Support
+
+    [server]
+    # Server bind address - use 0.0.0.0 to bind to all interfaces in container
+    bind_address = "0.0.0.0:50051"
+
+    # Health check endpoint
+    health_bind_address = "0.0.0.0:8080"
+
+    # Metrics endpoint for Prometheus
+    metrics_bind_address = "0.0.0.0:9090"
+
+    # Persistence backend configuration
+    # Supported backends: memory, cow_btree, lsm_tree, rocksdb, s3, azure, gcp
+    persistence_backend = "${ORBIT_PERSISTENCE_BACKEND:-memory}"
+
+    # Node configuration
+    [node]
+    # Node ID will be generated from pod name + namespace
+    id = "${POD_NAME}"
+    namespace = "${POD_NAMESPACE}"
+
+    # Cluster discovery configuration
+    [cluster]
+    # Use Kubernetes service discovery
+    discovery_mode = "kubernetes"
+    service_name = "orbit-server"
+    service_namespace = "orbit-rs"
+
+    # Lease configuration for cluster membership
+    lease_duration_seconds = 30
+    lease_renew_interval_seconds = 10
+
+    # Transaction configuration
+    [transactions]
+    # Database configuration
+    database_path = "/app/data/orbit_transactions.db"
+    max_connections = 10
+    enable_wal = true
+
+    # Recovery configuration
+    recovery_timeout_seconds = 300
+    max_recovery_attempts = 3
+
+    # Persistence Backend Configurations
+    # These sections will be used based on the persistence_backend setting
+
+    # Memory backend (default)
+    [persistence.memory]
+    max_entries = ${ORBIT_MEMORY_MAX_ENTRIES:-100000}
+    enable_disk_backup = ${ORBIT_MEMORY_DISK_BACKUP:-false}
+    backup_path = "${ORBIT_MEMORY_BACKUP_PATH:-/app/data/orbit_backup.json}"
+    sync_interval = ${ORBIT_MEMORY_BACKUP_INTERVAL:-300}
+
+    # Copy-on-Write B+ Tree backend
+    [persistence.cow_btree]
+    data_dir = "${ORBIT_COW_DATA_DIR:-/app/data/cow_btree}"
+    max_keys_per_node = ${ORBIT_COW_MAX_KEYS_PER_NODE:-256}
+    wal_buffer_size = ${ORBIT_COW_WAL_BUFFER_SIZE:-1048576}
+    enable_compression = ${ORBIT_COW_ENABLE_COMPRESSION:-true}
+    wal_sync_interval = ${ORBIT_COW_WAL_SYNC_INTERVAL:-5}
+
+    # LSM-Tree backend
+    [persistence.lsm_tree]
+    data_dir = "${ORBIT_LSM_DATA_DIR:-/app/data/lsm_tree}"
+    memtable_size_limit = ${ORBIT_LSM_MEMTABLE_SIZE:-67108864}  # 64MB
+    max_memtables = ${ORBIT_LSM_MAX_MEMTABLES:-10}
+    bloom_filter_fp_rate = ${ORBIT_LSM_BLOOM_FP_RATE:-0.01}
+    enable_compaction = ${ORBIT_LSM_ENABLE_COMPACTION:-true}
+    compaction_threshold = ${ORBIT_LSM_COMPACTION_THRESHOLD:-4}
+
+    # RocksDB backend
+    [persistence.rocksdb]
+    data_dir = "${ORBIT_ROCKSDB_DATA_DIR:-/app/data/rocksdb}"
+    enable_wal = ${ORBIT_ROCKSDB_ENABLE_WAL:-true}
+    max_background_jobs = ${ORBIT_ROCKSDB_MAX_BACKGROUND_JOBS:-4}
+    write_buffer_size = ${ORBIT_ROCKSDB_WRITE_BUFFER_SIZE:-134217728}  # 128MB
+    max_write_buffer_number = ${ORBIT_ROCKSDB_MAX_WRITE_BUFFER_NUMBER:-3}
+    target_file_size_base = ${ORBIT_ROCKSDB_TARGET_FILE_SIZE_BASE:-67108864}  # 64MB
+    enable_statistics = ${ORBIT_ROCKSDB_ENABLE_STATISTICS:-true}
+    block_cache_size = ${ORBIT_ROCKSDB_BLOCK_CACHE_SIZE:-268435456}  # 256MB
+
+    # S3 backend
+    [persistence.s3]
+    endpoint = "${ORBIT_S3_ENDPOINT}"
+    region = "${ORBIT_S3_REGION}"
+    bucket = "${ORBIT_S3_BUCKET}"
+    access_key_id = "${ORBIT_S3_ACCESS_KEY_ID}"
+    secret_access_key = "${ORBIT_S3_SECRET_ACCESS_KEY}"
+    prefix = "${ORBIT_S3_PREFIX:-orbit}"
+    enable_ssl = ${ORBIT_S3_ENABLE_SSL:-true}
+    connection_timeout = ${ORBIT_S3_CONNECTION_TIMEOUT:-30}
+    retry_count = ${ORBIT_S3_RETRY_COUNT:-3}
+
+    # Azure backend
+    [persistence.azure]
+    account_name = "${ORBIT_AZURE_ACCOUNT_NAME}"
+    account_key = "${ORBIT_AZURE_ACCOUNT_KEY}"
+    container_name = "${ORBIT_AZURE_CONTAINER_NAME}"
+    endpoint = "${ORBIT_AZURE_ENDPOINT}"
+    prefix = "${ORBIT_AZURE_PREFIX:-orbit}"
+    connection_timeout = ${ORBIT_AZURE_CONNECTION_TIMEOUT:-30}
+    retry_count = ${ORBIT_AZURE_RETRY_COUNT:-3}
+
+    # Google Cloud backend
+    [persistence.gcp]
+    project_id = "${ORBIT_GCP_PROJECT_ID}"
+    bucket_name = "${ORBIT_GCP_BUCKET_NAME}"
+    credentials_path = "${ORBIT_GCP_CREDENTIALS_PATH:-/app/gcp/credentials.json}"
+    service_account_key = "${ORBIT_GCP_SERVICE_ACCOUNT_KEY}"
+    prefix = "${ORBIT_GCP_PREFIX:-orbit}"
+    connection_timeout = ${ORBIT_GCP_CONNECTION_TIMEOUT:-30}
+    retry_count = ${ORBIT_GCP_RETRY_COUNT:-3}
+
+    # Saga configuration
+    [saga]
+    max_execution_time_seconds = 3600
+    default_step_timeout_seconds = 300
+    max_retry_attempts = 3
+    enable_automatic_failover = true
+
+    # Logging configuration
+    [logging]
+    level = "info"
+    format = "json"  # Use JSON for structured logging in Kubernetes
+
+    # Performance tuning
+    [performance]
+    worker_threads = 4  # Will be overridden by container resources
+    max_blocking_threads = 512
+    thread_stack_size = 2097152  # 2MB
+
+    # TLS configuration (optional)
+    [tls]
+    enabled = false
+    # cert_file = "/app/certs/tls.crt"
+    # key_file = "/app/certs/tls.key"
+    # ca_file = "/app/certs/ca.crt"
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: orbit-server-scripts
+  namespace: orbit-rs
+  labels:
+    app.kubernetes.io/name: orbit-rs
+    app.kubernetes.io/component: scripts
+data:
+  entrypoint.sh: |
+    #!/bin/bash
+    set -e
+
+    # Set environment variables for configuration substitution
+    export POD_NAME=${HOSTNAME}
+    export POD_NAMESPACE=${POD_NAMESPACE:-orbit-rs}
+    export NODE_ID="${POD_NAME}.${POD_NAMESPACE}"
+
+    # Create data directories based on persistence backend
+    mkdir -p /app/data
+
+    case "${ORBIT_PERSISTENCE_BACKEND:-memory}" in
+        "cow_btree")
+            mkdir -p "${ORBIT_COW_DATA_DIR:-/app/data/cow_btree}"
+            echo "Initialized COW B+ Tree data directory: ${ORBIT_COW_DATA_DIR:-/app/data/cow_btree}"
+            ;;
+        "lsm_tree")
+            mkdir -p "${ORBIT_LSM_DATA_DIR:-/app/data/lsm_tree}"
+            echo "Initialized LSM-Tree data directory: ${ORBIT_LSM_DATA_DIR:-/app/data/lsm_tree}"
+            ;;
+        "rocksdb")
+            mkdir -p "${ORBIT_ROCKSDB_DATA_DIR:-/app/data/rocksdb}"
+            echo "Initialized RocksDB data directory: ${ORBIT_ROCKSDB_DATA_DIR:-/app/data/rocksdb}"
+            ;;
+        "s3"|"azure"|"gcp")
+            echo "Using cloud storage backend: ${ORBIT_PERSISTENCE_BACKEND}"
+            # No local data directory needed for cloud backends
+            ;;
+        *)
+            echo "Using memory backend (default)"
+            if [[ "${ORBIT_MEMORY_DISK_BACKUP:-false}" == "true" ]]; then
+                mkdir -p "$(dirname "${ORBIT_MEMORY_BACKUP_PATH:-/app/data/orbit_backup.json}")"
+                echo "Initialized memory backup directory"
+            fi
+            ;;
+    esac
+
+    # Substitute environment variables in config
+    envsubst < /app/config/orbit-server.toml > /tmp/orbit-server.toml
+
+    # Log the selected persistence backend
+    echo "Starting Orbit-RS server with persistence backend: ${ORBIT_PERSISTENCE_BACKEND:-memory}"
+
+    # Start the server
+    exec /app/orbit-server --config /tmp/orbit-server.toml "$@"
+
+  health-check.sh: |
+    #!/bin/bash
+    # Health check script with persistence backend awareness
+    
+    # Basic health check
+    curl -f http://localhost:8080/health || exit 1
+    
+    # Additional checks based on persistence backend
+    case "${ORBIT_PERSISTENCE_BACKEND:-memory}" in
+        "cow_btree"|"lsm_tree"|"rocksdb")
+            # Check if data directory is accessible
+            DATA_DIR="${ORBIT_COW_DATA_DIR:-${ORBIT_LSM_DATA_DIR:-${ORBIT_ROCKSDB_DATA_DIR:-/app/data}}}"
+            if [[ ! -w "$DATA_DIR" ]]; then
+                echo "ERROR: Data directory $DATA_DIR is not writable"
+                exit 1
+            fi
+            ;;
+        "s3")
+            # Basic S3 connectivity check (if AWS CLI is available)
+            if command -v aws >/dev/null 2>&1; then
+                aws s3 ls "${ORBIT_S3_BUCKET}" --endpoint-url="${ORBIT_S3_ENDPOINT}" >/dev/null 2>&1 || {
+                    echo "WARNING: S3 connectivity check failed"
+                }
+            fi
+            ;;
+    esac
+
+---
+# Secret template for cloud storage credentials
+apiVersion: v1
+kind: Secret
+metadata:
+  name: orbit-server-secrets
+  namespace: orbit-rs
+  labels:
+    app.kubernetes.io/name: orbit-rs
+    app.kubernetes.io/component: secrets
+type: Opaque
+data:
+  # S3 credentials (base64 encoded)
+  # s3-access-key-id: ""
+  # s3-secret-access-key: ""
+  
+  # Azure credentials (base64 encoded)
+  # azure-account-key: ""
+  
+  # GCP service account key (base64 encoded)
+  # gcp-service-account-key: ""
+stringData:
+  # Example values - replace with actual secrets
+  # s3-access-key-id: "your-s3-access-key"
+  # s3-secret-access-key: "your-s3-secret-key"
+  # azure-account-key: "your-azure-account-key"
+  # gcp-service-account-key: |
+  #   {
+  #     "type": "service_account",
+  #     "project_id": "your-project-id",
+  #     ...
+  #   }
