@@ -10,10 +10,15 @@ Welcome to the comprehensive documentation hub for Orbit-RS, a high-performance 
 - **[Project Structure](PROJECT_STRUCTURE.md)** - Codebase organization and architecture
 
 ### Core Features
+- **[Virtual Actor Persistence](VIRTUAL_ACTOR_PERSISTENCE.md)** - Actor state persistence, activation, and lifecycle management
+- **[Storage Backend Independence](STORAGE_BACKEND_INDEPENDENCE.md)** - Cloud vs local storage architecture (Quick Reference)
 - **[Transaction Features](features/TRANSACTION_FEATURES.md)** - Distributed transactions, locks, saga patterns, and security
 - **[Protocol Adapters](protocols/PROTOCOL_ADAPTERS.md)** - Redis, PostgreSQL, and MCP protocol support
+- **[Persistence Architecture](PERSISTENCE_ARCHITECTURE.md)** - Storage backends and provider configuration
 
 ### Operations & Deployment  
+- **[Kubernetes Storage Guide](KUBERNETES_STORAGE_GUIDE.md)** - Complete guide to persistence in Kubernetes deployments
+- **[Kubernetes Persistence](KUBERNETES_PERSISTENCE.md)** - Quick setup guide for K8s persistence backends
 - **[Deployment Guide](deployment/DEPLOYMENT.md)** - Kubernetes, CI/CD, and production deployment
 - **[Development Guide](development/DEVELOPMENT.md)** - Contributing, testing, and development setup
 
@@ -71,6 +76,7 @@ Welcome to the comprehensive documentation hub for Orbit-RS, a high-performance 
 ## Core Features
 
 ### Actor System
+- **[Virtual Actor Persistence](VIRTUAL_ACTOR_PERSISTENCE.md)** - Complete guide to actor state persistence and activation
 - [Basic Actor Usage](../README.md#basic-usage) - Creating and invoking actors
 - [Actor Lifecycle](../ORBIT_ARCHITECTURE.md#addressables-virtual-actors) - Activation and deactivation
 - [Examples](../examples/) - Working example implementations
