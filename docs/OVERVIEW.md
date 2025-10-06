@@ -36,12 +36,18 @@ Orbit is a framework for building distributed systems using virtual actors. A vi
 - High-performance gRPC transport with connection pooling
 - Multiple protocol adapters: Redis (RESP), PostgreSQL wire protocol, REST API, and Neo4j Bolt support
 
+### 💾 Persistence & Storage
+- **Multiple Storage Backends**: In-Memory, COW B+Tree, LSM-Tree, and RocksDB
+- **Storage Backend Independence**: Cloud vs local storage with seamless switching
+- **Kubernetes Integration**: Full K8s persistence with StatefulSets and PVCs
+- **Actor State Management**: Automatic persistence with configurable backends
+
 ### 💎 Advanced Features
-- ACID-compliant distributed transactions with 2-phase commit
-- Coordinator failover and transaction recovery mechanisms
-- Persistent logging with durable transaction audit trails using SQLite
-- Built-in metrics and comprehensive observability with Prometheus integration
-- Easy deployment with single binary and minimal dependencies
+- **ACID Distributed Transactions**: 2-phase commit with coordinator failover
+- **Transaction Recovery**: Automatic recovery with durable audit trails
+- **Multiple Protocol Support**: Redis RESP, PostgreSQL wire, MCP, and REST APIs
+- **Comprehensive Observability**: Built-in Prometheus metrics and health checks
+- **Production Ready**: Single binary deployment with Kubernetes operator
 
 ## Architecture
 
@@ -53,18 +59,21 @@ The Rust implementation maintains the same core architecture as the original Kot
 │                 │    │                 │    │                 │
 │ • Actor Proxies │    │ • Data Types    │    │ • Cluster Mgmt  │
 │ • Invocation    │    │ • Messages      │    │ • Load Balancer │
-│ • Lease Mgmt    │    │ • Errors        │    │ • Health Check  │
+│ • Lease Mgmt    │    │ • Transactions  │    │ • Persistence   │
+│                 │    │ • OrbitQL       │    │ • Health Check  │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
          │                       │                       │
          └───────────────────────┼───────────────────────┘
                                  │
-                    ┌─────────────────┐
-                    │   orbit-proto   │
-                    │                 │
-                    │ • gRPC Services │
-                    │ • Proto Buffers │
-                    │ • Serialization │
-                    └─────────────────┘
+       ┌─────────────────────────┼─────────────────────────┐
+       │                         │                         │
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   orbit-proto   │    │ orbit-protocols │    │ orbit-operator  │
+│                 │    │                 │    │                 │
+│ • gRPC Services │    │ • Redis RESP    │    │ • K8s CRDs      │
+│ • Proto Buffers │    │ • PostgreSQL    │    │ • Persistence   │
+│ • Serialization │    │ • REST/HTTP     │    │ • Config Mgmt   │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
 ```
 
 ### Component Overview
@@ -77,17 +86,31 @@ The Rust implementation maintains the same core architecture as the original Kot
 #### orbit-shared
 - **Data Types**: Common data structures and type definitions
 - **Messages**: Inter-actor communication protocols
-- **Errors**: Standardized error handling across the system
+- **Transactions**: Distributed transaction coordination and recovery
+- **OrbitQL**: SQL-like query language for actor systems
+- **Persistence**: Storage backend abstractions and providers
 
 #### orbit-server
 - **Cluster Management**: Node discovery and cluster membership
 - **Load Balancer**: Request distribution and resource optimization
 - **Health Checks**: System monitoring and failure detection
+- **Persistence Providers**: Multiple storage backends (Memory, COW B+Tree, LSM-Tree, RocksDB)
 
 #### orbit-proto
 - **gRPC Services**: Network communication layer
 - **Protocol Buffers**: Serialization and type safety
 - **Cross-language Support**: Interoperability with other systems
+
+#### orbit-protocols
+- **Redis RESP**: Full Redis protocol compatibility
+- **PostgreSQL Wire**: Database protocol adapter
+- **REST/HTTP**: RESTful API interface
+- **MCP Support**: Model Context Protocol integration
+
+#### orbit-operator
+- **Kubernetes CRDs**: Custom resource definitions for K8s deployment
+- **Persistence Configuration**: Declarative storage backend management
+- **Config Management**: Automated configuration and scaling
 
 ## Key Advantages
 

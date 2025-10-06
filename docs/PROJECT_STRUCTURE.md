@@ -14,14 +14,12 @@ orbit-rs/
 ├── README.md                     # Project overview and quick start
 ├── LICENSE-MIT                   # MIT license
 ├── LICENSE-BSD                   # BSD 3-Clause license
-├── CONTRIBUTING.md               # Contributing guidelines
-├── CHANGELOG.md                  # Version history and changes
 │
 ├── orbit-util/                   # Core utilities and base functionality
 ├── orbit-shared/                 # Shared data structures and types
 ├── orbit-proto/                  # Protocol Buffer definitions and gRPC services
 ├── orbit-client/                 # Client-side actor system implementation
-├── orbit-server/                 # Server-side cluster management
+├── orbit-server/                 # Server-side cluster management with persistence
 ├── orbit-server-etcd/            # etcd-based distributed directory
 ├── orbit-server-prometheus/      # Prometheus metrics integration
 ├── orbit-protocols/              # Protocol adapters (Redis, PostgreSQL, MCP)
@@ -30,10 +28,33 @@ orbit-rs/
 ├── orbit-operator/               # Kubernetes operator with custom CRDs
 │
 ├── examples/                     # Example applications and demos
-├── docs/                         # Comprehensive documentation
+│   ├── hello-world/              # Basic actor greeting example
+│   ├── distributed-counter/      # Shared counter with coordination
+│   ├── distributed-transactions/ # Banking transaction example
+│   ├── saga-example/             # Order processing workflow
+│   ├── resp-server/              # Redis RESP protocol server
+│   ├── vector-store/             # Vector database example
+│   ├── pgvector-store/           # PostgreSQL vector extension
+│   ├── timeseries-demo/          # Time series data handling
+│   ├── orbitql-example/          # OrbitQL query examples
+│   └── mcp-*/                    # Model Context Protocol examples
+│
+├── docs/                         # Comprehensive documentation (reorganized)
+│   ├── rfc/                      # Request for Comments documents
+│   ├── architecture/             # Architecture documentation
+│   ├── development/              # Development guides
+│   ├── deployment/               # Deployment documentation
+│   ├── protocols/                # Protocol adapter docs
+│   └── wip/                      # Work-in-progress documents
+│
+├── persistence-benchmark/        # Persistence layer benchmarking
+├── verification/                 # Verification and formal methods
+├── tools/                        # Development tools
+│   └── vscode-orbitql/          # OrbitQL VS Code extension
+├── tests/                        # Integration tests
 ├── scripts/                      # Development and deployment scripts
 ├── helm/                         # Helm charts for Kubernetes deployment
-├── k8s/                         # Kubernetes manifests
+├── k8s/                         # Kubernetes manifests with persistence
 └── .github/                     # GitHub Actions workflows and templates
 ```
 
@@ -78,6 +99,19 @@ orbit-shared/
     ├── node.rs                  # Node and cluster types
     ├── load_balancer.rs         # Load balancing strategies
     ├── health.rs                # Health check definitions
+    ├── orbitql/                 # OrbitQL query language
+    │   ├── mod.rs               # OrbitQL module exports
+    │   ├── lexer.rs             # SQL-like lexer
+    │   ├── parser.rs            # Query parser
+    │   ├── ast.rs               # Abstract syntax tree
+    │   ├── executor.rs          # Query executor
+    │   └── lsp/                 # Language Server Protocol
+    │       ├── mod.rs           # LSP implementation
+    │       └── handlers.rs      # LSP request handlers
+    ├── persistence/             # Persistence abstractions
+    │   ├── mod.rs               # Persistence traits and types
+    │   ├── provider.rs          # Storage provider interface
+    │   └── config.rs            # Configuration types
     └── transactions/            # Transaction system
         ├── mod.rs               # Transaction module exports
         ├── types.rs             # Transaction types and IDs
@@ -96,6 +130,9 @@ orbit-shared/
 - Distributed locks with deadlock detection
 - Load balancing strategies
 - Health monitoring abstractions
+- OrbitQL query language with LSP support
+- Persistence provider abstractions
+- Multi-backend storage configuration
 
 ### orbit-proto
 **Purpose**: Protocol Buffer definitions and gRPC service specifications
@@ -169,16 +206,27 @@ orbit-server/
     ├── load_balancer.rs        # Request load balancing
     ├── health.rs               # Health monitoring
     ├── discovery.rs            # Service discovery server
-    └── grpc_server.rs          # gRPC server implementation
+    ├── grpc_server.rs          # gRPC server implementation
+    ├── mesh.rs                 # Mesh networking and coordination
+    └── persistence/            # Persistence layer with multiple backends
+        ├── mod.rs              # Persistence abstractions and traits
+        ├── config.rs           # Configuration for persistence backends
+        ├── dynamic.rs          # Dynamic provider switching and monitoring
+        ├── memory.rs           # In-memory storage provider
+        ├── cow_btree.rs        # Copy-on-Write B+ Tree provider
+        ├── lsm_tree.rs         # LSM-Tree storage provider
+        └── rocksdb.rs          # RocksDB storage provider
 ```
 
 **Key Features**:
-- Actor lifecycle and state management
+- Actor lifecycle and state management with persistence
+- Multiple storage backends (Memory, COW B+Tree, LSM-Tree, RocksDB)
 - Cluster membership and coordination
 - Health monitoring and failure detection
 - Load balancing across cluster nodes
 - gRPC service implementation
 - Service discovery and registration
+- Storage backend independence and hot-swapping
 
 ## Protocol and Integration Crates
 
@@ -242,9 +290,10 @@ orbit-operator/
     ├── main.rs                # Operator entry point
     ├── controller.rs          # Main controller logic
     ├── resources/             # CRD implementations
-    │   ├── cluster.rs         # OrbitCluster CRD
+    │   ├── cluster.rs         # OrbitCluster CRD with persistence config
     │   ├── actor.rs           # OrbitActor CRD
     │   └── transaction.rs     # OrbitTransaction CRD
+    ├── crd.rs                 # Custom resource definitions with persistence
     ├── reconciler.rs          # Resource reconciliation
     ├── config.rs              # Operator configuration
     └── error.rs               # Operator-specific errors
@@ -252,9 +301,11 @@ orbit-operator/
 
 **Key Features**:
 - Custom Resource Definitions for Orbit resources
-- Automated cluster deployment and scaling
+- Automated cluster deployment and scaling with persistence
 - Actor lifecycle management in Kubernetes
 - Resource reconciliation and state management
+- Storage backend configuration and management
+- StatefulSet with PVC templates for persistence
 - Integration with Kubernetes ecosystem
 - Production-ready deployment automation
 
@@ -355,8 +406,10 @@ orbit-operator (orchestration)
 - **tower**: Service abstractions and middleware
 
 #### Storage and Persistence
+- **rocksdb**: High-performance key-value store
 - **sqlx**: Async SQL database driver
-- **sled**: Embedded database (optional)
+- **bloom**: Bloom filter implementation for LSM-Tree
+- **base64**: Binary encoding for WAL operations
 - **redis**: Redis client (for protocol adapter)
 
 #### Kubernetes Integration

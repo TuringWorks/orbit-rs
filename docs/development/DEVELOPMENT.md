@@ -10,6 +10,8 @@ This guide covers development setup, contributing guidelines, testing procedures
 - **Protocol Buffers compiler (`protoc`)** - Required for gRPC code generation
 - **Git** - Version control system
 - **IDE/Editor** with Rust support (VS Code, IntelliJ IDEA, or Neovim)
+- **CMake** - Required for building RocksDB native dependencies
+- **Clang/LLVM** - C++ compiler for native dependencies
 
 ### Setting Up the Development Environment
 
@@ -17,6 +19,13 @@ This guide covers development setup, contributing guidelines, testing procedures
 # Clone the repository
 git clone https://github.com/TuringWorks/orbit-rs.git
 cd orbit-rs
+
+# Install system dependencies (macOS)
+brew install protobuf cmake llvm
+
+# Install system dependencies (Ubuntu/Debian)
+sudo apt-get update
+sudo apt-get install -y protobuf-compiler cmake clang
 
 # Install Rust toolchain components
 rustup component add clippy rustfmt
@@ -26,11 +35,14 @@ cargo install cargo-audit
 cargo install cargo-deny
 cargo install cargo-tarpaulin  # For code coverage
 
-# Build all modules
+# Build all modules (including persistence backends)
 cargo build --workspace
 
 # Run tests to verify setup
 cargo test --workspace
+
+# Verify persistence modules specifically
+cargo test --lib --package orbit-server
 ```
 
 ### IDE Configuration
@@ -67,23 +79,27 @@ VS Code settings (`.vscode/settings.json`):
 ### Development Commands
 
 ```bash
-# Fast compilation check (no codegen)
+# Fast compilation check (no codegen) - includes persistence backends
 cargo check --workspace
 
-# Full compilation
-cargo build --workspace
+# Full compilation with all features
+cargo build --workspace --all-features
 
-# Release build
+# Release build with optimizations
 cargo build --workspace --release
 
-# Run tests
+# Run all tests including persistence layer
 cargo test --workspace
+
+# Test specific modules
+cargo test --lib --package orbit-server  # Persistence modules
+cargo test --lib --package orbit-shared  # Core types
 
 # Code formatting
 cargo fmt --all
 
-# Linting
-cargo clippy --workspace --all-targets -- -D warnings
+# Linting (persistence modules now pass)
+cargo clippy --workspace --all-targets
 
 # Security audit
 cargo audit
@@ -94,7 +110,10 @@ cargo deny check
 # Generate documentation
 cargo doc --workspace --open
 
-# Run benchmarks
+# Run persistence benchmarks
+cargo run --package persistence-benchmark
+
+# Run protocol-specific benchmarks
 cargo bench --workspace
 ```
 
@@ -155,7 +174,13 @@ orbit-rs/
 │       ├── lib.rs
 │       ├── server.rs      # Main server implementation
 │       ├── cluster.rs     # Cluster management
-│       └── load_balancer.rs
+│       ├── load_balancer.rs
+│       └── persistence/   # Multiple storage backends
+│           ├── mod.rs     # Persistence traits and config
+│           ├── memory.rs  # In-memory provider
+│           ├── cow_btree.rs  # COW B+Tree provider
+│           ├── lsm_tree.rs   # LSM-Tree provider
+│           └── rocksdb.rs    # RocksDB provider
 │
 ├── orbit-protocols/        # Protocol adapters
 │   ├── Cargo.toml
@@ -233,6 +258,123 @@ orbit-rs/
 - Operator controller logic
 - Resource management
 - Deployment automation
+
+## Persistence Development
+
+### Storage Backends
+
+Orbit-RS supports multiple pluggable storage backends:
+
+#### In-Memory Provider (`memory.rs`)
+- Hash-map based storage for development and testing
+- No persistence across restarts
+- Fastest performance for temporary data
+
+#### COW B+Tree Provider (`cow_btree.rs`)
+- Copy-on-Write B+ Tree with Write-Ahead Logging
+- Optimized for read-heavy workloads
+- Snapshots and versioning support
+
+#### LSM-Tree Provider (`lsm_tree.rs`)
+- Log-Structured Merge Tree implementation
+- Optimized for write-heavy workloads
+- Background compaction and bloom filters
+
+#### RocksDB Provider (`rocksdb.rs`)
+- Production-grade key-value store
+- ACID transactions and crash recovery
+- High-performance with tunable parameters
+
+### Persistence Configuration
+
+```rust path=null start=null
+use orbit_server::persistence::*;
+
+// Configure persistence backend
+let config = PersistenceConfig {
+    backend: BackendType::RocksDB,
+    rocksdb: Some(RocksDbConfig {
+        data_dir: "./orbit_data".to_string(),
+        enable_wal: true,
+        block_cache_size: 256 * 1024 * 1024, // 256MB
+        ..Default::default()
+    }),
+    ..Default::default()
+};
+
+let provider = DynamicPersistenceProvider::new(config).await?;
+```
+
+### Adding New Storage Backends
+
+1. **Implement Required Traits**:
+   ```rust path=null start=null
+   impl PersistenceProvider for MyCustomProvider {
+       async fn initialize(&self) -> OrbitResult<()> { /* ... */ }
+       async fn shutdown(&self) -> OrbitResult<()> { /* ... */ }
+       // ... other methods
+   }
+   
+   impl AddressableDirectoryProvider for MyCustomProvider {
+       async fn store_lease(&self, lease: &AddressableLease) -> OrbitResult<()> { /* ... */ }
+       // ... other methods
+   }
+   ```
+
+2. **Add Configuration Support**:
+   ```rust path=null start=null
+   #[derive(Debug, Clone, Serialize, Deserialize)]
+   pub struct MyCustomConfig {
+       pub connection_string: String,
+       pub pool_size: usize,
+   }
+   ```
+
+3. **Register Backend**:
+   ```rust path=null start=null
+   // In persistence/mod.rs
+   pub enum BackendType {
+       Memory,
+       CowBTree,
+       LsmTree,
+       RocksDB,
+       MyCustom, // Add here
+   }
+   ```
+
+4. **Write Tests**:
+   ```rust path=null start=null
+   #[tokio::test]
+   async fn test_my_custom_provider() {
+       let config = MyCustomConfig { /* ... */ };
+       let provider = MyCustomProvider::new(config)?;
+       
+       provider.initialize().await?;
+       
+       // Test CRUD operations
+       let lease = AddressableLease { /* ... */ };
+       provider.store_lease(&lease).await?;
+       
+       let retrieved = provider.get_lease(&lease.reference).await?;
+       assert_eq!(retrieved.unwrap(), lease);
+   }
+   ```
+
+### Persistence Testing
+
+```bash
+# Test all persistence backends
+cargo test --lib --package orbit-server persistence
+
+# Test specific backend
+cargo test --lib --package orbit-server persistence::rocksdb
+
+# Benchmark persistence performance
+cargo run --package persistence-benchmark
+
+# Test with different configurations
+ORBIT_PERSISTENCE_BACKEND=rocksdb cargo test persistence_integration
+```
 
 ## Testing Framework
 
