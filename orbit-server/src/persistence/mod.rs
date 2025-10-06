@@ -18,6 +18,10 @@ pub mod config;
 pub mod dynamic;
 // pub mod health; // TODO: File missing
 // pub mod migration; // TODO: File missing
+pub mod cow_btree;
+pub mod lsm_tree;
+pub mod rocksdb;
+pub mod factory;
 
 /// Configuration for different storage providers
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -42,6 +46,12 @@ pub enum PersistenceConfig {
     Flash(FlashConfig),
     /// Composite provider with primary/backup configuration
     Composite(CompositeConfig),
+    /// Copy-on-Write B+ Tree with WAL
+    CowBTree(crate::persistence::cow_btree::CowBTreeConfig),
+    /// LSM-Tree with compaction
+    LsmTree(crate::persistence::lsm_tree::LsmTreeConfig),
+    /// RocksDB embedded database
+    RocksDB(crate::persistence::rocksdb::RocksDbConfig),
 }
 
 /// Memory storage configuration
