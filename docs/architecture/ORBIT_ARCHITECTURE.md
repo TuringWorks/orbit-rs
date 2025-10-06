@@ -1,89 +1,121 @@
-# Orbit Architecture Analysis
+# Orbit-RS Architecture
 
 ## Project Overview
 
-Orbit is a distributed actor system framework for building highly scalable real-time services. Originally developed by Electronic Arts, it's built on Kotlin/JVM and provides an actor model abstraction for distributed computing.
+Orbit-RS is a next-generation distributed actor system framework built in Rust, providing a comprehensive multi-model database platform with advanced query capabilities. It extends the original Orbit concept with native support for graph databases, time series analytics, and unified query processing.
 
 ## Key Features
 
-- **Virtual Actor Model**: Addressable actors that exist conceptually but are instantiated on-demand
-- **Location Transparency**: Actors can be invoked regardless of their physical location in the cluster
-- **Automatic Load Balancing**: Built-in distributed actor placement and migration
-- **GRPC Communication**: High-performance communication between nodes using Protocol Buffers
-- **Lease-based Management**: Actors and nodes use lease-based lifetime management
-- **Spring Integration**: Plugin available for Spring Framework integration
+- **Virtual Actor Model**: Addressable actors with persistent state and distributed execution
+- **Multi-Model Database**: Native support for graphs, documents, time series, and relational data
+- **Advanced Query Languages**: Cypher, AQL (ArrangoDB Query Language), and OrbitQL support
+- **High-Performance Time Series**: Real-time analytics with advanced compression and partitioning
+- **Distributed by Design**: Built for horizontal scaling and fault tolerance
+- **Actor Integration**: Direct database access through the actor system
+
+## System Architecture
+
+### High-Level Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              Query Layer                                   │
+│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐  │
+│  │   Cypher    │    │     AQL     │    │  OrbitQL    │    │ Protocol    │  │
+│  │   Parser    │    │   Parser    │    │  Parser     │    │ Adapters    │  │
+│  │             │    │             │    │             │    │ (Neo4j Bolt)│  │
+│  └─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘  │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           Query Engine Layer                               │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────────────────┐  │
+│  │ Query Planner & │  │  Execution      │  │    Query Optimization &     │  │
+│  │   Optimizer     │  │    Engine       │  │    Distributed Routing     │  │
+│  └─────────────────┘  └─────────────────┘  └─────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        Multi-Model Storage Layer                           │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────────────────┐  │
+│  │  Graph Database │  │  Time Series    │  │   Document & Key-Value      │  │
+│  │                 │  │    Engine       │  │       Storage               │  │
+│  │ • Node Storage  │  │ • In-Memory     │  │ • JSON Documents            │  │
+│  │ • Relationship  │  │ • Redis TS      │  │ • Relational Tables         │  │
+│  │   Storage       │  │ • TimescaleDB   │  │ • Actor State Storage       │  │
+│  │ • Graph ML      │  │ • Compression   │  │                             │  │
+│  │ • Analytics     │  │ • Partitioning  │  │                             │  │
+│  └─────────────────┘  └─────────────────┘  └─────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          Actor System Layer                                │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────────────────┐  │
+│  │ Virtual Actors  │  │   Persistence   │  │    Cluster Management      │  │
+│  │                 │  │                 │  │                             │  │
+│  │ • Addressable   │  │ • COW B-Tree    │  │ • Node Discovery            │  │
+│  │   Leasing       │  │ • LSM Tree      │  │ • Load Balancing            │  │
+│  │ • State Mgmt    │  │ • RocksDB       │  │ • Fault Tolerance           │  │
+│  │ • Lifecycle     │  │ • Memory        │  │ • Health Monitoring         │  │
+│  └─────────────────┘  └─────────────────┘  └─────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
 
 ## Module Architecture
 
-The project is structured as a multi-module Gradle build with the following main components:
+Orbit-RS is structured as a Rust workspace with the following main crates:
 
-### Core Modules
-
-#### orbit-util
-- **Purpose**: Common utilities and base functionality
-- **Dependencies**: kotlin-logging, micrometer-core
-- **Key Components**: Logging utilities, metrics support, RNG utilities
+### Core Crates
 
 #### orbit-shared
-- **Purpose**: Shared data structures and interfaces used by both client and server
-- **Dependencies**: orbit-util, kotlin-reflect
-- **Key Components**: 
-  - `Addressable` interfaces and types
-  - `NodeId` and cluster management types
-  - `Message` and communication protocols
-  - Exception handling
-
-#### orbit-proto
-- **Purpose**: Protocol Buffer definitions and conversion utilities
-- **Dependencies**: grpc, protobuf
+- **Purpose**: Shared data structures, traits, and utilities
 - **Key Components**:
-  - Proto definitions for messages, nodes, addressables
-  - Kotlin converters between proto and domain objects
-  - GRPC service definitions
-
-### Client Module
-
-#### orbit-client
-- **Purpose**: Client-side actor system implementation
-- **Dependencies**: orbit-util, orbit-shared, orbit-proto, coroutines, jackson, classgraph
-- **Key Components**:
-  - `AddressableProxy`: Dynamic proxy for actor invocations
-  - `InvocationSystem`: Handles remote actor method calls
-  - `AddressableLeaser`: Manages actor lease lifecycle
-  - Actor lifecycle management (OnActivate, OnDeactivate)
-  - Connection management and routing
-
-### Server Module
+  - Graph database types (`GraphNode`, `GraphRelationship`, `GraphStorage`)
+  - Time series engine (`TimeSeriesEngine`, compression algorithms)
+  - Actor system primitives (`NodeId`, `AddressableReference`)
+  - OrbitQL query language implementation
+  - Transaction and persistence traits
 
 #### orbit-server
-- **Purpose**: Server-side cluster management and actor hosting
-- **Dependencies**: orbit-util, orbit-shared, orbit-proto, grpc-netty
+- **Purpose**: Server-side actor hosting and cluster management
 - **Key Components**:
-  - `AddressableDirectory`: Tracks actor locations
-  - `ClusterManager`: Manages cluster membership
-  - Node discovery and health checking
-  - Lease management and renewal
+  - `AddressableDirectory`: Actor location tracking
+  - `ClusterNodeProvider`: Node management
+  - Persistence backends (Memory, COW B-Tree, LSM Tree, RocksDB)
+  - Kubernetes operator integration
+  - Dynamic persistence configuration
 
-### Extension Modules
-
-#### orbit-server-etcd
-- **Purpose**: etcd-based distributed directory implementation
+#### orbit-protocols
+- **Purpose**: Protocol implementations and query engines
 - **Key Components**:
-  - `EtcdAddressableDirectory`
-  - `EtcdNodeDirectory`
+  - Cypher parser and execution engine
+  - AQL parser and execution engine  
+  - Neo4j Bolt protocol adapter
+  - REST API server with WebSocket support
+  - Protocol buffer definitions
 
-#### orbit-server-prometheus
-- **Purpose**: Prometheus metrics integration
+### Specialized Modules
 
-#### orbit-client-spring-plugin
-- **Purpose**: Spring Framework integration
-- **Key Components**: Spring-aware actor constructors
+#### orbit-operator
+- **Purpose**: Kubernetes operator for cluster management
+- **Key Components**:
+  - Custom Resource Definitions (CRDs)
+  - Operator controller logic
+  - Persistence configuration management
 
-#### orbit-application
-- **Purpose**: Application-level utilities and configuration
-
-#### orbit-benchmarks
-- **Purpose**: Performance benchmarks using JMH
+#### Examples and Testing
+- **examples/**: Demonstration applications
+  - Hello World actor example
+  - OrbitQL usage examples
+  - Time series analytics demo
+  - Persistence configuration examples
+- **tests/**: Integration and performance tests
+  - Graph database tests
+  - Time series engine tests
+  - Protocol compatibility tests
 
 ## Core Concepts
 

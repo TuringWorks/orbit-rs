@@ -855,6 +855,7 @@ mod tests {
 
         // Create a simple SELECT with constant expression
         let stmt = Statement::Select(SelectStatement {
+            with_clauses: Vec::new(),
             fields: vec![SelectField::All],
             from: vec![FromClause::Table {
                 name: "test".to_string(),

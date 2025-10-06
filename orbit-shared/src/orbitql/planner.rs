@@ -466,6 +466,7 @@ mod tests {
         let planner = QueryPlanner::new();
 
         let stmt = Statement::Select(SelectStatement {
+            with_clauses: Vec::new(),
             fields: vec![SelectField::All],
             from: vec![FromClause::Table {
                 name: "users".to_string(),
@@ -496,6 +497,7 @@ mod tests {
         let planner = QueryPlanner::new();
 
         let stmt = Statement::Select(SelectStatement {
+            with_clauses: Vec::new(),
             fields: vec![SelectField::All],
             from: vec![FromClause::Table {
                 name: "users".to_string(),

@@ -23,9 +23,19 @@ pub enum Statement {
     Live(LiveStatement),
 }
 
+/// Common Table Expression (CTE) clause
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct WithClause {
+    pub name: String,
+    pub columns: Option<Vec<String>>,
+    pub query: Box<SelectStatement>,
+    pub recursive: bool,
+}
+
 /// SELECT statement for querying data
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SelectStatement {
+    pub with_clauses: Vec<WithClause>,
     pub fields: Vec<SelectField>,
     pub from: Vec<FromClause>,
     pub where_clause: Option<Expression>,
@@ -322,6 +332,10 @@ pub enum BinaryOperator {
     In,
     NotIn,
 
+    // Null checking
+    Is,
+    IsNot,
+
     // String operations
     Contains,
     StartsWith,
@@ -567,6 +581,7 @@ impl SelectStatement {
     /// Creates a new empty SELECT statement
     pub fn new() -> Self {
         Self {
+            with_clauses: Vec::new(),
             fields: vec![SelectField::All],
             from: Vec::new(),
             where_clause: None,

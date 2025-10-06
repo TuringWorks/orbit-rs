@@ -23,6 +23,7 @@ members = [
     "examples/saga-example",
     "examples/timeseries-demo",
     "examples/orbitql-example",
+    "examples/multi-model-query-example",
 ]
 
 [workspace.package]

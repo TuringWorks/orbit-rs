@@ -80,6 +80,8 @@ pub enum TokenType {
     Commit,
     Rollback,
     Relate,
+    With,
+    Recursive,
 
     // Graph keywords
     Node,
@@ -93,6 +95,7 @@ pub enum TokenType {
     Window,
     Range,
     Now,
+    Interval,
 
     // Operators
     Equal,              // =
@@ -229,6 +232,8 @@ impl Token {
                 | Commit
                 | Rollback
                 | Relate
+                | With
+                | Recursive
                 | Node
                 | Edge
                 | Path
@@ -238,6 +243,7 @@ impl Token {
                 | Window
                 | Range
                 | Now
+                | Interval
         )
     }
 
@@ -411,6 +417,8 @@ impl Lexer {
         keywords.insert("COMMIT".to_string(), TokenType::Commit);
         keywords.insert("ROLLBACK".to_string(), TokenType::Rollback);
         keywords.insert("RELATE".to_string(), TokenType::Relate);
+        keywords.insert("WITH".to_string(), TokenType::With);
+        keywords.insert("RECURSIVE".to_string(), TokenType::Recursive);
 
         // Graph keywords
         keywords.insert("NODE".to_string(), TokenType::Node);
@@ -424,6 +432,7 @@ impl Lexer {
         keywords.insert("WINDOW".to_string(), TokenType::Window);
         keywords.insert("RANGE".to_string(), TokenType::Range);
         keywords.insert("NOW".to_string(), TokenType::Now);
+        keywords.insert("INTERVAL".to_string(), TokenType::Interval);
 
         // Boolean and null literals
         keywords.insert("TRUE".to_string(), TokenType::Boolean);
