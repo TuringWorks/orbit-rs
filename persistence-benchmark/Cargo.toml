@@ -12,6 +12,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 uuid = { version = "1.0", features = ["v4", "serde"] }
 dashmap = "5.0"
+rand = "0.8"
 async-trait = "0.1"
 
 # Benchmarking
@@ -54,5 +55,13 @@ name = "cow_btree_demo"
 path = "examples/cow_btree_demo.rs"
 
 [[example]]
+name = "cow_btree_persistence_demo"
+path = "examples/cow_btree_persistence_demo.rs"
+
+[[example]]
 name = "rocksdb_demo"
 path = "examples/rocksdb_demo.rs"
+
+[[example]]
+name = "configurable_backends_demo"
+path = "examples/configurable_backends_demo.rs"
