@@ -7,6 +7,7 @@ pub mod election_state;
 pub mod exception;
 pub mod graph;
 pub mod integrated_recovery;
+pub mod timeseries;
 pub mod k8s_election;
 pub mod mesh;
 pub mod net;
@@ -31,3 +32,6 @@ pub use router::*;
 
 // Re-export advanced transaction features
 pub use transactions::*;
+
+// Re-export time series functionality
+pub use timeseries::*;

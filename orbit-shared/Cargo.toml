@@ -17,7 +17,7 @@ sha2 = "0.10"
 anyhow.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
-async-trait = "0.1"
+async-trait.workspace = true
 uuid.workspace = true
 # Using SQLx fork with RSA vulnerability fix (RUSTSEC-2023-0071)
 # Repository: https://github.com/ravituringworks/sqlx-no-rsa
