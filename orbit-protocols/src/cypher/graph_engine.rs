@@ -354,7 +354,7 @@ impl ExecutionContext {
 }
 
 /// Query execution result
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct QueryResult {
     /// Result nodes
     pub nodes: Vec<GraphNode>,

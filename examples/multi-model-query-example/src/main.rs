@@ -23,13 +23,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // =================================================================
     // Sample Data Setup (would normally come from actual storage)
     // =================================================================
-    
+
     setup_sample_data().await;
 
     // =================================================================
     // 1. BASIC DOCUMENT QUERIES
     // =================================================================
-    
+
     println!("📄 1. BASIC DOCUMENT QUERIES");
     println!("-----------------------------");
 
@@ -48,12 +48,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         ORDER BY created_at DESC
         LIMIT 5
     "#;
-    
+
     println!("Query: {}", query1);
     demonstrate_query(&mut engine, query1, QueryParams::new(), &context).await?;
 
     // =================================================================
-    // 2. GRAPH RELATIONSHIP QUERIES  
+    // 2. GRAPH RELATIONSHIP QUERIES
     // =================================================================
 
     println!("\n🔗 2. GRAPH RELATIONSHIP QUERIES");
@@ -343,14 +343,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     "#;
 
     println!("Running EXPLAIN ANALYZE on complex query...");
-    match engine.explain_analyze(analyze_query, QueryParams::new(), context.clone()).await {
+    match engine
+        .explain_analyze(analyze_query, QueryParams::new(), context.clone())
+        .await
+    {
         Ok((_result, profile)) => {
             println!("✅ Query executed successfully!");
             println!("📊 Performance Profile:");
             println!("   - Profile ID: {}", profile.profile_id);
             println!("   - Total Phases: {}", profile.phases.len());
             println!("   - Execution completed with detailed profiling");
-            
+
             // In a real implementation, you'd display:
             // - Execution time breakdown by phase
             // - Memory usage statistics
@@ -397,7 +400,6 @@ async fn demonstrate_query(
     params: QueryParams,
     context: &QueryContext,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    
     // First validate the query syntax
     match engine.validate(query) {
         Ok(_) => println!("✅ Query validation: PASSED"),
@@ -420,10 +422,10 @@ async fn demonstrate_query(
             println!("💡 Note: This is expected without actual data storage backends");
         }
     }
-    
+
     println!("   ⚡ Query processing pipeline completed successfully");
     println!();
-    
+
     Ok(())
 }
 
@@ -431,34 +433,34 @@ async fn demonstrate_query(
 async fn setup_sample_data() {
     println!("🔧 Setting up sample multi-model data...");
     println!();
-    
+
     println!("📄 Document Collections:");
     println!("   • users: 1000+ user profiles with demographics");
     println!("   • products: E-commerce catalog with categories");
     println!("   • orders: Purchase history and transaction data");
     println!();
-    
+
     println!("🔗 Graph Relationships:");
     println!("   • follows: User social connections (directed)");
-    println!("   • likes: User preferences and interactions");  
+    println!("   • likes: User preferences and interactions");
     println!("   • purchases: User-product purchase relationships");
     println!("   • reviews: User reviews of products with ratings");
     println!();
-    
+
     println!("📊 Time Series Collections:");
     println!("   • user_metrics: Page views, session duration, clicks");
     println!("   • system_metrics: Server performance, response times");
     println!("   • event_stream: User actions, purchases, logins");
     println!("   • sensor_data: IoT device readings (if applicable)");
     println!();
-    
+
     println!("⚡ Data Volume:");
     println!("   • 1,000+ users with full profiles");
     println!("   • 50,000+ social relationships");
     println!("   • 100,000+ time series data points");
     println!("   • 10,000+ product interactions");
     println!();
-    
+
     println!("✅ Sample data ready for multi-model queries!");
     println!();
 }

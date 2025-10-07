@@ -314,8 +314,17 @@ impl Parser {
         let alias = if self.matches(&[TokenType::As]) {
             self.advance();
             Some(self.expect_identifier_or_keyword()?.value.clone())
-        } else if matches!(self.peek()?.token_type, TokenType::Identifier | TokenType::Metrics | TokenType::Aggregate | TokenType::Window | TokenType::Range | TokenType::Node | TokenType::Edge | TokenType::Path)
-            && !self.is_reserved_keyword(&self.peek()?.value)
+        } else if matches!(
+            self.peek()?.token_type,
+            TokenType::Identifier
+                | TokenType::Metrics
+                | TokenType::Aggregate
+                | TokenType::Window
+                | TokenType::Range
+                | TokenType::Node
+                | TokenType::Edge
+                | TokenType::Path
+        ) && !self.is_reserved_keyword(&self.peek()?.value)
         {
             Some(self.advance().value.clone())
         } else {
@@ -517,7 +526,7 @@ impl Parser {
                 TokenType::In => BinaryOperator::In,
                 TokenType::Is => {
                     self.advance(); // consume IS
-                    
+
                     // Check for NOT after IS
                     let is_not = if self.matches(&[TokenType::Not]) {
                         self.advance(); // consume NOT
@@ -525,15 +534,15 @@ impl Parser {
                     } else {
                         false
                     };
-                    
+
                     let right = self.parse_term()?;
-                    
+
                     let operator = if is_not {
                         BinaryOperator::IsNot
                     } else {
                         BinaryOperator::Is
                     };
-                    
+
                     expr = Expression::Binary {
                         left: Box::new(expr),
                         operator,
@@ -693,11 +702,14 @@ impl Parser {
                 // Handle function calls
                 if self.matches(&[TokenType::LeftParen]) {
                     self.advance();
-                    
+
                     if let Expression::Identifier(name) = &expr {
                         // Check for aggregate functions with DISTINCT
-                        let is_aggregate = matches!(name.to_uppercase().as_str(), "COUNT" | "SUM" | "AVG" | "MIN" | "MAX");
-                        
+                        let is_aggregate = matches!(
+                            name.to_uppercase().as_str(),
+                            "COUNT" | "SUM" | "AVG" | "MIN" | "MAX"
+                        );
+
                         if is_aggregate {
                             // Check for DISTINCT
                             let distinct = if self.matches(&[TokenType::Distinct]) {
@@ -706,9 +718,11 @@ impl Parser {
                             } else {
                                 false
                             };
-                            
+
                             // Parse aggregate expression
-                            let expression = if name.to_uppercase() == "COUNT" && self.matches(&[TokenType::Multiply]) {
+                            let expression = if name.to_uppercase() == "COUNT"
+                                && self.matches(&[TokenType::Multiply])
+                            {
                                 self.advance(); // consume *
                                 None
                             } else if self.matches(&[TokenType::RightParen]) {
@@ -716,21 +730,23 @@ impl Parser {
                             } else {
                                 Some(Box::new(self.parse_expression()?))
                             };
-                            
+
                             self.expect(TokenType::RightParen)?;
-                            
+
                             let aggregate_func = match name.to_uppercase().as_str() {
                                 "COUNT" => AggregateFunction::Count,
                                 "SUM" => AggregateFunction::Sum,
                                 "AVG" => AggregateFunction::Avg,
                                 "MIN" => AggregateFunction::Min,
                                 "MAX" => AggregateFunction::Max,
-                                _ => return Err(ParseError::InvalidExpression {
-                                    message: format!("Unknown aggregate function: {}", name),
-                                    token: token.clone(),
-                                }),
+                                _ => {
+                                    return Err(ParseError::InvalidExpression {
+                                        message: format!("Unknown aggregate function: {}", name),
+                                        token: token.clone(),
+                                    })
+                                }
                             };
-                            
+
                             expr = Expression::Aggregate {
                                 function: aggregate_func,
                                 expression,
@@ -744,15 +760,21 @@ impl Parser {
                                 self.parse_expression_list()?
                             };
                             self.expect(TokenType::RightParen)?;
-                            
+
                             // Special handling for specific functions
                             match name.to_uppercase().as_str() {
                                 "COALESCE" | "ISNULL" | "NVL" => {
                                     // These are null-handling functions
-                                    expr = Expression::Function { name: name.clone(), args };
-                                },
+                                    expr = Expression::Function {
+                                        name: name.clone(),
+                                        args,
+                                    };
+                                }
                                 _ => {
-                                    expr = Expression::Function { name: name.clone(), args };
+                                    expr = Expression::Function {
+                                        name: name.clone(),
+                                        args,
+                                    };
                                 }
                             }
                         }
@@ -1032,7 +1054,7 @@ impl Parser {
             })
         }
     }
-    
+
     /// Expect an identifier token, allowing certain keywords to be used as identifiers
     fn expect_identifier_or_keyword(&mut self) -> Result<&Token, ParseError> {
         let token = self.peek()?;
@@ -1133,29 +1155,29 @@ impl Parser {
     /// Parse SELECT statement with CTE support
     fn parse_select_with_cte(&mut self) -> Result<SelectStatement, ParseError> {
         self.expect(TokenType::With)?;
-        
+
         let mut with_clauses = Vec::new();
-        
+
         // Parse first CTE
         with_clauses.push(self.parse_with_clause()?);
-        
+
         // Parse additional CTEs
         while self.matches(&[TokenType::Comma]) {
             self.advance();
             with_clauses.push(self.parse_with_clause()?);
         }
-        
+
         // Now parse the main SELECT
         self.expect(TokenType::Select)?;
         let fields = self.parse_select_fields()?;
-        
+
         let from = if self.matches(&[TokenType::From]) {
             self.advance();
             self.parse_from_clauses()?
         } else {
             Vec::new()
         };
-        
+
         let mut stmt = SelectStatement {
             with_clauses,
             fields,
@@ -1170,13 +1192,13 @@ impl Parser {
             fetch: Vec::new(),
             timeout: None,
         };
-        
+
         // Parse the rest of the clauses like normal SELECT
         if self.matches(&[TokenType::Where]) {
             self.advance();
             stmt.where_clause = Some(self.parse_expression()?);
         }
-        
+
         while self.matches(&[
             TokenType::Join,
             TokenType::Inner,
@@ -1187,24 +1209,24 @@ impl Parser {
         ]) {
             stmt.join_clauses.push(self.parse_join()?);
         }
-        
+
         if self.matches(&[TokenType::Group]) {
             self.advance();
             self.expect(TokenType::By)?;
             stmt.group_by = self.parse_expression_list()?;
         }
-        
+
         if self.matches(&[TokenType::Having]) {
             self.advance();
             stmt.having = Some(self.parse_expression()?);
         }
-        
+
         if self.matches(&[TokenType::Order]) {
             self.advance();
             self.expect(TokenType::By)?;
             stmt.order_by = self.parse_order_by_list()?;
         }
-        
+
         if self.matches(&[TokenType::Limit]) {
             self.advance();
             let limit_expr = self.parse_expression()?;
@@ -1217,7 +1239,7 @@ impl Parser {
                 });
             }
         }
-        
+
         if self.matches(&[TokenType::Offset]) {
             self.advance();
             let offset_expr = self.parse_expression()?;
@@ -1230,15 +1252,15 @@ impl Parser {
                 });
             }
         }
-        
+
         if self.matches(&[TokenType::Fetch]) {
             self.advance();
             stmt.fetch = self.parse_fetch_list()?;
         }
-        
+
         Ok(stmt)
     }
-    
+
     /// Parse a WITH clause (CTE)
     fn parse_with_clause(&mut self) -> Result<WithClause, ParseError> {
         let recursive = if self.matches(&[TokenType::Recursive]) {
@@ -1247,33 +1269,33 @@ impl Parser {
         } else {
             false
         };
-        
+
         let name = self.expect_identifier_or_keyword()?.value.clone();
-        
+
         // Optional column list
         let columns = if self.matches(&[TokenType::LeftParen]) {
             self.advance();
             let mut cols = Vec::new();
             cols.push(self.expect_identifier_or_keyword()?.value.clone());
-            
+
             while self.matches(&[TokenType::Comma]) {
                 self.advance();
                 cols.push(self.expect_identifier_or_keyword()?.value.clone());
             }
-            
+
             self.expect(TokenType::RightParen)?;
             Some(cols)
         } else {
             None
         };
-        
+
         self.expect(TokenType::As)?;
         self.expect(TokenType::LeftParen)?;
-        
+
         let query = Box::new(self.parse_select()?);
-        
+
         self.expect(TokenType::RightParen)?;
-        
+
         Ok(WithClause {
             name,
             columns,
@@ -1281,21 +1303,21 @@ impl Parser {
             recursive,
         })
     }
-    
+
     /// Parse CASE expression
     fn parse_case_expression(&mut self) -> Result<Expression, ParseError> {
         let mut when_clauses = Vec::new();
-        
+
         // Parse WHEN clauses
         while self.matches(&[TokenType::When]) {
             self.advance();
             let condition = self.parse_expression()?;
             self.expect(TokenType::Then)?;
             let result = self.parse_expression()?;
-            
+
             when_clauses.push(WhenClause { condition, result });
         }
-        
+
         // Parse optional ELSE clause
         let else_clause = if self.matches(&[TokenType::Else]) {
             self.advance();
@@ -1303,9 +1325,9 @@ impl Parser {
         } else {
             None
         };
-        
+
         self.expect(TokenType::End)?;
-        
+
         Ok(Expression::Case {
             when_clauses,
             else_clause,

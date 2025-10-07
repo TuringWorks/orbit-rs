@@ -69,6 +69,118 @@ impl KeyValueActor {
     pub fn is_expired(&self) -> bool {
         self.get_ttl() == -2
     }
+
+    pub fn append_value(&mut self, value: &str) -> usize {
+        match &mut self.value {
+            Some(existing) => {
+                existing.push_str(value);
+                existing.len()
+            }
+            None => {
+                self.value = Some(value.to_string());
+                value.len()
+            }
+        }
+    }
+
+    pub fn get_range(&self, start: i64, end: i64) -> Option<String> {
+        if let Some(value) = &self.value {
+            if self.is_expired() {
+                return None;
+            }
+            let len = value.len() as i64;
+            let start_idx = if start < 0 {
+                (len + start).max(0) as usize
+            } else {
+                (start as usize).min(value.len())
+            };
+            let end_idx = if end < 0 {
+                (len + end + 1).max(0) as usize
+            } else {
+                ((end + 1) as usize).min(value.len())
+            };
+            if start_idx >= end_idx || start_idx >= value.len() {
+                Some(String::new())
+            } else {
+                Some(value[start_idx..end_idx].to_string())
+            }
+        } else {
+            None
+        }
+    }
+
+    pub fn set_range(&mut self, offset: usize, value: &str) -> usize {
+        let current = self.value.get_or_insert_with(String::new);
+        if offset >= current.len() {
+            // Pad with zeros if offset is beyond current length
+            current.extend((current.len()..offset).map(|_| '\0'));
+            current.push_str(value);
+        } else {
+            // Replace existing bytes
+            let mut chars: Vec<char> = current.chars().collect();
+            let new_chars: Vec<char> = value.chars().collect();
+            for (i, &ch) in new_chars.iter().enumerate() {
+                if offset + i < chars.len() {
+                    chars[offset + i] = ch;
+                } else {
+                    chars.push(ch);
+                }
+            }
+            *current = chars.into_iter().collect();
+        }
+        current.len()
+    }
+
+    pub fn get_and_set(&mut self, new_value: String) -> Option<String> {
+        if self.is_expired() {
+            self.value = Some(new_value);
+            None
+        } else {
+            let old = self.value.clone();
+            self.value = Some(new_value);
+            old
+        }
+    }
+
+    pub fn strlen(&self) -> usize {
+        if self.is_expired() {
+            0
+        } else {
+            self.value.as_ref().map(|s| s.len()).unwrap_or(0)
+        }
+    }
+
+    pub fn persist(&mut self) -> bool {
+        let had_expiration = self.expiration.is_some();
+        self.expiration = None;
+        had_expiration
+    }
+
+    pub fn set_pexpiration(&mut self, milliseconds: u64) {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64;
+        self.expiration = Some((now + milliseconds) / 1000);
+    }
+
+    pub fn get_pttl(&self) -> i64 {
+        match self.expiration {
+            None => -1, // No expiration
+            Some(exp) => {
+                let now = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap()
+                    .as_millis() as u64;
+                let exp_ms = exp * 1000;
+                if exp_ms > now {
+                    (exp_ms - now) as i64
+                } else {
+                    -2 // Expired
+                }
+            }
+        }
+    }
 }
 
 impl Default for KeyValueActor {
@@ -94,6 +206,14 @@ pub trait KeyValueActorMethods: Addressable {
     async fn set_expiration(&mut self, seconds: u64) -> OrbitResult<()>;
     async fn get_ttl(&self) -> OrbitResult<i64>;
     async fn exists(&self) -> OrbitResult<bool>;
+    async fn append_value(&mut self, value: String) -> OrbitResult<usize>;
+    async fn get_range(&self, start: i64, end: i64) -> OrbitResult<Option<String>>;
+    async fn set_range(&mut self, offset: usize, value: String) -> OrbitResult<usize>;
+    async fn get_and_set(&mut self, new_value: String) -> OrbitResult<Option<String>>;
+    async fn strlen(&self) -> OrbitResult<usize>;
+    async fn persist(&mut self) -> OrbitResult<bool>;
+    async fn set_pexpiration(&mut self, milliseconds: u64) -> OrbitResult<()>;
+    async fn get_pttl(&self) -> OrbitResult<i64>;
 }
 
 #[async_trait]
@@ -133,6 +253,39 @@ impl KeyValueActorMethods for KeyValueActor {
 
     async fn exists(&self) -> OrbitResult<bool> {
         Ok(self.value.is_some() && !self.is_expired())
+    }
+
+    async fn append_value(&mut self, value: String) -> OrbitResult<usize> {
+        Ok(self.append_value(&value))
+    }
+
+    async fn get_range(&self, start: i64, end: i64) -> OrbitResult<Option<String>> {
+        Ok(self.get_range(start, end))
+    }
+
+    async fn set_range(&mut self, offset: usize, value: String) -> OrbitResult<usize> {
+        Ok(self.set_range(offset, &value))
+    }
+
+    async fn get_and_set(&mut self, new_value: String) -> OrbitResult<Option<String>> {
+        Ok(self.get_and_set(new_value))
+    }
+
+    async fn strlen(&self) -> OrbitResult<usize> {
+        Ok(self.strlen())
+    }
+
+    async fn persist(&mut self) -> OrbitResult<bool> {
+        Ok(self.persist())
+    }
+
+    async fn set_pexpiration(&mut self, milliseconds: u64) -> OrbitResult<()> {
+        self.set_pexpiration(milliseconds);
+        Ok(())
+    }
+
+    async fn get_pttl(&self) -> OrbitResult<i64> {
+        Ok(self.get_pttl())
     }
 }
 
@@ -183,6 +336,19 @@ impl HashActor {
     pub fn hlen(&self) -> usize {
         self.fields.len()
     }
+
+    pub fn hincrby(&mut self, field: String, increment: i64) -> Result<i64, String> {
+        let current_value = self
+            .fields
+            .get(&field)
+            .map(|v| v.parse::<i64>())
+            .unwrap_or(Ok(0))
+            .map_err(|_| "ERR hash value is not an integer".to_string())?;
+
+        let new_value = current_value + increment;
+        self.fields.insert(field, new_value.to_string());
+        Ok(new_value)
+    }
 }
 
 impl Default for HashActor {
@@ -210,6 +376,7 @@ pub trait HashActorMethods: Addressable {
     async fn hvals(&self) -> OrbitResult<Vec<String>>;
     async fn hgetall(&self) -> OrbitResult<Vec<(String, String)>>;
     async fn hlen(&self) -> OrbitResult<usize>;
+    async fn hincrby(&mut self, field: String, increment: i64) -> OrbitResult<Result<i64, String>>;
 }
 
 #[async_trait]
@@ -244,6 +411,10 @@ impl HashActorMethods for HashActor {
 
     async fn hlen(&self) -> OrbitResult<usize> {
         Ok(self.hlen())
+    }
+
+    async fn hincrby(&mut self, field: String, increment: i64) -> OrbitResult<Result<i64, String>> {
+        Ok(self.hincrby(field, increment))
     }
 }
 
@@ -322,6 +493,105 @@ impl ListActor {
             None
         }
     }
+
+    pub fn lset(&mut self, index: i64, value: String) -> bool {
+        let len = self.items.len() as i64;
+        let idx = if index < 0 {
+            (len + index).max(0)
+        } else {
+            index
+        };
+
+        if idx >= 0 && (idx as usize) < self.items.len() {
+            self.items[idx as usize] = value;
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn lrem(&mut self, count: i64, value: &str) -> usize {
+        let mut removed = 0;
+
+        if count == 0 {
+            // Remove all occurrences
+            let original_len = self.items.len();
+            self.items.retain(|item| item != value);
+            removed = original_len - self.items.len();
+        } else if count > 0 {
+            // Remove first N occurrences
+            let mut to_remove = count as usize;
+            let mut i = 0;
+            while i < self.items.len() && to_remove > 0 {
+                if self.items[i] == value {
+                    self.items.remove(i);
+                    to_remove -= 1;
+                    removed += 1;
+                } else {
+                    i += 1;
+                }
+            }
+        } else {
+            // Remove last N occurrences (count is negative)
+            let mut to_remove = (-count) as usize;
+            let mut i = self.items.len();
+            while i > 0 && to_remove > 0 {
+                i -= 1;
+                if self.items[i] == value {
+                    self.items.remove(i);
+                    to_remove -= 1;
+                    removed += 1;
+                }
+            }
+        }
+
+        removed
+    }
+
+    pub fn ltrim(&mut self, start: i64, stop: i64) {
+        let len = self.items.len() as i64;
+
+        // Convert negative indices
+        let start_idx = if start < 0 {
+            (len + start).max(0)
+        } else {
+            start.min(len)
+        } as usize;
+
+        let stop_idx = if stop < 0 {
+            (len + stop + 1).max(0)
+        } else {
+            (stop + 1).min(len)
+        } as usize;
+
+        if start_idx >= self.items.len() || start_idx >= stop_idx {
+            // Clear the list if invalid range
+            self.items.clear();
+        } else {
+            // Keep only the elements in the range [start_idx, stop_idx)
+            let trimmed: Vec<String> = self.items[start_idx..stop_idx].to_vec();
+            self.items = trimmed;
+        }
+    }
+
+    pub fn linsert(&mut self, before_after: &str, pivot: &str, element: String) -> i64 {
+        // Find the pivot element
+        if let Some(pivot_index) = self.items.iter().position(|item| item == pivot) {
+            match before_after.to_uppercase().as_str() {
+                "BEFORE" => {
+                    self.items.insert(pivot_index, element);
+                    self.items.len() as i64
+                }
+                "AFTER" => {
+                    self.items.insert(pivot_index + 1, element);
+                    self.items.len() as i64
+                }
+                _ => -1, // Invalid before/after argument
+            }
+        } else {
+            0 // Pivot not found
+        }
+    }
 }
 
 impl Default for ListActor {
@@ -348,6 +618,15 @@ pub trait ListActorMethods: Addressable {
     async fn lrange(&self, start: i64, stop: i64) -> OrbitResult<Vec<String>>;
     async fn llen(&self) -> OrbitResult<usize>;
     async fn lindex(&self, index: i64) -> OrbitResult<Option<String>>;
+    async fn lset(&mut self, index: i64, value: String) -> OrbitResult<bool>;
+    async fn lrem(&mut self, count: i64, value: &str) -> OrbitResult<usize>;
+    async fn ltrim(&mut self, start: i64, stop: i64) -> OrbitResult<()>;
+    async fn linsert(
+        &mut self,
+        before_after: &str,
+        pivot: &str,
+        element: String,
+    ) -> OrbitResult<i64>;
 }
 
 #[async_trait]
@@ -378,6 +657,28 @@ impl ListActorMethods for ListActor {
 
     async fn lindex(&self, index: i64) -> OrbitResult<Option<String>> {
         Ok(self.lindex(index).cloned())
+    }
+
+    async fn lset(&mut self, index: i64, value: String) -> OrbitResult<bool> {
+        Ok(self.lset(index, value))
+    }
+
+    async fn lrem(&mut self, count: i64, value: &str) -> OrbitResult<usize> {
+        Ok(self.lrem(count, value))
+    }
+
+    async fn ltrim(&mut self, start: i64, stop: i64) -> OrbitResult<()> {
+        self.ltrim(start, stop);
+        Ok(())
+    }
+
+    async fn linsert(
+        &mut self,
+        before_after: &str,
+        pivot: &str,
+        element: String,
+    ) -> OrbitResult<i64> {
+        Ok(self.linsert(before_after, pivot, element))
     }
 }
 
@@ -461,6 +762,406 @@ impl PubSubActorMethods for PubSubActor {
 
     async fn subscriber_count(&self) -> OrbitResult<usize> {
         Ok(self.subscriber_count())
+    }
+}
+
+/// Actor for storing sets (Redis SET type)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SetActor {
+    pub members: std::collections::HashSet<String>,
+}
+
+impl SetActor {
+    pub fn new() -> Self {
+        Self {
+            members: std::collections::HashSet::new(),
+        }
+    }
+
+    pub fn sadd(&mut self, members: Vec<String>) -> usize {
+        let mut added_count = 0;
+        for member in members {
+            if self.members.insert(member) {
+                added_count += 1;
+            }
+        }
+        added_count
+    }
+
+    pub fn srem(&mut self, members: Vec<String>) -> usize {
+        let mut removed_count = 0;
+        for member in members {
+            if self.members.remove(&member) {
+                removed_count += 1;
+            }
+        }
+        removed_count
+    }
+
+    pub fn smembers(&self) -> Vec<String> {
+        self.members.iter().cloned().collect()
+    }
+
+    pub fn scard(&self) -> usize {
+        self.members.len()
+    }
+
+    pub fn sismember(&self, member: &str) -> bool {
+        self.members.contains(member)
+    }
+
+    pub fn sunion(&self, other: &SetActor) -> Vec<String> {
+        self.members.union(&other.members).cloned().collect()
+    }
+
+    pub fn sinter(&self, other: &SetActor) -> Vec<String> {
+        self.members.intersection(&other.members).cloned().collect()
+    }
+
+    pub fn sdiff(&self, other: &SetActor) -> Vec<String> {
+        self.members.difference(&other.members).cloned().collect()
+    }
+}
+
+impl Default for SetActor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Addressable for SetActor {
+    fn addressable_type() -> &'static str {
+        "SetActor"
+    }
+}
+
+impl ActorWithStringKey for SetActor {}
+
+/// Async trait for SetActor methods
+#[async_trait]
+pub trait SetActorMethods: Addressable {
+    async fn sadd(&mut self, members: Vec<String>) -> OrbitResult<usize>;
+    async fn srem(&mut self, members: Vec<String>) -> OrbitResult<usize>;
+    async fn smembers(&self) -> OrbitResult<Vec<String>>;
+    async fn scard(&self) -> OrbitResult<usize>;
+    async fn sismember(&self, member: &str) -> OrbitResult<bool>;
+}
+
+#[async_trait]
+impl SetActorMethods for SetActor {
+    async fn sadd(&mut self, members: Vec<String>) -> OrbitResult<usize> {
+        Ok(self.sadd(members))
+    }
+
+    async fn srem(&mut self, members: Vec<String>) -> OrbitResult<usize> {
+        Ok(self.srem(members))
+    }
+
+    async fn smembers(&self) -> OrbitResult<Vec<String>> {
+        Ok(self.smembers())
+    }
+
+    async fn scard(&self) -> OrbitResult<usize> {
+        Ok(self.scard())
+    }
+
+    async fn sismember(&self, member: &str) -> OrbitResult<bool> {
+        Ok(self.sismember(member))
+    }
+}
+
+/// Actor for storing sorted sets (Redis ZSET type)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SortedSetActor {
+    // Map from member to score for fast member lookup
+    pub member_scores: std::collections::HashMap<String, f64>,
+    // Map from score to set of members with that score (for handling ties)
+    pub score_members: std::collections::BTreeMap<
+        ordered_float::OrderedFloat<f64>,
+        std::collections::HashSet<String>,
+    >,
+}
+
+impl SortedSetActor {
+    pub fn new() -> Self {
+        Self {
+            member_scores: std::collections::HashMap::new(),
+            score_members: std::collections::BTreeMap::new(),
+        }
+    }
+
+    pub fn zadd(&mut self, member: String, score: f64) -> bool {
+        let ordered_score = ordered_float::OrderedFloat(score);
+
+        // Check if member already exists
+        if let Some(old_score) = self.member_scores.get(&member) {
+            let old_ordered_score = ordered_float::OrderedFloat(*old_score);
+
+            // If the score is the same, no change
+            if old_ordered_score == ordered_score {
+                return false;
+            }
+
+            // Remove member from old score's set
+            if let Some(old_set) = self.score_members.get_mut(&old_ordered_score) {
+                old_set.remove(&member);
+                if old_set.is_empty() {
+                    self.score_members.remove(&old_ordered_score);
+                }
+            }
+        }
+
+        // Update member's score
+        let was_new = self.member_scores.insert(member.clone(), score).is_none();
+
+        // Add member to new score's set
+        self.score_members
+            .entry(ordered_score)
+            .or_insert_with(std::collections::HashSet::new)
+            .insert(member);
+
+        was_new
+    }
+
+    pub fn zrem(&mut self, members: Vec<String>) -> usize {
+        let mut removed_count = 0;
+
+        for member in members {
+            if let Some(score) = self.member_scores.remove(&member) {
+                let ordered_score = ordered_float::OrderedFloat(score);
+
+                // Remove member from score's set
+                if let Some(score_set) = self.score_members.get_mut(&ordered_score) {
+                    score_set.remove(&member);
+                    if score_set.is_empty() {
+                        self.score_members.remove(&ordered_score);
+                    }
+                }
+
+                removed_count += 1;
+            }
+        }
+
+        removed_count
+    }
+
+    pub fn zcard(&self) -> usize {
+        self.member_scores.len()
+    }
+
+    pub fn zscore(&self, member: &str) -> Option<f64> {
+        self.member_scores.get(member).copied()
+    }
+
+    pub fn zincrby(&mut self, member: String, increment: f64) -> f64 {
+        let current_score = self.member_scores.get(&member).copied().unwrap_or(0.0);
+        let new_score = current_score + increment;
+
+        // Use zadd to handle the score update properly
+        self.zadd(member, new_score);
+
+        new_score
+    }
+
+    pub fn zrange(&self, start: i64, stop: i64, with_scores: bool) -> Vec<(String, Option<f64>)> {
+        let members: Vec<_> = self
+            .score_members
+            .iter()
+            .flat_map(|(score, members_set)| {
+                let score_val = score.0;
+                let mut sorted_members: Vec<_> = members_set.iter().cloned().collect();
+                sorted_members.sort(); // Sort members lexicographically for consistent ordering
+                sorted_members
+                    .into_iter()
+                    .map(move |member| (member, score_val))
+            })
+            .collect();
+
+        let len = members.len() as i64;
+        if len == 0 {
+            return Vec::new();
+        }
+
+        // Convert negative indices
+        let start_idx = if start < 0 {
+            (len + start).max(0)
+        } else {
+            start.min(len)
+        } as usize;
+
+        let stop_idx = if stop < 0 {
+            (len + stop + 1).max(0)
+        } else {
+            (stop + 1).min(len)
+        } as usize;
+
+        if start_idx >= members.len() || start_idx >= stop_idx {
+            return Vec::new();
+        }
+
+        members[start_idx..stop_idx]
+            .iter()
+            .map(|(member, score)| {
+                if with_scores {
+                    (member.clone(), Some(*score))
+                } else {
+                    (member.clone(), None)
+                }
+            })
+            .collect()
+    }
+
+    pub fn zrangebyscore(
+        &self,
+        min_score: f64,
+        max_score: f64,
+        with_scores: bool,
+    ) -> Vec<(String, Option<f64>)> {
+        let min_ordered = ordered_float::OrderedFloat(min_score);
+        let max_ordered = ordered_float::OrderedFloat(max_score);
+
+        let mut result = Vec::new();
+
+        for (score, members_set) in self.score_members.range(min_ordered..=max_ordered) {
+            let score_val = score.0;
+            let mut sorted_members: Vec<_> = members_set.iter().cloned().collect();
+            sorted_members.sort(); // Sort members lexicographically for consistent ordering
+
+            for member in sorted_members {
+                if with_scores {
+                    result.push((member, Some(score_val)));
+                } else {
+                    result.push((member, None));
+                }
+            }
+        }
+
+        result
+    }
+
+    pub fn zcount(&self, min_score: f64, max_score: f64) -> usize {
+        let min_ordered = ordered_float::OrderedFloat(min_score);
+        let max_ordered = ordered_float::OrderedFloat(max_score);
+
+        self.score_members
+            .range(min_ordered..=max_ordered)
+            .map(|(_, members_set)| members_set.len())
+            .sum()
+    }
+
+    pub fn zrank(&self, member: &str) -> Option<usize> {
+        if let Some(member_score) = self.member_scores.get(member) {
+            let member_ordered_score = ordered_float::OrderedFloat(*member_score);
+            let mut rank = 0;
+
+            // Count all members with lower scores
+            for (score, members_set) in &self.score_members {
+                if *score < member_ordered_score {
+                    rank += members_set.len();
+                } else if *score == member_ordered_score {
+                    // Count members with same score that come before this member lexicographically
+                    let mut same_score_members: Vec<_> = members_set.iter().collect();
+                    same_score_members.sort();
+
+                    for same_member in same_score_members {
+                        if same_member == member {
+                            return Some(rank);
+                        }
+                        rank += 1;
+                    }
+                } else {
+                    break;
+                }
+            }
+        }
+        None
+    }
+}
+
+impl Default for SortedSetActor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Addressable for SortedSetActor {
+    fn addressable_type() -> &'static str {
+        "SortedSetActor"
+    }
+}
+
+impl ActorWithStringKey for SortedSetActor {}
+
+/// Async trait for SortedSetActor methods
+#[async_trait]
+pub trait SortedSetActorMethods: Addressable {
+    async fn zadd(&mut self, member: String, score: f64) -> OrbitResult<bool>;
+    async fn zrem(&mut self, members: Vec<String>) -> OrbitResult<usize>;
+    async fn zcard(&self) -> OrbitResult<usize>;
+    async fn zscore(&self, member: &str) -> OrbitResult<Option<f64>>;
+    async fn zincrby(&mut self, member: String, increment: f64) -> OrbitResult<f64>;
+    async fn zrange(
+        &self,
+        start: i64,
+        stop: i64,
+        with_scores: bool,
+    ) -> OrbitResult<Vec<(String, Option<f64>)>>;
+    async fn zrangebyscore(
+        &self,
+        min_score: f64,
+        max_score: f64,
+        with_scores: bool,
+    ) -> OrbitResult<Vec<(String, Option<f64>)>>;
+    async fn zcount(&self, min_score: f64, max_score: f64) -> OrbitResult<usize>;
+    async fn zrank(&self, member: &str) -> OrbitResult<Option<usize>>;
+}
+
+#[async_trait]
+impl SortedSetActorMethods for SortedSetActor {
+    async fn zadd(&mut self, member: String, score: f64) -> OrbitResult<bool> {
+        Ok(self.zadd(member, score))
+    }
+
+    async fn zrem(&mut self, members: Vec<String>) -> OrbitResult<usize> {
+        Ok(self.zrem(members))
+    }
+
+    async fn zcard(&self) -> OrbitResult<usize> {
+        Ok(self.zcard())
+    }
+
+    async fn zscore(&self, member: &str) -> OrbitResult<Option<f64>> {
+        Ok(self.zscore(member))
+    }
+
+    async fn zincrby(&mut self, member: String, increment: f64) -> OrbitResult<f64> {
+        Ok(self.zincrby(member, increment))
+    }
+
+    async fn zrange(
+        &self,
+        start: i64,
+        stop: i64,
+        with_scores: bool,
+    ) -> OrbitResult<Vec<(String, Option<f64>)>> {
+        Ok(self.zrange(start, stop, with_scores))
+    }
+
+    async fn zrangebyscore(
+        &self,
+        min_score: f64,
+        max_score: f64,
+        with_scores: bool,
+    ) -> OrbitResult<Vec<(String, Option<f64>)>> {
+        Ok(self.zrangebyscore(min_score, max_score, with_scores))
+    }
+
+    async fn zcount(&self, min_score: f64, max_score: f64) -> OrbitResult<usize> {
+        Ok(self.zcount(min_score, max_score))
+    }
+
+    async fn zrank(&self, member: &str) -> OrbitResult<Option<usize>> {
+        Ok(self.zrank(member))
     }
 }
 
@@ -635,7 +1336,56 @@ mod tests {
     }
 
     #[test]
-    fn test_list_actor_comprehensive() {
+    fn test_sorted_set_actor() {
+        let mut actor = SortedSetActor::new();
+        assert_eq!(actor.zcard(), 0);
+
+        // Add some members with scores
+        assert!(actor.zadd("member1".to_string(), 1.0));
+        assert!(actor.zadd("member2".to_string(), 2.0));
+        assert!(actor.zadd("member3".to_string(), 1.5));
+        assert_eq!(actor.zcard(), 3);
+
+        // Test score retrieval
+        assert_eq!(actor.zscore("member1"), Some(1.0));
+        assert_eq!(actor.zscore("member2"), Some(2.0));
+        assert_eq!(actor.zscore("nonexistent"), None);
+
+        // Test zrange (should be sorted by score)
+        let range = actor.zrange(0, -1, true);
+        assert_eq!(range.len(), 3);
+        assert_eq!(range[0], ("member1".to_string(), Some(1.0)));
+        assert_eq!(range[1], ("member3".to_string(), Some(1.5)));
+        assert_eq!(range[2], ("member2".to_string(), Some(2.0)));
+
+        // Test zrangebyscore
+        let score_range = actor.zrangebyscore(1.0, 1.5, false);
+        assert_eq!(score_range.len(), 2);
+        assert_eq!(score_range[0].0, "member1");
+        assert_eq!(score_range[1].0, "member3");
+
+        // Test zcount
+        assert_eq!(actor.zcount(1.0, 1.5), 2);
+        assert_eq!(actor.zcount(0.0, 0.5), 0);
+
+        // Test zincrby
+        let new_score = actor.zincrby("member1".to_string(), 0.5);
+        assert_eq!(new_score, 1.5);
+        assert_eq!(actor.zscore("member1"), Some(1.5));
+
+        // Test zrem
+        let removed = actor.zrem(vec!["member2".to_string(), "nonexistent".to_string()]);
+        assert_eq!(removed, 1);
+        assert_eq!(actor.zcard(), 2);
+
+        // Test zrank
+        assert_eq!(actor.zrank("member1"), Some(0)); // First by score and lex order
+        assert_eq!(actor.zrank("member3"), Some(1));
+        assert_eq!(actor.zrank("nonexistent"), None);
+    }
+
+    #[test]
+    fn test_simple_string_creation() {
         let mut actor = ListActor::new();
 
         // Test rpush and lpush

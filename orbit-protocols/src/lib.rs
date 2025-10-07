@@ -20,10 +20,11 @@ pub mod aql;
 pub mod bolt;
 pub mod cypher;
 pub mod error;
+pub mod graph_database;
 pub mod mcp;
 pub mod postgres_wire;
 pub mod resp;
-pub mod rest;
+pub mod time_series;
 pub mod vector_store;
 
 pub use error::{ProtocolError, ProtocolResult};

@@ -209,7 +209,7 @@ async fn test_interval_expressions() -> Result<(), Box<dyn std::error::Error>> {
     // Test different interval units
     let queries = vec![
         "SELECT NOW() - INTERVAL '1 hour'",
-        "SELECT NOW() - INTERVAL '30 minutes'", 
+        "SELECT NOW() - INTERVAL '30 minutes'",
         "SELECT NOW() - INTERVAL '1 month'",
         "SELECT NOW() - INTERVAL '2 years'",
     ];
@@ -384,7 +384,10 @@ async fn test_complex_conditional_aggregates() -> Result<(), Box<dyn std::error:
         GROUP BY product_category
     "#;
     match engine.validate(query) {
-        Ok(_) => assert!(true, "Complex conditional aggregates validated successfully"),
+        Ok(_) => assert!(
+            true,
+            "Complex conditional aggregates validated successfully"
+        ),
         Err(e) => panic!("Complex conditional aggregates validation failed: {}", e),
     }
 
@@ -429,7 +432,10 @@ async fn test_ultimate_multi_model_with_advanced_sql() -> Result<(), Box<dyn std
         LIMIT 20
     "#;
     match engine.validate(query) {
-        Ok(_) => assert!(true, "Ultimate multi-model query with advanced SQL validated successfully"),
+        Ok(_) => assert!(
+            true,
+            "Ultimate multi-model query with advanced SQL validated successfully"
+        ),
         Err(e) => panic!("Ultimate multi-model query validation failed: {}", e),
     }
 

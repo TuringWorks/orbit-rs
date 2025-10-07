@@ -34,7 +34,9 @@ pub async fn create_addressable_provider(
         }
         // TODO: Implement other providers as needed
         _ => {
-            tracing::warn!("Unsupported persistence config for addressable provider, falling back to memory");
+            tracing::warn!(
+                "Unsupported persistence config for addressable provider, falling back to memory"
+            );
             let provider = memory::MemoryAddressableDirectoryProvider::new(MemoryConfig::default());
             provider.initialize().await?;
             Ok(Arc::new(provider))
@@ -69,7 +71,9 @@ pub async fn create_cluster_provider(
         }
         // TODO: Implement other providers as needed
         _ => {
-            tracing::warn!("Unsupported persistence config for cluster provider, falling back to memory");
+            tracing::warn!(
+                "Unsupported persistence config for cluster provider, falling back to memory"
+            );
             let provider = memory::MemoryClusterNodeProvider::new(MemoryConfig::default());
             provider.initialize().await?;
             Ok(Arc::new(provider))
@@ -79,15 +83,15 @@ pub async fn create_cluster_provider(
 
 /// Load persistence configuration from environment variables
 pub fn load_config_from_env() -> OrbitResult<PersistenceConfig> {
-    let backend_type = std::env::var("ORBIT_PERSISTENCE_BACKEND")
-        .unwrap_or_else(|_| "memory".to_string());
-    
+    let backend_type =
+        std::env::var("ORBIT_PERSISTENCE_BACKEND").unwrap_or_else(|_| "memory".to_string());
+
     match backend_type.as_str() {
         "memory" => {
             let max_entries = std::env::var("ORBIT_MEMORY_MAX_ENTRIES")
                 .ok()
                 .and_then(|s| s.parse().ok());
-            
+
             let disk_backup = if std::env::var("ORBIT_MEMORY_DISK_BACKUP").is_ok() {
                 let path = std::env::var("ORBIT_MEMORY_BACKUP_PATH")
                     .unwrap_or_else(|_| "./orbit_backup.json".to_string());
@@ -95,7 +99,7 @@ pub fn load_config_from_env() -> OrbitResult<PersistenceConfig> {
                     .ok()
                     .and_then(|s| s.parse().ok())
                     .unwrap_or(300); // 5 minutes
-                
+
                 Some(DiskBackupConfig {
                     path,
                     sync_interval,
@@ -104,7 +108,7 @@ pub fn load_config_from_env() -> OrbitResult<PersistenceConfig> {
             } else {
                 None
             };
-            
+
             Ok(PersistenceConfig::Memory(MemoryConfig {
                 max_entries,
                 disk_backup,
@@ -200,13 +204,14 @@ pub fn load_config_from_env() -> OrbitResult<PersistenceConfig> {
 
 /// Load persistence configuration from a TOML file
 pub async fn load_config_from_file(path: &str) -> OrbitResult<PersistenceConfig> {
-    let content = tokio::fs::read_to_string(path)
-        .await
-        .map_err(|e| OrbitError::configuration(format!("Failed to read config file {}: {}", path, e)))?;
-    
-    let config: PersistenceConfig = toml::from_str(&content)
-        .map_err(|e| OrbitError::configuration(format!("Failed to parse config file {}: {}", path, e)))?;
-    
+    let content = tokio::fs::read_to_string(path).await.map_err(|e| {
+        OrbitError::configuration(format!("Failed to read config file {}: {}", path, e))
+    })?;
+
+    let config: PersistenceConfig = toml::from_str(&content).map_err(|e| {
+        OrbitError::configuration(format!("Failed to parse config file {}: {}", path, e))
+    })?;
+
     Ok(config)
 }
 
@@ -223,21 +228,23 @@ impl PersistenceConfigBuilder {
             data_dir: None,
         }
     }
-    
+
     pub fn backend(mut self, backend_type: &str) -> Self {
         self.backend_type = Some(backend_type.to_string());
         self
     }
-    
+
     pub fn data_dir(mut self, data_dir: &str) -> Self {
         self.data_dir = Some(data_dir.to_string());
         self
     }
-    
+
     pub fn build(self) -> OrbitResult<PersistenceConfig> {
         let backend_type = self.backend_type.unwrap_or_else(|| "memory".to_string());
-        let data_dir = self.data_dir.unwrap_or_else(|| format!("./orbit_{}_data", backend_type));
-        
+        let data_dir = self
+            .data_dir
+            .unwrap_or_else(|| format!("./orbit_{}_data", backend_type));
+
         match backend_type.as_str() {
             "memory" => Ok(PersistenceConfig::Memory(MemoryConfig::default())),
             "cow_btree" => Ok(PersistenceConfig::CowBTree(CowBTreeConfig {
@@ -272,23 +279,19 @@ pub async fn initialize_registry(
     cluster_config: &PersistenceConfig,
 ) -> OrbitResult<PersistenceProviderRegistry> {
     let registry = PersistenceProviderRegistry::new();
-    
+
     // Create and register addressable provider
     let addressable_provider = create_addressable_provider(addressable_config).await?;
-    registry.register_addressable_provider(
-        "default".to_string(),
-        addressable_provider,
-        true,
-    ).await?;
-    
+    registry
+        .register_addressable_provider("default".to_string(), addressable_provider, true)
+        .await?;
+
     // Create and register cluster provider
     let cluster_provider = create_cluster_provider(cluster_config).await?;
-    registry.register_cluster_provider(
-        "default".to_string(),
-        cluster_provider,
-        true,
-    ).await?;
-    
+    registry
+        .register_cluster_provider("default".to_string(), cluster_provider, true)
+        .await?;
+
     tracing::info!("Persistence registry initialized with providers");
     Ok(registry)
 }

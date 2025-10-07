@@ -19,9 +19,9 @@ pub mod dynamic;
 // pub mod health; // TODO: File missing
 // pub mod migration; // TODO: File missing
 pub mod cow_btree;
+pub mod factory;
 pub mod lsm_tree;
 pub mod rocksdb;
-pub mod factory;
 
 /// Configuration for different storage providers
 #[derive(Debug, Clone, Serialize, Deserialize)]
