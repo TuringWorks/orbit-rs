@@ -1,0 +1,91 @@
+version: 2
+updates:
+  # Rust dependencies via Cargo
+  - package-ecosystem: "cargo"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "04:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 10
+    reviewers:
+      - "ravituringworks"
+    commit-message:
+      prefix: "deps"
+      prefix-development: "deps"
+      include: "scope"
+    groups:
+      # Group development dependencies together
+      dev-dependencies:
+        patterns:
+          - "assert*"
+          - "criterion*"
+          - "pretty_assertions*"
+          - "proptest*"
+          - "quickcheck*"
+          - "rstest*"
+          - "tempfile*"
+          - "tokio-test*"
+      # Group async/tokio dependencies
+      async-runtime:
+        patterns:
+          - "tokio*"
+          - "async-*"
+          - "futures*"
+      # Group serialization dependencies
+      serialization:
+        patterns:
+          - "serde*"
+          - "bincode*"
+          - "postcard*"
+          - "rmp*"
+      # Group logging dependencies
+      logging:
+        patterns:
+          - "tracing*"
+          - "log*"
+          - "env_logger*"
+      # Group HTTP/network dependencies
+      networking:
+        patterns:
+          - "hyper*"
+          - "reqwest*"
+          - "axum*"
+          - "tower*"
+      # Group database dependencies
+      database:
+        patterns:
+          - "sqlx*"
+          - "redis*"
+          - "mongodb*"
+      # Group crypto dependencies
+      crypto:
+        patterns:
+          - "ring*"
+          - "rustls*"
+          - "aws-lc-rs*"
+          - "sha*"
+          - "aes*"
+    ignore:
+      # Ignore major version updates for stable dependencies
+      - dependency-name: "sqlx*"
+        update-types: ["version-update:semver-major"]
+      # Ignore pre-release versions
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+        
+  # GitHub Actions updates
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "04:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "ravituringworks"
+    commit-message:
+      prefix: "ci"
+      include: "scope"
