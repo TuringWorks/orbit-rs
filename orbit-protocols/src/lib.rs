@@ -21,6 +21,7 @@ pub mod bolt;
 pub mod cypher;
 pub mod error;
 pub mod graph_database;
+pub mod graphrag;
 pub mod mcp;
 pub mod postgres_wire;
 pub mod resp;

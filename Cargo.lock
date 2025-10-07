@@ -3324,6 +3324,7 @@ dependencies = [
  "postgres-types",
  "rand 0.8.5",
  "redis",
+ "regex",
  "reqwest",
  "rust_decimal",
  "serde",

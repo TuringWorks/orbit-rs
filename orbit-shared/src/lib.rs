@@ -6,6 +6,7 @@ pub mod election_metrics;
 pub mod election_state;
 pub mod exception;
 pub mod graph;
+pub mod graphrag;
 pub mod integrated_recovery;
 pub mod k8s_election;
 pub mod mesh;
@@ -46,3 +47,10 @@ pub use timeseries::{
 
 // Re-export OrbitQL functionality
 pub use orbitql::{OrbitQLEngine, QueryContext, QueryParams, QueryStats, QueryValue};
+
+// Re-export GraphRAG functionality
+pub use graphrag::{
+    ContextItem, ContextSourceType, EmbeddingModel, EmbeddingModelType, EnhancedGraphNode,
+    EnhancedGraphRelationship, EntityType, ExtractedEntity, ExtractedRelationship, LLMProvider,
+    RAGResponse, ReasoningPath, SearchStrategy,
+};

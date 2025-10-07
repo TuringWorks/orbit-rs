@@ -13,6 +13,11 @@ use super::{
 use crate::{
     error::{ProtocolError, ProtocolResult},
     graph_database::{ExecutionPlan, GraphActor, QueryProfile, SlowQuery},
+    graphrag::{
+        entity_extraction::DocumentProcessingResult,
+        graph_rag_actor::{GraphRAGDocumentRequest, GraphRAGQuery, GraphRAGQueryResult},
+        GraphRAGActor,
+    },
     time_series::{
         AggregationType, CompactionRule, DuplicatePolicy, Sample, TimeSeriesActor,
         TimeSeriesConfig, TimeSeriesStats,
@@ -201,6 +206,15 @@ impl CommandHandler {
             "GRAPH.PROFILE" => self.cmd_graph_profile(args).await,
             "GRAPH.SLOWLOG" => self.cmd_graph_slowlog(args).await,
             "GRAPH.CONFIG" => self.cmd_graph_config(args).await,
+
+            // GraphRAG commands (GRAPHRAG.* namespace)
+            "GRAPHRAG.BUILD" => self.cmd_graphrag_build(args).await,
+            "GRAPHRAG.QUERY" => self.cmd_graphrag_query(args).await,
+            "GRAPHRAG.EXTRACT" => self.cmd_graphrag_extract(args).await,
+            "GRAPHRAG.REASON" => self.cmd_graphrag_reason(args).await,
+            "GRAPHRAG.STATS" => self.cmd_graphrag_stats(args).await,
+            "GRAPHRAG.ENTITIES" => self.cmd_graphrag_entities(args).await,
+            "GRAPHRAG.SIMILAR" => self.cmd_graphrag_similar(args).await,
 
             // Server commands
             "INFO" => self.cmd_info(args).await,
@@ -5622,5 +5636,669 @@ impl CommandHandler {
                 operation
             ))),
         }
+    }
+
+    // GraphRAG command implementations
+
+    async fn cmd_graphrag_build(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        if args.len() < 3 {
+            return Err(ProtocolError::RespError(
+                "ERR wrong number of arguments for 'GRAPHRAG.BUILD' command. Usage: GRAPHRAG.BUILD <kg_name> <document_id> <text> [metadata key value ...]".to_string(),
+            ));
+        }
+
+        let kg_name = args[0].as_string().ok_or_else(|| {
+            ProtocolError::RespError("ERR invalid knowledge graph name".to_string())
+        })?;
+
+        let document_id = args[1]
+            .as_string()
+            .ok_or_else(|| ProtocolError::RespError("ERR invalid document ID".to_string()))?;
+
+        let text = args[2]
+            .as_string()
+            .ok_or_else(|| ProtocolError::RespError("ERR invalid document text".to_string()))?;
+
+        // Parse metadata key-value pairs
+        let mut metadata = HashMap::new();
+        let mut i = 3;
+        while i + 1 < args.len() {
+            let key = args[i].as_string().ok_or_else(|| {
+                ProtocolError::RespError("ERR metadata key must be string".to_string())
+            })?;
+            let value_str = args[i + 1].as_string().ok_or_else(|| {
+                ProtocolError::RespError("ERR metadata value must be string".to_string())
+            })?;
+            metadata.insert(key, serde_json::json!(value_str));
+            i += 2;
+        }
+
+        // Get GraphRAG actor reference
+        let actor_ref = self
+            .orbit_client
+            .actor_reference::<GraphRAGActor>(Key::StringKey {
+                key: kg_name.clone(),
+            })
+            .await
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+
+        // Create document processing request
+        let request = GraphRAGDocumentRequest {
+            document_id: document_id.clone(),
+            text: text.clone(),
+            metadata,
+            build_knowledge_graph: true,
+            generate_embeddings: true,
+            extractors: None,
+        };
+
+        // Process document
+        let result: DocumentProcessingResult = actor_ref
+            .invoke(
+                "process_document",
+                vec![serde_json::to_value(request).unwrap()],
+            )
+            .await
+            .map_err(|e| {
+                ProtocolError::RespError(format!("ERR document processing failed: {}", e))
+            })?;
+
+        debug!(
+            "GRAPHRAG.BUILD {} {} -> {} entities, {} relationships extracted",
+            kg_name,
+            document_id,
+            result.entities.len(),
+            result.relationships.len()
+        );
+
+        // Format response with processing statistics
+        let response = vec![
+            RespValue::bulk_string_from_str("entities_extracted"),
+            RespValue::integer(result.entities.len() as i64),
+            RespValue::bulk_string_from_str("relationships_extracted"),
+            RespValue::integer(result.relationships.len() as i64),
+            RespValue::bulk_string_from_str("extractors_used"),
+            RespValue::integer(result.extractors_used as i64),
+            RespValue::bulk_string_from_str("processing_time_ms"),
+            RespValue::integer(result.processing_time_ms as i64),
+        ];
+
+        Ok(RespValue::array(response))
+    }
+
+    async fn cmd_graphrag_query(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        if args.len() < 2 {
+            return Err(ProtocolError::RespError(
+                "ERR wrong number of arguments for 'GRAPHRAG.QUERY' command. Usage: GRAPHRAG.QUERY <kg_name> <query_text> [MAX_HOPS <hops>] [CONTEXT_SIZE <size>] [LLM_PROVIDER <provider>] [INCLUDE_EXPLANATION]".to_string(),
+            ));
+        }
+
+        let kg_name = args[0].as_string().ok_or_else(|| {
+            ProtocolError::RespError("ERR invalid knowledge graph name".to_string())
+        })?;
+
+        let query_text = args[1]
+            .as_string()
+            .ok_or_else(|| ProtocolError::RespError("ERR invalid query text".to_string()))?;
+
+        // Parse optional parameters
+        let mut max_hops: Option<u32> = None;
+        let mut context_size: Option<usize> = None;
+        let mut llm_provider: Option<String> = None;
+        let mut include_explanation = false;
+
+        let mut i = 2;
+        while i < args.len() {
+            if let Some(param) = args[i].as_string() {
+                match param.to_uppercase().as_str() {
+                    "MAX_HOPS" => {
+                        if i + 1 >= args.len() {
+                            return Err(ProtocolError::RespError(
+                                "ERR MAX_HOPS requires a value".to_string(),
+                            ));
+                        }
+                        max_hops = args[i + 1].as_integer().map(|x| x as u32);
+                        i += 2;
+                    }
+                    "CONTEXT_SIZE" => {
+                        if i + 1 >= args.len() {
+                            return Err(ProtocolError::RespError(
+                                "ERR CONTEXT_SIZE requires a value".to_string(),
+                            ));
+                        }
+                        context_size = args[i + 1].as_integer().map(|x| x as usize);
+                        i += 2;
+                    }
+                    "LLM_PROVIDER" => {
+                        if i + 1 >= args.len() {
+                            return Err(ProtocolError::RespError(
+                                "ERR LLM_PROVIDER requires a value".to_string(),
+                            ));
+                        }
+                        llm_provider = args[i + 1].as_string();
+                        i += 2;
+                    }
+                    "INCLUDE_EXPLANATION" => {
+                        include_explanation = true;
+                        i += 1;
+                    }
+                    _ => i += 1,
+                }
+            } else {
+                i += 1;
+            }
+        }
+
+        // Get GraphRAG actor reference
+        let actor_ref = self
+            .orbit_client
+            .actor_reference::<GraphRAGActor>(Key::StringKey {
+                key: kg_name.clone(),
+            })
+            .await
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+
+        // Create GraphRAG query
+        let query = GraphRAGQuery {
+            query_text: query_text.clone(),
+            max_hops,
+            context_size,
+            llm_provider,
+            search_strategy: None, // Use default
+            include_explanation,
+            max_results: None, // Use default
+        };
+
+        // Execute query
+        let result: GraphRAGQueryResult = actor_ref
+            .invoke("query_rag", vec![serde_json::to_value(query).unwrap()])
+            .await
+            .map_err(|e| ProtocolError::RespError(format!("ERR query execution failed: {}", e)))?;
+
+        debug!(
+            "GRAPHRAG.QUERY {} '{}' -> {} entities involved",
+            kg_name,
+            query_text,
+            result.entities_involved.len()
+        );
+
+        // Format response
+        let mut response = vec![
+            RespValue::bulk_string_from_str("response"),
+            RespValue::bulk_string_from_str(&result.response.response),
+            RespValue::bulk_string_from_str("confidence"),
+            RespValue::bulk_string_from_str(result.response.confidence.to_string()),
+            RespValue::bulk_string_from_str("processing_time_ms"),
+            RespValue::integer(result.processing_times.total_ms as i64),
+            RespValue::bulk_string_from_str("entities_involved"),
+            RespValue::array(
+                result
+                    .entities_involved
+                    .iter()
+                    .map(RespValue::bulk_string_from_str)
+                    .collect(),
+            ),
+        ];
+
+        // Add reasoning paths if requested
+        if let Some(paths) = result.reasoning_paths {
+            let path_responses: Vec<RespValue> = paths
+                .iter()
+                .map(|path| {
+                    RespValue::array(vec![
+                        RespValue::bulk_string_from_str("nodes"),
+                        RespValue::array(
+                            path.nodes
+                                .iter()
+                                .map(RespValue::bulk_string_from_str)
+                                .collect(),
+                        ),
+                        RespValue::bulk_string_from_str("score"),
+                        RespValue::bulk_string_from_str(path.score.to_string()),
+                        RespValue::bulk_string_from_str("explanation"),
+                        RespValue::bulk_string_from_str(&path.explanation),
+                    ])
+                })
+                .collect();
+            response.push(RespValue::bulk_string_from_str("reasoning_paths"));
+            response.push(RespValue::array(path_responses));
+        }
+
+        // Add citations
+        response.push(RespValue::bulk_string_from_str("citations"));
+        response.push(RespValue::array(
+            result
+                .response
+                .citations
+                .iter()
+                .map(RespValue::bulk_string_from_str)
+                .collect(),
+        ));
+
+        Ok(RespValue::array(response))
+    }
+
+    async fn cmd_graphrag_extract(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        if args.len() < 3 {
+            return Err(ProtocolError::RespError(
+                "ERR wrong number of arguments for 'GRAPHRAG.EXTRACT' command. Usage: GRAPHRAG.EXTRACT <kg_name> <document_id> <text> [EXTRACTORS extractor1 extractor2 ...]".to_string(),
+            ));
+        }
+
+        let kg_name = args[0].as_string().ok_or_else(|| {
+            ProtocolError::RespError("ERR invalid knowledge graph name".to_string())
+        })?;
+
+        let document_id = args[1]
+            .as_string()
+            .ok_or_else(|| ProtocolError::RespError("ERR invalid document ID".to_string()))?;
+
+        let text = args[2]
+            .as_string()
+            .ok_or_else(|| ProtocolError::RespError("ERR invalid document text".to_string()))?;
+
+        // Parse extractors list if provided
+        let mut extractors: Option<Vec<String>> = None;
+        if args.len() > 3 {
+            if let Some(extractors_keyword) = args[3].as_string() {
+                if extractors_keyword.to_uppercase() == "EXTRACTORS" {
+                    let extractor_list: Vec<String> =
+                        args[4..].iter().filter_map(|arg| arg.as_string()).collect();
+                    extractors = Some(extractor_list);
+                }
+            }
+        }
+
+        // Get GraphRAG actor reference
+        let actor_ref = self
+            .orbit_client
+            .actor_reference::<GraphRAGActor>(Key::StringKey {
+                key: kg_name.clone(),
+            })
+            .await
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+
+        // Create document processing request (extract only, don't build graph)
+        let request = GraphRAGDocumentRequest {
+            document_id: document_id.clone(),
+            text: text.clone(),
+            metadata: HashMap::new(),
+            build_knowledge_graph: false,
+            generate_embeddings: false,
+            extractors,
+        };
+
+        // Process document for extraction only
+        let result: DocumentProcessingResult = actor_ref
+            .invoke(
+                "process_document",
+                vec![serde_json::to_value(request).unwrap()],
+            )
+            .await
+            .map_err(|e| {
+                ProtocolError::RespError(format!("ERR entity extraction failed: {}", e))
+            })?;
+
+        debug!(
+            "GRAPHRAG.EXTRACT {} {} -> {} entities, {} relationships extracted",
+            kg_name,
+            document_id,
+            result.entities.len(),
+            result.relationships.len()
+        );
+
+        // Format response with extraction statistics
+        let mut response = vec![
+            RespValue::bulk_string_from_str("entities_extracted"),
+            RespValue::integer(result.entities.len() as i64),
+            RespValue::bulk_string_from_str("relationships_extracted"),
+            RespValue::integer(result.relationships.len() as i64),
+            RespValue::bulk_string_from_str("processing_time_ms"),
+            RespValue::integer(result.processing_time_ms as i64),
+        ];
+
+        if !result.warnings.is_empty() {
+            response.push(RespValue::bulk_string_from_str("warnings"));
+            response.push(RespValue::array(
+                result
+                    .warnings
+                    .iter()
+                    .map(RespValue::bulk_string_from_str)
+                    .collect(),
+            ));
+        }
+
+        Ok(RespValue::array(response))
+    }
+
+    async fn cmd_graphrag_reason(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        if args.len() < 4 {
+            return Err(ProtocolError::RespError(
+                "ERR wrong number of arguments for 'GRAPHRAG.REASON' command. Usage: GRAPHRAG.REASON <kg_name> <from_entity> <to_entity> [MAX_HOPS <hops>] [INCLUDE_EXPLANATION]".to_string(),
+            ));
+        }
+
+        let kg_name = args[0].as_string().ok_or_else(|| {
+            ProtocolError::RespError("ERR invalid knowledge graph name".to_string())
+        })?;
+
+        let from_entity = args[1]
+            .as_string()
+            .ok_or_else(|| ProtocolError::RespError("ERR invalid from entity".to_string()))?;
+
+        let to_entity = args[2]
+            .as_string()
+            .ok_or_else(|| ProtocolError::RespError("ERR invalid to entity".to_string()))?;
+
+        // Parse optional parameters
+        let mut max_hops: Option<u32> = None;
+        let mut include_explanation = false;
+
+        let mut i = 3;
+        while i < args.len() {
+            if let Some(param) = args[i].as_string() {
+                match param.to_uppercase().as_str() {
+                    "MAX_HOPS" => {
+                        if i + 1 >= args.len() {
+                            return Err(ProtocolError::RespError(
+                                "ERR MAX_HOPS requires a value".to_string(),
+                            ));
+                        }
+                        max_hops = args[i + 1].as_integer().map(|x| x as u32);
+                        i += 2;
+                    }
+                    "INCLUDE_EXPLANATION" => {
+                        include_explanation = true;
+                        i += 1;
+                    }
+                    _ => i += 1,
+                }
+            } else {
+                i += 1;
+            }
+        }
+
+        // Get GraphRAG actor reference
+        let actor_ref = self
+            .orbit_client
+            .actor_reference::<GraphRAGActor>(Key::StringKey {
+                key: kg_name.clone(),
+            })
+            .await
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+
+        // Create reasoning query using the reasoning engine
+        use crate::graphrag::multi_hop_reasoning::ReasoningQuery;
+        use orbit_shared::graphrag::ReasoningPath;
+
+        let reasoning_query = ReasoningQuery {
+            from_entity: from_entity.clone(),
+            to_entity: to_entity.clone(),
+            max_hops,
+            relationship_types: None,
+            include_explanation,
+            max_results: None,
+        };
+
+        // Execute reasoning query
+        let paths: Vec<ReasoningPath> = actor_ref
+            .invoke(
+                "find_connection_paths",
+                vec![serde_json::to_value(reasoning_query).unwrap()],
+            )
+            .await
+            .map_err(|e| ProtocolError::RespError(format!("ERR reasoning failed: {}", e)))?;
+
+        debug!(
+            "GRAPHRAG.REASON {} '{}' -> '{}' -> {} paths found",
+            kg_name,
+            from_entity,
+            to_entity,
+            paths.len()
+        );
+
+        // Format response
+        let path_responses: Vec<RespValue> = paths
+            .iter()
+            .map(|path| {
+                let mut path_data = vec![
+                    RespValue::bulk_string_from_str("nodes"),
+                    RespValue::array(
+                        path.nodes
+                            .iter()
+                            .map(RespValue::bulk_string_from_str)
+                            .collect(),
+                    ),
+                    RespValue::bulk_string_from_str("relationships"),
+                    RespValue::array(
+                        path.relationships
+                            .iter()
+                            .map(RespValue::bulk_string_from_str)
+                            .collect(),
+                    ),
+                    RespValue::bulk_string_from_str("score"),
+                    RespValue::bulk_string_from_str(path.score.to_string()),
+                    RespValue::bulk_string_from_str("length"),
+                    RespValue::integer(path.length as i64),
+                ];
+
+                if include_explanation {
+                    path_data.push(RespValue::bulk_string_from_str("explanation"));
+                    path_data.push(RespValue::bulk_string_from_str(&path.explanation));
+                }
+
+                RespValue::array(path_data)
+            })
+            .collect();
+
+        let response = vec![
+            RespValue::bulk_string_from_str("from_entity"),
+            RespValue::bulk_string_from_str(&from_entity),
+            RespValue::bulk_string_from_str("to_entity"),
+            RespValue::bulk_string_from_str(&to_entity),
+            RespValue::bulk_string_from_str("paths_found"),
+            RespValue::integer(paths.len() as i64),
+            RespValue::bulk_string_from_str("paths"),
+            RespValue::array(path_responses),
+        ];
+
+        Ok(RespValue::array(response))
+    }
+
+    async fn cmd_graphrag_stats(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::RespError(
+                "ERR wrong number of arguments for 'GRAPHRAG.STATS' command. Usage: GRAPHRAG.STATS <kg_name>".to_string(),
+            ));
+        }
+
+        let kg_name = args[0].as_string().ok_or_else(|| {
+            ProtocolError::RespError("ERR invalid knowledge graph name".to_string())
+        })?;
+
+        // Get GraphRAG actor reference
+        let actor_ref = self
+            .orbit_client
+            .actor_reference::<GraphRAGActor>(Key::StringKey {
+                key: kg_name.clone(),
+            })
+            .await
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+
+        // Get statistics
+        use crate::graphrag::GraphRAGStats;
+        let stats: GraphRAGStats = actor_ref
+            .invoke("get_stats", vec![])
+            .await
+            .map_err(|e| ProtocolError::RespError(format!("ERR failed to get stats: {}", e)))?;
+
+        debug!(
+            "GRAPHRAG.STATS {} -> {} documents processed",
+            kg_name, stats.documents_processed
+        );
+
+        let response = vec![
+            RespValue::bulk_string_from_str("kg_name"),
+            RespValue::bulk_string_from_str(&kg_name),
+            RespValue::bulk_string_from_str("documents_processed"),
+            RespValue::integer(stats.documents_processed as i64),
+            RespValue::bulk_string_from_str("rag_queries_executed"),
+            RespValue::integer(stats.rag_queries_executed as i64),
+            RespValue::bulk_string_from_str("reasoning_queries_executed"),
+            RespValue::integer(stats.reasoning_queries_executed as i64),
+            RespValue::bulk_string_from_str("entities_extracted"),
+            RespValue::integer(stats.entities_extracted as i64),
+            RespValue::bulk_string_from_str("relationships_extracted"),
+            RespValue::integer(stats.relationships_extracted as i64),
+            RespValue::bulk_string_from_str("avg_document_processing_time_ms"),
+            RespValue::bulk_string_from_str(format!(
+                "{:.2}",
+                stats.avg_document_processing_time_ms
+            )),
+            RespValue::bulk_string_from_str("avg_rag_query_time_ms"),
+            RespValue::bulk_string_from_str(format!("{:.2}", stats.avg_rag_query_time_ms)),
+            RespValue::bulk_string_from_str("avg_reasoning_query_time_ms"),
+            RespValue::bulk_string_from_str(format!("{:.2}", stats.avg_reasoning_query_time_ms)),
+            RespValue::bulk_string_from_str("rag_success_rate"),
+            RespValue::bulk_string_from_str(format!("{:.3}", stats.rag_success_rate)),
+        ];
+
+        Ok(RespValue::array(response))
+    }
+
+    async fn cmd_graphrag_entities(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        if args.is_empty() || args.len() > 3 {
+            return Err(ProtocolError::RespError(
+                "ERR wrong number of arguments for 'GRAPHRAG.ENTITIES' command. Usage: GRAPHRAG.ENTITIES <kg_name> [LIMIT <limit>] [ENTITY_TYPE <type>]".to_string(),
+            ));
+        }
+
+        let kg_name = args[0].as_string().ok_or_else(|| {
+            ProtocolError::RespError("ERR invalid knowledge graph name".to_string())
+        })?;
+
+        // Parse optional parameters
+        let mut limit: Option<usize> = None;
+        let mut entity_type: Option<String> = None;
+
+        let mut i = 1;
+        while i < args.len() {
+            if let Some(param) = args[i].as_string() {
+                match param.to_uppercase().as_str() {
+                    "LIMIT" => {
+                        if i + 1 >= args.len() {
+                            return Err(ProtocolError::RespError(
+                                "ERR LIMIT requires a value".to_string(),
+                            ));
+                        }
+                        limit = args[i + 1].as_integer().map(|x| x as usize);
+                        i += 2;
+                    }
+                    "ENTITY_TYPE" => {
+                        if i + 1 >= args.len() {
+                            return Err(ProtocolError::RespError(
+                                "ERR ENTITY_TYPE requires a value".to_string(),
+                            ));
+                        }
+                        entity_type = args[i + 1].as_string();
+                        i += 2;
+                    }
+                    _ => i += 1,
+                }
+            } else {
+                i += 1;
+            }
+        }
+
+        // For now, return a simplified response since we'd need to query the knowledge graph
+        // In a full implementation, this would query the graph database for entities
+        debug!(
+            "GRAPHRAG.ENTITIES {} (limit: {:?}, type: {:?})",
+            kg_name, limit, entity_type
+        );
+
+        // Mock response - in practice, would query the actual knowledge graph
+        let response = vec![
+            RespValue::bulk_string_from_str("kg_name"),
+            RespValue::bulk_string_from_str(&kg_name),
+            RespValue::bulk_string_from_str("entities"),
+            RespValue::array(vec![]), // Would contain actual entities
+            RespValue::bulk_string_from_str("total_count"),
+            RespValue::integer(0), // Would contain actual count
+        ];
+
+        Ok(RespValue::array(response))
+    }
+
+    async fn cmd_graphrag_similar(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        if args.len() < 2 {
+            return Err(ProtocolError::RespError(
+                "ERR wrong number of arguments for 'GRAPHRAG.SIMILAR' command. Usage: GRAPHRAG.SIMILAR <kg_name> <entity_name> [LIMIT <limit>] [THRESHOLD <threshold>]".to_string(),
+            ));
+        }
+
+        let kg_name = args[0].as_string().ok_or_else(|| {
+            ProtocolError::RespError("ERR invalid knowledge graph name".to_string())
+        })?;
+
+        let entity_name = args[1]
+            .as_string()
+            .ok_or_else(|| ProtocolError::RespError("ERR invalid entity name".to_string()))?;
+
+        // Parse optional parameters
+        let mut limit: Option<usize> = None;
+        let mut threshold: Option<f32> = None;
+
+        let mut i = 2;
+        while i < args.len() {
+            if let Some(param) = args[i].as_string() {
+                match param.to_uppercase().as_str() {
+                    "LIMIT" => {
+                        if i + 1 >= args.len() {
+                            return Err(ProtocolError::RespError(
+                                "ERR LIMIT requires a value".to_string(),
+                            ));
+                        }
+                        limit = args[i + 1].as_integer().map(|x| x as usize);
+                        i += 2;
+                    }
+                    "THRESHOLD" => {
+                        if i + 1 >= args.len() {
+                            return Err(ProtocolError::RespError(
+                                "ERR THRESHOLD requires a value".to_string(),
+                            ));
+                        }
+                        if let Some(threshold_str) = args[i + 1].as_string() {
+                            threshold = threshold_str.parse::<f32>().ok();
+                        }
+                        i += 2;
+                    }
+                    _ => i += 1,
+                }
+            } else {
+                i += 1;
+            }
+        }
+
+        // For now, return a simplified response since we'd need to query vectors
+        // In a full implementation, this would use vector similarity to find similar entities
+        debug!(
+            "GRAPHRAG.SIMILAR {} '{}' (limit: {:?}, threshold: {:?})",
+            kg_name, entity_name, limit, threshold
+        );
+
+        // Mock response - in practice, would perform vector similarity search
+        let response = vec![
+            RespValue::bulk_string_from_str("entity_name"),
+            RespValue::bulk_string_from_str(&entity_name),
+            RespValue::bulk_string_from_str("kg_name"),
+            RespValue::bulk_string_from_str(&kg_name),
+            RespValue::bulk_string_from_str("similar_entities"),
+            RespValue::array(vec![]), // Would contain similar entities with scores
+            RespValue::bulk_string_from_str("threshold_used"),
+            RespValue::bulk_string_from_str(threshold.unwrap_or(0.8).to_string()),
+        ];
+
+        Ok(RespValue::array(response))
     }
 }
