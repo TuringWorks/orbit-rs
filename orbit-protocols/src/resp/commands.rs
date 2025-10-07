@@ -2214,7 +2214,7 @@ impl CommandHandler {
         match score {
             Ok(Some(score_val)) => {
                 debug!("ZSCORE {} {} -> {}", key, member, score_val);
-                Ok(RespValue::bulk_string_from_str(&score_val.to_string()))
+                Ok(RespValue::bulk_string_from_str(score_val.to_string()))
             }
             Ok(None) => {
                 debug!("ZSCORE {} {} -> null (not found)", key, member);
@@ -2262,7 +2262,7 @@ impl CommandHandler {
         match new_score {
             Ok(score) => {
                 debug!("ZINCRBY {} {} {} -> {}", key, increment, member, score);
-                Ok(RespValue::bulk_string_from_str(&score.to_string()))
+                Ok(RespValue::bulk_string_from_str(score.to_string()))
             }
             Err(e) => {
                 debug!("ZINCRBY {} {} {} -> error: {}", key, increment, member, e);
@@ -2321,7 +2321,7 @@ impl CommandHandler {
                 for (member, score_opt) in members {
                     result.push(RespValue::bulk_string_from_str(&member));
                     if let Some(score) = score_opt {
-                        result.push(RespValue::bulk_string_from_str(&score.to_string()));
+                        result.push(RespValue::bulk_string_from_str(score.to_string()));
                     }
                 }
                 debug!(
@@ -2394,7 +2394,7 @@ impl CommandHandler {
                 for (member, score_opt) in members {
                     result.push(RespValue::bulk_string_from_str(&member));
                     if let Some(score) = score_opt {
-                        result.push(RespValue::bulk_string_from_str(&score.to_string()));
+                        result.push(RespValue::bulk_string_from_str(score.to_string()));
                     }
                 }
                 debug!(
@@ -4240,7 +4240,7 @@ impl CommandHandler {
     fn format_sample(&self, sample: &Sample) -> Vec<RespValue> {
         vec![
             RespValue::integer(sample.timestamp as i64),
-            RespValue::bulk_string_from_str(&sample.value.to_string()),
+            RespValue::bulk_string_from_str(sample.value.to_string()),
         ]
     }
 
