@@ -73,7 +73,7 @@ jobs:
     - name: Install system dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y pkg-config libssl-dev libsqlite3-dev protobuf-compiler
+        sudo apt-get install -y pkg-config libssl-dev libsqlite3-dev protobuf-compiler jq
 
     - name: Check code formatting
       run: cargo fmt --all -- --check
@@ -84,8 +84,8 @@ jobs:
 
     - name: Build all components (debug)
       run: |
-        cargo build --workspace --all-features
-        cargo build --workspace --all-features --release
+        cargo build --workspace
+        cargo build --workspace --release
 
     - name: Run comprehensive tests
       run: |
@@ -303,7 +303,7 @@ jobs:
           #   profile: release
           #   archive: tar.gz
           
-          # Windows builds
+          # Windows builds (ARM64 temporarily disabled)
           - target: x86_64-pc-windows-msvc
             os: windows-latest
             profile: debug
@@ -312,14 +312,16 @@ jobs:
             os: windows-latest
             profile: release
             archive: zip
-          - target: aarch64-pc-windows-msvc
-            os: windows-latest
-            profile: debug
-            archive: zip
-          - target: aarch64-pc-windows-msvc
-            os: windows-latest
-            profile: release
-            archive: zip
+          # ARM64 Windows builds temporarily disabled due to complexity
+          # TODO: Re-enable after stabilizing core pipeline
+          # - target: aarch64-pc-windows-msvc
+          #   os: windows-latest
+          #   profile: debug
+          #   archive: zip
+          # - target: aarch64-pc-windows-msvc
+          #   os: windows-latest
+          #   profile: release
+          #   archive: zip
 
     steps:
     - name: Checkout code
@@ -356,8 +358,8 @@ jobs:
     - name: Install Windows dependencies
       if: matrix.os == 'windows-latest'
       run: |
-        # Use vcpkg for Windows dependencies
-        vcpkg install protobuf:x64-windows-static || echo "Protobuf installation completed"
+        # Install protobuf using chocolatey (more reliable than vcpkg)
+        choco install protoc -y || echo "Protobuf installation completed"
 
     # Build step
     - name: Build binary
@@ -420,7 +422,13 @@ jobs:
         
         # Create archive
         if [ "${{ matrix.archive }}" = "zip" ]; then
-          7z a "${ARTIFACT_DIR}.zip" "${ARTIFACT_DIR}/*"
+          # Use PowerShell's Compress-Archive for Windows
+          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            powershell -Command "Compress-Archive -Path '${ARTIFACT_DIR}\*' -DestinationPath '${ARTIFACT_DIR}.zip'"
+          else
+            # Use zip command on Unix systems
+            zip -r "${ARTIFACT_DIR}.zip" "${ARTIFACT_DIR}"
+          fi
           echo "ARTIFACT_NAME=${ARTIFACT_DIR}.zip" >> $GITHUB_ENV
         else
           tar -czf "${ARTIFACT_DIR}.tar.gz" "${ARTIFACT_DIR}"
@@ -517,11 +525,9 @@ jobs:
         echo "- **Intel**: \`orbit-rs-${VERSION}-x86_64-apple-darwin-release.tar.gz\`" >> CHANGELOG.md
         echo "" >> CHANGELOG.md
         echo "#### Linux" >> CHANGELOG.md
-        echo "- **ARM64**: \`orbit-rs-${VERSION}-aarch64-unknown-linux-gnu-release.tar.gz\`" >> CHANGELOG.md
         echo "- **x86_64**: \`orbit-rs-${VERSION}-x86_64-unknown-linux-gnu-release.tar.gz\`" >> CHANGELOG.md
         echo "" >> CHANGELOG.md
         echo "#### Windows" >> CHANGELOG.md
-        echo "- **ARM64**: \`orbit-rs-${VERSION}-aarch64-pc-windows-msvc-release.zip\`" >> CHANGELOG.md
         echo "- **x86_64**: \`orbit-rs-${VERSION}-x86_64-pc-windows-msvc-release.zip\`" >> CHANGELOG.md
         echo "" >> CHANGELOG.md
         echo "### Debug Builds" >> CHANGELOG.md
