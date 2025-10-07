@@ -44,17 +44,58 @@ cargo build --workspace
 | Target | Description |
 |--------|-------------|
 | `make help` | Show all available targets |
+| **Build & Check** | |
 | `make format` | Format code with `cargo fmt --all` |
 | `make check` | Run cargo check and clippy |
 | `make test` | Run all tests |
 | `make build` | Build all packages |
 | `make clean` | Clean build artifacts |
-| `make commit-ready` | Format, check, and test (ready for commit) |
+| **Pre-commit** | |
+| `make commit-ready` | Format, check, and test (recommended) |
+| `make commit-light` | Format and check only (faster) |
+| `make pre-commit-full` | Enable full pre-commit hook with tests |
+| `make pre-commit-light` | Enable lightweight pre-commit hook |
+| **Complete** | |
 | `make all` | Run all checks and build |
 
-## 🤖 Automated Pre-commit Hook
+## 🤖 Automated Pre-commit Hooks
 
-A pre-commit hook has been installed that will automatically run `cargo fmt --all` before each commit. If formatting changes are needed, the commit will be blocked and you'll need to review and re-add the changes.
+Orbit-RS provides two pre-commit hook options to automatically enforce code quality:
+
+### Full Pre-commit Hook (Recommended)
+Runs comprehensive checks including tests:
+```bash
+# Enable full pre-commit hook
+make pre-commit-full
+```
+
+Checks performed:
+1. **Format code** using `cargo fmt --all`
+2. **Check compilation** using `cargo check --workspace`  
+3. **Run clippy** with `-D warnings` to catch linting issues
+4. **Run tests** using `cargo test --workspace --lib`
+
+### Lightweight Pre-commit Hook (Faster)
+Runs essential checks only (skips tests for faster commits):
+```bash
+# Enable lightweight pre-commit hook
+make pre-commit-light
+```
+
+Checks performed:
+1. **Format code** using `cargo fmt --all`
+2. **Check compilation** using `cargo check --workspace`
+3. **Run clippy** with `-D warnings` to catch linting issues
+
+### Manual Pre-commit Checks
+You can also run the same checks manually without the hook:
+```bash
+# Full checks (equivalent to pre-commit-full)
+make commit-ready
+
+# Lightweight checks (equivalent to pre-commit-light)  
+make commit-light
+```
 
 ## 🚨 CI/CD Pipeline
 
