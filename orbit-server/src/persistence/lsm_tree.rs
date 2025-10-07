@@ -5,7 +5,7 @@
 
 use super::*;
 use base64::{engine::general_purpose, Engine as _};
-use bloom::{BloomFilter, ASMS};
+use fastbloom_rs::{BloomFilter, FilterBuilder, Membership};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
@@ -83,7 +83,7 @@ impl Clone for SSTable {
     fn clone(&self) -> Self {
         // Create a new bloom filter with similar configuration
         let new_bloom =
-            BloomFilter::with_rate(0.01, self.entry_count.max(1000).try_into().unwrap_or(1000));
+            FilterBuilder::new(self.entry_count.max(1000) as u64, 0.01).build_bloom_filter();
         // Note: We can't clone the actual bloom filter state, so this is a new empty one
         // In a production system, you'd serialize/deserialize the bloom filter
         Self {
@@ -321,7 +321,7 @@ impl LsmTreeAddressableProvider {
         // Search SSTables in reverse chronological order (newest first)
         for sstable in sstables.iter().rev() {
             // Check bloom filter first
-            if !sstable.bloom_filter.contains(&key) {
+            if !sstable.bloom_filter.contains(key.as_bytes()) {
                 continue;
             }
 

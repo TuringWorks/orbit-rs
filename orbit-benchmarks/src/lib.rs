@@ -11,8 +11,4 @@
 pub mod persistence;
 
 // Re-export commonly used items
-pub use persistence::{
-    config::*,
-    metrics::*,
-    workload::*,
-};
+pub use persistence::{config::*, metrics::*, workload::*};

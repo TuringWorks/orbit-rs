@@ -1,6 +1,6 @@
-use super::workload::{WorkloadStats, CrashRecoveryResults};
+use super::workload::{CrashRecoveryResults, WorkloadStats};
+use serde::{Deserialize, Serialize};
 use std::time::Duration;
-use serde::{Serialize, Deserialize};
 
 /// Comprehensive benchmark results for a single persistence implementation
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -48,7 +48,7 @@ impl MetricsAnalyzer {
         let winner_by_metric = Self::find_winners(&results);
         let recommendations = Self::generate_recommendations(&results);
         let summary = Self::generate_summary(&results, &winner_by_metric);
-        
+
         ComparativeAnalysis {
             implementations: results,
             winner_by_metric,
@@ -56,16 +56,17 @@ impl MetricsAnalyzer {
             summary,
         }
     }
-    
+
     /// Calculate an overall score for an implementation (0-100)
     pub fn calculate_overall_score(stats: &WorkloadStats, recovery: &CrashRecoveryResults) -> f64 {
         // Weighted scoring system
         let write_score = Self::latency_score(stats.write_latency_p95);
         let read_score = Self::latency_score(stats.read_latency_p95);
         let throughput_score = Self::throughput_score(stats.throughput);
-        let memory_score = Self::memory_efficiency_score(stats.peak_memory_usage, stats.total_operations);
+        let memory_score =
+            Self::memory_efficiency_score(stats.peak_memory_usage, stats.total_operations);
         let recovery_score = Self::recovery_score(recovery.recovery_time);
-        
+
         // Weights based on orbit-rs priorities
         let weights = [
             (write_score, 0.3),      // Write performance critical for lease updates
@@ -74,10 +75,10 @@ impl MetricsAnalyzer {
             (memory_score, 0.15),    // Memory efficiency
             (recovery_score, 0.15),  // Recovery time (catastrophic failure scenarios)
         ];
-        
+
         weights.iter().map(|(score, weight)| score * weight).sum()
     }
-    
+
     /// Score latency (lower is better): 0-100 scale
     fn latency_score(latency: Duration) -> f64 {
         let micros = latency.as_micros() as f64;
@@ -91,7 +92,7 @@ impl MetricsAnalyzer {
             _ => 0.0,
         }
     }
-    
+
     /// Score throughput (higher is better): 0-100 scale
     fn throughput_score(throughput: f64) -> f64 {
         // Excellent: >10k ops/s = 100, Good: >1k ops/s = 80, Average: >100 ops/s = 60
@@ -104,13 +105,13 @@ impl MetricsAnalyzer {
             _ => throughput * 20.0,
         }
     }
-    
+
     /// Score memory efficiency (lower usage per operation is better): 0-100 scale
-    fn memory_efficiency_score(peak_memory: u64, operations: u64) -> f64 {
+    pub fn memory_efficiency_score(peak_memory: u64, operations: u64) -> f64 {
         if operations == 0 {
             return 0.0;
         }
-        
+
         let bytes_per_op = peak_memory as f64 / operations as f64;
         // Excellent: <100 bytes/op = 100, Good: <1KB/op = 80, Average: <10KB/op = 60
         match bytes_per_op {
@@ -121,7 +122,7 @@ impl MetricsAnalyzer {
             _ => 20.0,
         }
     }
-    
+
     /// Score recovery time (lower is better): 0-100 scale
     fn recovery_score(recovery_time: Duration) -> f64 {
         let seconds = recovery_time.as_secs_f64();
@@ -135,83 +136,101 @@ impl MetricsAnalyzer {
             _ => 0.0,
         }
     }
-    
+
     fn find_winners(results: &[BenchmarkResults]) -> WinnerByMetric {
         let best_write = results
             .iter()
-            .min_by(|a, b| a.actor_lease_workload.write_latency_p95
-                .cmp(&b.actor_lease_workload.write_latency_p95))
+            .min_by(|a, b| {
+                a.actor_lease_workload
+                    .write_latency_p95
+                    .cmp(&b.actor_lease_workload.write_latency_p95)
+            })
             .map(|r| r.implementation_name.clone())
             .unwrap_or_default();
-            
+
         let best_read = results
             .iter()
-            .min_by(|a, b| a.actor_lease_workload.read_latency_p95
-                .cmp(&b.actor_lease_workload.read_latency_p95))
+            .min_by(|a, b| {
+                a.actor_lease_workload
+                    .read_latency_p95
+                    .cmp(&b.actor_lease_workload.read_latency_p95)
+            })
             .map(|r| r.implementation_name.clone())
             .unwrap_or_default();
-            
+
         let best_throughput = results
             .iter()
-            .max_by(|a, b| a.high_throughput_workload.throughput
-                .partial_cmp(&b.high_throughput_workload.throughput)
-                .unwrap_or(std::cmp::Ordering::Equal))
+            .max_by(|a, b| {
+                a.high_throughput_workload
+                    .throughput
+                    .partial_cmp(&b.high_throughput_workload.throughput)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
             .map(|r| r.implementation_name.clone())
             .unwrap_or_default();
-            
+
         let best_memory = results
             .iter()
-            .max_by(|a, b| a.memory_efficiency_score
-                .partial_cmp(&b.memory_efficiency_score)
-                .unwrap_or(std::cmp::Ordering::Equal))
+            .max_by(|a, b| {
+                a.memory_efficiency_score
+                    .partial_cmp(&b.memory_efficiency_score)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
             .map(|r| r.implementation_name.clone())
             .unwrap_or_default();
-            
+
         let best_recovery = results
             .iter()
-            .min_by(|a, b| a.crash_recovery_results.recovery_time
-                .cmp(&b.crash_recovery_results.recovery_time))
+            .min_by(|a, b| {
+                a.crash_recovery_results
+                    .recovery_time
+                    .cmp(&b.crash_recovery_results.recovery_time)
+            })
             .map(|r| r.implementation_name.clone())
             .unwrap_or_default();
-            
+
         let best_overall = results
             .iter()
-            .max_by(|a, b| a.overall_score
-                .partial_cmp(&b.overall_score)
-                .unwrap_or(std::cmp::Ordering::Equal))
+            .max_by(|a, b| {
+                a.overall_score
+                    .partial_cmp(&b.overall_score)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
             .map(|r| r.implementation_name.clone())
             .unwrap_or_default();
-        
+
         WinnerByMetric {
             best_write_latency: best_write,
             best_read_latency: best_read,
-            best_throughput: best_throughput,
+            best_throughput,
             best_memory_efficiency: best_memory,
             best_recovery_time: best_recovery,
-            best_overall: best_overall,
+            best_overall,
         }
     }
-    
+
     fn generate_recommendations(results: &[BenchmarkResults]) -> Vec<Recommendation> {
         let mut recommendations = Vec::new();
-        
+
         // Find best for specific use cases
-        let write_heavy_best = results
-            .iter()
-            .min_by(|a, b| a.actor_lease_workload.write_latency_p95
-                .cmp(&b.actor_lease_workload.write_latency_p95));
-                
-        let read_heavy_best = results
-            .iter()
-            .min_by(|a, b| a.query_heavy_workload.range_query_latency_p95
-                .cmp(&b.query_heavy_workload.range_query_latency_p95));
-                
-        let balanced_best = results
-            .iter()
-            .max_by(|a, b| a.overall_score
+        let write_heavy_best = results.iter().min_by(|a, b| {
+            a.actor_lease_workload
+                .write_latency_p95
+                .cmp(&b.actor_lease_workload.write_latency_p95)
+        });
+
+        let read_heavy_best = results.iter().min_by(|a, b| {
+            a.query_heavy_workload
+                .range_query_latency_p95
+                .cmp(&b.query_heavy_workload.range_query_latency_p95)
+        });
+
+        let balanced_best = results.iter().max_by(|a, b| {
+            a.overall_score
                 .partial_cmp(&b.overall_score)
-                .unwrap_or(std::cmp::Ordering::Equal));
-        
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+
         if let Some(impl_) = write_heavy_best {
             recommendations.push(Recommendation {
                 use_case: "High-Frequency Actor Lease Updates".to_string(),
@@ -222,7 +241,7 @@ impl MetricsAnalyzer {
                 ),
             });
         }
-        
+
         if let Some(impl_) = read_heavy_best {
             recommendations.push(Recommendation {
                 use_case: "Cluster Coordination (Range Query Heavy)".to_string(),
@@ -233,7 +252,7 @@ impl MetricsAnalyzer {
                 ),
             });
         }
-        
+
         if let Some(impl_) = balanced_best {
             recommendations.push(Recommendation {
                 use_case: "Production Orbit-rs Deployment".to_string(),
@@ -245,38 +264,49 @@ impl MetricsAnalyzer {
                 ),
             });
         }
-        
+
         recommendations
     }
-    
+
     fn generate_summary(results: &[BenchmarkResults], winners: &WinnerByMetric) -> String {
         let mut summary = String::new();
-        
+
         summary.push_str("# Persistence Implementation Benchmark Results\n\n");
-        
+
         if results.len() == 2 {
-            let cow_results = results.iter().find(|r| r.implementation_name.contains("COW"));
-            let rocks_results = results.iter().find(|r| r.implementation_name.contains("RocksDB"));
-            
+            let cow_results = results
+                .iter()
+                .find(|r| r.implementation_name.contains("COW"));
+            let rocks_results = results
+                .iter()
+                .find(|r| r.implementation_name.contains("RocksDB"));
+
             if let (Some(cow), Some(rocks)) = (cow_results, rocks_results) {
-                let write_improvement = if cow.actor_lease_workload.write_latency_p95 < rocks.actor_lease_workload.write_latency_p95 {
-                    let ratio = rocks.actor_lease_workload.write_latency_p95.as_micros() as f64 / 
-                               cow.actor_lease_workload.write_latency_p95.as_micros() as f64;
+                let write_improvement = if cow.actor_lease_workload.write_latency_p95
+                    < rocks.actor_lease_workload.write_latency_p95
+                {
+                    let ratio = rocks.actor_lease_workload.write_latency_p95.as_micros() as f64
+                        / cow.actor_lease_workload.write_latency_p95.as_micros() as f64;
                     format!("COW B+ Tree is {:.1}x faster for writes", ratio)
                 } else {
-                    let ratio = cow.actor_lease_workload.write_latency_p95.as_micros() as f64 / 
-                               rocks.actor_lease_workload.write_latency_p95.as_micros() as f64;
+                    let ratio = cow.actor_lease_workload.write_latency_p95.as_micros() as f64
+                        / rocks.actor_lease_workload.write_latency_p95.as_micros() as f64;
                     format!("RocksDB is {:.1}x faster for writes", ratio)
                 };
-                
-                let memory_improvement = if cow.memory_efficiency_score > rocks.memory_efficiency_score {
-                    format!("COW B+ Tree is more memory efficient ({:.1} vs {:.1} score)", 
-                           cow.memory_efficiency_score, rocks.memory_efficiency_score)
-                } else {
-                    format!("RocksDB is more memory efficient ({:.1} vs {:.1} score)", 
-                           rocks.memory_efficiency_score, cow.memory_efficiency_score)
-                };
-                
+
+                let memory_improvement =
+                    if cow.memory_efficiency_score > rocks.memory_efficiency_score {
+                        format!(
+                            "COW B+ Tree is more memory efficient ({:.1} vs {:.1} score)",
+                            cow.memory_efficiency_score, rocks.memory_efficiency_score
+                        )
+                    } else {
+                        format!(
+                            "RocksDB is more memory efficient ({:.1} vs {:.1} score)",
+                            rocks.memory_efficiency_score, cow.memory_efficiency_score
+                        )
+                    };
+
                 summary.push_str(&format!(
                     "## Key Findings\n\n\
                     - **Write Performance**: {}\n\
@@ -288,12 +318,20 @@ impl MetricsAnalyzer {
                     cow.crash_recovery_results.recovery_time.as_secs_f64(),
                     rocks.crash_recovery_results.recovery_time.as_secs_f64(),
                     winners.best_overall,
-                    if winners.best_overall == cow.implementation_name { cow.overall_score } else { rocks.overall_score },
-                    if winners.best_overall == cow.implementation_name { rocks.overall_score } else { cow.overall_score }
+                    if winners.best_overall == cow.implementation_name {
+                        cow.overall_score
+                    } else {
+                        rocks.overall_score
+                    },
+                    if winners.best_overall == cow.implementation_name {
+                        rocks.overall_score
+                    } else {
+                        cow.overall_score
+                    }
                 ));
             }
         }
-        
+
         summary.push_str(&format!(
             "## Performance Leaders\n\n\
             - **Fastest Writes**: {}\n\
@@ -307,24 +345,30 @@ impl MetricsAnalyzer {
             winners.best_memory_efficiency,
             winners.best_recovery_time
         ));
-        
+
         summary
     }
-    
+
     /// Export results to JSON file
-    pub fn export_to_json(analysis: &ComparativeAnalysis, path: &std::path::Path) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn export_to_json(
+        analysis: &ComparativeAnalysis,
+        path: &std::path::Path,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let json = serde_json::to_string_pretty(analysis)?;
         std::fs::write(path, json)?;
         Ok(())
     }
-    
+
     /// Export results to CSV for further analysis
-    pub fn export_to_csv(results: &[BenchmarkResults], path: &std::path::Path) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn export_to_csv(
+        results: &[BenchmarkResults],
+        path: &std::path::Path,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let mut csv_content = String::new();
-        
+
         // Header
         csv_content.push_str("implementation,write_p50_us,write_p95_us,write_p99_us,read_p50_us,read_p95_us,throughput_ops_s,memory_mb,recovery_time_s,overall_score\n");
-        
+
         // Data rows
         for result in results {
             csv_content.push_str(&format!(
@@ -341,7 +385,7 @@ impl MetricsAnalyzer {
                 result.overall_score
             ));
         }
-        
+
         std::fs::write(path, csv_content)?;
         Ok(())
     }
@@ -350,7 +394,7 @@ impl MetricsAnalyzer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_scoring_functions() {
         // Test latency scoring
@@ -358,21 +402,21 @@ mod tests {
         assert!((MetricsAnalyzer::latency_score(Duration::from_micros(25)) - 91.1).abs() < 1.0);
         // 10ms = 10,000μs should score low but not 0 (around 15-20)
         assert!(MetricsAnalyzer::latency_score(Duration::from_millis(10)) < 25.0);
-        
+
         // Test throughput scoring
         assert!((MetricsAnalyzer::throughput_score(15000.0) - 100.0).abs() < 0.1);
         assert!((MetricsAnalyzer::throughput_score(5000.0) - 88.9).abs() < 1.0);
         // Throughput score for 50 ops/s (around 49)
         let score_50 = MetricsAnalyzer::throughput_score(50.0);
         assert!(score_50 > 48.0 && score_50 < 52.0);
-        
+
         // Test memory efficiency scoring - 1000 bytes for 100 ops = 10 bytes/op
         let mem_score = MetricsAnalyzer::memory_efficiency_score(1000, 100);
         assert!(mem_score > 95.0); // Should be very high (good efficiency)
-        
-        let mem_score_bad = MetricsAnalyzer::memory_efficiency_score(100000, 100); 
+
+        let mem_score_bad = MetricsAnalyzer::memory_efficiency_score(100000, 100);
         assert!(mem_score_bad < 85.0); // Should be lower than good efficiency
-        
+
         // Test recovery scoring
         assert!((MetricsAnalyzer::recovery_score(Duration::from_millis(500)) - 100.0).abs() < 0.1);
         let recovery_10s = MetricsAnalyzer::recovery_score(Duration::from_secs(10));

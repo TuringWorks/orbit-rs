@@ -11,7 +11,6 @@ members = [
     "orbit-server-prometheus",
     "orbit-protocols",
     "orbit-application",
-    "orbit-benchmarks",
     "orbit-operator",
     "tests",
     "examples/hello-world",
@@ -24,6 +23,11 @@ members = [
     "examples/timeseries-demo",
     "examples/orbitql-example",
     "examples/multi-model-query-example",
+]
+
+# Exclude benchmarks from default workspace build due to WAL replay issues
+exclude = [
+    "orbit-benchmarks",
 ]
 
 [workspace.package]

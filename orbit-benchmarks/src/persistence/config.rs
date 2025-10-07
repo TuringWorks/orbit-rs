@@ -6,16 +6,16 @@ use thiserror::Error;
 pub struct PersistenceConfig {
     /// The persistence backend to use
     pub backend: PersistenceBackend,
-    
+
     /// Data directory for storage files
     pub data_dir: PathBuf,
-    
+
     /// COW B+ Tree specific configuration
     pub cow_config: CowBTreeConfig,
-    
+
     /// LSM-Tree specific configuration  
     pub lsm_config: LsmConfig,
-    
+
     /// RocksDB specific configuration (existing)
     pub rocksdb_config: RocksDbConfig,
 }
@@ -147,103 +147,109 @@ impl PersistenceConfig {
         config.validate()?;
         Ok(config)
     }
-    
+
     /// Save configuration to a JSON file
     pub fn to_file(&self, path: &std::path::Path) -> Result<(), ConfigError> {
         let content = serde_json::to_string_pretty(self)?;
         std::fs::write(path, content)?;
         Ok(())
     }
-    
+
     /// Create configuration from environment variables
     pub fn from_env() -> Result<Self, ConfigError> {
         let mut config = Self::default();
-        
+
         // Parse backend from environment
         if let Ok(backend_str) = std::env::var("ORBIT_PERSISTENCE_BACKEND") {
             config.backend = match backend_str.to_lowercase().as_str() {
                 "cow" | "cowbtree" | "cow_btree" => PersistenceBackend::CowBTree,
                 "lsm" | "lsmtree" | "lsm_tree" => PersistenceBackend::LsmTree,
                 "rocksdb" | "rocks" => PersistenceBackend::RocksDb,
-                _ => return Err(ConfigError::InvalidConfig(
-                    format!("Unknown backend: {}", backend_str)
-                )),
+                _ => {
+                    return Err(ConfigError::InvalidConfig(format!(
+                        "Unknown backend: {}",
+                        backend_str
+                    )))
+                }
             };
         }
-        
+
         // Parse data directory
         if let Ok(data_dir) = std::env::var("ORBIT_DATA_DIR") {
             config.data_dir = PathBuf::from(data_dir);
         }
-        
+
         // Parse COW configuration
         if let Ok(val) = std::env::var("ORBIT_COW_MAX_KEYS") {
-            config.cow_config.max_keys_per_node = val.parse()
+            config.cow_config.max_keys_per_node = val
+                .parse()
                 .map_err(|_| ConfigError::InvalidConfig("Invalid COW max keys".into()))?;
         }
-        
+
         // Parse LSM configuration
         if let Ok(val) = std::env::var("ORBIT_LSM_MEMTABLE_SIZE_MB") {
-            config.lsm_config.memtable_size_mb = val.parse()
+            config.lsm_config.memtable_size_mb = val
+                .parse()
                 .map_err(|_| ConfigError::InvalidConfig("Invalid LSM memtable size".into()))?;
         }
-        
+
         if let Ok(val) = std::env::var("ORBIT_LSM_MAX_LEVELS") {
-            config.lsm_config.max_levels = val.parse()
+            config.lsm_config.max_levels = val
+                .parse()
                 .map_err(|_| ConfigError::InvalidConfig("Invalid LSM max levels".into()))?;
         }
-        
+
         config.validate()?;
         Ok(config)
     }
-    
+
     /// Validate the configuration
     pub fn validate(&self) -> Result<(), ConfigError> {
         // Validate COW config
         if self.cow_config.max_keys_per_node < 2 {
             return Err(ConfigError::InvalidConfig(
-                "COW max_keys_per_node must be at least 2".into()
+                "COW max_keys_per_node must be at least 2".into(),
             ));
         }
-        
+
         if self.cow_config.wal_buffer_size < 1024 {
             return Err(ConfigError::InvalidConfig(
-                "COW WAL buffer size must be at least 1KB".into()
+                "COW WAL buffer size must be at least 1KB".into(),
             ));
         }
-        
+
         // Validate LSM config
         if self.lsm_config.memtable_size_mb < 1 {
             return Err(ConfigError::InvalidConfig(
-                "LSM memtable size must be at least 1MB".into()
+                "LSM memtable size must be at least 1MB".into(),
             ));
         }
-        
+
         if self.lsm_config.max_levels < 2 {
             return Err(ConfigError::InvalidConfig(
-                "LSM max levels must be at least 2".into()
+                "LSM max levels must be at least 2".into(),
             ));
         }
-        
+
         if self.lsm_config.level_size_multiplier < 2 {
             return Err(ConfigError::InvalidConfig(
-                "LSM level size multiplier must be at least 2".into()
+                "LSM level size multiplier must be at least 2".into(),
             ));
         }
-        
+
         if self.lsm_config.compaction_threshold < 2 {
             return Err(ConfigError::InvalidConfig(
-                "LSM compaction threshold must be at least 2".into()
+                "LSM compaction threshold must be at least 2".into(),
             ));
         }
-        
+
         // Validate RocksDB config
         if self.rocksdb_config.block_cache_mb < 1 {
             return Err(ConfigError::InvalidConfig(
-                "RocksDB block cache must be at least 1MB".into()
+                "RocksDB block cache must be at least 1MB".into(),
             ));
         }
-        
+
         Ok(())
     }
 }
@@ -272,22 +278,25 @@ mod tests {
     fn test_config_file_io() {
         let temp_dir = tempdir().unwrap();
         let config_path = temp_dir.path().join("config.json");
-        
+
         let config = PersistenceConfig::default();
         config.to_file(&config_path).unwrap();
-        
+
         let loaded_config = PersistenceConfig::from_file(&config_path).unwrap();
-        assert!(matches!(loaded_config.backend, PersistenceBackend::CowBTree));
+        assert!(matches!(
+            loaded_config.backend,
+            PersistenceBackend::CowBTree
+        ));
     }
 
     #[test]
     fn test_config_validation() {
         let mut config = PersistenceConfig::default();
-        
+
         // Test invalid COW config
         config.cow_config.max_keys_per_node = 1;
         assert!(config.validate().is_err());
-        
+
         // Test invalid LSM config
         config.cow_config.max_keys_per_node = 16;
         config.lsm_config.max_levels = 1;

@@ -2,6 +2,7 @@
 name = "multi-model-query-example"
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
 
 [dependencies]
 orbit-shared = { path = "../../orbit-shared" }

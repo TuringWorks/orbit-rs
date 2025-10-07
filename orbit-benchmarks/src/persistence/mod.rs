@@ -1,15 +1,15 @@
 pub mod config;
 pub mod cow_btree;
 pub mod lsm_tree;
+pub mod metrics;
 pub mod persistence_factory;
 pub mod rocksdb_impl;
 pub mod workload;
-pub mod metrics;
 
-use std::time::{Duration, SystemTime};
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
+use std::time::{Duration, SystemTime};
 use thiserror::Error;
+use uuid::Uuid;
 
 /// Represents an actor lease in the orbit-rs system
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -80,23 +80,34 @@ pub enum PersistenceError {
 #[async_trait::async_trait]
 pub trait PersistenceProvider: Send + Sync {
     /// Store or update an actor lease
-    async fn store_lease(&self, lease: &ActorLease) -> Result<PersistenceMetrics, PersistenceError>;
-    
+    async fn store_lease(&self, lease: &ActorLease)
+        -> Result<PersistenceMetrics, PersistenceError>;
+
     /// Retrieve an actor lease by key
-    async fn get_lease(&self, key: &ActorKey) -> Result<(Option<ActorLease>, PersistenceMetrics), PersistenceError>;
-    
+    async fn get_lease(
+        &self,
+        key: &ActorKey,
+    ) -> Result<(Option<ActorLease>, PersistenceMetrics), PersistenceError>;
+
     /// Get all leases for a range of actor keys (for cluster coordination)
-    async fn range_query(&self, start: &ActorKey, end: &ActorKey) -> Result<(Vec<ActorLease>, PersistenceMetrics), PersistenceError>;
-    
+    async fn range_query(
+        &self,
+        start: &ActorKey,
+        end: &ActorKey,
+    ) -> Result<(Vec<ActorLease>, PersistenceMetrics), PersistenceError>;
+
     /// Create a snapshot of current state
     async fn create_snapshot(&self) -> Result<(String, PersistenceMetrics), PersistenceError>;
-    
+
     /// Restore from a snapshot
-    async fn restore_from_snapshot(&self, snapshot_id: &str) -> Result<PersistenceMetrics, PersistenceError>;
-    
+    async fn restore_from_snapshot(
+        &self,
+        snapshot_id: &str,
+    ) -> Result<PersistenceMetrics, PersistenceError>;
+
     /// Get storage statistics
     async fn get_stats(&self) -> Result<StorageStats, PersistenceError>;
-    
+
     /// Simulate crash and measure recovery time
     async fn simulate_crash_recovery(&self) -> Result<PersistenceMetrics, PersistenceError>;
 }
@@ -113,10 +124,18 @@ pub struct StorageStats {
 }
 
 impl ActorLease {
-    pub fn new(actor_id: Uuid, actor_type: String, node_id: String, lease_duration: Duration) -> Self {
+    pub fn new(
+        actor_id: Uuid,
+        actor_type: String,
+        node_id: String,
+        lease_duration: Duration,
+    ) -> Self {
         let now = SystemTime::now();
-        let key = ActorKey { actor_id, actor_type };
-        
+        let key = ActorKey {
+            actor_id,
+            actor_type,
+        };
+
         Self {
             key,
             node_id,
@@ -131,7 +150,7 @@ impl ActorLease {
             },
         }
     }
-    
+
     pub fn renew(&mut self, new_duration: Duration) {
         let now = SystemTime::now();
         self.expires_at = now + new_duration;
@@ -140,19 +159,19 @@ impl ActorLease {
         self.metadata.renewal_count += 1;
         self.version += 1;
     }
-    
+
     pub fn is_expired(&self) -> bool {
         SystemTime::now() > self.expires_at
     }
-    
+
     pub fn is_renewal(&self) -> bool {
         self.metadata.renewal_count > 0
     }
-    
+
     pub fn to_bytes(&self) -> Result<Vec<u8>, PersistenceError> {
         Ok(serde_json::to_vec(self)?)
     }
-    
+
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, PersistenceError> {
         Ok(serde_json::from_slice(bytes)?)
     }
@@ -167,43 +186,46 @@ impl ActorKey {
         bytes.extend_from_slice(self.actor_id.to_string().as_bytes());
         bytes
     }
-    
+
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, PersistenceError> {
-        let s = std::str::from_utf8(bytes).map_err(|_| {
-            PersistenceError::Corruption("Invalid UTF-8 in actor key".to_string())
-        })?;
-        
+        let s = std::str::from_utf8(bytes)
+            .map_err(|_| PersistenceError::Corruption("Invalid UTF-8 in actor key".to_string()))?;
+
         let parts: Vec<&str> = s.splitn(2, '\0').collect();
         if parts.len() != 2 {
-            return Err(PersistenceError::Corruption("Invalid actor key format".to_string()));
+            return Err(PersistenceError::Corruption(
+                "Invalid actor key format".to_string(),
+            ));
         }
-        
+
         let actor_type = parts[0].to_string();
-        let actor_id = Uuid::parse_str(parts[1]).map_err(|_| {
-            PersistenceError::Corruption("Invalid UUID in actor key".to_string())
-        })?;
-        
-        Ok(Self { actor_id, actor_type })
+        let actor_id = Uuid::parse_str(parts[1])
+            .map_err(|_| PersistenceError::Corruption("Invalid UUID in actor key".to_string()))?;
+
+        Ok(Self {
+            actor_id,
+            actor_type,
+        })
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_actor_key_serialization() {
         let key = ActorKey {
             actor_id: Uuid::new_v4(),
             actor_type: "test_actor".to_string(),
         };
-        
+
         let bytes = key.to_bytes();
         let restored = ActorKey::from_bytes(&bytes).unwrap();
-        
+
         assert_eq!(key, restored);
     }
-    
+
     #[test]
     fn test_actor_lease_operations() {
         let mut lease = ActorLease::new(
@@ -212,13 +234,13 @@ mod tests {
             "node1".to_string(),
             Duration::from_secs(300),
         );
-        
+
         assert_eq!(lease.version, 1);
         assert_eq!(lease.metadata.renewal_count, 0);
         assert!(!lease.is_renewal());
-        
+
         lease.renew(Duration::from_secs(600));
-        
+
         assert_eq!(lease.version, 2);
         assert_eq!(lease.metadata.renewal_count, 1);
         assert!(lease.is_renewal());
