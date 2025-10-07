@@ -3422,6 +3422,7 @@ dependencies = [
  "metrics",
  "orbit-util",
  "prost 0.13.5",
+ "prost-build 0.13.5",
  "serde",
  "serde_json",
  "sha2",
