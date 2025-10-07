@@ -13,18 +13,15 @@ plugins:
 # Navigation structure
 header_pages:
   - index.md
-  - quick-start.md
-  - architecture.md
-  - roadmap-new.md
-  - status.md
-  - contributing.md
+  - QUICK_START.md
+  - OVERVIEW.md
+  - ROADMAP.md
+  - PROJECT_STATUS.md
+  - CONTRIBUTING.md
 
 # Site configuration
 markdown: kramdown
 highlighter: rouge
-kramdown:
-  input: GFM
-  syntax_highlighter: rouge
 
 # SEO and social
 author: TuringWorks
@@ -102,3 +99,17 @@ exclude:
 # Include additional files
 include:
   - _pages
+  - assets/css/custom.css
+
+# Custom CSS for styling
+custom_css:
+  - "/orbit-rs/assets/css/custom.css"
+
+# Additional Jekyll settings
+kramdown:
+  input: GFM
+  syntax_highlighter: rouge
+  syntax_highlighter_opts:
+    css_class: 'highlight'
+    span:
+      line_numbers: false

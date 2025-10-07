@@ -1,3 +1,10 @@
+---
+layout: default
+title: "Quick Start Guide"
+subtitle: "Get up and running with Orbit-RS in minutes"
+category: "getting-started"
+---
+
 # Orbit-RS Quick Start Guide
 
 Get up and running with Orbit-RS in just a few minutes.

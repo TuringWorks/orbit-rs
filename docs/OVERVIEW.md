@@ -1,3 +1,10 @@
+---
+layout: default
+title: "Architecture Overview"
+subtitle: "Understanding Orbit-RS design and capabilities"
+category: "architecture"
+---
+
 # Orbit-RS Overview
 
 A high-performance, distributed virtual actor system framework reimplemented in Rust, inspired by Microsoft Orleans and the original Java Orbit framework.
