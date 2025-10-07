@@ -9,7 +9,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     match tonic_build::configure()
         .build_server(true)
         .build_client(true)
-        .compile(
+        .compile_protos(
             &["proto/transaction.proto", "proto/consensus.proto"],
             &["proto"],
         ) {
@@ -25,7 +25,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             
             // In CI environments, we might want to fail the build
             if std::env::var("CI").is_ok() || std::env::var("GITHUB_ACTIONS").is_ok() {
-                return Err(e);
+                return Err(Box::new(e));
             }
             
             // For local development, continue without protobuf
