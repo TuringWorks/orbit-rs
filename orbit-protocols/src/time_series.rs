@@ -45,7 +45,7 @@ pub enum AggregationType {
 }
 
 impl AggregationType {
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn parse(s: &str) -> Option<Self> {
         match s.to_uppercase().as_str() {
             "AVG" | "AVERAGE" => Some(Self::Avg),
             "SUM" => Some(Self::Sum),
@@ -167,7 +167,7 @@ pub enum DuplicatePolicy {
 }
 
 impl DuplicatePolicy {
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn parse(s: &str) -> Option<Self> {
         match s.to_uppercase().as_str() {
             "BLOCK" => Some(Self::Block),
             "FIRST" => Some(Self::First),
@@ -199,7 +199,7 @@ pub enum DataEncoding {
 }
 
 impl DataEncoding {
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn parse(s: &str) -> Option<Self> {
         match s.to_uppercase().as_str() {
             "COMPRESSED" => Some(Self::Compressed),
             "UNCOMPRESSED" => Some(Self::Uncompressed),
@@ -491,7 +491,7 @@ impl TimeSeriesActor {
     pub fn matches_labels(&self, filters: &HashMap<String, String>) -> bool {
         filters
             .iter()
-            .all(|(key, value)| self.config.labels.get(key).map_or(false, |v| v == value))
+            .all(|(key, value)| self.config.labels.get(key) == Some(value))
     }
 
     /// Apply retention policy

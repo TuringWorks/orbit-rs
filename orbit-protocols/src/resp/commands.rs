@@ -806,7 +806,7 @@ impl CommandHandler {
     }
 
     async fn cmd_hmset(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
-        if args.len() < 3 || args.len() % 2 == 0 {
+        if args.len() < 3 || args.len().is_multiple_of(2) {
             return Err(ProtocolError::RespError(
                 "ERR wrong number of arguments for 'hmset' command".to_string(),
             ));
@@ -1164,7 +1164,7 @@ impl CommandHandler {
                     // For single element, return the element or null
                     Ok(items
                         .first()
-                        .map(|s| RespValue::bulk_string_from_str(s))
+                        .map(RespValue::bulk_string_from_str)
                         .unwrap_or(RespValue::null()))
                 } else {
                     // For multiple elements, return array
@@ -1217,7 +1217,7 @@ impl CommandHandler {
                     // For single element, return the element or null
                     Ok(items
                         .first()
-                        .map(|s| RespValue::bulk_string_from_str(s))
+                        .map(RespValue::bulk_string_from_str)
                         .unwrap_or(RespValue::null()))
                 } else {
                     // For multiple elements, return array
@@ -2053,7 +2053,7 @@ impl CommandHandler {
     // Sorted Set commands
 
     async fn cmd_zadd(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
-        if args.len() < 3 || args.len() % 2 == 0 {
+        if args.len() < 3 || args.len().is_multiple_of(2) {
             return Err(ProtocolError::RespError(
                 "ERR wrong number of arguments for 'zadd' command".to_string(),
             ));
@@ -4189,7 +4189,7 @@ impl CommandHandler {
 
     /// Parse aggregation function
     fn parse_aggregation(&self, agg_str: &str) -> ProtocolResult<AggregationType> {
-        AggregationType::from_str(agg_str)
+        AggregationType::parse(agg_str)
             .ok_or_else(|| ProtocolError::RespError(format!(
                 "Unknown aggregation function '{}'. Use: AVG, SUM, MIN, MAX, COUNT, FIRST, LAST, RANGE, STD",
                 agg_str
@@ -4198,7 +4198,7 @@ impl CommandHandler {
 
     /// Parse duplicate policy
     fn parse_duplicate_policy(&self, policy_str: &str) -> ProtocolResult<DuplicatePolicy> {
-        DuplicatePolicy::from_str(policy_str).ok_or_else(|| {
+        DuplicatePolicy::parse(policy_str).ok_or_else(|| {
             ProtocolError::RespError(format!(
                 "Unknown duplicate policy '{}'. Use: BLOCK, FIRST, LAST, MIN, MAX, SUM",
                 policy_str
@@ -4437,7 +4437,7 @@ impl CommandHandler {
     }
 
     async fn cmd_ts_madd(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
-        if args.len() % 3 != 0 || args.is_empty() {
+        if !args.len().is_multiple_of(3) || args.is_empty() {
             return Err(ProtocolError::RespError(
                 "ERR wrong number of arguments for 'TS.MADD' command. Usage: TS.MADD <key1> <timestamp1> <value1> [<key2> <timestamp2> <value2> ...]".to_string(),
             ));
@@ -4542,7 +4542,7 @@ impl CommandHandler {
             .as_string()
             .ok_or_else(|| ProtocolError::RespError("ERR invalid key".to_string()))?;
 
-        let decrement = self.parse_value(&args[1])? * -1.0; // Negate for decrement
+        let decrement = -self.parse_value(&args[1])?; // Negate for decrement
 
         let mut timestamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)

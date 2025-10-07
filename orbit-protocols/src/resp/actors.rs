@@ -917,7 +917,7 @@ impl SortedSetActor {
         // Add member to new score's set
         self.score_members
             .entry(ordered_score)
-            .or_insert_with(std::collections::HashSet::new)
+            .or_default()
             .insert(member);
 
         was_new

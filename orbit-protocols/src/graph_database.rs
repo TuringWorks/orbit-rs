@@ -561,7 +561,7 @@ impl GraphManager {
 
     /// Delete a graph
     pub fn delete_graph(&mut self, name: &str) -> ProtocolResult<bool> {
-        if let Some(_) = self.graphs.remove(name) {
+        if self.graphs.remove(name).is_some() {
             info!("Deleted graph: {}", name);
             Ok(true)
         } else {
@@ -663,7 +663,7 @@ mod tests {
         // Delete graph
         let result = manager.delete_graph("graph1");
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), true);
+        assert!(result.unwrap());
         assert_eq!(manager.graph_count(), 0);
     }
 }
