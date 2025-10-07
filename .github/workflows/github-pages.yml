@@ -112,7 +112,18 @@ jobs:
     - name: Build Rust API documentation
       run: |
         echo "Building Rust API documentation..."
-        cargo doc --no-deps --workspace --features="resp,postgres-wire,cypher,rest" --document-private-items
+        # Build docs for the main packages only to avoid cross-compilation issues
+        cargo doc --no-deps --lib --features="resp,postgres-wire,cypher,rest" --document-private-items \
+          --package orbit-util \
+          --package orbit-shared \
+          --package orbit-proto \
+          --package orbit-client \
+          --package orbit-server \
+          --package orbit-protocols \
+          --package orbit-operator \
+          --package orbit-application \
+          --package orbit-server-etcd \
+          --package orbit-server-prometheus
         echo "✅ Rust documentation built"
 
     # Integrate API docs with Jekyll site
