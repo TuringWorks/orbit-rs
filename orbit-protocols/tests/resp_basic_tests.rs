@@ -40,7 +40,7 @@ fn test_command_handler_compilation() {
     // 3. The types compile together properly
 
     // If this compiles successfully, it means our RESP command infrastructure is valid
-    assert!(true, "CommandHandler compiles successfully");
+    // This test passes if the code compiles without errors
 }
 
 #[test]

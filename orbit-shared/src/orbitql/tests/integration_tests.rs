@@ -186,7 +186,7 @@ async fn test_now_function() -> Result<(), Box<dyn std::error::Error>> {
     // Test NOW() function parsing
     let query = "SELECT NOW() AS current_time";
     match engine.validate(query) {
-        Ok(_) => {}, // NOW() function validated successfully
+        Ok(_) => {} // NOW() function validated successfully
         Err(e) => panic!("NOW() function validation failed: {}", e),
     }
 
@@ -202,7 +202,7 @@ async fn test_interval_expressions() -> Result<(), Box<dyn std::error::Error>> {
     // Test INTERVAL expressions
     let query = "SELECT * FROM events WHERE timestamp > NOW() - INTERVAL '7 days'";
     match engine.validate(query) {
-        Ok(_) => {}, // INTERVAL expression validated successfully
+        Ok(_) => {} // INTERVAL expression validated successfully
         Err(e) => panic!("INTERVAL expression validation failed: {}", e),
     }
 
@@ -233,7 +233,7 @@ async fn test_count_distinct() -> Result<(), Box<dyn std::error::Error>> {
     // Test COUNT(DISTINCT) aggregation
     let query = "SELECT COUNT(DISTINCT user_id) AS unique_users FROM events";
     match engine.validate(query) {
-        Ok(_) => {}, // COUNT(DISTINCT) validated successfully
+        Ok(_) => {} // COUNT(DISTINCT) validated successfully
         Err(e) => panic!("COUNT(DISTINCT) validation failed: {}", e),
     }
 
@@ -247,7 +247,7 @@ async fn test_count_distinct() -> Result<(), Box<dyn std::error::Error>> {
         GROUP BY campaign_id
     "#;
     match engine.validate(query) {
-        Ok(_) => {}, // Multiple DISTINCT aggregates validated successfully
+        Ok(_) => {} // Multiple DISTINCT aggregates validated successfully
         Err(e) => panic!("Multiple DISTINCT aggregates validation failed: {}", e),
     }
 
@@ -272,7 +272,7 @@ async fn test_case_expressions() -> Result<(), Box<dyn std::error::Error>> {
         FROM users
     "#;
     match engine.validate(query) {
-        Ok(_) => {}, // Simple CASE expression validated successfully
+        Ok(_) => {} // Simple CASE expression validated successfully
         Err(e) => panic!("Simple CASE expression validation failed: {}", e),
     }
 
@@ -286,7 +286,7 @@ async fn test_case_expressions() -> Result<(), Box<dyn std::error::Error>> {
         GROUP BY department
     "#;
     match engine.validate(query) {
-        Ok(_) => {}, // CASE in aggregation validated successfully
+        Ok(_) => {} // CASE in aggregation validated successfully
         Err(e) => panic!("CASE in aggregation validation failed: {}", e),
     }
 
@@ -312,7 +312,7 @@ async fn test_with_ctes() -> Result<(), Box<dyn std::error::Error>> {
         LEFT JOIN user_stats us ON u.id = us.user_id
     "#;
     match engine.validate(query) {
-        Ok(_) => {}, // Basic CTE validated successfully
+        Ok(_) => {} // Basic CTE validated successfully
         Err(e) => panic!("Basic CTE validation failed: {}", e),
     }
 
@@ -336,7 +336,7 @@ async fn test_with_ctes() -> Result<(), Box<dyn std::error::Error>> {
         JOIN popular_posts pp ON p.id = pp.post_id
     "#;
     match engine.validate(query) {
-        Ok(_) => {}, // Multiple CTEs validated successfully
+        Ok(_) => {} // Multiple CTEs validated successfully
         Err(e) => panic!("Multiple CTEs validation failed: {}", e),
     }
 
@@ -358,7 +358,7 @@ async fn test_coalesce_function() -> Result<(), Box<dyn std::error::Error>> {
         FROM user_profiles
     "#;
     match engine.validate(query) {
-        Ok(_) => {}, // COALESCE function validated successfully
+        Ok(_) => {} // COALESCE function validated successfully
         Err(e) => panic!("COALESCE function validation failed: {}", e),
     }
 
@@ -384,7 +384,7 @@ async fn test_complex_conditional_aggregates() -> Result<(), Box<dyn std::error:
         GROUP BY product_category
     "#;
     match engine.validate(query) {
-        Ok(_) => {}, // Complex conditional aggregates validated successfully
+        Ok(_) => {} // Complex conditional aggregates validated successfully
         Err(e) => panic!("Complex conditional aggregates validation failed: {}", e),
     }
 
@@ -429,7 +429,7 @@ async fn test_ultimate_multi_model_with_advanced_sql() -> Result<(), Box<dyn std
         LIMIT 20
     "#;
     match engine.validate(query) {
-        Ok(_) => {}, // Ultimate multi-model query with advanced SQL validated successfully
+        Ok(_) => {} // Ultimate multi-model query with advanced SQL validated successfully
         Err(e) => panic!("Ultimate multi-model query validation failed: {}", e),
     }
 

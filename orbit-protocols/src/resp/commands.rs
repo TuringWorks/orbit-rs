@@ -3136,7 +3136,7 @@ impl CommandHandler {
         let value: Option<String> = old_actor_ref
             .invoke("get_value", vec![])
             .await
-            .map_err(|_| ProtocolError::RespError(format!("ERR no such key")))?;
+            .map_err(|_| ProtocolError::RespError("ERR no such key".to_string()))?;
 
         if value.is_none() {
             return Err(ProtocolError::RespError("ERR no such key".to_string()));
@@ -3550,10 +3550,7 @@ impl CommandHandler {
             .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
 
         actor_ref
-            .invoke::<()>(
-                "add_vector",
-                vec![serde_json::to_value(vector).unwrap()],
-            )
+            .invoke::<()>("add_vector", vec![serde_json::to_value(vector).unwrap()])
             .await
             .map_err(|e| ProtocolError::RespError(format!("ERR failed to add vector: {}", e)))?;
 
@@ -3592,7 +3589,7 @@ impl CommandHandler {
 
                 let mut result = vec![
                     RespValue::bulk_string_from_str(&vec.id),
-                    RespValue::bulk_string_from_str(&self.format_vector_data(&vec.data)),
+                    RespValue::bulk_string_from_str(self.format_vector_data(&vec.data)),
                 ];
 
                 // Add metadata
@@ -3674,13 +3671,13 @@ impl CommandHandler {
             RespValue::bulk_string_from_str("index_count"),
             RespValue::integer(stats.index_count as i64),
             RespValue::bulk_string_from_str("avg_dimension"),
-            RespValue::bulk_string_from_str(&format!("{:.2}", stats.avg_dimension)),
+            RespValue::bulk_string_from_str(format!("{:.2}", stats.avg_dimension)),
             RespValue::bulk_string_from_str("min_dimension"),
             RespValue::integer(stats.min_dimension as i64),
             RespValue::bulk_string_from_str("max_dimension"),
             RespValue::integer(stats.max_dimension as i64),
             RespValue::bulk_string_from_str("avg_metadata_keys"),
-            RespValue::bulk_string_from_str(&format!("{:.2}", stats.avg_metadata_keys)),
+            RespValue::bulk_string_from_str(format!("{:.2}", stats.avg_metadata_keys)),
         ];
 
         Ok(RespValue::array(result))
@@ -3846,7 +3843,7 @@ impl CommandHandler {
         let results: Vec<VectorSearchResult> = actor_ref
             .invoke(
                 "search_vectors",
-                vec![serde_json::to_value(search_params).unwrap().into()],
+                vec![serde_json::to_value(search_params).unwrap()],
             )
             .await
             .map_err(|e| ProtocolError::RespError(format!("ERR search failed: {}", e)))?;
@@ -3857,8 +3854,8 @@ impl CommandHandler {
         for result in results {
             let mut item = vec![
                 RespValue::bulk_string_from_str(&result.vector.id),
-                RespValue::bulk_string_from_str(&format!("{:.6}", result.score)),
-                RespValue::bulk_string_from_str(&self.format_vector_data(&result.vector.data)),
+                RespValue::bulk_string_from_str(format!("{:.6}", result.score)),
+                RespValue::bulk_string_from_str(self.format_vector_data(&result.vector.data)),
             ];
 
             // Add metadata
@@ -3915,9 +3912,9 @@ impl CommandHandler {
             .invoke(
                 "knn_search",
                 vec![
-                    serde_json::to_value(query_vector).unwrap().into(),
+                    serde_json::to_value(query_vector).unwrap(),
                     (k as usize).into(),
-                    serde_json::to_value(metric).unwrap().into(),
+                    serde_json::to_value(metric).unwrap(),
                 ],
             )
             .await
@@ -3929,7 +3926,7 @@ impl CommandHandler {
         for result in results {
             let item = vec![
                 RespValue::bulk_string_from_str(&result.vector.id),
-                RespValue::bulk_string_from_str(&format!("{:.6}", result.score)),
+                RespValue::bulk_string_from_str(format!("{:.6}", result.score)),
             ];
             response.push(RespValue::array(item));
         }
@@ -4010,7 +4007,7 @@ impl CommandHandler {
         actor_ref
             .invoke::<()>(
                 "create_index",
-                vec![serde_json::to_value(index_config).unwrap().into()],
+                vec![serde_json::to_value(index_config).unwrap()],
             )
             .await
             .map_err(|e| ProtocolError::RespError(format!("ERR failed to create index: {}", e)))?;
@@ -4056,10 +4053,10 @@ impl CommandHandler {
         let mut converted_args = args.to_vec();
 
         // Replace DISTANCE_METRIC with METRIC for compatibility
-        for i in 0..converted_args.len() {
-            if let Some(param) = converted_args[i].as_string() {
+        for item in &mut converted_args {
+            if let Some(param) = item.as_string() {
                 if param.to_uppercase() == "DISTANCE_METRIC" {
-                    converted_args[i] = RespValue::bulk_string_from_str("METRIC");
+                    *item = RespValue::bulk_string_from_str("METRIC");
                 }
             }
         }
@@ -4110,7 +4107,7 @@ impl CommandHandler {
             RespValue::bulk_string_from_str("avg_dimension"),
             RespValue::integer(stats.avg_dimension as i64),
             RespValue::bulk_string_from_str("dimension_range"),
-            RespValue::bulk_string_from_str(&format!(
+            RespValue::bulk_string_from_str(format!(
                 "{}-{}",
                 stats.min_dimension, stats.max_dimension
             )),
@@ -4124,7 +4121,7 @@ impl CommandHandler {
                 index_info.push(RespValue::array(vec![
                     RespValue::bulk_string_from_str(&idx.name),
                     RespValue::integer(idx.dimension as i64),
-                    RespValue::bulk_string_from_str(&format!("{:?}", idx.metric)),
+                    RespValue::bulk_string_from_str(format!("{:?}", idx.metric)),
                 ]));
             }
             result.push(RespValue::array(index_info));
@@ -4350,10 +4347,7 @@ impl CommandHandler {
             .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
 
         actor_ref
-            .invoke::<()>(
-                "update_config",
-                vec![serde_json::to_value(config).unwrap().into()],
-            )
+            .invoke::<()>("update_config", vec![serde_json::to_value(config).unwrap()])
             .await
             .map_err(|e| {
                 ProtocolError::RespError(format!("ERR failed to create time series: {}", e))
@@ -4383,10 +4377,7 @@ impl CommandHandler {
             .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
 
         actor_ref
-            .invoke::<()>(
-                "update_config",
-                vec![serde_json::to_value(config).unwrap().into()],
-            )
+            .invoke::<()>("update_config", vec![serde_json::to_value(config).unwrap()])
             .await
             .map_err(|e| {
                 ProtocolError::RespError(format!("ERR failed to alter time series: {}", e))
@@ -4420,10 +4411,7 @@ impl CommandHandler {
         if args.len() > 3 {
             let config = self.parse_ts_config(args, 3)?;
             let _: Result<(), _> = actor_ref
-                .invoke(
-                    "update_config",
-                    vec![serde_json::to_value(config).unwrap().into()],
-                )
+                .invoke("update_config", vec![serde_json::to_value(config).unwrap()])
                 .await;
         }
 
@@ -4466,7 +4454,7 @@ impl CommandHandler {
 
             match result {
                 Ok(_) => results.push(RespValue::integer(timestamp as i64)),
-                Err(e) => results.push(RespValue::bulk_string_from_str(&format!("ERR {}", e))),
+                Err(e) => results.push(RespValue::bulk_string_from_str(format!("ERR {}", e))),
             }
 
             i += 3;
@@ -4515,10 +4503,7 @@ impl CommandHandler {
         if args.len() > 2 {
             let config = self.parse_ts_config(args, 2)?;
             let _: Result<(), _> = actor_ref
-                .invoke(
-                    "update_config",
-                    vec![serde_json::to_value(config).unwrap().into()],
-                )
+                .invoke("update_config", vec![serde_json::to_value(config).unwrap()])
                 .await;
         }
 
@@ -4570,10 +4555,7 @@ impl CommandHandler {
         if args.len() > 2 {
             let config = self.parse_ts_config(args, 2)?;
             let _: Result<(), _> = actor_ref
-                .invoke(
-                    "update_config",
-                    vec![serde_json::to_value(config).unwrap().into()],
-                )
+                .invoke("update_config", vec![serde_json::to_value(config).unwrap()])
                 .await;
         }
 
@@ -4817,7 +4799,7 @@ impl CommandHandler {
                         from_ts.into(),
                         to_ts.into(),
                         bucket_duration.into(),
-                        serde_json::to_value(aggregation).unwrap().into(),
+                        serde_json::to_value(aggregation).unwrap(),
                     ],
                 )
                 .await
@@ -4901,7 +4883,7 @@ impl CommandHandler {
                         from_ts.into(),
                         to_ts.into(),
                         bucket_duration.into(),
-                        serde_json::to_value(aggregation).unwrap().into(),
+                        serde_json::to_value(aggregation).unwrap(),
                     ],
                 )
                 .await
@@ -4950,8 +4932,8 @@ impl CommandHandler {
         // In full implementation, would parse FILTER and AGGREGATION parameters
         let mut results = Vec::new();
 
-        for i in 2..args.len() {
-            if let Some(key) = args[i].as_string() {
+        for item in args.iter().skip(2) {
+            if let Some(key) = item.as_string() {
                 let actor_ref = self
                     .orbit_client
                     .actor_reference::<TimeSeriesActor>(Key::StringKey { key: key.clone() })
@@ -5009,8 +4991,8 @@ impl CommandHandler {
         // For simplicity, treat remaining args as keys
         let mut results = Vec::new();
 
-        for i in 2..args.len() {
-            if let Some(key) = args[i].as_string() {
+        for item in args.iter().skip(2) {
+            if let Some(key) = item.as_string() {
                 let actor_ref = self
                     .orbit_client
                     .actor_reference::<TimeSeriesActor>(Key::StringKey { key: key.clone() })
@@ -5138,7 +5120,7 @@ impl CommandHandler {
         actor_ref
             .invoke::<()>(
                 "create_compaction_rule",
-                vec![serde_json::to_value(rule).unwrap().into()],
+                vec![serde_json::to_value(rule).unwrap()],
             )
             .await
             .map_err(|e| ProtocolError::RespError(format!("ERR failed to create rule: {}", e)))?;
@@ -5238,7 +5220,7 @@ impl CommandHandler {
         let mut rows = Vec::new();
         for node in result.nodes {
             let mut row = Vec::new();
-            row.push(RespValue::bulk_string_from_str(&format!(
+            row.push(RespValue::bulk_string_from_str(format!(
                 "{}:{:?}",
                 node.id, node.labels
             )));
@@ -5246,7 +5228,7 @@ impl CommandHandler {
         }
         for relationship in result.relationships {
             let mut row = Vec::new();
-            row.push(RespValue::bulk_string_from_str(&format!(
+            row.push(RespValue::bulk_string_from_str(format!(
                 "{}->{}:{}",
                 relationship.start_node, relationship.end_node, relationship.rel_type
             )));
@@ -5258,9 +5240,9 @@ impl CommandHandler {
         // Add statistics (simplified)
         let stats = vec![
             RespValue::bulk_string_from_str("Cached execution"),
-            RespValue::bulk_string_from_str(&format!(
-                "Query internal execution time: 0.000000 milliseconds"
-            )),
+            RespValue::bulk_string_from_str(
+                "Query internal execution time: 0.000000 milliseconds".to_string(),
+            ),
         ];
         response.push(RespValue::array(stats));
 
@@ -5315,7 +5297,7 @@ impl CommandHandler {
         let mut rows = Vec::new();
         for node in result.nodes {
             let mut row = Vec::new();
-            row.push(RespValue::bulk_string_from_str(&format!(
+            row.push(RespValue::bulk_string_from_str(format!(
                 "{}:{:?}",
                 node.id, node.labels
             )));
@@ -5323,7 +5305,7 @@ impl CommandHandler {
         }
         for relationship in result.relationships {
             let mut row = Vec::new();
-            row.push(RespValue::bulk_string_from_str(&format!(
+            row.push(RespValue::bulk_string_from_str(format!(
                 "{}->{}:{}",
                 relationship.start_node, relationship.end_node, relationship.rel_type
             )));
@@ -5334,9 +5316,9 @@ impl CommandHandler {
 
         let stats = vec![
             RespValue::bulk_string_from_str("Cached execution"),
-            RespValue::bulk_string_from_str(&format!(
-                "Query internal execution time: 0.000000 milliseconds"
-            )),
+            RespValue::bulk_string_from_str(
+                "Query internal execution time: 0.000000 milliseconds".to_string(),
+            ),
         ];
         response.push(RespValue::array(stats));
 
@@ -5430,19 +5412,16 @@ impl CommandHandler {
         let mut steps = Vec::new();
         for (i, step) in plan.steps.iter().enumerate() {
             let step_info = vec![
-                RespValue::bulk_string_from_str(&format!("{}: {}", i + 1, step.operation)),
+                RespValue::bulk_string_from_str(format!("{}: {}", i + 1, step.operation)),
                 RespValue::bulk_string_from_str(&step.description),
-                RespValue::bulk_string_from_str(&format!(
-                    "Estimated rows: {}",
-                    step.estimated_rows
-                )),
-                RespValue::bulk_string_from_str(&format!("Cost: {:.2}", step.estimated_cost)),
+                RespValue::bulk_string_from_str(format!("Estimated rows: {}", step.estimated_rows)),
+                RespValue::bulk_string_from_str(format!("Cost: {:.2}", step.estimated_cost)),
             ];
             steps.push(RespValue::array(step_info));
         }
 
         // Add summary
-        let summary = vec![RespValue::bulk_string_from_str(&format!(
+        let summary = vec![RespValue::bulk_string_from_str(format!(
             "Total estimated cost: {:.2}",
             plan.estimated_cost
         ))];
@@ -5499,23 +5478,23 @@ impl CommandHandler {
             let memory_used = profile.metrics.memory_used.get(i).unwrap_or(&0);
 
             let step_info = vec![
-                RespValue::bulk_string_from_str(&format!("{}: {}", i + 1, step.operation)),
+                RespValue::bulk_string_from_str(format!("{}: {}", i + 1, step.operation)),
                 RespValue::bulk_string_from_str(&step.description),
-                RespValue::bulk_string_from_str(&format!("Records produced: {}", actual_rows)),
-                RespValue::bulk_string_from_str(&format!("Execution time: {} ms", step_time)),
-                RespValue::bulk_string_from_str(&format!("Memory used: {} bytes", memory_used)),
+                RespValue::bulk_string_from_str(format!("Records produced: {}", actual_rows)),
+                RespValue::bulk_string_from_str(format!("Execution time: {} ms", step_time)),
+                RespValue::bulk_string_from_str(format!("Memory used: {} bytes", memory_used)),
             ];
             plan_with_metrics.push(RespValue::array(step_info));
         }
 
         // Add overall statistics
         let stats = vec![
-            RespValue::bulk_string_from_str(&format!(
+            RespValue::bulk_string_from_str(format!(
                 "Total execution time: {} ms",
                 profile.total_time_ms
             )),
-            RespValue::bulk_string_from_str(&format!("Cache hits: {}", profile.metrics.cache_hits)),
-            RespValue::bulk_string_from_str(&format!(
+            RespValue::bulk_string_from_str(format!("Cache hits: {}", profile.metrics.cache_hits)),
+            RespValue::bulk_string_from_str(format!(
                 "Cache misses: {}",
                 profile.metrics.cache_misses
             )),
