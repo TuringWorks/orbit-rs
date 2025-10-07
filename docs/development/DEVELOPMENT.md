@@ -111,7 +111,7 @@ cargo deny check
 cargo doc --workspace --open
 
 # Run persistence benchmarks
-cargo run --package persistence-benchmark
+cargo run --package orbit-benchmarks
 
 # Run protocol-specific benchmarks
 cargo bench --workspace
@@ -370,7 +370,7 @@ cargo test --lib --package orbit-server persistence
 cargo test --lib --package orbit-server persistence::rocksdb
 
 # Benchmark persistence performance
-cargo run --package persistence-benchmark
+cargo run --package orbit-benchmarks
 
 # Test with different configurations
 ORBIT_PERSISTENCE_BACKEND=rocksdb cargo test persistence_integration

@@ -3,7 +3,7 @@ use std::time::Duration;
 use tokio;
 use uuid::Uuid;
 
-use persistence_benchmark::{
+use orbit_benchmarks::persistence::{
     ActorLease, PersistenceProvider, PersistenceError,
     config::{PersistenceConfig, PersistenceBackend},
     persistence_factory::{PersistenceFactory, PersistenceConfigBuilder},

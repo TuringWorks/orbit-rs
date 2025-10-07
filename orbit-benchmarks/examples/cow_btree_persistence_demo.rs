@@ -1,5 +1,5 @@
-use persistence_benchmark::*;
-use persistence_benchmark::cow_btree::CowBTreePersistence;
+use orbit_benchmarks::persistence::*;
+use orbit_benchmarks::persistence::cow_btree::CowBTreePersistence;
 use std::time::Duration;
 use uuid::Uuid;
 use std::path::Path;

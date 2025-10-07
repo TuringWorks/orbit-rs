@@ -1,7 +1,7 @@
 use std::path::Path;
 use tokio;
-use persistence_benchmark::cow_btree::CowBTreePersistence;
-use persistence_benchmark::{ActorKey, ActorLease, PersistenceError, PersistenceProvider};
+use orbit_benchmarks::persistence::cow_btree::CowBTreePersistence;
+use orbit_benchmarks::persistence::{ActorKey, ActorLease, PersistenceError, PersistenceProvider};
 use std::time::{SystemTime, Duration};
 use uuid::Uuid;
 

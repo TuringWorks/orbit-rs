@@ -1,4 +1,4 @@
-use crate::workload::{WorkloadStats, CrashRecoveryResults};
+use super::workload::{WorkloadStats, CrashRecoveryResults};
 use std::time::Duration;
 use serde::{Serialize, Deserialize};
 

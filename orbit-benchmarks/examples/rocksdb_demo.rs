@@ -1,5 +1,5 @@
-use persistence_benchmark::*;
-use persistence_benchmark::rocksdb_impl::RocksDBPersistence;
+use orbit_benchmarks::persistence::*;
+use orbit_benchmarks::persistence::rocksdb_impl::RocksDBPersistence;
 use std::time::Duration;
 use uuid::Uuid;
 

@@ -1,9 +1,9 @@
 use criterion::{criterion_group, criterion_main, Criterion, BenchmarkId};
-use persistence_benchmark::*;
-use persistence_benchmark::cow_btree::CowBTreePersistence;
-use persistence_benchmark::rocksdb_impl::RocksDBPersistence;
-use persistence_benchmark::workload::{WorkloadSimulator, CrashSimulator};
-use persistence_benchmark::metrics::{BenchmarkResults, MetricsAnalyzer, ComparativeAnalysis};
+use orbit_benchmarks::persistence::*;
+use orbit_benchmarks::persistence::cow_btree::CowBTreePersistence;
+use orbit_benchmarks::persistence::rocksdb_impl::RocksDBPersistence;
+use orbit_benchmarks::persistence::workload::{WorkloadSimulator, CrashSimulator};
+use orbit_benchmarks::persistence::metrics::{BenchmarkResults, MetricsAnalyzer, ComparativeAnalysis};
 use std::time::Duration;
 
 async fn run_comprehensive_benchmark<P: PersistenceProvider>(

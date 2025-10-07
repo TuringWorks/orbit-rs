@@ -17,7 +17,7 @@ With the successful completion of the persistence layer and all compilation fixe
 **Rationale**: With persistence layer complete, we can now benchmark real-world performance across storage backends
 
 **Immediate Actions:**
-- [ ] Extend `persistence-benchmark` package with comprehensive tests
+- [ ] Extend `orbit-benchmarks` package with comprehensive tests
 - [ ] Performance comparison across storage backends
 - [ ] Latency and throughput measurements
 - [ ] Memory usage profiling
@@ -117,7 +117,7 @@ With the successful completion of the persistence layer and all compilation fixe
 1. **Performance Benchmarking**
    ```bash
    # Extend persistence benchmarks
-   cargo run --package persistence-benchmark -- --all-backends
+   cargo run --package orbit-benchmarks -- --all-backends
    
    # Add throughput and latency tests
    cargo bench --package orbit-server persistence
