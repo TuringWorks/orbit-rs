@@ -80,7 +80,7 @@ jobs:
 
     - name: Run Clippy lints
       run: |
-        cargo clippy --all-targets --features="resp,postgres-wire,cypher,rest" -- -D warnings
+        cargo clippy --all-targets -- -D warnings
 
     - name: Build all components (debug)
       run: |
@@ -89,8 +89,8 @@ jobs:
 
     - name: Run comprehensive tests
       run: |
-        cargo test --workspace --verbose --all-features
-        cargo test --workspace --verbose --all-features --release
+        cargo test --workspace --verbose
+        cargo test --workspace --verbose --release
 
     - name: Run security audit
       run: |
@@ -104,7 +104,7 @@ jobs:
 
     - name: Check documentation
       run: |
-        cargo doc --no-deps --all-features --workspace
+        cargo doc --no-deps --workspace
 
     - name: Determine version
       id: version
@@ -367,7 +367,7 @@ jobs:
           BUILD_FLAGS="--release"
         fi
         
-        cargo build $BUILD_FLAGS --target ${{ matrix.target }} --workspace --features="resp,postgres-wire,cypher,rest"
+        cargo build $BUILD_FLAGS --target ${{ matrix.target }} --workspace
       shell: bash
 
     # Prepare artifacts

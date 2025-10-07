@@ -113,7 +113,7 @@ jobs:
       run: |
         echo "Building Rust API documentation..."
         # Build docs for the main packages only to avoid cross-compilation issues
-        cargo doc --no-deps --lib --features="resp,postgres-wire,cypher,rest" --document-private-items \
+        cargo doc --no-deps --lib --document-private-items \
           --package orbit-util \
           --package orbit-shared \
           --package orbit-proto \
