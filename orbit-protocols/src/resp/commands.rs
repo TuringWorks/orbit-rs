@@ -3552,7 +3552,7 @@ impl CommandHandler {
         actor_ref
             .invoke::<()>(
                 "add_vector",
-                vec![serde_json::to_value(vector).unwrap().into()],
+                vec![serde_json::to_value(vector).unwrap()],
             )
             .await
             .map_err(|e| ProtocolError::RespError(format!("ERR failed to add vector: {}", e)))?;
