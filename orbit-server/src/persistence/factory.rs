@@ -23,7 +23,7 @@ pub async fn create_addressable_provider(
             Ok(Arc::new(provider))
         }
         PersistenceConfig::LsmTree(lsm_config) => {
-            let provider = LsmTreeAddressableProvider::new(lsm_config.clone());
+            let provider = LsmTreeAddressableProvider::new(lsm_config.clone()).await?;
             provider.initialize().await?;
             Ok(Arc::new(provider))
         }
@@ -60,7 +60,7 @@ pub async fn create_cluster_provider(
             Ok(Arc::new(provider))
         }
         PersistenceConfig::LsmTree(lsm_config) => {
-            let provider = LsmTreeClusterProvider::new(lsm_config.clone());
+            let provider = LsmTreeClusterProvider::new(lsm_config.clone()).await?;
             provider.initialize().await?;
             Ok(Arc::new(provider))
         }

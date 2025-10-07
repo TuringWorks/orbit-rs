@@ -91,6 +91,7 @@ enum WALOperation {
 
 /// Snapshot metadata
 #[derive(Debug, Clone)]
+#[allow(dead_code)] // These fields are for future snapshot functionality
 struct Snapshot {
     id: String,
     root_version: u64,
@@ -100,24 +101,28 @@ struct Snapshot {
 
 /// COW B+ Tree persistence implementation for addressable directory
 pub struct CowBTreeAddressableProvider {
-    config: CowBTreeConfig,
     root: Arc<StdRwLock<BTreeNode>>,
-    wal: Arc<Mutex<WriteAheadLog>>,
+    wal: Arc<Mutex<Option<WriteAheadLog>>>,
+    #[allow(dead_code)] // Reserved for future snapshot functionality
     snapshots: Arc<StdRwLock<HashMap<String, Snapshot>>>,
+    #[allow(dead_code)] // Reserved for future versioning
     version_counter: Arc<Mutex<u64>>,
     metrics: Arc<RwLock<PersistenceMetrics>>,
     transactions: Arc<RwLock<HashMap<String, TransactionContext>>>,
+    config: CowBTreeConfig,
 }
 
 /// COW B+ Tree persistence implementation for cluster nodes
 pub struct CowBTreeClusterProvider {
-    config: CowBTreeConfig,
     root: Arc<StdRwLock<BTreeNode>>,
-    wal: Arc<Mutex<WriteAheadLog>>,
+    wal: Arc<Mutex<Option<WriteAheadLog>>>,
+    #[allow(dead_code)] // Reserved for future snapshot functionality
     snapshots: Arc<StdRwLock<HashMap<String, Snapshot>>>,
+    #[allow(dead_code)] // Reserved for future versioning
     version_counter: Arc<Mutex<u64>>,
     metrics: Arc<RwLock<PersistenceMetrics>>,
     transactions: Arc<RwLock<HashMap<String, TransactionContext>>>,
+    config: CowBTreeConfig,
 }
 
 struct WriteAheadLog {
@@ -139,6 +144,7 @@ impl BTreeNode {
         }
     }
 
+    #[allow(dead_code)] // Reserved for future B+ tree internal node functionality
     fn new_internal(version: u64) -> Self {
         Self {
             keys: Vec::new(),
@@ -151,11 +157,13 @@ impl BTreeNode {
         }
     }
 
+    #[allow(dead_code)] // Reserved for future B+ tree split functionality
     fn is_full(&self, max_keys: usize) -> bool {
         self.keys.len() >= max_keys
     }
 
     /// Copy-on-write clone of this node
+    #[allow(dead_code)] // Reserved for future COW functionality
     fn cow_clone(&self, new_version: u64) -> Self {
         Self {
             keys: self.keys.clone(),
@@ -322,11 +330,7 @@ impl CowBTreeAddressableProvider {
     pub fn new(config: CowBTreeConfig) -> Self {
         Self {
             root: Arc::new(StdRwLock::new(BTreeNode::new_leaf(0))),
-            wal: Arc::new(Mutex::new(WriteAheadLog {
-                file: unsafe { std::mem::zeroed() }, // Will be initialized in initialize()
-                sequence: 1,
-                buffer: Vec::with_capacity(config.wal_buffer_size),
-            })),
+            wal: Arc::new(Mutex::new(None)), // Will be initialized in initialize()
             snapshots: Arc::new(StdRwLock::new(HashMap::new())),
             version_counter: Arc::new(Mutex::new(0)),
             metrics: Arc::new(RwLock::new(PersistenceMetrics::default())),
@@ -379,7 +383,7 @@ impl PersistenceProvider for CowBTreeAddressableProvider {
         // Initialize WAL
         let wal_path = data_dir.join("orbit.wal");
         let wal = WriteAheadLog::new(&wal_path).await?;
-        *self.wal.lock().await = wal;
+        *self.wal.lock().await = Some(wal);
 
         tracing::info!(
             "COW B+ Tree addressable provider initialized at {}",
@@ -390,7 +394,9 @@ impl PersistenceProvider for CowBTreeAddressableProvider {
 
     async fn shutdown(&self) -> OrbitResult<()> {
         // Flush WAL
-        self.wal.lock().await.flush().await?;
+        if let Some(ref mut wal) = *self.wal.lock().await {
+            wal.flush().await?;
+        }
 
         tracing::info!("COW B+ Tree addressable provider shutdown");
         Ok(())
@@ -449,12 +455,14 @@ impl AddressableDirectoryProvider for CowBTreeAddressableProvider {
 
         // Log to WAL
         {
-            let mut wal = self.wal.lock().await;
-            wal.append_entry(WALOperation::InsertLease {
-                key: key.clone(),
-                lease: lease.clone(),
-            })
-            .await?;
+            let mut wal_guard = self.wal.lock().await;
+            if let Some(ref mut wal) = *wal_guard {
+                wal.append_entry(WALOperation::InsertLease {
+                    key: key.clone(),
+                    lease: lease.clone(),
+                })
+                .await?;
+            }
         }
 
         // Insert into B+ tree
@@ -492,12 +500,14 @@ impl AddressableDirectoryProvider for CowBTreeAddressableProvider {
 
         // Log to WAL
         {
-            let mut wal = self.wal.lock().await;
-            wal.append_entry(WALOperation::UpdateLease {
-                key: key.clone(),
-                lease: lease.clone(),
-            })
-            .await?;
+            let mut wal_guard = self.wal.lock().await;
+            if let Some(ref mut wal) = *wal_guard {
+                wal.append_entry(WALOperation::UpdateLease {
+                    key: key.clone(),
+                    lease: lease.clone(),
+                })
+                .await?;
+            }
         }
 
         // Update in B+ tree
@@ -516,9 +526,11 @@ impl AddressableDirectoryProvider for CowBTreeAddressableProvider {
 
         // Log to WAL
         {
-            let mut wal = self.wal.lock().await;
-            wal.append_entry(WALOperation::DeleteLease { key: key.clone() })
-                .await?;
+            let mut wal_guard = self.wal.lock().await;
+            if let Some(ref mut wal) = *wal_guard {
+                wal.append_entry(WALOperation::DeleteLease { key: key.clone() })
+                    .await?;
+            }
         }
 
         // Remove from B+ tree
@@ -545,11 +557,9 @@ impl AddressableDirectoryProvider for CowBTreeAddressableProvider {
         let leases = {
             let root = self.root.read().unwrap();
             let mut leases = Vec::new();
-            for (_i, value) in root.addressable_values.iter().enumerate() {
-                if let Some(lease) = value {
-                    if &lease.node_id == node_id {
-                        leases.push(lease.clone());
-                    }
+            for lease in root.addressable_values.iter().flatten() {
+                if &lease.node_id == node_id {
+                    leases.push(lease.clone());
                 }
             }
             leases
@@ -638,11 +648,7 @@ impl CowBTreeClusterProvider {
     pub fn new(config: CowBTreeConfig) -> Self {
         Self {
             root: Arc::new(StdRwLock::new(BTreeNode::new_leaf(0))),
-            wal: Arc::new(Mutex::new(WriteAheadLog {
-                file: unsafe { std::mem::zeroed() }, // Will be initialized in initialize()
-                sequence: 1,
-                buffer: Vec::with_capacity(config.wal_buffer_size),
-            })),
+            wal: Arc::new(Mutex::new(None)), // Will be initialized in initialize()
             snapshots: Arc::new(StdRwLock::new(HashMap::new())),
             version_counter: Arc::new(Mutex::new(0)),
             metrics: Arc::new(RwLock::new(PersistenceMetrics::default())),
@@ -664,14 +670,16 @@ impl PersistenceProvider for CowBTreeClusterProvider {
         // Initialize WAL
         let wal_path = data_dir.join("cluster_nodes.wal");
         let wal = WriteAheadLog::new(&wal_path).await?;
-        *self.wal.lock().await = wal;
+        *self.wal.lock().await = Some(wal);
 
         tracing::info!("COW B+ Tree cluster provider initialized");
         Ok(())
     }
 
     async fn shutdown(&self) -> OrbitResult<()> {
-        self.wal.lock().await.flush().await?;
+        if let Some(ref mut wal) = *self.wal.lock().await {
+            wal.flush().await?;
+        }
         tracing::info!("COW B+ Tree cluster provider shutdown");
         Ok(())
     }

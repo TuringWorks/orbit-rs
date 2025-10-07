@@ -248,6 +248,7 @@ async fn performance_comparison() -> OrbitResult<()> {
     Ok(())
 }
 
+#[allow(dead_code)] // Example function for demonstration
 async fn demo_configuration_methods() -> OrbitResult<()> {
     println!("⚙️  Configuration Methods Demo");
 
@@ -316,6 +317,7 @@ fn create_test_lease() -> AddressableLease {
     }
 }
 
+#[allow(dead_code)] // Helper function for examples
 fn create_test_node() -> NodeInfo {
     let node_id = NodeId::new(format!("node_{}", Uuid::new_v4()), "default".to_string());
     NodeInfo {

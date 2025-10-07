@@ -50,6 +50,7 @@ impl Default for LsmTreeConfig {
 struct MemTable {
     data: BTreeMap<String, Vec<u8>>,
     size_bytes: usize,
+    #[allow(dead_code)] // Reserved for future memtable rotation based on age
     created_at: SystemTime,
 }
 
@@ -81,7 +82,7 @@ impl std::fmt::Debug for SSTable {
 impl Clone for SSTable {
     fn clone(&self) -> Self {
         // Create a new bloom filter with similar configuration
-        let mut new_bloom =
+        let new_bloom =
             BloomFilter::with_rate(0.01, self.entry_count.max(1000).try_into().unwrap_or(1000));
         // Note: We can't clone the actual bloom filter state, so this is a new empty one
         // In a production system, you'd serialize/deserialize the bloom filter
@@ -98,6 +99,7 @@ impl Clone for SSTable {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)] // Reserved for future SSTable index implementation
 struct IndexEntry {
     key: String,
     offset: u64,
@@ -106,6 +108,7 @@ struct IndexEntry {
 
 /// Block cache for frequently accessed data
 #[derive(Debug, Clone)]
+#[allow(dead_code)] // Reserved for future block cache implementation
 struct CachedBlock {
     data: Vec<u8>,
     last_accessed: SystemTime,
@@ -123,6 +126,7 @@ pub struct LsmTreeAddressableProvider {
     immutable_memtables: Arc<StdRwLock<Vec<MemTable>>>,
     sstables: Arc<StdRwLock<Vec<SSTable>>>,
     wal: Arc<Mutex<WriteAheadLog>>,
+    #[allow(dead_code)] // Reserved for future block cache implementation
     block_cache: Arc<StdRwLock<HashMap<String, CachedBlock>>>,
     metrics: Arc<RwLock<PersistenceMetrics>>,
     transactions: Arc<RwLock<HashMap<String, TransactionContext>>>,
@@ -133,9 +137,12 @@ pub struct LsmTreeAddressableProvider {
 pub struct LsmTreeClusterProvider {
     config: LsmTreeConfig,
     active_memtable: Arc<StdRwLock<MemTable>>,
+    #[allow(dead_code)] // Reserved for future immutable memtable flush implementation
     immutable_memtables: Arc<StdRwLock<Vec<MemTable>>>,
+    #[allow(dead_code)] // Reserved for future SSTable implementation
     sstables: Arc<StdRwLock<Vec<SSTable>>>,
     wal: Arc<Mutex<WriteAheadLog>>,
+    #[allow(dead_code)] // Reserved for future block cache implementation
     block_cache: Arc<StdRwLock<HashMap<String, CachedBlock>>>,
     metrics: Arc<RwLock<PersistenceMetrics>>,
     transactions: Arc<RwLock<HashMap<String, TransactionContext>>>,
@@ -215,20 +222,21 @@ impl WriteAheadLog {
 }
 
 impl LsmTreeAddressableProvider {
-    pub fn new(config: LsmTreeConfig) -> Self {
-        Self {
+    pub async fn new(config: LsmTreeConfig) -> OrbitResult<Self> {
+        let wal_path = PathBuf::from(&config.data_dir).join("addressable.wal");
+        let wal = WriteAheadLog::new(&wal_path).await?;
+
+        Ok(Self {
             active_memtable: Arc::new(StdRwLock::new(MemTable::new())),
             immutable_memtables: Arc::new(StdRwLock::new(Vec::new())),
             sstables: Arc::new(StdRwLock::new(Vec::new())),
-            wal: Arc::new(Mutex::new(WriteAheadLog {
-                file: unsafe { std::mem::zeroed() }, // Will be initialized
-            })),
+            wal: Arc::new(Mutex::new(wal)),
             block_cache: Arc::new(StdRwLock::new(HashMap::new())),
             metrics: Arc::new(RwLock::new(PersistenceMetrics::default())),
             transactions: Arc::new(RwLock::new(HashMap::new())),
             compaction_running: Arc::new(Mutex::new(false)),
             config,
-        }
+        })
     }
 
     async fn update_metrics(&self, operation: &str, duration: std::time::Duration, success: bool) {
@@ -353,11 +361,6 @@ impl PersistenceProvider for LsmTreeAddressableProvider {
         tokio::fs::create_dir_all(&data_dir)
             .await
             .map_err(|e| OrbitError::internal(format!("Failed to create data directory: {}", e)))?;
-
-        // Initialize WAL
-        let wal_path = data_dir.join("orbit.wal");
-        let wal = WriteAheadLog::new(&wal_path).await?;
-        *self.wal.lock().await = wal;
 
         tracing::info!(
             "LSM-Tree addressable provider initialized at {}",
@@ -611,20 +614,21 @@ impl AddressableDirectoryProvider for LsmTreeAddressableProvider {
 }
 
 impl LsmTreeClusterProvider {
-    pub fn new(config: LsmTreeConfig) -> Self {
-        Self {
+    pub async fn new(config: LsmTreeConfig) -> OrbitResult<Self> {
+        let wal_path = PathBuf::from(&config.data_dir).join("cluster_nodes.wal");
+        let wal = WriteAheadLog::new(&wal_path).await?;
+
+        Ok(Self {
             active_memtable: Arc::new(StdRwLock::new(MemTable::new())),
             immutable_memtables: Arc::new(StdRwLock::new(Vec::new())),
             sstables: Arc::new(StdRwLock::new(Vec::new())),
-            wal: Arc::new(Mutex::new(WriteAheadLog {
-                file: unsafe { std::mem::zeroed() },
-            })),
+            wal: Arc::new(Mutex::new(wal)),
             block_cache: Arc::new(StdRwLock::new(HashMap::new())),
             metrics: Arc::new(RwLock::new(PersistenceMetrics::default())),
             transactions: Arc::new(RwLock::new(HashMap::new())),
             compaction_running: Arc::new(Mutex::new(false)),
             config,
-        }
+        })
     }
 }
 
@@ -635,10 +639,6 @@ impl PersistenceProvider for LsmTreeClusterProvider {
         tokio::fs::create_dir_all(&data_dir)
             .await
             .map_err(|e| OrbitError::internal(format!("Failed to create data directory: {}", e)))?;
-
-        let wal_path = data_dir.join("cluster_nodes.wal");
-        let wal = WriteAheadLog::new(&wal_path).await?;
-        *self.wal.lock().await = wal;
 
         tracing::info!("LSM-Tree cluster provider initialized");
         Ok(())

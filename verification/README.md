@@ -5,8 +5,10 @@ This directory contains scripts that replicate all the checks from the GitHub Ac
 ## 🎯 Overview
 
 The verification system mirrors the following GitHub Actions workflows:
-- `.github/workflows/ci.yml` - Continuous Integration
-- `.github/workflows/ci-cd.yml` - CI/CD Pipeline
+- `.github/workflows/ci.yml` - Basic Continuous Integration
+- `.github/workflows/ci-cd-enhanced.yml` - **Enhanced CI/CD Pipeline** (Primary)
+- `.github/workflows/ci-cd.yml` - Legacy CI/CD Pipeline (Renamed)
+- `.github/workflows/test-release.yml` - Test Release Workflow
 
 ## 📁 Structure
 
@@ -25,12 +27,11 @@ verification/
 │   ├── check_coverage.sh      # Code coverage (cargo tarpaulin)
 │   ├── check_benchmarks.sh    # Benchmarks (cargo bench)
 │   ├── check_docs.sh          # Documentation (cargo doc)
-│   ├── check_docker.sh        # Docker build
 │   └── check_helm.sh          # Helm chart validation
 └── stages/                # Grouped stage scripts
     ├── rust_checks.sh         # All Rust-related checks
     ├── quality_checks.sh      # Coverage, benchmarks, docs
-    └── infrastructure_checks.sh # Docker and Helm checks
+    └── infrastructure_checks.sh # Helm checks (Docker removed)
 ```
 
 ## 🚀 Quick Start
@@ -93,8 +94,7 @@ rustup component add clippy
 - **cargo-benchmarks**: For performance testing (if orbit-benchmarks package exists)
 
 ### System Tools
-- **Docker**: For container build checks
-- **Helm**: For Kubernetes chart validation
+- **Helm**: For Kubernetes chart validation (optional)
 
 ## 📊 Check Details
 
@@ -102,7 +102,7 @@ rustup component add clippy
 | Check | Command | Purpose |
 |-------|---------|---------|
 | Formatting | `cargo fmt --all -- --check` | Code style consistency |
-| Clippy | `cargo clippy --all-targets --features="..." -- -D warnings` | Linting and best practices |
+| Clippy | `cargo clippy --all-targets --features="resp,postgres-wire,cypher,rest" -- -D warnings` | Linting and best practices |
 | Build | `cargo build --release --workspace` | Compilation validation |
 | Tests | `cargo test --workspace --verbose` | Unit and integration tests |
 | Security | `cargo audit && cargo deny check` | Vulnerability scanning |
@@ -118,7 +118,6 @@ rustup component add clippy
 ### Infrastructure Checks (Stage 3)
 | Check | Command | Purpose |
 |-------|---------|---------|
-| Docker | `docker build -t orbit-rs:local-test .` | Container image build |
 | Helm | `helm lint && helm template` | Kubernetes deployment validation |
 
 ## 💡 Usage Examples
@@ -239,11 +238,6 @@ Try alternative coverage tool:
 COVERAGE_METHOD=llvm-cov ./verification/checks/check_coverage.sh
 ```
 
-**Docker checks fail**
-- Make sure Docker Desktop is running
-- Check if you have sufficient disk space
-- Ensure all workspace members are properly configured
-
 **Helm checks fail**
 - Install Helm: [helm.sh/docs/intro/install](https://helm.sh/docs/intro/install/)
 - Install chart-testing plugin: `helm plugin install https://github.com/helm/chart-testing`
@@ -251,7 +245,7 @@ COVERAGE_METHOD=llvm-cov ./verification/checks/check_coverage.sh
 ## 📈 Performance Tips
 
 - Use `--fast` mode for quickest feedback during development (skips slow operations)
-- Use `--skip-optional` to skip coverage, benchmarks, Docker, and Helm
+- Use `--skip-optional` to skip coverage, benchmarks, and Helm
 - Run `--stage rust` first to catch basic issues quickly (formatting, linting, building, testing)
 - Use `--verbose` only when debugging specific failures
 - Coverage and benchmarks are the slowest checks - consider running them separately
@@ -288,17 +282,17 @@ Validation behavior is controlled by:
 
 | Local Script | GitHub Action | Workflow File |
 |--------------|---------------|---------------|
-| `rust_checks.sh` | `rust-checks` job | `ci-cd.yml` |
-| `check_tests.sh` | `test` job | `ci.yml` |
+| `rust_checks.sh` | `rust-checks` job | `ci-cd-enhanced.yml` |
+| `check_tests.sh` | `test` job | `ci-cd-enhanced.yml` |
 | `check_coverage.sh` | `coverage` job | `ci.yml` |
 | `check_benchmarks.sh` | `benchmark` job | `ci.yml` |
-| `check_docs.sh` | `docs` job | `ci.yml` |
-| `check_docker.sh` | `docker-build` job | `ci-cd.yml` |
-| `check_helm.sh` | `helm-checks` job | `ci-cd.yml` |
+| `check_docs.sh` | `docs` job | `ci-cd-enhanced.yml` |
+| `check_helm.sh` | `helm-checks` job | `ci-cd-enhanced.yml` |
 
 ## 📝 Notes
 
 - Scripts are designed to be idempotent and safe to run multiple times
-- Optional checks (coverage, benchmarks, Docker, Helm) won't fail the overall verification if they're not available
+- Optional checks (coverage, benchmarks, Helm) won't fail the overall verification if they're not available
 - All scripts include helpful error messages and suggestions for fixing issues
 - The verification system supports both development and CI-like environments
+- Docker requirements have been removed from the enhanced CI/CD pipeline

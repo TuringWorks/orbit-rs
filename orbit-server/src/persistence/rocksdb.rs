@@ -5,7 +5,7 @@
 
 use super::*;
 use ::rocksdb::{
-    properties, BlockBasedOptions, Cache, Options, TransactionDB, TransactionDBOptions,
+    BlockBasedOptions, Cache, Options, TransactionDB, TransactionDBOptions,
     WriteBatchWithTransaction,
 };
 use serde::{Deserialize, Serialize};
@@ -59,6 +59,7 @@ pub struct RocksDbAddressableProvider {
 /// RocksDB implementation for cluster nodes
 pub struct RocksDbClusterProvider {
     db: Arc<TransactionDB>,
+    #[allow(dead_code)] // Configuration might be used for future functionality
     config: RocksDbConfig,
     metrics: Arc<RwLock<PersistenceMetrics>>,
 }
@@ -125,6 +126,7 @@ impl RocksDbAddressableProvider {
         format!("lease:{}:{}", reference.addressable_type, reference.key)
     }
 
+    #[allow(dead_code)] // Reserved for future node key functionality
     fn node_id_to_key(node_id: &NodeId) -> String {
         format!("node:{}", node_id)
     }
@@ -156,7 +158,7 @@ impl PersistenceProvider for RocksDbAddressableProvider {
     }
 
     async fn metrics(&self) -> PersistenceMetrics {
-        let mut metrics = self.metrics.read().await.clone();
+        let metrics = self.metrics.read().await.clone();
 
         // Augment with RocksDB statistics if available
         if self.config.enable_statistics {

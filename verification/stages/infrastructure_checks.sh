@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Infrastructure Checks Stage
-# Combines Docker and Helm checks
+# Helm chart validation checks (Docker removed from enhanced CI/CD)
 
 set -e
 
@@ -35,8 +35,7 @@ run_check() {
     fi
 }
 
-# Run infrastructure checks
-run_check "Docker Build" "check_docker.sh" "true"  # Optional since it requires Docker
+# Run infrastructure checks (Docker removed from enhanced CI/CD pipeline)
 run_check "Helm Charts" "check_helm.sh" "true"    # Optional since it requires Helm
 
 echo ""
@@ -52,6 +51,6 @@ else
         echo "   - $check"
     done
     echo ""
-    echo "💡 Note: Some infrastructure checks require additional tools (Docker, Helm)"
+    echo "💡 Note: Infrastructure checks require additional tools (Helm)"
     exit 1
 fi
