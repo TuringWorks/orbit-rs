@@ -173,6 +173,269 @@ async fn test_orbitql_functions() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+// ================================
+// NEW ADVANCED SQL FEATURES TESTS
+// ================================
+
+#[tokio::test]
+async fn test_now_function() -> Result<(), Box<dyn std::error::Error>> {
+    let mut engine = OrbitQLEngine::new();
+    let _params = QueryParams::new();
+    let _context = QueryContext::default();
+
+    // Test NOW() function parsing
+    let query = "SELECT NOW() AS current_time";
+    match engine.validate(query) {
+        Ok(_) => {} // NOW() function validated successfully
+        Err(e) => panic!("NOW() function validation failed: {}", e),
+    }
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_interval_expressions() -> Result<(), Box<dyn std::error::Error>> {
+    let mut engine = OrbitQLEngine::new();
+    let _params = QueryParams::new();
+    let _context = QueryContext::default();
+
+    // Test INTERVAL expressions
+    let query = "SELECT * FROM events WHERE timestamp > NOW() - INTERVAL '7 days'";
+    match engine.validate(query) {
+        Ok(_) => {} // INTERVAL expression validated successfully
+        Err(e) => panic!("INTERVAL expression validation failed: {}", e),
+    }
+
+    // Test different interval units
+    let queries = vec![
+        "SELECT NOW() - INTERVAL '1 hour'",
+        "SELECT NOW() - INTERVAL '30 minutes'",
+        "SELECT NOW() - INTERVAL '1 month'",
+        "SELECT NOW() - INTERVAL '2 years'",
+    ];
+
+    for query in queries {
+        match engine.validate(query) {
+            Ok(_) => continue,
+            Err(e) => panic!("INTERVAL validation failed for '{}': {}", query, e),
+        }
+    }
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_count_distinct() -> Result<(), Box<dyn std::error::Error>> {
+    let mut engine = OrbitQLEngine::new();
+    let _params = QueryParams::new();
+    let _context = QueryContext::default();
+
+    // Test COUNT(DISTINCT) aggregation
+    let query = "SELECT COUNT(DISTINCT user_id) AS unique_users FROM events";
+    match engine.validate(query) {
+        Ok(_) => {} // COUNT(DISTINCT) validated successfully
+        Err(e) => panic!("COUNT(DISTINCT) validation failed: {}", e),
+    }
+
+    // Test multiple DISTINCT aggregates
+    let query = r#"
+        SELECT 
+            COUNT(DISTINCT user_id) AS unique_users,
+            COUNT(DISTINCT session_id) AS unique_sessions,
+            SUM(DISTINCT amount) AS total_unique_amounts
+        FROM transactions
+        GROUP BY campaign_id
+    "#;
+    match engine.validate(query) {
+        Ok(_) => {} // Multiple DISTINCT aggregates validated successfully
+        Err(e) => panic!("Multiple DISTINCT aggregates validation failed: {}", e),
+    }
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_case_expressions() -> Result<(), Box<dyn std::error::Error>> {
+    let mut engine = OrbitQLEngine::new();
+    let _params = QueryParams::new();
+    let _context = QueryContext::default();
+
+    // Test simple CASE expression
+    let query = r#"
+        SELECT 
+            name,
+            CASE 
+                WHEN age < 18 THEN 'Minor'
+                WHEN age < 65 THEN 'Adult'
+                ELSE 'Senior'
+            END AS age_category
+        FROM users
+    "#;
+    match engine.validate(query) {
+        Ok(_) => {} // Simple CASE expression validated successfully
+        Err(e) => panic!("Simple CASE expression validation failed: {}", e),
+    }
+
+    // Test CASE in aggregation
+    let query = r#"
+        SELECT 
+            department,
+            COUNT(CASE WHEN salary > 100000 THEN 1 END) AS high_earners,
+            AVG(CASE WHEN performance = 'excellent' THEN salary END) AS avg_excellent_salary
+        FROM employees
+        GROUP BY department
+    "#;
+    match engine.validate(query) {
+        Ok(_) => {} // CASE in aggregation validated successfully
+        Err(e) => panic!("CASE in aggregation validation failed: {}", e),
+    }
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_with_ctes() -> Result<(), Box<dyn std::error::Error>> {
+    let mut engine = OrbitQLEngine::new();
+    let _params = QueryParams::new();
+    let _context = QueryContext::default();
+
+    // Test basic CTE
+    let query = r#"
+        WITH user_stats AS (
+            SELECT user_id, COUNT(*) AS post_count
+            FROM posts
+            WHERE created_at > NOW() - INTERVAL '30 days'
+            GROUP BY user_id
+        )
+        SELECT u.name, COALESCE(us.post_count, 0) AS recent_posts
+        FROM users u
+        LEFT JOIN user_stats us ON u.id = us.user_id
+    "#;
+    match engine.validate(query) {
+        Ok(_) => {} // Basic CTE validated successfully
+        Err(e) => panic!("Basic CTE validation failed: {}", e),
+    }
+
+    // Test multiple CTEs
+    let query = r#"
+        WITH 
+            active_users AS (
+                SELECT user_id FROM sessions 
+                WHERE last_seen > NOW() - INTERVAL '7 days'
+            ),
+            popular_posts AS (
+                SELECT post_id, COUNT(*) AS like_count
+                FROM likes
+                GROUP BY post_id
+                HAVING COUNT(*) > 100
+            )
+        SELECT u.name, p.title, pp.like_count
+        FROM users u
+        JOIN active_users au ON u.id = au.user_id
+        JOIN posts p ON u.id = p.author_id
+        JOIN popular_posts pp ON p.id = pp.post_id
+    "#;
+    match engine.validate(query) {
+        Ok(_) => {} // Multiple CTEs validated successfully
+        Err(e) => panic!("Multiple CTEs validation failed: {}", e),
+    }
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_coalesce_function() -> Result<(), Box<dyn std::error::Error>> {
+    let mut engine = OrbitQLEngine::new();
+    let _params = QueryParams::new();
+    let _context = QueryContext::default();
+
+    // Test COALESCE function
+    let query = r#"
+        SELECT 
+            user_id,
+            COALESCE(display_name, username, email) AS name,
+            COALESCE(phone, email, 'No contact') AS contact_method
+        FROM user_profiles
+    "#;
+    match engine.validate(query) {
+        Ok(_) => {} // COALESCE function validated successfully
+        Err(e) => panic!("COALESCE function validation failed: {}", e),
+    }
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_complex_conditional_aggregates() -> Result<(), Box<dyn std::error::Error>> {
+    let mut engine = OrbitQLEngine::new();
+    let _params = QueryParams::new();
+    let _context = QueryContext::default();
+
+    // Test complex conditional aggregates
+    let query = r#"
+        SELECT 
+            product_category,
+            COUNT(*) AS total_orders,
+            SUM(CASE WHEN order_status = 'completed' THEN amount ELSE 0 END) AS completed_revenue,
+            AVG(CASE WHEN rating IS NOT NULL THEN rating END) AS avg_rating,
+            COUNT(DISTINCT CASE WHEN order_status = 'completed' THEN customer_id END) AS unique_customers
+        FROM orders
+        WHERE order_date >= NOW() - INTERVAL '90 days'
+        GROUP BY product_category
+    "#;
+    match engine.validate(query) {
+        Ok(_) => {} // Complex conditional aggregates validated successfully
+        Err(e) => panic!("Complex conditional aggregates validation failed: {}", e),
+    }
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ultimate_multi_model_with_advanced_sql() -> Result<(), Box<dyn std::error::Error>> {
+    let mut engine = OrbitQLEngine::new();
+    let _params = QueryParams::new();
+    let _context = QueryContext::default();
+
+    // Test ultimate query combining all advanced SQL features
+    let query = r#"
+        WITH recent_activity AS (
+            SELECT 
+                user_id,
+                COUNT(DISTINCT session_id) as unique_sessions,
+                AVG(CASE WHEN metric_name = 'cpu_usage' THEN value END) as avg_cpu,
+                COUNT(CASE WHEN timestamp > NOW() - INTERVAL '1 hour' THEN 1 END) as recent_events
+            FROM metrics 
+            WHERE timestamp >= NOW() - INTERVAL '24 hours'
+            GROUP BY user_id
+            HAVING COUNT(*) > 10
+        )
+        SELECT 
+            u.name,
+            CASE 
+                WHEN ra.unique_sessions > 50 THEN 'power_user'
+                WHEN ra.unique_sessions > 10 THEN 'regular_user'
+                ELSE 'casual_user'
+            END as user_type,
+            COUNT(DISTINCT f.to_user_id) as follower_count,
+            COALESCE(ra.avg_cpu, 0) as avg_cpu_usage,
+            ra.recent_events
+        FROM users u
+        JOIN recent_activity ra ON u.id = ra.user_id
+        LEFT JOIN follows f ON u.id = f.to_user_id
+        WHERE ra.unique_sessions > 5
+        GROUP BY u.id, u.name, ra.unique_sessions, ra.avg_cpu, ra.recent_events
+        ORDER BY follower_count DESC
+        LIMIT 20
+    "#;
+    match engine.validate(query) {
+        Ok(_) => {} // Ultimate multi-model query with advanced SQL validated successfully
+        Err(e) => panic!("Ultimate multi-model query validation failed: {}", e),
+    }
+
+    Ok(())
+}
+
 #[tokio::test]
 #[ignore] // OrbitQL complex multi-model syntax not yet implemented
 async fn test_complex_multi_model_query() -> Result<(), Box<dyn std::error::Error>> {

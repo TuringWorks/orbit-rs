@@ -30,7 +30,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::{RwLock, Semaphore};
-use tracing::{debug, error, info};
+use tracing::{debug, info};
 use uuid::Uuid;
 
 /// Distributed execution context

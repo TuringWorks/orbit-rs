@@ -20,6 +20,10 @@ pub enum ProtocolError {
     #[error("Cypher query error: {0}")]
     CypherError(String),
 
+    /// AQL query parsing error
+    #[error("AQL query error: {0}")]
+    AqlError(String),
+
     /// SQL parsing error
     #[error("SQL parse error: {0}")]
     ParseError(String),

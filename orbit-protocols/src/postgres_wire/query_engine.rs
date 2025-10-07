@@ -6,6 +6,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 use crate::error::{ProtocolError, ProtocolResult};
+use crate::postgres_wire::graphrag_engine::GraphRAGQueryEngine;
 use crate::postgres_wire::vector_engine::VectorQueryEngine;
 use orbit_client::OrbitClient;
 
@@ -79,6 +80,8 @@ pub struct QueryEngine {
     actors: Arc<RwLock<HashMap<String, ActorRecord>>>,
     // Optional vector query engine for pgvector compatibility
     vector_engine: Option<VectorQueryEngine>,
+    // Optional GraphRAG query engine
+    graphrag_engine: Option<GraphRAGQueryEngine>,
 }
 
 impl QueryEngine {
@@ -87,20 +90,36 @@ impl QueryEngine {
         Self {
             actors: Arc::new(RwLock::new(HashMap::new())),
             vector_engine: None,
+            graphrag_engine: None,
         }
     }
 
     /// Create a new query engine with vector support
     pub fn new_with_vector_support(orbit_client: OrbitClient) -> Self {
+        // Since OrbitClient doesn't implement Clone, we need to create separate instances
+        // For now, we'll create the GraphRAG engine in placeholder mode
+        // This needs to be fixed when OrbitClient supports cloning or sharing
         Self {
             actors: Arc::new(RwLock::new(HashMap::new())),
             vector_engine: Some(VectorQueryEngine::new(orbit_client)),
+            graphrag_engine: Some(GraphRAGQueryEngine::new_placeholder()),
         }
     }
 
     /// Execute a SQL query
     pub async fn execute_query(&self, sql: &str) -> ProtocolResult<QueryResult> {
         let sql_upper = sql.trim().to_uppercase();
+
+        // Check if this is a GraphRAG function query
+        if self.is_graphrag_query(&sql_upper) {
+            if let Some(ref graphrag_engine) = self.graphrag_engine {
+                return graphrag_engine.execute_graphrag_query(sql).await;
+            } else {
+                return Err(ProtocolError::PostgresError(
+                    "GraphRAG support not enabled. Use new_with_vector_support() to enable GraphRAG functions.".to_string()
+                ));
+            }
+        }
 
         // Check if this is a vector-related query
         if let Some(ref vector_engine) = self.vector_engine {
@@ -147,6 +166,17 @@ impl QueryEngine {
             || sql.contains("VECTOR_NORM")
             || (sql.contains("CREATE INDEX")
                 && (sql.contains("USING IVFFLAT") || sql.contains("USING HNSW")))
+    }
+
+    /// Check if a query contains GraphRAG functions
+    fn is_graphrag_query(&self, sql: &str) -> bool {
+        sql.contains("GRAPHRAG_BUILD(")
+            || sql.contains("GRAPHRAG_QUERY(")
+            || sql.contains("GRAPHRAG_EXTRACT(")
+            || sql.contains("GRAPHRAG_REASON(")
+            || sql.contains("GRAPHRAG_STATS(")
+            || sql.contains("GRAPHRAG_ENTITIES(")
+            || sql.contains("GRAPHRAG_SIMILAR(")
     }
 
     /// Parse SQL statement

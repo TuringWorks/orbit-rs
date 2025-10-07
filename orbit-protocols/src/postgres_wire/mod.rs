@@ -30,6 +30,7 @@
 //! - ✅ Prepared statements
 //! - ✅ SQL parsing (SELECT, INSERT, UPDATE, DELETE)
 
+pub mod graphrag_engine;
 pub mod messages;
 pub mod protocol;
 pub mod query_engine;
@@ -37,6 +38,7 @@ pub mod server;
 pub mod sql;
 pub mod vector_engine;
 
+pub use graphrag_engine::GraphRAGQueryEngine;
 pub use messages::{BackendMessage, FieldDescription, FrontendMessage, TransactionStatus};
 pub use protocol::PostgresWireProtocol;
 pub use query_engine::{QueryEngine, QueryResult};

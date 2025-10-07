@@ -8,9 +8,9 @@ Protocol adapters act as translation layers between external protocols and the O
 
 ### Supported Protocols
 
-- ✅ **Redis Protocol (RESP)** - Complete Redis compatibility with 50+ commands
-- ✅ **PostgreSQL Wire Protocol** - Full DDL/DML support with vector operations
-- ✅ **Model Context Protocol (MCP)** - AI agent integration
+- ✅ **Redis Protocol (RESP)** - **Complete Redis compatibility with 50+ commands** including VECTOR.*, TS.*, GRAPH.*, FT.* extensions
+- ✅ **PostgreSQL Wire Protocol** - Full DDL/DML support with vector operations and complex SQL parsing
+- ✅ **Model Context Protocol (MCP)** - AI agent integration with comprehensive tool support
 - 🚧 **Redis Time Series** - Time-series database with RedisTimeSeries compatibility (Phase 12)
 - 🚧 **PostgreSQL TimescaleDB** - Advanced time-series analytics and hypertables (Phase 12)
 - 🚧 **REST API** - HTTP/JSON interface for web applications (planned)
@@ -48,7 +48,9 @@ OK
 
 ### Supported Redis Commands
 
-#### Key-Value Operations
+**📚 [Complete Command Reference](REDIS_COMMANDS_REFERENCE.md)** - Detailed documentation for all 50+ commands
+
+#### Key-Value Operations (15+ commands)
 - **GET** - Retrieve value by key
 - **SET** - Set key to value (with optional expiration: `SET key value EX 3600`)
 - **DEL** - Delete one or more keys
@@ -56,8 +58,22 @@ OK
 - **TTL** - Get time-to-live for key
 - **EXPIRE** - Set expiration time for key
 - **PERSIST** - Remove expiration from key
+- **APPEND** - Append value to existing string
+- **GETRANGE** - Get substring by byte range
+- **GETSET** - Atomically set new value and return old value
+- **MGET** - Get multiple keys at once
+- **MSET** - Set multiple key-value pairs
+- **SETEX** - Set key with expiration time
+- **SETRANGE** - Overwrite string at specific offset
+- **STRLEN** - Get string length
+- **PEXPIRE** - Set expiration in milliseconds
+- **PTTL** - Get TTL in milliseconds
+- **RANDOMKEY** - Get random key
+- **RENAME** - Rename key
+- **TYPE** - Get type of key
+- **UNLINK** - Asynchronous delete
 
-#### Hash Operations
+#### Hash Operations (10+ commands)
 - **HGET** - Get field value from hash
 - **HSET** - Set field value in hash
 - **HGETALL** - Get all field-value pairs from hash
@@ -66,8 +82,11 @@ OK
 - **HKEYS** - Get all field names from hash
 - **HVALS** - Get all values from hash
 - **HLEN** - Get number of fields in hash
+- **HMGET** - Get multiple field values
+- **HMSET** - Set multiple field values
+- **HINCRBY** - Increment field by integer value
 
-#### List Operations
+#### List Operations (12+ commands)
 - **LPUSH** - Push elements to left of list
 - **RPUSH** - Push elements to right of list
 - **LPOP** - Pop element from left of list
@@ -75,34 +94,146 @@ OK
 - **LRANGE** - Get range of elements from list
 - **LLEN** - Get length of list
 - **LINDEX** - Get element at index
+- **LSET** - Set element at index
+- **LREM** - Remove elements equal to value
+- **LTRIM** - Trim list to specified range
+- **LINSERT** - Insert element before or after pivot
+- **BLPOP** - Blocking left pop (non-blocking implementation)
+- **BRPOP** - Blocking right pop (non-blocking implementation)
 
-#### Pub/Sub Operations
+#### Set Operations (7+ commands)
+- **SADD** - Add members to set
+- **SREM** - Remove members from set
+- **SMEMBERS** - Get all members of set
+- **SCARD** - Get cardinality (size) of set
+- **SISMEMBER** - Check if member exists in set
+- **SUNION** - Return union of sets
+- **SINTER** - Return intersection of sets
+- **SDIFF** - Return difference of sets
+
+#### Sorted Set Operations (8+ commands)
+- **ZADD** - Add members with scores to sorted set
+- **ZREM** - Remove members from sorted set
+- **ZCARD** - Get cardinality of sorted set
+- **ZSCORE** - Get score of member
+- **ZINCRBY** - Increment score of member
+- **ZRANGE** - Get members by rank range
+- **ZRANGEBYSCORE** - Get members by score range
+- **ZCOUNT** - Count members in score range
+- **ZRANK** - Get rank of member
+
+#### Pub/Sub Operations (6+ commands)
 - **PUBLISH** - Publish message to channel
 - **SUBSCRIBE** - Subscribe to channels
 - **UNSUBSCRIBE** - Unsubscribe from channels
 - **PSUBSCRIBE** - Subscribe to channel patterns
 - **PUNSUBSCRIBE** - Unsubscribe from channel patterns
+- **PUBSUB** - Introspect pub/sub system
 
-#### Connection Commands
+#### Connection Commands (5+ commands)
 - **PING** - Test connection
 - **ECHO** - Echo message
 - **SELECT** - Select database (logical separation)
+- **AUTH** - Authenticate with server
 - **QUIT** - Close connection
 
-#### Server Commands
-- **INFO** - Get server information
+#### Server Commands (5+ commands)
+- **INFO** - Get server information with Orbit-specific details
 - **DBSIZE** - Get number of keys
 - **FLUSHDB** - Clear current database
+- **FLUSHALL** - Clear all databases
 - **COMMAND** - Get list of available commands
+
+## Redis Extensions - Advanced Features ✨
+
+Orbit-RS extends Redis with enterprise-grade features for AI/ML, time series, and graph database workloads.
+
+### Vector Operations (VECTOR.* namespace) 🤖
+**AI/ML vector search with multiple similarity metrics**
+
+- **VECTOR.ADD** index id vector [metadata...] - Add vector with optional metadata
+- **VECTOR.GET** index id - Get vector and metadata by ID
+- **VECTOR.DEL** index id - Delete vector from index
+- **VECTOR.STATS** index - Get statistics for vector index
+- **VECTOR.LIST** index - List all vector IDs in index
+- **VECTOR.COUNT** index - Get count of vectors in index
+- **VECTOR.SEARCH** index vector limit [options...] - Perform similarity search
+- **VECTOR.KNN** index vector k [metric] - K-nearest neighbors search
+
+**Similarity Metrics**: COSINE, EUCLIDEAN, DOT_PRODUCT, MANHATTAN
+
+```redis
+VECTOR.ADD embeddings doc1 "0.1,0.2,0.3,0.4" title "AI Document" category "tech"
+VECTOR.SEARCH embeddings "0.1,0.2,0.3,0.4" 5 METRIC COSINE THRESHOLD 0.8
+```
+
+### RedisSearch Compatible (FT.* namespace) 🔍
+**Full-text and vector search engine compatibility**
+
+- **FT.CREATE** index DIM dimension [options] - Create vector search index
+- **FT.ADD** index id vector [metadata...] - Add document to search index
+- **FT.DEL** index id - Delete document from index
+- **FT.SEARCH** index vector limit [options] - Search documents
+- **FT.INFO** index - Get index information and statistics
+
+### Time Series (TS.* namespace) 📊
+**Complete RedisTimeSeries compatibility for IoT and monitoring**
+
+- **TS.CREATE** key [options] - Create time series with retention policies
+- **TS.ALTER** key [options] - Modify time series configuration
+- **TS.ADD** key timestamp value - Add sample to time series
+- **TS.MADD** key1 ts1 val1 [key2 ts2 val2...] - Add multiple samples
+- **TS.INCRBY** / **TS.DECRBY** key value - Increment/decrement by value
+- **TS.DEL** key fromTimestamp toTimestamp - Delete samples in range
+- **TS.GET** key - Get latest sample
+- **TS.MGET** key1 [key2...] - Get latest from multiple series
+- **TS.INFO** key - Get time series information and statistics
+- **TS.RANGE** / **TS.REVRANGE** key from to [AGGREGATION func duration] - Query ranges
+- **TS.MRANGE** / **TS.MREVRANGE** - Query multiple time series
+- **TS.CREATERULE** / **TS.DELETERULE** - Manage compaction rules
+- **TS.QUERYINDEX** - Query time series by labels
+
+**Aggregation Functions**: AVG, SUM, MIN, MAX, COUNT, FIRST, LAST, STDDEV, VAR
+
+```redis
+TS.CREATE temperature:sensor1 RETENTION 3600000 LABELS sensor_id "001" location "office"
+TS.ADD temperature:sensor1 * 23.5
+TS.RANGE temperature:sensor1 - + AGGREGATION AVG 60000
+```
+
+### Graph Database (GRAPH.* namespace) 🕸️
+**Cypher-like graph queries with execution planning**
+
+- **GRAPH.QUERY** graph_name query - Execute graph query with write operations
+- **GRAPH.RO_QUERY** graph_name query - Execute read-only graph query
+- **GRAPH.DELETE** graph_name - Delete entire graph
+- **GRAPH.LIST** - List all graphs in system
+- **GRAPH.EXPLAIN** graph_name query - Get query execution plan
+- **GRAPH.PROFILE** graph_name query - Profile query with metrics
+- **GRAPH.SLOWLOG** graph_name - Get slow query log
+- **GRAPH.CONFIG** GET|SET parameter [value] - Configure graph settings
+
+```redis
+GRAPH.QUERY social "MATCH (p:Person {name: 'Alice'}) RETURN p"
+GRAPH.EXPLAIN social "MATCH (p:Person) WHERE p.age > 25 RETURN p.name"
+```
 
 ### Actor Mapping
 
-Each Redis command maps to corresponding Orbit actor operations:
+Each Redis command family maps to corresponding Orbit actor operations:
 
-- **String commands** → `KeyValueActor` - Manages key-value pairs with TTL
-- **Hash commands** → `HashActor` - Manages hash data structures  
-- **List commands** → `ListActor` - Manages ordered lists with push/pop operations
-- **Pub/Sub commands** → `PubSubActor` - Manages message publishing and subscriptions
+#### Core Data Types
+- **String commands** → `KeyValueActor` - TTL-aware key-value pairs with expiration
+- **Hash commands** → `HashActor` - Hash maps with field-value operations
+- **List commands** → `ListActor` - Ordered lists with push/pop/range operations
+- **Set commands** → `SetActor` - Unique member sets with union/intersection
+- **Sorted Set commands** → `SortedSetActor` - Score-ordered sets with ranking
+- **Pub/Sub commands** → `PubSubActor` - Message channels with pattern matching
+
+#### Advanced Extensions
+- **Vector commands** → `VectorActor` - AI/ML vector operations with similarity search
+- **Time Series commands** → `TimeSeriesActor` - Time-series data with aggregation
+- **Graph commands** → `GraphActor` - Graph database with Cypher-like queries
 
 ### Redis Configuration Example
 

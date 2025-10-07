@@ -29,9 +29,12 @@ Orbit is a framework for building distributed systems using virtual actors. A vi
 - 🚀 **Virtual Actors**: Automatic lifecycle management with on-demand activation
 - ⚡ **High Performance**: Up to 500k+ messages/second per core with Rust's memory safety
 - 💎 **Distributed Transactions**: ACID-compliant with 2-phase commit, saga patterns, and distributed locks
-- 🔌 **Protocol Adapters**: Redis (RESP), PostgreSQL wire protocol with vector operations, MCP for AI agents
+- 🔌 **Protocol Adapters**: **Complete Redis compatibility (50+ commands)** including Vector/AI, Time Series, Graph DB + PostgreSQL wire protocol + MCP for AI agents
+- 🤖 **AI/ML Ready**: Native vector similarity search, embeddings storage, and semantic search capabilities
+- 📊 **Time Series**: Full RedisTimeSeries compatibility with aggregation, retention policies, and real-time analytics
+- 🕸️ **Graph Database**: Cypher-like queries with execution planning, profiling, and distributed graph operations
 - 🗄️ **SQL Database**: Complete PostgreSQL compatibility with advanced SQL features and pgvector support
-- ☸️ **Kubernetes Native**: Custom operator with CRDs, Helm charts, and production-ready deployment
+- ☘️ **Kubernetes Native**: Custom operator with CRDs, Helm charts, and production-ready deployment
 - 📊 **Observability**: Built-in Prometheus metrics, Grafana dashboards, and comprehensive monitoring
 - 🛡️ **Enterprise Security**: Authentication, authorization, audit logging, and compliance features
 
@@ -77,8 +80,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 **✅ Production-Ready Features:**
 - ✅ **Core Actor System** - Virtual actors with automatic lifecycle management
 - ✅ **Distributed Transactions** - 2PC, Saga patterns, distributed locks, deadlock detection
-- ✅ **Protocol Adapters** - Redis RESP (50+ commands), PostgreSQL wire protocol, MCP for AI
-- ✅ **SQL Database** - Complete ANSI SQL with PostgreSQL compatibility and pgvector support
+- ✅ **Redis Protocol** - **Complete compatibility with 50+ commands** including:
+  - ✅ All core Redis data types (String, Hash, List, Set, Sorted Set, Pub/Sub)
+  - ✅ **Vector Operations** - AI/ML similarity search with multiple metrics (COSINE, EUCLIDEAN, etc.)
+  - ✅ **Time Series** - Full RedisTimeSeries compatibility with aggregation and retention
+  - ✅ **Graph Database** - Cypher-like queries with execution planning and profiling
+  - ✅ **Search Engine** - RedisSearch-compatible vector and full-text search
+- ✅ **PostgreSQL Protocol** - Complete wire protocol with complex SQL parsing and pgvector support
+- ✅ **AI Agent Integration** - Model Context Protocol (MCP) with comprehensive tool support
 - ✅ **Kubernetes Integration** - Native operator, Helm charts, production deployment
 - ✅ **Observability** - Prometheus metrics, Grafana dashboards, comprehensive monitoring
 

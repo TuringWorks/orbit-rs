@@ -47,7 +47,7 @@ orbit-rs/
 │   ├── protocols/                # Protocol adapter docs
 │   └── wip/                      # Work-in-progress documents
 │
-├── persistence-benchmark/        # Persistence layer benchmarking
+├── orbit-benchmarks/             # Consolidated performance benchmarks
 ├── verification/                 # Verification and formal methods
 ├── tools/                        # Development tools
 │   └── vscode-orbitql/          # OrbitQL VS Code extension

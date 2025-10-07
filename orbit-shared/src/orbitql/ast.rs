@@ -21,11 +21,23 @@ pub enum Statement {
     Drop(DropStatement),
     Transaction(TransactionStatement),
     Live(LiveStatement),
+    // GraphRAG statements
+    GraphRAG(GraphRAGStatement),
+}
+
+/// Common Table Expression (CTE) clause
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct WithClause {
+    pub name: String,
+    pub columns: Option<Vec<String>>,
+    pub query: Box<SelectStatement>,
+    pub recursive: bool,
 }
 
 /// SELECT statement for querying data
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SelectStatement {
+    pub with_clauses: Vec<WithClause>,
     pub fields: Vec<SelectField>,
     pub from: Vec<FromClause>,
     pub where_clause: Option<Expression>,
@@ -322,6 +334,10 @@ pub enum BinaryOperator {
     In,
     NotIn,
 
+    // Null checking
+    Is,
+    IsNot,
+
     // String operations
     Contains,
     StartsWith,
@@ -543,6 +559,65 @@ pub struct LiveStatement {
     pub diff: bool, // Whether to return diffs or full results
 }
 
+/// GraphRAG statement for knowledge graph operations
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum GraphRAGStatement {
+    /// Build knowledge graph from document
+    Build {
+        kg_name: String,
+        document_id: String,
+        text: String,
+        metadata: Option<HashMap<String, Expression>>,
+        build_graph: bool,
+        generate_embeddings: bool,
+        extractors: Option<Vec<String>>,
+    },
+    /// Query knowledge graph with RAG
+    Query {
+        kg_name: String,
+        query_text: String,
+        max_hops: Option<u32>,
+        context_size: Option<usize>,
+        llm_provider: Option<String>,
+        search_strategy: Option<String>,
+        include_explanation: bool,
+        max_results: Option<usize>,
+    },
+    /// Extract entities and relationships only
+    Extract {
+        kg_name: String,
+        document_id: String,
+        text: String,
+        extractors: Option<Vec<String>>,
+        confidence_threshold: Option<f32>,
+    },
+    /// Find reasoning paths between entities
+    Reason {
+        kg_name: String,
+        from_entity: String,
+        to_entity: String,
+        max_hops: Option<u32>,
+        relationship_types: Option<Vec<String>>,
+        include_explanation: bool,
+        max_results: Option<usize>,
+    },
+    /// Get knowledge graph statistics
+    Stats { kg_name: String },
+    /// List entities in knowledge graph
+    Entities {
+        kg_name: String,
+        entity_type: Option<String>,
+        limit: Option<usize>,
+    },
+    /// Find similar entities
+    Similar {
+        kg_name: String,
+        entity_name: String,
+        limit: Option<usize>,
+        threshold: Option<f32>,
+    },
+}
+
 impl Statement {
     /// Returns true if this statement modifies data
     pub fn is_mutating(&self) -> bool {
@@ -554,6 +629,7 @@ impl Statement {
                 | Statement::Relate(_)
                 | Statement::Create(_)
                 | Statement::Drop(_)
+                | Statement::GraphRAG(GraphRAGStatement::Build { .. })
         )
     }
 
@@ -567,6 +643,7 @@ impl SelectStatement {
     /// Creates a new empty SELECT statement
     pub fn new() -> Self {
         Self {
+            with_clauses: Vec::new(),
             fields: vec![SelectField::All],
             from: Vec::new(),
             where_clause: None,

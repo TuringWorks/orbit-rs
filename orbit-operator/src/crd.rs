@@ -481,11 +481,11 @@ fn default_enable_compression() -> bool {
 }
 
 fn default_write_buffer_size() -> u64 {
-    134217728  // 128MB
+    134217728 // 128MB
 }
 
 fn default_cache_size() -> u64 {
-    268435456  // 256MB
+    268435456 // 256MB
 }
 
 fn default_cloud_prefix() -> String {

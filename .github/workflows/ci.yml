@@ -161,10 +161,10 @@ jobs:
 
     - name: Build documentation
       run: cargo doc --no-deps --features="resp,postgres-wire,cypher,rest"
-
-    - name: Deploy to GitHub Pages
-      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-      uses: peaceiris/actions-gh-pages@v3
+      
+    - name: Upload documentation artifacts
+      uses: actions/upload-artifact@v4
       with:
-        github_token: ${{ secrets.GITHUB_TOKEN }}
-        publish_dir: ./target/doc
+        name: rust-api-docs
+        path: target/doc/
+        retention-days: 7
