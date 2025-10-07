@@ -6,6 +6,7 @@ Welcome to the comprehensive documentation hub for Orbit-RS, a high-performance 
 
 ### Getting Started
 - **[Overview](OVERVIEW.md)** - Architecture, features, and use cases
+- **[Complete Project Overview](PROJECT_OVERVIEW_ACCURATE.md)** - Comprehensive metrics and verified statistics
 - **[Quick Start Guide](QUICK_START.md)** - Get up and running in minutes
 - **[Project Structure](PROJECT_STRUCTURE.md)** - Codebase organization and architecture
 

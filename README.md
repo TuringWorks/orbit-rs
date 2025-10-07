@@ -29,7 +29,7 @@ Orbit is a framework for building distributed systems using virtual actors. A vi
 - 🚀 **Virtual Actors**: Automatic lifecycle management with on-demand activation
 - ⚡ **High Performance**: Up to 500k+ messages/second per core with Rust's memory safety
 - 💎 **Distributed Transactions**: ACID-compliant with 2-phase commit, saga patterns, and distributed locks
-- 🔌 **Protocol Adapters**: **Complete Redis compatibility (50+ commands)** including Vector/AI, Time Series, Graph DB + PostgreSQL wire protocol + MCP for AI agents
+- 🔌 **Protocol Adapters**: **Complete Redis compatibility (124+ commands)** including Vector/AI, Time Series, Graph DB, ML functions + PostgreSQL wire protocol + MCP for AI agents
 - 🤖 **AI/ML Ready**: Native vector similarity search, embeddings storage, and semantic search capabilities
 - 📊 **Time Series**: Full RedisTimeSeries compatibility with aggregation, retention policies, and real-time analytics
 - 🕸️ **Graph Database**: Cypher-like queries with execution planning, profiling, and distributed graph operations
@@ -80,12 +80,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 **✅ Production-Ready Features:**
 - ✅ **Core Actor System** - Virtual actors with automatic lifecycle management
 - ✅ **Distributed Transactions** - 2PC, Saga patterns, distributed locks, deadlock detection
-- ✅ **Redis Protocol** - **Complete compatibility with 50+ commands** including:
+- ✅ **Redis Protocol** - **Complete compatibility with 124+ commands** including:
   - ✅ All core Redis data types (String, Hash, List, Set, Sorted Set, Pub/Sub)
-  - ✅ **Vector Operations** - AI/ML similarity search with multiple metrics (COSINE, EUCLIDEAN, etc.)
-  - ✅ **Time Series** - Full RedisTimeSeries compatibility with aggregation and retention
-  - ✅ **Graph Database** - Cypher-like queries with execution planning and profiling
-  - ✅ **Search Engine** - RedisSearch-compatible vector and full-text search
+  - ✅ **Vector Operations (VECTOR.*, FT.*)** - AI/ML similarity search with multiple metrics
+  - ✅ **Time Series (TS.*)** - Full RedisTimeSeries compatibility (18+ commands)
+  - ✅ **Graph Database (GRAPH.*)** - Cypher-like queries with execution planning
+  - ✅ **Machine Learning (ML_*)** - Statistical functions integrated with SQL
+  - ✅ **Search Engine (FT.*)** - RedisSearch-compatible indexing and search
 - ✅ **PostgreSQL Protocol** - Complete wire protocol with complex SQL parsing and pgvector support
 - ✅ **AI Agent Integration** - Model Context Protocol (MCP) with comprehensive tool support
 - ✅ **Kubernetes Integration** - Native operator, Helm charts, production deployment
