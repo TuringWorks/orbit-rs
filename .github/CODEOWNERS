@@ -1,0 +1,34 @@
+# CODEOWNERS file for Orbit-RS
+# This file defines code owners for different parts of the repository
+# Code owners are automatically requested for review when PRs are created
+
+# Global ownership - all files require review from core maintainers
+* @ravituringworks
+
+# Documentation
+docs/ @ravituringworks
+*.md @ravituringworks
+README.md @ravituringworks
+
+# Core components
+orbit-client/ @ravituringworks
+orbit-server/ @ravituringworks
+orbit-shared/ @ravituringworks
+orbit-proto/ @ravituringworks
+
+# CI/CD and infrastructure
+.github/ @ravituringworks
+Dockerfile @ravituringworks
+docker-compose.yml @ravituringworks
+Makefile @ravituringworks
+
+# Configuration files
+Cargo.toml @ravituringworks
+Cargo.lock @ravituringworks
+.gitignore @ravituringworks
+
+# Security and deployment
+SECURITY.md @ravituringworks
+.github/workflows/ @ravituringworks
+helm/ @ravituringworks
+k8s/ @ravituringworks

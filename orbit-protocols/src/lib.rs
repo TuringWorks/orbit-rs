@@ -23,6 +23,7 @@ pub mod error;
 pub mod graph_database;
 pub mod graphrag;
 pub mod mcp;
+pub mod ml; // New ML module
 pub mod postgres_wire;
 pub mod resp;
 pub mod time_series;
