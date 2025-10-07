@@ -337,10 +337,10 @@ mod tests {
         let original_orbit_test_mode = env::var("ORBIT_TEST_MODE").ok();
         let original_ci = env::var("CI").ok();
         let original_github_actions = env::var("GITHUB_ACTIONS").ok();
-        
+
         // Ensure ORBIT_TEST_MODE is not set (so CI detection logic is used)
         env::remove_var("ORBIT_TEST_MODE");
-        
+
         // Set CI environment variable
         env::set_var("CI", "true");
 
@@ -366,10 +366,10 @@ mod tests {
         let original_orbit_test_mode = env::var("ORBIT_TEST_MODE").ok();
         let original_ci = env::var("CI").ok();
         let original_github_actions = env::var("GITHUB_ACTIONS").ok();
-        
+
         // Ensure ORBIT_TEST_MODE is not set (so CI detection logic is used)
         env::remove_var("ORBIT_TEST_MODE");
-        
+
         // Set GITHUB_ACTIONS environment variable
         env::set_var("GITHUB_ACTIONS", "true");
 
