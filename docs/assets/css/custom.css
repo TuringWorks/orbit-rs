@@ -52,13 +52,17 @@ h2 {
 }
 
 /* Grid layouts for feature sections */
-.status-grid,
 .features-grid,
 .resources-grid,
 .community-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
   gap: 1.5rem;
+  margin: 2rem 0;
+}
+
+/* Status grid should not use grid layout for tables */
+.status-grid {
   margin: 2rem 0;
 }
 
@@ -69,6 +73,7 @@ h2 {
   box-shadow: 0 1px 3px rgba(0,0,0,0.12);
   border-radius: 6px;
   overflow: hidden;
+  background: white;
 }
 
 .status-grid th,
@@ -76,6 +81,7 @@ h2 {
   padding: 0.75rem 1rem;
   text-align: left;
   border-bottom: 1px solid #e1e4e8;
+  vertical-align: top;
 }
 
 .status-grid th {
@@ -86,6 +92,25 @@ h2 {
 
 .status-grid tbody tr:hover {
   background-color: #f6f8fa;
+}
+
+/* Ensure status badges display properly */
+.status-grid td strong {
+  font-weight: 600;
+}
+
+.status-grid td:first-child {
+  font-weight: 500;
+  min-width: 200px;
+}
+
+.status-grid td:nth-child(2) {
+  min-width: 120px;
+  text-align: center;
+}
+
+.status-grid td:last-child {
+  max-width: 400px;
 }
 
 /* Feature cards */
@@ -213,7 +238,6 @@ a:hover {
 
 /* Responsive design */
 @media (max-width: 768px) {
-  .status-grid,
   .features-grid,
   .resources-grid,
   .community-grid {
@@ -296,6 +320,52 @@ table tbody tr:hover {
 .emoji {
   font-size: 1.2em;
   vertical-align: middle;
+}
+
+/* Status badge styling */
+.status-complete {
+  color: #28a745;
+  font-weight: 600;
+}
+
+.status-planned {
+  color: #ffc107;
+  font-weight: 600;
+}
+
+.status-progress {
+  color: #007bff;
+  font-weight: 600;
+}
+
+/* Table specific improvements for better readability */
+table {
+  font-size: 0.95rem;
+}
+
+table td {
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+/* Status grid table mobile responsiveness */
+@media (max-width: 768px) {
+  .status-grid table {
+    font-size: 0.85rem;
+  }
+  
+  .status-grid td:first-child {
+    min-width: 150px;
+  }
+  
+  .status-grid td:nth-child(2) {
+    min-width: 100px;
+  }
+  
+  .status-grid th,
+  .status-grid td {
+    padding: 0.5rem 0.75rem;
+  }
 }
 
 /* List improvements */
