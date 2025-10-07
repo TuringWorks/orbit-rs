@@ -333,14 +333,60 @@ mod tests {
 
     #[test]
     fn test_ci_detection() {
+        // Store original values
+        let original_orbit_test_mode = env::var("ORBIT_TEST_MODE").ok();
+        let original_ci = env::var("CI").ok();
+        let original_github_actions = env::var("GITHUB_ACTIONS").ok();
+        
+        // Ensure ORBIT_TEST_MODE is not set (so CI detection logic is used)
+        env::remove_var("ORBIT_TEST_MODE");
+        
         // Set CI environment variable
         env::set_var("CI", "true");
 
         let config = TestConfig::from_env();
         assert_eq!(config.mode, TestMode::Mock);
 
-        // Clean up
+        // Clean up - restore original values
         env::remove_var("CI");
+        if let Some(val) = original_orbit_test_mode {
+            env::set_var("ORBIT_TEST_MODE", val);
+        }
+        if let Some(val) = original_ci {
+            env::set_var("CI", val);
+        }
+        if let Some(val) = original_github_actions {
+            env::set_var("GITHUB_ACTIONS", val);
+        }
+    }
+
+    #[test]
+    fn test_ci_detection_with_github_actions() {
+        // Store original values
+        let original_orbit_test_mode = env::var("ORBIT_TEST_MODE").ok();
+        let original_ci = env::var("CI").ok();
+        let original_github_actions = env::var("GITHUB_ACTIONS").ok();
+        
+        // Ensure ORBIT_TEST_MODE is not set (so CI detection logic is used)
+        env::remove_var("ORBIT_TEST_MODE");
+        
+        // Set GITHUB_ACTIONS environment variable
+        env::set_var("GITHUB_ACTIONS", "true");
+
+        let config = TestConfig::from_env();
+        assert_eq!(config.mode, TestMode::Mock);
+
+        // Clean up - restore original values
+        env::remove_var("GITHUB_ACTIONS");
+        if let Some(val) = original_orbit_test_mode {
+            env::set_var("ORBIT_TEST_MODE", val);
+        }
+        if let Some(val) = original_ci {
+            env::set_var("CI", val);
+        }
+        if let Some(val) = original_github_actions {
+            env::set_var("GITHUB_ACTIONS", val);
+        }
     }
 
     #[tokio::test]
