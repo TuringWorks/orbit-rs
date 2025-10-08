@@ -1,6 +1,6 @@
 # Orbit - Rust Implementation
 
-![License](https://img.shields.io/badge/license-BSD--3--Clause%20OR%20MIT-blue.svg)](#license)
+![License](https://img.shields.io/badge/license-BSD--3--Clause%20OR%20MIT-blue.svg)
 [![Rust Version](https://img.shields.io/badge/rust-1.70+-red.svg)](https://www.rust-lang.org/)
 
 A high-performance, distributed virtual actor system framework reimplemented in Rust, inspired by Microsoft Orleans and the original Java Orbit framework.
