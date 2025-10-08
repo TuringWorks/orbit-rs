@@ -58,7 +58,7 @@ Welcome to the comprehensive documentation hub for Orbit-RS, a high-performance 
 - **[Contributing Guide](CONTRIBUTING.md)** - How to contribute to the project
 - **[Changelog](CHANGELOG.md)** - Version history and release notes
 - **[RFC Documents](rfc/)** - Request for Comments and architectural decisions
-- **[API Documentation](https://docs.rs/orbit-rs)** - Generated API documentation
+- **[API Documentation](https://turingworks.github.io/orbit-rs/api/)** - Generated API documentation
 
 ## 🚀 **Quick Navigation**
 
@@ -91,7 +91,7 @@ Welcome to the comprehensive documentation hub for Orbit-RS, a high-performance 
 ### Code & Development
 - **[GitHub Repository](https://github.com/TuringWorks/orbit-rs)** - Source code and issues
 - **[GitHub Project](https://github.com/orgs/TuringWorks/projects/1)** - Development roadmap tracking
-- **[API Documentation](https://docs.rs/orbit-rs)** - Generated API documentation
+- **[API Documentation](https://turingworks.github.io/orbit-rs/api/)** - Generated API documentation
 - **[Contributing Guide](https://github.com/TuringWorks/orbit-rs/blob/main/CONTRIBUTING.md)** - How to contribute
 
 ### Community & Support

@@ -49,7 +49,7 @@ Perfect for developers new to Orbit-RS or distributed databases.
 ### 🛠️ **Development & API**
 For developers building applications with Orbit-RS.
 
-- [📝 **API Reference**](https://docs.rs/orbit-rs) - Complete API documentation
+- [📝 **API Reference**](https://turingworks.github.io/orbit-rs/api/) - Complete API documentation
 - [🔌 **Protocol Support**](NETWORK_LAYER.md) - Network layer and protocol details
 - [🧪 **Testing Guide**](CONTRIBUTING.md#testing) - Writing and running tests
 - [🤝 **Contributing**](CONTRIBUTING.md) - How to contribute to Orbit-RS
@@ -238,7 +238,7 @@ Orbit-RS is released under the **Apache License 2.0**.
 <div class="quick-links" markdown="1">
 
 **For Developers:**
-- [📖 API Documentation](https://docs.rs/orbit-rs) 
+- [📖 API Documentation](https://turingworks.github.io/orbit-rs/api/) 
 - [🔧 Development Setup](../DEVELOPMENT.md)
 - [🧪 Testing Guide](CONTRIBUTING.md)
 
