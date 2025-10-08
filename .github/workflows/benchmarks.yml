@@ -1,0 +1,233 @@
+# Manual Benchmark Workflow
+# Purpose: Performance testing and benchmarking for Orbit-RS
+# Trigger: Manual execution only (workflow_dispatch)
+# Focus: Comprehensive performance analysis using orbit-benchmarks
+
+name: Benchmarks
+
+on:
+  workflow_dispatch:
+    inputs:
+      benchmark_type:
+        description: 'Type of benchmark to run'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+        - all
+        - actor_benchmarks
+        - leader_election_benchmarks
+        - persistence_comparison
+      duration:
+        description: 'Benchmark duration (minutes)'
+        required: false
+        default: '5'
+        type: string
+      upload_results:
+        description: 'Upload benchmark results as artifacts'
+        required: false
+        default: true
+        type: boolean
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  benchmark:
+    name: Performance Benchmarks
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        components: rustfmt, clippy
+
+    - name: Cache Rust dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          orbit-benchmarks/target
+        key: ${{ runner.os }}-benchmark-cargo-v1-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-benchmark-cargo-v1-
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y pkg-config libssl-dev libsqlite3-dev protobuf-compiler
+
+    - name: Verify benchmark directory exists
+      run: |
+        if [ ! -d "orbit-benchmarks" ]; then
+          echo "❌ orbit-benchmarks directory not found!"
+          echo "The benchmark package has been excluded from the workspace to prevent accidental execution."
+          echo "This is expected - benchmarks should be run manually when needed."
+          exit 1
+        fi
+        echo "✅ orbit-benchmarks directory found"
+
+    - name: Build benchmark dependencies
+      run: |
+        cd orbit-benchmarks
+        echo "🔨 Building benchmark dependencies..."
+        cargo build --release
+        echo "✅ Benchmark dependencies built successfully"
+
+    - name: Run benchmarks using consolidated script
+      run: |
+        cd orbit-benchmarks
+        
+        # Map GitHub input types to script types
+        BENCHMARK_TYPE="${{ inputs.benchmark_type }}"
+        if [ "$BENCHMARK_TYPE" = "actor_benchmarks" ]; then
+          SCRIPT_TYPE="actor"
+        elif [ "$BENCHMARK_TYPE" = "leader_election_benchmarks" ]; then
+          SCRIPT_TYPE="leader"
+        elif [ "$BENCHMARK_TYPE" = "persistence_comparison" ]; then
+          SCRIPT_TYPE="persistence"
+        else
+          SCRIPT_TYPE="$BENCHMARK_TYPE"
+        fi
+        
+        echo "🚀 Running benchmarks using consolidated script..."
+        echo "Benchmark type: $SCRIPT_TYPE"
+        echo "Duration: ${{ inputs.duration }}"
+        
+        # Run benchmarks with consolidated script
+        ./scripts/run_benchmarks.sh -t "$SCRIPT_TYPE" -d "${{ inputs.duration }}" -v -o ./results
+
+    - name: Generate benchmark analysis report
+      run: |
+        cd orbit-benchmarks
+        echo "📊 Generating benchmark analysis report..."
+        
+        # The run_benchmarks.sh script already generates a summary report
+        # But let's also generate an analysis report if we have Python available
+        if command -v python3 &> /dev/null; then
+          if [ -d "./results" ] && [ -n "$(ls -A ./results 2>/dev/null)" ]; then
+            echo "Running Python analysis..."
+            python3 ./scripts/analyze_results.py --results-dir ./results --output ./results/analysis_report.html --format html || true
+            python3 ./scripts/analyze_results.py --results-dir ./results --output ./results/analysis_summary.json --format json || true
+            echo "Analysis reports generated"
+          else
+            echo "No results found for analysis"
+          fi
+        else
+          echo "Python3 not available, skipping advanced analysis"
+        fi
+        
+        # Display summary if it exists
+        if [ -f "./results/benchmark_summary.md" ]; then
+          echo "📄 Benchmark Summary:"
+          cat ./results/benchmark_summary.md
+        fi
+
+    - name: Display benchmark summary
+      run: |
+        cd orbit-benchmarks
+        if [ -f "benchmark_summary.md" ]; then
+          echo "📊 BENCHMARK SUMMARY:"
+          echo "===================="
+          cat benchmark_summary.md
+        fi
+
+    - name: Upload benchmark results
+      if: inputs.upload_results
+      uses: actions/upload-artifact@v4
+      with:
+        name: benchmark-results-${{ github.run_number }}
+        path: |
+          orbit-benchmarks/results/
+          orbit-benchmarks/target/criterion/
+        retention-days: 30
+
+    - name: Create benchmark report comment (for PRs)
+      if: github.event_name == 'pull_request' && inputs.upload_results
+      uses: actions/github-script@v7
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          const fs = require('fs');
+          const path = require('path');
+          
+          try {
+            const summaryPath = path.join('orbit-benchmarks', 'benchmark_summary.md');
+            if (fs.existsSync(summaryPath)) {
+              const summary = fs.readFileSync(summaryPath, 'utf8');
+              
+              await github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: `## 🏃‍♂️ Benchmark Results\n\n${summary}\n\n---\n*Benchmark results are available in the workflow artifacts.*`
+              });
+            }
+          } catch (error) {
+            console.log('Could not create benchmark comment:', error.message);
+          }
+
+  benchmark-notification:
+    name: Benchmark Completion Notification
+    runs-on: ubuntu-latest
+    needs: [benchmark]
+    if: always()
+    steps:
+    - name: Notify completion
+      run: |
+        if [ "${{ needs.benchmark.result }}" == "success" ]; then
+          echo "✅ Benchmark workflow completed successfully!"
+          echo "📊 Benchmark Type: ${{ inputs.benchmark_type }}"
+          echo "⏱️ Duration: ${{ inputs.duration }} minutes"
+          echo "💾 Results uploaded: ${{ inputs.upload_results }}"
+        else
+          echo "❌ Benchmark workflow failed or was cancelled"
+          echo "Check the benchmark job logs for details"
+        fi
+
+    - name: Create issue on benchmark failure
+      if: needs.benchmark.result == 'failure' && github.ref == 'refs/heads/main'
+      uses: actions/github-script@v7
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          const title = `🏃‍♂️ Benchmark Failure - ${new Date().toISOString()}`;
+          const body = `## 🚨 Benchmark Workflow Failed
+          
+          **Workflow:** ${{ github.workflow }}
+          **Run:** [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+          **Benchmark Type:** ${{ inputs.benchmark_type }}
+          **Duration:** ${{ inputs.duration }} minutes
+          **Commit:** ${{ github.sha }}
+          **Triggered by:** @${{ github.actor }}
+          
+          ### 🔍 Investigation Steps
+          - [ ] Review benchmark job logs
+          - [ ] Check for compilation errors in orbit-benchmarks
+          - [ ] Verify system dependencies are available
+          - [ ] Test benchmark execution locally
+          - [ ] Check for memory/timeout issues
+          
+          ### 🛠 Local Testing
+          \`\`\`bash
+          cd orbit-benchmarks
+          cargo build --release
+          cargo bench
+          \`\`\`
+          
+          ---
+          *This issue was automatically created by the benchmark workflow.*`;
+          
+          await github.rest.issues.create({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            title: title,
+            body: body,
+            labels: ['benchmark-failure', 'performance', 'automated']
+          });

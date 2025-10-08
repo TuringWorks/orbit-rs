@@ -127,30 +127,8 @@ jobs:
         verbose: true
         name: codecov-umbrella
 
-  benchmark:
-    name: Benchmark
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Install Rust
-      uses: dtolnay/rust-toolchain@stable
-
-    - name: Install Protocol Buffers Compiler
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y protobuf-compiler
-
-    - name: Run benchmarks
-      run: |
-        # orbit-benchmarks is excluded from workspace, so we need to build it separately
-        if [ -d "orbit-benchmarks" ]; then
-          cd orbit-benchmarks
-          cargo bench || echo "Benchmarks completed with warnings"
-        else
-          echo "orbit-benchmarks directory not found, skipping benchmarks"
-        fi
+  # Benchmarks have been moved to a separate manual workflow
+  # See .github/workflows/benchmarks.yml for performance testing
 
   docs:
     name: Documentation
