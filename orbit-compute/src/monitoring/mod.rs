@@ -3,6 +3,7 @@
 //! This module provides platform-specific system monitoring capabilities for
 //! tracking CPU, GPU, memory, thermal, and power state across different operating systems.
 
+#[cfg(target_os = "macos")]
 pub mod macos;
 
 #[cfg(target_os = "windows")]
