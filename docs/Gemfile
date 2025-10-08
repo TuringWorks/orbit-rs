@@ -8,6 +8,9 @@ gem "minima", "~> 2.5"
 gem "jekyll-feed", "~> 0.12"
 gem "jekyll-sitemap", "~> 1.4" 
 gem "jekyll-seo-tag", "~> 2.6"
+gem "jekyll-gist", "~> 1.5"
+gem "jekyll-github-metadata", "~> 2.16"
+gem "jekyll-relative-links", "~> 0.7"
 
 # Parser support
 gem "kramdown-parser-gfm", "~> 1.1"
