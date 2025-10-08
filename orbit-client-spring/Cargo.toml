@@ -10,6 +10,16 @@ description = "Orbit integration with Spring-like frameworks (Rust equivalent)"
 orbit-util = { path = "../orbit-util" }
 orbit-shared = { path = "../orbit-shared" }
 orbit-client = { path = "../orbit-client" }
-tokio.workspace = true
-serde.workspace = true
+tokio = { workspace = true, features = ["full"] }
+serde = { workspace = true, features = ["derive"] }
 anyhow.workspace = true
+async-trait = "0.1"
+thiserror = "1.0"
+tracing = "0.1"
+once_cell = "1.19"
+dashmap = "5.5"
+uuid = { version = "1.10", features = ["v4", "serde"] }
+serde_yaml = "0.9"
+tokio-util = "0.7"
+chrono = { version = "0.4", features = ["serde"] }
+serde_json = "1.0"

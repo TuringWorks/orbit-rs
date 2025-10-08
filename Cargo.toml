@@ -6,6 +6,7 @@ members = [
     "orbit-shared", 
     "orbit-proto",
     "orbit-client",
+    "orbit-client-spring",
     "orbit-server",
     "orbit-server-etcd", 
     "orbit-server-prometheus",
