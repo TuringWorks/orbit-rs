@@ -88,6 +88,6 @@ metrics-exporter-prometheus = "0.15"
 # Testing
 mockall = "0.13"
 cucumber = "0.21"
-proptest = "1.4"
+proptest = { version = "1.4", features = ["full"] }
 tokio-test = "0.4"
 rand = "0.8"

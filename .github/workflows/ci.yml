@@ -80,8 +80,8 @@ jobs:
       run: |
         # Set linker flags to reduce memory usage
         export RUSTFLAGS="-C link-arg=-Wl,--no-keep-memory"
-        # Run tests with reduced parallelism
-        cargo test --verbose --jobs 2
+        # Run tests with reduced parallelism and shorter timeout
+        cargo test --verbose --jobs 1 --lib
 
     - name: Build examples
       run: |
@@ -134,7 +134,8 @@ jobs:
         export RUSTFLAGS="-C link-arg=-Wl,--no-keep-memory"
         # Use tarpaulin config file and focus on core packages only
         cargo tarpaulin --config tarpaulin.toml --verbose --timeout 300 --out Xml --output-dir ./coverage \
-          --packages orbit-shared,orbit-util,orbit-proto,orbit-compute,orbit-client,orbit-protocols,orbit-server,orbit-operator
+          --package orbit-shared --package orbit-util --package orbit-proto --package orbit-compute \
+          --package orbit-client --package orbit-protocols --package orbit-server --package orbit-operator
 
     - name: Upload to codecov.io
       uses: codecov/codecov-action@v4
