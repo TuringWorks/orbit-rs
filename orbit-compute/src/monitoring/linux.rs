@@ -30,18 +30,23 @@ pub struct LinuxSystemMonitor {
     cached_conditions: Arc<RwLock<SystemConditions>>,
 
     /// CPU monitoring interface
+    #[allow(dead_code)]
     cpu_monitor: LinuxCPUMonitor,
 
     /// Memory monitoring interface
+    #[allow(dead_code)]
     memory_monitor: LinuxMemoryMonitor,
 
     /// GPU monitoring interface
+    #[allow(dead_code)]
     gpu_monitor: Option<LinuxGPUMonitor>,
 
     /// Thermal monitoring interface
+    #[allow(dead_code)]
     thermal_monitor: LinuxThermalMonitor,
 
     /// Power monitoring interface
+    #[allow(dead_code)]
     power_monitor: LinuxPowerMonitor,
 }
 
@@ -782,11 +787,7 @@ impl LinuxSystemMonitor {
     async fn get_cpu_governors() -> Result<Vec<String>, ComputeError> {
         let path = "/sys/devices/system/cpu/cpu0/cpufreq/scaling_available_governors";
         if let Ok(content) = fs::read_to_string(path) {
-            Ok(content
-                .trim()
-                .split_whitespace()
-                .map(|s| s.to_string())
-                .collect())
+            Ok(content.split_whitespace().map(|s| s.to_string()).collect())
         } else {
             Ok(vec!["performance".to_string(), "powersave".to_string()])
         }
@@ -820,7 +821,7 @@ impl LinuxSystemMonitor {
         for line in meminfo.lines() {
             if let Some((key, value)) = line.split_once(':') {
                 let key = key.trim();
-                if let Some(num_str) = value.trim().split_whitespace().next() {
+                if let Some(num_str) = value.split_whitespace().next() {
                     if let Ok(num) = num_str.parse::<u64>() {
                         mem_data.insert(key.to_string(), num);
                     }

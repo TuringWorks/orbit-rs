@@ -35,7 +35,7 @@ pub enum SystemMonitor {
 
     /// Linux system monitor
     #[cfg(target_os = "linux")]
-    Linux(linux::LinuxSystemMonitor),
+    Linux(Box<linux::LinuxSystemMonitor>),
 
     /// Android system monitor
     #[cfg(target_os = "android")]
@@ -80,7 +80,7 @@ impl SystemMonitor {
         #[cfg(target_os = "linux")]
         {
             let monitor = linux::LinuxSystemMonitor::new().await?;
-            Ok(SystemMonitor::Linux(monitor))
+            Ok(SystemMonitor::Linux(Box::new(monitor)))
         }
 
         #[cfg(target_os = "android")]
@@ -170,7 +170,7 @@ impl SystemMonitor {
             #[cfg(target_os = "linux")]
             SystemMonitor::Linux(monitor) => {
                 let info = monitor.get_system_info();
-                SystemInfo::Linux(info)
+                SystemInfo::Linux(Box::new(info))
             }
 
             #[cfg(target_os = "android")]
@@ -206,7 +206,7 @@ pub enum SystemInfo {
 
     /// Linux system information
     #[cfg(target_os = "linux")]
-    Linux(linux::LinuxSystemInfo),
+    Linux(Box<linux::LinuxSystemInfo>),
 
     /// Android system information
     #[cfg(target_os = "android")]

@@ -1344,60 +1344,60 @@ fn detect_x86_64_capabilities() -> Result<CPUCapabilities, ComputeError> {
     let simd = SIMDCapabilities {
         x86_features: Some(X86SIMDFeatures {
             sse: SSESupport {
-                sse: feature_info.as_ref().map_or(false, |fi| fi.has_sse()),
-                sse2: feature_info.as_ref().map_or(false, |fi| fi.has_sse2()),
-                sse3: feature_info.as_ref().map_or(false, |fi| fi.has_sse3()),
-                ssse3: feature_info.as_ref().map_or(false, |fi| fi.has_ssse3()),
-                sse4_1: feature_info.as_ref().map_or(false, |fi| fi.has_sse41()),
-                sse4_2: feature_info.as_ref().map_or(false, |fi| fi.has_sse42()),
+                sse: feature_info.as_ref().is_some_and(|fi| fi.has_sse()),
+                sse2: feature_info.as_ref().is_some_and(|fi| fi.has_sse2()),
+                sse3: feature_info.as_ref().is_some_and(|fi| fi.has_sse3()),
+                ssse3: feature_info.as_ref().is_some_and(|fi| fi.has_ssse3()),
+                sse4_1: feature_info.as_ref().is_some_and(|fi| fi.has_sse41()),
+                sse4_2: feature_info.as_ref().is_some_and(|fi| fi.has_sse42()),
             },
             avx: AVXSupport {
-                avx: feature_info.as_ref().map_or(false, |fi| fi.has_avx()),
-                avx2: extended_features.as_ref().map_or(false, |ef| ef.has_avx2()),
+                avx: feature_info.as_ref().is_some_and(|fi| fi.has_avx()),
+                avx2: extended_features.as_ref().is_some_and(|ef| ef.has_avx2()),
                 avx512f: extended_features
                     .as_ref()
-                    .map_or(false, |ef| ef.has_avx512f()),
+                    .is_some_and(|ef| ef.has_avx512f()),
                 avx512bw: extended_features
                     .as_ref()
-                    .map_or(false, |ef| ef.has_avx512bw()),
+                    .is_some_and(|ef| ef.has_avx512bw()),
                 avx512cd: extended_features
                     .as_ref()
-                    .map_or(false, |ef| ef.has_avx512cd()),
+                    .is_some_and(|ef| ef.has_avx512cd()),
                 avx512dq: extended_features
                     .as_ref()
-                    .map_or(false, |ef| ef.has_avx512dq()),
+                    .is_some_and(|ef| ef.has_avx512dq()),
                 avx512vl: extended_features
                     .as_ref()
-                    .map_or(false, |ef| ef.has_avx512vl()),
+                    .is_some_and(|ef| ef.has_avx512vl()),
                 avx512_vnni: extended_features
                     .as_ref()
-                    .map_or(false, |ef| ef.has_avx512vnni()),
+                    .is_some_and(|ef| ef.has_avx512vnni()),
                 avx512_bf16: false, // Would need more detailed detection
                 avx512_fp16: false, // Would need more detailed detection
             },
-            fma: feature_info.as_ref().map_or(false, |fi| fi.has_fma()),
+            fma: feature_info.as_ref().is_some_and(|fi| fi.has_fma()),
             bmi: BMISupport {
-                bmi1: extended_features.as_ref().map_or(false, |ef| ef.has_bmi1()),
-                bmi2: extended_features.as_ref().map_or(false, |ef| ef.has_bmi2()),
+                bmi1: extended_features.as_ref().is_some_and(|ef| ef.has_bmi1()),
+                bmi2: extended_features.as_ref().is_some_and(|ef| ef.has_bmi2()),
             },
         }),
         arm_features: None,
         optimal_vector_width: if extended_features
             .as_ref()
-            .map_or(false, |ef| ef.has_avx512f())
+            .is_some_and(|ef| ef.has_avx512f())
         {
             64 // 512 bits = 64 bytes
-        } else if extended_features.as_ref().map_or(false, |ef| ef.has_avx2()) {
+        } else if extended_features.as_ref().is_some_and(|ef| ef.has_avx2()) {
             32 // 256 bits = 32 bytes
         } else {
             16 // 128 bits = 16 bytes (SSE)
         },
         max_vector_width: if extended_features
             .as_ref()
-            .map_or(false, |ef| ef.has_avx512f())
+            .is_some_and(|ef| ef.has_avx512f())
         {
             64
-        } else if extended_features.as_ref().map_or(false, |ef| ef.has_avx2()) {
+        } else if extended_features.as_ref().is_some_and(|ef| ef.has_avx2()) {
             32
         } else {
             16
