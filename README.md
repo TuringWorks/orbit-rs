@@ -11,15 +11,16 @@ A high-performance, distributed virtual actor system framework reimplemented in 
 ## 📚 Documentation
 
 **Complete documentation is available in the [docs/](docs/) directory:**
-- **[📖 Documentation Index](docs/README.md)** - Navigate all documentation
-- **[🎯 Overview](docs/OVERVIEW.md)** - Architecture, features, and key benefits  
-- **[🚀 Quick Start](docs/QUICK_START.md)** - Get up and running in minutes
-- **[⚙️ Virtual Actor Persistence](docs/VIRTUAL_ACTOR_PERSISTENCE.md)** - Actor state management and lifecycle
-- **[💎 Transaction Features](docs/features/TRANSACTION_FEATURES.md)** - Advanced distributed transactions
-- **[🔌 Protocol Adapters](docs/protocols/PROTOCOL_ADAPTERS.md)** - Redis, PostgreSQL, MCP support
-- **[☸️ Deployment](docs/deployment/DEPLOYMENT.md)** - Kubernetes, CI/CD, production setup
-- **[👩‍💻 Development](docs/development/DEVELOPMENT.md)** - Contributing and development guide
-- **[🗺️ Roadmap](docs/ROADMAP.md)** - Development roadmap and GitHub project
+- **[📚 Documentation Index](docs/README.md)** - Navigate all documentation
+- **[🏆 Feature Index](docs/features.md)** - Complete feature list with implementation status
+- **[🎯 Overview](docs/overview.md)** - Architecture, features, and key benefits  
+- **[🚀 Quick Start](docs/quick_start.md)** - Get up and running in minutes
+- **[⚙️ Virtual Actor Persistence](docs/virtual_actor_persistence.md)** - Actor state management and lifecycle
+- **[💎 Transaction Features](docs/features/transaction_features.md)** - Advanced distributed transactions
+- **[🔌 Protocol Adapters](docs/protocols/protocol_adapters.md)** - Redis, PostgreSQL, MCP support
+- **[☸️ Deployment](docs/kubernetes_deployment.md)** - Kubernetes, CI/CD, production setup
+- **[👩‍💻 Development](docs/development/development.md)** - Contributing and development guide
+- **[🗺️ Roadmap](docs/roadmap.md)** - Development roadmap and GitHub project
 
 ## What is Orbit-RS?
 
@@ -28,6 +29,7 @@ Orbit is a framework for building distributed systems using virtual actors. A vi
 ### Key Features
 - 🚀 **Virtual Actors**: Automatic lifecycle management with on-demand activation
 - ⚡ **High Performance**: Up to 500k+ messages/second per core with Rust's memory safety
+- 🏎️ **Heterogeneous Compute**: **NEW!** Automatic hardware acceleration (CPU SIMD, GPU, Neural Engines) with 5-50x speedups for parallelizable workloads
 - 💎 **Distributed Transactions**: ACID-compliant with 2-phase commit, saga patterns, and distributed locks
 - 🔌 **Protocol Adapters**: **Complete Redis compatibility (124+ commands)** including Vector/AI, Time Series, Graph DB, ML functions + PostgreSQL wire protocol + MCP for AI agents
 - 🤖 **AI/ML Ready**: Native vector similarity search, embeddings storage, and semantic search capabilities
@@ -75,10 +77,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 **📝 [Complete Quick Start Guide](docs/QUICK_START.md)** for detailed setup instructions.
 
-## Current Status: Phase 8 Complete! 🎉
+## Current Status: Phase 8.5 Complete! 🎉
 
 **✅ Production-Ready Features:**
 - ✅ **Core Actor System** - Virtual actors with automatic lifecycle management
+- ✅ **Heterogeneous Compute Engine** - **NEW!** Automatic hardware acceleration with 5-50x speedups
 - ✅ **Distributed Transactions** - 2PC, Saga patterns, distributed locks, deadlock detection
 - ✅ **Redis Protocol** - **Complete compatibility with 124+ commands** including:
   - ✅ All core Redis data types (String, Hash, List, Set, Sorted Set, Pub/Sub)

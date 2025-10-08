@@ -52,6 +52,9 @@ fastrand = "2.0"
 
 # Statistics
 statistical = "1.0"
+num_cpus = "1.0"
+thiserror = "1.0"
+futures = "0.3"
 
 [[bench]]
 name = "actor_benchmarks"

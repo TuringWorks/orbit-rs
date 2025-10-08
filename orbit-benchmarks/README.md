@@ -73,14 +73,56 @@ If you need to run persistence benchmarks:
 2. Consider running individual benchmark functions rather than the full suite
 3. Monitor the benchmark process and kill it if it hangs
 
-## Integration with Main Workspace
+## CI/CD Integration
 
-The benchmarks can still be run from the main workspace root using:
+### Exclusion from Regular CI/CD
 
+Benchmarks are **completely excluded** from regular CI/CD pipelines to:
+- Prevent accidental execution that could slow down builds
+- Avoid WAL replay issues in automated environments
+- Keep CI/CD focused on correctness rather than performance
+
+### Manual Benchmark Execution
+
+Benchmarks can be run manually via GitHub Actions:
+1. Go to the **Actions** tab in the repository
+2. Select the **Benchmarks** workflow
+3. Click **Run workflow** 
+4. Choose benchmark type and duration
+
+The manual workflow supports:
+- **All benchmarks**: Runs all available benchmarks
+- **Specific benchmarks**: Run only actor, leader election, or persistence benchmarks
+- **Custom duration**: Set timeout to prevent infinite loops
+- **Artifact upload**: Save results for analysis
+
+### Local Development
+
+#### Running from Workspace Root
 ```bash
 # From the workspace root
 cd orbit-benchmarks && cargo bench --bench actor_benchmarks
 cd orbit-benchmarks && cargo bench --bench leader_election_benchmarks
 ```
 
-But they are excluded from `cargo build --workspace` and similar commands to prevent build issues.
+#### Running from Benchmarks Directory
+```bash
+# Navigate to benchmarks directory
+cd orbit-benchmarks
+
+# Run all benchmarks (be careful with persistence_comparison)
+cargo bench
+
+# Run specific benchmarks
+cargo bench --bench actor_benchmarks
+cargo bench --bench leader_election_benchmarks
+```
+
+#### Integration with Workspace
+Benchmarks are excluded from:
+- `cargo build --workspace` (to prevent accidental builds)
+- `cargo test --workspace` (to avoid test interference) 
+- Regular CI/CD pipelines (to keep builds fast)
+- Automatic dependency updates (to avoid version conflicts)
+
+But they can still access workspace dependencies through path-based references.

@@ -20,11 +20,11 @@ plugins:
 # Navigation structure
 header_pages:
   - index.md
-  - PROJECT_OVERVIEW.md
-  - QUICK_START.md
-  - ROADMAP_CONSOLIDATED.md
-  - BACKLOG_CONSOLIDATED.md
-  - CONTRIBUTING.md
+  - project_overview.md
+  - quick_start.md
+  - roadmap.md
+  - features.md
+  - contributing.md
 
 # Site configuration
 markdown: kramdown
