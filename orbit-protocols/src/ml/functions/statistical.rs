@@ -349,6 +349,7 @@ fn compute_linear_regression(features: &[Vec<f64>], targets: &[f64]) -> MLResult
 }
 
 /// Solve linear system Ax = b using Gaussian elimination
+#[allow(clippy::needless_range_loop)]
 fn solve_linear_system(mut a: Vec<Vec<f64>>, mut b: Vec<f64>) -> MLResult<Vec<f64>> {
     let n = a.len();
 
