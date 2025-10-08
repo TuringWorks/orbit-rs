@@ -5,30 +5,30 @@ Welcome to the comprehensive documentation hub for Orbit-RS, a high-performance 
 ## 📚 **Consolidated Documentation Index**
 
 ### **🚀 Getting Started**
-- **[Project Overview](PROJECT_OVERVIEW.md)** - Comprehensive project overview with verified metrics and architecture
-- **[Quick Start Guide](QUICK_START.md)** - Get up and running in minutes
-- **[Development Guide](DEVELOPMENT.md)** - Complete setup and development instructions
-- **[Contributing Guide](CONTRIBUTING.md)** - How to contribute to the project
+- **[Project Overview](project_overview.md)** - Comprehensive project overview with verified metrics and architecture
+- **[Quick Start Guide](quick_start.md)** - Get up and running in minutes
+- **[Development Guide](development/development.md)** - Complete setup and development instructions
+- **[Contributing Guide](contributing.md)** - How to contribute to the project
 
-### **🏗️ Architecture & Core Features**
-- **[Virtual Actor Persistence](VIRTUAL_ACTOR_PERSISTENCE.md)** - Actor state persistence, activation, and lifecycle management
+### **🏥️ Architecture & Core Features**
+- **[Virtual Actor Persistence](virtual_actor_persistence.md)** - Actor state persistence, activation, and lifecycle management
 - **[Storage Backend Independence](STORAGE_BACKEND_INDEPENDENCE.md)** - Cloud vs local storage architecture
-- **[Transaction Features](ADVANCED_TRANSACTION_FEATURES.md)** - Distributed transactions, locks, saga patterns, and security
-- **[Protocol Adapters](protocols/PROTOCOL_ADAPTERS.md)** - Redis, PostgreSQL, and MCP protocol support
+- **[Transaction Features](advanced_transaction_features.md)** - Distributed transactions, locks, saga patterns, and security
+- **[Protocol Adapters](protocols/protocol_adapters.md)** - Redis, PostgreSQL, and MCP protocol support
 - **[Persistence Architecture](PERSISTENCE_ARCHITECTURE.md)** - Storage backends and provider configuration
 - **[Network Layer](NETWORK_LAYER.md)** - gRPC services, Protocol Buffers, and communication
 - **[Cluster Management](CLUSTER_MANAGEMENT.md)** - Node discovery, load balancing, and fault tolerance
 
 ### **🔗 Protocol Support**
 - **[Graph Database](GRAPH_DATABASE.md)** - Complete graph operations and Cypher-like queries
-- **[Graph Commands](GRAPH_COMMANDS.md)** - Graph database command reference
-- **[Vector Operations](VECTOR_COMMANDS.md)** - AI/ML vector database capabilities
-- **[Time Series Commands](TIMESERIES_COMMANDS.md)** - Time-series data management and analytics
+- **[Graph Commands](graph_commands.md)** - Graph database command reference
+- **[Vector Operations](vector_commands.md)** - AI/ML vector database capabilities
+- **[Time Series Commands](timeseries_commands.md)** - Time-series data management and analytics
 - **[ML Functions](ML_SQL_FUNCTIONS_DESIGN.md)** - Machine learning functions integrated with SQL
 - **[AQL Reference](AQL_REFERENCE.md)** - ArangoDB Query Language compatibility
 
 ### **☁️ Operations & Deployment**
-- **[Kubernetes Deployment](KUBERNETES_DEPLOYMENT.md)** - Production Kubernetes deployment
+- **[Kubernetes Deployment](kubernetes_deployment.md)** - Production Kubernetes deployment
 - **[Kubernetes Storage Guide](KUBERNETES_STORAGE_GUIDE.md)** - Complete guide to persistence in Kubernetes
 - **[Kubernetes Persistence](KUBERNETES_PERSISTENCE.md)** - Quick setup for K8s persistence backends
 - **[CI/CD Pipeline](CICD.md)** - Continuous integration and deployment

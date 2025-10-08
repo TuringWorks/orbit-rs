@@ -15,6 +15,7 @@ This directory contains RFC documents for Orbit-RS. RFCs are design documents th
 | RFC | Title | Status | Author |
 |-----|-------|--------|---------|
 | [RFC_PERSISTENCE_ALTERNATIVES](./RFC_PERSISTENCE_ALTERNATIVES.md) | Persistence Alternatives Analysis | Implemented | Team |
+| [RFC_HETEROGENEOUS_COMPUTE](./RFC_HETEROGENEOUS_COMPUTE.md) | Heterogeneous Compute Engine | Implemented | AI Agent, Ravindra Boddipalli |
 
 ## RFC Template
 
