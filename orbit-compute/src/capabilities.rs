@@ -1371,7 +1371,7 @@ fn detect_x86_64_capabilities() -> Result<CPUCapabilities, ComputeError> {
                     .map_or(false, |ef| ef.has_avx512vl()),
                 avx512_vnni: extended_features
                     .as_ref()
-                    .map_or(false, |ef| ef.has_avx512_vnni()),
+                    .map_or(false, |ef| ef.has_avx512vnni()),
                 avx512_bf16: false, // Would need more detailed detection
                 avx512_fp16: false, // Would need more detailed detection
             },
@@ -1415,10 +1415,10 @@ fn detect_x86_64_capabilities() -> Result<CPUCapabilities, ComputeError> {
         efficiency_cores: 0, // x86-64 typically doesn't have E-cores (except Intel 12th gen+)
         base_frequency_mhz: processor_frequency
             .as_ref()
-            .map_or(0, |pf| pf.processor_base_frequency()),
+            .map_or(0, |pf| pf.processor_base_frequency().into()),
         max_frequency_mhz: processor_frequency
             .as_ref()
-            .map_or(0, |pf| pf.processor_max_frequency()),
+            .map_or(0, |pf| pf.processor_max_frequency().into()),
         hyperthreading: num_cpus::get() > num_cpus::get_physical(),
     };
 

@@ -955,10 +955,10 @@ impl LinuxSystemMonitor {
         let power_supplies = Self::get_power_supplies().await.unwrap_or_default();
 
         Ok(LinuxHardwareInfo {
-            manufacturer,
-            product_name,
-            version,
-            serial_number,
+            manufacturer: manufacturer.ok(),
+            product_name: product_name.ok(),
+            version: version.ok(),
+            serial_number: serial_number.ok(),
             bios_info,
             board_info,
             thermal_zones,
@@ -1212,7 +1212,7 @@ impl LinuxSystemMonitor {
         let thermal_throttling = Self::is_thermal_throttling().await.unwrap_or(false);
 
         // Estimate concurrent workloads (from load average)
-        let concurrent_workloads = Self::get_load_average().await.unwrap_or(1.0) as u8;
+        let concurrent_workloads = Self::get_load_average().await.unwrap_or(1.0) as u32;
 
         // Determine power state (simplified)
         let power_state = Self::determine_power_state().await;

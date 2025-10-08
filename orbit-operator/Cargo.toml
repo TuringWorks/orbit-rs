@@ -25,7 +25,6 @@ futures = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_yaml = "0.9"
-jsonschema = "0.18"
 schemars = { version = "0.8", features = ["chrono"] }
 
 # Error handling
