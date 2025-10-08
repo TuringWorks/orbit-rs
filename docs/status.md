@@ -27,7 +27,7 @@ permalink: /status/
 
 ## 🎯 Current Phase Status
 
-<div class="current-status">
+<div class="current-status" markdown="1">
 
 ### **Phase 8: SQL Query Engine** ✅ **COMPLETE**
 **Comprehensive SQL Engine with Vector Database Capabilities**
@@ -53,7 +53,7 @@ Orbit-RS has successfully completed Phase 8, delivering enterprise-grade SQL cap
 
 ## 📈 Development Progress
 
-<div class="progress-overview">
+<div class="progress-overview" markdown="1">
 
 ### 🎯 **Overall Completion: 42%**
 
@@ -84,7 +84,7 @@ Orbit-RS has successfully completed Phase 8, delivering enterprise-grade SQL cap
 
 ## 🧪 Test Status & Quality Metrics
 
-<div class="quality-metrics">
+<div class="quality-metrics" markdown="1">
 
 ### ✅ **Test Suite Status**
 **79 Tests Passing** across all components
@@ -123,7 +123,7 @@ Orbit-RS has successfully completed Phase 8, delivering enterprise-grade SQL cap
 
 ## 🚀 Performance Benchmarks
 
-<div class="performance-section">
+<div class="performance-section" markdown="1">
 
 ### 📊 **Current Performance** *(Phase 8)*
 
@@ -160,7 +160,7 @@ Phase 9 will focus on 10x performance improvements through:
 
 ## 🏗️ Architecture Status
 
-<div class="architecture-status">
+<div class="architecture-status" markdown="1">
 
 ### ✅ **Completed Components**
 
@@ -214,7 +214,7 @@ Phase 9 will focus on 10x performance improvements through:
 
 ## 📊 GitHub Activity & Community
 
-<div class="community-status">
+<div class="community-status" markdown="1">
 
 ### 📈 **Repository Statistics**
 - **GitHub Stars**: 1,200+ (growing)
@@ -241,7 +241,7 @@ Phase 9 will focus on 10x performance improvements through:
 
 ## 🗓️ Upcoming Milestones
 
-<div class="milestones-section">
+<div class="milestones-section" markdown="1">
 
 ### 🎯 **Next 90 Days**
 - **Phase 9 Kickoff**: Query optimization planning
@@ -267,7 +267,7 @@ Phase 9 will focus on 10x performance improvements through:
 
 ## 📊 Real-Time Status Dashboard
 
-<div class="dashboard-section">
+<div class="dashboard-section" markdown="1">
 
 ### 🚦 **System Status**
 - **Build Status**: [![Build](https://img.shields.io/badge/Build-Passing-brightgreen.svg)](https://github.com/TuringWorks/orbit-rs/actions)
@@ -292,7 +292,7 @@ Access real-time development metrics:
 
 ---
 
-<div class="footer-nav">
+<div class="footer-nav" markdown="1">
 
 **📍 Navigation:**  
 [🏠 Home](index.md) | [🗺️ Roadmap](roadmap.md) | [🏗️ Architecture](architecture.md) | [🚀 Quick Start](quick-start.md)

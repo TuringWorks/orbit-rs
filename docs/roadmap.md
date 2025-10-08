@@ -26,7 +26,7 @@ permalink: /roadmap/
 
 ## 📈 Progress Overview
 
-<div class="progress-section">
+<div class="progress-section" markdown="1">
 
 ### 🎯 **Current Milestone: Phase 8 Complete** 
 **SQL Query Engine with Vector Operations**
@@ -46,7 +46,7 @@ Orbit-RS has successfully completed Phase 8, delivering a comprehensive SQL engi
 
 ## ✅ Completed Phases
 
-<div class="completed-phases">
+<div class="completed-phases" markdown="1">
 
 ### Phase 1: Foundation *(Complete)*
 **Multi-crate workspace with comprehensive testing**
@@ -118,12 +118,12 @@ Orbit-RS has successfully completed Phase 8, delivering a comprehensive SQL engi
 
 ## 🚀 Upcoming Phases
 
-<div class="upcoming-phases">
+<div class="upcoming-phases" markdown="1">
 
 ### 🎯 **Phase 9: Query Optimization & Performance** *(Q2 2024)*
 **Transform into high-performance enterprise database**
 
-<div class="phase-details">
+<div class="phase-details" markdown="1">
 
 **Duration:** 19-25 weeks | **Priority:** High | **Team Size:** 8-12 engineers
 
@@ -164,7 +164,7 @@ Orbit-RS has successfully completed Phase 8, delivering a comprehensive SQL engi
 ### 🏭 **Phase 10: Production Readiness** *(Q3 2024)*
 **Enterprise operations and reliability**
 
-<div class="phase-details">
+<div class="phase-details" markdown="1">
 
 **Duration:** 21-29 weeks | **Priority:** High | **Team Size:** 10-15 engineers
 
@@ -204,7 +204,7 @@ Orbit-RS has successfully completed Phase 8, delivering a comprehensive SQL engi
 ### 🎛️ **Phase 11: Advanced Features** *(Q4 2024)*
 **Modern database capabilities**
 
-<div class="phase-details">
+<div class="phase-details" markdown="1">
 
 **Duration:** 25-31 weeks | **Priority:** High | **Team Size:** 8-12 engineers
 
@@ -239,7 +239,7 @@ Orbit-RS has successfully completed Phase 8, delivering a comprehensive SQL engi
 ### 📈 **Phase 12: Time Series Database** *(Q1 2025)*
 **High-performance time-series capabilities**
 
-<div class="phase-details">
+<div class="phase-details" markdown="1">
 
 **Duration:** 22-34 weeks | **Priority:** High | **Team Size:** 6-10 engineers
 
@@ -266,7 +266,7 @@ Orbit-RS has successfully completed Phase 8, delivering a comprehensive SQL engi
 ### 🕸️ **Phase 13: Neo4j Bolt Protocol** *(Q2 2025)*
 **Complete graph database compatibility**
 
-<div class="phase-details">
+<div class="phase-details" markdown="1">
 
 **Duration:** 30-36 weeks | **Priority:** High | **Team Size:** 12-18 engineers
 
@@ -298,7 +298,7 @@ Orbit-RS has successfully completed Phase 8, delivering a comprehensive SQL engi
 ### 🔄 **Phase 14: Distributed Query Processing** *(Q3 2025)*
 **Cross-node query optimization**
 
-<div class="phase-details">
+<div class="phase-details" markdown="1">
 
 **Duration:** 18-24 weeks | **Priority:** Medium | **Team Size:** 8-12 engineers
 
@@ -325,7 +325,7 @@ Orbit-RS has successfully completed Phase 8, delivering a comprehensive SQL engi
 ### 🗄️ **Phase 15: ArangoDB Multi-Model** *(Q3 2025)*
 **Unified multi-model database**
 
-<div class="phase-details">
+<div class="phase-details" markdown="1">
 
 **Duration:** 36-42 weeks | **Priority:** High | **Team Size:** 15-20 engineers
 
@@ -357,7 +357,7 @@ Orbit-RS has successfully completed Phase 8, delivering a comprehensive SQL engi
 ### 🤖 **Phase 16: GraphML & GraphRAG** *(Q4 2025 - Q1 2026)*
 **AI-powered graph analytics**
 
-<div class="phase-details">
+<div class="phase-details" markdown="1">
 
 **Duration:** 28-34 weeks | **Priority:** High | **Team Size:** 12-18 engineers
 
@@ -384,7 +384,7 @@ Orbit-RS has successfully completed Phase 8, delivering a comprehensive SQL engi
 ### 🔌 **Phase 17: Additional Protocol Support** *(Q1 2026)*
 **Extended protocol compatibility**
 
-<div class="phase-details">
+<div class="phase-details" markdown="1">
 
 **Duration:** 16-20 weeks | **Priority:** Medium | **Team Size:** 8-12 engineers
 
@@ -409,7 +409,7 @@ Orbit-RS has successfully completed Phase 8, delivering a comprehensive SQL engi
 ### ☁️ **Phase 18: Cloud-Native Features** *(Q2 2026)*
 **Multi-cloud and edge deployment**
 
-<div class="phase-details">
+<div class="phase-details" markdown="1">
 
 **Duration:** 14-18 weeks | **Priority:** Medium | **Team Size:** 10-15 engineers
 
@@ -432,7 +432,7 @@ Orbit-RS has successfully completed Phase 8, delivering a comprehensive SQL engi
 ### 🏢 **Phase 19: Enterprise Features** *(Q3 2026)*
 **Enterprise integration and support**
 
-<div class="phase-details">
+<div class="phase-details" markdown="1">
 
 **Duration:** 12-16 weeks | **Priority:** Medium | **Team Size:** 8-12 engineers
 
@@ -456,7 +456,7 @@ Orbit-RS has successfully completed Phase 8, delivering a comprehensive SQL engi
 
 ## 📊 Resource Planning
 
-<div class="resource-planning">
+<div class="resource-planning" markdown="1">
 
 ### 👥 **Team Scaling**
 
@@ -488,7 +488,7 @@ Orbit-RS has successfully completed Phase 8, delivering a comprehensive SQL engi
 
 ## 🗺️ Visual Timeline
 
-<div class="timeline-visual">
+<div class="timeline-visual" markdown="1">
 
 ```mermaid
 gantt
@@ -523,7 +523,7 @@ gantt
 
 ## 📈 Key Milestones
 
-<div class="milestones">
+<div class="milestones" markdown="1">
 
 ### 🎯 **2024 Milestones**
 - **Q2 2024:** Phase 9 complete - 10x query performance improvement
@@ -546,7 +546,7 @@ gantt
 
 ## 🤝 Get Involved
 
-<div class="get-involved">
+<div class="get-involved" markdown="1">
 
 ### 📋 **Track Progress**
 - [📊 **GitHub Project Board**](https://github.com/TuringWorks/orbit-rs/projects) - Real-time progress tracking
@@ -567,7 +567,7 @@ gantt
 
 ---
 
-<div class="footer-nav">
+<div class="footer-nav" markdown="1">
 
 **📍 Navigation:**  
 [🏠 Home](index.md) | [📊 Status](status.md) | [🏗️ Architecture](architecture.md) | [🚀 Quick Start](quick-start.md)

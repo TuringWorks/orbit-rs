@@ -90,7 +90,7 @@ Project status, roadmap, and community information.
 
 Orbit-RS has reached **Phase 8** completion with a fully functional SQL engine and multi-protocol support:
 
-<div class="status-grid">
+<div class="status-grid" markdown="1">
 
 | Component | Status | Features |
 |-----------|--------|----------|
@@ -117,7 +117,7 @@ Orbit-RS has reached **Phase 8** completion with a fully functional SQL engine a
 
 ## 🌟 Key Features
 
-<div class="features-grid">
+<div class="features-grid" markdown="1">
 
 ### 🎭 **Distributed Actor System**
 Built on a powerful actor model for scalable, fault-tolerant distributed computing.
@@ -174,7 +174,7 @@ Orbit-RS follows a structured development approach with clearly defined phases:
 
 ## 🎓 Learning Resources
 
-<div class="resources-grid">
+<div class="resources-grid" markdown="1">
 
 ### 📖 **Tutorials**
 - [🚀 **Getting Started Tutorial**](QUICK_START.md) - Your first Orbit-RS application
@@ -198,7 +198,7 @@ Orbit-RS follows a structured development approach with clearly defined phases:
 
 ## 🤝 Community & Support
 
-<div class="community-grid">
+<div class="community-grid" markdown="1">
 
 ### 💬 **Get Help**
 - [💬 **Discord Community**](https://discord.gg/orbit-rs) - Real-time chat and support
@@ -235,7 +235,7 @@ Orbit-RS is released under the **Apache License 2.0**.
 
 ## 🎯 Quick Links
 
-<div class="quick-links">
+<div class="quick-links" markdown="1">
 
 **For Developers:**
 - [📖 API Documentation](https://docs.rs/orbit-rs) 
@@ -256,7 +256,7 @@ Orbit-RS is released under the **Apache License 2.0**.
 
 ---
 
-<div class="footer-info">
+<div class="footer-info" markdown="1">
 
 **🌟 Star us on GitHub:** [TuringWorks/orbit-rs](https://github.com/TuringWorks/orbit-rs)
 
