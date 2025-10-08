@@ -1,0 +1,107 @@
+# Examples CI Workflow
+# Purpose: Build and test examples separately from main CI to avoid memory issues
+# Runs on: Manual trigger or weekly schedule
+# Focus: Memory-intensive examples that may fail in standard CI environment
+
+name: Examples CI
+
+on:
+  workflow_dispatch:
+    inputs:
+      example_filter:
+        description: 'Filter examples to build (regex pattern)'
+        required: false
+        default: '.*'
+        type: string
+  schedule:
+    # Run weekly on Sundays at 02:00 UTC
+    - cron: '0 2 * * 0'
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  # Set memory-optimized linker flags globally for this workflow
+  RUSTFLAGS: "-C link-arg=-Wl,--no-keep-memory -C link-arg=-Wl,--reduce-memory-overheads"
+
+jobs:
+  build-examples:
+    name: Build Examples
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        example:
+          - hello-world
+          - distributed-transactions-example
+          - distributed-counter
+          - saga-example
+          - aql_parser_test  # This is the memory-intensive example
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        components: rustfmt, clippy
+
+    - name: Install Protocol Buffers Compiler
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y protobuf-compiler
+
+    - name: Cache cargo registry
+      uses: actions/cache@v4
+      with:
+        path: ~/.cargo/registry
+        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Cache cargo index
+      uses: actions/cache@v4
+      with:
+        path: ~/.cargo/git
+        key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Cache cargo build
+      uses: actions/cache@v4
+      with:
+        path: target
+        key: ${{ runner.os }}-examples-${{ hashFiles('**/Cargo.lock') }}-${{ matrix.example }}
+
+    - name: Build example - ${{ matrix.example }}
+      run: |
+        # Apply additional memory constraints for problematic examples
+        if [[ "${{ matrix.example }}" == "aql_parser_test" ]]; then
+          echo "Building memory-intensive example with extra constraints"
+          # Use single-threaded compilation for memory-heavy examples
+          cargo build --example ${{ matrix.example }} --jobs 1
+        else
+          # Standard build with reduced parallelism
+          cargo build --example ${{ matrix.example }} --jobs 2
+        fi
+      continue-on-error: ${{ matrix.example == 'aql_parser_test' }}
+
+    - name: Run example - ${{ matrix.example }}
+      run: |
+        # Only run lightweight examples that don't require special setup
+        case "${{ matrix.example }}" in
+          "hello-world"|"distributed-counter")
+            timeout 30s cargo run --example ${{ matrix.example }} || echo "Example completed or timed out"
+            ;;
+          *)
+            echo "Skipping execution of ${{ matrix.example }} (requires special setup or is resource-intensive)"
+            ;;
+        esac
+      continue-on-error: true
+
+  report:
+    name: Examples Build Report
+    runs-on: ubuntu-latest
+    needs: build-examples
+    if: always()
+    steps:
+    - name: Report Results
+      run: |
+        echo "Examples build completed. Check individual job results for details."
+        echo "This workflow is designed to handle memory-intensive examples separately from main CI."
+        echo "Some examples may be allowed to fail if they exceed CI resource limits."

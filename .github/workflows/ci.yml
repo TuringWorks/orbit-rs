@@ -68,17 +68,30 @@ jobs:
       run: cargo clippy --all-targets -- -D warnings
 
     - name: Build
-      run: cargo build --verbose
+      run: |
+        # Set linker flags to reduce memory usage for CI builds
+        export RUSTFLAGS="-C link-arg=-Wl,--no-keep-memory -C link-arg=-Wl,--reduce-memory-overheads"
+        # Build libraries (exclude examples which may have heavy dependencies)
+        cargo build --verbose --jobs 2 --lib
+        # Build binaries
+        cargo build --verbose --jobs 2 --bins
 
     - name: Run tests
-      run: cargo test --verbose
+      run: |
+        # Set linker flags to reduce memory usage
+        export RUSTFLAGS="-C link-arg=-Wl,--no-keep-memory -C link-arg=-Wl,--reduce-memory-overheads"
+        # Run tests with reduced parallelism
+        cargo test --verbose --jobs 2
 
     - name: Build examples
       run: |
-        cargo build --package hello-world
-        cargo build --package distributed-transactions-example
-        cargo build --package distributed-counter
-        cargo build --package saga-example
+        # Set linker flags to reduce memory usage for CI builds
+        export RUSTFLAGS="-C link-arg=-Wl,--no-keep-memory -C link-arg=-Wl,--reduce-memory-overheads"
+        # Build examples individually with reduced parallelism
+        cargo build --jobs 2 --package hello-world
+        cargo build --jobs 2 --package distributed-transactions-example
+        cargo build --jobs 2 --package distributed-counter
+        cargo build --jobs 2 --package saga-example
 
   security_audit:
     name: Security Audit
