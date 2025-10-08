@@ -50,10 +50,27 @@ pub mod container;
 pub mod context;
 pub mod error;
 pub mod integration;
+pub mod metrics;
+pub mod scheduler;
 
+// Java Spring Boot integration modules
+pub mod grpc_server;
+pub mod http_server;
+pub mod java_integration;
+pub mod jni_bindings;
+
+// Re-exports for convenience
 pub use annotations::*;
 pub use config::*;
 pub use container::*;
 pub use context::*;
 pub use error::*;
 pub use integration::*;
+pub use metrics::*;
+pub use scheduler::*;
+
+// Java Spring Boot integration re-exports
+pub use grpc_server::*;
+pub use http_server::*;
+pub use java_integration::*;
+pub use jni_bindings::*;
