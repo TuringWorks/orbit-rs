@@ -70,7 +70,7 @@ jobs:
     - name: Build
       run: |
         # Set linker flags to reduce memory usage for CI builds
-        export RUSTFLAGS="-C link-arg=-Wl,--no-keep-memory -C link-arg=-Wl,--reduce-memory-overheads"
+        export RUSTFLAGS="-C link-arg=-Wl,--no-keep-memory"
         # Build libraries (exclude examples which may have heavy dependencies)
         cargo build --verbose --jobs 2 --lib
         # Build binaries
@@ -79,14 +79,14 @@ jobs:
     - name: Run tests
       run: |
         # Set linker flags to reduce memory usage
-        export RUSTFLAGS="-C link-arg=-Wl,--no-keep-memory -C link-arg=-Wl,--reduce-memory-overheads"
+        export RUSTFLAGS="-C link-arg=-Wl,--no-keep-memory"
         # Run tests with reduced parallelism
         cargo test --verbose --jobs 2
 
     - name: Build examples
       run: |
         # Set linker flags to reduce memory usage for CI builds
-        export RUSTFLAGS="-C link-arg=-Wl,--no-keep-memory -C link-arg=-Wl,--reduce-memory-overheads"
+        export RUSTFLAGS="-C link-arg=-Wl,--no-keep-memory"
         # Build examples individually with reduced parallelism
         cargo build --jobs 2 --package hello-world
         cargo build --jobs 2 --package distributed-transactions-example
@@ -131,9 +131,9 @@ jobs:
       run: |
         # Increase available memory for linking and use incremental compilation
         export CARGO_INCREMENTAL=1
-        export RUSTFLAGS="-C link-arg=-Wl,--no-keep-memory -C link-arg=-Wl,--reduce-memory-overheads"
+        export RUSTFLAGS="-C link-arg=-Wl,--no-keep-memory"
         # Use tarpaulin config file and focus on core packages only
-        cargo tarpaulin --config tarpaulin.toml --verbose --timeout 300 --out Xml --output-dir ./coverage \  
+        cargo tarpaulin --config tarpaulin.toml --verbose --timeout 300 --out Xml --output-dir ./coverage \
           --packages orbit-shared,orbit-util,orbit-proto,orbit-compute,orbit-client,orbit-protocols,orbit-server,orbit-operator
 
     - name: Upload to codecov.io

@@ -85,7 +85,7 @@ jobs:
     - name: Build all components (debug)
       run: |
         # Set linker flags to reduce memory usage for CI builds
-        export RUSTFLAGS="-C link-arg=-Wl,--no-keep-memory -C link-arg=-Wl,--reduce-memory-overheads"
+        export RUSTFLAGS="-C link-arg=-Wl,--no-keep-memory"
         # Build libraries and binaries (exclude examples to avoid memory issues)
         cargo build --workspace --jobs 2 --lib
         cargo build --workspace --jobs 2 --bins
@@ -95,7 +95,7 @@ jobs:
     - name: Run comprehensive tests
       run: |
         # Set linker flags to reduce memory usage
-        export RUSTFLAGS="-C link-arg=-Wl,--no-keep-memory -C link-arg=-Wl,--reduce-memory-overheads"
+        export RUSTFLAGS="-C link-arg=-Wl,--no-keep-memory"
         # Run tests with reduced parallelism
         cargo test --workspace --verbose --jobs 2
         cargo test --workspace --verbose --release --jobs 2
@@ -373,7 +373,7 @@ jobs:
     - name: Build binary
       run: |
         # Set linker flags to reduce memory usage for CI builds
-        export RUSTFLAGS="-C link-arg=-Wl,--no-keep-memory -C link-arg=-Wl,--reduce-memory-overheads"
+        export RUSTFLAGS="-C link-arg=-Wl,--no-keep-memory"
         
         BUILD_FLAGS=""
         if [ "${{ matrix.profile }}" = "release" ]; then
