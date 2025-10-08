@@ -1406,7 +1406,7 @@ fn detect_x86_64_capabilities() -> Result<CPUCapabilities, ComputeError> {
 
     // Get core information
     let processor_frequency = cpuid.get_processor_frequency_info();
-    let cache_params = cpuid.get_cache_parameters();
+    let _cache_params = cpuid.get_cache_parameters();
 
     let cores = CoreConfiguration {
         physical_cores: num_cpus::get_physical() as u8,
@@ -1657,6 +1657,7 @@ fn detect_apple_silicon() -> Result<(ARMVendor, ARMSoC), ComputeError> {
 
 /// Fallback detection for non-macOS platforms
 #[cfg(not(target_os = "macos"))]
+#[allow(dead_code)]
 fn detect_apple_silicon() -> Result<(ARMVendor, ARMSoC), ComputeError> {
     Err(ComputeError::capability_detection(
         CapabilityDetectionError::NeuralEngineDetectionFailed {
@@ -1667,6 +1668,7 @@ fn detect_apple_silicon() -> Result<(ARMVendor, ARMSoC), ComputeError> {
 }
 
 #[cfg(target_os = "linux")]
+#[allow(dead_code)]
 fn detect_linux_arm_soc() -> Result<(ARMVendor, ARMSoC), ComputeError> {
     // Stub implementation for Linux ARM detection
     Ok((

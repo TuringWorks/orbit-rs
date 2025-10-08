@@ -1,0 +1,403 @@
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: orbit-mmap-cluster
+  namespace: orbit-rs
+  labels:
+    app.kubernetes.io/name: orbit-rs
+    app.kubernetes.io/component: mmap-server
+    app.kubernetes.io/version: "0.1.0"
+    deployment-type: "memory-mapped"
+spec:
+  serviceName: orbit-server-headless
+  replicas: 30  # Significantly fewer nodes needed with mmap
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: orbit-rs
+      app.kubernetes.io/component: mmap-server
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: orbit-rs
+        app.kubernetes.io/component: mmap-server
+        app.kubernetes.io/version: "0.1.0"
+        deployment-type: "memory-mapped"
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+        prometheus.io/path: "/metrics"
+        # Memory-mapped file specific annotations
+        mmap.orbit-rs/enabled: "true"
+        mmap.orbit-rs/file-size: "1000GB"
+        mmap.orbit-rs/huge-pages: "enabled"
+    spec:
+      serviceAccountName: orbit-server
+      # Security context for mmap optimizations
+      securityContext:
+        runAsNonRoot: false  # Need root for sysctl changes
+        runAsUser: 0
+        runAsGroup: 0
+        fsGroup: 1001
+        sysctls:
+        - name: vm.max_map_count
+          value: "2097152"
+        - name: vm.dirty_background_ratio
+          value: "5"
+        - name: vm.dirty_ratio
+          value: "10"
+      
+      # Init container for system optimizations
+      initContainers:
+      - name: system-init
+        image: alpine:3.18
+        command: ["/bin/sh"]
+        args: ["/app/scripts/init-system.sh"]
+        securityContext:
+          privileged: true  # Required for sysctl and kernel modifications
+          runAsUser: 0
+        volumeMounts:
+        - name: scripts
+          mountPath: /app/scripts
+          readOnly: true
+        - name: mmap-data
+          mountPath: /mnt/mmap-data
+        - name: proc
+          mountPath: /host/proc
+        - name: sys
+          mountPath: /host/sys
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+      
+      containers:
+      - name: orbit-server
+        image: orbit-rs/orbit-server:latest
+        imagePullPolicy: IfNotPresent
+        command: ["/bin/bash"]
+        args: ["/app/scripts/entrypoint.sh"]
+        
+        ports:
+        - name: grpc
+          containerPort: 50051
+          protocol: TCP
+        - name: health
+          containerPort: 8080
+          protocol: TCP
+        - name: metrics
+          containerPort: 9090
+          protocol: TCP
+        
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: RUST_LOG
+          value: "info"
+        - name: RUST_BACKTRACE
+          value: "1"
+        
+        # Orbit-RS configuration
+        - name: DEPLOYMENT_MODE
+          value: "kubernetes"
+        - name: HOSTNAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: ORBIT_REPLICA_COUNT
+          value: "30"  # Match replica count
+        - name: ORBIT_DISCOVERY_DNS
+          value: "orbit-server-headless.orbit-rs.svc.cluster.local"
+        
+        # Memory-mapped file specific environment
+        - name: ORBIT_PERSISTENCE_BACKEND
+          value: "memory_mapped"
+        - name: ORBIT_MMAP_DIR
+          value: "/mnt/mmap-data"
+        - name: ORBIT_ENABLE_HUGE_PAGES
+          value: "true"
+        - name: ORBIT_TEST_STORAGE
+          value: "false"  # Set to true for performance testing
+        
+        # Optimized resource allocation for mmap
+        resources:
+          requests:
+            memory: "16Gi"      # Significantly less RAM needed
+            cpu: "8000m"        # 8 cores
+            ephemeral-storage: "10Gi"
+          limits:
+            memory: "48Gi"      # Max RAM with mmap optimization
+            cpu: "32000m"       # 32 cores max
+            ephemeral-storage: "50Gi"
+        
+        # Enhanced health checks for mmap
+        livenessProbe:
+          exec:
+            command: ["/app/scripts/health-check.sh"]
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+          successThreshold: 1
+        
+        readinessProbe:
+          httpGet:
+            path: /health/ready
+            port: health
+          initialDelaySeconds: 30
+          periodSeconds: 15
+          timeoutSeconds: 5
+          failureThreshold: 3
+          successThreshold: 1
+        
+        startupProbe:
+          httpGet:
+            path: /health/startup
+            port: health
+          initialDelaySeconds: 15
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 30
+          successThreshold: 1
+        
+        volumeMounts:
+        - name: mmap-data
+          mountPath: /mnt/mmap-data
+        - name: config
+          mountPath: /app/config
+          readOnly: true
+        - name: scripts
+          mountPath: /app/scripts
+          readOnly: true
+        - name: tmp
+          mountPath: /tmp
+        - name: hugepages-2mi
+          mountPath: /dev/hugepages-2Mi
+        
+        # Memory-mapped file optimizations
+        securityContext:
+          allowPrivilegeEscalation: true
+          capabilities:
+            add:
+            - SYS_RESOURCE  # For memory management
+            - IPC_LOCK     # For memory locking
+            - SYS_RAWIO    # For direct I/O access
+          runAsUser: 1001
+          runAsGroup: 1001
+      
+      volumes:
+      - name: config
+        configMap:
+          name: orbit-mmap-config
+          defaultMode: 0644
+      - name: scripts
+        configMap:
+          name: orbit-mmap-scripts
+          defaultMode: 0755
+      - name: tmp
+        emptyDir:
+          sizeLimit: "1Gi"
+      - name: hugepages-2mi
+        emptyDir:
+          medium: "HugePages-2Mi"
+          sizeLimit: "2Gi"
+      - name: proc
+        hostPath:
+          path: /proc
+          type: Directory
+      - name: sys
+        hostPath:
+          path: /sys
+          type: Directory
+      
+      # Node selection and affinity for performance
+      affinity:
+        # Prefer nodes with high-performance storage
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            preference:
+              matchExpressions:
+              - key: node.kubernetes.io/instance-type
+                operator: In
+                values:
+                - "i3en.2xlarge"   # AWS instances with NVMe
+                - "i3en.4xlarge"
+                - "i3en.8xlarge"
+                - "i4i.2xlarge"
+                - "i4i.4xlarge"
+          - weight: 80
+            preference:
+              matchExpressions:
+              - key: topology.kubernetes.io/zone
+                operator: In
+                values:
+                - "us-west-2a"
+                - "us-west-2b"
+                - "us-west-2c"
+          - weight: 60
+            preference:
+              matchExpressions:
+              - key: kubernetes.io/arch
+                operator: In
+                values:
+                - "amd64"
+        
+        # Anti-affinity to spread across nodes
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app.kubernetes.io/name
+                  operator: In
+                  values:
+                  - orbit-rs
+                - key: app.kubernetes.io/component
+                  operator: In
+                  values:
+                  - mmap-server
+              topologyKey: kubernetes.io/hostname
+          
+          # Ensure balanced distribution across zones
+          - weight: 80
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app.kubernetes.io/name
+                  operator: In
+                  values:
+                  - orbit-rs
+              topologyKey: topology.kubernetes.io/zone
+      
+      # Tolerations for dedicated nodes
+      tolerations:
+      - key: "orbit-rs/mmap-optimized"
+        operator: "Equal"
+        value: "true"
+        effect: "NoSchedule"
+      - key: "node.kubernetes.io/not-ready"
+        operator: "Exists"
+        effect: "NoExecute"
+        tolerationSeconds: 300
+      - key: "node.kubernetes.io/unreachable"
+        operator: "Exists"
+        effect: "NoExecute"
+        tolerationSeconds: 300
+      
+      # Extended termination grace period for mmap cleanup
+      terminationGracePeriodSeconds: 120
+      
+      # DNS configuration for fast service discovery
+      dnsPolicy: ClusterFirst
+      dnsConfig:
+        options:
+        - name: ndots
+          value: "2"
+        - name: edns0
+  
+  # Volume claim templates for high-performance storage
+  volumeClaimTemplates:
+  - metadata:
+      name: mmap-data
+      labels:
+        app.kubernetes.io/name: orbit-rs
+        app.kubernetes.io/component: mmap-storage
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: orbit-mmap-nvme  # High-performance storage class
+      resources:
+        requests:
+          storage: 2Ti  # 2TB per node (can handle 4-6TB of data with mmap)
+  
+  # Update strategy optimized for mmap
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      # More conservative update strategy due to larger data per node
+      maxUnavailable: 2  # Update 2 nodes at a time
+      partition: 0
+
+---
+# HorizontalPodAutoscaler for memory-mapped deployment
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: orbit-mmap-cluster-hpa
+  namespace: orbit-rs
+  labels:
+    app.kubernetes.io/name: orbit-rs
+    app.kubernetes.io/component: mmap-autoscaler
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: StatefulSet
+    name: orbit-mmap-cluster
+  minReplicas: 15  # Minimum for reliability
+  maxReplicas: 100 # Maximum nodes
+  metrics:
+  # Scale based on CPU utilization
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 75
+  
+  # Scale based on memory pressure
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 85
+  
+  # Custom metrics for mmap-specific scaling
+  - type: Pods
+    pods:
+      metric:
+        name: orbit_mmap_page_faults_per_second
+      target:
+        type: AverageValue
+        averageValue: "1000"  # Scale up if page faults increase
+  
+  - type: Pods
+    pods:
+      metric:
+        name: orbit_actor_activations_per_second
+      target:
+        type: AverageValue
+        averageValue: "5000"  # Scale based on actor activity
+  
+  # Scale behavior for mmap workloads
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 10         # Scale down slowly (10% at a time)
+        periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+      - type: Percent
+        value: 25         # Scale up faster when needed
+        periodSeconds: 30

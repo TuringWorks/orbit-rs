@@ -1,0 +1,252 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: orbit-mmap-config
+  namespace: orbit-rs
+  labels:
+    app.kubernetes.io/name: orbit-rs
+    app.kubernetes.io/component: mmap-config
+data:
+  orbit-server.toml: |
+    # Orbit-RS Server Configuration - Memory-Mapped File Optimized
+    
+    [server]
+    bind_address = "0.0.0.0:50051"
+    health_bind_address = "0.0.0.0:8080"
+    metrics_bind_address = "0.0.0.0:9090"
+    
+    # Memory-mapped persistence backend
+    persistence_backend = "memory_mapped"
+    
+    [node]
+    id = "${POD_NAME}"
+    namespace = "${POD_NAMESPACE}"
+    
+    [cluster]
+    discovery_mode = "kubernetes"
+    service_name = "orbit-server-headless"
+    service_namespace = "orbit-rs"
+    lease_duration_seconds = 30
+    lease_renew_interval_seconds = 10
+    
+    # Memory-mapped file configuration
+    [persistence.mmap]
+    type = "memory_mapped"
+    data_dir = "/mnt/mmap-data"           # High-performance NVMe mount
+    file_size_gb = 1000                  # 1TB memory-mapped files
+    max_mapped_size_gb = 2000            # 2TB max per node
+    enable_large_pages = true            # Enable transparent huge pages
+    prefault_pages = false               # Let OS handle page faults
+    sync_mode = "async"                  # Async fsync for performance
+    advise_random = true                 # Optimize for random access
+    mmap_flags = "MAP_SHARED | MAP_POPULATE"
+    
+    # Memory optimizations
+    enable_transparent_huge_pages = true
+    huge_page_size = "2MB"              # Use 2MB pages
+    numa_policy = "local"               # NUMA-aware allocation
+    
+    # I/O optimizations
+    enable_direct_io = false            # mmap doesn't need direct I/O
+    io_engine = "io_uring"              # Modern async I/O (if available)
+    io_queue_depth = 128               # High queue depth for NVMe
+    
+    # Performance tuning
+    [performance]
+    worker_threads = 0                  # Auto-detect based on CPU cores
+    max_blocking_threads = 1024         # High for I/O operations
+    thread_stack_size = 4194304         # 4MB stack for mmap operations
+    enable_work_stealing = true
+    
+    # Memory management
+    [memory]
+    actor_cache_size_mb = 512           # Smaller cache, mmap handles data
+    page_cache_limit_mb = 2048          # OS page cache limit hint
+    enable_memory_pressure_relief = true
+    memory_pressure_threshold = 0.85   # 85% memory usage trigger
+    
+    # Actor management optimized for mmap
+    [actor_management]
+    lease_duration_seconds = 300
+    snapshot_interval_seconds = 600     # Less frequent, mmap provides durability
+    idle_timeout_seconds = 1800
+    max_concurrent_activations = 50000  # Higher with efficient mmap
+    enable_state_compression = false    # Not needed with mmap
+    
+    # Transaction configuration
+    [transactions]
+    database_path = "/mnt/mmap-data/transactions.mmap"
+    max_connections = 50               # Higher concurrency
+    enable_wal = false                 # mmap provides durability
+    transaction_timeout_seconds = 60
+    
+    # Logging configuration
+    [logging]
+    level = "info"
+    format = "json"
+    
+    # Monitoring
+    [monitoring]
+    enabled = true
+    metrics_endpoint = "0.0.0.0:9090"
+    export_interval = "30s"
+    
+    # Health checks
+    [health]
+    enabled = true
+    check_mmap_regions = true
+    check_disk_space = true
+    check_memory_pressure = true
+
+  sysctl.conf: |
+    # System optimizations for memory-mapped files
+    
+    # Virtual memory settings for large mmap regions
+    vm.max_map_count = 2097152          # Increase max mmap regions (default: 65536)
+    vm.mmap_min_addr = 4096             # Minimum mmap address
+    
+    # Transparent huge pages
+    kernel.shmmax = 68719476736         # 64GB shared memory
+    kernel.shmall = 4294967296          # 16TB total shared memory
+    
+    # File system optimizations
+    fs.file-max = 6815744               # Maximum file descriptors
+    fs.nr_open = 1048576                # Per-process file descriptor limit
+    
+    # Network optimizations for cluster communication
+    net.core.rmem_max = 134217728       # 128MB socket receive buffer
+    net.core.wmem_max = 134217728       # 128MB socket send buffer
+    
+    # Memory management
+    vm.dirty_background_ratio = 5       # Start background writeback at 5%
+    vm.dirty_ratio = 10                 # Block at 10% dirty pages
+    vm.dirty_expire_centisecs = 3000    # 30 seconds dirty page lifetime
+    vm.dirty_writeback_centisecs = 500  # 5 seconds writeback interval
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: orbit-mmap-scripts
+  namespace: orbit-rs
+  labels:
+    app.kubernetes.io/name: orbit-rs
+    app.kubernetes.io/component: mmap-scripts
+data:
+  entrypoint.sh: |
+    #!/bin/bash
+    set -euo pipefail
+    
+    echo "Starting Orbit-RS with memory-mapped file optimization..."
+    
+    # Set environment variables
+    export POD_NAME=${HOSTNAME}
+    export POD_NAMESPACE=${POD_NAMESPACE:-orbit-rs}
+    export NODE_ID="${POD_NAME}.${POD_NAMESPACE}"
+    
+    # Create data directories
+    mkdir -p /mnt/mmap-data
+    chmod 755 /mnt/mmap-data
+    
+    # Check if running as privileged to apply sysctl optimizations
+    if [ -w /proc/sys/vm/max_map_count ]; then
+        echo "Applying memory-mapped file optimizations..."
+        
+        # Increase max mmap regions
+        echo 2097152 > /proc/sys/vm/max_map_count
+        
+        # Configure transparent huge pages
+        if [ -f /sys/kernel/mm/transparent_hugepage/enabled ]; then
+            echo madvise > /sys/kernel/mm/transparent_hugepage/enabled
+            echo defer > /sys/kernel/mm/transparent_hugepage/defrag
+        fi
+        
+        # Set vm settings for mmap performance
+        echo 5 > /proc/sys/vm/dirty_background_ratio
+        echo 10 > /proc/sys/vm/dirty_ratio
+        echo 3000 > /proc/sys/vm/dirty_expire_centisecs
+        echo 500 > /proc/sys/vm/dirty_writeback_centisecs
+    else
+        echo "Warning: Cannot apply kernel optimizations (not running as privileged)"
+        echo "Consider using an init container or node-level configuration"
+    fi
+    
+    # Check NVMe storage
+    echo "Checking storage performance..."
+    df -h /mnt/mmap-data
+    
+    # Test write performance (optional)
+    if [ "${ORBIT_TEST_STORAGE:-false}" = "true" ]; then
+        echo "Testing storage performance..."
+        dd if=/dev/zero of=/mnt/mmap-data/test bs=1M count=1000 oflag=direct 2>&1 | grep -E "copied|MB/s" || true
+        rm -f /mnt/mmap-data/test
+    fi
+    
+    # Substitute environment variables in config
+    envsubst < /app/config/orbit-server.toml > /tmp/orbit-server.toml
+    
+    # Start the server with memory optimizations
+    echo "Starting orbit-server with mmap optimization..."
+    exec /app/orbit-server --config /tmp/orbit-server.toml "$@"
+
+  init-system.sh: |
+    #!/bin/bash
+    # Init container script for system-level optimizations
+    set -euo pipefail
+    
+    echo "Initializing system for memory-mapped file optimization..."
+    
+    # Apply sysctl settings
+    sysctl -w vm.max_map_count=2097152
+    sysctl -w vm.mmap_min_addr=4096
+    sysctl -w kernel.shmmax=68719476736
+    sysctl -w kernel.shmall=4294967296
+    sysctl -w fs.file-max=6815744
+    sysctl -w fs.nr_open=1048576
+    sysctl -w vm.dirty_background_ratio=5
+    sysctl -w vm.dirty_ratio=10
+    sysctl -w vm.dirty_expire_centisecs=3000
+    sysctl -w vm.dirty_writeback_centisecs=500
+    
+    # Configure transparent huge pages
+    if [ -d /sys/kernel/mm/transparent_hugepage ]; then
+        echo madvise > /sys/kernel/mm/transparent_hugepage/enabled
+        echo defer > /sys/kernel/mm/transparent_hugepage/defrag
+        echo 1 > /sys/kernel/mm/transparent_hugepage/khugepaged/defrag
+    fi
+    
+    # Optimize the mounted storage
+    if [ -d /mnt/mmap-data ]; then
+        # Remount with optimized options
+        mount -o remount,noatime,nodiratime,data=writeback /mnt/mmap-data || true
+    fi
+    
+    echo "System initialization complete"
+
+  health-check.sh: |
+    #!/bin/bash
+    # Enhanced health check for memory-mapped file system
+    
+    # Check HTTP health endpoint
+    if ! curl -f -s http://localhost:8080/health >/dev/null; then
+        echo "HTTP health check failed"
+        exit 1
+    fi
+    
+    # Check memory-mapped region health
+    if [ -f /proc/$(pgrep orbit-server)/maps ]; then
+        mmap_count=$(grep -c "mmap-data" /proc/$(pgrep orbit-server)/maps || echo 0)
+        if [ "$mmap_count" -lt 1 ]; then
+            echo "No memory-mapped regions found"
+            exit 1
+        fi
+    fi
+    
+    # Check disk space
+    if [ $(df /mnt/mmap-data | tail -1 | awk '{print $5}' | sed 's/%//') -gt 90 ]; then
+        echo "Disk space critical"
+        exit 1
+    fi
+    
+    echo "Health check passed"

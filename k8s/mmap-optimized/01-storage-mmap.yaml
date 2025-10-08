@@ -1,0 +1,107 @@
+---
+# StorageClass optimized for memory-mapped files
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: orbit-mmap-nvme
+  labels:
+    app.kubernetes.io/name: orbit-rs
+    app.kubernetes.io/component: mmap-storage
+    performance-tier: ultra-high
+annotations:
+  storageclass.kubernetes.io/is-default-class: "false"
+provisioner: ebs.csi.aws.com  # AWS - change for other providers
+parameters:
+  type: gp3                    # High-performance GP3 with custom IOPS
+  iops: "16000"                # Max IOPS for optimal mmap performance
+  throughput: "1000"           # 1GB/s throughput
+  encrypted: "true"
+  fsType: ext4
+  # Mount options for memory-mapped files
+  mountOptions: "noatime,nodiratime,data=writeback"
+allowVolumeExpansion: true
+reclaimPolicy: Retain
+volumeBindingMode: WaitForFirstConsumer
+
+---
+# Alternative StorageClass for other cloud providers
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: orbit-mmap-nvme-gcp
+  labels:
+    app.kubernetes.io/name: orbit-rs
+    app.kubernetes.io/component: mmap-storage
+    cloud-provider: gcp
+provisioner: pd.csi.storage.gke.io
+parameters:
+  type: pd-ssd
+  provisioned-iops-on-create: "30000"  # High IOPS for GCP
+  disk-encryption-kms-key: ""          # Optional KMS encryption
+allowVolumeExpansion: true
+reclaimPolicy: Retain
+volumeBindingMode: WaitForFirstConsumer
+
+---
+# StorageClass for Azure
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: orbit-mmap-nvme-azure
+  labels:
+    app.kubernetes.io/name: orbit-rs
+    app.kubernetes.io/component: mmap-storage
+    cloud-provider: azure
+provisioner: disk.csi.azure.com
+parameters:
+  storageaccounttype: Premium_LRS      # Premium SSD
+  kind: managed
+  diskIOPSReadWrite: "20000"           # High IOPS
+  diskMBpsReadWrite: "900"             # High throughput
+allowVolumeExpansion: true
+reclaimPolicy: Retain
+volumeBindingMode: WaitForFirstConsumer
+
+---
+# Node-local storage for extreme performance (optional)
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: orbit-mmap-local-nvme
+  labels:
+    app.kubernetes.io/name: orbit-rs
+    app.kubernetes.io/component: mmap-storage
+    performance-tier: extreme
+provisioner: kubernetes.io/no-provisioner  # Local storage
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Delete
+
+---
+# PersistentVolume for local NVMe (example for node with local SSD)
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: orbit-local-nvme-node1
+  labels:
+    app.kubernetes.io/name: orbit-rs
+    app.kubernetes.io/component: mmap-storage
+    node: "node1"
+spec:
+  capacity:
+    storage: 1Ti  # 1TB local NVMe
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Delete
+  storageClassName: orbit-mmap-local-nvme
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: kubernetes.io/hostname
+          operator: In
+          values:
+          - "node1"  # Replace with actual node name
+  local:
+    path: /mnt/local-nvme  # Path to mounted local NVMe
+    fsType: ext4

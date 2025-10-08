@@ -15,7 +15,7 @@ use tokio::time::interval;
 use tracing::{debug, error, info, warn};
 
 use crate::errors::{ComputeError, LinuxError, PlatformError, SystemError};
-use crate::scheduler::{PowerState, SystemConditions, ThermalState};
+use crate::scheduler::{PowerState, SystemConditions};
 
 /// Linux system monitor implementation
 #[derive(Debug)]

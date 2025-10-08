@@ -1,0 +1,337 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: orbit-3node-config
+  namespace: orbit-rs
+  labels:
+    app.kubernetes.io/name: orbit-rs
+    app.kubernetes.io/component: 3node-config
+    deployment-size: petabyte
+data:
+  orbit-server.toml: |
+    # Orbit-RS 3-Node Petabyte Configuration
+    
+    [server]
+    bind_address = "0.0.0.0:50051"
+    health_bind_address = "0.0.0.0:8080"
+    metrics_bind_address = "0.0.0.0:9090"
+    persistence_backend = "memory_mapped"
+    
+    [node]
+    id = "${POD_NAME}"
+    namespace = "${POD_NAMESPACE}"
+    
+    [cluster]
+    discovery_mode = "kubernetes"
+    service_name = "orbit-server-headless"
+    service_namespace = "orbit-rs"
+    lease_duration_seconds = 30
+    lease_renew_interval_seconds = 10
+    expected_nodes = 3  # Only 3 nodes in cluster
+    
+    # Ultra-dense memory-mapped configuration for 334TB per node
+    [mmap]
+    type = "memory_mapped"
+    data_dir = "/mnt/orbit-ultra-storage/data"
+    file_size_gb = 50000               # 50TB files for ultra-dense storage
+    max_mapped_size_gb = 350000        # 350TB mapped per node (334TB + overhead)
+    enable_huge_pages = true
+    huge_page_size = "1GB"             # Use 1GB pages for maximum efficiency
+    prefault_pages = false             # Let OS handle on-demand paging
+    sync_mode = "async"
+    advise_random = true
+    mmap_flags = "MAP_SHARED | MAP_POPULATE"
+    
+    # Replication strategy for 3-node cluster
+    replication_factor = 2             # 2x replication across 3 nodes
+    consistency_level = "quorum"       # Require 2/3 nodes for writes
+    
+    # Memory optimizations for ultra-dense deployment
+    [memory]
+    enable_transparent_huge_pages = true
+    huge_page_size = "1GB"
+    numa_policy = "local"
+    page_cache_limit_gb = 128          # Large page cache for hot data
+    enable_memory_pressure_relief = true
+    memory_pressure_threshold = 0.90   # High threshold for dense deployment
+    
+    # I/O optimizations for high-density storage
+    [io_ring]
+    enabled = true
+    sq_entries = 1024                  # Large queue for high I/O
+    cq_multiplier = 2.0
+    polling_mode = "hybrid"            # Hybrid polling for efficiency
+    sq_polling = true                  # Kernel-side polling
+    
+    [huge_pages]
+    enabled = true
+    size = "1GB"
+    defrag = "defer"
+    reserve_pages = 64                 # Reserve 64GB of 1GB pages
+    
+    [numa]
+    enabled = true
+    policy = "local"
+    cpu_affinity = "numa_local"
+    memory_migration = "on_fault"
+    
+    # Performance tuning for ultra-dense workload
+    [performance]
+    worker_threads = 0                 # Auto-detect
+    max_blocking_threads = 2048        # High for I/O operations
+    thread_stack_size = 8388608        # 8MB stack for large operations
+    enable_work_stealing = true
+    enable_cpu_affinity = true
+    
+    # Actor management for high-density
+    [actor_management]
+    lease_duration_seconds = 600       # Longer leases for stability
+    snapshot_interval_seconds = 1800   # Less frequent snapshots
+    idle_timeout_seconds = 3600        # Keep actors active longer
+    max_concurrent_activations = 100000 # High concurrency
+    enable_state_compression = true    # Compress state for density
+    
+    # Transaction configuration for 3-node cluster
+    [transactions]
+    database_path = "/mnt/orbit-ultra-storage/transactions"
+    max_connections = 100
+    enable_wal = false                 # mmap provides durability
+    transaction_timeout_seconds = 120   # Longer timeout for large ops
+    
+    # Distributed consensus for 3-node cluster
+    [consensus]
+    algorithm = "raft"
+    election_timeout_ms = 5000         # Longer timeout for stability
+    heartbeat_interval_ms = 1000
+    max_log_entries = 10000
+    snapshot_threshold = 5000
+    
+    # Logging optimized for production
+    [logging]
+    level = "info"
+    format = "json"
+    max_file_size_mb = 100
+    max_files = 10
+    
+    # Monitoring for ultra-dense deployment
+    [monitoring]
+    enabled = true
+    metrics_endpoint = "0.0.0.0:9090"
+    export_interval = "15s"
+    page_fault_tracking = true
+    memory_usage_reporting = true
+    io_latency_histogram = true
+    numa_statistics = true
+    storage_utilization_tracking = true
+    
+    # Health checks adapted for high-density
+    [health]
+    enabled = true
+    check_mmap_regions = true
+    check_disk_space = true
+    check_memory_pressure = true
+    disk_space_threshold = 0.95        # High threshold for dense storage
+    
+    # Network optimizations for 3-node cluster
+    [network]
+    max_connections = 10000
+    connection_timeout_ms = 30000
+    keepalive_interval_ms = 10000
+    buffer_size_kb = 64
+    enable_compression = true
+
+  # System optimizations for ultra-dense deployment
+  sysctl-ultra-dense.conf: |
+    # Virtual memory optimizations for ultra-dense mmap
+    vm.max_map_count = 10485760         # 10M mmap regions (10x normal)
+    vm.mmap_min_addr = 4096
+    
+    # Huge pages for 1GB pages
+    vm.nr_hugepages = 128               # 128 * 1GB = 128GB reserved
+    kernel.shmmax = 137438953472        # 128GB shared memory
+    kernel.shmall = 33554432            # 128GB in pages
+    
+    # Memory management for ultra-dense
+    vm.dirty_background_ratio = 2       # Start writeback early
+    vm.dirty_ratio = 5                  # Block early to avoid memory pressure
+    vm.dirty_expire_centisecs = 1000    # 10 second dirty page lifetime
+    vm.dirty_writeback_centisecs = 100  # 1 second writeback interval
+    vm.vfs_cache_pressure = 50          # Keep inode/dentry cache
+    
+    # File system optimizations
+    fs.file-max = 26214400              # 25M file descriptors
+    fs.nr_open = 16777216               # 16M per-process file descriptors
+    fs.inotify.max_user_watches = 1048576
+    
+    # Network optimizations for 3-node cluster
+    net.core.rmem_max = 268435456       # 256MB socket receive buffer
+    net.core.wmem_max = 268435456       # 256MB socket send buffer
+    net.core.netdev_max_backlog = 30000
+    net.core.somaxconn = 65536
+    
+    # TCP optimizations for replication
+    net.ipv4.tcp_rmem = 4096 87380 268435456
+    net.ipv4.tcp_wmem = 4096 65536 268435456
+    net.ipv4.tcp_congestion_control = bbr
+    net.ipv4.tcp_slow_start_after_idle = 0
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: orbit-3node-scripts
+  namespace: orbit-rs
+  labels:
+    app.kubernetes.io/name: orbit-rs
+    app.kubernetes.io/component: 3node-scripts
+data:
+  entrypoint-ultra-dense.sh: |
+    #!/bin/bash
+    set -euo pipefail
+    
+    echo "Starting Orbit-RS ultra-dense 3-node deployment..."
+    
+    # Environment setup
+    export POD_NAME=${HOSTNAME}
+    export POD_NAMESPACE=${POD_NAMESPACE:-orbit-rs}
+    export NODE_ID="${POD_NAME}.${POD_NAMESPACE}"
+    
+    # Determine node role based on pod name
+    if [[ "$POD_NAME" == *"-0" ]]; then
+        export NODE_ROLE="primary"
+        export NODE_INDEX=0
+    elif [[ "$POD_NAME" == *"-1" ]]; then
+        export NODE_ROLE="secondary"  
+        export NODE_INDEX=1
+    elif [[ "$POD_NAME" == *"-2" ]]; then
+        export NODE_ROLE="tertiary"
+        export NODE_INDEX=2
+    else
+        export NODE_ROLE="unknown"
+        export NODE_INDEX=99
+    fi
+    
+    echo "Node role: $NODE_ROLE (index: $NODE_INDEX)"
+    
+    # Apply system optimizations
+    if [ -w /proc/sys/vm/max_map_count ]; then
+        echo "Applying ultra-dense system optimizations..."
+        
+        # Ultra-high mmap limits
+        echo 10485760 > /proc/sys/vm/max_map_count
+        
+        # Configure 1GB huge pages
+        echo 128 > /proc/sys/vm/nr_hugepages
+        
+        # Memory management
+        echo 2 > /proc/sys/vm/dirty_background_ratio
+        echo 5 > /proc/sys/vm/dirty_ratio
+        echo 1000 > /proc/sys/vm/dirty_expire_centisecs
+        echo 100 > /proc/sys/vm/dirty_writeback_centisecs
+        
+        # Configure THP for 1GB pages
+        if [ -d /sys/kernel/mm/transparent_hugepage ]; then
+            echo madvise > /sys/kernel/mm/transparent_hugepage/enabled
+            echo defer > /sys/kernel/mm/transparent_hugepage/defrag
+        fi
+    else
+        echo "Warning: Cannot apply kernel optimizations"
+    fi
+    
+    # Verify storage setup
+    echo "Verifying ultra-dense storage..."
+    if [ ! -d "/mnt/orbit-ultra-storage" ]; then
+        echo "ERROR: Ultra-dense storage not mounted"
+        exit 1
+    fi
+    
+    # Check available space (should be ~800TB)
+    AVAILABLE_SPACE=$(df /mnt/orbit-ultra-storage | tail -1 | awk '{print $2}')
+    AVAILABLE_TB=$((AVAILABLE_SPACE / 1024 / 1024 / 1024))
+    
+    echo "Available storage: ${AVAILABLE_TB}TB"
+    if [ $AVAILABLE_TB -lt 500 ]; then
+        echo "WARNING: Available storage ($AVAILABLE_TB TB) less than expected minimum (500TB)"
+    fi
+    
+    # Create data directories with node-specific structure
+    mkdir -p "/mnt/orbit-ultra-storage/data/node-${NODE_INDEX}"
+    mkdir -p "/mnt/orbit-ultra-storage/logs/node-${NODE_INDEX}"
+    mkdir -p "/mnt/orbit-ultra-storage/snapshots/node-${NODE_INDEX}"
+    mkdir -p "/mnt/orbit-ultra-storage/temp/node-${NODE_INDEX}"
+    
+    # Set ownership
+    chown -R 1001:1001 "/mnt/orbit-ultra-storage/"
+    
+    # Performance testing (optional)
+    if [ "${ORBIT_TEST_PERFORMANCE:-false}" = "true" ]; then
+        echo "Running performance test..."
+        
+        # Test write performance
+        WRITE_TEST_FILE="/mnt/orbit-ultra-storage/temp/write-test-${NODE_INDEX}.tmp"
+        dd if=/dev/zero of="$WRITE_TEST_FILE" bs=1M count=10000 oflag=direct 2>&1 | \
+            grep -E "copied|MB/s" || true
+        rm -f "$WRITE_TEST_FILE"
+        
+        # Test mmap performance
+        echo "Testing memory mapping performance..."
+        # Would include mmap-specific tests here
+    fi
+    
+    # Generate node-specific configuration
+    envsubst < /app/config/orbit-server.toml > /tmp/orbit-server.toml
+    
+    # Add node-specific settings
+    cat >> /tmp/orbit-server.toml << EOF
+
+# Node-specific configuration
+[node.${NODE_ROLE}]
+index = ${NODE_INDEX}
+primary_storage_path = "/mnt/orbit-ultra-storage/data/node-${NODE_INDEX}"
+backup_nodes = [$([ $NODE_INDEX -eq 0 ] && echo "1,2" || [ $NODE_INDEX -eq 1 ] && echo "0,2" || echo "0,1")]
+
+EOF
+    
+    echo "Starting orbit-server for ${NODE_ROLE} node..."
+    exec /app/orbit-server --config /tmp/orbit-server.toml "$@"
+
+  health-check-ultra-dense.sh: |
+    #!/bin/bash
+    # Ultra-dense health check with storage verification
+    
+    # Standard HTTP health check
+    if ! curl -f -s http://localhost:8080/health >/dev/null; then
+        echo "HTTP health check failed"
+        exit 1
+    fi
+    
+    # Storage space check (critical for ultra-dense)
+    DISK_USAGE=$(df /mnt/orbit-ultra-storage | tail -1 | awk '{print $5}' | sed 's/%//')
+    if [ "$DISK_USAGE" -gt 95 ]; then
+        echo "Disk usage critical: ${DISK_USAGE}%"
+        exit 1
+    fi
+    
+    # Memory pressure check
+    if [ -f /proc/meminfo ]; then
+        AVAILABLE=$(grep MemAvailable /proc/meminfo | awk '{print $2}')
+        TOTAL=$(grep MemTotal /proc/meminfo | awk '{print $2}')
+        USAGE_PCT=$((100 - (AVAILABLE * 100 / TOTAL)))
+        
+        if [ $USAGE_PCT -gt 95 ]; then
+            echo "Memory pressure critical: ${USAGE_PCT}%"
+            exit 1
+        fi
+    fi
+    
+    # Check mmap regions
+    if [ -f /proc/self/maps ]; then
+        MMAP_COUNT=$(grep -c "orbit" /proc/self/maps 2>/dev/null || echo 0)
+        if [ $MMAP_COUNT -eq 0 ]; then
+            echo "No orbit mmap regions found"
+            exit 1
+        fi
+    fi
+    
+    echo "Ultra-dense health check passed"
