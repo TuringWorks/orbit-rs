@@ -121,9 +121,7 @@ jobs:
           --package orbit-server \
           --package orbit-protocols \
           --package orbit-operator \
-          --package orbit-application \
-          --package orbit-server-etcd \
-          --package orbit-server-prometheus
+          --package orbit-compute
         echo "✅ Rust documentation built"
 
     # Integrate API docs with Jekyll site
@@ -195,6 +193,12 @@ jobs:
                     <h3>☸️ orbit_operator</h3>
                     <p>Kubernetes operator for managing Orbit-RS clusters</p>
                     <a href="orbit_operator/index.html">View Documentation →</a>
+                </div>
+                
+                <div class="api-card">
+                    <h3>⚡ orbit_compute</h3>
+                    <p>Heterogeneous computing acceleration with CPU/GPU/Neural Engine support</p>
+                    <a href="orbit_compute/index.html">View Documentation →</a>
                 </div>
             </div>
             
