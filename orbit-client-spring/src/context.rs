@@ -10,6 +10,7 @@ use tracing::{debug, info, warn};
 
 /// Spring-like application context that manages the application lifecycle
 /// and provides dependency injection capabilities
+#[derive(Debug)]
 pub struct ApplicationContext {
     /// Dependency injection container
     container: Container,
