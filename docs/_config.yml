@@ -1,5 +1,9 @@
+# Jekyll Configuration for Orbit-RS Documentation
+# Configured for GitHub Flavored Markdown (GFM) compatibility
+# Last updated: October 2025
+
 title: Orbit-RS Documentation
-description: The Next-Generation Distributed Database System
+description: The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform
 url: https://turingworks.github.io
 baseurl: /orbit-rs
 
@@ -9,19 +13,40 @@ plugins:
   - jekyll-feed
   - jekyll-sitemap
   - jekyll-seo-tag
+  - jekyll-gist
+  - jekyll-github-metadata
+  - jekyll-relative-links
 
 # Navigation structure
 header_pages:
   - index.md
+  - PROJECT_OVERVIEW.md
   - QUICK_START.md
-  - OVERVIEW.md
-  - ROADMAP.md
-  - PROJECT_STATUS.md
+  - ROADMAP_CONSOLIDATED.md
+  - BACKLOG_CONSOLIDATED.md
   - CONTRIBUTING.md
 
 # Site configuration
 markdown: kramdown
 highlighter: rouge
+
+# GitHub Flavored Markdown configuration
+kramdown:
+  input: GFM
+  hard_wrap: false
+  auto_ids: true
+  footnote_nr: 1
+  entity_output: as_char
+  toc_levels: 1..6
+  smart_quotes: lsquo,rsquo,ldquo,rdquo
+  enable_coderay: false
+  syntax_highlighter: rouge
+  syntax_highlighter_opts:
+    css_class: 'highlight'
+    span:
+      line_numbers: false
+    block:
+      line_numbers: false
 
 # SEO and social
 author: TuringWorks
@@ -106,10 +131,12 @@ custom_css:
   - "/orbit-rs/assets/css/custom.css"
 
 # Additional Jekyll settings
-kramdown:
-  input: GFM
-  syntax_highlighter: rouge
-  syntax_highlighter_opts:
-    css_class: 'highlight'
-    span:
-      line_numbers: false
+# Enable GitHub Flavored Markdown features
+gfm_quirks: paragraph_end
+
+# Additional GFM support
+markdown_ext: "markdown,mkdown,mkdn,mkd,md"
+
+# Repository information for GitHub integration
+repository: TuringWorks/orbit-rs
+github: [metadata]
