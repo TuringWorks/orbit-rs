@@ -1678,6 +1678,7 @@ fn detect_linux_arm_soc() -> Result<(ARMVendor, ARMSoC), ComputeError> {
 }
 
 #[cfg(target_os = "android")]
+#[allow(dead_code)]
 fn detect_android_soc() -> Result<(ARMVendor, ARMSoC), ComputeError> {
     // Stub implementation for Android detection
     Ok((
