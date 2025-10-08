@@ -3691,13 +3691,27 @@ name = "orbit-server-prometheus"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
+ "axum 0.7.9",
+ "chrono",
+ "dashmap 5.5.3",
+ "hyper 1.7.0",
  "metrics 0.23.1",
  "metrics-exporter-prometheus",
+ "once_cell",
  "orbit-server",
  "orbit-shared",
  "orbit-util",
  "serde",
+ "serde_json",
+ "serde_yaml",
+ "thiserror 1.0.69",
  "tokio",
+ "tokio-util",
+ "toml",
+ "tower 0.4.13",
+ "tower-http 0.5.2",
+ "tracing",
 ]
 
 [[package]]
