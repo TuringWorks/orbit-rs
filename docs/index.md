@@ -31,7 +31,7 @@ orbit-rs start --port 5432
 psql -h localhost -p 5432 -U orbit
 ```
 
-[📖 **Full Quick Start Guide**](QUICK_START.md) | [🎯 **See Project Overview**](OVERVIEW.md)
+[📖 **Full Quick Start Guide**](quick_start.md) | [🎯 **See Project Overview**](overview.md)
 
 ---
 
@@ -40,25 +40,25 @@ psql -h localhost -p 5432 -U orbit
 ### 🏗️ **Getting Started**
 Perfect for developers new to Orbit-RS or distributed databases.
 
-- [🚀 **Quick Start Guide**](QUICK_START.md) - Get running in 5 minutes
-- [📖 **Project Overview**](OVERVIEW.md) - Architecture, features, and use cases  
+- [🚀 **Quick Start Guide**](quick_start.md) - Get running in 5 minutes
+- [📖 **Project Overview**](overview.md) - Architecture, features, and use cases
 - [🎯 **Project Structure**](PROJECT_STRUCTURE.md) - Codebase organization
 - [🔍 **Architecture Details**](architecture/ORBIT_ARCHITECTURE.md) - Understanding Orbit-RS design
-- [⚙️ **Development Guide**](CONTRIBUTING.md) - Setup and configuration
+- [⚙️ **Development Guide**](contributing.md) - Setup and configuration
 
 ### 🛠️ **Development & API**
 For developers building applications with Orbit-RS.
 
 - [📝 **API Reference**](https://turingworks.github.io/orbit-rs/api/) - Complete API documentation
 - [🔌 **Protocol Support**](NETWORK_LAYER.md) - Network layer and protocol details
-- [🧪 **Testing Guide**](CONTRIBUTING.md#testing) - Writing and running tests
-- [🤝 **Contributing**](CONTRIBUTING.md) - How to contribute to Orbit-RS
+- [🧪 **Testing Guide**](contributing.md#testing) - Writing and running tests
+- [🤝 **Contributing**](contributing.md) - How to contribute to Orbit-RS
 - [🔧 **Development Setup**](../DEVELOPMENT.md) - Setting up development environment
 
 ### 🚢 **Operations & Deployment**
 For system administrators and DevOps engineers.
 
-- [☸️ **Kubernetes Deployment**](KUBERNETES_DEPLOYMENT.md) - Production Kubernetes setup
+- [☸️ **Kubernetes Deployment**](kubernetes_deployment.md) - Production Kubernetes setup
 - [🐳 **Docker Guide**](DOCKER_REMOVAL_SUMMARY.md) - Docker considerations
 - [📉 **Storage Architecture**](PERSISTENCE_ARCHITECTURE.md) - Storage backends and persistence
 - [🔒 **Security**](SECURITY.md) - Security policies and practices
@@ -71,18 +71,18 @@ Deep dives into Orbit-RS capabilities.
 - [🗃️ **SQL Engine**](ORBITQL_REFERENCE.md) - OrbitQL and SQL capabilities
 - [📈 **Time Series**](TIME_SERIES_ENGINE.md) - Time-series data management
 - [🕸️ **Graph Database**](GRAPH_DATABASE.md) - Graph data models and queries
-- [📄 **Vector Operations**](VECTOR_COMMANDS.md) - Vector database operations
+- [📄 **Vector Operations**](vector_commands.md) - Vector database operations
 - [🔍 **AQL Reference**](AQL_REFERENCE.md) - ArangoDB Query Language support
 - [🤖 **GraphRAG Integration**](GraphRAG_ARCHITECTURE.md) - AI and graph analytics
 
 ### 📋 **Project Information**
 Project status, roadmap, and community information.
 
-- [🗺️ **Roadmap**](ROADMAP.md) - Development roadmap and upcoming features
+- [🗺️ **Roadmap**](roadmap.md) - Development roadmap and upcoming features
 - [📉 **Project Status**](PROJECT_STATUS.md) - Current implementation status  
 - [🔄 **Changelog**](CHANGELOG.md) - Version history and changes
 - [❓ **Migration Guide**](MIGRATION_GUIDE.md) - Kotlin/JVM to Rust migration
-- [💬 **Contributing**](CONTRIBUTING.md) - Community guidelines and support
+- [💬 **Contributing**](contributing.md) - Community guidelines and support
 
 ---
 
@@ -111,7 +111,7 @@ Orbit-RS has reached **Phase 8** completion with a fully functional SQL engine a
 - **Test Coverage:** 79 passing tests with comprehensive scenarios
 - **Code Quality:** 150,000+ lines of production-ready Rust
 
-[📉 **View Detailed Status**](PROJECT_STATUS.md) | [🗺️ **See Full Roadmap**](ROADMAP.md)
+[📉 **View Detailed Status**](PROJECT_STATUS.md) | [🗺️ **See Full Roadmap**](roadmap.md)
 
 ---
 
@@ -168,7 +168,7 @@ Orbit-RS follows a structured development approach with clearly defined phases:
 - **Phase 12:** Time-series database with Redis TimeSeries compatibility
 - **Phase 13:** Neo4j Bolt protocol with complete Cypher support
 
-[📋 **View Complete Roadmap**](ROADMAP.md) | [📉 **Track Progress**](https://github.com/TuringWorks/orbit-rs/projects)
+[📋 **View Complete Roadmap**](roadmap.md) | [📉 **Track Progress**](https://github.com/TuringWorks/orbit-rs/projects)
 
 ---
 
@@ -177,13 +177,13 @@ Orbit-RS follows a structured development approach with clearly defined phases:
 <div class="resources-grid" markdown="1">
 
 ### 📖 **Tutorials**
-- [🚀 **Getting Started Tutorial**](QUICK_START.md) - Your first Orbit-RS application
+- [🚀 **Getting Started Tutorial**](quick_start.md) - Your first Orbit-RS application
 - [🔍 **SQL Tutorial**](ORBITQL_REFERENCE.md) - OrbitQL features and vector operations
-- [🎭 **Transaction Programming**](ADVANCED_TRANSACTION_FEATURES.md) - Building with distributed transactions
-- [☸️ **Kubernetes Deployment**](KUBERNETES_DEPLOYMENT.md) - Production deployment guide
+- [🎭 **Transaction Programming**](advanced_transaction_features.md) - Building with distributed transactions
+- [☸️ **Kubernetes Deployment**](kubernetes_deployment.md) - Production deployment guide
 
 ### 📚 **Documentation**
-- [🗺️ **Architecture Overview**](OVERVIEW.md) - Understanding Orbit-RS design principles
+- [🗺️ **Architecture Overview**](overview.md) - Understanding Orbit-RS design principles
 - [⚡ **Performance Guide**](LSM_TREE_IMPLEMENTATION.md) - Storage optimization and tuning  
 - [📈 **Implementation Tracking**](ORBITQL_IMPLEMENTATION_TRACKING.md) - Development progress
 

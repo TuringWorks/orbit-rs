@@ -32,7 +32,7 @@ Welcome to the comprehensive documentation hub for Orbit-RS, a high-performance 
 - **[Kubernetes Storage Guide](KUBERNETES_STORAGE_GUIDE.md)** - Complete guide to persistence in Kubernetes
 - **[Kubernetes Persistence](KUBERNETES_PERSISTENCE.md)** - Quick setup for K8s persistence backends
 - **[CI/CD Pipeline](CICD.md)** - Continuous integration and deployment
-- **[Advanced Transaction Features](ADVANCED_TRANSACTION_FEATURES.md)** - Enterprise transaction capabilities
+- **[Advanced Transaction Features](advanced_transaction_features.md)** - Enterprise transaction capabilities
 
 ### **📋 Planning & Development**
 - **[Strategic Roadmap](ROADMAP_CONSOLIDATED.md)** - Comprehensive development roadmap and future plans
@@ -52,10 +52,10 @@ Welcome to the comprehensive documentation hub for Orbit-RS, a high-performance 
 ### **🔐 Security & Compliance**
 - **[Security Guide](SECURITY.md)** - Security policies and vulnerability reporting
 - **[Secrets Configuration](SECRETS_CONFIGURATION_GUIDE.md)** - Secure configuration management
-- **[Advanced Transaction Features](ADVANCED_TRANSACTION_FEATURES.md)** - Security and audit features
+- **[Advanced Transaction Features](advanced_transaction_features.md)** - Security and audit features
 
 ### **📚 Reference Documentation**
-- **[Contributing Guide](CONTRIBUTING.md)** - How to contribute to the project
+- **[Contributing Guide](contributing.md)** - How to contribute to the project
 - **[Changelog](CHANGELOG.md)** - Version history and release notes
 - **[RFC Documents](rfc/)** - Request for Comments and architectural decisions
 - **[API Documentation](https://turingworks.github.io/orbit-rs/api/)** - Generated API documentation
@@ -63,16 +63,16 @@ Welcome to the comprehensive documentation hub for Orbit-RS, a high-performance 
 ## 🚀 **Quick Navigation**
 
 ### **🆕 New to Orbit-RS?**
-1. Start with the **[Project Overview](PROJECT_OVERVIEW.md)** to understand Orbit-RS capabilities and verified metrics
-2. Follow the **[Quick Start Guide](QUICK_START.md)** to get a working system
-3. Explore **[Advanced Transaction Features](ADVANCED_TRANSACTION_FEATURES.md)** for distributed capabilities
+1. Start with the **[Project Overview](project_overview.md)** to understand Orbit-RS capabilities and verified metrics
+2. Follow the **[Quick Start Guide](quick_start.md)** to get a working system
+3. Explore **[Advanced Transaction Features](advanced_transaction_features.md)** for distributed capabilities
 4. Review **[Protocol Support](#-protocol-support)** to understand multi-model database features
 
 ### **🚀 Looking to Deploy?**
 1. Review the **[Strategic Roadmap](ROADMAP_CONSOLIDATED.md)** to understand current production-ready status
-2. Check **[Kubernetes Deployment](KUBERNETES_DEPLOYMENT.md)** for production setup
+2. Check **[Kubernetes Deployment](kubernetes_deployment.md)** for production setup
 3. Review **[CI/CD Pipeline](CICD.md)** for deployment automation
-4. Explore **[Advanced Transaction Features](ADVANCED_TRANSACTION_FEATURES.md)** for enterprise features
+4. Explore **[Advanced Transaction Features](advanced_transaction_features.md)** for enterprise features
 
 ### **🤝 Want to Contribute?**
 1. Read the **[Development Guide](DEVELOPMENT.md)** for setup and guidelines
@@ -82,7 +82,7 @@ Welcome to the comprehensive documentation hub for Orbit-RS, a high-performance 
 
 ### **🎯 Enterprise Users**
 1. Review **[Enterprise Features](#-security--compliance)** for security and compliance
-2. Check **[Advanced Transaction Features](ADVANCED_TRANSACTION_FEATURES.md)** for enterprise capabilities
+2. Check **[Advanced Transaction Features](advanced_transaction_features.md)** for enterprise capabilities
 3. Explore **[Migration Guide](MIGRATION_GUIDE.md)** for system migration
 4. Contact **[Enterprise Support](mailto:enterprise@turingworks.com)** for professional services
 
@@ -103,7 +103,7 @@ Welcome to the comprehensive documentation hub for Orbit-RS, a high-performance 
 ## 📊 **Documentation Status**
 
 ### **✅ Recently Consolidated**
-- **Project Documentation**: All overview, status, and structure documents merged into comprehensive [Project Overview](PROJECT_OVERVIEW.md)
+- **Project Documentation**: All overview, status, and structure documents merged into comprehensive [Project Overview](project_overview.md)
 - **Strategic Planning**: All roadmap documents unified into [Strategic Roadmap](ROADMAP_CONSOLIDATED.md)
 - **Feature Planning**: All backlog documents consolidated into [Feature Backlog](BACKLOG_CONSOLIDATED.md)
 - **Link Verification**: All internal links updated and verified for consistency
