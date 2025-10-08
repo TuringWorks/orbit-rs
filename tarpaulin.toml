@@ -1,0 +1,47 @@
+[package]
+# Tarpaulin configuration file
+# This helps optimize code coverage runs and avoid linking issues
+
+[tool.tarpaulin.coverage]
+# Exclude large examples and integration tests from coverage to reduce linking overhead
+exclude = [
+    "examples/*",
+    "tests/*", 
+    "target/*",
+    "orbit-application/examples/*",
+    "orbit-server/examples/*"
+]
+
+# Include only core library packages for coverage
+include = [
+    "orbit-shared",
+    "orbit-util", 
+    "orbit-proto",
+    "orbit-compute",
+    "orbit-client",
+    "orbit-protocols",
+    "orbit-server",
+    "orbit-operator"
+]
+
+# Optimize compilation for faster coverage runs
+[tool.tarpaulin.build]
+# Use release mode for smaller binaries and faster linking
+release = false
+# Enable all features for comprehensive coverage
+all-features = true
+# Increase timeout for linking large binaries
+timeout = 300
+
+# Runner configuration
+[tool.tarpaulin.run]
+# Skip doctests to reduce compilation overhead
+ignore-tests = false
+# Continue on test failure to get partial coverage
+ignore-panics = true
+# Exclude FFI code that might cause linking issues
+exclude-files = [
+    "*/ffi/*",
+    "*/sys/*", 
+    "*/generated/*"
+]

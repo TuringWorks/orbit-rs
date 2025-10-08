@@ -106,16 +106,22 @@ jobs:
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
 
-    - name: Install Protocol Buffers Compiler
+    - name: Install system dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y protobuf-compiler
+        sudo apt-get install -y protobuf-compiler build-essential pkg-config
 
     - name: Install cargo-tarpaulin
       run: cargo install cargo-tarpaulin
 
     - name: Generate code coverage
-      run: cargo tarpaulin --verbose --workspace --timeout 120 --out Xml --output-dir ./coverage
+      run: |
+        # Increase available memory for linking and use incremental compilation
+        export CARGO_INCREMENTAL=1
+        export RUSTFLAGS="-C link-arg=-Wl,--no-keep-memory -C link-arg=-Wl,--reduce-memory-overheads"
+        # Use tarpaulin config file and focus on core packages only
+        cargo tarpaulin --config tarpaulin.toml --verbose --timeout 300 --out Xml --output-dir ./coverage \  
+          --packages orbit-shared,orbit-util,orbit-proto,orbit-compute,orbit-client,orbit-protocols,orbit-server,orbit-operator
 
     - name: Upload to codecov.io
       uses: codecov/codecov-action@v4
