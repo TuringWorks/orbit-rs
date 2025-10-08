@@ -303,6 +303,9 @@ pub fn parse_create_extension(parser: &mut SqlParser) -> ParseResult<Statement> 
         let name = ext_name.clone();
         parser.advance()?;
         name
+    } else if matches!(&parser.current_token, Some(Token::Vector)) {
+        parser.advance()?;
+        "vector".to_string()
     } else {
         return Err(ParseError {
             message: "Expected extension name".to_string(),

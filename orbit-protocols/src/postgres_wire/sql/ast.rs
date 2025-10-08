@@ -810,7 +810,7 @@ pub struct ReleaseSavepointStatement {
     pub name: String,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum IsolationLevel {
     ReadUncommitted,
     ReadCommitted,
