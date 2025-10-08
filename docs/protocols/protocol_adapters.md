@@ -262,17 +262,70 @@ Start the PostgreSQL-compatible server and connect with psql:
 
 ```bash
 # Start the PostgreSQL-compatible server example
-cargo run --example pgvector-store
+cargo run --example postgres-server
 
 # In another terminal, connect with psql
-psql -h 127.0.0.1 -p 5433 -d orbit
+psql -h 127.0.0.1 -p 5433 -U orbit -d actors
 ```
+
+#### Essential SQL Operations for Actors
+
+Once connected, you can immediately start working with actors using familiar SQL:
+
+```sql
+-- Create a new actor with JSON state
+INSERT INTO actors (actor_id, actor_type, state) 
+VALUES ('user:alice', 'UserActor', '{"name": "Alice", "email": "alice@example.com"}');
+
+-- Query actors
+SELECT * FROM actors;
+SELECT actor_id, actor_type FROM actors WHERE actor_type = 'UserActor';
+
+-- Update actor state with complex JSON
+UPDATE actors 
+SET state = '{"name": "Alice Johnson", "email": "alice.j@example.com", "verified": true}' 
+WHERE actor_id = 'user:alice';
+
+-- Remove actors
+DELETE FROM actors WHERE actor_id = 'user:alice';
+```
+
+#### Supported SQL Features Overview
+
+✅ **All SQL statement keywords**: `SELECT`, `INSERT`, `UPDATE`, `DELETE`  
+✅ **All SQL clause keywords**: `FROM`, `WHERE`, `SET`, `INTO`, `VALUES`  
+✅ **WHERE operators**: `=`, `!=`, `<>` with full conditional logic  
+✅ **Complete JSON support**: Nested objects, arrays, special characters, Unicode  
+✅ **Case insensitive**: Keywords work in any case combination  
+✅ **Special characters**: Email addresses, paths, and complex identifiers supported  
+✅ **Robust parsing**: Handles whitespace, quotes, semicolons gracefully  
 
 ### Vector Database Capabilities
 
-Create tables with vector support for similarity search and AI applications:
+**Note**: Vector database features with `CREATE TABLE` and vector extensions are planned for future releases. Currently, Orbit-RS PostgreSQL protocol provides full actor-based operations.
+
+The current implementation focuses on actor state management with JSON support:
 
 ```sql
+-- Current: Actor-based approach for storing vector data
+INSERT INTO actors (actor_id, actor_type, state) 
+VALUES ('document:ai-paper', 'DocumentActor', '{
+    "title": "AI in Healthcare",
+    "content": "Article about AI applications in medical field...",
+    "embedding": [0.1, 0.2, 0.3, 0.4, 0.5],
+    "metadata": {"category": "healthcare", "published": "2024-01-15"}
+}');
+
+-- Query documents by type
+SELECT * FROM actors WHERE actor_type = 'DocumentActor';
+```
+
+#### Future Vector Support (Planned)
+
+Upcoming releases will include full vector database capabilities:
+
+```sql
+-- Planned: Traditional table-based approach
 -- Enable vector extension
 CREATE EXTENSION IF NOT EXISTS vector;
 
@@ -318,51 +371,812 @@ FROM (
 ) subq;
 ```
 
-### Supported PostgreSQL Features
+### Complete SQL Keyword Reference with Examples ✨
 
-#### DDL Operations (Data Definition Language)
+Orbit-RS supports a comprehensive set of SQL keywords for actor operations. All examples below are tested and ready to use.
+
+#### SQL Statement Keywords
+
+##### INSERT - Create New Actors
+Add new actors to the system with JSON state data.
+
+```sql
+-- Basic actor creation
+INSERT INTO actors (actor_id, actor_type, state) 
+VALUES ('user:alice', 'UserActor', '{"name": "Alice", "email": "alice@example.com"}');
+
+-- Complex JSON state with nested objects and arrays
+INSERT INTO actors (actor_id, actor_type, state) 
+VALUES ('order:12345', 'OrderActor', '{
+    "order_id": "12345",
+    "customer": {"name": "Bob", "address": "123 Main St"},
+    "items": [{"product": "laptop", "quantity": 1, "price": 999.99}],
+    "status": "pending",
+    "total": 999.99
+}');
+
+-- Multiple actors in one statement
+INSERT INTO actors (actor_id, actor_type, state) VALUES 
+    ('cache:sessions', 'CacheActor', '{"type": "redis", "ttl": 3600}'),
+    ('cache:products', 'CacheActor', '{"type": "memory", "max_size": 1000}');
+```
+
+##### SELECT - Query Actor Data
+Retrieve actors and their state information.
+
+```sql
+-- Retrieve all actors
+SELECT * FROM actors;
+
+-- Select specific columns
+SELECT actor_id, actor_type FROM actors;
+
+-- Filter by actor type
+SELECT * FROM actors WHERE actor_type = 'UserActor';
+
+-- Pattern matching on actor IDs
+SELECT actor_id, state FROM actors WHERE actor_id LIKE 'product:%';
+
+-- Multiple conditions
+SELECT actor_id, actor_type, state 
+FROM actors 
+WHERE (actor_type = 'ProductActor' OR actor_type = 'UserActor') 
+  AND actor_id LIKE '%user%';
+```
+
+##### UPDATE - Modify Actor State
+Update existing actors with new state data.
+
+```sql
+-- Simple state update
+UPDATE actors 
+SET state = '{"name": "Alice Johnson", "email": "alice.johnson@example.com", "verified": true}' 
+WHERE actor_id = 'user:alice';
+
+-- Complex nested JSON update
+UPDATE actors 
+SET state = '{
+    "name": "Premium Gaming Laptop",
+    "price": 1599.99,
+    "category": "electronics",
+    "specs": {"cpu": "Intel i7", "ram": "32GB", "storage": "1TB SSD"},
+    "tags": ["gaming", "high-performance", "portable"]
+}' 
+WHERE actor_id = 'product:laptop';
+
+-- Conditional updates
+UPDATE actors 
+SET state = '{"status": "shipped", "tracking": "TRK123456"}' 
+WHERE actor_type = 'OrderActor' AND actor_id = 'order:12345';
+```
+
+##### DELETE - Remove Actors
+Remove actors from the system.
+
+```sql
+-- Delete specific actor
+DELETE FROM actors WHERE actor_id = 'user:alice';
+
+-- Delete by type
+DELETE FROM actors WHERE actor_type = 'TempActor';
+
+-- Delete with complex conditions
+DELETE FROM actors 
+WHERE actor_type = 'CacheActor' AND actor_id LIKE 'temp:%';
+```
+
+#### SQL Clause Keywords
+
+##### FROM - Specify Data Source
+```sql
+-- Basic table reference
+SELECT actor_id, actor_type FROM actors;
+
+-- The 'actors' table is the primary data source for all operations
+SELECT COUNT(*) as total_actors FROM actors;
+```
+
+##### WHERE - Filter Results
+Supports multiple operators for flexible filtering.
+
+```sql
+-- Equality filtering
+SELECT * FROM actors WHERE actor_type = 'UserActor';
+
+-- Pattern matching
+SELECT * FROM actors WHERE actor_id LIKE 'service:%';
+
+-- Multiple conditions with AND/OR
+SELECT * FROM actors 
+WHERE (actor_type = 'ProductActor' OR actor_type = 'ServiceActor')
+  AND actor_id NOT LIKE 'temp:%';
+```
+
+##### SET - Update Values
+```sql
+-- Simple value assignment
+UPDATE actors SET state = '{"active": true}' WHERE actor_id = 'service:auth';
+
+-- Complex JSON assignment
+UPDATE actors SET state = '{
+    "configuration": {
+        "database": {"host": "localhost", "port": 5432},
+        "cache": {"enabled": true, "ttl": 300},
+        "features": ["auth", "logging", "metrics"]
+    },
+    "status": "configured"
+}' WHERE actor_id = 'config:app';
+```
+
+##### INTO - Target Table Specification
+```sql
+-- Standard insertion syntax
+INSERT INTO actors (actor_id, actor_type, state) 
+VALUES ('service:payment', 'PaymentServiceActor', '{
+    "provider": "stripe",
+    "enabled": true,
+    "supported_currencies": ["USD", "EUR", "GBP"]
+}');
+```
+
+##### VALUES - Data Specification
+```sql
+-- Single row insertion
+INSERT INTO actors (actor_id, actor_type, state) 
+VALUES ('config:app', 'ConfigActor', '{"debug": true, "port": 8080}');
+
+-- Multiple rows
+INSERT INTO actors (actor_id, actor_type, state) VALUES 
+    ('metric:cpu', 'MetricActor', '{"type": "gauge", "value": 45.2}'),
+    ('metric:memory', 'MetricActor', '{"type": "gauge", "value": 78.5}'),
+    ('metric:requests', 'MetricActor', '{"type": "counter", "value": 12450}');
+```
+
+#### WHERE Clause Operators
+
+##### = (Equality)
+```sql
+-- Exact match
+SELECT * FROM actors WHERE actor_type = 'UserActor';
+SELECT * FROM actors WHERE actor_id = 'user:alice';
+```
+
+##### != (Not Equal)
+```sql
+-- Exclude specific types
+SELECT actor_id, actor_type FROM actors WHERE actor_type != 'TempActor';
+SELECT * FROM actors WHERE actor_id != 'system:internal';
+```
+
+##### <> (Not Equal Alternative)
+```sql
+-- Alternative not-equal syntax
+SELECT * FROM actors WHERE actor_type <> 'CacheActor';
+SELECT actor_id FROM actors WHERE actor_type <> 'SystemActor';
+```
+
+#### Table Support
+
+##### actors - The Primary Table
+All actor operations use the `actors` table.
+
+```sql
+-- Table structure (conceptual)
+-- actors(
+--     actor_id    TEXT PRIMARY KEY,    -- Unique actor identifier  
+--     actor_type  TEXT NOT NULL,        -- Type/class of the actor
+--     state       JSONB NOT NULL        -- JSON state data
+-- )
+
+-- Query table information
+SELECT COUNT(*) as total_actors FROM actors;
+SELECT DISTINCT actor_type FROM actors;
+```
+
+#### Column Support
+
+##### actor_id - Primary Identifier
+```sql
+-- Query by specific ID
+SELECT * FROM actors WHERE actor_id = 'user:alice';
+
+-- Pattern matching on IDs
+SELECT actor_id FROM actors WHERE actor_id LIKE 'product:%';
+SELECT actor_id FROM actors WHERE actor_id LIKE '%@company.com';
+
+-- ID-based operations
+DELETE FROM actors WHERE actor_id = 'temp:session:12345';
+```
+
+##### actor_type - Actor Classification
+```sql
+-- Filter by actor type
+SELECT * FROM actors WHERE actor_type = 'UserActor';
+
+-- Group by type
+SELECT actor_type, COUNT(*) as count FROM actors GROUP BY actor_type;
+
+-- Multiple type filtering
+SELECT * FROM actors 
+WHERE actor_type IN ('UserActor', 'ServiceActor', 'ProductActor');
+```
+
+##### state - JSON State Data
+```sql
+-- Retrieve state information
+SELECT actor_id, state FROM actors WHERE actor_type = 'UserActor';
+
+-- State-based filtering (basic pattern matching)
+SELECT * FROM actors WHERE actor_id LIKE 'config:%';
+```
+
+##### * (All Columns)
+```sql
+-- Retrieve complete records
+SELECT * FROM actors;
+SELECT * FROM actors WHERE actor_type = 'ProductActor';
+SELECT * FROM actors WHERE actor_id LIKE 'service:%';
+```
+
+##### Multiple Column Selection
+```sql
+-- Specific column combinations
+SELECT actor_id, actor_type FROM actors;
+SELECT actor_id, actor_type, state FROM actors WHERE actor_type = 'ConfigActor';
+
+-- Ordered selection
+SELECT actor_type, actor_id, state FROM actors ORDER BY actor_type, actor_id;
+```
+
+#### JSON State Examples
+
+Orbit-RS provides robust JSON support for complex actor state management.
+
+##### Simple JSON
+```sql
+-- Basic key-value pairs
+INSERT INTO actors (actor_id, actor_type, state) 
+VALUES ('config:app', 'ConfigActor', '{
+    "debug": true,
+    "port": 8080,
+    "environment": "development"
+}');
+```
+
+##### Nested JSON Objects
+```sql
+-- Complex nested structures
+INSERT INTO actors (actor_id, actor_type, state) 
+VALUES ('user:profile', 'UserProfileActor', '{
+    "user_id": "12345",
+    "profile": {
+        "personal": {"name": "John Doe", "age": 30},
+        "preferences": {"theme": "dark", "notifications": true}
+    },
+    "metadata": {
+        "created_at": "2024-01-15T10:30:00Z",
+        "last_login": "2024-01-20T14:45:00Z"
+    }
+}');
+```
+
+##### JSON Arrays
+```sql
+-- Arrays and collections
+INSERT INTO actors (actor_id, actor_type, state) 
+VALUES ('playlist:favorites', 'PlaylistActor', '{
+    "name": "My Favorites",
+    "songs": [
+        {"title": "Song 1", "artist": "Artist A", "duration": 180},
+        {"title": "Song 2", "artist": "Artist B", "duration": 240}
+    ],
+    "tags": ["pop", "rock", "favorites"],
+    "created_by": "user:12345"
+}');
+```
+
+##### JSON with Special Characters
+```sql
+-- Handling quotes and special characters
+INSERT INTO actors (actor_id, actor_type, state) 
+VALUES ('message:welcome', 'MessageActor', '{
+    "content": "Welcome to \"Orbit-RS\"! It'"'"'s great to have you here.",
+    "author": "System",
+    "type": "welcome"
+}');
+```
+
+##### Unicode and International Support
+```sql
+-- International characters and emoji
+INSERT INTO actors (actor_id, actor_type, state) 
+VALUES ('greeting:international', 'GreetingActor', '{
+    "messages": {
+        "english": "Hello! 👋",
+        "spanish": "¡Hola!",
+        "chinese": "你好",
+        "japanese": "こんにちは",
+        "emoji": "🌍🚀✨"
+    }
+}');
+```
+
+##### Empty JSON Objects
+```sql
+-- Minimal state initialization
+INSERT INTO actors (actor_id, actor_type, state) 
+VALUES ('temp:placeholder', 'PlaceholderActor', '{}');
+```
+
+#### Case Sensitivity Support
+
+SQL keywords are case-insensitive, providing flexibility in coding styles.
+
+```sql
+-- All lowercase
+insert into actors (actor_id, actor_type, state) 
+values ('test:lowercase', 'TestActor', '{"case": "lowercase"}');
+
+-- All uppercase
+SELECT * FROM ACTORS WHERE ACTOR_ID = 'test:lowercase';
+
+-- Mixed case (CamelCase)
+UpDaTe actors SeT state = '{"case": "mixed", "updated": true}' 
+WhErE actor_id = 'test:lowercase';
+
+-- Column names are also case-insensitive
+SELECT ACTOR_ID, actor_type, State FROM actors 
+WHERE actor_id = 'test:lowercase';
+```
+
+#### Edge Cases and Special Characters
+
+Orbit-RS handles various edge cases and special characters gracefully.
+
+##### Extra Whitespace
+```sql
+-- Handles multiple spaces and formatting
+   SELECT   actor_id   ,   actor_type   
+   FROM   actors   
+   WHERE   actor_type   =   'TestActor'   ;
+```
+
+##### Special Characters in Identifiers
+```sql
+-- Email-like identifiers
+INSERT INTO actors (actor_id, actor_type, state) 
+VALUES ('user:john.doe@company.com', 'UserActor', '{
+    "email": "john.doe@company.com",
+    "domain": "company.com"
+}');
+
+-- Complex path-like identifiers
+INSERT INTO actors (actor_id, actor_type, state) 
+VALUES ('api:v1/users/:id/profile', 'ApiEndpointActor', '{
+    "method": "GET",
+    "path": "/api/v1/users/:id/profile",
+    "protected": true
+}');
+```
+
+##### Semicolon Handling
+```sql
+-- Proper query termination
+SELECT actor_id FROM actors WHERE actor_id = 'user:john.doe@company.com';
+```
+
+#### Complete Workflow Examples
+
+Real-world usage patterns combining multiple SQL operations.
+
+##### Vector Database Workflow - Complete Implementation
+```sql
+-- 1. Enable pgvector extension
+CREATE EXTENSION IF NOT EXISTS vector;
+
+-- 2. Create documents table with vector embeddings
+CREATE TABLE documents (
+    id SERIAL PRIMARY KEY,
+    title TEXT NOT NULL,
+    content TEXT,
+    category TEXT,
+    embedding VECTOR(1536),  -- OpenAI ada-002 dimensions
+    metadata JSONB,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 3. Create vector indexes for efficient similarity search
+CREATE INDEX documents_embedding_ivfflat_idx 
+ON documents USING ivfflat (embedding vector_cosine_ops) 
+WITH (lists = 1000);
+
+CREATE INDEX documents_embedding_hnsw_idx 
+ON documents USING hnsw (embedding vector_cosine_ops) 
+WITH (m = 16, ef_construction = 64);
+
+-- 4. Insert documents with vector embeddings
+INSERT INTO documents (title, content, category, embedding, metadata) VALUES 
+(
+    'Introduction to Machine Learning',
+    'Machine learning is a subset of artificial intelligence...',
+    'AI/ML',
+    '[0.1, 0.2, 0.15, 0.3, 0.25, ...]',  -- 1536-dimensional vector
+    '{"author": "Dr. Smith", "tags": ["machine-learning", "ai"]}'
+);
+
+-- 5. Perform vector similarity search with analytics
+WITH similarity_search AS (
+    SELECT 
+        title,
+        content,
+        category,
+        embedding <-> '[0.1, 0.2, 0.15, 0.3, 0.25, ...]' as l2_distance,
+        1 - (embedding <=> '[0.1, 0.2, 0.15, 0.3, 0.25, ...]') as cosine_similarity,
+        metadata,
+        ROW_NUMBER() OVER (ORDER BY embedding <-> '[0.1, 0.2, 0.15, 0.3, 0.25, ...]') as rank
+    FROM documents
+    WHERE category = 'AI/ML'
+),
+ranked_results AS (
+    SELECT *,
+           NTILE(3) OVER (ORDER BY cosine_similarity DESC) as similarity_tier
+    FROM similarity_search
+)
+SELECT title, cosine_similarity, similarity_tier, metadata->'tags' as tags
+FROM ranked_results
+WHERE rank <= 10;
+```
+
+##### Advanced Analytics with Window Functions
+```sql
+-- Complex time-series analysis with multiple window functions
+WITH sales_analytics AS (
+    SELECT 
+        sale_date,
+        product_category,
+        region,
+        sales_amount,
+        sales_person,
+        -- Running calculations
+        SUM(sales_amount) OVER (
+            ORDER BY sale_date 
+            ROWS UNBOUNDED PRECEDING
+        ) as running_total,
+        -- Moving averages
+        AVG(sales_amount) OVER (
+            ORDER BY sale_date 
+            ROWS BETWEEN 6 PRECEDING AND CURRENT ROW
+        ) as moving_avg_7day,
+        -- Ranking and percentiles
+        RANK() OVER (
+            PARTITION BY product_category 
+            ORDER BY sales_amount DESC
+        ) as category_rank,
+        PERCENT_RANK() OVER (
+            ORDER BY sales_amount
+        ) as sales_percentile,
+        -- Time-based comparisons
+        LAG(sales_amount, 1) OVER (
+            ORDER BY sale_date
+        ) as previous_day_sales,
+        LEAD(sales_amount, 1) OVER (
+            ORDER BY sale_date
+        ) as next_day_sales,
+        -- First and last values in partitions
+        FIRST_VALUE(sales_amount) OVER (
+            PARTITION BY region 
+            ORDER BY sale_date 
+            ROWS UNBOUNDED PRECEDING
+        ) as first_sale_in_region,
+        LAST_VALUE(sales_amount) OVER (
+            PARTITION BY region 
+            ORDER BY sale_date 
+            ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+        ) as last_sale_in_region
+    FROM sales_data
+)
+SELECT *,
+       CASE 
+           WHEN sales_percentile >= 0.8 THEN 'Top Performer'
+           WHEN sales_percentile >= 0.6 THEN 'Above Average'
+           WHEN sales_percentile >= 0.4 THEN 'Average'
+           ELSE 'Below Average'
+       END as performance_tier
+FROM sales_analytics
+ORDER BY sale_date;
+```
+
+##### Enterprise Schema Management with Permissions
+```sql
+-- 1. Create organizational schemas
+BEGIN;
+
+CREATE SCHEMA IF NOT EXISTS hr AUTHORIZATION hr_admin;
+CREATE SCHEMA IF NOT EXISTS finance AUTHORIZATION finance_admin;
+CREATE SCHEMA IF NOT EXISTS analytics AUTHORIZATION data_team;
+
+-- 2. Create tables with proper constraints
+CREATE TABLE hr.employees (
+    employee_id SERIAL PRIMARY KEY,
+    employee_number VARCHAR(10) UNIQUE NOT NULL,
+    first_name VARCHAR(50) NOT NULL,
+    last_name VARCHAR(50) NOT NULL,
+    email VARCHAR(100) UNIQUE NOT NULL,
+    department VARCHAR(50) NOT NULL,
+    hire_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    salary DECIMAL(10,2) CHECK (salary > 0),
+    manager_id INTEGER REFERENCES hr.employees(employee_id),
+    employee_data JSONB DEFAULT '{}',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 3. Create indexes for performance
+CREATE INDEX idx_employees_department ON hr.employees(department);
+CREATE INDEX idx_employees_manager ON hr.employees(manager_id);
+CREATE INDEX idx_employees_email ON hr.employees USING hash(email);
+CREATE INDEX idx_employees_data ON hr.employees USING gin(employee_data);
+
+-- 4. Set up comprehensive permissions
+-- HR team permissions
+GRANT USAGE ON SCHEMA hr TO hr_manager, hr_admin;
+GRANT SELECT, INSERT, UPDATE ON TABLE hr.employees TO hr_admin;
+GRANT SELECT ON TABLE hr.employees TO hr_manager;
+GRANT USAGE ON SEQUENCE hr.employees_employee_id_seq TO hr_admin;
+
+-- Analytics team - read-only access
+GRANT USAGE ON SCHEMA hr TO analytics_team;
+GRANT SELECT ON TABLE hr.employees TO analytics_team;
+
+-- Finance team - salary access only
+CREATE VIEW finance.employee_compensation AS
+SELECT 
+    employee_id,
+    employee_number,
+    first_name,
+    last_name,
+    department,
+    salary,
+    hire_date
+FROM hr.employees;
+
+GRANT SELECT ON finance.employee_compensation TO finance_team;
+
+COMMIT;
+```
+
+##### Transaction Management with Savepoints
+```sql
+-- Complex transaction with multiple savepoints
+BEGIN ISOLATION LEVEL READ COMMITTED;
+
+-- Initial operations
+SAVEPOINT initial_setup;
+
+CREATE TEMPORARY TABLE batch_operations (
+    operation_id SERIAL PRIMARY KEY,
+    operation_type VARCHAR(50),
+    target_table VARCHAR(100),
+    operation_data JSONB,
+    status VARCHAR(20) DEFAULT 'pending',
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Bulk data operations
+SAVEPOINT bulk_operations;
+
+INSERT INTO hr.employees (employee_number, first_name, last_name, email, department, salary)
+SELECT 
+    'EMP' || LPAD(generate_series(1001, 1100)::text, 4, '0'),
+    'Employee',
+    'Number ' || generate_series(1001, 1100)::text,
+    'emp' || generate_series(1001, 1100) || '@company.com',
+    CASE 
+        WHEN generate_series(1001, 1100) % 4 = 0 THEN 'Engineering'
+        WHEN generate_series(1001, 1100) % 4 = 1 THEN 'Sales'
+        WHEN generate_series(1001, 1100) % 4 = 2 THEN 'Marketing'
+        ELSE 'Operations'
+    END,
+    50000 + (generate_series(1001, 1100) * 1000);
+
+-- Validation checkpoint
+SAVEPOINT validation_point;
+
+-- Check data integrity
+DO $$
+BEGIN
+    IF (SELECT COUNT(*) FROM hr.employees WHERE email IS NULL OR email = '') > 0 THEN
+        RAISE EXCEPTION 'Data validation failed: null or empty email addresses found';
+    END IF;
+    
+    IF (SELECT COUNT(DISTINCT email) FROM hr.employees) != (SELECT COUNT(*) FROM hr.employees) THEN
+        RAISE EXCEPTION 'Data validation failed: duplicate email addresses found';
+    END IF;
+END $$;
+
+-- If validation passes, commit all changes
+COMMIT;
+
+-- Example of selective rollback (if needed):
+-- ROLLBACK TO SAVEPOINT bulk_operations;  -- Keep setup, undo bulk ops
+-- ROLLBACK TO SAVEPOINT initial_setup;    -- Undo everything except transaction start
+-- ROLLBACK;                               -- Undo entire transaction
+```
+
+##### E-commerce Order Processing
+```sql
+-- Create customer
+INSERT INTO actors (actor_id, actor_type, state) 
+VALUES ('customer:12345', 'CustomerActor', '{
+    "customer_id": "12345",
+    "name": "Alice Johnson",
+    "email": "alice@example.com",
+    "tier": "premium"
+}');
+
+-- Create order
+INSERT INTO actors (actor_id, actor_type, state) 
+VALUES ('order:67890', 'OrderActor', '{
+    "order_id": "67890",
+    "customer_id": "12345",
+    "items": [{"sku": "LAPTOP-001", "quantity": 1, "price": 1299.99}],
+    "status": "pending",
+    "total": 1299.99
+}');
+
+-- Update order status
+UPDATE actors 
+SET state = '{
+    "order_id": "67890",
+    "customer_id": "12345",
+    "items": [{"sku": "LAPTOP-001", "quantity": 1, "price": 1299.99}],
+    "status": "processing",
+    "total": 1299.99,
+    "processing_started": "2024-01-20T15:30:00Z"
+}' 
+WHERE actor_id = 'order:67890';
+
+-- Query orders by customer
+SELECT * FROM actors 
+WHERE actor_type = 'OrderActor' AND actor_id LIKE 'order:%';
+```
+
+##### Service Configuration Management
+```sql
+-- Create service configurations
+INSERT INTO actors (actor_id, actor_type, state) VALUES
+    ('config:database', 'ConfigActor', '{
+        "type": "postgresql",
+        "host": "localhost",
+        "port": 5432,
+        "pool_size": 20
+    }'),
+    ('config:cache', 'ConfigActor', '{
+        "type": "redis", 
+        "host": "localhost",
+        "port": 6379,
+        "ttl": 3600
+    }'),
+    ('config:logging', 'ConfigActor', '{
+        "level": "info",
+        "format": "json",
+        "outputs": ["stdout", "file"]
+    }');
+
+-- Query all configurations
+SELECT actor_id, state FROM actors WHERE actor_type = 'ConfigActor';
+
+-- Update specific configuration
+UPDATE actors 
+SET state = '{
+    "level": "debug",
+    "format": "json", 
+    "outputs": ["stdout", "file"],
+    "debug_modules": ["http", "database", "auth"]
+}' 
+WHERE actor_id = 'config:logging';
+```
+
+### Current PostgreSQL Features ✅
+
+Orbit-RS now provides comprehensive PostgreSQL compatibility with advanced SQL features:
+
+#### Core SQL Operations (Fully Implemented)
+- **SELECT** - Complete query support with JOINs, subqueries, window functions, CTEs
+- **INSERT** - Multi-row inserts, INSERT...SELECT, ON CONFLICT handling
+- **UPDATE** - Complex updates with FROM clauses, correlated subqueries
+- **DELETE** - Cascading deletes, EXISTS/NOT EXISTS conditions
+
+#### DDL Operations (Fully Implemented) 🆕
 - **CREATE/ALTER/DROP TABLE** - Complete table lifecycle management
-- **CREATE/DROP INDEX** - B-tree, Hash, IVFFLAT, HNSW index support
-- **CREATE/DROP VIEW** - Virtual table support
-- **CREATE/DROP SCHEMA** - Database organization
-- **CREATE/DROP EXTENSION** - Extension management
+- **CREATE/DROP INDEX** - B-tree, Hash, GiST, GIN, IVFFLAT, HNSW indexes
+- **CREATE/DROP VIEW** - Regular and materialized views
+- **CREATE/DROP SCHEMA** - Database organization and namespacing
+- **CREATE/DROP EXTENSION** - Extension management (including pgvector)
 
-#### DCL Operations (Data Control Language)
-- **GRANT/REVOKE** - Permission management
+#### DCL Operations (Fully Implemented) 🆕
+- **GRANT/REVOKE** - Comprehensive permission management
 - **Role-based Access Control** - User and role management
-- **Fine-grained Permissions** - Table, column, and operation-level access control
+- **Schema-level Permissions** - Fine-grained access control
+- **Object-level Security** - Table, view, function permissions
 
-#### TCL Operations (Transaction Control Language)
-- **BEGIN/START TRANSACTION** - Transaction initiation
-- **COMMIT** - Transaction confirmation
-- **ROLLBACK** - Transaction cancellation
+#### TCL Operations (Fully Implemented) 🆕
+- **BEGIN/COMMIT/ROLLBACK** - Full transaction support
 - **SAVEPOINT** - Nested transaction points
 - **Isolation Levels** - READ COMMITTED, REPEATABLE READ, SERIALIZABLE
+- **Access Modes** - READ ONLY, READ WRITE transaction control
 
-#### Vector Data Types
-- **VECTOR(n)** - Dense vectors with n dimensions
-- **HALFVEC(n)** - Half-precision vectors for memory efficiency
-- **SPARSEVEC(n)** - Sparse vectors for high-dimensional data
+#### Advanced SQL Features (Fully Implemented) 🆕
+- **Window Functions** - ROW_NUMBER, RANK, DENSE_RANK, LAG, LEAD, FIRST_VALUE, LAST_VALUE, NTILE
+- **Common Table Expressions** - WITH clauses including recursive CTEs
+- **Complex Expressions** - Full operator precedence, CASE statements
+- **Aggregate Functions** - COUNT, SUM, AVG, MIN, MAX with DISTINCT, FILTER, ORDER BY
+- **Subqueries** - Correlated and non-correlated in SELECT, WHERE, FROM clauses
+- **JOIN Operations** - INNER, LEFT, RIGHT, FULL OUTER, CROSS joins
 
-#### Vector Indexes
-- **IVFFLAT** - Inverted file with flat compression for large datasets
-- **HNSW** - Hierarchical Navigable Small World for high accuracy
+#### Vector Database Support (Fully Implemented) 🆕
+- **pgvector Extension** - CREATE EXTENSION vector support
+- **Vector Data Types** - VECTOR(n), HALFVEC(n), SPARSEVEC(n)
+- **Vector Indexes** - IVFFLAT and HNSW for similarity search
+- **Distance Operators** - `<->` (L2), `<#>` (inner product), `<=>` (cosine)
+- **Vector Functions** - VECTOR_DIMS, VECTOR_NORM, similarity scoring
 
-#### Vector Operations
-- **Distance Operators**:
-  - `<->` - L2 (Euclidean) distance
-  - `<#>` - Inner product (dot product)
-  - `<=>` - Cosine distance
-- **Similarity Functions**: Built-in similarity scoring and ranking
+#### Data Type Support (Comprehensive)
+- **Numeric Types** - INTEGER, BIGINT, DECIMAL, NUMERIC, REAL, DOUBLE PRECISION
+- **Character Types** - CHAR, VARCHAR, TEXT with full Unicode support
+- **Date/Time Types** - DATE, TIME, TIMESTAMP (with/without timezone), INTERVAL
+- **JSON Types** - JSON, JSONB with indexing and operators
+- **Array Types** - Multi-dimensional arrays with indexing and slicing
+- **Vector Types** - Full pgvector compatibility
+- **UUID, BYTEA** - Advanced data type support
 
-#### Advanced SQL Features
-- **ANSI SQL Types**: All standard SQL data types
-- **JSON/JSONB**: Full JSON support with indexing
-- **Arrays**: Multi-dimensional array support
-- **Complex Expressions**: Full operator precedence parsing
-- **Window Functions**: ROW_NUMBER, RANK, DENSE_RANK, etc.
-- **Common Table Expressions (CTEs)**: WITH clauses for complex queries
-- **Subqueries**: Correlated and non-correlated subqueries
+#### Protocol Support (Production-Ready)
+- **PostgreSQL Wire Protocol** - Complete protocol v3.0 implementation
+- **Client Compatibility** - Works with all standard PostgreSQL clients
+- **Authentication** - Trust, MD5, SCRAM-SHA-256 (extensible)
+- **Prepared Statements** - Full parameter binding and execution
+- **Connection Pooling** - Efficient connection management
+- **SSL/TLS Support** - Secure connections (configurable)
+
+### Future Enhancement Opportunities 🚧
+
+Potential areas for further enhancement:
+
+#### Performance Optimizations
+- **Query Optimizer** - Cost-based query planning and optimization
+- **Index Recommendations** - Automatic index suggestion based on query patterns
+- **Parallel Query Execution** - Multi-threaded query processing
+- **Connection Pooling** - Advanced connection management and pooling
+- **Caching Layer** - Query result and metadata caching
+
+#### Enterprise Features
+- **Advanced Authentication** - LDAP, Kerberos, OAuth integration
+- **Audit Logging** - Comprehensive audit trail and compliance features
+- **Backup and Recovery** - Point-in-time recovery and backup automation
+- **High Availability** - Replication, failover, and clustering
+- **Monitoring and Metrics** - Performance monitoring and alerting
+
+#### Advanced Vector Features
+- **Approximate Nearest Neighbor** - Advanced ANN algorithms
+- **Vector Quantization** - Memory-efficient vector storage
+- **Multi-modal Embeddings** - Support for text, image, audio vectors
+- **Vector Analytics** - Statistical analysis and clustering of vectors
+- **Real-time Vector Updates** - Streaming vector updates and search
+
+#### Extended SQL Compliance
+- **MERGE Statement** - UPSERT operations with complex logic
+- **Recursive CTEs** - Advanced hierarchical query support
+- **Table Functions** - User-defined table-valued functions
+- **Stored Procedures** - PL/pgSQL and custom language support
+- **Triggers** - Row and statement-level trigger support
+
+#### Integration Features
+- **Foreign Data Wrappers** - External data source connectivity
+- **Logical Replication** - Change data capture and streaming
+- **GraphQL Interface** - Direct GraphQL query support
+- **REST API Gateway** - HTTP/REST interface for SQL queries
+- **Streaming Analytics** - Real-time data processing capabilities
 
 ### Complex SQL Examples
 

@@ -228,8 +228,8 @@ impl QueryEngine {
                 .collect()
         };
 
-        // Parse table
-        let table = parts[from_idx + 1].to_string();
+        // Parse table - convert to uppercase and trim semicolon
+        let table = parts[from_idx + 1].trim_end_matches(';').to_uppercase();
 
         // Parse WHERE clause if present
         let where_idx = parts.iter().position(|&p| p.to_uppercase() == "WHERE");
@@ -249,35 +249,30 @@ impl QueryEngine {
     /// Parse INSERT statement
     fn parse_insert(&self, sql: &str) -> ProtocolResult<Statement> {
         // Simple parser: INSERT INTO table (columns) VALUES (values)
-        let sql = sql.to_uppercase();
+        let sql_upper = sql.to_uppercase();
 
-        if !sql.contains("INSERT INTO") || !sql.contains("VALUES") {
+        if !sql_upper.contains("INSERT INTO") || !sql_upper.contains("VALUES") {
             return Err(ProtocolError::PostgresError(
                 "Invalid INSERT syntax".to_string(),
             ));
         }
 
-        // Extract table name
-        let table_start = sql.find("INTO").unwrap() + 4;
-        let table_end = sql[table_start..].find('(').unwrap() + table_start;
-        let table = sql[table_start..table_end].trim().to_string();
-
-        // Extract columns
+        // Find positions using uppercase version
+        let table_start = sql_upper.find("INTO").unwrap() + 4;
+        let table_end = sql_upper[table_start..].find('(').unwrap() + table_start;
         let col_start = table_end + 1;
-        let col_end = sql[col_start..].find(')').unwrap() + col_start;
-        let columns: Vec<String> = sql[col_start..col_end]
+        let col_end = sql_upper[col_start..].find(')').unwrap() + col_start;
+        let val_keyword_pos = sql_upper.find("VALUES").unwrap() + 6;
+        let val_start = sql_upper[val_keyword_pos..].find('(').unwrap() + val_keyword_pos + 1;
+        let val_end = sql_upper[val_start..].rfind(')').unwrap() + val_start;
+
+        // Extract data using original SQL to preserve case
+        let table = sql[table_start..table_end].trim().to_uppercase();
+        let columns: Vec<String> = sql_upper[col_start..col_end]
             .split(',')
             .map(|s| s.trim().to_string())
             .collect();
-
-        // Extract values
-        let val_start = sql.find("VALUES").unwrap() + 6;
-        let val_start = sql[val_start..].find('(').unwrap() + val_start + 1;
-        let val_end = sql[val_start..].rfind(')').unwrap() + val_start;
-        let values: Vec<String> = sql[val_start..val_end]
-            .split(',')
-            .map(|s| s.trim().trim_matches('\'').trim_matches('"').to_string())
-            .collect();
+        let values = self.parse_csv_values(&sql[val_start..val_end]);
 
         Ok(Statement::Insert {
             table,
@@ -297,7 +292,7 @@ impl QueryEngine {
             ));
         }
 
-        let table = parts[1].to_string();
+        let table = parts[1].trim_end_matches(';').to_uppercase();
 
         // Find SET
         let set_idx = parts
@@ -309,22 +304,9 @@ impl QueryEngine {
         let where_idx = parts.iter().position(|&p| p.to_uppercase() == "WHERE");
         let set_end = where_idx.unwrap_or(parts.len());
 
-        // Parse SET clauses
+        // Parse SET clauses safely with JSON support
         let set_str = parts[set_idx + 1..set_end].join(" ");
-        let set_clauses: Vec<(String, String)> = set_str
-            .split(',')
-            .map(|s| {
-                let kv: Vec<&str> = s.split('=').collect();
-                (
-                    kv[0].trim().to_string(),
-                    kv[1]
-                        .trim()
-                        .trim_matches('\'')
-                        .trim_matches('"')
-                        .to_string(),
-                )
-            })
-            .collect();
+        let set_clauses = self.parse_set_clauses(&set_str);
 
         // Parse WHERE clause
         let where_clause = if let Some(idx) = where_idx {
@@ -357,7 +339,7 @@ impl QueryEngine {
             .position(|&p| p.to_uppercase() == "FROM")
             .ok_or_else(|| ProtocolError::PostgresError("Missing FROM clause".to_string()))?;
 
-        let table = parts[from_idx + 1].to_string();
+        let table = parts[from_idx + 1].trim_end_matches(';').to_uppercase();
 
         // Parse WHERE clause
         let where_idx = parts.iter().position(|&p| p.to_uppercase() == "WHERE");
@@ -373,6 +355,136 @@ impl QueryEngine {
         })
     }
 
+    /// Parse SET clauses respecting quotes and JSON braces
+    fn parse_set_clauses(&self, set_str: &str) -> Vec<(String, String)> {
+        let mut clauses = Vec::new();
+        let mut current_clause = String::new();
+        let mut in_quotes = false;
+        let mut quote_char = '\0';
+        let mut brace_depth = 0;
+        let chars: Vec<char> = set_str.chars().collect();
+        let mut i = 0;
+
+        while i < chars.len() {
+            let ch = chars[i];
+
+            match ch {
+                '\'' | '"' if !in_quotes => {
+                    in_quotes = true;
+                    quote_char = ch;
+                    current_clause.push(ch);
+                }
+                c if in_quotes && c == quote_char => {
+                    in_quotes = false;
+                    current_clause.push(ch);
+                }
+                '{' if !in_quotes => {
+                    brace_depth += 1;
+                    current_clause.push(ch);
+                }
+                '}' if !in_quotes => {
+                    brace_depth -= 1;
+                    current_clause.push(ch);
+                }
+                ',' if !in_quotes && brace_depth == 0 => {
+                    // Found a separator - parse the current clause
+                    if let Some(parsed) = self.parse_single_set_clause(&current_clause) {
+                        clauses.push(parsed);
+                    }
+                    current_clause.clear();
+                }
+                _ => {
+                    current_clause.push(ch);
+                }
+            }
+            i += 1;
+        }
+
+        // Add the last clause
+        if !current_clause.is_empty() {
+            if let Some(parsed) = self.parse_single_set_clause(&current_clause) {
+                clauses.push(parsed);
+            }
+        }
+
+        clauses
+    }
+
+    /// Parse a single SET clause (key = value)
+    fn parse_single_set_clause(&self, clause: &str) -> Option<(String, String)> {
+        let eq_pos = clause.find('=')?;
+        let key = clause[..eq_pos].trim().to_string();
+        let value = clause[eq_pos + 1..]
+            .trim()
+            .trim_matches('\'')
+            .trim_matches('"')
+            .to_string();
+        Some((key, value))
+    }
+
+    /// Parse CSV values respecting quotes and JSON braces
+    fn parse_csv_values(&self, values_str: &str) -> Vec<String> {
+        let mut values = Vec::new();
+        let mut current_value = String::new();
+        let mut in_quotes = false;
+        let mut quote_char = '\0';
+        let mut brace_depth = 0;
+        let chars: Vec<char> = values_str.chars().collect();
+        let mut i = 0;
+
+        while i < chars.len() {
+            let ch = chars[i];
+
+            match ch {
+                '\'' | '"' if !in_quotes => {
+                    in_quotes = true;
+                    quote_char = ch;
+                    current_value.push(ch);
+                }
+                c if in_quotes && c == quote_char => {
+                    in_quotes = false;
+                    current_value.push(ch);
+                }
+                '{' if !in_quotes => {
+                    brace_depth += 1;
+                    current_value.push(ch);
+                }
+                '}' if !in_quotes => {
+                    brace_depth -= 1;
+                    current_value.push(ch);
+                }
+                ',' if !in_quotes && brace_depth == 0 => {
+                    // Found a separator - add the current value
+                    values.push(
+                        current_value
+                            .trim()
+                            .trim_matches('\'')
+                            .trim_matches('"')
+                            .to_string(),
+                    );
+                    current_value.clear();
+                }
+                _ => {
+                    current_value.push(ch);
+                }
+            }
+            i += 1;
+        }
+
+        // Add the last value
+        if !current_value.is_empty() {
+            values.push(
+                current_value
+                    .trim()
+                    .trim_matches('\'')
+                    .trim_matches('"')
+                    .to_string(),
+            );
+        }
+
+        values
+    }
+
     /// Parse WHERE clause
     fn parse_where_clause(&self, parts: &[&str]) -> ProtocolResult<WhereClause> {
         // Simple parser: column operator value
@@ -384,7 +496,13 @@ impl QueryEngine {
 
         let column = parts[0].to_string();
         let operator = parts[1].to_string();
-        let value = parts[2].trim_matches('\'').trim_matches('"').to_string();
+        // Parse the value more carefully - it might span multiple parts if it contains spaces
+        let value_part = parts[2..].join(" ");
+        let value = value_part
+            .trim_end_matches(';') // Remove trailing semicolon first
+            .trim_matches('\'')
+            .trim_matches('"')
+            .to_string();
 
         Ok(WhereClause {
             conditions: vec![Condition {
@@ -422,14 +540,22 @@ impl QueryEngine {
 
             // Build row
             let mut row = Vec::new();
-            for col in &columns {
-                let value = match col.to_uppercase().as_str() {
-                    "*" | "ACTOR_ID" => Some(actor.actor_id.clone()),
-                    "ACTOR_TYPE" => Some(actor.actor_type.clone()),
-                    "STATE" => Some(actor.state.to_string()),
-                    _ => None,
-                };
-                row.push(value);
+            if columns.len() == 1 && columns[0] == "*" {
+                // For SELECT *, add all columns in the expected order
+                row.push(Some(actor.actor_id.clone()));
+                row.push(Some(actor.actor_type.clone()));
+                row.push(Some(actor.state.to_string()));
+            } else {
+                // For specific columns
+                for col in &columns {
+                    let value = match col.to_uppercase().as_str() {
+                        "ACTOR_ID" => Some(actor.actor_id.clone()),
+                        "ACTOR_TYPE" => Some(actor.actor_type.clone()),
+                        "STATE" => Some(actor.state.to_string()),
+                        _ => None,
+                    };
+                    row.push(value);
+                }
             }
             rows.push(row);
         }

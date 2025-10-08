@@ -86,15 +86,21 @@ mod tests {
     async fn test_dml_execution() {
         let mut engine = SqlEngine::new();
 
-        // Test SELECT execution
-        let result = engine.execute("SELECT * FROM test_table").await;
-        assert!(result.is_ok(), "Failed to execute SELECT: {:?}", result);
+        // First create the table
+        let result = engine
+            .execute("CREATE TABLE test_table (id INTEGER, name TEXT)")
+            .await;
+        assert!(result.is_ok(), "Failed to create table: {:?}", result);
 
         // Test INSERT execution
         let result = engine
             .execute("INSERT INTO test_table (name) VALUES ('test')")
             .await;
         assert!(result.is_ok(), "Failed to execute INSERT: {:?}", result);
+
+        // Test SELECT execution (should work now that table exists and has data)
+        let result = engine.execute("SELECT * FROM test_table").await;
+        assert!(result.is_ok(), "Failed to execute SELECT: {:?}", result);
 
         // Test UPDATE execution
         let result = engine

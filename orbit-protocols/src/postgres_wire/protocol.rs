@@ -1,6 +1,6 @@
 //! PostgreSQL wire protocol handler
 
-use bytes::BytesMut;
+use bytes::{BufMut, BytesMut};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -176,6 +176,9 @@ impl PostgresWireProtocol {
             }
             FrontendMessage::Terminate => {
                 return Ok(false);
+            }
+            FrontendMessage::SSLRequest => {
+                self.handle_ssl_request(buf).await?;
             }
         }
 
@@ -445,6 +448,13 @@ impl PostgresWireProtocol {
                 .encode(buf);
             }
         }
+    }
+
+    /// Handle SSL request
+    async fn handle_ssl_request(&mut self, buf: &mut BytesMut) -> ProtocolResult<()> {
+        // Reject SSL request - send 'N' to indicate SSL not supported
+        buf.put_u8(b'N');
+        Ok(())
     }
 
     /// Send error response

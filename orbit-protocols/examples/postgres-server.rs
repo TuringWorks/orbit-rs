@@ -33,7 +33,7 @@
 //! DELETE FROM actors WHERE actor_id = 'user:123';
 //! ```
 
-use orbit_protocols::postgres_wire::PostgresServer;
+use orbit_protocols::postgres_wire::{PostgresServer, QueryEngine};
 use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
@@ -46,8 +46,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
         .init();
 
+    // Create a shared query engine so data persists across connections
+    let query_engine = QueryEngine::new();
+
     // Create PostgreSQL server on port 5433 (avoid conflict with real PostgreSQL)
-    let server = PostgresServer::new("127.0.0.1:5433");
+    let server = PostgresServer::new_with_query_engine("127.0.0.1:5433", query_engine);
 
     println!("🚀 PostgreSQL Wire Protocol Server starting on 127.0.0.1:5433");
     println!();

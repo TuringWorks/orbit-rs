@@ -90,6 +90,8 @@ pub enum FrontendMessage {
     Terminate,
     /// Password message
     Password { password: String },
+    /// SSL request
+    SSLRequest,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -253,8 +255,8 @@ impl FrontendMessage {
         // SSL request
         if protocol_version == 80877103 {
             buf.advance(len);
-            // Return None to indicate SSL not supported
-            return Ok(None);
+            // Return SSL request message
+            return Ok(Some(FrontendMessage::SSLRequest));
         }
 
         let mut parameters = HashMap::new();
