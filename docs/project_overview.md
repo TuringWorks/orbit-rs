@@ -292,27 +292,27 @@ orbit-rs/
 ## 📚 **Documentation Index**
 
 ### **Getting Started**
-- [Quick Start Guide](quick_start.md)
-- [Contributing Guide](contributing.md)
-- [Development Setup](development/development.md)
+- [Installation Guide](quick_start.md#installation) - Installation and setup instructions
+- [Quick Start Guide](quick_start.md) - Get up and running in 5 minutes
+- [Basic Tutorial](quick_start.md#basic-usage) - Step-by-step tutorial
 
 ### **Architecture**
-- [System Architecture](overview.md)
-- [Protocol Adapters](protocols/protocol_adapters.md)
-- [Persistence Architecture](PERSISTENCE_ARCHITECTURE.md)
+- [System Architecture](overview.md) - Complete system design and components
+- [Protocol Adapters](protocols/protocol_adapters.md) - Multi-protocol support architecture
+- [Persistence Architecture](PERSISTENCE_ARCHITECTURE.md) - Storage backends and data management
 
 ### **Protocols**
-- [Redis Commands](protocols/REDIS_COMMANDS_REFERENCE.md)
-- [PostgreSQL Integration](protocols/POSTGRES_WIRE_IMPLEMENTATION.md)
-- [Vector Operations](vector_commands.md)
-- [Time Series](timeseries_commands.md)
-- [Graph Database](graph_commands.md)
-- [ML Functions](ML_SQL_FUNCTIONS_DESIGN.md)
+- [Redis Commands](protocols/REDIS_COMMANDS_REFERENCE.md) - Complete Redis RESP protocol support
+- [PostgreSQL Integration](protocols/POSTGRES_WIRE_IMPLEMENTATION.md) - PostgreSQL wire protocol compatibility
+- [Vector Operations](vector_commands.md) - AI/ML vector database capabilities
+- [Time Series](timeseries_commands.md) - Time-series data management
+- [Graph Database](graph_commands.md) - Graph queries and operations
+- [ML Functions](ML_SQL_FUNCTIONS_DESIGN.md) - Machine learning in SQL
 
 ### **Operations**
-- [Kubernetes Deployment](kubernetes_deployment.md)
-- [Persistence Configuration](KUBERNETES_PERSISTENCE.md)
-- [Security Guide](SECURITY.md)
+- [Kubernetes Deployment](kubernetes_deployment.md) - Production Kubernetes setup
+- [Persistence Configuration](KUBERNETES_PERSISTENCE.md) - Storage configuration guide
+- [Monitoring Guide](advanced_transaction_features.md#metrics-integration) - Metrics, monitoring, and observability
 
 ---
 
