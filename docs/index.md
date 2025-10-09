@@ -212,9 +212,9 @@ Orbit-RS follows a structured development approach with clearly defined phases:
 - [🔒 **Security Issues**](security@turingworks.com) - Responsible disclosure
 
 ### 📝 **Contributing**
-- [📋 **Contribution Guide**](CONTRIBUTING.md) - How to contribute code
+- [📋 **Contribution Guide**](contributing.md) - How to contribute code
 - [📝 **Documentation**](README.md) - Documentation structure and guides
-- [🧪 **Testing**](CONTRIBUTING.md#testing) - Adding tests and benchmarks
+- [🧪 **Testing**](contributing.md#testing) - Adding tests and benchmarks
 - [🎨 **Development**](../DEVELOPMENT.md) - Development workflow
 
 </div>
@@ -240,17 +240,17 @@ Orbit-RS is released under the **Apache License 2.0**.
 **For Developers:**
 - [📖 API Documentation](https://turingworks.github.io/orbit-rs/api/) 
 - [🔧 Development Setup](../DEVELOPMENT.md)
-- [🧪 Testing Guide](CONTRIBUTING.md)
+- [🧪 **Testing Guide**](contributing.md) - Adding tests and benchmarks
 
 **For Operators:**  
-- [☸️ Kubernetes Guide](KUBERNETES_DEPLOYMENT.md)
+- [☘️ Kubernetes Guide](kubernetes_deployment.md)
 - [📉 Storage Setup](KUBERNETES_STORAGE_GUIDE.md)
 - [🔒 Security Configuration](SECURITY.md)
 
 **For Decision Makers:**
 - [📉 Project Status](PROJECT_STATUS.md)
-- [🗺️ Roadmap & Timeline](ROADMAP.md)
-- [💼 Architecture Overview](OVERVIEW.md)
+- [🗺️ Roadmap & Timeline](roadmap.md)
+- [💼 Architecture Overview](overview.md)
 
 </div>
 
