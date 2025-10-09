@@ -19,8 +19,8 @@ permalink: /roadmap/
 
 - [🏠 **Documentation Home**](index.md)
 - [📊 **Current Status**](status.md) 
-- [🎯 **Quick Start**](quick-start.md)
-- [🏗️ **Architecture**](architecture.md)
+- [🎯 **Quick Start**](quick_start.md)
+- [🏗️ **Architecture**](overview.md)
 
 ---
 
@@ -155,7 +155,7 @@ Orbit-RS has successfully completed Phase 8, delivering a comprehensive SQL engi
 - **Linear scalability** up to 16 CPU cores
 - **Sub-100ms latency** for complex JOINs
 
-[📋 **View Detailed Phase 9 Plan**](phases/phase-09-query-optimization.md)
+[📋 **View Detailed Phase 9 Plan**](_phases/phase-09-query-optimization.md)
 
 </div>
 
@@ -195,7 +195,7 @@ Orbit-RS has successfully completed Phase 8, delivering a comprehensive SQL engi
 - **<30 second failover** time for node failures
 - **11 9's data durability** with cross-region replication
 
-[📋 **View Detailed Phase 10 Plan**](phases/phase-10-production-readiness.md)
+[📋 **View Detailed Phase 10 Plan**](_phases/phase-10-production-readiness.md)
 
 </div>
 
@@ -230,7 +230,7 @@ Orbit-RS has successfully completed Phase 8, delivering a comprehensive SQL engi
   - Change data capture with event sourcing
   - Stream processing and materialized views
 
-[📋 **View Detailed Phase 11 Plan**](phases/phase-11-advanced-features.md)
+**Phase 11 Plan** - Detailed plan in development
 
 </div>
 
@@ -257,7 +257,7 @@ Orbit-RS has successfully completed Phase 8, delivering a comprehensive SQL engi
   - Parallel ingestion and query processing
   - 1M+ samples/second ingestion target
 
-[📋 **View Detailed Phase 12 Plan**](phases/phase-12-timeseries-database.md)
+**Phase 12 Plan** - Detailed plan in development
 
 </div>
 
@@ -289,7 +289,7 @@ Orbit-RS has successfully completed Phase 8, delivering a comprehensive SQL engi
 - **100M+ nodes** support with linear scaling
 - **Sub-millisecond** traversal operations
 
-[📋 **View Detailed Phase 13 Plan**](phases/phase-13-neo4j-bolt-protocol.md)
+**Phase 13 Plan** - Detailed plan in development
 
 </div>
 
@@ -316,7 +316,7 @@ Orbit-RS has successfully completed Phase 8, delivering a comprehensive SQL engi
   - Automatic rebalancing and migration
   - Consistency and availability trade-offs
 
-[📋 **View Detailed Phase 14 Plan**](phases/phase-14-distributed-query-processing.md)
+**Phase 14 Plan** - Detailed plan in development
 
 </div>
 
@@ -348,7 +348,7 @@ Orbit-RS has successfully completed Phase 8, delivering a comprehensive SQL engi
 - **10K+ graph traversals/second**
 - **Multi-model ACID transactions**
 
-[📋 **View Detailed Phase 15 Plan**](phases/phase-15-arangodb-multi-model.md)
+**Phase 15 Plan** - Detailed plan in development
 
 </div>
 
@@ -375,7 +375,7 @@ Orbit-RS has successfully completed Phase 8, delivering a comprehensive SQL engi
   - Real-time inference and embedding updates
   - Vector database integration
 
-[📋 **View Detailed Phase 16 Plan**](phases/phase-16-graphml-graphrag.md)
+**Phase 16 Plan** - Detailed plan in development
 
 </div>
 
@@ -400,7 +400,7 @@ Orbit-RS has successfully completed Phase 8, delivering a comprehensive SQL engi
   - MongoDB wire protocol layer
   - Document validation and indexing
 
-[📋 **View Detailed Phase 17 Plan**](phases/phase-17-additional-protocols.md)
+**Phase 17 Plan** - Detailed plan in development
 
 </div>
 
@@ -423,7 +423,7 @@ Orbit-RS has successfully completed Phase 8, delivering a comprehensive SQL engi
   - Data synchronization and caching
   - Reduced latency for global users
 
-[📋 **View Detailed Phase 18 Plan**](phases/phase-18-cloud-native-features.md)
+**Phase 18 Plan** - Detailed plan in development
 
 </div>
 
@@ -446,7 +446,7 @@ Orbit-RS has successfully completed Phase 8, delivering a comprehensive SQL engi
   - Professional services framework
   - Enterprise support infrastructure
 
-[📋 **View Detailed Phase 19 Plan**](phases/phase-19-enterprise-features.md)
+**Phase 19 Plan** - Detailed plan in development
 
 </div>
 
@@ -556,12 +556,12 @@ gantt
 ### 🚀 **Contribute**
 - [🐛 **Report Issues**](https://github.com/TuringWorks/orbit-rs/issues) - Bug reports and feature requests
 - [🤝 **Pull Requests**](contributing.md) - Code contributions and improvements
-- [📝 **Documentation**](contributing/documentation.md) - Help improve documentation
+- [📝 **Documentation**](contributing.md#documentation) - Help improve documentation
 
 ### 💼 **Enterprise Partnership**
 - [📧 **Contact Sales**](mailto:enterprise@turingworks.com) - Enterprise deployment planning
-- [🤝 **Technology Partnership**](partnerships.md) - Integration and development partnerships
-- [💰 **Funding Opportunities**](funding.md) - Investment and sponsorship options
+- [🤝 **Technology Partnership**](mailto:partnerships@turingworks.com) - Integration and development partnerships
+- [💰 **Funding Opportunities**](mailto:funding@turingworks.com) - Investment and sponsorship options
 
 </div>
 
@@ -570,7 +570,7 @@ gantt
 <div class="footer-nav" markdown="1">
 
 **📍 Navigation:**  
-[🏠 Home](index.md) | [📊 Status](status.md) | [🏗️ Architecture](architecture.md) | [🚀 Quick Start](quick-start.md)
+[🏠 Home](index.md) | [📊 Status](status.md) | [🏗️ Architecture](overview.md) | [🚀 Quick Start](quick_start.md)
 
 **🔗 Quick Links:**  
 [GitHub](https://github.com/TuringWorks/orbit-rs) | [Discord](https://discord.gg/orbit-rs) | [Documentation](index.md)
