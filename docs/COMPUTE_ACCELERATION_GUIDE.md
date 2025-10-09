@@ -493,5 +493,5 @@ For workloads involving large datasets, vector operations, matrix computations, 
 
 **See Also**:
 - [README-K8S-DEPLOYMENT.md](README-K8S-DEPLOYMENT.md) - Kubernetes deployment with GPU support
-- [RFC Heterogeneous Compute](docs/rfc/rfc_heterogeneous_compute.md) - Technical architecture details
+- [RFC Heterogeneous Compute](docs/rfcs/rfc_heterogeneous_compute.md) - Technical architecture details
 - [Kubernetes Deployment Sizing Guide](docs/k8s-deployment-sizing-guide.md) - Hardware sizing recommendations

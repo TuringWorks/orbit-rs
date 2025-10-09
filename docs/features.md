@@ -25,7 +25,7 @@ This document provides a comprehensive overview of all implemented features in O
   - Cross-platform support (macOS, Windows, Linux, Android, iOS)
   - Intelligent workload scheduling with graceful degradation
   - Platform-specific optimizations (Apple Silicon, Snapdragon, x86-64)
-- **Documentation**: [RFC: Heterogeneous Compute](rfc/rfc_heterogeneous_compute.md)
+- **Documentation**: [RFC: Heterogeneous Compute](rfcs/rfc_heterogeneous_compute.md)
 
 ### Distributed Transactions
 - **Status**: ✅ **Production Ready**
@@ -74,7 +74,7 @@ This document provides a comprehensive overview of all implemented features in O
   - Snapdragon Hexagon DSP
   - Intel Neural Compute (OpenVINO)
 - **Performance**: 10-50x speedups for AI inference workloads
-- **Documentation**: [RFC: Heterogeneous Compute](rfc/rfc_heterogeneous_compute.md)
+- **Documentation**: [RFC: Heterogeneous Compute](rfcs/rfc_heterogeneous_compute.md)
 
 ## 📊 Data Management
 
@@ -198,7 +198,7 @@ This document provides a comprehensive overview of all implemented features in O
 ### Architecture & Core
 - [Architecture Overview](overview.md)
 - [Virtual Actor Persistence](virtual_actor_persistence.md)
-- [Heterogeneous Compute RFC](rfc/rfc_heterogeneous_compute.md)
+- [Heterogeneous Compute RFC](rfcs/rfc_heterogeneous_compute.md)
 
 ### Protocols & APIs
 - [Protocol Adapters](protocols/protocol_adapters.md)
