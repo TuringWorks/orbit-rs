@@ -1,0 +1,76 @@
+# Pre-commit hooks configuration for Orbit-RS
+# This ensures code quality and security before commits
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.4.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
+      - id: check-merge-conflict
+
+  - repo: https://github.com/doublify/pre-commit-rust
+    rev: v1.0
+    hooks:
+      - id: fmt
+        name: Rust formatting (cargo fmt)
+        description: Format Rust code with cargo fmt
+        entry: cargo fmt --all --
+        language: system
+        files: \.rs$
+        pass_filenames: false
+
+      - id: cargo-check
+        name: Rust check (cargo check) 
+        description: Run cargo check
+        entry: cargo check --workspace --all-targets
+        language: system
+        files: \.rs$
+        pass_filenames: false
+
+  - repo: local
+    hooks:
+      - id: clippy
+        name: Rust lints (cargo clippy)
+        description: Run Clippy linter
+        entry: cargo clippy --workspace --all-targets -- -D warnings
+        language: system
+        files: \.rs$
+        pass_filenames: false
+
+      - id: cargo-audit
+        name: Security audit (cargo audit)
+        description: Run security audit on dependencies
+        entry: bash -c 'cargo install cargo-audit --locked || true && cargo audit'
+        language: system
+        files: Cargo\.(toml|lock)$
+        pass_filenames: false
+
+      - id: test
+        name: Rust tests
+        description: Run Rust tests
+        entry: cargo test --workspace --lib
+        language: system
+        files: \.rs$
+        pass_filenames: false
+        stages: [manual]  # Only run when explicitly requested
+
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.32.0
+    hooks:
+      - id: yamllint
+        args: [-d, relaxed]
+        files: \.(yaml|yml)$
+
+  - repo: https://github.com/pre-commit/mirrors-prettier
+    rev: v3.0.0
+    hooks:
+      - id: prettier
+        files: \.(md|json|yaml|yml)$
+        exclude: ^(Cargo\.lock|target/|\.github/workflows/)
+
+# Configuration for specific hooks
+default_language_version:
+  rust: system

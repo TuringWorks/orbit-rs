@@ -25,6 +25,7 @@ header_pages:
   - roadmap.md
   - features.md
   - contributing.md
+  - container-images/index.html
 
 # Site configuration
 markdown: kramdown
@@ -125,6 +126,7 @@ exclude:
 include:
   - _pages
   - assets/css/custom.css
+  - container-images
 
 # Custom CSS for styling
 custom_css:
