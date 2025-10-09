@@ -72,7 +72,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-**📝 [Complete Quick Start Guide](docs/QUICK_START.md)** for detailed setup instructions.
+**📝 [Complete Quick Start Guide](docs/quick_start.md)** for detailed setup instructions.
 
 ## Current Status: Phase 8.5 Complete! 🎉
 
@@ -97,11 +97,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 - **Phase 10**: Production Readiness ([5 GitHub Issues](https://github.com/TuringWorks/orbit-rs/issues?q=label%3Aphase-10))
 - **Phase 11**: Advanced Features ([5 GitHub Issues](https://github.com/TuringWorks/orbit-rs/issues?q=label%3Aphase-11))
 
-**[📊 View Full Roadmap](docs/ROADMAP.md)** | **[📝 GitHub Project](https://github.com/orgs/TuringWorks/projects/1)**
+**[📊 View Full Roadmap](docs/roadmap.md)** | **[📝 GitHub Project](https://github.com/orgs/TuringWorks/projects/1)**
 
 ## Contributing
 
-We welcome contributions! See our **[Development Guide](docs/development/DEVELOPMENT.md)** for setup instructions and contributing guidelines.
+We welcome contributions! See our **[Development Guide](DEVELOPMENT.md)** for setup instructions and contributing guidelines.
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-new-feature`)
