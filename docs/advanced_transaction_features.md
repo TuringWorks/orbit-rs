@@ -1,7 +1,5 @@
 # Advanced Transaction Features Guide
 
-This guide provides detailed information about the advanced transaction features available in Orbit-RS, including distributed locks, metrics, security, performance optimizations, and saga patterns.
-
 ## Table of Contents
 
 1. [Distributed Locks](#distributed-locks)
@@ -184,6 +182,7 @@ lock_metrics.record_deadlock_detected(&[tx_id1, tx_id2]).await;
 Metrics are automatically exported in Prometheus format:
 
 ```
+
 # HELP orbit_transaction_node_1_started_total Total transactions started
 # TYPE orbit_transaction_node_1_started_total counter
 orbit_transaction_node_1_started_total 1234
@@ -203,6 +202,7 @@ orbit_transaction_node_1_duration_seconds_bucket{le="0.01"} 250
 Example dashboard queries:
 
 ```promql
+
 # Transaction throughput
 rate(orbit_transaction_started_total[5m])
 

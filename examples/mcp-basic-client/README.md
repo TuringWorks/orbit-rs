@@ -1,7 +1,5 @@
 # MCP Basic Client Example
 
-This example demonstrates the basic usage of the Model Context Protocol (MCP) client functionality in Orbit. It shows how to:
-
 - Connect to an MCP server
 - List and execute available tools
 - Access server resources

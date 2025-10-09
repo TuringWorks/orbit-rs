@@ -157,6 +157,7 @@ test result: ok. 16 passed; 0 failed; 0 ignored
 
 ### New Dependencies Added
 ```toml
+
 # Storage backends
 rocksdb = "0.22"
 bloom = "0.3"

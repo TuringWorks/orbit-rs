@@ -1,7 +1,5 @@
 # Advanced MCP Server Example
 
-This example demonstrates a production-ready MCP (Model Context Protocol) server implementation using the `orbit-protocols` framework. The server provides comprehensive tool execution capabilities, database integration, vector operations, and resource management through both HTTP REST APIs and MCP protocol support.
-
 ## Features
 
 ### Core MCP Capabilities
@@ -314,6 +312,7 @@ curl "http://localhost:8080/mcp/resources/memory://sessions"
 You can use the basic MCP client example to interact with this server:
 
 ```bash
+
 # In another terminal, run the basic client
 cd ../mcp-basic-client
 cargo run -- --server-url http://localhost:8080 list-tools
@@ -342,6 +341,7 @@ cargo run -- --log-level debug
 
 #### Database Integration
 ```bash
+
 # Start PostgreSQL (example with Docker)
 docker run -d --name postgres \
   -e POSTGRES_DB=testdb \
@@ -356,12 +356,14 @@ cargo run -- --database-url "postgresql://testuser:testpass@localhost:5432/testd
 
 #### Vector Operations
 ```bash
+
 # Enable vector search capabilities
 cargo run -- --enable-vectors --port 9090
 ```
 
 #### Production Configuration
 ```bash
+
 # Production-like setup
 cargo run -- \
   --host 0.0.0.0 \

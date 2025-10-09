@@ -1,7 +1,5 @@
 # Orbit Protocol Adapters
 
-Protocol adapters that enable existing database clients (Redis, PostgreSQL, Neo4j) and REST API consumers to interact with the Orbit distributed actor system.
-
 ## Overview
 
 The `orbit-protocols` crate provides protocol translation layers that allow developers to use familiar database clients and tools with Orbit's distributed actor system. This enables seamless integration and adoption without requiring application rewrites.
@@ -87,6 +85,7 @@ cargo run --package orbit-protocols --example postgres-server
 #### Testing with psql
 
 ```bash
+
 # Connect to server
 psql -h localhost -p 5433 -U orbit -d actors
 
@@ -193,6 +192,7 @@ server.run().await?;
 #### Testing with curl
 
 ```bash
+
 # Create actor
 curl -X POST http://localhost:8080/api/v1/actors \
   -H "Content-Type: application/json" \
@@ -249,6 +249,7 @@ Available features:
 ### Environment Variables
 
 ```bash
+
 # RESP Server
 ORBIT_RESP_BIND_ADDRESS=0.0.0.0:6379
 

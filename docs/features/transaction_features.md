@@ -1,7 +1,5 @@
 # Advanced Transaction Features
 
-Orbit-RS includes a comprehensive suite of advanced transaction features for building production-ready distributed systems with ACID compliance, high availability, and enterprise-grade security.
-
 ## Overview
 
 Orbit-RS provides a sophisticated transaction system that goes beyond basic CRUD operations to support complex distributed workflows, advanced locking mechanisms, and comprehensive observability. The system is designed for production use with features like deadlock detection, saga patterns, and security audit trails.

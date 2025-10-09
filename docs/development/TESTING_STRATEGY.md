@@ -21,6 +21,7 @@ Tests are organized using Cargo feature flags that align with development phases
 
 ```toml
 [features]
+
 # Phase-specific feature flags
 phase-13-features = ["neo4j-features"]
 phase-15-features = ["arangodb-features"]  
@@ -37,6 +38,7 @@ graphrag-features = []
 
 #### 1. Mock Tests (Always Available)
 ```bash
+
 # Run all mock tests
 ./scripts/run-tests.sh mock
 
@@ -53,6 +55,7 @@ cargo test --features "graphml-features" --lib graphml::
 
 #### 2. Unit Tests (Implementation-Gated)
 ```bash
+
 # Run when implementation is ready
 cargo test --features "neo4j-features" --test neo4j_integration
 ```
@@ -65,6 +68,7 @@ cargo test --features "neo4j-features" --test neo4j_integration
 
 #### 3. BDD/Cucumber Tests (User-Focused)
 ```bash
+
 # Run BDD feature tests
 ./scripts/run-tests.sh bdd
 ```
@@ -77,6 +81,7 @@ cargo test --features "neo4j-features" --test neo4j_integration
 
 #### 4. Property-Based Tests (Edge Case Discovery)
 ```bash
+
 # Run property-based tests
 ./scripts/run-tests.sh property
 ```
@@ -89,6 +94,7 @@ cargo test --features "neo4j-features" --test neo4j_integration
 
 #### 5. Performance Tests (Benchmark Validation)
 ```bash
+
 # Run performance benchmarks
 ./scripts/run-tests.sh performance
 ```
@@ -182,6 +188,7 @@ mod tests {
 ### Feature File Example
 
 ```gherkin
+
 # tests/features/neo4j_cypher.feature
 Feature: Neo4j Cypher Query Language Support
   As a graph database user
@@ -198,6 +205,7 @@ Feature: Neo4j Cypher Query Language Support
 ### Step Implementation
 
 ```rust
+
 #[given("an empty graph database")]
 fn empty_graph_database(world: &mut CypherWorld) {
     world.engine = MockCypherEngine::new();
@@ -228,6 +236,7 @@ fn query_should_succeed(world: &mut CypherWorld) {
 ### Example: Node Embedding Properties
 
 ```rust
+
 #[cfg(feature = "property-tests")]
 mod property_tests {
     use proptest::prelude::*;
@@ -261,6 +270,7 @@ mod property_tests {
 ### Benchmark Structure
 
 ```rust
+
 #[cfg(feature = "performance-tests")]
 mod performance_tests {
     use std::time::Instant;
@@ -296,6 +306,7 @@ mod performance_tests {
 ### Continuous Integration
 
 ```yaml
+
 # .github/workflows/tests.yml
 name: Comprehensive Testing
 
@@ -332,6 +343,7 @@ jobs:
 Tests are automatically enabled based on implementation readiness:
 
 ```bash
+
 # Check if Neo4j implementation exists
 if [ -f "orbit-protocols/src/neo4j/mod.rs" ]; then
     # Run full Neo4j test suite
@@ -375,6 +387,7 @@ fi
 ### Test Naming Convention
 
 ```rust
+
 #[tokio::test]
 async fn test_create_node_with_valid_properties_should_succeed() {
     // Test name describes: action + condition + expected_outcome
@@ -389,6 +402,7 @@ async fn test_create_node_with_invalid_properties_should_fail() {
 ### Test Structure (Given-When-Then)
 
 ```rust
+
 #[tokio::test]
 async fn test_example() {
     // Given - Setup test data and conditions

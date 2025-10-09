@@ -1,7 +1,5 @@
 # PostgreSQL TimescaleDB Compatibility
 
-This document outlines the planned TimescaleDB compatibility features for Orbit-RS, enabling advanced time-series database capabilities through the PostgreSQL wire protocol.
-
 ## Overview
 
 TimescaleDB is a PostgreSQL extension that transforms PostgreSQL into a scalable time-series database. Orbit-RS will provide native compatibility with TimescaleDB functions and features, allowing existing applications to seamlessly migrate from TimescaleDB to Orbit's distributed architecture.
@@ -120,6 +118,7 @@ CALL refresh_continuous_aggregate('sensor_data_hourly',
 ### Actor Architecture
 
 ```rust
+
 #[async_trait]
 pub trait HypertableActor: ActorWithStringKey {
     // Hypertable management
@@ -145,6 +144,7 @@ pub trait HypertableActor: ActorWithStringKey {
 ### Data Structures
 
 ```rust
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HypertableConfig {
     pub table_name: String,

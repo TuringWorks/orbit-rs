@@ -1,7 +1,5 @@
 # RESP Server Example
 
-This example demonstrates how to run a Redis-compatible server that accepts Redis protocol (RESP) commands and executes them on Orbit actors.
-
 ## Overview
 
 The RESP server example creates a TCP server that:
@@ -24,6 +22,7 @@ redis-cli -h 127.0.0.1 -p 6380
 
 3. Try some Redis commands:
 ```redis
+
 # Key-value operations
 > SET mykey "hello world"
 OK

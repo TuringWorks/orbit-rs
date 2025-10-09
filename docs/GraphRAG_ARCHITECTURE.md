@@ -75,6 +75,7 @@ From our analysis, Orbit-RS provides an excellent foundation for GraphRAG:
 **Purpose**: Orchestrates knowledge graph construction, entity extraction, and RAG operations.
 
 ```rust
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GraphRAGActor {
     pub kg_name: String,
@@ -109,6 +110,7 @@ pub struct GraphRAGConfig {
 **Purpose**: NLP pipeline for identifying entities and relationships from text.
 
 ```rust
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EntityExtractionActor {
     pub extractors: Vec<ExtractorConfig>,
@@ -134,6 +136,7 @@ pub enum ExtractorConfig {
 #### 3. Enhanced GraphNode with Vector Embeddings
 
 ```rust
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EnhancedGraphNode {
     pub id: String,
@@ -163,6 +166,7 @@ pub enum EntityType {
 #### 4. Multi-Hop Reasoning Engine
 
 ```rust
+
 #[derive(Debug, Clone)]
 pub struct MultiHopReasoningEngine {
     pub max_hops: u32,
@@ -191,6 +195,7 @@ impl MultiHopReasoningEngine {
 ### Knowledge Graph Construction Commands
 
 ```redis
+
 # Build knowledge graph from documents
 GRAPHRAG.BUILD <kg_name> <document_id> <document_text> [extractors...]
 
@@ -208,6 +213,7 @@ GRAPHRAG.ENTITIES <kg_name> [TYPE <entity_type>] [FILTER <key> <value>] [LIMIT <
 ### Retrieval-Augmented Generation Commands
 
 ```redis
+
 # Perform RAG query with context retrieval
 GRAPHRAG.QUERY <kg_name> <query_text> [MAX_HOPS <n>] [CONTEXT_SIZE <n>] [LLM <provider>]
 
@@ -224,6 +230,7 @@ GRAPHRAG.SIMILAR <kg_name> <entity_id> <limit> [THRESHOLD <f>] [ENTITY_TYPES <ty
 ### Advanced GraphRAG Operations
 
 ```redis
+
 # Extract entities from new documents
 GRAPHRAG.EXTRACT <kg_name> <document_text> [CONFIDENCE <f>] [EXTRACTORS <types>]
 
@@ -353,6 +360,7 @@ pub async fn hybrid_search(
 ### 3. LLM Provider Integration
 
 ```rust
+
 #[derive(Debug, Clone)]
 pub enum LLMProvider {
     OpenAI { api_key: String, model: String },
@@ -385,6 +393,7 @@ impl GraphRAGActor {
 ### 1. Caching Strategy
 
 ```rust
+
 #[derive(Debug)]
 pub struct GraphRAGCache {
     entity_embeddings: Arc<RwLock<LruCache<String, Vec<f32>>>>,

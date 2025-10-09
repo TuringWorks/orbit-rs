@@ -90,6 +90,7 @@ I have successfully implemented GraphRAG functionality across **four major proto
 ### Simple Knowledge Building
 
 ```bash
+
 # Redis/RESP
 GRAPHRAG.BUILD research_kg paper_001 "Machine learning research..." "{}"
 
@@ -108,6 +109,7 @@ YIELD entities_extracted, processing_time_ms
 ### Complex Multi-Protocol Workflow
 
 ```python
+
 # Multi-protocol GraphRAG application
 class GraphRAGPipeline:
     def __init__(self):
@@ -164,6 +166,7 @@ class GraphRAGPipeline:
 
 #### For High-Throughput Applications
 ```bash
+
 # Use RESP for maximum throughput
 GRAPHRAG.BUILD kg doc_001 "text" "{}" 
 GRAPHRAG.BUILD kg doc_002 "text" "{}"

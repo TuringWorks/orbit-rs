@@ -59,6 +59,7 @@ By participating in this project, you agree to abide by our Code of Conduct. Ple
 ### Building the Project
 
 ```bash
+
 # Build all crates
 cargo build
 
@@ -72,6 +73,7 @@ cargo build --package orbit-shared
 ### Running Tests
 
 ```bash
+
 # Run all tests
 cargo test
 
@@ -88,6 +90,7 @@ cargo test -- --ignored
 ### Running Examples
 
 ```bash
+
 # Hello World example
 cargo run --example hello-world
 
@@ -179,6 +182,7 @@ const MAX_RETRIES: u32 = 3;
 pub type TransactionId = String;
 
 // Structs and enums
+
 #[derive(Debug, Clone)]
 pub struct MyStruct {
     // fields
@@ -195,6 +199,7 @@ impl MyStruct {
 }
 
 // Tests (at bottom of file)
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -271,6 +276,7 @@ pub async fn begin_transaction(&self, timeout: Option<Duration>) -> OrbitResult<
 ### Test Structure
 
 ```rust
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -332,6 +338,7 @@ mod tests {
 ### Benchmarking
 
 ```bash
+
 # Run benchmarks
 cargo bench --package orbit-benchmarks
 
@@ -354,6 +361,7 @@ perf report
 ### Pull Request Template
 
 ```markdown
+
 ## Description
 Brief description of changes.
 

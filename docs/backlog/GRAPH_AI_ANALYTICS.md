@@ -37,6 +37,7 @@ Implement cutting-edge Graph Machine Learning (GraphML), Graph Retrieval-Augment
 
 ```rust
 // Graph Machine Learning Framework
+
 #[async_trait]
 pub trait GraphMLActor: ActorWithStringKey {
     // Node Embeddings
@@ -62,6 +63,7 @@ pub trait GraphMLActor: ActorWithStringKey {
 }
 
 // GraphRAG Framework
+
 #[async_trait]
 pub trait GraphRAGActor: ActorWithStringKey {
     // Knowledge Graph Construction
@@ -86,6 +88,7 @@ pub trait GraphRAGActor: ActorWithStringKey {
 }
 
 // Advanced Graph Analytics
+
 #[async_trait]
 pub trait GraphAnalyticsActor: ActorWithStringKey {
     // Community Detection
@@ -120,6 +123,7 @@ pub trait GraphAnalyticsActor: ActorWithStringKey {
 }
 
 // Knowledge Graph Reasoning
+
 #[async_trait]
 pub trait KnowledgeGraphActor: ActorWithStringKey {
     // Ontology Management
@@ -148,6 +152,7 @@ pub trait KnowledgeGraphActor: ActorWithStringKey {
 ### Data Structures
 
 ```rust
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EmbeddingModel {
     pub model_type: EmbeddingType,

@@ -85,6 +85,7 @@ SELECT * FROM GRAPHRAG_STATS('docs');
 
 ### Redis Client (redis-cli)
 ```redis
+
 # Build knowledge graph
 GRAPHRAG.BUILD docs readme "Orbit is an actor framework..." "{}"
 

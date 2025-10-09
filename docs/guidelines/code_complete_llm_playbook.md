@@ -90,6 +90,7 @@ Pick one or more stacks; generate baseline code + tests + CI in one commit.
 
 ### Rust (workspace)
 ```bash
+
 # Workspace
 cat > Cargo.toml <<'TOML'
 [workspace]
@@ -102,6 +103,7 @@ mkdir -p crates/app/src crates/core/src crates/infra/src
 cat > crates/core/src/lib.rs <<'RS'
 //! Core domain logic
 pub fn add(a:i32,b:i32)->i32{a+b}
+
 #[cfg(test)]
 mod tests{use super::*;#[test]fn adds(){assert_eq!(add(2,3),5);}}
 RS
@@ -256,17 +258,22 @@ jobs:
 **When `develop` is stable**:
 ```bash
 VERSION=1.0.0
+
 # Start release
 git checkout develop && git pull
 git checkout -b release/${VERSION}
+
 # Update versions/CHANGELOG
 # Commit
 git commit -am "chore(release): prepare v${VERSION}"
+
 # PR: base main -> merge -> tag
 git checkout main && git merge --no-ff release/${VERSION}
 git tag -a v${VERSION} -m "Release v${VERSION}" && git push --tags
+
 # Back-merge
 git checkout develop && git merge --no-ff release/${VERSION}
+
 # Cleanup
 git branch -d release/${VERSION}
 ```
@@ -276,13 +283,16 @@ git branch -d release/${VERSION}
 ## 10) Hotfix Steps (Production Incident)
 ```bash
 VERSION=1.0.1
+
 # Branch from main
 git checkout main && git pull
 git checkout -b hotfix/${VERSION}
+
 # Apply minimal fix + tests
 # Merge to main and tag
 git checkout main && git merge --no-ff hotfix/${VERSION}
 git tag -a v${VERSION} -m "Hotfix v${VERSION}" && git push --tags
+
 # Back-merge to develop (and release/* if open)
 git checkout develop && git merge --no-ff hotfix/${VERSION}
 ```
@@ -333,6 +343,7 @@ playbook:
 
 ## 14) Minimal Command Index (copy/paste)
 ```bash
+
 # Run full local gate (Rust example)
 cargo fmt --all && cargo clippy --workspace --all-targets --all-features -- -D warnings && cargo test --workspace --all-features && cargo doc --no-deps
 

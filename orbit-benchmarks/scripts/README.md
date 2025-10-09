@@ -5,6 +5,7 @@ This directory contains all benchmark-related scripts for Orbit-RS, providing a 
 ## 🚀 Quick Start
 
 ```bash
+
 # Run safe benchmarks (recommended)
 ./run_benchmarks.sh -t safe
 
@@ -74,6 +75,7 @@ BENCHMARK TYPES:
 
 **Examples:**
 ```bash
+
 # Basic usage
 ./run_benchmarks.sh
 
@@ -101,6 +103,7 @@ Python script for analyzing benchmark results and generating reports.
 
 **Requirements:**
 ```bash
+
 # Optional Python packages (for enhanced features)
 pip install matplotlib pandas  # For advanced analysis
 ```
@@ -170,6 +173,7 @@ EXAMPLES:
 
 ### Before (Scattered)
 ```bash
+
 # Old locations
 verification/checks/check_benchmarks.sh     # ❌ Removed
 orbit-compute/src/benchmarks/               # ❌ Moved
@@ -181,6 +185,7 @@ cargo bench --package orbit-benchmarks      # ❌ Fails (excluded)
 
 ### After (Consolidated)
 ```bash
+
 # New location
 orbit-benchmarks/scripts/                   # ✅ All scripts here
 
@@ -240,6 +245,7 @@ Expected performance on MacBook Pro M2:
 
 **Workaround**:
 ```bash
+
 # Use timeout protection (recommended)
 ./run_benchmarks.sh -t persistence -d 2m
 
@@ -265,6 +271,7 @@ cargo bench  # ✅ Works
 
 ### Development Workflow
 ```bash
+
 # Before code changes
 cd orbit-benchmarks && ./scripts/run_benchmarks.sh -t safe
 

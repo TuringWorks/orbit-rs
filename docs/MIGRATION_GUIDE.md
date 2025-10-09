@@ -105,6 +105,7 @@ val actor = client.actorReference(GreeterActor::class, "key")
 
 **Rust**: Trait-based with compile-time dispatch
 ```rust
+
 #[async_trait]
 trait GreeterActor: ActorWithStringKey {
     async fn greet(&self, name: String) -> Result<String, OrbitError>;
@@ -142,6 +143,7 @@ data class AddressableReference(
 
 **Rust**:
 ```rust
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct AddressableReference {
     pub addressable_type: AddressableType,
@@ -162,6 +164,7 @@ sealed class Key {
 
 **Rust**: Enum with associated data
 ```rust
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Key {
     StringKey { key: String },
@@ -185,6 +188,7 @@ data class NodeId(val key: NodeKey, val namespace: Namespace) {
 
 **Rust**:
 ```rust
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct NodeId {
     pub key: NodeKey,
@@ -249,6 +253,7 @@ class ActorTest : StringSpec({
 
 **Rust**: Built-in testing + Mockall
 ```rust
+
 #[cfg(test)]
 mod tests {
     use super::*;

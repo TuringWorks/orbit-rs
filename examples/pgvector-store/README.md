@@ -325,6 +325,7 @@ If you're migrating from a standard PostgreSQL + pgvector setup:
 ## 🧪 Testing
 
 ```bash
+
 # Run tests
 cargo test --example pgvector-store
 

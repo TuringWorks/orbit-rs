@@ -445,6 +445,7 @@ members = [
 tokio = { version = "1.0", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }
 tracing = "0.1"
+
 # ... other shared dependencies
 
 [workspace.lints.clippy]

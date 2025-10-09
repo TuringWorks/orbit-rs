@@ -26,6 +26,7 @@ Orbit-RS solves this by making **virtual actors the fundamental unit of memory m
 
 ```rust
 // Actors automatically manage their memory footprint
+
 #[derive(Addressable)]
 pub struct GraphTraversalActor {
     partition_id: u64,
@@ -53,6 +54,7 @@ impl GraphTraversalActor {
 ### 2.1 Memory Profile Classification
 
 ```rust
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ActorMemoryProfile {
     Hot,    // <1ms tail latency requirement
@@ -134,6 +136,7 @@ let pin_opts = PinOpts {
 ### 3.1 Enhanced Actor Lifecycle Trait
 
 ```rust
+
 #[async_trait]
 pub trait ActorLifecycleWithMemory: Addressable {
     /// Called when actor is first activated
@@ -170,6 +173,7 @@ pub enum ActivationReason {
 
 ```rust
 // Example: Graph Database Actor
+
 #[derive(Addressable)]
 pub struct GraphPartitionActor {
     partition_id: u64,
@@ -279,6 +283,7 @@ impl ActorMemoryBehavior for GraphPartitionActor {
 ### 4.1 Time Series Actors
 
 ```rust
+
 #[derive(Addressable)]
 pub struct TimeSeriesActor {
     metric_name: String,
@@ -353,6 +358,7 @@ impl TimeSeriesActor {
 ### 4.2 Document Store Actors
 
 ```rust
+
 #[derive(Addressable)]
 pub struct DocumentCollectionActor {
     collection_name: String,
@@ -434,6 +440,7 @@ impl DocumentCollectionActor {
 ### 5.1 Memory Hint Messages
 
 ```rust
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum MemoryHint {
     /// Hint that these actors will be accessed soon
@@ -731,6 +738,7 @@ impl DistributedActorMemoryCoordinator {
 ### 8.1 Actor-Level SLA Definition
 
 ```rust
+
 #[derive(Debug, Clone)]
 pub struct ActorSLA {
     pub max_activation_time_ms: u64,
@@ -845,6 +853,7 @@ impl ActorSLAMonitor {
 
 ```rust
 // Example: Social media influence analysis
+
 #[derive(Addressable)]
 pub struct InfluenceAnalysisActor {
     user_id: u64,
@@ -904,6 +913,7 @@ impl ActorLifecycleWithMemory for InfluenceAnalysisActor {
 ### 9.2 High-Frequency Trading Analytics
 
 ```rust
+
 #[derive(Addressable)]
 pub struct TradingSignalActor {
     symbol: String,

@@ -179,6 +179,7 @@ The pipeline auto-creates basic Helm charts if they don't exist. For custom depl
 
 **1. Run individual checks:**
 ```bash
+
 # Format check
 cargo fmt --all -- --check
 
@@ -197,6 +198,7 @@ helm lint helm/orbit-rs
 
 **2. Cross-compilation testing:**
 ```bash
+
 # Install target
 rustup target add aarch64-apple-darwin
 

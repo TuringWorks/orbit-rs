@@ -587,6 +587,7 @@ RETURN success, size(errors) as error_count;
 ### Multi-Protocol Knowledge Discovery
 
 ```python
+
 # Python application using multiple protocols
 import psycopg2
 import neo4j

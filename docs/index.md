@@ -21,6 +21,7 @@ permalink: /
 **New to Orbit-RS?** Get up and running in 5 minutes:
 
 ```bash
+
 # Install Orbit-RS
 cargo install orbit-rs
 

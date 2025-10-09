@@ -1,7 +1,5 @@
 # Redis Commands Reference - Orbit-RS RESP Protocol
 
-Complete reference for all **50+ Redis commands** implemented in Orbit-RS RESP protocol adapter.
-
 ## Overview
 
 Orbit-RS provides full Redis compatibility through the RESP (Redis Serialization Protocol) adapter, supporting:
@@ -17,9 +15,11 @@ Orbit-RS provides full Redis compatibility through the RESP (Redis Serialization
 Test server connection and optionally echo message.
 ```redis
 PING
+
 # "PONG"
 
 PING "hello world" 
+
 # "hello world"
 ```
 
@@ -27,6 +27,7 @@ PING "hello world"
 Echo the given message back to client.
 ```redis
 ECHO "Hello Redis!"
+
 # "Hello Redis!"
 ```
 
@@ -34,6 +35,7 @@ ECHO "Hello Redis!"
 Select database (logical separation, no-op for compatibility).
 ```redis
 SELECT 0
+
 # OK
 ```
 
@@ -41,9 +43,11 @@ SELECT 0
 Authenticate with server (placeholder implementation).
 ```redis
 AUTH mypassword
+
 # OK
 
 AUTH myuser mypassword
+
 # OK
 ```
 
@@ -51,6 +55,7 @@ AUTH myuser mypassword
 Close connection gracefully.
 ```redis
 QUIT
+
 # OK
 ```
 
@@ -61,6 +66,7 @@ Retrieve value by key from KeyValueActor.
 ```redis
 SET mykey "hello world"
 GET mykey
+
 # "hello world"
 ```
 
@@ -68,12 +74,15 @@ GET mykey
 Set key to value with optional expiration.
 ```redis
 SET mykey "value"
+
 # OK
 
 SET mykey "value" EX 3600
+
 # OK (expires in 1 hour)
 
 SET mykey "value" PX 60000
+
 # OK (expires in 60 seconds)
 ```
 
@@ -81,6 +90,7 @@ SET mykey "value" PX 60000
 Delete one or more keys.
 ```redis
 DEL key1 key2 key3
+
 # (integer) 2
 ```
 
@@ -88,6 +98,7 @@ DEL key1 key2 key3
 Check if keys exist.
 ```redis
 EXISTS key1 key2
+
 # (integer) 1
 ```
 
@@ -95,6 +106,7 @@ EXISTS key1 key2
 Get time-to-live in seconds (-1 = no expiration, -2 = key doesn't exist).
 ```redis
 TTL mykey
+
 # (integer) 299
 ```
 
@@ -102,6 +114,7 @@ TTL mykey
 Set expiration time in seconds.
 ```redis
 EXPIRE mykey 300
+
 # (integer) 1
 ```
 
@@ -112,8 +125,10 @@ Append value to existing string.
 ```redis
 SET mykey "Hello"
 APPEND mykey " World"
+
 # (integer) 11
 GET mykey
+
 # "Hello World"
 ```
 
@@ -122,6 +137,7 @@ Get substring by byte range.
 ```redis
 SET mykey "Hello World"
 GETRANGE mykey 0 4
+
 # "Hello"
 ```
 
@@ -130,6 +146,7 @@ Set new value and return old value atomically.
 ```redis
 SET mykey "old"
 GETSET mykey "new"
+
 # "old"
 ```
 
@@ -138,6 +155,7 @@ Get multiple keys at once.
 ```redis
 MSET key1 "value1" key2 "value2" key3 "value3"
 MGET key1 key2 key3
+
 # 1) "value1"
 # 2) "value2"
 # 3) "value3"
@@ -147,6 +165,7 @@ MGET key1 key2 key3
 Set multiple key-value pairs.
 ```redis
 MSET key1 "value1" key2 "value2" key3 "value3"
+
 # OK
 ```
 
@@ -154,6 +173,7 @@ MSET key1 "value1" key2 "value2" key3 "value3"
 Set key with expiration time.
 ```redis
 SETEX mykey 60 "temporary value"
+
 # OK
 ```
 
@@ -162,8 +182,10 @@ Overwrite string at specific offset.
 ```redis
 SET mykey "Hello World"
 SETRANGE mykey 6 "Redis"
+
 # (integer) 11
 GET mykey
+
 # "Hello Redis"
 ```
 
@@ -172,6 +194,7 @@ Get string length.
 ```redis
 SET mykey "Hello World"
 STRLEN mykey
+
 # (integer) 11
 ```
 
@@ -182,6 +205,7 @@ Get field value from hash.
 ```redis
 HSET user:1 name "Alice" age "30"
 HGET user:1 name
+
 # "Alice"
 ```
 
@@ -189,6 +213,7 @@ HGET user:1 name
 Set field values in hash.
 ```redis
 HSET user:1 name "Alice" age "30" city "NYC"
+
 # (integer) 3
 ```
 
@@ -196,6 +221,7 @@ HSET user:1 name "Alice" age "30" city "NYC"
 Get all field-value pairs from hash.
 ```redis
 HGETALL user:1
+
 # 1) "name"
 # 2) "Alice"
 # 3) "age"
@@ -208,6 +234,7 @@ HGETALL user:1
 Delete fields from hash.
 ```redis
 HDEL user:1 age city
+
 # (integer) 2
 ```
 
@@ -215,6 +242,7 @@ HDEL user:1 age city
 Check if field exists in hash.
 ```redis
 HEXISTS user:1 name
+
 # (integer) 1
 ```
 
@@ -222,6 +250,7 @@ HEXISTS user:1 name
 Get all field names from hash.
 ```redis
 HKEYS user:1
+
 # 1) "name"
 # 2) "age"
 # 3) "city"
@@ -231,6 +260,7 @@ HKEYS user:1
 Get all values from hash.
 ```redis
 HVALS user:1
+
 # 1) "Alice"
 # 2) "30"
 # 3) "NYC"
@@ -240,6 +270,7 @@ HVALS user:1
 Get number of fields in hash.
 ```redis
 HLEN user:1
+
 # (integer) 3
 ```
 
@@ -249,6 +280,7 @@ HLEN user:1
 Get multiple field values.
 ```redis
 HMGET user:1 name age city
+
 # 1) "Alice"
 # 2) "30"
 # 3) "NYC"
@@ -258,6 +290,7 @@ HMGET user:1 name age city
 Set multiple field values (legacy, use HSET).
 ```redis
 HMSET user:1 name "Alice" age "30"
+
 # OK
 ```
 
@@ -266,6 +299,7 @@ Increment field by integer value.
 ```redis
 HSET user:1 score 100
 HINCRBY user:1 score 50
+
 # (integer) 150
 ```
 
@@ -275,6 +309,7 @@ HINCRBY user:1 score 50
 Push elements to left (head) of list.
 ```redis
 LPUSH mylist "world" "hello"
+
 # (integer) 2
 ```
 
@@ -282,6 +317,7 @@ LPUSH mylist "world" "hello"
 Push elements to right (tail) of list.
 ```redis
 RPUSH mylist "foo" "bar"
+
 # (integer) 4
 ```
 
@@ -289,9 +325,11 @@ RPUSH mylist "foo" "bar"
 Pop element(s) from left (head) of list.
 ```redis
 LPOP mylist
+
 # "hello"
 
 LPOP mylist 2
+
 # 1) "world"
 # 2) "foo"
 ```
@@ -300,9 +338,11 @@ LPOP mylist 2
 Pop element(s) from right (tail) of list.
 ```redis
 RPOP mylist
+
 # "bar"
 
 RPOP mylist 2
+
 # 1) "foo"
 # 2) "world"
 ```
@@ -311,12 +351,14 @@ RPOP mylist 2
 Get range of elements from list.
 ```redis
 LRANGE mylist 0 -1
+
 # 1) "hello"
 # 2) "world"
 # 3) "foo"
 # 4) "bar"
 
 LRANGE mylist 1 2
+
 # 1) "world"
 # 2) "foo"
 ```
@@ -325,6 +367,7 @@ LRANGE mylist 1 2
 Get length of list.
 ```redis
 LLEN mylist
+
 # (integer) 4
 ```
 
@@ -334,9 +377,11 @@ LLEN mylist
 Get element at index.
 ```redis
 LINDEX mylist 0
+
 # "hello"
 
 LINDEX mylist -1
+
 # "bar"
 ```
 
@@ -344,6 +389,7 @@ LINDEX mylist -1
 Set element at index.
 ```redis
 LSET mylist 0 "hi"
+
 # OK
 ```
 
@@ -351,6 +397,7 @@ LSET mylist 0 "hi"
 Remove elements equal to element.
 ```redis
 LREM mylist 2 "foo"
+
 # (integer) 1
 ```
 
@@ -358,6 +405,7 @@ LREM mylist 2 "foo"
 Trim list to specified range.
 ```redis
 LTRIM mylist 1 -1
+
 # OK
 ```
 
@@ -365,6 +413,7 @@ LTRIM mylist 1 -1
 Insert element before or after pivot.
 ```redis
 LINSERT mylist BEFORE "world" "beautiful"
+
 # (integer) 5
 ```
 
@@ -372,6 +421,7 @@ LINSERT mylist BEFORE "world" "beautiful"
 Blocking left pop (non-blocking in current implementation).
 ```redis
 BLPOP mylist 10
+
 # 1) "mylist"
 # 2) "element"
 ```
@@ -380,6 +430,7 @@ BLPOP mylist 10
 Blocking right pop (non-blocking in current implementation).
 ```redis
 BRPOP mylist 10
+
 # 1) "mylist"
 # 2) "element"
 ```
@@ -390,6 +441,7 @@ BRPOP mylist 10
 Add members to set.
 ```redis
 SADD myset "apple" "banana" "cherry"
+
 # (integer) 3
 ```
 
@@ -397,6 +449,7 @@ SADD myset "apple" "banana" "cherry"
 Remove members from set.
 ```redis
 SREM myset "banana"
+
 # (integer) 1
 ```
 
@@ -404,6 +457,7 @@ SREM myset "banana"
 Get all members of set.
 ```redis
 SMEMBERS myset
+
 # 1) "apple"
 # 2) "cherry"
 ```
@@ -412,6 +466,7 @@ SMEMBERS myset
 Get cardinality (size) of set.
 ```redis
 SCARD myset
+
 # (integer) 2
 ```
 
@@ -419,6 +474,7 @@ SCARD myset
 Check if member exists in set.
 ```redis
 SISMEMBER myset "apple"
+
 # (integer) 1
 ```
 
@@ -428,6 +484,7 @@ Return union of sets.
 SADD set1 "a" "b" "c"
 SADD set2 "c" "d" "e"
 SUNION set1 set2
+
 # 1) "a"
 # 2) "b"
 # 3) "c"
@@ -439,6 +496,7 @@ SUNION set1 set2
 Return intersection of sets.
 ```redis
 SINTER set1 set2
+
 # 1) "c"
 ```
 
@@ -446,6 +504,7 @@ SINTER set1 set2
 Return difference of sets.
 ```redis
 SDIFF set1 set2
+
 # 1) "a"
 # 2) "b"
 ```
@@ -456,6 +515,7 @@ SDIFF set1 set2
 Add members with scores to sorted set.
 ```redis
 ZADD leaderboard 100 "alice" 85 "bob" 92 "charlie"
+
 # (integer) 3
 ```
 
@@ -463,6 +523,7 @@ ZADD leaderboard 100 "alice" 85 "bob" 92 "charlie"
 Remove members from sorted set.
 ```redis
 ZREM leaderboard "bob"
+
 # (integer) 1
 ```
 
@@ -470,6 +531,7 @@ ZREM leaderboard "bob"
 Get cardinality of sorted set.
 ```redis
 ZCARD leaderboard
+
 # (integer) 2
 ```
 
@@ -477,6 +539,7 @@ ZCARD leaderboard
 Get score of member.
 ```redis
 ZSCORE leaderboard "alice"
+
 # "100"
 ```
 
@@ -484,6 +547,7 @@ ZSCORE leaderboard "alice"
 Increment score of member.
 ```redis
 ZINCRBY leaderboard 10 "charlie"
+
 # "102"
 ```
 
@@ -491,6 +555,7 @@ ZINCRBY leaderboard 10 "charlie"
 Get members by rank range.
 ```redis
 ZRANGE leaderboard 0 -1 WITHSCORES
+
 # 1) "alice"
 # 2) "100"
 # 3) "charlie"
@@ -501,6 +566,7 @@ ZRANGE leaderboard 0 -1 WITHSCORES
 Get members by score range.
 ```redis
 ZRANGEBYSCORE leaderboard 90 110 WITHSCORES
+
 # 1) "alice"
 # 2) "100"
 # 3) "charlie"
@@ -511,6 +577,7 @@ ZRANGEBYSCORE leaderboard 90 110 WITHSCORES
 Count members in score range.
 ```redis
 ZCOUNT leaderboard 90 110
+
 # (integer) 2
 ```
 
@@ -518,6 +585,7 @@ ZCOUNT leaderboard 90 110
 Get rank of member (0-based).
 ```redis
 ZRANK leaderboard "alice"
+
 # (integer) 0
 ```
 
@@ -527,6 +595,7 @@ ZRANK leaderboard "alice"
 Publish message to channel.
 ```redis
 PUBLISH news "Breaking news!"
+
 # (integer) 3
 ```
 
@@ -534,6 +603,7 @@ PUBLISH news "Breaking news!"
 Subscribe to channels.
 ```redis
 SUBSCRIBE news weather sports
+
 # 1) "subscribe"
 # 2) "news"
 # 3) (integer) 1
@@ -543,6 +613,7 @@ SUBSCRIBE news weather sports
 Unsubscribe from channels.
 ```redis
 UNSUBSCRIBE news
+
 # 1) "unsubscribe"
 # 2) "news"
 # 3) (integer) 0
@@ -552,6 +623,7 @@ UNSUBSCRIBE news
 Subscribe to channel patterns.
 ```redis
 PSUBSCRIBE news.*
+
 # 1) "psubscribe"
 # 2) "news.*"
 # 3) (integer) 1
@@ -561,6 +633,7 @@ PSUBSCRIBE news.*
 Unsubscribe from channel patterns.
 ```redis
 PUNSUBSCRIBE news.*
+
 # 1) "punsubscribe"
 # 2) "news.*"
 # 3) (integer) 0
@@ -570,10 +643,12 @@ PUNSUBSCRIBE news.*
 Introspect pub/sub system.
 ```redis
 PUBSUB CHANNELS
+
 # 1) "news"
 # 2) "weather"
 
 PUBSUB NUMSUB news weather
+
 # 1) "news"
 # 2) (integer) 3
 # 3) "weather"
@@ -586,6 +661,7 @@ PUBSUB NUMSUB news weather
 Add vector with optional metadata to index.
 ```redis
 VECTOR.ADD doc_embeddings doc1 "0.1,0.2,0.3,0.4" title "First Document" category "tech"
+
 # OK
 ```
 
@@ -593,6 +669,7 @@ VECTOR.ADD doc_embeddings doc1 "0.1,0.2,0.3,0.4" title "First Document" category
 Get vector and metadata by ID.
 ```redis
 VECTOR.GET doc_embeddings doc1
+
 # 1) "doc1"
 # 2) "0.100000,0.200000,0.300000,0.400000"
 # 3) "title"
@@ -605,6 +682,7 @@ VECTOR.GET doc_embeddings doc1
 Delete vector from index.
 ```redis
 VECTOR.DEL doc_embeddings doc1
+
 # (integer) 1
 ```
 
@@ -612,6 +690,7 @@ VECTOR.DEL doc_embeddings doc1
 Get statistics for vector index.
 ```redis
 VECTOR.STATS doc_embeddings
+
 # 1) "vector_count"
 # 2) (integer) 1000
 # 3) "index_count"
@@ -624,6 +703,7 @@ VECTOR.STATS doc_embeddings
 List all vector IDs in index.
 ```redis
 VECTOR.LIST doc_embeddings
+
 # 1) "doc1"
 # 2) "doc2"
 # 3) "doc3"
@@ -633,6 +713,7 @@ VECTOR.LIST doc_embeddings
 Get count of vectors in index.
 ```redis
 VECTOR.COUNT doc_embeddings
+
 # (integer) 1000
 ```
 
@@ -640,6 +721,7 @@ VECTOR.COUNT doc_embeddings
 Perform vector similarity search.
 ```redis
 VECTOR.SEARCH doc_embeddings "0.1,0.2,0.3,0.4" 5 METRIC COSINE THRESHOLD 0.8 category "tech"
+
 # 1) 1) "doc1"
 #    2) "0.950000"
 #    3) "0.100000,0.200000,0.300000,0.400000"
@@ -654,6 +736,7 @@ VECTOR.SEARCH doc_embeddings "0.1,0.2,0.3,0.4" 5 METRIC COSINE THRESHOLD 0.8 cat
 K-nearest neighbors search.
 ```redis
 VECTOR.KNN doc_embeddings "0.1,0.2,0.3,0.4" 3 METRIC EUCLIDEAN
+
 # 1) 1) "doc1"
 #    2) "0.050000"
 # 2) 1) "doc2"
@@ -666,6 +749,7 @@ VECTOR.KNN doc_embeddings "0.1,0.2,0.3,0.4" 3 METRIC EUCLIDEAN
 Create vector index.
 ```redis
 FT.CREATE doc_index DIM 768 DISTANCE_METRIC COSINE
+
 # OK
 ```
 
@@ -673,6 +757,7 @@ FT.CREATE doc_index DIM 768 DISTANCE_METRIC COSINE
 Add document to index (alias for VECTOR.ADD).
 ```redis
 FT.ADD doc_index doc1 "0.1,0.2,0.3,..." title "Document"
+
 # OK
 ```
 
@@ -680,6 +765,7 @@ FT.ADD doc_index doc1 "0.1,0.2,0.3,..." title "Document"
 Delete document from index.
 ```redis
 FT.DEL doc_index doc1
+
 # (integer) 1
 ```
 
@@ -687,6 +773,7 @@ FT.DEL doc_index doc1
 Search index (converted to VECTOR.SEARCH format).
 ```redis
 FT.SEARCH doc_index "0.1,0.2,0.3,..." 10 DISTANCE_METRIC COSINE
+
 # (search results)
 ```
 
@@ -694,6 +781,7 @@ FT.SEARCH doc_index "0.1,0.2,0.3,..." 10 DISTANCE_METRIC COSINE
 Get index information.
 ```redis
 FT.INFO doc_index
+
 # 1) "index_name"
 # 2) "doc_index"
 # 3) "num_docs"
@@ -706,6 +794,7 @@ FT.INFO doc_index
 Create time series.
 ```redis
 TS.CREATE temperature:sensor1 RETENTION 3600000 CHUNK_SIZE 4096 LABELS sensor_id "001" location "office"
+
 # OK
 ```
 
@@ -713,6 +802,7 @@ TS.CREATE temperature:sensor1 RETENTION 3600000 CHUNK_SIZE 4096 LABELS sensor_id
 Alter time series configuration.
 ```redis
 TS.ALTER temperature:sensor1 RETENTION 7200000
+
 # OK
 ```
 
@@ -720,9 +810,11 @@ TS.ALTER temperature:sensor1 RETENTION 7200000
 Add sample to time series.
 ```redis
 TS.ADD temperature:sensor1 1609459200000 23.5
+
 # (integer) 1609459200000
 
 TS.ADD temperature:sensor1 * 24.1
+
 # (integer) 1609459260000
 ```
 
@@ -730,6 +822,7 @@ TS.ADD temperature:sensor1 * 24.1
 Add multiple samples.
 ```redis
 TS.MADD temperature:sensor1 1609459200000 23.5 temperature:sensor2 1609459200000 22.8
+
 # 1) (integer) 1609459200000
 # 2) (integer) 1609459200000
 ```
@@ -738,6 +831,7 @@ TS.MADD temperature:sensor1 1609459200000 23.5 temperature:sensor2 1609459200000
 Increment time series by value.
 ```redis
 TS.INCRBY counter:requests 1 TIMESTAMP 1609459200000
+
 # (integer) 1609459200000
 ```
 
@@ -745,6 +839,7 @@ TS.INCRBY counter:requests 1 TIMESTAMP 1609459200000
 Decrement time series by value.
 ```redis
 TS.DECRBY counter:requests 1 TIMESTAMP 1609459200000
+
 # (integer) 1609459200000
 ```
 
@@ -752,6 +847,7 @@ TS.DECRBY counter:requests 1 TIMESTAMP 1609459200000
 Delete samples in time range.
 ```redis
 TS.DEL temperature:sensor1 1609459200000 1609459260000
+
 # (integer) 2
 ```
 
@@ -759,6 +855,7 @@ TS.DEL temperature:sensor1 1609459200000 1609459260000
 Get latest sample.
 ```redis
 TS.GET temperature:sensor1
+
 # 1) (integer) 1609459260000
 # 2) "24.1"
 ```
@@ -767,6 +864,7 @@ TS.GET temperature:sensor1
 Get latest samples from multiple time series.
 ```redis
 TS.MGET temperature:sensor1 temperature:sensor2
+
 # 1) 1) "temperature:sensor1"
 #    2) (integer) 1609459260000
 #    3) "24.1"
@@ -779,6 +877,7 @@ TS.MGET temperature:sensor1 temperature:sensor2
 Get time series information.
 ```redis
 TS.INFO temperature:sensor1
+
 # 1) "totalSamples"
 # 2) (integer) 100
 # 3) "memoryUsage"
@@ -793,12 +892,14 @@ TS.INFO temperature:sensor1
 Get samples in time range.
 ```redis
 TS.RANGE temperature:sensor1 1609459200000 1609459260000
+
 # 1) 1) (integer) 1609459200000
 #    2) "23.5"
 # 2) 1) (integer) 1609459260000
 #    2) "24.1"
 
 TS.RANGE temperature:sensor1 1609459200000 1609459260000 AGGREGATION AVG 60000
+
 # 1) 1) (integer) 1609459200000
 #    2) "23.8"
 ```
@@ -807,6 +908,7 @@ TS.RANGE temperature:sensor1 1609459200000 1609459260000 AGGREGATION AVG 60000
 Get samples in reverse time order.
 ```redis
 TS.REVRANGE temperature:sensor1 1609459200000 1609459260000
+
 # 2) 1) (integer) 1609459260000
 #    2) "24.1"
 # 1) 1) (integer) 1609459200000
@@ -817,6 +919,7 @@ TS.REVRANGE temperature:sensor1 1609459200000 1609459260000
 Get range from multiple time series.
 ```redis
 TS.MRANGE 1609459200000 1609459260000 temperature:sensor1 temperature:sensor2
+
 # 1) 1) "temperature:sensor1"
 #    2) (empty array)
 #    3) 1) 1) (integer) 1609459200000
@@ -829,6 +932,7 @@ TS.MRANGE 1609459200000 1609459260000 temperature:sensor1 temperature:sensor2
 Get reverse range from multiple time series.
 ```redis
 TS.MREVRANGE 1609459200000 1609459260000 temperature:sensor1 temperature:sensor2
+
 # (reverse time order results)
 ```
 
@@ -836,6 +940,7 @@ TS.MREVRANGE 1609459200000 1609459260000 temperature:sensor1 temperature:sensor2
 Query time series index (placeholder).
 ```redis
 TS.QUERYINDEX
+
 # (empty array)
 ```
 
@@ -843,6 +948,7 @@ TS.QUERYINDEX
 Create compaction rule.
 ```redis
 TS.CREATERULE temperature:sensor1 temperature:sensor1:hourly AGGREGATION AVG 3600000
+
 # OK
 ```
 
@@ -850,6 +956,7 @@ TS.CREATERULE temperature:sensor1 temperature:sensor1:hourly AGGREGATION AVG 360
 Delete compaction rule.
 ```redis
 TS.DELETERULE temperature:sensor1 temperature:sensor1:hourly
+
 # OK
 ```
 
@@ -859,6 +966,7 @@ TS.DELETERULE temperature:sensor1 temperature:sensor1:hourly
 Execute graph query.
 ```redis
 GRAPH.QUERY social "MATCH (p:Person) RETURN p.name"
+
 # 1) 1) "p.name"
 # 2) 1) 1) "Alice"
 #    2) 1) "Bob"
@@ -871,6 +979,7 @@ GRAPH.QUERY social "MATCH (p:Person) RETURN p.name"
 Execute read-only graph query.
 ```redis
 GRAPH.RO_QUERY social "MATCH (p:Person) WHERE p.age > 25 RETURN p"
+
 # (query results similar to GRAPH.QUERY)
 ```
 
@@ -878,6 +987,7 @@ GRAPH.RO_QUERY social "MATCH (p:Person) WHERE p.age > 25 RETURN p"
 Delete entire graph.
 ```redis
 GRAPH.DELETE social
+
 # OK
 ```
 
@@ -885,6 +995,7 @@ GRAPH.DELETE social
 List all graphs.
 ```redis
 GRAPH.LIST
+
 # 1) "demo_graph"
 # 2) "social_network"
 ```
@@ -893,6 +1004,7 @@ GRAPH.LIST
 Get execution plan for query.
 ```redis
 GRAPH.EXPLAIN social "MATCH (p:Person) RETURN p"
+
 # 1) 1) "1: Scan"
 #    2) "Node Scan | (p:Person)"
 #    3) "Estimated rows: 1000"
@@ -904,6 +1016,7 @@ GRAPH.EXPLAIN social "MATCH (p:Person) RETURN p"
 Profile query execution.
 ```redis
 GRAPH.PROFILE social "MATCH (p:Person) RETURN p"
+
 # 1) (empty array)
 # 2) (empty array)
 # 3) 1) "1: Scan"
@@ -917,6 +1030,7 @@ GRAPH.PROFILE social "MATCH (p:Person) RETURN p"
 Get slow query log.
 ```redis
 GRAPH.SLOWLOG social
+
 # 1) 1) (integer) 1
 #    2) (integer) 1609459200
 #    3) (integer) 1500
@@ -929,10 +1043,12 @@ GRAPH.SLOWLOG social
 Configure graph settings.
 ```redis
 GRAPH.CONFIG GET timeout
+
 # 1) "timeout"
 # 2) "1000"
 
 GRAPH.CONFIG SET timeout 2000
+
 # OK
 ```
 
@@ -942,6 +1058,7 @@ GRAPH.CONFIG SET timeout 2000
 Get server information with Orbit-specific details.
 ```redis
 INFO
+
 # # Server
 # redis_version:7.0.0-orbit
 # redis_git_sha1:00000000
@@ -962,6 +1079,7 @@ INFO
 Get number of keys (placeholder implementation).
 ```redis
 DBSIZE
+
 # (integer) 0
 ```
 
@@ -969,6 +1087,7 @@ DBSIZE
 Clear current database (placeholder implementation).
 ```redis
 FLUSHDB
+
 # OK
 ```
 
@@ -976,6 +1095,7 @@ FLUSHDB
 Clear all databases (placeholder implementation).
 ```redis
 FLUSHALL
+
 # OK
 ```
 
@@ -983,6 +1103,7 @@ FLUSHALL
 Get list of available commands.
 ```redis
 COMMAND
+
 # 1) 1) "ping"
 #    2) (integer) -1
 #    3) (integer) 1
@@ -1003,8 +1124,10 @@ Remove expiration from key.
 ```redis
 EXPIRE mykey 60
 PERSIST mykey
+
 # (integer) 1
 TTL mykey
+
 # (integer) -1
 ```
 
@@ -1012,6 +1135,7 @@ TTL mykey
 Set expiration in milliseconds.
 ```redis
 PEXPIRE mykey 60000
+
 # (integer) 1
 ```
 
@@ -1019,6 +1143,7 @@ PEXPIRE mykey 60000
 Get TTL in milliseconds.
 ```redis
 PTTL mykey
+
 # (integer) 59850
 ```
 
@@ -1026,6 +1151,7 @@ PTTL mykey
 Get random key (placeholder implementation).
 ```redis
 RANDOMKEY
+
 # (nil)
 ```
 
@@ -1034,8 +1160,10 @@ Rename key.
 ```redis
 SET oldkey "value"
 RENAME oldkey newkey
+
 # OK
 GET newkey
+
 # "value"
 ```
 
@@ -1046,10 +1174,13 @@ SET mystring "value"
 HSET myhash field value
 LPUSH mylist item
 TYPE mystring
+
 # string
 TYPE myhash
+
 # hash
 TYPE mylist
+
 # list
 ```
 
@@ -1057,6 +1188,7 @@ TYPE mylist
 Asynchronous delete (same as DEL in current implementation).
 ```redis
 UNLINK key1 key2 key3
+
 # (integer) 2
 ```
 

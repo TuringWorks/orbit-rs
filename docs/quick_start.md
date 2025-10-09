@@ -49,6 +49,7 @@ cd orbit-rs
 ### 2. Build the Project
 
 ```bash
+
 # Build in release mode for optimal performance
 cargo build --release
 
@@ -59,6 +60,7 @@ cargo build
 ### 3. Run Tests
 
 ```bash
+
 # Run all tests
 cargo test
 
@@ -72,6 +74,7 @@ cargo test -- --nocapture
 ### 4. Verify Installation
 
 ```bash
+
 # Check that examples compile
 cargo check --examples
 
@@ -91,6 +94,7 @@ use orbit_shared::{ActorWithStringKey, Key};
 use async_trait::async_trait;
 
 // Define an actor trait
+
 #[async_trait]
 trait GreeterActor: ActorWithStringKey {
     async fn greet(&self, name: String) -> Result<String, orbit_shared::OrbitError>;
@@ -197,6 +201,7 @@ cargo run --example distributed-counter
 
 ### Redis Protocol Example
 ```bash
+
 # Start the RESP server
 cargo run --example resp-server
 
@@ -206,6 +211,7 @@ redis-cli -h 127.0.0.1 -p 6380
 
 ### PostgreSQL Protocol Example
 ```bash
+
 # Start the PostgreSQL-compatible server
 cargo run --example pgvector-store
 
@@ -261,6 +267,7 @@ Recommended extensions:
 ### Development Commands
 
 ```bash
+
 # Fast compile check
 cargo check
 
@@ -280,6 +287,7 @@ cargo bench
 ### Testing
 
 ```bash
+
 # Run unit tests
 cargo test --workspace --lib
 

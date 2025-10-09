@@ -7,6 +7,7 @@ This document outlines all GitHub issues that need to be created for tracking th
 Run these commands to create all GitHub issues for feature tracking:
 
 ```bash
+
 # Neo4j Bolt Protocol Issues (Phase 13)
 gh issue create --title "[FEATURE] Neo4j Core Graph Actors - GraphNodeActor Implementation" --body-file .github/issue-templates/neo4j-core-actors.md --label "enhancement,neo4j,graph-database,phase-13" --milestone "Phase 13"
 
@@ -278,6 +279,7 @@ Use GitHub Projects to track progress across all issues:
 Set up GitHub Actions for issue management:
 
 ```yaml
+
 # .github/workflows/issue-management.yml
 name: Issue Management
 on:

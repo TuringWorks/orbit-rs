@@ -14,6 +14,7 @@ This document provides comprehensive guidance for deploying Orbit-RS in Kubernet
 ### Basic Deployment
 
 ```bash
+
 # Add the Orbit-RS Helm repository (when available)
 helm repo add orbit-rs https://turingworks.github.io/orbit-rs
 
@@ -98,6 +99,7 @@ Orbit-RS provides comprehensive compute acceleration through the [orbit-compute 
 ### GPU-Enabled Deployment
 
 ```bash
+
 # Deploy with GPU support (enterprise profile)
 helm install orbit-rs-gpu orbit-rs/orbit-rs \
   -f values-enterprise.yaml \
@@ -111,6 +113,7 @@ helm install orbit-rs-gpu orbit-rs/orbit-rs \
 The pipeline automatically builds GPU-enabled variants:
 
 ```bash
+
 # Pull GPU-enabled orbit-compute image
 podman pull ghcr.io/turingworks/orbit-rs/orbit-compute:latest-release-gpu-linux-amd64
 
@@ -126,6 +129,7 @@ podman run -d --gpus all -p 8080:8080 \
 Create appropriate storage classes for different workload types:
 
 ```yaml
+
 # Fast NVMe storage for production
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
@@ -144,6 +148,7 @@ allowVolumeExpansion: true
 For high-performance workloads, configure memory-mapped file storage:
 
 ```yaml
+
 # RAM disk for ultra-fast access
 orbitServer:
   mmapStorage:
@@ -178,6 +183,7 @@ autoscaling:
 For GPU workloads, configure GPU utilization metrics:
 
 ```yaml
+
 # Custom GPU metrics
 - type: Pods
   pods:
@@ -227,6 +233,7 @@ networkPolicy:
 Use the validation script to check your configuration:
 
 ```bash
+
 # Run validation script
 ./scripts/validate-k8s-deployments.sh
 
@@ -248,6 +255,7 @@ Visit the automatically generated container image page for easy access to all av
 #### GPU Not Detected
 
 ```bash
+
 # Check GPU device plugin
 kubectl get pods -n kube-system | grep nvidia-device-plugin
 
@@ -261,6 +269,7 @@ kubectl describe node <gpu-node-name>
 #### Storage Issues
 
 ```bash
+
 # Check storage class
 kubectl get storageclass
 
@@ -274,6 +283,7 @@ kubectl describe pod <pod-name> -n <namespace>
 #### Performance Issues
 
 ```bash
+
 # Check resource usage
 kubectl top pods -n <namespace>
 
@@ -289,6 +299,7 @@ kubectl get --raw /apis/custom.metrics.k8s.io/v1beta1
 ### CPU Optimization
 
 ```yaml
+
 # CPU pinning and NUMA awareness
 orbitServer:
   env:
@@ -302,6 +313,7 @@ orbitServer:
 ### Memory Optimization
 
 ```yaml
+
 # Huge pages and memory-mapped files
 orbitServer:
   env:
@@ -316,6 +328,7 @@ orbitServer:
 ### GPU Optimization
 
 ```yaml
+
 # Multi-GPU configuration
 orbitCompute:
   gpu:
@@ -345,6 +358,7 @@ When adding new deployment configurations:
 4. Update documentation
 
 ```bash
+
 # Run validation before submitting PR
 ./scripts/validate-k8s-deployments.sh
 

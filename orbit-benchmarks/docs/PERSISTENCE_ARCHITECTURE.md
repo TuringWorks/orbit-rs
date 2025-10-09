@@ -95,6 +95,7 @@ data/
 ### Environment Variables
 
 ```bash
+
 # Backend selection
 export ORBIT_PERSISTENCE_BACKEND=cow  # or lsm, rocksdb
 
@@ -181,6 +182,7 @@ let provider = PersistenceConfigBuilder::new()
 ### COW B+ Tree Tuning
 
 ```toml
+
 # For read-heavy workloads
 max_keys_per_node = 256        # Larger nodes, fewer levels
 wal_buffer_size = 512000       # Smaller buffer, frequent flushes
@@ -196,6 +198,7 @@ enable_snapshots = false       # Disable snapshots
 ### LSM-Tree Tuning
 
 ```toml
+
 # For write-heavy workloads
 memtable_size_mb = 128         # Large memtables
 max_levels = 8                 # More levels
@@ -238,6 +241,7 @@ pub struct StorageStats {
 ### Alerting Thresholds
 
 ```yaml
+
 # Recommended alert thresholds
 write_latency_p95: 100ms      # 95th percentile write latency
 read_latency_p95: 10ms        # 95th percentile read latency
@@ -286,6 +290,7 @@ graph TB
 ### Clustering Configuration
 
 ```yaml
+
 # docker-compose.yml
 version: '3.8'
 services:
@@ -350,6 +355,7 @@ let config = PersistenceConfigBuilder::new()
 ### Access Control
 
 ```yaml
+
 # File permissions
 /var/lib/orbit/:
   owner: orbit:orbit
@@ -367,6 +373,7 @@ let config = PersistenceConfigBuilder::new()
 ### Network Security
 
 ```yaml
+
 # Firewall rules (iptables)
 -A INPUT -p tcp --dport 8080 -s 10.0.0.0/8 -j ACCEPT     # Internal network only
 -A INPUT -p tcp --dport 8080 -j DROP                      # Block external access
@@ -386,6 +393,7 @@ let config = PersistenceConfigBuilder::new()
 ### Scaling Guidelines
 
 ```bash
+
 # Horizontal scaling triggers
 if [ $(get_write_latency_p95) -gt 100 ]; then
     echo "Scale out: Add more nodes"
@@ -405,6 +413,7 @@ fi
 ### Integration Tests
 
 ```rust
+
 #[tokio::test]
 async fn test_backend_switching() {
     let backends = vec![
@@ -430,6 +439,7 @@ async fn test_backend_switching() {
 ### Performance Benchmarking
 
 ```bash
+
 # Run comprehensive benchmarks
 cargo bench --features benchmarks
 
@@ -442,6 +452,7 @@ ORBIT_PERSISTENCE_BACKEND=rocksdb cargo bench -- rocksdb
 ### Load Testing
 
 ```yaml
+
 # k6 load testing script
 scenarios:
   write_heavy:
@@ -473,6 +484,7 @@ scenarios:
 ### Data Migration
 
 ```bash
+
 # Export from COW B+ Tree
 orbit-cli export --backend=cow --data-dir=/var/lib/orbit --output=export.json
 

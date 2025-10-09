@@ -140,6 +140,7 @@ Instead of using your personal kubeconfig, create a dedicated service account:
 ### Create Service Account for Staging
 
 ```bash
+
 # Create namespace
 kubectl create namespace orbit-rs-staging
 
@@ -187,6 +188,7 @@ kubectl get secret orbit-deployer-token -n orbit-rs-staging -o jsonpath='{.data.
 ### Generate Kubeconfig from Service Account
 
 ```bash
+
 # Get cluster info
 CLUSTER_NAME=$(kubectl config view -o jsonpath='{.contexts[?(@.name == "'$(kubectl config current-context)'")].context.cluster}')
 CLUSTER_SERVER=$(kubectl config view -o jsonpath='{.clusters[?(@.name == "'${CLUSTER_NAME}'")].cluster.server}')
@@ -342,6 +344,7 @@ Deploy runners in your private network:
 ## Quick Reference Commands
 
 ```bash
+
 # View current Kubernetes context
 kubectl config current-context
 

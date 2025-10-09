@@ -130,6 +130,7 @@ SELECT content FROM documents ORDER BY embedding <-> '[0.1, 0.2, 0.3]' LIMIT 5;
 Redis RESP protocol compatibility for key-value operations.
 
 ```bash
+
 # String operations
 SET key "value"
 GET key
@@ -184,6 +185,7 @@ Model Context Protocol for AI agent integration.
 ### 🔧 Configuration
 
 ```rust
+
 #[derive(Debug, Clone)]
 pub struct OrbitClientConfig {
     pub namespace: String,
@@ -227,6 +229,7 @@ pub struct ClientStats {
 Generate actor proxies and protocol bindings:
 
 ```bash
+
 # Generate actor proxies
 orbit-codegen actors --input src/actors.rs --output src/generated/
 
@@ -252,6 +255,7 @@ async fn test_actor_interaction() {
 ### 🔍 Debugging
 
 ```bash
+
 # Enable debug logging
 export RUST_LOG=orbit_client=debug,orbit_shared=debug
 

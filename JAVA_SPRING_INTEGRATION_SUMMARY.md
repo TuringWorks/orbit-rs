@@ -140,6 +140,7 @@ I have successfully implemented a comprehensive Java Spring Boot integration for
 
 ### Updated `Cargo.toml` Dependencies
 ```toml
+
 # HTTP/gRPC server dependencies
 axum = "0.7"
 tonic = { workspace = true }
@@ -234,6 +235,7 @@ public class OrbitNativeService {
 
 ### Manual Testing Commands
 ```bash
+
 # HTTP API Testing
 curl http://localhost:8080/api/v1/services
 curl http://localhost:8080/api/v1/health

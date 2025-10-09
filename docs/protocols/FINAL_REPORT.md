@@ -185,6 +185,7 @@ Cargo.toml - Added orbit-protocols to workspace members
 ### 1. Test REST API
 
 ```bash
+
 # Start the server
 cargo run --example rest-api-server
 
@@ -211,6 +212,7 @@ websocat ws://localhost:8080/api/v1/ws/events
 ### 2. View OpenAPI Documentation
 
 ```bash
+
 # Get OpenAPI spec
 curl http://localhost:8080/openapi.json > openapi.json
 

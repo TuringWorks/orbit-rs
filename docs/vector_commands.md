@@ -1,7 +1,5 @@
 # Vector Commands Documentation
 
-This document provides comprehensive documentation for all vector storage and search commands implemented in Orbit-RS. The implementation provides both **VECTOR.*** commands and **FT.*** (RedisSearch-compatible) commands for maximum compatibility.
-
 ## 🚀 Features
 
 - **Full Redis Protocol Compatibility**: All commands work with standard Redis clients
@@ -31,6 +29,7 @@ VECTOR.ADD <index> <id> <vector> [key value ...]
 
 **Examples:**
 ```redis
+
 # Add a simple vector
 VECTOR.ADD my-index doc1 "0.1,0.2,0.3,0.4"
 
@@ -155,6 +154,7 @@ VECTOR.SEARCH <index> <vector> <limit> [METRIC <metric>] [THRESHOLD <threshold>]
 
 **Examples:**
 ```redis
+
 # Basic similarity search
 VECTOR.SEARCH my-index "0.1,0.2,0.3,0.4" 5
 
@@ -188,6 +188,7 @@ VECTOR.KNN <index> <vector> <k> [METRIC <metric>]
 
 **Examples:**
 ```redis
+
 # Find 5 nearest neighbors
 VECTOR.KNN my-index "0.1,0.2,0.3,0.4" 5
 
@@ -216,6 +217,7 @@ FT.CREATE <index> DIM <dimension> [DISTANCE_METRIC <metric>]
 
 **Examples:**
 ```redis
+
 # Create index with default cosine similarity
 FT.CREATE my-ft-index DIM 384
 
@@ -331,6 +333,7 @@ VECTOR.ADD my-index doc1 ["0.1", "0.2", "0.3", "0.4", "0.5"]
 ### Complete Workflow Example
 
 ```redis
+
 # 1. Create vectors with metadata
 VECTOR.ADD ml-embeddings doc1 "0.1,0.2,0.3,0.4" title "Machine Learning Basics" category "AI" difficulty "beginner"
 VECTOR.ADD ml-embeddings doc2 "0.2,0.3,0.4,0.5" title "Deep Learning Advanced" category "AI" difficulty "advanced"  
@@ -362,6 +365,7 @@ VECTOR.DEL ml-embeddings doc3
 ### FT Commands Example
 
 ```redis
+
 # 1. Create FT index
 FT.CREATE semantic-search DIM 384 DISTANCE_METRIC COSINE
 
@@ -427,6 +431,7 @@ Common error responses:
 
 ### Semantic Search
 ```redis
+
 # Store document embeddings
 VECTOR.ADD docs doc1 "..." title "Introduction to AI" tags "ai,ml,intro"
 VECTOR.ADD docs doc2 "..." title "Deep Learning" tags "ai,dl,advanced"
@@ -437,6 +442,7 @@ VECTOR.SEARCH docs "query_embedding..." 10 METRIC COSINE THRESHOLD 0.7
 
 ### Image Similarity
 ```redis
+
 # Store image feature vectors
 VECTOR.ADD images img1 "..." filename "photo1.jpg" category "landscape"
 VECTOR.ADD images img2 "..." filename "photo2.jpg" category "portrait"
@@ -447,6 +453,7 @@ VECTOR.SEARCH images "query_features..." 5 METRIC EUCLIDEAN
 
 ### Recommendation System
 ```redis
+
 # Store user preference vectors
 VECTOR.ADD users user123 "..." age "25" location "NYC"
 

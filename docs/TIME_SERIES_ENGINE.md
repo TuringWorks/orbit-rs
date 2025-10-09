@@ -1,7 +1,5 @@
 # Orbit-RS Time Series Engine
 
-The Orbit-RS Time Series Engine provides a high-performance, scalable time series database with advanced compression, multiple storage backends, and real-time analytics capabilities. This documentation covers all aspects of the time series functionality.
-
 ## Table of Contents
 
 1. [Overview](#overview)

@@ -149,6 +149,7 @@ pub enum MLFunction {
 
 ```rust
 // ML Actor for distributed processing
+
 #[async_trait]
 pub trait MLActor: Addressable {
     async fn train_model(&self, request: TrainModelRequest) -> OrbitResult<ModelMetadata>;

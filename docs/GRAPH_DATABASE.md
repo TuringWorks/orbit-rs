@@ -70,6 +70,7 @@ The graph database is built on several key components:
 
 #### GraphNode
 ```rust
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct GraphNode {
     pub id: NodeId,
@@ -82,6 +83,7 @@ pub struct GraphNode {
 
 #### GraphRelationship
 ```rust
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct GraphRelationship {
     pub id: RelationshipId,
@@ -99,6 +101,7 @@ pub struct GraphRelationship {
 The graph storage is built on a flexible trait system:
 
 ```rust
+
 #[async_trait]
 pub trait GraphStorage: Send + Sync {
     // Node operations

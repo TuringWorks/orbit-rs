@@ -14,6 +14,7 @@
 
 ### Key Commands
 ```bash
+
 # Check service status
 systemctl status orbit-rs
 
@@ -34,6 +35,7 @@ orbit-cli replay-wal --data-dir=/var/lib/orbit
 
 ### 1. Service Won't Start
 ```bash
+
 # Check logs for errors
 journalctl -u orbit-rs --since "5 minutes ago"
 
@@ -49,6 +51,7 @@ systemctl start orbit-rs --config=/etc/orbit/safe-mode.json
 
 ### 2. High Latency
 ```bash
+
 # Check current performance
 curl -s localhost:8080/metrics | grep latency
 
@@ -64,6 +67,7 @@ orbit-cli reduce-cache --block-cache-mb=128
 
 ### 3. Data Corruption
 ```bash
+
 # Stop service
 systemctl stop orbit-rs
 
@@ -81,6 +85,7 @@ orbit-cli validate --data-dir=/var/lib/orbit
 
 ### Environment Variables
 ```bash
+
 # Switch to COW B+ Tree
 export ORBIT_PERSISTENCE_BACKEND=cow
 systemctl restart orbit-rs
@@ -96,6 +101,7 @@ systemctl restart orbit-rs
 
 ### Performance Tuning
 ```bash
+
 # Low memory configuration
 cat > /tmp/low-memory.json << 'EOF'
 {
@@ -137,6 +143,7 @@ EOF
 
 ### Daily Backup
 ```bash
+
 # Automated via cron: 0 2 * * *
 /usr/local/bin/orbit-backup.sh
 

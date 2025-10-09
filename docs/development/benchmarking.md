@@ -66,6 +66,7 @@ Benchmarks are excluded from regular CI/CD pipelines because:
 
 #### Workspace Level
 ```toml
+
 # Cargo.toml
 [workspace]
 exclude = [
@@ -137,6 +138,7 @@ cd orbit-benchmarks
 
 ### Prerequisites
 ```bash
+
 # System dependencies
 sudo apt-get install -y pkg-config libssl-dev libsqlite3-dev protobuf-compiler
 
@@ -250,6 +252,7 @@ cargo bench --bench persistence_comparison -- --exact "benchmark_function_name"
 
 #### Clean State Testing
 ```bash
+
 # Ensure clean state between runs
 rm -rf /tmp/orbit-benchmark-*
 cd orbit-benchmarks
@@ -290,6 +293,7 @@ Since benchmarks are manual-only:
 
 #### "Package not found" Error
 ```bash
+
 # Wrong - will fail
 cargo bench --package orbit-benchmarks
 
@@ -311,6 +315,7 @@ cargo update
 
 #### Hanging Benchmarks
 ```bash
+
 # Use timeout for protection
 timeout 5m cargo bench
 
@@ -321,6 +326,7 @@ pkill -f "orbit-benchmarks"
 
 #### Memory Issues
 ```bash
+
 # Monitor memory usage
 htop
 

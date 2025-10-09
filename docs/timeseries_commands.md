@@ -1,7 +1,5 @@
 # Orbit Time Series Commands
 
-Orbit provides a comprehensive Redis TimeSeries-compatible implementation that allows you to store, query, and analyze time-based data using familiar Redis commands. The time series functionality is built on top of the Orbit actor system, providing high performance and horizontal scalability.
-
 ## Table of Contents
 
 - [Overview](#overview)
@@ -52,6 +50,7 @@ TS.CREATE key [RETENTION retentionTime] [CHUNK_SIZE size] [DUPLICATE_POLICY poli
 
 **Examples:**
 ```redis
+
 # Basic time series
 TS.CREATE temperature:sensor1
 
@@ -91,6 +90,7 @@ TS.ADD key timestamp value [RETENTION retentionTime] [CHUNK_SIZE size] [DUPLICAT
 
 **Examples:**
 ```redis
+
 # Add sample with specific timestamp
 TS.ADD temperature:sensor1 1609459200000 23.5
 
@@ -125,6 +125,7 @@ TS.DECRBY key value [TIMESTAMP timestamp] [RETENTION retentionTime] [CHUNK_SIZE 
 
 **Examples:**
 ```redis
+
 # Increment counter
 TS.INCRBY requests:count 1
 
@@ -148,6 +149,7 @@ TS.GET key
 **Example:**
 ```redis
 TS.GET temperature:sensor1
+
 # Returns: [timestamp, value]
 ```
 
@@ -161,6 +163,7 @@ TS.MGET [FILTER label=value ...] key1 [key2 ...]
 
 **Example:**
 ```redis
+
 # Get latest from specific series
 TS.MGET temperature:sensor1 temperature:sensor2
 
@@ -190,6 +193,7 @@ TS.REVRANGE key fromTimestamp toTimestamp [AGGREGATION aggregation bucketDuratio
 
 **Examples:**
 ```redis
+
 # Get all samples in range
 TS.RANGE temperature:sensor1 1609459200000 1609462800000
 
@@ -226,6 +230,7 @@ TS.DEL key fromTimestamp toTimestamp
 
 **Example:**
 ```redis
+
 # Delete samples from last hour
 TS.DEL temperature:sensor1 1609459200000 1609462800000
 ```
@@ -274,6 +279,7 @@ Orbit supports comprehensive aggregation functions:
 Aggregations are performed over time buckets specified in milliseconds:
 
 ```redis
+
 # 5-minute averages
 TS.RANGE metrics:cpu 1609459200000 1609462800000 AGGREGATION AVG 300000
 
@@ -295,6 +301,7 @@ TS.CREATERULE sourceKey destKey AGGREGATION aggregation bucketDuration [retentio
 
 **Example:**
 ```redis
+
 # Create hourly averages from minute data
 TS.CREATERULE metrics:cpu:1min metrics:cpu:1hour AGGREGATION AVG 3600000
 
@@ -320,6 +327,7 @@ TS.DELETERULE metrics:cpu:1min metrics:cpu:1hour
 Time series can be tagged with labels for organization and filtering:
 
 ```redis
+
 # Create series with labels
 TS.CREATE metrics:cpu LABELS server web01 datacenter us-east region production
 
@@ -357,6 +365,7 @@ ERR failed to add sample: [reason]
 ### IoT Sensor Monitoring
 
 ```redis
+
 # Create temperature sensors with metadata
 TS.CREATE temp:living_room LABELS room living location home sensor ds18b20
 TS.CREATE temp:kitchen LABELS room kitchen location home sensor ds18b20
@@ -375,6 +384,7 @@ TS.RANGE temp:living_room 1609459200000 1609545600000 AGGREGATION AVG 86400000
 ### Application Performance Monitoring
 
 ```redis
+
 # Create performance metrics
 TS.CREATE app:response_time LABELS service api version v2
 TS.CREATE app:request_count LABELS service api version v2
@@ -393,6 +403,7 @@ TS.CREATERULE app:request_count app:request_count:hourly AGGREGATION SUM 3600000
 ### System Metrics Collection
 
 ```redis
+
 # CPU usage tracking
 TS.CREATE system:cpu RETENTION 604800000 LABELS host server01 metric cpu
 TS.CREATE system:memory RETENTION 604800000 LABELS host server01 metric memory
@@ -408,6 +419,7 @@ TS.MRANGE 1609459200000 1609462800000 system:cpu system:memory system:disk
 ### Financial Time Series
 
 ```redis
+
 # Stock price tracking
 TS.CREATE stock:AAPL:price LABELS symbol AAPL exchange NASDAQ type price
 TS.CREATE stock:AAPL:volume LABELS symbol AAPL exchange NASDAQ type volume

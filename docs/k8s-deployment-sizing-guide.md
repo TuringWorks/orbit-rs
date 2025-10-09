@@ -1,7 +1,5 @@
 # Kubernetes Deployment Sizing Guide
 
-This comprehensive guide provides detailed resource sizing recommendations for Orbit-RS components across different workload types and deployment scenarios.
-
 ## Table of Contents
 
 - [Overview](#overview)
@@ -317,6 +315,7 @@ env:
 
 ### Development Storage
 ```yaml
+
 # Basic PVC for development
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -333,6 +332,7 @@ spec:
 
 ### Production Storage with Fast NVMe
 ```yaml
+
 # High-performance storage for production
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -347,6 +347,7 @@ spec:
       storage: 1Ti
       
 ---
+
 # Memory-mapped file storage (tmpfs/RAM disk)
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -363,6 +364,7 @@ spec:
 
 ### Enterprise Storage with Replication
 ```yaml
+
 # Replicated storage for enterprise
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -377,6 +379,7 @@ spec:
       storage: 10Ti
 
 ---
+
 # Backup storage (slower, cheaper)
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -406,6 +409,7 @@ data:
   nvidia-docker-runtime: "true"
   
 ---
+
 # GPU-optimized storage class
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
@@ -422,6 +426,7 @@ volumeBindingMode: WaitForFirstConsumer
 
 ### AMD GPU Support
 ```yaml
+
 # AMD ROCm configuration
 apiVersion: v1
 kind: ConfigMap
@@ -433,6 +438,7 @@ data:
   rocblas-version: "2.45.0"
   
 ---
+
 # ROCm device plugin daemonset
 apiVersion: apps/v1
 kind: DaemonSet
@@ -460,6 +466,7 @@ spec:
 
 ### Fast Storage Configuration
 ```yaml
+
 # Storage class for memory-mapped files
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
@@ -477,6 +484,7 @@ mountOptions:
 allowVolumeExpansion: true
 
 ---
+
 # Pod configuration with memory-mapped storage
 apiVersion: apps/v1
 kind: StatefulSet
@@ -516,6 +524,7 @@ spec:
 
 ### RAM Disk Configuration
 ```yaml
+
 # RAM disk for ultra-fast memory mapping
 apiVersion: v1
 kind: Pod
@@ -588,6 +597,7 @@ spec:
         averageValue: "70"
 
 ---
+
 # Vertical Pod Autoscaler (VPA)
 apiVersion: autoscaling.k8s.io/v1
 kind: VerticalPodAutoscaler
@@ -614,6 +624,7 @@ spec:
 
 ### GPU Node Autoscaling
 ```yaml
+
 # Cluster Autoscaler configuration for GPU nodes
 apiVersion: v1
 kind: ConfigMap
@@ -627,6 +638,7 @@ data:
   gpu-node-group.scale-down-utilization: "0.5"
 
 ---
+
 # GPU-specific node affinity and taints
 apiVersion: v1
 kind: Node
@@ -650,6 +662,7 @@ spec:
 
 ### Small Development Environment
 ```bash
+
 # Deploy development environment
 kubectl apply -f - <<EOF
 apiVersion: v1
@@ -707,6 +720,7 @@ EOF
 
 ### Production Environment with GPU
 ```bash
+
 # Deploy production environment with GPU acceleration
 kubectl apply -f - <<EOF
 apiVersion: v1
@@ -717,6 +731,7 @@ metadata:
     orbit.rs/environment: production
 
 ---
+
 # Orbit Server with high availability
 apiVersion: apps/v1
 kind: StatefulSet
@@ -796,6 +811,7 @@ spec:
           storage: 100Gi
 
 ---
+
 # Orbit Compute with GPU
 apiVersion: apps/v1
 kind: Deployment
@@ -841,6 +857,7 @@ EOF
 
 ### Enterprise Hyperscale Deployment
 ```bash
+
 # Deploy enterprise hyperscale environment
 kubectl apply -f - <<EOF
 apiVersion: v1
@@ -852,6 +869,7 @@ metadata:
     orbit.rs/scale: hyperscale
 
 ---
+
 # High-availability Orbit Server cluster
 apiVersion: apps/v1
 kind: StatefulSet
@@ -942,6 +960,7 @@ spec:
           storage: 1Ti
 
 ---
+
 # GPU compute cluster
 apiVersion: apps/v1
 kind: Deployment

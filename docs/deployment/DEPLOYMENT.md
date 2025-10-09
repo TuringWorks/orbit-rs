@@ -37,6 +37,7 @@ Orbit-RS is designed for production deployment with enterprise-grade features in
 Deploy Orbit-RS using the native Kubernetes operator:
 
 ```bash
+
 # Deploy the operator components
 kubectl apply -f orbit-operator/deploy/crds.yaml
 kubectl apply -f orbit-operator/deploy/rbac.yaml  
@@ -51,6 +52,7 @@ kubectl apply -f orbit-operator/deploy/examples.yaml
 For production deployments, use the Helm chart:
 
 ```bash
+
 # Add the Orbit-RS Helm repository
 helm repo add orbit-rs https://charts.turingworks.com/orbit-rs
 helm repo update
@@ -159,6 +161,7 @@ spec:
 #### Multi-Region Deployment
 
 ```bash
+
 # Deploy to multiple regions with cross-region replication
 helm install orbit-us-west orbit-rs/orbit-rs \
   --set cluster.region=us-west \
@@ -232,6 +235,7 @@ The CI/CD pipeline includes:
 Use the provided script to prepare secrets for GitHub Actions:
 
 ```bash
+
 # Prepare secrets for staging environment
 ./scripts/prepare-secrets.sh staging
 
@@ -257,6 +261,7 @@ Add the following secrets in GitHub repository settings (Settings → Secrets an
 #### 3. Environment Configuration
 
 ```yaml
+
 # .github/workflows/deploy.yml
 env:
   REGISTRY: ghcr.io
@@ -329,6 +334,7 @@ jobs:
 The pipeline runs comprehensive tests:
 
 ```bash
+
 # Unit tests across all workspace crates
 cargo test --workspace --lib
 
@@ -376,6 +382,7 @@ CMD ["orbit-server"]
 Security best practices for container deployment:
 
 ```dockerfile
+
 # Use non-root user
 RUN groupadd -r orbit && useradd -r -g orbit orbit
 USER orbit
@@ -441,6 +448,7 @@ monitoring:
 Pre-built Grafana dashboards are included:
 
 ```bash
+
 # Import dashboards
 kubectl apply -f monitoring/grafana/dashboards/
 ```
@@ -532,6 +540,7 @@ spec:
 Recommended resource allocation:
 
 ```yaml
+
 # Production workload
 resources:
   requests:
@@ -604,6 +613,7 @@ backup:
 Cross-region disaster recovery:
 
 ```bash
+
 # Automated failover configuration
 kubectl apply -f disaster-recovery/failover-policy.yaml
 
@@ -640,6 +650,7 @@ kubectl patch orbitcluster production-cluster \
 Resource optimization guidelines:
 
 ```yaml
+
 # CPU-bound workloads
 resources:
   requests:

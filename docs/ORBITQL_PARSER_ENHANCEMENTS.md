@@ -120,6 +120,7 @@ fn parse_case_expression(&mut self) -> Result<Expression, ParseError> {
 
 ```rust
 // Added WithClause to AST
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct WithClause {
     pub name: String,

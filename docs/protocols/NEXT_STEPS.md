@@ -327,6 +327,7 @@ impl GraphEngine {
 **File**: `orbit-protocols/tests/integration_tests.rs`
 
 ```rust
+
 #[tokio::test]
 async fn test_redis_protocol() {
     let client = redis::Client::open("redis://localhost:6379")?;
@@ -429,12 +430,14 @@ async-trait = "0.1"
 
 Add to `orbit-client/Cargo.toml`:
 ```toml
+
 # For dynamic actor references
 downcast-rs = "1.2"
 ```
 
 Add to `orbit-protocols/Cargo.toml`:
 ```toml
+
 # For SQL parsing
 sqlparser = "0.49"
 
@@ -486,6 +489,7 @@ deadpool = "0.12"
 Start with **Phase 1.1** - implementing GET/SET commands in RESP protocol. This is the smallest, most well-defined task that will validate the entire integration pattern.
 
 ```bash
+
 # 1. Create KVActor trait
 vim orbit-shared/src/actors/kv_actor.rs
 

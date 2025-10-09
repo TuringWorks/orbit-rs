@@ -63,6 +63,7 @@ pub trait CypherQueryActor: ActorWithStringKey {
 ### Data Model
 
 ```rust
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GraphNode {
     pub id: NodeId,

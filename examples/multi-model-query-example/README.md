@@ -18,6 +18,7 @@ This example showcases OrbitQL's revolutionary ability to query across multiple 
 ## 🚀 **Quick Start**
 
 ```bash
+
 # Run the comprehensive multi-model example
 cargo run --example multi-model-query-example
 
@@ -270,6 +271,7 @@ ORDER BY trending_score DESC;
 ### **Execution Steps**
 
 ```bash
+
 # 1. Clone and navigate to orbit-rs
 cd orbit-rs
 

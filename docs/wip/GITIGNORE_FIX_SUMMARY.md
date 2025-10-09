@@ -21,6 +21,7 @@ Error writing files: failed to resolve mod `core`:
 The file `orbit-shared/src/transactions/core.rs` existed locally but was **not tracked in git** because it was being ignored by the `.gitignore` pattern at line 175:
 
 ```gitignore
+
 # Core dumps
 core.*
 ```
@@ -45,12 +46,14 @@ This pattern was intended to ignore core dump files (which are created when prog
 
 **Changed from:**
 ```gitignore
+
 # Core dumps
 core.*
 ```
 
 **Changed to:**
 ```gitignore
+
 # Core dumps (but not core.rs source files)
 core
 core.[0-9]*
@@ -64,6 +67,7 @@ core.[0-9]*
 ### Fix #2: Add core.rs to Repository
 
 ```bash
+
 # Force add the file (was previously ignored)
 git add -f orbit-shared/src/transactions/core.rs
 
@@ -144,20 +148,25 @@ style: apply cargo fmt to transaction modules
 ### Local Verification ✅
 
 ```bash
+
 # 1. Check file is tracked
 git ls-files orbit-shared/src/transactions/core.rs
+
 # Output: orbit-shared/src/transactions/core.rs ✓
 
 # 2. Verify formatting
 cargo fmt --all -- --check
+
 # Output: (no errors) ✓
 
 # 3. Check file is no longer ignored
 git check-ignore orbit-shared/src/transactions/core.rs
+
 # Output: (empty) ✓
 
 # 4. Verify build works
 cargo build --workspace
+
 # Output: Compiling... ✓
 ```
 
@@ -189,6 +198,7 @@ After pushing commits, the CI/CD pipeline should:
 
 Before assuming a file is in the repository:
 ```bash
+
 # Check if file is tracked
 git ls-files path/to/file
 
@@ -203,6 +213,7 @@ git check-ignore -v path/to/file
 
 Commands that CI/CD runs should be tested locally first:
 ```bash
+
 # Format check (CI/CD runs this)
 cargo fmt --all -- --check
 
@@ -269,6 +280,7 @@ To prevent similar issues in the future:
 
 Create `.git/hooks/pre-commit`:
 ```bash
+
 #!/bin/bash
 # Check for untracked source files that should be committed
 
@@ -308,6 +320,7 @@ Periodically review `.gitignore` patterns:
 
 Before committing `.gitignore` changes:
 ```bash
+
 # Check what files would be ignored
 git status --ignored
 
@@ -340,9 +353,11 @@ git ls-files -o -i --exclude-standard
 
 ### Update .gitignore and Add File
 ```bash
+
 # 1. Edit .gitignore
 # 2. Force add file
 git add -f <file>
+
 # 3. Commit both
 git add .gitignore
 git commit -m "fix: update .gitignore and add previously ignored file"

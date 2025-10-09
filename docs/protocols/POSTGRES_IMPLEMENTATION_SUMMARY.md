@@ -130,6 +130,7 @@ DELETE FROM actors WHERE actor_id = 'user:1';
 ## Testing
 
 ```bash
+
 # Run all tests
 cargo test --package orbit-protocols --test postgres_integration_tests
 

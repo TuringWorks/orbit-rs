@@ -124,6 +124,7 @@ rustup component add clippy
 
 ### Development Workflow
 ```bash
+
 # Quick check during development (1-3 minutes)
 ./verification/quick_check.sh
 
@@ -140,12 +141,14 @@ rustup component add clippy
 ### Pre-commit Hook
 Add to `.git/hooks/pre-commit`:
 ```bash
+
 #!/bin/bash
 ./verification/quick_check.sh
 ```
 
 ### CI/CD Troubleshooting
 ```bash
+
 # Run only the failing stage with verbose output
 ./verification/verify_all.sh --stage rust --verbose
 
@@ -155,6 +158,7 @@ Add to `.git/hooks/pre-commit`:
 
 ### Coverage Analysis
 ```bash
+
 # Use tarpaulin (default)
 ./verification/checks/check_coverage.sh
 
@@ -167,6 +171,7 @@ COVERAGE_METHOD=both ./verification/checks/check_coverage.sh
 
 ### Individual Check
 ```bash
+
 # Run just formatting check
 ./verification/checks/check_formatting.sh
 
@@ -179,6 +184,7 @@ CHECK_TIMEOUT=600 ./verification/checks/check_security.sh
 
 ### Before Release
 ```bash
+
 # Run complete validation including all optional checks
 ./verification/verify_all.sh
 

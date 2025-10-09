@@ -67,6 +67,7 @@ flowchart TD
 ### Backup Strategy
 
 ```bash
+
 #!/bin/bash
 # Daily backup script - Run via cron
 # 0 2 * * * /usr/local/bin/orbit-backup.sh
@@ -168,6 +169,7 @@ backup_rocksdb() {
 ### Monitoring Setup
 
 ```yaml
+
 # prometheus.yml
 global:
   scrape_interval: 15s
@@ -191,6 +193,7 @@ alerting:
 ```
 
 ```yaml
+
 # orbit_alerts.yml
 groups:
 - name: orbit-persistence
@@ -322,6 +325,7 @@ pub async fn readiness_check(
 #### Immediate Response (0-15 minutes)
 
 ```bash
+
 #!/bin/bash
 # Emergency response script
 set -euo pipefail
@@ -368,6 +372,7 @@ fi
 #### Data Recovery Procedure
 
 ```bash
+
 #!/bin/bash
 # Data recovery script
 set -euo pipefail
@@ -604,6 +609,7 @@ recover_rocksdb() {
 ### 5. Disk Space Exhaustion (P0/P1)
 
 ```bash
+
 #!/bin/bash
 # Disk space recovery
 set -euo pipefail
@@ -676,6 +682,7 @@ fi
 ### 6. Memory Exhaustion (P1)
 
 ```bash
+
 #!/bin/bash
 # Memory recovery procedure
 set -euo pipefail
@@ -747,6 +754,7 @@ fi
 ### 7. Process Crash Recovery (P1)
 
 ```bash
+
 #!/bin/bash
 # Process crash recovery
 set -euo pipefail
@@ -820,6 +828,7 @@ fi
 ## Utility Functions
 
 ```bash
+
 #!/bin/bash
 # Utility functions for recovery scripts
 
@@ -934,6 +943,7 @@ notify_recovery_failure() {
 ### Incident Documentation
 
 ```markdown
+
 # Incident Report Template
 
 ## Incident Summary
@@ -975,6 +985,7 @@ notify_recovery_failure() {
 ### Recovery Validation
 
 ```bash
+
 #!/bin/bash
 # Post-recovery validation script
 
@@ -1019,6 +1030,7 @@ cat /tmp/recovery-validation-report.txt
 ## Emergency Contacts
 
 ```yaml
+
 # Emergency contact list
 primary_oncall:
   name: "DevOps Engineer"

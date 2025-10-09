@@ -8,8 +8,6 @@ permalink: /legal/terms/
 
 # Terms of Service
 
-**Orbit-RS Terms of Use and Service Agreement**
-
 *Last Updated: October 2024*
 
 ---

@@ -8,6 +8,7 @@
 - **MSRV**: Pin a **Minimum Supported Rust Version** in CI (e.g., 1.79).
 
 ```toml
+
 # rust-toolchain.toml
 [toolchain]
 channel = "1.79.0"
@@ -16,6 +17,7 @@ profile = "minimal"
 ```
 
 ```toml
+
 # .rustfmt.toml
 edition = "2021"
 use_small_heuristics = "Max"
@@ -26,6 +28,7 @@ imports_granularity = "Crate"
 ```
 
 ```toml
+
 # clippy.toml
 warns = ["clippy::pedantic", "clippy::nursery"]
 allow-unwrap-in-tests = true

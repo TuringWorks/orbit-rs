@@ -1,7 +1,5 @@
 # Query Languages Comparison Guide
 
-Orbit-RS supports three powerful query languages: Cypher, AQL (ArrangoDB Query Language), and OrbitQL. Each has unique strengths and is optimized for different use cases. This guide helps you choose the right language for your needs and understand how they work together.
-
 ## Table of Contents
 
 1. [Overview](#overview)

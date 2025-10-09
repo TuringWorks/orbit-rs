@@ -25,6 +25,7 @@ Connect to Orbit actors using any Redis client through the RESP (REdis Serializa
 Start the RESP server and connect with any Redis client:
 
 ```bash
+
 # Start the RESP server example
 cargo run --example resp-server
 
@@ -261,6 +262,7 @@ Connect to Orbit actors using any PostgreSQL client with full SQL support and na
 Start the PostgreSQL-compatible server and connect with psql:
 
 ```bash
+
 # Start the PostgreSQL-compatible server example
 cargo run --example postgres-server
 
@@ -1341,6 +1343,7 @@ Through MCP, AI agents can:
 
 ```toml
 [protocols]
+
 # Enable specific protocols
 redis.enabled = true
 postgres.enabled = true

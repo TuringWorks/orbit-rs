@@ -59,6 +59,7 @@ The integration tests verify that the Orbit-RS server correctly implements vario
 ### Running All Tests
 
 ```bash
+
 # Run all integration tests
 python3 tests/run_integration_tests.py
 
@@ -76,6 +77,7 @@ python3 tests/run_integration_tests.py --host localhost --resp-port 6379 --vecto
 You can also run the test files directly:
 
 ```bash
+
 # Graph tests
 python3 tests/integration/test_graph_commands.py
 

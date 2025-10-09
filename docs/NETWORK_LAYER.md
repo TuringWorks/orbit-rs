@@ -389,6 +389,7 @@ let transport = GrpcRaftTransport::new(
 #### RaftTransport Trait
 
 ```rust
+
 #[async_trait]
 pub trait RaftTransport: Send + Sync {
     async fn send_vote_request(
@@ -957,6 +958,7 @@ pool.cleanup_idle_connections(Duration::from_secs(0)).await?;
 ### Unit Tests
 
 ```rust
+
 #[tokio::test]
 async fn test_connection_pool_reuse() {
     let config = TransportConfig::default();
@@ -983,6 +985,7 @@ async fn test_message_conversion() {
 ### Integration Tests
 
 ```rust
+
 #[tokio::test]
 async fn test_full_transaction_flow() {
     // Start server

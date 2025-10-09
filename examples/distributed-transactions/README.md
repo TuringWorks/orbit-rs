@@ -54,6 +54,7 @@ pub enum BankingOperation {
 ## Running the Example
 
 ```bash
+
 # From the project root
 cargo run --package distributed-transactions-example
 ```
@@ -114,6 +115,7 @@ coordinator.commit_transaction(&tx_id).await?;
 Services implement `TransactionParticipant` to participate in distributed transactions:
 
 ```rust
+
 #[async_trait]
 impl TransactionParticipant for BankService {
     async fn prepare(&self, transaction_id: &TransactionId, operations: &[TransactionOperation]) -> OrbitResult<TransactionVote> {
@@ -134,6 +136,7 @@ impl TransactionParticipant for BankService {
 Transaction coordination uses message passing:
 
 ```rust
+
 #[async_trait]
 impl TransactionMessageSender for MockTransactionMessageSender {
     async fn send_message(&self, target: &AddressableReference, message: TransactionMessage) -> OrbitResult<()> {

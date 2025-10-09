@@ -1,7 +1,5 @@
 # Orbit-RS Redis Spatial Extensions
 
-This document describes the advanced geospatial capabilities available through the Redis protocol in Orbit-RS. These extensions go beyond standard Redis GEO commands to provide complex geometry support, real-time geofencing, spatial analytics, and GPU-accelerated clustering.
-
 ## Standard Redis GEO Commands (Enhanced)
 
 Orbit-RS implements all standard Redis geospatial commands with performance optimizations and enhanced functionality:
@@ -326,6 +324,7 @@ Spatial functionality can be configured through environment variables or configu
 
 ```toml
 [spatial]
+
 # Enable GPU acceleration (requires CUDA/OpenCL)
 gpu_enabled = true
 
@@ -343,6 +342,7 @@ max_memory_per_operation = "1GB"
 max_parallel_threads = 0  # 0 = auto-detect
 
 [geofencing]
+
 # Maximum number of active geofences
 max_geofences = 10000
 
@@ -368,6 +368,7 @@ Spatial commands return standard Redis error responses:
 ### Setting up a real-time location tracking system:
 
 ```redis
+
 # Create a spatial index for vehicles
 GEO.INDEX.CREATE vehicle_locations RTREE
 
@@ -395,6 +396,7 @@ GEO.TS.TRAJECTORY vehicle1_track 1640995200 1640999999
 ### Spatial analytics on customer locations:
 
 ```redis
+
 # Create customer location index  
 GEO.INDEX.CREATE customers QUADTREE
 

@@ -273,6 +273,7 @@ public class OrbitNativeService {
 ### Application Configuration
 
 ```yaml
+
 # application.yml
 orbit:
   enabled: true
@@ -302,6 +303,7 @@ orbit:
 ### Building the Rust Library
 
 ```bash
+
 # Build the shared library for JNI
 cd orbit-client-spring
 cargo build --release
@@ -317,6 +319,7 @@ cargo build --release --target x86_64-unknown-linux-gnu
 ### Java Client Generation
 
 ```bash
+
 # Generate Java client stubs from gRPC proto files
 protoc --java_out=src/main/java \
        --grpc-java_out=src/main/java \
@@ -329,6 +332,7 @@ protoc --java_out=src/main/java \
 ### Integration Tests
 
 ```bash
+
 # Start the Rust server
 cargo run --example java_integration_server
 
@@ -343,6 +347,7 @@ mvn test -Dtest=OrbitIntegrationTest
 ### Manual Testing
 
 ```bash
+
 # Test HTTP endpoints
 curl http://localhost:8080/api/v1/services
 curl http://localhost:8080/api/v1/health

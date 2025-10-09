@@ -309,6 +309,7 @@ type = \"S3\"
 endpoint = \"https://s3.amazonaws.com\"
 region = \"us-west-2\"
 bucket = \"orbit-data\"
+
 # ... other S3 config
 ```
 

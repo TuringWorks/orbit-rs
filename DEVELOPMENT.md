@@ -8,6 +8,7 @@ Before committing any code, **always** run the following to ensure code quality 
 
 ### Option 1: Use Make (Recommended)
 ```bash
+
 # Format, check, and test - all in one command
 make commit-ready
 
@@ -20,12 +21,14 @@ make build    # Build all packages
 
 ### Option 2: Use the Pre-commit Script
 ```bash
+
 # Run the comprehensive pre-commit script
 ./scripts/pre-commit.sh
 ```
 
 ### Option 3: Manual Commands
 ```bash
+
 # 1. Format code (REQUIRED before every commit)
 cargo fmt --all
 
@@ -65,6 +68,7 @@ Orbit-RS provides two pre-commit hook options to automatically enforce code qual
 ### Full Pre-commit Hook (Recommended)
 Runs comprehensive checks including tests:
 ```bash
+
 # Enable full pre-commit hook
 make pre-commit-full
 ```
@@ -78,6 +82,7 @@ Checks performed:
 ### Lightweight Pre-commit Hook (Faster)
 Runs essential checks only (skips tests for faster commits):
 ```bash
+
 # Enable lightweight pre-commit hook
 make pre-commit-light
 ```
@@ -90,6 +95,7 @@ Checks performed:
 ### Manual Pre-commit Checks
 You can also run the same checks manually without the hook:
 ```bash
+
 # Full checks (equivalent to pre-commit-full)
 make commit-ready
 
@@ -129,6 +135,7 @@ The CI/CD pipeline runs the following checks:
 ## 🔗 Useful Commands
 
 ```bash
+
 # Quick formatting (run this before every commit!)
 cargo fmt --all
 

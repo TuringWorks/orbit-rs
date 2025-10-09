@@ -25,6 +25,7 @@ Time-series databases are critical for IoT applications, financial systems, moni
 
 #### TimeSeriesActor
 ```rust
+
 #[async_trait]
 pub trait TimeSeriesActor: ActorWithStringKey {
     // Core operations
@@ -71,6 +72,7 @@ pub trait TimeSeriesActor: ActorWithStringKey {
 ### Data Structures
 
 ```rust
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TimeSeriesConfig {
     pub retention_ms: Option<u64>,

@@ -21,6 +21,7 @@ Automated script for preparing Kubernetes secrets for GitHub Actions CI/CD pipel
 **Usage:**
 
 ```bash
+
 # For staging environment
 ./scripts/prepare-secrets.sh staging
 

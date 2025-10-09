@@ -36,6 +36,7 @@ The system implements 2-phase commit with:
 
 ### Workspace Commands
 ```bash
+
 # Build all modules
 cargo build --workspace
 
@@ -137,6 +138,7 @@ The `orbit-operator` provides native Kubernetes support with three Custom Resour
 ### Operator Development Patterns
 ```rust
 // Custom Resource Definition structure
+
 #[derive(CustomResource, Deserialize, Serialize, Clone, Debug, JsonSchema)]
 #[kube(group = "orbit.turingworks.com", version = "v1", kind = "OrbitCluster")]
 #[kube(status = "OrbitClusterStatus")]
@@ -147,6 +149,7 @@ async fn reconcile_cluster(cluster: Arc<OrbitCluster>, ctx: Arc<ControllerContex
 
 ### Kubernetes Deployment Workflow
 ```bash
+
 # Deploy operator
 kubectl apply -f orbit-operator/deploy/crds.yaml
 kubectl apply -f orbit-operator/deploy/rbac.yaml

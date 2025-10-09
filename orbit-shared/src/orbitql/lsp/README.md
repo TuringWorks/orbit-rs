@@ -60,6 +60,7 @@ Represents a parsed OrbitQL query with AST, errors, and dependency information.
 ### Starting the LSP Server
 
 ```bash
+
 # Build the language server
 cargo build --bin orbitql-lsp
 
@@ -242,6 +243,7 @@ cargo test orbitql::lsp
 
 Test with a real LSP client:
 ```bash
+
 # Start server
 cargo run --bin orbitql-lsp
 

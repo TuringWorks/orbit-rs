@@ -39,8 +39,10 @@
 git checkout develop
 git pull origin develop
 git checkout -b feature/ABC-123-user-onboarding
+
 # work, commit, push
 git push -u origin feature/ABC-123-user-onboarding
+
 # open PR → base: develop
 ```
 
@@ -49,6 +51,7 @@ git push -u origin feature/ABC-123-user-onboarding
 export VERSION=1.4.0
 git checkout develop && git pull
 git checkout -b release/${VERSION}
+
 # bump versions, update changelog
 git commit -am "chore(release): prepare v${VERSION}"
 git push -u origin release/${VERSION}
@@ -69,6 +72,7 @@ git merge --no-ff release/${VERSION}
 export VERSION=1.4.1
 git checkout main && git pull
 git checkout -b hotfix/${VERSION}
+
 # fix, commit
 git push -u origin hotfix/${VERSION}
 ```

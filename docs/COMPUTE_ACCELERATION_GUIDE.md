@@ -233,6 +233,7 @@ let performance_client = OrbitClient::builder()
 You can control acceleration through connection parameters:
 
 ```bash
+
 # Enable all acceleration (default)
 postgres://user:pass@localhost:5432/db?compute_acceleration=true&simd_acceleration=true
 
@@ -249,6 +250,7 @@ postgres://user:pass@localhost:5432/db?compute_timeout=5000&adaptive_scheduling=
 ### 3. Environment Variables
 
 ```bash
+
 # Global acceleration settings
 export ORBIT_COMPUTE_ACCELERATION=true        # Enable GPU/Neural acceleration
 export ORBIT_SIMD_ACCELERATION=true           # Enable CPU SIMD
@@ -355,6 +357,7 @@ println!("GPU queries: {} ({:.1}x avg speedup)",
 ### 3. Kubernetes Monitoring
 
 ```bash
+
 # Check GPU utilization in pods
 kubectl top pod -l app=orbit-compute --containers
 
@@ -444,6 +447,7 @@ export ORBIT_HYPER_THREADING=true
 ### Debug Configuration
 
 ```bash
+
 # Enable detailed logging
 export RUST_LOG=orbit_compute=debug,orbit_scheduler=debug
 

@@ -7,6 +7,7 @@ The Orbit-RS Kubernetes Operator provides native Kubernetes support for deployin
 ### Install the Operator
 
 ```bash
+
 # Install CRDs
 kubectl apply -f deploy/crds.yaml
 
@@ -18,6 +19,7 @@ kubectl apply -f deploy/operator.yaml
 ### Deploy an Orbit Cluster
 
 ```bash
+
 # Deploy example cluster
 kubectl apply -f deploy/examples.yaml
 
@@ -123,6 +125,7 @@ spec:
 ### Building the Operator
 
 ```bash
+
 # Build the operator binary
 cargo build --release --package orbit-operator
 
@@ -133,6 +136,7 @@ docker build -t orbit-rs/orbit-operator:latest -f orbit-operator/Dockerfile .
 ### Testing
 
 ```bash
+
 # Run unit tests
 cargo test --package orbit-operator
 

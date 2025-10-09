@@ -1,7 +1,5 @@
 # OrbitQL Language Server Protocol (LSP) Implementation
 
-This document describes the comprehensive Language Server Protocol implementation for OrbitQL, the unified multi-model query language in the Orbit distributed database system.
-
 ## Overview
 
 The OrbitQL LSP implementation provides rich IDE support for OrbitQL developers, including:
@@ -162,6 +160,7 @@ The VS Code extension (`tools/vscode-orbitql/`) provides seamless integration:
 
 #### Installation
 ```bash
+
 # Build the language server
 cargo build --bin orbitql-lsp
 
@@ -343,6 +342,7 @@ schema.functions.insert("geo::distance".to_string(), FunctionInfo {
 ### Basic Setup
 
 ```bash
+
 # Start the LSP server (typically called by IDE)
 orbitql-lsp
 
@@ -445,13 +445,12 @@ multi_schema.add_database("analytics", analytics_schema);
 ### Development Setup
 
 ```bash
+
 # Clone repository
 git clone https://github.com/your-org/orbit-rs.git
 cd orbit-rs
 
 # Build with LSP features
-cargo build --features lsp
-
 # Run tests
 cargo test orbitql::lsp
 

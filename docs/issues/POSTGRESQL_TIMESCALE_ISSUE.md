@@ -25,6 +25,7 @@ TimescaleDB is one of the most popular time-series databases, widely used in IoT
 
 #### HypertableActor
 ```rust
+
 #[async_trait]
 pub trait HypertableActor: ActorWithStringKey {
     // Hypertable management
@@ -82,6 +83,7 @@ pub trait HypertableActor: ActorWithStringKey {
 ### Data Structures
 
 ```rust
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HypertableConfig {
     pub table_name: String,

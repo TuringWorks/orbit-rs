@@ -1,7 +1,5 @@
 # ArangoDB Multi-Model Database Compatibility
 
-This document outlines the planned ArangoDB compatibility features for Orbit-RS, enabling comprehensive multi-model database capabilities with graph, document, key-value, full-text search, and geospatial functionality unified through AQL (ArangoDB Query Language).
-
 ## Overview
 
 ArangoDB is a multi-model NoSQL database that combines graph, document, and key-value data models in a single system. Orbit-RS will provide full ArangoDB compatibility, allowing applications to leverage the power of multiple data models through a unified query language (AQL) while gaining enhanced scalability, fault tolerance, and performance through Orbit's distributed actor system.
@@ -75,6 +73,7 @@ ArangoDB is a multi-model NoSQL database that combines graph, document, and key-
 
 #### Document Collection Actor
 ```rust
+
 #[async_trait]
 pub trait DocumentCollectionActor: ActorWithStringKey {
     // Document operations
@@ -97,6 +96,7 @@ pub trait DocumentCollectionActor: ActorWithStringKey {
 
 #### Graph Actor
 ```rust
+
 #[async_trait]
 pub trait GraphActor: ActorWithStringKey {
     // Vertex operations
@@ -119,6 +119,7 @@ pub trait GraphActor: ActorWithStringKey {
 
 #### AQL Query Actor
 ```rust
+
 #[async_trait]
 pub trait AQLQueryActor: ActorWithStringKey {
     // Query execution
@@ -143,6 +144,7 @@ pub trait AQLQueryActor: ActorWithStringKey {
 
 #### Search Index Actor
 ```rust
+
 #[async_trait]
 pub trait SearchIndexActor: ActorWithStringKey {
     // View management
@@ -164,6 +166,7 @@ pub trait SearchIndexActor: ActorWithStringKey {
 ### Data Structures
 
 ```rust
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Document {
     pub key: Option<String>,
@@ -657,6 +660,7 @@ impl AQLOptimizer {
 
 ### Multi-Model Transaction Support
 ```rust
+
 #[async_trait]
 pub trait MultiModelTransaction {
     async fn begin(&self, collections: TransactionCollections) -> OrbitResult<TransactionHandle>;

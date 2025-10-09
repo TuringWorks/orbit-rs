@@ -286,6 +286,7 @@ WHERE confidence > 0.8;
 ### Using psql
 
 ```bash
+
 # Connect to Orbit PostgreSQL server
 psql -h localhost -p 5433 -U orbit -d orbit
 

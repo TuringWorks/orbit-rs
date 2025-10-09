@@ -45,6 +45,7 @@ cargo bench --bench leader_election_benchmarks
 The crate also includes several examples demonstrating different persistence backends:
 
 ```bash
+
 # Run examples
 cargo run --example cow_btree_demo
 cargo run --example cow_btree_persistence_demo
@@ -100,6 +101,7 @@ The manual workflow supports:
 
 #### Running from Workspace Root
 ```bash
+
 # From the workspace root
 cd orbit-benchmarks && cargo bench --bench actor_benchmarks
 cd orbit-benchmarks && cargo bench --bench leader_election_benchmarks
@@ -107,6 +109,7 @@ cd orbit-benchmarks && cargo bench --bench leader_election_benchmarks
 
 #### Running from Benchmarks Directory
 ```bash
+
 # Navigate to benchmarks directory
 cd orbit-benchmarks
 

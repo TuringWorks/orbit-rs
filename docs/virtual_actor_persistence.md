@@ -47,6 +47,7 @@ stateDiagram-v2
 Actor leases are the foundation of distributed coordination in Orbit-RS. They prevent multiple nodes from activating the same actor simultaneously.
 
 ```rust
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ActorLease {
     pub key: ActorKey,           // Actor identifier
@@ -75,6 +76,7 @@ pub struct ActorKey {
 Actor snapshots contain the serialized state of virtual actors with integrity checking and versioning.
 
 ```rust
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ActorSnapshot {
     pub actor_reference: AddressableReference,
@@ -227,6 +229,7 @@ The **cloud storage backends (S3, Azure, GCP, MinIO)** are **completely independ
 
 **Option 1: Pure Cloud Storage (S3)**
 ```toml
+
 # Uses S3 directly - no local storage involved
 [server]
 persistence_backend = "s3"
@@ -235,11 +238,13 @@ persistence_backend = "s3"
 type = "s3"
 endpoint = "https://s3.amazonaws.com"
 bucket = "orbit-actor-state"
+
 # Actor leases stored as: s3://bucket/orbit/leases/ActorType/actor-id
 ```
 
 **Option 2: Pure Local Storage (LSM-Tree)**
 ```toml
+
 # Uses LSM-Tree directly - no cloud storage involved
 [server]
 persistence_backend = "lsm_tree"
@@ -247,6 +252,7 @@ persistence_backend = "lsm_tree"
 [persistence.lsm_tree]
 type = "lsm_tree"
 data_dir = "/ssd/orbit_data"
+
 # Actor leases stored in local LSM-Tree files
 ```
 
@@ -614,6 +620,7 @@ pub async fn update_actor_state<T: Actor>(
 The persistence layer provides comprehensive monitoring:
 
 ```rust
+
 #[derive(Debug, Clone)]
 pub struct PersistenceMetrics {
     pub snapshots_created: u64,
@@ -720,6 +727,7 @@ batch_size = 1000
 - **Use versioning**: Design state structures to support evolution
 
 ```rust
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(tag = "version")]
 enum UserState {
@@ -775,6 +783,7 @@ enum UserState {
 ### Debugging Tools
 
 ```bash
+
 # Check actor lease status
 orbit-cli actor list-leases --node-id node-1
 

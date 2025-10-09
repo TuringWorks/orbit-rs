@@ -14,6 +14,7 @@
 
 **Files to create/update at repo root** (idempotent):
 ```toml
+
 # rust-toolchain.toml
 [toolchain]
 channel = "1.79.0"
@@ -22,6 +23,7 @@ profile = "minimal"
 ```
 
 ```toml
+
 # .rustfmt.toml
 edition = "2021"
 use_small_heuristics = "Max"
@@ -33,6 +35,7 @@ format_code_in_doc_comments = true
 ```
 
 ```toml
+
 # clippy.toml
 warns = ["clippy::pedantic", "clippy::nursery"]
 msrv = "1.79"
@@ -126,6 +129,7 @@ fn main() -> anyhow::Result<()> {
 - Trait objects crossing threads: annotate with `dyn Trait + Send + Sync` when required.
 
 ```rust
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let (tx, mut rx) = tokio::sync::mpsc::channel::<String>(64);
@@ -165,6 +169,7 @@ pub trait Repository {
 - Add metrics (`metrics` crate or OpenTelemetry) for hot paths when applicable.
 
 ```rust
+
 #[tracing::instrument(skip(self), fields(user_id=%uid))]
 pub async fn handle(&self, uid: UserId) -> anyhow::Result<()> {
     tracing::info!("handling request");
@@ -189,6 +194,7 @@ pub async fn handle(&self, uid: UserId) -> anyhow::Result<()> {
 - Test data via helper builders; avoid hidden global state.
 
 ```rust
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -275,6 +281,7 @@ Bots should fail the PR if any rule is violated.
 
 ## 15) Quick Command Cookbook (copy/paste)
 ```bash
+
 # format & lint
 cargo fmt --all
 cargo clippy --workspace --all-targets --all-features -- -D warnings

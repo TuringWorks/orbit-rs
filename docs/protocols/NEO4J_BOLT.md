@@ -1,7 +1,5 @@
 # Neo4j Bolt Protocol Compatibility
 
-This document outlines the planned Neo4j Bolt protocol compatibility features for Orbit-RS, enabling comprehensive graph database capabilities and seamless integration with the Neo4j ecosystem.
-
 ## Overview
 
 Neo4j is the world's leading graph database, using the Bolt protocol for client-server communication and Cypher as its query language. Orbit-RS will provide full Neo4j compatibility, allowing existing Neo4j applications to migrate to Orbit's distributed actor system while gaining enhanced scalability, fault tolerance, and performance.
@@ -57,6 +55,7 @@ Neo4j is the world's leading graph database, using the Bolt protocol for client-
 
 #### Graph Node Actor
 ```rust
+
 #[async_trait]
 pub trait GraphNodeActor: ActorWithStringKey {
     // Node management
@@ -78,6 +77,7 @@ pub trait GraphNodeActor: ActorWithStringKey {
 
 #### Relationship Actor
 ```rust
+
 #[async_trait]
 pub trait RelationshipActor: ActorWithStringKey {
     // Relationship management
@@ -94,6 +94,7 @@ pub trait RelationshipActor: ActorWithStringKey {
 
 #### Cypher Query Actor
 ```rust
+
 #[async_trait]
 pub trait CypherQueryActor: ActorWithStringKey {
     // Query execution
@@ -114,6 +115,7 @@ pub trait CypherQueryActor: ActorWithStringKey {
 ### Data Structures
 
 ```rust
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GraphNode {
     pub id: NodeId,
@@ -326,6 +328,7 @@ impl BoltConnection {
 
 ### Message Types
 ```rust
+
 #[derive(Debug, Clone)]
 pub enum BoltMessage {
     // Connection messages

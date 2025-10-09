@@ -1,7 +1,5 @@
 # Kubernetes Storage Guide for Orbit-RS
 
-This comprehensive guide explains how storage persistence works with Kubernetes deployments for Orbit-RS, including what changes are needed to support all persistence backends.
-
 ## 🎯 **TL;DR - What You Need to Know**
 
 **✅ Current Status**: Basic local storage (PVC) works  
@@ -39,6 +37,7 @@ This comprehensive guide explains how storage persistence works with Kubernetes 
 
 **Example Environment Variables**:
 ```bash
+
 # Backend Selection
 ORBIT_PERSISTENCE_BACKEND=lsm_tree
 
@@ -79,6 +78,7 @@ ORBIT_S3_ACCESS_KEY_ID=<from-secret>
 #### **LSM-Tree Backend** (High-performance local storage)
 
 ```bash
+
 # 1. Apply base manifests
 kubectl apply -f k8s/00-namespace.yaml
 kubectl apply -f k8s/02-storage.yaml  # Creates SSD StorageClass
@@ -93,6 +93,7 @@ kind: StatefulSet
 metadata:
   name: orbit-server
   namespace: orbit-rs
+
 # ... (copy from 03-statefulset-enhanced.yaml)
 spec:
   template:
@@ -113,6 +114,7 @@ EOF
 #### **S3 Backend** (Cloud storage)
 
 ```bash
+
 # 1. Create S3 credentials secret
 kubectl create secret generic orbit-server-secrets -n orbit-rs \
   --from-literal=s3-access-key-id="AKIA..." \
@@ -149,6 +151,7 @@ EOF
 #### **RocksDB Backend** (Production database)
 
 ```yaml
+
 # values-rocksdb.yaml
 orbitServer:
   replicaCount: 5  # Scale up for production
@@ -182,6 +185,7 @@ helm install orbit-rs ./helm/orbit-rs -f values-rocksdb.yaml
 #### **Azure Backend** (Cloud storage)
 
 ```yaml
+
 # values-azure.yaml
 orbitServer:
   env:
@@ -291,6 +295,7 @@ spec:
 **For Cloud Backends**, create secrets:
 
 ```bash
+
 # S3
 kubectl create secret generic orbit-server-secrets \
   --from-literal=s3-access-key-id="AKIA..." \
@@ -310,6 +315,7 @@ kubectl create secret generic orbit-server-secrets \
 The Orbit-RS pods need these permissions:
 
 ```yaml
+
 # Already included in orbit-server ServiceAccount
 rules:
 - apiGroups: [""]
@@ -350,6 +356,7 @@ rules:
 The enhanced health checks provide backend-specific information:
 
 ```bash
+
 # Basic health
 curl http://pod-ip:8080/health
 

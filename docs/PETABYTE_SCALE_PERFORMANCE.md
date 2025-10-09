@@ -189,6 +189,7 @@ enable_server_side_encryption = true
 #### Cluster-Wide Memory Calculations
 
 ```bash
+
 # For 1PB data with 1 billion keys (1KB avg value size)
 Total Keys: 1,000,000,000
 Bloom Filter Memory: ~1.25 GB (distributed across nodes)
@@ -452,6 +453,7 @@ volumes:
 #### Memory-Mapped Files Cost Structure (RECOMMENDED)
 
 ```bash
+
 # Memory-mapped file deployment (30-50 nodes)
 Compute (50 x i3en.4xlarge): $50,000/month
 High-capacity NVMe storage: $20,000/month
@@ -468,6 +470,7 @@ Total with mmap: ~$73,000/month
 #### Traditional Cost Optimization Strategies
 
 ```bash
+
 # Use spot instances (70% cost reduction)
 Spot Instance Savings: ~$35,000/month
 
@@ -529,6 +532,7 @@ scrape_configs:
 #### Grafana Dashboard Queries
 
 ```promql
+
 # Write Latency P95
 histogram_quantile(0.95, 
   rate(orbit_write_duration_seconds_bucket[5m])
@@ -752,6 +756,7 @@ impl MMapActorManager {
 ### Security Considerations
 
 ```yaml
+
 # Network policies for cluster isolation
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy

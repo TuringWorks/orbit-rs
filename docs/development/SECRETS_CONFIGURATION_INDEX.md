@@ -133,6 +133,7 @@
 
 **Usage:**
 ```bash
+
 # Interactive mode (recommended)
 ./scripts/prepare-secrets.sh staging
 

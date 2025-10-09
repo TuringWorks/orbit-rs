@@ -97,8 +97,10 @@ If Docker support is needed in the future:
 The changes preserve all core functionality while removing Docker dependencies. The pipeline can be tested with:
 
 ```bash
+
 # Run the test release workflow
 git push origin
+
 # or manually trigger via GitHub Actions UI
 
 # Test locally (same as before)

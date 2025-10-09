@@ -1,7 +1,5 @@
 # Redis Time Series Compatibility
 
-This document outlines the planned Redis Time Series (RedisTimeSeries) compatibility features for Orbit-RS, enabling time-series data storage and analysis capabilities through the Redis protocol.
-
 ## Overview
 
 Redis Time Series is a Redis module that adds time-series data structure support to Redis. Orbit-RS will provide native compatibility with RedisTimeSeries commands, allowing existing applications to seamlessly migrate or integrate with Orbit's distributed actor system.
@@ -56,6 +54,7 @@ Redis Time Series is a Redis module that adds time-series data structure support
 ### Actor Architecture
 
 ```rust
+
 #[async_trait]
 pub trait TimeSeriesActor: ActorWithStringKey {
     // Core operations
@@ -77,6 +76,7 @@ pub trait TimeSeriesActor: ActorWithStringKey {
 ### Data Structures
 
 ```rust
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TimeSeriesConfig {
     pub retention_ms: Option<u64>,
@@ -186,6 +186,7 @@ r.execute_command('TS.CREATERULE', 'temperature:sensor1', 'temperature:sensor1:h
 ### Multi-Series Analytics
 
 ```python
+
 # Create multiple time series for different sensors
 sensors = ['sensor1', 'sensor2', 'sensor3']
 for sensor_id in sensors:
@@ -213,6 +214,7 @@ for series_data in results:
 ### IoT Data Pipeline
 
 ```python
+
 # Real-time IoT data ingestion
 def ingest_sensor_data(device_id, sensor_type, value):
     timestamp = int(time.time() * 1000)

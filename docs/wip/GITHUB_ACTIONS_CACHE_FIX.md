@@ -252,6 +252,7 @@ GitHub has a 10GB cache limit per repository:
 ### 4. Document Cache Strategy
 In your workflow file or README:
 ```yaml
+
 # Cache key versioning:
 # v1: Initial implementation
 # v2: Added core.rs transaction module (Oct 2025)

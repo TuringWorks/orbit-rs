@@ -29,6 +29,7 @@ This guide provides comprehensive instructions for deploying Orbit-RS on Kuberne
 ### Required Tools
 
 ```bash
+
 # Install kubectl
 curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
 chmod +x kubectl && sudo mv kubectl /usr/local/bin/
@@ -43,6 +44,7 @@ curl -fsSL https://get.docker.com -o get-docker.sh && sh get-docker.sh
 ### Optional Tools
 
 ```bash
+
 # Prometheus Operator (for monitoring)
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
 helm repo update
@@ -59,6 +61,7 @@ kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/
 ### Using Helm (Recommended)
 
 ```bash
+
 # Add Helm repository (once available)
 helm repo add orbit-rs https://turingworks.github.io/orbit-rs
 helm repo update
@@ -74,6 +77,7 @@ helm install orbit-rs orbit-rs/orbit-rs \
 ### Using Local Helm Chart
 
 ```bash
+
 # Clone the repository
 git clone https://github.com/TuringWorks/orbit-rs.git
 cd orbit-rs
@@ -156,6 +160,7 @@ kubectl apply -f k8s/00-namespace.yaml
 Update the storage class in `k8s/02-storage.yaml` based on your cloud provider:
 
 ```yaml
+
 # For AWS EKS
 provisioner: ebs.csi.aws.com
 parameters:
@@ -192,6 +197,7 @@ kubectl apply -f k8s/04-services.yaml
 ### Step 5: Verify Deployment
 
 ```bash
+
 # Check pods
 kubectl get pods -n orbit-rs
 
@@ -271,6 +277,7 @@ config:
 ### Deploy with Helm
 
 ```bash
+
 # Deploy
 helm install orbit-rs helm/orbit-rs \
   --namespace orbit-rs \
@@ -296,6 +303,7 @@ helm uninstall orbit-rs --namespace orbit-rs
 #### Development
 
 ```yaml
+
 # dev-values.yaml
 orbitServer:
   replicaCount: 1
@@ -318,6 +326,7 @@ config:
 #### Staging
 
 ```yaml
+
 # staging-values.yaml
 orbitServer:
   replicaCount: 2
@@ -340,6 +349,7 @@ config:
 #### Production
 
 ```yaml
+
 # prod-values.yaml
 orbitServer:
   replicaCount: 5
@@ -375,6 +385,7 @@ config:
 ### Configuration Management
 
 ```bash
+
 # Create environment-specific configurations
 kubectl create configmap orbit-rs-prod-config \
   --from-file=config/production.toml \
@@ -430,11 +441,13 @@ monitoring:
 ### Grafana Dashboards
 
 ```bash
+
 # Deploy Grafana dashboard
 kubectl apply -f k8s/05-monitoring.yaml
 
 # Access Grafana
 kubectl port-forward svc/prometheus-grafana 3000:80 -n monitoring
+
 # Default login: admin/prom-operator
 ```
 
@@ -464,6 +477,7 @@ Key alerts configured in PrometheusRule:
 ### Multi-Zone Deployment
 
 ```yaml
+
 # Enable pod anti-affinity
 affinity:
   podAntiAffinity:
@@ -492,6 +506,7 @@ podDisruptionBudget:
 ### Automated Recovery
 
 ```yaml
+
 # Configure probe timeouts
 livenessProbe:
   enabled: true
@@ -551,6 +566,7 @@ spec:
 ### Pod Security Standards
 
 ```yaml
+
 # Enable restricted pod security
 apiVersion: v1
 kind: Namespace
@@ -565,6 +581,7 @@ metadata:
 ### TLS Configuration
 
 ```yaml
+
 # Enable TLS
 config:
   tls:
@@ -599,6 +616,7 @@ The deployment includes minimal RBAC permissions:
 #### 1. Pods Not Starting
 
 ```bash
+
 # Check pod status
 kubectl describe pod orbit-server-0 -n orbit-rs
 
@@ -615,6 +633,7 @@ kubectl logs orbit-server-0 -n orbit-rs --previous
 #### 2. Persistent Volume Issues
 
 ```bash
+
 # Check PVCs
 kubectl get pvc -n orbit-rs
 
@@ -628,6 +647,7 @@ kubectl get events -n orbit-rs --sort-by=.metadata.creationTimestamp
 #### 3. Network Connectivity
 
 ```bash
+
 # Test internal connectivity
 kubectl exec -it orbit-server-0 -n orbit-rs -- curl http://orbit-server-1.orbit-server-headless:8080/health
 
@@ -639,6 +659,7 @@ curl http://localhost:8080/health
 #### 4. Configuration Issues
 
 ```bash
+
 # Check configuration
 kubectl exec -it orbit-server-0 -n orbit-rs -- cat /tmp/orbit-server.toml
 
@@ -649,6 +670,7 @@ kubectl exec -it orbit-server-0 -n orbit-rs -- /app/orbit-server --config /tmp/o
 ### Debugging Commands
 
 ```bash
+
 # Get all resources
 kubectl get all -n orbit-rs
 
@@ -673,6 +695,7 @@ kubectl get events -n orbit-rs --sort-by='.lastTimestamp'
 ### Backup Procedures
 
 ```bash
+
 # Backup persistent volumes
 kubectl get pvc -n orbit-rs -o yaml > orbit-rs-pvc-backup.yaml
 
@@ -687,6 +710,7 @@ kubectl exec -it orbit-server-0 -n orbit-rs -- /app/orbit-server --backup /app/d
 ### Updates and Upgrades
 
 ```bash
+
 # Update image version
 helm upgrade orbit-rs helm/orbit-rs \
   --set orbitServer.image.tag=v0.2.0 \
@@ -702,6 +726,7 @@ kubectl patch statefulset orbit-server -n orbit-rs -p '{"spec":{"updateStrategy"
 ### Scaling Operations
 
 ```bash
+
 # Manual scaling
 kubectl scale statefulset orbit-server --replicas=5 -n orbit-rs
 
@@ -721,6 +746,7 @@ helm upgrade orbit-rs helm/orbit-rs \
 ### Performance Tuning
 
 ```yaml
+
 # Resource optimization
 resources:
   requests:
@@ -742,6 +768,7 @@ config:
 ### Log Management
 
 ```bash
+
 # Centralized logging with Fluentd/Filebeat
 # Configure log rotation
 kubectl patch statefulset orbit-server -n orbit-rs --type='merge' -p='{

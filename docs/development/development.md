@@ -16,6 +16,7 @@ This guide covers development setup, contributing guidelines, testing procedures
 ### Setting Up the Development Environment
 
 ```bash
+
 # Clone the repository
 git clone https://github.com/TuringWorks/orbit-rs.git
 cd orbit-rs
@@ -79,6 +80,7 @@ VS Code settings (`.vscode/settings.json`):
 ### Development Commands
 
 ```bash
+
 # Fast compilation check (no codegen) - includes persistence backends
 cargo check --workspace
 
@@ -363,6 +365,7 @@ let provider = DynamicPersistenceProvider::new(config).await?;
 ### Persistence Testing
 
 ```bash
+
 # Test all persistence backends
 cargo test --lib --package orbit-server persistence
 
@@ -400,6 +403,7 @@ tests/
 ### Running Tests
 
 ```bash
+
 # All tests
 cargo test --workspace
 
@@ -448,6 +452,7 @@ harness = false
 #### Unit Test Example
 
 ```rust
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -572,6 +577,7 @@ criterion_main!(benches);
 Use rustfmt for consistent code formatting:
 
 ```bash
+
 # Format all code
 cargo fmt --all
 
@@ -596,6 +602,7 @@ remove_nested_parens = true
 Use Clippy for comprehensive linting:
 
 ```bash
+
 # Run all lints
 cargo clippy --workspace --all-targets -- -D warnings
 
@@ -840,6 +847,7 @@ error!("Failed to connect to database: {}", error);
 ### Performance Profiling
 
 ```bash
+
 # CPU profiling with perf
 cargo build --release
 perf record --call-graph=dwarf ./target/release/orbit-server

@@ -104,6 +104,7 @@ pub struct MMapPersistenceProvider {
 }
 
 /// Configuration for memory-mapped file provider
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MMapConfig {
     /// Base directory for memory-mapped files
@@ -207,6 +208,7 @@ impl MMapRegion {
 
 ```rust
 /// Transparent Huge Page (THP) configuration
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum HugePageSize {
     /// 2MB huge pages (default)
@@ -285,6 +287,7 @@ pub struct NumaTopology {
 }
 
 /// NUMA-aware memory allocation policy
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum NumaPolicy {
     /// Allocate memory on the local NUMA node
@@ -441,6 +444,7 @@ impl IoRingManager {
 
 ```rust
 /// Complete configuration for memory-mapped file architecture
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OrbitMMapConfig {
     /// Memory-mapped file provider configuration
@@ -458,6 +462,7 @@ pub struct OrbitMMapConfig {
 }
 
 /// Huge page specific configuration
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HugePageConfig {
     /// Enable transparent huge pages
@@ -471,6 +476,7 @@ pub struct HugePageConfig {
 }
 
 /// NUMA configuration
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NumaConfig {
     /// Enable NUMA optimizations
@@ -484,6 +490,7 @@ pub struct NumaConfig {
 }
 
 /// I/O ring configuration
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IoRingConfig {
     /// Enable io_uring
@@ -504,6 +511,7 @@ pub struct IoRingConfig {
 **Complete TOML Configuration Example:**
 
 ```toml
+
 # Orbit-RS Memory-Mapped File Configuration
 
 [server]
@@ -669,6 +677,7 @@ nodeRequirements:
 
 **Example Deployment:**
 ```bash
+
 # Label nodes for mmap optimization
 kubectl label nodes <node-name> orbit-rs/mmap-optimized=true
 
@@ -690,6 +699,7 @@ kubectl apply -f k8s/mmap-optimized/04-node-prep-monitoring.yaml
 For development and small-scale deployments:
 
 ```toml
+
 # single-node-config.toml
 [mmap]
 data_dir = "/data/orbit-mmap"
@@ -707,6 +717,7 @@ worker_threads = 8  # Match available cores
 
 **Setup Commands:**
 ```bash
+
 # Prepare the system
 sudo sysctl -w vm.max_map_count=2097152
 sudo echo madvise > /sys/kernel/mm/transparent_hugepage/enabled
@@ -758,6 +769,7 @@ resource "aws_instance" "orbit_mmap_nodes" {
 
 **VM Initialization Script:**
 ```bash
+
 #!/bin/bash
 # user-data.sh - VM initialization for mmap optimization
 
@@ -795,6 +807,7 @@ chmod +x orbit-server
 
 **Cluster Configuration:**
 ```toml
+
 # mmap-cluster.toml
 [server]
 persistence_backend = "memory_mapped"
@@ -850,6 +863,7 @@ ultra_dense_node_specs:
 
 **Storage Configuration (`k8s/3-node-petabyte/01-storage-ultra-dense.yaml`)**
 ```yaml
+
 # Ultra-high density storage class
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
@@ -866,6 +880,7 @@ mountOptions:
   - "data=writeback"
   - "commit=60"              # Optimized for ultra-dense
 ---
+
 # Node-specific 800TB volumes
 apiVersion: v1
 kind: PersistentVolume
@@ -912,6 +927,7 @@ data:
 #### Deployment Commands
 
 ```bash
+
 # Label nodes for ultra-dense deployment
 kubectl label nodes node1 orbit-rs.io/node-id=node1
 kubectl label nodes node1 orbit-rs.io/storage-tier=ultra-dense
@@ -1070,6 +1086,7 @@ spec:
 **Service Configuration (`k8s/3-node-petabyte/04-services.yaml`)**
 ```yaml
 ---
+
 # Load balancer service for external access
 apiVersion: v1
 kind: Service
@@ -1088,6 +1105,7 @@ spec:
     app: orbit-rs
     tier: ultra-dense
 ---
+
 # Headless service for StatefulSet
 apiVersion: v1
 kind: Service
@@ -1109,6 +1127,7 @@ spec:
     app: orbit-rs
     tier: ultra-dense
 ---
+
 # Monitoring service
 apiVersion: v1
 kind: Service
@@ -1133,6 +1152,7 @@ spec:
 
 **Health Check Script (`scripts/ultra-dense-health-check.sh`)**
 ```bash
+
 #!/bin/bash
 # Ultra-dense deployment health checker
 
@@ -1311,6 +1331,7 @@ graph_slicing:
 
 **Extent Mapping Structure:**
 ```rust
+
 #[derive(Clone, Copy)]
 pub struct ExtentRef {
     pub file_id: u32,          // Which file contains this extent
@@ -1345,6 +1366,7 @@ pub struct ExtentConnections {
 #### 7.4.1 Lifetime Classes
 
 ```rust
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum LifetimeClass {
     Ephemeral,    // Per-operator scratch, dropped at operator end
@@ -1408,6 +1430,7 @@ impl EpochManager {
 #### 7.5.1 PinManager Interface
 
 ```rust
+
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub struct PinKey(pub u64);  // Logical object/slice identifier
 
@@ -2058,6 +2081,7 @@ recommendedHardware:
 
 **System Preparation:**
 ```bash
+
 #!/bin/bash
 # bare-metal-setup.sh
 
@@ -2163,6 +2187,7 @@ const AVAILABLE_RAM: usize = 64_000_000_000;   // 64GB
 
 ```rust
 /// Security configuration for memory-mapped regions
+
 #[derive(Debug, Clone)]
 pub struct MMapSecurityConfig {
     /// Enable address space randomization
@@ -2211,6 +2236,7 @@ pub enum MemoryEncryption {
 
 ```rust
 /// Comprehensive test suite for mmap architecture
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2270,6 +2296,7 @@ mod tests {
 #### 2. Parallel Deployment
 ```rust
 /// Migration configuration
+
 #[derive(Debug, Clone)]
 pub struct MigrationConfig {
     /// Source persistence backend

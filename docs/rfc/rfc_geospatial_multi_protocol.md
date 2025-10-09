@@ -96,6 +96,7 @@ Position Orbit-RS as the **definitive next-generation geospatial database** by c
 
 ```rust
 /// Universal spatial geometry types based on OGC Simple Features
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum SpatialGeometry {
     Point(Point),
@@ -135,6 +136,7 @@ pub struct LinearRing {
 }
 
 /// Coordinate Reference System support
+
 #[derive(Debug, Clone)]
 pub struct CoordinateReferenceSystem {
     pub srid: i32,                 // EPSG code
@@ -358,6 +360,7 @@ GROUP BY sensor_id;
 
 #### Basic Geospatial Commands
 ```redis
+
 # Add points to geospatial index
 GEOADD cities -122.4194 37.7749 "San Francisco"
 GEOADD cities -74.0060 40.7128 "New York"
@@ -379,6 +382,7 @@ GEOHASH cities "San Francisco" "New York"
 
 #### Extended Spatial Commands (Orbit-RS Specific)
 ```redis
+
 # Create spatial indexes
 GEO.INDEX.CREATE poi_index RTREE
 GEO.INDEX.CREATE traffic_grid GEOHASH precision 8
@@ -410,6 +414,7 @@ GEO.TS.TRAJECTORY vehicle_tracks vehicle_123 last_hour
 
 #### Streaming Geospatial Operations
 ```redis
+
 # Real-time GPS stream processing
 XADD gps_stream * vehicle_id 123 lat 37.7749 lng -122.4194 speed 45 heading 270
 GEO.STREAM.PROCESS gps_stream vehicle_positions UPDATE_INTERVAL 1000
@@ -846,6 +851,7 @@ impl GPUSpatialEngine {
 }
 
 /// Spatial compute shaders for different GPU APIs
+
 #[derive(Debug, Clone)]
 pub enum SpatialComputeShader {
     PointInPolygon {

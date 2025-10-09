@@ -1,7 +1,5 @@
 # Orbit Graph Database Commands
 
-Orbit provides a comprehensive RedisGraph-compatible graph database implementation that allows you to store, query, and analyze graph data using Cypher queries through familiar Redis commands. The graph database is built on top of the Orbit actor system, leveraging existing Cypher parsing and execution infrastructure for high performance and horizontal scalability.
-
 ## Table of Contents
 
 - [Overview](#overview)
@@ -48,6 +46,7 @@ GRAPH.QUERY <graph_name> <query>
 **Examples:**
 
 ```redis
+
 # Create nodes
 GRAPH.QUERY social "CREATE (alice:Person {name: 'Alice', age: 30})"
 
@@ -75,6 +74,7 @@ GRAPH.RO_QUERY <graph_name> <query>
 **Examples:**
 
 ```redis
+
 # Read-only node matching
 GRAPH.RO_QUERY social "MATCH (p:Person) RETURN p.name ORDER BY p.age"
 
@@ -118,6 +118,7 @@ GRAPH.LIST
 
 ```redis
 GRAPH.LIST
+
 # Returns: ["social", "recommendation", "fraud_detection"]
 ```
 
@@ -232,9 +233,11 @@ GRAPH.CONFIG GET <parameter>
 
 ```redis
 GRAPH.CONFIG GET QUERY_TIMEOUT
+
 # Returns: "30000"
 
 GRAPH.CONFIG GET PROFILING_ENABLED  
+
 # Returns: "false"
 ```
 
@@ -254,9 +257,11 @@ GRAPH.CONFIG SET <parameter> <value>
 
 ```redis
 GRAPH.CONFIG SET QUERY_TIMEOUT 60000
+
 # Returns: "OK"
 
 GRAPH.CONFIG SET PROFILING_ENABLED true
+
 # Returns: "OK"
 ```
 

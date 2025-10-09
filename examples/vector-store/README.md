@@ -33,6 +33,7 @@ This example demonstrates using Orbit-RS as a **Redis-compatible vector database
 ### Basic Vector Operations (VECTOR.* commands)
 
 ```redis
+
 # Add a vector with ID
 VECTOR.ADD my-vectors doc6 "0.1,0.2,0.3,0.4,..."
 
@@ -55,6 +56,7 @@ VECTOR.KNN ml-embeddings "0.1,0.2,0.3,..." 3
 ### Advanced Redis FT.* Commands
 
 ```redis
+
 # Create a vector index
 FT.CREATE my-index DIM 384 DISTANCE_METRIC COSINE
 
@@ -95,6 +97,7 @@ Each vector is 384-dimensional (typical for sentence transformers) with metadata
 ## Example Queries
 
 ```redis
+
 # Try this with the pre-loaded data
 127.0.0.1:6381> VECTOR.SEARCH ml-embeddings "0.150,0.152,0.148,..." 3
 1) 1) "doc2"

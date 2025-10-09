@@ -48,6 +48,7 @@ Created comprehensive documentation and automation tools for configuring GitHub 
 
 **Usage:**
 ```bash
+
 # For staging
 ./scripts/prepare-secrets.sh staging
 
@@ -135,6 +136,7 @@ Added CI/CD and Secrets section with links to:
 ### Step 1: Prepare Secrets
 
 ```bash
+
 # Make script executable (if not already)
 chmod +x scripts/prepare-secrets.sh
 
@@ -171,6 +173,7 @@ chmod +x scripts/prepare-secrets.sh
 ### Step 3: Clean Up
 
 ```bash
+
 # Remove sensitive files after adding to GitHub
 rm -f staging-kubeconfig-base64.txt
 rm -f production-kubeconfig-base64.txt
@@ -233,6 +236,7 @@ The preparation script creates dedicated service accounts with:
 ### 1. Test Script Locally
 
 ```bash
+
 # Run script
 ./scripts/prepare-secrets.sh staging
 
@@ -255,6 +259,7 @@ After adding secrets:
 
 **For staging:**
 ```bash
+
 # Create a commit on develop branch
 git checkout develop
 git commit --allow-empty -m "test: trigger staging deployment"
@@ -265,6 +270,7 @@ git push origin develop
 
 **For production:**
 ```bash
+
 # Create and push a tag
 git tag v1.0.0-test
 git push origin v1.0.0-test
@@ -275,6 +281,7 @@ git push origin v1.0.0-test
 ### 4. Check Deployment
 
 ```bash
+
 # Verify pods are running
 kubectl get pods -n orbit-rs-staging  # for staging
 kubectl get pods -n orbit-rs           # for production
@@ -333,12 +340,14 @@ kubectl get deployment orbit-rs-staging -n orbit-rs-staging
 
 ### Issue 1: Script Permission Denied
 ```bash
+
 # Solution: Make script executable
 chmod +x scripts/prepare-secrets.sh
 ```
 
 ### Issue 2: kubectl Not Found
 ```bash
+
 # Solution: Install kubectl
 # macOS: brew install kubectl
 # Linux: See https://kubernetes.io/docs/tasks/tools/
@@ -346,6 +355,7 @@ chmod +x scripts/prepare-secrets.sh
 
 ### Issue 3: Cannot Connect to Cluster
 ```bash
+
 # Solution: Verify context and credentials
 kubectl config current-context
 kubectl cluster-info
@@ -353,6 +363,7 @@ kubectl cluster-info
 
 ### Issue 4: Service Account Token Not Created
 ```bash
+
 # Solution: Check Kubernetes version (1.24+ requires explicit secret)
 # The script handles this automatically
 kubectl get secret orbit-deployer-token -n orbit-rs-staging
@@ -360,6 +371,7 @@ kubectl get secret orbit-deployer-token -n orbit-rs-staging
 
 ### Issue 5: Deployment Fails with "Unauthorized"
 ```bash
+
 # Solution: Verify RBAC permissions
 kubectl auth can-i create deployments \
   --as=system:serviceaccount:orbit-rs-staging:orbit-deployer \

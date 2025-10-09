@@ -379,6 +379,7 @@ impl OrbitLSMTree {
 ### New LSM Provider Configuration
 ```rust
 // Add to orbit-server/src/persistence/mod.rs
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum PersistenceConfig {
     // ... existing providers ...

@@ -99,6 +99,7 @@ persistence_backend = "s3"
 [persistence.s3]
 endpoint = "https://s3.amazonaws.com"
 bucket = "orbit-production-state"
+
 # All data stored in S3 objects
 ```
 
@@ -110,6 +111,7 @@ persistence_backend = "lsm_tree"
 [persistence.lsm_tree]
 data_dir = "/ssd/orbit_data"
 memtable_size_limit = 67108864  # 64MB
+
 # All data stored in local LSM files
 ```
 
@@ -121,6 +123,7 @@ persistence_backend = "rocksdb"
 [persistence.rocksdb]
 data_dir = "/nvme/orbit_rocksdb"
 enable_wal = true
+
 # All data stored in RocksDB files
 ```
 

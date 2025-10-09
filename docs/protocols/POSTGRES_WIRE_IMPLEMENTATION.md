@@ -165,6 +165,7 @@ DELETE FROM actors WHERE actor_type = 'TempActor';
 ### Starting the Server
 
 ```bash
+
 # Run the example server
 cargo run --example postgres-server
 
@@ -174,6 +175,7 @@ cargo run --example postgres-server
 ### Connecting with psql
 
 ```bash
+
 # Connect to the server
 psql -h localhost -p 5433 -U orbit -d actors
 
