@@ -91,6 +91,160 @@ docker_compose:
     - ORBIT_REPLICA_COUNT=3
     - ORBIT_DISCOVERY_DNS=orbit-server
 
+# Digital Ocean deployment configuration
+digital_ocean:
+  # Digital Ocean API configuration
+  api:
+    token: "${DO_API_TOKEN}"  # Digital Ocean API token
+    endpoint: "https://api.digitalocean.com/v2"
+    timeout: 30s
+    retry_count: 3
+
+  # Droplet configuration
+  droplets:
+    # Standard compute droplets
+    standard:
+      image: "ubuntu-22-04-x64"
+      size: "s-2vcpu-4gb"  # 2 vCPU, 4GB RAM
+      region: "nyc3"  # Primary region
+      backup_regions: ["sfo3", "ams3"]  # Fallback regions
+      count: 3
+      ssh_keys: ["${DO_SSH_KEY_ID}"]
+      user_data_file: "scripts/droplet-init.sh"
+      tags: ["orbit-rs", "standard-compute"]
+      
+    # GPU-enabled droplets for compute-intensive workloads
+    gpu:
+      image: "gpu-h100x1-base"  # NVIDIA H100 optimized image
+      size: "gd-8vcpu-32gb-nvidia-h100x1"  # GPU droplet with H100
+      region: "nyc3"  # GPU availability by region
+      backup_regions: ["sfo3"]  # Limited GPU regions
+      count: 2
+      ssh_keys: ["${DO_SSH_KEY_ID}"]
+      user_data_file: "scripts/gpu-droplet-init.sh"
+      tags: ["orbit-rs", "gpu-compute", "ml-workload"]
+      
+      # GPU-specific configuration
+      gpu_config:
+        driver_version: "535.154.05"  # NVIDIA driver version
+        cuda_version: "12.2"  # CUDA toolkit version
+        enable_persistence_mode: true
+        memory_clock: 1215  # GPU memory clock (MHz)
+        graphics_clock: 1410  # GPU graphics clock (MHz)
+        power_limit: 350  # Power limit (watts)
+        enable_mig: false  # Multi-Instance GPU
+        
+      # Monitoring and optimization
+      monitoring:
+        gpu_metrics: true
+        temperature_threshold: 83  # Celsius
+        power_threshold: 300  # Watts
+        memory_threshold: 80  # Percentage
+        enable_nvml: true
+        
+  # Load balancer configuration
+  load_balancer:
+    name: "orbit-rs-lb"
+    algorithm: "round_robin"  # or "least_connections", "ip_hash"
+    region: "nyc3"
+    size: "lb-small"  # lb-small, lb-medium, lb-large
+    health_check:
+      protocol: "http"
+      port: 8080
+      path: "/health"
+      interval: 10
+      timeout: 5
+      unhealthy_threshold: 3
+      healthy_threshold: 2
+    
+    # GPU-aware load balancing
+    gpu_routing:
+      enabled: true
+      route_by_gpu_availability: true
+      route_by_gpu_memory: true
+      sticky_sessions: true  # For ML training consistency
+      
+  # Digital Ocean Spaces object storage
+  spaces:
+    name: "${DO_SPACES_NAME}"
+    region: "${DO_SPACES_REGION}"
+    endpoint: "${DO_SPACES_REGION}.digitaloceanspaces.com"
+    access_key: "${DO_SPACES_ACCESS_KEY}"
+    secret_key: "${DO_SPACES_SECRET_KEY}"
+    enable_cdn: true
+    cdn_endpoint: "${DO_SPACES_NAME}.${DO_SPACES_REGION}.cdn.digitaloceanspaces.com"
+    prefix: "orbit-rs"
+    enable_encryption: true
+    retention_policy:
+      logs: "30d"
+      metrics: "90d"
+      snapshots: "1y"
+      
+  # Networking configuration
+  networking:
+    vpc:
+      name: "orbit-rs-vpc"
+      ip_range: "10.116.0.0/20"
+      region: "nyc3"
+      
+    firewall:
+      name: "orbit-rs-firewall"
+      inbound_rules:
+        - protocol: "tcp"
+          ports: "22"  # SSH
+          sources:
+            addresses: ["0.0.0.0/0"]  # Restrict in production
+        - protocol: "tcp"
+          ports: "50051"  # gRPC
+          sources:
+            load_balancer_uids: ["${DO_LB_ID}"]
+        - protocol: "tcp"
+          ports: "8080"  # HTTP API
+          sources:
+            load_balancer_uids: ["${DO_LB_ID}"]
+        - protocol: "tcp"
+          ports: "9090"  # Metrics
+          sources:
+            addresses: ["10.116.0.0/20"]  # VPC only
+      outbound_rules:
+        - protocol: "tcp"
+          ports: "443"  # HTTPS
+          destinations:
+            addresses: ["0.0.0.0/0"]
+        - protocol: "tcp"
+          ports: "80"  # HTTP
+          destinations:
+            addresses: ["0.0.0.0/0"]
+            
+  # Auto-scaling configuration
+  auto_scaling:
+    enabled: true
+    min_instances: 2
+    max_instances: 10
+    target_cpu_utilization: 70  # Percentage
+    target_gpu_utilization: 80  # Percentage (for GPU droplets)
+    scale_up_cooldown: "5m"
+    scale_down_cooldown: "10m"
+    
+    # GPU-specific scaling
+    gpu_scaling:
+      enabled: true
+      min_gpu_instances: 1
+      max_gpu_instances: 4
+      gpu_memory_threshold: 85  # Percentage
+      scale_up_on_queue_length: 5  # Scale up when job queue > 5
+      
+  # Cost optimization
+  cost_optimization:
+    enable_reserved_instances: false  # Reserved pricing not available yet
+    enable_spot_instances: false  # Not available for GPU droplets
+    shutdown_schedule:
+      enabled: false  # Set to true for dev environments
+      weekday_shutdown: "20:00"  # 8 PM EST
+      weekend_shutdown: "18:00"  # 6 PM EST
+      startup: "08:00"  # 8 AM EST
+      timezone: "America/New_York"
+      
 # Standalone deployment configuration
 standalone:
   # Cluster configuration

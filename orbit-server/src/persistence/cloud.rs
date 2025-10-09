@@ -61,6 +61,23 @@ pub struct GoogleCloudClusterNodeProvider {
     health_status: Arc<RwLock<ProviderHealth>>,
 }
 
+/// Digital Ocean Spaces provider for addressable directory
+pub struct DigitalOceanSpacesAddressableDirectoryProvider {
+    config: DigitalOceanSpacesConfig,
+    client: Client,
+    metrics: Arc<RwLock<PersistenceMetrics>>,
+    health_status: Arc<RwLock<ProviderHealth>>,
+}
+
+/// Digital Ocean Spaces provider for cluster nodes
+#[allow(dead_code)]
+pub struct DigitalOceanSpacesClusterNodeProvider {
+    config: DigitalOceanSpacesConfig,
+    client: Client,
+    metrics: Arc<RwLock<PersistenceMetrics>>,
+    health_status: Arc<RwLock<ProviderHealth>>,
+}
+
 // Helper structs for object storage
 #[derive(Debug, Serialize, Deserialize)]
 struct StoredLease {
@@ -699,4 +716,598 @@ impl GoogleCloudAddressableDirectoryProvider {
     }
 
     // Implementation would use Google Cloud Storage JSON API
+}
+
+// ============================================================================
+// Digital Ocean Spaces Implementation
+// ============================================================================
+
+impl DigitalOceanSpacesAddressableDirectoryProvider {
+    pub fn new(config: DigitalOceanSpacesConfig) -> Self {
+        let timeout = Duration::from_secs(config.connection_timeout.unwrap_or(30));
+        let client = Client::builder()
+            .timeout(timeout)
+            .build()
+            .expect("Failed to create HTTP client for Digital Ocean Spaces");
+
+        Self {
+            config,
+            client,
+            metrics: Arc::new(RwLock::new(PersistenceMetrics::default())),
+            health_status: Arc::new(RwLock::new(ProviderHealth::Healthy)),
+        }
+    }
+
+    fn get_endpoint(&self) -> String {
+        if self.config.enable_ssl {
+            format!("https://{}", self.config.endpoint)
+        } else {
+            format!("http://{}", self.config.endpoint)
+        }
+    }
+
+    fn get_cdn_endpoint(&self) -> Option<String> {
+        if self.config.enable_cdn {
+            self.config.cdn_endpoint.clone().or_else(|| {
+                Some(format!(
+                    "https://{}.cdn.digitaloceanspaces.com",
+                    self.config.space_name
+                ))
+            })
+        } else {
+            None
+        }
+    }
+
+    fn get_lease_key(&self, reference: &AddressableReference) -> String {
+        let prefix = self.config.prefix.as_deref().unwrap_or("orbit");
+        format!(
+            "{}/leases/{}/{}",
+            prefix,
+            reference.addressable_type,
+            self.encode_key(&reference.key)
+        )
+    }
+
+    fn get_node_leases_prefix(&self, node_id: &NodeId) -> String {
+        let prefix = self.config.prefix.as_deref().unwrap_or("orbit");
+        format!("{}/node-leases/{}/", prefix, node_id)
+    }
+
+    fn encode_key(&self, key: &Key) -> String {
+        match key {
+            Key::StringKey { key } => urlencoding::encode(key).to_string(),
+            Key::Int32Key { key } => key.to_string(),
+            Key::Int64Key { key } => key.to_string(),
+            Key::NoKey => "no-key".to_string(),
+        }
+    }
+
+    async fn put_object(&self, key: &str, data: &[u8]) -> OrbitResult<()> {
+        let base_url = self.get_endpoint();
+        let url = format!("{}/{}/{}", base_url, self.config.space_name, key);
+
+        let mut request = self
+            .client
+            .put(&url)
+            .header("Content-Type", "application/json")
+            .header("x-amz-acl", "private"); // Digital Ocean Spaces uses AWS S3 compatible headers
+
+        // Add server-side encryption if enabled
+        if self.config.enable_encryption {
+            request = request.header("x-amz-server-side-encryption", "AES256");
+        }
+
+        // Add custom tags as metadata headers
+        for (key, value) in &self.config.tags {
+            request = request.header(format!("x-amz-meta-{}", key.to_lowercase()), value);
+        }
+
+        let response = request.body(data.to_vec()).send().await.map_err(|e| {
+            OrbitError::network(format!("Digital Ocean Spaces PUT request failed: {}", e))
+        })?;
+
+        if !response.status().is_success() {
+            return Err(OrbitError::network(format!(
+                "Digital Ocean Spaces PUT failed with status: {}",
+                response.status()
+            )));
+        }
+
+        Ok(())
+    }
+
+    async fn get_object(&self, key: &str) -> OrbitResult<Option<Vec<u8>>> {
+        // Use CDN endpoint for reads if enabled for better performance
+        let base_url = if let Some(cdn_endpoint) = self.get_cdn_endpoint() {
+            cdn_endpoint
+        } else {
+            self.get_endpoint()
+        };
+
+        let url = format!("{}/{}/{}", base_url, self.config.space_name, key);
+
+        let response = self.client.get(&url).send().await.map_err(|e| {
+            OrbitError::network(format!("Digital Ocean Spaces GET request failed: {}", e))
+        })?;
+
+        if response.status().is_success() {
+            let data = response.bytes().await.map_err(|e| {
+                OrbitError::network(format!(
+                    "Failed to read Digital Ocean Spaces response: {}",
+                    e
+                ))
+            })?;
+            Ok(Some(data.to_vec()))
+        } else if response.status() == reqwest::StatusCode::NOT_FOUND {
+            Ok(None)
+        } else {
+            Err(OrbitError::network(format!(
+                "Digital Ocean Spaces GET failed with status: {}",
+                response.status()
+            )))
+        }
+    }
+
+    async fn delete_object(&self, key: &str) -> OrbitResult<bool> {
+        let base_url = self.get_endpoint();
+        let url = format!("{}/{}/{}", base_url, self.config.space_name, key);
+
+        let response = self.client.delete(&url).send().await.map_err(|e| {
+            OrbitError::network(format!("Digital Ocean Spaces DELETE request failed: {}", e))
+        })?;
+
+        if response.status().is_success() || response.status() == reqwest::StatusCode::NOT_FOUND {
+            Ok(true)
+        } else {
+            Err(OrbitError::network(format!(
+                "Digital Ocean Spaces DELETE failed with status: {}",
+                response.status()
+            )))
+        }
+    }
+
+    async fn list_objects(&self, prefix: &str) -> OrbitResult<Vec<String>> {
+        let base_url = self.get_endpoint();
+        let url = format!("{}/{}", base_url, self.config.space_name);
+
+        let response = self
+            .client
+            .get(&url)
+            .query(&[("list-type", "2"), ("prefix", prefix)])
+            .send()
+            .await
+            .map_err(|e| {
+                OrbitError::network(format!("Digital Ocean Spaces LIST request failed: {}", e))
+            })?;
+
+        if !response.status().is_success() {
+            return Err(OrbitError::network(format!(
+                "Digital Ocean Spaces LIST failed with status: {}",
+                response.status()
+            )));
+        }
+
+        // Parse XML response (simplified implementation)
+        let text = response.text().await.map_err(|e| {
+            OrbitError::network(format!(
+                "Failed to read Digital Ocean Spaces list response: {}",
+                e
+            ))
+        })?;
+
+        // This is a simplified XML parser - in production, use a proper XML library
+        let mut keys = Vec::new();
+        for line in text.lines() {
+            if line.trim().starts_with("<Key>") && line.trim().ends_with("</Key>") {
+                if let Some(key) = line
+                    .trim()
+                    .strip_prefix("<Key>")
+                    .and_then(|s| s.strip_suffix("</Key>"))
+                {
+                    keys.push(key.to_string());
+                }
+            }
+        }
+
+        Ok(keys)
+    }
+
+    async fn update_metrics<F>(
+        &self,
+        operation: &str,
+        duration: Duration,
+        result: &OrbitResult<F>,
+    ) {
+        let mut metrics = self.metrics.write().await;
+        match operation {
+            "read" => {
+                metrics.read_operations += 1;
+                metrics.read_latency_avg =
+                    (metrics.read_latency_avg + duration.as_secs_f64()) / 2.0;
+                if self.config.enable_cdn {
+                    metrics.cache_hits += 1;
+                }
+            }
+            "write" => {
+                metrics.write_operations += 1;
+                metrics.write_latency_avg =
+                    (metrics.write_latency_avg + duration.as_secs_f64()) / 2.0;
+            }
+            "delete" => {
+                metrics.delete_operations += 1;
+                metrics.delete_latency_avg =
+                    (metrics.delete_latency_avg + duration.as_secs_f64()) / 2.0;
+            }
+            _ => {}
+        }
+        if result.is_err() {
+            metrics.error_count += 1;
+        }
+    }
+}
+
+#[async_trait]
+impl PersistenceProvider for DigitalOceanSpacesAddressableDirectoryProvider {
+    async fn initialize(&self) -> OrbitResult<()> {
+        tracing::info!(
+            "Digital Ocean Spaces addressable directory provider initialized for space: {}",
+            self.config.space_name
+        );
+        Ok(())
+    }
+
+    async fn shutdown(&self) -> OrbitResult<()> {
+        tracing::info!("Digital Ocean Spaces addressable directory provider shutdown");
+        Ok(())
+    }
+
+    async fn health_check(&self) -> ProviderHealth {
+        // Perform a simple HEAD request to check connectivity
+        let base_url = self.get_endpoint();
+        let url = format!("{}/{}", base_url, self.config.space_name);
+
+        match self.client.head(&url).send().await {
+            Ok(response) if response.status().is_success() => ProviderHealth::Healthy,
+            Ok(response) => ProviderHealth::Degraded {
+                reason: format!("HTTP status: {}", response.status()),
+            },
+            Err(e) => ProviderHealth::Unhealthy {
+                reason: format!("Connection failed: {}", e),
+            },
+        }
+    }
+
+    async fn metrics(&self) -> PersistenceMetrics {
+        self.metrics.read().await.clone()
+    }
+
+    async fn begin_transaction(&self, context: TransactionContext) -> OrbitResult<String> {
+        // Digital Ocean Spaces doesn't support transactions natively, so this is a no-op
+        Ok(context.id)
+    }
+
+    async fn commit_transaction(&self, _transaction_id: &str) -> OrbitResult<()> {
+        Ok(())
+    }
+
+    async fn rollback_transaction(&self, _transaction_id: &str) -> OrbitResult<()> {
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl AddressableDirectoryProvider for DigitalOceanSpacesAddressableDirectoryProvider {
+    async fn store_lease(&self, lease: &AddressableLease) -> OrbitResult<()> {
+        let start = Instant::now();
+
+        let result = async {
+            let key = self.get_lease_key(&lease.reference);
+            let stored_lease = StoredLease {
+                lease: lease.clone(),
+                metadata: ObjectMetadata {
+                    version: 1,
+                    created_at: chrono::Utc::now(),
+                    updated_at: chrono::Utc::now(),
+                    checksum: None,
+                },
+            };
+
+            let data = serde_json::to_vec(&stored_lease)
+                .map_err(|e| OrbitError::internal(format!("Serialization error: {}", e)))?;
+
+            self.put_object(&key, &data).await
+        }
+        .await;
+
+        self.update_metrics("write", start.elapsed(), &result).await;
+        result
+    }
+
+    async fn get_lease(
+        &self,
+        reference: &AddressableReference,
+    ) -> OrbitResult<Option<AddressableLease>> {
+        let start = Instant::now();
+
+        let result = async {
+            let key = self.get_lease_key(reference);
+            if let Some(data) = self.get_object(&key).await? {
+                let stored_lease: StoredLease = serde_json::from_slice(&data)
+                    .map_err(|e| OrbitError::internal(format!("Deserialization error: {}", e)))?;
+                Ok(Some(stored_lease.lease))
+            } else {
+                Ok(None)
+            }
+        }
+        .await;
+
+        self.update_metrics("read", start.elapsed(), &result).await;
+        result
+    }
+
+    async fn update_lease(&self, lease: &AddressableLease) -> OrbitResult<()> {
+        let start = Instant::now();
+
+        let result = async {
+            let key = self.get_lease_key(&lease.reference);
+            let stored_lease = StoredLease {
+                lease: lease.clone(),
+                metadata: ObjectMetadata {
+                    version: 1,
+                    created_at: chrono::Utc::now(),
+                    updated_at: chrono::Utc::now(),
+                    checksum: None,
+                },
+            };
+
+            let data = serde_json::to_vec(&stored_lease)
+                .map_err(|e| OrbitError::internal(format!("Serialization error: {}", e)))?;
+
+            self.put_object(&key, &data).await
+        }
+        .await;
+
+        self.update_metrics("write", start.elapsed(), &result).await;
+        result
+    }
+
+    async fn remove_lease(&self, reference: &AddressableReference) -> OrbitResult<bool> {
+        let start = Instant::now();
+
+        let result = async {
+            let key = self.get_lease_key(reference);
+            self.delete_object(&key).await
+        }
+        .await;
+
+        self.update_metrics("delete", start.elapsed(), &result)
+            .await;
+        result
+    }
+
+    async fn list_node_leases(&self, node_id: &NodeId) -> OrbitResult<Vec<AddressableLease>> {
+        let start = Instant::now();
+
+        let result = async {
+            let prefix = self.get_node_leases_prefix(node_id);
+            let keys = self.list_objects(&prefix).await?;
+
+            let mut leases = Vec::new();
+            for key in keys {
+                if let Some(data) = self.get_object(&key).await? {
+                    let stored_lease: StoredLease = serde_json::from_slice(&data).map_err(|e| {
+                        OrbitError::internal(format!("Deserialization error: {}", e))
+                    })?;
+                    leases.push(stored_lease.lease);
+                }
+            }
+
+            Ok(leases)
+        }
+        .await;
+
+        self.update_metrics("read", start.elapsed(), &result).await;
+        result
+    }
+
+    async fn list_all_leases(&self) -> OrbitResult<Vec<AddressableLease>> {
+        let start = Instant::now();
+
+        let result = async {
+            let prefix = format!(
+                "{}/leases/",
+                self.config.prefix.as_deref().unwrap_or("orbit")
+            );
+            let keys = self.list_objects(&prefix).await?;
+
+            let mut leases = Vec::new();
+            for key in keys {
+                if let Some(data) = self.get_object(&key).await? {
+                    let stored_lease: StoredLease = serde_json::from_slice(&data).map_err(|e| {
+                        OrbitError::internal(format!("Deserialization error: {}", e))
+                    })?;
+                    leases.push(stored_lease.lease);
+                }
+            }
+
+            Ok(leases)
+        }
+        .await;
+
+        self.update_metrics("read", start.elapsed(), &result).await;
+        result
+    }
+
+    async fn cleanup_expired_leases(&self) -> OrbitResult<u64> {
+        let start = Instant::now();
+
+        let result = async {
+            let all_leases = self.list_all_leases().await?;
+            let now = chrono::Utc::now();
+            let mut count = 0;
+
+            for lease in all_leases {
+                if lease.expires_at < now
+                    && self.remove_lease(&lease.reference).await.unwrap_or(false)
+                {
+                    count += 1;
+                }
+            }
+
+            Ok(count)
+        }
+        .await;
+
+        self.update_metrics("delete", start.elapsed(), &result)
+            .await;
+        result
+    }
+
+    async fn store_leases_bulk(&self, leases: &[AddressableLease]) -> OrbitResult<()> {
+        let start = Instant::now();
+
+        let result = async {
+            for lease in leases {
+                self.store_lease(lease).await?;
+            }
+            Ok(())
+        }
+        .await;
+
+        self.update_metrics("write", start.elapsed(), &result).await;
+        result
+    }
+
+    async fn remove_leases_bulk(&self, references: &[AddressableReference]) -> OrbitResult<u64> {
+        let start = Instant::now();
+
+        let result = async {
+            let mut count = 0;
+            for reference in references {
+                if self.remove_lease(reference).await.unwrap_or(false) {
+                    count += 1;
+                }
+            }
+            Ok(count)
+        }
+        .await;
+
+        self.update_metrics("delete", start.elapsed(), &result)
+            .await;
+        result
+    }
+}
+
+// Digital Ocean Spaces cluster node provider implementation
+impl DigitalOceanSpacesClusterNodeProvider {
+    pub fn new(config: DigitalOceanSpacesConfig) -> Self {
+        let timeout = Duration::from_secs(config.connection_timeout.unwrap_or(30));
+        let client = Client::builder()
+            .timeout(timeout)
+            .build()
+            .expect("Failed to create HTTP client for Digital Ocean Spaces cluster provider");
+
+        Self {
+            config,
+            client,
+            metrics: Arc::new(RwLock::new(PersistenceMetrics::default())),
+            health_status: Arc::new(RwLock::new(ProviderHealth::Healthy)),
+        }
+    }
+}
+
+#[async_trait]
+impl PersistenceProvider for DigitalOceanSpacesClusterNodeProvider {
+    async fn initialize(&self) -> OrbitResult<()> {
+        tracing::info!(
+            "Digital Ocean Spaces cluster node provider initialized for space: {}",
+            self.config.space_name
+        );
+        Ok(())
+    }
+
+    async fn shutdown(&self) -> OrbitResult<()> {
+        tracing::info!("Digital Ocean Spaces cluster node provider shutdown");
+        Ok(())
+    }
+
+    async fn health_check(&self) -> ProviderHealth {
+        ProviderHealth::Healthy // Simplified for now
+    }
+
+    async fn metrics(&self) -> PersistenceMetrics {
+        self.metrics.read().await.clone()
+    }
+
+    async fn begin_transaction(&self, context: TransactionContext) -> OrbitResult<String> {
+        Ok(context.id)
+    }
+
+    async fn commit_transaction(&self, _transaction_id: &str) -> OrbitResult<()> {
+        Ok(())
+    }
+
+    async fn rollback_transaction(&self, _transaction_id: &str) -> OrbitResult<()> {
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl ClusterNodeProvider for DigitalOceanSpacesClusterNodeProvider {
+    async fn store_node(&self, _node: &NodeInfo) -> OrbitResult<()> {
+        // TODO: Implement Digital Ocean Spaces node storage
+        Err(OrbitError::internal(
+            "Digital Ocean Spaces node storage not yet implemented",
+        ))
+    }
+
+    async fn get_node(&self, _node_id: &NodeId) -> OrbitResult<Option<NodeInfo>> {
+        // TODO: Implement Digital Ocean Spaces node retrieval
+        Err(OrbitError::internal(
+            "Digital Ocean Spaces node retrieval not yet implemented",
+        ))
+    }
+
+    async fn update_node(&self, _node: &NodeInfo) -> OrbitResult<()> {
+        // TODO: Implement Digital Ocean Spaces node update
+        Err(OrbitError::internal(
+            "Digital Ocean Spaces node update not yet implemented",
+        ))
+    }
+
+    async fn remove_node(&self, _node_id: &NodeId) -> OrbitResult<bool> {
+        // TODO: Implement Digital Ocean Spaces node removal
+        Err(OrbitError::internal(
+            "Digital Ocean Spaces node removal not yet implemented",
+        ))
+    }
+
+    async fn list_active_nodes(&self) -> OrbitResult<Vec<NodeInfo>> {
+        // TODO: Implement Digital Ocean Spaces active node listing
+        Err(OrbitError::internal(
+            "Digital Ocean Spaces active node listing not yet implemented",
+        ))
+    }
+
+    async fn list_all_nodes(&self) -> OrbitResult<Vec<NodeInfo>> {
+        // TODO: Implement Digital Ocean Spaces all node listing
+        Err(OrbitError::internal(
+            "Digital Ocean Spaces all node listing not yet implemented",
+        ))
+    }
+
+    async fn cleanup_expired_nodes(&self) -> OrbitResult<u64> {
+        // TODO: Implement Digital Ocean Spaces expired node cleanup
+        Err(OrbitError::internal(
+            "Digital Ocean Spaces expired node cleanup not yet implemented",
+        ))
+    }
+
+    async fn renew_node_lease(&self, _node_id: &NodeId, _lease: &NodeLease) -> OrbitResult<()> {
+        // TODO: Implement Digital Ocean Spaces node lease renewal
+        Err(OrbitError::internal(
+            "Digital Ocean Spaces node lease renewal not yet implemented",
+        ))
+    }
 }

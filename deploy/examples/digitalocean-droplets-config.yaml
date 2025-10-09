@@ -1,0 +1,493 @@
+# Digital Ocean Droplets Deployment Configuration
+# This configuration demonstrates how to deploy Orbit-RS to Digital Ocean droplets
+# with both standard compute and GPU-enabled instances.
+
+# Environment-specific configuration
+environment: production  # development, staging, production
+
+# Digital Ocean API configuration
+digital_ocean:
+  # Digital Ocean API settings
+  api:
+    token: "${DO_API_TOKEN}"  # Your Digital Ocean API token
+    endpoint: "https://api.digitalocean.com/v2"
+    timeout: 30s
+    retry_count: 3
+    rate_limit: 3600  # API calls per hour
+
+  # Infrastructure configuration
+  infrastructure:
+    # Virtual Private Cloud (VPC) settings
+    vpc:
+      name: "orbit-rs-production-vpc"
+      ip_range: "10.116.0.0/20"  # Private IP range for the VPC
+      region: "nyc3"
+      description: "VPC for Orbit-RS production deployment"
+
+    # Firewall configuration
+    firewall:
+      name: "orbit-rs-production-firewall"
+      inbound_rules:
+        # SSH access (restrict this in production!)
+        - protocol: "tcp"
+          ports: "22"
+          sources:
+            addresses: ["YOUR_IP_ADDRESS/32"]  # Replace with your IP
+            tags: ["trusted-admin"]
+        
+        # gRPC API port
+        - protocol: "tcp"
+          ports: "50051"
+          sources:
+            load_balancer_uids: ["${DO_LB_ID}"]
+            addresses: ["10.116.0.0/20"]  # VPC only
+        
+        # HTTP API port
+        - protocol: "tcp"
+          ports: "8080"
+          sources:
+            load_balancer_uids: ["${DO_LB_ID}"]
+            addresses: ["10.116.0.0/20"]  # VPC only
+        
+        # Metrics port (internal only)
+        - protocol: "tcp"
+          ports: "9090"
+          sources:
+            addresses: ["10.116.0.0/20"]  # VPC only
+            tags: ["monitoring"]
+
+      outbound_rules:
+        # HTTPS traffic
+        - protocol: "tcp"
+          ports: "443"
+          destinations:
+            addresses: ["0.0.0.0/0"]
+        
+        # HTTP traffic  
+        - protocol: "tcp"
+          ports: "80"
+          destinations:
+            addresses: ["0.0.0.0/0"]
+        
+        # DNS
+        - protocol: "tcp"
+          ports: "53"
+          destinations:
+            addresses: ["0.0.0.0/0"]
+        - protocol: "udp"
+          ports: "53"
+          destinations:
+            addresses: ["0.0.0.0/0"]
+
+    # Load balancer configuration
+    load_balancer:
+      name: "orbit-rs-production-lb"
+      algorithm: "round_robin"  # Options: round_robin, least_connections, ip_hash
+      region: "nyc3"
+      size: "lb-medium"  # Options: lb-small, lb-medium, lb-large
+      
+      # Health check configuration
+      health_check:
+        protocol: "http"
+        port: 8080
+        path: "/health"
+        check_interval_seconds: 10
+        response_timeout_seconds: 5
+        unhealthy_threshold: 3
+        healthy_threshold: 2
+      
+      # Forwarding rules
+      forwarding_rules:
+        - entry_protocol: "http"
+          entry_port: 80
+          target_protocol: "http"
+          target_port: 8080
+          certificate_id: ""  # Add SSL certificate ID for HTTPS
+        - entry_protocol: "tcp"
+          entry_port: 50051
+          target_protocol: "tcp"
+          target_port: 50051
+      
+      # Enable sticky sessions for GPU workloads
+      sticky_sessions:
+        type: "cookies"
+        cookie_name: "orbit_session"
+        cookie_ttl_seconds: 3600
+
+  # Droplet configurations
+  droplets:
+    # Standard compute droplets for general workloads
+    standard:
+      # Base configuration
+      image: "ubuntu-22-04-x64"
+      size: "s-4vcpu-8gb"  # 4 vCPU, 8GB RAM
+      region: "nyc3"
+      
+      # Backup regions for high availability
+      backup_regions: 
+        - "sfo3"
+        - "ams3"
+      
+      # Instance count
+      count: 3
+      
+      # SSH configuration
+      ssh_keys:
+        - "${DO_SSH_KEY_ID}"  # Your SSH key ID from DO control panel
+      
+      # Cloud-init configuration
+      user_data_file: "scripts/standard-droplet-init.sh"
+      
+      # Tags for organization and billing
+      tags:
+        - "orbit-rs"
+        - "standard-compute"
+        - "production"
+        - "auto-scaling"
+      
+      # Volume configuration
+      volumes:
+        - name: "orbit-data"
+          size_gigabytes: 100
+          filesystem_type: "ext4"
+          mount_point: "/opt/orbit-rs/data"
+        - name: "orbit-logs"
+          size_gigabytes: 50
+          filesystem_type: "ext4"
+          mount_point: "/opt/orbit-rs/logs"
+      
+      # Monitoring configuration
+      monitoring:
+        enabled: true
+        metrics_retention_days: 30
+        alerts:
+          cpu_threshold: 80      # Alert when CPU > 80%
+          memory_threshold: 85   # Alert when memory > 85%
+          disk_threshold: 90     # Alert when disk > 90%
+
+    # GPU-enabled droplets for compute-intensive workloads
+    gpu:
+      # GPU droplet configuration
+      image: "gpu-h100x1-base"  # NVIDIA H100 optimized image
+      size: "gd-8vcpu-32gb-nvidia-h100x1"  # GPU droplet with H100
+      region: "nyc3"  # GPU availability varies by region
+      
+      # Limited backup regions for GPU droplets
+      backup_regions: 
+        - "sfo3"
+      
+      # Instance count (GPU droplets are expensive!)
+      count: 2
+      
+      # SSH configuration
+      ssh_keys:
+        - "${DO_SSH_KEY_ID}"
+      
+      # GPU-specific initialization
+      user_data_file: "scripts/gpu-droplet-init.sh"
+      
+      # Tags
+      tags:
+        - "orbit-rs"
+        - "gpu-compute"
+        - "ml-workload"
+        - "production"
+        - "high-performance"
+      
+      # GPU-specific configuration
+      gpu_config:
+        # NVIDIA driver configuration
+        driver_version: "535.154.05"  # NVIDIA driver version
+        cuda_version: "12.2"          # CUDA toolkit version
+        cudnn_version: "8.9"          # cuDNN version for ML workloads
+        
+        # GPU performance settings
+        enable_persistence_mode: true  # Keep GPU initialized
+        memory_clock: 1215             # GPU memory clock (MHz)
+        graphics_clock: 1410           # GPU graphics clock (MHz)
+        power_limit: 350               # Power limit (watts)
+        
+        # Multi-Instance GPU (MIG) settings
+        enable_mig: false              # Disable MIG for full GPU access
+        mig_profiles: []               # MIG profiles if enabled
+        
+        # GPU memory management
+        memory_fraction: 0.9           # Use 90% of GPU memory
+        enable_unified_memory: true    # Enable CUDA Unified Memory
+        
+      # GPU monitoring and alerting
+      monitoring:
+        enabled: true
+        gpu_metrics: true
+        alerts:
+          gpu_temperature_threshold: 83    # Alert when GPU temp > 83°C
+          gpu_power_threshold: 300         # Alert when GPU power > 300W
+          gpu_memory_threshold: 80         # Alert when GPU memory > 80%
+          gpu_utilization_threshold: 95   # Alert when GPU util > 95%
+        
+        # NVML (NVIDIA Management Library) integration
+        enable_nvml: true
+        nvml_collection_interval: 15s
+        
+      # Volumes for GPU workloads (larger for datasets)
+      volumes:
+        - name: "gpu-data"
+          size_gigabytes: 500  # Large volume for datasets
+          filesystem_type: "ext4"
+          mount_point: "/opt/orbit-rs/data"
+        - name: "gpu-models"
+          size_gigabytes: 200  # Volume for ML models
+          filesystem_type: "ext4"
+          mount_point: "/opt/orbit-rs/models"
+        - name: "gpu-logs"
+          size_gigabytes: 100
+          filesystem_type: "ext4"
+          mount_point: "/opt/orbit-rs/logs"
+
+  # Auto-scaling configuration
+  auto_scaling:
+    enabled: true
+    
+    # Standard droplet scaling
+    standard:
+      min_instances: 2
+      max_instances: 10
+      target_cpu_utilization: 70      # Scale when avg CPU > 70%
+      target_memory_utilization: 75   # Scale when avg memory > 75%
+      scale_up_cooldown: "5m"         # Wait 5m between scale-up actions
+      scale_down_cooldown: "10m"      # Wait 10m between scale-down actions
+      
+      # Custom scaling triggers
+      custom_triggers:
+        - metric: "request_queue_length"
+          threshold: 100
+          action: "scale_up"
+        - metric: "response_time_p95"
+          threshold: 1000  # milliseconds
+          action: "scale_up"
+    
+    # GPU droplet scaling (more conservative due to cost)
+    gpu:
+      min_instances: 1
+      max_instances: 4
+      target_gpu_utilization: 80      # Scale when avg GPU > 80%
+      target_gpu_memory: 85           # Scale when avg GPU memory > 85%
+      scale_up_cooldown: "10m"        # Longer cooldown for expensive resources
+      scale_down_cooldown: "20m"      # Even longer scale-down cooldown
+      
+      # GPU-specific triggers
+      custom_triggers:
+        - metric: "gpu_job_queue_length"
+          threshold: 5
+          action: "scale_up"
+        - metric: "gpu_memory_pressure"
+          threshold: 90
+          action: "scale_up"
+
+  # Digital Ocean Spaces object storage integration
+  spaces:
+    # Primary storage space
+    primary:
+      name: "${DO_SPACES_NAME}"
+      region: "${DO_SPACES_REGION}"
+      endpoint: "${DO_SPACES_REGION}.digitaloceanspaces.com"
+      access_key: "${DO_SPACES_ACCESS_KEY}"
+      secret_key: "${DO_SPACES_SECRET_KEY}"
+      
+      # CDN configuration
+      enable_cdn: true
+      cdn_endpoint: "${DO_SPACES_NAME}.${DO_SPACES_REGION}.cdn.digitaloceanspaces.com"
+      
+      # Storage settings
+      prefix: "orbit-rs-production"
+      enable_encryption: true
+      
+      # Lifecycle management
+      retention_policy:
+        logs: "90d"        # Keep logs for 90 days
+        metrics: "1y"      # Keep metrics for 1 year
+        snapshots: "5y"    # Keep snapshots for 5 years
+        temp_files: "7d"   # Clean temp files after 7 days
+    
+    # Backup storage space (different region for disaster recovery)
+    backup:
+      name: "${DO_SPACES_BACKUP_NAME}"
+      region: "sfo3"  # Different region for geo-redundancy
+      endpoint: "sfo3.digitaloceanspaces.com"
+      access_key: "${DO_SPACES_BACKUP_ACCESS_KEY}"
+      secret_key: "${DO_SPACES_BACKUP_SECRET_KEY}"
+      prefix: "orbit-rs-backup"
+      enable_encryption: true
+      enable_cdn: false  # No CDN needed for backup storage
+
+  # Cost optimization settings
+  cost_optimization:
+    # Reserved instances (when available)
+    enable_reserved_instances: false  # Not available yet for DO
+    
+    # Spot instances (not available for GPU droplets)
+    enable_spot_instances: false
+    spot_max_price: 0.50  # Maximum price per hour for spot instances
+    
+    # Automated shutdown for development environments
+    shutdown_schedule:
+      enabled: false  # Enable this for dev/staging environments
+      weekday_shutdown: "20:00"  # 8 PM EST
+      weekend_shutdown: "18:00"  # 6 PM EST
+      startup: "08:00"           # 8 AM EST
+      timezone: "America/New_York"
+      
+      # Exceptions (don't shutdown these instances)
+      exceptions:
+        tags: ["production", "critical"]
+        droplet_names: ["orbit-rs-production-1"]
+    
+    # Resource rightsizing
+    rightsizing:
+      enabled: true
+      analysis_window: "7d"      # Analyze 7 days of metrics
+      cpu_threshold: 20          # Recommend downsize if CPU < 20%
+      memory_threshold: 30       # Recommend downsize if memory < 30%
+      recommendations_only: true # Only recommend, don't auto-resize
+
+# Application deployment configuration
+deployment:
+  # Container registry settings
+  registry:
+    url: "ghcr.io"
+    namespace: "your-org/orbit-rs"
+    
+  # Application configuration
+  orbit_server:
+    image: "orbit-server"
+    tag: "latest"
+    ports:
+      grpc: 50051
+      http: 8080
+      metrics: 9090
+    
+    # Environment variables
+    environment:
+      DEPLOYMENT_MODE: "digital_ocean"
+      RUST_LOG: "info"
+      ORBIT_CLUSTER_SIZE: "3"
+      ORBIT_ENABLE_GPU: "true"
+    
+    # Resource limits
+    resources:
+      cpu_limit: "2000m"     # 2 CPU cores
+      memory_limit: "4Gi"    # 4GB RAM
+      cpu_request: "1000m"   # 1 CPU core minimum
+      memory_request: "2Gi"  # 2GB RAM minimum
+  
+  orbit_compute:
+    image: "orbit-compute"
+    tag: "latest-gpu"
+    
+    # GPU-specific settings
+    gpu:
+      enabled: true
+      count: 1
+      memory_fraction: 0.8
+    
+    environment:
+      CUDA_VISIBLE_DEVICES: "0"
+      GPU_MEMORY_FRACTION: "0.8"
+    
+    resources:
+      cpu_limit: "4000m"     # 4 CPU cores for GPU workloads
+      memory_limit: "16Gi"   # 16GB RAM for GPU workloads
+      gpu_memory: "24Gi"     # 24GB GPU memory (H100)
+
+# Monitoring and observability
+monitoring:
+  # Prometheus configuration
+  prometheus:
+    enabled: true
+    retention: "30d"
+    storage_size: "100Gi"
+    
+  # Grafana dashboards
+  grafana:
+    enabled: true
+    admin_password: "${GRAFANA_ADMIN_PASSWORD}"
+    dashboards:
+      - "orbit-rs-overview"
+      - "orbit-rs-gpu-metrics"
+      - "orbit-rs-performance"
+      - "digital-ocean-infrastructure"
+  
+  # Alerting
+  alerting:
+    enabled: true
+    notification_channels:
+      - type: "slack"
+        webhook_url: "${SLACK_WEBHOOK_URL}"
+      - type: "email"
+        to: "devops@company.com"
+    
+    rules:
+      - name: "high-cpu"
+        condition: "cpu_usage > 80"
+        duration: "5m"
+        severity: "warning"
+      - name: "gpu-temperature"
+        condition: "gpu_temperature > 80"
+        duration: "2m"
+        severity: "critical"
+
+# Security configuration
+security:
+  # TLS/SSL settings
+  tls:
+    enabled: true
+    cert_manager: true
+    issuer: "letsencrypt-prod"
+  
+  # Network policies
+  network_policies:
+    enabled: true
+    deny_all_ingress: false
+    deny_all_egress: false
+    
+    # Allow specific traffic
+    allowed_ingress:
+      - from: "load-balancer"
+        ports: [8080, 50051]
+      - from: "monitoring"
+        ports: [9090]
+    
+    allowed_egress:
+      - to: "internet"
+        ports: [80, 443]
+      - to: "spaces"
+        ports: [443]
+  
+  # Secrets management
+  secrets:
+    provider: "external-secrets"  # or "kubernetes", "vault"
+    vault_address: "${VAULT_ADDRESS}"
+    
+    # Secret mappings
+    mappings:
+      - secret_name: "do-api-token"
+        env_var: "DO_API_TOKEN"
+      - secret_name: "do-spaces-keys"
+        env_vars:
+          - "DO_SPACES_ACCESS_KEY"
+          - "DO_SPACES_SECRET_KEY"
+
+# Example commands to set environment variables:
+# 
+# export DO_API_TOKEN="your_digital_ocean_api_token"
+# export DO_SSH_KEY_ID="your_ssh_key_id"
+# export DO_SPACES_NAME="your-space-name"
+# export DO_SPACES_REGION="nyc3"
+# export DO_SPACES_ACCESS_KEY="your_spaces_access_key"
+# export DO_SPACES_SECRET_KEY="your_spaces_secret_key"
+# export DO_SPACES_BACKUP_NAME="your-backup-space-name"
+# export DO_SPACES_BACKUP_ACCESS_KEY="your_backup_access_key"
+# export DO_SPACES_BACKUP_SECRET_KEY="your_backup_secret_key"
+# export GRAFANA_ADMIN_PASSWORD="secure_password"
+# export SLACK_WEBHOOK_URL="https://hooks.slack.com/services/..."
+# export VAULT_ADDRESS="https://vault.company.com"

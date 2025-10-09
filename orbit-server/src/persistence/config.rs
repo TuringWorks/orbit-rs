@@ -236,6 +236,25 @@ impl PersistenceConfigBuilder {
         self
     }
 
+    /// Add a Digital Ocean Spaces provider configuration
+    pub fn with_digitalocean_spaces<S: Into<String>>(
+        mut self,
+        name: S,
+        config: DigitalOceanSpacesConfig,
+        is_default: bool,
+    ) -> Self {
+        let name = name.into();
+        self.configs
+            .insert(name.clone(), PersistenceConfig::DigitalOceanSpaces(config));
+
+        if is_default {
+            self.default_addressable = Some(name.clone());
+            self.default_cluster = Some(name);
+        }
+
+        self
+    }
+
     /// Add an etcd provider configuration
     pub fn with_etcd<S: Into<String>>(
         mut self,
@@ -409,6 +428,32 @@ impl PersistenceConfigBuilder {
                 if config.bucket_name.is_empty() {
                     return Err(OrbitError::configuration(format!(
                         "Google Cloud provider '{}': bucket name cannot be empty",
+                        name
+                    )));
+                }
+            }
+            PersistenceConfig::DigitalOceanSpaces(config) => {
+                if config.endpoint.is_empty() {
+                    return Err(OrbitError::configuration(format!(
+                        "Digital Ocean Spaces provider '{}': endpoint cannot be empty",
+                        name
+                    )));
+                }
+                if config.space_name.is_empty() {
+                    return Err(OrbitError::configuration(format!(
+                        "Digital Ocean Spaces provider '{}': space name cannot be empty",
+                        name
+                    )));
+                }
+                if config.access_key_id.is_empty() || config.secret_access_key.is_empty() {
+                    return Err(OrbitError::configuration(format!(
+                        "Digital Ocean Spaces provider '{}': access credentials cannot be empty",
+                        name
+                    )));
+                }
+                if config.region.is_empty() {
+                    return Err(OrbitError::configuration(format!(
+                        "Digital Ocean Spaces provider '{}': region cannot be empty",
                         name
                     )));
                 }
@@ -594,6 +639,37 @@ impl PersistenceProviderConfig {
                 let addressable_provider =
                     Arc::new(S3AddressableDirectoryProvider::new(config.clone()));
                 let cluster_provider = Arc::new(S3ClusterNodeProvider::new(config.clone()));
+
+                addressable_provider.initialize().await?;
+                cluster_provider.initialize().await?;
+
+                registry
+                    .register_addressable_provider(
+                        format!("{}_addressable", name),
+                        addressable_provider,
+                        is_default_addressable,
+                    )
+                    .await?;
+
+                registry
+                    .register_cluster_provider(
+                        format!("{}_cluster", name),
+                        cluster_provider,
+                        is_default_cluster,
+                    )
+                    .await?;
+            }
+            PersistenceConfig::DigitalOceanSpaces(config) => {
+                let addressable_provider = Arc::new(
+                    crate::persistence::cloud::DigitalOceanSpacesAddressableDirectoryProvider::new(
+                        config.clone(),
+                    ),
+                );
+                let cluster_provider = Arc::new(
+                    crate::persistence::cloud::DigitalOceanSpacesClusterNodeProvider::new(
+                        config.clone(),
+                    ),
+                );
 
                 addressable_provider.initialize().await?;
                 cluster_provider.initialize().await?;
@@ -812,6 +888,57 @@ impl EnvironmentConfig {
             lease_ttl: get_env_opt("LEASE_TTL")
                 .and_then(|s| s.parse().ok())
                 .unwrap_or(300),
+        })
+    }
+
+    /// Create Digital Ocean Spaces configuration from environment variables
+    pub fn digitalocean_spaces_from_env(prefix: &str) -> OrbitResult<DigitalOceanSpacesConfig> {
+        let get_env = |key: &str| -> OrbitResult<String> {
+            std::env::var(format!("{}_{}", prefix, key)).map_err(|_| {
+                OrbitError::configuration(format!(
+                    "Missing environment variable: {}_{}",
+                    prefix, key
+                ))
+            })
+        };
+
+        let get_env_opt =
+            |key: &str| -> Option<String> { std::env::var(format!("{}_{}", prefix, key)).ok() };
+
+        // Parse tags from environment variable format: "key1=value1,key2=value2"
+        let mut tags = std::collections::HashMap::new();
+        if let Some(tags_str) = get_env_opt("TAGS") {
+            for pair in tags_str.split(',') {
+                if let Some((key, value)) = pair.split_once('=') {
+                    tags.insert(key.trim().to_string(), value.trim().to_string());
+                }
+            }
+        }
+
+        Ok(DigitalOceanSpacesConfig {
+            endpoint: get_env("ENDPOINT")?,
+            region: get_env("REGION")?,
+            space_name: get_env("SPACE_NAME")?,
+            access_key_id: get_env("ACCESS_KEY_ID")?,
+            secret_access_key: get_env("SECRET_ACCESS_KEY")?,
+            prefix: get_env_opt("PREFIX"),
+            enable_ssl: get_env_opt("ENABLE_SSL")
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(true),
+            enable_cdn: get_env_opt("ENABLE_CDN")
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(false),
+            cdn_endpoint: get_env_opt("CDN_ENDPOINT"),
+            connection_timeout: get_env_opt("CONNECTION_TIMEOUT").and_then(|s| s.parse().ok()),
+            read_timeout: get_env_opt("READ_TIMEOUT").and_then(|s| s.parse().ok()),
+            write_timeout: get_env_opt("WRITE_TIMEOUT").and_then(|s| s.parse().ok()),
+            retry_count: get_env_opt("RETRY_COUNT")
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(3),
+            enable_encryption: get_env_opt("ENABLE_ENCRYPTION")
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(true),
+            tags,
         })
     }
 }

@@ -30,6 +30,8 @@ pub enum PersistenceConfig {
     Memory(MemoryConfig),
     /// Amazon S3 compatible storage
     S3(S3Config),
+    /// Digital Ocean Spaces object storage
+    DigitalOceanSpaces(DigitalOceanSpacesConfig),
     /// Azure Blob Storage
     Azure(AzureConfig),
     /// Google Cloud Storage
@@ -77,6 +79,41 @@ pub struct S3Config {
     pub read_timeout: Option<u64>,
     pub write_timeout: Option<u64>,
     pub retry_count: u32,
+}
+
+/// Digital Ocean Spaces storage configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DigitalOceanSpacesConfig {
+    /// Digital Ocean Spaces endpoint (e.g., "nyc3.digitaloceanspaces.com")
+    pub endpoint: String,
+    /// Digital Ocean region (e.g., "nyc3", "sfo3", "ams3", "sgp1", "fra1")
+    pub region: String,
+    /// Spaces bucket/space name
+    pub space_name: String,
+    /// Digital Ocean Spaces access key
+    pub access_key_id: String,
+    /// Digital Ocean Spaces secret key
+    pub secret_access_key: String,
+    /// Optional path prefix for organization
+    pub prefix: Option<String>,
+    /// Enable SSL/TLS (recommended: true)
+    pub enable_ssl: bool,
+    /// Enable CDN acceleration for reads
+    pub enable_cdn: bool,
+    /// CDN endpoint URL (if CDN is enabled)
+    pub cdn_endpoint: Option<String>,
+    /// Connection timeout in seconds
+    pub connection_timeout: Option<u64>,
+    /// Read timeout in seconds
+    pub read_timeout: Option<u64>,
+    /// Write timeout in seconds
+    pub write_timeout: Option<u64>,
+    /// Number of retry attempts
+    pub retry_count: u32,
+    /// Enable server-side encryption
+    pub enable_encryption: bool,
+    /// Custom metadata tags for cost tracking and organization
+    pub tags: std::collections::HashMap<String, String>,
 }
 
 /// Azure Blob Storage configuration

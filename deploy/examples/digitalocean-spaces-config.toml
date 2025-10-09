@@ -1,0 +1,119 @@
+# Digital Ocean Spaces Configuration Example
+# This file shows how to configure Orbit-RS to use Digital Ocean Spaces
+# for object storage and persistence.
+
+[storage]
+# Use Digital Ocean Spaces as the primary storage backend
+provider = "digitalocean_spaces"
+
+# Digital Ocean Spaces configuration
+[storage.digitalocean_spaces]
+# Spaces endpoint format: <region>.digitaloceanspaces.com
+endpoint = "nyc3.digitaloceanspaces.com"
+
+# Digital Ocean region where your Space is located
+# Available regions: nyc3, sfo3, ams3, sgp1, fra1
+region = "nyc3"
+
+# Name of your Digital Ocean Space
+space_name = "orbit-rs-storage"
+
+# Digital Ocean Spaces credentials
+# Get these from the API section of your Digital Ocean control panel
+access_key_id = "${DO_SPACES_ACCESS_KEY}"
+secret_access_key = "${DO_SPACES_SECRET_KEY}"
+
+# Optional: Path prefix for organizing data within your Space
+prefix = "orbit-rs-production"
+
+# Enable SSL/TLS encryption for data in transit (recommended)
+enable_ssl = true
+
+# Enable CDN acceleration for faster reads
+enable_cdn = true
+
+# Optional: Custom CDN endpoint (auto-generated if not specified)
+cdn_endpoint = "orbit-rs-storage.nyc3.cdn.digitaloceanspaces.com"
+
+# Connection timeouts in seconds
+connection_timeout = 30
+read_timeout = 60
+write_timeout = 120
+
+# Number of retry attempts for failed operations
+retry_count = 3
+
+# Enable server-side encryption at rest
+enable_encryption = true
+
+# Custom metadata tags for cost tracking and organization
+[storage.digitalocean_spaces.tags]
+project = "orbit-rs"
+environment = "production"
+team = "backend"
+cost_center = "engineering"
+
+# Backup configuration
+[storage.digitalocean_spaces.backup]
+enabled = true
+# Backup retention policies
+retention_policy = "30d"  # Keep backups for 30 days
+backup_interval = "24h"   # Create backups every 24 hours
+compression = "gzip"      # Compress backups
+
+# Optional: Secondary storage for redundancy
+[storage.backup]
+provider = "digitalocean_spaces"
+
+[storage.backup.digitalocean_spaces]
+endpoint = "sfo3.digitaloceanspaces.com"
+region = "sfo3"
+space_name = "orbit-rs-backup"
+access_key_id = "${DO_SPACES_BACKUP_ACCESS_KEY}"
+secret_access_key = "${DO_SPACES_BACKUP_SECRET_KEY}"
+prefix = "orbit-rs-backup"
+enable_ssl = true
+enable_cdn = false  # CDN not needed for backup storage
+
+# Persistence provider registry configuration
+[persistence]
+default_addressable = "digitalocean_spaces_primary"
+default_cluster = "digitalocean_spaces_primary"
+
+# Primary Digital Ocean Spaces provider
+[persistence.providers.digitalocean_spaces_primary]
+type = "DigitalOceanSpaces"
+config = { inherit_from = "storage.digitalocean_spaces" }
+
+# Optional: Backup provider for failover
+[persistence.providers.digitalocean_spaces_backup]
+type = "DigitalOceanSpaces"
+config = { inherit_from = "storage.backup.digitalocean_spaces" }
+
+# Health monitoring configuration
+[persistence.health_monitor]
+check_interval = 30        # Health check interval in seconds
+check_timeout = 5          # Health check timeout in seconds
+failure_threshold = 3      # Number of failures before marking unhealthy
+success_threshold = 2      # Number of successes before marking healthy
+enable_circuit_breaker = true
+circuit_breaker_timeout = 300  # Circuit breaker timeout in seconds
+
+# Performance monitoring
+[persistence.performance]
+enable_monitoring = true
+monitoring_window = 300    # Performance monitoring window in seconds
+enable_auto_scaling = false
+
+# Example environment variables for secure credential management:
+#
+# export DO_SPACES_ACCESS_KEY="your_access_key_here"
+# export DO_SPACES_SECRET_KEY="your_secret_key_here"
+# export DO_SPACES_BACKUP_ACCESS_KEY="your_backup_access_key_here"
+# export DO_SPACES_BACKUP_SECRET_KEY="your_backup_secret_key_here"
+#
+# Or use a .env file:
+# DO_SPACES_ACCESS_KEY=your_access_key_here
+# DO_SPACES_SECRET_KEY=your_secret_key_here
+# DO_SPACES_BACKUP_ACCESS_KEY=your_backup_access_key_here
+# DO_SPACES_BACKUP_SECRET_KEY=your_backup_secret_key_here
