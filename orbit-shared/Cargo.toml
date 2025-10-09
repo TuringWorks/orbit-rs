@@ -37,6 +37,8 @@ tower-lsp = "0.20"
 tokio-stream = { version = "0.1", features = ["sync"] }
 async-stream = "0.3"
 tracing-subscriber = "0.3"
+# Spatial dependencies
+dashmap.workspace = true
 
 [[bin]]
 name = "orbitql-lsp"
