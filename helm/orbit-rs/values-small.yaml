@@ -1,0 +1,206 @@
+# Orbit-RS Helm Chart Values - Small Workload Profile
+# Use Case: Development, testing, small demos
+# Data Scale: < 10GB
+# Concurrent Users: 1-10
+# Expected Throughput: < 1,000 ops/sec
+
+# Global settings
+global:
+  imageRegistry: "ghcr.io/turingworks/orbit-rs"
+  imageTag: "latest-release"
+  imagePullPolicy: IfNotPresent
+  storageClass: "standard"
+  
+# Orbit Server Configuration
+orbitServer:
+  enabled: true
+  replicaCount: 1
+  
+  image:
+    repository: orbit-server
+    tag: ""  # Uses global.imageTag if empty
+    pullPolicy: ""  # Uses global.imagePullPolicy if empty
+  
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "1Gi"
+      ephemeral-storage: "10Gi"
+    limits:
+      cpu: "2"
+      memory: "4Gi"
+      ephemeral-storage: "50Gi"
+  
+  # Environment variables for small workload
+  env:
+    RUST_MIN_STACK: "8388608"  # 8MB stack
+    ORBIT_CACHE_SIZE: "512MB"
+    ORBIT_WAL_BUFFER_SIZE: "64MB"
+    RUST_LOG: "info"
+    ORBIT_MAX_CONNECTIONS: "100"
+  
+  # Storage configuration
+  persistence:
+    enabled: true
+    storageClass: ""  # Uses global.storageClass if empty
+    size: "50Gi"
+    accessMode: ReadWriteOnce
+  
+  # Service configuration
+  service:
+    type: ClusterIP
+    port: 8080
+    targetPort: 8080
+  
+  # Health checks
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: 8080
+    initialDelaySeconds: 30
+    periodSeconds: 10
+  
+  readinessProbe:
+    httpGet:
+      path: /ready
+      port: 8080
+    initialDelaySeconds: 5
+    periodSeconds: 5
+
+# Orbit Client Configuration
+orbitClient:
+  enabled: true
+  replicaCount: 1
+  
+  image:
+    repository: orbit-client
+    tag: ""
+    pullPolicy: ""
+  
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "256Mi"
+    limits:
+      cpu: "500m"
+      memory: "1Gi"
+  
+  env:
+    ORBIT_MAX_POOL_SIZE: "50"
+    ORBIT_MIN_POOL_SIZE: "5"
+    RUST_LOG: "info"
+
+# Orbit Compute Configuration (CPU-only for small workload)
+orbitCompute:
+  enabled: false  # Disabled by default for small workloads
+  replicaCount: 1
+  
+  image:
+    repository: orbit-compute
+    tag: ""
+    pullPolicy: ""
+  
+  resources:
+    requests:
+      cpu: "1"
+      memory: "2Gi"
+    limits:
+      cpu: "4"
+      memory: "8Gi"
+  
+  # GPU configuration (disabled for small workload)
+  gpu:
+    enabled: false
+    vendor: ""  # nvidia, amd, or auto
+    count: 0
+    memoryFraction: 0.8
+  
+  env:
+    RUST_LOG: "info"
+
+# Orbit Operator Configuration
+orbitOperator:
+  enabled: true
+  replicaCount: 1
+  
+  image:
+    repository: orbit-operator
+    tag: ""
+    pullPolicy: ""
+  
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "256Mi"
+    limits:
+      cpu: "1"
+      memory: "2Gi"
+  
+  env:
+    ORBIT_RECONCILE_INTERVAL: "30s"
+    ORBIT_LEADER_ELECTION: "true"
+    RUST_LOG: "info"
+
+# Service Account
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+# Pod Security Context
+podSecurityContext:
+  fsGroup: 1000
+  runAsUser: 1000
+  runAsGroup: 1000
+  runAsNonRoot: true
+
+# Security Context
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+    - ALL
+  readOnlyRootFilesystem: false  # Allow writes for development
+  runAsNonRoot: true
+  runAsUser: 1000
+
+# Node Selector
+nodeSelector: {}
+
+# Tolerations
+tolerations: []
+
+# Affinity
+affinity: {}
+
+# Autoscaling (disabled for small workload)
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: 80
+
+# Monitoring
+monitoring:
+  enabled: false  # Disabled for development
+  serviceMonitor:
+    enabled: false
+    interval: 30s
+    scrapeTimeout: 10s
+  
+  metrics:
+    enabled: false
+    port: 9090
+
+# Network Policies
+networkPolicy:
+  enabled: false
+
+# Pod Disruption Budget (disabled for single replica)
+podDisruptionBudget:
+  enabled: false
+
+# Backup configuration (disabled for small workload)
+backup:
+  enabled: false

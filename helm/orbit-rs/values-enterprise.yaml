@@ -1,0 +1,454 @@
+# Orbit-RS Helm Chart Values - Enterprise/Large Workload Profile
+# Use Case: Enterprise production, high-availability, GPU acceleration
+# Data Scale: 1TB - 100TB+
+# Concurrent Users: 100-1,000+
+# Expected Throughput: 50,000 - 500,000+ ops/sec
+
+# Global settings
+global:
+  imageRegistry: "ghcr.io/turingworks/orbit-rs"
+  imageTag: "latest-release"
+  imagePullPolicy: IfNotPresent
+  storageClass: "fast-nvme"
+  
+# Orbit Server Configuration
+orbitServer:
+  enabled: true
+  replicaCount: 9  # 3 regions × 3 replicas for HA
+  
+  image:
+    repository: orbit-server
+    tag: ""
+    pullPolicy: ""
+  
+  resources:
+    requests:
+      cpu: "32"
+      memory: "128Gi"
+      ephemeral-storage: "1Ti"
+      hugepages-2Mi: "32Gi"
+    limits:
+      cpu: "64"
+      memory: "512Gi"
+      ephemeral-storage: "5Ti"
+      hugepages-2Mi: "64Gi"
+  
+  # Environment variables for enterprise workload
+  env:
+    ORBIT_CACHE_SIZE: "64GB"
+    ORBIT_WAL_BUFFER_SIZE: "4GB"
+    ORBIT_QUERY_CACHE_SIZE: "16GB"
+    ORBIT_MAX_CONNECTIONS: "20000"
+    ORBIT_BACKGROUND_THREADS: "32"
+    ORBIT_NUMA_AWARE: "true"
+    ORBIT_USE_HUGEPAGES: "true"
+    ORBIT_MMAP_PATH: "/mmap-cache"
+    ORBIT_MMAP_SIZE: "128GB"
+    RUST_LOG: "info"
+    RUST_MIN_STACK: "16777216"  # 16MB stack for heavy workloads
+  
+  # Primary storage configuration
+  persistence:
+    enabled: true
+    storageClass: "enterprise-nvme"
+    size: "10Ti"
+    accessMode: ReadWriteOnce
+  
+  # Memory-mapped file storage
+  mmapStorage:
+    enabled: true
+    storageClass: "mmap-optimized"
+    size: "1Ti"
+    accessMode: ReadWriteOnce
+    mountPath: "/mmap-cache"
+  
+  # Service configuration
+  service:
+    type: ClusterIP
+    port: 8080
+    targetPort: 8080
+    annotations:
+      service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+  
+  # Health checks with longer timeouts for enterprise
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: 8080
+    initialDelaySeconds: 60
+    periodSeconds: 30
+    timeoutSeconds: 10
+    failureThreshold: 3
+  
+  readinessProbe:
+    httpGet:
+      path: /ready
+      port: 8080
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 2
+  
+  # Pod topology spread constraints for HA
+  topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: topology.kubernetes.io/zone
+    whenUnsatisfiable: DoNotSchedule
+    labelSelector:
+      matchLabels:
+        app: orbit-server
+  - maxSkew: 1
+    topologyKey: kubernetes.io/hostname
+    whenUnsatisfiable: DoNotSchedule
+    labelSelector:
+      matchLabels:
+        app: orbit-server
+  
+  # Node selector for compute-optimized nodes
+  nodeSelector:
+    orbit.rs/node-class: "compute-optimized"
+    kubernetes.io/arch: "amd64"
+
+# Orbit Client Configuration
+orbitClient:
+  enabled: true
+  replicaCount: 6  # Multiple replicas for load distribution
+  
+  image:
+    repository: orbit-client
+    tag: ""
+    pullPolicy: ""
+  
+  resources:
+    requests:
+      cpu: "2"
+      memory: "4Gi"
+    limits:
+      cpu: "8"
+      memory: "16Gi"
+  
+  env:
+    ORBIT_MAX_POOL_SIZE: "5000"
+    ORBIT_MIN_POOL_SIZE: "500"
+    ORBIT_KEEPALIVE_TIMEOUT: "60s"
+    ORBIT_CIRCUIT_BREAKER_ENABLED: "true"
+    ORBIT_CONNECTION_RETRY_ATTEMPTS: "3"
+    RUST_LOG: "info"
+
+# Orbit Compute Configuration with GPU acceleration
+orbitCompute:
+  enabled: true
+  replicaCount: 4
+  
+  image:
+    repository: orbit-compute
+    tag: ""
+    pullPolicy: ""
+    # Use GPU-enabled image variant
+    variant: "gpu"
+  
+  resources:
+    requests:
+      cpu: "32"
+      memory: "128Gi"
+    limits:
+      cpu: "64"
+      memory: "256Gi"
+      nvidia.com/gpu: 4  # 4 GPUs per pod
+  
+  # GPU configuration
+  gpu:
+    enabled: true
+    vendor: "nvidia"  # nvidia, amd, or auto
+    count: 4
+    memoryFraction: 0.95
+    architecture: "ampere"  # ampere, ada, hopper for NVIDIA
+    
+    # Multi-GPU configuration
+    strategy: "model_parallel"  # data_parallel or model_parallel
+    peerAccess: true
+    nvlink: true
+    
+    # CUDA configuration
+    cudaVersion: "12.2"
+    cudnnVersion: "8.9"
+    nccl:
+      debug: "INFO"
+      ibDisable: "0"
+  
+  # Node selector for GPU nodes
+  nodeSelector:
+    accelerator: "nvidia-a100-40gb"
+    orbit.rs/gpu-enabled: "true"
+  
+  # GPU tolerations
+  tolerations:
+  - key: nvidia.com/gpu
+    operator: Exists
+    effect: NoSchedule
+  - key: orbit.rs/gpu-workload
+    operator: Equal
+    value: "true"
+    effect: NoSchedule
+  
+  env:
+    ORBIT_GPU_MEMORY_FRACTION: "0.95"
+    ORBIT_MULTI_GPU_STRATEGY: "model_parallel"
+    ORBIT_GPU_PEER_ACCESS: "true"
+    NCCL_DEBUG: "INFO"
+    CUDA_VISIBLE_DEVICES: "0,1,2,3"
+    ORBIT_CUDA_STREAMS: "16"
+    RUST_LOG: "info"
+
+# Orbit Operator Configuration
+orbitOperator:
+  enabled: true
+  replicaCount: 2  # HA for operator
+  
+  image:
+    repository: orbit-operator
+    tag: ""
+    pullPolicy: ""
+  
+  resources:
+    requests:
+      cpu: "200m"
+      memory: "512Mi"
+    limits:
+      cpu: "2"
+      memory: "4Gi"
+  
+  env:
+    ORBIT_RECONCILE_INTERVAL: "15s"  # Faster reconciliation for enterprise
+    ORBIT_LEADER_ELECTION: "true"
+    ORBIT_WEBHOOK_ENABLED: "true"
+    ORBIT_METRICS_ENABLED: "true"
+    RUST_LOG: "info"
+
+# Service Account with additional permissions
+serviceAccount:
+  create: true
+  annotations:
+    eks.amazonaws.com/role-arn: "arn:aws:iam::ACCOUNT:role/OrbitRSServiceRole"
+  name: "orbit-rs-enterprise"
+
+# Pod Security Context
+podSecurityContext:
+  fsGroup: 1000
+  runAsUser: 1000
+  runAsGroup: 1000
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+
+# Security Context (more restrictive for enterprise)
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+    - ALL
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 1000
+
+# Autoscaling configuration
+autoscaling:
+  enabled: true
+  
+  # Horizontal Pod Autoscaler for orbit-server
+  hpa:
+    enabled: true
+    minReplicas: 9
+    maxReplicas: 27  # Can scale to 3x baseline
+    metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+    # Custom metrics
+    - type: Pods
+      pods:
+        metric:
+          name: orbit_active_connections
+        target:
+          type: AverageValue
+          averageValue: "15000"
+  
+  # Vertical Pod Autoscaler
+  vpa:
+    enabled: true
+    updateMode: "Auto"
+    resourcePolicy:
+      containerPolicies:
+      - containerName: orbit-server
+        maxAllowed:
+          cpu: "64"
+          memory: "512Gi"
+        minAllowed:
+          cpu: "16"
+          memory: "64Gi"
+
+# Pod Disruption Budget
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 6  # Ensure at least 6 server pods remain during updates
+
+# Monitoring and observability
+monitoring:
+  enabled: true
+  
+  serviceMonitor:
+    enabled: true
+    interval: 15s
+    scrapeTimeout: 10s
+    honorLabels: true
+    
+  metrics:
+    enabled: true
+    port: 9090
+    path: "/metrics"
+    
+  # Prometheus rules for alerting
+  prometheusRules:
+    enabled: true
+    rules:
+    - alert: OrbitRSHighCPU
+      expr: rate(container_cpu_usage_seconds_total[5m]) > 0.8
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Orbit-RS high CPU usage"
+        
+    - alert: OrbitRSHighMemory
+      expr: container_memory_usage_bytes / container_spec_memory_limit_bytes > 0.9
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Orbit-RS high memory usage"
+        
+    - alert: OrbitRSGPUUtilization
+      expr: nvidia_gpu_utilization > 95
+      for: 10m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Orbit-RS GPU utilization very high"
+
+# Network Policies for security
+networkPolicy:
+  enabled: true
+  policyTypes:
+  - Ingress
+  - Egress
+  
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: orbit-clients
+    ports:
+    - protocol: TCP
+      port: 8080
+  
+  egress:
+  - to: []  # Allow all egress (customize as needed)
+    ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 53
+    - protocol: UDP
+      port: 53
+
+# Backup configuration for enterprise
+backup:
+  enabled: true
+  schedule: "0 2 * * *"  # Daily at 2 AM
+  retention: "30d"
+  
+  storage:
+    enabled: true
+    storageClass: "backup-storage"
+    size: "50Ti"
+  
+  # S3-compatible backup configuration
+  s3:
+    enabled: true
+    bucket: "orbit-rs-enterprise-backups"
+    region: "us-west-2"
+    endpoint: ""  # Use default S3 endpoint
+    
+# Disaster Recovery
+disasterRecovery:
+  enabled: true
+  
+  # Cross-region replication
+  replication:
+    enabled: true
+    regions:
+    - "us-west-2"
+    - "us-east-1" 
+    - "eu-west-1"
+    
+  # Point-in-time recovery
+  pitr:
+    enabled: true
+    retentionPeriod: "7d"
+    
+# Load balancer configuration
+loadBalancer:
+  enabled: true
+  type: "nlb"  # Network Load Balancer for performance
+  
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
+    service.beta.kubernetes.io/aws-load-balancer-backend-protocol: "tcp"
+
+# Enterprise security features
+security:
+  enabled: true
+  
+  # Pod Security Standards
+  podSecurityStandard: "restricted"
+  
+  # TLS configuration
+  tls:
+    enabled: true
+    secretName: "orbit-rs-tls"
+    
+  # RBAC
+  rbac:
+    enabled: true
+    rules:
+    - apiGroups: [""]
+      resources: ["pods", "services", "configmaps", "secrets"]
+      verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+    - apiGroups: ["apps"]
+      resources: ["deployments", "statefulsets"]
+      verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+# Cost optimization
+costOptimization:
+  enabled: true
+  
+  # Spot instances for non-critical workloads
+  spotInstances:
+    enabled: true
+    components: ["orbit-compute"]  # Use spot for GPU compute workloads
+    
+  # Cluster autoscaler configuration
+  clusterAutoscaler:
+    enabled: true
+    scaleDownDelay: "10m"
+    scaleDownUnneededTime: "10m"

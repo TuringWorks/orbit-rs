@@ -137,7 +137,7 @@ jobs:
   # ============================================================================
 
   build-images:
-    name: Build ${{ matrix.component }}-${{ matrix.build-type }} (${{ matrix.platform }})
+    name: Build ${{ matrix.component }}-${{ matrix.build-type }} (${{ matrix.platform }})${{ matrix.gpu-enabled && '-gpu' || '' }}
     runs-on: ubuntu-latest
     needs: setup
     if: success()
@@ -147,11 +147,23 @@ jobs:
         component: ["orbit-server", "orbit-client", "orbit-operator", "orbit-compute"]
         build-type: ${{ fromJson(needs.setup.outputs.build-types) }}
         platform: ["linux/amd64", "linux/arm64"]
+        gpu-enabled: [false, true]
         include:
           - platform: "linux/amd64"
             runner-arch: "amd64"
           - platform: "linux/arm64"
             runner-arch: "arm64"
+        exclude:
+          # Only build GPU variants for orbit-compute
+          - component: "orbit-server"
+            gpu-enabled: true
+          - component: "orbit-client"
+            gpu-enabled: true
+          - component: "orbit-operator"
+            gpu-enabled: true
+          # No ARM64 GPU support for now (can be enabled later)
+          - platform: "linux/arm64"
+            gpu-enabled: true
     permissions:
       contents: read
       packages: write
@@ -232,12 +244,14 @@ jobs:
       run: |
         TARGET="${{ matrix.platform == 'linux/amd64' && 'x86_64-unknown-linux-gnu' || 'aarch64-unknown-linux-gnu' }}"
         BINARY_PATH="target/${TARGET}/${{ matrix.build-type }}/${{ matrix.component }}"
+        GPU_ENABLED="${{ matrix.gpu-enabled }}"
+        GPU_SUFFIX="${{ matrix.gpu-enabled && '-gpu' || '' }}"
         
         # Create containerfiles directory if it doesn't exist
         mkdir -p containerfiles
         
         # Create component-specific Containerfile
-        cat > containerfiles/Containerfile.${{ matrix.component }} << EOF
+        cat > containerfiles/Containerfile.${{ matrix.component }}${GPU_SUFFIX} << EOF
         # Multi-stage build for ${{ matrix.component }}
         FROM docker.io/library/debian:bookworm-slim as runtime
         
@@ -249,7 +263,44 @@ jobs:
                 libsqlite3-0 \\
                 tzdata \\
                 curl \\
+                tini \\
+        EOF
+        
+        # Add GPU-specific dependencies if GPU is enabled
+        if [[ "${GPU_ENABLED}" == "true" ]]; then
+          cat >> containerfiles/Containerfile.${{ matrix.component }}${GPU_SUFFIX} << 'EOF_GPU'
+                # GPU runtime dependencies
+                wget \\
+                gnupg \\
+                software-properties-common \\
+        EOF_GPU
+        fi
+        
+        cat >> containerfiles/Containerfile.${{ matrix.component }}${GPU_SUFFIX} << EOF
             && rm -rf /var/lib/apt/lists/*
+        
+        # Install GPU runtime if enabled
+        EOF
+        
+        if [[ "${GPU_ENABLED}" == "true" ]]; then
+          cat >> containerfiles/Containerfile.${{ matrix.component }}${GPU_SUFFIX} << 'EOF_GPU'
+        RUN wget -qO - https://developer.download.nvidia.com/compute/cuda/repos/debian12/x86_64/3bf863cc.pub | apt-key add - && \\
+            echo "deb https://developer.download.nvidia.com/compute/cuda/repos/debian12/x86_64 /" > /etc/apt/sources.list.d/cuda.list && \\
+            apt-get update && \\
+            apt-get install -y \\
+                cuda-runtime-12-2 \\
+                libcudnn8 \\
+                libnccl2 \\
+            && rm -rf /var/lib/apt/lists/*
+        
+        # Set GPU environment variables
+        ENV NVIDIA_VISIBLE_DEVICES=all
+        ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility
+        ENV CUDA_VERSION=12.2
+        EOF_GPU
+        fi
+        
+        cat >> containerfiles/Containerfile.${{ matrix.component }}${GPU_SUFFIX} << EOF
         
         # Create non-root user
         RUN groupadd -r orbit && useradd -r -g orbit orbit
@@ -289,13 +340,15 @@ jobs:
         VERSION="${{ needs.setup.outputs.version }}"
         BUILD_TYPE="${{ matrix.build-type }}"
         COMPONENT="${{ matrix.component }}"
+        GPU_ENABLED="${{ matrix.gpu-enabled }}"
+        GPU_SUFFIX="${{ matrix.gpu-enabled && '-gpu' || '' }}"
         
         # Build image
         podman build \
           --platform=${PLATFORM} \
-          --file=containerfiles/Containerfile.${COMPONENT} \
-          --tag=${REGISTRY}/${IMAGE_NAMESPACE}/${COMPONENT}:${VERSION}-${BUILD_TYPE}-${PLATFORM//\//-} \
-          --tag=${REGISTRY}/${IMAGE_NAMESPACE}/${COMPONENT}:${BUILD_TYPE}-${PLATFORM//\//-} \
+          --file=containerfiles/Containerfile.${COMPONENT}${GPU_SUFFIX} \
+          --tag=${REGISTRY}/${IMAGE_NAMESPACE}/${COMPONENT}:${VERSION}-${BUILD_TYPE}${GPU_SUFFIX}-${PLATFORM//\//-} \
+          --tag=${REGISTRY}/${IMAGE_NAMESPACE}/${COMPONENT}:${BUILD_TYPE}${GPU_SUFFIX}-${PLATFORM//\//-} \
           --label="org.opencontainers.image.source=https://github.com/${{ github.repository }}" \
           --label="org.opencontainers.image.description=Orbit-RS ${COMPONENT} (${BUILD_TYPE})" \
           --label="org.opencontainers.image.version=${VERSION}" \
@@ -369,7 +422,9 @@ jobs:
         VERSION="${{ needs.setup.outputs.version }}"
         BUILD_TYPE="${{ matrix.build-type }}"
         COMPONENT="${{ matrix.component }}"
-        IMAGE_TAG="${REGISTRY}/${IMAGE_NAMESPACE}/${COMPONENT}:${VERSION}-${BUILD_TYPE}-${PLATFORM//\//-}"
+        GPU_ENABLED="${{ matrix.gpu-enabled }}"
+        GPU_SUFFIX="${{ matrix.gpu-enabled && '-gpu' || '' }}"
+        IMAGE_TAG="${REGISTRY}/${IMAGE_NAMESPACE}/${COMPONENT}:${VERSION}-${BUILD_TYPE}${GPU_SUFFIX}-${PLATFORM//\//-}"
         
         # Get image info
         IMAGE_ID=$(podman images --format="{{.ID}}" ${IMAGE_TAG})
@@ -377,12 +432,13 @@ jobs:
         
         # Create metadata file
         mkdir -p image-metadata
-        cat > image-metadata/${COMPONENT}-${BUILD_TYPE}-${PLATFORM//\//-}.json << EOF
+        cat > image-metadata/${COMPONENT}-${BUILD_TYPE}${GPU_SUFFIX}-${PLATFORM//\//-}.json << EOF
         {
           "component": "${COMPONENT}",
           "version": "${VERSION}",
           "build_type": "${BUILD_TYPE}",
           "platform": "${PLATFORM}",
+          "gpu_enabled": ${GPU_ENABLED},
           "image_tag": "${IMAGE_TAG}",
           "image_id": "${IMAGE_ID}",
           "image_size": "${IMAGE_SIZE}",
@@ -390,7 +446,7 @@ jobs:
           "commit_sha": "${{ github.sha }}",
           "registry": "${REGISTRY}",
           "pull_command": "podman pull ${IMAGE_TAG}",
-          "run_command": "podman run -d -p 8080:8080 ${IMAGE_TAG}"
+          "run_command": "podman run -d -p 8080:8080 ${IMAGE_TAG}${{ matrix.gpu-enabled && ' --gpus all' || '' }}"
         }
         EOF
 
