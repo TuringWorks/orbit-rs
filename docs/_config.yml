@@ -25,7 +25,7 @@ header_pages:
   - roadmap.md
   - features.md
   - contributing.md
-  - container-images/index.html
+  - overview.md
 
 # Site configuration
 markdown: kramdown

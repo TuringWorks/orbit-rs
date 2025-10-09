@@ -1,3 +1,267 @@
+/* Orbit-RS Documentation Custom Styles */
+/* Professional styling for enhanced documentation experience */
+
+/* Root Variables */
+:root {
+  --orbit-blue: #0066cc;
+  --orbit-light-blue: #e6f2ff;
+  --orbit-dark-blue: #003d7a;
+  --orbit-green: #28a745;
+  --orbit-orange: #fd7e14;
+  --orbit-red: #dc3545;
+  --orbit-gray: #6c757d;
+  --orbit-light-gray: #f8f9fa;
+  --orbit-dark-gray: #343a40;
+  --orbit-border: #dee2e6;
+  --shadow-subtle: 0 2px 8px rgba(0, 0, 0, 0.1);
+  --shadow-hover: 0 4px 16px rgba(0, 0, 0, 0.15);
+  --border-radius: 8px;
+  --transition: all 0.3s ease;
+}
+
+/* Enhanced Typography */
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+  line-height: 1.7;
+  color: #333;
+  font-size: 16px;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 700;
+  line-height: 1.3;
+  margin-top: 2rem;
+  margin-bottom: 1rem;
+  color: var(--orbit-dark-blue);
+}
+
+h1 {
+  font-size: 2.5rem;
+  border-bottom: 3px solid var(--orbit-blue);
+  padding-bottom: 0.5rem;
+  margin-bottom: 2rem;
+}
+
+h2 {
+  font-size: 2rem;
+  color: var(--orbit-blue);
+  margin-top: 2.5rem;
+}
+
+h3 {
+  font-size: 1.5rem;
+  color: var(--orbit-dark-blue);
+}
+
+/* Enhanced Links */
+a {
+  color: var(--orbit-blue);
+  text-decoration: none;
+  transition: var(--transition);
+}
+
+a:hover {
+  color: var(--orbit-dark-blue);
+  text-decoration: underline;
+}
+
+/* Tables */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.5rem 0;
+  background: white;
+  border-radius: var(--border-radius);
+  overflow: hidden;
+  box-shadow: var(--shadow-subtle);
+}
+
+thead th {
+  background-color: var(--orbit-blue);
+  color: white;
+  font-weight: 600;
+  text-align: left;
+  padding: 1rem;
+}
+
+tbody td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--orbit-border);
+}
+
+tbody tr:nth-child(even) {
+  background-color: var(--orbit-light-gray);
+}
+
+tbody tr:hover {
+  background-color: var(--orbit-light-blue);
+  transition: var(--transition);
+}
+
+/* Code Blocks */
+pre {
+  background-color: #f8f9fa;
+  border: 1px solid var(--orbit-border);
+  border-radius: var(--border-radius);
+  padding: 1rem;
+  overflow-x: auto;
+  margin: 1.5rem 0;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+code {
+  background-color: #f1f3f4;
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 0.9em;
+}
+
+pre code {
+  background-color: transparent;
+  padding: 0;
+}
+
+/* Grid Layouts */
+.status-grid, .features-grid, .resources-grid, .community-grid {
+  display: grid;
+  grid-gap: 2rem;
+  margin: 2rem 0;
+}
+
+.features-grid {
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+}
+
+.resources-grid, .community-grid {
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+}
+
+/* Quick Links */
+.quick-links {
+  background: linear-gradient(135deg, var(--orbit-light-blue) 0%, #f8f9fa 100%);
+  border: 1px solid var(--orbit-border);
+  border-radius: var(--border-radius);
+  padding: 2rem;
+  margin: 2rem 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  grid-gap: 1.5rem;
+}
+
+.quick-links h4 {
+  color: var(--orbit-dark-blue);
+  margin-top: 0;
+  border-bottom: 2px solid var(--orbit-blue);
+  padding-bottom: 0.5rem;
+}
+
+/* Blockquotes */
+blockquote {
+  border-left: 4px solid var(--orbit-blue);
+  background-color: var(--orbit-light-blue);
+  padding: 1rem 1.5rem;
+  margin: 1.5rem 0;
+  border-radius: 0 var(--border-radius) var(--border-radius) 0;
+  font-style: italic;
+}
+
+blockquote p:last-child {
+  margin-bottom: 0;
+}
+
+/* Footer */
+.footer-info {
+  background: linear-gradient(135deg, var(--orbit-dark-blue) 0%, var(--orbit-blue) 100%);
+  color: white;
+  padding: 2rem;
+  border-radius: var(--border-radius);
+  text-align: center;
+  margin: 3rem 0 2rem 0;
+  box-shadow: var(--shadow-subtle);
+}
+
+.footer-info a {
+  color: #ffffff;
+  text-decoration: underline;
+}
+
+.footer-info a:hover {
+  color: var(--orbit-light-blue);
+}
+
+/* Mobile Responsiveness */
+@media (max-width: 768px) {
+  h1 {
+    font-size: 2rem;
+  }
+  
+  h2 {
+    font-size: 1.75rem;
+  }
+  
+  .features-grid, .resources-grid, .community-grid {
+    grid-template-columns: 1fr;
+    grid-gap: 1rem;
+  }
+  
+  .quick-links {
+    grid-template-columns: 1fr;
+    padding: 1rem;
+  }
+  
+  table {
+    font-size: 0.9rem;
+  }
+}
+
+/* Header Styling */
+.site-header {
+  border-bottom: 2px solid var(--orbit-blue);
+  background-color: white;
+  box-shadow: var(--shadow-subtle);
+}
+
+.site-title {
+  font-weight: 700;
+  color: var(--orbit-dark-blue) !important;
+  font-size: 1.5rem;
+}
+
+.site-title:hover {
+  text-decoration: none !important;
+}
+
+/* Progress sections */
+.progress-section {
+  background: white;
+  border: 1px solid var(--orbit-border);
+  border-radius: var(--border-radius);
+  padding: 2rem;
+  margin: 2rem 0;
+  box-shadow: var(--shadow-subtle);
+}
+
+.completed-phases, .upcoming-phases {
+  background: white;
+  border-radius: var(--border-radius);
+  padding: 1.5rem;
+  margin: 1.5rem 0;
+  border-left: 4px solid var(--orbit-green);
+}
+
+.upcoming-phases {
+  border-left-color: var(--orbit-orange);
+}
+
+.phase-details {
+  background-color: var(--orbit-light-gray);
+  border-radius: var(--border-radius);
+  padding: 1.5rem;
+  margin: 1rem 0;
+  border: 1px solid var(--orbit-border);
+}
+
 /* Custom CSS for Orbit-RS Documentation */
 
 /* Layout improvements */

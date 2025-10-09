@@ -1,6 +1,12 @@
-# Orbit-RS: Comprehensive Project Overview
+---
+layout: default
+title: "Orbit-RS: Comprehensive Project Overview"
+subtitle: "Production-Ready Multi-Model Database Platform"
+category: "overview"
+permalink: /project_overview.html
+---
 
-> **Last Updated**: October 7, 2025 - Complete documentation consolidation and accuracy audit
+> **Last Updated**: October 9, 2025 - Documentation improvements and link fixes
 
 ---
 

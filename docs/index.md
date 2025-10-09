@@ -32,7 +32,7 @@ orbit-rs start --port 5432
 psql -h localhost -p 5432 -U orbit
 ```
 
-[📖 **Full Quick Start Guide**](quick_start.md) | [🎯 **See Project Overview**](overview.md)
+[📖 **Full Quick Start Guide**](quick_start.md) | [🎯 **See Project Overview**](project_overview.md)
 
 ---
 
@@ -42,9 +42,9 @@ psql -h localhost -p 5432 -U orbit
 Perfect for developers new to Orbit-RS or distributed databases.
 
 - [🚀 **Quick Start Guide**](quick_start.md) - Get running in 5 minutes
-- [📖 **Project Overview**](overview.md) - Architecture, features, and use cases
+- [📖 **Project Overview**](project_overview.md) - Architecture, features, and use cases
 - [🎯 **Project Structure**](PROJECT_STRUCTURE.md) - Codebase organization
-- [🔍 **Architecture Details**](architecture/ORBIT_ARCHITECTURE.md) - Understanding Orbit-RS design
+- [🔍 **Architecture Details**](overview.md) - Understanding Orbit-RS design
 - [⚙️ **Development Guide**](contributing.md) - Setup and configuration
 
 ### 🛠️ **Development & API**
@@ -54,7 +54,7 @@ For developers building applications with Orbit-RS.
 - [🔌 **Protocol Support**](NETWORK_LAYER.md) - Network layer and protocol details
 - [🧪 **Testing Guide**](contributing.md#testing) - Writing and running tests
 - [🤝 **Contributing**](contributing.md) - How to contribute to Orbit-RS
-- [🔧 **Development Setup**](../DEVELOPMENT.md) - Setting up development environment
+- [⚙️ **Development Setup**](contributing.md) - Setting up development environment
 
 ### 🚢 **Operations & Deployment**
 For system administrators and DevOps engineers.
@@ -112,7 +112,7 @@ Orbit-RS has reached **Phase 8** completion with a fully functional SQL engine a
 - **Test Coverage:** 79 passing tests with comprehensive scenarios
 - **Code Quality:** 150,000+ lines of production-ready Rust
 
-[📉 **View Detailed Status**](PROJECT_STATUS.md) | [🗺️ **See Full Roadmap**](roadmap.md)
+[📉 **View Detailed Status**](features.md) | [🗺️ **See Full Roadmap**](roadmap.md)
 
 ---
 
@@ -184,7 +184,7 @@ Orbit-RS follows a structured development approach with clearly defined phases:
 - [☸️ **Kubernetes Deployment**](kubernetes_deployment.md) - Production deployment guide
 
 ### 📚 **Documentation**
-- [🗺️ **Architecture Overview**](overview.md) - Understanding Orbit-RS design principles
+- [🗺️ **Architecture Overview**](project_overview.md) - Understanding Orbit-RS design principles
 - [⚡ **Performance Guide**](LSM_TREE_IMPLEMENTATION.md) - Storage optimization and tuning  
 - [📈 **Implementation Tracking**](ORBITQL_IMPLEMENTATION_TRACKING.md) - Development progress
 
@@ -216,7 +216,7 @@ Orbit-RS follows a structured development approach with clearly defined phases:
 - [📋 **Contribution Guide**](contributing.md) - How to contribute code
 - [📝 **Documentation**](README.md) - Documentation structure and guides
 - [🧪 **Testing**](contributing.md#testing) - Adding tests and benchmarks
-- [🎨 **Development**](../DEVELOPMENT.md) - Development workflow
+- [🎨 **Development**](contributing.md) - Development workflow
 
 </div>
 
@@ -240,18 +240,18 @@ Orbit-RS is released under the **Apache License 2.0**.
 
 **For Developers:**
 - [📖 API Documentation](https://turingworks.github.io/orbit-rs/api/) 
-- [🔧 Development Setup](../DEVELOPMENT.md)
+- [🔧 Development Setup](contributing.md)
 - [🧪 **Testing Guide**](contributing.md) - Adding tests and benchmarks
 
 **For Operators:**  
-- [☘️ Kubernetes Guide](kubernetes_deployment.md)
+- [☘️ Kubernetes Guide](KUBERNETES_STORAGE_GUIDE.md)
 - [📉 Storage Setup](KUBERNETES_STORAGE_GUIDE.md)
 - [🔒 Security Configuration](SECURITY.md)
 
 **For Decision Makers:**
-- [📉 Project Status](PROJECT_STATUS.md)
+- [📉 Project Status](features.md)
 - [🗺️ Roadmap & Timeline](roadmap.md)
-- [💼 Architecture Overview](overview.md)
+- [💼 Architecture Overview](project_overview.md)
 
 </div>
 
