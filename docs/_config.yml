@@ -24,6 +24,7 @@ header_pages:
   - quick_start.md
   - roadmap.md
   - features.md
+  - COMPUTE_ACCELERATION_GUIDE.md
   - contributing.md
   - overview.md
 

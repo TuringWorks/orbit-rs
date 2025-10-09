@@ -1,8 +1,16 @@
+---
+layout: default
+title: "RFC: Heterogeneous Compute Engine"
+subtitle: "Technical Architecture and Implementation"
+category: "rfc"
+permalink: /rfcs/heterogeneous-compute/
+---
+
 # RFC: Heterogeneous Compute Engine for Orbit-RS
 
-**Status**: Implemented  
+**Status**: ✅ Implemented  
 **Date**: 2025-10-08  
-**Authors**: AI Agent, Ravindra Boddipalli  
+**Authors**: AI Agent, Ravindra Boddipalli
 
 ## Abstract
 

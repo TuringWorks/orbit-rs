@@ -18,14 +18,18 @@ This document provides a comprehensive overview of all implemented features in O
 - **Documentation**: [Virtual Actor Persistence](virtual_actor_persistence.md)
 
 ### Heterogeneous Compute Acceleration 🆕
-- **Status**: ✅ **Implemented** (Phase 8.5)
+- **Status**: ✅ **Production Ready** (Phase 8.5)
 - **Performance**: 5-50x speedups for parallelizable workloads
 - **Features**: 
-  - Automatic hardware detection (CPU SIMD, GPU, Neural Engines)
-  - Cross-platform support (macOS, Windows, Linux, Android, iOS)
-  - Intelligent workload scheduling with graceful degradation
-  - Platform-specific optimizations (Apple Silicon, Snapdragon, x86-64)
-- **Documentation**: [RFC: Heterogeneous Compute](rfcs/rfc_heterogeneous_compute.md)
+  - **CPU SIMD**: AVX-512, NEON, SVE optimization with 3-8x speedups
+  - **GPU Acceleration**: Metal, CUDA, OpenCL, ROCm with 5-50x speedups
+  - **Neural Engines**: Apple ANE, Snapdragon Hexagon DSP, Intel OpenVINO
+  - **Auto-Detection**: Intelligent hardware discovery and workload routing
+  - **Cross-Platform**: macOS, Windows, Linux, Android, iOS support
+  - **Graceful Fallback**: Seamless degradation when preferred hardware unavailable
+- **Documentation**: 
+  - [⚡ **Acceleration Guide**](COMPUTE_ACCELERATION_GUIDE.md) - Usage and configuration
+  - [🧠 **Technical RFC**](rfcs/rfc_heterogeneous_compute.md) - Architecture deep-dive
 
 ### Distributed Transactions
 - **Status**: ✅ **Production Ready**

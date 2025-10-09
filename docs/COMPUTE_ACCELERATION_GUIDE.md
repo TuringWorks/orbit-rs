@@ -1,8 +1,17 @@
-# Orbit-Compute Acceleration Guide
+---
+layout: default
+title: "Hardware Acceleration Guide"
+subtitle: "GPU, Neural Engine, and SIMD Acceleration"
+category: "performance"
+permalink: /compute-acceleration/
+---
 
-**Status**: Production Ready  
+# Hardware Acceleration Guide
+**Orbit-Compute: Heterogeneous Computing for Maximum Performance**
+
+**Status**: ✅ Production Ready  
 **Updated**: 2025-10-09  
-**Applies to**: orbit-compute v1.0+  
+**Applies to**: orbit-compute v1.0+
 
 ## Overview
 

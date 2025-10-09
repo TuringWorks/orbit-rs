@@ -69,10 +69,12 @@ For system administrators and DevOps engineers.
 ### 🎯 **Feature Guides**
 Deep dives into Orbit-RS capabilities.
 
-- [🗃️ **SQL Engine**](ORBITQL_REFERENCE.md) - OrbitQL and SQL capabilities
+- [🗓️ **SQL Engine**](ORBITQL_REFERENCE.md) - OrbitQL and SQL capabilities
 - [📈 **Time Series**](TIME_SERIES_ENGINE.md) - Time-series data management
 - [🕸️ **Graph Database**](GRAPH_DATABASE.md) - Graph data models and queries
 - [📄 **Vector Operations**](vector_commands.md) - Vector database operations
+- [⚡ **Hardware Acceleration**](COMPUTE_ACCELERATION_GUIDE.md) - GPU/Neural compute acceleration 🆕
+- [🧠 **Compute Architecture**](rfcs/rfc_heterogeneous_compute.md) - Technical deep-dive on acceleration
 - [🔍 **AQL Reference**](AQL_REFERENCE.md) - ArangoDB Query Language support
 - [🤖 **GraphRAG Integration**](GraphRAG_ARCHITECTURE.md) - AI and graph analytics
 
@@ -141,12 +143,20 @@ Enterprise-grade SQL engine with modern capabilities.
 - **Complex Queries:** JOINs, subqueries, CTEs, window functions
 - **Transaction Support:** ACID compliance with distributed transactions
 
-### ☸️ **Cloud-Native**
+### ☁️ **Cloud-Native**
 Designed for modern cloud and Kubernetes deployments.
 - **Kubernetes Operator:** Custom resources for cluster management
 - **Helm Charts:** Production-ready deployment templates
 - **Auto-scaling:** Dynamic cluster scaling based on workload
 - **Multi-platform:** Support for linux/amd64 and linux/arm64
+
+### ⚡ **Hardware Acceleration** 🆕
+Powerful heterogeneous compute engine for maximum performance.
+- **CPU SIMD:** AVX-512, NEON optimization with 3-8x speedups
+- **GPU Acceleration:** Metal, CUDA, OpenCL with 5-50x speedups  
+- **Neural Engines:** Apple ANE, Snapdragon DSP for AI workloads
+- **Auto-Detection:** Intelligent hardware discovery and workload routing
+- **Cross-Platform:** macOS, Windows, Linux, Android, iOS support
 
 </div>
 

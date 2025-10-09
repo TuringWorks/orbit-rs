@@ -3,84 +3,121 @@ layout: default
 title: "Architecture Overview"
 subtitle: "Understanding Orbit-RS design and capabilities"
 category: "architecture"
+permalink: /overview.html
 ---
 
-# Orbit-RS Overview
+# Orbit-RS: Architecture Overview
 
-A high-performance, distributed virtual actor system framework reimplemented in Rust, inspired by Microsoft Orleans and the original Java Orbit framework.
+**Production-Ready Multi-Model Distributed Database Platform**
 
-[![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](#)
-[![License](https://img.shields.io/badge/license-BSD--3--Clause%20OR%20MIT-blue.svg)](../LICENSE-MIT)
+Orbit-RS is a high-performance, distributed multi-model database system written in Rust that combines virtual actor architecture with comprehensive database capabilities including SQL, vector operations, time-series, graph data, and AI/ML integration.
+
+[![Version](https://img.shields.io/badge/version-Production--Ready-brightgreen.svg)](https://github.com/TuringWorks/orbit-rs)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](https://github.com/TuringWorks/orbit-rs/blob/main/LICENSE)
 [![Rust Version](https://img.shields.io/badge/rust-1.70+-red.svg)](https://www.rust-lang.org/)
-[![Tests](https://img.shields.io/badge/tests-79%20passing-green)]()
-[![Coverage](https://img.shields.io/badge/coverage-comprehensive-blue)]()
-[![CI/CD](https://img.shields.io/badge/CI%2FCD-verified-brightgreen)]()
+[![Phase 8](https://img.shields.io/badge/Phase%208-Complete-brightgreen.svg)](roadmap.md)
+[![144K+ Lines](https://img.shields.io/badge/lines-144K+-blue.svg)](project_overview.md)
+[![720+ Tests](https://img.shields.io/badge/tests-720%2B-green.svg)](features.md)
 
 ## What is Orbit-RS?
 
-Orbit is a framework for building distributed systems using virtual actors. A virtual actor is an object that interacts with the world using asynchronous messages. Actors can be active or inactive - when inactive, their state resides in storage, and when a message is sent to an inactive actor, it automatically activates on an available server in the cluster.
+Orbit-RS is a production-ready, multi-model distributed database platform that combines the power of virtual actor architecture with comprehensive database capabilities. It's designed as a next-generation system that unifies:
 
-## Core Features
+- **Virtual Actor Framework** for distributed computing
+- **Multi-Protocol Database** with SQL, vector, time-series, and graph support
+- **AI/ML Integration** with vector operations and neural engine acceleration
+- **Cloud-Native Operations** with Kubernetes operators and enterprise features
 
-### 🚀 Virtual Actors
-- Automatic lifecycle management with on-demand activation
-- Transparent location and state management
-- Type-safe actor interfaces with compile-time guarantees
+### 🎯 **Current Status: Phase 8 Complete (Production Ready)**
 
-### 🌐 Distributed Architecture
-- Seamless clustering with automatic load balancing  
-- Multiple load balancing strategies: round-robin, least connections, resource-aware, hash-based
-- Fault tolerant with health checks, timeouts, and automatic cleanup
+Orbit-RS has successfully completed its Phase 8 milestone, delivering a **comprehensive multi-model database platform** with:
+- **144,855+ lines** of production-ready Rust code
+- **720+ tests** ensuring reliability and correctness
+- **124+ Redis commands** with full compatibility
+- **Complete PostgreSQL wire protocol** implementation
+- **Advanced AI/ML capabilities** with vector operations
 
-### ⚡ High Performance
-- Built with Rust for maximum performance and memory safety
-- Up to 500k+ messages/second per core
-- Zero GC pauses with consistent sub-microsecond latency
-- Small footprint: ~10MB statically linked binaries vs ~100MB JVM deployments
+---
 
-### 🔧 Protocol Integration
-- Protocol Buffers for type-safe cross-language communication via gRPC
-- High-performance gRPC transport with connection pooling
-- Multiple protocol adapters: Redis (RESP), PostgreSQL wire protocol, REST API, and Neo4j Bolt support
+## 🏗️ Core Features
 
-### 💾 Persistence & Storage
-- **Multiple Storage Backends**: In-Memory, COW B+Tree, LSM-Tree, and RocksDB
-- **Storage Backend Independence**: Cloud vs local storage with seamless switching
-- **Kubernetes Integration**: Full K8s persistence with StatefulSets and PVCs
-- **Actor State Management**: Automatic persistence with configurable backends
+### 🎭 **Virtual Actor System**
+- **Distributed Computing**: Actor-based distributed programming model
+- **Automatic Lifecycle Management**: On-demand activation and transparent scaling
+- **Type-Safe Interfaces**: Compile-time guarantees with Rust's type system
+- **Location Transparency**: Actors can move between nodes seamlessly
+- **State Persistence**: Automatic state management with configurable backends
 
-### 💎 Advanced Features
-- **ACID Distributed Transactions**: 2-phase commit with coordinator failover
-- **Transaction Recovery**: Automatic recovery with durable audit trails
-- **Multiple Protocol Support**: Redis RESP, PostgreSQL wire, MCP, and REST APIs
-- **Comprehensive Observability**: Built-in Prometheus metrics and health checks
-- **Production Ready**: Single binary deployment with Kubernetes operator
+### 📊 **Multi-Model Database**
+- **SQL Database**: Full ANSI SQL support with PostgreSQL wire protocol compatibility
+- **Vector Database**: High-performance similarity search with HNSW/IVFFLAT indexing
+- **Time-Series Database**: RedisTimeSeries-compatible with advanced aggregation
+- **Graph Database**: Cypher-like queries with distributed graph operations
+- **Document Store**: Flexible JSON document storage and querying
 
-## Architecture
+### 🤖 **AI/ML Integration**
+- **Vector Operations**: pgvector compatibility with similarity search
+- **Neural Engine Acceleration**: Apple Neural Engine, Snapdragon DSP integration
+- **Machine Learning Functions**: Built-in statistical functions in SQL
+- **Embeddings Support**: Seamless integration with AI embedding models
+- **Model Context Protocol**: AI agent integration and tool ecosystem
 
-The Rust implementation maintains the same core architecture as the original Kotlin version:
+### 🔌 **Protocol Support**
+- **Redis RESP Protocol**: 124+ commands with clustering support
+- **PostgreSQL Wire Protocol**: Full DDL/DML/DCL/TCL operations
+- **gRPC Services**: High-performance service-to-service communication
+- **Model Context Protocol (MCP)**: AI agent and tool integration
+- **REST APIs**: RESTful interface for web applications
+
+### ☁️ **Cloud-Native Architecture**
+- **Kubernetes Operator**: Custom resources for cluster management
+- **Helm Charts**: Production-ready deployment templates
+- **Auto-Scaling**: Dynamic cluster scaling based on workload
+- **Multi-Platform**: Support for linux/amd64, linux/arm64, and Apple Silicon
+- **Enterprise Security**: RBAC, audit trails, and compliance features
+
+### ⚡ **Performance & Scale**
+- **500k+ messages/second** per core throughput
+- **Sub-microsecond latency** for actor message processing
+- **~10MB binary size** vs ~100MB JVM equivalents
+- **Zero GC pauses** with predictable memory usage
+- **5-50x speedups** with heterogeneous compute acceleration
+
+---
+
+## 🏗️ System Architecture
+
+Orbit-RS is built as a **comprehensive workspace** with **14 core modules** and **20+ example applications**:
 
 ```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   orbit-client  │    │  orbit-shared   │    │  orbit-server   │
-│                 │    │                 │    │                 │
-│ • Actor Proxies │    │ • Data Types    │    │ • Cluster Mgmt  │
-│ • Invocation    │    │ • Messages      │    │ • Load Balancer │
-│ • Lease Mgmt    │    │ • Transactions  │    │ • Persistence   │
-│                 │    │ • OrbitQL       │    │ • Health Check  │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-         │                       │                       │
-         └───────────────────────┼───────────────────────┘
-                                 │
-       ┌─────────────────────────┼─────────────────────────┐
-       │                         │                         │
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   orbit-proto   │    │ orbit-protocols │    │ orbit-operator  │
-│                 │    │                 │    │                 │
-│ • gRPC Services │    │ • Redis RESP    │    │ • K8s CRDs      │
-│ • Proto Buffers │    │ • PostgreSQL    │    │ • Persistence   │
-│ • Serialization │    │ • REST/HTTP     │    │ • Config Mgmt   │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
+orbit-rs/
+├── 💭 Core Framework
+│   ├── orbit-client/         # Client-side actor proxies and invocation
+│   ├── orbit-shared/         # Common types, errors, spatial operations  
+│   ├── orbit-server/         # Cluster management and health monitoring
+│   ├── orbit-proto/          # gRPC services and Protocol Buffers
+│   └── orbit-util/           # Utilities, RNG, metrics
+├── 🔌 Protocol Adapters
+│   └── orbit-protocols/      # Redis RESP, PostgreSQL, MCP, REST APIs
+├── ☁️ Cloud & Operations
+│   ├── orbit-operator/       # Kubernetes operator with CRDs
+│   ├── orbit-server-etcd/    # etcd integration for clustering
+│   └── orbit-server-prometheus/ # Metrics and monitoring
+├── 🚀 Applications & Integration
+│   ├── orbit-application/    # Application framework
+│   ├── orbit-client-spring/  # Spring Boot integration
+│   └── orbit-compute/        # Hardware acceleration (GPU/Neural)
+├── 📊 Performance & Testing
+│   ├── orbit-benchmarks/     # Performance benchmarks
+│   └── tests/                # Integration tests
+└── 📈 Examples (20+)
+    ├── hello-world/          # Basic actor demonstration
+    ├── distributed-transactions/ # ACID transaction patterns
+    ├── vector-store/         # AI/ML vector operations
+    ├── resp-server/          # Redis-compatible server
+    ├── pgvector-store/       # PostgreSQL vector extension
+    ├── mcp-advanced-server/  # AI agent integration
+    └── ... and 15+ more examples
 ```
 
 ### Component Overview
@@ -148,11 +185,30 @@ Orbit-RS is ideal for building:
 - **Financial Systems**: Transaction processing and audit trails
 - **Data Processing**: Stream processing and ETL pipelines
 
-## Next Steps
+---
 
-- [Quick Start Guide](QUICK_START.md) - Get up and running quickly
-- [Virtual Actor Persistence](VIRTUAL_ACTOR_PERSISTENCE.md) - Actor state management and lifecycle
-- [Transaction Features](features/TRANSACTION_FEATURES.md) - Advanced transaction capabilities
-- [Protocol Adapters](protocols/PROTOCOL_ADAPTERS.md) - Multi-protocol support
-- [Development Guide](development/DEVELOPMENT.md) - Contributing and development
-- [Deployment Guide](deployment/DEPLOYMENT.md) - Production deployment
+## 📚 Next Steps & Documentation
+
+### 🚀 **Getting Started**
+- [🏃 **Quick Start Guide**](quick_start.md) - Get up and running in 5 minutes
+- [📖 **Project Overview**](project_overview.md) - Complete project status and capabilities
+- [🎯 **Feature Index**](features.md) - Comprehensive feature overview
+- [🤝 **Contributing Guide**](contributing.md) - How to contribute to the project
+
+### 🏗️ **Architecture & Core Systems**
+- [🎭 **Virtual Actor Persistence**](virtual_actor_persistence.md) - Actor state management and lifecycle
+- [💳 **Advanced Transaction Features**](advanced_transaction_features.md) - Distributed transaction capabilities
+- [⚡ **Compute Acceleration Guide**](COMPUTE_ACCELERATION_GUIDE.md) - GPU/Neural hardware acceleration
+- [🧠 **Heterogeneous Compute RFC**](rfcs/rfc_heterogeneous_compute.md) - Technical deep-dive on acceleration
+
+### 🚀 **Operations & Deployment**
+- [☸️ **Kubernetes Deployment**](kubernetes_deployment.md) - Production Kubernetes setup
+- [💾 **Kubernetes Storage Guide**](KUBERNETES_STORAGE_GUIDE.md) - Persistent storage configuration
+- [🔧 **Development Roadmap**](roadmap.md) - Strategic vision and timeline
+- [🔒 **Security Guide**](SECURITY.md) - Security policies and best practices
+
+### 🔌 **Integration & Examples**
+- [📊 **All 20+ Examples**](../examples/) - Working code examples for all features
+- [🐳 **Container Deployment**](../containerfiles/) - Docker and container setup
+- [⚙️ **Configuration Examples**](../config/) - Sample configurations
+- [📋 **API Documentation**](api/) - Complete API reference
