@@ -292,27 +292,27 @@ orbit-rs/
 ## 📚 **Documentation Index**
 
 ### **Getting Started**
-- [Installation Guide](INSTALLATION.md)
-- [Quick Start Guide](QUICK_START.md)
-- [Basic Tutorial](TUTORIAL.md)
+- [Quick Start Guide](quick_start.md)
+- [Contributing Guide](contributing.md)
+- [Development Setup](development/development.md)
 
 ### **Architecture**
-- [System Architecture](architecture/ORBIT_ARCHITECTURE.md)
-- [Protocol Adapters](protocols/PROTOCOL_ADAPTERS.md)
+- [System Architecture](overview.md)
+- [Protocol Adapters](protocols/protocol_adapters.md)
 - [Persistence Architecture](PERSISTENCE_ARCHITECTURE.md)
 
 ### **Protocols**
 - [Redis Commands](protocols/REDIS_COMMANDS_REFERENCE.md)
-- [PostgreSQL Integration](protocols/POSTGRESQL_INTEGRATION.md)
-- [Vector Operations](VECTOR_COMMANDS.md)
-- [Time Series](TIMESERIES_COMMANDS.md)
-- [Graph Database](GRAPH_COMMANDS.md)
+- [PostgreSQL Integration](protocols/POSTGRES_WIRE_IMPLEMENTATION.md)
+- [Vector Operations](vector_commands.md)
+- [Time Series](timeseries_commands.md)
+- [Graph Database](graph_commands.md)
 - [ML Functions](ML_SQL_FUNCTIONS_DESIGN.md)
 
 ### **Operations**
-- [Kubernetes Deployment](KUBERNETES_DEPLOYMENT.md)
+- [Kubernetes Deployment](kubernetes_deployment.md)
 - [Persistence Configuration](KUBERNETES_PERSISTENCE.md)
-- [Monitoring Guide](MONITORING.md)
+- [Security Guide](SECURITY.md)
 
 ---
 
