@@ -325,8 +325,9 @@ error: Address already in use (os error 48)
 
 Now that you have Orbit-RS running, explore these advanced features:
 
-- [Transaction Features](features/TRANSACTION_FEATURES.md) - Advanced distributed transactions
-- [Protocol Adapters](protocols/PROTOCOL_ADAPTERS.md) - Redis and PostgreSQL compatibility
+- [Transaction Features](features/transaction_features.md) - Advanced distributed transactions
+- [Protocol Adapters](protocols/protocol_adapters.md) - Redis and PostgreSQL compatibility  
 - [Deployment Guide](deployment/DEPLOYMENT.md) - Production deployment with Kubernetes
-- [Development Guide](development/DEVELOPMENT.md) - Contributing to Orbit-RS
-- [Project Roadmap](ROADMAP.md) - Future development plans
+- [Development Guide](../DEVELOPMENT.md) - Contributing to Orbit-RS
+- [Compute Acceleration Guide](COMPUTE_ACCELERATION_GUIDE.md) - GPU acceleration and workload optimization
+- [Project Roadmap](ROADMAP_CURRENT.md) - Current development plans
