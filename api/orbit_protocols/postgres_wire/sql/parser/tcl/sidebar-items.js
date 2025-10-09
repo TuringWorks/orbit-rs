@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["parse_access_mode","parse_begin","parse_commit","parse_isolation_level","parse_release_savepoint","parse_rollback","parse_savepoint"]};

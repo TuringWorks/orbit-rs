@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["parse_data_type","parse_expression","parse_literal_value","parse_select_statement","parse_table_name"]};

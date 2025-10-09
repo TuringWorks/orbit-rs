@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ElectionOutcome"],"fn":["calculate_avg_latency","calculate_avg_loss_rate"],"struct":["ElectionMetrics","ElectionMetricsSummary","ElectionNetworkMetrics","ElectionOutcomeMetrics","ElectionPerformanceMetrics","ElectionTimingMetrics","ElectionTracker","HeartbeatPerformanceMetrics","PartitionEvent"]};

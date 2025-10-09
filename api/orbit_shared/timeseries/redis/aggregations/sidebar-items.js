@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["AVG","COUNT","FIRST","LAST","MAX","MIN","RANGE","STD_P","STD_S","SUM","VAR_P","VAR_S"]};

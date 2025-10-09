@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["MLFunctionCategory"],"mod":["executor","function_registry","optimizer"],"struct":["MLFunctionMetadata","SqlMLFunctionRegistry","SqlMlBridge"]};

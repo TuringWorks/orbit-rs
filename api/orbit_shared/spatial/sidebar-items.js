@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["DEFAULT_PRECISION","EARTH_RADIUS_METERS","UTM_ZONE_33N_SRID","WEB_MERCATOR_SRID","WGS84_SRID"],"mod":["crs","functions","geometry","gpu","index","operations","streaming"]};

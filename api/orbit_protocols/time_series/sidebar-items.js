@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["AggregationType","DataEncoding","DuplicatePolicy"],"struct":["CompactionRule","Sample","TimeSeriesActor","TimeSeriesConfig","TimeSeriesStats"],"trait":["TimeSeriesActorMethods"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["SpatialError","SpatialGeometry"],"struct":["BoundingBox","GeometryCollection","LineString","LinearRing","MultiLineString","MultiPoint","MultiPolygon","Point","Polygon"]};

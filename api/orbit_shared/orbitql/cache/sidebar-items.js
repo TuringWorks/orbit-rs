@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ChangeType","EvictionPolicy"],"fn":["analyze_query_dependencies","estimate_result_size","normalize_query"],"struct":["AccessStats","CacheConfig","CacheHealth","CacheKey","CacheStatistics","CachedQueryExecutor","CachedResult","DependencyTracker","InvalidationEvent","QueryCache"],"trait":["QueryExecutorTrait"]};

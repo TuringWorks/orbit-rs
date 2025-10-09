@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["ClusterConfig","CoordinatorHealth","RecoveryConfig","RecoveryStats","TransactionCheckpoint","TransactionRecoveryManager"],"trait":["ClusterManager","RecoveryEventHandler"]};

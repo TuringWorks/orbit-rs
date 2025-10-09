@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["TIME_SERIES_SCHEMA"],"enum":["SortDirection","TimescaleAggregation"],"struct":["ChunkInfo","CompressionConfig","ContinuousAggregatesConfig","HypertableInfo","OrderByColumn","PoolConfig","PostgreSQLConfig","RetentionConfig","SslConfig","TimescaleConfig","TimescaleDB","TimescaleStatistics"]};

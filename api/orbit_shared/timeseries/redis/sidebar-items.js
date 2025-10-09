@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["DuplicatePolicy"],"mod":["aggregations"],"struct":["CompactionRule","RedisConfig","RedisTimeSeries","TimeSeriesInfo"]};

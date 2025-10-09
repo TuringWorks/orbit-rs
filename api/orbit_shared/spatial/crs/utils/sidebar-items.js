@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["bearing","deg_to_rad","haversine_distance","project_point","rad_to_deg"]};

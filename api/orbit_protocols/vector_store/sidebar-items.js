@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["SimilarityMetric"],"struct":["Vector","VectorActor","VectorIndexConfig","VectorSearchParams","VectorSearchResult","VectorSimilarity","VectorStats"],"trait":["VectorActorMethods"]};

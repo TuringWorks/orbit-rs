@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["DeduplicationStrategy","ExtractorConfig"],"struct":["DocumentProcessingRequest","DocumentProcessingResult","EntityExtractionActor","ExtractionStats","RelationshipRule"]};

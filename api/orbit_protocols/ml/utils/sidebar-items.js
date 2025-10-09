@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["calculate_stats","sql_array_to_vector","validate_features","vector_to_sql_array"]};

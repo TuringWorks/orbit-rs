@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["TransactionPermission"],"struct":["AuditLogEntry","AuthToken","InMemoryAuditLogger","InMemoryAuthProvider","ScopeBasedAuthorizationProvider","SecurityContext","TransactionSecurityManager"],"trait":["AuditLogger","AuthenticationProvider","AuthorizationProvider"],"type":["UserCredentials"]};

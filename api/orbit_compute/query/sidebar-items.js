@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["AccelerationStrategy"],"fn":["analyze_query"],"struct":["QueryAnalysis"]};

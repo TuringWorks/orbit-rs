@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["DocumentProcessingResult","GraphRAGActor","GraphRAGConfig","GraphRAGDocumentRequest","GraphRAGQuery","GraphRAGQueryResult","GraphRAGStats","ProcessingTimes"]};

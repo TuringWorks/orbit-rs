@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["LockMode"],"struct":["DeadlockDetector","MvccSqlExecutor","MvccTable","MvccTransaction","RowVersion","TransactionSnapshot"],"type":["SnapshotId","TransactionId"]};

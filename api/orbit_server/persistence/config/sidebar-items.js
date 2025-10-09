@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["FailoverStrategy"],"struct":["ConfigFile","DefaultProviders","DynamicProviderConfig","EnvironmentConfig","FailoverConfig","HealthMonitorConfig","PersistenceConfigBuilder","PersistenceProviderConfig","ValidationError"]};

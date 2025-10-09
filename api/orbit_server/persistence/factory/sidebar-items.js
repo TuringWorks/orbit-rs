@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["create_addressable_provider","create_cluster_provider","initialize_registry","load_config_from_env","load_config_from_file"],"struct":["PersistenceConfigBuilder"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["RTreeSplitStrategy","SpatialIndex"],"struct":["AdaptiveSpatialIndexer","GeohashGrid","GeometryStatistics","IndexStatistics","KdNode","KdTree","QuadNode","QuadTree","QueryPerformanceStats","RTree","RTreeEntry","RTreeNode"],"trait":["SpatialIndexTrait"]};

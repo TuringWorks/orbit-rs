@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["handle_initialize","handle_prompt_get","handle_prompts_list","handle_request","handle_resource_read","handle_resources_list","handle_tool_call","handle_tools_list"]};

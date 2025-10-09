@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ChangeType","EvictionPolicy"],"struct":["AccessStats","CacheConfig","CacheHealth","CacheKey","CacheStatistics","CachedQueryExecutor","CachedResult","InvalidationEvent","QueryCache"],"trait":["QueryExecutorTrait"]};

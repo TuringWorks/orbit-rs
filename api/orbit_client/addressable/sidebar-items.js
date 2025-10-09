@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["DeactivationReason"],"struct":["ActorContext","ActorInstance","ActorRegistry","DefaultActorConstructor"],"trait":["ActorConstructor","ActorImplementation","ActorLifecycle"]};

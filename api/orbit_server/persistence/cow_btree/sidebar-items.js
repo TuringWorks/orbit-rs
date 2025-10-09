@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["MAX_KEYS_PER_NODE","WAL_BUFFER_SIZE"],"enum":["WALOperation"],"struct":["BTreeNode","CowBTreeAddressableProvider","CowBTreeClusterProvider","CowBTreeConfig","Snapshot","WALEntry","WriteAheadLog"]};

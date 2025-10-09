@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["MvccExecutionResult"],"mod":["analyzer","ast","execution_strategy","executor","expression_evaluator","lexer","mvcc_executor","optimizer","parser","types"],"struct":["MvccSqlEngine"],"type":["SqlEngine"]};

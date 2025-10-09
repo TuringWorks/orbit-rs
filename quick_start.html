@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Quick Start Guide | Orbit-RS Documentation</title>
+<meta name="generator" content="Jekyll v4.4.1" />
+<meta property="og:title" content="Quick Start Guide" />
+<meta name="author" content="TuringWorks" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<meta property="og:description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<link rel="canonical" href="https://turingworks.github.io/orbit-rs/quick_start.html" />
+<meta property="og:url" content="https://turingworks.github.io/orbit-rs/quick_start.html" />
+<meta property="og:site_name" content="Orbit-RS Documentation" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Quick Start Guide" />
+<meta name="twitter:site" content="@TuringWorksAI" />
+<meta name="twitter:creator" content="@TuringWorks" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","author":{"@type":"Person","name":"TuringWorks"},"description":"The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform","headline":"Quick Start Guide","url":"https://turingworks.github.io/orbit-rs/quick_start.html"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/orbit-rs/assets/main.css">
+  <link rel="stylesheet" href="/orbit-rs/assets/css/custom.css"><link type="application/atom+xml" rel="alternate" href="https://turingworks.github.io/orbit-rs/feed.xml" title="Orbit-RS Documentation" /></head><body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/orbit-rs/">Orbit-RS Documentation</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/orbit-rs/">Orbit-RS Documentation</a><a class="page-link" href="/orbit-rs/quick_start.html">Quick Start Guide</a><a class="page-link" href="/orbit-rs/roadmap/">Development Roadmap</a><a class="page-link" href="/orbit-rs/features/">Orbit-RS Feature Index</a><a class="page-link" href="/orbit-rs/contributing.html">Contributing Guide</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <h1 id="orbit-rs-quick-start-guide">Orbit-RS Quick Start Guide</h1>
+
+<p>Get up and running with Orbit-RS in just a few minutes.</p>
+
+<h2 id="prerequisites">Prerequisites</h2>
+
+<p>Before you begin, ensure you have the following installed:</p>
+
+<ul>
+  <li><strong>Rust 1.70+</strong> - <a href="https://rustup.rs/">Install Rust</a></li>
+  <li><strong>Protocol Buffers compiler (<code class="language-plaintext highlighter-rouge">protoc</code>)</strong> - <a href="https://grpc.io/docs/protoc-installation/">Install Protocol Buffers</a></li>
+  <li>(Optional) <strong>Docker</strong> - For containerized deployment</li>
+  <li>(Optional) <strong>Kubernetes cluster</strong> - For operator deployment</li>
+</ul>
+
+<h3 id="installing-protocol-buffers">Installing Protocol Buffers</h3>
+
+<h4 id="macos">macOS</h4>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>brew <span class="nb">install </span>protobuf
+</code></pre></div></div>
+
+<h4 id="ubuntudebian">Ubuntu/Debian</h4>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">sudo </span>apt update
+<span class="nb">sudo </span>apt <span class="nb">install </span>protobuf-compiler
+</code></pre></div></div>
+
+<h4 id="windows">Windows</h4>
+<p>Download from <a href="https://github.com/protocolbuffers/protobuf/releases">Protocol Buffers releases</a> or use:</p>
+<div class="language-powershell highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">choco</span><span class="w"> </span><span class="nx">install</span><span class="w"> </span><span class="nx">protoc</span><span class="w">
+</span></code></pre></div></div>
+
+<h2 id="installation">Installation</h2>
+
+<h3 id="1-clone-the-repository">1. Clone the Repository</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>git clone https://github.com/TuringWorks/orbit-rs.git
+<span class="nb">cd </span>orbit-rs
+</code></pre></div></div>
+
+<h3 id="2-build-the-project">2. Build the Project</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Build in release mode for optimal performance</span>
+cargo build <span class="nt">--release</span>
+
+<span class="c"># Or build in debug mode for development</span>
+cargo build
+</code></pre></div></div>
+
+<h3 id="3-run-tests">3. Run Tests</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Run all tests</span>
+cargo <span class="nb">test</span>
+
+<span class="c"># Run tests for a specific workspace</span>
+cargo <span class="nb">test</span> <span class="nt">--workspace</span>
+
+<span class="c"># Run tests with output</span>
+cargo <span class="nb">test</span> <span class="nt">--</span> <span class="nt">--nocapture</span>
+</code></pre></div></div>
+
+<h3 id="4-verify-installation">4. Verify Installation</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Check that examples compile</span>
+cargo check <span class="nt">--examples</span>
+
+<span class="c"># Run a simple example</span>
+cargo run <span class="nt">--example</span> hello-world
+</code></pre></div></div>
+
+<h2 id="basic-usage">Basic Usage</h2>
+
+<h3 id="simple-actor-example">Simple Actor Example</h3>
+
+<p>Here’s a minimal example to get you started with Orbit-RS:</p>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">orbit_client</span><span class="p">::</span><span class="n">OrbitClient</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">orbit_shared</span><span class="p">::{</span><span class="n">ActorWithStringKey</span><span class="p">,</span> <span class="n">Key</span><span class="p">};</span>
+<span class="k">use</span> <span class="nn">async_trait</span><span class="p">::</span><span class="n">async_trait</span><span class="p">;</span>
+
+<span class="c1">// Define an actor trait</span>
+
+<span class="nd">#[async_trait]</span>
+<span class="k">trait</span> <span class="n">GreeterActor</span><span class="p">:</span> <span class="n">ActorWithStringKey</span> <span class="p">{</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">greet</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">String</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="nb">String</span><span class="p">,</span> <span class="nn">orbit_shared</span><span class="p">::</span><span class="n">OrbitError</span><span class="o">&gt;</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="c1">// Implement the actor</span>
+<span class="k">struct</span> <span class="n">GreeterActorImpl</span><span class="p">;</span>
+
+<span class="nd">#[async_trait]</span>
+<span class="k">impl</span> <span class="n">GreeterActor</span> <span class="k">for</span> <span class="n">GreeterActorImpl</span> <span class="p">{</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">greet</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">String</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="nb">String</span><span class="p">,</span> <span class="nn">orbit_shared</span><span class="p">::</span><span class="n">OrbitError</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="nf">Ok</span><span class="p">(</span><span class="nd">format!</span><span class="p">(</span><span class="s">"Hello, {}!"</span><span class="p">,</span> <span class="n">name</span><span class="p">))</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+
+<span class="nd">#[tokio::main]</span>
+<span class="k">async</span> <span class="k">fn</span> <span class="nf">main</span><span class="p">()</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="p">(),</span> <span class="nb">Box</span><span class="o">&lt;</span><span class="k">dyn</span> <span class="nn">std</span><span class="p">::</span><span class="nn">error</span><span class="p">::</span><span class="n">Error</span><span class="o">&gt;&gt;</span> <span class="p">{</span>
+    <span class="c1">// Create a client</span>
+    <span class="k">let</span> <span class="n">client</span> <span class="o">=</span> <span class="nn">OrbitClient</span><span class="p">::</span><span class="nf">builder</span><span class="p">()</span>
+        <span class="nf">.with_namespace</span><span class="p">(</span><span class="s">"demo"</span><span class="p">)</span>
+        <span class="nf">.build</span><span class="p">()</span>
+        <span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+    
+    <span class="c1">// Get an actor reference</span>
+    <span class="k">let</span> <span class="n">greeter</span> <span class="o">=</span> <span class="n">client</span><span class="py">.actor_reference</span><span class="p">::</span><span class="o">&lt;</span><span class="k">dyn</span> <span class="n">GreeterActor</span><span class="o">&gt;</span><span class="p">(</span>
+        <span class="nn">Key</span><span class="p">::</span><span class="n">StringKey</span> <span class="p">{</span> <span class="n">key</span><span class="p">:</span> <span class="s">"my-greeter"</span><span class="nf">.to_string</span><span class="p">()</span> <span class="p">}</span>
+    <span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+    
+    <span class="c1">// Invoke the actor</span>
+    <span class="k">let</span> <span class="n">greeting</span> <span class="o">=</span> <span class="n">greeter</span><span class="nf">.greet</span><span class="p">(</span><span class="s">"World"</span><span class="nf">.to_string</span><span class="p">())</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+    <span class="nd">println!</span><span class="p">(</span><span class="s">"{}"</span><span class="p">,</span> <span class="n">greeting</span><span class="p">);</span> <span class="c1">// "Hello, World!"</span>
+    
+    <span class="nf">Ok</span><span class="p">(())</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="distributed-transactions-example">Distributed Transactions Example</h3>
+
+<p>For more advanced usage with distributed transactions:</p>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">orbit_shared</span><span class="p">::{</span>
+    <span class="nn">transactions</span><span class="p">::</span><span class="o">*</span><span class="p">,</span>
+    <span class="nn">transport</span><span class="p">::</span><span class="o">*</span><span class="p">,</span>
+    <span class="n">AddressableReference</span><span class="p">,</span> <span class="n">Key</span><span class="p">,</span> <span class="n">NodeId</span><span class="p">,</span>
+<span class="p">};</span>
+<span class="k">use</span> <span class="nn">std</span><span class="p">::{</span><span class="nn">sync</span><span class="p">::</span><span class="nb">Arc</span><span class="p">,</span> <span class="nn">time</span><span class="p">::</span><span class="n">Duration</span><span class="p">};</span>
+
+<span class="nd">#[tokio::main]</span>
+<span class="k">async</span> <span class="k">fn</span> <span class="nf">main</span><span class="p">()</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="p">(),</span> <span class="nb">Box</span><span class="o">&lt;</span><span class="k">dyn</span> <span class="nn">std</span><span class="p">::</span><span class="nn">error</span><span class="p">::</span><span class="n">Error</span><span class="o">&gt;&gt;</span> <span class="p">{</span>
+    <span class="c1">// Create transaction coordinator</span>
+    <span class="k">let</span> <span class="n">node_id</span> <span class="o">=</span> <span class="nn">NodeId</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="s">"coordinator"</span><span class="nf">.to_string</span><span class="p">(),</span> <span class="s">"cluster"</span><span class="nf">.to_string</span><span class="p">());</span>
+    <span class="k">let</span> <span class="n">config</span> <span class="o">=</span> <span class="nn">TransactionConfig</span><span class="p">::</span><span class="nf">default</span><span class="p">();</span>
+    <span class="k">let</span> <span class="n">transport</span> <span class="o">=</span> <span class="nn">Arc</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="nn">GrpcTransactionMessageSender</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="cm">/* ... */</span><span class="p">));</span>
+    
+    <span class="k">let</span> <span class="n">coordinator</span> <span class="o">=</span> <span class="nn">TransactionCoordinator</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="n">node_id</span><span class="p">,</span> <span class="n">config</span><span class="p">,</span> <span class="n">transport</span><span class="p">);</span>
+    
+    <span class="c1">// Begin distributed transaction</span>
+    <span class="k">let</span> <span class="n">tx_id</span> <span class="o">=</span> <span class="n">coordinator</span><span class="nf">.begin_transaction</span><span class="p">(</span><span class="nf">Some</span><span class="p">(</span><span class="nn">Duration</span><span class="p">::</span><span class="nf">from_secs</span><span class="p">(</span><span class="mi">30</span><span class="p">)))</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+    
+    <span class="c1">// Add banking operations</span>
+    <span class="k">let</span> <span class="n">debit_operation</span> <span class="o">=</span> <span class="nn">TransactionOperation</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span>
+        <span class="n">AddressableReference</span> <span class="p">{</span>
+            <span class="n">addressable_type</span><span class="p">:</span> <span class="s">"BankAccount"</span><span class="nf">.to_string</span><span class="p">(),</span>
+            <span class="n">key</span><span class="p">:</span> <span class="nn">Key</span><span class="p">::</span><span class="n">StringKey</span> <span class="p">{</span> <span class="n">key</span><span class="p">:</span> <span class="s">"alice"</span><span class="nf">.to_string</span><span class="p">()</span> <span class="p">},</span>
+        <span class="p">},</span>
+        <span class="s">"debit"</span><span class="nf">.to_string</span><span class="p">(),</span>
+        <span class="nn">serde_json</span><span class="p">::</span><span class="nd">json!</span><span class="p">({</span><span class="s">"amount"</span><span class="p">:</span> <span class="mi">100</span><span class="p">}),</span>
+    <span class="p">)</span><span class="nf">.with_compensation</span><span class="p">(</span><span class="nn">serde_json</span><span class="p">::</span><span class="nd">json!</span><span class="p">({</span><span class="s">"amount"</span><span class="p">:</span> <span class="mi">100</span><span class="p">,</span> <span class="s">"action"</span><span class="p">:</span> <span class="s">"credit"</span><span class="p">}));</span>
+    
+    <span class="k">let</span> <span class="n">credit_operation</span> <span class="o">=</span> <span class="nn">TransactionOperation</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span>
+        <span class="n">AddressableReference</span> <span class="p">{</span>
+            <span class="n">addressable_type</span><span class="p">:</span> <span class="s">"BankAccount"</span><span class="nf">.to_string</span><span class="p">(),</span>
+            <span class="n">key</span><span class="p">:</span> <span class="nn">Key</span><span class="p">::</span><span class="n">StringKey</span> <span class="p">{</span> <span class="n">key</span><span class="p">:</span> <span class="s">"bob"</span><span class="nf">.to_string</span><span class="p">()</span> <span class="p">},</span>
+        <span class="p">},</span>
+        <span class="s">"credit"</span><span class="nf">.to_string</span><span class="p">(),</span>
+        <span class="nn">serde_json</span><span class="p">::</span><span class="nd">json!</span><span class="p">({</span><span class="s">"amount"</span><span class="p">:</span> <span class="mi">100</span><span class="p">}),</span>
+    <span class="p">)</span><span class="nf">.with_compensation</span><span class="p">(</span><span class="nn">serde_json</span><span class="p">::</span><span class="nd">json!</span><span class="p">({</span><span class="s">"amount"</span><span class="p">:</span> <span class="mi">100</span><span class="p">,</span> <span class="s">"action"</span><span class="p">:</span> <span class="s">"debit"</span><span class="p">}));</span>
+    
+    <span class="n">coordinator</span><span class="nf">.add_operation</span><span class="p">(</span><span class="o">&amp;</span><span class="n">tx_id</span><span class="p">,</span> <span class="n">debit_operation</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+    <span class="n">coordinator</span><span class="nf">.add_operation</span><span class="p">(</span><span class="o">&amp;</span><span class="n">tx_id</span><span class="p">,</span> <span class="n">credit_operation</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+    
+    <span class="c1">// Execute 2-phase commit</span>
+    <span class="n">coordinator</span><span class="nf">.commit_transaction</span><span class="p">(</span><span class="o">&amp;</span><span class="n">tx_id</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+    
+    <span class="nd">println!</span><span class="p">(</span><span class="s">"🎉 Transaction {} committed successfully!"</span><span class="p">,</span> <span class="n">tx_id</span><span class="p">);</span>
+    <span class="nf">Ok</span><span class="p">(())</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h2 id="running-examples">Running Examples</h2>
+
+<p>Orbit-RS includes several examples to demonstrate different features:</p>
+
+<h3 id="hello-world-example">Hello World Example</h3>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>cargo run <span class="nt">--example</span> hello-world
+</code></pre></div></div>
+
+<h3 id="distributed-counter-example">Distributed Counter Example</h3>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>cargo run <span class="nt">--example</span> distributed-counter
+</code></pre></div></div>
+
+<h3 id="redis-protocol-example">Redis Protocol Example</h3>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Start the RESP server</span>
+cargo run <span class="nt">--example</span> resp-server
+
+<span class="c"># In another terminal, connect with redis-cli</span>
+redis-cli <span class="nt">-h</span> 127.0.0.1 <span class="nt">-p</span> 6380
+</code></pre></div></div>
+
+<h3 id="postgresql-protocol-example">PostgreSQL Protocol Example</h3>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Start the PostgreSQL-compatible server</span>
+cargo run <span class="nt">--example</span> pgvector-store
+
+<span class="c"># In another terminal, connect with psql</span>
+psql <span class="nt">-h</span> 127.0.0.1 <span class="nt">-p</span> 5433 <span class="nt">-d</span> orbit
+</code></pre></div></div>
+
+<h2 id="configuration">Configuration</h2>
+
+<h3 id="basic-configuration">Basic Configuration</h3>
+
+<p>Create a configuration file <code class="language-plaintext highlighter-rouge">orbit-config.toml</code>:</p>
+
+<div class="language-toml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">[</span><span class="n">cluster</span><span class="k">]</span>
+<span class="n">namespace</span> <span class="o">=</span><span class="w"> </span><span class="s">"my-app"</span>
+<span class="n">port</span> <span class="o">=</span><span class="w"> </span><span class="mi">8080</span>
+
+<span class="k">[</span><span class="n">storage</span><span class="k">]</span>
+<span class="n">backend</span> <span class="o">=</span><span class="w"> </span><span class="s">"sqlite"</span>
+<span class="n">connection_string</span> <span class="o">=</span><span class="w"> </span><span class="s">"orbit.db"</span>
+
+<span class="k">[</span><span class="n">metrics</span><span class="k">]</span>
+<span class="n">enabled</span> <span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+<span class="n">port</span> <span class="o">=</span><span class="w"> </span><span class="mi">9090</span>
+</code></pre></div></div>
+
+<h3 id="environment-variables">Environment Variables</h3>
+
+<p>You can also configure Orbit-RS using environment variables:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">export </span><span class="nv">ORBIT_NAMESPACE</span><span class="o">=</span><span class="s2">"my-app"</span>
+<span class="nb">export </span><span class="nv">ORBIT_PORT</span><span class="o">=</span><span class="s2">"8080"</span>
+<span class="nb">export </span><span class="nv">ORBIT_STORAGE_BACKEND</span><span class="o">=</span><span class="s2">"sqlite"</span>
+<span class="nb">export </span><span class="nv">ORBIT_METRICS_ENABLED</span><span class="o">=</span><span class="s2">"true"</span>
+</code></pre></div></div>
+
+<h2 id="development-setup">Development Setup</h2>
+
+<h3 id="ide-setup">IDE Setup</h3>
+
+<h4 id="vs-code">VS Code</h4>
+<p>Recommended extensions:</p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">rust-analyzer</code> - Rust language server</li>
+  <li><code class="language-plaintext highlighter-rouge">CodeLLDB</code> - Debugger for Rust</li>
+  <li><code class="language-plaintext highlighter-rouge">crates</code> - Cargo dependency management</li>
+</ul>
+
+<h4 id="intellij-idea">IntelliJ IDEA</h4>
+<ul>
+  <li>Install the Rust plugin</li>
+  <li>Configure the Rust toolchain in settings</li>
+</ul>
+
+<h3 id="development-commands">Development Commands</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Fast compile check</span>
+cargo check
+
+<span class="c"># Lint with Clippy</span>
+cargo clippy
+
+<span class="c"># Format code</span>
+cargo <span class="nb">fmt</span>
+
+<span class="c"># Security audit</span>
+cargo audit
+
+<span class="c"># Run benchmarks</span>
+cargo bench
+</code></pre></div></div>
+
+<h3 id="testing">Testing</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Run unit tests</span>
+cargo <span class="nb">test</span> <span class="nt">--workspace</span> <span class="nt">--lib</span>
+
+<span class="c"># Run integration tests  </span>
+cargo <span class="nb">test</span> <span class="nt">--workspace</span> <span class="nt">--test</span> integration
+
+<span class="c"># Run BDD scenarios</span>
+cargo <span class="nb">test</span> <span class="nt">--workspace</span> <span class="nt">--test</span> bdd
+
+<span class="c"># Run with coverage</span>
+cargo tarpaulin <span class="nt">--out</span> Html
+</code></pre></div></div>
+
+<h2 id="troubleshooting">Troubleshooting</h2>
+
+<h3 id="common-issues">Common Issues</h3>
+
+<h4 id="protocol-buffers-not-found">Protocol Buffers Not Found</h4>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>error: Could not find `protoc` installation
+</code></pre></div></div>
+<p><strong>Solution</strong>: Install Protocol Buffers compiler as described in prerequisites.</p>
+
+<h4 id="rust-version-too-old">Rust Version Too Old</h4>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>error: package requires Rust 1.70 or newer
+</code></pre></div></div>
+<p><strong>Solution</strong>: Update Rust using <code class="language-plaintext highlighter-rouge">rustup update</code></p>
+
+<h4 id="port-already-in-use">Port Already in Use</h4>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>error: Address already in use (os error 48)
+</code></pre></div></div>
+<p><strong>Solution</strong>: Use a different port or stop the conflicting service.</p>
+
+<h3 id="getting-help">Getting Help</h3>
+
+<ul>
+  <li>📖 <a href="/orbit-rs/README.md">Full Documentation</a></li>
+  <li>🐛 <a href="https://github.com/TuringWorks/orbit-rs/issues">Issue Tracker</a></li>
+  <li>💬 <a href="https://github.com/TuringWorks/orbit-rs/discussions">Discussions</a></li>
+</ul>
+
+<h2 id="next-steps">Next Steps</h2>
+
+<p>Now that you have Orbit-RS running, explore these advanced features:</p>
+
+<ul>
+  <li><a href="/orbit-rs/features/transaction_features.md">Transaction Features</a> - Advanced distributed transactions</li>
+  <li><a href="/orbit-rs/protocols/protocol_adapters.md">Protocol Adapters</a> - Redis and PostgreSQL compatibility</li>
+  <li><a href="/orbit-rs/deployment/DEPLOYMENT.md">Deployment Guide</a> - Production deployment with Kubernetes</li>
+  <li><a href="../DEVELOPMENT.md">Development Guide</a> - Contributing to Orbit-RS</li>
+  <li><a href="/orbit-rs/COMPUTE_ACCELERATION_GUIDE.md">Compute Acceleration Guide</a> - GPU acceleration and workload optimization</li>
+  <li><a href="/orbit-rs/ROADMAP_CURRENT.md">Project Roadmap</a> - Current development plans</li>
+</ul>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/orbit-rs/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Orbit-RS Documentation</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">TuringWorks</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["parse_grant","parse_grantee_list","parse_object_reference","parse_privilege_list","parse_revoke"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["SpatialFunctionCategory","SpatialParameterType","SpatialReturnType"],"static":["SPATIAL_FUNCTIONS"],"struct":["SpatialFunctionInfo","SpatialFunctionRegistry","SpatialParameter"]};
