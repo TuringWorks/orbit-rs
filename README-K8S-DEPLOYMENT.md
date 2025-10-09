@@ -73,6 +73,17 @@ helm install orbit-rs-hyperscale orbit-rs/orbit-rs -f values-enterprise.yaml
 
 ## 🖥️ GPU Acceleration Support
 
+Orbit-RS provides comprehensive compute acceleration through the [orbit-compute framework](docs/COMPUTE_ACCELERATION_GUIDE.md) supporting various workload types:
+
+### GPU-Accelerated Database Workloads
+- **Vector Operations**: Similarity search, embeddings, vector aggregations (8-15x speedup)
+- **Matrix Operations**: Large JOINs, linear algebra, ML workloads (8-15x speedup) 
+- **Time Series Analytics**: Aggregations, moving averages (5-12x speedup)
+- **Graph Operations**: Traversals, community detection (4-10x speedup)
+- **Text Processing**: Search, NLP, regex operations (2-8x speedup)
+
+📖 **See the [Compute Acceleration Guide](docs/COMPUTE_ACCELERATION_GUIDE.md) for detailed workload types, client configuration options, and performance tuning.**
+
 ### Supported GPU Types
 
 | Vendor | Architecture | Models | Support Status |
