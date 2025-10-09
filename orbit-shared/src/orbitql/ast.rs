@@ -5,6 +5,7 @@
 //! time-series, and key-value data.
 
 use crate::orbitql::QueryValue;
+use crate::spatial::{BoundingBox, Point, SpatialGeometry};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -299,6 +300,23 @@ pub enum Expression {
         aggregation: Option<TimeSeriesAggregation>,
         window: Option<TimeWindow>,
     },
+
+    // Spatial expressions
+    Geometry(GeometryLiteral),
+    SpatialFunction {
+        name: String,
+        args: Vec<Expression>,
+        srid: Option<i32>,
+    },
+    BoundingBox(BoundingBox),
+    Buffer {
+        geometry: Box<Expression>,
+        distance: f64,
+    },
+    Transform {
+        geometry: Box<Expression>,
+        srid: i32,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -350,6 +368,19 @@ pub enum BinaryOperator {
     // Graph operations
     Connected,
     NotConnected,
+
+    // Spatial operations
+    SpatialContains,
+    SpatialWithin,
+    SpatialIntersects,
+    SpatialOverlaps,
+    SpatialTouches,
+    SpatialCrosses,
+    SpatialDisjoint,
+    SpatialEquals,
+    SpatialDWithin(f64),
+    SpatialBeyond(f64),
+    SpatialKNN(i32),
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -506,6 +537,15 @@ pub enum DataType {
     Object,
     Json,
     Any,
+    // Spatial data types
+    Geometry,
+    Point,
+    LineString,
+    Polygon,
+    MultiPoint,
+    MultiLineString,
+    MultiPolygon,
+    GeometryCollection,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -684,6 +724,98 @@ impl Default for SelectStatement {
     fn default() -> Self {
         Self::new()
     }
+}
+
+/// Geometry literals in various formats
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum GeometryLiteral {
+    Point(Point),
+    WKT(String),
+    GeoJSON(serde_json::Value),
+    EWKT(String),    // Extended WKT with SRID
+    Binary(Vec<u8>), // WKB
+}
+
+/// Spatial filter for queries
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SpatialFilter {
+    pub geometry_expr: Expression,
+    pub operator: SpatialOperator,
+    pub reference_expr: Expression,
+}
+
+/// Spatial operators for geometric relationships
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum SpatialOperator {
+    // Topological relationships
+    Contains,
+    Within,
+    Intersects,
+    Overlaps,
+    Touches,
+    Crosses,
+    Disjoint,
+    Equals,
+
+    // Distance relationships
+    DWithin(f64), // Distance within threshold
+    Beyond(f64),  // Distance beyond threshold
+
+    // Directional relationships
+    North,
+    South,
+    East,
+    West,
+    Northeast,
+    Northwest,
+    Southeast,
+    Southwest,
+
+    // Custom operators
+    KNN(i32), // K nearest neighbors
+    BBox,     // Bounding box intersection
+}
+
+/// Spatial index types
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum SpatialIndexType {
+    RTree,
+    QuadTree,
+    Geohash,
+    BTree,
+    Hash,
+}
+
+/// Spatial index configuration
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SpatialIndexConfig {
+    pub max_entries: Option<usize>,
+    pub precision: Option<u8>,
+    pub fill_factor: Option<f64>,
+    pub srid: Option<i32>,
+}
+
+/// Window specification for streaming queries
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct WindowSpec {
+    pub size: std::time::Duration,
+    pub slide: Option<std::time::Duration>,
+    pub watermark: Option<std::time::Duration>,
+}
+
+/// Streaming clause for real-time queries
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct StreamingClause {
+    pub window: WindowSpec,
+    pub trigger: Option<StreamTrigger>,
+}
+
+/// Stream triggers
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum StreamTrigger {
+    ProcessingTime(std::time::Duration),
+    EventTime,
+    Count(usize),
 }
 
 #[cfg(test)]

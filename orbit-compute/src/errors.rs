@@ -104,7 +104,7 @@ pub enum ComputeError {
     },
 
     /// Unsupported operation or feature
-    #[error("Unsupported operation: {operation}")]
+    #[error("Unsupported operation: {0}")]
     UnsupportedOperation(String),
 
     /// No GPU available for acceleration

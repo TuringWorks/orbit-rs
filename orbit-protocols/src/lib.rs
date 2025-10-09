@@ -17,6 +17,7 @@
 #![allow(missing_docs)]
 
 pub mod aql;
+pub mod arangodb;
 pub mod bolt;
 pub mod cypher;
 pub mod error;
@@ -24,6 +25,8 @@ pub mod graph_database;
 pub mod graphrag;
 pub mod mcp;
 pub mod ml; // New ML module
+pub mod neo4j;
+pub mod orbitql;
 pub mod postgres_wire;
 pub mod resp;
 pub mod time_series;

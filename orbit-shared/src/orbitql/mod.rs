@@ -36,6 +36,7 @@ pub mod optimizer;
 pub mod parser;
 pub mod planner;
 pub mod profiler;
+pub mod spatial;
 pub mod streaming;
 
 // Re-export core types
@@ -60,6 +61,10 @@ pub use planner::{ExecutionPlan, PlanNode, QueryPlanner};
 pub use profiler::{
     ExecutionPhase, ExecutionStats, OptimizationSuggestion, PerformanceBottleneck, ProfilerConfig,
     QueryProfile, QueryProfiler, ResourceUsage,
+};
+pub use spatial::{
+    SpatialFunctionCategory, SpatialFunctionInfo, SpatialFunctionRegistry, SpatialParameter,
+    SpatialParameterType, SpatialReturnType, SPATIAL_FUNCTIONS,
 };
 pub use streaming::{
     ChangeNotification, ChangeType, LiveQueryConfig, LiveQuerySubscription, QueryResultStream,

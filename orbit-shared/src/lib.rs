@@ -47,7 +47,12 @@ pub use timeseries::{
 };
 
 // Re-export OrbitQL functionality
-pub use orbitql::{OrbitQLEngine, QueryContext, QueryParams, QueryStats, QueryValue};
+pub use orbitql::{
+    GeometryLiteral, OrbitQLEngine, QueryContext, QueryParams, QueryStats, QueryValue,
+    SpatialFilter, SpatialFunctionCategory, SpatialFunctionRegistry, SpatialIndexConfig,
+    SpatialIndexType, SpatialOperator, StreamTrigger, StreamingClause, WindowSpec,
+    SPATIAL_FUNCTIONS,
+};
 
 // Re-export GraphRAG functionality
 pub use graphrag::{

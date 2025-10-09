@@ -30,6 +30,7 @@ pub mod actors;
 pub mod codec;
 pub mod commands;
 pub mod server;
+pub mod spatial_commands;
 pub mod types;
 
 pub use crate::vector_store::{
@@ -43,4 +44,7 @@ pub use actors::{
 pub use codec::RespCodec;
 pub use commands::CommandHandler;
 pub use server::RespServer;
+pub use spatial_commands::{
+    GeofenceDefinition, GeofenceEngine, RedisSpatialCommands, RedisValue, SpatialDataSet,
+};
 pub use types::{RespArray, RespValue};
