@@ -1,0 +1,613 @@
+# Azure GPU Deployment Configuration for Orbit-RS
+# Supports H100, A100, V100 instances and ARM-based VMs
+
+apiVersion: v1
+kind: Config
+metadata:
+  name: "azure-orbit-rs-gpu-deployment"
+  description: "Complete Azure deployment with GPU support for Orbit-RS"
+  version: "1.0.0"
+
+# Azure Infrastructure Configuration
+azure:
+  # Azure subscription and authentication
+  subscription_id: "${AZURE_SUBSCRIPTION_ID}"
+  resource_group: "orbit-rs-rg"
+  location: "East US 2"  # Primary region
+  
+  # Backup regions for high availability
+  backup_locations:
+    - "West US 2"
+    - "West Europe"
+  
+  # Virtual Network Configuration
+  virtual_network:
+    name: "orbit-rs-vnet"
+    address_space: "10.0.0.0/16"
+    
+    # Subnets for different workloads
+    subnets:
+      # Public subnet for load balancers
+      public:
+        - name: "orbit-public-subnet"
+          address_prefix: "10.0.1.0/24"
+          
+      # Private subnets for compute instances
+      private:
+        - name: "orbit-private-subnet"
+          address_prefix: "10.0.10.0/24"
+          
+      # GPU-specific subnet with proximity placement
+      gpu:
+        - name: "orbit-gpu-subnet"
+          address_prefix: "10.0.20.0/24"
+          proximity_placement_group: "orbit-gpu-ppg"
+
+  # Load Balancer Configuration
+  load_balancer:
+    name: "orbit-rs-lb"
+    type: "Standard"  # Standard or Basic
+    sku: "Standard"
+    
+    # Frontend IP configuration
+    frontend_ip_config:
+      name: "orbit-frontend-ip"
+      public_ip: true
+      
+    # Backend pools
+    backend_pools:
+      - name: "orbit-server-pool"
+        port: 8080
+      - name: "orbit-grpc-pool"
+        port: 50051
+    
+    # Health probes
+    health_probes:
+      - name: "orbit-health-probe"
+        protocol: "HTTP"
+        port: 8080
+        request_path: "/health"
+        interval: 30
+        timeout: 5
+        unhealthy_threshold: 3
+
+# Virtual Machine Scale Sets (VMSS) Configuration
+virtual_machine_scale_sets:
+  
+  # ARM-based VMs for CPU workloads
+  arm_cpu:
+    name: "orbit-arm-vmss"
+    vm_size: "Standard_D8ps_v5"  # ARM-based Ampere Altra
+    instance_count:
+      min: 2
+      max: 10
+      default: 3
+    
+    # OS configuration
+    os_profile:
+      admin_username: "azureuser"
+      ssh_public_key: "${AZURE_SSH_PUBLIC_KEY}"
+      custom_data_script: "scripts/arm-init.sh"
+      
+    # OS disk
+    os_disk:
+      size_gb: 128
+      disk_type: "Premium_LRS"
+      caching: "ReadWrite"
+      
+    # Data disks
+    data_disks:
+      - lun: 1
+        size_gb: 1024
+        disk_type: "Premium_LRS"
+        mount_point: "/opt/orbit-rs/data"
+    
+    # ARM-specific optimizations
+    arm_optimizations:
+      compiler_flags: "-march=armv8.2-a+crypto"
+      enable_neon_simd: true
+      use_arm_optimized_libraries: true
+      
+    # Auto-scaling rules
+    auto_scaling:
+      - name: "scale-out-cpu"
+        metric: "Percentage CPU"
+        threshold: 70
+        action: "increase"
+        cooldown: "PT5M"  # 5 minutes
+        scale_by: 1
+        
+      - name: "scale-in-cpu"
+        metric: "Percentage CPU" 
+        threshold: 30
+        action: "decrease"
+        cooldown: "PT10M"  # 10 minutes
+        scale_by: 1
+
+  # H100 GPU instances for large-scale ML training
+  h100:
+    name: "orbit-h100-vmss"
+    vm_size: "Standard_NC48ads_H100_v5"  # 8x H100, 48 vCPUs, 440GB RAM
+    instance_count:
+      min: 1
+      max: 4
+      default: 2
+    
+    # Proximity placement for low latency
+    proximity_placement_group: "orbit-gpu-ppg"
+    
+    # OS configuration
+    os_profile:
+      admin_username: "azureuser"
+      ssh_public_key: "${AZURE_SSH_PUBLIC_KEY}"
+      custom_data_script: "scripts/h100-init.sh"
+      
+    # Custom image with GPU drivers
+    os_disk:
+      size_gb: 512
+      disk_type: "Premium_LRS"
+      source_image:
+        publisher: "microsoft-dsvm"
+        offer: "dsvm-win-2019"
+        sku: "windsvm-19"
+        version: "latest"
+        
+    # Large data disks for ML datasets
+    data_disks:
+      - lun: 1
+        size_gb: 4096  # 4TB for datasets
+        disk_type: "Premium_LRS"
+        mount_point: "/opt/orbit-rs/data"
+      - lun: 2
+        size_gb: 2048  # 2TB for models
+        disk_type: "Premium_LRS" 
+        mount_point: "/opt/orbit-rs/models"
+    
+    # H100-specific GPU configuration
+    gpu_config:
+      driver_version: "535.154.05"
+      cuda_version: "12.2"
+      cudnn_version: "8.9"
+      nccl_version: "2.18"
+      
+      # H100 optimization settings
+      enable_mig: false
+      enable_fabric_manager: true
+      nvlink_topology: "fully_connected"
+      
+      # Performance tuning
+      memory_clock: 4800  # MHz
+      graphics_clock: 1980  # MHz
+      power_limit: 700   # Watts
+      
+      # Advanced H100 features
+      transformer_engine: true
+      enable_fp8_precision: true
+      enable_sparse_attention: true
+      enable_flash_attention: true
+      
+    # Conservative auto-scaling for expensive instances
+    auto_scaling:
+      - name: "scale-out-gpu"
+        metric: "GPU Utilization"
+        threshold: 80
+        action: "increase"
+        cooldown: "PT10M"
+        scale_by: 1
+        
+      - name: "scale-in-gpu"
+        metric: "GPU Utilization"
+        threshold: 20
+        action: "decrease"
+        cooldown: "PT20M"
+        scale_by: 1
+
+  # A100 GPU instances for ML training and inference
+  a100:
+    name: "orbit-a100-vmss"
+    vm_size: "Standard_NC96ads_A100_v4"  # 8x A100, 96 vCPUs, 900GB RAM
+    instance_count:
+      min: 1
+      max: 6
+      default: 2
+      
+    # OS configuration
+    os_profile:
+      admin_username: "azureuser"
+      ssh_public_key: "${AZURE_SSH_PUBLIC_KEY}"
+      custom_data_script: "scripts/a100-init.sh"
+      
+    os_disk:
+      size_gb: 256
+      disk_type: "Premium_LRS"
+      source_image:
+        publisher: "microsoft-dsvm"
+        offer: "ubuntu-hpc"
+        sku: "2004"
+        version: "latest"
+        
+    data_disks:
+      - lun: 1
+        size_gb: 2048
+        disk_type: "Premium_LRS"
+        mount_point: "/opt/orbit-rs/data"
+        
+    # A100-specific configuration
+    gpu_config:
+      driver_version: "535.154.05"
+      cuda_version: "12.2"
+      cudnn_version: "8.9"
+      
+      # A100 settings
+      enable_mig: false  # Can be enabled for multi-tenancy
+      mig_profiles: []
+      
+      # Performance settings
+      memory_clock: 1593  # MHz
+      graphics_clock: 1410  # MHz
+      power_limit: 400    # Watts
+      
+      # A100 features
+      enable_tensor_cores: true
+      mixed_precision: true
+      enable_nvlink: true
+      
+    auto_scaling:
+      - name: "scale-out-a100"
+        metric: "GPU Utilization"
+        threshold: 75
+        action: "increase"
+        cooldown: "PT8M"
+        scale_by: 1
+
+  # V100 GPU instances for general ML workloads
+  v100:
+    name: "orbit-v100-vmss"
+    vm_size: "Standard_NC24rs_v3"  # 4x V100, 24 vCPUs, 448GB RAM
+    instance_count:
+      min: 2
+      max: 8
+      default: 3
+      
+    os_profile:
+      admin_username: "azureuser"
+      ssh_public_key: "${AZURE_SSH_PUBLIC_KEY}"
+      custom_data_script: "scripts/v100-init.sh"
+      
+    os_disk:
+      size_gb: 128
+      disk_type: "Premium_LRS"
+      
+    data_disks:
+      - lun: 1
+        size_gb: 1024
+        disk_type: "Premium_LRS"
+        mount_point: "/opt/orbit-rs/data"
+        
+    gpu_config:
+      driver_version: "535.154.05"
+      cuda_version: "12.2"
+      cudnn_version: "8.9"
+      
+      # V100 settings
+      memory_clock: 877   # MHz
+      graphics_clock: 1530  # MHz
+      power_limit: 300    # Watts
+      
+      enable_tensor_cores: true
+      mixed_precision: true
+
+# Azure Services Integration
+azure_services:
+  
+  # Azure Storage for object storage
+  storage_account:
+    name: "orbitrs${AZURE_SUBSCRIPTION_ID}"
+    account_tier: "Standard"
+    replication_type: "GRS"  # Geo-redundant storage
+    
+    # Blob containers
+    containers:
+      - name: "orbit-data"
+        access_level: "private"
+      - name: "orbit-models"
+        access_level: "private"
+      - name: "orbit-backups"
+        access_level: "private"
+        
+    # Lifecycle management
+    lifecycle_rules:
+      - name: "delete-old-logs"
+        days: 30
+        action: "delete"
+        filter_prefix: "logs/"
+      - name: "archive-old-data"
+        days: 90
+        action: "tier_to_cool"
+
+  # Azure Kubernetes Service (AKS)
+  kubernetes:
+    cluster_name: "orbit-rs-aks"
+    kubernetes_version: "1.28"
+    location: "East US 2"
+    
+    # System node pool (ARM-based)
+    system_node_pool:
+      name: "systempool"
+      vm_size: "Standard_D4ps_v5"  # ARM-based
+      node_count: 3
+      max_pods: 30
+      os_type: "Linux"
+      
+    # GPU node pools
+    gpu_node_pools:
+      - name: "h100pool"
+        vm_size: "Standard_NC48ads_H100_v5"
+        node_count: 2
+        max_node_count: 4
+        enable_auto_scaling: true
+        taints:
+          - key: "gpu"
+            value: "h100"
+            effect: "NoSchedule"
+            
+      - name: "a100pool"
+        vm_size: "Standard_NC96ads_A100_v4"
+        node_count: 1
+        max_node_count: 3
+        enable_auto_scaling: true
+        taints:
+          - key: "gpu"
+            value: "a100"
+            effect: "NoSchedule"
+    
+    # Network configuration
+    network_profile:
+      network_plugin: "azure"
+      service_cidr: "172.16.0.0/16"
+      dns_service_ip: "172.16.0.10"
+      pod_cidr: "172.17.0.0/16"
+
+  # Azure Monitor for observability
+  monitor:
+    log_analytics_workspace:
+      name: "orbit-rs-logs"
+      retention_days: 30
+      
+    application_insights:
+      name: "orbit-rs-insights"
+      application_type: "web"
+      
+    # Custom metrics
+    custom_metrics:
+      - name: "GPU_Utilization"
+        resource_group: "orbit-rs-rg"
+        metric_namespace: "OrbitRS/GPU"
+      - name: "GPU_Memory_Usage"
+        resource_group: "orbit-rs-rg"  
+        metric_namespace: "OrbitRS/GPU"
+      - name: "GPU_Temperature"
+        resource_group: "orbit-rs-rg"
+        metric_namespace: "OrbitRS/GPU"
+
+  # Azure Key Vault for secrets
+  key_vault:
+    name: "orbit-rs-kv-${AZURE_SUBSCRIPTION_ID}"
+    sku: "standard"
+    
+    # Secrets
+    secrets:
+      - name: "database-connection-string"
+      - name: "api-keys"
+      - name: "ssl-certificates"
+    
+    # Access policies
+    access_policies:
+      - object_id: "${AZURE_SERVICE_PRINCIPAL_OBJECT_ID}"
+        permissions:
+          secrets: ["get", "list"]
+
+# Application Deployment Configuration
+deployment:
+  # Container registry
+  container_registry:
+    name: "orbitrscr${AZURE_SUBSCRIPTION_ID}"
+    sku: "Premium"
+    admin_enabled: true
+    
+  # Application services
+  services:
+    orbit_server:
+      image: "orbit-server"
+      tag: "latest"
+      
+      # Resource allocation
+      resources:
+        cpu: "2"
+        memory: "4Gi"
+        
+      environment:
+        DEPLOYMENT_MODE: "azure"
+        CLOUD_PROVIDER: "AZURE"
+        AZURE_LOCATION: "eastus2"
+        RUST_LOG: "info"
+        ORBIT_CLUSTER_SIZE: "auto"
+        
+    orbit_compute_gpu:
+      image: "orbit-compute-gpu"
+      tag: "latest"
+      
+      # GPU resource allocation
+      resources:
+        cpu: "8"
+        memory: "32Gi"
+        gpu: 1
+        
+      environment:
+        CUDA_VISIBLE_DEVICES: "0"
+        GPU_MEMORY_FRACTION: "0.9"
+        ORBIT_GPU_PROVIDER: "NVIDIA"
+        ORBIT_GPU_ARCHITECTURE: "auto-detect"
+        
+      # Node selector for GPU nodes
+      node_selector:
+        accelerator: "nvidia-h100"
+        
+      tolerations:
+        - key: "gpu"
+          operator: "Equal"
+          value: "h100"
+          effect: "NoSchedule"
+          
+    orbit_compute_arm:
+      image: "orbit-compute-arm64"
+      tag: "latest"
+      
+      # ARM64 resource allocation
+      resources:
+        cpu: "4"
+        memory: "8Gi"
+        
+      environment:
+        ORBIT_CPU_ARCHITECTURE: "arm64"
+        ORBIT_ARM_OPTIMIZATIONS: "true"
+        ORBIT_NEON_SIMD: "true"
+        
+      # Node selector for ARM nodes
+      node_selector:
+        kubernetes.io/arch: "arm64"
+
+# Monitoring and Observability
+monitoring:
+  # Azure Monitor dashboards
+  dashboards:
+    - name: "Orbit-RS-Overview"
+      resource_group: "orbit-rs-rg"
+      widgets:
+        - type: "metric"
+          metric: "VM Insights - Processor % Processor Time"
+        - type: "metric"
+          metric: "VM Insights - Memory Available Bytes"
+        - type: "custom"
+          metric: "OrbitRS/GPU/GPU_Utilization"
+          
+    - name: "GPU-Performance"
+      resource_group: "orbit-rs-rg"
+      widgets:
+        - type: "custom"
+          metric: "OrbitRS/GPU/GPU_Utilization"
+        - type: "custom"
+          metric: "OrbitRS/GPU/GPU_Memory_Usage"
+        - type: "custom"
+          metric: "OrbitRS/GPU/GPU_Temperature"
+
+  # Alerts
+  alerts:
+    - name: "High-GPU-Utilization"
+      resource_group: "orbit-rs-rg"
+      metric: "OrbitRS/GPU/GPU_Utilization"
+      threshold: 90
+      operator: "GreaterThan"
+      frequency: "PT5M"
+      severity: 2
+      
+    - name: "GPU-Temperature-Critical"
+      resource_group: "orbit-rs-rg"
+      metric: "OrbitRS/GPU/GPU_Temperature"
+      threshold: 80
+      operator: "GreaterThan"
+      frequency: "PT1M"
+      severity: 1
+
+# Cost Optimization
+cost_optimization:
+  # Spot instances for non-critical workloads
+  spot_instances:
+    enabled: true
+    max_price: 0.50  # USD per hour
+    vm_sizes: ["Standard_D8ps_v5", "Standard_NC24rs_v3"]
+    eviction_policy: "Delete"
+    
+  # Reserved instances for predictable workloads
+  reserved_instances:
+    enabled: true
+    vm_sizes: ["Standard_D8ps_v5"]
+    term: "1Year"
+    payment_option: "Monthly"
+    
+  # Auto-shutdown for development environments
+  auto_shutdown:
+    enabled: false  # Enable for dev/test environments
+    shutdown_time: "19:00"
+    timezone: "Eastern Standard Time"
+    notification_email: "devops@company.com"
+    
+  # Right-sizing recommendations
+  advisor_recommendations:
+    enabled: true
+    cpu_threshold: 20  # Recommend downsize if CPU < 20%
+    implementation: "manual"  # or "automatic"
+
+# Security Configuration
+security:
+  # Network security groups
+  network_security_groups:
+    - name: "orbit-app-nsg"
+      rules:
+        - name: "allow-http"
+          priority: 1000
+          direction: "Inbound"
+          protocol: "TCP"
+          source: "*"
+          destination: "*"
+          port: "8080"
+          action: "Allow"
+          
+        - name: "allow-grpc"
+          priority: 1001
+          direction: "Inbound"
+          protocol: "TCP"
+          source: "VirtualNetwork"
+          destination: "*"
+          port: "50051"
+          action: "Allow"
+          
+        - name: "allow-ssh"
+          priority: 1002
+          direction: "Inbound"
+          protocol: "TCP"
+          source: "${MANAGEMENT_IP_RANGE}"
+          destination: "*"
+          port: "22"
+          action: "Allow"
+  
+  # Azure Active Directory integration
+  active_directory:
+    tenant_id: "${AZURE_TENANT_ID}"
+    
+    # Service principals
+    service_principals:
+      - name: "orbit-rs-sp"
+        permissions:
+          - "Contributor"
+          - "User Access Administrator"
+        scope: "/subscriptions/${AZURE_SUBSCRIPTION_ID}/resourceGroups/orbit-rs-rg"
+
+# Example usage commands:
+#
+# # Set up Azure CLI and deploy
+# az login
+# export AZURE_SUBSCRIPTION_ID="your-subscription-id"
+# export AZURE_SSH_PUBLIC_KEY="ssh-rsa AAAAB3NzaC1yc2E..."
+# export AZURE_TENANT_ID="your-tenant-id"
+# export MANAGEMENT_IP_RANGE="203.0.113.0/24"
+#
+# # Create resource group
+# az group create --name orbit-rs-rg --location "East US 2"
+#
+# # Deploy infrastructure
+# az deployment group create --resource-group orbit-rs-rg --template-file azure-gpu-deployment.json
+#
+# # Deploy to AKS
+# az aks get-credentials --resource-group orbit-rs-rg --name orbit-rs-aks
+# kubectl apply -f azure-gpu-k8s-manifests/

@@ -255,6 +255,44 @@ impl PersistenceConfigBuilder {
         self
     }
 
+    /// Add an AWS S3 provider configuration with GPU optimizations
+    pub fn with_aws_s3<S: Into<String>>(
+        mut self,
+        name: S,
+        config: AWSS3Config,
+        is_default: bool,
+    ) -> Self {
+        let name = name.into();
+        self.configs
+            .insert(name.clone(), PersistenceConfig::AWSS3(config));
+
+        if is_default {
+            self.default_addressable = Some(name.clone());
+            self.default_cluster = Some(name);
+        }
+
+        self
+    }
+
+    /// Add a Google Cloud Storage provider configuration
+    pub fn with_gcp_storage<S: Into<String>>(
+        mut self,
+        name: S,
+        config: GCPStorageConfig,
+        is_default: bool,
+    ) -> Self {
+        let name = name.into();
+        self.configs
+            .insert(name.clone(), PersistenceConfig::GCPStorage(config));
+
+        if is_default {
+            self.default_addressable = Some(name.clone());
+            self.default_cluster = Some(name);
+        }
+
+        self
+    }
+
     /// Add an etcd provider configuration
     pub fn with_etcd<S: Into<String>>(
         mut self,

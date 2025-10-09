@@ -92,16 +92,20 @@ pub enum X86Microarch {
     Haswell,
 
     // AMD microarchitectures
-    /// AMD Zen 4 (Ryzen 7000)
-    Zen4,
-    /// AMD Zen 3 (Ryzen 5000)
-    Zen3,
-    /// AMD Zen 2 (Ryzen 3000)
-    Zen2,
+    /// AMD Zen 4 (Ryzen 7000, EPYC 9004 "Genoa")
+    Zen4 { epyc_model: Option<EPYCModel> },
+    /// AMD Zen 4c (EPYC 9004 "Bergamo" - cloud optimized)
+    Zen4c { epyc_model: Option<EPYCModel> },
+    /// AMD Zen 3 (Ryzen 5000, EPYC 7003 "Milan")
+    Zen3 { epyc_model: Option<EPYCModel> },
+    /// AMD Zen 2 (Ryzen 3000, EPYC 7002 "Rome")
+    Zen2 { epyc_model: Option<EPYCModel> },
     /// AMD Zen+ (Ryzen 2000)
-    ZenPlus,
-    /// AMD Zen (Ryzen 1000)
-    Zen,
+    ZenPlus { epyc_model: Option<EPYCModel> },
+    /// AMD Zen (Ryzen 1000, EPYC 7001 "Naples")
+    Zen { epyc_model: Option<EPYCModel> },
+    /// AMD Zen 5 (Future EPYC and Ryzen - 2024+)
+    Zen5 { epyc_model: Option<EPYCModel> },
 
     /// Unknown microarchitecture
     Unknown(String),
@@ -514,7 +518,7 @@ pub struct IntelOptimizations {
     pub dl_boost: bool,
 }
 
-/// AMD-specific optimization features  
+/// AMD-specific optimization features with enhanced EPYC support
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AMDOptimizations {
     /// AMD Precision Boost
@@ -525,6 +529,94 @@ pub struct AMDOptimizations {
     pub smart_access_memory: bool,
     /// AMD 3D V-Cache
     pub three_d_v_cache: bool,
+    /// EPYC-specific optimization features
+    pub epyc_optimizations: Option<EPYCOptimizations>,
+    /// AMD Infinity Fabric optimizations
+    pub infinity_fabric_optimizations: InfinityFabricOptimizations,
+    /// Cache coherency and NUMA optimizations
+    pub numa_optimizations: NUMAOptimizations,
+}
+
+/// EPYC processor-specific optimizations
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EPYCOptimizations {
+    /// Platform Quality of Service (QoS) features
+    pub platform_qos: bool,
+    /// Memory bandwidth optimization
+    pub memory_bandwidth_optimization: bool,
+    /// Inter-socket communication optimization
+    pub inter_socket_optimization: bool,
+    /// Virtualization optimizations (SEV, SME)
+    pub virtualization_optimizations: VirtualizationOptimizations,
+    /// Cloud-specific optimizations (Bergamo)
+    pub cloud_optimizations: Option<CloudOptimizations>,
+    /// Enterprise security features
+    pub enterprise_security: EnterpriseSecurityFeatures,
+}
+
+/// Infinity Fabric optimization settings
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InfinityFabricOptimizations {
+    /// Automatic fabric frequency scaling
+    pub auto_frequency_scaling: bool,
+    /// Memory-to-fabric frequency ratio optimization
+    pub memory_fabric_ratio_optimization: bool,
+    /// Inter-die communication optimization
+    pub inter_die_optimization: bool,
+    /// Cross-socket bandwidth optimization
+    pub cross_socket_optimization: bool,
+}
+
+/// NUMA (Non-Uniform Memory Access) optimizations
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NUMAOptimizations {
+    /// Automatic NUMA balancing
+    pub auto_numa_balancing: bool,
+    /// Memory locality optimization
+    pub memory_locality_optimization: bool,
+    /// Thread affinity optimization
+    pub thread_affinity_optimization: bool,
+    /// Cache coherency optimizations
+    pub cache_coherency_optimization: bool,
+}
+
+/// Virtualization-specific optimizations
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VirtualizationOptimizations {
+    /// Secure Memory Encryption (SME)
+    pub secure_memory_encryption: bool,
+    /// Secure Encrypted Virtualization (SEV)
+    pub secure_encrypted_virtualization: bool,
+    /// SEV-SNP (Secure Nested Paging)
+    pub sev_snp: bool,
+    /// Hardware-assisted virtualization performance
+    pub hardware_assisted_performance: bool,
+}
+
+/// Cloud-specific optimizations for Bergamo and similar
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CloudOptimizations {
+    /// Density-optimized core configuration
+    pub density_optimization: bool,
+    /// Container workload optimization
+    pub container_optimization: bool,
+    /// Microservice architecture optimization
+    pub microservice_optimization: bool,
+    /// Multi-tenant performance isolation
+    pub multi_tenant_isolation: bool,
+}
+
+/// Enterprise security features
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EnterpriseSecurityFeatures {
+    /// Memory Guard (hardware memory encryption)
+    pub memory_guard: bool,
+    /// Silicon Root of Trust
+    pub silicon_root_of_trust: bool,
+    /// Secure Boot support
+    pub secure_boot_support: bool,
+    /// Hardware-based attestation
+    pub hardware_attestation: bool,
 }
 
 /// ARM vendor-specific optimizations
@@ -628,11 +720,13 @@ pub struct AppleGPU {
     pub unified_memory_bandwidth_gbps: f32,
 }
 
-/// NVIDIA GPU details
+/// NVIDIA GPU details with enhanced cloud and model support
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NvidiaGPU {
-    /// GPU architecture (Ampere, Ada Lovelace, etc.)
+    /// GPU architecture (Ampere, Ada Lovelace, Hopper, etc.)
     pub architecture: NvidiaArchitecture,
+    /// Specific GPU model for cloud deployments
+    pub model: NvidiaModel,
     /// CUDA compute capability
     pub cuda_capability: (u8, u8),
     /// RT cores (for ray tracing)
@@ -641,22 +735,101 @@ pub struct NvidiaGPU {
     pub tensor_cores: Option<u32>,
     /// NVENC/NVDEC support
     pub encoder_decoder: bool,
+    /// Multi-Instance GPU (MIG) support
+    pub mig_support: bool,
+    /// Cloud provider information
+    pub cloud_provider: Option<CloudProvider>,
+    /// Instance type for cloud deployments
+    pub cloud_instance_type: Option<String>,
+    /// Performance characteristics
+    pub performance_profile: GPUPerformanceProfile,
 }
 
-/// NVIDIA GPU architectures
+/// NVIDIA GPU architectures with enhanced support
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum NvidiaArchitecture {
-    /// Ada Lovelace (RTX 40 series)
+    /// Blackwell (B100, B200, GB200 series) - Next-gen AI/ML (2024+)
+    Blackwell,
+    /// Hopper (H100, H200 series) - Latest for AI/ML
+    Hopper,
+    /// Ada Lovelace (RTX 40 series, L4, L40S)
     AdaLovelace,
-    /// Ampere (RTX 30 series, A100)
+    /// Ampere (RTX 30 series, A100, A10G)
     Ampere,
-    /// Turing (RTX 20 series)
+    /// Turing (RTX 20 series, T4)
     Turing,
     /// Volta (Titan V, V100)
     Volta,
     /// Pascal (GTX 10 series)
     Pascal,
     /// Other architecture
+    Other(String),
+}
+
+/// Specific NVIDIA GPU models for cloud deployments
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum NvidiaModel {
+    // Blackwell Architecture (Next-Gen 2024+)
+    /// B100 SXM 192GB - Next-gen AI training flagship
+    B100_SXM_192GB,
+    /// B200 SXM 288GB - Ultra-large memory AI training
+    B200_SXM_288GB,
+    /// GB200 SuperChip - Grace + Blackwell superchip
+    GB200_SuperChip,
+    /// B40 PCIe 48GB - Mid-range Blackwell for inference
+    B40_PCIe_48GB,
+    /// B100 PCIe 128GB - PCIe variant of B100
+    B100_PCIe_128GB,
+
+    // Hopper Architecture (Current Gen)
+    /// H100 SXM 80GB - Data center flagship
+    H100_SXM_80GB,
+    /// H100 PCIe 80GB - Server deployment
+    H100_PCIe_80GB,
+    /// H100 NVL 94GB - Large memory variant
+    H100_NVL_94GB,
+    /// H200 SXM 141GB - Latest with HBM3e
+    H200_SXM_141GB,
+
+    // Ampere Architecture (Current Gen)
+    /// A100 SXM 80GB - ML training powerhouse
+    A100_SXM_80GB,
+    /// A100 SXM 40GB - Standard ML training
+    A100_SXM_40GB,
+    /// A100 PCIe 80GB - Server variant
+    A100_PCIe_80GB,
+    /// A100 PCIe 40GB - Server variant
+    A100_PCIe_40GB,
+    /// A10G - Graphics and AI inference
+    A10G,
+    /// A10 - Professional graphics
+    A10,
+
+    // Turing Architecture (Inference)
+    /// T4 - Cost-effective inference
+    T4,
+    /// T4G - T4 with enhanced memory
+    T4G,
+
+    // Volta Architecture (Legacy)
+    /// V100 SXM 32GB - Legacy training
+    V100_SXM_32GB,
+    /// V100 PCIe 32GB - Legacy server
+    V100_PCIe_32GB,
+    /// V100 SXM 16GB - Smaller memory
+    V100_SXM_16GB,
+
+    // Ada Lovelace (Latest Consumer/Pro)
+    /// L4 - Inference optimized
+    L4,
+    /// L40S - Professional workstation
+    L40S,
+    /// RTX 4090 - High-end consumer
+    RTX_4090,
+    /// RTX 4080 - Mid-high consumer
+    RTX_4080,
+
+    // Other models
     Other(String),
 }
 
@@ -677,9 +850,11 @@ pub struct AmdGPU {
     pub generation: u8,
 }
 
-/// AMD GPU architectures
+/// AMD GPU architectures with enhanced data center support
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum AMDArchitecture {
+    /// RDNA 4 (RX 8000 series - 2024+)
+    RDNA4 { model: RDNA4Model },
     /// RDNA 3 (RX 7000 series)
     RDNA3 { model: RDNA3Model },
     /// RDNA 2 (RX 6000 series)
@@ -688,8 +863,12 @@ pub enum AMDArchitecture {
     RDNA1 { model: RDNA1Model },
     /// GCN architecture
     GCN { generation: u8 },
-    /// CDNA (data center)
-    CDNA { model: CDNAModel },
+    /// CDNA 3 (MI300 series - latest data center)
+    CDNA3 { model: CDNA3Model },
+    /// CDNA 2 (MI200 series)
+    CDNA2 { model: CDNA2Model },
+    /// CDNA 1 (MI100 series)
+    CDNA1 { model: CDNA1Model },
 }
 
 /// RDNA 3 GPU models
@@ -730,16 +909,47 @@ pub enum RDNA1Model {
     RX5500XT,
 }
 
-/// CDNA data center GPU models
+/// RDNA 4 GPU models (2024+)
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum CDNAModel {
-    /// MI300X
+pub enum RDNA4Model {
+    /// RX 8800 XT - High-end RDNA 4
+    RX8800XT,
+    /// RX 8700 XT - Mid-high RDNA 4
+    RX8700XT,
+    /// RX 8600 XT - Mid-range RDNA 4
+    RX8600XT,
+    /// RX 8500 XT - Entry-level RDNA 4
+    RX8500XT,
+    /// Future RDNA 4 models
+    Future(String),
+}
+
+/// CDNA 3 data center GPU models (MI300 series)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum CDNA3Model {
+    /// MI300X - 192GB HBM3, optimized for AI inference
     MI300X,
-    /// MI250X
+    /// MI300A - APU with CPU + GPU, 128GB unified memory
+    MI300A,
+    /// MI300C - Compute-optimized variant
+    MI300C,
+}
+
+/// CDNA 2 data center GPU models (MI200 series)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum CDNA2Model {
+    /// MI250X - 128GB HBM2e, flagship CDNA2
     MI250X,
-    /// MI210
+    /// MI250 - Standard CDNA2 model
+    MI250,
+    /// MI210 - Entry-level CDNA2
     MI210,
-    /// MI100
+}
+
+/// CDNA 1 data center GPU models (MI100 series)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum CDNA1Model {
+    /// MI100 - First generation CDNA
     MI100,
 }
 
@@ -751,6 +961,7 @@ pub enum AMDMemoryType {
     HBM2,
     HBM2E,
     HBM3,
+    HBM3E, // Latest high-bandwidth memory for MI300 series
 }
 
 /// Qualcomm Adreno GPU details
@@ -841,6 +1052,162 @@ pub struct MaliGPU {
     pub shader_cores: u32,
     /// GPU frequency in MHz
     pub frequency_mhz: u32,
+}
+
+/// Cloud provider types for GPU deployments
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum CloudProvider {
+    /// Amazon Web Services
+    AWS {
+        /// AWS region
+        region: String,
+        /// Availability zone (optional)
+        availability_zone: Option<String>,
+    },
+    /// Microsoft Azure
+    Azure {
+        /// Azure region
+        region: String,
+        /// Resource group
+        resource_group: Option<String>,
+    },
+    /// Google Cloud Platform
+    GCP {
+        /// GCP region
+        region: String,
+        /// GCP zone
+        zone: Option<String>,
+        /// Project ID
+        project_id: Option<String>,
+    },
+    /// Digital Ocean
+    DigitalOcean {
+        /// DO region
+        region: String,
+        /// VPC UUID (optional)
+        vpc_uuid: Option<String>,
+    },
+    /// On-premises or bare metal
+    OnPremises,
+    /// Other cloud provider
+    Other(String),
+}
+
+/// GPU performance profiles for different workload types
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GPUPerformanceProfile {
+    /// Vector operations performance (TFLOPS)
+    pub vector_operations: GPUPerformanceMetric,
+    /// Matrix operations performance (TFLOPS)
+    pub matrix_operations: GPUPerformanceMetric,
+    /// ML inference performance (TOPS)
+    pub ml_inference: GPUPerformanceMetric,
+    /// ML training performance (TFLOPS)
+    pub ml_training: GPUPerformanceMetric,
+    /// Memory bandwidth utilization efficiency (0.0-1.0)
+    pub memory_efficiency: f32,
+    /// Power consumption characteristics
+    pub power_profile: GPUPowerProfile,
+    /// Thermal characteristics
+    pub thermal_profile: GPUThermalProfile,
+    /// Workload-specific optimizations
+    pub workload_optimizations: Vec<WorkloadOptimization>,
+}
+
+/// GPU performance metrics for different precision types
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GPUPerformanceMetric {
+    /// FP32 performance
+    pub fp32_performance: f32,
+    /// FP16 performance  
+    pub fp16_performance: f32,
+    /// BF16 performance (brain float)
+    pub bf16_performance: Option<f32>,
+    /// FP8 performance (H100 and newer)
+    pub fp8_performance: Option<f32>,
+    /// INT8 performance
+    pub int8_performance: Option<f32>,
+    /// INT4 performance
+    pub int4_performance: Option<f32>,
+}
+
+/// GPU power consumption profile
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GPUPowerProfile {
+    /// Thermal design power in watts
+    pub tdp_watts: u32,
+    /// Typical power consumption in watts
+    pub typical_power_watts: u32,
+    /// Minimum power consumption in watts
+    pub minimum_power_watts: u32,
+    /// Maximum power consumption in watts
+    pub maximum_power_watts: u32,
+    /// Power efficiency (TFLOPS per watt)
+    pub power_efficiency: f32,
+    /// Supports dynamic voltage/frequency scaling
+    pub dvfs_support: bool,
+}
+
+/// GPU thermal characteristics
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GPUThermalProfile {
+    /// Maximum operating temperature in Celsius
+    pub max_temp_celsius: u8,
+    /// Thermal throttling temperature in Celsius
+    pub throttle_temp_celsius: u8,
+    /// Idle temperature in Celsius
+    pub idle_temp_celsius: u8,
+    /// Cooling requirements
+    pub cooling_requirements: CoolingRequirements,
+}
+
+/// GPU cooling requirements
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum CoolingRequirements {
+    /// Passive cooling (fanless)
+    Passive,
+    /// Active air cooling
+    ActiveAir,
+    /// Liquid cooling required
+    LiquidCooling,
+    /// Data center cooling
+    DataCenter,
+}
+
+/// Workload-specific optimizations available on GPU
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkloadOptimization {
+    /// Workload type
+    pub workload_type: WorkloadType,
+    /// Performance multiplier for this workload
+    pub performance_multiplier: f32,
+    /// Special features enabled
+    pub special_features: Vec<String>,
+}
+
+/// Types of workloads that can be optimized
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum WorkloadType {
+    /// Vector similarity search
+    VectorSimilarity,
+    /// Matrix multiplications
+    MatrixMultiply,
+    /// Deep learning inference
+    DLInference,
+    /// Deep learning training
+    DLTraining,
+    /// Computer vision
+    ComputerVision,
+    /// Natural language processing
+    NLP,
+    /// Time series analysis
+    TimeSeriesAnalysis,
+    /// Graph analytics
+    GraphAnalytics,
+    /// Cryptographic operations
+    Cryptography,
+    /// General compute
+    GeneralCompute,
 }
 
 /// Supported compute APIs for GPU
@@ -1431,32 +1798,517 @@ fn detect_x86_64_capabilities() -> Result<CPUCapabilities, ComputeError> {
         cache_line_size: 64,
     };
 
-    // Microarchitecture detection (simplified)
-    let microarchitecture = match vendor {
-        X86Vendor::Intel => X86Microarch::Unknown("Intel".to_string()),
-        X86Vendor::AMD => X86Microarch::Unknown("AMD".to_string()),
-        _ => X86Microarch::Unknown("Unknown".to_string()),
-    };
+    // Enhanced microarchitecture detection
+    let (microarchitecture, x86_features) =
+        detect_detailed_microarch_and_features(&vendor, &cpuid)?;
 
     let architecture = CPUArchitecture::X86_64 {
         vendor,
         microarchitecture,
-        features: X86Features {
-            // Would populate with detailed feature detection
-        },
+        features: x86_features,
     };
+
+    // Enhanced vendor optimizations detection
+    let vendor_optimizations = detect_vendor_optimizations(&vendor, &microarchitecture)?;
 
     Ok(CPUCapabilities {
         architecture,
         simd,
         cores,
         cache_hierarchy,
-        vendor_optimizations: VendorOptimizations {
-            intel: None, // Would populate based on vendor
-            amd: None,
-            arm: None,
+        vendor_optimizations,
+    })
+}
+
+/// Detailed microarchitecture and feature detection
+#[cfg(all(target_arch = "x86_64", feature = "runtime-detection"))]
+fn detect_detailed_microarch_and_features(
+    vendor: &X86Vendor,
+    cpuid: &raw_cpuid::CpuId,
+) -> Result<(X86Microarch, X86Features), ComputeError> {
+    use raw_cpuid::CpuId;
+
+    let feature_info = cpuid.get_feature_info();
+    let extended_features = cpuid.get_extended_feature_info();
+    let extended_function_info = cpuid.get_extended_function_info();
+
+    match vendor {
+        X86Vendor::AMD => {
+            let (microarch, epyc_model) = detect_amd_microarch_and_model(cpuid)?;
+            let amd_features = detect_amd_specific_features(cpuid, &microarch, &epyc_model)?;
+
+            let x86_features = X86Features {
+                avx_support: detect_avx_capabilities(&feature_info, &extended_features),
+                aes: feature_info.as_ref().is_some_and(|fi| fi.has_aesni()),
+                pclmulqdq: feature_info.as_ref().is_some_and(|fi| fi.has_pclmulqdq()),
+                rdrand: extended_features.as_ref().is_some_and(|ef| ef.has_rdrand()),
+                sha: extended_features.as_ref().is_some_and(|ef| ef.has_sha()),
+                mpx: extended_features.as_ref().is_some_and(|ef| ef.has_mpx()),
+                cet: false, // Would need more detailed detection
+                mpk: extended_features.as_ref().is_some_and(|ef| ef.has_pku()),
+                amd_features: Some(amd_features),
+                intel_features: None,
+            };
+
+            Ok((microarch, x86_features))
+        }
+        X86Vendor::Intel => {
+            let microarch = detect_intel_microarch(cpuid);
+            let intel_features = detect_intel_specific_features(cpuid)?;
+
+            let x86_features = X86Features {
+                avx_support: detect_avx_capabilities(&feature_info, &extended_features),
+                aes: feature_info.as_ref().is_some_and(|fi| fi.has_aesni()),
+                pclmulqdq: feature_info.as_ref().is_some_and(|fi| fi.has_pclmulqdq()),
+                rdrand: extended_features.as_ref().is_some_and(|ef| ef.has_rdrand()),
+                sha: extended_features.as_ref().is_some_and(|ef| ef.has_sha()),
+                mpx: extended_features.as_ref().is_some_and(|ef| ef.has_mpx()),
+                cet: extended_features.as_ref().is_some_and(|ef| ef.has_cet_ss()),
+                mpk: extended_features.as_ref().is_some_and(|ef| ef.has_pku()),
+                amd_features: None,
+                intel_features: Some(intel_features),
+            };
+
+            Ok((microarch, x86_features))
+        }
+        _ => {
+            let microarch = X86Microarch::Unknown("Unknown".to_string());
+            let x86_features = X86Features {
+                avx_support: detect_avx_capabilities(&feature_info, &extended_features),
+                aes: feature_info.as_ref().is_some_and(|fi| fi.has_aesni()),
+                pclmulqdq: feature_info.as_ref().is_some_and(|fi| fi.has_pclmulqdq()),
+                rdrand: extended_features.as_ref().is_some_and(|ef| ef.has_rdrand()),
+                sha: extended_features.as_ref().is_some_and(|ef| ef.has_sha()),
+                mpx: extended_features.as_ref().is_some_and(|ef| ef.has_mpx()),
+                cet: false,
+                mpk: extended_features.as_ref().is_some_and(|ef| ef.has_pku()),
+                amd_features: None,
+                intel_features: None,
+            };
+
+            Ok((microarch, x86_features))
+        }
+    }
+}
+
+/// Detect AMD microarchitecture and EPYC model
+#[cfg(all(target_arch = "x86_64", feature = "runtime-detection"))]
+fn detect_amd_microarch_and_model(
+    cpuid: &raw_cpuid::CpuId,
+) -> Result<(X86Microarch, Option<EPYCModel>), ComputeError> {
+    let processor_brand = cpuid
+        .get_processor_brand_string()
+        .map(|pbs| pbs.as_str().to_string())
+        .unwrap_or_default();
+
+    let feature_info = cpuid.get_feature_info();
+    let family = feature_info.as_ref().map_or(0, |fi| fi.family_id());
+    let model = feature_info.as_ref().map_or(0, |fi| fi.model_id());
+    let stepping = feature_info.as_ref().map_or(0, |fi| fi.stepping_id());
+
+    // AMD Family 19h (Zen 3 and Zen 4)
+    if family == 0x19 {
+        if processor_brand.to_lowercase().contains("epyc") {
+            if processor_brand.contains("9004") || processor_brand.contains("Genoa") {
+                let epyc_model = parse_genoa_model(&processor_brand);
+                return Ok((X86Microarch::Zen4 { epyc_model }, epyc_model));
+            } else if processor_brand.contains("9374F") || processor_brand.contains("Bergamo") {
+                let epyc_model = parse_bergamo_model(&processor_brand);
+                return Ok((X86Microarch::Zen4c { epyc_model }, epyc_model));
+            } else if processor_brand.contains("7003") || processor_brand.contains("Milan") {
+                let epyc_model = parse_milan_model(&processor_brand);
+                return Ok((X86Microarch::Zen3 { epyc_model }, epyc_model));
+            } else if processor_brand.contains("7V13") || processor_brand.contains("Milan-X") {
+                let epyc_model = parse_milan_x_model(&processor_brand);
+                return Ok((X86Microarch::Zen3 { epyc_model }, epyc_model));
+            }
+        }
+
+        // Default Zen 3/4 detection based on model numbers
+        if model >= 0x10 && model <= 0x1F {
+            Ok((X86Microarch::Zen3 { epyc_model: None }, None))
+        } else if model >= 0x20 && model <= 0x2F {
+            Ok((X86Microarch::Zen4 { epyc_model: None }, None))
+        } else {
+            Ok((X86Microarch::Zen3 { epyc_model: None }, None))
+        }
+    }
+    // AMD Family 17h (Zen and Zen 2)
+    else if family == 0x17 {
+        if processor_brand.to_lowercase().contains("epyc") {
+            if processor_brand.contains("7002") || processor_brand.contains("Rome") {
+                let epyc_model = parse_rome_model(&processor_brand);
+                return Ok((X86Microarch::Zen2 { epyc_model }, epyc_model));
+            } else if processor_brand.contains("7001") || processor_brand.contains("Naples") {
+                let epyc_model = parse_naples_model(&processor_brand);
+                return Ok((X86Microarch::Zen { epyc_model }, epyc_model));
+            }
+        }
+
+        // Default Zen/Zen 2 detection
+        if model >= 0x30 && model <= 0x3F {
+            Ok((X86Microarch::Zen2 { epyc_model: None }, None))
+        } else {
+            Ok((X86Microarch::Zen { epyc_model: None }, None))
+        }
+    } else {
+        Ok((
+            X86Microarch::Unknown(format!("AMD Family {:#x}", family)),
+            None,
+        ))
+    }
+}
+
+// EPYC model parsing functions
+#[cfg(all(target_arch = "x86_64", feature = "runtime-detection"))]
+fn parse_genoa_model(brand_string: &str) -> Option<EPYCModel> {
+    // Example: "AMD EPYC 9654 96-Core Processor"
+    let cores = extract_core_count(brand_string).unwrap_or(96);
+    let model_name = brand_string.to_string();
+
+    Some(EPYCModel::Genoa {
+        model_name,
+        cores,
+        threads: cores * 2,                               // SMT enabled
+        base_freq_ghz: 2.4,                               // Typical base frequency
+        boost_freq_ghz: 3.7,                              // Typical boost frequency
+        l3_cache_mb: if cores >= 64 { 384 } else { 256 }, // Typical L3 cache
+        tdp_watts: if cores >= 64 { 360 } else { 280 },
+        memory_channels: 12, // DDR5 support
+        pcie_lanes: 160,     // PCIe 5.0
+    })
+}
+
+#[cfg(all(target_arch = "x86_64", feature = "runtime-detection"))]
+fn parse_bergamo_model(brand_string: &str) -> Option<EPYCModel> {
+    let cores = extract_core_count(brand_string).unwrap_or(128);
+    let model_name = brand_string.to_string();
+
+    Some(EPYCModel::Bergamo {
+        model_name,
+        cores,
+        threads: cores * 2,
+        base_freq_ghz: 2.0, // Lower base frequency for density
+        boost_freq_ghz: 3.0,
+        l3_cache_mb: 256, // Optimized for cloud workloads
+        tdp_watts: 360,
+        optimized_for_cloud: true,
+    })
+}
+
+#[cfg(all(target_arch = "x86_64", feature = "runtime-detection"))]
+fn parse_milan_model(brand_string: &str) -> Option<EPYCModel> {
+    let cores = extract_core_count(brand_string).unwrap_or(64);
+    let model_name = brand_string.to_string();
+
+    Some(EPYCModel::Milan {
+        model_name,
+        cores,
+        threads: cores * 2,
+        base_freq_ghz: 2.2,
+        boost_freq_ghz: 3.4,
+        l3_cache_mb: if cores >= 32 { 256 } else { 128 },
+        tdp_watts: if cores >= 32 { 280 } else { 225 },
+        memory_support: MemorySupport {
+            channels_per_socket: 8,
+            max_capacity_gb: 4096, // 4TB max
+            supported_speeds_mhz: vec![3200, 2933, 2666, 2400],
+            ddr4_support: true,
+            ddr5_support: false,
+            ecc_support: true,
+            memory_interleaving: true,
         },
     })
+}
+
+#[cfg(all(target_arch = "x86_64", feature = "runtime-detection"))]
+fn parse_milan_x_model(brand_string: &str) -> Option<EPYCModel> {
+    let cores = extract_core_count(brand_string).unwrap_or(64);
+    let model_name = brand_string.to_string();
+
+    Some(EPYCModel::MilanX {
+        model_name,
+        cores,
+        threads: cores * 2,
+        base_freq_ghz: 2.2,
+        boost_freq_ghz: 3.4,
+        l3_cache_mb: if cores >= 32 { 256 } else { 128 },
+        v_cache_mb: if cores >= 32 { 768 } else { 384 }, // 3D V-Cache
+        tdp_watts: if cores >= 32 { 280 } else { 225 },
+    })
+}
+
+#[cfg(all(target_arch = "x86_64", feature = "runtime-detection"))]
+fn parse_rome_model(brand_string: &str) -> Option<EPYCModel> {
+    let cores = extract_core_count(brand_string).unwrap_or(64);
+    let model_name = brand_string.to_string();
+
+    Some(EPYCModel::Rome {
+        model_name,
+        cores,
+        threads: cores * 2,
+        base_freq_ghz: 2.0,
+        boost_freq_ghz: 3.2,
+        l3_cache_mb: if cores >= 32 { 256 } else { 128 },
+        tdp_watts: if cores >= 32 { 280 } else { 200 },
+    })
+}
+
+#[cfg(all(target_arch = "x86_64", feature = "runtime-detection"))]
+fn parse_naples_model(brand_string: &str) -> Option<EPYCModel> {
+    let cores = extract_core_count(brand_string).unwrap_or(32);
+    let model_name = brand_string.to_string();
+
+    Some(EPYCModel::Naples {
+        model_name,
+        cores,
+        threads: cores * 2,
+        base_freq_ghz: 2.0,
+        boost_freq_ghz: 3.0,
+        l3_cache_mb: if cores >= 16 { 64 } else { 32 },
+        tdp_watts: if cores >= 16 { 180 } else { 155 },
+    })
+}
+
+#[cfg(all(target_arch = "x86_64", feature = "runtime-detection"))]
+fn extract_core_count(brand_string: &str) -> Option<u8> {
+    // Look for patterns like "64-Core" or "96-Core"
+    for part in brand_string.split_whitespace() {
+        if part.ends_with("-Core") {
+            let core_part = part.strip_suffix("-Core")?;
+            if let Ok(cores) = core_part.parse::<u8>() {
+                return Some(cores);
+            }
+        }
+    }
+    None
+}
+
+// AMD-specific feature detection
+#[cfg(all(target_arch = "x86_64", feature = "runtime-detection"))]
+fn detect_amd_specific_features(
+    cpuid: &raw_cpuid::CpuId,
+    microarch: &X86Microarch,
+    epyc_model: &Option<EPYCModel>,
+) -> Result<AMDSpecificFeatures, ComputeError> {
+    let extended_features = cpuid.get_extended_feature_info();
+    let amd_features = cpuid.get_extended_function_info();
+
+    let has_3d_v_cache = matches!(
+        epyc_model,
+        Some(EPYCModel::MilanX { .. }) | Some(EPYCModel::GenoaX { .. })
+    );
+    let v_cache_size = if has_3d_v_cache {
+        match epyc_model {
+            Some(EPYCModel::MilanX { v_cache_mb, .. }) => Some(*v_cache_mb),
+            Some(EPYCModel::GenoaX { v_cache_mb, .. }) => Some(*v_cache_mb),
+            _ => None,
+        }
+    } else {
+        None
+    };
+
+    let epyc_features = epyc_model.as_ref().map(|_| EPYCFeatures {
+        ccd_count: match microarch {
+            X86Microarch::Zen4 { .. } | X86Microarch::Zen4c { .. } => 12, // Up to 12 CCDs
+            X86Microarch::Zen3 { .. } => 8,                               // Up to 8 CCDs
+            _ => 4,
+        },
+        cores_per_ccd: 8,        // 8 cores per CCD
+        l3_cache_per_ccd_mb: 32, // 32MB L3 per CCD
+        dual_socket_support: true,
+        quad_socket_support: matches!(
+            microarch,
+            X86Microarch::Zen3 { .. } | X86Microarch::Zen4 { .. }
+        ),
+        memory_controllers: 12, // DDR5 support in newer generations
+        secure_memory_encryption: true,
+        secure_encrypted_virtualization: true,
+        platform_qos: true,
+    });
+
+    Ok(AMDSpecificFeatures {
+        three_d_v_cache: has_3d_v_cache,
+        v_cache_size_mb: v_cache_size,
+        precision_boost: true, // Available on all modern AMD CPUs
+        precision_boost_overdrive: true,
+        smart_access_memory: matches!(
+            microarch,
+            X86Microarch::Zen3 { .. } | X86Microarch::Zen4 { .. } | X86Microarch::Zen4c { .. }
+        ),
+        smt_support: true,                    // All EPYC processors support SMT
+        infinity_fabric_freq_mhz: Some(1800), // Typical IF frequency
+        memory_channels: match microarch {
+            X86Microarch::Zen4 { .. } | X86Microarch::Zen4c { .. } => 12, // DDR5 support
+            _ => 8,                                                       // DDR4 support
+        },
+        max_memory_speed_mhz: match microarch {
+            X86Microarch::Zen4 { .. } | X86Microarch::Zen4c { .. } => 5600, // DDR5
+            _ => 3200,                                                      // DDR4
+        },
+        pcie_lanes: match microarch {
+            X86Microarch::Zen4 { .. } | X86Microarch::Zen4c { .. } => 160, // PCIe 5.0
+            X86Microarch::Zen3 { .. } => 128,                              // PCIe 4.0
+            _ => 128,
+        },
+        epyc_features,
+    })
+}
+
+// Helper functions for detection
+#[cfg(all(target_arch = "x86_64", feature = "runtime-detection"))]
+fn detect_avx_capabilities(
+    feature_info: &Option<raw_cpuid::FeatureInfo>,
+    extended_features: &Option<raw_cpuid::ExtendedFeatures>,
+) -> AVXCapabilities {
+    AVXCapabilities {
+        avx256: extended_features.as_ref().is_some_and(|ef| ef.has_avx2()),
+        avx512: extended_features
+            .as_ref()
+            .is_some_and(|ef| ef.has_avx512f()),
+        avx512_vnni: extended_features
+            .as_ref()
+            .is_some_and(|ef| ef.has_avx512vnni()),
+        avx512_bf16: false, // Would need more detailed detection
+        avx512_vbmi: extended_features
+            .as_ref()
+            .is_some_and(|ef| ef.has_avx512vbmi()),
+    }
+}
+
+#[cfg(all(target_arch = "x86_64", feature = "runtime-detection"))]
+fn detect_intel_microarch(cpuid: &raw_cpuid::CpuId) -> X86Microarch {
+    let feature_info = cpuid.get_feature_info();
+    let family = feature_info.as_ref().map_or(0, |fi| fi.family_id());
+    let model = feature_info.as_ref().map_or(0, |fi| fi.model_id());
+
+    // Intel family 6 detection (most modern Intel CPUs)
+    if family == 0x6 {
+        match model {
+            0xB7 | 0xBA | 0xBF => X86Microarch::RaptorLake,
+            0x97 | 0x9A | 0x9C => X86Microarch::AlderLake,
+            0x8C | 0x8D => X86Microarch::TigerLake,
+            0x7D | 0x7E => X86Microarch::IceLake,
+            0x4E | 0x5E | 0x8E | 0x9E => X86Microarch::Skylake,
+            0x3C | 0x3F | 0x45 | 0x46 => X86Microarch::Haswell,
+            _ => X86Microarch::Unknown(format!("Intel Model {:#x}", model)),
+        }
+    } else {
+        X86Microarch::Unknown(format!("Intel Family {:#x}", family))
+    }
+}
+
+#[cfg(all(target_arch = "x86_64", feature = "runtime-detection"))]
+fn detect_intel_specific_features(
+    cpuid: &raw_cpuid::CpuId,
+) -> Result<IntelSpecificFeatures, ComputeError> {
+    let extended_features = cpuid.get_extended_feature_info();
+
+    Ok(IntelSpecificFeatures {
+        turbo_boost: true,             // Available on most modern Intel CPUs
+        thermal_velocity_boost: false, // Would need more detailed detection
+        thread_director: false,        // Available on 12th gen+
+        dl_boost: extended_features
+            .as_ref()
+            .is_some_and(|ef| ef.has_avx512vnni()),
+        optane_support: false, // Would need platform-specific detection
+        speed_select_technology: false, // Would need more detailed detection
+    })
+}
+
+#[cfg(all(target_arch = "x86_64", feature = "runtime-detection"))]
+fn detect_vendor_optimizations(
+    vendor: &X86Vendor,
+    microarch: &X86Microarch,
+) -> Result<VendorOptimizations, ComputeError> {
+    match vendor {
+        X86Vendor::AMD => {
+            let amd_opts = AMDOptimizations {
+                precision_boost: true,
+                precision_boost_overdrive: true,
+                smart_access_memory: matches!(
+                    microarch,
+                    X86Microarch::Zen3 { .. }
+                        | X86Microarch::Zen4 { .. }
+                        | X86Microarch::Zen4c { .. }
+                ),
+                three_d_v_cache: false, // Would be detected per-model
+                epyc_optimizations: Some(EPYCOptimizations {
+                    platform_qos: true,
+                    memory_bandwidth_optimization: true,
+                    inter_socket_optimization: true,
+                    virtualization_optimizations: VirtualizationOptimizations {
+                        secure_memory_encryption: true,
+                        secure_encrypted_virtualization: true,
+                        sev_snp: matches!(
+                            microarch,
+                            X86Microarch::Zen3 { .. } | X86Microarch::Zen4 { .. }
+                        ),
+                        hardware_assisted_performance: true,
+                    },
+                    cloud_optimizations: if matches!(microarch, X86Microarch::Zen4c { .. }) {
+                        Some(CloudOptimizations {
+                            density_optimization: true,
+                            container_optimization: true,
+                            microservice_optimization: true,
+                            multi_tenant_isolation: true,
+                        })
+                    } else {
+                        None
+                    },
+                    enterprise_security: EnterpriseSecurityFeatures {
+                        memory_guard: true,
+                        silicon_root_of_trust: true,
+                        secure_boot_support: true,
+                        hardware_attestation: true,
+                    },
+                }),
+                infinity_fabric_optimizations: InfinityFabricOptimizations {
+                    auto_frequency_scaling: true,
+                    memory_fabric_ratio_optimization: true,
+                    inter_die_optimization: true,
+                    cross_socket_optimization: true,
+                },
+                numa_optimizations: NUMAOptimizations {
+                    auto_numa_balancing: true,
+                    memory_locality_optimization: true,
+                    thread_affinity_optimization: true,
+                    cache_coherency_optimization: true,
+                },
+            };
+
+            Ok(VendorOptimizations {
+                intel: None,
+                amd: Some(amd_opts),
+                arm: None,
+            })
+        }
+        X86Vendor::Intel => {
+            let intel_opts = IntelOptimizations {
+                turbo_boost: true,
+                thermal_velocity_boost: matches!(
+                    microarch,
+                    X86Microarch::RaptorLake | X86Microarch::AlderLake
+                ),
+                thread_director: matches!(
+                    microarch,
+                    X86Microarch::RaptorLake | X86Microarch::AlderLake
+                ),
+                dl_boost: true,
+            };
+
+            Ok(VendorOptimizations {
+                intel: Some(intel_opts),
+                amd: None,
+                arm: None,
+            })
+        }
+        _ => Ok(VendorOptimizations {
+            intel: None,
+            amd: None,
+            arm: None,
+        }),
+    }
 }
 
 #[cfg(all(target_arch = "aarch64", feature = "runtime-detection"))]
@@ -1735,10 +2587,233 @@ fn detect_platform_optimizations() -> Result<PlatformOptimizations, ComputeError
     })
 }
 
-// Stub type definitions that would be properly implemented
+/// x86-64 specific CPU features and capabilities
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct X86Features {
-    // x86-64 specific features would be defined here
+    /// Advanced Vector Extensions (AVX) support
+    pub avx_support: AVXCapabilities,
+    /// Advanced Encryption Standard (AES) instructions
+    pub aes: bool,
+    /// Carry-less Multiplication (PCLMULQDQ)
+    pub pclmulqdq: bool,
+    /// Random Number Generator (RDRAND)
+    pub rdrand: bool,
+    /// Secure Hash Algorithm (SHA) instructions
+    pub sha: bool,
+    /// Memory Protection Extensions (MPX)
+    pub mpx: bool,
+    /// Control-flow Enforcement Technology (CET)
+    pub cet: bool,
+    /// Intel Memory Protection Keys (MPK)
+    pub mpk: bool,
+    /// AMD-specific features
+    pub amd_features: Option<AMDSpecificFeatures>,
+    /// Intel-specific features
+    pub intel_features: Option<IntelSpecificFeatures>,
+}
+
+/// AMD-specific CPU features for EPYC and Ryzen processors
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AMDSpecificFeatures {
+    /// AMD 3D V-Cache technology
+    pub three_d_v_cache: bool,
+    /// 3D V-Cache size in MB
+    pub v_cache_size_mb: Option<u32>,
+    /// AMD Precision Boost technology
+    pub precision_boost: bool,
+    /// AMD Precision Boost Overdrive
+    pub precision_boost_overdrive: bool,
+    /// AMD Smart Access Memory (SAM)
+    pub smart_access_memory: bool,
+    /// AMD Simultaneous Multithreading (SMT)
+    pub smt_support: bool,
+    /// AMD Infinity Fabric frequency (MHz)
+    pub infinity_fabric_freq_mhz: Option<u32>,
+    /// Memory channels supported
+    pub memory_channels: u8,
+    /// Maximum memory speed (DDR4/DDR5) in MHz
+    pub max_memory_speed_mhz: u32,
+    /// PCIe lanes supported
+    pub pcie_lanes: u32,
+    /// EPYC-specific features
+    pub epyc_features: Option<EPYCFeatures>,
+}
+
+/// EPYC processor-specific capabilities
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EPYCFeatures {
+    /// Number of CPU Complex Dies (CCDs)
+    pub ccd_count: u8,
+    /// Cores per CCD
+    pub cores_per_ccd: u8,
+    /// L3 cache per CCD in MB
+    pub l3_cache_per_ccd_mb: u32,
+    /// Support for 2-socket configurations
+    pub dual_socket_support: bool,
+    /// Support for 4-socket configurations (Milan and later)
+    pub quad_socket_support: bool,
+    /// Number of memory controllers
+    pub memory_controllers: u8,
+    /// Secure Memory Encryption (SME)
+    pub secure_memory_encryption: bool,
+    /// Secure Encrypted Virtualization (SEV)
+    pub secure_encrypted_virtualization: bool,
+    /// Platform Quality of Service (QoS)
+    pub platform_qos: bool,
+}
+
+/// Intel-specific CPU features
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IntelSpecificFeatures {
+    /// Intel Turbo Boost Technology
+    pub turbo_boost: bool,
+    /// Intel Thermal Velocity Boost
+    pub thermal_velocity_boost: bool,
+    /// Intel Thread Director (12th gen+)
+    pub thread_director: bool,
+    /// Intel Deep Learning Boost (DL Boost)
+    pub dl_boost: bool,
+    /// Intel Optane DC Persistent Memory support
+    pub optane_support: bool,
+    /// Intel Speed Select Technology (SST)
+    pub speed_select_technology: bool,
+}
+
+/// AVX capabilities with detailed support levels
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AVXCapabilities {
+    /// AVX-256 support
+    pub avx256: bool,
+    /// AVX-512 support
+    pub avx512: bool,
+    /// AVX-512 Vector Neural Network Instructions (VNNI)
+    pub avx512_vnni: bool,
+    /// AVX-512 BFloat16 support
+    pub avx512_bf16: bool,
+    /// AVX-512 Vector Byte Manipulation Instructions (VBMI)
+    pub avx512_vbmi: bool,
+}
+
+/// AMD EPYC processor models with detailed specifications
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum EPYCModel {
+    // Zen 5 Architecture (2024+)
+    /// EPYC 9005 "Turin" series (Zen 5)
+    Turin {
+        model_name: String,
+        cores: u8,
+        threads: u8,
+        base_freq_ghz: f32,
+        boost_freq_ghz: f32,
+        l3_cache_mb: u32,
+        tdp_watts: u32,
+    },
+
+    // Zen 4 Architecture (Current Gen)
+    /// EPYC 9004 "Genoa" series (Zen 4)
+    Genoa {
+        model_name: String,
+        cores: u8,
+        threads: u8,
+        base_freq_ghz: f32,
+        boost_freq_ghz: f32,
+        l3_cache_mb: u32,
+        tdp_watts: u32,
+        memory_channels: u8,
+        pcie_lanes: u32,
+    },
+    /// EPYC 9004 "Bergamo" series (Zen 4c - cloud optimized)
+    Bergamo {
+        model_name: String,
+        cores: u8,   // Up to 128 cores
+        threads: u8, // Up to 256 threads
+        base_freq_ghz: f32,
+        boost_freq_ghz: f32,
+        l3_cache_mb: u32,
+        tdp_watts: u32,
+        optimized_for_cloud: bool,
+    },
+
+    // Zen 3 Architecture
+    /// EPYC 7004 "Genoa-X" with 3D V-Cache
+    GenoaX {
+        model_name: String,
+        cores: u8,
+        threads: u8,
+        base_freq_ghz: f32,
+        boost_freq_ghz: f32,
+        l3_cache_mb: u32,
+        v_cache_mb: u32, // Additional 3D V-Cache
+        tdp_watts: u32,
+    },
+    /// EPYC 7003 "Milan" series (Zen 3)
+    Milan {
+        model_name: String,
+        cores: u8,
+        threads: u8,
+        base_freq_ghz: f32,
+        boost_freq_ghz: f32,
+        l3_cache_mb: u32,
+        tdp_watts: u32,
+        memory_support: MemorySupport,
+    },
+    /// EPYC 7003 "Milan-X" with 3D V-Cache
+    MilanX {
+        model_name: String,
+        cores: u8,
+        threads: u8,
+        base_freq_ghz: f32,
+        boost_freq_ghz: f32,
+        l3_cache_mb: u32,
+        v_cache_mb: u32, // Additional 3D V-Cache
+        tdp_watts: u32,
+    },
+
+    // Zen 2 Architecture
+    /// EPYC 7002 "Rome" series (Zen 2)
+    Rome {
+        model_name: String,
+        cores: u8,
+        threads: u8,
+        base_freq_ghz: f32,
+        boost_freq_ghz: f32,
+        l3_cache_mb: u32,
+        tdp_watts: u32,
+    },
+
+    // Zen Architecture
+    /// EPYC 7001 "Naples" series (Zen)
+    Naples {
+        model_name: String,
+        cores: u8,
+        threads: u8,
+        base_freq_ghz: f32,
+        boost_freq_ghz: f32,
+        l3_cache_mb: u32,
+        tdp_watts: u32,
+    },
+
+    /// Other EPYC model
+    Other(String),
+}
+
+/// Memory support characteristics for EPYC processors
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MemorySupport {
+    /// Memory channels per socket
+    pub channels_per_socket: u8,
+    /// Maximum memory capacity per socket (GB)
+    pub max_capacity_gb: u32,
+    /// Supported memory speeds (MHz)
+    pub supported_speeds_mhz: Vec<u32>,
+    /// DDR4 support
+    pub ddr4_support: bool,
+    /// DDR5 support
+    pub ddr5_support: bool,
+    /// Error Correcting Code (ECC) support
+    pub ecc_support: bool,
+    /// Memory interleaving capabilities
+    pub memory_interleaving: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

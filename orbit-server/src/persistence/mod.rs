@@ -30,12 +30,16 @@ pub enum PersistenceConfig {
     Memory(MemoryConfig),
     /// Amazon S3 compatible storage
     S3(S3Config),
+    /// AWS S3 with enhanced GPU and compute optimizations
+    AWSS3(AWSS3Config),
     /// Digital Ocean Spaces object storage
     DigitalOceanSpaces(DigitalOceanSpacesConfig),
     /// Azure Blob Storage
     Azure(AzureConfig),
     /// Google Cloud Storage
     GoogleCloud(GoogleCloudConfig),
+    /// GCP Storage with enhanced compute integration
+    GCPStorage(GCPStorageConfig),
     /// etcd distributed key-value store
     Etcd(EtcdConfig),
     /// Redis in-memory data structure store
@@ -217,6 +221,195 @@ pub struct CompositeConfig {
     pub sync_interval: u64,
     pub health_check_interval: u64,
     pub failover_threshold: u32,
+}
+
+/// AWS S3 configuration with enhanced GPU and compute optimizations
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AWSS3Config {
+    /// AWS region (e.g., "us-east-1", "us-west-2")
+    pub region: String,
+    /// S3 bucket name
+    pub bucket: String,
+    /// AWS access key ID
+    pub access_key_id: String,
+    /// AWS secret access key
+    pub secret_access_key: String,
+    /// Optional session token for temporary credentials
+    pub session_token: Option<String>,
+    /// Optional path prefix for organization
+    pub prefix: Option<String>,
+    /// Enable SSL/TLS (recommended: true)
+    pub enable_ssl: bool,
+    /// Connection timeout in seconds
+    pub connection_timeout: Option<u64>,
+    /// Read timeout in seconds
+    pub read_timeout: Option<u64>,
+    /// Write timeout in seconds
+    pub write_timeout: Option<u64>,
+    /// Number of retry attempts
+    pub retry_count: u32,
+    /// S3 storage class optimization
+    pub storage_class: S3StorageClass,
+    /// Enable S3 Transfer Acceleration for GPU workloads
+    pub enable_transfer_acceleration: bool,
+    /// Enable multipart uploads for large GPU datasets
+    pub multipart_upload_threshold: u64, // bytes
+    /// Part size for multipart uploads
+    pub multipart_part_size: u64, // bytes
+    /// Maximum concurrent uploads for GPU data
+    pub max_concurrent_uploads: u32,
+    /// Enable server-side encryption
+    pub enable_encryption: bool,
+    /// KMS key ID for encryption (optional)
+    pub kms_key_id: Option<String>,
+    /// S3 Intelligent Tiering for cost optimization
+    pub enable_intelligent_tiering: bool,
+    /// GPU-specific optimizations
+    pub gpu_optimizations: AWSS3GPUOptimizations,
+    /// EC2 instance role ARN (for cross-account access)
+    pub instance_role_arn: Option<String>,
+    /// VPC endpoint configuration for private access
+    pub vpc_endpoint: Option<String>,
+    /// Custom metadata tags for cost tracking
+    pub tags: std::collections::HashMap<String, String>,
+}
+
+/// AWS S3 storage classes for different performance/cost profiles
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum S3StorageClass {
+    /// Standard storage for frequently accessed data
+    Standard,
+    /// Reduced redundancy (deprecated, for compatibility)
+    ReducedRedundancy,
+    /// Standard Infrequent Access
+    StandardIA,
+    /// One Zone Infrequent Access
+    OneZoneIA,
+    /// Glacier for archival
+    Glacier,
+    /// Deep Archive for long-term archival
+    DeepArchive,
+    /// Intelligent Tiering (automatic optimization)
+    IntelligentTiering,
+}
+
+/// GPU-specific optimizations for AWS S3
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AWSS3GPUOptimizations {
+    /// Optimize for GPU training data access patterns
+    pub optimize_for_training: bool,
+    /// Use S3 Express One Zone for ultra-low latency (GPU inference)
+    pub use_express_one_zone: bool,
+    /// Enable S3 Select for partial data retrieval
+    pub enable_s3_select: bool,
+    /// Prefetch data for GPU batch processing
+    pub enable_prefetch: bool,
+    /// Prefetch buffer size in bytes
+    pub prefetch_buffer_size: u64,
+    /// Parallel download threads for large datasets
+    pub parallel_download_threads: u32,
+    /// Enable compression for neural network models
+    pub compress_models: bool,
+    /// Use CloudFront for global GPU cluster access
+    pub use_cloudfront: bool,
+    /// CloudFront distribution ID
+    pub cloudfront_distribution_id: Option<String>,
+}
+
+/// GCP Storage configuration with enhanced compute integration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GCPStorageConfig {
+    /// GCP project ID
+    pub project_id: String,
+    /// Cloud Storage bucket name
+    pub bucket_name: String,
+    /// Service account key JSON (base64 encoded)
+    pub service_account_key: Option<String>,
+    /// Path to service account key file
+    pub credentials_path: Option<String>,
+    /// GCP region for the bucket
+    pub region: String,
+    /// Optional path prefix for organization
+    pub prefix: Option<String>,
+    /// Connection timeout in seconds
+    pub connection_timeout: Option<u64>,
+    /// Read timeout in seconds
+    pub read_timeout: Option<u64>,
+    /// Write timeout in seconds
+    pub write_timeout: Option<u64>,
+    /// Number of retry attempts
+    pub retry_count: u32,
+    /// Storage class optimization
+    pub storage_class: GCPStorageClass,
+    /// Enable resumable uploads for large files
+    pub enable_resumable_uploads: bool,
+    /// Resumable upload threshold in bytes
+    pub resumable_upload_threshold: u64,
+    /// Maximum concurrent uploads
+    pub max_concurrent_uploads: u32,
+    /// Enable customer-managed encryption
+    pub enable_encryption: bool,
+    /// Cloud KMS key name for encryption
+    pub kms_key_name: Option<String>,
+    /// GPU-specific optimizations
+    pub gpu_optimizations: GCPStorageGPUOptimizations,
+    /// Use Google Cloud CDN for global access
+    pub enable_cdn: bool,
+    /// Enable Cloud Storage Transfer Service
+    pub enable_transfer_service: bool,
+    /// Labels for cost tracking and organization
+    pub labels: std::collections::HashMap<String, String>,
+}
+
+/// GCP Cloud Storage classes
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum GCPStorageClass {
+    /// Standard storage
+    Standard,
+    /// Nearline storage (30-day minimum)
+    Nearline,
+    /// Coldline storage (90-day minimum)
+    Coldline,
+    /// Archive storage (365-day minimum)
+    Archive,
+}
+
+/// GPU-specific optimizations for GCP Storage
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GCPStorageGPUOptimizations {
+    /// Optimize for TPU/GPU training workloads
+    pub optimize_for_ml_training: bool,
+    /// Use regional buckets for GPU clusters
+    pub use_regional_buckets: bool,
+    /// Enable parallel composite uploads
+    pub enable_parallel_composite: bool,
+    /// Composite upload threshold in bytes
+    pub composite_upload_threshold: u64,
+    /// Enable gzip compression for model files
+    pub enable_gzip_compression: bool,
+    /// Use Cloud Storage FUSE for direct file system access
+    pub enable_fuse_mount: bool,
+    /// FUSE mount point for GPU containers
+    pub fuse_mount_point: Option<String>,
+    /// Enable automatic data locality optimization
+    pub enable_data_locality: bool,
+    /// Use Google Cloud Storage Insights for optimization
+    pub enable_insights: bool,
+    /// Prefetch configuration for batch processing
+    pub prefetch_config: Option<GCPPrefetchConfig>,
+}
+
+/// Prefetch configuration for GCP Storage
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GCPPrefetchConfig {
+    /// Enable prefetching
+    pub enabled: bool,
+    /// Prefetch buffer size in bytes
+    pub buffer_size: u64,
+    /// Number of prefetch threads
+    pub thread_count: u32,
+    /// Prefetch patterns (file extensions or patterns)
+    pub patterns: Vec<String>,
 }
 
 /// Compression types for storage optimization

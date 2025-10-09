@@ -194,26 +194,67 @@ digital_ocean:
         - "production"
         - "high-performance"
       
-      # GPU-specific configuration
-      gpu_config:
-        # NVIDIA driver configuration
-        driver_version: "535.154.05"  # NVIDIA driver version
-        cuda_version: "12.2"          # CUDA toolkit version
-        cudnn_version: "8.9"          # cuDNN version for ML workloads
+    # Enhanced GPU-specific configuration
+    gpu_config:
+      # NVIDIA driver configuration
+      driver_version: "535.154.05"  # NVIDIA driver version
+      cuda_version: "12.2"          # CUDA toolkit version
+      cudnn_version: "8.9"          # cuDNN version for ML workloads
+      nccl_version: "2.18"          # NCCL for multi-GPU communication
+      tensorrt_version: "8.6"       # TensorRT for inference optimization
+      
+      # GPU architecture-specific settings
+      gpu_architecture: "auto-detect"  # auto-detect, hopper, ampere, turing, volta
+      gpu_model: "auto-detect"         # auto-detect, H100_SXM_80GB, A100_SXM_80GB, etc.
+      
+      # GPU performance settings
+      enable_persistence_mode: true  # Keep GPU initialized
+      memory_clock: 1215             # GPU memory clock (MHz)
+      graphics_clock: 1410           # GPU graphics clock (MHz)
+      power_limit: 350               # Power limit (watts)
+      
+      # Multi-Instance GPU (MIG) settings
+      enable_mig: false              # Disable MIG for full GPU access
+      mig_profiles: []               # MIG profiles if enabled
+      
+      # Advanced GPU memory management
+      memory_fraction: 0.9           # Use 90% of GPU memory
+      enable_unified_memory: true    # Enable CUDA Unified Memory
+      memory_pool_size: "auto"       # Memory pool size (auto, or specific size)
+      enable_memory_mapping: true    # Enable memory mapping for large datasets
+      
+      # H100-specific optimizations
+      h100_optimizations:
+        enable_transformer_engine: true  # FP8 support for transformers
+        enable_sparse_attention: true    # Sparse attention optimization
+        enable_flash_attention: true     # Flash attention for efficiency
+        fp8_precision: true              # Enable FP8 precision
         
-        # GPU performance settings
-        enable_persistence_mode: true  # Keep GPU initialized
-        memory_clock: 1215             # GPU memory clock (MHz)
-        graphics_clock: 1410           # GPU graphics clock (MHz)
-        power_limit: 350               # Power limit (watts)
+      # A100-specific optimizations  
+      a100_optimizations:
+        enable_tensor_cores: true        # Tensor core acceleration
+        mixed_precision: true           # Mixed precision training
+        enable_nvlink: true             # NVLink for multi-GPU
         
-        # Multi-Instance GPU (MIG) settings
-        enable_mig: false              # Disable MIG for full GPU access
-        mig_profiles: []               # MIG profiles if enabled
+      # Multi-GPU coordination
+      multi_gpu:
+        enable_nccl: true               # Enable NCCL for multi-GPU
+        topology: "auto-detect"         # auto-detect, nvlink, pcie
+        communication_backend: "nccl"   # nccl, mpi, gloo
         
-        # GPU memory management
-        memory_fraction: 0.9           # Use 90% of GPU memory
-        enable_unified_memory: true    # Enable CUDA Unified Memory
+      # Performance profiles for different workloads
+      performance_profiles:
+        training:
+          priority: "high"
+          memory_growth: true
+          allow_memory_growth: true
+        inference:
+          priority: "throughput"
+          enable_tensorrt: true
+          optimize_for_inference: true
+        development:
+          priority: "low"
+          debug_mode: true
         
       # GPU monitoring and alerting
       monitoring:

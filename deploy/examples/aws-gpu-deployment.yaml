@@ -1,0 +1,841 @@
+# AWS GPU Deployment Configuration for Orbit-RS
+# Supports H100, A100, V100, T4 instances and ARM Graviton processors
+
+apiVersion: v1
+kind: Config
+metadata:
+  name: "aws-orbit-rs-gpu-deployment"
+  description: "Complete AWS deployment with GPU support for Orbit-RS"
+  version: "1.0.0"
+
+# AWS Infrastructure Configuration
+aws:
+  # AWS Account and Authentication
+  account_id: "${AWS_ACCOUNT_ID}"
+  region: "us-east-1"
+  
+  # Backup regions for high availability
+  backup_regions:
+    - "us-west-2"
+    - "eu-west-1"
+  
+  # VPC Configuration
+  vpc:
+    name: "orbit-rs-vpc"
+    cidr_block: "10.0.0.0/16"
+    enable_dns_hostnames: true
+    enable_dns_support: true
+    
+    # Subnets for different workloads
+    subnets:
+      # Public subnets for load balancers
+      public:
+        - name: "orbit-public-1a"
+          cidr: "10.0.1.0/24"
+          availability_zone: "us-east-1a"
+        - name: "orbit-public-1b"
+          cidr: "10.0.2.0/24"
+          availability_zone: "us-east-1b"
+      
+      # Private subnets for compute instances
+      private:
+        - name: "orbit-private-1a"
+          cidr: "10.0.10.0/24"
+          availability_zone: "us-east-1a"
+        - name: "orbit-private-1b"
+          cidr: "10.0.11.0/24"
+          availability_zone: "us-east-1b"
+      
+      # GPU-specific subnets (placement groups)
+      gpu:
+        - name: "orbit-gpu-1a"
+          cidr: "10.0.20.0/24"
+          availability_zone: "us-east-1a"
+          placement_group: "orbit-gpu-cluster"
+
+  # Load Balancer Configuration
+  load_balancer:
+    type: "application"  # ALB for HTTP/HTTPS, NLB for TCP
+    name: "orbit-rs-alb"
+    scheme: "internet-facing"
+    
+    # Health check configuration
+    health_check:
+      protocol: "HTTP"
+      port: 8080
+      path: "/health"
+      interval_seconds: 30
+      timeout_seconds: 5
+      healthy_threshold: 2
+      unhealthy_threshold: 5
+    
+    # Target groups for different services
+    target_groups:
+      - name: "orbit-server"
+        protocol: "HTTP"
+        port: 8080
+        health_check_path: "/health"
+      - name: "orbit-grpc"
+        protocol: "HTTP"
+        port: 50051
+        health_check_path: "/health"
+
+# EC2 Instance Configurations
+instances:
+  
+  # AMD EPYC instances for high-performance CPU workloads
+  amd_epyc:
+    # Instance configuration (when available)
+    instance_type: "m7a.xlarge"  # AMD EPYC Genoa, 4 vCPUs, 16GB RAM
+    ami_id: "ami-0c02fb55956c7d316"  # Amazon Linux 2023
+    key_pair: "${AWS_KEY_PAIR}"
+    
+    # Auto scaling configuration
+    auto_scaling:
+      min_size: 2
+      max_size: 20
+      desired_capacity: 4
+      target_cpu_utilization: 65  # EPYC can handle higher utilization
+      
+    user_data_script: "scripts/epyc-init.sh"
+    
+    # AMD EPYC-specific optimizations
+    epyc_optimizations:
+      # Compiler optimizations for Zen 4
+      compiler_flags: "-march=znver4 -mtune=znver4"
+      # Enable AVX-512 if available
+      enable_avx512: true
+      # AMD-specific memory optimizations
+      enable_numa_balancing: true
+      memory_allocator: "jemalloc"
+      # PCIe optimization for high-bandwidth workloads
+      pcie_optimization: true
+      
+    # Storage optimized for EPYC performance
+    storage:
+      root_volume:
+        size_gb: 200
+        volume_type: "gp3"
+        iops: 10000
+      data_volumes:
+        - device_name: "/dev/nvme1n1"
+          size_gb: 1000
+          volume_type: "gp3"
+          iops: 16000
+          mount_point: "/opt/orbit-rs/data"
+  
+  # Standard Graviton instances for CPU workloads
+  graviton:
+    # Instance configuration
+    instance_type: "c7g.2xlarge"  # 8 vCPUs, 16GB RAM, Graviton3
+    ami_id: "ami-0c02fb55956c7d316"  # Amazon Linux 2023 ARM64
+    key_pair: "${AWS_KEY_PAIR}"
+    
+    # Auto scaling configuration
+    auto_scaling:
+      min_size: 2
+      max_size: 10
+      desired_capacity: 3
+      target_cpu_utilization: 70
+      
+    # Instance configuration
+    user_data_script: "scripts/graviton-init.sh"
+    
+    # Security groups
+    security_groups:
+      - name: "orbit-graviton-sg"
+        rules:
+          ingress:
+            - protocol: "tcp"
+              port: 8080
+              source: "10.0.0.0/16"
+            - protocol: "tcp"
+              port: 50051
+              source: "10.0.0.0/16"
+            - protocol: "tcp"
+              port: 22
+              source: "10.0.0.0/16"
+          egress:
+            - protocol: "-1"
+              port: -1
+              destination: "0.0.0.0/0"
+    
+    # ARM-specific optimizations
+    arm_optimizations:
+      compiler_flags: "-march=armv8.2-a+crypto+rcpc"
+      use_aws_graviton_optimized_libraries: true
+      enable_neon_simd: true
+      memory_allocator: "aws-lc-malloc"
+    
+    # Instance store configuration (NVMe SSD)
+    storage:
+      root_volume:
+        size_gb: 100
+        volume_type: "gp3"
+        iops: 3000
+      data_volumes:
+        - device_name: "/dev/nvme1n1"
+          size_gb: 500
+          volume_type: "gp3"
+          iops: 16000
+          mount_point: "/opt/orbit-rs/data"
+
+  # Blackwell GPU instances for next-gen AI training (2024+)
+  blackwell:
+    # AWS P6 instances with Blackwell GPUs (anticipated)
+    instance_type: "p6.48xlarge"  # 8x B100, 256 vCPUs, 4096GB RAM (estimated)
+    ami_id: "ami-0c9c942bd7bf113a2"  # Deep Learning AMI with CUDA 12.4+
+    key_pair: "${AWS_KEY_PAIR}"
+    
+    # Placement group for ultra-low latency
+    placement_group:
+      name: "orbit-blackwell-cluster"
+      strategy: "cluster"
+    
+    # Very conservative auto-scaling (extremely expensive)
+    auto_scaling:
+      min_size: 1
+      max_size: 2
+      desired_capacity: 1
+      target_gpu_utilization: 85
+      scale_up_cooldown: "15m"
+      scale_down_cooldown: "30m"
+    
+    user_data_script: "scripts/blackwell-init.sh"
+    
+    # Blackwell-specific configuration
+    gpu_config:
+      driver_version: "550.90.07"  # Latest driver for Blackwell
+      cuda_version: "12.4"         # CUDA 12.4+ for Blackwell support
+      cudnn_version: "9.0"         # cuDNN 9.0+ for Blackwell
+      nccl_version: "2.20"         # Latest NCCL for multi-GPU
+      
+      # Blackwell-specific settings
+      enable_mig: false             # Disable MIG for maximum performance
+      enable_fabric_manager: true   # Essential for multi-GPU coordination
+      nvlink_topology: "fully_connected_gen5"  # NVLink 5.0
+      
+      # Next-gen performance settings
+      memory_clock: 5200            # MHz (estimated for B100)
+      graphics_clock: 2100          # MHz (estimated)
+      power_limit: 800              # Watts (estimated for B100)
+      
+      # Advanced Blackwell features
+      transformer_engine_v2: true   # Enhanced FP4/FP6/FP8 support
+      enable_fp4_precision: true    # Revolutionary FP4 precision
+      enable_fp6_precision: true    # FP6 precision for specific workloads
+      secure_ai_compute: true       # Hardware-level AI security
+      enable_sparsity_v2: true      # Enhanced sparsity support
+      nvlink_c2c: true              # Chip-to-chip communication
+      
+    # Massive storage for next-gen AI datasets
+    storage:
+      root_volume:
+        size_gb: 1000
+        volume_type: "gp3"
+        iops: 16000
+      data_volumes:
+        - device_name: "/dev/nvme1n1"
+          size_gb: 8000   # 8TB for massive datasets
+          volume_type: "gp3"
+          iops: 16000
+          mount_point: "/opt/orbit-rs/data"
+        - device_name: "/dev/nvme2n1"
+          size_gb: 4000   # 4TB for models
+          volume_type: "gp3"
+          iops: 16000
+          mount_point: "/opt/orbit-rs/models"
+        - device_name: "/dev/nvme3n1"
+          size_gb: 2000   # 2TB for checkpoints
+          volume_type: "gp3"
+          iops: 16000
+          mount_point: "/opt/orbit-rs/checkpoints"
+    
+    # Security groups for Blackwell instances
+    security_groups:
+      - name: "orbit-blackwell-sg"
+        rules:
+          ingress:
+            - protocol: "tcp"
+              port: 8080
+              source: "10.0.0.0/16"
+            - protocol: "tcp"
+              port: 50051
+              source: "10.0.0.0/16"
+            - protocol: "tcp"
+              port: 22
+              source: "10.0.0.0/16"
+            # NVLink 5.0 communication ports
+            - protocol: "tcp"
+              port_range: "23000-23200"
+              source: "10.0.0.0/16"
+            # Additional high-speed interconnect ports
+            - protocol: "tcp"
+              port_range: "24000-24100"
+              source: "10.0.0.0/16"
+          egress:
+            - protocol: "-1"
+              port: -1
+              destination: "0.0.0.0/0"
+
+  # H100 GPU instances for large-scale ML training
+  h100:
+    # AWS P5 instances with H100 GPUs
+    instance_type: "p5.48xlarge"  # 8x H100, 192 vCPUs, 2048GB RAM
+    ami_id: "ami-0c9c942bd7bf113a2"  # Deep Learning AMI with CUDA 12.2
+    key_pair: "${AWS_KEY_PAIR}"
+    
+    # Placement group for low latency
+    placement_group:
+      name: "orbit-h100-cluster"
+      strategy: "cluster"
+    
+    # Auto scaling (conservative for expensive instances)
+    auto_scaling:
+      min_size: 1
+      max_size: 4
+      desired_capacity: 2
+      target_gpu_utilization: 80
+      scale_up_cooldown: "10m"
+      scale_down_cooldown: "20m"
+    
+    # GPU-specific initialization
+    user_data_script: "scripts/h100-init.sh"
+    
+    # H100-specific configuration
+    gpu_config:
+      driver_version: "535.154.05"
+      cuda_version: "12.2"
+      cudnn_version: "8.9"
+      nccl_version: "2.18"
+      
+      # H100 specific settings
+      enable_mig: false  # Disable MIG for full GPU access
+      enable_fabric_manager: true  # For multi-GPU coordination
+      nvlink_topology: "fully_connected"
+      
+      # Performance settings
+      memory_clock: 4800  # MHz
+      graphics_clock: 1980  # MHz  
+      power_limit: 700    # Watts (H100 SXM)
+      
+      # Advanced H100 features
+      transformer_engine: true  # FP8 support
+      enable_sparse_attention: true
+      enable_flash_attention: true
+      
+    # Storage optimized for large datasets
+    storage:
+      root_volume:
+        size_gb: 500
+        volume_type: "gp3"
+        iops: 16000
+      data_volumes:
+        - device_name: "/dev/nvme1n1"
+          size_gb: 2000  # 2TB for datasets
+          volume_type: "gp3"
+          iops: 16000
+          mount_point: "/opt/orbit-rs/data"
+        - device_name: "/dev/nvme2n1"
+          size_gb: 1000  # 1TB for models
+          volume_type: "gp3"
+          iops: 16000
+          mount_point: "/opt/orbit-rs/models"
+    
+    # Security groups for GPU instances
+    security_groups:
+      - name: "orbit-h100-sg"
+        rules:
+          ingress:
+            - protocol: "tcp"
+              port: 8080
+              source: "10.0.0.0/16"
+            - protocol: "tcp"
+              port: 50051
+              source: "10.0.0.0/16"
+            - protocol: "tcp"
+              port: 22
+              source: "10.0.0.0/16"
+            # NCCL communication ports
+            - protocol: "tcp"
+              port_range: "23000-23100"
+              source: "10.0.0.0/16"
+          egress:
+            - protocol: "-1"
+              port: -1
+              destination: "0.0.0.0/0"
+
+  # A100 GPU instances for ML training and inference
+  a100:
+    # AWS P4d instances with A100 GPUs
+    instance_type: "p4d.24xlarge"  # 8x A100, 96 vCPUs, 1152GB RAM
+    ami_id: "ami-0c9c942bd7bf113a2"  # Deep Learning AMI
+    key_pair: "${AWS_KEY_PAIR}"
+    
+    # Auto scaling configuration
+    auto_scaling:
+      min_size: 1
+      max_size: 6
+      desired_capacity: 2
+      target_gpu_utilization: 75
+      scale_up_cooldown: "8m"
+      scale_down_cooldown: "15m"
+    
+    user_data_script: "scripts/a100-init.sh"
+    
+    # A100-specific configuration
+    gpu_config:
+      driver_version: "535.154.05"
+      cuda_version: "12.2"
+      cudnn_version: "8.9"
+      
+      # A100 specific settings
+      enable_mig: false  # Can be enabled for multi-tenancy
+      mig_profiles: []   # 7g.40gb, 4g.20gb, 3g.20gb, etc.
+      
+      # Performance settings
+      memory_clock: 1593  # MHz
+      graphics_clock: 1410  # MHz
+      power_limit: 400     # Watts
+      
+      # A100 features
+      enable_tensor_cores: true
+      mixed_precision: true
+      enable_multi_instance: false
+      
+    storage:
+      root_volume:
+        size_gb: 300
+        volume_type: "gp3"
+        iops: 10000
+      data_volumes:
+        - device_name: "/dev/nvme1n1"
+          size_gb: 1500
+          volume_type: "gp3"
+          iops: 16000
+          mount_point: "/opt/orbit-rs/data"
+
+  # AMD MI300 GPU instances for AI workloads (when available)
+  amd_mi300:
+    instance_type: "p5a.24xlarge"  # Hypothetical AMD instance type
+    ami_id: "ami-0c9c942bd7bf113a2"  # ROCm-optimized AMI
+    key_pair: "${AWS_KEY_PAIR}"
+    
+    # Conservative auto-scaling for AMD GPUs
+    auto_scaling:
+      min_size: 1
+      max_size: 4
+      desired_capacity: 2
+      target_gpu_utilization: 75
+      scale_up_cooldown: "10m"
+      scale_down_cooldown: "20m"
+    
+    user_data_script: "scripts/mi300-init.sh"
+    
+    # MI300-specific configuration
+    gpu_config:
+      # ROCm stack instead of CUDA
+      rocm_version: "6.0"          # Latest ROCm for MI300
+      hip_version: "6.0"           # HIP runtime
+      miopen_version: "3.0"        # MIOpen for ML frameworks
+      
+      # MI300 architecture settings
+      gpu_architecture: "CDNA3"     # CDNA 3 architecture
+      gpu_model: "MI300X"          # MI300X variant
+      
+      # Performance settings
+      memory_clock: 5200           # MHz (HBM3)
+      graphics_clock: 2100         # MHz
+      power_limit: 750             # Watts
+      
+      # AMD-specific features
+      enable_infinity_cache: true   # AMD Infinity Cache
+      enable_smart_access_memory: true  # AMD SAM
+      matrix_cores: true           # AMD Matrix cores
+      
+      # Memory management
+      memory_fraction: 0.9         # Use 90% of GPU memory
+      unified_memory: true         # Unified memory architecture (MI300A)
+      
+      # Multi-GPU coordination
+      enable_xgmi: true            # AMD XGMI for multi-GPU
+      xgmi_topology: "fully_connected"
+      
+    # Optimized storage for AMD workloads
+    storage:
+      root_volume:
+        size_gb: 400
+        volume_type: "gp3"
+        iops: 12000
+      data_volumes:
+        - device_name: "/dev/nvme1n1"
+          size_gb: 2000
+          volume_type: "gp3"
+          iops: 16000
+          mount_point: "/opt/orbit-rs/data"
+        - device_name: "/dev/nvme2n1"
+          size_gb: 1000
+          volume_type: "gp3"
+          iops: 16000
+          mount_point: "/opt/orbit-rs/models"
+    
+    # Security groups for AMD GPU instances
+    security_groups:
+      - name: "orbit-amd-sg"
+        rules:
+          ingress:
+            - protocol: "tcp"
+              port: 8080
+              source: "10.0.0.0/16"
+            - protocol: "tcp"
+              port: 50051
+              source: "10.0.0.0/16"
+            - protocol: "tcp"
+              port: 22
+              source: "10.0.0.0/16"
+            # XGMI communication ports
+            - protocol: "tcp"
+              port_range: "25000-25100"
+              source: "10.0.0.0/16"
+          egress:
+            - protocol: "-1"
+              port: -1
+              destination: "0.0.0.0/0"
+
+  # T4 GPU instances for cost-effective inference
+  t4:
+    instance_type: "g4dn.xlarge"  # 1x T4, 4 vCPUs, 16GB RAM
+    ami_id: "ami-0c9c942bd7bf113a2"
+    key_pair: "${AWS_KEY_PAIR}"
+    
+    # Auto scaling for inference workloads
+    auto_scaling:
+      min_size: 2
+      max_size: 20
+      desired_capacity: 4
+      target_gpu_utilization: 70
+      target_cpu_utilization: 60
+    
+    user_data_script: "scripts/t4-init.sh"
+    
+    # T4-specific configuration (optimized for inference)
+    gpu_config:
+      driver_version: "535.154.05"
+      cuda_version: "12.2"
+      tensorrt_version: "8.6"
+      
+      # T4 optimization for inference
+      enable_tensor_cores: true
+      enable_int8_inference: true
+      enable_fp16_inference: true
+      enable_tensorrt_optimization: true
+      
+      # Performance settings
+      power_limit: 70  # Watts
+      memory_clock: 1300  # MHz
+      graphics_clock: 1590  # MHz
+    
+    storage:
+      root_volume:
+        size_gb: 100
+        volume_type: "gp3"
+        iops: 3000
+      data_volumes:
+        - device_name: "/dev/nvme1n1"
+          size_gb: 300
+          volume_type: "gp3"
+          iops: 10000
+          mount_point: "/opt/orbit-rs/data"
+
+# AWS Services Integration
+aws_services:
+  
+  # S3 for object storage
+  s3:
+    primary_bucket: "orbit-rs-data-${AWS_ACCOUNT_ID}"
+    backup_bucket: "orbit-rs-backup-${AWS_ACCOUNT_ID}"
+    model_bucket: "orbit-rs-models-${AWS_ACCOUNT_ID}"
+    
+    # S3 configuration
+    versioning: true
+    encryption: "AES256"
+    lifecycle_rules:
+      - name: "transition-to-ia"
+        days: 30
+        storage_class: "STANDARD_IA"
+      - name: "transition-to-glacier"
+        days: 90
+        storage_class: "GLACIER"
+    
+  # ECS/EKS for container orchestration
+  container_orchestration:
+    type: "EKS"  # or "ECS"
+    cluster_name: "orbit-rs-cluster"
+    kubernetes_version: "1.28"
+    
+    # Node groups
+    node_groups:
+      - name: "graviton-nodes"
+        instance_types: ["c7g.xlarge", "c7g.2xlarge"]
+        min_size: 2
+        max_size: 10
+        desired_size: 3
+        
+      - name: "gpu-nodes"
+        instance_types: ["p5.24xlarge", "p4d.24xlarge", "g4dn.xlarge"]
+        min_size: 1
+        max_size: 5
+        desired_size: 2
+        
+        # GPU-specific taints and tolerations
+        taints:
+          - key: "nvidia.com/gpu"
+            value: "present"
+            effect: "NoSchedule"
+        
+        # AMI with GPU drivers pre-installed
+        ami_type: "AL2_x86_64_GPU"
+  
+  # CloudWatch for monitoring
+  cloudwatch:
+    log_groups:
+      - name: "/aws/orbit-rs/application"
+        retention_days: 30
+      - name: "/aws/orbit-rs/gpu-metrics"
+        retention_days: 14
+    
+    # Custom metrics
+    custom_metrics:
+      - metric_name: "GPU_Utilization"
+        namespace: "Orbit-RS/GPU"
+        dimensions:
+          - name: "InstanceType"
+          - name: "GPUType"
+      - metric_name: "GPU_Memory_Usage"
+        namespace: "Orbit-RS/GPU"
+        dimensions:
+          - name: "InstanceType"
+          - name: "GPUType"
+  
+  # Secrets Manager for sensitive configuration
+  secrets_manager:
+    secrets:
+      - name: "orbit-rs/database-credentials"
+      - name: "orbit-rs/api-keys"
+      - name: "orbit-rs/certificates"
+
+# Application Deployment Configuration
+deployment:
+  # Container registry
+  registry:
+    type: "ECR"
+    repository_uri: "${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com/orbit-rs"
+    
+  # Application services
+  services:
+    orbit_server:
+      image: "orbit-server"
+      tag: "latest"
+      
+      # Resource allocation
+      resources:
+        cpu: "2000m"
+        memory: "4Gi"
+        
+      # Environment configuration
+      environment:
+        DEPLOYMENT_MODE: "aws"
+        CLOUD_PROVIDER: "AWS"
+        AWS_REGION: "us-east-1"
+        RUST_LOG: "info"
+        ORBIT_CLUSTER_SIZE: "auto"
+        
+      # Service mesh (optional)
+      service_mesh:
+        enabled: true
+        type: "istio"  # or "app-mesh"
+        
+    orbit_compute_blackwell:
+      image: "orbit-compute-gpu"
+      tag: "blackwell-latest"
+      
+      # Blackwell GPU resource allocation
+      resources:
+        cpu: "16000m"  # More CPU for Blackwell workloads
+        memory: "128Gi" # More memory for large models
+        gpu:
+          count: 1
+          memory_fraction: 0.95  # Use almost all GPU memory
+          
+      environment:
+        CUDA_VISIBLE_DEVICES: "0"
+        GPU_MEMORY_FRACTION: "0.95"
+        ORBIT_GPU_PROVIDER: "NVIDIA"
+        ORBIT_GPU_ARCHITECTURE: "blackwell"
+        ORBIT_GPU_MODEL: "B100_SXM_192GB"
+        # Blackwell-specific environment
+        CUDA_VERSION: "12.4"
+        ENABLE_FP4_PRECISION: "true"
+        ENABLE_TRANSFORMER_ENGINE_V2: "true"
+        NVLINK_TOPOLOGY: "fully_connected_gen5"
+        
+    orbit_compute_gpu:
+      image: "orbit-compute-gpu"
+      tag: "latest"
+      
+      # GPU resource allocation (H100/A100)
+      resources:
+        cpu: "8000m"
+        memory: "32Gi"
+        gpu:
+          count: 1
+          memory_fraction: 0.9
+          
+      environment:
+        CUDA_VISIBLE_DEVICES: "0"
+        GPU_MEMORY_FRACTION: "0.9"
+        ORBIT_GPU_PROVIDER: "NVIDIA"
+        ORBIT_GPU_ARCHITECTURE: "auto-detect"
+        
+    orbit_compute_amd:
+      image: "orbit-compute-amd"
+      tag: "rocm-latest"
+      
+      # AMD GPU resource allocation
+      resources:
+        cpu: "12000m"
+        memory: "64Gi"
+        gpu:
+          count: 1
+          memory_fraction: 0.9
+          
+      environment:
+        HIP_VISIBLE_DEVICES: "0"
+        GPU_MEMORY_FRACTION: "0.9"
+        ORBIT_GPU_PROVIDER: "AMD"
+        ORBIT_GPU_ARCHITECTURE: "CDNA3"
+        ORBIT_GPU_MODEL: "MI300X"
+        # AMD-specific environment
+        ROCM_VERSION: "6.0"
+        HIP_VERSION: "6.0"
+        ENABLE_INFINITY_CACHE: "true"
+        ENABLE_MATRIX_CORES: "true"
+        
+    orbit_compute_epyc:
+      image: "orbit-compute-x86"
+      tag: "epyc-optimized"
+      
+      # AMD EPYC resource allocation
+      resources:
+        cpu: "8000m"
+        memory: "32Gi"
+        
+      environment:
+        ORBIT_CPU_ARCHITECTURE: "x86_64"
+        ORBIT_CPU_VENDOR: "AMD"
+        ORBIT_CPU_MICROARCH: "Zen4"
+        ORBIT_EPYC_OPTIMIZATIONS: "true"
+        ORBIT_AVX512_ENABLED: "true"
+        ORBIT_NUMA_BALANCING: "true"
+        CC: "clang"
+        CXX: "clang++"
+        CFLAGS: "-march=znver4 -mtune=znver4 -O3"
+        CXXFLAGS: "-march=znver4 -mtune=znver4 -O3"
+        
+    orbit_compute_graviton:
+      image: "orbit-compute-arm64"
+      tag: "latest"
+      
+      # ARM64-specific resource allocation
+      resources:
+        cpu: "4000m"
+        memory: "8Gi"
+        
+      environment:
+        ORBIT_CPU_ARCHITECTURE: "arm64"
+        ORBIT_GRAVITON_OPTIMIZATIONS: "true"
+        ORBIT_NEON_SIMD: "true"
+
+# Monitoring and observability
+monitoring:
+  # CloudWatch dashboards
+  dashboards:
+    - name: "Orbit-RS-Overview"
+      widgets:
+        - type: "metric"
+          metric: "AWS/EC2/CPUUtilization"
+        - type: "metric"  
+          metric: "AWS/EC2/NetworkIn"
+        - type: "custom"
+          metric: "Orbit-RS/GPU/GPU_Utilization"
+          
+    - name: "GPU-Performance"
+      widgets:
+        - type: "custom"
+          metric: "Orbit-RS/GPU/GPU_Utilization"
+        - type: "custom"
+          metric: "Orbit-RS/GPU/GPU_Memory_Usage"
+        - type: "custom"
+          metric: "Orbit-RS/GPU/GPU_Temperature"
+  
+  # Alerts
+  alarms:
+    - name: "High-GPU-Utilization"
+      metric: "Orbit-RS/GPU/GPU_Utilization"
+      threshold: 90
+      comparison: "GreaterThanThreshold"
+      period: 300
+      evaluation_periods: 2
+      
+    - name: "GPU-Temperature-High"
+      metric: "Orbit-RS/GPU/GPU_Temperature"
+      threshold: 80
+      comparison: "GreaterThanThreshold"
+      period: 60
+      evaluation_periods: 1
+
+# Cost optimization
+cost_optimization:
+  # Spot instances where applicable
+  spot_instances:
+    enabled: true
+    max_price: "1.00"  # USD per hour
+    instance_types: ["g4dn.xlarge", "c7g.xlarge"]
+    
+  # Reserved instances for predictable workloads
+  reserved_instances:
+    enabled: true
+    instance_types: ["c7g.2xlarge"]
+    term: "1year"
+    payment_option: "partial_upfront"
+    
+  # Auto-scaling policies
+  scaling_policies:
+    - name: "scale-down-gpu-instances"
+      resource: "gpu"
+      metric: "gpu_utilization"
+      threshold: 30
+      action: "scale_down"
+      cooldown: "20m"
+      
+    - name: "scale-up-on-queue-length" 
+      resource: "all"
+      metric: "sqs_queue_length"
+      threshold: 100
+      action: "scale_up"
+      cooldown: "5m"
+
+# Example usage commands:
+# 
+# # Set up AWS credentials and deploy
+# aws configure
+# export AWS_ACCOUNT_ID="123456789012"
+# export AWS_KEY_PAIR="my-key-pair"
+# 
+# # Deploy infrastructure
+# terraform init
+# terraform plan -var-file="aws-gpu-deployment.tfvars"
+# terraform apply
+# 
+# # Deploy application
+# kubectl apply -f aws-gpu-k8s-manifests/
