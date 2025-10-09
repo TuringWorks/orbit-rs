@@ -5,7 +5,7 @@ use crate::{
 };
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tracing::{info, warn};
+use tracing::info;
 
 /// Comprehensive Java Spring Boot integration that provides HTTP, gRPC, and JNI interfaces
 pub struct JavaSpringBootIntegration {

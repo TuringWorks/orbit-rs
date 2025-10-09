@@ -2,11 +2,9 @@ use crate::{ApplicationContext, SpringError, SpringResult};
 use jni::{
     objects::{JClass, JObject, JString, JValue},
     sys::{jboolean, jint, jlong, jobject, jstring},
-    JNIEnv, JavaVM,
+    JNIEnv,
 };
 use std::collections::HashMap;
-use std::ffi::{CStr, CString};
-use std::os::raw::c_char;
 use std::ptr;
 use std::sync::{Arc, Mutex, OnceLock};
 use tokio::sync::RwLock;
@@ -188,7 +186,7 @@ pub extern "C" fn Java_com_orbit_spring_OrbitClient_getServiceNames(
     context_id: jlong,
 ) -> jobject {
     match get_service_names_impl(env, context_id) {
-        Ok(array) => array.into_inner(),
+        Ok(array) => array.as_raw(),
         Err(e) => {
             error!("Failed to get service names: {}", e);
             ptr::null_mut()
@@ -237,7 +235,7 @@ pub extern "C" fn Java_com_orbit_spring_OrbitClient_destroyContext(
 // ============================================================================
 
 fn initialize_context_impl(
-    env: JNIEnv,
+    mut env: JNIEnv,
     config_path: JString,
 ) -> Result<u64, Box<dyn std::error::Error>> {
     let config_path_str: String = env.get_string(&config_path)?.into();
@@ -304,19 +302,21 @@ fn stop_context_impl(context_id: jlong) -> SpringResult<()> {
 }
 
 fn get_config_value_impl(
-    env: JNIEnv,
-    context_id: jlong,
+    mut env: JNIEnv,
+    _context_id: jlong,
     key: JString,
 ) -> Result<jstring, Box<dyn std::error::Error>> {
     let key_str: String = env.get_string(&key)?.into();
 
     let global_context = get_global_context();
-    let guard = global_context.lock()?;
+    let guard = match global_context.lock() {
+        Ok(guard) => guard,
+        Err(_) => return Err("Failed to lock global context".into()),
+    };
 
-    if let Some(context) = guard.as_ref() {
+    let value = if let Some(context) = guard.as_ref() {
         let rt = tokio::runtime::Runtime::new()?;
-
-        let value = rt.block_on(async {
+        rt.block_on(async {
             let context_guard = context.read().await;
             let config = context_guard.config();
 
@@ -326,23 +326,24 @@ fn get_config_value_impl(
                 "server.port" => Some(config.server.port.to_string()),
                 _ => None,
             }
-        });
-
-        match value {
-            Some(v) => {
-                let result = env.new_string(v)?;
-                Ok(result.into_raw())
-            }
-            None => Ok(ptr::null_mut()),
-        }
+        })
     } else {
-        Ok(ptr::null_mut())
+        None
+    };
+    drop(guard);
+
+    match value {
+        Some(v) => {
+            let result = env.new_string(v)?;
+            Ok(result.into_raw())
+        }
+        None => Ok(ptr::null_mut()),
     }
 }
 
 fn set_config_value_impl(
-    env: JNIEnv,
-    context_id: jlong,
+    mut env: JNIEnv,
+    _context_id: jlong,
     key: JString,
     value: JString,
 ) -> SpringResult<()> {
@@ -362,8 +363,8 @@ fn set_config_value_impl(
 }
 
 fn register_service_impl(
-    env: JNIEnv,
-    context_id: jlong,
+    mut env: JNIEnv,
+    _context_id: jlong,
     name: JString,
     service_type: JString,
 ) -> SpringResult<()> {
@@ -385,7 +386,7 @@ fn register_service_impl(
     Ok(())
 }
 
-fn unregister_service_impl(env: JNIEnv, context_id: jlong, name: JString) -> SpringResult<()> {
+fn unregister_service_impl(mut env: JNIEnv, _context_id: jlong, name: JString) -> SpringResult<()> {
     let name_str: String = env
         .get_string(&name)
         .map_err(|e| SpringError::context(format!("JNI error: {}", e)))?
@@ -398,27 +399,30 @@ fn unregister_service_impl(env: JNIEnv, context_id: jlong, name: JString) -> Spr
 }
 
 fn has_service_impl(
-    env: JNIEnv,
-    context_id: jlong,
+    mut env: JNIEnv,
+    _context_id: jlong,
     name: JString,
 ) -> Result<bool, Box<dyn std::error::Error>> {
     let name_str: String = env.get_string(&name)?.into();
 
     let global_context = get_global_context();
-    let guard = global_context.lock()?;
+    let guard = match global_context.lock() {
+        Ok(guard) => guard,
+        Err(_) => return Err("Failed to lock global context".into()),
+    };
 
-    if let Some(context) = guard.as_ref() {
+    let has_service = if let Some(context) = guard.as_ref() {
         let rt = tokio::runtime::Runtime::new()?;
-
-        let has_service = rt.block_on(async {
+        rt.block_on(async {
             let context_guard = context.read().await;
             context_guard.contains_service(&name_str)
-        });
-
-        Ok(has_service)
+        })
     } else {
-        Ok(false)
-    }
+        false
+    };
+    drop(guard);
+
+    Ok(has_service)
 }
 
 fn get_service_names_impl(
@@ -426,7 +430,10 @@ fn get_service_names_impl(
     _context_id: jlong,
 ) -> Result<JObject, Box<dyn std::error::Error>> {
     let global_context = get_global_context();
-    let guard = global_context.lock()?;
+    let guard = match global_context.lock() {
+        Ok(guard) => guard,
+        Err(_) => return Err("Failed to lock global context".into()),
+    };
 
     let service_names = if let Some(context) = guard.as_ref() {
         let rt = tokio::runtime::Runtime::new()?;
@@ -452,7 +459,10 @@ fn get_service_names_impl(
 
 fn health_check_impl(_context_id: jlong) -> Result<bool, Box<dyn std::error::Error>> {
     let global_context = get_global_context();
-    let guard = global_context.lock()?;
+    let guard = match global_context.lock() {
+        Ok(guard) => guard,
+        Err(_) => return Err("Failed to lock global context".into()),
+    };
 
     let result = if let Some(context) = guard.as_ref() {
         let rt = tokio::runtime::Runtime::new()?;
@@ -499,20 +509,20 @@ pub fn result_to_jboolean<T, E>(result: Result<T, E>) -> jboolean {
 }
 
 /// Convert a Rust String to Java String
-pub fn string_to_jstring(env: &JNIEnv, s: String) -> Result<jstring, jni::errors::Error> {
+pub fn string_to_jstring(env: &mut JNIEnv, s: String) -> Result<jstring, jni::errors::Error> {
     let java_string = env.new_string(s)?;
     Ok(java_string.into_raw())
 }
 
 /// Convert a Java String to Rust String
-pub fn jstring_to_string(env: &JNIEnv, s: JString) -> Result<String, jni::errors::Error> {
+pub fn jstring_to_string(env: &mut JNIEnv, s: JString) -> Result<String, jni::errors::Error> {
     let java_str = env.get_string(&s)?;
     Ok(java_str.into())
 }
 
 /// Create a Java HashMap from a Rust HashMap
 pub fn create_java_hashmap<'a>(
-    env: &'a JNIEnv<'a>,
+    env: &'a mut JNIEnv<'a>,
     map: HashMap<String, String>,
 ) -> Result<JObject<'a>, jni::errors::Error> {
     let hashmap_class = env.find_class("java/util/HashMap")?;
@@ -523,7 +533,7 @@ pub fn create_java_hashmap<'a>(
         let java_value = env.new_string(value)?;
 
         env.call_method(
-            hashmap,
+            &hashmap,
             "put",
             "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
             &[

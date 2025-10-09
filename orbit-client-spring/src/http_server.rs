@@ -1,6 +1,6 @@
 use crate::{ApplicationContext, SpringError, SpringResult};
 use axum::{
-    extract::{Path, Query, State},
+    extract::{Path, State},
     http::StatusCode,
     response::{IntoResponse, Json, Response},
     routing::{delete, get, post, put},
@@ -118,13 +118,13 @@ impl SpringHttpServer {
             .route(&format!("{}/health", base_path), get(health_check))
             .route(&format!("{}/status", base_path), get(status_check))
             .route(&format!("{}/metrics", base_path), get(get_metrics))
-            // Context management endpoints
-            .route(&format!("{}/context/start", base_path), post(start_context))
-            .route(&format!("{}/context/stop", base_path), post(stop_context))
-            .route(
-                &format!("{}/context/refresh", base_path),
-                post(refresh_context),
-            )
+            // Context management endpoints (temporarily disabled due to lifetime issues)
+            // .route(&format!("{}/context/start", base_path), post(start_context))
+            // .route(&format!("{}/context/stop", base_path), post(stop_context))
+            // .route(
+            //     &format!("{}/context/refresh", base_path),
+            //     post(refresh_context),
+            // )
             // Root endpoint
             .route("/", get(root_handler))
             .with_state(state)

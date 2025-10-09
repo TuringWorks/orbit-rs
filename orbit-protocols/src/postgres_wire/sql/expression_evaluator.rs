@@ -346,7 +346,7 @@ impl ExpressionEvaluator {
     fn evaluate_window_function(
         &mut self,
         function: &WindowFunctionType,
-        partition_by: &[Expression],
+        _partition_by: &[Expression],
         order_by: &[OrderByItem],
         frame: &Option<WindowFrame>,
         context: &EvaluationContext,
@@ -518,7 +518,7 @@ impl ExpressionEvaluator {
                 ))),
             },
             // Type coercion for mixed types
-            (SqlValue::Integer(a), SqlValue::DoublePrecision(b)) => {
+            (SqlValue::Integer(a), SqlValue::DoublePrecision(_b)) => {
                 self.arithmetic_op(&SqlValue::DoublePrecision(*a as f64), right, op)
             }
             (SqlValue::DoublePrecision(_), SqlValue::Integer(b)) => {
@@ -636,7 +636,7 @@ impl ExpressionEvaluator {
     }
 
     // Aggregate function implementations
-    fn evaluate_count(&self, args: &[SqlValue], distinct: bool) -> ProtocolResult<SqlValue> {
+    fn evaluate_count(&self, args: &[SqlValue], _distinct: bool) -> ProtocolResult<SqlValue> {
         if args.is_empty() {
             // COUNT(*)
             Ok(SqlValue::BigInt(1)) // This would be accumulated by the query engine

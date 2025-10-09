@@ -421,3 +421,17 @@ pub struct ContainerStats {
     pub type_registrations: usize,
     pub total_beans: usize,
 }
+
+impl std::fmt::Debug for Container {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Container")
+            .field("beans_count", &self.beans.len())
+            .field("definitions_count", &self.definitions.len())
+            .field("factories_count", &self.factories.len())
+            .field("type_registry_count", &self.type_registry.len())
+            .field("dependencies_count", &self.dependencies.len())
+            .field("autowire_mode", &self.autowire_mode)
+            .field("config", &self.config)
+            .finish()
+    }
+}

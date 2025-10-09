@@ -393,7 +393,7 @@ impl SqlExecutor {
                     .iter()
                     .any(|c| matches!(c, ColumnConstraint::NotNull)),
                 default: col_def.constraints.iter().find_map(|c| match c {
-                    ColumnConstraint::Default(expr) => {
+                    ColumnConstraint::Default(_expr) => {
                         // TODO: Evaluate expression to get default value
                         Some(SqlValue::Null)
                     }
@@ -884,12 +884,12 @@ impl SqlExecutor {
         }
     }
 
-    async fn execute_update(&self, stmt: UpdateStatement) -> ProtocolResult<ExecutionResult> {
+    async fn execute_update(&self, _stmt: UpdateStatement) -> ProtocolResult<ExecutionResult> {
         // TODO: Implement UPDATE with proper WHERE clause evaluation
         Ok(ExecutionResult::Update { count: 0 })
     }
 
-    async fn execute_delete(&self, stmt: DeleteStatement) -> ProtocolResult<ExecutionResult> {
+    async fn execute_delete(&self, _stmt: DeleteStatement) -> ProtocolResult<ExecutionResult> {
         // TODO: Implement DELETE with proper WHERE clause evaluation
         Ok(ExecutionResult::Delete { count: 0 })
     }
@@ -937,7 +937,7 @@ impl SqlExecutor {
         Ok(ExecutionResult::Begin { transaction_id })
     }
 
-    async fn execute_commit(&self, stmt: CommitStatement) -> ProtocolResult<ExecutionResult> {
+    async fn execute_commit(&self, _stmt: CommitStatement) -> ProtocolResult<ExecutionResult> {
         let mut current_transaction = self.current_transaction.write().await;
 
         if let Some(transaction) = current_transaction.take() {
@@ -958,7 +958,7 @@ impl SqlExecutor {
         if let Some(transaction) = current_transaction.as_ref() {
             let transaction_id = transaction.id.clone();
 
-            if let Some(savepoint) = &stmt.to_savepoint {
+            if let Some(_savepoint) = &stmt.to_savepoint {
                 // Rollback to savepoint
                 // TODO: Implement savepoint rollback logic
             } else {

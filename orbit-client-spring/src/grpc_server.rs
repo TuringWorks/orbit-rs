@@ -2,8 +2,8 @@ use crate::{ApplicationContext, SpringError, SpringResult};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tonic::{transport::Server, Request, Response, Status};
-use tracing::{info, warn};
+use tonic::{Request, Response, Status};
+use tracing::info;
 
 // For now, we'll create a mock gRPC service trait and implementation
 // In production, this would use generated code from .proto files
