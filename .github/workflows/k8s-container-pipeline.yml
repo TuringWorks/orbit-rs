@@ -8,6 +8,15 @@ name: Kubernetes Container Pipeline
 on:
   push:
     branches: [ main, develop ]
+    paths:
+      - 'orbit-server/**'
+      - 'orbit-client/**'
+      - 'orbit-operator/**'
+      - 'orbit-compute/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/k8s-container-pipeline.yml'
+      - 'containerfiles/**'
     tags: [ 'v*' ]
   pull_request:
     branches: [ main, develop ]
