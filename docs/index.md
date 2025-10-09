@@ -12,7 +12,7 @@ permalink: /
 [![Version](https://img.shields.io/badge/version-0.1.0-blue.svg)](https://github.com/TuringWorks/orbit-rs)
 [![License](https://img.shields.io/badge/license-Apache%202.0-green.svg)](LICENSE)
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](https://github.com/TuringWorks/orbit-rs/actions)
-[![Coverage](https://img.shields.io/badge/coverage-79%25-yellow.svg)](coverage.html)
+[![Coverage](https://img.shields.io/badge/coverage-79%25-yellow.svg)](https://codecov.io/gh/TuringWorks/orbit-rs)
 
 ---
 
@@ -212,15 +212,15 @@ Orbit-RS follows a structured development approach with clearly defined phases:
 <div class="community-grid" markdown="1">
 
 ### 💬 **Get Help**
-- [💬 **Discord Community**](https://discord.gg/orbit-rs) - Real-time chat and support
-- [💡 **GitHub Discussions**](https://github.com/TuringWorks/orbit-rs/discussions) - Q&A and feature requests  
-- [📧 **Mailing List**](mailto:orbit-rs@turingworks.com) - Announcements and updates
+- [💬 **GitHub Issues**](https://github.com/TuringWorks/orbit-rs/issues) - Bug reports and questions
+- [💡 **GitHub Discussions**](https://github.com/TuringWorks/orbit-rs/discussions) - Community Q&A (Enable in repository settings)
+- [📧 **Contact Email**](mailto:contact@turingworks.com) - General inquiries
 - [🆘 **Support Portal**](support/) - Enterprise support options
 
 ### 🐛 **Report Issues**
 - [🐞 **Bug Reports**](https://github.com/TuringWorks/orbit-rs/issues/new?template=bug_report.md)
-- [💡 **Feature Requests**](https://github.com/TuringWorks/orbit-rs/issues/new?template=feature_request.md)  
-- [🔒 **Security Issues**](security@turingworks.com) - Responsible disclosure
+- [💡 **Feature Requests**](https://github.com/TuringWorks/orbit-rs/issues/new?template=feature_request.md)
+- [🔒 **Security Issues**](mailto:security@turingworks.com) - Responsible disclosure
 
 ### 📝 **Contributing**
 - [📋 **Contribution Guide**](contributing.md) - How to contribute code

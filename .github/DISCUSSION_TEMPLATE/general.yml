@@ -1,0 +1,66 @@
+body:
+  - type: markdown
+    attributes:
+      value: |
+        👋 **Welcome to Orbit-RS Discussions!**
+        
+        This is the place to ask questions, share ideas, showcase projects, and connect with the Orbit-RS community.
+        
+        **Before posting, please:**
+        - 🔍 Search existing discussions to see if your question has been answered
+        - 📖 Check our [documentation](https://turingworks.github.io/orbit-rs/)
+        - 💬 Join our [Discord](https://discord.gg/orbit-rs) for real-time chat
+        
+        **Discussion Categories:**
+        - **General** - General questions and discussions
+        - **Q&A** - Get help with specific problems
+        - **Ideas** - Feature requests and suggestions
+        - **Show and tell** - Share your Orbit-RS projects
+        - **Performance** - Performance-related discussions
+        - **Hardware Acceleration** - GPU/Neural engine optimization
+        - **Announcements** - Project updates and news
+  
+  - type: dropdown
+    id: category
+    attributes:
+      label: Discussion Category
+      description: What type of discussion is this?
+      options:
+        - General Question
+        - Technical Help
+        - Feature Idea
+        - Performance Question
+        - Hardware Acceleration
+        - Project Showcase
+        - Documentation Feedback
+        - Community
+      default: 0
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What would you like to discuss?
+      placeholder: Tell us what's on your mind...
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context
+      description: |
+        Any additional information that might be helpful:
+        - Environment details (OS, hardware, deployment type)
+        - Orbit-RS version
+        - Related documentation or examples
+        - Code snippets or configurations
+      placeholder: |
+        - OS: 
+        - Orbit-RS Version:
+        - Deployment: 
+        - Additional context...
+    validations:
+      required: false
