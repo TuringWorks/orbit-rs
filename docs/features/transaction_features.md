@@ -12,7 +12,7 @@ Orbit-RS provides a sophisticated transaction system that goes beyond basic CRUD
 
 The foundation of Orbit-RS transactions is a robust 2-phase commit implementation:
 
-```rust path=null start=null
+```rust
 use orbit_shared::{
     transactions::*,
     transport::*,
@@ -66,7 +66,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 Orbit-RS provides sophisticated distributed locking with automatic deadlock detection and prevention:
 
-```rust path=null start=null
+```rust
 use orbit_shared::transactions::{DistributedLockManager, LockMode};
 
 // Create lock manager
@@ -103,7 +103,7 @@ The system uses several strategies to prevent and resolve deadlocks:
 
 Comprehensive observability and monitoring through Prometheus metrics:
 
-```rust path=null start=null
+```rust
 use orbit_shared::transactions::TransactionMetrics;
 
 // Initialize metrics
@@ -143,7 +143,7 @@ let metrics = TransactionMetrics::new(node_id);
 
 You can also create custom metrics for your specific use cases:
 
-```rust path=null start=null
+```rust
 use orbit_shared::transactions::TransactionMetrics;
 
 let metrics = TransactionMetrics::new(node_id);
@@ -164,7 +164,7 @@ metrics.record_histogram("business.operation.duration",
 
 Enterprise-grade security features with comprehensive audit trails:
 
-```rust path=null start=null
+```rust
 use orbit_shared::transactions::{TransactionSecurityManager, TransactionPermission};
 
 // Initialize security manager
@@ -233,7 +233,7 @@ security_mgr.audit_log_entry(tx_id, "COMMIT", "success").await?;
 
 Support for complex, long-running distributed workflows with automatic compensation:
 
-```rust path=null start=null
+```rust
 use orbit_shared::saga::SagaOrchestrator;
 
 // Define saga with compensating actions
@@ -262,7 +262,7 @@ saga.execute().await?;
 
 ### Advanced Saga Example
 
-```rust path=null start=null
+```rust
 use orbit_shared::saga::{SagaOrchestrator, SagaStep, CompensationAction};
 
 let saga = SagaOrchestrator::new()
@@ -288,7 +288,7 @@ let result = saga
 
 High-performance features for demanding production workloads:
 
-```rust path=null start=null
+```rust
 use orbit_shared::transactions::{BatchProcessor, ConnectionPool, ResourceManager};
 
 // Adaptive batch processing
@@ -327,7 +327,7 @@ let guard = resource_mgr.acquire(memory_estimate).await?;
 
 ### Performance Tuning
 
-```rust path=null start=null
+```rust
 use orbit_shared::transactions::TransactionConfig;
 
 let config = TransactionConfig {

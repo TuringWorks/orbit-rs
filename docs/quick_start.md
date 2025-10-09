@@ -85,7 +85,7 @@ cargo run --example hello-world
 
 Here's a minimal example to get you started with Orbit-RS:
 
-```rust path=null start=null
+```rust
 use orbit_client::OrbitClient;
 use orbit_shared::{ActorWithStringKey, Key};
 use async_trait::async_trait;
@@ -131,7 +131,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 For more advanced usage with distributed transactions:
 
-```rust path=null start=null
+```rust
 use orbit_shared::{
     transactions::*,
     transport::*,

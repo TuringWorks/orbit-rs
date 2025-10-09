@@ -1221,7 +1221,7 @@ SELECT * FROM category_hierarchy ORDER BY level, name;
 
 The PostgreSQL wire protocol includes a comprehensive expression parser:
 
-```rust path=null start=null
+```rust
 use orbit_protocols::postgres_wire::sql::parser::ExpressionParser;
 use orbit_protocols::postgres_wire::sql::lexer::Lexer;
 
@@ -1258,7 +1258,7 @@ AI agent integration through the standardized Model Context Protocol, enabling A
 
 ### MCP Server Setup
 
-```rust path=null start=null
+```rust
 use orbit_protocols::mcp::{McpServer, McpConfig};
 
 // Configure MCP server for AI agents

@@ -287,7 +287,7 @@ Orbit-RS supports multiple pluggable storage backends:
 
 ### Persistence Configuration
 
-```rust path=null start=null
+```rust
 use orbit_server::persistence::*;
 
 // Configure persistence backend
@@ -308,7 +308,7 @@ let provider = DynamicPersistenceProvider::new(config).await?;
 ### Adding New Storage Backends
 
 1. **Implement Required Traits**:
-   ```rust path=null start=null
+   ```rust
    impl PersistenceProvider for MyCustomProvider {
        async fn initialize(&self) -> OrbitResult<()> { /* ... */ }
        async fn shutdown(&self) -> OrbitResult<()> { /* ... */ }
@@ -322,7 +322,7 @@ let provider = DynamicPersistenceProvider::new(config).await?;
    ```
 
 2. **Add Configuration Support**:
-   ```rust path=null start=null
+   ```rust
    #[derive(Debug, Clone, Serialize, Deserialize)]
    pub struct MyCustomConfig {
        pub connection_string: String,
@@ -331,7 +331,7 @@ let provider = DynamicPersistenceProvider::new(config).await?;
    ```
 
 3. **Register Backend**:
-   ```rust path=null start=null
+   ```rust
    // In persistence/mod.rs
    pub enum BackendType {
        Memory,
@@ -343,7 +343,7 @@ let provider = DynamicPersistenceProvider::new(config).await?;
    ```
 
 4. **Write Tests**:
-   ```rust path=null start=null
+   ```rust
    #[tokio::test]
    async fn test_my_custom_provider() {
        let config = MyCustomConfig { /* ... */ };
@@ -447,7 +447,7 @@ harness = false
 
 #### Unit Test Example
 
-```rust path=null start=null
+```rust
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -473,7 +473,7 @@ mod tests {
 
 #### Integration Test Example
 
-```rust path=null start=null
+```rust
 use orbit_client::OrbitClient;
 use orbit_server::OrbitServer;
 use std::time::Duration;
@@ -515,7 +515,7 @@ Feature: Actor Lifecycle Management
 ```
 
 Step definitions:
-```rust path=null start=null
+```rust
 use cucumber::{given, when, then, World};
 
 #[derive(Debug, Default, World)]
@@ -540,7 +540,7 @@ async fn when_request_actor(world: &mut ActorWorld, actor_id: String) {
 
 #### Performance Benchmarks
 
-```rust path=null start=null
+```rust
 use criterion::{criterion_group, criterion_main, Criterion, BenchmarkId};
 use tokio::runtime::Runtime;
 
@@ -621,7 +621,7 @@ module_name_repetitions = "allow"
 - **Safety**: Document unsafe code with safety requirements
 
 Documentation example:
-```rust path=null start=null
+```rust
 /// Manages the lifecycle of actors in the Orbit cluster.
 ///
 /// The `ActorManager` coordinates actor activation, deactivation, and
@@ -654,7 +654,7 @@ pub struct ActorManager {
 - Use `anyhow` for application errors, custom error types for library APIs
 
 Error type example:
-```rust path=null start=null
+```rust
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -789,7 +789,7 @@ docs(readme): update installation instructions
 - Handle cancellation gracefully
 
 Example:
-```rust path=null start=null
+```rust
 use tokio::time::{timeout, Duration};
 
 pub async fn process_with_timeout<T>(
@@ -820,7 +820,7 @@ pub async fn process_with_timeout<T>(
 
 ### Logging Configuration
 
-```rust path=null start=null
+```rust
 use tracing::{info, warn, error, debug, trace};
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
