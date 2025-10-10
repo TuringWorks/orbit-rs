@@ -45,15 +45,24 @@ pub enum MLError {
 
     /// Neural network errors
     #[error("Neural network error: {message}")]
-    NeuralNetwork { message: String },
+    NeuralNetwork {
+        /// Error message describing the neural network issue
+        message: String,
+    },
 
     /// Transformer errors
     #[error("Transformer error: {message}")]
-    Transformer { message: String },
+    Transformer {
+        /// Error message describing the transformer issue
+        message: String,
+    },
 
     /// Graph neural network errors
     #[error("Graph neural network error: {message}")]
-    GraphNeuralNetwork { message: String },
+    GraphNeuralNetwork {
+        /// Error message describing the graph neural network issue
+        message: String,
+    },
 
     /// Multi-language integration errors
     #[error("Multi-language error ({language}): {message}")]
@@ -78,7 +87,10 @@ pub enum MLError {
 
     /// Lua integration errors
     #[error("Lua error: {message}")]
-    Lua { message: String },
+    Lua {
+        /// Error message from Lua runtime
+        message: String,
+    },
 
     /// GPU/CUDA errors
     #[cfg(feature = "gpu")]
@@ -92,7 +104,10 @@ pub enum MLError {
 
     /// SQL extension errors
     #[error("SQL extension error: {message}")]
-    SqlExtension { message: String },
+    SqlExtension {
+        /// Error message from SQL extension
+        message: String,
+    },
 
     /// Serialization/deserialization errors
     #[error("Serialization error: {0}")]
@@ -104,7 +119,10 @@ pub enum MLError {
 
     /// Invalid input errors
     #[error("Invalid input: {message}")]
-    InvalidInput { message: String },
+    InvalidInput {
+        /// Description of the invalid input
+        message: String,
+    },
 
     /// Resource not found errors
     #[error("Resource not found: {resource}")]
@@ -115,19 +133,31 @@ pub enum MLError {
 
     /// Permission/access errors
     #[error("Access denied: {message}")]
-    AccessDenied { message: String },
+    AccessDenied {
+        /// Description of the access denial reason
+        message: String,
+    },
 
     /// Resource allocation errors
     #[error("Resource allocation error: {message}")]
-    ResourceAllocation { message: String },
+    ResourceAllocation {
+        /// Description of the resource allocation failure
+        message: String,
+    },
 
     /// Timeout errors
     #[error("Operation timed out: {operation}")]
-    Timeout { operation: String },
+    Timeout {
+        /// Name of the operation that timed out
+        operation: String,
+    },
 
     /// Internal errors
     #[error("Internal error: {message}")]
-    Internal { message: String },
+    Internal {
+        /// Internal error message
+        message: String,
+    },
 
     /// External service errors
     #[error("External service error ({service}): {message}")]
@@ -140,19 +170,31 @@ pub enum MLError {
 
     /// Validation errors
     #[error("Validation error: {message}")]
-    Validation { message: String },
+    Validation {
+        /// Validation error description
+        message: String,
+    },
 
     /// Compatibility errors
     #[error("Compatibility error: {message}")]
-    Compatibility { message: String },
+    Compatibility {
+        /// Compatibility issue description
+        message: String,
+    },
 
     /// Memory errors
     #[error("Memory error: {message}")]
-    Memory { message: String },
+    Memory {
+        /// Memory error description
+        message: String,
+    },
 
     /// Thread safety errors
     #[error("Thread safety error: {message}")]
-    ThreadSafety { message: String },
+    ThreadSafety {
+        /// Thread safety violation description
+        message: String,
+    },
 }
 
 impl MLError {

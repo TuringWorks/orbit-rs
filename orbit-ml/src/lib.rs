@@ -47,27 +47,34 @@
 pub mod config;
 pub mod engine;
 pub mod error;
+/// Performance metrics and monitoring
 pub mod metrics;
 
 // ML Architecture modules
+/// Graph Neural Network implementations and architectures
 pub mod graph_neural_networks;
 pub mod neural_networks;
 pub mod transformers;
 
 // Multi-language support
+/// Multi-language runtime integration (Python, JavaScript, Lua)
 pub mod multi_language;
 
 // Industry-specific models
+/// Pre-built models for various industry verticals
 pub mod industry_models;
 
 // SQL extensions
+/// SQL function extensions for ML operations
 pub mod sql_extensions;
 
 // Utilities and common functionality
+/// Data processing and manipulation utilities
 pub mod data;
 pub mod inference;
 pub mod models;
 pub mod training;
+/// General utility functions and helpers
 pub mod utils;
 
 // Re-exports for convenience

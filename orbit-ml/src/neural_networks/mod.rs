@@ -47,7 +47,10 @@ pub enum NetworkType {
     /// Gated Recurrent Unit
     GRU,
     /// Custom architecture
-    Custom { name: String },
+    Custom {
+        /// Name of the custom architecture
+        name: String,
+    },
 }
 
 /// Neural network layer configuration
@@ -77,34 +80,57 @@ pub enum LayerType {
     Dense,
     /// Convolutional layer
     Conv1D {
+        /// Size of the convolution kernel
         kernel_size: usize,
+        /// Stride for the convolution operation
         stride: usize,
+        /// Padding to apply to input
         padding: usize,
     },
     /// 2D Convolutional layer
     Conv2D {
+        /// Size of the 2D convolution kernel as (height, width)
         kernel_size: (usize, usize),
+        /// Stride for the 2D convolution as (height, width)
         stride: (usize, usize),
+        /// Padding to apply to input as (height, width)
         padding: (usize, usize),
     },
     /// 3D Convolutional layer
     Conv3D {
+        /// Size of the 3D convolution kernel as (depth, height, width)
         kernel_size: (usize, usize, usize),
+        /// Stride for the 3D convolution as (depth, height, width)
         stride: (usize, usize, usize),
+        /// Padding to apply to input as (depth, height, width)
         padding: (usize, usize, usize),
     },
     /// Max pooling layer
-    MaxPool1D { pool_size: usize, stride: usize },
+    MaxPool1D {
+        /// Size of the pooling window
+        pool_size: usize,
+        /// Stride for the pooling operation
+        stride: usize,
+    },
     /// 2D Max pooling layer
     MaxPool2D {
+        /// Size of the 2D pooling window as (height, width)
         pool_size: (usize, usize),
+        /// Stride for the 2D pooling as (height, width)
         stride: (usize, usize),
     },
     /// Average pooling layer
-    AvgPool1D { pool_size: usize, stride: usize },
+    AvgPool1D {
+        /// Size of the pooling window
+        pool_size: usize,
+        /// Stride for the pooling operation
+        stride: usize,
+    },
     /// 2D Average pooling layer
     AvgPool2D {
+        /// Size of the 2D pooling window as (height, width)
         pool_size: (usize, usize),
+        /// Stride for the 2D pooling as (height, width)
         stride: (usize, usize),
     },
     /// Recurrent layer
@@ -122,7 +148,10 @@ pub enum LayerType {
     /// Flatten layer
     Flatten,
     /// Reshape layer
-    Reshape { shape: Vec<usize> },
+    Reshape {
+        /// Target shape for tensor reshaping
+        shape: Vec<usize>,
+    },
 }
 
 /// Activation function types
@@ -134,9 +163,15 @@ pub enum ActivationType {
     /// Rectified Linear Unit
     ReLU,
     /// Leaky ReLU
-    LeakyReLU { alpha: f64 },
+    LeakyReLU {
+        /// Negative slope coefficient (typically 0.01)
+        alpha: f64,
+    },
     /// Exponential Linear Unit
-    ELU { alpha: f64 },
+    ELU {
+        /// Alpha parameter for negative values
+        alpha: f64,
+    },
     /// Swish activation
     Swish,
     /// GELU activation

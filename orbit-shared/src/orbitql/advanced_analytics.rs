@@ -1383,6 +1383,7 @@ pub struct AdaBoostModel {
 }
 
 /// LightGBM-style gradient boosting
+#[allow(dead_code)]
 pub struct LightGBMModel {
     /// Leaf-wise growing trees
     trees: Vec<LightGBMTree>,
@@ -1410,6 +1411,7 @@ pub struct LightGBMModel {
 }
 
 /// CatBoost-style categorical boosting
+#[allow(dead_code)]
 pub struct CatBoostModel {
     /// Oblivious decision trees
     trees: Vec<ObliviousTree>,
