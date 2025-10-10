@@ -7,37 +7,40 @@ use uuid::Uuid;
 
 use crate::error::Result;
 
-/// Training configuration
+/// Comprehensive training configuration for ML models
+///
+/// Contains all parameters needed to configure the training process including
+/// optimization settings, regularization, checkpointing, and monitoring.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TrainingConfig {
-    /// Number of training epochs
+    /// Number of training epochs (complete passes through the dataset)
     pub epochs: usize,
 
-    /// Learning rate
+    /// Learning rate for gradient descent optimization
     pub learning_rate: f64,
 
-    /// Batch size
+    /// Mini-batch size for stochastic gradient descent
     pub batch_size: usize,
 
-    /// Validation split ratio (0.0 to 1.0)
+    /// Fraction of data to use for validation (0.0 to 1.0)
     pub validation_split: f64,
 
-    /// Optimizer type
+    /// Optimization algorithm configuration
     pub optimizer: OptimizerType,
 
-    /// Loss function
+    /// Loss function for training objective
     pub loss_function: LossFunction,
 
-    /// Metrics to track during training
+    /// List of metrics to compute and track during training
     pub metrics: Vec<String>,
 
-    /// Early stopping configuration
+    /// Optional early stopping configuration to prevent overfitting
     pub early_stopping: Option<EarlyStoppingConfig>,
 
-    /// Checkpoint configuration
+    /// Model checkpointing configuration for recovery and best model saving
     pub checkpointing: CheckpointConfig,
 
-    /// Additional hyperparameters
+    /// Additional model-specific hyperparameters as key-value pairs
     pub hyperparameters: HashMap<String, serde_json::Value>,
 }
 
@@ -88,38 +91,44 @@ pub enum LossFunction {
     },
 }
 
-/// Early stopping configuration
+/// Early stopping configuration to prevent overfitting
+///
+/// Monitors a specified metric and stops training when no improvement
+/// is seen for a configured number of epochs.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EarlyStoppingConfig {
-    /// Metric to monitor
+    /// Name of the metric to monitor (e.g., "val_loss", "val_accuracy")
     pub monitor: String,
 
-    /// Minimum change to qualify as improvement
+    /// Minimum change in monitored metric to qualify as improvement
     pub min_delta: f64,
 
-    /// Number of epochs with no improvement to wait
+    /// Number of epochs with no improvement after which training stops
     pub patience: usize,
 
-    /// Whether to restore best weights
+    /// Whether to restore model weights from the best epoch
     pub restore_best_weights: bool,
 }
 
-/// Checkpoint configuration
+/// Model checkpointing configuration for training recovery and best model saving
+///
+/// Configures automatic saving of model checkpoints during training to enable
+/// recovery from failures and preservation of the best performing models.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CheckpointConfig {
-    /// Enable checkpointing
+    /// Whether to enable automatic checkpointing during training
     pub enabled: bool,
 
-    /// Save frequency (every N epochs)
+    /// Frequency of checkpoint saves (every N epochs)
     pub save_every_n_epochs: usize,
 
-    /// Maximum number of checkpoints to keep
+    /// Maximum number of checkpoint files to retain (oldest are deleted)
     pub max_checkpoints: usize,
 
-    /// Save best model only
+    /// Whether to save only checkpoints that improve the monitored metric
     pub save_best_only: bool,
 
-    /// Metric to monitor for best model
+    /// Name of metric to monitor for determining "best" model
     pub monitor_metric: Option<String>,
 }
 
@@ -183,18 +192,35 @@ pub struct TrainingJob {
     pub metrics: HashMap<String, f64>,
 }
 
-/// Trainer interface
+/// Training orchestrator that manages the model training process
+///
+/// Coordinates training execution using the provided configuration,
+/// manages training jobs, and handles training lifecycle events.
 pub struct Trainer {
+    /// Training configuration to use for all training jobs
     config: TrainingConfig,
 }
 
 impl Trainer {
-    /// Create a new trainer
+    /// Create a new trainer with the specified configuration
+    ///
+    /// # Arguments
+    /// * `config` - Training configuration to use for all training jobs
     pub fn new(config: TrainingConfig) -> Self {
         Self { config }
     }
 
-    /// Start training
+    /// Start a new training job for the specified model
+    ///
+    /// # Arguments
+    /// * `_model_name` - Name of the model to train
+    /// * `_data` - Training data as bytes
+    ///
+    /// # Returns
+    /// A new training job instance or error if job creation fails
+    ///
+    /// # Note
+    /// This is currently a stub implementation. Full training logic will be added.
     pub async fn train(&self, _model_name: &str, _data: &[u8]) -> Result<TrainingJob> {
         // TODO: Implement actual training logic
         let job = TrainingJob {
@@ -248,48 +274,73 @@ impl Default for TrainingConfig {
 }
 
 impl TrainingConfig {
-    /// Create a new training configuration
+    /// Create a new training configuration with default values
+    ///
+    /// # Returns
+    /// A new training configuration with sensible defaults
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Set number of epochs
+    /// Set the number of training epochs
+    ///
+    /// # Arguments
+    /// * `epochs` - Number of complete passes through the training dataset
     pub fn epochs(mut self, epochs: usize) -> Self {
         self.epochs = epochs;
         self
     }
 
-    /// Set learning rate
+    /// Set the learning rate for optimization
+    ///
+    /// # Arguments
+    /// * `lr` - Learning rate value (typically between 0.0001 and 0.1)
     pub fn learning_rate(mut self, lr: f64) -> Self {
         self.learning_rate = lr;
         self
     }
 
-    /// Set batch size
+    /// Set the mini-batch size for training
+    ///
+    /// # Arguments
+    /// * `size` - Number of samples per batch (powers of 2 are typically optimal)
     pub fn batch_size(mut self, size: usize) -> Self {
         self.batch_size = size;
         self
     }
 
-    /// Set optimizer
+    /// Set the optimization algorithm
+    ///
+    /// # Arguments
+    /// * `optimizer` - Optimizer type and configuration
     pub fn optimizer(mut self, optimizer: OptimizerType) -> Self {
         self.optimizer = optimizer;
         self
     }
 
-    /// Set loss function
+    /// Set the loss function for training
+    ///
+    /// # Arguments
+    /// * `loss` - Loss function type and configuration
     pub fn loss_function(mut self, loss: LossFunction) -> Self {
         self.loss_function = loss;
         self
     }
 
-    /// Add metric to track
+    /// Add a metric to track during training
+    ///
+    /// # Arguments
+    /// * `metric` - Name of the metric (e.g., "accuracy", "precision")
     pub fn add_metric(mut self, metric: &str) -> Self {
         self.metrics.push(metric.to_string());
         self
     }
 
-    /// Set hyperparameter
+    /// Set a custom hyperparameter value
+    ///
+    /// # Arguments
+    /// * `key` - Parameter name
+    /// * `value` - Parameter value as JSON
     pub fn set_hyperparameter(mut self, key: &str, value: serde_json::Value) -> Self {
         self.hyperparameters.insert(key.to_string(), value);
         self
