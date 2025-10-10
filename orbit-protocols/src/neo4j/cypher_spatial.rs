@@ -4,7 +4,8 @@
 //! It supports all Neo4j spatial functions with enhanced graph traversal capabilities.
 
 use orbit_shared::spatial::{
-    crs::utils::haversine_distance, Point, SpatialError, SpatialGeometry, WGS84_SRID,
+    crs::utils::haversine_distance, Point, SpatialError, SpatialGeometry, SpatialOperations,
+    WGS84_SRID,
 };
 use serde_json::{Map, Value};
 use std::collections::{HashMap, HashSet};
