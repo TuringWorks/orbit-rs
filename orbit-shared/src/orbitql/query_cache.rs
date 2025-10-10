@@ -4,18 +4,15 @@
 //! result caching, plan caching, metadata caching, cache invalidation,
 //! and distributed cache coordination. Implements Phase 9.6 of the optimization plan.
 
-use futures::future::join_all;
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
-use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::hash::{Hash, Hasher};
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
-use tokio::sync::{broadcast, mpsc, oneshot, RwLock as TokioRwLock};
+use tokio::sync::{broadcast, mpsc, RwLock as TokioRwLock};
 
 use crate::orbitql::ast::*;
-use crate::orbitql::cost_based_planner::*;
-use crate::orbitql::parallel_execution::*;
 use crate::orbitql::vectorized_execution::*;
 use crate::orbitql::ExecutionPlan;
 use crate::orbitql::QueryValue;

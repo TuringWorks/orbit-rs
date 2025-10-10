@@ -4,15 +4,11 @@
 //! file format support (Parquet, ORC, CSV), object storage connectivity
 //! (S3, Azure, GCS), and storage-aware query optimization.
 
-use bytes::Bytes;
 use futures::stream::{Stream, StreamExt};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::fs::File;
-use std::io::{BufReader, BufWriter};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
-use tokio::fs;
 use tokio::io::{AsyncRead, AsyncWrite};
 
 use crate::orbitql::ast::*;

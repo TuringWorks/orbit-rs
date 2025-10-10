@@ -4,10 +4,9 @@
 //! workload pattern recognition, and auto-tuning capabilities for the OrbitQL query engine.
 
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashMap, VecDeque};
-use std::sync::{Arc, Mutex, RwLock};
-use std::time::{Duration, Instant, SystemTime};
-use tokio::sync::{broadcast, mpsc};
+use std::collections::{HashMap, VecDeque};
+use std::sync::{Arc, RwLock};
+use std::time::{Duration, SystemTime};
 
 /// Advanced Analytics coordinator
 pub struct AdvancedAnalytics {

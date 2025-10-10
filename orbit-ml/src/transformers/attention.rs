@@ -6,7 +6,7 @@
 //! - Sparse Attention
 //! - Cross Attention
 
-use ndarray::{s, Array2, Array3, Array4, Axis};
+use ndarray::{Array2, Array3, Array4};
 use serde::{Deserialize, Serialize};
 
 use crate::error::Result;

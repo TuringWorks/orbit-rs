@@ -3,7 +3,6 @@
 //! This module provides comprehensive implementations of modern transformer architectures
 //! with support for various attention mechanisms, positional encodings, and layer normalizations.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use ndarray::{Array1, Array2, Array3};
@@ -116,7 +115,7 @@ impl EmbeddingLayer {
         let hidden_size = self.token_embeddings.out_features;
 
         // Token embeddings
-        let mut embeddings = Array3::<f64>::zeros((batch_size, seq_len, hidden_size));
+        let embeddings = Array3::<f64>::zeros((batch_size, seq_len, hidden_size));
 
         // TODO: Implement actual embedding lookup
         // This is a simplified version - in practice would use embedding lookup tables

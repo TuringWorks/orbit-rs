@@ -8,7 +8,6 @@
 
 use ndarray::{Array2, Array3};
 use serde::{Deserialize, Serialize};
-use std::f64::consts::PI;
 
 use crate::error::Result;
 

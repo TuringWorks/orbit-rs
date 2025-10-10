@@ -1,8 +1,7 @@
 //! Feedforward Neural Network implementation.
 
 use async_trait::async_trait;
-use ndarray::{Array1, Array2, Axis};
-use serde::{Deserialize, Serialize};
+use ndarray::{Array1, Array2};
 
 use crate::error::{MLError, Result};
 use crate::neural_networks::{

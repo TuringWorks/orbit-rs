@@ -4,23 +4,17 @@
 //! cluster management, distributed query planning, network communication,
 //! fault tolerance, and cross-node data shuffling.
 
-use futures::stream::{Stream, StreamExt};
+use futures::stream::StreamExt;
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashMap, HashSet};
-use std::net::{IpAddr, SocketAddr};
+use std::collections::{HashMap, HashSet};
+use std::net::SocketAddr;
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, Instant, SystemTime};
-use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::{broadcast, mpsc, oneshot, Semaphore};
-use tokio::time::timeout;
+use tokio::sync::{broadcast, mpsc};
 use uuid::Uuid;
 
 use crate::orbitql::ast::*;
-use crate::orbitql::parallel_execution::*;
-use crate::orbitql::query_cache::*;
-use crate::orbitql::storage_integration::*;
 use crate::orbitql::vectorized_execution::*;
-use crate::orbitql::QueryValue;
 
 /// Distributed query execution coordinator
 pub struct DistributedExecutor {

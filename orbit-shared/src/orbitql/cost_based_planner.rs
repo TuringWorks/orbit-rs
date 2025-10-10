@@ -10,7 +10,7 @@ use tokio::sync::RwLock;
 
 use super::ast::*;
 use super::cost_model::{CardinalityEstimate, CostModel, QueryCost};
-use super::optimizer::{OptimizationError, QueryOptimizer};
+use super::optimizer::QueryOptimizer;
 use super::planner::{ExecutionPlan, PlanNode, PlanningError};
 use super::statistics::{IndexStatistics, StatisticsManager, TableStatistics};
 

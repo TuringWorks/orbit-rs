@@ -4,14 +4,13 @@
 //! parallel operators, work scheduling, and data exchange operators for high-performance
 //! query processing. Implements Phase 9.5 of the optimization plan.
 
-use futures::future::join_all;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Condvar, Mutex, RwLock};
 use std::thread;
 use std::time::{Duration, Instant};
-use tokio::sync::{mpsc, oneshot, Semaphore};
+use tokio::sync::{mpsc, oneshot};
 
 use crate::orbitql::ast::*;
 use crate::orbitql::vectorized_execution::*;

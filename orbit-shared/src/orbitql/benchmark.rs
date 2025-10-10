@@ -7,12 +7,10 @@
 use futures::future::join_all;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashMap, VecDeque};
-use std::fs::{create_dir_all, File};
-use std::io::{BufWriter, Write};
-use std::path::Path;
-use std::sync::{Arc, Mutex, RwLock};
-use std::thread;
+use std::collections::{BTreeMap, HashMap};
+use std::fs::create_dir_all;
+use std::io::Write;
+use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant, SystemTime};
 use tokio::sync::Semaphore;
 

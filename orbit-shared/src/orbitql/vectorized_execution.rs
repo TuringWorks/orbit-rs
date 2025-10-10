@@ -5,10 +5,8 @@
 //! for analytical workloads. Implements Phase 9.4 of the optimization plan.
 
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 // Note: Portable SIMD is unstable, so we use manual vectorization for now
 // use std::simd::{f64x8, i64x8, u64x8, Simd, SimdElement, SimdPartialEq, SimdPartialOrd};
-use std::sync::Arc;
 
 use crate::orbitql::ast::*;
 use crate::orbitql::QueryValue;

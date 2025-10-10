@@ -10,7 +10,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 use super::ast::*;
-use super::cost_model::{CardinalityEstimate, CostModel, QueryCost};
+use super::cost_model::{CostModel, QueryCost};
 use super::statistics::{IndexStatistics, StatisticsManager};
 
 /// Index selection engine for optimal index usage

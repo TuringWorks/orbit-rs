@@ -1,7 +1,7 @@
 //! Optimizer implementations for neural networks.
 
 use async_trait::async_trait;
-use ndarray::{Array1, Array2, Array4};
+use ndarray::Array2;
 
 use crate::error::Result;
 
