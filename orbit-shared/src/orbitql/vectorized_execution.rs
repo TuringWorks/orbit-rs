@@ -6,7 +6,8 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::simd::{f64x8, i64x8, u64x8, Simd, SimdElement, SimdPartialEq, SimdPartialOrd};
+// Note: Portable SIMD is unstable, so we use manual vectorization for now
+// use std::simd::{f64x8, i64x8, u64x8, Simd, SimdElement, SimdPartialEq, SimdPartialOrd};
 use std::sync::Arc;
 
 use crate::orbitql::ast::*;
@@ -90,7 +91,7 @@ pub struct VectorRegister<T> {
 }
 
 /// Columnar data representation for vectorized processing
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ColumnBatch {
     /// Raw data buffer
     pub data: Vec<u8>,
@@ -105,7 +106,7 @@ pub struct ColumnBatch {
 }
 
 /// Bitmap for null tracking
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Bitmap {
     /// Bit storage
     pub bits: Vec<u64>,
@@ -124,7 +125,7 @@ pub enum VectorDataType {
 }
 
 /// Record batch for columnar processing
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RecordBatch {
     /// Columns in the batch
     pub columns: Vec<ColumnBatch>,
@@ -135,7 +136,7 @@ pub struct RecordBatch {
 }
 
 /// Schema for record batches
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BatchSchema {
     /// Column names and types
     pub fields: Vec<(String, VectorDataType)>,
@@ -399,7 +400,7 @@ impl VectorizedFilter {
         self.apply_selection_mask(input, &selection_mask)
     }
 
-    /// SIMD filter for i64 columns
+    /// Vectorized filter for i64 columns (using scalar operations for stability)
     fn simd_filter_i64(
         &self,
         column: &ColumnBatch,
@@ -409,18 +410,15 @@ impl VectorizedFilter {
         let data = self.extract_i64_data(column)?;
         let mut result = vec![false; data.len()];
 
-        let filter_simd = i64x8::splat(filter_value);
-        let chunks = data.chunks_exact(8);
-
-        // Process 8 elements at a time with SIMD
-        for (i, chunk) in chunks.enumerate() {
-            let data_simd = i64x8::from_slice(chunk);
-            let mask = match operator {
-                BinaryOperator::Equal => data_simd.simd_eq(filter_simd),
-                BinaryOperator::GreaterThan => data_simd.simd_gt(filter_simd),
-                BinaryOperator::LessThan => data_simd.simd_lt(filter_simd),
-                BinaryOperator::GreaterThanOrEqual => data_simd.simd_ge(filter_simd),
-                BinaryOperator::LessThanOrEqual => data_simd.simd_le(filter_simd),
+        // Process elements using scalar operations for now
+        // TODO: Replace with stable SIMD when available
+        for (i, &value) in data.iter().enumerate() {
+            result[i] = match operator {
+                BinaryOperator::Equal => value == filter_value,
+                BinaryOperator::GreaterThan => value > filter_value,
+                BinaryOperator::LessThan => value < filter_value,
+                BinaryOperator::GreaterThanOrEqual => value >= filter_value,
+                BinaryOperator::LessThanOrEqual => value <= filter_value,
                 _ => {
                     return Err(VectorizationError::SimdNotSupported(format!(
                         "Operator {:?} not supported",
@@ -428,31 +426,12 @@ impl VectorizedFilter {
                     )))
                 }
             };
-
-            // Convert SIMD mask to boolean array
-            for (j, &bit) in mask.as_array().iter().enumerate() {
-                result[i * 8 + j] = bit;
-            }
-        }
-
-        // Handle remainder elements
-        let remainder = data.chunks_exact(8).remainder();
-        for (i, &value) in remainder.iter().enumerate() {
-            let base_idx = (data.len() / 8) * 8 + i;
-            result[base_idx] = match operator {
-                BinaryOperator::Equal => value == filter_value,
-                BinaryOperator::GreaterThan => value > filter_value,
-                BinaryOperator::LessThan => value < filter_value,
-                BinaryOperator::GreaterThanOrEqual => value >= filter_value,
-                BinaryOperator::LessThanOrEqual => value <= filter_value,
-                _ => false,
-            };
         }
 
         Ok(result)
     }
 
-    /// SIMD filter for f64 columns
+    /// Vectorized filter for f64 columns (using scalar operations for stability)
     fn simd_filter_f64(
         &self,
         column: &ColumnBatch,
@@ -462,18 +441,15 @@ impl VectorizedFilter {
         let data = self.extract_f64_data(column)?;
         let mut result = vec![false; data.len()];
 
-        let filter_simd = f64x8::splat(filter_value);
-        let chunks = data.chunks_exact(8);
-
-        // Process 8 elements at a time with SIMD
-        for (i, chunk) in chunks.enumerate() {
-            let data_simd = f64x8::from_slice(chunk);
-            let mask = match operator {
-                BinaryOperator::Equal => data_simd.simd_eq(filter_simd),
-                BinaryOperator::GreaterThan => data_simd.simd_gt(filter_simd),
-                BinaryOperator::LessThan => data_simd.simd_lt(filter_simd),
-                BinaryOperator::GreaterThanOrEqual => data_simd.simd_ge(filter_simd),
-                BinaryOperator::LessThanOrEqual => data_simd.simd_le(filter_simd),
+        // Process elements using scalar operations for now
+        // TODO: Replace with stable SIMD when available
+        for (i, &value) in data.iter().enumerate() {
+            result[i] = match operator {
+                BinaryOperator::Equal => (value - filter_value).abs() < f64::EPSILON,
+                BinaryOperator::GreaterThan => value > filter_value,
+                BinaryOperator::LessThan => value < filter_value,
+                BinaryOperator::GreaterThanOrEqual => value >= filter_value,
+                BinaryOperator::LessThanOrEqual => value <= filter_value,
                 _ => {
                     return Err(VectorizationError::SimdNotSupported(format!(
                         "Operator {:?} not supported",
@@ -481,32 +457,16 @@ impl VectorizedFilter {
                     )))
                 }
             };
-
-            // Convert SIMD mask to boolean array
-            for (j, &bit) in mask.as_array().iter().enumerate() {
-                result[i * 8 + j] = bit;
-            }
-        }
-
-        // Handle remainder elements
-        let remainder = data.chunks_exact(8).remainder();
-        for (i, &value) in remainder.iter().enumerate() {
-            let base_idx = (data.len() / 8) * 8 + i;
-            result[base_idx] = match operator {
-                BinaryOperator::Equal => (value - filter_value).abs() < f64::EPSILON,
-                BinaryOperator::GreaterThan => value > filter_value,
-                BinaryOperator::LessThan => value < filter_value,
-                BinaryOperator::GreaterThanOrEqual => value >= filter_value,
-                BinaryOperator::LessThanOrEqual => value <= filter_value,
-                _ => false,
-            };
         }
 
         Ok(result)
     }
 
     /// Extract i64 data from column
-    fn extract_i64_data(&self, column: &ColumnBatch) -> Result<&[i64], VectorizationError> {
+    fn extract_i64_data<'a>(
+        &self,
+        column: &'a ColumnBatch,
+    ) -> Result<&'a [i64], VectorizationError> {
         if column.data_type != VectorDataType::Integer64 {
             return Err(VectorizationError::TypeMismatch(
                 "Expected Integer64".to_string(),
@@ -524,7 +484,10 @@ impl VectorizedFilter {
     }
 
     /// Extract f64 data from column
-    fn extract_f64_data(&self, column: &ColumnBatch) -> Result<&[f64], VectorizationError> {
+    fn extract_f64_data<'a>(
+        &self,
+        column: &'a ColumnBatch,
+    ) -> Result<&'a [f64], VectorizationError> {
         if column.data_type != VectorDataType::Float64 {
             return Err(VectorizationError::TypeMismatch(
                 "Expected Float64".to_string(),
@@ -744,7 +707,7 @@ impl VectorizedProjection {
         let right_col = self.evaluate_expression(right, input)?;
 
         // Perform SIMD arithmetic operations
-        match (left_col.data_type, right_col.data_type, operator) {
+        match (&left_col.data_type, &right_col.data_type, operator) {
             (VectorDataType::Integer64, VectorDataType::Integer64, op) => {
                 self.simd_arithmetic_i64(&left_col, &right_col, op)
             }
@@ -757,7 +720,7 @@ impl VectorizedProjection {
         }
     }
 
-    /// SIMD arithmetic for i64 columns
+    /// Vectorized arithmetic for i64 columns (using scalar operations for stability)
     fn simd_arithmetic_i64(
         &self,
         left: &ColumnBatch,
@@ -775,48 +738,9 @@ impl VectorizedProjection {
 
         let mut result_data = Vec::with_capacity(left_data.len() * 8);
 
-        // Process 8 elements at a time with SIMD
-        let chunks = left_data.chunks_exact(8).zip(right_data.chunks_exact(8));
-
-        for (left_chunk, right_chunk) in chunks {
-            let left_simd = i64x8::from_slice(left_chunk);
-            let right_simd = i64x8::from_slice(right_chunk);
-
-            let result_simd = match operator {
-                BinaryOperator::Add => left_simd + right_simd,
-                BinaryOperator::Subtract => left_simd - right_simd,
-                BinaryOperator::Multiply => left_simd * right_simd,
-                // Division requires special handling to avoid division by zero
-                BinaryOperator::Divide => {
-                    let mut result = [0i64; 8];
-                    for i in 0..8 {
-                        result[i] = if right_chunk[i] != 0 {
-                            left_chunk[i] / right_chunk[i]
-                        } else {
-                            0 // Handle division by zero
-                        };
-                    }
-                    i64x8::from_array(result)
-                }
-                _ => {
-                    return Err(VectorizationError::SimdNotSupported(format!(
-                        "Operator {:?} not supported",
-                        operator
-                    )))
-                }
-            };
-
-            // Convert result back to bytes
-            for &value in result_simd.as_array() {
-                result_data.extend_from_slice(&value.to_le_bytes());
-            }
-        }
-
-        // Handle remainder elements
-        let left_remainder = left_data.chunks_exact(8).remainder();
-        let right_remainder = right_data.chunks_exact(8).remainder();
-
-        for (left_val, right_val) in left_remainder.iter().zip(right_remainder.iter()) {
+        // Process elements using scalar operations for now
+        // TODO: Replace with stable SIMD when available
+        for (left_val, right_val) in left_data.iter().zip(right_data.iter()) {
             let result = match operator {
                 BinaryOperator::Add => left_val + right_val,
                 BinaryOperator::Subtract => left_val - right_val,
@@ -825,7 +749,7 @@ impl VectorizedProjection {
                     if *right_val != 0 {
                         left_val / right_val
                     } else {
-                        0
+                        0 // Handle division by zero
                     }
                 }
                 _ => {
@@ -847,7 +771,7 @@ impl VectorizedProjection {
         })
     }
 
-    /// SIMD arithmetic for f64 columns
+    /// Vectorized arithmetic for f64 columns (using scalar operations for stability)
     fn simd_arithmetic_f64(
         &self,
         left: &ColumnBatch,
@@ -865,42 +789,14 @@ impl VectorizedProjection {
 
         let mut result_data = Vec::with_capacity(left_data.len() * 8);
 
-        // Process 8 elements at a time with SIMD
-        let chunks = left_data.chunks_exact(8).zip(right_data.chunks_exact(8));
-
-        for (left_chunk, right_chunk) in chunks {
-            let left_simd = f64x8::from_slice(left_chunk);
-            let right_simd = f64x8::from_slice(right_chunk);
-
-            let result_simd = match operator {
-                BinaryOperator::Add => left_simd + right_simd,
-                BinaryOperator::Subtract => left_simd - right_simd,
-                BinaryOperator::Multiply => left_simd * right_simd,
-                BinaryOperator::Divide => left_simd / right_simd, // IEEE 754 handles division by zero
-                _ => {
-                    return Err(VectorizationError::SimdNotSupported(format!(
-                        "Operator {:?} not supported",
-                        operator
-                    )))
-                }
-            };
-
-            // Convert result back to bytes
-            for &value in result_simd.as_array() {
-                result_data.extend_from_slice(&value.to_le_bytes());
-            }
-        }
-
-        // Handle remainder elements
-        let left_remainder = left_data.chunks_exact(8).remainder();
-        let right_remainder = right_data.chunks_exact(8).remainder();
-
-        for (left_val, right_val) in left_remainder.iter().zip(right_remainder.iter()) {
+        // Process elements using scalar operations for now
+        // TODO: Replace with stable SIMD when available
+        for (left_val, right_val) in left_data.iter().zip(right_data.iter()) {
             let result = match operator {
                 BinaryOperator::Add => left_val + right_val,
                 BinaryOperator::Subtract => left_val - right_val,
                 BinaryOperator::Multiply => left_val * right_val,
-                BinaryOperator::Divide => left_val / right_val,
+                BinaryOperator::Divide => left_val / right_val, // IEEE 754 handles division by zero
                 _ => {
                     return Err(VectorizationError::SimdNotSupported(format!(
                         "Operator {:?} not supported",

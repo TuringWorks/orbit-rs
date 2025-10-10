@@ -399,6 +399,22 @@ impl ProjectionPushdown {
                 SelectField::Expression { expr, .. } => {
                     self.extract_column_references(expr, &mut required_columns);
                 }
+                SelectField::AllFrom(table_name) => {
+                    // table.* requires all columns from specific table
+                    required_columns.insert(table_name.clone(), vec!["*".to_string()]);
+                }
+                SelectField::Graph { alias, .. } => {
+                    // Graph queries need special handling
+                    if let Some(alias) = alias {
+                        required_columns.insert(alias.clone(), vec!["*".to_string()]);
+                    }
+                }
+                SelectField::TimeSeries { alias, .. } => {
+                    // Time series queries need special handling
+                    if let Some(alias) = alias {
+                        required_columns.insert(alias.clone(), vec!["*".to_string()]);
+                    }
+                }
             }
         }
 
@@ -467,8 +483,8 @@ impl ProjectionPushdown {
             Expression::FieldAccess { object, .. } => {
                 self.extract_column_references(object, columns);
             }
-            Expression::IndexAccess { array, index, .. } => {
-                self.extract_column_references(array, columns);
+            Expression::IndexAccess { object, index, .. } => {
+                self.extract_column_references(object, columns);
                 self.extract_column_references(index, columns);
             }
             _ => {} // Other expressions don't contain column references

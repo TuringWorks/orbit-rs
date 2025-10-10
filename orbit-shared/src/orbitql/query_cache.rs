@@ -17,6 +17,7 @@ use crate::orbitql::ast::*;
 use crate::orbitql::cost_based_planner::*;
 use crate::orbitql::parallel_execution::*;
 use crate::orbitql::vectorized_execution::*;
+use crate::orbitql::ExecutionPlan;
 use crate::orbitql::QueryValue;
 
 /// Default cache sizes and timeouts
@@ -504,7 +505,7 @@ pub struct CacheEntryMetadata {
 }
 
 /// Overall cache statistics
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CacheStatistics {
     /// Result cache stats
     pub result_cache: CacheStats,
@@ -521,7 +522,7 @@ pub struct CacheStatistics {
 }
 
 /// Individual cache statistics
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CacheStats {
     /// Hit count
     pub hits: usize,
@@ -584,7 +585,7 @@ impl QueryCacheManager {
     }
 
     /// Get cached query result
-    pub async fn get_result(&self, query: &Query) -> Option<QueryResult> {
+    pub async fn get_result(&self, query: &Statement) -> Option<QueryResult> {
         if !self.config.enable_result_cache {
             return None;
         }
@@ -592,7 +593,7 @@ impl QueryCacheManager {
         let query_hash = self.calculate_query_hash(query);
         let mut cache = self.result_cache.write().unwrap();
 
-        if let Some(entry) = cache.entries.get_mut(&query_hash) {
+        if let Some(entry) = cache.entries.get(&query_hash) {
             // Check TTL
             if entry.created_at.elapsed() > entry.ttl {
                 cache.entries.remove(&query_hash);
@@ -601,9 +602,15 @@ impl QueryCacheManager {
                 return None;
             }
 
-            // Update access tracking
-            entry.last_accessed = Instant::now();
-            entry.access_count += 1;
+            // Clone the data before updating cache state
+            let result_data = entry.data.clone();
+
+            // Now update the entry with a separate get_mut call
+            if let Some(entry) = cache.entries.get_mut(&query_hash) {
+                entry.last_accessed = Instant::now();
+                entry.access_count += 1;
+            }
+
             cache.hits += 1;
 
             // Update LRU
@@ -613,7 +620,7 @@ impl QueryCacheManager {
             // Update frequency
             *cache.frequency_tracker.entry(query_hash).or_insert(0) += 1;
 
-            Some(entry.data.clone())
+            Some(result_data)
         } else {
             cache.misses += 1;
             None
@@ -621,7 +628,11 @@ impl QueryCacheManager {
     }
 
     /// Cache query result
-    pub async fn cache_result(&self, query: &Query, result: QueryResult) -> Result<(), CacheError> {
+    pub async fn cache_result(
+        &self,
+        query: &Statement,
+        result: QueryResult,
+    ) -> Result<(), CacheError> {
         if !self.config.enable_result_cache {
             return Ok(());
         }
@@ -667,7 +678,7 @@ impl QueryCacheManager {
     }
 
     /// Get cached execution plan
-    pub async fn get_plan(&self, query: &Query) -> Option<ExecutionPlan> {
+    pub async fn get_plan(&self, query: &Statement) -> Option<ExecutionPlan> {
         if !self.config.enable_plan_cache {
             return None;
         }
@@ -675,7 +686,7 @@ impl QueryCacheManager {
         let query_hash = self.calculate_query_hash(query);
         let mut cache = self.plan_cache.write().unwrap();
 
-        if let Some(entry) = cache.entries.get_mut(&query_hash) {
+        if let Some(entry) = cache.entries.get(&query_hash) {
             // Check TTL
             if entry.created_at.elapsed() > entry.ttl {
                 cache.entries.remove(&query_hash);
@@ -684,16 +695,22 @@ impl QueryCacheManager {
                 return None;
             }
 
-            // Update access tracking
-            entry.last_accessed = Instant::now();
-            entry.access_count += 1;
+            // Clone the data before updating cache state
+            let plan_data = entry.data.clone();
+
+            // Now update the entry with a separate get_mut call
+            if let Some(entry) = cache.entries.get_mut(&query_hash) {
+                entry.last_accessed = Instant::now();
+                entry.access_count += 1;
+            }
+
             cache.hits += 1;
 
             // Update LRU
             cache.lru_tracker.retain(|&h| h != query_hash);
             cache.lru_tracker.push_back(query_hash);
 
-            Some(entry.data.clone())
+            Some(plan_data)
         } else {
             cache.misses += 1;
             None
@@ -701,7 +718,11 @@ impl QueryCacheManager {
     }
 
     /// Cache execution plan
-    pub async fn cache_plan(&self, query: &Query, plan: ExecutionPlan) -> Result<(), CacheError> {
+    pub async fn cache_plan(
+        &self,
+        query: &Statement,
+        plan: ExecutionPlan,
+    ) -> Result<(), CacheError> {
         if !self.config.enable_plan_cache {
             return Ok(());
         }
@@ -753,9 +774,10 @@ impl QueryCacheManager {
 
             entry.last_accessed = Instant::now();
             entry.access_count += 1;
+            let result = entry.data.clone();
             cache.hits += 1;
 
-            Some(entry.data.clone())
+            Some(result)
         } else {
             cache.misses += 1;
             None
@@ -859,20 +881,24 @@ impl QueryCacheManager {
 
     // Helper methods
 
-    fn calculate_query_hash(&self, query: &Query) -> QueryHash {
+    fn calculate_query_hash(&self, query: &Statement) -> QueryHash {
         let mut hasher = DefaultHasher::new();
         format!("{:?}", query).hash(&mut hasher);
         hasher.finish()
     }
 
-    fn extract_query_tags(&self, query: &Query) -> HashSet<String> {
+    fn extract_query_tags(&self, query: &Statement) -> HashSet<String> {
         let mut tags = HashSet::new();
 
         // Extract table names from query (simplified)
         match query {
-            Query::Select(select) => {
-                if let Some(ref from) = select.from {
-                    tags.insert(format!("table:{}", from.table_name));
+            Statement::Select(select) => {
+                if !select.from.is_empty() {
+                    for from_clause in &select.from {
+                        if let crate::orbitql::ast::FromClause::Table { name, .. } = from_clause {
+                            tags.insert(format!("table:{}", name));
+                        }
+                    }
                 }
             }
             _ => {}

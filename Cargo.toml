@@ -14,6 +14,7 @@ members = [
     "orbit-application",
     "orbit-operator",
     "orbit-compute",
+    "orbit-ml",
     "tests",
     "examples/hello-world",
     "examples/distributed-counter",
@@ -42,6 +43,7 @@ description = "Orbit - Build distributed and scalable online services (Rust impl
 repository = "https://github.com/TuringWorks/orbit-rs"
 
 [workspace.dependencies]
+pyo3 = "0.21"
 # Kubernetes operator dependencies  
 kube = "0.95"
 k8s-openapi = "0.22"
@@ -90,6 +92,6 @@ metrics-exporter-prometheus = "0.15"
 # Testing
 mockall = "0.13"
 cucumber = "0.21"
-proptest = { version = "1.4", features = ["full"] }
+proptest = "1.4"
 tokio-test = "0.4"
 rand = "0.8"

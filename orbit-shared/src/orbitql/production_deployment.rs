@@ -3,11 +3,11 @@
 //! This module provides production deployment validation, configuration management,
 //! monitoring dashboards, stress testing, and end-to-end integration testing capabilities.
 
-use std::collections::{HashMap, BTreeMap, VecDeque};
-use std::sync::{Arc, RwLock, Mutex};
-use std::time::{Duration, Instant, SystemTime};
 use serde::{Deserialize, Serialize};
-use tokio::sync::{mpsc, broadcast, oneshot};
+use std::collections::{BTreeMap, HashMap, VecDeque};
+use std::sync::{Arc, Mutex, RwLock};
+use std::time::{Duration, Instant, SystemTime};
+use tokio::sync::{broadcast, mpsc, oneshot};
 
 /// Production deployment coordinator
 pub struct ProductionDeployment {
@@ -151,6 +151,20 @@ pub struct CacheConfig {
     pub pool_size: usize,
 }
 
+impl Default for CacheConfig {
+    fn default() -> Self {
+        Self {
+            cache_type: CacheType::InMemory,
+            host: "localhost".to_string(),
+            port: 0,
+            password: None,
+            database: 0,
+            timeout: Duration::from_secs(5),
+            pool_size: 10,
+        }
+    }
+}
+
 /// Cache types
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum CacheType {
@@ -166,6 +180,15 @@ pub struct StorageConfig {
     pub storage_type: StorageType,
     /// Configuration settings
     pub settings: HashMap<String, String>,
+}
+
+impl Default for StorageConfig {
+    fn default() -> Self {
+        Self {
+            storage_type: StorageType::LocalFilesystem,
+            settings: HashMap::new(),
+        }
+    }
 }
 
 /// Storage types
@@ -317,7 +340,7 @@ pub struct AuthenticationConfig {
 }
 
 /// Authentication methods
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum AuthMethod {
     JWT,
     OAuth2,
@@ -1172,7 +1195,7 @@ pub struct TestResult {
 }
 
 /// Test status
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum TestStatus {
     Running,
     Passed,
@@ -1498,54 +1521,62 @@ impl ProductionDeployment {
             config_validator: Arc::new(ConfigValidator::new()),
         }
     }
-    
+
     /// Initialize production deployment system
     pub async fn initialize(&self) -> Result<(), DeploymentError> {
         println!("🚀 Initializing production deployment system...");
-        
+
         // Validate configuration
         self.validate_configuration().await?;
-        
+
         // Initialize environment
         self.setup_environment().await?;
-        
+
         // Start monitoring
         self.start_monitoring().await?;
-        
+
         // Initialize health checks
         self.initialize_health_checks().await?;
-        
+
         println!("✅ Production deployment system initialized");
         Ok(())
     }
-    
+
     /// Validate deployment configuration
     async fn validate_configuration(&self) -> Result<(), DeploymentError> {
         println!("📋 Validating deployment configuration...");
-        
+
         // Validate application settings
         if self.config.app_settings.port == 0 {
-            return Err(DeploymentError::ConfigurationError("Invalid port number".to_string()));
+            return Err(DeploymentError::ConfigurationError(
+                "Invalid port number".to_string(),
+            ));
         }
-        
+
         // Validate infrastructure settings
         if self.config.infrastructure.database.pool_size == 0 {
-            return Err(DeploymentError::ConfigurationError("Database pool size must be greater than 0".to_string()));
+            return Err(DeploymentError::ConfigurationError(
+                "Database pool size must be greater than 0".to_string(),
+            ));
         }
-        
+
         // Validate security settings
-        if self.config.security.auth.method == AuthMethod::JWT && self.config.security.auth.jwt.is_none() {
-            return Err(DeploymentError::ConfigurationError("JWT configuration required when using JWT auth".to_string()));
+        if self.config.security.auth.method == AuthMethod::JWT
+            && self.config.security.auth.jwt.is_none()
+        {
+            return Err(DeploymentError::ConfigurationError(
+                "JWT configuration required when using JWT auth".to_string(),
+            ));
         }
-        
+
         println!("✅ Configuration validation passed");
         Ok(())
     }
-    
+
     /// Setup deployment environment
     async fn setup_environment(&self) -> Result<(), DeploymentError> {
         println!("🌍 Setting up deployment environment...");
-        
+
         // Create environment
         let environment = Environment {
             name: format!("{}-env", self.config.app_settings.name),
@@ -1554,101 +1585,108 @@ impl ProductionDeployment {
             status: EnvironmentStatus::Deploying,
             last_health_check: None,
         };
-        
+
         // Register environment
-        self.environment_manager.register_environment(environment).await?;
-        
+        self.environment_manager
+            .register_environment(environment)
+            .await?;
+
         println!("✅ Environment setup complete");
         Ok(())
     }
-    
+
     /// Start monitoring system
     async fn start_monitoring(&self) -> Result<(), DeploymentError> {
         println!("📊 Starting monitoring system...");
-        
+
         // Start metrics collection
         self.monitoring_system.start_metrics_collection().await?;
-        
+
         // Initialize dashboards
         self.monitoring_system.initialize_dashboards().await?;
-        
+
         // Start alerting
         self.monitoring_system.start_alerting().await?;
-        
+
         println!("✅ Monitoring system started");
         Ok(())
     }
-    
+
     /// Initialize health checks
     async fn initialize_health_checks(&self) -> Result<(), DeploymentError> {
         println!("🏥 Initializing health checks...");
-        
+
         // Setup database health check
-        self.health_checker.add_health_check(HealthCheck {
-            name: "database".to_string(),
-            check_type: HealthCheckType::Database,
-            interval: Duration::from_secs(30),
-            timeout: Duration::from_secs(5),
-            enabled: true,
-            config: HashMap::new(),
-        }).await?;
-        
+        self.health_checker
+            .add_health_check(HealthCheck {
+                name: "database".to_string(),
+                check_type: HealthCheckType::Database,
+                interval: Duration::from_secs(30),
+                timeout: Duration::from_secs(5),
+                enabled: true,
+                config: HashMap::new(),
+            })
+            .await?;
+
         // Setup cache health check
-        self.health_checker.add_health_check(HealthCheck {
-            name: "cache".to_string(),
-            check_type: HealthCheckType::Cache,
-            interval: Duration::from_secs(30),
-            timeout: Duration::from_secs(5),
-            enabled: true,
-            config: HashMap::new(),
-        }).await?;
-        
+        self.health_checker
+            .add_health_check(HealthCheck {
+                name: "cache".to_string(),
+                check_type: HealthCheckType::Cache,
+                interval: Duration::from_secs(30),
+                timeout: Duration::from_secs(5),
+                enabled: true,
+                config: HashMap::new(),
+            })
+            .await?;
+
         // Start health monitoring
         self.health_checker.start_monitoring().await?;
-        
+
         println!("✅ Health checks initialized");
         Ok(())
     }
-    
+
     /// Run deployment tests
     pub async fn run_deployment_tests(&self) -> Result<TestResult, DeploymentError> {
         println!("🧪 Running deployment tests...");
-        
+
         let start_time = SystemTime::now();
-        
+
         // Run unit tests
         let unit_test_results = self.run_unit_tests().await?;
-        
+
         // Run integration tests
         let integration_test_results = self.run_integration_tests().await?;
-        
+
         // Run performance tests
         let performance_test_results = self.run_performance_tests().await?;
-        
+
         // Combine results
-        let overall_status = if unit_test_results.status == TestStatus::Passed &&
-                               integration_test_results.status == TestStatus::Passed &&
-                               performance_test_results.status == TestStatus::Passed {
+        let overall_status = if unit_test_results.status == TestStatus::Passed
+            && integration_test_results.status == TestStatus::Passed
+            && performance_test_results.status == TestStatus::Passed
+        {
             TestStatus::Passed
         } else {
             TestStatus::Failed
         };
-        
+
         let result = TestResult {
             test_name: "deployment_tests".to_string(),
             started_at: start_time,
             ended_at: Some(SystemTime::now()),
             status: overall_status,
             metrics: TestMetrics {
-                total_requests: unit_test_results.metrics.total_requests +
-                              integration_test_results.metrics.total_requests +
-                              performance_test_results.metrics.total_requests,
-                successful_requests: unit_test_results.metrics.successful_requests +
-                                   integration_test_results.metrics.successful_requests +
-                                   performance_test_results.metrics.successful_requests,
-                failed_requests: unit_test_results.metrics.failed_requests +
-                               integration_test_results.metrics.failed_requests +
-                               performance_test_results.metrics.failed_requests,
+                total_requests: unit_test_results.metrics.total_requests
+                    + integration_test_results.metrics.total_requests
+                    + performance_test_results.metrics.total_requests,
+                successful_requests: unit_test_results.metrics.successful_requests
+                    + integration_test_results.metrics.successful_requests
+                    + performance_test_results.metrics.successful_requests,
+                failed_requests: unit_test_results.metrics.failed_requests
+                    + integration_test_results.metrics.failed_requests
+                    + performance_test_results.metrics.failed_requests,
                 avg_response_time: performance_test_results.metrics.avg_response_time,
                 p95_response_time: performance_test_results.metrics.p95_response_time,
                 p99_response_time: performance_test_results.metrics.p99_response_time,
@@ -1658,15 +1696,18 @@ impl ProductionDeployment {
             },
             errors: vec![],
         };
-        
-        println!("✅ Deployment tests completed with status: {:?}", result.status);
+
+        println!(
+            "✅ Deployment tests completed with status: {:?}",
+            result.status
+        );
         Ok(result)
     }
-    
+
     /// Run unit tests
     async fn run_unit_tests(&self) -> Result<TestResult, DeploymentError> {
         println!("🔧 Running unit tests...");
-        
+
         // Mock unit test execution
         let result = TestResult {
             test_name: "unit_tests".to_string(),
@@ -1686,15 +1727,15 @@ impl ProductionDeployment {
             },
             errors: vec![],
         };
-        
+
         println!("✅ Unit tests completed");
         Ok(result)
     }
-    
+
     /// Run integration tests
     async fn run_integration_tests(&self) -> Result<TestResult, DeploymentError> {
         println!("🔗 Running integration tests...");
-        
+
         // Mock integration test execution
         let result = TestResult {
             test_name: "integration_tests".to_string(),
@@ -1714,15 +1755,15 @@ impl ProductionDeployment {
             },
             errors: vec![],
         };
-        
+
         println!("✅ Integration tests completed");
         Ok(result)
     }
-    
+
     /// Run performance tests
     async fn run_performance_tests(&self) -> Result<TestResult, DeploymentError> {
         println!("⚡ Running performance tests...");
-        
+
         // Mock performance test execution
         let result = TestResult {
             test_name: "performance_tests".to_string(),
@@ -1742,15 +1783,15 @@ impl ProductionDeployment {
             },
             errors: vec![],
         };
-        
+
         println!("✅ Performance tests completed");
         Ok(result)
     }
-    
+
     /// Run stress tests
     pub async fn run_stress_tests(&self) -> Result<TestResult, DeploymentError> {
         println!("💪 Running stress tests...");
-        
+
         // Create stress test scenario
         let scenario = StressTestScenario {
             name: "high_load_test".to_string(),
@@ -1774,21 +1815,21 @@ impl ProductionDeployment {
                 },
             },
         };
-        
+
         // Execute stress test
         let result = self.stress_tester.execute_scenario(scenario).await?;
-        
+
         println!("✅ Stress tests completed with status: {:?}", result.status);
         Ok(result)
     }
-    
+
     /// Generate deployment report
     pub async fn generate_deployment_report(&self) -> Result<DeploymentReport, DeploymentError> {
         println!("📊 Generating deployment report...");
-        
+
         let health_status = self.health_checker.get_overall_health().await?;
         let monitoring_metrics = self.monitoring_system.get_current_metrics().await?;
-        
+
         let report = DeploymentReport {
             environment: self.config.environment.clone(),
             deployment_metadata: self.config.metadata.clone(),
@@ -1827,7 +1868,7 @@ impl ProductionDeployment {
             },
             generated_at: SystemTime::now(),
         };
-        
+
         println!("✅ Deployment report generated");
         Ok(report)
     }
@@ -1950,8 +1991,11 @@ impl EnvironmentManager {
             current_environment: Arc::new(RwLock::new(None)),
         }
     }
-    
-    pub async fn register_environment(&self, environment: Environment) -> Result<(), DeploymentError> {
+
+    pub async fn register_environment(
+        &self,
+        environment: Environment,
+    ) -> Result<(), DeploymentError> {
         let mut environments = self.environments.write().unwrap();
         environments.insert(environment.name.clone(), environment);
         Ok(())
@@ -1967,19 +2011,19 @@ impl MonitoringSystem {
             log_aggregator: Arc::new(LogAggregator::new(config.logging.clone())),
         }
     }
-    
+
     pub async fn start_metrics_collection(&self) -> Result<(), DeploymentError> {
         Ok(())
     }
-    
+
     pub async fn initialize_dashboards(&self) -> Result<(), DeploymentError> {
         Ok(())
     }
-    
+
     pub async fn start_alerting(&self) -> Result<(), DeploymentError> {
         Ok(())
     }
-    
+
     pub async fn get_current_metrics(&self) -> Result<MonitoringMetrics, DeploymentError> {
         Ok(MonitoringMetrics {
             cpu_usage: 45.0,
@@ -2043,8 +2087,11 @@ impl StressTester {
             results: Arc::new(RwLock::new(HashMap::new())),
         }
     }
-    
-    pub async fn execute_scenario(&self, scenario: StressTestScenario) -> Result<TestResult, DeploymentError> {
+
+    pub async fn execute_scenario(
+        &self,
+        scenario: StressTestScenario,
+    ) -> Result<TestResult, DeploymentError> {
         // Mock stress test execution
         Ok(TestResult {
             test_name: scenario.name,
@@ -2084,18 +2131,18 @@ impl HealthChecker {
             status_cache: Arc::new(RwLock::new(HashMap::new())),
         }
     }
-    
+
     pub async fn add_health_check(&self, check: HealthCheck) -> Result<(), DeploymentError> {
         let mut checks = self.checks.write().unwrap();
         checks.insert(check.name.clone(), check);
         Ok(())
     }
-    
+
     pub async fn start_monitoring(&self) -> Result<(), DeploymentError> {
         // Start health check monitoring
         Ok(())
     }
-    
+
     pub async fn get_overall_health(&self) -> Result<OverallHealthStatus, DeploymentError> {
         Ok(OverallHealthStatus {
             status: ComponentStatus::Healthy,
@@ -2116,7 +2163,7 @@ impl ConfigValidator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_deployment_config_creation() {
         let config = DeploymentConfig {
@@ -2309,12 +2356,12 @@ mod tests {
                 release_notes: "Initial deployment".to_string(),
             },
         };
-        
+
         assert_eq!(config.app_settings.name, "test-app");
         assert_eq!(config.app_settings.port, 8080);
         assert!(matches!(config.environment, EnvironmentType::Development));
     }
-    
+
     #[tokio::test]
     async fn test_production_deployment_initialization() {
         let config = DeploymentConfig {
@@ -2501,7 +2548,7 @@ mod tests {
                 release_notes: "Test deployment".to_string(),
             },
         };
-        
+
         let deployment = ProductionDeployment::new(config);
         let result = deployment.initialize().await;
         assert!(result.is_ok());

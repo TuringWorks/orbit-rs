@@ -1,19 +1,19 @@
 //! Storage integration layer for OrbitQL query engine
 //!
 //! This module provides comprehensive storage system integration including
-//! file format support (Parquet, ORC, CSV), object storage connectivity 
+//! file format support (Parquet, ORC, CSV), object storage connectivity
 //! (S3, Azure, GCS), and storage-aware query optimization.
 
-use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
-use std::path::{Path, PathBuf};
-use std::io::{BufReader, BufWriter};
-use std::fs::File;
+use bytes::Bytes;
+use futures::stream::{Stream, StreamExt};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::fs::File;
+use std::io::{BufReader, BufWriter};
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, RwLock};
 use tokio::fs;
 use tokio::io::{AsyncRead, AsyncWrite};
-use futures::stream::{Stream, StreamExt};
-use bytes::Bytes;
 
 use crate::orbitql::ast::*;
 use crate::orbitql::vectorized_execution::*;
@@ -87,22 +87,22 @@ pub enum CompressionType {
 pub trait StorageProvider {
     /// Read data from storage
     fn read_data(&self, path: &str) -> Result<Box<dyn AsyncRead + Unpin + Send>, StorageError>;
-    
+
     /// Write data to storage
     fn write_data(&self, path: &str) -> Result<Box<dyn AsyncWrite + Unpin + Send>, StorageError>;
-    
+
     /// List files in directory
     fn list_files(&self, path: &str) -> Result<Vec<String>, StorageError>;
-    
+
     /// Get file metadata
     fn get_metadata(&self, path: &str) -> Result<StorageMetadata, StorageError>;
-    
+
     /// Check if file exists
     fn exists(&self, path: &str) -> Result<bool, StorageError>;
-    
+
     /// Delete file
     fn delete(&self, path: &str) -> Result<(), StorageError>;
-    
+
     /// Get provider type
     fn provider_type(&self) -> &str;
 }
@@ -114,8 +114,11 @@ pub trait FileFormatHandler {
         &self,
         reader: Box<dyn AsyncRead + Unpin + Send>,
         schema: Option<&BatchSchema>,
-    ) -> Result<Box<dyn Stream<Item = Result<RecordBatch, StorageError>> + Unpin + Send>, StorageError>;
-    
+    ) -> Result<
+        Box<dyn Stream<Item = Result<RecordBatch, StorageError>> + Unpin + Send>,
+        StorageError,
+    >;
+
     /// Write data in specific format
     fn write_batches(
         &self,
@@ -123,19 +126,19 @@ pub trait FileFormatHandler {
         schema: &BatchSchema,
         batches: Box<dyn Stream<Item = RecordBatch> + Unpin + Send>,
     ) -> Result<(), StorageError>;
-    
+
     /// Get schema from file
     fn infer_schema(
         &self,
         reader: Box<dyn AsyncRead + Unpin + Send>,
     ) -> Result<BatchSchema, StorageError>;
-    
+
     /// Support predicate pushdown
     fn supports_predicate_pushdown(&self) -> bool;
-    
+
     /// Support projection pushdown
     fn supports_projection_pushdown(&self) -> bool;
-    
+
     /// Get format name
     fn format_name(&self) -> &str;
 }
@@ -250,7 +253,7 @@ impl LocalStorageProvider {
             base_dir: base_dir.into(),
         }
     }
-    
+
     fn resolve_path(&self, path: &str) -> PathBuf {
         if Path::new(path).is_absolute() {
             PathBuf::from(path)
@@ -263,64 +266,83 @@ impl LocalStorageProvider {
 impl StorageProvider for LocalStorageProvider {
     fn read_data(&self, path: &str) -> Result<Box<dyn AsyncRead + Unpin + Send>, StorageError> {
         let full_path = self.resolve_path(path);
-        let file = std::fs::File::open(&full_path)
-            .map_err(|e| StorageError::IoError(format!("Failed to open {}: {}", full_path.display(), e)))?;
-        
+        let file = std::fs::File::open(&full_path).map_err(|e| {
+            StorageError::IoError(format!("Failed to open {}: {}", full_path.display(), e))
+        })?;
+
         // Convert to async reader (simplified)
         Ok(Box::new(tokio::fs::File::from_std(file)))
     }
-    
+
     fn write_data(&self, path: &str) -> Result<Box<dyn AsyncWrite + Unpin + Send>, StorageError> {
         let full_path = self.resolve_path(path);
-        
+
         // Create parent directories if needed
         if let Some(parent) = full_path.parent() {
-            std::fs::create_dir_all(parent)
-                .map_err(|e| StorageError::IoError(format!("Failed to create directories: {}", e)))?;
+            std::fs::create_dir_all(parent).map_err(|e| {
+                StorageError::IoError(format!("Failed to create directories: {}", e))
+            })?;
         }
-        
-        let file = std::fs::File::create(&full_path)
-            .map_err(|e| StorageError::IoError(format!("Failed to create {}: {}", full_path.display(), e)))?;
-        
+
+        let file = std::fs::File::create(&full_path).map_err(|e| {
+            StorageError::IoError(format!("Failed to create {}: {}", full_path.display(), e))
+        })?;
+
         Ok(Box::new(tokio::fs::File::from_std(file)))
     }
-    
+
     fn list_files(&self, path: &str) -> Result<Vec<String>, StorageError> {
         let full_path = self.resolve_path(path);
-        let entries = std::fs::read_dir(&full_path)
-            .map_err(|e| StorageError::IoError(format!("Failed to read directory {}: {}", full_path.display(), e)))?;
-        
+        let entries = std::fs::read_dir(&full_path).map_err(|e| {
+            StorageError::IoError(format!(
+                "Failed to read directory {}: {}",
+                full_path.display(),
+                e
+            ))
+        })?;
+
         let mut files = Vec::new();
         for entry in entries {
             let entry = entry.map_err(|e| StorageError::IoError(e.to_string()))?;
-            if entry.file_type().map_err(|e| StorageError::IoError(e.to_string()))?.is_file() {
+            if entry
+                .file_type()
+                .map_err(|e| StorageError::IoError(e.to_string()))?
+                .is_file()
+            {
                 if let Some(filename) = entry.file_name().to_str() {
                     files.push(filename.to_string());
                 }
             }
         }
-        
+
         Ok(files)
     }
-    
+
     fn get_metadata(&self, path: &str) -> Result<StorageMetadata, StorageError> {
         let full_path = self.resolve_path(path);
-        let metadata = std::fs::metadata(&full_path)
-            .map_err(|e| StorageError::IoError(format!("Failed to get metadata for {}: {}", full_path.display(), e)))?;
-        
+        let metadata = std::fs::metadata(&full_path).map_err(|e| {
+            StorageError::IoError(format!(
+                "Failed to get metadata for {}: {}",
+                full_path.display(),
+                e
+            ))
+        })?;
+
         let size_bytes = metadata.len();
-        let modified_time = metadata.modified()
+        let modified_time = metadata
+            .modified()
             .map_err(|e| StorageError::IoError(e.to_string()))?
             .duration_since(std::time::UNIX_EPOCH)
             .map_err(|e| StorageError::IoError(e.to_string()))?
             .as_secs();
-        
+
         // Infer format from extension
-        let format = full_path.extension()
+        let format = full_path
+            .extension()
             .and_then(|ext| ext.to_str())
             .unwrap_or("unknown")
             .to_string();
-        
+
         Ok(StorageMetadata {
             path: path.to_string(),
             size_bytes,
@@ -332,19 +354,20 @@ impl StorageProvider for LocalStorageProvider {
             compression: None,
         })
     }
-    
+
     fn exists(&self, path: &str) -> Result<bool, StorageError> {
         let full_path = self.resolve_path(path);
         Ok(full_path.exists())
     }
-    
+
     fn delete(&self, path: &str) -> Result<(), StorageError> {
         let full_path = self.resolve_path(path);
-        std::fs::remove_file(&full_path)
-            .map_err(|e| StorageError::IoError(format!("Failed to delete {}: {}", full_path.display(), e)))?;
+        std::fs::remove_file(&full_path).map_err(|e| {
+            StorageError::IoError(format!("Failed to delete {}: {}", full_path.display(), e))
+        })?;
         Ok(())
     }
-    
+
     fn provider_type(&self) -> &str {
         "local"
     }
@@ -382,18 +405,22 @@ impl S3Client {
     pub fn new(config: S3Config) -> Self {
         Self { config }
     }
-    
+
     // Mock S3 operations (would use actual AWS SDK)
     pub async fn get_object(&self, key: &str) -> Result<Vec<u8>, StorageError> {
         // Placeholder implementation
-        Err(StorageError::NetworkError("S3 client not implemented".to_string()))
+        Err(StorageError::NetworkError(
+            "S3 client not implemented".to_string(),
+        ))
     }
-    
+
     pub async fn put_object(&self, key: &str, data: &[u8]) -> Result<(), StorageError> {
         // Placeholder implementation
-        Err(StorageError::NetworkError("S3 client not implemented".to_string()))
+        Err(StorageError::NetworkError(
+            "S3 client not implemented".to_string(),
+        ))
     }
-    
+
     pub async fn list_objects(&self, prefix: &str) -> Result<Vec<String>, StorageError> {
         // Placeholder implementation
         Ok(vec![])
@@ -410,32 +437,38 @@ impl S3StorageProvider {
 impl StorageProvider for S3StorageProvider {
     fn read_data(&self, path: &str) -> Result<Box<dyn AsyncRead + Unpin + Send>, StorageError> {
         // Would implement actual S3 streaming read
-        Err(StorageError::NetworkError("S3 read not implemented".to_string()))
+        Err(StorageError::NetworkError(
+            "S3 read not implemented".to_string(),
+        ))
     }
-    
+
     fn write_data(&self, path: &str) -> Result<Box<dyn AsyncWrite + Unpin + Send>, StorageError> {
         // Would implement actual S3 streaming write
-        Err(StorageError::NetworkError("S3 write not implemented".to_string()))
+        Err(StorageError::NetworkError(
+            "S3 write not implemented".to_string(),
+        ))
     }
-    
+
     fn list_files(&self, path: &str) -> Result<Vec<String>, StorageError> {
         // Would implement actual S3 list operation
         Ok(vec![])
     }
-    
+
     fn get_metadata(&self, path: &str) -> Result<StorageMetadata, StorageError> {
         // Would implement actual S3 head object operation
-        Err(StorageError::NetworkError("S3 metadata not implemented".to_string()))
+        Err(StorageError::NetworkError(
+            "S3 metadata not implemented".to_string(),
+        ))
     }
-    
+
     fn exists(&self, path: &str) -> Result<bool, StorageError> {
         Ok(false)
     }
-    
+
     fn delete(&self, path: &str) -> Result<(), StorageError> {
         Ok(())
     }
-    
+
     fn provider_type(&self) -> &str {
         "s3"
     }
@@ -482,16 +515,16 @@ impl FileFormatHandler for ParquetHandler {
         &self,
         reader: Box<dyn AsyncRead + Unpin + Send>,
         schema: Option<&BatchSchema>,
-    ) -> Result<Box<dyn Stream<Item = Result<RecordBatch, StorageError>> + Unpin + Send>, StorageError> {
+    ) -> Result<
+        Box<dyn Stream<Item = Result<RecordBatch, StorageError>> + Unpin + Send>,
+        StorageError,
+    > {
         // Mock implementation - would use actual Parquet library
-        let stream = futures::stream::once(async {
+        let stream = Box::new(futures::stream::once(futures::future::ready({
             // Create mock batch
-            let column = ColumnBatch::mock_data(
-                "parquet_col".to_string(),
-                VectorDataType::Integer64,
-                1000,
-            );
-            
+            let column =
+                ColumnBatch::mock_data("parquet_col".to_string(), VectorDataType::Integer64, 1000);
+
             Ok(RecordBatch {
                 columns: vec![column],
                 row_count: 1000,
@@ -499,11 +532,11 @@ impl FileFormatHandler for ParquetHandler {
                     fields: vec![("parquet_col".to_string(), VectorDataType::Integer64)],
                 },
             })
-        });
-        
-        Ok(Box::new(stream))
+        })));
+
+        Ok(stream)
     }
-    
+
     fn write_batches(
         &self,
         writer: Box<dyn AsyncWrite + Unpin + Send>,
@@ -513,8 +546,11 @@ impl FileFormatHandler for ParquetHandler {
         // Mock implementation
         Ok(())
     }
-    
-    fn infer_schema(&self, reader: Box<dyn AsyncRead + Unpin + Send>) -> Result<BatchSchema, StorageError> {
+
+    fn infer_schema(
+        &self,
+        reader: Box<dyn AsyncRead + Unpin + Send>,
+    ) -> Result<BatchSchema, StorageError> {
         // Mock schema inference
         Ok(BatchSchema {
             fields: vec![
@@ -524,15 +560,15 @@ impl FileFormatHandler for ParquetHandler {
             ],
         })
     }
-    
+
     fn supports_predicate_pushdown(&self) -> bool {
         true
     }
-    
+
     fn supports_projection_pushdown(&self) -> bool {
         true
     }
-    
+
     fn format_name(&self) -> &str {
         "parquet"
     }
@@ -579,15 +615,14 @@ impl FileFormatHandler for CsvHandler {
         &self,
         reader: Box<dyn AsyncRead + Unpin + Send>,
         schema: Option<&BatchSchema>,
-    ) -> Result<Box<dyn Stream<Item = Result<RecordBatch, StorageError>> + Unpin + Send>, StorageError> {
+    ) -> Result<
+        Box<dyn Stream<Item = Result<RecordBatch, StorageError>> + Unpin + Send>,
+        StorageError,
+    > {
         // Mock implementation - would use actual CSV parser
-        let stream = futures::stream::once(async {
-            let column = ColumnBatch::mock_data(
-                "csv_col".to_string(),
-                VectorDataType::String,
-                500,
-            );
-            
+        let stream = Box::new(futures::stream::once(futures::future::ready({
+            let column = ColumnBatch::mock_data("csv_col".to_string(), VectorDataType::String, 500);
+
             Ok(RecordBatch {
                 columns: vec![column],
                 row_count: 500,
@@ -595,11 +630,11 @@ impl FileFormatHandler for CsvHandler {
                     fields: vec![("csv_col".to_string(), VectorDataType::String)],
                 },
             })
-        });
-        
-        Ok(Box::new(stream))
+        })));
+
+        Ok(stream)
     }
-    
+
     fn write_batches(
         &self,
         writer: Box<dyn AsyncWrite + Unpin + Send>,
@@ -609,8 +644,11 @@ impl FileFormatHandler for CsvHandler {
         // Mock implementation
         Ok(())
     }
-    
-    fn infer_schema(&self, reader: Box<dyn AsyncRead + Unpin + Send>) -> Result<BatchSchema, StorageError> {
+
+    fn infer_schema(
+        &self,
+        reader: Box<dyn AsyncRead + Unpin + Send>,
+    ) -> Result<BatchSchema, StorageError> {
         // Mock schema inference
         Ok(BatchSchema {
             fields: vec![
@@ -620,15 +658,15 @@ impl FileFormatHandler for CsvHandler {
             ],
         })
     }
-    
+
     fn supports_predicate_pushdown(&self) -> bool {
         false // CSV doesn't support efficient predicate pushdown
     }
-    
+
     fn supports_projection_pushdown(&self) -> bool {
         true
     }
-    
+
     fn format_name(&self) -> &str {
         "csv"
     }
@@ -638,24 +676,25 @@ impl StorageEngine {
     /// Create new storage engine
     pub fn new(config: StorageConfig) -> Self {
         let mut providers: HashMap<String, Arc<dyn StorageProvider + Send + Sync>> = HashMap::new();
-        let mut format_handlers: HashMap<String, Arc<dyn FileFormatHandler + Send + Sync>> = HashMap::new();
-        
+        let mut format_handlers: HashMap<String, Arc<dyn FileFormatHandler + Send + Sync>> =
+            HashMap::new();
+
         // Register default providers
         providers.insert(
             "local".to_string(),
-            Arc::new(LocalStorageProvider::new("./data"))
+            Arc::new(LocalStorageProvider::new("./data")),
         );
-        
+
         // Register format handlers
         format_handlers.insert(
             "parquet".to_string(),
-            Arc::new(ParquetHandler::new(ParquetConfig::default()))
+            Arc::new(ParquetHandler::new(ParquetConfig::default())),
         );
         format_handlers.insert(
             "csv".to_string(),
-            Arc::new(CsvHandler::new(CsvConfig::default()))
+            Arc::new(CsvHandler::new(CsvConfig::default())),
         );
-        
+
         Self {
             providers,
             format_handlers,
@@ -673,59 +712,75 @@ impl StorageEngine {
             })),
         }
     }
-    
+
     /// Register storage provider
-    pub fn register_provider(&mut self, name: String, provider: Arc<dyn StorageProvider + Send + Sync>) {
+    pub fn register_provider(
+        &mut self,
+        name: String,
+        provider: Arc<dyn StorageProvider + Send + Sync>,
+    ) {
         self.providers.insert(name, provider);
     }
-    
+
     /// Register format handler
-    pub fn register_format_handler(&mut self, name: String, handler: Arc<dyn FileFormatHandler + Send + Sync>) {
+    pub fn register_format_handler(
+        &mut self,
+        name: String,
+        handler: Arc<dyn FileFormatHandler + Send + Sync>,
+    ) {
         self.format_handlers.insert(name, handler);
     }
-    
+
     /// Read data from storage with format detection
-    pub async fn read_table(
-        &self,
+    pub async fn read_table<'a>(
+        &'a self,
         table_path: &str,
         schema: Option<&BatchSchema>,
-        predicates: Option<&[Expression]>,
-        projection: Option<&[String]>,
-    ) -> Result<Box<dyn Stream<Item = Result<RecordBatch, StorageError>> + Unpin + Send>, StorageError> {
+        predicates: Option<&'a [Expression]>,
+        projection: Option<&'a [String]>,
+    ) -> Result<
+        Box<dyn Stream<Item = Result<RecordBatch, StorageError>> + Unpin + Send + 'a>,
+        StorageError,
+    > {
         // Parse provider and path
         let (provider_name, file_path) = self.parse_path(table_path)?;
-        
+
         // Get provider
-        let provider = self.providers.get(&provider_name)
+        let provider = self
+            .providers
+            .get(&provider_name)
             .ok_or_else(|| StorageError::IoError(format!("Unknown provider: {}", provider_name)))?;
-        
+
         // Get metadata (with caching)
-        let metadata = self.get_cached_metadata(table_path, provider.as_ref()).await?;
-        
+        let metadata = self
+            .get_cached_metadata(table_path, provider.as_ref())
+            .await?;
+
         // Get format handler
-        let handler = self.format_handlers.get(&metadata.format)
-            .ok_or_else(|| StorageError::FormatError(format!("Unsupported format: {}", metadata.format)))?;
-        
+        let handler = self.format_handlers.get(&metadata.format).ok_or_else(|| {
+            StorageError::FormatError(format!("Unsupported format: {}", metadata.format))
+        })?;
+
         // Apply storage-level optimizations
         if self.config.enable_partition_pruning {
             // Would apply partition pruning here
         }
-        
+
         if self.config.enable_predicate_pushdown && handler.supports_predicate_pushdown() {
             // Would push predicates to storage layer
         }
-        
+
         // Read data
         let reader = provider.read_data(file_path)?;
         let mut stream = handler.read_batches(reader, schema)?;
-        
+
         // Apply projection if specified
         if let Some(columns) = projection {
             stream = Box::new(stream.map(move |batch_result| {
                 batch_result.map(|batch| self.apply_projection(batch, columns))
             }));
         }
-        
+
         // Apply predicates if not pushed down
         if let Some(preds) = predicates {
             if !handler.supports_predicate_pushdown() {
@@ -734,13 +789,13 @@ impl StorageEngine {
                 }));
             }
         }
-        
+
         // Update statistics
         self.update_read_stats().await;
-        
+
         Ok(stream)
     }
-    
+
     /// Write data to storage
     pub async fn write_table(
         &self,
@@ -751,59 +806,67 @@ impl StorageEngine {
     ) -> Result<(), StorageError> {
         // Parse provider and path
         let (provider_name, file_path) = self.parse_path(table_path)?;
-        
+
         // Get provider
-        let provider = self.providers.get(&provider_name)
+        let provider = self
+            .providers
+            .get(&provider_name)
             .ok_or_else(|| StorageError::IoError(format!("Unknown provider: {}", provider_name)))?;
-        
+
         // Determine format
         let format_name = format.unwrap_or("parquet");
-        let handler = self.format_handlers.get(format_name)
-            .ok_or_else(|| StorageError::FormatError(format!("Unsupported format: {}", format_name)))?;
-        
+        let handler = self.format_handlers.get(format_name).ok_or_else(|| {
+            StorageError::FormatError(format!("Unsupported format: {}", format_name))
+        })?;
+
         // Get writer
         let writer = provider.write_data(file_path)?;
-        
+
         // Write data
         handler.write_batches(writer, schema, batches)?;
-        
+
         // Update metadata cache
         self.invalidate_metadata_cache(table_path).await;
-        
+
         // Update statistics
         self.update_write_stats().await;
-        
+
         Ok(())
     }
-    
+
     /// Get table schema
     pub async fn get_table_schema(&self, table_path: &str) -> Result<BatchSchema, StorageError> {
         let (provider_name, file_path) = self.parse_path(table_path)?;
-        let provider = self.providers.get(&provider_name)
+        let provider = self
+            .providers
+            .get(&provider_name)
             .ok_or_else(|| StorageError::IoError(format!("Unknown provider: {}", provider_name)))?;
-        
-        let metadata = self.get_cached_metadata(table_path, provider.as_ref()).await?;
-        
+
+        let metadata = self
+            .get_cached_metadata(table_path, provider.as_ref())
+            .await?;
+
         if let Some(schema) = metadata.schema {
             Ok(schema)
         } else {
             // Infer schema from file
-            let handler = self.format_handlers.get(&metadata.format)
-                .ok_or_else(|| StorageError::FormatError(format!("Unsupported format: {}", metadata.format)))?;
-            
+            let handler = self.format_handlers.get(&metadata.format).ok_or_else(|| {
+                StorageError::FormatError(format!("Unsupported format: {}", metadata.format))
+            })?;
+
             let reader = provider.read_data(file_path)?;
             handler.infer_schema(reader)
         }
     }
-    
+
     /// Get storage statistics
     pub async fn get_stats(&self) -> StorageStats {
         self.stats.read().unwrap().clone()
     }
-    
+
     // Helper methods
-    
-    fn parse_path(&self, table_path: &str) -> Result<(String, &str), StorageError> {
+
+    fn parse_path<'a>(&self, table_path: &'a str) -> Result<(String, &'a str), StorageError> {
         if let Some(idx) = table_path.find("://") {
             let provider = &table_path[..idx];
             let path = &table_path[idx + 3..];
@@ -812,7 +875,7 @@ impl StorageEngine {
             Ok((self.config.default_provider.clone(), table_path))
         }
     }
-    
+
     async fn get_cached_metadata(
         &self,
         table_path: &str,
@@ -826,50 +889,55 @@ impl StorageEngine {
                 return Ok(metadata.clone());
             }
         }
-        
+
         // Cache miss - fetch from provider
         let (_, file_path) = self.parse_path(table_path)?;
         let metadata = provider.get_metadata(file_path)?;
-        
+
         // Update cache
         {
             let mut cache = self.metadata_cache.write().unwrap();
             cache.insert(table_path.to_string(), metadata.clone());
         }
-        
+
         self.stats.write().unwrap().cache_misses += 1;
         Ok(metadata)
     }
-    
+
     async fn invalidate_metadata_cache(&self, table_path: &str) {
         let mut cache = self.metadata_cache.write().unwrap();
         cache.remove(table_path);
     }
-    
+
     async fn update_read_stats(&self) {
         let mut stats = self.stats.write().unwrap();
         stats.read_operations += 1;
         // Would update other metrics in real implementation
     }
-    
+
     async fn update_write_stats(&self) {
         let mut stats = self.stats.write().unwrap();
         stats.write_operations += 1;
         // Would update other metrics in real implementation
     }
-    
+
     fn apply_projection(&self, batch: RecordBatch, columns: &[String]) -> RecordBatch {
         // Simplified projection - select only specified columns
         let mut projected_columns = Vec::new();
         let mut projected_fields = Vec::new();
-        
+
         for col_name in columns {
-            if let Some((idx, column)) = batch.columns.iter().enumerate().find(|(_, col)| col.name == *col_name) {
+            if let Some((idx, column)) = batch
+                .columns
+                .iter()
+                .enumerate()
+                .find(|(_, col)| col.name == *col_name)
+            {
                 projected_columns.push(column.clone());
                 projected_fields.push(batch.schema.fields[idx].clone());
             }
         }
-        
+
         RecordBatch {
             columns: projected_columns,
             row_count: batch.row_count,
@@ -878,8 +946,12 @@ impl StorageEngine {
             },
         }
     }
-    
-    fn apply_predicates(&self, batch: RecordBatch, predicates: &[Expression]) -> Result<RecordBatch, StorageError> {
+
+    fn apply_predicates(
+        &self,
+        batch: RecordBatch,
+        predicates: &[Expression],
+    ) -> Result<RecordBatch, StorageError> {
         // Simplified predicate application
         // In reality would use vectorized evaluation
         Ok(batch)
@@ -904,46 +976,46 @@ impl Default for StorageStats {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[tokio::test]
     async fn test_local_storage_provider() {
         let provider = LocalStorageProvider::new("./test_data");
-        
+
         // Test existence check
         let exists = provider.exists("nonexistent.txt").unwrap();
         assert!(!exists);
     }
-    
+
     #[test]
     fn test_storage_engine_creation() {
         let config = StorageConfig::default();
         let engine = StorageEngine::new(config);
-        
+
         assert!(engine.providers.contains_key("local"));
         assert!(engine.format_handlers.contains_key("parquet"));
         assert!(engine.format_handlers.contains_key("csv"));
     }
-    
+
     #[test]
     fn test_path_parsing() {
         let engine = StorageEngine::new(StorageConfig::default());
-        
+
         let (provider, path) = engine.parse_path("s3://bucket/path/file.parquet").unwrap();
         assert_eq!(provider, "s3");
         assert_eq!(path, "bucket/path/file.parquet");
-        
+
         let (provider, path) = engine.parse_path("local_file.csv").unwrap();
         assert_eq!(provider, "local");
         assert_eq!(path, "local_file.csv");
     }
-    
+
     #[test]
     fn test_format_handlers() {
         let parquet_handler = ParquetHandler::new(ParquetConfig::default());
         assert!(parquet_handler.supports_predicate_pushdown());
         assert!(parquet_handler.supports_projection_pushdown());
         assert_eq!(parquet_handler.format_name(), "parquet");
-        
+
         let csv_handler = CsvHandler::new(CsvConfig::default());
         assert!(!csv_handler.supports_predicate_pushdown());
         assert!(csv_handler.supports_projection_pushdown());
