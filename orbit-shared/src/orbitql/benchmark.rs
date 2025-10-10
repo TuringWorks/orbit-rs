@@ -641,7 +641,7 @@ impl BenchmarkFramework {
             "StockLevel",
         ];
 
-        for (i, (query, tx_type)) in queries.iter().zip(transaction_types.iter()).enumerate() {
+        for (query, tx_type) in queries.iter().zip(transaction_types.iter()) {
             let result = self.benchmark_transaction(query, tx_type).await?;
             transaction_results.insert(tx_type.to_string(), result);
         }
@@ -917,7 +917,7 @@ impl BenchmarkFramework {
         }
 
         // Wait for all tasks to complete
-        let results = join_all(tasks).await;
+        let _results = join_all(tasks).await;
         let actual_duration = start_time.elapsed();
         let throughput_score = total_queries as f64 / actual_duration.as_secs() as f64;
 
@@ -1235,7 +1235,7 @@ impl BenchmarkFramework {
             let semaphore = Arc::new(Semaphore::new(parallelism));
             let mut tasks = Vec::new();
 
-            for (i, query) in queries.iter().enumerate() {
+            for query in queries.iter() {
                 let permit = semaphore.clone().acquire_owned().await.unwrap();
                 let query_clone = query.clone();
                 let executor = self.executor.clone();

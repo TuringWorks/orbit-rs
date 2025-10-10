@@ -525,7 +525,7 @@ impl ParallelExecutor {
         let probe_tasks = self.create_probe_tasks(join).await?;
 
         // Execute build phase
-        let build_results = self.execute_tasks_parallel(build_tasks).await?;
+        let _build_results = self.execute_tasks_parallel(build_tasks).await?;
 
         // Execute probe phase with build results
         let probe_results = self.execute_tasks_parallel(probe_tasks).await?;
@@ -564,8 +564,8 @@ impl ParallelExecutor {
         // Create aggregation tasks
         for i in 0..aggregation.parallelism {
             let task_id = format!("hash_agg_task_{}", i);
-            let group_by = aggregation.group_by.clone();
-            let aggregates = aggregation.aggregates.clone();
+            let _group_by = aggregation.group_by.clone();
+            let _aggregates = aggregation.aggregates.clone();
 
             let task = Task {
                 id: task_id,
@@ -656,7 +656,7 @@ impl ParallelExecutor {
 
         for i in 0..join.build_parallelism {
             let task_id = format!("build_task_{}", i);
-            let condition = join.condition.clone();
+            let _condition = join.condition.clone();
 
             let task = Task {
                 id: task_id,
@@ -690,7 +690,7 @@ impl ParallelExecutor {
 
         for i in 0..join.probe_parallelism {
             let task_id = format!("probe_task_{}", i);
-            let condition = join.condition.clone();
+            let _condition = join.condition.clone();
 
             let task = Task {
                 id: task_id,
@@ -1101,7 +1101,7 @@ impl ExchangeOperator {
         let partitions = (self.partition_func)(&input);
 
         // Distribute based on hash partitions
-        for (i, &worker_id) in partitions.iter().zip(target_workers.iter()) {
+        for &worker_id in partitions.iter().zip(target_workers.iter()).map(|(_, w)| w) {
             if let Some(channel) = self.channels.get(&worker_id) {
                 // In reality, would partition the input batch
                 channel

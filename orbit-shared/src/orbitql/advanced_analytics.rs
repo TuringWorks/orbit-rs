@@ -2508,7 +2508,7 @@ impl WorkloadPatternAnalyzer {
 
     pub async fn analyze_patterns(
         &self,
-        queries: &[QuerySignature],
+        _queries: &[QuerySignature],
     ) -> Result<Vec<WorkloadPattern>, AnalyticsError> {
         let patterns = self.patterns.read().unwrap();
         Ok(patterns.values().cloned().collect())

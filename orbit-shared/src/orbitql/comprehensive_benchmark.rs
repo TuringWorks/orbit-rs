@@ -1144,7 +1144,7 @@ impl ComprehensiveBenchmark {
         let warehouses = self.config.scale_factors.tpc_c;
         println!("🏃 Executing TPC-C benchmark ({} warehouses)", warehouses);
 
-        let start_time = Instant::now();
+        let _start_time = Instant::now();
         let duration = Duration::from_secs(300); // 5 minutes
 
         // Mock TPC-C transaction execution
