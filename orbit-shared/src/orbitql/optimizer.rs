@@ -175,7 +175,7 @@ impl fmt::Display for OptimizationError {
 impl std::error::Error for OptimizationError {}
 
 /// Optimization rule trait
-pub trait OptimizationRule {
+pub trait OptimizationRule: Send + Sync {
     fn name(&self) -> &'static str;
     fn apply(&self, stmt: &Statement) -> Result<Statement, OptimizationError>;
 }
