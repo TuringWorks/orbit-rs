@@ -28,8 +28,11 @@
 
 pub mod ast;
 pub mod cache;
+pub mod cost_based_planner;
+pub mod cost_model;
 pub mod distributed;
 pub mod executor;
+pub mod index_selection;
 pub mod lexer;
 pub mod lsp;
 pub mod optimizer;
@@ -37,6 +40,7 @@ pub mod parser;
 pub mod planner;
 pub mod profiler;
 pub mod spatial;
+pub mod statistics;
 pub mod streaming;
 
 // Re-export core types
