@@ -391,9 +391,9 @@ impl StatisticsManager {
     /// Estimate selectivity for range predicates using histogram
     fn estimate_range_selectivity(
         &self,
-        histogram_bounds: &[QueryValue],
+        _histogram_bounds: &[QueryValue],
         operator: &str,
-        value: &QueryValue,
+        _value: &QueryValue,
     ) -> f64 {
         // Simplified range estimation
         // In a real implementation, this would use proper histogram analysis

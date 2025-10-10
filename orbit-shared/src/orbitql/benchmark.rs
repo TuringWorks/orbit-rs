@@ -5,11 +5,9 @@
 //! the performance of all query optimization components.
 
 use futures::future::join_all;
-use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use std::fs::create_dir_all;
-use std::io::Write;
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant, SystemTime};
 use tokio::sync::Semaphore;
@@ -1586,7 +1584,7 @@ impl WorkloadGenerator for TpcHWorkloadGenerator {
             .collect()
     }
 
-    fn generate_test_data(&self, scale_factor: usize) -> Vec<RecordBatch> {
+    fn generate_test_data(&self, _scale_factor: usize) -> Vec<RecordBatch> {
         // Mock implementation
         vec![]
     }
@@ -1636,7 +1634,7 @@ impl WorkloadGenerator for TpcCWorkloadGenerator {
             .collect()
     }
 
-    fn generate_test_data(&self, scale_factor: usize) -> Vec<RecordBatch> {
+    fn generate_test_data(&self, _scale_factor: usize) -> Vec<RecordBatch> {
         vec![]
     }
 

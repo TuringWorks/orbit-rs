@@ -62,8 +62,8 @@ impl MultiHeadAttention {
         value: &Array3<f64>,
         attention_mask: Option<&Array2<f64>>,
     ) -> Result<Array3<f64>> {
-        let batch_size = query.shape()[0];
-        let seq_len = query.shape()[1];
+        let _batch_size = query.shape()[0];
+        let _seq_len = query.shape()[1];
 
         // Linear projections for Q, K, V
         let q = self.query_linear.forward_3d(query)?;

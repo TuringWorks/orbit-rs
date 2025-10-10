@@ -418,7 +418,7 @@ impl ParallelExecutor {
     /// Create parallel execution plan from query
     fn create_parallel_plan(
         &self,
-        query: &Statement,
+        _query: &Statement,
     ) -> Result<ParallelExecutionPlan, ParallelExecutionError> {
         // Simplified plan creation - would be more complex in reality
         let plan = ParallelExecutionPlan {
@@ -875,7 +875,7 @@ impl ThreadPool {
     }
 
     /// Choose worker for task assignment
-    fn choose_worker(&self, task: &Task) -> usize {
+    fn choose_worker(&self, _task: &Task) -> usize {
         // Simple round-robin for now - could be more sophisticated
         static COUNTER: AtomicUsize = AtomicUsize::new(0);
         COUNTER.fetch_add(1, Ordering::Relaxed) % self.config.worker_threads
@@ -883,7 +883,7 @@ impl ThreadPool {
 
     /// Worker thread main loop
     fn worker_loop(
-        worker_id: usize,
+        _worker_id: usize,
         queue: Arc<Mutex<VecDeque<Task>>>,
         shutdown: Arc<AtomicBool>,
         work_available: Arc<Condvar>,
@@ -1021,7 +1021,7 @@ impl WorkScheduler {
 
         // Use historical performance to make scheduling decisions
         if let Some(history) = adaptive_state.performance_history.get(&task.id) {
-            if let Some(best_perf) = history.iter().min_by_key(|p| p.duration) {
+            if let Some(_best_perf) = history.iter().min_by_key(|p| p.duration) {
                 // Try to schedule on the worker that performed best historically
                 return self.schedule_load_based(task);
             }

@@ -4,7 +4,6 @@
 //! cluster management, distributed query planning, network communication,
 //! fault tolerance, and cross-node data shuffling.
 
-use futures::stream::StreamExt;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::net::SocketAddr;
@@ -618,7 +617,7 @@ impl FragmentationStrategy for HashFragmentationStrategy {
 
         // Simple hash-based fragmentation (mock implementation)
         match query {
-            Statement::Select(select) => {
+            Statement::Select(_select) => {
                 // Create scan fragments for each node
                 for (i, node) in available_nodes.iter().enumerate() {
                     let fragment_id = format!("scan_{}", i);
@@ -696,7 +695,7 @@ impl FragmentationStrategy for HashFragmentationStrategy {
         })
     }
 
-    fn estimate_cost(&self, query: &Statement, nodes: &[NodeInfo]) -> f64 {
+    fn estimate_cost(&self, _query: &Statement, nodes: &[NodeInfo]) -> f64 {
         // Simple cost estimation
         nodes.len() as f64 * 10.0
     }
@@ -1062,7 +1061,7 @@ impl ResourceScheduler {
     pub fn schedule_plan(
         &self,
         plan: DistributedExecutionPlan,
-        nodes: &[NodeInfo],
+        _nodes: &[NodeInfo],
     ) -> Result<DistributedExecutionPlan, DistributedError> {
         // Apply resource-aware scheduling
         // For now, return plan as-is
@@ -1087,7 +1086,7 @@ impl NetworkManager {
 
     pub async fn execute_fragment_remote(
         &self,
-        fragment: ExecutionFragment,
+        _fragment: ExecutionFragment,
     ) -> Result<Vec<RecordBatch>, DistributedError> {
         // Execute fragment on remote node
         // Mock implementation
@@ -1104,7 +1103,10 @@ impl NetworkManager {
         }])
     }
 
-    pub async fn broadcast_message(&self, message: NetworkMessage) -> Result<(), DistributedError> {
+    pub async fn broadcast_message(
+        &self,
+        _message: NetworkMessage,
+    ) -> Result<(), DistributedError> {
         // Broadcast message to all connected nodes
         Ok(())
     }
