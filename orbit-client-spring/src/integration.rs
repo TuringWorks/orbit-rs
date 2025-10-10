@@ -93,6 +93,7 @@ impl OrbitClientService {
     }
 
     /// Update client metrics
+    #[allow(dead_code)]
     fn update_metrics(&mut self) {
         self.metrics.uptime_seconds += 1;
         // In a real implementation, we would gather actual metrics from the client

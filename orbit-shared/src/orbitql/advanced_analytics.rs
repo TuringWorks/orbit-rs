@@ -9,6 +9,7 @@ use std::sync::{Arc, RwLock};
 use std::time::{Duration, SystemTime};
 
 /// Advanced Analytics coordinator
+#[allow(dead_code)]
 pub struct AdvancedAnalytics {
     /// ML-based cost estimator
     ml_cost_estimator: Arc<MLCostEstimator>,
@@ -64,6 +65,7 @@ impl Default for AnalyticsConfig {
 }
 
 /// ML-based cost estimator using various algorithms
+#[allow(dead_code)]
 pub struct MLCostEstimator {
     /// Linear regression model
     linear_model: Arc<RwLock<LinearRegressionModel>>,
@@ -255,6 +257,7 @@ pub struct TreeNode {
 }
 
 /// Neural network model for cost estimation
+#[allow(dead_code)]
 pub struct NeuralNetworkModel {
     /// Network layers
     layers: Vec<NetworkLayer>,
@@ -558,6 +561,7 @@ pub enum RecommendationType {
 }
 
 /// Pattern matcher for workload analysis
+#[allow(dead_code)]
 pub struct PatternMatcher {
     /// Matching algorithms
     algorithms: Vec<Box<dyn MatchingAlgorithm + Send + Sync>>,
@@ -1350,6 +1354,7 @@ pub struct GradientBoostingModel {
 }
 
 /// AdaBoost model for cost estimation
+#[allow(dead_code)]
 pub struct AdaBoostModel {
     /// Base estimators with their weights
     estimators: Vec<(WeakLearner, f64)>,
@@ -1421,6 +1426,7 @@ pub struct CatBoostModel {
 }
 
 /// XGBoost-style extreme gradient boosting
+#[allow(dead_code)]
 pub struct XGBoostModel {
     /// Boosted trees
     booster: Vec<XGBoostTree>,
@@ -1525,6 +1531,7 @@ pub enum BaseEstimatorType {
 
 /// Weak learner for boosting algorithms
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct WeakLearner {
     /// Tree structure
     tree: DecisionTree,
@@ -1538,6 +1545,7 @@ pub struct WeakLearner {
 
 /// LightGBM tree structure (leaf-wise growth)
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct LightGBMTree {
     /// Tree nodes
     nodes: Vec<LightGBMNode>,

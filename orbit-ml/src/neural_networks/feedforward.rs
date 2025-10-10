@@ -128,6 +128,7 @@ impl FeedforwardNetwork {
     }
 
     /// Apply activation derivative (for backpropagation)
+    #[allow(dead_code)]
     fn apply_activation_derivative(
         &self,
         input: &Array2<f64>,

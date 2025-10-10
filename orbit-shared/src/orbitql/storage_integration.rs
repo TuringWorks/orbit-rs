@@ -393,6 +393,7 @@ pub struct S3Config {
 }
 
 /// Simplified S3 client
+#[allow(dead_code)]
 pub struct S3Client {
     config: S3Config,
 }
@@ -471,6 +472,7 @@ impl StorageProvider for S3StorageProvider {
 }
 
 /// Parquet file format handler
+#[allow(dead_code)]
 pub struct ParquetHandler {
     /// Configuration
     config: ParquetConfig,
@@ -571,6 +573,7 @@ impl FileFormatHandler for ParquetHandler {
 }
 
 /// CSV file format handler
+#[allow(dead_code)]
 pub struct CsvHandler {
     /// Configuration
     config: CsvConfig,

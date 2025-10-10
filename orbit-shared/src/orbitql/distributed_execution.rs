@@ -164,6 +164,7 @@ pub struct NodeResources {
 }
 
 /// Cluster state manager
+#[allow(dead_code)]
 pub struct ClusterManager {
     /// Configuration
     config: ClusterConfig,
@@ -213,6 +214,7 @@ pub enum ClusterEvent {
 }
 
 /// Distributed query planner
+#[allow(dead_code)]
 pub struct DistributedQueryPlanner {
     /// Cluster configuration
     config: ClusterConfig,
@@ -478,6 +480,7 @@ pub trait MessageHandler {
 }
 
 /// Fault tolerance manager
+#[allow(dead_code)]
 pub struct FaultToleranceManager {
     /// Configuration
     config: ClusterConfig,
