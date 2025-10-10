@@ -126,6 +126,12 @@ pub struct EmbeddingLayer {
 }
 
 impl EmbeddingLayer {
+    /// Create a new embedding layer
+    ///
+    /// # Arguments
+    /// * `vocab_size` - Size of the vocabulary for token embeddings
+    /// * `hidden_size` - Dimension of the embedding space
+    /// * `max_positions` - Maximum number of positions for positional embeddings
     pub fn new(vocab_size: usize, hidden_size: usize, max_positions: usize) -> Result<Self> {
         Ok(Self {
             token_embeddings: Linear::new(vocab_size, hidden_size)?,
@@ -136,6 +142,15 @@ impl EmbeddingLayer {
         })
     }
 
+    /// Forward pass through the embedding layer
+    ///
+    /// # Arguments
+    /// * `input_ids` - Token IDs of shape [batch_size, seq_len]
+    /// * `_position_ids` - Optional position IDs (currently unused)
+    /// * `token_type_ids` - Optional token type IDs for sentence pairs
+    ///
+    /// # Returns
+    /// Embedded representations of shape [batch_size, seq_len, hidden_size]
     pub fn forward(
         &self,
         input_ids: &Array2<i32>,
@@ -247,6 +262,11 @@ pub enum ActivationType {
 }
 
 impl FeedForwardNetwork {
+    /// Create a new feed-forward network
+    ///
+    /// # Arguments
+    /// * `hidden_size` - Dimension of input and output
+    /// * `intermediate_size` - Dimension of intermediate layer (typically 4x hidden_size)
     pub fn new(hidden_size: usize, intermediate_size: usize) -> Result<Self> {
         Ok(Self {
             linear1: Linear::new(hidden_size, intermediate_size)?,
@@ -256,6 +276,13 @@ impl FeedForwardNetwork {
         })
     }
 
+    /// Forward pass through the feed-forward network
+    ///
+    /// # Arguments
+    /// * `input` - Input tensor of shape [batch_size, seq_len, hidden_size]
+    ///
+    /// # Returns
+    /// Output tensor of same shape as input after feed-forward transformation
     pub fn forward(&self, input: &Array3<f64>) -> Result<Array3<f64>> {
         // First linear transformation
         let intermediate = self.linear1.forward_3d(input)?;
@@ -294,43 +321,51 @@ pub struct TransformerBuilder {
 }
 
 impl TransformerBuilder {
+    /// Create a new transformer builder with default configuration
     pub fn new() -> Self {
         Self {
             config: TransformerConfig::default(),
         }
     }
 
+    /// Set vocabulary size
     pub fn vocab_size(mut self, size: usize) -> Self {
         self.config.vocab_size = size;
         self
     }
 
+    /// Set hidden dimension size
     pub fn hidden_size(mut self, size: usize) -> Self {
         self.config.hidden_size = size;
         self
     }
 
+    /// Set number of attention heads
     pub fn num_attention_heads(mut self, heads: usize) -> Self {
         self.config.num_attention_heads = heads;
         self
     }
 
+    /// Set number of encoder and decoder layers
     pub fn num_layers(mut self, encoder_layers: usize, decoder_layers: usize) -> Self {
         self.config.num_encoder_layers = encoder_layers;
         self.config.num_decoder_layers = decoder_layers;
         self
     }
 
+    /// Set maximum position embeddings
     pub fn max_position_embeddings(mut self, max_pos: usize) -> Self {
         self.config.max_position_embeddings = max_pos;
         self
     }
 
+    /// Set transformer architecture type
     pub fn architecture(mut self, arch: TransformerArchitecture) -> Self {
         self.config.architecture_type = arch;
         self
     }
 
+    /// Build the transformer with current configuration
     pub fn build(self) -> Result<Transformer> {
         let model_id = Uuid::new_v4();
 
@@ -443,6 +478,14 @@ impl TransformerEncoderLayer {
         })
     }
 
+    /// Forward pass through transformer encoder layer
+    ///
+    /// # Arguments
+    /// * `hidden_states` - Input hidden states
+    /// * `attention_mask` - Optional attention mask
+    ///
+    /// # Returns
+    /// Transformed hidden states
     pub fn forward(
         &self,
         hidden_states: &Array3<f64>,
@@ -491,6 +534,16 @@ impl TransformerDecoderLayer {
         })
     }
 
+    /// Forward pass through transformer decoder layer
+    ///
+    /// # Arguments
+    /// * `hidden_states` - Input hidden states
+    /// * `encoder_hidden_states` - Optional encoder states for cross-attention
+    /// * `attention_mask` - Optional self-attention mask
+    /// * `cross_attention_mask` - Optional cross-attention mask
+    ///
+    /// # Returns
+    /// Transformed hidden states
     pub fn forward(
         &self,
         hidden_states: &Array3<f64>,
