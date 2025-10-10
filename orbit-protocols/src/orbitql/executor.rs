@@ -819,7 +819,7 @@ impl OrbitQLExecutor {
     /// Apply ORDER BY clause
     async fn apply_order_by(
         &self,
-        mut rows: Vec<Row>,
+        rows: Vec<Row>,
         order_by: &[OrderByClause],
     ) -> Result<Vec<Row>, SpatialError> {
         // Simplified ordering - for now just return as-is

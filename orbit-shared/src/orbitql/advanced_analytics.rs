@@ -2808,16 +2808,13 @@ impl AdaBoostModel {
 
             // Calculate weighted error
             let mut weighted_error = 0.0;
-            let mut correct_predictions = 0;
 
             for (i, example) in data.iter().enumerate() {
                 let prediction = weak_learner.predict(&example.features);
                 let error = (prediction - example.actual_cost).abs();
 
-                if error < 10.0 {
-                    // Threshold for "correct" prediction in regression
-                    correct_predictions += 1;
-                } else {
+                if error >= 10.0 {
+                    // Threshold for "incorrect" prediction in regression
                     weighted_error += sample_weights[i];
                 }
             }

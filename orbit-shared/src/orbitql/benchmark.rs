@@ -1315,7 +1315,6 @@ impl BenchmarkFramework {
 
     /// Generate benchmark summary
     fn generate_summary(&self, results: &BenchmarkResults) -> BenchmarkSummary {
-        let mut overall_score = 0.0;
         let mut scores = Vec::new();
 
         // TPC-H score
@@ -1336,7 +1335,7 @@ impl BenchmarkFramework {
             }
         }
 
-        overall_score = if !scores.is_empty() {
+        let overall_score = if !scores.is_empty() {
             scores.iter().sum::<f64>() / scores.len() as f64
         } else {
             0.0

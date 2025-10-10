@@ -9,7 +9,6 @@ use ndarray::{Array1, Array2, Array3};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use self::positional_encoding::{PositionalEncoding, SinusoidalPositionalEncoding};
 use crate::error::{MLError, Result};
 use crate::neural_networks::layers::{LayerNorm, Linear};
 
