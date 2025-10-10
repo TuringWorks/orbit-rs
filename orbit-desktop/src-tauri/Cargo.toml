@@ -1,0 +1,48 @@
+[workspace]
+
+[package]
+name = "orbit-desktop"
+version = "0.1.0"
+description = "Desktop UI for Orbit-RS Database Management"
+authors = ["Ravindra Boddipalli <ravindra@turingworks.com>"]
+license = "MIT"
+repository = "https://github.com/TuringWorks/orbit-rs"
+default-run = "orbit-desktop"
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "1.5", features = [] }
+
+[dependencies]
+serde_json = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+tokio = { version = "1.35", features = ["full"] }
+tauri = { version = "1.5", features = [ "dialog-message", "notification-all", "http-request", "window-unminimize", "window-unmaximize", "fs-rename-file", "fs-create-dir", "fs-remove-file", "dialog-ask", "fs-read-dir", "window-minimize", "fs-read-file", "fs-write-file", "dialog-open", "window-close", "window-maximize", "fs-remove-dir", "fs-exists", "window-show", "window-start-dragging", "shell-open", "window-hide", "fs-copy-file", "dialog-save", "dialog-confirm"] }
+uuid = { version = "1.6", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+
+# Database connections
+tokio-postgres = { version = "0.7", features = ["with-chrono-0_4", "with-serde_json-1", "with-uuid-1"] }
+redis = { version = "0.24", features = ["tokio-comp", "connection-manager"] }
+sqlparser = "0.39"
+
+# HTTP client for API calls
+reqwest = { version = "0.11", features = ["json", "rustls-tls"], default-features = false }
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Error handling
+anyhow = "1.0"
+thiserror = "1.0"
+
+[features]
+# this feature is used for production builds or when `devPath` points to the filesystem and the built-in dev server is disabled.
+# If you use cargo directly instead of tauri's cli you can use this feature flag to switch between tauri's `dev` and `build` modes.
+# DO NOT REMOVE!!
+custom-protocol = ["tauri/custom-protocol"]
+
+[[bin]]
+name = "orbit-desktop"
+path = "src/main.rs"
