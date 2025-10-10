@@ -221,6 +221,7 @@ pub struct LinearRegressionModel {
 }
 
 /// Random forest model for cost estimation
+#[allow(dead_code)]
 pub struct RandomForestModel {
     /// Decision trees
     trees: Vec<DecisionTree>,
@@ -243,6 +244,7 @@ pub struct DecisionTree {
 
 /// Tree node in decision tree
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct TreeNode {
     /// Feature index for split
     feature_index: Option<usize>,
@@ -310,6 +312,7 @@ pub enum ActivationFunction {
 }
 
 /// Adaptive query optimizer
+#[allow(dead_code)]
 pub struct AdaptiveOptimizer {
     /// Optimization rules with success rates
     optimization_rules: Arc<RwLock<HashMap<String, OptimizationRule>>>,
@@ -440,6 +443,7 @@ pub struct AdaptationParameters {
 }
 
 /// Workload pattern analyzer
+#[allow(dead_code)]
 pub struct WorkloadPatternAnalyzer {
     /// Query patterns database
     patterns: Arc<RwLock<HashMap<String, WorkloadPattern>>>,
@@ -640,6 +644,7 @@ pub struct FeatureDeviation {
 }
 
 /// Anomaly detector for unusual workload patterns
+#[allow(dead_code)]
 pub struct AnomalyDetector {
     /// Statistical thresholds
     thresholds: Arc<RwLock<AnomalyThresholds>>,
@@ -740,6 +745,7 @@ pub enum AnomalyType {
 }
 
 /// Trend analyzer for workload evolution
+#[allow(dead_code)]
 pub struct TrendAnalyzer {
     /// Time series data
     time_series: Arc<RwLock<HashMap<String, TimeSeries>>>,
@@ -801,6 +807,7 @@ pub trait TrendDetectionAlgorithm {
 }
 
 /// Auto-tuning system for dynamic optimization
+#[allow(dead_code)]
 pub struct AutoTuner {
     /// Tuning parameters
     parameters: Arc<RwLock<TuningParameters>>,
@@ -934,6 +941,7 @@ pub struct IndexParameters {
 }
 
 /// Performance feedback loop
+#[allow(dead_code)]
 pub struct FeedbackLoop {
     /// Performance metrics
     metrics: Arc<RwLock<PerformanceMetrics>>,
@@ -1015,6 +1023,7 @@ pub trait TuningStrategy {
 }
 
 /// Performance metrics collector
+#[allow(dead_code)]
 pub struct MetricsCollector {
     /// Collected metrics
     metrics: Arc<RwLock<HashMap<String, MetricSeries>>>,
@@ -1326,6 +1335,7 @@ impl LearningAlgorithm for GradientLearningAlgorithm {
 }
 
 /// Gradient Boosting Machine for cost estimation
+#[allow(dead_code)]
 pub struct GradientBoostingModel {
     /// Base estimators (decision trees)
     estimators: Vec<WeakLearner>,

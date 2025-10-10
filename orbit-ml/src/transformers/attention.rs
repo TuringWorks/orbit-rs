@@ -12,24 +12,47 @@ use serde::{Deserialize, Serialize};
 use crate::error::Result;
 use crate::neural_networks::layers::Linear;
 
-/// Multi-head attention mechanism
+/// Multi-head attention mechanism for transformers
+///
+/// Implements the scaled dot-product attention with multiple attention heads,
+/// as described in "Attention Is All You Need" paper. This allows the model
+/// to attend to information from different representation subspaces.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MultiHeadAttention {
+    /// The hidden size of the model (must be divisible by num_attention_heads)
     pub hidden_size: usize,
+    /// Number of parallel attention heads
     pub num_attention_heads: usize,
+    /// Size of each attention head (hidden_size / num_attention_heads)
     pub attention_head_size: usize,
+    /// Total size of all attention heads combined
     pub all_head_size: usize,
 
+    /// Linear layer for query projection
     pub query_linear: Linear,
+    /// Linear layer for key projection
     pub key_linear: Linear,
+    /// Linear layer for value projection
     pub value_linear: Linear,
+    /// Final linear layer to project concatenated heads back to hidden_size
     pub output_linear: Linear,
 
+    /// Dropout probability for attention weights
     pub dropout_prob: f64,
+    /// Scaling factor for dot-product attention (1/sqrt(d_k))
     pub scale: f64,
 }
 
 impl MultiHeadAttention {
+    /// Creates a new multi-head attention layer
+    ///
+    /// # Arguments
+    /// * `hidden_size` - The hidden dimension size (must be divisible by num_attention_heads)
+    /// * `num_attention_heads` - Number of parallel attention heads
+    /// * `dropout_prob` - Dropout probability for attention weights
+    ///
+    /// # Returns
+    /// A new MultiHeadAttention instance or an error if parameters are invalid
     pub fn new(hidden_size: usize, num_attention_heads: usize, dropout_prob: f64) -> Result<Self> {
         assert_eq!(
             hidden_size % num_attention_heads,
@@ -55,6 +78,16 @@ impl MultiHeadAttention {
         })
     }
 
+    /// Performs the forward pass of multi-head attention
+    ///
+    /// # Arguments
+    /// * `query` - Query tensor of shape [batch_size, seq_len, hidden_size]
+    /// * `key` - Key tensor of shape [batch_size, key_seq_len, hidden_size]
+    /// * `value` - Value tensor of shape [batch_size, key_seq_len, hidden_size]
+    /// * `attention_mask` - Optional mask to prevent attention to certain positions
+    ///
+    /// # Returns
+    /// Output tensor of shape [batch_size, seq_len, hidden_size]
     pub fn forward(
         &self,
         query: &Array3<f64>,
@@ -86,6 +119,8 @@ impl MultiHeadAttention {
         Ok(output)
     }
 
+    /// Reshapes tensor from [batch, seq, hidden] to [batch, seq, num_heads, head_size]
+    /// to separate attention heads for parallel computation
     fn reshape_for_attention(&self, tensor: &Array3<f64>) -> Result<Array4<f64>> {
         let (batch_size, seq_len, _) = tensor.dim();
 
@@ -111,6 +146,8 @@ impl MultiHeadAttention {
         Ok(reshaped)
     }
 
+    /// Reshapes tensor from [batch, seq, num_heads, head_size] to [batch, seq, hidden]
+    /// to concatenate attention heads after computation
     fn reshape_from_attention(&self, tensor: &Array4<f64>) -> Result<Array3<f64>> {
         let (batch_size, seq_len, _, _) = tensor.dim();
 
@@ -131,6 +168,16 @@ impl MultiHeadAttention {
         Ok(reshaped)
     }
 
+    /// Computes scaled dot-product attention: Attention(Q,K,V) = softmax(QK^T/sqrt(d_k))V
+    ///
+    /// # Arguments
+    /// * `query` - Query tensor of shape [batch, seq_len, num_heads, head_size]
+    /// * `key` - Key tensor of shape [batch, key_seq_len, num_heads, head_size]
+    /// * `value` - Value tensor of shape [batch, key_seq_len, num_heads, head_size]
+    /// * `attention_mask` - Optional mask to prevent attention to certain positions
+    ///
+    /// # Returns
+    /// Context tensor of shape [batch, seq_len, num_heads, head_size]
     fn scaled_dot_product_attention(
         &self,
         query: &Array4<f64>,
@@ -206,6 +253,8 @@ impl MultiHeadAttention {
         Ok(context)
     }
 
+    /// Applies softmax along the last dimension of a 4D tensor for numerical stability
+    /// Used to convert attention scores to attention probabilities
     fn softmax_4d(&self, input: &Array4<f64>) -> Array4<f64> {
         let mut output = input.clone();
         let (batch_size, seq_len, num_heads, key_seq_len) = input.dim();
@@ -240,23 +289,42 @@ impl MultiHeadAttention {
     }
 }
 
-/// Sparse attention mechanism for handling longer sequences
+/// Sparse attention mechanism for efficiently handling longer sequences
+///
+/// Reduces computational complexity from O(n²) to O(n·√n) or O(n·log n)
+/// by limiting attention to a subset of positions based on sparsity patterns.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SparseAttention {
+    /// The underlying multi-head attention mechanism
     pub base_attention: MultiHeadAttention,
+    /// Pattern defining which positions can attend to each other
     pub sparsity_pattern: SparsityPattern,
+    /// Size of attention blocks for pattern computation
     pub block_size: usize,
 }
 
+/// Different patterns for sparse attention computation
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum SparsityPattern {
-    Local,   // Only attend to nearby tokens
-    Strided, // Attend to tokens at regular intervals
-    Random,  // Random sparse attention pattern
-    Hybrid,  // Combination of patterns
+    /// Only attend to nearby tokens within a local window
+    Local,
+    /// Attend to tokens at regular intervals across the sequence
+    Strided,
+    /// Random sparse attention pattern for better coverage
+    Random,
+    /// Combination of local and strided patterns for balanced efficiency
+    Hybrid,
 }
 
 impl SparseAttention {
+    /// Creates a new sparse attention layer
+    ///
+    /// # Arguments
+    /// * `hidden_size` - The hidden dimension size
+    /// * `num_attention_heads` - Number of parallel attention heads
+    /// * `dropout_prob` - Dropout probability for attention weights
+    /// * `sparsity_pattern` - Pattern defining attention sparsity
+    /// * `block_size` - Size of attention blocks for pattern computation
     pub fn new(
         hidden_size: usize,
         num_attention_heads: usize,
@@ -275,6 +343,15 @@ impl SparseAttention {
         })
     }
 
+    /// Performs sparse attention forward pass with reduced computational complexity
+    ///
+    /// # Arguments
+    /// * `query` - Query tensor of shape [batch_size, seq_len, hidden_size]
+    /// * `key` - Key tensor of shape [batch_size, key_seq_len, hidden_size]
+    /// * `value` - Value tensor of shape [batch_size, key_seq_len, hidden_size]
+    ///
+    /// # Returns
+    /// Output tensor of shape [batch_size, seq_len, hidden_size]
     pub fn forward(
         &self,
         query: &Array3<f64>,
@@ -288,6 +365,14 @@ impl SparseAttention {
             .forward(query, key, value, Some(&attention_mask))
     }
 
+    /// Creates a sparse attention mask based on the configured sparsity pattern
+    ///
+    /// # Arguments
+    /// * `query_len` - Length of the query sequence
+    /// * `key_len` - Length of the key sequence
+    ///
+    /// # Returns
+    /// Binary mask where 1.0 allows attention and 0.0 prevents it
     fn create_sparse_mask(&self, query_len: usize, key_len: usize) -> Array2<f64> {
         let mut mask = Array2::<f64>::zeros((query_len, key_len));
 
@@ -354,18 +439,37 @@ impl SparseAttention {
 }
 
 /// Cross-attention mechanism for encoder-decoder architectures
+///
+/// In cross-attention, queries come from the decoder while keys and values
+/// come from the encoder, allowing the decoder to attend to encoder representations.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CrossAttention {
+    /// The underlying multi-head attention mechanism
     pub attention: MultiHeadAttention,
 }
 
 impl CrossAttention {
+    /// Creates a new cross-attention layer for encoder-decoder architectures
+    ///
+    /// # Arguments
+    /// * `hidden_size` - The hidden dimension size
+    /// * `num_attention_heads` - Number of parallel attention heads
+    /// * `dropout_prob` - Dropout probability for attention weights
     pub fn new(hidden_size: usize, num_attention_heads: usize, dropout_prob: f64) -> Result<Self> {
         Ok(Self {
             attention: MultiHeadAttention::new(hidden_size, num_attention_heads, dropout_prob)?,
         })
     }
 
+    /// Performs cross-attention between decoder and encoder states
+    ///
+    /// # Arguments
+    /// * `decoder_hidden_states` - Decoder states used as queries [batch_size, dec_seq_len, hidden_size]
+    /// * `encoder_hidden_states` - Encoder states used as keys and values [batch_size, enc_seq_len, hidden_size]
+    /// * `encoder_attention_mask` - Optional mask to prevent attention to encoder positions
+    ///
+    /// # Returns
+    /// Cross-attention output of shape [batch_size, dec_seq_len, hidden_size]
     pub fn forward(
         &self,
         decoder_hidden_states: &Array3<f64>,

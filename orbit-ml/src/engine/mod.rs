@@ -30,6 +30,7 @@ pub use scheduler::JobScheduler;
 #[derive(Debug)]
 pub struct MLEngine {
     /// Engine configuration
+    #[allow(dead_code)]
     config: MLConfig,
 
     /// Model registry for managing trained models
@@ -51,24 +52,50 @@ pub struct MLEngine {
     metrics: Arc<RwLock<EngineMetrics>>,
 }
 
-/// Engine performance metrics
+/// Engine performance metrics and statistics
+///
+/// Tracks various operational metrics of the ML engine including
+/// model usage, performance, and resource utilization.
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct EngineMetrics {
+    /// Total number of models that have completed training
     pub models_trained: u64,
+    /// Number of models currently loaded in memory
     pub models_loaded: u64,
+    /// Total number of inference requests completed
     pub inferences_completed: u64,
+    /// Number of training jobs currently running
     pub training_jobs_active: u64,
+    /// Number of inference jobs currently running
     pub inference_jobs_active: u64,
+    /// Current memory usage in bytes
     pub memory_usage_bytes: u64,
+    /// GPU utilization percentage (0-100)
     pub gpu_utilization_percent: f64,
+    /// Average time per training job in milliseconds
     pub average_training_time_ms: f64,
+    /// Average time per inference request in milliseconds
     pub average_inference_time_ms: f64,
+    /// Total number of errors encountered
     pub error_count: u64,
 }
 
+/// Core interface for ML engine operations
+///
+/// Provides async methods for model training, inference, management,
+/// and monitoring within the Orbit ML engine.
 #[async_trait]
 pub trait MLEngineInterface {
     /// Train a model asynchronously
+    ///
+    /// # Arguments
+    /// * `model_name` - Unique identifier for the model
+    /// * `model_type` - Type of model to train (e.g., "neural_network", "transformer")
+    /// * `training_data` - Serialized training data
+    /// * `config` - Training configuration parameters
+    ///
+    /// # Returns
+    /// A training job that can be monitored for progress
     async fn train_model(
         &self,
         model_name: String,
@@ -77,10 +104,24 @@ pub trait MLEngineInterface {
         config: TrainingConfig,
     ) -> Result<TrainingJob>;
 
-    /// Load a trained model
+    /// Load a trained model into memory for inference
+    ///
+    /// # Arguments
+    /// * `model_name` - Name of the model to load
+    ///
+    /// # Returns
+    /// Reference-counted model instance
     async fn load_model(&self, model_name: &str) -> Result<Arc<dyn Model>>;
 
-    /// Run inference on a model
+    /// Run inference on a loaded model
+    ///
+    /// # Arguments
+    /// * `model_name` - Name of the model to use for inference
+    /// * `input_data` - Serialized input data for prediction
+    /// * `config` - Inference configuration parameters
+    ///
+    /// # Returns
+    /// Inference result containing predictions and metadata
     async fn predict(
         &self,
         model_name: &str,
@@ -88,38 +129,68 @@ pub trait MLEngineInterface {
         config: InferenceConfig,
     ) -> Result<InferenceResult>;
 
-    /// List available models
+    /// List all available models in the registry
+    ///
+    /// # Returns
+    /// Vector of model metadata for all registered models
     async fn list_models(&self) -> Result<Vec<ModelMetadata>>;
 
-    /// Delete a model
+    /// Delete a model from the registry and disk
+    ///
+    /// # Arguments
+    /// * `model_name` - Name of the model to delete
     async fn delete_model(&self, model_name: &str) -> Result<()>;
 
-    /// Get engine metrics
+    /// Get current engine performance metrics
+    ///
+    /// # Returns
+    /// Current engine metrics and statistics
     async fn get_metrics(&self) -> Result<EngineMetrics>;
 
-    /// Health check
+    /// Perform engine health check
+    ///
+    /// # Returns
+    /// Current engine status and system information
     async fn health_check(&self) -> Result<EngineStatus>;
 }
 
+/// Engine status information for health checks and monitoring
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EngineStatus {
+    /// Current engine status ("healthy", "degraded", "unhealthy")
     pub status: String,
+    /// Engine version string
     pub version: String,
+    /// Engine uptime in seconds since startup
     pub uptime_seconds: u64,
+    /// Total number of active jobs (training + inference)
     pub active_jobs: u64,
+    /// Number of models currently loaded in memory
     pub loaded_models: u64,
+    /// Current memory usage in megabytes
     pub memory_usage_mb: f64,
+    /// Whether GPU acceleration is available
     pub gpu_available: bool,
+    /// List of enabled features/capabilities
     pub features_enabled: Vec<String>,
 }
 
 impl MLEngine {
-    /// Create a new ML engine
+    /// Create a new ML engine with default configuration
+    ///
+    /// # Returns
+    /// A new ML engine instance or an error if initialization fails
     pub async fn new() -> Result<Self> {
         Self::with_config(MLConfig::default()).await
     }
 
     /// Create ML engine with custom configuration
+    ///
+    /// # Arguments
+    /// * `config` - Custom ML engine configuration
+    ///
+    /// # Returns
+    /// A new ML engine instance or an error if initialization fails
     pub async fn with_config(config: MLConfig) -> Result<Self> {
         info!("Initializing ML engine with config: {:?}", config);
 
@@ -144,7 +215,10 @@ impl MLEngine {
         Ok(engine)
     }
 
-    /// Initialize engine subsystems
+    /// Initialize all engine subsystems including GPU, distributed computing, and multi-language runtimes
+    ///
+    /// # Returns
+    /// Ok(()) if initialization succeeds, error otherwise
     async fn initialize_subsystems(&self) -> Result<()> {
         // Initialize model factory
         debug!("Initializing model factory");
@@ -173,7 +247,10 @@ impl MLEngine {
         Ok(())
     }
 
-    /// Initialize GPU support
+    /// Initialize GPU support using CUDA if available
+    ///
+    /// # Returns
+    /// Ok(()) if GPU initialization succeeds, error otherwise
     #[cfg(feature = "gpu")]
     async fn initialize_gpu(&self) -> Result<()> {
         use candle_core::Device;
@@ -190,7 +267,10 @@ impl MLEngine {
         }
     }
 
-    /// Initialize distributed computing
+    /// Initialize distributed computing environment for multi-node training
+    ///
+    /// # Returns
+    /// Ok(()) if distributed computing setup succeeds, error otherwise
     #[cfg(feature = "distributed")]
     async fn initialize_distributed(&self) -> Result<()> {
         debug!("Setting up distributed computing environment");
@@ -198,7 +278,10 @@ impl MLEngine {
         Ok(())
     }
 
-    /// Initialize multi-language runtimes
+    /// Initialize multi-language runtime support for Python, JavaScript, and Lua
+    ///
+    /// # Returns
+    /// Ok(()) if runtime initialization succeeds, error otherwise
     async fn initialize_multi_language(&self) -> Result<()> {
         #[cfg(feature = "python")]
         {
@@ -221,7 +304,10 @@ impl MLEngine {
         Ok(())
     }
 
-    /// Get engine builder
+    /// Get a builder for customizing engine configuration
+    ///
+    /// # Returns
+    /// A new MLEngineBuilder instance for fluent configuration
     pub fn builder() -> MLEngineBuilder {
         MLEngineBuilder::default()
     }
@@ -355,7 +441,10 @@ impl MLEngineInterface for MLEngine {
 }
 
 impl MLEngine {
-    /// Get list of enabled features
+    /// Get list of enabled compile-time features
+    ///
+    /// # Returns
+    /// Vector of feature names that are compiled into this build
     fn get_enabled_features(&self) -> Vec<String> {
         let mut features = Vec::new();
 
@@ -387,7 +476,10 @@ impl MLEngine {
         features
     }
 
-    /// Shutdown the engine gracefully
+    /// Shutdown the engine gracefully, canceling active jobs and cleaning up resources
+    ///
+    /// # Returns
+    /// Ok(()) if shutdown completes successfully, error otherwise
     pub async fn shutdown(&self) -> Result<()> {
         info!("Shutting down ML engine");
 

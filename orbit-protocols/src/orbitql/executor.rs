@@ -6,7 +6,7 @@
 
 use orbit_shared::orbitql::*;
 use orbit_shared::spatial::{
-    GPUSpatialEngine, Point, SpatialError, SpatialGeometry, SpatialStreamProcessor, WGS84_SRID,
+    GPUSpatialEngine, SpatialError, SpatialGeometry, SpatialStreamProcessor, WGS84_SRID,
 };
 use serde_json::{Map, Value};
 use std::collections::HashMap;
