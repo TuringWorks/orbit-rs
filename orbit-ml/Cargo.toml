@@ -51,7 +51,7 @@ async-trait.workspace = true
 # linfa-bayes = "0.7"
 # linfa-svm = "0.7"
 # smartcore = "0.3"
-ndarray = "0.15"
+ndarray = { version = "0.15", features = ["serde"] }
 
 # Deep Learning Extensions (commented out for initial build)
 # candle-cuda = { version = "0.7", optional = true }
@@ -75,9 +75,9 @@ petgraph = "0.6"
 # Distributed Computing (commented out for initial build)
 # mpi = { version = "0.6", optional = true }
 
-# Data Processing
-polars = { version = "0.41", features = ["lazy", "sql", "parquet"] }
-arrow = "52.0"
+# Data Processing (commented out due to dependency conflicts)
+# polars = { version = "0.41", features = ["lazy", "sql", "parquet"] }
+# arrow = "52.0"
 
 # Statistical Computing
 statrs = "0.17"
@@ -97,6 +97,7 @@ config = "0.14"
 
 # Metrics and Monitoring
 prometheus = "0.13"
+pyo3.workspace = true
 
 [dev-dependencies]
 # Testing dependencies
@@ -112,68 +113,68 @@ approx = "0.5"
 tonic-build = "0.12"
 prost-build = "0.13"
 
-[[bin]]
-name = "orbit-ml-cli"
-path = "src/bin/cli.rs"
-required-features = []
+# [[bin]]
+# name = "orbit-ml-cli"
+# path = "src/bin/cli.rs"
+# required-features = []
 
-[[bin]]
-name = "orbit-ml-server"
-path = "src/bin/server.rs"
-required-features = []
+# [[bin]]
+# name = "orbit-ml-server"
+# path = "src/bin/server.rs"
+# required-features = []
 
 [lib]
 name = "orbit_ml"
 path = "src/lib.rs"
 
-# Benchmarks
-[[bench]]
-name = "neural_network_benchmark"
-harness = false
-path = "benchmarks/neural_network_benchmark.rs"
+# Benchmarks (commented out until files are created)
+# [[bench]]
+# name = "neural_network_benchmark"
+# harness = false
+# path = "benchmarks/neural_network_benchmark.rs"
 
-[[bench]]
-name = "transformer_benchmark"
-harness = false
-path = "benchmarks/transformer_benchmark.rs"
+# [[bench]]
+# name = "transformer_benchmark"
+# harness = false
+# path = "benchmarks/transformer_benchmark.rs"
 
-[[bench]]
-name = "graph_neural_network_benchmark"
-harness = false
-path = "benchmarks/graph_neural_network_benchmark.rs"
+# [[bench]]
+# name = "graph_neural_network_benchmark"
+# harness = false
+# path = "benchmarks/graph_neural_network_benchmark.rs"
 
-# Examples
-[[example]]
-name = "healthcare_demo"
-path = "examples/healthcare_demo.rs"
-required-features = ["industry-healthcare"]
+# Examples (commented out until files are created)
+# [[example]]
+# name = "healthcare_demo"
+# path = "examples/healthcare_demo.rs"
+# required-features = ["industry-healthcare"]
 
-[[example]]
-name = "fintech_demo"
-path = "examples/fintech_demo.rs"
-required-features = ["industry-fintech"]
+# [[example]]
+# name = "fintech_demo"
+# path = "examples/fintech_demo.rs"
+# required-features = ["industry-fintech"]
 
-[[example]]
-name = "neural_network_demo"
-path = "examples/neural_network_demo.rs"
-required-features = ["neural-networks"]
+# [[example]]
+# name = "neural_network_demo"
+# path = "examples/neural_network_demo.rs"
+# required-features = ["neural-networks"]
 
-[[example]]
-name = "transformer_demo"
-path = "examples/transformer_demo.rs"
-required-features = ["transformers"]
+# [[example]]
+# name = "transformer_demo"
+# path = "examples/transformer_demo.rs"
+# required-features = ["transformers"]
 
-[[example]]
-name = "graph_neural_network_demo"
-path = "examples/graph_neural_network_demo.rs"
-required-features = ["graph-neural-networks"]
+# [[example]]
+# name = "graph_neural_network_demo"
+# path = "examples/graph_neural_network_demo.rs"
+# required-features = ["graph-neural-networks"]
 
-[[example]]
-name = "python_integration_demo"
-path = "examples/python_integration_demo.rs"
-required-features = ["python"]
+# [[example]]
+# name = "python_integration_demo"
+# path = "examples/python_integration_demo.rs"
+# required-features = ["python"]
 
-[[example]]
-name = "multi_language_demo"
-path = "examples/multi_language_demo.rs"
-required-features = ["python", "javascript", "lua"]
+# [[example]]
+# name = "multi_language_demo"
+# path = "examples/multi_language_demo.rs"
+# required-features = ["python", "javascript", "lua"]

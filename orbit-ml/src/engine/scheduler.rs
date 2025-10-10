@@ -1,8 +1,9 @@
-use uuid::Uuid;
 use crate::config::MLConfig;
-use crate::inference::InferenceResult;
 use crate::error::Result;
+use crate::inference::InferenceResult;
+use uuid::Uuid;
 
+#[derive(Debug)]
 pub struct JobScheduler;
 
 impl JobScheduler {
@@ -15,8 +16,8 @@ impl JobScheduler {
     }
 
     pub async fn run_inference(&self, _job_id: Uuid) -> Result<InferenceResult> {
-        use crate::inference::{InferenceResult, InferenceMetrics, Prediction};
-        
+        use crate::inference::{InferenceMetrics, InferenceResult, Prediction};
+
         Ok(InferenceResult {
             job_id: _job_id,
             model_name: "mock".to_string(),

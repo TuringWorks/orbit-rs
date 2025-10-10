@@ -4,22 +4,22 @@
 //! cluster management, distributed query planning, network communication,
 //! fault tolerance, and cross-node data shuffling.
 
-use std::collections::{HashMap, HashSet, BTreeMap};
-use std::sync::{Arc, RwLock, Mutex};
-use std::time::{Duration, Instant, SystemTime};
-use std::net::{SocketAddr, IpAddr};
-use serde::{Deserialize, Serialize};
-use tokio::sync::{mpsc, oneshot, broadcast, Semaphore};
-use tokio::net::{TcpListener, TcpStream};
-use tokio::time::timeout;
 use futures::stream::{Stream, StreamExt};
+use serde::{Deserialize, Serialize};
+use std::collections::{BTreeMap, HashMap, HashSet};
+use std::net::{IpAddr, SocketAddr};
+use std::sync::{Arc, Mutex, RwLock};
+use std::time::{Duration, Instant, SystemTime};
+use tokio::net::{TcpListener, TcpStream};
+use tokio::sync::{broadcast, mpsc, oneshot, Semaphore};
+use tokio::time::timeout;
 use uuid::Uuid;
 
 use crate::orbitql::ast::*;
-use crate::orbitql::vectorized_execution::*;
 use crate::orbitql::parallel_execution::*;
 use crate::orbitql::query_cache::*;
 use crate::orbitql::storage_integration::*;
+use crate::orbitql::vectorized_execution::*;
 use crate::orbitql::QueryValue;
 
 /// Distributed query execution coordinator
@@ -242,13 +242,13 @@ pub trait FragmentationStrategy {
     /// Fragment query into distributed execution plan
     fn fragment_query(
         &self,
-        query: &Query,
+        query: &Statement,
         available_nodes: &[NodeInfo],
     ) -> Result<DistributedExecutionPlan, DistributedError>;
-    
+
     /// Estimate fragmentation cost
-    fn estimate_cost(&self, query: &Query, nodes: &[NodeInfo]) -> f64;
-    
+    fn estimate_cost(&self, query: &Statement, nodes: &[NodeInfo]) -> f64;
+
     /// Strategy name
     fn name(&self) -> &str;
 }
@@ -276,7 +276,7 @@ pub struct ExecutionFragment {
     /// Target node for execution
     pub target_node: String,
     /// Fragment query
-    pub query: Query,
+    pub query: Statement,
     /// Input data sources
     pub input_sources: Vec<DataSource>,
     /// Output destinations
@@ -325,7 +325,7 @@ pub struct ResourceRequirements {
 }
 
 /// Execution priority levels
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ExecutionPriority {
     Low = 0,
     Normal = 1,
@@ -399,7 +399,7 @@ impl Default for NetworkConfig {
             max_connections: 1000,
             enable_compression: true,
             enable_encryption: false, // Would enable in production
-            buffer_size: 65536, // 64KB
+            buffer_size: 65536,       // 64KB
         }
     }
 }
@@ -468,9 +468,7 @@ pub enum NetworkMessage {
         error_message: String,
     },
     /// Cluster management
-    ClusterManagement {
-        event: ClusterEvent,
-    },
+    ClusterManagement { event: ClusterEvent },
 }
 
 /// Message handler trait
@@ -481,7 +479,7 @@ pub trait MessageHandler {
         message: NetworkMessage,
         sender_id: &str,
     ) -> Result<Option<NetworkMessage>, DistributedError>;
-    
+
     /// Handler name
     fn name(&self) -> &str;
 }
@@ -616,27 +614,29 @@ pub struct HashFragmentationStrategy;
 impl FragmentationStrategy for HashFragmentationStrategy {
     fn fragment_query(
         &self,
-        query: &Query,
+        query: &Statement,
         available_nodes: &[NodeInfo],
     ) -> Result<DistributedExecutionPlan, DistributedError> {
         let query_id = Uuid::new_v4().to_string();
         let mut fragments = Vec::new();
         let mut exchanges = Vec::new();
         let mut dependencies = Vec::new();
-        
+
         // Simple hash-based fragmentation (mock implementation)
         match query {
-            Query::Select(select) => {
+            Statement::Select(select) => {
                 // Create scan fragments for each node
                 for (i, node) in available_nodes.iter().enumerate() {
                     let fragment_id = format!("scan_{}", i);
-                    
+
                     let fragment = ExecutionFragment {
                         fragment_id: fragment_id.clone(),
                         target_node: node.node_id.clone(),
                         query: query.clone(),
                         input_sources: vec![DataSource::Table("distributed_table".to_string())],
-                        output_destinations: vec![DataDestination::Fragment("aggregate_0".to_string())],
+                        output_destinations: vec![DataDestination::Fragment(
+                            "aggregate_0".to_string(),
+                        )],
                         resource_requirements: ResourceRequirements {
                             cpu_cores: 2,
                             memory_mb: 1024,
@@ -646,9 +646,9 @@ impl FragmentationStrategy for HashFragmentationStrategy {
                         },
                         priority: ExecutionPriority::Normal,
                     };
-                    
+
                     fragments.push(fragment);
-                    
+
                     // Create exchange for sending data to aggregation node
                     if i > 0 {
                         exchanges.push(DataExchange {
@@ -659,18 +659,19 @@ impl FragmentationStrategy for HashFragmentationStrategy {
                             partitioning_key: Some("partition_key".to_string()),
                             estimated_data_volume: 1024 * 1024, // 1MB
                         });
-                        
+
                         dependencies.push((fragment_id, "aggregate_0".to_string()));
                     }
                 }
-                
+
                 // Create aggregation fragment on coordinator node
                 if let Some(coordinator) = available_nodes.first() {
                     fragments.push(ExecutionFragment {
                         fragment_id: "aggregate_0".to_string(),
                         target_node: coordinator.node_id.clone(),
                         query: query.clone(),
-                        input_sources: fragments.iter()
+                        input_sources: fragments
+                            .iter()
                             .map(|f| DataSource::Fragment(f.fragment_id.clone()))
                             .collect(),
                         output_destinations: vec![DataDestination::Result],
@@ -687,11 +688,11 @@ impl FragmentationStrategy for HashFragmentationStrategy {
             }
             _ => {
                 return Err(DistributedError::FragmentationError(
-                    "Query type not supported for distribution".to_string()
+                    "Query type not supported for distribution".to_string(),
                 ));
             }
         }
-        
+
         Ok(DistributedExecutionPlan {
             query_id,
             fragments,
@@ -700,12 +701,12 @@ impl FragmentationStrategy for HashFragmentationStrategy {
             estimated_cost: 100.0, // Mock cost
         })
     }
-    
-    fn estimate_cost(&self, query: &Query, nodes: &[NodeInfo]) -> f64 {
+
+    fn estimate_cost(&self, query: &Statement, nodes: &[NodeInfo]) -> f64 {
         // Simple cost estimation
         nodes.len() as f64 * 10.0
     }
-    
+
     fn name(&self) -> &str {
         "hash_fragmentation"
     }
@@ -734,10 +735,13 @@ impl DistributedExecutor {
         let local_node = Arc::new(local_node);
         let cluster_manager = Arc::new(ClusterManager::new(config.clone()));
         let query_planner = Arc::new(DistributedQueryPlanner::new(config.clone()));
-        let network_manager = Arc::new(NetworkManager::new(local_node.clone(), NetworkConfig::default()));
+        let network_manager = Arc::new(NetworkManager::new(
+            local_node.clone(),
+            NetworkConfig::default(),
+        ));
         let fault_manager = Arc::new(FaultToleranceManager::new(config.clone()));
         let stats = Arc::new(RwLock::new(DistributedStats::default()));
-        
+
         Self {
             config,
             local_node,
@@ -748,54 +752,62 @@ impl DistributedExecutor {
             stats,
         }
     }
-    
+
     /// Start distributed executor
     pub async fn start(&self) -> Result<(), DistributedError> {
-        println!("🚀 Starting distributed executor on node: {}", self.local_node.node_id);
-        
+        println!(
+            "🚀 Starting distributed executor on node: {}",
+            self.local_node.node_id
+        );
+
         // Start cluster management
         self.cluster_manager.start().await?;
-        
+
         // Start network manager
         self.network_manager.start().await?;
-        
+
         // Start fault tolerance manager
         self.fault_manager.start().await?;
-        
+
         // Join cluster
         self.join_cluster().await?;
-        
+
         println!("✅ Distributed executor started successfully");
         Ok(())
     }
-    
+
     /// Execute distributed query
     pub async fn execute_distributed_query(
         &self,
-        query: &Query,
+        query: &Statement,
     ) -> Result<Vec<RecordBatch>, DistributedError> {
         let start_time = Instant::now();
-        
+
         // Get available nodes
         let nodes = self.cluster_manager.get_active_nodes().await?;
         if nodes.is_empty() {
-            return Err(DistributedError::NodeUnavailable("No nodes available".to_string()));
+            return Err(DistributedError::NodeUnavailable(
+                "No nodes available".to_string(),
+            ));
         }
-        
+
         // Create distributed execution plan
         let plan = self.query_planner.create_plan(query, &nodes).await?;
-        println!("📋 Created execution plan with {} fragments", plan.fragments.len());
-        
+        println!(
+            "📋 Created execution plan with {} fragments",
+            plan.fragments.len()
+        );
+
         // Execute plan
         let result = self.execute_plan(plan).await?;
-        
+
         // Update statistics
         let execution_time = start_time.elapsed();
         self.update_stats(execution_time).await;
-        
+
         Ok(result)
     }
-    
+
     /// Execute distributed execution plan
     async fn execute_plan(
         &self,
@@ -803,22 +815,20 @@ impl DistributedExecutor {
     ) -> Result<Vec<RecordBatch>, DistributedError> {
         let mut results = Vec::new();
         let mut fragment_futures = Vec::new();
-        
+
         // Sort fragments by dependencies (topological sort)
         let sorted_fragments = self.topological_sort(&plan)?;
-        
+
         // Execute fragments in dependency order
         for fragment in sorted_fragments {
             let network_manager = self.network_manager.clone();
-            let future = async move {
-                network_manager.execute_fragment_remote(fragment).await
-            };
+            let future = async move { network_manager.execute_fragment_remote(fragment).await };
             fragment_futures.push(future);
         }
-        
+
         // Wait for all fragments to complete
         let fragment_results = futures::future::join_all(fragment_futures).await;
-        
+
         // Collect results from output fragments
         for result in fragment_results {
             match result {
@@ -826,62 +836,68 @@ impl DistributedExecutor {
                 Err(e) => return Err(e),
             }
         }
-        
+
         Ok(results)
     }
-    
+
     /// Topological sort of fragments based on dependencies
-    fn topological_sort(&self, plan: &DistributedExecutionPlan) -> Result<Vec<ExecutionFragment>, DistributedError> {
+    fn topological_sort(
+        &self,
+        plan: &DistributedExecutionPlan,
+    ) -> Result<Vec<ExecutionFragment>, DistributedError> {
         // Simplified topological sort (would be more sophisticated in practice)
         let mut sorted = plan.fragments.clone();
         sorted.sort_by_key(|f| f.priority);
         Ok(sorted)
     }
-    
+
     /// Join cluster
     async fn join_cluster(&self) -> Result<(), DistributedError> {
         // Register with cluster manager
-        self.cluster_manager.register_node(self.local_node.as_ref().clone()).await?;
-        
+        self.cluster_manager
+            .register_node(self.local_node.as_ref().clone())
+            .await?;
+
         // Start heartbeat
         self.start_heartbeat().await;
-        
+
         Ok(())
     }
-    
+
     /// Start heartbeat mechanism
     async fn start_heartbeat(&self) {
         let network_manager = self.network_manager.clone();
         let local_node = self.local_node.clone();
         let interval = self.config.heartbeat_interval;
-        
+
         tokio::spawn(async move {
             let mut ticker = tokio::time::interval(interval);
-            
+
             loop {
                 ticker.tick().await;
-                
+
                 let heartbeat = NetworkMessage::Heartbeat {
                     node_id: local_node.node_id.clone(),
                     timestamp: SystemTime::now(),
                     resources: local_node.resources.clone(),
                 };
-                
+
                 let _ = network_manager.broadcast_message(heartbeat).await;
             }
         });
     }
-    
+
     /// Update execution statistics
     async fn update_stats(&self, execution_time: Duration) {
         let mut stats = self.stats.write().unwrap();
         stats.queries_executed += 1;
-        
+
         // Update average latency
-        let total_latency = stats.avg_query_latency * (stats.queries_executed - 1) as u32 + execution_time;
+        let total_latency =
+            stats.avg_query_latency * (stats.queries_executed - 1) as u32 + execution_time;
         stats.avg_query_latency = total_latency / stats.queries_executed as u32;
     }
-    
+
     /// Get cluster statistics
     pub async fn get_stats(&self) -> DistributedStats {
         self.stats.read().unwrap().clone()
@@ -891,32 +907,33 @@ impl DistributedExecutor {
 impl ClusterManager {
     pub fn new(config: ClusterConfig) -> Self {
         let (event_sender, _) = broadcast::channel(1000);
-        
+        let health_monitor_config = config.clone();
+
         Self {
             config,
             nodes: Arc::new(RwLock::new(HashMap::new())),
-            health_monitor: Arc::new(HealthMonitor::new(config.clone())),
+            health_monitor: Arc::new(HealthMonitor::new(health_monitor_config)),
             leader_election: Arc::new(LeaderElection::new()),
             event_sender,
         }
     }
-    
+
     pub async fn start(&self) -> Result<(), DistributedError> {
         self.health_monitor.start().await?;
         self.leader_election.start().await?;
         Ok(())
     }
-    
+
     pub async fn register_node(&self, node: NodeInfo) -> Result<(), DistributedError> {
         {
             let mut nodes = self.nodes.write().unwrap();
             nodes.insert(node.node_id.clone(), node.clone());
         }
-        
+
         let _ = self.event_sender.send(ClusterEvent::NodeJoined(node));
         Ok(())
     }
-    
+
     pub async fn get_active_nodes(&self) -> Result<Vec<NodeInfo>, DistributedError> {
         let nodes = self.nodes.read().unwrap();
         let active_nodes: Vec<NodeInfo> = nodes
@@ -924,7 +941,7 @@ impl ClusterManager {
             .filter(|node| matches!(node.status, NodeStatus::Active))
             .cloned()
             .collect();
-        
+
         Ok(active_nodes)
     }
 }
@@ -936,7 +953,7 @@ impl HealthMonitor {
             monitoring_tasks: Arc::new(Mutex::new(Vec::new())),
         }
     }
-    
+
     pub async fn start(&self) -> Result<(), DistributedError> {
         // Start health monitoring tasks
         Ok(())
@@ -951,12 +968,12 @@ impl LeaderElection {
             leader_lease_expires: Arc::new(RwLock::new(None)),
         }
     }
-    
+
     pub async fn start(&self) -> Result<(), DistributedError> {
         // Start leader election process
         Ok(())
     }
-    
+
     pub async fn get_current_leader(&self) -> Option<String> {
         self.leader_id.read().unwrap().clone()
     }
@@ -965,11 +982,8 @@ impl LeaderElection {
 impl DistributedQueryPlanner {
     pub fn new(config: ClusterConfig) -> Self {
         let mut fragmenter = QueryFragmenter::new();
-        fragmenter.register_strategy(
-            "hash".to_string(),
-            Box::new(HashFragmentationStrategy)
-        );
-        
+        fragmenter.register_strategy("hash".to_string(), Box::new(HashFragmentationStrategy));
+
         Self {
             config,
             fragmenter: Arc::new(fragmenter),
@@ -977,21 +991,21 @@ impl DistributedQueryPlanner {
             scheduler: Arc::new(ResourceScheduler::new()),
         }
     }
-    
+
     pub async fn create_plan(
         &self,
-        query: &Query,
+        query: &Statement,
         nodes: &[NodeInfo],
     ) -> Result<DistributedExecutionPlan, DistributedError> {
         // Fragment query
         let plan = self.fragmenter.fragment_query(query, nodes)?;
-        
+
         // Optimize plan
         let optimized_plan = self.optimizer.optimize_plan(plan)?;
-        
+
         // Schedule resources
         let scheduled_plan = self.scheduler.schedule_plan(optimized_plan, nodes)?;
-        
+
         Ok(scheduled_plan)
     }
 }
@@ -1002,7 +1016,7 @@ impl QueryFragmenter {
             strategies: HashMap::new(),
         }
     }
-    
+
     pub fn register_strategy(
         &mut self,
         name: String,
@@ -1010,16 +1024,17 @@ impl QueryFragmenter {
     ) {
         self.strategies.insert(name, strategy);
     }
-    
+
     pub fn fragment_query(
         &self,
-        query: &Query,
+        query: &Statement,
         nodes: &[NodeInfo],
     ) -> Result<DistributedExecutionPlan, DistributedError> {
         // Use hash strategy by default
-        let strategy = self.strategies.get("hash")
-            .ok_or_else(|| DistributedError::FragmentationError("No fragmentation strategy available".to_string()))?;
-        
+        let strategy = self.strategies.get("hash").ok_or_else(|| {
+            DistributedError::FragmentationError("No fragmentation strategy available".to_string())
+        })?;
+
         strategy.fragment_query(query, nodes)
     }
 }
@@ -1031,8 +1046,11 @@ impl DistributedOptimizer {
     pub fn new() -> Self {
         Self
     }
-    
-    pub fn optimize_plan(&self, plan: DistributedExecutionPlan) -> Result<DistributedExecutionPlan, DistributedError> {
+
+    pub fn optimize_plan(
+        &self,
+        plan: DistributedExecutionPlan,
+    ) -> Result<DistributedExecutionPlan, DistributedError> {
         // Apply distributed optimizations
         // For now, return plan as-is
         Ok(plan)
@@ -1046,7 +1064,7 @@ impl ResourceScheduler {
             strategy: SchedulingStrategy::LoadBased,
         }
     }
-    
+
     pub fn schedule_plan(
         &self,
         plan: DistributedExecutionPlan,
@@ -1067,12 +1085,12 @@ impl NetworkManager {
             config,
         }
     }
-    
+
     pub async fn start(&self) -> Result<(), DistributedError> {
         // Start network listener
         Ok(())
     }
-    
+
     pub async fn execute_fragment_remote(
         &self,
         fragment: ExecutionFragment,
@@ -1091,7 +1109,7 @@ impl NetworkManager {
             },
         }])
     }
-    
+
     pub async fn broadcast_message(&self, message: NetworkMessage) -> Result<(), DistributedError> {
         // Broadcast message to all connected nodes
         Ok(())
@@ -1100,14 +1118,15 @@ impl NetworkManager {
 
 impl FaultToleranceManager {
     pub fn new(config: ClusterConfig) -> Self {
+        let replication_factor = config.replication_factor;
         Self {
             config,
             failure_detector: Arc::new(FailureDetector::new()),
             recovery_coordinator: Arc::new(RecoveryCoordinator::new()),
-            replication_manager: Arc::new(ReplicationManager::new(config.replication_factor)),
+            replication_manager: Arc::new(ReplicationManager::new(replication_factor)),
         }
     }
-    
+
     pub async fn start(&self) -> Result<(), DistributedError> {
         // Start fault tolerance mechanisms
         Ok(())
@@ -1157,7 +1176,7 @@ impl Default for DistributedStats {
 mod tests {
     use super::*;
     use std::net::Ipv4Addr;
-    
+
     #[test]
     fn test_node_info_creation() {
         let node = NodeInfo {
@@ -1176,34 +1195,32 @@ mod tests {
             last_heartbeat: SystemTime::now(),
             metadata: HashMap::new(),
         };
-        
+
         assert_eq!(node.node_id, "test_node_1");
         assert_eq!(node.resources.cpu_cores, 8);
         assert!(matches!(node.role, NodeRole::Worker));
     }
-    
+
     #[test]
     fn test_fragmentation_strategy() {
         let strategy = HashFragmentationStrategy;
-        let nodes = vec![
-            NodeInfo {
-                node_id: "node1".to_string(),
-                address: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080),
-                role: NodeRole::Worker,
-                status: NodeStatus::Active,
-                resources: NodeResources {
-                    cpu_cores: 4,
-                    memory_mb: 8192,
-                    disk_mb: 512 * 1024,
-                    network_mbps: 1000,
-                    cpu_utilization: 0.2,
-                    memory_utilization: 0.4,
-                },
-                last_heartbeat: SystemTime::now(),
-                metadata: HashMap::new(),
-            }
-        ];
-        
+        let nodes = vec![NodeInfo {
+            node_id: "node1".to_string(),
+            address: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080),
+            role: NodeRole::Worker,
+            status: NodeStatus::Active,
+            resources: NodeResources {
+                cpu_cores: 4,
+                memory_mb: 8192,
+                disk_mb: 512 * 1024,
+                network_mbps: 1000,
+                cpu_utilization: 0.2,
+                memory_utilization: 0.4,
+            },
+            last_heartbeat: SystemTime::now(),
+            metadata: HashMap::new(),
+        }];
+
         let query = Query::Select(SelectQuery {
             columns: vec![],
             from: Some(FromClause {
@@ -1216,20 +1233,20 @@ mod tests {
             order_by: vec![],
             limit: Some(100),
         });
-        
+
         let result = strategy.fragment_query(&query, &nodes);
         assert!(result.is_ok());
-        
+
         let plan = result.unwrap();
         assert!(!plan.fragments.is_empty());
         assert_eq!(strategy.name(), "hash_fragmentation");
     }
-    
+
     #[tokio::test]
     async fn test_cluster_manager() {
         let config = ClusterConfig::default();
         let manager = ClusterManager::new(config);
-        
+
         let node = NodeInfo {
             node_id: "test_node".to_string(),
             address: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080),
@@ -1246,10 +1263,10 @@ mod tests {
             last_heartbeat: SystemTime::now(),
             metadata: HashMap::new(),
         };
-        
+
         let result = manager.register_node(node).await;
         assert!(result.is_ok());
-        
+
         let nodes = manager.get_active_nodes().await.unwrap();
         assert_eq!(nodes.len(), 1);
         assert_eq!(nodes[0].node_id, "test_node");

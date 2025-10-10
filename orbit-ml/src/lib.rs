@@ -4,7 +4,7 @@
 //! providing neural networks, transformers, graph neural networks, and multi-language support.
 //!
 //! ## Features
-//! 
+//!
 //! - **Neural Networks**: Feedforward, CNN, RNN, LSTM, GRU architectures
 //! - **Transformers**: BERT, GPT, Vision Transformers with attention mechanisms
 //! - **Graph Neural Networks**: GCN, GraphSAGE, GAT for graph-based learning
@@ -44,15 +44,15 @@
 #![forbid(unsafe_code)]
 
 // Core modules
+pub mod config;
 pub mod engine;
 pub mod error;
-pub mod config;
 pub mod metrics;
 
 // ML Architecture modules
+pub mod graph_neural_networks;
 pub mod neural_networks;
 pub mod transformers;
-pub mod graph_neural_networks;
 
 // Multi-language support
 pub mod multi_language;
@@ -64,22 +64,22 @@ pub mod industry_models;
 pub mod sql_extensions;
 
 // Utilities and common functionality
-pub mod utils;
 pub mod data;
-pub mod training;
 pub mod inference;
 pub mod models;
+pub mod training;
+pub mod utils;
 
 // Re-exports for convenience
+pub use config::MLConfig;
 pub use engine::{MLEngine, MLEngineBuilder};
 pub use error::{MLError, Result};
-pub use config::MLConfig;
-pub use neural_networks::{NeuralNetwork, NeuralNetworkBuilder};
-pub use transformers::{Transformer, TransformerBuilder};
-pub use graph_neural_networks::{GraphNeuralNetwork, GNNBuilder};
-pub use training::{TrainingConfig, Trainer};
+pub use graph_neural_networks::{GNNBuilder, GraphNeuralNetwork};
 pub use inference::{InferenceConfig, Predictor};
 pub use models::{Model, ModelMetadata, ModelRegistry};
+pub use neural_networks::{NeuralNetwork, NeuralNetworkBuilder};
+pub use training::{Trainer, TrainingConfig};
+pub use transformers::{Transformer, TransformerBuilder};
 
 // Feature-gated exports
 #[cfg(feature = "python")]

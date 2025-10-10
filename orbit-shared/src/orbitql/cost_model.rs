@@ -296,6 +296,13 @@ impl CostModel {
                     * self.config.memory_cost_per_mb;
                 cost.total_time_ms = cost.cpu_cost * 0.5;
             }
+            JoinType::Graph => {
+                // Graph join cost depends on graph traversal complexity
+                cost.cpu_cost = left_rows * right_rows * self.config.cpu_tuple_cost * 0.1; // Assume graph reduces complexity
+                cost.memory_cost = (left_rows * right_rows * 32.0) / (1024.0 * 1024.0)
+                    * self.config.memory_cost_per_mb;
+                cost.total_time_ms = cost.cpu_cost * 0.3 + cost.io_cost * 8.0;
+            }
         }
 
         let output_width = left_card.width + right_card.width;

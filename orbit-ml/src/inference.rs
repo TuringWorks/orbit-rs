@@ -5,38 +5,38 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::error::{MLError, Result};
+use crate::error::Result;
 
 /// Inference configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InferenceConfig {
     /// Batch size for inference
     pub batch_size: usize,
-    
+
     /// Maximum timeout for inference in seconds
     pub timeout_seconds: u64,
-    
+
     /// Enable model warmup
     pub enable_warmup: bool,
-    
+
     /// Warmup iterations
     pub warmup_iterations: usize,
-    
+
     /// Enable prediction caching
     pub enable_caching: bool,
-    
+
     /// Cache TTL in seconds
     pub cache_ttl_seconds: u64,
-    
+
     /// Output format
     pub output_format: OutputFormat,
-    
+
     /// Include confidence scores
     pub include_confidence: bool,
-    
+
     /// Include explanation/interpretability
     pub include_explanation: bool,
-    
+
     /// Additional parameters
     pub parameters: HashMap<String, serde_json::Value>,
 }
@@ -47,13 +47,13 @@ pub struct InferenceConfig {
 pub enum OutputFormat {
     /// Raw numerical output
     Raw,
-    
+
     /// JSON formatted output
     Json,
-    
+
     /// CSV formatted output
     Csv,
-    
+
     /// Structured predictions with metadata
     Structured,
 }
@@ -63,16 +63,16 @@ pub enum OutputFormat {
 pub struct InferenceJob {
     /// Unique job identifier
     pub id: Uuid,
-    
+
     /// Model name
     pub model_name: String,
-    
+
     /// Input data
     pub input_data: Vec<u8>,
-    
+
     /// Inference configuration
     pub config: InferenceConfig,
-    
+
     /// Creation timestamp
     pub created_at: chrono::DateTime<chrono::Utc>,
 }
@@ -82,16 +82,16 @@ pub struct InferenceJob {
 pub struct InferenceResult {
     /// Job identifier
     pub job_id: Uuid,
-    
+
     /// Model name
     pub model_name: String,
-    
+
     /// Predictions
     pub predictions: Vec<Prediction>,
-    
+
     /// Inference metrics
     pub metrics: InferenceMetrics,
-    
+
     /// Processing timestamp
     pub processed_at: chrono::DateTime<chrono::Utc>,
 }
@@ -101,13 +101,13 @@ pub struct InferenceResult {
 pub struct Prediction {
     /// Prediction value(s)
     pub value: serde_json::Value,
-    
+
     /// Confidence score (0.0 to 1.0)
     pub confidence: Option<f64>,
-    
+
     /// Prediction probabilities (for classification)
     pub probabilities: Option<HashMap<String, f64>>,
-    
+
     /// Explanation/interpretation
     pub explanation: Option<PredictionExplanation>,
 }
@@ -117,13 +117,13 @@ pub struct Prediction {
 pub struct PredictionExplanation {
     /// Feature importance scores
     pub feature_importance: Option<HashMap<String, f64>>,
-    
+
     /// SHAP values
     pub shap_values: Option<Vec<f64>>,
-    
+
     /// Attention weights (for transformers)
     pub attention_weights: Option<Vec<Vec<f64>>>,
-    
+
     /// Textual explanation
     pub text_explanation: Option<String>,
 }
@@ -133,22 +133,22 @@ pub struct PredictionExplanation {
 pub struct InferenceMetrics {
     /// Inference time in milliseconds
     pub inference_time_ms: f64,
-    
+
     /// Preprocessing time in milliseconds
     pub preprocessing_time_ms: f64,
-    
+
     /// Postprocessing time in milliseconds
     pub postprocessing_time_ms: f64,
-    
+
     /// Total time in milliseconds
     pub total_time_ms: f64,
-    
+
     /// Memory usage in bytes
     pub memory_usage_bytes: usize,
-    
+
     /// Batch size processed
     pub batch_size: usize,
-    
+
     /// Throughput (predictions per second)
     pub throughput: f64,
 }
@@ -170,7 +170,7 @@ impl Predictor {
         let start_time = std::time::Instant::now();
 
         // TODO: Implement actual inference logic
-        
+
         let predictions = vec![Prediction {
             value: serde_json::Value::Number(serde_json::Number::from_f64(0.85).unwrap()),
             confidence: Some(0.95),
@@ -179,7 +179,7 @@ impl Predictor {
         }];
 
         let elapsed = start_time.elapsed().as_millis() as f64;
-        
+
         let metrics = InferenceMetrics {
             inference_time_ms: elapsed * 0.8, // Simulate inference time
             preprocessing_time_ms: elapsed * 0.1,
@@ -296,7 +296,10 @@ mod tests {
             .enable_caching(600)
             .include_confidence()
             .include_explanation()
-            .set_parameter("temperature", serde_json::Value::Number(serde_json::Number::from_f64(0.7).unwrap()));
+            .set_parameter(
+                "temperature",
+                serde_json::Value::Number(serde_json::Number::from_f64(0.7).unwrap()),
+            );
 
         assert_eq!(config.batch_size, 16);
         assert_eq!(config.timeout_seconds, 60);
@@ -313,8 +316,11 @@ mod tests {
     async fn test_predictor_creation() {
         let config = InferenceConfig::default();
         let predictor = Predictor::new(config);
-        
-        let result = predictor.predict("test_model", b"test_input").await.unwrap();
+
+        let result = predictor
+            .predict("test_model", b"test_input")
+            .await
+            .unwrap();
         assert_eq!(result.model_name, "test_model");
         assert_eq!(result.predictions.len(), 1);
         assert!(result.metrics.total_time_ms >= 0.0);

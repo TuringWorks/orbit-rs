@@ -5,38 +5,38 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::error::{MLError, Result};
+use crate::error::Result;
 
 /// Training configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TrainingConfig {
     /// Number of training epochs
     pub epochs: usize,
-    
+
     /// Learning rate
     pub learning_rate: f64,
-    
+
     /// Batch size
     pub batch_size: usize,
-    
+
     /// Validation split ratio (0.0 to 1.0)
     pub validation_split: f64,
-    
+
     /// Optimizer type
     pub optimizer: OptimizerType,
-    
+
     /// Loss function
     pub loss_function: LossFunction,
-    
+
     /// Metrics to track during training
     pub metrics: Vec<String>,
-    
+
     /// Early stopping configuration
     pub early_stopping: Option<EarlyStoppingConfig>,
-    
+
     /// Checkpoint configuration
     pub checkpointing: CheckpointConfig,
-    
+
     /// Additional hyperparameters
     pub hyperparameters: HashMap<String, serde_json::Value>,
 }
@@ -47,13 +47,17 @@ pub struct TrainingConfig {
 pub enum OptimizerType {
     /// Stochastic Gradient Descent
     Sgd { momentum: Option<f64> },
-    
+
     /// Adam optimizer
-    Adam { beta1: f64, beta2: f64, epsilon: f64 },
-    
+    Adam {
+        beta1: f64,
+        beta2: f64,
+        epsilon: f64,
+    },
+
     /// AdaGrad optimizer
     AdaGrad { epsilon: f64 },
-    
+
     /// RMSprop optimizer
     RmsProp { alpha: f64, epsilon: f64 },
 }
@@ -64,21 +68,24 @@ pub enum OptimizerType {
 pub enum LossFunction {
     /// Mean Squared Error
     MeanSquaredError,
-    
+
     /// Mean Absolute Error
     MeanAbsoluteError,
-    
+
     /// Cross Entropy Loss
     CrossEntropy,
-    
+
     /// Binary Cross Entropy Loss
     BinaryCrossEntropy,
-    
+
     /// Huber Loss
     HuberLoss { delta: f64 },
-    
+
     /// Custom loss function
-    Custom { name: String, parameters: HashMap<String, f64> },
+    Custom {
+        name: String,
+        parameters: HashMap<String, f64>,
+    },
 }
 
 /// Early stopping configuration
@@ -86,13 +93,13 @@ pub enum LossFunction {
 pub struct EarlyStoppingConfig {
     /// Metric to monitor
     pub monitor: String,
-    
+
     /// Minimum change to qualify as improvement
     pub min_delta: f64,
-    
+
     /// Number of epochs with no improvement to wait
     pub patience: usize,
-    
+
     /// Whether to restore best weights
     pub restore_best_weights: bool,
 }
@@ -102,16 +109,16 @@ pub struct EarlyStoppingConfig {
 pub struct CheckpointConfig {
     /// Enable checkpointing
     pub enabled: bool,
-    
+
     /// Save frequency (every N epochs)
     pub save_every_n_epochs: usize,
-    
+
     /// Maximum number of checkpoints to keep
     pub max_checkpoints: usize,
-    
+
     /// Save best model only
     pub save_best_only: bool,
-    
+
     /// Metric to monitor for best model
     pub monitor_metric: Option<String>,
 }
@@ -122,19 +129,19 @@ pub struct CheckpointConfig {
 pub enum TrainingStatus {
     /// Job is queued
     Queued,
-    
+
     /// Job is running
     Running,
-    
+
     /// Job completed successfully
     Completed,
-    
+
     /// Job failed
     Failed,
-    
+
     /// Job was cancelled
     Cancelled,
-    
+
     /// Job is paused
     Paused,
 }
@@ -144,34 +151,34 @@ pub enum TrainingStatus {
 pub struct TrainingJob {
     /// Unique job identifier
     pub id: Uuid,
-    
+
     /// Model name
     pub model_name: String,
-    
+
     /// Model type
     pub model_type: String,
-    
+
     /// Job status
     pub status: TrainingStatus,
-    
+
     /// Training configuration
     pub config: TrainingConfig,
-    
+
     /// Creation timestamp
     pub created_at: chrono::DateTime<chrono::Utc>,
-    
+
     /// Start timestamp
     pub started_at: Option<chrono::DateTime<chrono::Utc>>,
-    
+
     /// Completion timestamp
     pub completed_at: Option<chrono::DateTime<chrono::Utc>>,
-    
+
     /// Training progress (0.0 to 1.0)
     pub progress: f64,
-    
+
     /// Current loss value
     pub loss: Option<f64>,
-    
+
     /// Training metrics
     pub metrics: HashMap<String, f64>,
 }
@@ -203,7 +210,7 @@ impl Trainer {
             loss: None,
             metrics: HashMap::new(),
         };
-        
+
         Ok(job)
     }
 }
@@ -308,7 +315,10 @@ mod tests {
             .learning_rate(0.01)
             .batch_size(64)
             .add_metric("precision")
-            .set_hyperparameter("dropout", serde_json::Value::Number(serde_json::Number::from_f64(0.5).unwrap()));
+            .set_hyperparameter(
+                "dropout",
+                serde_json::Value::Number(serde_json::Number::from_f64(0.5).unwrap()),
+            );
 
         assert_eq!(config.epochs, 200);
         assert_eq!(config.learning_rate, 0.01);
@@ -321,7 +331,7 @@ mod tests {
     async fn test_trainer_creation() {
         let config = TrainingConfig::default();
         let trainer = Trainer::new(config);
-        
+
         let job = trainer.train("test_model", b"test_data").await.unwrap();
         assert_eq!(job.status, TrainingStatus::Queued);
         assert_eq!(job.model_name, "test_model");

@@ -267,6 +267,7 @@ pub enum ExchangeType {
 }
 
 /// Parallel scan operator
+#[derive(Debug, Clone)]
 pub struct ParallelScan {
     /// Table schema
     pub schema: BatchSchema,
@@ -279,6 +280,7 @@ pub struct ParallelScan {
 }
 
 /// Parallel hash join operator
+#[derive(Debug, Clone)]
 pub struct ParallelHashJoin {
     /// Join condition
     pub condition: Expression,
@@ -291,6 +293,7 @@ pub struct ParallelHashJoin {
 }
 
 /// Parallel aggregation operator
+#[derive(Debug, Clone)]
 pub struct ParallelAggregation {
     /// Group by expressions
     pub group_by: Vec<Expression>,
@@ -404,7 +407,7 @@ impl ParallelExecutor {
     /// Submit a parallel query for execution
     pub async fn execute_parallel_query(
         &self,
-        query: &Query,
+        query: &Statement,
     ) -> Result<Vec<RecordBatch>, ParallelExecutionError> {
         // Convert query to parallel execution plan
         let execution_plan = self.create_parallel_plan(query)?;
@@ -416,7 +419,7 @@ impl ParallelExecutor {
     /// Create parallel execution plan from query
     fn create_parallel_plan(
         &self,
-        query: &Query,
+        query: &Statement,
     ) -> Result<ParallelExecutionPlan, ParallelExecutionError> {
         // Simplified plan creation - would be more complex in reality
         let plan = ParallelExecutionPlan {

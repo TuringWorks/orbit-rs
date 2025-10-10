@@ -3,11 +3,11 @@
 //! This module provides ML/AI workload optimization, adaptive query optimization,
 //! workload pattern recognition, and auto-tuning capabilities for the OrbitQL query engine.
 
-use std::collections::{HashMap, VecDeque, BTreeMap};
-use std::sync::{Arc, RwLock, Mutex};
-use std::time::{Duration, Instant, SystemTime};
 use serde::{Deserialize, Serialize};
-use tokio::sync::{mpsc, broadcast};
+use std::collections::{BTreeMap, HashMap, VecDeque};
+use std::sync::{Arc, Mutex, RwLock};
+use std::time::{Duration, Instant, SystemTime};
+use tokio::sync::{broadcast, mpsc};
 
 /// Advanced Analytics coordinator
 pub struct AdvancedAnalytics {
@@ -56,7 +56,7 @@ impl Default for AnalyticsConfig {
             enable_workload_analysis: true,
             enable_auto_tuning: true,
             min_training_samples: 100,
-            model_retrain_interval: Duration::from_hours(1),
+            model_retrain_interval: Duration::from_secs(3600), // 1 hour
             pattern_window_size: 1000,
             tuning_sensitivity: 0.1,
             max_model_complexity: 10,
@@ -567,8 +567,12 @@ pub struct PatternMatcher {
 /// Pattern matching algorithm trait
 pub trait MatchingAlgorithm {
     /// Match query against patterns
-    fn match_pattern(&self, query: &QuerySignature, patterns: &[WorkloadPattern]) -> Vec<PatternMatch>;
-    
+    fn match_pattern(
+        &self,
+        query: &QuerySignature,
+        patterns: &[WorkloadPattern],
+    ) -> Vec<PatternMatch>;
+
     /// Algorithm name
     fn name(&self) -> &str;
 }
@@ -697,8 +701,12 @@ pub struct PercentileDistribution {
 /// Anomaly detection algorithm trait
 pub trait AnomalyDetectionAlgorithm {
     /// Detect anomalies in workload
-    fn detect_anomalies(&self, metrics: &[WorkloadMetrics], baseline: &WorkloadBaseline) -> Vec<Anomaly>;
-    
+    fn detect_anomalies(
+        &self,
+        metrics: &[WorkloadMetrics],
+        baseline: &WorkloadBaseline,
+    ) -> Vec<Anomaly>;
+
     /// Algorithm name
     fn name(&self) -> &str;
 }
@@ -784,7 +792,7 @@ pub enum TrendDirection {
 pub trait TrendDetectionAlgorithm {
     /// Detect trends in time series
     fn detect_trends(&self, series: &TimeSeries) -> Vec<Trend>;
-    
+
     /// Algorithm name
     fn name(&self) -> &str;
 }
@@ -974,11 +982,15 @@ pub struct SystemConfiguration {
 /// Learning algorithm trait for feedback loop
 pub trait LearningAlgorithm {
     /// Learn from feedback
-    fn learn(&mut self, feedback: &[FeedbackRecord]) -> Result<SystemConfiguration, AnalyticsError>;
-    
+    fn learn(&mut self, feedback: &[FeedbackRecord])
+        -> Result<SystemConfiguration, AnalyticsError>;
+
     /// Predict performance for configuration
-    fn predict_performance(&self, config: &SystemConfiguration) -> Result<PerformanceMetrics, AnalyticsError>;
-    
+    fn predict_performance(
+        &self,
+        config: &SystemConfiguration,
+    ) -> Result<PerformanceMetrics, AnalyticsError>;
+
     /// Algorithm name
     fn name(&self) -> &str;
 }
@@ -986,11 +998,15 @@ pub trait LearningAlgorithm {
 /// Tuning strategy trait
 pub trait TuningStrategy {
     /// Suggest next configuration to try
-    fn suggest_configuration(&self, current: &SystemConfiguration, feedback: &[FeedbackRecord]) -> Result<SystemConfiguration, AnalyticsError>;
-    
+    fn suggest_configuration(
+        &self,
+        current: &SystemConfiguration,
+        feedback: &[FeedbackRecord],
+    ) -> Result<SystemConfiguration, AnalyticsError>;
+
     /// Evaluate configuration fitness
     fn evaluate_fitness(&self, config: &SystemConfiguration, metrics: &PerformanceMetrics) -> f64;
-    
+
     /// Strategy name
     fn name(&self) -> &str;
 }
@@ -1056,8 +1072,11 @@ pub struct MetricsConfig {
 /// Metric processor trait
 pub trait MetricProcessor {
     /// Process metric batch
-    fn process_metrics(&mut self, metrics: &[MetricPoint]) -> Result<Vec<ProcessedMetric>, AnalyticsError>;
-    
+    fn process_metrics(
+        &mut self,
+        metrics: &[MetricPoint],
+    ) -> Result<Vec<ProcessedMetric>, AnalyticsError>;
+
     /// Processor name
     fn name(&self) -> &str;
 }
@@ -1090,8 +1109,12 @@ impl std::fmt::Display for AnalyticsError {
         match self {
             AnalyticsError::ModelTrainingError(msg) => write!(f, "Model training error: {}", msg),
             AnalyticsError::PredictionError(msg) => write!(f, "Prediction error: {}", msg),
-            AnalyticsError::PatternMatchingError(msg) => write!(f, "Pattern matching error: {}", msg),
-            AnalyticsError::AnomalyDetectionError(msg) => write!(f, "Anomaly detection error: {}", msg),
+            AnalyticsError::PatternMatchingError(msg) => {
+                write!(f, "Pattern matching error: {}", msg)
+            }
+            AnalyticsError::AnomalyDetectionError(msg) => {
+                write!(f, "Anomaly detection error: {}", msg)
+            }
             AnalyticsError::TuningError(msg) => write!(f, "Tuning error: {}", msg),
             AnalyticsError::ConfigurationError(msg) => write!(f, "Configuration error: {}", msg),
             AnalyticsError::DataError(msg) => write!(f, "Data error: {}", msg),
@@ -1105,40 +1128,55 @@ impl std::error::Error for AnalyticsError {}
 pub struct SimilarityMatcher;
 
 impl MatchingAlgorithm for SimilarityMatcher {
-    fn match_pattern(&self, query: &QuerySignature, patterns: &[WorkloadPattern]) -> Vec<PatternMatch> {
+    fn match_pattern(
+        &self,
+        query: &QuerySignature,
+        patterns: &[WorkloadPattern],
+    ) -> Vec<PatternMatch> {
         let mut matches = Vec::new();
-        
+
         for pattern in patterns {
             let similarity = self.calculate_similarity(&query.features, &pattern.characteristics);
-            
-            if similarity > 0.7 {  // Threshold for considering a match
+
+            if similarity > 0.7 {
+                // Threshold for considering a match
                 matches.push(PatternMatch {
                     pattern_id: pattern.id.clone(),
                     confidence: similarity,
                     details: MatchDetails {
-                        matching_features: vec!["table_count".to_string(), "join_count".to_string()],
+                        matching_features: vec![
+                            "table_count".to_string(),
+                            "join_count".to_string(),
+                        ],
                         similarity_score: similarity,
                         deviations: vec![],
                     },
                 });
             }
         }
-        
+
         matches.sort_by(|a, b| b.confidence.partial_cmp(&a.confidence).unwrap());
         matches
     }
-    
+
     fn name(&self) -> &str {
         "similarity_matcher"
     }
 }
 
 impl SimilarityMatcher {
-    fn calculate_similarity(&self, features: &QueryFeatures, characteristics: &PatternCharacteristics) -> f64 {
+    fn calculate_similarity(
+        &self,
+        features: &QueryFeatures,
+        characteristics: &PatternCharacteristics,
+    ) -> f64 {
         // Simple similarity calculation (would be more sophisticated in practice)
-        let table_similarity = 1.0 - (features.table_count as f64 - characteristics.table_patterns.len() as f64).abs() / 10.0;
-        let join_similarity = 1.0 - (features.join_count as f64 - characteristics.join_patterns.len() as f64).abs() / 5.0;
-        
+        let table_similarity = 1.0
+            - (features.table_count as f64 - characteristics.table_patterns.len() as f64).abs()
+                / 10.0;
+        let join_similarity = 1.0
+            - (features.join_count as f64 - characteristics.join_patterns.len() as f64).abs() / 5.0;
+
         (table_similarity + join_similarity) / 2.0
     }
 }
@@ -1147,27 +1185,34 @@ impl SimilarityMatcher {
 pub struct StatisticalAnomalyDetector;
 
 impl AnomalyDetectionAlgorithm for StatisticalAnomalyDetector {
-    fn detect_anomalies(&self, metrics: &[WorkloadMetrics], baseline: &WorkloadBaseline) -> Vec<Anomaly> {
+    fn detect_anomalies(
+        &self,
+        metrics: &[WorkloadMetrics],
+        baseline: &WorkloadBaseline,
+    ) -> Vec<Anomaly> {
         let mut anomalies = Vec::new();
-        
+
         for metric in metrics {
             // Check execution time anomaly
-            if metric.avg_execution_time > baseline.average_metrics.avg_execution_time + 
-                2.0 * baseline.std_deviations.avg_execution_time {
+            if metric.avg_execution_time
+                > baseline.average_metrics.avg_execution_time
+                    + 2.0 * baseline.std_deviations.avg_execution_time
+            {
                 anomalies.push(Anomaly {
                     anomaly_type: AnomalyType::PerformanceDegradation,
-                    severity: (metric.avg_execution_time - baseline.average_metrics.avg_execution_time) / 
-                             baseline.std_deviations.avg_execution_time,
+                    severity: (metric.avg_execution_time
+                        - baseline.average_metrics.avg_execution_time)
+                        / baseline.std_deviations.avg_execution_time,
                     description: "Query execution time significantly above baseline".to_string(),
                     timestamp: SystemTime::now(),
                     affected_queries: vec!["unknown".to_string()],
                 });
             }
         }
-        
+
         anomalies
     }
-    
+
     fn name(&self) -> &str {
         "statistical_anomaly_detector"
     }
@@ -1181,12 +1226,12 @@ impl TrendDetectionAlgorithm for LinearTrendDetector {
         if series.points.len() < 10 {
             return vec![];
         }
-        
+
         let mut trends = Vec::new();
-        
+
         // Simple linear regression to detect trend
         let (slope, _) = self.linear_regression(&series.points);
-        
+
         let direction = if slope > 0.1 {
             TrendDirection::Increasing
         } else if slope < -0.1 {
@@ -1194,17 +1239,17 @@ impl TrendDetectionAlgorithm for LinearTrendDetector {
         } else {
             TrendDirection::Stable
         };
-        
+
         trends.push(Trend {
             direction,
             strength: slope.abs(),
             duration: Duration::from_secs(3600), // Mock duration
-            significance: 0.95, // Mock significance
+            significance: 0.95,                  // Mock significance
         });
-        
+
         trends
     }
-    
+
     fn name(&self) -> &str {
         "linear_trend_detector"
     }
@@ -1216,12 +1261,16 @@ impl LinearTrendDetector {
         let n = points.len() as f64;
         let sum_x: f64 = (0..points.len()).map(|i| i as f64).sum();
         let sum_y: f64 = points.iter().map(|p| p.value).sum();
-        let sum_xy: f64 = points.iter().enumerate().map(|(i, p)| i as f64 * p.value).sum();
+        let sum_xy: f64 = points
+            .iter()
+            .enumerate()
+            .map(|(i, p)| i as f64 * p.value)
+            .sum();
         let sum_x2: f64 = (0..points.len()).map(|i| (i as f64).powi(2)).sum();
-        
+
         let slope = (n * sum_xy - sum_x * sum_y) / (n * sum_x2 - sum_x.powi(2));
         let intercept = (sum_y - slope * sum_x) / n;
-        
+
         (slope, intercept)
     }
 }
@@ -1230,20 +1279,34 @@ impl LinearTrendDetector {
 pub struct GradientLearningAlgorithm;
 
 impl LearningAlgorithm for GradientLearningAlgorithm {
-    fn learn(&mut self, feedback: &[FeedbackRecord]) -> Result<SystemConfiguration, AnalyticsError> {
+    fn learn(
+        &mut self,
+        feedback: &[FeedbackRecord],
+    ) -> Result<SystemConfiguration, AnalyticsError> {
         if feedback.is_empty() {
-            return Err(AnalyticsError::DataError("No feedback data available".to_string()));
+            return Err(AnalyticsError::DataError(
+                "No feedback data available".to_string(),
+            ));
         }
-        
+
         // Find best performing configuration
-        let best_record = feedback.iter()
-            .max_by(|a, b| a.performance.throughput.partial_cmp(&b.performance.throughput).unwrap())
+        let best_record = feedback
+            .iter()
+            .max_by(|a, b| {
+                a.performance
+                    .throughput
+                    .partial_cmp(&b.performance.throughput)
+                    .unwrap()
+            })
             .unwrap();
-        
+
         Ok(best_record.configuration.clone())
     }
-    
-    fn predict_performance(&self, _config: &SystemConfiguration) -> Result<PerformanceMetrics, AnalyticsError> {
+
+    fn predict_performance(
+        &self,
+        _config: &SystemConfiguration,
+    ) -> Result<PerformanceMetrics, AnalyticsError> {
         // Mock prediction
         Ok(PerformanceMetrics {
             throughput: 1000.0,
@@ -1253,7 +1316,7 @@ impl LearningAlgorithm for GradientLearningAlgorithm {
             satisfaction_score: 0.9,
         })
     }
-    
+
     fn name(&self) -> &str {
         "gradient_learning"
     }
@@ -1608,13 +1671,25 @@ impl ActivationFunction {
             ActivationFunction::Tanh => x.tanh(),
             ActivationFunction::Linear => x,
             ActivationFunction::LeakyReLU { alpha } => {
-                if x > 0.0 { x } else { alpha * x }
+                if x > 0.0 {
+                    x
+                } else {
+                    alpha * x
+                }
             }
             ActivationFunction::PReLU { alpha } => {
-                if x > 0.0 { x } else { alpha * x }
+                if x > 0.0 {
+                    x
+                } else {
+                    alpha * x
+                }
             }
             ActivationFunction::ELU { alpha } => {
-                if x > 0.0 { x } else { alpha * (x.exp() - 1.0) }
+                if x > 0.0 {
+                    x
+                } else {
+                    alpha * (x.exp() - 1.0)
+                }
             }
             ActivationFunction::SELU => {
                 // SELU constants: λ ≈ 1.0507, α ≈ 1.6733
@@ -1631,9 +1706,7 @@ impl ActivationFunction {
                 let sqrt_2_over_pi = (2.0 / std::f64::consts::PI).sqrt();
                 0.5 * x * (1.0 + (sqrt_2_over_pi * (x + 0.044715 * x.powi(3))).tanh())
             }
-            ActivationFunction::Swish { beta } => {
-                x * (1.0 / (1.0 + (-beta * x).exp()))
-            }
+            ActivationFunction::Swish { beta } => x * (1.0 / (1.0 + (-beta * x).exp())),
             ActivationFunction::Mish => {
                 // Mish: x * tanh(softplus(x)) = x * tanh(ln(1 + e^x))
                 x * (x.exp().ln_1p()).tanh()
@@ -1650,28 +1723,26 @@ impl ActivationFunction {
             }
         }
     }
-    
+
     /// Apply softmax to a vector of values
     pub fn apply_softmax(values: &[f64]) -> Vec<f64> {
         if values.is_empty() {
             return vec![];
         }
-        
+
         // Find max for numerical stability
         let max_val = values.iter().fold(f64::NEG_INFINITY, |a, &b| a.max(b));
-        
+
         // Compute exponentials
-        let exp_values: Vec<f64> = values.iter()
-            .map(|&x| (x - max_val).exp())
-            .collect();
-        
+        let exp_values: Vec<f64> = values.iter().map(|&x| (x - max_val).exp()).collect();
+
         // Compute sum
         let sum: f64 = exp_values.iter().sum();
-        
+
         // Normalize
         exp_values.iter().map(|&x| x / sum).collect()
     }
-    
+
     /// Apply activation function to a vector of values
     pub fn apply_vector(&self, values: &[f64]) -> Vec<f64> {
         match self {
@@ -1679,11 +1750,17 @@ impl ActivationFunction {
             _ => values.iter().map(|&x| self.apply(x)).collect(),
         }
     }
-    
+
     /// Compute the derivative of the activation function
     pub fn derivative(&self, x: f64) -> f64 {
         match self {
-            ActivationFunction::ReLU => if x > 0.0 { 1.0 } else { 0.0 },
+            ActivationFunction::ReLU => {
+                if x > 0.0 {
+                    1.0
+                } else {
+                    0.0
+                }
+            }
             ActivationFunction::Sigmoid => {
                 let s = self.apply(x);
                 s * (1.0 - s)
@@ -1694,13 +1771,25 @@ impl ActivationFunction {
             }
             ActivationFunction::Linear => 1.0,
             ActivationFunction::LeakyReLU { alpha } => {
-                if x > 0.0 { 1.0 } else { *alpha }
+                if x > 0.0 {
+                    1.0
+                } else {
+                    *alpha
+                }
             }
             ActivationFunction::PReLU { alpha } => {
-                if x > 0.0 { 1.0 } else { *alpha }
+                if x > 0.0 {
+                    1.0
+                } else {
+                    *alpha
+                }
             }
             ActivationFunction::ELU { alpha } => {
-                if x > 0.0 { 1.0 } else { alpha * x.exp() }
+                if x > 0.0 {
+                    1.0
+                } else {
+                    alpha * x.exp()
+                }
             }
             ActivationFunction::SELU => {
                 let lambda = 1.0507009873554804934193349852946;
@@ -1717,7 +1806,8 @@ impl ActivationFunction {
                 let inner = sqrt_2_over_pi * (x + 0.044715 * x.powi(3));
                 let tanh_val = inner.tanh();
                 let sech2 = 1.0 - tanh_val.powi(2);
-                0.5 * (1.0 + tanh_val) + 0.5 * x * sech2 * sqrt_2_over_pi * (1.0 + 3.0 * 0.044715 * x.powi(2))
+                0.5 * (1.0 + tanh_val)
+                    + 0.5 * x * sech2 * sqrt_2_over_pi * (1.0 + 3.0 * 0.044715 * x.powi(2))
             }
             ActivationFunction::Swish { beta } => {
                 let sigmoid = 1.0 / (1.0 + (-beta * x).exp());
@@ -1738,16 +1828,20 @@ impl ActivationFunction {
             }
             ActivationFunction::Maxout { .. } => {
                 // Maxout derivative depends on which piece is active
-                if x > 0.0 { 1.0 } else { 0.0 }
+                if x > 0.0 {
+                    1.0
+                } else {
+                    0.0
+                }
             }
         }
     }
-    
+
     /// Get default parameters for parameterized activation functions
     pub fn default_params() -> Self {
         ActivationFunction::ReLU
     }
-    
+
     /// Create activation function with default parameters
     pub fn with_defaults(name: &str) -> Option<Self> {
         match name.to_lowercase().as_str() {
@@ -1767,7 +1861,7 @@ impl ActivationFunction {
             _ => None,
         }
     }
-    
+
     /// Get name of activation function
     pub fn name(&self) -> &'static str {
         match self {
@@ -1786,16 +1880,15 @@ impl ActivationFunction {
             ActivationFunction::Maxout { .. } => "Maxout",
         }
     }
-    
+
     /// Check if activation function is suitable for output layer
     pub fn is_output_suitable(&self) -> bool {
-        matches!(self, 
-            ActivationFunction::Sigmoid |
-            ActivationFunction::Softmax |
-            ActivationFunction::Linear
+        matches!(
+            self,
+            ActivationFunction::Sigmoid | ActivationFunction::Softmax | ActivationFunction::Linear
         )
     }
-    
+
     /// Check if activation function is suitable for hidden layers
     pub fn is_hidden_suitable(&self) -> bool {
         !matches!(self, ActivationFunction::Softmax)
@@ -1814,18 +1907,17 @@ pub struct ActivationUtils;
 impl ActivationUtils {
     /// Apply activation function to a batch of vectors (matrix)
     pub fn apply_batch(activation: &ActivationFunction, inputs: &[Vec<f64>]) -> Vec<Vec<f64>> {
-        inputs.iter()
+        inputs
+            .iter()
             .map(|input| activation.apply_vector(input))
             .collect()
     }
-    
+
     /// Compute activation function derivatives for a batch
     pub fn derivatives_batch(activation: &ActivationFunction, inputs: &[f64]) -> Vec<f64> {
-        inputs.iter()
-            .map(|&x| activation.derivative(x))
-            .collect()
+        inputs.iter().map(|&x| activation.derivative(x)).collect()
     }
-    
+
     /// Get recommended activation functions for different layer types
     pub fn get_recommended_for_layer_type(layer_type: LayerType) -> Vec<ActivationFunction> {
         match layer_type {
@@ -1846,24 +1938,27 @@ impl ActivationUtils {
             ],
         }
     }
-    
+
     /// Benchmark activation functions for performance
-    pub fn benchmark_performance(functions: &[ActivationFunction], test_size: usize) -> HashMap<String, Duration> {
+    pub fn benchmark_performance(
+        functions: &[ActivationFunction],
+        test_size: usize,
+    ) -> HashMap<String, Duration> {
         use std::time::Instant;
         let mut results = HashMap::new();
-        
+
         // Generate test data
         let test_data: Vec<f64> = (0..test_size)
             .map(|i| (i as f64 - test_size as f64 / 2.0) / 100.0)
             .collect();
-        
+
         for func in functions {
             let start = Instant::now();
             let _output = func.apply_vector(&test_data);
             let duration = start.elapsed();
             results.insert(func.name().to_string(), duration);
         }
-        
+
         results
     }
 }
@@ -1892,63 +1987,71 @@ impl AdvancedAnalytics {
             config,
         }
     }
-    
+
     /// Start advanced analytics system
     pub async fn start(&self) -> Result<(), AnalyticsError> {
         println!("🧠 Starting Advanced Analytics system...");
-        
+
         // Initialize ML models
         self.ml_cost_estimator.initialize().await?;
-        
+
         // Start adaptive optimizer
         self.adaptive_optimizer.start().await?;
-        
+
         // Start workload analyzer
         self.workload_analyzer.start().await?;
-        
+
         // Start auto-tuner
         self.auto_tuner.start().await?;
-        
+
         // Start metrics collection
         self.metrics_collector.start().await?;
-        
+
         println!("✅ Advanced Analytics system started successfully");
         Ok(())
     }
-    
+
     /// Get ML-based cost estimation
     pub async fn estimate_cost(&self, features: &QueryFeatures) -> Result<f64, AnalyticsError> {
         self.ml_cost_estimator.predict_cost(features).await
     }
-    
+
     /// Get adaptive optimization recommendations
-    pub async fn get_optimizations(&self, query_hash: u64) -> Result<Vec<OptimizationRule>, AnalyticsError> {
-        self.adaptive_optimizer.get_recommendations(query_hash).await
+    pub async fn get_optimizations(
+        &self,
+        query_hash: u64,
+    ) -> Result<Vec<OptimizationRule>, AnalyticsError> {
+        self.adaptive_optimizer
+            .get_recommendations(query_hash)
+            .await
     }
-    
+
     /// Analyze workload patterns
-    pub async fn analyze_workload(&self, queries: &[QuerySignature]) -> Result<Vec<WorkloadPattern>, AnalyticsError> {
+    pub async fn analyze_workload(
+        &self,
+        queries: &[QuerySignature],
+    ) -> Result<Vec<WorkloadPattern>, AnalyticsError> {
         self.workload_analyzer.analyze_patterns(queries).await
     }
-    
+
     /// Get auto-tuning recommendations
     pub async fn get_tuning_recommendations(&self) -> Result<SystemConfiguration, AnalyticsError> {
         self.auto_tuner.get_recommendations().await
     }
-    
+
     /// Record query execution for learning
     pub async fn record_execution(&self, example: TrainingExample) -> Result<(), AnalyticsError> {
         self.ml_cost_estimator.add_training_example(example).await?;
         Ok(())
     }
-    
+
     /// Get system analytics report
     pub async fn get_analytics_report(&self) -> Result<AnalyticsReport, AnalyticsError> {
         let model_stats = self.ml_cost_estimator.get_model_statistics().await?;
         let optimization_stats = self.adaptive_optimizer.get_statistics().await?;
         let pattern_stats = self.workload_analyzer.get_statistics().await?;
         let tuning_stats = self.auto_tuner.get_statistics().await?;
-        
+
         Ok(AnalyticsReport {
             model_statistics: model_stats,
             optimization_statistics: optimization_stats,
@@ -2052,15 +2155,15 @@ impl MLCostEstimator {
             model_performance: Arc::new(RwLock::new(HashMap::new())),
         }
     }
-    
+
     pub async fn initialize(&self) -> Result<(), AnalyticsError> {
         // Initialize models
         Ok(())
     }
-    
+
     pub async fn predict_cost(&self, features: &QueryFeatures) -> Result<f64, AnalyticsError> {
         let active_model = self.active_model.read().unwrap().clone();
-        
+
         match active_model {
             ModelType::LinearRegression => {
                 let model = self.linear_model.read().unwrap();
@@ -2136,33 +2239,36 @@ impl MLCostEstimator {
             }
         }
     }
-    
-    pub async fn add_training_example(&self, example: TrainingExample) -> Result<(), AnalyticsError> {
+
+    pub async fn add_training_example(
+        &self,
+        example: TrainingExample,
+    ) -> Result<(), AnalyticsError> {
         let mut data = self.training_data.write().unwrap();
         data.push(example);
-        
+
         // Retrain if we have enough examples
         if data.len() >= 100 {
             self.retrain_models().await?;
         }
-        
+
         Ok(())
     }
-    
+
     async fn retrain_models(&self) -> Result<(), AnalyticsError> {
         let data = self.training_data.read().unwrap();
-        
+
         // Train linear model
         let mut linear_model = self.linear_model.write().unwrap();
         linear_model.train(&data)?;
-        
+
         Ok(())
     }
-    
+
     pub async fn get_model_statistics(&self) -> Result<ModelStatistics, AnalyticsError> {
         let metadata = self.model_metadata.read().unwrap();
         let training_count = self.training_data.read().unwrap().len();
-        
+
         Ok(ModelStatistics {
             models_trained: 3,
             predictions_made: 1000, // Mock data
@@ -2180,25 +2286,27 @@ impl LinearRegressionModel {
             is_trained: false,
         }
     }
-    
+
     pub fn train(&mut self, data: &[TrainingExample]) -> Result<(), AnalyticsError> {
         if data.is_empty() {
-            return Err(AnalyticsError::ModelTrainingError("No training data".to_string()));
+            return Err(AnalyticsError::ModelTrainingError(
+                "No training data".to_string(),
+            ));
         }
-        
+
         // Simple training (mock implementation)
         self.is_trained = true;
         Ok(())
     }
-    
+
     pub fn predict(&self, features: &QueryFeatures) -> f64 {
         // Simple linear prediction
-        self.intercept +
-        self.coefficients[0] * features.table_count as f64 +
-        self.coefficients[1] * features.join_count as f64 +
-        self.coefficients[2] * features.aggregation_count as f64 +
-        self.coefficients[3] * features.condition_count as f64 +
-        self.coefficients[4] * features.input_cardinality.log10()
+        self.intercept
+            + self.coefficients[0] * features.table_count as f64
+            + self.coefficients[1] * features.join_count as f64
+            + self.coefficients[2] * features.aggregation_count as f64
+            + self.coefficients[3] * features.condition_count as f64
+            + self.coefficients[4] * features.input_cardinality.log10()
     }
 }
 
@@ -2256,39 +2364,45 @@ impl AdaptiveOptimizer {
             },
         }
     }
-    
+
     pub async fn start(&self) -> Result<(), AnalyticsError> {
         // Initialize default rules
         self.initialize_default_rules().await?;
         Ok(())
     }
-    
+
     async fn initialize_default_rules(&self) -> Result<(), AnalyticsError> {
         let mut rules = self.optimization_rules.write().unwrap();
-        
-        rules.insert("join_reorder".to_string(), OptimizationRule {
-            name: "join_reorder".to_string(),
-            description: "Reorder joins based on cardinality".to_string(),
-            success_rate: 0.8,
-            avg_improvement: 0.3,
-            application_count: 0,
-            conditions: vec![RuleCondition::HasJoins(2)],
-            actions: vec![RuleAction::ReorderJoins(JoinReorderStrategy::CostBased)],
-            priority: 0.8,
-        });
-        
+
+        rules.insert(
+            "join_reorder".to_string(),
+            OptimizationRule {
+                name: "join_reorder".to_string(),
+                description: "Reorder joins based on cardinality".to_string(),
+                success_rate: 0.8,
+                avg_improvement: 0.3,
+                application_count: 0,
+                conditions: vec![RuleCondition::HasJoins(2)],
+                actions: vec![RuleAction::ReorderJoins(JoinReorderStrategy::CostBased)],
+                priority: 0.8,
+            },
+        );
+
         Ok(())
     }
-    
-    pub async fn get_recommendations(&self, _query_hash: u64) -> Result<Vec<OptimizationRule>, AnalyticsError> {
+
+    pub async fn get_recommendations(
+        &self,
+        _query_hash: u64,
+    ) -> Result<Vec<OptimizationRule>, AnalyticsError> {
         let rules = self.optimization_rules.read().unwrap();
         Ok(rules.values().cloned().collect())
     }
-    
+
     pub async fn get_statistics(&self) -> Result<OptimizationStatistics, AnalyticsError> {
         let rules = self.optimization_rules.read().unwrap();
         let history = self.execution_history.read().unwrap();
-        
+
         Ok(OptimizationStatistics {
             rules_applied: rules.len(),
             successful_optimizations: history.iter().filter(|r| r.success).count(),
@@ -2351,53 +2465,59 @@ impl WorkloadPatternAnalyzer {
             }),
         }
     }
-    
+
     pub async fn start(&self) -> Result<(), AnalyticsError> {
         // Initialize pattern database
         self.initialize_patterns().await?;
         Ok(())
     }
-    
+
     async fn initialize_patterns(&self) -> Result<(), AnalyticsError> {
         let mut patterns = self.patterns.write().unwrap();
-        
-        patterns.insert("oltp_pattern".to_string(), WorkloadPattern {
-            id: "oltp_pattern".to_string(),
-            name: "OLTP Workload".to_string(),
-            description: "Online Transaction Processing pattern".to_string(),
-            characteristics: PatternCharacteristics {
-                query_types: vec![QueryType::OLTP],
-                table_patterns: vec!["small_tables".to_string()],
-                join_patterns: vec![JoinPattern::Star],
-                temporal_patterns: vec![TemporalPattern::Periodic],
-                resource_patterns: ResourcePattern {
-                    cpu_intensity: 0.3,
-                    memory_intensity: 0.2,
-                    io_intensity: 0.8,
-                    duration_pattern: DurationPattern::Short,
+
+        patterns.insert(
+            "oltp_pattern".to_string(),
+            WorkloadPattern {
+                id: "oltp_pattern".to_string(),
+                name: "OLTP Workload".to_string(),
+                description: "Online Transaction Processing pattern".to_string(),
+                characteristics: PatternCharacteristics {
+                    query_types: vec![QueryType::OLTP],
+                    table_patterns: vec!["small_tables".to_string()],
+                    join_patterns: vec![JoinPattern::Star],
+                    temporal_patterns: vec![TemporalPattern::Periodic],
+                    resource_patterns: ResourcePattern {
+                        cpu_intensity: 0.3,
+                        memory_intensity: 0.2,
+                        io_intensity: 0.8,
+                        duration_pattern: DurationPattern::Short,
+                    },
                 },
+                frequency: 0.6,
+                optimal_strategy: ExecutionStrategy::Parallel,
+                recommendations: vec![OptimizationRecommendation {
+                    recommendation_type: RecommendationType::IndexCreation,
+                    expected_benefit: 0.4,
+                    implementation_effort: 0.2,
+                    priority_score: 0.8,
+                }],
             },
-            frequency: 0.6,
-            optimal_strategy: ExecutionStrategy::Parallel,
-            recommendations: vec![OptimizationRecommendation {
-                recommendation_type: RecommendationType::IndexCreation,
-                expected_benefit: 0.4,
-                implementation_effort: 0.2,
-                priority_score: 0.8,
-            }],
-        });
-        
+        );
+
         Ok(())
     }
-    
-    pub async fn analyze_patterns(&self, queries: &[QuerySignature]) -> Result<Vec<WorkloadPattern>, AnalyticsError> {
+
+    pub async fn analyze_patterns(
+        &self,
+        queries: &[QuerySignature],
+    ) -> Result<Vec<WorkloadPattern>, AnalyticsError> {
         let patterns = self.patterns.read().unwrap();
         Ok(patterns.values().cloned().collect())
     }
-    
+
     pub async fn get_statistics(&self) -> Result<PatternStatistics, AnalyticsError> {
         let patterns = self.patterns.read().unwrap();
-        
+
         Ok(PatternStatistics {
             patterns_identified: patterns.len(),
             anomalies_detected: 5, // Mock data
@@ -2442,7 +2562,7 @@ impl AutoTuner {
                     },
                 },
                 cache_params: CacheParameters {
-                    query_cache_size: 1024 * 100, // 100 queries
+                    query_cache_size: 1024 * 100,         // 100 queries
                     result_cache_size: 1024 * 1024 * 256, // 256MB
                     eviction_policy: CacheEvictionPolicy::LRU,
                 },
@@ -2512,17 +2632,17 @@ impl AutoTuner {
             })),
         }
     }
-    
+
     pub async fn start(&self) -> Result<(), AnalyticsError> {
         // Initialize auto-tuning system
         Ok(())
     }
-    
+
     pub async fn get_recommendations(&self) -> Result<SystemConfiguration, AnalyticsError> {
         let config = self.current_config.read().unwrap().clone();
         Ok(config)
     }
-    
+
     pub async fn get_statistics(&self) -> Result<TuningStatistics, AnalyticsError> {
         Ok(TuningStatistics {
             configurations_tested: 25,
@@ -2541,7 +2661,7 @@ impl MetricsCollector {
             processors: vec![], // Would be populated with actual processors
         }
     }
-    
+
     pub async fn start(&self) -> Result<(), AnalyticsError> {
         // Start metrics collection
         Ok(())
@@ -2569,67 +2689,70 @@ impl GradientBoostingModel {
             feature_importance: Vec::new(),
         }
     }
-    
+
     pub fn train(&mut self, data: &[TrainingExample]) -> Result<(), AnalyticsError> {
         if data.is_empty() {
-            return Err(AnalyticsError::ModelTrainingError("No training data".to_string()));
+            return Err(AnalyticsError::ModelTrainingError(
+                "No training data".to_string(),
+            ));
         }
-        
+
         // Initialize residuals with mean
-        let mean_target: f64 = data.iter().map(|ex| ex.actual_cost).sum::<f64>() / data.len() as f64;
+        let mean_target: f64 =
+            data.iter().map(|ex| ex.actual_cost).sum::<f64>() / data.len() as f64;
         let mut residuals: Vec<f64> = data.iter().map(|ex| ex.actual_cost - mean_target).collect();
-        
+
         self.estimators.clear();
         self.loss_history.clear();
-        
+
         // Gradient boosting iterations
         for iteration in 0..self.n_estimators {
             // Create weak learner to fit residuals
             let mut weak_learner = WeakLearner::new();
             weak_learner.train_on_residuals(data, &residuals)?;
-            
+
             // Update residuals
             for (i, example) in data.iter().enumerate() {
                 let prediction = weak_learner.predict(&example.features);
                 residuals[i] -= self.learning_rate * prediction;
             }
-            
+
             weak_learner.weight = self.learning_rate;
             self.estimators.push(weak_learner);
-            
+
             // Calculate loss
             let loss = residuals.iter().map(|r| r * r).sum::<f64>() / residuals.len() as f64;
             self.loss_history.push(loss);
-            
+
             // Early stopping check
             if loss < 1e-6 {
                 break;
             }
         }
-        
+
         self.is_trained = true;
         self.calculate_feature_importance();
         Ok(())
     }
-    
+
     pub fn predict(&self, features: &QueryFeatures) -> f64 {
         if !self.is_trained || self.estimators.is_empty() {
             return 100.0; // Default prediction
         }
-        
+
         let mut prediction = 0.0;
         for estimator in &self.estimators {
             prediction += estimator.weight * estimator.predict(features);
         }
-        
+
         prediction.max(0.0) // Ensure non-negative cost predictions
     }
-    
+
     fn calculate_feature_importance(&mut self) {
         // Calculate feature importance based on usage in estimators
         let feature_count = 8; // Number of features in QueryFeatures
         self.feature_importance = vec![0.0; feature_count];
-        
+
         for estimator in &self.estimators {
             for &feature_idx in &estimator.feature_indices {
                 if feature_idx < feature_count {
@@ -2637,7 +2760,7 @@ impl GradientBoostingModel {
                 }
             }
         }
-        
+
         // Normalize
         let sum: f64 = self.feature_importance.iter().sum();
         if sum > 0.0 {
@@ -2646,7 +2769,7 @@ impl GradientBoostingModel {
             }
         }
     }
-    
+
     pub fn get_feature_importance(&self) -> &[f64] {
         &self.feature_importance
     }
@@ -2664,39 +2787,42 @@ impl AdaBoostModel {
             estimator_weights: Vec::new(),
         }
     }
-    
+
     pub fn train(&mut self, data: &[TrainingExample]) -> Result<(), AnalyticsError> {
         if data.is_empty() {
-            return Err(AnalyticsError::ModelTrainingError("No training data".to_string()));
+            return Err(AnalyticsError::ModelTrainingError(
+                "No training data".to_string(),
+            ));
         }
-        
+
         let n_samples = data.len();
         let mut sample_weights = vec![1.0 / n_samples as f64; n_samples];
-        
+
         self.estimators.clear();
         self.estimator_errors.clear();
         self.estimator_weights.clear();
-        
+
         for _ in 0..self.n_estimators {
             // Train weak learner on weighted samples
             let mut weak_learner = WeakLearner::new();
             weak_learner.train_weighted(data, &sample_weights)?;
-            
+
             // Calculate weighted error
             let mut weighted_error = 0.0;
             let mut correct_predictions = 0;
-            
+
             for (i, example) in data.iter().enumerate() {
                 let prediction = weak_learner.predict(&example.features);
                 let error = (prediction - example.actual_cost).abs();
-                
-                if error < 10.0 { // Threshold for "correct" prediction in regression
+
+                if error < 10.0 {
+                    // Threshold for "correct" prediction in regression
                     correct_predictions += 1;
                 } else {
                     weighted_error += sample_weights[i];
                 }
             }
-            
+
             // Avoid division by zero
             if weighted_error >= 0.5 {
                 weighted_error = 0.5 - 1e-10;
@@ -2704,50 +2830,51 @@ impl AdaBoostModel {
             if weighted_error <= 0.0 {
                 weighted_error = 1e-10;
             }
-            
+
             // Calculate estimator weight
             let alpha = self.learning_rate * (0.5 * ((1.0 - weighted_error) / weighted_error).ln());
-            
+
             // Update sample weights
             for (i, example) in data.iter().enumerate() {
                 let prediction = weak_learner.predict(&example.features);
                 let error = (prediction - example.actual_cost).abs();
-                
-                if error >= 10.0 { // Misclassified
+
+                if error >= 10.0 {
+                    // Misclassified
                     sample_weights[i] *= (weighted_error / (1.0 - weighted_error)).exp();
                 }
             }
-            
+
             // Normalize weights
             let weight_sum: f64 = sample_weights.iter().sum();
             for weight in &mut sample_weights {
                 *weight /= weight_sum;
             }
-            
+
             weak_learner.weight = alpha;
             self.estimators.push((weak_learner, alpha));
             self.estimator_errors.push(weighted_error);
             self.estimator_weights.push(alpha);
         }
-        
+
         self.is_trained = true;
         Ok(())
     }
-    
+
     pub fn predict(&self, features: &QueryFeatures) -> f64 {
         if !self.is_trained || self.estimators.is_empty() {
             return 100.0;
         }
-        
+
         let mut weighted_sum = 0.0;
         let mut weight_sum = 0.0;
-        
+
         for (weak_learner, alpha) in &self.estimators {
             let prediction = weak_learner.predict(features);
             weighted_sum += alpha * prediction;
             weight_sum += alpha;
         }
-        
+
         if weight_sum > 0.0 {
             (weighted_sum / weight_sum).max(0.0)
         } else {
@@ -2773,64 +2900,77 @@ impl LightGBMModel {
             evals_result: Vec::new(),
         }
     }
-    
+
     pub fn train(&mut self, data: &[TrainingExample]) -> Result<(), AnalyticsError> {
         if data.is_empty() {
-            return Err(AnalyticsError::ModelTrainingError("No training data".to_string()));
+            return Err(AnalyticsError::ModelTrainingError(
+                "No training data".to_string(),
+            ));
         }
-        
+
         // Initialize with mean prediction
-        let mean_target: f64 = data.iter().map(|ex| ex.actual_cost).sum::<f64>() / data.len() as f64;
+        let mean_target: f64 =
+            data.iter().map(|ex| ex.actual_cost).sum::<f64>() / data.len() as f64;
         let mut predictions = vec![mean_target; data.len()];
-        
+
         self.trees.clear();
         self.evals_result.clear();
-        
+
         let num_iterations = 100;
         for iteration in 0..num_iterations {
             // Calculate gradients and hessians
-            let gradients: Vec<f64> = data.iter().enumerate()
+            let gradients: Vec<f64> = data
+                .iter()
+                .enumerate()
                 .map(|(i, ex)| 2.0 * (predictions[i] - ex.actual_cost))
                 .collect();
-            
+
             let hessians = vec![2.0; data.len()];
-            
+
             // Build leaf-wise tree
             let tree = self.build_lightgbm_tree(data, &gradients, &hessians)?;
-            
+
             // Update predictions
             for (i, example) in data.iter().enumerate() {
                 predictions[i] += self.learning_rate * tree.predict(&example.features);
             }
-            
+
             self.trees.push(tree);
-            
+
             // Calculate loss
-            let loss = data.iter().enumerate()
+            let loss = data
+                .iter()
+                .enumerate()
                 .map(|(i, ex)| (predictions[i] - ex.actual_cost).powi(2))
-                .sum::<f64>() / data.len() as f64;
-            
+                .sum::<f64>()
+                / data.len() as f64;
+
             self.evals_result.push(loss);
-            
+
             // Early stopping
             if loss < 1e-6 {
                 break;
             }
         }
-        
+
         self.is_trained = true;
         Ok(())
     }
-    
-    fn build_lightgbm_tree(&self, data: &[TrainingExample], gradients: &[f64], hessians: &[f64]) -> Result<LightGBMTree, AnalyticsError> {
+
+    fn build_lightgbm_tree(
+        &self,
+        data: &[TrainingExample],
+        gradients: &[f64],
+        hessians: &[f64],
+    ) -> Result<LightGBMTree, AnalyticsError> {
         // Simplified leaf-wise tree building
         let mut nodes = Vec::new();
-        
+
         // Create root node
         let gradient_sum: f64 = gradients.iter().sum();
         let hessian_sum: f64 = hessians.iter().sum();
         let root_value = -gradient_sum / (hessian_sum + self.lambda_l2);
-        
+
         nodes.push(LightGBMNode {
             feature: None,
             threshold: None,
@@ -2840,7 +2980,7 @@ impl LightGBMModel {
             count: data.len(),
             leaf_weight: Some(1.0),
         });
-        
+
         Ok(LightGBMTree {
             nodes,
             root: 0,
@@ -2848,17 +2988,17 @@ impl LightGBMModel {
             weight: 1.0,
         })
     }
-    
+
     pub fn predict(&self, features: &QueryFeatures) -> f64 {
         if !self.is_trained || self.trees.is_empty() {
             return 100.0;
         }
-        
+
         let mut prediction = 0.0;
         for tree in &self.trees {
             prediction += self.learning_rate * tree.predict(features);
         }
-        
+
         prediction.max(0.0)
     }
 }
@@ -2879,75 +3019,91 @@ impl CatBoostModel {
             metrics_history: Vec::new(),
         }
     }
-    
+
     pub fn train(&mut self, data: &[TrainingExample]) -> Result<(), AnalyticsError> {
         if data.is_empty() {
-            return Err(AnalyticsError::ModelTrainingError("No training data".to_string()));
+            return Err(AnalyticsError::ModelTrainingError(
+                "No training data".to_string(),
+            ));
         }
-        
+
         // Initialize with mean
-        let mean_target: f64 = data.iter().map(|ex| ex.actual_cost).sum::<f64>() / data.len() as f64;
+        let mean_target: f64 =
+            data.iter().map(|ex| ex.actual_cost).sum::<f64>() / data.len() as f64;
         let mut predictions = vec![mean_target; data.len()];
-        
+
         self.trees.clear();
         self.metrics_history.clear();
-        
+
         for iteration in 0..self.iterations {
             // Calculate gradients
-            let gradients: Vec<f64> = data.iter().enumerate()
+            let gradients: Vec<f64> = data
+                .iter()
+                .enumerate()
                 .map(|(i, ex)| 2.0 * (predictions[i] - ex.actual_cost))
                 .collect();
-            
+
             // Build oblivious tree
             let tree = self.build_oblivious_tree(data, &gradients)?;
-            
+
             // Update predictions
             for (i, example) in data.iter().enumerate() {
                 predictions[i] += self.learning_rate * tree.predict(&example.features);
             }
-            
+
             self.trees.push(tree);
-            
+
             // Calculate loss
-            let loss = data.iter().enumerate()
+            let loss = data
+                .iter()
+                .enumerate()
                 .map(|(i, ex)| (predictions[i] - ex.actual_cost).powi(2))
-                .sum::<f64>() / data.len() as f64;
-            
+                .sum::<f64>()
+                / data.len() as f64;
+
             self.metrics_history.push(loss);
-            
+
             if loss < 1e-6 {
                 break;
             }
         }
-        
+
         self.is_trained = true;
         Ok(())
     }
-    
-    fn build_oblivious_tree(&self, data: &[TrainingExample], gradients: &[f64]) -> Result<ObliviousTree, AnalyticsError> {
+
+    fn build_oblivious_tree(
+        &self,
+        data: &[TrainingExample],
+        gradients: &[f64],
+    ) -> Result<ObliviousTree, AnalyticsError> {
         // Simplified oblivious tree (symmetric tree)
         let num_leaves = 1 << self.depth; // 2^depth
-        let leaf_values = vec![-gradients.iter().sum::<f64>() / (data.len() as f64 + self.l2_leaf_reg); num_leaves];
-        
+        let leaf_values = vec![
+            -gradients.iter().sum::<f64>()
+                / (data.len() as f64 + self.l2_leaf_reg);
+            num_leaves
+        ];
+
         Ok(ObliviousTree {
             depth: self.depth,
             split_features: (0..self.depth).collect(), // Use first features
-            split_thresholds: vec![5.0; self.depth], // Simple thresholds
+            split_thresholds: vec![5.0; self.depth],   // Simple thresholds
             leaf_values,
             weight: 1.0,
         })
     }
-    
+
     pub fn predict(&self, features: &QueryFeatures) -> f64 {
         if !self.is_trained || self.trees.is_empty() {
             return 100.0;
         }
-        
+
         let mut prediction = 0.0;
         for tree in &self.trees {
             prediction += self.learning_rate * tree.predict(features);
         }
-        
+
         prediction.max(0.0)
     }
 }
@@ -2964,40 +3120,43 @@ impl XGBoostModel {
             best_iteration: 0,
         }
     }
-    
+
     pub fn train(&mut self, data: &[TrainingExample]) -> Result<(), AnalyticsError> {
         if data.is_empty() {
-            return Err(AnalyticsError::ModelTrainingError("No training data".to_string()));
+            return Err(AnalyticsError::ModelTrainingError(
+                "No training data".to_string(),
+            ));
         }
-        
+
         // Initialize predictions with mean
-        let mean_target: f64 = data.iter().map(|ex| ex.actual_cost).sum::<f64>() / data.len() as f64;
+        let mean_target: f64 =
+            data.iter().map(|ex| ex.actual_cost).sum::<f64>() / data.len() as f64;
         let mut predictions = vec![mean_target; data.len()];
-        
+
         self.booster.clear();
         self.training_metrics.clear();
-        
+
         let mut best_loss = f64::INFINITY;
         let mut patience = 0;
-        
+
         for iteration in 0..self.params.n_estimators {
             // Calculate gradients and hessians based on objective
             let (gradients, hessians) = self.calculate_gradients_hessians(data, &predictions);
-            
+
             // Build tree
             let tree = self.build_xgboost_tree(data, &gradients, &hessians)?;
-            
+
             // Update predictions
             for (i, example) in data.iter().enumerate() {
                 predictions[i] += self.params.eta * tree.predict(&example.features);
             }
-            
+
             self.booster.push(tree);
-            
+
             // Calculate training loss
             let loss = self.calculate_loss(data, &predictions);
             self.training_metrics.push(loss);
-            
+
             // Early stopping
             if let Some(early_stopping) = self.params.early_stopping_rounds {
                 if loss < best_loss {
@@ -3011,36 +3170,52 @@ impl XGBoostModel {
                     }
                 }
             }
-            
+
             if loss < 1e-6 {
                 break;
             }
         }
-        
+
         self.is_trained = true;
         self.calculate_feature_importance();
         Ok(())
     }
-    
-    fn calculate_gradients_hessians(&self, data: &[TrainingExample], predictions: &[f64]) -> (Vec<f64>, Vec<f64>) {
+
+    fn calculate_gradients_hessians(
+        &self,
+        data: &[TrainingExample],
+        predictions: &[f64],
+    ) -> (Vec<f64>, Vec<f64>) {
         match self.params.objective {
             ObjectiveFunction::RegSquaredError => {
-                let gradients = data.iter().enumerate()
+                let gradients = data
+                    .iter()
+                    .enumerate()
                     .map(|(i, ex)| 2.0 * (predictions[i] - ex.actual_cost))
                     .collect();
                 let hessians = vec![2.0; data.len()];
                 (gradients, hessians)
             }
             ObjectiveFunction::RegAbsoluteError => {
-                let gradients = data.iter().enumerate()
-                    .map(|(i, ex)| if predictions[i] > ex.actual_cost { 1.0 } else { -1.0 })
+                let gradients = data
+                    .iter()
+                    .enumerate()
+                    .map(|(i, ex)| {
+                        if predictions[i] > ex.actual_cost {
+                            1.0
+                        } else {
+                            -1.0
+                        }
+                    })
                     .collect();
                 let hessians = vec![0.0; data.len()]; // Hessian is 0 for absolute loss
                 (gradients, hessians)
             }
             _ => {
                 // Default to squared error
-                let gradients = data.iter().enumerate()
+                let gradients = data
+                    .iter()
+                    .enumerate()
                     .map(|(i, ex)| 2.0 * (predictions[i] - ex.actual_cost))
                     .collect();
                 let hessians = vec![2.0; data.len()];
@@ -3048,11 +3223,16 @@ impl XGBoostModel {
             }
         }
     }
-    
-    fn build_xgboost_tree(&self, data: &[TrainingExample], gradients: &[f64], hessians: &[f64]) -> Result<XGBoostTree, AnalyticsError> {
+
+    fn build_xgboost_tree(
+        &self,
+        data: &[TrainingExample],
+        gradients: &[f64],
+        hessians: &[f64],
+    ) -> Result<XGBoostTree, AnalyticsError> {
         // Simplified tree building
         let mut nodes = Vec::new();
-        
+
         // Calculate optimal leaf value
         let gradient_sum: f64 = gradients.iter().sum();
         let hessian_sum: f64 = hessians.iter().sum();
@@ -3061,7 +3241,7 @@ impl XGBoostModel {
         } else {
             0.0
         };
-        
+
         // Create root node as leaf
         nodes.push(XGBoostNode {
             feature: None,
@@ -3073,7 +3253,7 @@ impl XGBoostModel {
             hess: hessian_sum,
             cover: data.len() as f64,
         });
-        
+
         Ok(XGBoostTree {
             nodes,
             root: 0,
@@ -3081,31 +3261,37 @@ impl XGBoostModel {
             score: -0.5 * gradient_sum * gradient_sum / (hessian_sum + self.params.lambda),
         })
     }
-    
+
     fn calculate_loss(&self, data: &[TrainingExample], predictions: &[f64]) -> f64 {
         match self.params.objective {
             ObjectiveFunction::RegSquaredError => {
-                data.iter().enumerate()
+                data.iter()
+                    .enumerate()
                     .map(|(i, ex)| (predictions[i] - ex.actual_cost).powi(2))
-                    .sum::<f64>() / data.len() as f64
+                    .sum::<f64>()
+                    / data.len() as f64
             }
             ObjectiveFunction::RegAbsoluteError => {
-                data.iter().enumerate()
+                data.iter()
+                    .enumerate()
                     .map(|(i, ex)| (predictions[i] - ex.actual_cost).abs())
-                    .sum::<f64>() / data.len() as f64
+                    .sum::<f64>()
+                    / data.len() as f64
             }
             _ => {
-                data.iter().enumerate()
+                data.iter()
+                    .enumerate()
                     .map(|(i, ex)| (predictions[i] - ex.actual_cost).powi(2))
-                    .sum::<f64>() / data.len() as f64
+                    .sum::<f64>()
+                    / data.len() as f64
             }
         }
     }
-    
+
     fn calculate_feature_importance(&mut self) {
         let feature_count = 8; // Number of features
         self.feature_importance = vec![0.0; feature_count];
-        
+
         for tree in &self.booster {
             for node in &tree.nodes {
                 if let Some(feature_idx) = node.feature {
@@ -3115,7 +3301,7 @@ impl XGBoostModel {
                 }
             }
         }
-        
+
         // Normalize
         let sum: f64 = self.feature_importance.iter().sum();
         if sum > 0.0 {
@@ -3124,28 +3310,28 @@ impl XGBoostModel {
             }
         }
     }
-    
+
     pub fn predict(&self, features: &QueryFeatures) -> f64 {
         if !self.is_trained || self.booster.is_empty() {
             return 100.0;
         }
-        
+
         let mut prediction = 0.0;
         let end_iteration = if let Some(_) = self.params.early_stopping_rounds {
             self.best_iteration.min(self.booster.len() - 1)
         } else {
             self.booster.len() - 1
         };
-        
+
         for i in 0..=end_iteration {
             if i < self.booster.len() {
                 prediction += self.params.eta * self.booster[i].predict(features);
             }
         }
-        
+
         prediction.max(0.0)
     }
-    
+
     pub fn get_feature_importance(&self) -> &[f64] {
         &self.feature_importance
     }
@@ -3185,147 +3371,170 @@ impl BoostingEnsemble {
             is_trained: false,
         }
     }
-    
+
     pub fn train(&mut self, data: &[TrainingExample]) -> Result<(), AnalyticsError> {
         if data.is_empty() {
-            return Err(AnalyticsError::ModelTrainingError("No training data".to_string()));
+            return Err(AnalyticsError::ModelTrainingError(
+                "No training data".to_string(),
+            ));
         }
-        
+
         // Train all models
         let mut gb_model = GradientBoostingModel::new();
         gb_model.train(data)?;
         self.gb_model = Some(gb_model);
-        
+
         let mut ada_model = AdaBoostModel::new();
         ada_model.train(data)?;
         self.ada_model = Some(ada_model);
-        
+
         let mut lgb_model = LightGBMModel::new();
         lgb_model.train(data)?;
         self.lgb_model = Some(lgb_model);
-        
+
         let mut cat_model = CatBoostModel::new();
         cat_model.train(data)?;
         self.cat_model = Some(cat_model);
-        
+
         let mut xgb_model = XGBoostModel::new();
         xgb_model.train(data)?;
         self.xgb_model = Some(xgb_model);
-        
+
         // Calculate optimal weights based on performance
         self.optimize_weights(data)?;
-        
+
         self.is_trained = true;
         Ok(())
     }
-    
+
     fn optimize_weights(&mut self, data: &[TrainingExample]) -> Result<(), AnalyticsError> {
         // Simple weight optimization based on individual model performance
         let mut model_errors = Vec::new();
-        
+
         // Calculate error for each model
         if let Some(ref model) = self.gb_model {
             let error = self.calculate_model_error(model, data);
             model_errors.push(error);
         }
-        
+
         if let Some(ref model) = self.ada_model {
             let error = self.calculate_model_error_ada(model, data);
             model_errors.push(error);
         }
-        
+
         if let Some(ref model) = self.lgb_model {
             let error = self.calculate_model_error_lgb(model, data);
             model_errors.push(error);
         }
-        
+
         if let Some(ref model) = self.cat_model {
             let error = self.calculate_model_error_cat(model, data);
             model_errors.push(error);
         }
-        
+
         if let Some(ref model) = self.xgb_model {
             let error = self.calculate_model_error_xgb(model, data);
             model_errors.push(error);
         }
-        
+
         // Convert errors to weights (inverse relationship)
-        let total_inverse_error: f64 = model_errors.iter()
+        let total_inverse_error: f64 = model_errors
+            .iter()
             .map(|&error| 1.0 / (error + 1e-10))
             .sum();
-        
-        self.model_weights = model_errors.iter()
+
+        self.model_weights = model_errors
+            .iter()
             .map(|&error| (1.0 / (error + 1e-10)) / total_inverse_error)
             .collect();
-        
+
         Ok(())
     }
-    
-    fn calculate_model_error(&self, model: &GradientBoostingModel, data: &[TrainingExample]) -> f64 {
+
+    fn calculate_model_error(
+        &self,
+        model: &GradientBoostingModel,
+        data: &[TrainingExample],
+    ) -> f64 {
         data.iter()
             .map(|ex| (model.predict(&ex.features) - ex.actual_cost).abs())
-            .sum::<f64>() / data.len() as f64
+            .sum::<f64>()
+            / data.len() as f64
     }
-    
+
     fn calculate_model_error_ada(&self, model: &AdaBoostModel, data: &[TrainingExample]) -> f64 {
         data.iter()
             .map(|ex| (model.predict(&ex.features) - ex.actual_cost).abs())
-            .sum::<f64>() / data.len() as f64
+            .sum::<f64>()
+            / data.len() as f64
     }
-    
+
     fn calculate_model_error_lgb(&self, model: &LightGBMModel, data: &[TrainingExample]) -> f64 {
         data.iter()
             .map(|ex| (model.predict(&ex.features) - ex.actual_cost).abs())
-            .sum::<f64>() / data.len() as f64
+            .sum::<f64>()
+            / data.len() as f64
     }
-    
+
     fn calculate_model_error_cat(&self, model: &CatBoostModel, data: &[TrainingExample]) -> f64 {
         data.iter()
             .map(|ex| (model.predict(&ex.features) - ex.actual_cost).abs())
-            .sum::<f64>() / data.len() as f64
+            .sum::<f64>()
+            / data.len() as f64
     }
-    
+
     fn calculate_model_error_xgb(&self, model: &XGBoostModel, data: &[TrainingExample]) -> f64 {
         data.iter()
             .map(|ex| (model.predict(&ex.features) - ex.actual_cost).abs())
-            .sum::<f64>() / data.len() as f64
+            .sum::<f64>()
+            / data.len() as f64
     }
-    
+
     pub fn predict(&self, features: &QueryFeatures) -> f64 {
         if !self.is_trained {
             return 100.0;
         }
-        
+
         match self.ensemble_method {
             EnsembleMethod::WeightedAverage => {
                 let mut weighted_sum = 0.0;
                 let mut weight_sum = 0.0;
-                
-                if let (Some(ref model), Some(&weight)) = (&self.gb_model, self.model_weights.get(0)) {
+
+                if let (Some(ref model), Some(&weight)) =
+                    (&self.gb_model, self.model_weights.get(0))
+                {
                     weighted_sum += weight * model.predict(features);
                     weight_sum += weight;
                 }
-                
-                if let (Some(ref model), Some(&weight)) = (&self.ada_model, self.model_weights.get(1)) {
+
+                if let (Some(ref model), Some(&weight)) =
+                    (&self.ada_model, self.model_weights.get(1))
+                {
                     weighted_sum += weight * model.predict(features);
                     weight_sum += weight;
                 }
-                
-                if let (Some(ref model), Some(&weight)) = (&self.lgb_model, self.model_weights.get(2)) {
+
+                if let (Some(ref model), Some(&weight)) =
+                    (&self.lgb_model, self.model_weights.get(2))
+                {
                     weighted_sum += weight * model.predict(features);
                     weight_sum += weight;
                 }
-                
-                if let (Some(ref model), Some(&weight)) = (&self.cat_model, self.model_weights.get(3)) {
+
+                if let (Some(ref model), Some(&weight)) =
+                    (&self.cat_model, self.model_weights.get(3))
+                {
                     weighted_sum += weight * model.predict(features);
                     weight_sum += weight;
                 }
-                
-                if let (Some(ref model), Some(&weight)) = (&self.xgb_model, self.model_weights.get(4)) {
+
+                if let (Some(ref model), Some(&weight)) =
+                    (&self.xgb_model, self.model_weights.get(4))
+                {
                     weighted_sum += weight * model.predict(features);
                     weight_sum += weight;
                 }
-                
+
                 if weight_sum > 0.0 {
                     (weighted_sum / weight_sum).max(0.0)
                 } else {
@@ -3335,7 +3544,7 @@ impl BoostingEnsemble {
             _ => {
                 // Default to simple average for other methods
                 let mut predictions = Vec::new();
-                
+
                 if let Some(ref model) = self.gb_model {
                     predictions.push(model.predict(features));
                 }
@@ -3351,7 +3560,7 @@ impl BoostingEnsemble {
                 if let Some(ref model) = self.xgb_model {
                     predictions.push(model.predict(features));
                 }
-                
+
                 if !predictions.is_empty() {
                     (predictions.iter().sum::<f64>() / predictions.len() as f64).max(0.0)
                 } else {
@@ -3360,7 +3569,7 @@ impl BoostingEnsemble {
             }
         }
     }
-    
+
     pub fn get_model_weights(&self) -> &[f64] {
         &self.model_weights
     }
@@ -3377,19 +3586,28 @@ impl WeakLearner {
             training_error: 0.0,
         }
     }
-    
-    pub fn train_on_residuals(&mut self, data: &[TrainingExample], residuals: &[f64]) -> Result<(), AnalyticsError> {
+
+    pub fn train_on_residuals(
+        &mut self,
+        data: &[TrainingExample],
+        residuals: &[f64],
+    ) -> Result<(), AnalyticsError> {
         // Simple training on residuals (simplified decision stump)
-        self.training_error = residuals.iter().map(|r| r.abs()).sum::<f64>() / residuals.len() as f64;
+        self.training_error =
+            residuals.iter().map(|r| r.abs()).sum::<f64>() / residuals.len() as f64;
         Ok(())
     }
-    
-    pub fn train_weighted(&mut self, data: &[TrainingExample], weights: &[f64]) -> Result<(), AnalyticsError> {
+
+    pub fn train_weighted(
+        &mut self,
+        data: &[TrainingExample],
+        weights: &[f64],
+    ) -> Result<(), AnalyticsError> {
         // Weighted training (simplified)
         self.training_error = weights.iter().sum::<f64>() / weights.len() as f64;
         Ok(())
     }
-    
+
     pub fn predict(&self, features: &QueryFeatures) -> f64 {
         // Simple prediction based on table count
         10.0 + features.table_count as f64 * 5.0
@@ -3421,18 +3639,18 @@ impl ObliviousTree {
             features.index_score,
             0.0, // placeholder
         ];
-        
+
         for level in 0..self.depth {
             if level < self.split_features.len() {
                 let feature_idx = self.split_features[level];
                 let threshold = self.split_thresholds[level];
-                
+
                 if feature_idx < feature_values.len() && feature_values[feature_idx] > threshold {
                     leaf_index |= 1 << level;
                 }
             }
         }
-        
+
         self.leaf_values.get(leaf_index).copied().unwrap_or(0.0)
     }
 }
@@ -3454,13 +3672,13 @@ impl RandomForestModel {
         if !self.is_trained || self.trees.is_empty() {
             return 100.0;
         }
-        
+
         // Simple prediction - average of all trees
         let mut total_prediction = 0.0;
         for tree in &self.trees {
             total_prediction += tree.predict(features);
         }
-        
+
         (total_prediction / self.trees.len() as f64).max(0.0)
     }
 }
@@ -3483,7 +3701,7 @@ impl NeuralNetworkModel {
         if !self.is_trained || self.layers.is_empty() {
             return 100.0;
         }
-        
+
         // Simple forward pass
         let input = vec![
             features.table_count as f64,
@@ -3492,12 +3710,12 @@ impl NeuralNetworkModel {
             features.condition_count as f64,
             features.input_cardinality,
         ];
-        
+
         let mut output = input;
         for layer in &self.layers {
             output = layer.forward(&output);
         }
-        
+
         output.get(0).copied().unwrap_or(100.0).max(0.0)
     }
 }
@@ -3505,19 +3723,19 @@ impl NeuralNetworkModel {
 impl NetworkLayer {
     pub fn forward(&self, input: &[f64]) -> Vec<f64> {
         let mut output = vec![0.0; self.biases.len()];
-        
+
         for (i, bias) in self.biases.iter().enumerate() {
             let mut sum = *bias;
-            
+
             for (j, &input_val) in input.iter().enumerate() {
                 if j < self.weights.len() && i < self.weights[j].len() {
                     sum += self.weights[j][i] * input_val;
                 }
             }
-            
+
             output[i] = self.activation.apply(sum);
         }
-        
+
         output
     }
 }
@@ -3525,7 +3743,7 @@ impl NetworkLayer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_analytics_config_creation() {
         let config = AnalyticsConfig::default();
@@ -3533,7 +3751,7 @@ mod tests {
         assert!(config.enable_ml_cost_estimation);
         assert!(config.enable_adaptive_optimization);
     }
-    
+
     #[test]
     fn test_query_features() {
         let features = QueryFeatures {
@@ -3557,17 +3775,17 @@ mod tests {
                 network_bandwidth: 100.0,
             },
         };
-        
+
         assert_eq!(features.table_count, 3);
         assert_eq!(features.join_count, 2);
         assert!(features.selectivity > 0.0);
     }
-    
+
     #[test]
     fn test_linear_regression_model() {
         let mut model = LinearRegressionModel::new();
         assert!(!model.is_trained);
-        
+
         let features = QueryFeatures {
             table_count: 2,
             join_count: 1,
@@ -3589,25 +3807,25 @@ mod tests {
                 network_bandwidth: 50.0,
             },
         };
-        
+
         let prediction = model.predict(&features);
         assert!(prediction > 0.0);
     }
-    
+
     #[tokio::test]
     async fn test_advanced_analytics_creation() {
         let config = AnalyticsConfig::default();
         let analytics = AdvancedAnalytics::new(config);
-        
+
         // Test that the system can be created
         let result = analytics.start().await;
         assert!(result.is_ok());
     }
-    
+
     #[test]
     fn test_similarity_matcher() {
         let matcher = SimilarityMatcher;
-        
+
         let query = QuerySignature {
             features: QueryFeatures {
                 table_count: 2,
@@ -3638,7 +3856,7 @@ mod tests {
                 session_id: Some("session_123".to_string()),
             },
         };
-        
+
         let patterns = vec![WorkloadPattern {
             id: "test_pattern".to_string(),
             name: "Test Pattern".to_string(),
@@ -3659,10 +3877,10 @@ mod tests {
             optimal_strategy: ExecutionStrategy::Vectorized,
             recommendations: vec![],
         }];
-        
+
         let matches = matcher.match_pattern(&query, &patterns);
         assert_eq!(matcher.name(), "similarity_matcher");
-        
+
         // The matcher should find at least one match
         if !matches.is_empty() {
             assert!(matches[0].confidence >= 0.0 && matches[0].confidence <= 1.0);

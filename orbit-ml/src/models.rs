@@ -1,7 +1,6 @@
 //! Model management and registry.
 
 use std::collections::HashMap;
-use std::sync::Arc;
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -88,7 +87,7 @@ mod tests {
     #[tokio::test]
     async fn test_model_registry() {
         let mut registry = ModelRegistry::new().await.unwrap();
-        
+
         let metadata = ModelMetadata {
             id: Uuid::new_v4(),
             name: "test_model".to_string(),
@@ -104,13 +103,13 @@ mod tests {
         };
 
         registry.register_model(metadata.clone()).await.unwrap();
-        
+
         let retrieved = registry.get_model("test_model").await.unwrap().unwrap();
         assert_eq!(retrieved.name, "test_model");
-        
+
         let models = registry.list_models().await.unwrap();
         assert_eq!(models.len(), 1);
-        
+
         registry.delete_model("test_model").await.unwrap();
         let models = registry.list_models().await.unwrap();
         assert_eq!(models.len(), 0);

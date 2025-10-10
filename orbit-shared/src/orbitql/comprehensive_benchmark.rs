@@ -3,30 +3,46 @@
 //! This module integrates all OrbitQL components and runs comprehensive benchmarks
 //! including TPC-H, TPC-C, TPC-DS, custom workloads, and production readiness validation.
 
-use std::collections::{HashMap, BTreeMap};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant, SystemTime};
-use serde::{Deserialize, Serialize};
-use tokio::sync::mpsc;
 
 // Import all OrbitQL components
 use crate::orbitql::advanced_analytics::*;
-use crate::orbitql::distributed_execution::*;
-use crate::orbitql::storage_integration::*;
-use crate::orbitql::production_deployment::*;
-use crate::orbitql::performance_benchmarking::*;
-use crate::orbitql::vectorized_execution::*;
-use crate::orbitql::parallel_execution::*;
-use crate::orbitql::query_cache::*;
-use crate::orbitql::cost_based_planner::*;
+use crate::orbitql::distributed_execution::{
+    self, ClusterConfig, DistributedExecutor, NetworkConfig as DistributedNetworkConfig, NodeInfo,
+    NodeResources, NodeRole, NodeStatus as DistributedNodeStatus,
+};
+use crate::orbitql::production_deployment::{self, *};
+use crate::orbitql::storage_integration::{
+    self, StorageConfig as StorageIntegrationConfig, StorageEngine,
+};
+// Remove performance_benchmarking import as it doesn't exist
+use crate::orbitql::advanced_analytics::*;
 use crate::orbitql::ast::*;
+use crate::orbitql::benchmark::*;
+use crate::orbitql::cache::QueryExecutorTrait;
+use crate::orbitql::cost_based_planner::*;
+use crate::orbitql::cost_model::CostModel;
+use crate::orbitql::executor::QueryMetadata;
+use crate::orbitql::parallel_execution::*;
+use crate::orbitql::query_cache::{
+    self, CacheConfig as QueryCacheConfig, NodeStatus as CacheNodeStatus,
+};
+use crate::orbitql::statistics::StatisticsConfig;
+use crate::orbitql::statistics::StatisticsManager;
+use crate::orbitql::vectorized_execution::VectorizedExecutor;
+use crate::orbitql::CachedQueryExecutor;
+use crate::orbitql::{ExecutionError, QueryContext, QueryParams, QueryResult, QueryStats};
+use uuid::Uuid;
 
 /// Comprehensive benchmark coordinator
 pub struct ComprehensiveBenchmark {
     /// System components
     components: OrbitQLComponents,
     /// Benchmark configuration
-    config: BenchmarkConfig,
+    config: ComprehensiveBenchmarkConfig,
     /// Results storage
     results: Arc<RwLock<BenchmarkResults>>,
     /// Report generator
@@ -44,18 +60,52 @@ pub struct OrbitQLComponents {
     /// Production deployment validator
     pub deployment_validator: Arc<ProductionDeployment>,
     /// Query cache
-    pub query_cache: Arc<CachedQueryExecutor>,
+    pub query_cache: Arc<CachedQueryExecutor<MockQueryExecutor>>,
     /// Cost-based planner
     pub cost_planner: Arc<CostBasedQueryPlanner>,
     /// Vectorized executor
-    pub vectorized_executor: Arc<VectorizedQueryExecutor>,
+    pub vectorized_executor: Arc<VectorizedExecutor>,
     /// Parallel executor
-    pub parallel_executor: Arc<ParallelQueryExecutor>,
+    pub parallel_executor: Arc<ParallelExecutor>,
+}
+
+/// Mock query executor for testing
+#[derive(Clone)]
+struct MockQueryExecutor;
+
+impl MockQueryExecutor {
+    fn new() -> Self {
+        Self
+    }
+}
+
+impl QueryExecutorTrait for MockQueryExecutor {
+    async fn execute(
+        &self,
+        _query: &str,
+        _params: QueryParams,
+        _context: QueryContext,
+    ) -> Result<QueryResult, ExecutionError> {
+        // Mock implementation - returns empty result
+        Ok(QueryResult {
+            rows: vec![],
+            stats: QueryStats::default(),
+            warnings: vec![],
+            metadata: QueryMetadata {
+                query_id: Uuid::new_v4(),
+                execution_id: Uuid::new_v4(),
+                node_id: Some("mock".to_string()),
+                distributed: false,
+                cached: false,
+                indices_used: vec![],
+            },
+        })
+    }
 }
 
 /// Comprehensive benchmark configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BenchmarkConfig {
+pub struct ComprehensiveBenchmarkConfig {
     /// Benchmark suite selection
     pub suites: BenchmarkSuites,
     /// Scale factors for different workloads
@@ -247,7 +297,7 @@ pub struct BenchmarkMetadata {
     /// Total duration
     pub total_duration: Option<Duration>,
     /// Configuration used
-    pub config: BenchmarkConfig,
+    pub config: ComprehensiveBenchmarkConfig,
     /// System information
     pub system_info: SystemInformation,
     /// OrbitQL version
@@ -340,7 +390,7 @@ pub struct TPCHResults {
     /// Scale factor used
     pub scale_factor: f64,
     /// Query results (Q1-Q22)
-    pub query_results: HashMap<String, QueryResult>,
+    pub query_results: HashMap<String, BenchmarkQueryResult>,
     /// Power test score
     pub power_score: f64,
     /// Throughput test score
@@ -380,7 +430,7 @@ pub struct TPCDSResults {
     /// Scale factor used
     pub scale_factor: f64,
     /// Query results (99 queries)
-    pub query_results: HashMap<String, QueryResult>,
+    pub query_results: HashMap<String, BenchmarkQueryResult>,
     /// Total execution time
     pub total_time: Duration,
     /// Queries per hour
@@ -389,9 +439,9 @@ pub struct TPCDSResults {
     pub avg_query_time: Duration,
 }
 
-/// Query result information
+/// Query result information for benchmarking
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct QueryResult {
+pub struct BenchmarkQueryResult {
     /// Query execution time
     pub execution_time: Duration,
     /// Rows returned
@@ -592,41 +642,43 @@ pub struct ReportTemplateConfig {
 
 impl ComprehensiveBenchmark {
     /// Create new comprehensive benchmark suite
-    pub async fn new(config: BenchmarkConfig) -> Result<Self, BenchmarkError> {
+    pub async fn new(config: ComprehensiveBenchmarkConfig) -> Result<Self, BenchmarkError> {
         println!("🏗️  Initializing comprehensive benchmark suite...");
-        
+
         // Initialize system components
         let components = Self::initialize_components(&config).await?;
-        
+
         // Initialize report generator
         let report_generator = Arc::new(ReportGenerator::new());
-        
+
         let benchmark = Self {
             components,
             config,
             results: Arc::new(RwLock::new(BenchmarkResults::new())),
             report_generator,
         };
-        
+
         println!("✅ Comprehensive benchmark suite initialized");
         Ok(benchmark)
     }
-    
+
     /// Initialize all OrbitQL components
-    async fn initialize_components(config: &BenchmarkConfig) -> Result<OrbitQLComponents, BenchmarkError> {
+    async fn initialize_components(
+        config: &ComprehensiveBenchmarkConfig,
+    ) -> Result<OrbitQLComponents, BenchmarkError> {
         println!("🔧 Initializing OrbitQL components...");
-        
+
         // Initialize storage engine
-        let storage_config = StorageEngineConfig::default();
+        let storage_config = crate::orbitql::storage_integration::StorageConfig::default();
         let storage_engine = Arc::new(StorageEngine::new(storage_config));
-        
+
         // Initialize distributed executor if cluster config provided
         let distributed_executor = if let Some(cluster_config) = &config.execution.cluster_config {
             let local_node = NodeInfo {
                 node_id: "benchmark_coordinator".to_string(),
                 address: "127.0.0.1:8000".parse().unwrap(),
                 role: NodeRole::Coordinator,
-                status: NodeStatus::Active,
+                status: DistributedNodeStatus::Active,
                 resources: NodeResources {
                     cpu_cores: 8,
                     memory_mb: 16384,
@@ -646,7 +698,7 @@ impl ComprehensiveBenchmark {
                 node_id: "single_node".to_string(),
                 address: "127.0.0.1:8000".parse().unwrap(),
                 role: NodeRole::Hybrid,
-                status: NodeStatus::Active,
+                status: DistributedNodeStatus::Active,
                 resources: NodeResources {
                     cpu_cores: 8,
                     memory_mb: 16384,
@@ -660,11 +712,11 @@ impl ComprehensiveBenchmark {
             };
             Arc::new(DistributedExecutor::new(default_config, local_node))
         };
-        
+
         // Initialize advanced analytics
         let analytics_config = AnalyticsConfig::default();
         let analytics = Arc::new(AdvancedAnalytics::new(analytics_config));
-        
+
         // Initialize production deployment validator
         let deployment_config = DeploymentConfig {
             environment: EnvironmentType::Testing,
@@ -780,7 +832,7 @@ impl ComprehensiveBenchmark {
                 },
             },
             monitoring: MonitoringConfig {
-                metrics: MetricsConfig {
+                metrics: crate::orbitql::production_deployment::MetricsConfig {
                     enabled: true,
                     endpoint: "/metrics".to_string(),
                     interval: Duration::from_secs(10),
@@ -826,7 +878,7 @@ impl ComprehensiveBenchmark {
                 },
                 performance_tests: PerformanceTestConfig {
                     duration: Duration::from_secs(3600),
-                    thresholds: PerformanceThresholds {
+                    thresholds: crate::orbitql::production_deployment::PerformanceThresholds {
                         max_response_time: Duration::from_millis(1000),
                         min_throughput: 100.0,
                         max_error_rate: 0.01,
@@ -851,15 +903,21 @@ impl ComprehensiveBenchmark {
             },
         };
         let deployment_validator = Arc::new(ProductionDeployment::new(deployment_config));
-        
+
         // Initialize other components with default configurations
-        let query_cache = Arc::new(CachedQueryExecutor::new(CacheConfig::default()));
-        let cost_planner = Arc::new(CostBasedQueryPlanner::new());
-        let vectorized_executor = Arc::new(VectorizedQueryExecutor::new());
-        let parallel_executor = Arc::new(ParallelQueryExecutor::new(8)); // 8 threads
-        
+        let mock_executor = MockQueryExecutor::new();
+        let cache_config = crate::orbitql::cache::CacheConfig::default();
+        let query_cache = Arc::new(CachedQueryExecutor::new(mock_executor, cache_config));
+        let stats_manager = Arc::new(tokio::sync::RwLock::new(StatisticsManager::new(
+            StatisticsConfig::default(),
+        )));
+        let cost_model = CostModel::default();
+        let cost_planner = Arc::new(CostBasedQueryPlanner::new(stats_manager, cost_model));
+        let vectorized_executor = Arc::new(VectorizedExecutor::new());
+        let parallel_executor = Arc::new(ParallelExecutor::new()); // Uses default thread configuration
+
         println!("✅ All components initialized");
-        
+
         Ok(OrbitQLComponents {
             storage_engine,
             distributed_executor,
@@ -871,13 +929,13 @@ impl ComprehensiveBenchmark {
             parallel_executor,
         })
     }
-    
+
     /// Run comprehensive benchmark suite
     pub async fn run_benchmark_suite(&self) -> Result<BenchmarkResults, BenchmarkError> {
         println!("🚀 Starting comprehensive benchmark suite...");
-        
+
         let start_time = SystemTime::now();
-        
+
         // Initialize benchmark results
         {
             let mut results = self.results.write().unwrap();
@@ -886,64 +944,64 @@ impl ComprehensiveBenchmark {
             results.metadata.system_info = self.gather_system_info();
             results.metadata.orbitql_version = "1.0.0-benchmark".to_string();
         }
-        
+
         // Start all components
         self.start_components().await?;
-        
+
         // Warmup phase
         if self.config.execution.warmup_duration > Duration::ZERO {
             println!("🔥 Running warmup phase...");
             self.run_warmup().await?;
         }
-        
+
         // Run benchmark suites
         if self.config.suites.tpc_h {
             println!("📊 Running TPC-H benchmark...");
             self.run_tpc_h_benchmark().await?;
         }
-        
+
         if self.config.suites.tpc_c {
             println!("💳 Running TPC-C benchmark...");
             self.run_tpc_c_benchmark().await?;
         }
-        
+
         if self.config.suites.tpc_ds {
             println!("🛒 Running TPC-DS benchmark...");
             self.run_tpc_ds_benchmark().await?;
         }
-        
+
         if self.config.suites.custom_workloads {
             println!("🎯 Running custom workloads...");
             self.run_custom_workloads().await?;
         }
-        
+
         if self.config.suites.stress_tests {
             println!("💪 Running stress tests...");
             self.run_stress_tests().await?;
         }
-        
+
         if self.config.suites.integration_tests {
             println!("🔗 Running integration tests...");
             self.run_integration_tests().await?;
         }
-        
+
         if self.config.suites.production_validation {
             println!("🏭 Running production validation...");
             self.run_production_validation().await?;
         }
-        
+
         // Collect system metrics
         self.collect_system_metrics().await?;
-        
+
         // Analyze scalability
         self.analyze_scalability().await?;
-        
+
         // Generate production readiness assessment
         self.assess_production_readiness().await?;
-        
+
         // Generate summary
         self.generate_summary().await?;
-        
+
         // Finalize results
         let end_time = SystemTime::now();
         {
@@ -951,97 +1009,123 @@ impl ComprehensiveBenchmark {
             results.metadata.ended_at = Some(end_time);
             results.metadata.total_duration = Some(end_time.duration_since(start_time).unwrap());
         }
-        
+
         let final_results = self.results.read().unwrap().clone();
-        
+
         println!("✅ Comprehensive benchmark suite completed!");
-        println!("📊 Performance Score: {:.1}", final_results.summary.performance_score);
-        println!("🏭 Production Ready: {}", if final_results.summary.production_ready { "✅ Yes" } else { "❌ No" });
-        
+        println!(
+            "📊 Performance Score: {:.1}",
+            final_results.summary.performance_score
+        );
+        println!(
+            "🏭 Production Ready: {}",
+            if final_results.summary.production_ready {
+                "✅ Yes"
+            } else {
+                "❌ No"
+            }
+        );
+
         Ok(final_results)
     }
-    
+
     /// Start all system components
     async fn start_components(&self) -> Result<(), BenchmarkError> {
         println!("🔧 Starting system components...");
-        
+
         // Start distributed executor
-        self.components.distributed_executor.start().await
-            .map_err(|e| BenchmarkError::ComponentError(format!("Distributed executor: {:?}", e)))?;
-        
+        self.components
+            .distributed_executor
+            .start()
+            .await
+            .map_err(|e| {
+                BenchmarkError::ComponentError(format!("Distributed executor: {:?}", e))
+            })?;
+
         // Start advanced analytics
-        self.components.analytics.start().await
+        self.components
+            .analytics
+            .start()
+            .await
             .map_err(|e| BenchmarkError::ComponentError(format!("Analytics: {:?}", e)))?;
-        
+
         // Initialize production deployment
-        self.components.deployment_validator.initialize().await
-            .map_err(|e| BenchmarkError::ComponentError(format!("Deployment validator: {:?}", e)))?;
-        
+        self.components
+            .deployment_validator
+            .initialize()
+            .await
+            .map_err(|e| {
+                BenchmarkError::ComponentError(format!("Deployment validator: {:?}", e))
+            })?;
+
         println!("✅ All components started");
         Ok(())
     }
-    
+
     /// Run warmup phase
     async fn run_warmup(&self) -> Result<(), BenchmarkError> {
         let warmup_duration = self.config.execution.warmup_duration;
         println!("⏱️  Warming up for {:?}...", warmup_duration);
-        
+
         // Run simple queries to warm up all components
         for _i in 0..10 {
             let _result = self.execute_simple_query().await;
         }
-        
+
         tokio::time::sleep(warmup_duration).await;
-        
+
         println!("✅ Warmup completed");
         Ok(())
     }
-    
+
     /// Execute a simple query for warmup
     async fn execute_simple_query(&self) -> Result<(), BenchmarkError> {
         // Mock simple query execution
         tokio::time::sleep(Duration::from_millis(10)).await;
         Ok(())
     }
-    
+
     /// Run TPC-H benchmark
     async fn run_tpc_h_benchmark(&self) -> Result<(), BenchmarkError> {
         let scale_factor = self.config.scale_factors.tpc_h;
         println!("🏃 Executing TPC-H benchmark (SF: {})", scale_factor);
-        
+
         let mut query_results = HashMap::new();
         let start_time = Instant::now();
-        
+
         // Mock TPC-H queries (Q1-Q22)
         for i in 1..=22 {
             let query_name = format!("Q{}", i);
             let query_start = Instant::now();
-            
+
             // Mock query execution
             tokio::time::sleep(Duration::from_millis(100 + i * 10)).await;
-            
-            query_results.insert(query_name, QueryResult {
-                execution_time: query_start.elapsed(),
-                rows_returned: 1000 * i as usize,
-                bytes_processed: 1024 * 1024 * i as usize,
-                cpu_time: Duration::from_millis(50 + i * 5),
-                memory_peak_mb: 128 + i * 16,
-                cache_hits: i * 10,
-                cache_misses: i * 2,
-                success: true,
-                error_message: None,
-            });
-            
+
+            query_results.insert(
+                query_name,
+                BenchmarkQueryResult {
+                    execution_time: query_start.elapsed(),
+                    rows_returned: 1000 * i as usize,
+                    bytes_processed: 1024 * 1024 * i as usize,
+                    cpu_time: Duration::from_millis(50 + i * 5),
+                    memory_peak_mb: 128 + i as usize * 16,
+                    cache_hits: i as usize * 10,
+                    cache_misses: i as usize * 2,
+                    success: true,
+                    error_message: None,
+                },
+            );
+
             println!("  ✅ Q{} completed in {:?}", i, query_start.elapsed());
         }
-        
+
         let total_time = start_time.elapsed();
-        
+
         // Calculate TPC-H scores
         let power_score = 3600.0 * scale_factor / total_time.as_secs_f64();
         let throughput_score = power_score * 0.8; // Mock throughput calculation
         let composite_score = (power_score * throughput_score).sqrt();
-        
+
         let tpc_h_results = TPCHResults {
             scale_factor,
             query_results,
@@ -1050,40 +1134,49 @@ impl ComprehensiveBenchmark {
             composite_score,
             total_time,
         };
-        
+
         {
             let mut results = self.results.write().unwrap();
             results.tpc_h_results = Some(tpc_h_results);
         }
-        
-        println!("✅ TPC-H benchmark completed - Composite Score: {:.1}", composite_score);
+
+        println!(
+            "✅ TPC-H benchmark completed - Composite Score: {:.1}",
+            composite_score
+        );
         Ok(())
     }
-    
+
     /// Run TPC-C benchmark
     async fn run_tpc_c_benchmark(&self) -> Result<(), BenchmarkError> {
         let warehouses = self.config.scale_factors.tpc_c;
         println!("🏃 Executing TPC-C benchmark ({} warehouses)", warehouses);
-        
+
         let start_time = Instant::now();
         let duration = Duration::from_secs(300); // 5 minutes
-        
+
         // Mock TPC-C transaction execution
         let mut transaction_counts = HashMap::new();
         let mut response_times = HashMap::new();
         let mut p95_response_times = HashMap::new();
-        
-        let transactions = vec!["NewOrder", "Payment", "OrderStatus", "Delivery", "StockLevel"];
-        
+
+        let transactions = vec![
+            "NewOrder",
+            "Payment",
+            "OrderStatus",
+            "Delivery",
+            "StockLevel",
+        ];
+
         for txn in &transactions {
             transaction_counts.insert(txn.to_string(), warehouses * 100);
             response_times.insert(txn.to_string(), Duration::from_millis(50));
             p95_response_times.insert(txn.to_string(), Duration::from_millis(150));
         }
-        
+
         let total_transactions: usize = transaction_counts.values().sum();
         let tpm = total_transactions as f64 * 60.0 / duration.as_secs_f64();
-        
+
         let tpc_c_results = TPCCResults {
             warehouses,
             tpm,
@@ -1095,54 +1188,57 @@ impl ComprehensiveBenchmark {
             response_times,
             p95_response_times,
         };
-        
+
         {
             let mut results = self.results.write().unwrap();
             results.tpc_c_results = Some(tpc_c_results);
         }
-        
+
         println!("✅ TPC-C benchmark completed - TPM: {:.1}", tpm);
         Ok(())
     }
-    
+
     /// Run TPC-DS benchmark
     async fn run_tpc_ds_benchmark(&self) -> Result<(), BenchmarkError> {
         let scale_factor = self.config.scale_factors.tpc_ds;
         println!("🏃 Executing TPC-DS benchmark (SF: {})", scale_factor);
-        
+
         let mut query_results = HashMap::new();
         let start_time = Instant::now();
-        
+
         // Mock TPC-DS queries (99 queries)
         for i in 1..=99 {
             let query_name = format!("Q{}", i);
             let query_start = Instant::now();
-            
+
             // Mock query execution with varying complexity
             let complexity_factor = (i % 10) + 1;
             tokio::time::sleep(Duration::from_millis(50 + complexity_factor * 20)).await;
-            
-            query_results.insert(query_name, QueryResult {
-                execution_time: query_start.elapsed(),
-                rows_returned: 500 * i,
-                bytes_processed: 1024 * 512 * i,
-                cpu_time: Duration::from_millis(25 + complexity_factor * 10),
-                memory_peak_mb: 64 + complexity_factor * 32,
-                cache_hits: i * 5,
-                cache_misses: i,
-                success: true,
-                error_message: None,
-            });
-            
+
+            query_results.insert(
+                query_name,
+                BenchmarkQueryResult {
+                    execution_time: query_start.elapsed(),
+                    rows_returned: 500 * i as usize,
+                    bytes_processed: 1024 * 512 * i as usize,
+                    cpu_time: Duration::from_millis(25 + complexity_factor * 10),
+                    memory_peak_mb: (64 + complexity_factor * 32) as usize,
+                    cache_hits: (i * 5) as usize,
+                    cache_misses: i as usize,
+                    success: true,
+                    error_message: None,
+                },
+            );
+
             if i % 20 == 0 {
                 println!("  ✅ {} queries completed", i);
             }
         }
-        
+
         let total_time = start_time.elapsed();
         let queries_per_hour = 99.0 * 3600.0 / total_time.as_secs_f64();
         let avg_query_time = total_time / 99;
-        
+
         let tpc_ds_results = TPCDSResults {
             scale_factor,
             query_results,
@@ -1150,62 +1246,65 @@ impl ComprehensiveBenchmark {
             queries_per_hour,
             avg_query_time,
         };
-        
+
         {
             let mut results = self.results.write().unwrap();
             results.tpc_ds_results = Some(tpc_ds_results);
         }
-        
-        println!("✅ TPC-DS benchmark completed - Queries/hour: {:.1}", queries_per_hour);
+
+        println!(
+            "✅ TPC-DS benchmark completed - Queries/hour: {:.1}",
+            queries_per_hour
+        );
         Ok(())
     }
-    
+
     /// Run custom workloads
     async fn run_custom_workloads(&self) -> Result<(), BenchmarkError> {
         println!("🎯 Running custom workloads...");
-        
+
         // Vectorized workload
         let vectorized_result = self.run_vectorized_workload().await?;
-        
+
         // Cache performance workload
         let cache_result = self.run_cache_workload().await?;
-        
+
         // Parallel execution workload
         let parallel_result = self.run_parallel_workload().await?;
-        
+
         // Mixed workload
         let mixed_result = self.run_mixed_workload().await?;
-        
+
         let custom_results = CustomWorkloadResults {
             vectorized: vectorized_result,
             cache_performance: cache_result,
             parallel_execution: parallel_result,
             mixed_workload: mixed_result,
         };
-        
+
         {
             let mut results = self.results.write().unwrap();
             results.custom_results = Some(custom_results);
         }
-        
+
         println!("✅ Custom workloads completed");
         Ok(())
     }
-    
+
     /// Run vectorized workload
     async fn run_vectorized_workload(&self) -> Result<WorkloadResult, BenchmarkError> {
         println!("  🏃 Vectorized workload...");
-        
+
         let start_time = Instant::now();
         let query_count = 1000;
-        
+
         // Mock vectorized query execution
         for _i in 0..query_count {
             tokio::time::sleep(Duration::from_micros(500)).await;
         }
-        
+
         let total_time = start_time.elapsed();
-        
+
         Ok(WorkloadResult {
             name: "Vectorized Operations".to_string(),
             total_queries: query_count,
@@ -1222,21 +1321,21 @@ impl ComprehensiveBenchmark {
             },
         })
     }
-    
+
     /// Run cache workload
     async fn run_cache_workload(&self) -> Result<WorkloadResult, BenchmarkError> {
         println!("  🏃 Cache performance workload...");
-        
+
         let start_time = Instant::now();
         let query_count = 2000;
-        
+
         // Mock cache-heavy workload
         for _i in 0..query_count {
             tokio::time::sleep(Duration::from_micros(200)).await;
         }
-        
+
         let total_time = start_time.elapsed();
-        
+
         Ok(WorkloadResult {
             name: "Cache Performance".to_string(),
             total_queries: query_count,
@@ -1253,21 +1352,21 @@ impl ComprehensiveBenchmark {
             },
         })
     }
-    
+
     /// Run parallel workload
     async fn run_parallel_workload(&self) -> Result<WorkloadResult, BenchmarkError> {
         println!("  🏃 Parallel execution workload...");
-        
+
         let start_time = Instant::now();
         let query_count = 500;
-        
+
         // Mock parallel query execution
         for _i in 0..query_count {
             tokio::time::sleep(Duration::from_millis(2)).await;
         }
-        
+
         let total_time = start_time.elapsed();
-        
+
         Ok(WorkloadResult {
             name: "Parallel Execution".to_string(),
             total_queries: query_count,
@@ -1284,21 +1383,21 @@ impl ComprehensiveBenchmark {
             },
         })
     }
-    
+
     /// Run mixed workload
     async fn run_mixed_workload(&self) -> Result<WorkloadResult, BenchmarkError> {
         println!("  🏃 Mixed workload...");
-        
+
         let start_time = Instant::now();
         let query_count = 800;
-        
+
         // Mock mixed workload
         for _i in 0..query_count {
             tokio::time::sleep(Duration::from_millis(1)).await;
         }
-        
+
         let total_time = start_time.elapsed();
-        
+
         Ok(WorkloadResult {
             name: "Mixed Workload".to_string(),
             total_queries: query_count,
@@ -1315,44 +1414,58 @@ impl ComprehensiveBenchmark {
             },
         })
     }
-    
+
     /// Run stress tests
     async fn run_stress_tests(&self) -> Result<(), BenchmarkError> {
         println!("💪 Running stress tests...");
-        
-        let _stress_result = self.components.deployment_validator.run_stress_tests().await
+
+        let _stress_result = self
+            .components
+            .deployment_validator
+            .run_stress_tests()
+            .await
             .map_err(|e| BenchmarkError::ComponentError(format!("Stress tests: {:?}", e)))?;
-        
+
         println!("✅ Stress tests completed");
         Ok(())
     }
-    
+
     /// Run integration tests
     async fn run_integration_tests(&self) -> Result<(), BenchmarkError> {
         println!("🔗 Running integration tests...");
-        
-        let _test_result = self.components.deployment_validator.run_deployment_tests().await
+
+        let _test_result = self
+            .components
+            .deployment_validator
+            .run_deployment_tests()
+            .await
             .map_err(|e| BenchmarkError::ComponentError(format!("Integration tests: {:?}", e)))?;
-        
+
         println!("✅ Integration tests completed");
         Ok(())
     }
-    
+
     /// Run production validation
     async fn run_production_validation(&self) -> Result<(), BenchmarkError> {
         println!("🏭 Running production validation...");
-        
-        let _deployment_report = self.components.deployment_validator.generate_deployment_report().await
-            .map_err(|e| BenchmarkError::ComponentError(format!("Production validation: {:?}", e)))?;
-        
+
+        let _deployment_report = self
+            .components
+            .deployment_validator
+            .generate_deployment_report()
+            .await
+            .map_err(|e| {
+                BenchmarkError::ComponentError(format!("Production validation: {:?}", e))
+            })?;
+
         println!("✅ Production validation completed");
         Ok(())
     }
-    
+
     /// Collect system metrics
     async fn collect_system_metrics(&self) -> Result<(), BenchmarkError> {
         println!("📊 Collecting system metrics...");
-        
+
         let system_metrics = SystemMetrics {
             overall_throughput: 1250.0,
             peak_memory_mb: 8192,
@@ -1361,25 +1474,25 @@ impl ComprehensiveBenchmark {
             network_utilization_percent: 45.0,
             cache_efficiency: 0.85,
         };
-        
+
         {
             let mut results = self.results.write().unwrap();
             results.system_metrics = system_metrics;
         }
-        
+
         println!("✅ System metrics collected");
         Ok(())
     }
-    
+
     /// Analyze scalability
     async fn analyze_scalability(&self) -> Result<(), BenchmarkError> {
         println!("📈 Analyzing scalability...");
-        
+
         let mut scaling_efficiency = HashMap::new();
         let mut throughput_scaling = HashMap::new();
         let mut latency_scaling = HashMap::new();
         let mut resource_efficiency = HashMap::new();
-        
+
         // Mock scalability analysis for different node counts
         for nodes in [1, 2, 4, 8] {
             let efficiency = 1.0 / (nodes as f64).log2().max(1.0);
@@ -1388,7 +1501,7 @@ impl ComprehensiveBenchmark {
             latency_scaling.insert(nodes, 100.0 / (nodes as f64 * efficiency));
             resource_efficiency.insert(nodes, efficiency * 0.9);
         }
-        
+
         let scalability_analysis = ScalabilityAnalysis {
             scaling_efficiency,
             throughput_scaling,
@@ -1397,20 +1510,20 @@ impl ComprehensiveBenchmark {
             optimal_nodes: 4,
             max_tested_nodes: 8,
         };
-        
+
         {
             let mut results = self.results.write().unwrap();
             results.scalability_analysis = scalability_analysis;
         }
-        
+
         println!("✅ Scalability analysis completed");
         Ok(())
     }
-    
+
     /// Assess production readiness
     async fn assess_production_readiness(&self) -> Result<(), BenchmarkError> {
         println!("🏭 Assessing production readiness...");
-        
+
         let performance_readiness = ReadinessScore {
             score: 85.0,
             status: ReadinessStatus::Ready,
@@ -1419,7 +1532,7 @@ impl ComprehensiveBenchmark {
                 "Latency within acceptable limits".to_string(),
             ],
         };
-        
+
         let reliability_readiness = ReadinessScore {
             score: 78.0,
             status: ReadinessStatus::NeedsImprovement,
@@ -1428,7 +1541,7 @@ impl ComprehensiveBenchmark {
                 "Recovery procedures need refinement".to_string(),
             ],
         };
-        
+
         let scalability_readiness = ReadinessScore {
             score: 82.0,
             status: ReadinessStatus::Ready,
@@ -1437,7 +1550,7 @@ impl ComprehensiveBenchmark {
                 "Resource efficiency acceptable".to_string(),
             ],
         };
-        
+
         let operational_readiness = ReadinessScore {
             score: 75.0,
             status: ReadinessStatus::NeedsImprovement,
@@ -1446,7 +1559,7 @@ impl ComprehensiveBenchmark {
                 "Alerting needs improvement".to_string(),
             ],
         };
-        
+
         let security_readiness = ReadinessScore {
             score: 70.0,
             status: ReadinessStatus::NeedsImprovement,
@@ -1455,11 +1568,14 @@ impl ComprehensiveBenchmark {
                 "Encryption needs enhancement".to_string(),
             ],
         };
-        
-        let overall_score = (performance_readiness.score + reliability_readiness.score + 
-                           scalability_readiness.score + operational_readiness.score + 
-                           security_readiness.score) / 5.0;
-        
+
+        let overall_score = (performance_readiness.score
+            + reliability_readiness.score
+            + scalability_readiness.score
+            + operational_readiness.score
+            + security_readiness.score)
+            / 5.0;
+
         let readiness_assessment = ProductionReadinessAssessment {
             overall_score,
             performance_readiness,
@@ -1474,71 +1590,87 @@ impl ComprehensiveBenchmark {
             ],
             blocking_issues: vec![],
         };
-        
+
         {
             let mut results = self.results.write().unwrap();
             results.readiness_assessment = readiness_assessment;
         }
-        
-        println!("✅ Production readiness assessed - Overall Score: {:.1}", overall_score);
+
+        println!(
+            "✅ Production readiness assessed - Overall Score: {:.1}",
+            overall_score
+        );
         Ok(())
     }
-    
+
     /// Generate benchmark summary
     async fn generate_summary(&self) -> Result<(), BenchmarkError> {
         println!("📊 Generating benchmark summary...");
-        
+
         let results = self.results.read().unwrap();
-        
+
         // Calculate overall performance score
         let mut performance_scores = Vec::new();
-        
+
         if let Some(tpc_h) = &results.tpc_h_results {
             performance_scores.push(tpc_h.composite_score / 1000.0); // Normalize
         }
-        
+
         if let Some(tpc_c) = &results.tpc_c_results {
             performance_scores.push(tpc_c.tpm / 10000.0); // Normalize
         }
-        
+
         if let Some(tpc_ds) = &results.tpc_ds_results {
             performance_scores.push(tpc_ds.queries_per_hour / 1000.0); // Normalize
         }
-        
+
         let performance_score = if performance_scores.is_empty() {
             75.0
         } else {
             performance_scores.iter().sum::<f64>() / performance_scores.len() as f64 * 100.0
         };
-        
+
         let all_tests_passed = true; // Mock validation
         let performance_targets_met = performance_score >= 75.0;
         let scalability_targets_met = results.scalability_analysis.optimal_nodes <= 8;
         let production_ready = results.readiness_assessment.overall_score >= 75.0;
-        
+
         let mut key_metrics = HashMap::new();
         key_metrics.insert("performance_score".to_string(), performance_score);
-        key_metrics.insert("readiness_score".to_string(), results.readiness_assessment.overall_score);
-        key_metrics.insert("throughput".to_string(), results.system_metrics.overall_throughput);
-        key_metrics.insert("peak_memory_mb".to_string(), results.system_metrics.peak_memory_mb as f64);
-        
+        key_metrics.insert(
+            "readiness_score".to_string(),
+            results.readiness_assessment.overall_score,
+        );
+        key_metrics.insert(
+            "throughput".to_string(),
+            results.system_metrics.overall_throughput,
+        );
+        key_metrics.insert(
+            "peak_memory_mb".to_string(),
+            results.system_metrics.peak_memory_mb as f64,
+        );
+
         let critical_issues = if production_ready {
             vec![]
         } else {
             vec!["Production readiness score below 75".to_string()]
         };
-        
+
         let summary_text = format!(
             "OrbitQL benchmark completed with performance score {:.1}. \
              {} ready for production deployment. \
              Peak throughput: {:.1} queries/sec. \
              Optimal cluster size: {} nodes.",
             performance_score,
-            if production_ready { "System is" } else { "System is not" },
+            if production_ready {
+                "System is"
+            } else {
+                "System is not"
+            },
             results.system_metrics.overall_throughput,
             results.scalability_analysis.optimal_nodes
         );
-        
+
         let summary = BenchmarkSummary {
             performance_score,
             all_tests_passed,
@@ -1549,9 +1681,9 @@ impl ComprehensiveBenchmark {
             critical_issues,
             summary_text,
         };
-        
+
         drop(results); // Release read lock
-        
+
         {
             let mut results = self.results.write().unwrap();
             results.summary = summary;
@@ -1564,11 +1696,11 @@ impl ComprehensiveBenchmark {
                 cache_lookup_ms: 1.2,
             };
         }
-        
+
         println!("✅ Benchmark summary generated");
         Ok(())
     }
-    
+
     /// Gather system information
     fn gather_system_info(&self) -> SystemInformation {
         // Mock system information gathering
@@ -1605,11 +1737,13 @@ impl ComprehensiveBenchmark {
             },
         }
     }
-    
+
     /// Generate comprehensive report
     pub async fn generate_report(&self, format: ExportFormat) -> Result<String, BenchmarkError> {
         let results = self.results.read().unwrap();
-        self.report_generator.generate_report(&results, format).await
+        self.report_generator
+            .generate_report(&results, format)
+            .await
     }
 }
 
@@ -1620,7 +1754,7 @@ impl BenchmarkResults {
                 started_at: SystemTime::now(),
                 ended_at: None,
                 total_duration: None,
-                config: BenchmarkConfig::default(),
+                config: ComprehensiveBenchmarkConfig::default(),
                 system_info: SystemInformation {
                     cpu: CPUInfo {
                         model: "Unknown".to_string(),
@@ -1727,7 +1861,7 @@ impl BenchmarkResults {
     }
 }
 
-impl Default for BenchmarkConfig {
+impl Default for ComprehensiveBenchmarkConfig {
     fn default() -> Self {
         Self {
             suites: BenchmarkSuites {
@@ -1799,21 +1933,33 @@ impl ReportGenerator {
             },
         }
     }
-    
-    pub async fn generate_report(&self, results: &BenchmarkResults, format: ExportFormat) -> Result<String, BenchmarkError> {
+
+    pub async fn generate_report(
+        &self,
+        results: &BenchmarkResults,
+        format: ExportFormat,
+    ) -> Result<String, BenchmarkError> {
         match format {
             ExportFormat::JSON => self.generate_json_report(results).await,
             ExportFormat::HTML => self.generate_html_report(results).await,
-            _ => Err(BenchmarkError::ReportError("Unsupported format".to_string())),
+            _ => Err(BenchmarkError::ReportError(
+                "Unsupported format".to_string(),
+            )),
         }
     }
-    
-    async fn generate_json_report(&self, results: &BenchmarkResults) -> Result<String, BenchmarkError> {
+
+    async fn generate_json_report(
+        &self,
+        results: &BenchmarkResults,
+    ) -> Result<String, BenchmarkError> {
         serde_json::to_string_pretty(results)
             .map_err(|e| BenchmarkError::ReportError(format!("JSON serialization error: {}", e)))
     }
-    
-    async fn generate_html_report(&self, results: &BenchmarkResults) -> Result<String, BenchmarkError> {
+
+    async fn generate_html_report(
+        &self,
+        results: &BenchmarkResults,
+    ) -> Result<String, BenchmarkError> {
         // Mock HTML report generation
         let html_content = format!(
             r#"
@@ -1867,13 +2013,17 @@ impl ReportGenerator {
             results.metadata.started_at,
             results.metadata.total_duration.unwrap_or(Duration::ZERO),
             results.summary.summary_text,
-            if results.summary.production_ready { "✅ Yes" } else { "❌ No" },
+            if results.summary.production_ready {
+                "✅ Yes"
+            } else {
+                "❌ No"
+            },
             results.summary.performance_score,
             results.readiness_assessment.overall_score,
             results.system_metrics.overall_throughput,
             results.system_metrics.peak_memory_mb
         );
-        
+
         Ok(html_content)
     }
 }
@@ -1903,30 +2053,34 @@ impl std::error::Error for BenchmarkError {}
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[tokio::test]
     async fn test_comprehensive_benchmark_creation() {
         let config = BenchmarkConfig::default();
         let benchmark = ComprehensiveBenchmark::new(config).await;
         assert!(benchmark.is_ok());
     }
-    
+
     #[tokio::test]
     async fn test_benchmark_results_initialization() {
         let results = BenchmarkResults::new();
         assert_eq!(results.system_metrics.overall_throughput, 0.0);
         assert_eq!(results.summary.performance_score, 0.0);
     }
-    
+
     #[tokio::test]
     async fn test_report_generation() {
         let results = BenchmarkResults::new();
         let generator = ReportGenerator::new();
-        
-        let json_report = generator.generate_report(&results, ExportFormat::JSON).await;
+
+        let json_report = generator
+            .generate_report(&results, ExportFormat::JSON)
+            .await;
         assert!(json_report.is_ok());
-        
-        let html_report = generator.generate_report(&results, ExportFormat::HTML).await;
+
+        let html_report = generator
+            .generate_report(&results, ExportFormat::HTML)
+            .await;
         assert!(html_report.is_ok());
     }
 }

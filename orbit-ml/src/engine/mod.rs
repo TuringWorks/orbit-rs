@@ -11,10 +11,10 @@ use tracing::{debug, info, warn};
 use uuid::Uuid;
 
 use crate::config::MLConfig;
-use crate::error::{MLError, Result};
+use crate::error::Result;
+use crate::inference::{InferenceConfig, InferenceJob, InferenceResult};
 use crate::models::{Model, ModelMetadata, ModelRegistry};
 use crate::training::{TrainingConfig, TrainingJob, TrainingStatus};
-use crate::inference::{InferenceConfig, InferenceJob, InferenceResult};
 
 pub mod builder;
 pub mod factory;
@@ -31,22 +31,22 @@ pub use scheduler::JobScheduler;
 pub struct MLEngine {
     /// Engine configuration
     config: MLConfig,
-    
+
     /// Model registry for managing trained models
     model_registry: Arc<ModelRegistry>,
-    
+
     /// Model manager for lifecycle operations
     model_manager: Arc<ModelManager>,
-    
+
     /// Job scheduler for training and inference
     job_scheduler: Arc<JobScheduler>,
-    
+
     /// Active training jobs
     training_jobs: Arc<DashMap<Uuid, TrainingJob>>,
-    
+
     /// Active inference jobs
     inference_jobs: Arc<DashMap<Uuid, InferenceJob>>,
-    
+
     /// Engine metrics
     metrics: Arc<RwLock<EngineMetrics>>,
 }
@@ -177,7 +177,7 @@ impl MLEngine {
     #[cfg(feature = "gpu")]
     async fn initialize_gpu(&self) -> Result<()> {
         use candle_core::Device;
-        
+
         match Device::cuda_if_available(0) {
             Ok(_device) => {
                 info!("GPU support initialized successfully");
@@ -257,7 +257,9 @@ impl MLEngineInterface for MLEngine {
         self.training_jobs.insert(job_id, job.clone());
 
         // Schedule job
-        self.job_scheduler.schedule_training_job(job_id, training_data).await?;
+        self.job_scheduler
+            .schedule_training_job(job_id, training_data)
+            .await?;
 
         // Update metrics
         {
@@ -338,7 +340,7 @@ impl MLEngineInterface for MLEngine {
     async fn health_check(&self) -> Result<EngineStatus> {
         let metrics = self.metrics.read().await;
         let features_enabled = self.get_enabled_features();
-        
+
         Ok(EngineStatus {
             status: "healthy".to_string(),
             version: crate::VERSION.to_string(),
@@ -356,7 +358,7 @@ impl MLEngine {
     /// Get list of enabled features
     fn get_enabled_features(&self) -> Vec<String> {
         let mut features = Vec::new();
-        
+
         if cfg!(feature = "neural-networks") {
             features.push("neural-networks".to_string());
         }
@@ -381,7 +383,7 @@ impl MLEngine {
         if cfg!(feature = "distributed") {
             features.push("distributed".to_string());
         }
-        
+
         features
     }
 

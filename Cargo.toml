@@ -43,6 +43,7 @@ description = "Orbit - Build distributed and scalable online services (Rust impl
 repository = "https://github.com/TuringWorks/orbit-rs"
 
 [workspace.dependencies]
+pyo3 = "0.21"
 # Kubernetes operator dependencies  
 kube = "0.95"
 k8s-openapi = "0.22"

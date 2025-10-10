@@ -49,7 +49,7 @@ pub struct IndexMetadata {
 }
 
 /// Types of indexes supported
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum IndexType {
     /// B-Tree index for range queries
     BTree,
@@ -71,7 +71,7 @@ pub enum IndexType {
 }
 
 /// Vector index algorithms
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum VectorIndexAlgorithm {
     IvfFlat { lists: u32 },
     Hnsw { m: u32, ef_construction: u32 },
@@ -344,7 +344,7 @@ impl IndexSelector {
 
     /// Check how well an index applies to JOIN conditions
     fn check_join_applicability(&self, index: &IndexMetadata, joins: &[JoinClause]) -> f64 {
-        let mut max_applicability = 0.0;
+        let mut max_applicability: f64 = 0.0;
 
         for join in joins {
             let join_applicability = match &join.condition {

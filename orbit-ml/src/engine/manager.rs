@@ -1,7 +1,8 @@
-use std::sync::Arc;
-use crate::models::{Model, ModelRegistry};
 use crate::error::{MLError, Result};
+use crate::models::{Model, ModelRegistry};
+use std::sync::Arc;
 
+#[derive(Debug)]
 pub struct ModelManager {
     registry: Arc<ModelRegistry>,
 }

@@ -10,7 +10,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-use crate::orbitql::{QueryValue, SpatialError};
+use crate::orbitql::QueryValue;
+use crate::SpatialError;
 
 /// Table-level statistics for cost-based optimization
 #[derive(Debug, Clone, Serialize, Deserialize)]

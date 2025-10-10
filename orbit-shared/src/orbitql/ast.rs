@@ -357,6 +357,7 @@ pub enum BinaryOperator {
     // Set operations
     In,
     NotIn,
+    Between,
 
     // Null checking
     Is,
@@ -450,7 +451,7 @@ pub enum MLFunction {
     ModelInfo {
         model_name: String,
     },
-    
+
     // Statistical Functions
     LinearRegression {
         features: Vec<Expression>,
@@ -473,7 +474,7 @@ pub enum MLFunction {
         mean: Box<Expression>,
         std: Box<Expression>,
     },
-    
+
     // Supervised Learning
     KMeans {
         features: Vec<Expression>,
@@ -499,7 +500,7 @@ pub enum MLFunction {
         target: Box<Expression>,
         layers: Vec<u32>,
     },
-    
+
     // Boosting Algorithms
     GradientBoosting {
         features: Vec<Expression>,
@@ -527,7 +528,7 @@ pub enum MLFunction {
         target: Box<Expression>,
         parameters: HashMap<String, Expression>,
     },
-    
+
     // Feature Engineering
     Normalize {
         values: Vec<Expression>,
@@ -550,7 +551,7 @@ pub enum MLFunction {
         target: Box<Expression>,
         method: String,
     },
-    
+
     // Vector Operations
     EmbedText {
         text: Box<Expression>,
@@ -574,7 +575,7 @@ pub enum MLFunction {
         method: String,
         dimensions: u32,
     },
-    
+
     // Time Series ML
     Forecast {
         timeseries: Box<Expression>,
@@ -589,7 +590,7 @@ pub enum MLFunction {
     ChangepointDetection {
         timeseries: Box<Expression>,
     },
-    
+
     // NLP Functions
     SentimentAnalysis {
         text: Box<Expression>,
@@ -908,6 +909,23 @@ impl Statement {
     /// Returns true if this statement requires a transaction
     pub fn requires_transaction(&self) -> bool {
         self.is_mutating() || matches!(self, Statement::Transaction(_))
+    }
+}
+
+impl std::fmt::Display for Statement {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Statement::Select(_) => write!(f, "SELECT"),
+            Statement::Insert(_) => write!(f, "INSERT"),
+            Statement::Update(_) => write!(f, "UPDATE"),
+            Statement::Delete(_) => write!(f, "DELETE"),
+            Statement::Relate(_) => write!(f, "RELATE"),
+            Statement::Create(_) => write!(f, "CREATE"),
+            Statement::Drop(_) => write!(f, "DROP"),
+            Statement::Transaction(_) => write!(f, "TRANSACTION"),
+            Statement::Live(_) => write!(f, "LIVE"),
+            Statement::GraphRAG(_) => write!(f, "GRAPH_RAG"),
+        }
     }
 }
 

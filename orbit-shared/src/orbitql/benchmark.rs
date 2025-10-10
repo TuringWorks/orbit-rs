@@ -97,7 +97,7 @@ pub struct QueryExecutor {
     /// Query optimizer
     optimizer: QueryOptimizer,
     /// Cost-based planner
-    planner: CostBasedPlanner,
+    planner: CostBasedQueryPlanner,
 }
 
 /// Benchmark results storage
@@ -360,7 +360,7 @@ pub struct SystemInfo {
 /// Workload generator trait
 pub trait WorkloadGenerator {
     /// Generate workload queries
-    fn generate_queries(&self, count: usize) -> Vec<Query>;
+    fn generate_queries(&self, count: usize) -> Vec<Statement>;
 
     /// Generate test data
     fn generate_test_data(&self, scale_factor: usize) -> Vec<RecordBatch>;
@@ -457,7 +457,14 @@ impl BenchmarkFramework {
         let parallel_executor = ParallelExecutor::new();
         let cache_manager = QueryCacheManager::new();
         let optimizer = QueryOptimizer::new();
-        let planner = CostBasedPlanner::new();
+        // Create required components for the planner
+        let stats_manager = Arc::new(tokio::sync::RwLock::new(
+            crate::orbitql::statistics::StatisticsManager::new(
+                crate::orbitql::statistics::StatisticsConfig::default(),
+            ),
+        ));
+        let cost_model = crate::orbitql::cost_model::CostModel::default();
+        let planner = CostBasedQueryPlanner::new(stats_manager, cost_model);
 
         let executor = Arc::new(QueryExecutor {
             vectorized_executor,
@@ -732,17 +739,22 @@ impl BenchmarkFramework {
     /// Run warmup phase
     async fn run_warmup(&self) -> Result<(), BenchmarkError> {
         // Generate some warmup queries
-        let warmup_queries = vec![Query::Select(SelectQuery {
-            columns: vec![],
-            from: Some(FromClause {
-                table_name: "warmup_table".to_string(),
+        let warmup_queries = vec![Statement::Select(SelectStatement {
+            with_clauses: Vec::new(),
+            fields: vec![SelectField::All],
+            from: vec![FromClause::Table {
+                name: "warmup_table".to_string(),
                 alias: None,
-            }),
+            }],
             where_clause: None,
+            join_clauses: vec![],
             group_by: vec![],
             having: None,
             order_by: vec![],
             limit: Some(1000),
+            offset: None,
+            fetch: vec![],
+            timeout: None,
         })];
 
         let end_time = Instant::now() + self.config.warmup_duration;
@@ -758,7 +770,7 @@ impl BenchmarkFramework {
     /// Benchmark a single query
     async fn benchmark_single_query(
         &self,
-        query: &Query,
+        query: &Statement,
         query_id: &str,
     ) -> Result<QueryBenchmarkResult, BenchmarkError> {
         let start_time = Instant::now();
@@ -794,7 +806,7 @@ impl BenchmarkFramework {
     }
 
     /// Execute a query using the query executor
-    async fn execute_query(&self, query: &Query) -> Result<Vec<RecordBatch>, BenchmarkError> {
+    async fn execute_query(&self, query: &Statement) -> Result<Vec<RecordBatch>, BenchmarkError> {
         // Try cache first
         if let Some(cached_result) = self.executor.cache_manager.get_result(query).await {
             return Ok(cached_result.data);
@@ -849,7 +861,10 @@ impl BenchmarkFramework {
     }
 
     /// Run power test (single-user performance)
-    async fn run_power_test(&self, queries: &[Query]) -> Result<PowerTestResult, BenchmarkError> {
+    async fn run_power_test(
+        &self,
+        queries: &[Statement],
+    ) -> Result<PowerTestResult, BenchmarkError> {
         let start_time = Instant::now();
         let mut query_times = Vec::new();
 
@@ -872,7 +887,7 @@ impl BenchmarkFramework {
     /// Run throughput test (multi-user performance)
     async fn run_throughput_test(
         &self,
-        queries: &[Query],
+        queries: &[Statement],
     ) -> Result<ThroughputTestResult, BenchmarkError> {
         let concurrent_streams = self.config.concurrent_users;
         let test_duration = self.config.test_duration;
@@ -944,7 +959,7 @@ impl BenchmarkFramework {
     /// Benchmark transaction (for TPC-C)
     async fn benchmark_transaction(
         &self,
-        query: &Query,
+        query: &Statement,
         transaction_type: &str,
     ) -> Result<TransactionBenchmarkResult, BenchmarkError> {
         let start_time = Instant::now();
@@ -970,8 +985,8 @@ impl BenchmarkFramework {
         response_times.sort();
         let avg_response_time = if !response_times.is_empty() {
             Duration::from_nanos(
-                response_times.iter().map(|d| d.as_nanos()).sum::<u128>()
-                    / response_times.len() as u128,
+                (response_times.iter().map(|d| d.as_nanos()).sum::<u128>()
+                    / response_times.len() as u128) as u64,
             )
         } else {
             Duration::ZERO
@@ -1039,16 +1054,16 @@ impl BenchmarkFramework {
     }
 
     /// Analyze query complexity
-    fn analyze_query_complexity(&self, queries: &[Query]) -> HashMap<String, f64> {
+    fn analyze_query_complexity(&self, queries: &[Statement]) -> HashMap<String, f64> {
         let mut analysis = HashMap::new();
 
         for (i, query) in queries.iter().enumerate() {
             let complexity_score = match query {
-                Query::Select(select) => {
+                Statement::Select(select) => {
                     let mut score = 1.0;
 
                     // Add complexity for joins
-                    if select.from.is_some() {
+                    if !select.from.is_empty() {
                         score += 2.0;
                     }
 
@@ -1549,21 +1564,26 @@ impl TpcHWorkloadGenerator {
 }
 
 impl WorkloadGenerator for TpcHWorkloadGenerator {
-    fn generate_queries(&self, count: usize) -> Vec<Query> {
+    fn generate_queries(&self, count: usize) -> Vec<Statement> {
         // Mock implementation of TPC-H queries
         (1..=count.min(22))
             .map(|i| {
-                Query::Select(SelectQuery {
-                    columns: vec![],
-                    from: Some(FromClause {
-                        table_name: format!("tpch_table_{}", i),
+                Statement::Select(SelectStatement {
+                    with_clauses: Vec::new(),
+                    fields: vec![SelectField::All],
+                    from: vec![FromClause::Table {
+                        name: format!("table_{}", i % 10),
                         alias: None,
-                    }),
+                    }],
                     where_clause: None,
+                    join_clauses: vec![],
                     group_by: vec![],
                     having: None,
                     order_by: vec![],
                     limit: Some(100),
+                    offset: None,
+                    fetch: vec![],
+                    timeout: None,
                 })
             })
             .collect()
@@ -1594,23 +1614,29 @@ impl TpcCWorkloadGenerator {
 }
 
 impl WorkloadGenerator for TpcCWorkloadGenerator {
-    fn generate_queries(&self, count: usize) -> Vec<Query> {
+    fn generate_queries(&self, count: usize) -> Vec<Statement> {
         // Mock implementation of TPC-C transactions
-        vec![
-            Query::Select(SelectQuery {
-                columns: vec![],
-                from: Some(FromClause {
-                    table_name: "new_order".to_string(),
-                    alias: None
-                }),
-                where_clause: None,
-                group_by: vec![],
-                having: None,
-                order_by: vec![],
-                limit: None,
-            });
-            count.min(5)
-        ]
+        (0..count.min(5))
+            .map(|_| {
+                Statement::Select(SelectStatement {
+                    with_clauses: Vec::new(),
+                    fields: vec![SelectField::All],
+                    from: vec![FromClause::Table {
+                        name: "new_order".to_string(),
+                        alias: None,
+                    }],
+                    where_clause: None,
+                    join_clauses: vec![],
+                    group_by: vec![],
+                    having: None,
+                    order_by: vec![],
+                    limit: None,
+                    offset: None,
+                    fetch: vec![],
+                    timeout: None,
+                })
+            })
+            .collect()
     }
 
     fn generate_test_data(&self, scale_factor: usize) -> Vec<RecordBatch> {
@@ -1637,28 +1663,33 @@ impl TpcDsWorkloadGenerator {
 }
 
 impl WorkloadGenerator for TpcDsWorkloadGenerator {
-    fn generate_queries(&self, count: usize) -> Vec<Query> {
+    fn generate_queries(&self, count: usize) -> Vec<Statement> {
         // Mock implementation of TPC-DS queries (subset)
         (1..=count.min(99))
             .map(|i| {
-                Query::Select(SelectQuery {
-                    columns: vec![],
-                    from: Some(FromClause {
-                        table_name: format!("store_sales_{}", i % 10),
+                Statement::Select(SelectStatement {
+                    with_clauses: Vec::new(),
+                    fields: vec![SelectField::All],
+                    from: vec![FromClause::Table {
+                        name: format!("store_sales_{}", i % 10),
                         alias: Some(format!("ss{}", i)),
-                    }),
+                    }],
                     where_clause: Some(Expression::Binary {
                         left: Box::new(Expression::Identifier("ss_sold_date_sk".to_string())),
                         operator: BinaryOperator::GreaterThan,
                         right: Box::new(Expression::Literal(QueryValue::Integer(2450000))),
                     }),
+                    join_clauses: vec![],
                     group_by: vec![Expression::Identifier("ss_item_sk".to_string())],
                     having: None,
                     order_by: vec![OrderByClause {
                         expression: Expression::Identifier("revenue".to_string()),
-                        direction: Some(OrderDirection::Desc),
+                        direction: SortDirection::Desc,
                     }],
                     limit: Some(100),
+                    offset: None,
+                    fetch: vec![],
+                    timeout: None,
                 })
             })
             .collect()
@@ -1692,18 +1723,20 @@ impl VectorizationWorkloadGenerator {
 }
 
 impl WorkloadGenerator for VectorizationWorkloadGenerator {
-    fn generate_queries(&self, count: usize) -> Vec<Query> {
+    fn generate_queries(&self, count: usize) -> Vec<Statement> {
         (0..count)
             .map(|i| {
                 match i % 3 {
                     0 => {
                         // Arithmetic-heavy query for SIMD testing
-                        Query::Select(SelectQuery {
-                            columns: vec![],
-                            from: Some(FromClause {
-                                table_name: "vector_test_table".to_string(),
+                        Statement::Select(SelectStatement {
+                            with_clauses: vec![],
+                            fields: vec![SelectField::All],
+                            from: vec![FromClause::Table {
+                                name: "vectorized_table".to_string(),
                                 alias: None,
-                            }),
+                            }],
+                            join_clauses: vec![],
                             where_clause: Some(Expression::Binary {
                                 left: Box::new(Expression::Binary {
                                     left: Box::new(Expression::Identifier("col_a".to_string())),
@@ -1717,31 +1750,41 @@ impl WorkloadGenerator for VectorizationWorkloadGenerator {
                             having: None,
                             order_by: vec![],
                             limit: Some(10000),
+                            offset: None,
+                            fetch: vec![],
+                            timeout: None,
                         })
                     }
                     1 => {
                         // Aggregation query for vectorized operations
-                        Query::Select(SelectQuery {
-                            columns: vec![],
-                            from: Some(FromClause {
-                                table_name: "vector_agg_table".to_string(),
+                        Statement::Select(SelectStatement {
+                            with_clauses: vec![],
+                            fields: vec![SelectField::All],
+                            from: vec![FromClause::Table {
+                                name: "vectorized_table".to_string(),
                                 alias: None,
-                            }),
+                            }],
+                            join_clauses: vec![],
                             where_clause: None,
                             group_by: vec![Expression::Identifier("category".to_string())],
                             having: None,
                             order_by: vec![],
                             limit: None,
+                            offset: None,
+                            fetch: vec![],
+                            timeout: None,
                         })
                     }
                     _ => {
                         // Filter-heavy query
-                        Query::Select(SelectQuery {
-                            columns: vec![],
-                            from: Some(FromClause {
-                                table_name: "vector_filter_table".to_string(),
+                        Statement::Select(SelectStatement {
+                            with_clauses: vec![],
+                            fields: vec![SelectField::All],
+                            from: vec![FromClause::Table {
+                                name: "vectorized_table".to_string(),
                                 alias: None,
-                            }),
+                            }],
+                            join_clauses: vec![],
                             where_clause: Some(Expression::Binary {
                                 left: Box::new(Expression::Identifier("value".to_string())),
                                 operator: BinaryOperator::Between,
@@ -1751,6 +1794,9 @@ impl WorkloadGenerator for VectorizationWorkloadGenerator {
                             having: None,
                             order_by: vec![],
                             limit: Some(5000),
+                            offset: None,
+                            fetch: vec![],
+                            timeout: None,
                         })
                     }
                 }
@@ -1787,15 +1833,17 @@ impl CacheWorkloadGenerator {
 }
 
 impl WorkloadGenerator for CacheWorkloadGenerator {
-    fn generate_queries(&self, count: usize) -> Vec<Query> {
+    fn generate_queries(&self, count: usize) -> Vec<Statement> {
         (0..count)
             .map(|i| match i % self.query_patterns.len() {
-                0 => Query::Select(SelectQuery {
-                    columns: vec![],
-                    from: Some(FromClause {
-                        table_name: "cache_table".to_string(),
+                0 => Statement::Select(SelectStatement {
+                    with_clauses: vec![],
+                    fields: vec![SelectField::All],
+                    from: vec![FromClause::Table {
+                        name: "cache_table".to_string(),
                         alias: None,
-                    }),
+                    }],
+                    join_clauses: vec![],
                     where_clause: Some(Expression::Binary {
                         left: Box::new(Expression::Identifier("id".to_string())),
                         operator: BinaryOperator::Equal,
@@ -1805,13 +1853,18 @@ impl WorkloadGenerator for CacheWorkloadGenerator {
                     having: None,
                     order_by: vec![],
                     limit: None,
+                    offset: None,
+                    fetch: vec![],
+                    timeout: None,
                 }),
-                1 => Query::Select(SelectQuery {
-                    columns: vec![],
-                    from: Some(FromClause {
-                        table_name: "cache_table".to_string(),
+                1 => Statement::Select(SelectStatement {
+                    with_clauses: vec![],
+                    fields: vec![SelectField::All],
+                    from: vec![FromClause::Table {
+                        name: "cache_table".to_string(),
                         alias: None,
-                    }),
+                    }],
+                    join_clauses: vec![],
                     where_clause: Some(Expression::Binary {
                         left: Box::new(Expression::Identifier("status".to_string())),
                         operator: BinaryOperator::Equal,
@@ -1824,18 +1877,26 @@ impl WorkloadGenerator for CacheWorkloadGenerator {
                     having: None,
                     order_by: vec![],
                     limit: None,
+                    offset: None,
+                    fetch: vec![],
+                    timeout: None,
                 }),
-                _ => Query::Select(SelectQuery {
-                    columns: vec![],
-                    from: Some(FromClause {
-                        table_name: "cache_table".to_string(),
+                _ => Statement::Select(SelectStatement {
+                    with_clauses: vec![],
+                    fields: vec![SelectField::All],
+                    from: vec![FromClause::Table {
+                        name: "cache_table".to_string(),
                         alias: None,
-                    }),
+                    }],
+                    join_clauses: vec![],
                     where_clause: None,
                     group_by: vec![Expression::Identifier("category".to_string())],
                     having: None,
                     order_by: vec![],
                     limit: None,
+                    offset: None,
+                    fetch: vec![],
+                    timeout: None,
                 }),
             })
             .collect()
@@ -1868,18 +1929,20 @@ impl ParallelWorkloadGenerator {
 }
 
 impl WorkloadGenerator for ParallelWorkloadGenerator {
-    fn generate_queries(&self, count: usize) -> Vec<Query> {
+    fn generate_queries(&self, count: usize) -> Vec<Statement> {
         (0..count)
             .map(|i| {
                 match &self.workload_type {
                     ParallelWorkloadType::CpuIntensive => {
                         // CPU-heavy query with complex calculations
-                        Query::Select(SelectQuery {
-                            columns: vec![],
-                            from: Some(FromClause {
-                                table_name: "cpu_intensive_table".to_string(),
+                        Statement::Select(SelectStatement {
+                            with_clauses: vec![],
+                            fields: vec![SelectField::All],
+                            from: vec![FromClause::Table {
+                                name: "cpu_intensive_table".to_string(),
                                 alias: None,
-                            }),
+                            }],
+                            join_clauses: vec![],
                             where_clause: Some(Expression::Binary {
                                 left: Box::new(Expression::Binary {
                                     left: Box::new(Expression::Identifier("value1".to_string())),
@@ -1893,19 +1956,24 @@ impl WorkloadGenerator for ParallelWorkloadGenerator {
                             having: None,
                             order_by: vec![OrderByClause {
                                 expression: Expression::Identifier("calculated_value".to_string()),
-                                direction: Some(OrderDirection::Desc),
+                                direction: SortDirection::Desc,
                             }],
                             limit: Some(1000),
+                            offset: None,
+                            fetch: vec![],
+                            timeout: None,
                         })
                     }
                     ParallelWorkloadType::IoIntensive => {
                         // I/O-heavy query with large scans
-                        Query::Select(SelectQuery {
-                            columns: vec![],
-                            from: Some(FromClause {
-                                table_name: format!("large_table_{}", i % 10),
+                        Statement::Select(SelectStatement {
+                            with_clauses: vec![],
+                            fields: vec![SelectField::All],
+                            from: vec![FromClause::Table {
+                                name: format!("large_table_{}", i % 10),
                                 alias: None,
-                            }),
+                            }],
+                            join_clauses: vec![],
                             where_clause: Some(Expression::Binary {
                                 left: Box::new(Expression::Identifier("timestamp".to_string())),
                                 operator: BinaryOperator::GreaterThan,
@@ -1917,32 +1985,42 @@ impl WorkloadGenerator for ParallelWorkloadGenerator {
                             having: None,
                             order_by: vec![],
                             limit: Some(10000),
+                            offset: None,
+                            fetch: vec![],
+                            timeout: None,
                         })
                     }
                     ParallelWorkloadType::Mixed => {
                         // Mixed workload
                         if i % 2 == 0 {
                             // CPU-intensive
-                            Query::Select(SelectQuery {
-                                columns: vec![],
-                                from: Some(FromClause {
-                                    table_name: "mixed_table".to_string(),
+                            Statement::Select(SelectStatement {
+                                with_clauses: vec![],
+                                fields: vec![SelectField::All],
+                                from: vec![FromClause::Table {
+                                    name: "mixed_table".to_string(),
                                     alias: None,
-                                }),
+                                }],
+                                join_clauses: vec![],
                                 where_clause: None,
                                 group_by: vec![Expression::Identifier("group_col".to_string())],
                                 having: None,
                                 order_by: vec![],
                                 limit: None,
+                                offset: None,
+                                fetch: vec![],
+                                timeout: None,
                             })
                         } else {
                             // I/O-intensive
-                            Query::Select(SelectQuery {
-                                columns: vec![],
-                                from: Some(FromClause {
-                                    table_name: "mixed_table".to_string(),
+                            Statement::Select(SelectStatement {
+                                with_clauses: vec![],
+                                fields: vec![SelectField::All],
+                                from: vec![FromClause::Table {
+                                    name: "mixed_table".to_string(),
                                     alias: None,
-                                }),
+                                }],
+                                join_clauses: vec![],
                                 where_clause: Some(Expression::Binary {
                                     left: Box::new(Expression::Identifier("scan_col".to_string())),
                                     operator: BinaryOperator::LessThan,
@@ -1952,6 +2030,9 @@ impl WorkloadGenerator for ParallelWorkloadGenerator {
                                 having: None,
                                 order_by: vec![],
                                 limit: Some(5000),
+                                offset: None,
+                                fetch: vec![],
+                                timeout: None,
                             })
                         }
                     }
