@@ -27,21 +27,26 @@
 //! ```
 
 pub mod ast;
+pub mod benchmark;
 pub mod cache;
 pub mod cost_based_planner;
-pub mod cost_model;
-pub mod distributed;
 pub mod executor;
+pub mod index_recommendation;
+pub mod index_recommendation;
+pub mod index_selection;
 pub mod index_selection;
 pub mod lexer;
 pub mod lsp;
 pub mod optimizer;
+pub mod parallel_execution;
 pub mod parser;
 pub mod planner;
 pub mod profiler;
+pub mod query_cache;
 pub mod spatial;
 pub mod statistics;
 pub mod streaming;
+pub mod vectorized_execution;
 
 // Re-export core types
 pub use ast::*;
