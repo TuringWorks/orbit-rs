@@ -21,42 +21,69 @@ pub use positional_encoding::*;
 /// Core Transformer model
 #[derive(Debug, Clone)]
 pub struct Transformer {
+    /// Unique identifier for this model instance
     pub model_id: Uuid,
+    /// Configuration parameters for the transformer
     pub config: TransformerConfig,
+    /// Optional encoder stack (for encoder-only or encoder-decoder models)
     pub encoder: Option<TransformerEncoder>,
+    /// Optional decoder stack (for decoder-only or encoder-decoder models)
     pub decoder: Option<TransformerDecoder>,
+    /// Embedding layer for token and position embeddings
     pub embedding: Arc<EmbeddingLayer>,
+    /// Positional encoding implementation
     pub positional_encoding: Arc<dyn PositionalEncoding + Send + Sync>,
+    /// Optional layer normalization at model output
     pub layer_norm: Option<LayerNorm>,
 }
 
 /// Transformer configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TransformerConfig {
+    /// Size of the vocabulary
     pub vocab_size: usize,
+    /// Dimension of hidden states
     pub hidden_size: usize,
+    /// Number of attention heads in each attention layer
     pub num_attention_heads: usize,
+    /// Number of encoder layers
     pub num_encoder_layers: usize,
+    /// Number of decoder layers
     pub num_decoder_layers: usize,
+    /// Dimension of the feed-forward layer
     pub intermediate_size: usize,
+    /// Maximum sequence length for position embeddings
     pub max_position_embeddings: usize,
+    /// Dropout probability for hidden states
     pub dropout_prob: f64,
+    /// Dropout probability for attention weights
     pub attention_dropout_prob: f64,
+    /// Epsilon for layer normalization
     pub layer_norm_eps: f64,
+    /// Standard deviation for weight initialization
     pub initializer_range: f64,
+    /// Whether to use key-value caching during generation
     pub use_cache: bool,
+    /// Token ID for padding
     pub pad_token_id: Option<usize>,
+    /// Token ID for beginning of sequence
     pub bos_token_id: Option<usize>,
+    /// Token ID for end of sequence
     pub eos_token_id: Option<usize>,
+    /// Type of transformer architecture (encoder-only, decoder-only, etc.)
     pub architecture_type: TransformerArchitecture,
 }
 
 /// Types of transformer architectures
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TransformerArchitecture {
-    EncoderOnly,    // BERT-style
-    DecoderOnly,    // GPT-style
-    EncoderDecoder, // T5-style
+    /// Encoder-only architecture (BERT-style)
+    EncoderOnly,
+    /// Decoder-only architecture (GPT-style)
+    DecoderOnly,
+    /// Encoder-decoder architecture (T5-style)
+    EncoderDecoder,
+    /// Vision Transformer architecture
     VisionTransformer,
 }
 
@@ -86,10 +113,15 @@ impl Default for TransformerConfig {
 /// Embedding layer for token and position embeddings
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EmbeddingLayer {
+    /// Linear layer for token embeddings
     pub token_embeddings: Linear,
+    /// Optional linear layer for position embeddings
     pub position_embeddings: Option<Linear>,
+    /// Optional linear layer for token type embeddings (for sentence pairs)
     pub token_type_embeddings: Option<Linear>,
+    /// Layer normalization applied to embeddings
     pub layer_norm: LayerNorm,
+    /// Dropout probability for embeddings
     pub dropout: f64,
 }
 
@@ -141,52 +173,76 @@ impl EmbeddingLayer {
 /// Transformer encoder stack
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TransformerEncoder {
+    /// Stack of encoder layers
     pub layers: Vec<TransformerEncoderLayer>,
+    /// Optional final layer normalization
     pub layer_norm: Option<LayerNorm>,
 }
 
 /// Single transformer encoder layer
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TransformerEncoderLayer {
+    /// Multi-head self-attention mechanism
     pub self_attention: MultiHeadAttention,
+    /// Feed-forward network
     pub feed_forward: FeedForwardNetwork,
+    /// Layer normalization for attention output
     pub attention_layer_norm: LayerNorm,
+    /// Layer normalization for final output
     pub output_layer_norm: LayerNorm,
+    /// Dropout probability
     pub dropout: f64,
 }
 
 /// Transformer decoder stack
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TransformerDecoder {
+    /// Stack of decoder layers
     pub layers: Vec<TransformerDecoderLayer>,
+    /// Optional final layer normalization
     pub layer_norm: Option<LayerNorm>,
 }
 
 /// Single transformer decoder layer
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TransformerDecoderLayer {
+    /// Multi-head self-attention mechanism
     pub self_attention: MultiHeadAttention,
+    /// Optional cross-attention for encoder-decoder models
     pub cross_attention: Option<MultiHeadAttention>,
+    /// Feed-forward network
     pub feed_forward: FeedForwardNetwork,
+    /// Layer normalization for self-attention output
     pub self_attention_layer_norm: LayerNorm,
+    /// Optional layer normalization for cross-attention output
     pub cross_attention_layer_norm: Option<LayerNorm>,
+    /// Layer normalization for final output
     pub output_layer_norm: LayerNorm,
+    /// Dropout probability
     pub dropout: f64,
 }
 
 /// Feed-forward network used in transformer layers
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FeedForwardNetwork {
+    /// First linear transformation (hidden -> intermediate)
     pub linear1: Linear,
+    /// Second linear transformation (intermediate -> hidden)
     pub linear2: Linear,
+    /// Activation function between linear layers
     pub activation: ActivationType,
+    /// Dropout probability
     pub dropout: f64,
 }
 
+/// Activation function types for feed-forward networks
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ActivationType {
+    /// Rectified Linear Unit activation
     ReLU,
+    /// Gaussian Error Linear Unit activation
     GELU,
+    /// Swish activation function
     Swish,
 }
 
@@ -233,6 +289,7 @@ impl FeedForwardNetwork {
 
 /// Builder for constructing transformers
 pub struct TransformerBuilder {
+    /// Configuration being built
     config: TransformerConfig,
 }
 

@@ -1029,7 +1029,7 @@ impl QueryPatternAnalyzer {
     fn extract_column_references_from_expression(
         &self,
         expr: &Expression,
-        context: &str,
+        _context: &str,
     ) -> Vec<ColumnReference> {
         match expr {
             Expression::Binary {

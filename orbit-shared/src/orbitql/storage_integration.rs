@@ -949,7 +949,7 @@ impl StorageEngine {
     fn apply_predicates(
         &self,
         batch: RecordBatch,
-        predicates: &[Expression],
+        _predicates: &[Expression],
     ) -> Result<RecordBatch, StorageError> {
         // Simplified predicate application
         // In reality would use vectorized evaluation

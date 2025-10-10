@@ -10,23 +10,38 @@ pub type Result<T> = std::result::Result<T, MLError>;
 pub enum MLError {
     /// Configuration errors
     #[error("Configuration error: {message}")]
-    Config { message: String },
+    Config {
+        /// Error message describing the configuration issue
+        message: String,
+    },
 
     /// Model errors
     #[error("Model error: {message}")]
-    Model { message: String },
+    Model {
+        /// Error message describing the model issue
+        message: String,
+    },
 
     /// Training errors
     #[error("Training error: {message}")]
-    Training { message: String },
+    Training {
+        /// Error message describing the training issue
+        message: String,
+    },
 
     /// Inference errors
     #[error("Inference error: {message}")]
-    Inference { message: String },
+    Inference {
+        /// Error message describing the inference issue
+        message: String,
+    },
 
     /// Data processing errors
     #[error("Data error: {message}")]
-    Data { message: String },
+    Data {
+        /// Error message describing the data processing issue
+        message: String,
+    },
 
     /// Neural network errors
     #[error("Neural network error: {message}")]
@@ -42,7 +57,12 @@ pub enum MLError {
 
     /// Multi-language integration errors
     #[error("Multi-language error ({language}): {message}")]
-    MultiLanguage { language: String, message: String },
+    MultiLanguage {
+        /// Programming language that caused the error
+        language: String,
+        /// Error message describing the multi-language issue
+        message: String,
+    },
 
     /// Python integration errors
     #[cfg(feature = "python")]
@@ -51,7 +71,10 @@ pub enum MLError {
 
     /// JavaScript integration errors
     #[error("JavaScript error: {message}")]
-    JavaScript { message: String },
+    JavaScript {
+        /// Error message from JavaScript runtime
+        message: String,
+    },
 
     /// Lua integration errors
     #[error("Lua error: {message}")]
@@ -85,7 +108,10 @@ pub enum MLError {
 
     /// Resource not found errors
     #[error("Resource not found: {resource}")]
-    NotFound { resource: String },
+    NotFound {
+        /// Name or identifier of the resource that was not found
+        resource: String,
+    },
 
     /// Permission/access errors
     #[error("Access denied: {message}")]
@@ -105,7 +131,12 @@ pub enum MLError {
 
     /// External service errors
     #[error("External service error ({service}): {message}")]
-    ExternalService { service: String, message: String },
+    ExternalService {
+        /// Name of the external service
+        service: String,
+        /// Error message from the external service
+        message: String,
+    },
 
     /// Validation errors
     #[error("Validation error: {message}")]
