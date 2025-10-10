@@ -30,6 +30,7 @@ members = [
 # Exclude benchmarks from default workspace build due to WAL replay issues
 exclude = [
     "orbit-benchmarks",
+    "orbit-desktop",
 ]
 
 [workspace.package]

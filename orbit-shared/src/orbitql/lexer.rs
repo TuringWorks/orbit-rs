@@ -97,6 +97,19 @@ pub enum TokenType {
     Now,
     Interval,
 
+    // ML keywords
+    Model,
+    Train,
+    Predict,
+    Using,
+    Algorithm,
+    Features,
+    Target,
+    Evaluate,
+    Score,
+    Fit,
+    Transform,
+
     // Operators
     Equal,              // =
     NotEqual,           // !=, <>
@@ -244,6 +257,17 @@ impl Token {
                 | Range
                 | Now
                 | Interval
+                | Model
+                | Train
+                | Predict
+                | Using
+                | Algorithm
+                | Features
+                | Target
+                | Evaluate
+                | Score
+                | Fit
+                | Transform
         )
     }
 
@@ -433,6 +457,19 @@ impl Lexer {
         keywords.insert("RANGE".to_string(), TokenType::Range);
         keywords.insert("NOW".to_string(), TokenType::Now);
         keywords.insert("INTERVAL".to_string(), TokenType::Interval);
+
+        // ML keywords
+        keywords.insert("MODEL".to_string(), TokenType::Model);
+        keywords.insert("TRAIN".to_string(), TokenType::Train);
+        keywords.insert("PREDICT".to_string(), TokenType::Predict);
+        keywords.insert("USING".to_string(), TokenType::Using);
+        keywords.insert("ALGORITHM".to_string(), TokenType::Algorithm);
+        keywords.insert("FEATURES".to_string(), TokenType::Features);
+        keywords.insert("TARGET".to_string(), TokenType::Target);
+        keywords.insert("EVALUATE".to_string(), TokenType::Evaluate);
+        keywords.insert("SCORE".to_string(), TokenType::Score);
+        keywords.insert("FIT".to_string(), TokenType::Fit);
+        keywords.insert("TRANSFORM".to_string(), TokenType::Transform);
 
         // Boolean and null literals
         keywords.insert("TRUE".to_string(), TokenType::Boolean);
