@@ -317,6 +317,12 @@ pub enum Expression {
         geometry: Box<Expression>,
         srid: i32,
     },
+
+    // Machine Learning expressions
+    MLFunction {
+        function: MLFunction,
+        args: Vec<Expression>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -409,6 +415,232 @@ pub enum AggregateFunction {
 pub struct WhenClause {
     pub condition: Expression,
     pub result: Expression,
+}
+
+/// Machine Learning function definitions
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum MLFunction {
+    // Model Management
+    TrainModel {
+        name: String,
+        algorithm: MLAlgorithm,
+        features: Vec<Expression>,
+        target: Box<Expression>,
+        parameters: HashMap<String, Expression>,
+    },
+    Predict {
+        model_name: String,
+        features: Vec<Expression>,
+    },
+    EvaluateModel {
+        model_name: String,
+        test_features: Vec<Expression>,
+        test_target: Box<Expression>,
+        metrics: Vec<String>,
+    },
+    UpdateModel {
+        model_name: String,
+        features: Vec<Expression>,
+        target: Box<Expression>,
+    },
+    DropModel {
+        model_name: String,
+    },
+    ListModels,
+    ModelInfo {
+        model_name: String,
+    },
+    
+    // Statistical Functions
+    LinearRegression {
+        features: Vec<Expression>,
+        target: Box<Expression>,
+    },
+    LogisticRegression {
+        features: Vec<Expression>,
+        target: Box<Expression>,
+    },
+    Correlation {
+        x: Box<Expression>,
+        y: Box<Expression>,
+    },
+    Covariance {
+        x: Box<Expression>,
+        y: Box<Expression>,
+    },
+    ZScore {
+        value: Box<Expression>,
+        mean: Box<Expression>,
+        std: Box<Expression>,
+    },
+    
+    // Supervised Learning
+    KMeans {
+        features: Vec<Expression>,
+        k: u32,
+    },
+    SVM {
+        features: Vec<Expression>,
+        target: Box<Expression>,
+        kernel: String,
+    },
+    DecisionTree {
+        features: Vec<Expression>,
+        target: Box<Expression>,
+        max_depth: Option<u32>,
+    },
+    RandomForest {
+        features: Vec<Expression>,
+        target: Box<Expression>,
+        n_estimators: u32,
+    },
+    NeuralNetwork {
+        features: Vec<Expression>,
+        target: Box<Expression>,
+        layers: Vec<u32>,
+    },
+    
+    // Boosting Algorithms
+    GradientBoosting {
+        features: Vec<Expression>,
+        target: Box<Expression>,
+        n_estimators: u32,
+        learning_rate: f64,
+    },
+    AdaBoost {
+        features: Vec<Expression>,
+        target: Box<Expression>,
+        n_estimators: u32,
+    },
+    XGBoost {
+        features: Vec<Expression>,
+        target: Box<Expression>,
+        parameters: HashMap<String, Expression>,
+    },
+    LightGBM {
+        features: Vec<Expression>,
+        target: Box<Expression>,
+        parameters: HashMap<String, Expression>,
+    },
+    CatBoost {
+        features: Vec<Expression>,
+        target: Box<Expression>,
+        parameters: HashMap<String, Expression>,
+    },
+    
+    // Feature Engineering
+    Normalize {
+        values: Vec<Expression>,
+        method: NormalizationMethod,
+    },
+    EncodeCategorical {
+        category: Box<Expression>,
+        method: EncodingMethod,
+    },
+    PolynomialFeatures {
+        features: Vec<Expression>,
+        degree: u32,
+    },
+    PCA {
+        features: Vec<Expression>,
+        components: u32,
+    },
+    FeatureSelection {
+        features: Vec<Expression>,
+        target: Box<Expression>,
+        method: String,
+    },
+    
+    // Vector Operations
+    EmbedText {
+        text: Box<Expression>,
+        model: String,
+    },
+    EmbedImage {
+        image_url: Box<Expression>,
+        model: String,
+    },
+    SimilaritySearch {
+        query_vector: Box<Expression>,
+        target_vectors: Box<Expression>,
+        k: u32,
+    },
+    VectorCluster {
+        vectors: Vec<Expression>,
+        k: u32,
+    },
+    DimensionalityReduction {
+        vectors: Vec<Expression>,
+        method: String,
+        dimensions: u32,
+    },
+    
+    // Time Series ML
+    Forecast {
+        timeseries: Box<Expression>,
+        periods: u32,
+    },
+    SeasonalityDecompose {
+        timeseries: Box<Expression>,
+    },
+    AnomalyDetection {
+        timeseries: Box<Expression>,
+    },
+    ChangepointDetection {
+        timeseries: Box<Expression>,
+    },
+    
+    // NLP Functions
+    SentimentAnalysis {
+        text: Box<Expression>,
+    },
+    ExtractEntities {
+        text: Box<Expression>,
+    },
+    SummarizeText {
+        text: Box<Expression>,
+        max_length: u32,
+    },
+    Translate {
+        text: Box<Expression>,
+        source_lang: String,
+        target_lang: String,
+    },
+}
+
+/// ML algorithms available for training
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum MLAlgorithm {
+    LinearRegression,
+    LogisticRegression,
+    KMeans,
+    SVM,
+    DecisionTree,
+    RandomForest,
+    NeuralNetwork,
+    GradientBoosting,
+    AdaBoost,
+    XGBoost,
+    LightGBM,
+    CatBoost,
+}
+
+/// Normalization methods for feature scaling
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum NormalizationMethod {
+    MinMax,
+    ZScore,
+    Robust,
+    UnitVector,
+}
+
+/// Categorical encoding methods
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum EncodingMethod {
+    OneHot,
+    Label,
+    Target,
+    Binary,
 }
 
 /// INSERT statement
