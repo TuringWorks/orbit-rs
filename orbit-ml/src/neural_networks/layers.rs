@@ -28,11 +28,23 @@ pub struct DenseLayer {
     weights: Array2<f64>,
     biases: Array1<f64>,
     weight_gradients: Array2<f64>,
+    /// Gradients for bias parameters (kept for future training implementation)
+    #[allow(dead_code)]
     bias_gradients: Array1<f64>,
+    /// Cached input from forward pass (kept for future backprop implementation)
+    #[allow(dead_code)]
     last_input: Option<Array2<f64>>,
 }
 
 impl DenseLayer {
+    /// Create a new dense layer with Xavier initialization
+    ///
+    /// # Arguments
+    /// * `input_size` - Number of input features
+    /// * `output_size` - Number of output features
+    ///
+    /// # Returns
+    /// A new dense layer with weights initialized using Xavier initialization
     pub fn new(input_size: usize, output_size: usize) -> Self {
         // Xavier initialization
         let scale = (2.0 / (input_size + output_size) as f64).sqrt();
@@ -85,6 +97,13 @@ pub struct DropoutLayer {
 }
 
 impl DropoutLayer {
+    /// Create a new dropout layer
+    ///
+    /// # Arguments
+    /// * `dropout_rate` - Probability of dropping units (0.0 to 1.0)
+    ///
+    /// # Returns
+    /// A new dropout layer in training mode
     pub fn new(dropout_rate: f64) -> Self {
         Self {
             dropout_rate,
@@ -92,6 +111,10 @@ impl DropoutLayer {
         }
     }
 
+    /// Set training mode for the dropout layer
+    ///
+    /// # Arguments
+    /// * `training` - If true, dropout is applied; if false, acts as identity
     pub fn set_training(&mut self, training: bool) {
         self.training = training;
     }
@@ -130,17 +153,38 @@ impl Layer for DropoutLayer {
     }
 }
 
-/// Convolutional 2D layer (simplified stub)
+/// Convolutional 2D layer (simplified stub implementation)
 #[derive(Debug, Clone)]
 pub struct Conv2DLayer {
-    filters: Array4<f64>, // [out_channels, in_channels, height, width]
+    /// Convolutional filters [out_channels, in_channels, height, width] (kept for future implementation)
+    #[allow(dead_code)]
+    filters: Array4<f64>,
+    /// Bias terms for each output channel (kept for future implementation)
+    #[allow(dead_code)]
     biases: Array1<f64>,
+    /// Size of the convolution kernel (kept for future implementation)
+    #[allow(dead_code)]
     kernel_size: (usize, usize),
+    /// Stride for convolution operation (kept for future implementation)
+    #[allow(dead_code)]
     stride: (usize, usize),
+    /// Padding applied to input (kept for future implementation)
+    #[allow(dead_code)]
     padding: (usize, usize),
 }
 
 impl Conv2DLayer {
+    /// Create a new 2D convolutional layer (stub implementation)
+    ///
+    /// # Arguments
+    /// * `in_channels` - Number of input channels
+    /// * `out_channels` - Number of output channels
+    /// * `kernel_size` - Size of convolution kernel as (height, width)
+    /// * `stride` - Stride for convolution as (height, width)
+    /// * `padding` - Padding for input as (height, width)
+    ///
+    /// # Returns
+    /// A new Conv2D layer (not yet fully implemented)
     pub fn new(
         in_channels: usize,
         out_channels: usize,
@@ -184,16 +228,28 @@ impl Layer for Conv2DLayer {
     }
 }
 
-/// Layer normalization implementation
+/// Layer normalization implementation for transformer architectures
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LayerNorm {
+    /// Shape of the input features to normalize
     normalized_shape: usize,
+    /// Small epsilon value to avoid division by zero
     eps: f64,
+    /// Learnable weight (gamma) parameters for scaling
     weight: Array1<f64>,
+    /// Learnable bias (beta) parameters for shifting
     bias: Array1<f64>,
 }
 
 impl LayerNorm {
+    /// Create a new layer normalization layer
+    ///
+    /// # Arguments
+    /// * `normalized_shape` - Number of features to normalize
+    /// * `eps` - Small epsilon value to avoid division by zero
+    ///
+    /// # Returns
+    /// A new LayerNorm instance with weight initialized to ones and bias to zeros
     pub fn new(normalized_shape: usize, eps: f64) -> Self {
         Self {
             normalized_shape,
@@ -203,6 +259,13 @@ impl LayerNorm {
         }
     }
 
+    /// Forward pass through layer normalization
+    ///
+    /// # Arguments
+    /// * `input` - Input tensor in format [batch, seq_len, hidden_size]
+    ///
+    /// # Returns
+    /// Normalized tensor with same shape as input
     pub fn forward(&self, input: &Array3<f64>) -> Result<Array3<f64>> {
         let (batch_size, seq_len, hidden_size) = input.dim();
         let mut output = input.clone();
@@ -237,16 +300,28 @@ impl LayerNorm {
     }
 }
 
-/// Linear/Dense layer for transformer usage
+/// Linear/Dense layer for transformer and neural network usage
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Linear {
+    /// Number of input features
     pub in_features: usize,
+    /// Number of output features
     pub out_features: usize,
+    /// Weight matrix [out_features, in_features]
     weight: Array2<f64>,
+    /// Optional bias vector [out_features]
     bias: Option<Array1<f64>>,
 }
 
 impl Linear {
+    /// Create a new linear layer with bias using Xavier initialization
+    ///
+    /// # Arguments
+    /// * `in_features` - Number of input features
+    /// * `out_features` - Number of output features
+    ///
+    /// # Returns
+    /// A new Linear layer with Xavier-initialized weights and zero bias
     pub fn new(in_features: usize, out_features: usize) -> Result<Self> {
         // Xavier initialization
         let scale = (2.0 / (in_features + out_features) as f64).sqrt();
@@ -264,6 +339,14 @@ impl Linear {
         })
     }
 
+    /// Create a new linear layer without bias using Xavier initialization
+    ///
+    /// # Arguments
+    /// * `in_features` - Number of input features
+    /// * `out_features` - Number of output features
+    ///
+    /// # Returns
+    /// A new Linear layer with Xavier-initialized weights and no bias
     pub fn new_no_bias(in_features: usize, out_features: usize) -> Result<Self> {
         let scale = (2.0 / (in_features + out_features) as f64).sqrt();
         let weight = Array2::from_shape_fn((out_features, in_features), |_| {
@@ -278,6 +361,13 @@ impl Linear {
         })
     }
 
+    /// Forward pass for 3D input tensors (batch, sequence, features)
+    ///
+    /// # Arguments
+    /// * `input` - Input tensor of shape [batch_size, seq_len, in_features]
+    ///
+    /// # Returns
+    /// Output tensor of shape [batch_size, seq_len, out_features]
     pub fn forward_3d(&self, input: &Array3<f64>) -> Result<Array3<f64>> {
         let (batch_size, seq_len, _) = input.dim();
         let mut output = Array3::<f64>::zeros((batch_size, seq_len, self.out_features));
@@ -305,6 +395,13 @@ impl Linear {
         Ok(output)
     }
 
+    /// Standard forward pass for 2D input tensors (batch, features)
+    ///
+    /// # Arguments
+    /// * `input` - Input tensor of shape [batch_size, in_features]
+    ///
+    /// # Returns
+    /// Output tensor of shape [batch_size, out_features]
     pub fn forward(&self, input: &Array2<f64>) -> Result<Array2<f64>> {
         let output = input.dot(&self.weight.t());
 
