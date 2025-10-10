@@ -350,7 +350,7 @@ impl OrbitQLExecutor {
 
         // Apply updates to matching rows
         let table_copy = table.clone(); // Clone for reading during evaluation
-        for (row_idx, row) in table.rows.iter_mut().enumerate() {
+        for (_row_idx, row) in table.rows.iter_mut().enumerate() {
             // Check WHERE clause condition
             let mut should_update = true;
             if let Some(where_expr) = &query.where_clause {
@@ -612,27 +612,27 @@ impl OrbitQLExecutor {
     }
 
     /// Execute DROP statement (stub implementation)
-    async fn execute_drop(&self, query: DropStatement) -> Result<ExecutionResult, SpatialError> {
+    async fn execute_drop(&self, _query: DropStatement) -> Result<ExecutionResult, SpatialError> {
         Ok(ExecutionResult::default())
     }
 
     /// Execute TRANSACTION statement (stub implementation)
     async fn execute_transaction(
         &self,
-        query: TransactionStatement,
+        _query: TransactionStatement,
     ) -> Result<ExecutionResult, SpatialError> {
         Ok(ExecutionResult::default())
     }
 
     /// Execute LIVE statement (stub implementation)
-    async fn execute_live(&self, query: LiveStatement) -> Result<ExecutionResult, SpatialError> {
+    async fn execute_live(&self, _query: LiveStatement) -> Result<ExecutionResult, SpatialError> {
         Ok(ExecutionResult::default())
     }
 
     /// Execute RELATE statement (stub implementation)
     async fn execute_relate(
         &self,
-        query: RelateStatement,
+        _query: RelateStatement,
     ) -> Result<ExecutionResult, SpatialError> {
         Ok(ExecutionResult::default())
     }
@@ -640,7 +640,7 @@ impl OrbitQLExecutor {
     /// Execute GraphRAG statement (stub implementation)
     async fn execute_graphrag(
         &self,
-        query: GraphRAGStatement,
+        _query: GraphRAGStatement,
     ) -> Result<ExecutionResult, SpatialError> {
         Ok(ExecutionResult::default())
     }
@@ -693,7 +693,7 @@ impl OrbitQLExecutor {
             gpu_used: false,
         };
 
-        let original_count = table.rows.len();
+        let _original_count = table.rows.len();
         let mut filtered_rows = Vec::new();
 
         for row in &table.rows {
@@ -717,8 +717,8 @@ impl OrbitQLExecutor {
     /// Process JOIN clauses
     async fn process_join(
         &self,
-        base_table: &mut Table,
-        join: &JoinClause,
+        _base_table: &mut Table,
+        _join: &JoinClause,
     ) -> Result<FilterResult, SpatialError> {
         // Simplified JOIN implementation
         Ok(FilterResult {
@@ -731,8 +731,8 @@ impl OrbitQLExecutor {
     /// Apply GROUP BY clause
     async fn apply_group_by(
         &self,
-        table: &mut Table,
-        group_by: &[Expression],
+        _table: &mut Table,
+        _group_by: &[Expression],
     ) -> Result<(), SpatialError> {
         // Simplified GROUP BY - for now, just return as-is
         Ok(())
@@ -766,7 +766,7 @@ impl OrbitQLExecutor {
             // Process specific fields
             for field in fields {
                 match field {
-                    SelectField::Expression { expr, alias } => {
+                    SelectField::Expression { expr: _expr, alias } => {
                         let col_name = alias.clone().unwrap_or_else(|| "expr".to_string());
                         result_columns.push(ColumnDef {
                             name: col_name,
@@ -820,7 +820,7 @@ impl OrbitQLExecutor {
     async fn apply_order_by(
         &self,
         rows: Vec<Row>,
-        order_by: &[OrderByClause],
+        _order_by: &[OrderByClause],
     ) -> Result<Vec<Row>, SpatialError> {
         // Simplified ordering - for now just return as-is
         Ok(rows)
@@ -938,7 +938,7 @@ impl OrbitQLExecutor {
         right: &Expression,
         row: &Row,
         table: &Table,
-        relationship: &str,
+        _relationship: &str,
     ) -> Result<bool, SpatialError> {
         // Extract geometries from both sides
         let _left_geom = self
@@ -991,7 +991,7 @@ impl OrbitQLExecutor {
                     GeometryLiteral::Point(point) => {
                         Ok(Some(SpatialGeometry::Point(point.clone())))
                     }
-                    GeometryLiteral::WKT(wkt) => {
+                    GeometryLiteral::WKT(_wkt) => {
                         // Parse WKT string - for now return None
                         Ok(None)
                     }
@@ -1091,7 +1091,7 @@ impl OrbitQLExecutor {
         let tables = self.tables.read().await;
 
         if let Some(table) = tables.get(table_name) {
-            for (index_name, index) in indexes.iter_mut() {
+            for (_index_name, index) in indexes.iter_mut() {
                 if index.table == table_name {
                     // Update the index with new geometries
                     for row_idx in start_row..(start_row + count) {

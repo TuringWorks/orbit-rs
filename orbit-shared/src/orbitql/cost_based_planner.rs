@@ -317,7 +317,7 @@ impl CostBasedQueryPlanner {
     /// Generate join plan for a specific join order
     async fn generate_join_plan(
         &self,
-        select: &SelectStatement,
+        _select: &SelectStatement,
         join_order: &[usize],
     ) -> Result<PlanAlternative, PlanningError> {
         // This is a simplified implementation
@@ -602,7 +602,7 @@ impl CostBasedQueryPlanner {
         orders
     }
 
-    fn create_default_table_stats(&self, table_name: &str) -> TableStatistics {
+    fn create_default_table_stats(&self, _table_name: &str) -> TableStatistics {
         TableStatistics {
             row_count: 10000,
             page_count: 100,

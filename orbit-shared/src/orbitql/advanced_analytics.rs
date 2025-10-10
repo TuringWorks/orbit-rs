@@ -2705,7 +2705,7 @@ impl GradientBoostingModel {
         self.loss_history.clear();
 
         // Gradient boosting iterations
-        for iteration in 0..self.n_estimators {
+        for _iteration in 0..self.n_estimators {
             // Create weak learner to fit residuals
             let mut weak_learner = WeakLearner::new();
             weak_learner.train_on_residuals(data, &residuals)?;
@@ -2913,7 +2913,7 @@ impl LightGBMModel {
         self.evals_result.clear();
 
         let num_iterations = 100;
-        for iteration in 0..num_iterations {
+        for _iteration in 0..num_iterations {
             // Calculate gradients and hessians
             let gradients: Vec<f64> = data
                 .iter()
@@ -3031,7 +3031,7 @@ impl CatBoostModel {
         self.trees.clear();
         self.metrics_history.clear();
 
-        for iteration in 0..self.iterations {
+        for _iteration in 0..self.iterations {
             // Calculate gradients
             let gradients: Vec<f64> = data
                 .iter()
@@ -3585,7 +3585,7 @@ impl WeakLearner {
 
     pub fn train_on_residuals(
         &mut self,
-        data: &[TrainingExample],
+        _data: &[TrainingExample],
         residuals: &[f64],
     ) -> Result<(), AnalyticsError> {
         // Simple training on residuals (simplified decision stump)
@@ -3596,7 +3596,7 @@ impl WeakLearner {
 
     pub fn train_weighted(
         &mut self,
-        data: &[TrainingExample],
+        _data: &[TrainingExample],
         weights: &[f64],
     ) -> Result<(), AnalyticsError> {
         // Weighted training (simplified)
@@ -3611,7 +3611,7 @@ impl WeakLearner {
 }
 
 impl LightGBMTree {
-    pub fn predict(&self, features: &QueryFeatures) -> f64 {
+    pub fn predict(&self, _features: &QueryFeatures) -> f64 {
         if let Some(node) = self.nodes.get(self.root) {
             if let Some(leaf_value) = node.leaf_value {
                 return leaf_value;
@@ -3652,7 +3652,7 @@ impl ObliviousTree {
 }
 
 impl XGBoostTree {
-    pub fn predict(&self, features: &QueryFeatures) -> f64 {
+    pub fn predict(&self, _features: &QueryFeatures) -> f64 {
         if let Some(root_node) = self.nodes.get(self.root) {
             if let Some(leaf_value) = root_node.leaf_value {
                 return leaf_value;
@@ -3681,7 +3681,7 @@ impl RandomForestModel {
 
 // Update DecisionTree to add predict method
 impl DecisionTree {
-    pub fn predict(&self, features: &QueryFeatures) -> f64 {
+    pub fn predict(&self, _features: &QueryFeatures) -> f64 {
         if let Some(root_node) = self.nodes.get(self.root) {
             if let Some(prediction) = root_node.prediction {
                 return prediction;

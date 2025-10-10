@@ -107,7 +107,7 @@ impl EmbeddingLayer {
     pub fn forward(
         &self,
         input_ids: &Array2<i32>,
-        position_ids: Option<&Array2<i32>>,
+        _position_ids: Option<&Array2<i32>>,
         token_type_ids: Option<&Array2<i32>>,
     ) -> Result<Array3<f64>> {
         let (batch_size, seq_len) = input_ids.dim();
@@ -120,13 +120,13 @@ impl EmbeddingLayer {
         // This is a simplified version - in practice would use embedding lookup tables
 
         // Add position embeddings if available
-        if let Some(pos_emb) = &self.position_embeddings {
+        if let Some(_pos_emb) = &self.position_embeddings {
             // Add positional embeddings
         }
 
         // Add token type embeddings if available
-        if let Some(token_type_ids) = token_type_ids {
-            if let Some(token_type_emb) = &self.token_type_embeddings {
+        if let Some(_token_type_ids) = token_type_ids {
+            if let Some(_token_type_emb) = &self.token_type_embeddings {
                 // Add token type embeddings
             }
         }

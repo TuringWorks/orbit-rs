@@ -151,7 +151,7 @@ impl FeedforwardNetwork {
                 tanh.map(|x| 1.0 - x * x)
             }
             ActivationType::Swish => {
-                let sigmoid = input.map(|x| 1.0 / (1.0 + (-x).exp()));
+                let _sigmoid = input.map(|x| 1.0 / (1.0 + (-x).exp()));
                 input.map(|&x| {
                     let s = 1.0 / (1.0 + (-x).exp());
                     s + x * s * (1.0 - s)

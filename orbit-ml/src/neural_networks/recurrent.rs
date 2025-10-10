@@ -19,17 +19,17 @@ impl RecurrentNetwork {
 
 #[async_trait]
 impl NeuralNetwork for RecurrentNetwork {
-    async fn forward(&self, input: &Array2<f64>) -> Result<Array2<f64>> {
+    async fn forward(&self, _input: &Array2<f64>) -> Result<Array2<f64>> {
         Err(MLError::neural_network(
             "RNN forward pass not implemented yet",
         ))
     }
 
-    async fn backward(&mut self, loss_gradient: &Array2<f64>) -> Result<()> {
+    async fn backward(&mut self, _loss_gradient: &Array2<f64>) -> Result<()> {
         Ok(())
     }
 
-    async fn update_weights(&mut self, optimizer: &dyn Optimizer) -> Result<()> {
+    async fn update_weights(&mut self, _optimizer: &dyn Optimizer) -> Result<()> {
         Ok(())
     }
 
@@ -45,7 +45,7 @@ impl NeuralNetwork for RecurrentNetwork {
         Ok(vec![])
     }
 
-    async fn load_weights(&mut self, weights: &[u8]) -> Result<()> {
+    async fn load_weights(&mut self, _weights: &[u8]) -> Result<()> {
         Ok(())
     }
 }
