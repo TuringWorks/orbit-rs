@@ -13,6 +13,13 @@ pub struct ConvolutionalNetwork {
 }
 
 impl ConvolutionalNetwork {
+    /// Create a new convolutional neural network with given architecture
+    ///
+    /// # Arguments
+    /// * `architecture` - Network architecture specification
+    ///
+    /// # Returns
+    /// A new CNN instance (currently placeholder implementation)
     pub async fn new(architecture: NetworkArchitecture) -> Result<Self> {
         // TODO: Implement CNN initialization
         Ok(Self { architecture })
@@ -21,19 +28,19 @@ impl ConvolutionalNetwork {
 
 #[async_trait]
 impl NeuralNetwork for ConvolutionalNetwork {
-    async fn forward(&self, input: &Array2<f64>) -> Result<Array2<f64>> {
+    async fn forward(&self, _input: &Array2<f64>) -> Result<Array2<f64>> {
         // TODO: Implement CNN forward pass
         Err(MLError::neural_network(
             "CNN forward pass not implemented yet",
         ))
     }
 
-    async fn backward(&mut self, loss_gradient: &Array2<f64>) -> Result<()> {
+    async fn backward(&mut self, _loss_gradient: &Array2<f64>) -> Result<()> {
         // TODO: Implement CNN backward pass
         Ok(())
     }
 
-    async fn update_weights(&mut self, optimizer: &dyn Optimizer) -> Result<()> {
+    async fn update_weights(&mut self, _optimizer: &dyn Optimizer) -> Result<()> {
         // TODO: Implement CNN weight updates
         Ok(())
     }
@@ -52,7 +59,7 @@ impl NeuralNetwork for ConvolutionalNetwork {
         Ok(vec![])
     }
 
-    async fn load_weights(&mut self, weights: &[u8]) -> Result<()> {
+    async fn load_weights(&mut self, _weights: &[u8]) -> Result<()> {
         // TODO: Implement CNN weight deserialization
         Ok(())
     }

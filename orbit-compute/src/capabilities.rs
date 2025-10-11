@@ -771,35 +771,35 @@ pub enum NvidiaArchitecture {
 pub enum NvidiaModel {
     // Blackwell Architecture (Next-Gen 2024+)
     /// B100 SXM 192GB - Next-gen AI training flagship
-    B100_SXM_192GB,
+    B100SXM192GB,
     /// B200 SXM 288GB - Ultra-large memory AI training
-    B200_SXM_288GB,
+    B200SXM288GB,
     /// GB200 SuperChip - Grace + Blackwell superchip
-    GB200_SuperChip,
+    GB200SuperChip,
     /// B40 PCIe 48GB - Mid-range Blackwell for inference
-    B40_PCIe_48GB,
+    B40PCIe48GB,
     /// B100 PCIe 128GB - PCIe variant of B100
-    B100_PCIe_128GB,
+    B100PCIe128GB,
 
     // Hopper Architecture (Current Gen)
     /// H100 SXM 80GB - Data center flagship
-    H100_SXM_80GB,
+    H100SXM80GB,
     /// H100 PCIe 80GB - Server deployment
-    H100_PCIe_80GB,
+    H100PCIe80GB,
     /// H100 NVL 94GB - Large memory variant
-    H100_NVL_94GB,
+    H100NVL94GB,
     /// H200 SXM 141GB - Latest with HBM3e
-    H200_SXM_141GB,
+    H200SXM141GB,
 
     // Ampere Architecture (Current Gen)
     /// A100 SXM 80GB - ML training powerhouse
-    A100_SXM_80GB,
+    A100SXM80GB,
     /// A100 SXM 40GB - Standard ML training
-    A100_SXM_40GB,
+    A100SXM40GB,
     /// A100 PCIe 80GB - Server variant
-    A100_PCIe_80GB,
+    A100PCIe80GB,
     /// A100 PCIe 40GB - Server variant
-    A100_PCIe_40GB,
+    A100PCIe40GB,
     /// A10G - Graphics and AI inference
     A10G,
     /// A10 - Professional graphics
@@ -813,11 +813,11 @@ pub enum NvidiaModel {
 
     // Volta Architecture (Legacy)
     /// V100 SXM 32GB - Legacy training
-    V100_SXM_32GB,
+    V100SXM32GB,
     /// V100 PCIe 32GB - Legacy server
-    V100_PCIe_32GB,
+    V100PCIe32GB,
     /// V100 SXM 16GB - Smaller memory
-    V100_SXM_16GB,
+    V100SXM16GB,
 
     // Ada Lovelace (Latest Consumer/Pro)
     /// L4 - Inference optimized
@@ -825,9 +825,9 @@ pub enum NvidiaModel {
     /// L40S - Professional workstation
     L40S,
     /// RTX 4090 - High-end consumer
-    RTX_4090,
+    RTX4090,
     /// RTX 4080 - Mid-high consumer
-    RTX_4080,
+    RTX4080,
 
     // Other models
     Other(String),

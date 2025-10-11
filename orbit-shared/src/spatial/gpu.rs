@@ -13,14 +13,15 @@ pub struct GPUSpatialEngine {
 /// Supported GPU compute backends.
 #[derive(Debug, Clone)]
 pub enum GPUBackend {
-    #[cfg(feature = "cuda")]
-    CUDA,
-    #[cfg(feature = "opencl")]
-    OpenCL,
-    #[cfg(feature = "metal")]
-    Metal,
-    #[cfg(feature = "vulkan")]
-    Vulkan,
+    // GPU backends would be enabled with feature flags in production
+    // #[cfg(feature = "cuda")]
+    // CUDA,
+    // #[cfg(feature = "opencl")]
+    // OpenCL,
+    // #[cfg(feature = "metal")]
+    // Metal,
+    // #[cfg(feature = "vulkan")]
+    // Vulkan,
     CPU, // CPU fallback
 }
 
@@ -62,17 +63,8 @@ impl GPUSpatialEngine {
         polygon: &Polygon,
     ) -> Result<Vec<bool>, SpatialError> {
         match self.backend {
-            #[cfg(feature = "cuda")]
-            GPUBackend::CUDA => self.cuda_point_in_polygon(points, polygon).await,
-            #[cfg(feature = "opencl")]
-            GPUBackend::OpenCL => self.opencl_point_in_polygon(points, polygon).await,
-            #[cfg(feature = "metal")]
-            GPUBackend::Metal => self.metal_point_in_polygon(points, polygon).await,
-            #[cfg(feature = "vulkan")]
-            GPUBackend::Vulkan => self.vulkan_point_in_polygon(points, polygon).await,
+            // GPU backends would be handled here when features are enabled
             GPUBackend::CPU => self.cpu_point_in_polygon(points, polygon).await,
-            #[allow(unreachable_patterns)]
-            _ => self.cpu_point_in_polygon(points, polygon).await,
         }
     }
 

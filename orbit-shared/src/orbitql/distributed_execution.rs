@@ -4,23 +4,16 @@
 //! cluster management, distributed query planning, network communication,
 //! fault tolerance, and cross-node data shuffling.
 
-use futures::stream::{Stream, StreamExt};
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashMap, HashSet};
-use std::net::{IpAddr, SocketAddr};
+use std::collections::{HashMap, HashSet};
+use std::net::SocketAddr;
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, Instant, SystemTime};
-use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::{broadcast, mpsc, oneshot, Semaphore};
-use tokio::time::timeout;
+use tokio::sync::{broadcast, mpsc};
 use uuid::Uuid;
 
 use crate::orbitql::ast::*;
-use crate::orbitql::parallel_execution::*;
-use crate::orbitql::query_cache::*;
-use crate::orbitql::storage_integration::*;
 use crate::orbitql::vectorized_execution::*;
-use crate::orbitql::QueryValue;
 
 /// Distributed query execution coordinator
 pub struct DistributedExecutor {
@@ -171,6 +164,7 @@ pub struct NodeResources {
 }
 
 /// Cluster state manager
+#[allow(dead_code)]
 pub struct ClusterManager {
     /// Configuration
     config: ClusterConfig,
@@ -220,6 +214,7 @@ pub enum ClusterEvent {
 }
 
 /// Distributed query planner
+#[allow(dead_code)]
 pub struct DistributedQueryPlanner {
     /// Cluster configuration
     config: ClusterConfig,
@@ -485,6 +480,7 @@ pub trait MessageHandler {
 }
 
 /// Fault tolerance manager
+#[allow(dead_code)]
 pub struct FaultToleranceManager {
     /// Configuration
     config: ClusterConfig,
@@ -624,7 +620,7 @@ impl FragmentationStrategy for HashFragmentationStrategy {
 
         // Simple hash-based fragmentation (mock implementation)
         match query {
-            Statement::Select(select) => {
+            Statement::Select(_select) => {
                 // Create scan fragments for each node
                 for (i, node) in available_nodes.iter().enumerate() {
                     let fragment_id = format!("scan_{}", i);
@@ -702,7 +698,7 @@ impl FragmentationStrategy for HashFragmentationStrategy {
         })
     }
 
-    fn estimate_cost(&self, query: &Statement, nodes: &[NodeInfo]) -> f64 {
+    fn estimate_cost(&self, _query: &Statement, nodes: &[NodeInfo]) -> f64 {
         // Simple cost estimation
         nodes.len() as f64 * 10.0
     }
@@ -1068,7 +1064,7 @@ impl ResourceScheduler {
     pub fn schedule_plan(
         &self,
         plan: DistributedExecutionPlan,
-        nodes: &[NodeInfo],
+        _nodes: &[NodeInfo],
     ) -> Result<DistributedExecutionPlan, DistributedError> {
         // Apply resource-aware scheduling
         // For now, return plan as-is
@@ -1093,7 +1089,7 @@ impl NetworkManager {
 
     pub async fn execute_fragment_remote(
         &self,
-        fragment: ExecutionFragment,
+        _fragment: ExecutionFragment,
     ) -> Result<Vec<RecordBatch>, DistributedError> {
         // Execute fragment on remote node
         // Mock implementation
@@ -1110,7 +1106,10 @@ impl NetworkManager {
         }])
     }
 
-    pub async fn broadcast_message(&self, message: NetworkMessage) -> Result<(), DistributedError> {
+    pub async fn broadcast_message(
+        &self,
+        _message: NetworkMessage,
+    ) -> Result<(), DistributedError> {
         // Broadcast message to all connected nodes
         Ok(())
     }
@@ -1175,7 +1174,8 @@ impl Default for DistributedStats {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::net::Ipv4Addr;
+    use crate::orbitql::ast::{Statement, SelectStatement, FromClause, SelectField};
+    use std::net::{IpAddr, Ipv4Addr};
 
     #[test]
     fn test_node_info_creation() {
@@ -1221,17 +1221,22 @@ mod tests {
             metadata: HashMap::new(),
         }];
 
-        let query = Query::Select(SelectQuery {
-            columns: vec![],
-            from: Some(FromClause {
-                table_name: "test_table".to_string(),
+        let query = Statement::Select(SelectStatement {
+            with_clauses: vec![],
+            fields: vec![SelectField::All],
+            from: vec![FromClause::Table {
+                name: "test_table".to_string(),
                 alias: None,
-            }),
+            }],
             where_clause: None,
+            join_clauses: vec![],
             group_by: vec![],
             having: None,
             order_by: vec![],
             limit: Some(100),
+            offset: None,
+            fetch: vec![],
+            timeout: None,
         });
 
         let result = strategy.fragment_query(&query, &nodes);

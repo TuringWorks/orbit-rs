@@ -4,10 +4,9 @@
 //! monitoring dashboards, stress testing, and end-to-end integration testing capabilities.
 
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashMap, VecDeque};
-use std::sync::{Arc, Mutex, RwLock};
-use std::time::{Duration, Instant, SystemTime};
-use tokio::sync::{broadcast, mpsc, oneshot};
+use std::collections::{HashMap, VecDeque};
+use std::sync::{Arc, RwLock};
+use std::time::{Duration, SystemTime};
 
 /// Production deployment coordinator
 pub struct ProductionDeployment {

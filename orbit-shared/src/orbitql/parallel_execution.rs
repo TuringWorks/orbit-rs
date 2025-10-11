@@ -4,14 +4,13 @@
 //! parallel operators, work scheduling, and data exchange operators for high-performance
 //! query processing. Implements Phase 9.5 of the optimization plan.
 
-use futures::future::join_all;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Condvar, Mutex, RwLock};
 use std::thread;
 use std::time::{Duration, Instant};
-use tokio::sync::{mpsc, oneshot, Semaphore};
+use tokio::sync::{mpsc, oneshot};
 
 use crate::orbitql::ast::*;
 use crate::orbitql::vectorized_execution::*;
@@ -419,7 +418,7 @@ impl ParallelExecutor {
     /// Create parallel execution plan from query
     fn create_parallel_plan(
         &self,
-        query: &Statement,
+        _query: &Statement,
     ) -> Result<ParallelExecutionPlan, ParallelExecutionError> {
         // Simplified plan creation - would be more complex in reality
         let plan = ParallelExecutionPlan {
@@ -486,7 +485,7 @@ impl ParallelExecutor {
                     let batch = RecordBatch {
                         columns: vec![column],
                         row_count: 1000,
-                        schema: schema,
+                        schema,
                     };
                     Ok(vec![batch])
                 }),
@@ -526,7 +525,7 @@ impl ParallelExecutor {
         let probe_tasks = self.create_probe_tasks(join).await?;
 
         // Execute build phase
-        let build_results = self.execute_tasks_parallel(build_tasks).await?;
+        let _build_results = self.execute_tasks_parallel(build_tasks).await?;
 
         // Execute probe phase with build results
         let probe_results = self.execute_tasks_parallel(probe_tasks).await?;
@@ -565,8 +564,8 @@ impl ParallelExecutor {
         // Create aggregation tasks
         for i in 0..aggregation.parallelism {
             let task_id = format!("hash_agg_task_{}", i);
-            let group_by = aggregation.group_by.clone();
-            let aggregates = aggregation.aggregates.clone();
+            let _group_by = aggregation.group_by.clone();
+            let _aggregates = aggregation.aggregates.clone();
 
             let task = Task {
                 id: task_id,
@@ -657,7 +656,7 @@ impl ParallelExecutor {
 
         for i in 0..join.build_parallelism {
             let task_id = format!("build_task_{}", i);
-            let condition = join.condition.clone();
+            let _condition = join.condition.clone();
 
             let task = Task {
                 id: task_id,
@@ -691,7 +690,7 @@ impl ParallelExecutor {
 
         for i in 0..join.probe_parallelism {
             let task_id = format!("probe_task_{}", i);
-            let condition = join.condition.clone();
+            let _condition = join.condition.clone();
 
             let task = Task {
                 id: task_id,
@@ -876,7 +875,7 @@ impl ThreadPool {
     }
 
     /// Choose worker for task assignment
-    fn choose_worker(&self, task: &Task) -> usize {
+    fn choose_worker(&self, _task: &Task) -> usize {
         // Simple round-robin for now - could be more sophisticated
         static COUNTER: AtomicUsize = AtomicUsize::new(0);
         COUNTER.fetch_add(1, Ordering::Relaxed) % self.config.worker_threads
@@ -884,7 +883,7 @@ impl ThreadPool {
 
     /// Worker thread main loop
     fn worker_loop(
-        worker_id: usize,
+        _worker_id: usize,
         queue: Arc<Mutex<VecDeque<Task>>>,
         shutdown: Arc<AtomicBool>,
         work_available: Arc<Condvar>,
@@ -1022,7 +1021,7 @@ impl WorkScheduler {
 
         // Use historical performance to make scheduling decisions
         if let Some(history) = adaptive_state.performance_history.get(&task.id) {
-            if let Some(best_perf) = history.iter().min_by_key(|p| p.duration) {
+            if let Some(_best_perf) = history.iter().min_by_key(|p| p.duration) {
                 // Try to schedule on the worker that performed best historically
                 return self.schedule_load_based(task);
             }
@@ -1102,7 +1101,7 @@ impl ExchangeOperator {
         let partitions = (self.partition_func)(&input);
 
         // Distribute based on hash partitions
-        for (i, &worker_id) in partitions.iter().zip(target_workers.iter()) {
+        for &worker_id in partitions.iter().zip(target_workers.iter()).map(|(_, w)| w) {
             if let Some(channel) = self.channels.get(&worker_id) {
                 // In reality, would partition the input batch
                 channel

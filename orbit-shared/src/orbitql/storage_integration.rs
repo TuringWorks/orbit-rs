@@ -4,15 +4,11 @@
 //! file format support (Parquet, ORC, CSV), object storage connectivity
 //! (S3, Azure, GCS), and storage-aware query optimization.
 
-use bytes::Bytes;
 use futures::stream::{Stream, StreamExt};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::fs::File;
-use std::io::{BufReader, BufWriter};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
-use tokio::fs;
 use tokio::io::{AsyncRead, AsyncWrite};
 
 use crate::orbitql::ast::*;
@@ -397,6 +393,7 @@ pub struct S3Config {
 }
 
 /// Simplified S3 client
+#[allow(dead_code)]
 pub struct S3Client {
     config: S3Config,
 }
@@ -407,21 +404,21 @@ impl S3Client {
     }
 
     // Mock S3 operations (would use actual AWS SDK)
-    pub async fn get_object(&self, key: &str) -> Result<Vec<u8>, StorageError> {
+    pub async fn get_object(&self, _key: &str) -> Result<Vec<u8>, StorageError> {
         // Placeholder implementation
         Err(StorageError::NetworkError(
             "S3 client not implemented".to_string(),
         ))
     }
 
-    pub async fn put_object(&self, key: &str, data: &[u8]) -> Result<(), StorageError> {
+    pub async fn put_object(&self, _key: &str, _data: &[u8]) -> Result<(), StorageError> {
         // Placeholder implementation
         Err(StorageError::NetworkError(
             "S3 client not implemented".to_string(),
         ))
     }
 
-    pub async fn list_objects(&self, prefix: &str) -> Result<Vec<String>, StorageError> {
+    pub async fn list_objects(&self, _prefix: &str) -> Result<Vec<String>, StorageError> {
         // Placeholder implementation
         Ok(vec![])
     }
@@ -435,37 +432,37 @@ impl S3StorageProvider {
 }
 
 impl StorageProvider for S3StorageProvider {
-    fn read_data(&self, path: &str) -> Result<Box<dyn AsyncRead + Unpin + Send>, StorageError> {
+    fn read_data(&self, _path: &str) -> Result<Box<dyn AsyncRead + Unpin + Send>, StorageError> {
         // Would implement actual S3 streaming read
         Err(StorageError::NetworkError(
             "S3 read not implemented".to_string(),
         ))
     }
 
-    fn write_data(&self, path: &str) -> Result<Box<dyn AsyncWrite + Unpin + Send>, StorageError> {
+    fn write_data(&self, _path: &str) -> Result<Box<dyn AsyncWrite + Unpin + Send>, StorageError> {
         // Would implement actual S3 streaming write
         Err(StorageError::NetworkError(
             "S3 write not implemented".to_string(),
         ))
     }
 
-    fn list_files(&self, path: &str) -> Result<Vec<String>, StorageError> {
+    fn list_files(&self, _path: &str) -> Result<Vec<String>, StorageError> {
         // Would implement actual S3 list operation
         Ok(vec![])
     }
 
-    fn get_metadata(&self, path: &str) -> Result<StorageMetadata, StorageError> {
+    fn get_metadata(&self, _path: &str) -> Result<StorageMetadata, StorageError> {
         // Would implement actual S3 head object operation
         Err(StorageError::NetworkError(
             "S3 metadata not implemented".to_string(),
         ))
     }
 
-    fn exists(&self, path: &str) -> Result<bool, StorageError> {
+    fn exists(&self, _path: &str) -> Result<bool, StorageError> {
         Ok(false)
     }
 
-    fn delete(&self, path: &str) -> Result<(), StorageError> {
+    fn delete(&self, _path: &str) -> Result<(), StorageError> {
         Ok(())
     }
 
@@ -475,6 +472,7 @@ impl StorageProvider for S3StorageProvider {
 }
 
 /// Parquet file format handler
+#[allow(dead_code)]
 pub struct ParquetHandler {
     /// Configuration
     config: ParquetConfig,
@@ -513,8 +511,8 @@ impl ParquetHandler {
 impl FileFormatHandler for ParquetHandler {
     fn read_batches(
         &self,
-        reader: Box<dyn AsyncRead + Unpin + Send>,
-        schema: Option<&BatchSchema>,
+        _reader: Box<dyn AsyncRead + Unpin + Send>,
+        _schema: Option<&BatchSchema>,
     ) -> Result<
         Box<dyn Stream<Item = Result<RecordBatch, StorageError>> + Unpin + Send>,
         StorageError,
@@ -539,9 +537,9 @@ impl FileFormatHandler for ParquetHandler {
 
     fn write_batches(
         &self,
-        writer: Box<dyn AsyncWrite + Unpin + Send>,
-        schema: &BatchSchema,
-        batches: Box<dyn Stream<Item = RecordBatch> + Unpin + Send>,
+        _writer: Box<dyn AsyncWrite + Unpin + Send>,
+        _schema: &BatchSchema,
+        _batches: Box<dyn Stream<Item = RecordBatch> + Unpin + Send>,
     ) -> Result<(), StorageError> {
         // Mock implementation
         Ok(())
@@ -549,7 +547,7 @@ impl FileFormatHandler for ParquetHandler {
 
     fn infer_schema(
         &self,
-        reader: Box<dyn AsyncRead + Unpin + Send>,
+        _reader: Box<dyn AsyncRead + Unpin + Send>,
     ) -> Result<BatchSchema, StorageError> {
         // Mock schema inference
         Ok(BatchSchema {
@@ -575,6 +573,7 @@ impl FileFormatHandler for ParquetHandler {
 }
 
 /// CSV file format handler
+#[allow(dead_code)]
 pub struct CsvHandler {
     /// Configuration
     config: CsvConfig,
@@ -613,8 +612,8 @@ impl CsvHandler {
 impl FileFormatHandler for CsvHandler {
     fn read_batches(
         &self,
-        reader: Box<dyn AsyncRead + Unpin + Send>,
-        schema: Option<&BatchSchema>,
+        _reader: Box<dyn AsyncRead + Unpin + Send>,
+        _schema: Option<&BatchSchema>,
     ) -> Result<
         Box<dyn Stream<Item = Result<RecordBatch, StorageError>> + Unpin + Send>,
         StorageError,
@@ -637,9 +636,9 @@ impl FileFormatHandler for CsvHandler {
 
     fn write_batches(
         &self,
-        writer: Box<dyn AsyncWrite + Unpin + Send>,
-        schema: &BatchSchema,
-        batches: Box<dyn Stream<Item = RecordBatch> + Unpin + Send>,
+        _writer: Box<dyn AsyncWrite + Unpin + Send>,
+        _schema: &BatchSchema,
+        _batches: Box<dyn Stream<Item = RecordBatch> + Unpin + Send>,
     ) -> Result<(), StorageError> {
         // Mock implementation
         Ok(())
@@ -647,7 +646,7 @@ impl FileFormatHandler for CsvHandler {
 
     fn infer_schema(
         &self,
-        reader: Box<dyn AsyncRead + Unpin + Send>,
+        _reader: Box<dyn AsyncRead + Unpin + Send>,
     ) -> Result<BatchSchema, StorageError> {
         // Mock schema inference
         Ok(BatchSchema {
@@ -950,7 +949,7 @@ impl StorageEngine {
     fn apply_predicates(
         &self,
         batch: RecordBatch,
-        predicates: &[Expression],
+        _predicates: &[Expression],
     ) -> Result<RecordBatch, StorageError> {
         // Simplified predicate application
         // In reality would use vectorized evaluation

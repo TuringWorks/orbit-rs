@@ -10,39 +10,68 @@ pub type Result<T> = std::result::Result<T, MLError>;
 pub enum MLError {
     /// Configuration errors
     #[error("Configuration error: {message}")]
-    Config { message: String },
+    Config {
+        /// Error message describing the configuration issue
+        message: String,
+    },
 
     /// Model errors
     #[error("Model error: {message}")]
-    Model { message: String },
+    Model {
+        /// Error message describing the model issue
+        message: String,
+    },
 
     /// Training errors
     #[error("Training error: {message}")]
-    Training { message: String },
+    Training {
+        /// Error message describing the training issue
+        message: String,
+    },
 
     /// Inference errors
     #[error("Inference error: {message}")]
-    Inference { message: String },
+    Inference {
+        /// Error message describing the inference issue
+        message: String,
+    },
 
     /// Data processing errors
     #[error("Data error: {message}")]
-    Data { message: String },
+    Data {
+        /// Error message describing the data processing issue
+        message: String,
+    },
 
     /// Neural network errors
     #[error("Neural network error: {message}")]
-    NeuralNetwork { message: String },
+    NeuralNetwork {
+        /// Error message describing the neural network issue
+        message: String,
+    },
 
     /// Transformer errors
     #[error("Transformer error: {message}")]
-    Transformer { message: String },
+    Transformer {
+        /// Error message describing the transformer issue
+        message: String,
+    },
 
     /// Graph neural network errors
     #[error("Graph neural network error: {message}")]
-    GraphNeuralNetwork { message: String },
+    GraphNeuralNetwork {
+        /// Error message describing the graph neural network issue
+        message: String,
+    },
 
     /// Multi-language integration errors
     #[error("Multi-language error ({language}): {message}")]
-    MultiLanguage { language: String, message: String },
+    MultiLanguage {
+        /// Programming language that caused the error
+        language: String,
+        /// Error message describing the multi-language issue
+        message: String,
+    },
 
     /// Python integration errors
     #[cfg(feature = "python")]
@@ -51,16 +80,25 @@ pub enum MLError {
 
     /// JavaScript integration errors
     #[error("JavaScript error: {message}")]
-    JavaScript { message: String },
+    JavaScript {
+        /// Error message from JavaScript runtime
+        message: String,
+    },
 
     /// Lua integration errors
     #[error("Lua error: {message}")]
-    Lua { message: String },
+    Lua {
+        /// Error message from Lua runtime
+        message: String,
+    },
 
     /// GPU/CUDA errors
     #[cfg(feature = "gpu")]
     #[error("GPU error: {message}")]
-    Gpu { message: String },
+    Gpu {
+        /// Error message describing the GPU/CUDA issue
+        message: String,
+    },
 
     /// Distributed computing errors
     #[cfg(feature = "distributed")]
@@ -69,7 +107,10 @@ pub enum MLError {
 
     /// SQL extension errors
     #[error("SQL extension error: {message}")]
-    SqlExtension { message: String },
+    SqlExtension {
+        /// Error message from SQL extension
+        message: String,
+    },
 
     /// Serialization/deserialization errors
     #[error("Serialization error: {0}")]
@@ -81,47 +122,82 @@ pub enum MLError {
 
     /// Invalid input errors
     #[error("Invalid input: {message}")]
-    InvalidInput { message: String },
+    InvalidInput {
+        /// Description of the invalid input
+        message: String,
+    },
 
     /// Resource not found errors
     #[error("Resource not found: {resource}")]
-    NotFound { resource: String },
+    NotFound {
+        /// Name or identifier of the resource that was not found
+        resource: String,
+    },
 
     /// Permission/access errors
     #[error("Access denied: {message}")]
-    AccessDenied { message: String },
+    AccessDenied {
+        /// Description of the access denial reason
+        message: String,
+    },
 
     /// Resource allocation errors
     #[error("Resource allocation error: {message}")]
-    ResourceAllocation { message: String },
+    ResourceAllocation {
+        /// Description of the resource allocation failure
+        message: String,
+    },
 
     /// Timeout errors
     #[error("Operation timed out: {operation}")]
-    Timeout { operation: String },
+    Timeout {
+        /// Name of the operation that timed out
+        operation: String,
+    },
 
     /// Internal errors
     #[error("Internal error: {message}")]
-    Internal { message: String },
+    Internal {
+        /// Internal error message
+        message: String,
+    },
 
     /// External service errors
     #[error("External service error ({service}): {message}")]
-    ExternalService { service: String, message: String },
+    ExternalService {
+        /// Name of the external service
+        service: String,
+        /// Error message from the external service
+        message: String,
+    },
 
     /// Validation errors
     #[error("Validation error: {message}")]
-    Validation { message: String },
+    Validation {
+        /// Validation error description
+        message: String,
+    },
 
     /// Compatibility errors
     #[error("Compatibility error: {message}")]
-    Compatibility { message: String },
+    Compatibility {
+        /// Compatibility issue description
+        message: String,
+    },
 
     /// Memory errors
     #[error("Memory error: {message}")]
-    Memory { message: String },
+    Memory {
+        /// Memory error description
+        message: String,
+    },
 
     /// Thread safety errors
     #[error("Thread safety error: {message}")]
-    ThreadSafety { message: String },
+    ThreadSafety {
+        /// Thread safety violation description
+        message: String,
+    },
 }
 
 impl MLError {

@@ -90,6 +90,7 @@ pub struct OrbitSpringServiceImpl {
 
 // Mock trait for demonstration - in production this would be generated
 #[tonic::async_trait]
+#[allow(dead_code)]
 trait MockOrbitSpringService {
     async fn get_service_info(
         &self,

@@ -6,15 +6,32 @@
 //! - Rotary positional encoding (RoPE)
 //! - Relative positional encoding
 
-use ndarray::{Array2, Array3};
+use ndarray::{Array1, Array2, Array3};
 use serde::{Deserialize, Serialize};
-use std::f64::consts::PI;
 
 use crate::error::Result;
 
 /// Trait for different positional encoding strategies
 pub trait PositionalEncoding: Send + Sync + std::fmt::Debug {
+    /// Generate positional encodings for a sequence
+    ///
+    /// # Arguments
+    /// * `sequence_length` - Length of the input sequence
+    /// * `hidden_size` - Hidden dimension size
+    ///
+    /// # Returns
+    /// Array2 of shape [sequence_length, hidden_size] with positional encodings
     fn encode(&self, sequence_length: usize, hidden_size: usize) -> Result<Array2<f64>>;
+
+    /// Generate positional encodings for a batch of sequences
+    ///
+    /// # Arguments
+    /// * `batch_size` - Number of sequences in the batch
+    /// * `sequence_length` - Length of each sequence
+    /// * `hidden_size` - Hidden dimension size
+    ///
+    /// # Returns
+    /// Array3 of shape [batch_size, sequence_length, hidden_size] with positional encodings
     fn encode_batch(
         &self,
         batch_size: usize,
@@ -45,6 +62,14 @@ pub struct SinusoidalPositionalEncoding {
 }
 
 impl SinusoidalPositionalEncoding {
+    /// Create a new sinusoidal positional encoding
+    ///
+    /// # Arguments
+    /// * `hidden_size` - Hidden dimension size
+    /// * `max_length` - Maximum sequence length to support
+    ///
+    /// # Returns
+    /// A new SinusoidalPositionalEncoding instance
     pub fn new(hidden_size: usize, max_length: usize) -> Self {
         Self {
             max_length,
@@ -101,6 +126,14 @@ pub struct LearnedPositionalEmbedding {
 }
 
 impl LearnedPositionalEmbedding {
+    /// Create a new learned positional embedding with Xavier initialization
+    ///
+    /// # Arguments
+    /// * `max_length` - Maximum sequence length to support
+    /// * `hidden_size` - Hidden dimension size
+    ///
+    /// # Returns
+    /// A new LearnedPositionalEmbedding instance with randomly initialized embeddings
     pub fn new(max_length: usize, hidden_size: usize) -> Self {
         // Initialize with small random values
         let mut embeddings = Array2::<f64>::zeros((max_length, hidden_size));
@@ -120,6 +153,17 @@ impl LearnedPositionalEmbedding {
         }
     }
 
+    /// Update the embedding for a specific position
+    ///
+    /// # Arguments
+    /// * `position` - Position index to update (must be < max_length)
+    /// * `embedding` - New embedding vector (must match hidden_size)
+    ///
+    /// # Returns
+    /// Result indicating success or failure
+    ///
+    /// # Errors
+    /// Returns error if position exceeds max_length or embedding size doesn't match
     pub fn update_embedding(&mut self, position: usize, embedding: &Array1<f64>) -> Result<()> {
         if position >= self.max_length {
             return Err(crate::error::MLError::model(format!(
@@ -179,6 +223,15 @@ pub struct RotaryPositionalEncoding {
 }
 
 impl RotaryPositionalEncoding {
+    /// Create a new rotary positional encoding (RoPE)
+    ///
+    /// # Arguments
+    /// * `hidden_size` - Hidden dimension size (should be even for proper rotation)
+    /// * `max_length` - Maximum sequence length to support
+    /// * `base` - Base frequency for rotation (typically 10000.0)
+    ///
+    /// # Returns
+    /// A new RotaryPositionalEncoding instance
     pub fn new(hidden_size: usize, max_length: usize, base: f64) -> Self {
         Self {
             hidden_size,
@@ -248,6 +301,14 @@ pub struct RelativePositionalEncoding {
 }
 
 impl RelativePositionalEncoding {
+    /// Create a new relative positional encoding
+    ///
+    /// # Arguments
+    /// * `max_relative_distance` - Maximum relative distance to consider
+    /// * `hidden_size` - Hidden dimension size
+    ///
+    /// # Returns
+    /// A new RelativePositionalEncoding instance with randomly initialized embeddings
     pub fn new(max_relative_distance: usize, hidden_size: usize) -> Self {
         let vocab_size = 2 * max_relative_distance + 1; // -max_dist to +max_dist
         let mut relative_embeddings = Array2::<f64>::zeros((vocab_size, hidden_size));
@@ -309,6 +370,13 @@ pub struct AlibiPositionalEncoding {
 }
 
 impl AlibiPositionalEncoding {
+    /// Create a new Alibi (Attention with Linear Biases) positional encoding
+    ///
+    /// # Arguments
+    /// * `num_heads` - Number of attention heads
+    ///
+    /// # Returns
+    /// A new AlibiPositionalEncoding instance with computed slopes for each head
     pub fn new(num_heads: usize) -> Self {
         // Compute slopes for each attention head
         let mut slopes = Vec::new();
@@ -356,6 +424,3 @@ impl PositionalEncoding for AlibiPositionalEncoding {
         Ok(Array2::<f64>::zeros((sequence_length, self.num_heads)))
     }
 }
-
-use ndarray::Array1;
-use rand;

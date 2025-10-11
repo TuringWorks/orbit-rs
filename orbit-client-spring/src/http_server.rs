@@ -327,6 +327,7 @@ async fn get_metrics(
 }
 
 /// Start context endpoint
+#[allow(dead_code)]
 async fn start_context(
     State(state): State<ServerState>,
 ) -> Result<Json<ContextResponse>, SpringError> {
@@ -340,6 +341,7 @@ async fn start_context(
 }
 
 /// Stop context endpoint
+#[allow(dead_code)]
 async fn stop_context(
     State(state): State<ServerState>,
 ) -> Result<Json<ContextResponse>, SpringError> {
@@ -353,6 +355,7 @@ async fn stop_context(
 }
 
 /// Refresh context endpoint
+#[allow(dead_code)]
 async fn refresh_context(
     State(state): State<ServerState>,
 ) -> Result<Json<ContextResponse>, SpringError> {
