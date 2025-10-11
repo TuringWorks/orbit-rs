@@ -34,6 +34,14 @@ pub struct SGDOptimizer {
 }
 
 impl SGDOptimizer {
+    /// Create a new SGD optimizer
+    ///
+    /// # Arguments
+    /// * `learning_rate` - Learning rate for gradient descent (typically 0.01-0.1)
+    /// * `momentum` - Momentum factor for acceleration (0.0 for no momentum, typically 0.9)
+    ///
+    /// # Returns
+    /// A new SGD optimizer instance
     pub fn new(learning_rate: f64, momentum: f64) -> Self {
         Self {
             learning_rate,
@@ -105,6 +113,16 @@ pub struct AdamOptimizer {
 }
 
 impl AdamOptimizer {
+    /// Create a new Adam optimizer with custom parameters
+    ///
+    /// # Arguments
+    /// * `learning_rate` - Learning rate (typically 0.001)
+    /// * `beta1` - Exponential decay rate for first moment (typically 0.9)
+    /// * `beta2` - Exponential decay rate for second moment (typically 0.999)
+    /// * `epsilon` - Small constant for numerical stability (typically 1e-8)
+    ///
+    /// # Returns
+    /// A new Adam optimizer instance
     pub fn new(learning_rate: f64, beta1: f64, beta2: f64, epsilon: f64) -> Self {
         Self {
             learning_rate,
@@ -117,6 +135,16 @@ impl AdamOptimizer {
         }
     }
 
+    /// Create an Adam optimizer with default parameters
+    ///
+    /// Uses standard Adam hyperparameters:
+    /// - learning_rate = 0.001
+    /// - beta1 = 0.9  
+    /// - beta2 = 0.999
+    /// - epsilon = 1e-8
+    ///
+    /// # Returns
+    /// A new Adam optimizer with default configuration
     pub fn default() -> Self {
         Self::new(0.001, 0.9, 0.999, 1e-8)
     }
@@ -194,6 +222,14 @@ pub struct AdaGradOptimizer {
 }
 
 impl AdaGradOptimizer {
+    /// Create a new AdaGrad optimizer
+    ///
+    /// # Arguments
+    /// * `learning_rate` - Learning rate (typically 0.01)
+    /// * `epsilon` - Small constant for numerical stability (typically 1e-8)
+    ///
+    /// # Returns
+    /// A new AdaGrad optimizer instance
     pub fn new(learning_rate: f64, epsilon: f64) -> Self {
         Self {
             learning_rate,
@@ -261,6 +297,15 @@ pub struct RMSpropOptimizer {
 }
 
 impl RMSpropOptimizer {
+    /// Create a new RMSprop optimizer
+    ///
+    /// # Arguments
+    /// * `learning_rate` - Learning rate (typically 0.001)
+    /// * `alpha` - Decay factor for moving average (typically 0.99)
+    /// * `epsilon` - Small constant for numerical stability (typically 1e-8)
+    ///
+    /// # Returns
+    /// A new RMSprop optimizer instance
     pub fn new(learning_rate: f64, alpha: f64, epsilon: f64) -> Self {
         Self {
             learning_rate,

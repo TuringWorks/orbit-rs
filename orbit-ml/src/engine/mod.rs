@@ -16,9 +16,13 @@ use crate::inference::{InferenceConfig, InferenceJob, InferenceResult};
 use crate::models::{Model, ModelMetadata, ModelRegistry};
 use crate::training::{TrainingConfig, TrainingJob, TrainingStatus};
 
+/// ML engine builder for configurable engine construction
 pub mod builder;
+/// Model factory for creating different types of ML models
 pub mod factory;
+/// Model lifecycle and resource management
 pub mod manager;
+/// Job scheduling and execution for training and inference
 pub mod scheduler;
 
 pub use builder::MLEngineBuilder;
