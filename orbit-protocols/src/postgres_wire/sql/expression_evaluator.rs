@@ -465,6 +465,7 @@ impl ExpressionEvaluator {
     }
 
     // Helper methods for arithmetic operations
+    #[allow(clippy::only_used_in_recursion)]
     fn arithmetic_op(
         &self,
         left: &SqlValue,
@@ -1218,7 +1219,7 @@ impl ExpressionEvaluator {
         let value = self.evaluate(expr, context)?;
         value
             .cast_to(target_type)
-            .map_err(|e| ProtocolError::PostgresError(e))
+            .map_err(ProtocolError::PostgresError)
     }
 
     fn evaluate_array_constructor(

@@ -304,6 +304,7 @@ impl PredicatePushdown {
             .collect()
     }
 
+    #[allow(clippy::only_used_in_recursion)]
     fn references_table(&self, expr: &Expression, table_name: &str) -> bool {
         match expr {
             Expression::Binary { left, right, .. } => {
@@ -446,6 +447,7 @@ impl ProjectionPushdown {
         required_columns
     }
 
+    #[allow(clippy::only_used_in_recursion)]
     fn extract_column_references(
         &self,
         expr: &Expression,
@@ -458,13 +460,13 @@ impl ProjectionPushdown {
                     if parts.len() == 2 {
                         let table = parts[0].to_string();
                         let column = parts[1].to_string();
-                        columns.entry(table).or_insert_with(Vec::new).push(column);
+                        columns.entry(table).or_default().push(column);
                     }
                 } else {
                     // Unqualified column - add to default table
                     columns
                         .entry("_default".to_string())
-                        .or_insert_with(Vec::new)
+                        .or_default()
                         .push(name.clone());
                 }
             }

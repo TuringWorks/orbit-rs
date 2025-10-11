@@ -258,6 +258,7 @@ impl IndexSelector {
     }
 
     /// Check how well an index applies to WHERE clause conditions
+    #[allow(clippy::only_used_in_recursion)]
     fn check_where_clause_applicability(
         &self,
         index: &IndexMetadata,
@@ -535,10 +536,7 @@ impl IndexSelector {
     /// Add an index to the available indexes
     pub async fn add_index(&self, table_name: String, index: IndexMetadata) {
         let mut indexes = self.available_indexes.write().await;
-        indexes
-            .entry(table_name)
-            .or_insert_with(Vec::new)
-            .push(index);
+        indexes.entry(table_name).or_default().push(index);
     }
 
     /// Remove an index from available indexes

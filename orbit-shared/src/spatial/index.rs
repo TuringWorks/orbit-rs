@@ -67,6 +67,7 @@ struct QuadNode {
 
 /// R-tree spatial index for complex geometries.
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct RTree {
     root: Option<RTreeNode>,
     max_entries: usize,
@@ -85,10 +86,14 @@ struct RTreeNode {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 struct RTreeEntry {
+    #[allow(dead_code)]
     id: u64,
     bounds: BoundingBox,
+    #[allow(dead_code)]
     geometry: Option<SpatialGeometry>,
+    #[allow(dead_code)]
     child: Option<Box<RTreeNode>>,
 }
 
@@ -374,6 +379,7 @@ impl QuadTree {
         results
     }
 
+    #[allow(clippy::only_used_in_recursion)]
     fn query_bbox_recursive<'a>(
         &self,
         node: &'a QuadNode,

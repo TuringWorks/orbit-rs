@@ -15,6 +15,10 @@ use uuid::Uuid;
 use crate::orbitql::ast::*;
 use crate::orbitql::vectorized_execution::*;
 
+// Type aliases to reduce complexity
+type FailureCallbackFn = dyn Fn(String) + Send + Sync;
+type MessageHandlerMap = HashMap<String, Box<dyn MessageHandler + Send + Sync>>;
+
 /// Distributed query execution coordinator
 pub struct DistributedExecutor {
     /// Cluster configuration
@@ -371,7 +375,8 @@ pub struct NetworkManager {
     /// Connection pool
     connections: Arc<RwLock<HashMap<String, NetworkConnection>>>,
     /// Message handlers
-    message_handlers: Arc<RwLock<HashMap<String, Box<dyn MessageHandler + Send + Sync>>>>,
+    #[allow(clippy::type_complexity)]
+    message_handlers: Arc<RwLock<MessageHandlerMap>>,
     /// Network configuration
     config: NetworkConfig,
 }
@@ -502,7 +507,8 @@ pub struct FailureDetector {
     /// Suspected failures
     suspected_failures: Arc<RwLock<HashSet<String>>>,
     /// Failure callbacks
-    failure_callbacks: Arc<RwLock<Vec<Box<dyn Fn(String) + Send + Sync>>>>,
+    #[allow(clippy::type_complexity)]
+    failure_callbacks: Arc<RwLock<Vec<Box<FailureCallbackFn>>>>,
 }
 
 /// Recovery coordination
@@ -972,7 +978,15 @@ impl LeaderElection {
             leader_lease_expires: Arc::new(RwLock::new(None)),
         }
     }
+}
 
+impl Default for LeaderElection {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl LeaderElection {
     pub async fn start(&self) -> Result<(), DistributedError> {
         // Start leader election process
         Ok(())
@@ -1020,7 +1034,15 @@ impl QueryFragmenter {
             strategies: HashMap::new(),
         }
     }
+}
 
+impl Default for QueryFragmenter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl QueryFragmenter {
     pub fn register_strategy(
         &mut self,
         name: String,
@@ -1050,7 +1072,15 @@ impl DistributedOptimizer {
     pub fn new() -> Self {
         Self
     }
+}
 
+impl Default for DistributedOptimizer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl DistributedOptimizer {
     pub fn optimize_plan(
         &self,
         plan: DistributedExecutionPlan,
@@ -1068,7 +1098,15 @@ impl ResourceScheduler {
             strategy: SchedulingStrategy::LoadBased,
         }
     }
+}
 
+impl Default for ResourceScheduler {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ResourceScheduler {
     pub fn schedule_plan(
         &self,
         plan: DistributedExecutionPlan,
@@ -1149,11 +1187,23 @@ impl FailureDetector {
     }
 }
 
+impl Default for FailureDetector {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RecoveryCoordinator {
     pub fn new() -> Self {
         Self {
             active_recoveries: Arc::new(RwLock::new(HashMap::new())),
         }
+    }
+}
+
+impl Default for RecoveryCoordinator {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

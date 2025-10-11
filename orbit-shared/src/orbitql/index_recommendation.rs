@@ -679,9 +679,10 @@ impl IndexRecommendationEngine {
                 .await
             {
                 // Consider unused if not used in the last 30 days or very low usage
-                let is_unused = usage_stats.last_used.map_or(true, |last_used| {
-                    Utc::now() - last_used > Duration::days(30)
-                }) || usage_stats.usage_count < 5; // Very low usage
+                let is_unused = usage_stats
+                    .last_used
+                    .is_none_or(|last_used| Utc::now() - last_used > Duration::days(30))
+                    || usage_stats.usage_count < 5; // Very low usage
 
                 if is_unused {
                     unused_indexes.push(UnusedIndex {
@@ -819,6 +820,12 @@ impl IndexRecommendationEngine {
             most_frequent_tables: vec![],
             most_common_operations: vec![],
         }
+    }
+}
+
+impl Default for QueryPatternAnalyzer {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

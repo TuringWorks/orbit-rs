@@ -16,6 +16,9 @@ use crate::orbitql::ast::*;
 use crate::orbitql::vectorized_execution::*;
 use crate::orbitql::QueryValue;
 
+// Type aliases to reduce complexity
+type PartitionFunction = dyn Fn(&RecordBatch) -> Vec<usize> + Send + Sync;
+
 /// Default number of worker threads
 pub const DEFAULT_WORKER_THREADS: usize = 8;
 
@@ -248,7 +251,8 @@ pub struct ExchangeOperator {
     /// Exchange type
     exchange_type: ExchangeType,
     /// Partition function
-    partition_func: Box<dyn Fn(&RecordBatch) -> Vec<usize> + Send + Sync>,
+    #[allow(clippy::type_complexity)]
+    partition_func: Box<PartitionFunction>,
     /// Communication channels
     channels: HashMap<usize, mpsc::UnboundedSender<RecordBatch>>,
     /// Buffer management
@@ -1057,8 +1061,17 @@ impl ExchangeOperator {
             buffers: Arc::new(RwLock::new(HashMap::new())),
         }
     }
+}
 
+impl Default for ExchangeOperator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ExchangeOperator {
     /// Set exchange type and partition function
+    #[allow(clippy::type_complexity)]
     pub fn with_partitioning(
         mut self,
         exchange_type: ExchangeType,

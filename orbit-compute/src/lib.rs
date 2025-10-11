@@ -53,11 +53,13 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 // Re-export key types for convenient access
+#[allow(ambiguous_glob_reexports)]
 pub use capabilities::*;
 pub use engine::*;
 pub use errors::*;
 pub use monitoring::*;
 pub use query::*;
+#[allow(ambiguous_glob_reexports)]
 pub use scheduler::*;
 
 #[cfg(feature = "benchmarks")]

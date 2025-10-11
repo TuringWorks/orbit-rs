@@ -689,12 +689,13 @@ pub struct GPUDevice {
 }
 
 /// GPU vendor enumeration with detailed specifications
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum GPUVendor {
     /// Apple Silicon GPU
     Apple(AppleGPU),
     /// NVIDIA GPU
-    NVIDIA(NvidiaGPU),
+    NVIDIA(Box<NvidiaGPU>),
     /// AMD GPU
     AMD(AmdGPU),
     /// Intel GPU

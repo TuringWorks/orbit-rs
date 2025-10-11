@@ -153,8 +153,7 @@ impl MvccSqlEngine {
                         // Extract column names and values
                         let columns = insert_stmt
                             .columns
-                            .as_ref()
-                            .map(|cols| cols.clone())
+                            .clone()
                             .unwrap_or_else(|| vec!["data".to_string()]); // Default column
 
                         for (i, value_expr) in values.iter().enumerate() {

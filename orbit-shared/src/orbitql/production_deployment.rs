@@ -2013,7 +2013,15 @@ impl EnvironmentManager {
             current_environment: Arc::new(RwLock::new(None)),
         }
     }
+}
 
+impl Default for EnvironmentManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl EnvironmentManager {
     pub async fn register_environment(
         &self,
         environment: Environment,
@@ -2082,6 +2090,12 @@ impl DashboardManager {
     }
 }
 
+impl Default for DashboardManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AlertManager {
     pub fn new() -> Self {
         Self {
@@ -2089,6 +2103,12 @@ impl AlertManager {
             active_alerts: Arc::new(RwLock::new(HashMap::new())),
             channels: Arc::new(RwLock::new(HashMap::new())),
         }
+    }
+}
+
+impl Default for AlertManager {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -2109,7 +2129,15 @@ impl StressTester {
             results: Arc::new(RwLock::new(HashMap::new())),
         }
     }
+}
 
+impl Default for StressTester {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl StressTester {
     pub async fn execute_scenario(
         &self,
         scenario: StressTestScenario,
@@ -2146,6 +2174,12 @@ impl IntegrationTester {
     }
 }
 
+impl Default for IntegrationTester {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl HealthChecker {
     pub fn new() -> Self {
         Self {
@@ -2153,7 +2187,15 @@ impl HealthChecker {
             status_cache: Arc::new(RwLock::new(HashMap::new())),
         }
     }
+}
 
+impl Default for HealthChecker {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl HealthChecker {
     pub async fn add_health_check(&self, check: HealthCheck) -> Result<(), DeploymentError> {
         let mut checks = self.checks.write().unwrap();
         checks.insert(check.name.clone(), check);
@@ -2179,6 +2221,12 @@ impl ConfigValidator {
         Self {
             rules: Arc::new(RwLock::new(Vec::new())),
         }
+    }
+}
+
+impl Default for ConfigValidator {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

@@ -829,6 +829,12 @@ impl VectorRegisterSet {
     }
 }
 
+impl Default for VectorRegisterSet {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<T> VectorRegister<T> {
     pub fn new(capacity: usize) -> Self {
         Self {

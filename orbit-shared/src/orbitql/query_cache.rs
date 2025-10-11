@@ -676,9 +676,7 @@ impl QueryCacheManager {
         // Register dependencies
         let mut deps = self.invalidator.dependencies.write().unwrap();
         for table in &result.metadata.tables_accessed {
-            deps.entry(table.clone())
-                .or_insert_with(HashSet::new)
-                .insert(query_hash);
+            deps.entry(table.clone()).or_default().insert(query_hash);
         }
 
         Ok(())
