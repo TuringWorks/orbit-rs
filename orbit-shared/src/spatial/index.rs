@@ -112,6 +112,7 @@ pub struct GeohashGrid {
 
 /// K-d tree for high-dimensional spatial data.
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct KdTree {
     root: Option<KdNode>,
     dimensions: u8,
@@ -120,6 +121,7 @@ pub struct KdTree {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 struct KdNode {
     point: (u64, Point),
     left: Option<Box<KdNode>>,
@@ -390,7 +392,7 @@ impl QuadTree {
         // Recursively search children
         if let Some(ref children) = node.children {
             for child in children.iter() {
-                self.query_bbox_recursive(child, bbox, results);
+                Self::query_bbox_recursive(self, child, bbox, results);
             }
         }
     }
@@ -550,10 +552,7 @@ impl GeohashGrid {
             }
         };
 
-        self.cells
-            .entry(geohash)
-            .or_insert_with(Vec::new)
-            .push((id, geometry));
+        self.cells.entry(geohash).or_default().push((id, geometry));
         self.point_count += 1;
         Ok(())
     }

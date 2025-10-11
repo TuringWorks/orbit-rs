@@ -453,7 +453,7 @@ pub enum NetworkMessage {
     /// Query execution request
     ExecuteFragment {
         query_id: String,
-        fragment: ExecutionFragment,
+        fragment: Box<ExecutionFragment>,
     },
     /// Query result data
     ResultData {

@@ -207,7 +207,7 @@ impl CostBasedQueryPlanner {
 
         // Estimate selectivity from WHERE clause
         let selectivity = if let Some(where_clause) = &select.where_clause {
-            self.estimate_where_selectivity(table_name, where_clause, &*stats_manager)
+            self.estimate_where_selectivity(table_name, where_clause, &stats_manager)
                 .await
         } else {
             1.0
