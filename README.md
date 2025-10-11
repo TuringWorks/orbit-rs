@@ -1,4 +1,4 @@
-# Orbit - Rust Implementation
+# Orbit-rs - Rust Implementation of a distributed data system.
 
 ![License](https://img.shields.io/badge/license-BSD--3--Clause%20OR%20MIT-blue.svg)
 [![Rust Version](https://img.shields.io/badge/rust-1.70+-red.svg)](https://www.rust-lang.org/)
