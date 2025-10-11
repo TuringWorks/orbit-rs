@@ -8,6 +8,8 @@ use std::sync::Arc;
 /// Provides memory management and resource optimization for model operations.
 #[derive(Debug)]
 pub struct ModelManager {
+    /// Model registry for storage and retrieval (used in future methods)
+    #[allow(dead_code)]
     registry: Arc<ModelRegistry>,
 }
 

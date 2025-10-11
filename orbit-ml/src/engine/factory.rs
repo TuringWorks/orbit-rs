@@ -13,3 +13,9 @@ impl ModelFactory {
         Self
     }
 }
+
+impl Default for ModelFactory {
+    fn default() -> Self {
+        Self::new()
+    }
+}

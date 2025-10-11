@@ -155,6 +155,8 @@ pub struct InferenceMetrics {
 
 /// Predictor interface
 pub struct Predictor {
+    /// Configuration used for future inference features
+    #[allow(dead_code)]
     config: InferenceConfig,
 }
 

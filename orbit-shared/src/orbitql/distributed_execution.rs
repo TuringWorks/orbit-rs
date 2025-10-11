@@ -1174,7 +1174,7 @@ impl Default for DistributedStats {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::orbitql::ast::{Statement, SelectStatement, FromClause, SelectField};
+    use crate::orbitql::ast::{FromClause, SelectField, SelectStatement, Statement};
     use std::net::{IpAddr, Ipv4Addr};
 
     #[test]
