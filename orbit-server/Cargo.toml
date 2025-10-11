@@ -34,7 +34,7 @@ async-trait = "0.1"
 reqwest = { version = "0.12", features = ["json"] }
 urlencoding = "2.1"
 flate2 = "1.0" # For compression
-toml = "0.8" # For configuration file support
+toml = "0.9" # For configuration file support
 # New persistence backends
 rocksdb = "0.22"
 rand = "0.8"
