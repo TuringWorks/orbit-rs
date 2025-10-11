@@ -304,6 +304,7 @@ impl PredicatePushdown {
             .collect()
     }
 
+    #[allow(clippy::only_used_in_recursion)]
     fn references_table(&self, expr: &Expression, table_name: &str) -> bool {
         match expr {
             Expression::Binary { left, right, .. } => {
@@ -446,6 +447,7 @@ impl ProjectionPushdown {
         required_columns
     }
 
+    #[allow(clippy::only_used_in_recursion)]
     fn extract_column_references(
         &self,
         expr: &Expression,
@@ -458,13 +460,13 @@ impl ProjectionPushdown {
                     if parts.len() == 2 {
                         let table = parts[0].to_string();
                         let column = parts[1].to_string();
-                        columns.entry(table).or_insert_with(Vec::new).push(column);
+                        columns.entry(table).or_default().push(column);
                     }
                 } else {
                     // Unqualified column - add to default table
                     columns
                         .entry("_default".to_string())
-                        .or_insert_with(Vec::new)
+                        .or_default()
                         .push(name.clone());
                 }
             }
@@ -1016,13 +1018,29 @@ impl QueryOptimizer {
         let mut changed = true;
         let mut iterations = 0;
 
+        // Use advanced cost model to guide optimization if enabled
+        let initial_cost = if self.cost_based_enabled {
+            Some(self.advanced_cost_model.estimate_query_cost(&current))
+        } else {
+            None
+        };
+
         while changed && iterations < self.max_iterations {
             changed = false;
             iterations += 1;
 
             for rule in &self.rules {
                 let optimized = rule.apply(&current)?;
-                if !statements_equal(&current, &optimized) {
+
+                // Use advanced cost model to validate optimizations
+                let should_apply = if let Some(ref initial) = initial_cost {
+                    let new_cost = self.advanced_cost_model.estimate_query_cost(&optimized);
+                    new_cost.total_cost() <= initial.total_cost()
+                } else {
+                    !statements_equal(&current, &optimized)
+                };
+
+                if should_apply && !statements_equal(&current, &optimized) {
                     current = optimized;
                     changed = true;
                 }
@@ -1040,6 +1058,16 @@ impl QueryOptimizer {
         self.analyze_statement_costs(stmt, &mut total_cost);
 
         total_cost
+    }
+
+    /// Estimate detailed query cost using advanced cost model
+    pub fn estimate_detailed_query_cost(&self, stmt: &Statement) -> super::cost_model::QueryCost {
+        self.advanced_cost_model.estimate_query_cost(stmt)
+    }
+
+    /// Check if advanced cost model is enabled
+    pub fn has_advanced_cost_model(&self) -> bool {
+        self.cost_based_enabled && self.advanced_cost_model.get_config().cpu_tuple_cost > 0.0
     }
 
     /// Analyze statement components and accumulate costs

@@ -1,3 +1,9 @@
+---
+layout: default
+title: Alternative Persistence Implementations for orbit-rs
+category: documentation
+---
+
 # Alternative Persistence Implementations for orbit-rs
 
 ## Executive Summary

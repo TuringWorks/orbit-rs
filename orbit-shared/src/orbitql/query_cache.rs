@@ -37,6 +37,7 @@ pub struct QueryCacheManager {
     /// Invalidation coordinator
     invalidator: Arc<CacheInvalidator>,
     /// Distributed coordination
+    #[allow(dead_code)]
     distributor: Arc<DistributedCacheCoordinator>,
     /// Cache statistics
     stats: Arc<RwLock<CacheStatistics>>,
@@ -129,10 +130,12 @@ pub struct PlanCache {
     /// LRU tracking
     lru_tracker: VecDeque<QueryHash>,
     /// Access frequency tracking
+    #[allow(dead_code)]
     frequency_tracker: HashMap<QueryHash, usize>,
     /// Maximum cache size
     max_size: usize,
     /// Eviction strategy
+    #[allow(dead_code)]
     eviction_strategy: EvictionStrategy,
     /// Cache statistics
     hits: usize,
@@ -148,6 +151,7 @@ pub struct MetadataCache {
     /// Statistics entries
     statistics: HashMap<String, CacheEntry<TableStatistics>>,
     /// Maximum cache size
+    #[allow(dead_code)]
     max_size: usize,
     /// Cache statistics
     hits: usize,
@@ -345,6 +349,7 @@ pub struct CacheInvalidator {
     /// Invalidation event broadcaster
     event_sender: broadcast::Sender<InvalidationEvent>,
     /// Background invalidation tasks
+    #[allow(dead_code)]
     background_tasks: Mutex<Vec<tokio::task::JoinHandle<()>>>,
 }
 
@@ -403,16 +408,21 @@ pub struct InvalidationEvent {
 /// Distributed cache coordinator
 pub struct DistributedCacheCoordinator {
     /// Node ID
+    #[allow(dead_code)]
     node_id: String,
     /// Peer nodes
     peers: RwLock<HashMap<String, PeerNode>>,
     /// Replication factor
+    #[allow(dead_code)]
     replication_factor: usize,
     /// Consistency level
+    #[allow(dead_code)]
     consistency_level: ConsistencyLevel,
     /// Communication channels
+    #[allow(dead_code)]
     channels: RwLock<HashMap<String, mpsc::UnboundedSender<CacheMessage>>>,
     /// Message handler
+    #[allow(dead_code)]
     message_handler: Arc<TokioRwLock<Option<mpsc::UnboundedReceiver<CacheMessage>>>>,
 }
 
@@ -666,9 +676,7 @@ impl QueryCacheManager {
         // Register dependencies
         let mut deps = self.invalidator.dependencies.write().unwrap();
         for table in &result.metadata.tables_accessed {
-            deps.entry(table.clone())
-                .or_insert_with(HashSet::new)
-                .insert(query_hash);
+            deps.entry(table.clone()).or_default().insert(query_hash);
         }
 
         Ok(())

@@ -250,8 +250,7 @@ impl SqlExecutionStrategy for MvccExecutionStrategy {
                         let mut row_data = HashMap::new();
                         let columns = insert_stmt
                             .columns
-                            .as_ref()
-                            .map(|cols| cols.clone())
+                            .clone()
                             .unwrap_or_else(|| vec!["data".to_string()]);
 
                         for (i, value_expr) in values.iter().enumerate() {
@@ -395,6 +394,7 @@ impl MvccExecutionStrategy {
 pub struct TraditionalExecutionStrategy {
     parser: SqlParser,
     executor: SqlExecutor,
+    #[allow(dead_code)]
     config: SqlEngineConfig,
 }
 

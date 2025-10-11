@@ -1,3 +1,9 @@
+---
+layout: default
+title: Orbit-RS PostgreSQL Wire Protocol Server - Validation Summary
+category: documentation
+---
+
 # Orbit-RS PostgreSQL Wire Protocol Server - Validation Summary
 
 ## 🎉 **Successfully Fixed Issues:**

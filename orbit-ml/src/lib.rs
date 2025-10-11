@@ -128,6 +128,7 @@ pub fn version() -> &'static str {
 }
 
 /// Check if a feature is enabled at compile time
+#[allow(clippy::match_like_matches_macro)] // Each branch has different cfg! conditions
 pub fn has_feature(feature: &str) -> bool {
     match feature {
         "neural-networks" => cfg!(feature = "neural-networks"),

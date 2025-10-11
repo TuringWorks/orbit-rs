@@ -1,3 +1,9 @@
+---
+layout: default
+title: Vector Commands Documentation
+category: documentation
+---
+
 # Vector Commands Documentation
 
 ## 🚀 Features

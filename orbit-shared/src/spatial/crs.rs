@@ -9,6 +9,19 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::f64::consts::PI;
 
+/// Parameters for creating a Coordinate Reference System
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CRSParameters {
+    pub srid: i32,
+    pub authority: String,
+    pub code: i32,
+    pub proj4_string: String,
+    pub wkt: String,
+    pub name: String,
+    pub units: String,
+    pub is_geographic: bool,
+}
+
 /// Coordinate Reference System definition with EPSG support.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CoordinateReferenceSystem {
@@ -51,25 +64,16 @@ pub struct TransformationParameters {
 
 impl CoordinateReferenceSystem {
     /// Create a new CRS definition.
-    pub fn new(
-        srid: i32,
-        authority: String,
-        code: i32,
-        proj4_string: String,
-        wkt: String,
-        name: String,
-        units: String,
-        is_geographic: bool,
-    ) -> Self {
+    pub fn new(params: CRSParameters) -> Self {
         Self {
-            srid,
-            authority,
-            code,
-            proj4_string,
-            wkt,
-            name,
-            units,
-            is_geographic,
+            srid: params.srid,
+            authority: params.authority,
+            code: params.code,
+            proj4_string: params.proj4_string,
+            wkt: params.wkt,
+            name: params.name,
+            units: params.units,
+            is_geographic: params.is_geographic,
         }
     }
 
@@ -100,40 +104,40 @@ impl EPSGRegistry {
         let mut systems = HashMap::new();
 
         // WGS84 Geographic
-        systems.insert(4326, CoordinateReferenceSystem::new(
-            4326,
-            "EPSG".to_string(),
-            4326,
-            "+proj=longlat +datum=WGS84 +no_defs".to_string(),
-            r#"GEOGCS["WGS 84",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563,AUTHORITY["EPSG","7030"]],AUTHORITY["EPSG","6326"]],PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],UNIT["degree",0.0174532925199433,AUTHORITY["EPSG","9122"]],AUTHORITY["EPSG","4326"]]"#.to_string(),
-            "WGS 84".to_string(),
-            "degree".to_string(),
-            true,
-        ));
+        systems.insert(4326, CoordinateReferenceSystem::new(CRSParameters {
+            srid: 4326,
+            authority: "EPSG".to_string(),
+            code: 4326,
+            proj4_string: "+proj=longlat +datum=WGS84 +no_defs".to_string(),
+            wkt: r#"GEOGCS["WGS 84",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563,AUTHORITY["EPSG","7030"]],AUTHORITY["EPSG","6326"]],PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],UNIT["degree",0.0174532925199433,AUTHORITY["EPSG","9122"]],AUTHORITY["EPSG","4326"]]"#.to_string(),
+            name: "WGS 84".to_string(),
+            units: "degree".to_string(),
+            is_geographic: true,
+        }));
 
         // Web Mercator (Google Maps, OpenStreetMap)
-        systems.insert(3857, CoordinateReferenceSystem::new(
-            3857,
-            "EPSG".to_string(),
-            3857,
-            "+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +wktext +no_defs".to_string(),
-            r#"PROJCS["WGS 84 / Pseudo-Mercator",GEOGCS["WGS 84",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563,AUTHORITY["EPSG","7030"]],AUTHORITY["EPSG","6326"]],PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],UNIT["degree",0.0174532925199433,AUTHORITY["EPSG","9122"]],AUTHORITY["EPSG","4326"]],PROJECTION["Mercator_1SP"],PARAMETER["central_meridian",0],PARAMETER["scale_factor",1],PARAMETER["false_easting",0],PARAMETER["false_northing",0],UNIT["metre",1,AUTHORITY["EPSG","9001"]],AXIS["X",EAST],AXIS["Y",NORTH],EXTENSION["PROJ4","+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +wktext +no_defs"],AUTHORITY["EPSG","3857"]]"#.to_string(),
-            "WGS 84 / Pseudo-Mercator".to_string(),
-            "meter".to_string(),
-            false,
-        ));
+        systems.insert(3857, CoordinateReferenceSystem::new(CRSParameters {
+            srid: 3857,
+            authority: "EPSG".to_string(),
+            code: 3857,
+            proj4_string: "+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +wktext +no_defs".to_string(),
+            wkt: r#"PROJCS["WGS 84 / Pseudo-Mercator",GEOGCS["WGS 84",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563,AUTHORITY["EPSG","7030"]],AUTHORITY["EPSG","6326"]],PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],UNIT["degree",0.0174532925199433,AUTHORITY["EPSG","9122"]],AUTHORITY["EPSG","4326"]],PROJECTION["Mercator_1SP"],PARAMETER["central_meridian",0],PARAMETER["scale_factor",1],PARAMETER["false_easting",0],PARAMETER["false_northing",0],UNIT["metre",1,AUTHORITY["EPSG","9001"]],AXIS["X",EAST],AXIS["Y",NORTH],EXTENSION["PROJ4","+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +wktext +no_defs"],AUTHORITY["EPSG","3857"]]"#.to_string(),
+            name: "WGS 84 / Pseudo-Mercator".to_string(),
+            units: "meter".to_string(),
+            is_geographic: false,
+        }));
 
         // UTM Zone 33N (Europe)
-        systems.insert(32633, CoordinateReferenceSystem::new(
-            32633,
-            "EPSG".to_string(),
-            32633,
-            "+proj=utm +zone=33 +datum=WGS84 +units=m +no_defs".to_string(),
-            r#"PROJCS["WGS 84 / UTM zone 33N",GEOGCS["WGS 84",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563,AUTHORITY["EPSG","7030"]],AUTHORITY["EPSG","6326"]],PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],UNIT["degree",0.0174532925199433,AUTHORITY["EPSG","9122"]],AUTHORITY["EPSG","4326"]],PROJECTION["Transverse_Mercator"],PARAMETER["latitude_of_origin",0],PARAMETER["central_meridian",15],PARAMETER["scale_factor",0.9996],PARAMETER["false_easting",500000],PARAMETER["false_northing",0],UNIT["metre",1,AUTHORITY["EPSG","9001"]],AXIS["Easting",EAST],AXIS["Northing",NORTH],AUTHORITY["EPSG","32633"]]"#.to_string(),
-            "WGS 84 / UTM zone 33N".to_string(),
-            "meter".to_string(),
-            false,
-        ));
+        systems.insert(32633, CoordinateReferenceSystem::new(CRSParameters {
+            srid: 32633,
+            authority: "EPSG".to_string(),
+            code: 32633,
+            proj4_string: "+proj=utm +zone=33 +datum=WGS84 +units=m +no_defs".to_string(),
+            wkt: r#"PROJCS["WGS 84 / UTM zone 33N",GEOGCS["WGS 84",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563,AUTHORITY["EPSG","7030"]],AUTHORITY["EPSG","6326"]],PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],UNIT["degree",0.0174532925199433,AUTHORITY["EPSG","9122"]],AUTHORITY["EPSG","4326"]],PROJECTION["Transverse_Mercator"],PARAMETER["latitude_of_origin",0],PARAMETER["central_meridian",15],PARAMETER["scale_factor",0.9996],PARAMETER["false_easting",500000],PARAMETER["false_northing",0],UNIT["metre",1,AUTHORITY["EPSG","9001"]],AXIS["Easting",EAST],AXIS["Northing",NORTH],AUTHORITY["EPSG","32633"]]"#.to_string(),
+            name: "WGS 84 / UTM zone 33N".to_string(),
+            units: "meter".to_string(),
+            is_geographic: false,
+        }));
 
         Self { systems }
     }
@@ -165,6 +169,7 @@ impl Default for EPSGRegistry {
 /// Coordinate transformation engine for converting between different CRS.
 pub struct CoordinateTransformer {
     registry: EPSGRegistry,
+    #[allow(dead_code)]
     transformation_cache: HashMap<(i32, i32), TransformationParameters>,
 }
 

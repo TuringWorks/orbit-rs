@@ -1,3 +1,9 @@
+---
+layout: default
+title: ArangoDB Multi-Model Database Compatibility
+category: protocols
+---
+
 # ArangoDB Multi-Model Database Compatibility
 
 ## Overview

@@ -830,9 +830,10 @@ mod tests {
             .unwrap();
 
         match result {
-            AQLSpatialResult::Boolean(contains) => {
+            AQLSpatialResult::Boolean(_contains) => {
                 // For identical points, contains should be true (or handled appropriately)
-                assert!(contains || !contains); // Just check it returns a boolean
+                // Just verify we got a boolean response
+                // Test passes as we received the expected type
             }
             _ => panic!("Expected boolean result"),
         }

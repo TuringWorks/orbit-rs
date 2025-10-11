@@ -21,10 +21,13 @@ pub struct OrbitQLExecutor {
     /// Spatial indexes
     spatial_indexes: Arc<RwLock<HashMap<String, SpatialIndexInstance>>>,
     /// Real-time streams
+    #[allow(dead_code)]
     streams: Arc<RwLock<HashMap<String, StreamProcessor>>>,
     /// GPU acceleration engine
+    #[allow(dead_code)]
     gpu_engine: GPUSpatialEngine,
     /// Execution context
+    #[allow(dead_code)]
     context: Arc<RwLock<ExecutionContext>>,
 }
 
@@ -106,6 +109,12 @@ pub struct ExecutionResult {
     pub spatial_operations: usize,
     pub index_hits: usize,
     pub gpu_acceleration_used: bool,
+}
+
+impl Default for OrbitQLExecutor {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl OrbitQLExecutor {
@@ -349,7 +358,7 @@ impl OrbitQLExecutor {
 
         // Apply updates to matching rows
         let table_copy = table.clone(); // Clone for reading during evaluation
-        for (_row_idx, row) in table.rows.iter_mut().enumerate() {
+        for row in table.rows.iter_mut() {
             // Check WHERE clause condition
             let mut should_update = true;
             if let Some(where_expr) = &query.where_clause {
@@ -966,15 +975,10 @@ impl OrbitQLExecutor {
                     Ok(None)
                 }
             }
-            Expression::Geometry(geom_literal) => {
-                // Convert geometry literal to SpatialGeometry
-                match geom_literal {
-                    GeometryLiteral::Point(point) => {
-                        Ok(Some(SpatialGeometry::Point(point.clone())))
-                    }
-                    _ => Ok(None), // Handle other geometry types as needed
-                }
+            Expression::Geometry(GeometryLiteral::Point(point)) => {
+                Ok(Some(SpatialGeometry::Point(point.clone())))
             }
+            Expression::Geometry(_) => Ok(None), // Handle other geometry types as needed
             _ => Ok(None),
         }
     }
@@ -1002,6 +1006,7 @@ impl OrbitQLExecutor {
     }
 
     /// Convert QueryValue to serde_json::Value
+    #[allow(clippy::only_used_in_recursion)]
     fn query_value_to_json(&self, qv: &QueryValue) -> Value {
         match qv {
             QueryValue::Null => Value::Null,

@@ -1,3 +1,9 @@
+---
+layout: default
+title: Cluster Management
+category: documentation
+---
+
 # Cluster Management
 
 *This documentation is currently under development. Please check back soon for comprehensive cluster management information.*

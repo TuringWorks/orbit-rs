@@ -1,3 +1,9 @@
+---
+layout: default
+title: OrbitQL Language Server Protocol (LSP) Implementation
+category: documentation
+---
+
 # OrbitQL Language Server Protocol (LSP) Implementation
 
 ## Overview

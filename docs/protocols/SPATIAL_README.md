@@ -1,3 +1,9 @@
+---
+layout: default
+title: Orbit-RS Redis Spatial Extensions
+category: protocols
+---
+
 # Orbit-RS Redis Spatial Extensions
 
 ## Standard Redis GEO Commands (Enhanced)

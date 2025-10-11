@@ -1,3 +1,9 @@
+---
+layout: default
+title: RFC-002: Unified Multi-Modal Query Engine for Orbit-RS
+category: rfcs
+---
+
 # RFC-002: Unified Multi-Modal Query Engine for Orbit-RS
 
 **Date**: October 9, 2025  

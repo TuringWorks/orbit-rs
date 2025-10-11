@@ -1,3 +1,9 @@
+---
+layout: default
+title: Project Structure
+category: documentation
+---
+
 # Project Structure
 
 This document provides a comprehensive overview of the Orbit-RS project structure, including module organization, dependencies, and architectural layers.

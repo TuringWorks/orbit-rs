@@ -1,3 +1,9 @@
+---
+layout: default
+title: GitHub Issues Tracking - Comprehensive Feature Implementation
+category: development
+---
+
 # GitHub Issues Tracking - Comprehensive Feature Implementation
 
 This document outlines all GitHub issues that need to be created for tracking the implementation of Orbit-RS features across all phases.

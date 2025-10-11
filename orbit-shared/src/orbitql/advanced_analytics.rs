@@ -2584,6 +2584,12 @@ impl WorkloadPatternAnalyzer {
     }
 }
 
+impl Default for AutoTuner {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AutoTuner {
     pub fn new() -> Self {
         Self {
@@ -2729,6 +2735,12 @@ impl MetricsCollector {
 // BOOSTING ALGORITHM IMPLEMENTATIONS
 // =============================================================================
 
+impl Default for GradientBoostingModel {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl GradientBoostingModel {
     pub fn new() -> Self {
         Self {
@@ -2829,6 +2841,12 @@ impl GradientBoostingModel {
 
     pub fn get_feature_importance(&self) -> &[f64] {
         &self.feature_importance
+    }
+}
+
+impl Default for AdaBoostModel {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -2934,6 +2952,12 @@ impl AdaBoostModel {
         } else {
             100.0
         }
+    }
+}
+
+impl Default for LightGBMModel {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -3057,6 +3081,12 @@ impl LightGBMModel {
     }
 }
 
+impl Default for CatBoostModel {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CatBoostModel {
     pub fn new() -> Self {
         Self {
@@ -3159,6 +3189,12 @@ impl CatBoostModel {
         }
 
         prediction.max(0.0)
+    }
+}
+
+impl Default for XGBoostModel {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -3412,6 +3448,12 @@ impl Default for XGBoostParams {
 }
 
 // Ensemble Implementation
+impl Default for BoostingEnsemble {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl BoostingEnsemble {
     pub fn new() -> Self {
         Self {
@@ -3630,6 +3672,12 @@ impl BoostingEnsemble {
 }
 
 // Helper implementations for weak learners and tree structures
+
+impl Default for WeakLearner {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl WeakLearner {
     pub fn new() -> Self {

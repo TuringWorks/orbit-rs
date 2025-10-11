@@ -1,3 +1,9 @@
+---
+layout: default
+title: Next Steps: Orbit Protocol Adapters Integration
+category: protocols
+---
+
 # Next Steps: Orbit Protocol Adapters Integration
 
 This document outlines the concrete steps needed to complete the protocol adapter implementation.

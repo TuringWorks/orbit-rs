@@ -1,3 +1,9 @@
+---
+layout: default
+title: Backlog Priority Update
+category: backlog
+---
+
 # Backlog Priority Update
 
 ## Current Status (October 2024)

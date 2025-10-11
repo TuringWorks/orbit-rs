@@ -1,3 +1,9 @@
+---
+layout: default
+title: Orbit-RS Complete Feature Catalog
+category: rfcs
+---
+
 # Orbit-RS Complete Feature Catalog
 
 **Date**: October 9, 2025  

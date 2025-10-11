@@ -10,6 +10,7 @@ use tracing::info;
 
 /// gRPC server for Java Spring Boot integration
 pub struct SpringGrpcServer {
+    #[allow(dead_code)]
     context: Arc<RwLock<ApplicationContext>>,
     config: GrpcServerConfig,
     shutdown_token: tokio_util::sync::CancellationToken,
@@ -85,6 +86,7 @@ impl SpringGrpcServer {
 /// In production, this would implement the generated OrbitSpringService trait
 #[derive(Debug)]
 pub struct OrbitSpringServiceImpl {
+    #[allow(dead_code)]
     context: Arc<RwLock<ApplicationContext>>,
 }
 

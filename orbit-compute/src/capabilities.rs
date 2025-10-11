@@ -689,12 +689,13 @@ pub struct GPUDevice {
 }
 
 /// GPU vendor enumeration with detailed specifications
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum GPUVendor {
     /// Apple Silicon GPU
     Apple(AppleGPU),
     /// NVIDIA GPU
-    NVIDIA(NvidiaGPU),
+    NVIDIA(Box<NvidiaGPU>),
     /// AMD GPU
     AMD(AmdGPU),
     /// Intel GPU
@@ -1690,7 +1691,7 @@ fn detect_cpu_capabilities() -> Result<CPUCapabilities, ComputeError> {
 
 #[cfg(all(target_arch = "x86_64", feature = "runtime-detection"))]
 fn detect_x86_64_capabilities() -> Result<CPUCapabilities, ComputeError> {
-    use raw_cpuid::CpuId;
+    use raw_cpuid::{CpuId, CpuIdReader};
 
     let cpuid = CpuId::new();
 
@@ -1822,12 +1823,10 @@ fn detect_x86_64_capabilities() -> Result<CPUCapabilities, ComputeError> {
 
 /// Detailed microarchitecture and feature detection
 #[cfg(all(target_arch = "x86_64", feature = "runtime-detection"))]
-fn detect_detailed_microarch_and_features(
+fn detect_detailed_microarch_and_features<R: raw_cpuid::CpuIdReader>(
     vendor: &X86Vendor,
-    cpuid: &raw_cpuid::CpuId,
+    cpuid: &raw_cpuid::CpuId<R>,
 ) -> Result<(X86Microarch, X86Features), ComputeError> {
-    use raw_cpuid::CpuId;
-
     let feature_info = cpuid.get_feature_info();
     let extended_features = cpuid.get_extended_feature_info();
     let extended_function_info = cpuid.get_extended_function_info();
@@ -1893,8 +1892,8 @@ fn detect_detailed_microarch_and_features(
 
 /// Detect AMD microarchitecture and EPYC model
 #[cfg(all(target_arch = "x86_64", feature = "runtime-detection"))]
-fn detect_amd_microarch_and_model(
-    cpuid: &raw_cpuid::CpuId,
+fn detect_amd_microarch_and_model<R: raw_cpuid::CpuIdReader>(
+    cpuid: &raw_cpuid::CpuId<R>,
 ) -> Result<(X86Microarch, Option<EPYCModel>), ComputeError> {
     let processor_brand = cpuid
         .get_processor_brand_string()
@@ -2086,8 +2085,8 @@ fn extract_core_count(brand_string: &str) -> Option<u8> {
 
 // AMD-specific feature detection
 #[cfg(all(target_arch = "x86_64", feature = "runtime-detection"))]
-fn detect_amd_specific_features(
-    cpuid: &raw_cpuid::CpuId,
+fn detect_amd_specific_features<R: raw_cpuid::CpuIdReader>(
+    cpuid: &raw_cpuid::CpuId<R>,
     microarch: &X86Microarch,
     epyc_model: &Option<EPYCModel>,
 ) -> Result<AMDSpecificFeatures, ComputeError> {
@@ -2177,7 +2176,7 @@ fn detect_avx_capabilities(
 }
 
 #[cfg(all(target_arch = "x86_64", feature = "runtime-detection"))]
-fn detect_intel_microarch(cpuid: &raw_cpuid::CpuId) -> X86Microarch {
+fn detect_intel_microarch<R: raw_cpuid::CpuIdReader>(cpuid: &raw_cpuid::CpuId<R>) -> X86Microarch {
     let feature_info = cpuid.get_feature_info();
     let family = feature_info.as_ref().map_or(0, |fi| fi.family_id());
     let model = feature_info.as_ref().map_or(0, |fi| fi.model_id());
@@ -2199,8 +2198,8 @@ fn detect_intel_microarch(cpuid: &raw_cpuid::CpuId) -> X86Microarch {
 }
 
 #[cfg(all(target_arch = "x86_64", feature = "runtime-detection"))]
-fn detect_intel_specific_features(
-    cpuid: &raw_cpuid::CpuId,
+fn detect_intel_specific_features<R: raw_cpuid::CpuIdReader>(
+    cpuid: &raw_cpuid::CpuId<R>,
 ) -> Result<IntelSpecificFeatures, ComputeError> {
     let extended_features = cpuid.get_extended_feature_info();
 

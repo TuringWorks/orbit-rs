@@ -1,3 +1,9 @@
+---
+layout: default
+title: GitHub Secrets Configuration - Complete Index
+category: development
+---
+
 # GitHub Secrets Configuration - Complete Index
 
 **Quick Navigation Guide for Configuring GitHub Actions Secrets**

@@ -1,3 +1,9 @@
+---
+layout: default
+title: Documentation Update Summary
+category: wip
+---
+
 # Documentation Update Summary
 
 ## Overview

@@ -1,3 +1,9 @@
+---
+layout: default
+title: Neo4j Bolt Protocol Compatibility
+category: protocols
+---
+
 # Neo4j Bolt Protocol Compatibility
 
 ## Overview

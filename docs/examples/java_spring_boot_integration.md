@@ -1,3 +1,9 @@
+---
+layout: default
+title: Java Spring Boot Integration with Orbit-RS
+category: examples
+---
+
 # Java Spring Boot Integration with Orbit-RS
 
 This example demonstrates how to integrate Rust Orbit services with Java Spring Boot applications using multiple communication methods: HTTP REST API, gRPC, and JNI (Java Native Interface).

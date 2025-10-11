@@ -1,3 +1,9 @@
+---
+layout: default
+title: Orbit-RS Graph Database
+category: documentation
+---
+
 # Orbit-RS Graph Database
 
 The Orbit-RS graph database provides a comprehensive, distributed graph data management system with support for multiple query languages and protocol adapters. This documentation covers all aspects of the graph database functionality.

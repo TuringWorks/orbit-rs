@@ -1,3 +1,9 @@
+---
+layout: default
+title: RFC-011: Storage Backend Architecture Analysis
+category: rfcs
+---
+
 # RFC-011: Storage Backend Architecture Analysis
 
 **Date**: October 9, 2025  

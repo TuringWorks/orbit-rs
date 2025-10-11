@@ -1,3 +1,9 @@
+---
+layout: default
+title: RFC-008: Graph Database Capabilities Analysis
+category: rfcs
+---
+
 # RFC-008: Graph Database Capabilities Analysis
 
 **Date**: October 9, 2025  

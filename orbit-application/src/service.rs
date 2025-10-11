@@ -12,6 +12,7 @@ pub trait Service: Send + Sync {
     fn is_healthy(&self) -> bool;
 }
 
+#[derive(Default)]
 pub struct ServiceRegistry {
     services: HashMap<String, Arc<dyn Service>>,
 }

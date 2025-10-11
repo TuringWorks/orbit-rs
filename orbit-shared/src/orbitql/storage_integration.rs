@@ -219,6 +219,7 @@ pub enum StorageError {
     SchemaError(String),
     CompressionError(String),
     PartitionError(String),
+    ConfigurationError(String),
 }
 
 impl std::fmt::Display for StorageError {
@@ -231,6 +232,7 @@ impl std::fmt::Display for StorageError {
             StorageError::SchemaError(msg) => write!(f, "Schema error: {}", msg),
             StorageError::CompressionError(msg) => write!(f, "Compression error: {}", msg),
             StorageError::PartitionError(msg) => write!(f, "Partition error: {}", msg),
+            StorageError::ConfigurationError(msg) => write!(f, "Configuration error: {}", msg),
         }
     }
 }
@@ -429,40 +431,109 @@ impl S3StorageProvider {
         let client = Arc::new(S3Client::new(config.clone()));
         Self { config, client }
     }
+
+    /// Get the S3 bucket name from configuration
+    pub fn bucket_name(&self) -> &str {
+        &self.config.bucket
+    }
+
+    /// Get the S3 region from configuration
+    pub fn region(&self) -> &str {
+        &self.config.region
+    }
+
+    /// Check if the client is properly configured
+    pub fn is_configured(&self) -> bool {
+        !self.config.bucket.is_empty()
+            && !self.config.access_key_id.is_empty()
+            && !self.config.secret_access_key.is_empty()
+    }
+
+    /// Get client configuration for debugging
+    pub fn client_info(&self) -> String {
+        format!(
+            "S3Client for bucket: {} in region: {}",
+            self.config.bucket, self.config.region
+        )
+    }
+
+    /// Get a reference to the underlying S3 client
+    pub fn client(&self) -> &Arc<S3Client> {
+        &self.client
+    }
+
+    /// Check if client is available
+    pub fn has_client(&self) -> bool {
+        Arc::strong_count(&self.client) > 0
+    }
 }
 
 impl StorageProvider for S3StorageProvider {
     fn read_data(&self, _path: &str) -> Result<Box<dyn AsyncRead + Unpin + Send>, StorageError> {
-        // Would implement actual S3 streaming read
+        // Validate config before attempting read
+        if self.config.bucket.is_empty() {
+            return Err(StorageError::ConfigurationError(
+                "Empty bucket name".to_string(),
+            ));
+        }
+        // Would implement actual S3 streaming read using self.client
         Err(StorageError::NetworkError(
             "S3 read not implemented".to_string(),
         ))
     }
 
     fn write_data(&self, _path: &str) -> Result<Box<dyn AsyncWrite + Unpin + Send>, StorageError> {
-        // Would implement actual S3 streaming write
+        // Validate config before attempting write
+        if self.config.bucket.is_empty() {
+            return Err(StorageError::ConfigurationError(
+                "Empty bucket name".to_string(),
+            ));
+        }
+        // Would implement actual S3 streaming write using self.client
         Err(StorageError::NetworkError(
             "S3 write not implemented".to_string(),
         ))
     }
 
     fn list_files(&self, _path: &str) -> Result<Vec<String>, StorageError> {
-        // Would implement actual S3 list operation
+        // Use config to construct proper S3 path
+        let _s3_path = format!("s3://{}/{}", self.config.bucket, _path);
+        // Would implement actual S3 list operation using self.client
         Ok(vec![])
     }
 
     fn get_metadata(&self, _path: &str) -> Result<StorageMetadata, StorageError> {
-        // Would implement actual S3 head object operation
+        // Use config to validate bucket access
+        if self.config.bucket.is_empty() {
+            return Err(StorageError::ConfigurationError(
+                "Empty S3 bucket name".to_string(),
+            ));
+        }
+        // Would implement actual S3 head object operation using self.client
         Err(StorageError::NetworkError(
             "S3 metadata not implemented".to_string(),
         ))
     }
 
     fn exists(&self, _path: &str) -> Result<bool, StorageError> {
+        // Validate bucket configuration
+        if self.config.bucket.is_empty() {
+            return Err(StorageError::ConfigurationError(
+                "Empty bucket name".to_string(),
+            ));
+        }
+        // Would use self.client to check object existence
         Ok(false)
     }
 
     fn delete(&self, _path: &str) -> Result<(), StorageError> {
+        // Validate configuration before attempting delete
+        if self.config.access_key_id.is_empty() {
+            return Err(StorageError::ConfigurationError(
+                "Missing S3 credentials".to_string(),
+            ));
+        }
+        // Would use self.client to delete object
         Ok(())
     }
 

@@ -1,3 +1,9 @@
+---
+layout: default
+title: RFC-007: Distributed Transactions & ACID Analysis
+category: rfcs
+---
+
 # RFC-007: Distributed Transactions & ACID Analysis
 
 **Date**: October 9, 2025  

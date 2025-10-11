@@ -4,7 +4,7 @@ use std::env;
 use std::time::Duration;
 
 /// etcd client configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct EtcdConfig {
     /// Connection configuration
     pub connection: ConnectionConfig,
@@ -20,18 +20,6 @@ pub struct EtcdConfig {
 
     /// Security configuration
     pub security: SecurityConfig,
-}
-
-impl Default for EtcdConfig {
-    fn default() -> Self {
-        Self {
-            connection: ConnectionConfig::default(),
-            discovery: DiscoveryConfig::default(),
-            election: ElectionConfig::default(),
-            health: HealthConfig::default(),
-            security: SecurityConfig::default(),
-        }
-    }
 }
 
 /// Connection configuration
@@ -250,7 +238,7 @@ impl Default for HealthConfig {
 }
 
 /// Security configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct SecurityConfig {
     /// Enable TLS
     pub tls_enabled: bool,
@@ -260,16 +248,6 @@ pub struct SecurityConfig {
 
     /// Authentication configuration
     pub auth: AuthConfig,
-}
-
-impl Default for SecurityConfig {
-    fn default() -> Self {
-        Self {
-            tls_enabled: false,
-            tls: TlsConfig::default(),
-            auth: AuthConfig::default(),
-        }
-    }
 }
 
 /// TLS configuration
@@ -328,6 +306,7 @@ impl Default for AuthConfig {
 
 impl EtcdConfig {
     /// Load configuration from environment variables
+    #[allow(clippy::result_large_err)]
     pub fn from_env() -> EtcdResult<Self> {
         let config = Self::default();
         config.validate()?;
@@ -335,6 +314,7 @@ impl EtcdConfig {
     }
 
     /// Load configuration from file
+    #[allow(clippy::result_large_err)]
     pub fn from_file<P: AsRef<std::path::Path>>(path: P) -> EtcdResult<Self> {
         let content = std::fs::read_to_string(&path)
             .map_err(|e| EtcdError::configuration(format!("Failed to read config file: {}", e)))?;
@@ -347,6 +327,7 @@ impl EtcdConfig {
     }
 
     /// Validate the configuration
+    #[allow(clippy::result_large_err)]
     pub fn validate(&self) -> EtcdResult<()> {
         // Validate connection configuration
         if self.connection.endpoints.is_empty() {
@@ -399,12 +380,12 @@ impl EtcdConfig {
         }
 
         // Validate security configuration
-        if self.security.auth.enabled {
-            if self.security.auth.username.is_none() || self.security.auth.password.is_none() {
-                return Err(EtcdError::configuration(
-                    "Username and password required when auth is enabled",
-                ));
-            }
+        if self.security.auth.enabled
+            && (self.security.auth.username.is_none() || self.security.auth.password.is_none())
+        {
+            return Err(EtcdError::configuration(
+                "Username and password required when auth is enabled",
+            ));
         }
 
         if self.security.tls_enabled {
@@ -505,6 +486,7 @@ impl EtcdConfigBuilder {
         self
     }
 
+    #[allow(clippy::result_large_err)]
     pub fn build(self) -> EtcdResult<EtcdConfig> {
         self.config.validate()?;
         Ok(self.config)

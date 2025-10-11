@@ -231,6 +231,9 @@ pub struct UserRole {
     pub can_grant: bool,
 }
 
+/// Type alias for table data storage
+type TableData = Arc<RwLock<HashMap<String, Vec<HashMap<String, SqlValue>>>>>;
+
 /// Comprehensive SQL executor
 pub struct SqlExecutor {
     // Schema management
@@ -241,16 +244,21 @@ pub struct SqlExecutor {
 
     // Data storage (in-memory for demonstration)
     // In production, this would integrate with OrbitClient
-    table_data: Arc<RwLock<HashMap<String, Vec<HashMap<String, SqlValue>>>>>,
+    table_data: TableData,
 
     // Transaction management
     current_transaction: Arc<RwLock<Option<TransactionState>>>,
+    #[allow(dead_code)]
     transaction_log: Arc<RwLock<Vec<TransactionLogEntry>>>,
+    #[allow(dead_code)]
     savepoint_data: Arc<RwLock<HashMap<String, SavepointData>>>,
 
     // Security and permissions
+    #[allow(dead_code)]
     users: Arc<RwLock<HashMap<String, UserRole>>>,
+    #[allow(dead_code)]
     current_user: Arc<RwLock<String>>,
+    #[allow(dead_code)]
     permissions: Arc<RwLock<HashMap<String, Vec<Permission>>>>,
 
     // Settings and configuration
@@ -261,6 +269,7 @@ pub struct SqlExecutor {
     vector_extensions: Arc<RwLock<HashMap<String, bool>>>,
 
     // Expression evaluator
+    #[allow(dead_code)]
     expression_evaluator: Arc<RwLock<ExpressionEvaluator>>,
 }
 
@@ -751,58 +760,53 @@ impl SqlExecutor {
         let mut rows = Vec::new();
 
         // Handle simple SELECT * FROM table queries
-        if let Some(from_clause) = &stmt.from_clause {
-            if let FromClause::Table { name, .. } = from_clause {
-                let table_name = name.full_name();
+        if let Some(FromClause::Table { name, .. }) = &stmt.from_clause {
+            let table_name = name.full_name();
 
-                // Get table schema
-                let tables = self.tables.read().await;
-                let table_schema = tables
-                    .get(&table_name)
-                    .ok_or_else(|| {
-                        ProtocolError::PostgresError(format!(
-                            "Table '{}' does not exist",
-                            table_name
-                        ))
-                    })?
-                    .clone();
-                drop(tables);
+            // Get table schema
+            let tables = self.tables.read().await;
+            let table_schema = tables
+                .get(&table_name)
+                .ok_or_else(|| {
+                    ProtocolError::PostgresError(format!("Table '{}' does not exist", table_name))
+                })?
+                .clone();
+            drop(tables);
 
-                // Build column list
-                for item in &stmt.select_list {
-                    match item {
-                        SelectItem::Wildcard => {
-                            for col in &table_schema.columns {
-                                columns.push(col.name.clone());
-                            }
+            // Build column list
+            for item in &stmt.select_list {
+                match item {
+                    SelectItem::Wildcard => {
+                        for col in &table_schema.columns {
+                            columns.push(col.name.clone());
                         }
-                        SelectItem::Expression { expr: _, alias } => {
-                            // TODO: Handle expressions properly
-                            columns.push(alias.clone().unwrap_or_else(|| "expr".to_string()));
-                        }
-                        SelectItem::QualifiedWildcard { qualifier: _ } => {
-                            // TODO: Handle qualified wildcards
-                            for col in &table_schema.columns {
-                                columns.push(col.name.clone());
-                            }
+                    }
+                    SelectItem::Expression { expr: _, alias } => {
+                        // TODO: Handle expressions properly
+                        columns.push(alias.clone().unwrap_or_else(|| "expr".to_string()));
+                    }
+                    SelectItem::QualifiedWildcard { qualifier: _ } => {
+                        // TODO: Handle qualified wildcards
+                        for col in &table_schema.columns {
+                            columns.push(col.name.clone());
                         }
                     }
                 }
+            }
 
-                // Get table data
-                let table_data = self.table_data.read().await;
-                if let Some(data) = table_data.get(&table_name) {
-                    for row in data {
-                        let mut result_row = Vec::new();
-                        for col_name in &columns {
-                            let value = row
-                                .get(col_name)
-                                .map(|v| v.to_postgres_string())
-                                .or(Some("".to_string()));
-                            result_row.push(value);
-                        }
-                        rows.push(result_row);
+            // Get table data
+            let table_data = self.table_data.read().await;
+            if let Some(data) = table_data.get(&table_name) {
+                for row in data {
+                    let mut result_row = Vec::new();
+                    for col_name in &columns {
+                        let value = row
+                            .get(col_name)
+                            .map(|v| v.to_postgres_string())
+                            .or(Some("".to_string()));
+                        result_row.push(value);
                     }
+                    rows.push(result_row);
                 }
             }
         }

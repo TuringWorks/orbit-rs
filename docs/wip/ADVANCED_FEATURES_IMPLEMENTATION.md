@@ -1,3 +1,9 @@
+---
+layout: default
+title: Advanced Transaction Features Implementation Summary
+category: wip
+---
+
 # Advanced Transaction Features Implementation Summary
 
 ## Overview

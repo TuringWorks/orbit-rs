@@ -4,7 +4,7 @@ use std::env;
 use std::time::Duration;
 
 /// Prometheus exporter configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct PrometheusConfig {
     /// Server configuration
     pub server: ServerConfig,
@@ -20,18 +20,6 @@ pub struct PrometheusConfig {
 
     /// Security configuration
     pub security: SecurityConfig,
-}
-
-impl Default for PrometheusConfig {
-    fn default() -> Self {
-        Self {
-            server: ServerConfig::default(),
-            metrics: MetricsConfig::default(),
-            export: ExportConfig::default(),
-            dashboard: DashboardConfig::default(),
-            security: SecurityConfig::default(),
-        }
-    }
 }
 
 /// Server configuration

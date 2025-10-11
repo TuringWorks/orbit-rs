@@ -1,3 +1,9 @@
+---
+layout: default
+title: RFC 012: Kubernetes Operator & Cloud-Native Capabilities
+category: rfcs
+---
+
 # RFC 012: Kubernetes Operator & Cloud-Native Capabilities
 
 **Status**: Draft  

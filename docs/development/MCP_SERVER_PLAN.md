@@ -1,3 +1,9 @@
+---
+layout: default
+title: MCP Server for Orbit-RS: LLM Integration Plan
+category: development
+---
+
 # MCP Server for Orbit-RS: LLM Integration Plan
 
 ## Overview

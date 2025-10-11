@@ -1,3 +1,9 @@
+---
+layout: default
+title: Redis Time Series Compatibility Implementation
+category: issues
+---
+
 # Redis Time Series Compatibility Implementation
 
 **Feature Type:** Protocol Adapter  

@@ -115,7 +115,7 @@ impl Container {
         // Register type mapping
         self.type_registry
             .entry(type_id)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(name.clone());
 
         debug!("Registered singleton bean: {}", name);
@@ -148,7 +148,7 @@ impl Container {
         // Register type mapping
         self.type_registry
             .entry(type_id)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(name.clone());
 
         debug!("Registered prototype bean factory: {}", name);
@@ -340,6 +340,7 @@ impl Container {
     }
 
     /// Check for circular dependencies using DFS
+    #[allow(clippy::only_used_in_recursion)]
     fn has_circular_dependency(
         &self,
         bean_name: &str,

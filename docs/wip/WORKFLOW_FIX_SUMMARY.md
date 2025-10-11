@@ -1,3 +1,9 @@
+---
+layout: default
+title: GitHub Actions Workflow Fix Summary
+category: wip
+---
+
 # GitHub Actions Workflow Fix Summary
 
 **Date:** 2025-10-03  

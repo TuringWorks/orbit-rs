@@ -1,6 +1,6 @@
 use crate::{AppError, PluginConfig};
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct PluginManager;
 
 impl PluginManager {

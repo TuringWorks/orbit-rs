@@ -1,3 +1,9 @@
+---
+layout: default
+title: Orbit-RS Kubernetes Deployment Guide
+category: documentation
+---
+
 # Orbit-RS Kubernetes Deployment Guide
 
 This guide provides comprehensive instructions for deploying Orbit-RS on Kubernetes in production environments.

@@ -182,7 +182,7 @@ impl GPUSpatialEngine {
             }
 
             // Update centroids
-            for cluster_id in 0..k {
+            for (cluster_id, centroid) in centroids.iter_mut().enumerate().take(k) {
                 let cluster_points: Vec<&Point> = points
                     .iter()
                     .enumerate()
@@ -195,7 +195,7 @@ impl GPUSpatialEngine {
                         / cluster_points.len() as f64;
                     let avg_y = cluster_points.iter().map(|p| p.y).sum::<f64>()
                         / cluster_points.len() as f64;
-                    centroids[cluster_id] = Point::new(avg_x, avg_y, None);
+                    *centroid = Point::new(avg_x, avg_y, None);
                 }
             }
         }
