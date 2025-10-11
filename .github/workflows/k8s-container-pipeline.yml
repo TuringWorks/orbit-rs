@@ -146,33 +146,22 @@ jobs:
   # ============================================================================
 
   build-images:
-    name: Build ${{ matrix.component }}-${{ matrix.build-type }} (${{ matrix.platform }})${{ matrix.gpu-enabled && '-gpu' || '' }}
+    name: Build ${{ matrix.component }}-${{ matrix.build-type }} (${{ matrix.platform }})
     runs-on: ubuntu-latest
     needs: setup
     if: success()
     strategy:
       fail-fast: false
       matrix:
-        component: ["orbit-server", "orbit-client", "orbit-operator", "orbit-compute"]
+        # Only build containers for components with binary targets
+        component: ["orbit-server", "orbit-operator"]
         build-type: ${{ fromJson(needs.setup.outputs.build-types) }}
         platform: ["linux/amd64", "linux/arm64"]
-        gpu-enabled: [false, true]
         include:
           - platform: "linux/amd64"
             runner-arch: "amd64"
           - platform: "linux/arm64"
             runner-arch: "arm64"
-        exclude:
-          # Only build GPU variants for orbit-compute
-          - component: "orbit-server"
-            gpu-enabled: true
-          - component: "orbit-client"
-            gpu-enabled: true
-          - component: "orbit-operator"
-            gpu-enabled: true
-          # No ARM64 GPU support for now (can be enabled later)
-          - platform: "linux/arm64"
-            gpu-enabled: true
     permissions:
       contents: read
       packages: write
@@ -477,7 +466,8 @@ jobs:
     if: needs.setup.outputs.should-push == 'true'
     strategy:
       matrix:
-        component: ["orbit-server", "orbit-client", "orbit-operator", "orbit-compute"]
+        # Only create manifests for components with binary targets
+        component: ["orbit-server", "orbit-operator"]
         build-type: ${{ fromJson(needs.setup.outputs.build-types) }}
     permissions:
       contents: read
@@ -871,7 +861,8 @@ jobs:
         # Update Kubernetes manifests with new image tags
         mkdir -p k8s/test-deployment
         
-        for component in orbit-server orbit-client orbit-operator orbit-compute; do
+        # Only create deployments for components with binary targets
+        for component in orbit-server orbit-operator; do
           cat > k8s/test-deployment/${component}-deployment.yaml << EOF
         apiVersion: apps/v1
         kind: Deployment
@@ -958,7 +949,7 @@ jobs:
       run: |
         VERSION="${{ needs.setup.outputs.version }}"
         
-        # Update Helm values for testing
+        # Update Helm values for testing (only for components with binary targets)
         cat > helm/orbit-rs/values-test.yaml << EOF
         orbitServer:
           image:
@@ -966,22 +957,10 @@ jobs:
             tag: ${VERSION}-release
             pullPolicy: IfNotPresent
           replicaCount: 1
-          
-        orbitClient:
-          image:
-            repository: ${REGISTRY}/${IMAGE_NAMESPACE}/orbit-client
-            tag: ${VERSION}-release
-            pullPolicy: IfNotPresent
             
         orbitOperator:
           image:
             repository: ${REGISTRY}/${IMAGE_NAMESPACE}/orbit-operator
-            tag: ${VERSION}-release
-            pullPolicy: IfNotPresent
-            
-        orbitCompute:
-          image:
-            repository: ${REGISTRY}/${IMAGE_NAMESPACE}/orbit-compute
             tag: ${VERSION}-release
             pullPolicy: IfNotPresent
         EOF
@@ -1015,7 +994,7 @@ jobs:
           echo "✅ Download page updated"
         fi
         echo ""
-        echo "📦 Built images for components: orbit-server, orbit-client, orbit-operator, orbit-compute"
+        echo "📦 Built images for components: orbit-server, orbit-operator"
         echo "🏗️ Build types: ${{ needs.setup.outputs.build-types }}"
         echo "🖥️ Platforms: ${{ needs.setup.outputs.platforms }}"
         echo "📝 Version: ${{ needs.setup.outputs.version }}"
