@@ -1,3 +1,9 @@
+---
+layout: default
+title: RFC-012: Query Languages Analysis (OrbitQL & SQL)
+category: rfcs
+---
+
 # RFC-012: Query Languages Analysis (OrbitQL & SQL)
 
 **Date**: October 9, 2025  

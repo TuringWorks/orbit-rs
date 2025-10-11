@@ -1,3 +1,9 @@
+---
+layout: default
+title: Kubernetes Persistence Guide for Orbit-RS
+category: documentation
+---
+
 # Kubernetes Persistence Guide for Orbit-RS
 
 This guide explains how to configure Orbit-RS persistence backends when deploying on Kubernetes, using either the raw manifests, the Helm chart, or the Operator (CRDs).

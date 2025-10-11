@@ -1,3 +1,9 @@
+---
+layout: default
+title: Orbit-RS Master Documentation
+category: documentation
+---
+
 # Orbit-RS Master Documentation
 **Single Source of Truth for Current State and Planned Development**
 

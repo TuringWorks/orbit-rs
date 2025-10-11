@@ -1,3 +1,9 @@
+---
+layout: default
+title: PostgreSQL Wire Protocol - Complete Implementation Report
+category: protocols
+---
+
 # PostgreSQL Wire Protocol - Complete Implementation Report
 
 ## Executive Summary

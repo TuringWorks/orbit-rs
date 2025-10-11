@@ -1,3 +1,9 @@
+---
+layout: default
+title: Rust Coding Standards — LLM Execution Playbook
+category: guidelines
+---
+
 # Rust Coding Standards — LLM Execution Playbook
 
 > Purpose: Give a large language model (LLM) precise, deterministic rules to **write, modify, and review** Rust code in a way that a human team can trust. Follow the checklists and command recipes _exactly_. When unsure, use the **Defaults** section at the end.

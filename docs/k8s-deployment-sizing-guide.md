@@ -1,3 +1,9 @@
+---
+layout: default
+title: Kubernetes Deployment Sizing Guide
+category: documentation
+---
+
 # Kubernetes Deployment Sizing Guide
 
 ## Table of Contents

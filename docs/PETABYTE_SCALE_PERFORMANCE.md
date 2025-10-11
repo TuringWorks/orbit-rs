@@ -1,3 +1,9 @@
+---
+layout: default
+title: Petabyte-Scale Performance Guide for Orbit-RS
+category: documentation
+---
+
 # Petabyte-Scale Performance Guide for Orbit-RS
 
 This document provides comprehensive guidance on how orbit-rs handles large petabyte-level tables, including memory requirements, disk requirements, and cluster node requirements for managing 1PB+ of data.

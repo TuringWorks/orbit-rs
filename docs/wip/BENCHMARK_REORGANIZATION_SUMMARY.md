@@ -1,3 +1,9 @@
+---
+layout: default
+title: OrbitQL Benchmark Reorganization - Documentation Update Summary
+category: wip
+---
+
 # OrbitQL Benchmark Reorganization - Documentation Update Summary
 
 **Date**: October 11, 2025  

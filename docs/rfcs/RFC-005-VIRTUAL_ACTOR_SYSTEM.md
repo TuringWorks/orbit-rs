@@ -1,3 +1,9 @@
+---
+layout: default
+title: RFC-005: Virtual Actor System Analysis
+category: rfcs
+---
+
 # RFC-005: Virtual Actor System Analysis
 
 **Date**: October 9, 2025  

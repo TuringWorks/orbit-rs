@@ -1,3 +1,9 @@
+---
+layout: default
+title: RFC-004: AI-Native Database Features for Orbit-RS
+category: rfcs
+---
+
 # RFC-004: AI-Native Database Features for Orbit-RS
 
 **Date**: October 9, 2025  

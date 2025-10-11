@@ -1,3 +1,9 @@
+---
+layout: default
+title: AQL GraphRAG Function Design
+category: documentation
+---
+
 # AQL GraphRAG Function Design
 
 ## Overview

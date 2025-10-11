@@ -1,3 +1,9 @@
+---
+layout: default
+title: Kotlin/JVM to Rust Dependency Mapping
+category: development
+---
+
 # Kotlin/JVM to Rust Dependency Mapping
 
 ## Core Runtime Dependencies

@@ -1,3 +1,9 @@
+---
+layout: default
+title: CI/CD Pipeline Documentation
+category: documentation
+---
+
 # CI/CD Pipeline Documentation
 
 ## Overview

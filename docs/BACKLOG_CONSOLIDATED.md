@@ -1,3 +1,9 @@
+---
+layout: default
+title: Orbit-RS: Comprehensive Feature Backlog
+category: documentation
+---
+
 # Orbit-RS: Comprehensive Feature Backlog
 
 > **Last Updated**: October 7, 2025 - Complete backlog consolidation and prioritization  

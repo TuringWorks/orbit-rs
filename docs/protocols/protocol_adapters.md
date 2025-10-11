@@ -1,3 +1,9 @@
+---
+layout: default
+title: Protocol Adapters
+category: protocols
+---
+
 # Protocol Adapters
 
 Orbit-RS provides multiple protocol adapters enabling clients to interact with the actor system using familiar protocols. This allows existing applications to integrate with Orbit-RS without requiring significant code changes.

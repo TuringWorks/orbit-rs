@@ -1,3 +1,9 @@
+---
+layout: default
+title: OrbitQL Reference
+category: documentation
+---
+
 # OrbitQL Reference
 
 OrbitQL is Orbit-RS's native query language designed specifically for multi-model distributed systems. It combines the familiarity of SQL with advanced features for graph traversals, time series analytics, and distributed computing, all optimized for the Orbit actor system.

@@ -1,3 +1,9 @@
+---
+layout: default
+title: LSM Tree Implementation Plan for orbit-rs
+category: documentation
+---
+
 # LSM Tree Implementation Plan for orbit-rs
 
 ## Executive Summary

@@ -1,3 +1,9 @@
+---
+layout: default
+title: RFC-001: Columnar Analytics Engine for Orbit-RS
+category: rfcs
+---
+
 # RFC-001: Columnar Analytics Engine for Orbit-RS
 
 **Date**: October 9, 2025  

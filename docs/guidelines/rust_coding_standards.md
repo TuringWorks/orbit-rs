@@ -1,3 +1,9 @@
+---
+layout: default
+title: Rust Coding Standards
+category: guidelines
+---
+
 # Rust Coding Standards
 
 ## 0) Tooling Baseline

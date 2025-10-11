@@ -1,3 +1,9 @@
+---
+layout: default
+title: Orbit-RS Kubernetes Deployment Optimization
+category: documentation
+---
+
 # Orbit-RS Kubernetes Deployment Optimization
 
 This document provides comprehensive guidance for deploying Orbit-RS in Kubernetes environments with optimized resource allocation, GPU acceleration, and various workload profiles.

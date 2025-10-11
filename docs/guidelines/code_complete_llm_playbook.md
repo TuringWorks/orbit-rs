@@ -1,3 +1,9 @@
+---
+layout: default
+title: Code-Complete Steps Playbook — For LLM Execution
+category: guidelines
+---
+
 # Code-Complete Steps Playbook — For LLM Execution
 
 > Purpose: a deterministic, end-to-end checklist that a Large Language Model (LLM) or bot can follow to deliver **production-grade code** from spec to release. All steps are **idempotent** and include machine-checkable gates.

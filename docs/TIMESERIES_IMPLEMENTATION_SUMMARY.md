@@ -1,3 +1,9 @@
+---
+layout: default
+title: Time Series Implementation Summary
+category: documentation
+---
+
 # Time Series Implementation Summary
 
 ## Overview

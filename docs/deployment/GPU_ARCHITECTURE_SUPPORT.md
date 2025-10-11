@@ -1,3 +1,9 @@
+---
+layout: default
+title: GPU Architecture Support in Orbit-RS
+category: deployment
+---
+
 # GPU Architecture Support in Orbit-RS
 
 **Date**: 2025-01-09  

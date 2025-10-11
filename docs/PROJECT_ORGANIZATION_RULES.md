@@ -1,3 +1,9 @@
+---
+layout: default
+title: Project Organization Rules
+category: documentation
+---
+
 # Project Organization Rules
 
 This document establishes clear guidelines for where different types of files should be placed within the Orbit-RS project to maintain consistency and organization.

@@ -1,3 +1,9 @@
+---
+layout: default
+title: ✅ GitHub Secrets Configuration - Setup Complete
+category: wip
+---
+
 # ✅ GitHub Secrets Configuration - Setup Complete
 
 **Status:** All documentation and tooling ready for use  
