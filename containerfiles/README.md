@@ -77,11 +77,11 @@ Build types:
 
 ## Components
 
-The following Orbit-RS components have container images:
+The following Orbit-RS binary components have container images:
 - `orbit-server` - Main distributed system server
-- `orbit-client` - Client library container
 - `orbit-operator` - Kubernetes operator
-- `orbit-compute` - Compute node component
+
+**Note:** `orbit-client` and `orbit-compute` are library crates and do not have standalone container images.
 
 ## Local Development
 
