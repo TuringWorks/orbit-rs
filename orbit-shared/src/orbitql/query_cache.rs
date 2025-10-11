@@ -1113,6 +1113,7 @@ impl Default for QueryCacheManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::orbitql::ast::{Statement, SelectStatement, FromClause, SelectField};
 
     #[tokio::test]
     async fn test_cache_manager_creation() {
@@ -1126,17 +1127,22 @@ mod tests {
     async fn test_result_caching() {
         let cache_manager = QueryCacheManager::new();
 
-        let query = Query::Select(SelectQuery {
-            columns: vec![],
-            from: Some(FromClause {
-                table_name: "test_table".to_string(),
+        let query = Statement::Select(SelectStatement {
+            with_clauses: vec![],
+            fields: vec![SelectField::All],
+            from: vec![FromClause::Table {
+                name: "test_table".to_string(),
                 alias: None,
-            }),
+            }],
             where_clause: None,
+            join_clauses: vec![],
             group_by: vec![],
             having: None,
             order_by: vec![],
             limit: None,
+            offset: None,
+            fetch: vec![],
+            timeout: None,
         });
 
         // Initially no cached result

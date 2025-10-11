@@ -1085,6 +1085,7 @@ pub struct QueryPatternSummary {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::QueryValue;
 
     #[tokio::test]
     async fn test_recommendation_engine_creation() {

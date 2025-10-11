@@ -95,7 +95,10 @@ pub enum MLError {
     /// GPU/CUDA errors
     #[cfg(feature = "gpu")]
     #[error("GPU error: {message}")]
-    Gpu { message: String },
+    Gpu {
+        /// Error message describing the GPU/CUDA issue
+        message: String,
+    },
 
     /// Distributed computing errors
     #[cfg(feature = "distributed")]

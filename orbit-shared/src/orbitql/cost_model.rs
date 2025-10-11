@@ -163,6 +163,7 @@ impl CardinalityEstimate {
 }
 
 /// Cost model implementation
+#[derive(Clone)]
 pub struct CostModel {
     /// Configuration parameters
     config: CostModelConfig,

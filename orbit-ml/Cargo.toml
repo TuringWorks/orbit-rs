@@ -15,7 +15,7 @@ graph-neural-networks = []
 python = [] # Dependencies commented out for initial build  
 javascript = [] # Dependencies commented out for initial build
 lua = [] # Dependencies commented out for initial build
-gpu = [] # GPU dependencies commented out for initial build
+gpu = ["candle-core", "candle-nn"] # GPU acceleration with Candle
 distributed = [] # Dependencies commented out for initial build
 industry-healthcare = []
 industry-fintech = []
@@ -40,9 +40,9 @@ futures.workspace = true
 once_cell.workspace = true
 async-trait.workspace = true
 
-# Machine Learning Core (commented out for initial build due to compatibility issues)
-# candle-core = "0.7"
-# candle-nn = "0.7" 
+# Machine Learning Core - using latest stable version
+candle-core = { version = "0.9", optional = true }
+candle-nn = { version = "0.9", optional = true }
 # candle-datasets = "0.7"
 # linfa = "0.7"
 # linfa-clustering = "0.7"

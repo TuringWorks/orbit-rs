@@ -6,7 +6,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::net::SocketAddr;
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, Instant, SystemTime};
 use tokio::sync::{broadcast, mpsc};
@@ -1174,7 +1174,8 @@ impl Default for DistributedStats {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::net::Ipv4Addr;
+    use crate::orbitql::ast::{Statement, SelectStatement, FromClause, SelectField};
+    use std::net::{IpAddr, Ipv4Addr};
 
     #[test]
     fn test_node_info_creation() {
@@ -1220,17 +1221,22 @@ mod tests {
             metadata: HashMap::new(),
         }];
 
-        let query = Query::Select(SelectQuery {
-            columns: vec![],
-            from: Some(FromClause {
-                table_name: "test_table".to_string(),
+        let query = Statement::Select(SelectStatement {
+            with_clauses: vec![],
+            fields: vec![SelectField::All],
+            from: vec![FromClause::Table {
+                name: "test_table".to_string(),
                 alias: None,
-            }),
+            }],
             where_clause: None,
+            join_clauses: vec![],
             group_by: vec![],
             having: None,
             order_by: vec![],
             limit: Some(100),
+            offset: None,
+            fetch: vec![],
+            timeout: None,
         });
 
         let result = strategy.fragment_query(&query, &nodes);
