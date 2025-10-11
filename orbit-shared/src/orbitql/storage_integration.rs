@@ -219,6 +219,7 @@ pub enum StorageError {
     SchemaError(String),
     CompressionError(String),
     PartitionError(String),
+    ConfigurationError(String),
 }
 
 impl std::fmt::Display for StorageError {
@@ -231,6 +232,7 @@ impl std::fmt::Display for StorageError {
             StorageError::SchemaError(msg) => write!(f, "Schema error: {}", msg),
             StorageError::CompressionError(msg) => write!(f, "Compression error: {}", msg),
             StorageError::PartitionError(msg) => write!(f, "Partition error: {}", msg),
+            StorageError::ConfigurationError(msg) => write!(f, "Configuration error: {}", msg),
         }
     }
 }
@@ -454,16 +456,26 @@ impl S3StorageProvider {
             self.config.bucket, self.config.region
         )
     }
+
+    /// Get a reference to the underlying S3 client
+    pub fn client(&self) -> &Arc<S3Client> {
+        &self.client
+    }
+
+    /// Check if client is available
+    pub fn has_client(&self) -> bool {
+        Arc::strong_count(&self.client) > 0
+    }
 }
 
 impl StorageProvider for S3StorageProvider {
     fn read_data(&self, _path: &str) -> Result<Box<dyn AsyncRead + Unpin + Send>, StorageError> {
-        // Log configuration for debugging
-        log::debug!(
-            "S3 read_data from bucket: {}, path: {}",
-            self.config.bucket,
-            _path
-        );
+        // Validate config before attempting read
+        if self.config.bucket.is_empty() {
+            return Err(StorageError::ConfigurationError(
+                "Empty bucket name".to_string(),
+            ));
+        }
         // Would implement actual S3 streaming read using self.client
         Err(StorageError::NetworkError(
             "S3 read not implemented".to_string(),
@@ -471,12 +483,12 @@ impl StorageProvider for S3StorageProvider {
     }
 
     fn write_data(&self, _path: &str) -> Result<Box<dyn AsyncWrite + Unpin + Send>, StorageError> {
-        // Log configuration for debugging
-        log::debug!(
-            "S3 write_data to bucket: {}, path: {}",
-            self.config.bucket,
-            _path
-        );
+        // Validate config before attempting write
+        if self.config.bucket.is_empty() {
+            return Err(StorageError::ConfigurationError(
+                "Empty bucket name".to_string(),
+            ));
+        }
         // Would implement actual S3 streaming write using self.client
         Err(StorageError::NetworkError(
             "S3 write not implemented".to_string(),
@@ -485,8 +497,7 @@ impl StorageProvider for S3StorageProvider {
 
     fn list_files(&self, _path: &str) -> Result<Vec<String>, StorageError> {
         // Use config to construct proper S3 path
-        let s3_path = format!("s3://{}/{}", self.config.bucket, _path);
-        log::debug!("S3 list_files at: {}", s3_path);
+        let _s3_path = format!("s3://{}/{}", self.config.bucket, _path);
         // Would implement actual S3 list operation using self.client
         Ok(vec![])
     }
@@ -505,8 +516,12 @@ impl StorageProvider for S3StorageProvider {
     }
 
     fn exists(&self, _path: &str) -> Result<bool, StorageError> {
-        // Log bucket information from config
-        log::trace!("S3 exists check in bucket: {}", self.config.bucket);
+        // Validate bucket configuration
+        if self.config.bucket.is_empty() {
+            return Err(StorageError::ConfigurationError(
+                "Empty bucket name".to_string(),
+            ));
+        }
         // Would use self.client to check object existence
         Ok(false)
     }
