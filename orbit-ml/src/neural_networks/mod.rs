@@ -47,7 +47,10 @@ pub enum NetworkType {
     /// Gated Recurrent Unit
     GRU,
     /// Custom architecture
-    Custom { name: String },
+    Custom {
+        /// Name of the custom architecture
+        name: String,
+    },
 }
 
 /// Neural network layer configuration
@@ -77,34 +80,57 @@ pub enum LayerType {
     Dense,
     /// Convolutional layer
     Conv1D {
+        /// Size of the convolution kernel
         kernel_size: usize,
+        /// Stride for the convolution operation
         stride: usize,
+        /// Padding to apply to input
         padding: usize,
     },
     /// 2D Convolutional layer
     Conv2D {
+        /// Size of the 2D convolution kernel as (height, width)
         kernel_size: (usize, usize),
+        /// Stride for the 2D convolution as (height, width)
         stride: (usize, usize),
+        /// Padding to apply to input as (height, width)
         padding: (usize, usize),
     },
     /// 3D Convolutional layer
     Conv3D {
+        /// Size of the 3D convolution kernel as (depth, height, width)
         kernel_size: (usize, usize, usize),
+        /// Stride for the 3D convolution as (depth, height, width)
         stride: (usize, usize, usize),
+        /// Padding to apply to input as (depth, height, width)
         padding: (usize, usize, usize),
     },
     /// Max pooling layer
-    MaxPool1D { pool_size: usize, stride: usize },
+    MaxPool1D {
+        /// Size of the pooling window
+        pool_size: usize,
+        /// Stride for the pooling operation
+        stride: usize,
+    },
     /// 2D Max pooling layer
     MaxPool2D {
+        /// Size of the 2D pooling window as (height, width)
         pool_size: (usize, usize),
+        /// Stride for the 2D pooling as (height, width)
         stride: (usize, usize),
     },
     /// Average pooling layer
-    AvgPool1D { pool_size: usize, stride: usize },
+    AvgPool1D {
+        /// Size of the pooling window
+        pool_size: usize,
+        /// Stride for the pooling operation
+        stride: usize,
+    },
     /// 2D Average pooling layer
     AvgPool2D {
+        /// Size of the 2D pooling window as (height, width)
         pool_size: (usize, usize),
+        /// Stride for the 2D pooling as (height, width)
         stride: (usize, usize),
     },
     /// Recurrent layer
@@ -122,7 +148,10 @@ pub enum LayerType {
     /// Flatten layer
     Flatten,
     /// Reshape layer
-    Reshape { shape: Vec<usize> },
+    Reshape {
+        /// Target shape for tensor reshaping
+        shape: Vec<usize>,
+    },
 }
 
 /// Activation function types
@@ -134,9 +163,15 @@ pub enum ActivationType {
     /// Rectified Linear Unit
     ReLU,
     /// Leaky ReLU
-    LeakyReLU { alpha: f64 },
+    LeakyReLU {
+        /// Negative slope coefficient (typically 0.01)
+        alpha: f64,
+    },
     /// Exponential Linear Unit
-    ELU { alpha: f64 },
+    ELU {
+        /// Alpha parameter for negative values
+        alpha: f64,
+    },
     /// Swish activation
     Swish,
     /// GELU activation
@@ -195,67 +230,119 @@ pub enum OptimizerType {
     AdamW,
 }
 
-/// Generic neural network trait
+/// Generic neural network trait defining core operations
+///
+/// All neural network implementations must support these fundamental operations
+/// for training, inference, and persistence.
 #[async_trait]
 pub trait NeuralNetwork: Send + Sync {
-    /// Forward pass through the network
+    /// Perform forward pass through the network
+    ///
+    /// # Arguments
+    /// * `input` - Input data matrix of shape [batch_size, input_features]
+    ///
+    /// # Returns
+    /// Output matrix of shape [batch_size, output_features]
     async fn forward(&self, input: &Array2<f64>) -> Result<Array2<f64>>;
 
-    /// Backward pass (compute gradients)
+    /// Perform backward pass to compute gradients
+    ///
+    /// # Arguments
+    /// * `loss_gradient` - Gradient of loss with respect to network output
     async fn backward(&mut self, loss_gradient: &Array2<f64>) -> Result<()>;
 
-    /// Update weights using optimizer
+    /// Update network weights using the provided optimizer
+    ///
+    /// # Arguments
+    /// * `optimizer` - Optimizer instance to use for weight updates
     async fn update_weights(&mut self, optimizer: &dyn Optimizer) -> Result<()>;
 
-    /// Get network architecture
+    /// Get the network's architecture specification
+    ///
+    /// # Returns
+    /// Reference to the network architecture configuration
     fn architecture(&self) -> &NetworkArchitecture;
 
-    /// Get number of parameters
+    /// Get the total number of trainable parameters
+    ///
+    /// # Returns
+    /// Total count of weights and biases in the network
     fn parameter_count(&self) -> usize;
 
-    /// Save network weights
+    /// Serialize network weights to bytes for persistence
+    ///
+    /// # Returns
+    /// Serialized weight data as bytes
     async fn save_weights(&self) -> Result<Vec<u8>>;
 
-    /// Load network weights
+    /// Load network weights from serialized bytes
+    ///
+    /// # Arguments
+    /// * `weights` - Serialized weight data to load
     async fn load_weights(&mut self, weights: &[u8]) -> Result<()>;
 }
 
-/// Neural network builder
+/// Builder for constructing neural networks with fluent API
+///
+/// Provides a convenient way to specify network architecture, layers,
+/// optimization configuration, and other network properties step by step.
 #[derive(Default)]
 pub struct NeuralNetworkBuilder {
+    /// Type of neural network architecture
     network_type: Option<NetworkType>,
+    /// Shape of input data
     input_shape: Option<Vec<usize>>,
+    /// List of layer configurations
     layers: Vec<LayerConfig>,
+    /// Expected output shape
     output_shape: Option<Vec<usize>>,
+    /// Loss function name
     loss_function: Option<String>,
+    /// Optimizer configuration
     optimizer: Option<OptimizerConfig>,
 }
 
 impl NeuralNetworkBuilder {
-    /// Create a new neural network builder
+    /// Create a new neural network builder instance
+    ///
+    /// # Returns
+    /// A new builder with default configuration
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Set network type
+    /// Set the type of neural network architecture
+    ///
+    /// # Arguments
+    /// * `network_type` - The architecture type (feedforward, CNN, RNN, etc.)
     pub fn network_type(mut self, network_type: NetworkType) -> Self {
         self.network_type = Some(network_type);
         self
     }
 
-    /// Set input shape
+    /// Set the input data shape
+    ///
+    /// # Arguments
+    /// * `shape` - Dimensions of input data (e.g., [784] for flattened MNIST)
     pub fn input_shape(mut self, shape: Vec<usize>) -> Self {
         self.input_shape = Some(shape);
         self
     }
 
-    /// Add a layer
+    /// Add a custom layer configuration to the network
+    ///
+    /// # Arguments
+    /// * `layer` - Complete layer configuration with type, units, and parameters
     pub fn add_layer(mut self, layer: LayerConfig) -> Self {
         self.layers.push(layer);
         self
     }
 
-    /// Add a dense layer
+    /// Add a dense (fully connected) layer
+    ///
+    /// # Arguments
+    /// * `units` - Number of neurons in the layer
+    /// * `activation` - Activation function to use
     pub fn dense(mut self, units: usize, activation: ActivationType) -> Self {
         self.layers.push(LayerConfig {
             layer_type: LayerType::Dense,
@@ -269,7 +356,14 @@ impl NeuralNetworkBuilder {
         self
     }
 
-    /// Add a convolutional 2D layer
+    /// Add a 2D convolutional layer for image processing
+    ///
+    /// # Arguments
+    /// * `filters` - Number of convolution filters (output channels)
+    /// * `kernel_size` - Size of convolution kernel as (height, width)
+    /// * `stride` - Stride for convolution as (height, width)
+    /// * `padding` - Padding for input as (height, width)
+    /// * `activation` - Activation function to apply
     pub fn conv2d(
         mut self,
         filters: usize,
@@ -294,7 +388,11 @@ impl NeuralNetworkBuilder {
         self
     }
 
-    /// Add max pooling 2D layer
+    /// Add a 2D max pooling layer for dimensionality reduction
+    ///
+    /// # Arguments
+    /// * `pool_size` - Size of pooling window as (height, width)
+    /// * `stride` - Stride for pooling as (height, width)
     pub fn max_pool2d(mut self, pool_size: (usize, usize), stride: (usize, usize)) -> Self {
         self.layers.push(LayerConfig {
             layer_type: LayerType::MaxPool2D { pool_size, stride },
@@ -308,7 +406,11 @@ impl NeuralNetworkBuilder {
         self
     }
 
-    /// Add LSTM layer
+    /// Add an LSTM (Long Short-Term Memory) layer for sequence processing
+    ///
+    /// # Arguments
+    /// * `units` - Number of LSTM units (memory cells)
+    /// * `activation` - Activation function for LSTM gates
     pub fn lstm(mut self, units: usize, activation: ActivationType) -> Self {
         self.layers.push(LayerConfig {
             layer_type: LayerType::LSTM,
@@ -322,7 +424,11 @@ impl NeuralNetworkBuilder {
         self
     }
 
-    /// Add GRU layer
+    /// Add a GRU (Gated Recurrent Unit) layer for sequence processing
+    ///
+    /// # Arguments
+    /// * `units` - Number of GRU units
+    /// * `activation` - Activation function for GRU gates
     pub fn gru(mut self, units: usize, activation: ActivationType) -> Self {
         self.layers.push(LayerConfig {
             layer_type: LayerType::GRU,
@@ -336,7 +442,10 @@ impl NeuralNetworkBuilder {
         self
     }
 
-    /// Add dropout layer
+    /// Add a dropout layer for regularization
+    ///
+    /// # Arguments
+    /// * `rate` - Dropout rate between 0.0 and 1.0
     pub fn dropout(mut self, rate: f64) -> Self {
         self.layers.push(LayerConfig {
             layer_type: LayerType::Dropout,
@@ -350,25 +459,40 @@ impl NeuralNetworkBuilder {
         self
     }
 
-    /// Set output shape
+    /// Set the expected output shape of the network
+    ///
+    /// # Arguments
+    /// * `shape` - Dimensions of network output (e.g., [10] for 10-class classification)
     pub fn output_shape(mut self, shape: Vec<usize>) -> Self {
         self.output_shape = Some(shape);
         self
     }
 
-    /// Set loss function
+    /// Set the loss function for training
+    ///
+    /// # Arguments
+    /// * `loss` - Loss function name (e.g., "mse", "categorical_crossentropy")
     pub fn loss_function(mut self, loss: &str) -> Self {
         self.loss_function = Some(loss.to_string());
         self
     }
 
-    /// Set optimizer
+    /// Set the optimizer configuration
+    ///
+    /// # Arguments
+    /// * `optimizer` - Complete optimizer configuration with type and parameters
     pub fn optimizer(mut self, optimizer: OptimizerConfig) -> Self {
         self.optimizer = Some(optimizer);
         self
     }
 
-    // Legacy compatibility methods
+    /// Legacy method: Add multiple dense layers with specified sizes (deprecated)
+    ///
+    /// # Arguments
+    /// * `layer_sizes` - Array of layer sizes to add sequentially
+    ///
+    /// # Note
+    /// This method is preserved for backward compatibility. Use individual layer methods for better control.
     pub fn layers(self, layer_sizes: &[usize]) -> Self {
         let mut builder = self;
         for &size in layer_sizes {
@@ -377,13 +501,26 @@ impl NeuralNetworkBuilder {
         builder
     }
 
+    /// Legacy method: Set activation function globally (deprecated)
+    ///
+    /// # Arguments
+    /// * `_activation` - Activation function name (ignored)
+    ///
+    /// # Note
+    /// This method is kept for compatibility but activations are now specified per layer.
     pub fn activation(self, _activation: &str) -> Self {
         // This method is kept for compatibility but the activation
         // is now specified per layer in the dense() method
         self
     }
 
-    /// Build the neural network
+    /// Build the configured neural network
+    ///
+    /// # Returns
+    /// A boxed neural network instance ready for training/inference
+    ///
+    /// # Errors
+    /// Returns error if the network configuration is invalid or construction fails
     pub async fn build(self) -> Result<Box<dyn NeuralNetwork>> {
         let network_type = self.network_type.unwrap_or(NetworkType::Feedforward);
 
@@ -433,7 +570,14 @@ impl NeuralNetworkBuilder {
 
 /// Convenience functions for common network architectures
 impl NeuralNetworkBuilder {
-    /// Create a simple feedforward classifier
+    /// Create a simple feedforward classifier with standard architecture
+    ///
+    /// # Arguments
+    /// * `input_size` - Number of input features
+    /// * `num_classes` - Number of output classes
+    ///
+    /// # Returns
+    /// Pre-configured builder for a 3-layer feedforward network with dropout
     pub fn feedforward_classifier(input_size: usize, num_classes: usize) -> Self {
         Self::new()
             .network_type(NetworkType::Feedforward)
@@ -452,7 +596,14 @@ impl NeuralNetworkBuilder {
             })
     }
 
-    /// Create a CNN for image classification
+    /// Create a CNN for image classification with standard architecture
+    ///
+    /// # Arguments
+    /// * `input_shape` - Input image dimensions [height, width, channels]
+    /// * `num_classes` - Number of output classes
+    ///
+    /// # Returns
+    /// Pre-configured builder for a 3-layer CNN with pooling and dense layers
     pub fn cnn_classifier(input_shape: Vec<usize>, num_classes: usize) -> Self {
         Self::new()
             .network_type(NetworkType::Convolutional)
@@ -478,7 +629,14 @@ impl NeuralNetworkBuilder {
             .loss_function("categorical_crossentropy")
     }
 
-    /// Create an LSTM for sequence processing
+    /// Create an LSTM network for sequence classification
+    ///
+    /// # Arguments
+    /// * `input_shape` - Input sequence dimensions [sequence_length, features]
+    /// * `num_classes` - Number of output classes
+    ///
+    /// # Returns
+    /// Pre-configured builder for a 2-layer LSTM with dropout
     pub fn lstm_classifier(input_shape: Vec<usize>, num_classes: usize) -> Self {
         Self::new()
             .network_type(NetworkType::LSTM)
@@ -492,7 +650,13 @@ impl NeuralNetworkBuilder {
             .loss_function("categorical_crossentropy")
     }
 
-    /// Legacy feedforward method for compatibility
+    /// Legacy method: Create basic feedforward builder (deprecated)
+    ///
+    /// # Returns
+    /// A basic builder configured for feedforward networks
+    ///
+    /// # Note
+    /// Use `new().network_type(NetworkType::Feedforward)` or specific presets instead
     pub fn feedforward() -> Self {
         Self::new().network_type(NetworkType::Feedforward)
     }

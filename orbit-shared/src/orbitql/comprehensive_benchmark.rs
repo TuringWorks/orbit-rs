@@ -11,25 +11,17 @@ use std::time::{Duration, Instant, SystemTime};
 // Import all OrbitQL components
 use crate::orbitql::advanced_analytics::*;
 use crate::orbitql::distributed_execution::{
-    self, ClusterConfig, DistributedExecutor, NetworkConfig as DistributedNetworkConfig, NodeInfo,
-    NodeResources, NodeRole, NodeStatus as DistributedNodeStatus,
+    ClusterConfig, DistributedExecutor, NodeInfo, NodeResources, NodeRole,
+    NodeStatus as DistributedNodeStatus,
 };
-use crate::orbitql::production_deployment::{self, *};
-use crate::orbitql::storage_integration::{
-    self, StorageConfig as StorageIntegrationConfig, StorageEngine,
-};
+use crate::orbitql::production_deployment::*;
+use crate::orbitql::storage_integration::StorageEngine;
 // Remove performance_benchmarking import as it doesn't exist
-use crate::orbitql::advanced_analytics::*;
-use crate::orbitql::ast::*;
-use crate::orbitql::benchmark::*;
 use crate::orbitql::cache::QueryExecutorTrait;
 use crate::orbitql::cost_based_planner::*;
 use crate::orbitql::cost_model::CostModel;
 use crate::orbitql::executor::QueryMetadata;
 use crate::orbitql::parallel_execution::*;
-use crate::orbitql::query_cache::{
-    self, CacheConfig as QueryCacheConfig, NodeStatus as CacheNodeStatus,
-};
 use crate::orbitql::statistics::StatisticsConfig;
 use crate::orbitql::statistics::StatisticsManager;
 use crate::orbitql::vectorized_execution::VectorizedExecutor;
@@ -1152,7 +1144,7 @@ impl ComprehensiveBenchmark {
         let warehouses = self.config.scale_factors.tpc_c;
         println!("🏃 Executing TPC-C benchmark ({} warehouses)", warehouses);
 
-        let start_time = Instant::now();
+        let _start_time = Instant::now();
         let duration = Duration::from_secs(300); // 5 minutes
 
         // Mock TPC-C transaction execution
@@ -2055,8 +2047,8 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn test_comprehensive_benchmark_creation() {
-        let config = BenchmarkConfig::default();
+    async fn test_comprehensive_benchmark() {
+        let config = ComprehensiveBenchmarkConfig::default();
         let benchmark = ComprehensiveBenchmark::new(config).await;
         assert!(benchmark.is_ok());
     }

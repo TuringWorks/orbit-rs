@@ -497,7 +497,7 @@ impl AQLSpatialExecutor {
         }
 
         // Similar to GEO_IN_RANGE but with different parameter order
-        let collection_name = self.extract_string(&args[0])?;
+        let _collection_name = self.extract_string(&args[0])?;
         let center_lat = self.extract_number(&args[1])?;
         let center_lng = self.extract_number(&args[2])?;
         let radius = self.extract_number(&args[3])?;

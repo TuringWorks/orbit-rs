@@ -3,18 +3,44 @@ use crate::error::Result;
 use crate::inference::InferenceResult;
 use uuid::Uuid;
 
+/// Job scheduler for managing training and inference tasks
+///
+/// Coordinates execution of ML operations including training jobs,
+/// inference requests, and resource allocation across available compute resources.
 #[derive(Debug)]
 pub struct JobScheduler;
 
 impl JobScheduler {
+    /// Create a new job scheduler with the given configuration
+    ///
+    /// # Arguments
+    /// * `_config` - ML engine configuration for scheduler setup
+    ///
+    /// # Returns
+    /// A new job scheduler instance ready for task management
     pub async fn new(_config: &MLConfig) -> Result<Self> {
         Ok(Self)
     }
 
+    /// Schedule a training job for execution
+    ///
+    /// # Arguments
+    /// * `_job_id` - Unique identifier for the training job
+    /// * `_data` - Serialized training data
+    ///
+    /// # Returns
+    /// Success indicator or error if scheduling fails
     pub async fn schedule_training_job(&self, _job_id: Uuid, _data: Vec<u8>) -> Result<()> {
         Ok(())
     }
 
+    /// Run inference for a scheduled job
+    ///
+    /// # Arguments
+    /// * `_job_id` - Unique identifier for the inference job
+    ///
+    /// # Returns
+    /// Inference results including predictions and performance metrics
     pub async fn run_inference(&self, _job_id: Uuid) -> Result<InferenceResult> {
         use crate::inference::{InferenceMetrics, InferenceResult, Prediction};
 

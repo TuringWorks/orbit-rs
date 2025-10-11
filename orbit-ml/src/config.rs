@@ -78,22 +78,31 @@ pub enum StorageBackend {
 
     /// Amazon S3 storage
     S3 {
+        /// S3 bucket name
         bucket: String,
+        /// AWS region
         region: String,
+        /// AWS access key ID (optional, can use IAM roles)
         access_key_id: Option<String>,
+        /// AWS secret access key (optional, can use IAM roles)
         secret_access_key: Option<String>,
     },
 
     /// Google Cloud Storage
     Gcs {
+        /// GCS bucket name
         bucket: String,
+        /// Path to GCS service account credentials file
         credentials_path: Option<PathBuf>,
     },
 
     /// Azure Blob Storage
     Azure {
+        /// Azure storage account name
         account_name: String,
+        /// Azure blob container name
         container: String,
+        /// Azure storage account access key
         access_key: Option<String>,
     },
 }

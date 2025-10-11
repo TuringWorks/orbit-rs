@@ -6,7 +6,7 @@
 //! for sophisticated cost-based optimization of multi-model queries.
 
 use crate::orbitql::ast::*;
-use crate::orbitql::cost_model::{CostModel, QueryCost};
+use crate::orbitql::cost_model::CostModel;
 use crate::orbitql::statistics::StatisticsManager;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

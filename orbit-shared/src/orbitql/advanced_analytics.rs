@@ -4,12 +4,12 @@
 //! workload pattern recognition, and auto-tuning capabilities for the OrbitQL query engine.
 
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashMap, VecDeque};
-use std::sync::{Arc, Mutex, RwLock};
-use std::time::{Duration, Instant, SystemTime};
-use tokio::sync::{broadcast, mpsc};
+use std::collections::{HashMap, VecDeque};
+use std::sync::{Arc, RwLock};
+use std::time::{Duration, SystemTime};
 
 /// Advanced Analytics coordinator
+#[allow(dead_code)]
 pub struct AdvancedAnalytics {
     /// ML-based cost estimator
     ml_cost_estimator: Arc<MLCostEstimator>,
@@ -65,6 +65,7 @@ impl Default for AnalyticsConfig {
 }
 
 /// ML-based cost estimator using various algorithms
+#[allow(dead_code)]
 pub struct MLCostEstimator {
     /// Linear regression model
     linear_model: Arc<RwLock<LinearRegressionModel>>,
@@ -220,6 +221,7 @@ pub struct LinearRegressionModel {
 }
 
 /// Random forest model for cost estimation
+#[allow(dead_code)]
 pub struct RandomForestModel {
     /// Decision trees
     trees: Vec<DecisionTree>,
@@ -242,6 +244,7 @@ pub struct DecisionTree {
 
 /// Tree node in decision tree
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct TreeNode {
     /// Feature index for split
     feature_index: Option<usize>,
@@ -256,6 +259,7 @@ pub struct TreeNode {
 }
 
 /// Neural network model for cost estimation
+#[allow(dead_code)]
 pub struct NeuralNetworkModel {
     /// Network layers
     layers: Vec<NetworkLayer>,
@@ -308,6 +312,7 @@ pub enum ActivationFunction {
 }
 
 /// Adaptive query optimizer
+#[allow(dead_code)]
 pub struct AdaptiveOptimizer {
     /// Optimization rules with success rates
     optimization_rules: Arc<RwLock<HashMap<String, OptimizationRule>>>,
@@ -438,6 +443,7 @@ pub struct AdaptationParameters {
 }
 
 /// Workload pattern analyzer
+#[allow(dead_code)]
 pub struct WorkloadPatternAnalyzer {
     /// Query patterns database
     patterns: Arc<RwLock<HashMap<String, WorkloadPattern>>>,
@@ -559,6 +565,7 @@ pub enum RecommendationType {
 }
 
 /// Pattern matcher for workload analysis
+#[allow(dead_code)]
 pub struct PatternMatcher {
     /// Matching algorithms
     algorithms: Vec<Box<dyn MatchingAlgorithm + Send + Sync>>,
@@ -637,6 +644,7 @@ pub struct FeatureDeviation {
 }
 
 /// Anomaly detector for unusual workload patterns
+#[allow(dead_code)]
 pub struct AnomalyDetector {
     /// Statistical thresholds
     thresholds: Arc<RwLock<AnomalyThresholds>>,
@@ -737,6 +745,7 @@ pub enum AnomalyType {
 }
 
 /// Trend analyzer for workload evolution
+#[allow(dead_code)]
 pub struct TrendAnalyzer {
     /// Time series data
     time_series: Arc<RwLock<HashMap<String, TimeSeries>>>,
@@ -798,6 +807,7 @@ pub trait TrendDetectionAlgorithm {
 }
 
 /// Auto-tuning system for dynamic optimization
+#[allow(dead_code)]
 pub struct AutoTuner {
     /// Tuning parameters
     parameters: Arc<RwLock<TuningParameters>>,
@@ -931,6 +941,7 @@ pub struct IndexParameters {
 }
 
 /// Performance feedback loop
+#[allow(dead_code)]
 pub struct FeedbackLoop {
     /// Performance metrics
     metrics: Arc<RwLock<PerformanceMetrics>>,
@@ -1012,6 +1023,7 @@ pub trait TuningStrategy {
 }
 
 /// Performance metrics collector
+#[allow(dead_code)]
 pub struct MetricsCollector {
     /// Collected metrics
     metrics: Arc<RwLock<HashMap<String, MetricSeries>>>,
@@ -1323,6 +1335,7 @@ impl LearningAlgorithm for GradientLearningAlgorithm {
 }
 
 /// Gradient Boosting Machine for cost estimation
+#[allow(dead_code)]
 pub struct GradientBoostingModel {
     /// Base estimators (decision trees)
     estimators: Vec<WeakLearner>,
@@ -1351,6 +1364,7 @@ pub struct GradientBoostingModel {
 }
 
 /// AdaBoost model for cost estimation
+#[allow(dead_code)]
 pub struct AdaBoostModel {
     /// Base estimators with their weights
     estimators: Vec<(WeakLearner, f64)>,
@@ -1369,6 +1383,7 @@ pub struct AdaBoostModel {
 }
 
 /// LightGBM-style gradient boosting
+#[allow(dead_code)]
 pub struct LightGBMModel {
     /// Leaf-wise growing trees
     trees: Vec<LightGBMTree>,
@@ -1396,6 +1411,7 @@ pub struct LightGBMModel {
 }
 
 /// CatBoost-style categorical boosting
+#[allow(dead_code)]
 pub struct CatBoostModel {
     /// Oblivious decision trees
     trees: Vec<ObliviousTree>,
@@ -1422,6 +1438,7 @@ pub struct CatBoostModel {
 }
 
 /// XGBoost-style extreme gradient boosting
+#[allow(dead_code)]
 pub struct XGBoostModel {
     /// Boosted trees
     booster: Vec<XGBoostTree>,
@@ -1526,6 +1543,7 @@ pub enum BaseEstimatorType {
 
 /// Weak learner for boosting algorithms
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct WeakLearner {
     /// Tree structure
     tree: DecisionTree,
@@ -1539,6 +1557,7 @@ pub struct WeakLearner {
 
 /// LightGBM tree structure (leaf-wise growth)
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct LightGBMTree {
     /// Tree nodes
     nodes: Vec<LightGBMNode>,
@@ -2509,7 +2528,7 @@ impl WorkloadPatternAnalyzer {
 
     pub async fn analyze_patterns(
         &self,
-        queries: &[QuerySignature],
+        _queries: &[QuerySignature],
     ) -> Result<Vec<WorkloadPattern>, AnalyticsError> {
         let patterns = self.patterns.read().unwrap();
         Ok(patterns.values().cloned().collect())
@@ -2706,7 +2725,7 @@ impl GradientBoostingModel {
         self.loss_history.clear();
 
         // Gradient boosting iterations
-        for iteration in 0..self.n_estimators {
+        for _iteration in 0..self.n_estimators {
             // Create weak learner to fit residuals
             let mut weak_learner = WeakLearner::new();
             weak_learner.train_on_residuals(data, &residuals)?;
@@ -2809,16 +2828,13 @@ impl AdaBoostModel {
 
             // Calculate weighted error
             let mut weighted_error = 0.0;
-            let mut correct_predictions = 0;
 
             for (i, example) in data.iter().enumerate() {
                 let prediction = weak_learner.predict(&example.features);
                 let error = (prediction - example.actual_cost).abs();
 
-                if error < 10.0 {
-                    // Threshold for "correct" prediction in regression
-                    correct_predictions += 1;
-                } else {
+                if error >= 10.0 {
+                    // Threshold for "incorrect" prediction in regression
                     weighted_error += sample_weights[i];
                 }
             }
@@ -2917,7 +2933,7 @@ impl LightGBMModel {
         self.evals_result.clear();
 
         let num_iterations = 100;
-        for iteration in 0..num_iterations {
+        for _iteration in 0..num_iterations {
             // Calculate gradients and hessians
             let gradients: Vec<f64> = data
                 .iter()
@@ -3035,7 +3051,7 @@ impl CatBoostModel {
         self.trees.clear();
         self.metrics_history.clear();
 
-        for iteration in 0..self.iterations {
+        for _iteration in 0..self.iterations {
             // Calculate gradients
             let gradients: Vec<f64> = data
                 .iter()
@@ -3589,7 +3605,7 @@ impl WeakLearner {
 
     pub fn train_on_residuals(
         &mut self,
-        data: &[TrainingExample],
+        _data: &[TrainingExample],
         residuals: &[f64],
     ) -> Result<(), AnalyticsError> {
         // Simple training on residuals (simplified decision stump)
@@ -3600,7 +3616,7 @@ impl WeakLearner {
 
     pub fn train_weighted(
         &mut self,
-        data: &[TrainingExample],
+        _data: &[TrainingExample],
         weights: &[f64],
     ) -> Result<(), AnalyticsError> {
         // Weighted training (simplified)
@@ -3615,7 +3631,7 @@ impl WeakLearner {
 }
 
 impl LightGBMTree {
-    pub fn predict(&self, features: &QueryFeatures) -> f64 {
+    pub fn predict(&self, _features: &QueryFeatures) -> f64 {
         if let Some(node) = self.nodes.get(self.root) {
             if let Some(leaf_value) = node.leaf_value {
                 return leaf_value;
@@ -3656,7 +3672,7 @@ impl ObliviousTree {
 }
 
 impl XGBoostTree {
-    pub fn predict(&self, features: &QueryFeatures) -> f64 {
+    pub fn predict(&self, _features: &QueryFeatures) -> f64 {
         if let Some(root_node) = self.nodes.get(self.root) {
             if let Some(leaf_value) = root_node.leaf_value {
                 return leaf_value;
@@ -3685,7 +3701,7 @@ impl RandomForestModel {
 
 // Update DecisionTree to add predict method
 impl DecisionTree {
-    pub fn predict(&self, features: &QueryFeatures) -> f64 {
+    pub fn predict(&self, _features: &QueryFeatures) -> f64 {
         if let Some(root_node) = self.nodes.get(self.root) {
             if let Some(prediction) = root_node.prediction {
                 return prediction;
@@ -3783,7 +3799,7 @@ mod tests {
 
     #[test]
     fn test_linear_regression_model() {
-        let mut model = LinearRegressionModel::new();
+        let model = LinearRegressionModel::new();
         assert!(!model.is_trained);
 
         let features = QueryFeatures {

@@ -5,14 +5,10 @@
 //! the performance of all query optimization components.
 
 use futures::future::join_all;
-use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashMap, VecDeque};
-use std::fs::{create_dir_all, File};
-use std::io::{BufWriter, Write};
-use std::path::Path;
-use std::sync::{Arc, Mutex, RwLock};
-use std::thread;
+use std::collections::{BTreeMap, HashMap};
+use std::fs::create_dir_all;
+use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant, SystemTime};
 use tokio::sync::Semaphore;
 
@@ -643,7 +639,7 @@ impl BenchmarkFramework {
             "StockLevel",
         ];
 
-        for (i, (query, tx_type)) in queries.iter().zip(transaction_types.iter()).enumerate() {
+        for (query, tx_type) in queries.iter().zip(transaction_types.iter()) {
             let result = self.benchmark_transaction(query, tx_type).await?;
             transaction_results.insert(tx_type.to_string(), result);
         }
@@ -919,7 +915,7 @@ impl BenchmarkFramework {
         }
 
         // Wait for all tasks to complete
-        let results = join_all(tasks).await;
+        let _results = join_all(tasks).await;
         let actual_duration = start_time.elapsed();
         let throughput_score = total_queries as f64 / actual_duration.as_secs() as f64;
 
@@ -1237,7 +1233,7 @@ impl BenchmarkFramework {
             let semaphore = Arc::new(Semaphore::new(parallelism));
             let mut tasks = Vec::new();
 
-            for (i, query) in queries.iter().enumerate() {
+            for query in queries.iter() {
                 let permit = semaphore.clone().acquire_owned().await.unwrap();
                 let query_clone = query.clone();
                 let executor = self.executor.clone();
@@ -1317,7 +1313,6 @@ impl BenchmarkFramework {
 
     /// Generate benchmark summary
     fn generate_summary(&self, results: &BenchmarkResults) -> BenchmarkSummary {
-        let mut overall_score = 0.0;
         let mut scores = Vec::new();
 
         // TPC-H score
@@ -1338,7 +1333,7 @@ impl BenchmarkFramework {
             }
         }
 
-        overall_score = if !scores.is_empty() {
+        let overall_score = if !scores.is_empty() {
             scores.iter().sum::<f64>() / scores.len() as f64
         } else {
             0.0
@@ -1589,7 +1584,7 @@ impl WorkloadGenerator for TpcHWorkloadGenerator {
             .collect()
     }
 
-    fn generate_test_data(&self, scale_factor: usize) -> Vec<RecordBatch> {
+    fn generate_test_data(&self, _scale_factor: usize) -> Vec<RecordBatch> {
         // Mock implementation
         vec![]
     }
@@ -1639,7 +1634,7 @@ impl WorkloadGenerator for TpcCWorkloadGenerator {
             .collect()
     }
 
-    fn generate_test_data(&self, scale_factor: usize) -> Vec<RecordBatch> {
+    fn generate_test_data(&self, _scale_factor: usize) -> Vec<RecordBatch> {
         vec![]
     }
 

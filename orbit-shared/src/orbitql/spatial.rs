@@ -3,7 +3,6 @@
 //! This module provides spatial functionality for OrbitQL, including function
 //! registry, spatial operations, and integration with the spatial subsystem.
 
-use crate::spatial::{BoundingBox, Point, SpatialError, SpatialGeometry};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 

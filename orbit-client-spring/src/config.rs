@@ -52,13 +52,7 @@ impl Configuration for AppConfig {
                 "Server port must be greater than 0",
             ));
         }
-
-        if self.server.port > 65535 {
-            return Err(SpringError::validation(
-                "server.port",
-                "Server port must be less than 65536",
-            ));
-        }
+        // Note: u16 port type naturally constrains values to 0-65535
 
         // Validate database properties if enabled
         if self.database.enabled {

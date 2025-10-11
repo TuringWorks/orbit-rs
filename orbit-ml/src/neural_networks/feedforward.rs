@@ -1,8 +1,7 @@
 //! Feedforward Neural Network implementation.
 
 use async_trait::async_trait;
-use ndarray::{Array1, Array2, Axis};
-use serde::{Deserialize, Serialize};
+use ndarray::{Array1, Array2};
 
 use crate::error::{MLError, Result};
 use crate::neural_networks::{
@@ -129,6 +128,7 @@ impl FeedforwardNetwork {
     }
 
     /// Apply activation derivative (for backpropagation)
+    #[allow(dead_code)]
     fn apply_activation_derivative(
         &self,
         input: &Array2<f64>,
@@ -152,7 +152,7 @@ impl FeedforwardNetwork {
                 tanh.map(|x| 1.0 - x * x)
             }
             ActivationType::Swish => {
-                let sigmoid = input.map(|x| 1.0 / (1.0 + (-x).exp()));
+                let _sigmoid = input.map(|x| 1.0 / (1.0 + (-x).exp()));
                 input.map(|&x| {
                     let s = 1.0 / (1.0 + (-x).exp());
                     s + x * s * (1.0 - s)

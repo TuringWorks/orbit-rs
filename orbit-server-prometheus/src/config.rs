@@ -304,12 +304,7 @@ impl PrometheusConfig {
                 "Server port must be greater than 0",
             ));
         }
-
-        if self.server.port > 65535 {
-            return Err(PrometheusError::configuration(
-                "Server port must be less than 65536",
-            ));
-        }
+        // Note: u16 port type naturally constrains values to 0-65535
 
         if self.server.host.is_empty() {
             return Err(PrometheusError::configuration(

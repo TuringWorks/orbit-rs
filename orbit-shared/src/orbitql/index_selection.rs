@@ -10,7 +10,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 use super::ast::*;
-use super::cost_model::{CardinalityEstimate, CostModel, QueryCost};
+use super::cost_model::{CostModel, QueryCost};
 use super::statistics::{IndexStatistics, StatisticsManager};
 
 /// Index selection engine for optimal index usage
@@ -248,9 +248,29 @@ impl IndexSelector {
     ) -> f64 {
         match where_clause {
             Expression::Binary {
+                operator: BinaryOperator::And,
+                left,
+                right,
+            } => {
+                // For AND conditions, take the maximum applicability
+                let left_score = self.check_where_clause_applicability(index, left);
+                let right_score = self.check_where_clause_applicability(index, right);
+                left_score.max(right_score)
+            }
+            Expression::Binary {
+                operator: BinaryOperator::Or,
+                left,
+                right,
+            } => {
+                // For OR conditions, average the applicabilities
+                let left_score = self.check_where_clause_applicability(index, left);
+                let right_score = self.check_where_clause_applicability(index, right);
+                (left_score + right_score) / 2.0
+            }
+            Expression::Binary {
                 left,
                 operator,
-                right,
+                right: _,
             } => {
                 if let Expression::Identifier(column) = left.as_ref() {
                     if index.columns.contains(column) {
@@ -288,26 +308,6 @@ impl IndexSelector {
                 } else {
                     0.0 // Not a simple column reference
                 }
-            }
-            Expression::Binary {
-                operator: BinaryOperator::And,
-                left,
-                right,
-            } => {
-                // For AND conditions, take the maximum applicability
-                let left_score = self.check_where_clause_applicability(index, left);
-                let right_score = self.check_where_clause_applicability(index, right);
-                left_score.max(right_score)
-            }
-            Expression::Binary {
-                operator: BinaryOperator::Or,
-                left,
-                right,
-            } => {
-                // For OR conditions, average the applicabilities
-                let left_score = self.check_where_clause_applicability(index, left);
-                let right_score = self.check_where_clause_applicability(index, right);
-                (left_score + right_score) / 2.0
             }
             _ => 0.0, // Other expression types
         }

@@ -1029,7 +1029,7 @@ impl QueryPatternAnalyzer {
     fn extract_column_references_from_expression(
         &self,
         expr: &Expression,
-        context: &str,
+        _context: &str,
     ) -> Vec<ColumnReference> {
         match expr {
             Expression::Binary {
@@ -1085,6 +1085,7 @@ pub struct QueryPatternSummary {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::QueryValue;
 
     #[tokio::test]
     async fn test_recommendation_engine_creation() {

@@ -11,7 +11,6 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 use crate::orbitql::QueryValue;
-use crate::SpatialError;
 
 /// Table-level statistics for cost-based optimization
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -392,9 +391,9 @@ impl StatisticsManager {
     /// Estimate selectivity for range predicates using histogram
     fn estimate_range_selectivity(
         &self,
-        histogram_bounds: &[QueryValue],
+        _histogram_bounds: &[QueryValue],
         operator: &str,
-        value: &QueryValue,
+        _value: &QueryValue,
     ) -> f64 {
         // Simplified range estimation
         // In a real implementation, this would use proper histogram analysis

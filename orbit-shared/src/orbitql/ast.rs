@@ -5,7 +5,7 @@
 //! time-series, and key-value data.
 
 use crate::orbitql::QueryValue;
-use crate::spatial::{BoundingBox, Point, SpatialGeometry};
+use crate::spatial::{BoundingBox, Point};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
