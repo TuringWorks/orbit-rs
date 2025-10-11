@@ -105,6 +105,7 @@ pub enum RTreeSplitStrategy {
 #[derive(Debug, Clone)]
 pub struct GeohashGrid {
     precision: u8,
+    #[allow(dead_code)]
     grid_size: usize,
     cells: HashMap<String, Vec<(u64, SpatialGeometry)>>,
     point_count: usize,

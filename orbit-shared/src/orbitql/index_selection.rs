@@ -96,6 +96,7 @@ pub struct IndexUsageTracker {
     /// Usage statistics per index
     usage_stats: HashMap<String, IndexUsageStats>,
     /// Query patterns that used specific indexes
+    #[allow(dead_code)]
     query_patterns: HashMap<String, Vec<String>>, // pattern_hash -> index_ids
 }
 

@@ -37,6 +37,7 @@ pub struct QueryCacheManager {
     /// Invalidation coordinator
     invalidator: Arc<CacheInvalidator>,
     /// Distributed coordination
+    #[allow(dead_code)]
     distributor: Arc<DistributedCacheCoordinator>,
     /// Cache statistics
     stats: Arc<RwLock<CacheStatistics>>,
@@ -148,6 +149,7 @@ pub struct MetadataCache {
     /// Statistics entries
     statistics: HashMap<String, CacheEntry<TableStatistics>>,
     /// Maximum cache size
+    #[allow(dead_code)]
     max_size: usize,
     /// Cache statistics
     hits: usize,
@@ -345,6 +347,7 @@ pub struct CacheInvalidator {
     /// Invalidation event broadcaster
     event_sender: broadcast::Sender<InvalidationEvent>,
     /// Background invalidation tasks
+    #[allow(dead_code)]
     background_tasks: Mutex<Vec<tokio::task::JoinHandle<()>>>,
 }
 

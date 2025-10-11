@@ -395,6 +395,7 @@ impl MvccExecutionStrategy {
 pub struct TraditionalExecutionStrategy {
     parser: SqlParser,
     executor: SqlExecutor,
+    #[allow(dead_code)]
     config: SqlEngineConfig,
 }
 

@@ -169,6 +169,7 @@ impl Default for EPSGRegistry {
 /// Coordinate transformation engine for converting between different CRS.
 pub struct CoordinateTransformer {
     registry: EPSGRegistry,
+    #[allow(dead_code)]
     transformation_cache: HashMap<(i32, i32), TransformationParameters>,
 }
 

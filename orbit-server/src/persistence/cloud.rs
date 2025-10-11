@@ -66,6 +66,7 @@ pub struct DigitalOceanSpacesAddressableDirectoryProvider {
     config: DigitalOceanSpacesConfig,
     client: Client,
     metrics: Arc<RwLock<PersistenceMetrics>>,
+    #[allow(dead_code)]
     health_status: Arc<RwLock<ProviderHealth>>,
 }
 

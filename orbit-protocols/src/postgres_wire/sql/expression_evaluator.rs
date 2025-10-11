@@ -49,6 +49,7 @@ pub enum AggregateState {
 
 /// Expression evaluator
 pub struct ExpressionEvaluator {
+    #[allow(dead_code)]
     aggregates: HashMap<String, AggregateState>,
 }
 

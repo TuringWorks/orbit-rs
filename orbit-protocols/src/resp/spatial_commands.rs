@@ -20,6 +20,7 @@ pub struct RedisSpatialCommands {
     /// Real-time geofencing engine
     geofence_engine: Arc<RwLock<GeofenceEngine>>,
     /// Streaming processor for real-time updates
+    #[allow(dead_code)]
     stream_processor: SpatialStreamProcessor,
 }
 
@@ -37,6 +38,7 @@ pub struct SpatialDataSet {
 #[derive(Debug, Clone)]
 pub struct GeofenceEngine {
     geofences: HashMap<String, GeofenceDefinition>,
+    #[allow(dead_code)]
     active_subscriptions: HashMap<String, Vec<String>>, // channel -> fence_ids
 }
 

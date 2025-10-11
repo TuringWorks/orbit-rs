@@ -891,6 +891,7 @@ pub struct EnvironmentManager {
     /// Available environments
     environments: Arc<RwLock<HashMap<String, Environment>>>,
     /// Current environment
+    #[allow(dead_code)]
     current_environment: Arc<RwLock<Option<String>>>,
 }
 
@@ -922,20 +923,26 @@ pub enum EnvironmentStatus {
 /// Monitoring system
 pub struct MonitoringSystem {
     /// Metrics collector
+    #[allow(dead_code)]
     metrics_collector: Arc<MetricsCollector>,
     /// Dashboard manager
+    #[allow(dead_code)]
     dashboard_manager: Arc<DashboardManager>,
     /// Alert manager
+    #[allow(dead_code)]
     alert_manager: Arc<AlertManager>,
     /// Log aggregator
+    #[allow(dead_code)]
     log_aggregator: Arc<LogAggregator>,
 }
 
 /// Metrics collector
 pub struct MetricsCollector {
     /// Collected metrics
+    #[allow(dead_code)]
     metrics: Arc<RwLock<HashMap<String, MetricSeries>>>,
     /// Collection configuration
+    #[allow(dead_code)]
     config: MetricsConfig,
 }
 
@@ -964,6 +971,7 @@ pub struct MetricPoint {
 /// Dashboard manager
 pub struct DashboardManager {
     /// Available dashboards
+    #[allow(dead_code)]
     dashboards: Arc<RwLock<HashMap<String, Dashboard>>>,
 }
 
@@ -1023,10 +1031,13 @@ pub struct PanelSize {
 /// Alert manager
 pub struct AlertManager {
     /// Alert rules
+    #[allow(dead_code)]
     rules: Arc<RwLock<Vec<AlertRule>>>,
     /// Active alerts
+    #[allow(dead_code)]
     active_alerts: Arc<RwLock<HashMap<String, Alert>>>,
     /// Notification channels
+    #[allow(dead_code)]
     channels: Arc<RwLock<HashMap<String, NotificationChannel>>>,
 }
 
@@ -1058,8 +1069,10 @@ pub enum AlertStatus {
 /// Log aggregator
 pub struct LogAggregator {
     /// Log entries
+    #[allow(dead_code)]
     logs: Arc<RwLock<VecDeque<LogEntry>>>,
     /// Configuration
+    #[allow(dead_code)]
     config: LoggingConfig,
 }
 
@@ -1081,10 +1094,13 @@ pub struct LogEntry {
 /// Stress testing framework
 pub struct StressTester {
     /// Test scenarios
+    #[allow(dead_code)]
     scenarios: Arc<RwLock<HashMap<String, StressTestScenario>>>,
     /// Test runners
+    #[allow(dead_code)]
     runners: Arc<RwLock<Vec<TestRunner>>>,
     /// Results storage
+    #[allow(dead_code)]
     results: Arc<RwLock<HashMap<String, TestResult>>>,
 }
 
@@ -1243,10 +1259,13 @@ pub struct TestError {
 /// Integration test suite
 pub struct IntegrationTester {
     /// Test suites
+    #[allow(dead_code)]
     test_suites: Arc<RwLock<HashMap<String, IntegrationTestSuite>>>,
     /// Test environment
+    #[allow(dead_code)]
     test_environment: Arc<RwLock<Option<String>>>,
     /// Results
+    #[allow(dead_code)]
     results: Arc<RwLock<HashMap<String, IntegrationTestResult>>>,
 }
 
@@ -1385,6 +1404,7 @@ pub struct HealthChecker {
     /// Health check configurations
     checks: Arc<RwLock<HashMap<String, HealthCheck>>>,
     /// Health status cache
+    #[allow(dead_code)]
     status_cache: Arc<RwLock<HashMap<String, HealthStatus>>>,
 }
 
@@ -1442,6 +1462,7 @@ pub enum ComponentStatus {
 /// Configuration validator
 pub struct ConfigValidator {
     /// Validation rules
+    #[allow(dead_code)]
     rules: Arc<RwLock<Vec<ValidationRule>>>,
 }
 
