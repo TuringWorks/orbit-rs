@@ -388,6 +388,11 @@ impl IndexSelector {
         indexes.get(table_name).cloned().unwrap_or_default()
     }
 
+    /// Check if statistics manager is available
+    pub async fn has_statistics(&self, table_name: &str) -> bool {
+        self.get_table_statistics(table_name).await.is_some()
+    }
+
     /// Check how well an index applies to ORDER BY clauses
     fn check_order_by_applicability(
         &self,

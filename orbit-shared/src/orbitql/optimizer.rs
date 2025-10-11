@@ -1063,6 +1063,11 @@ impl QueryOptimizer {
         self.advanced_cost_model.estimate_query_cost(stmt)
     }
 
+    /// Check if advanced cost model is enabled
+    pub fn has_advanced_cost_model(&self) -> bool {
+        self.cost_based_enabled && self.advanced_cost_model.get_config().cpu_tuple_cost > 0.0
+    }
+
     /// Analyze statement components and accumulate costs
     fn analyze_statement_costs(&self, stmt: &Statement, cost: &mut MultiModelQueryCost) {
         match stmt {

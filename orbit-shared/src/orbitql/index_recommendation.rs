@@ -1194,6 +1194,16 @@ impl QueryPatternAnalyzer {
     pub async fn get_join_patterns(&self) -> HashMap<String, JoinPattern> {
         self.join_patterns.read().await.clone()
     }
+
+    /// Get column access pattern statistics
+    pub async fn get_column_usage_stats(&self) -> usize {
+        self.column_access_patterns.read().await.len()
+    }
+
+    /// Get join pattern statistics  
+    pub async fn get_join_usage_stats(&self) -> usize {
+        self.join_patterns.read().await.len()
+    }
 }
 
 /// Comprehensive index report

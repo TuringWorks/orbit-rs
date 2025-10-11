@@ -19,10 +19,12 @@ pub struct ProductionDeployment {
     /// Stress testing framework
     stress_tester: Arc<StressTester>,
     /// Integration test suite
+    #[allow(dead_code)]
     integration_tester: Arc<IntegrationTester>,
     /// Health checker
     health_checker: Arc<HealthChecker>,
     /// Configuration validator
+    #[allow(dead_code)]
     config_validator: Arc<ConfigValidator>,
 }
 
