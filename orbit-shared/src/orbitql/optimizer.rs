@@ -1016,13 +1016,29 @@ impl QueryOptimizer {
         let mut changed = true;
         let mut iterations = 0;
 
+        // Use advanced cost model to guide optimization if enabled
+        let initial_cost = if self.cost_based_enabled {
+            Some(self.advanced_cost_model.estimate_query_cost(&current))
+        } else {
+            None
+        };
+
         while changed && iterations < self.max_iterations {
             changed = false;
             iterations += 1;
 
             for rule in &self.rules {
                 let optimized = rule.apply(&current)?;
-                if !statements_equal(&current, &optimized) {
+
+                // Use advanced cost model to validate optimizations
+                let should_apply = if let Some(ref initial) = initial_cost {
+                    let new_cost = self.advanced_cost_model.estimate_query_cost(&optimized);
+                    new_cost.total_cost() <= initial.total_cost()
+                } else {
+                    !statements_equal(&current, &optimized)
+                };
+
+                if should_apply && !statements_equal(&current, &optimized) {
                     current = optimized;
                     changed = true;
                 }
@@ -1040,6 +1056,11 @@ impl QueryOptimizer {
         self.analyze_statement_costs(stmt, &mut total_cost);
 
         total_cost
+    }
+
+    /// Estimate detailed query cost using advanced cost model
+    pub fn estimate_detailed_query_cost(&self, stmt: &Statement) -> super::cost_model::QueryCost {
+        self.advanced_cost_model.estimate_query_cost(stmt)
     }
 
     /// Analyze statement components and accumulate costs

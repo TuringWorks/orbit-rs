@@ -867,7 +867,7 @@ impl ColumnBatch {
 
 impl Bitmap {
     pub fn new(len: usize) -> Self {
-        let word_count = (len + 63) / 64; // Ceiling division
+        let word_count = len.div_ceil(64);
         Self {
             bits: vec![0; word_count],
             len,

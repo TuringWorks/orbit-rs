@@ -220,13 +220,11 @@ impl QuadTree {
                     } else {
                         2
                     } // SW or NW
+                } else if point_clone.y < center_y {
+                    1
                 } else {
-                    if point_clone.y < center_y {
-                        1
-                    } else {
-                        3
-                    } // SE or NE
-                };
+                    3
+                }; // SE or NE
 
                 if let Some(ref mut children) = node.children {
                     // Remove the point from this node and add to appropriate child
@@ -257,13 +255,11 @@ impl QuadTree {
                 } else {
                     2
                 } // SW or NW
+            } else if point.y < center_y {
+                1
             } else {
-                if point.y < center_y {
-                    1
-                } else {
-                    3
-                } // SE or NE
-            };
+                3
+            }; // SE or NE
 
             Self::insert_point_recursive(
                 &mut children[child_index],
