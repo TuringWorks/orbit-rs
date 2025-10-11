@@ -245,12 +245,17 @@ pub struct SqlExecutor {
 
     // Transaction management
     current_transaction: Arc<RwLock<Option<TransactionState>>>,
+    #[allow(dead_code)]
     transaction_log: Arc<RwLock<Vec<TransactionLogEntry>>>,
+    #[allow(dead_code)]
     savepoint_data: Arc<RwLock<HashMap<String, SavepointData>>>,
 
     // Security and permissions
+    #[allow(dead_code)]
     users: Arc<RwLock<HashMap<String, UserRole>>>,
+    #[allow(dead_code)]
     current_user: Arc<RwLock<String>>,
+    #[allow(dead_code)]
     permissions: Arc<RwLock<HashMap<String, Vec<Permission>>>>,
 
     // Settings and configuration
@@ -261,6 +266,7 @@ pub struct SqlExecutor {
     vector_extensions: Arc<RwLock<HashMap<String, bool>>>,
 
     // Expression evaluator
+    #[allow(dead_code)]
     expression_evaluator: Arc<RwLock<ExpressionEvaluator>>,
 }
 

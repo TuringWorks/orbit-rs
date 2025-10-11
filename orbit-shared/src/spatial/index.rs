@@ -70,7 +70,9 @@ struct QuadNode {
 pub struct RTree {
     root: Option<RTreeNode>,
     max_entries: usize,
+    #[allow(dead_code)]
     min_entries: usize,
+    #[allow(dead_code)]
     split_strategy: RTreeSplitStrategy,
     geometry_count: usize,
 }

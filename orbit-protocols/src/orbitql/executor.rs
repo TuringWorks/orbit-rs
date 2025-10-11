@@ -21,10 +21,13 @@ pub struct OrbitQLExecutor {
     /// Spatial indexes
     spatial_indexes: Arc<RwLock<HashMap<String, SpatialIndexInstance>>>,
     /// Real-time streams
+    #[allow(dead_code)]
     streams: Arc<RwLock<HashMap<String, StreamProcessor>>>,
     /// GPU acceleration engine
+    #[allow(dead_code)]
     gpu_engine: GPUSpatialEngine,
     /// Execution context
+    #[allow(dead_code)]
     context: Arc<RwLock<ExecutionContext>>,
 }
 

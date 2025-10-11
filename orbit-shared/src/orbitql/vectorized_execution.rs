@@ -21,10 +21,13 @@ pub const SIMD_I64_WIDTH: usize = 8; // AVX-512: 8 i64 values
 /// Vectorized execution engine
 pub struct VectorizedExecutor {
     /// Batch size for vectorized operations
+    #[allow(dead_code)]
     batch_size: usize,
     /// SIMD instruction width
+    #[allow(dead_code)]
     simd_width: usize,
     /// Available vector register sets
+    #[allow(dead_code)]
     vector_registers: VectorRegisterSet,
     /// Configuration
     config: VectorizationConfig,
@@ -75,8 +78,11 @@ pub enum NullHandlingStrategy {
 #[derive(Debug, Clone)]
 pub struct VectorRegisterSet {
     /// Available registers for different data types
+    #[allow(dead_code)]
     f64_registers: Vec<VectorRegister<f64>>,
+    #[allow(dead_code)]
     i64_registers: Vec<VectorRegister<i64>>,
+    #[allow(dead_code)]
     string_registers: Vec<VectorRegister<String>>,
 }
 
