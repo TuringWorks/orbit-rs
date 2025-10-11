@@ -12,13 +12,13 @@ use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant, SystemTime};
 use tokio::sync::Semaphore;
 
-use crate::orbitql::ast::*;
-use crate::orbitql::cost_based_planner::*;
-use crate::orbitql::optimizer::*;
-use crate::orbitql::parallel_execution::*;
-use crate::orbitql::query_cache::*;
-use crate::orbitql::vectorized_execution::*;
-use crate::orbitql::QueryValue;
+use orbit_shared::orbitql::ast::*;
+use orbit_shared::orbitql::cost_based_planner::*;
+use orbit_shared::orbitql::optimizer::*;
+use orbit_shared::orbitql::parallel_execution::*;
+use orbit_shared::orbitql::query_cache::*;
+use orbit_shared::orbitql::vectorized_execution::*;
+use orbit_shared::orbitql::QueryValue;
 
 /// Performance benchmarking framework
 pub struct BenchmarkFramework {
@@ -83,6 +83,7 @@ impl Default for BenchmarkConfig {
 }
 
 /// Query executor for benchmarking
+#[allow(dead_code)]
 pub struct QueryExecutor {
     /// Vectorized executor
     vectorized_executor: VectorizedExecutor,
@@ -369,12 +370,14 @@ pub trait WorkloadGenerator {
 }
 
 /// TPC-H workload generator
+#[allow(dead_code)]
 pub struct TpcHWorkloadGenerator {
     scale_factor: usize,
     random_seed: u64,
 }
 
 /// TPC-C workload generator
+#[allow(dead_code)]
 pub struct TpcCWorkloadGenerator {
     scale_factor: usize,
     warehouses: usize,
@@ -382,12 +385,14 @@ pub struct TpcCWorkloadGenerator {
 }
 
 /// TPC-DS workload generator
+#[allow(dead_code)]
 pub struct TpcDsWorkloadGenerator {
     scale_factor: usize,
     random_seed: u64,
 }
 
 /// Custom vectorization workload
+#[allow(dead_code)]
 pub struct VectorizationWorkloadGenerator {
     batch_size: usize,
     data_types: Vec<VectorDataType>,
@@ -414,6 +419,7 @@ pub enum ParallelWorkloadType {
 }
 
 /// System monitor for collecting metrics
+#[allow(dead_code)]
 pub struct SystemMonitor {
     /// Monitoring active flag
     active: Arc<RwLock<bool>>,
@@ -455,11 +461,11 @@ impl BenchmarkFramework {
         let optimizer = QueryOptimizer::new();
         // Create required components for the planner
         let stats_manager = Arc::new(tokio::sync::RwLock::new(
-            crate::orbitql::statistics::StatisticsManager::new(
-                crate::orbitql::statistics::StatisticsConfig::default(),
+            orbit_shared::orbitql::statistics::StatisticsManager::new(
+                orbit_shared::orbitql::statistics::StatisticsConfig::default(),
             ),
         ));
-        let cost_model = crate::orbitql::cost_model::CostModel::default();
+        let cost_model = orbit_shared::orbitql::cost_model::CostModel::default();
         let planner = CostBasedQueryPlanner::new(stats_manager, cost_model);
 
         let executor = Arc::new(QueryExecutor {
@@ -712,19 +718,19 @@ impl BenchmarkFramework {
 
         // Vectorization workload
         if let Some(workload) = self.workloads.get("Vectorization") {
-            let result = self.run_vectorization_tests(workload).await?;
+            let result = self.run_vectorization_tests(workload.as_ref()).await?;
             custom_results.insert("Vectorization".to_string(), result);
         }
 
         // Cache workload
         if let Some(workload) = self.workloads.get("Cache") {
-            let result = self.run_cache_tests(workload).await?;
+            let result = self.run_cache_tests(workload.as_ref()).await?;
             custom_results.insert("Cache".to_string(), result);
         }
 
         // Parallel workload
         if let Some(workload) = self.workloads.get("Parallel") {
-            let result = self.run_parallel_tests(workload).await?;
+            let result = self.run_parallel_tests(workload.as_ref()).await?;
             custom_results.insert("Parallel".to_string(), result);
         }
 
@@ -817,9 +823,9 @@ impl BenchmarkFramework {
         {
             Ok(result) => {
                 // Cache the result
-                let query_result = crate::orbitql::query_cache::QueryResult {
+                let query_result = orbit_shared::orbitql::query_cache::QueryResult {
                     data: result.clone(),
-                    metadata: crate::orbitql::query_cache::QueryExecutionMetadata {
+                    metadata: orbit_shared::orbitql::query_cache::QueryExecutionMetadata {
                         execution_time: Duration::from_millis(100),
                         rows_processed: result.iter().map(|b| b.row_count).sum(),
                         tables_accessed: std::collections::HashSet::new(),
@@ -968,12 +974,9 @@ impl BenchmarkFramework {
 
         while Instant::now() < end_time {
             let tx_start = Instant::now();
-            match self.execute_query(query).await {
-                Ok(_) => {
-                    successful_transactions += 1;
-                    response_times.push(tx_start.elapsed());
-                }
-                Err(_) => {}
+            if self.execute_query(query).await.is_ok() {
+                successful_transactions += 1;
+                response_times.push(tx_start.elapsed());
             }
             total_transactions += 1;
         }
@@ -1092,7 +1095,7 @@ impl BenchmarkFramework {
     /// Run vectorization tests
     async fn run_vectorization_tests(
         &self,
-        workload: &Box<dyn WorkloadGenerator + Send + Sync>,
+        workload: &(dyn WorkloadGenerator + Send + Sync),
     ) -> Result<CustomWorkloadResults, BenchmarkError> {
         let queries = workload.generate_queries(10);
         let mut test_results = Vec::new();
@@ -1148,7 +1151,7 @@ impl BenchmarkFramework {
     /// Run cache tests
     async fn run_cache_tests(
         &self,
-        workload: &Box<dyn WorkloadGenerator + Send + Sync>,
+        workload: &(dyn WorkloadGenerator + Send + Sync),
     ) -> Result<CustomWorkloadResults, BenchmarkError> {
         let queries = workload.generate_queries(20);
         let mut test_results = Vec::new();
@@ -1221,7 +1224,7 @@ impl BenchmarkFramework {
     /// Run parallel tests
     async fn run_parallel_tests(
         &self,
-        workload: &Box<dyn WorkloadGenerator + Send + Sync>,
+        workload: &(dyn WorkloadGenerator + Send + Sync),
     ) -> Result<CustomWorkloadResults, BenchmarkError> {
         let queries = workload.generate_queries(15);
         let mut test_results = Vec::new();

@@ -30,6 +30,7 @@ pub struct CostBasedQueryPlanner {
 
 /// Cached execution plan with metadata
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 struct CachedPlan {
     plan: ExecutionPlan,
     cost: QueryCost,
@@ -564,27 +565,25 @@ impl CostBasedQueryPlanner {
         where_clause: &Expression,
         stats_manager: &StatisticsManager,
     ) -> f64 {
-        match where_clause {
-            Expression::Binary {
-                left,
-                operator,
-                right,
-            } => {
-                if let (Expression::Identifier(column), Expression::Literal(value)) =
-                    (left.as_ref(), right.as_ref())
-                {
-                    let op_str = match operator {
-                        BinaryOperator::Equal => "=",
-                        BinaryOperator::GreaterThan => ">",
-                        BinaryOperator::LessThan => "<",
-                        _ => "=",
-                    };
-                    return stats_manager
-                        .estimate_selectivity(table_name, column, op_str, value)
-                        .await;
-                }
+        if let Expression::Binary {
+            left,
+            operator,
+            right,
+        } = where_clause
+        {
+            if let (Expression::Identifier(column), Expression::Literal(value)) =
+                (left.as_ref(), right.as_ref())
+            {
+                let op_str = match operator {
+                    BinaryOperator::Equal => "=",
+                    BinaryOperator::GreaterThan => ">",
+                    BinaryOperator::LessThan => "<",
+                    _ => "=",
+                };
+                return stats_manager
+                    .estimate_selectivity(table_name, column, op_str, value)
+                    .await;
             }
-            _ => {}
         }
         0.1 // Default selectivity
     }

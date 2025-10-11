@@ -9,24 +9,24 @@ use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant, SystemTime};
 
 // Import all OrbitQL components
-use crate::orbitql::advanced_analytics::*;
-use crate::orbitql::distributed_execution::{
+use orbit_shared::orbitql::advanced_analytics::*;
+use orbit_shared::orbitql::distributed_execution::{
     ClusterConfig, DistributedExecutor, NodeInfo, NodeResources, NodeRole,
     NodeStatus as DistributedNodeStatus,
 };
-use crate::orbitql::production_deployment::*;
-use crate::orbitql::storage_integration::StorageEngine;
+use orbit_shared::orbitql::production_deployment::*;
+use orbit_shared::orbitql::storage_integration::StorageEngine;
 // Remove performance_benchmarking import as it doesn't exist
-use crate::orbitql::cache::QueryExecutorTrait;
-use crate::orbitql::cost_based_planner::*;
-use crate::orbitql::cost_model::CostModel;
-use crate::orbitql::executor::QueryMetadata;
-use crate::orbitql::parallel_execution::*;
-use crate::orbitql::statistics::StatisticsConfig;
-use crate::orbitql::statistics::StatisticsManager;
-use crate::orbitql::vectorized_execution::VectorizedExecutor;
-use crate::orbitql::CachedQueryExecutor;
-use crate::orbitql::{ExecutionError, QueryContext, QueryParams, QueryResult, QueryStats};
+use orbit_shared::orbitql::cache::QueryExecutorTrait;
+use orbit_shared::orbitql::cost_based_planner::*;
+use orbit_shared::orbitql::cost_model::CostModel;
+use orbit_shared::orbitql::executor::QueryMetadata;
+use orbit_shared::orbitql::parallel_execution::*;
+use orbit_shared::orbitql::statistics::StatisticsConfig;
+use orbit_shared::orbitql::statistics::StatisticsManager;
+use orbit_shared::orbitql::vectorized_execution::VectorizedExecutor;
+use orbit_shared::orbitql::CachedQueryExecutor;
+use orbit_shared::orbitql::{ExecutionError, QueryContext, QueryParams, QueryResult, QueryStats};
 use uuid::Uuid;
 
 /// Comprehensive benchmark coordinator
@@ -63,7 +63,7 @@ pub struct OrbitQLComponents {
 
 /// Mock query executor for testing
 #[derive(Clone)]
-struct MockQueryExecutor;
+pub struct MockQueryExecutor;
 
 impl MockQueryExecutor {
     fn new() -> Self {
@@ -614,6 +614,7 @@ pub struct BenchmarkSummary {
 }
 
 /// Report generator
+#[allow(dead_code)]
 pub struct ReportGenerator {
     /// Template configuration
     template_config: ReportTemplateConfig,
@@ -661,7 +662,7 @@ impl ComprehensiveBenchmark {
         println!("🔧 Initializing OrbitQL components...");
 
         // Initialize storage engine
-        let storage_config = crate::orbitql::storage_integration::StorageConfig::default();
+        let storage_config = orbit_shared::orbitql::storage_integration::StorageConfig::default();
         let storage_engine = Arc::new(StorageEngine::new(storage_config));
 
         // Initialize distributed executor if cluster config provided
@@ -824,7 +825,7 @@ impl ComprehensiveBenchmark {
                 },
             },
             monitoring: MonitoringConfig {
-                metrics: crate::orbitql::production_deployment::MetricsConfig {
+                metrics: orbit_shared::orbitql::production_deployment::MetricsConfig {
                     enabled: true,
                     endpoint: "/metrics".to_string(),
                     interval: Duration::from_secs(10),
@@ -870,13 +871,14 @@ impl ComprehensiveBenchmark {
                 },
                 performance_tests: PerformanceTestConfig {
                     duration: Duration::from_secs(3600),
-                    thresholds: crate::orbitql::production_deployment::PerformanceThresholds {
-                        max_response_time: Duration::from_millis(1000),
-                        min_throughput: 100.0,
-                        max_error_rate: 0.01,
-                        max_memory_mb: 8192,
-                        max_cpu_percent: 80.0,
-                    },
+                    thresholds:
+                        orbit_shared::orbitql::production_deployment::PerformanceThresholds {
+                            max_response_time: Duration::from_millis(1000),
+                            min_throughput: 100.0,
+                            max_error_rate: 0.01,
+                            max_memory_mb: 8192,
+                            max_cpu_percent: 80.0,
+                        },
                     warmup_duration: Duration::from_secs(300),
                 },
                 load_tests: LoadTestConfig {
@@ -898,7 +900,7 @@ impl ComprehensiveBenchmark {
 
         // Initialize other components with default configurations
         let mock_executor = MockQueryExecutor::new();
-        let cache_config = crate::orbitql::cache::CacheConfig::default();
+        let cache_config = orbit_shared::orbitql::cache::CacheConfig::default();
         let query_cache = Arc::new(CachedQueryExecutor::new(mock_executor, cache_config));
         let stats_manager = Arc::new(tokio::sync::RwLock::new(StatisticsManager::new(
             StatisticsConfig::default(),
@@ -1732,7 +1734,7 @@ impl ComprehensiveBenchmark {
 
     /// Generate comprehensive report
     pub async fn generate_report(&self, format: ExportFormat) -> Result<String, BenchmarkError> {
-        let results = self.results.read().unwrap();
+        let results = self.results.read().unwrap().clone();
         self.report_generator
             .generate_report(&results, format)
             .await

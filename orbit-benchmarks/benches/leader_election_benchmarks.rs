@@ -125,10 +125,7 @@ fn bench_state_persistence(c: &mut Criterion) {
             rt.block_on(async {
                 let state_manager = ElectionStateManager::new(&state_path, node_id.clone());
                 let term = fastrand::u64(1..1000);
-                state_manager
-                    .update_term(term)
-                    .await
-                    .unwrap();
+                state_manager.update_term(term).await.unwrap();
                 state_manager.vote_for(node_id.clone(), term).await.unwrap();
                 black_box(state_manager);
             });
@@ -355,10 +352,10 @@ fn bench_concurrent_operations(c: &mut Criterion) {
                         let state_path = temp_dir.path().join(format!("concurrent_{}.json", i));
                         let node_id = NodeId::new(format!("node-{}", i), "bench".to_string());
                         let state_manager = ElectionStateManager::new(&state_path, node_id.clone());
-                        
+
                         // Initialize and perform operations on individual state manager
                         state_manager.update_term(i as u64 + 1).await.unwrap();
-                        
+
                         let record = ElectionRecord {
                             term: i as u64 + 1,
                             candidate: node_id,
@@ -375,7 +372,8 @@ fn bench_concurrent_operations(c: &mut Criterion) {
                     tasks.push(task);
                 }
 
-                let results: Vec<_> = future::join_all(tasks).await
+                let results: Vec<_> = future::join_all(tasks)
+                    .await
                     .into_iter()
                     .collect::<Result<Vec<_>, _>>()
                     .unwrap();

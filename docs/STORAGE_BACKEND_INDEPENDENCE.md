@@ -12,7 +12,7 @@ Each storage backend is a complete, self-contained persistence solution. You cho
 ┌─────────────────────────────────────────────────────────┐
 │                 Orbit-RS Framework                      │
 │            (AddressableDirectoryProvider)               │
-└┬────────────┬─────────────┬─────────────┬─────────────┬┘
+└┬────────────┬─────────────┬─────────────┬─────────────┬-┘
  │            │             │             │             │
  │   Cloud    │   Local     │   Local     │   Local     │
  │  (REST)    │  (Embedded) │ (Embedded)  │ (Embedded)  │

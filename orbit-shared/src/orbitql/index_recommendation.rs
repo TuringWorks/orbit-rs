@@ -452,7 +452,11 @@ impl IndexRecommendationEngine {
                 .estimate_current_query_cost(pattern, &table_stats)
                 .await;
             let index_cost = self
-                .estimate_index_query_cost(pattern, &col_ref.table, &[col_ref.column.clone()])
+                .estimate_index_query_cost(
+                    pattern,
+                    &col_ref.table,
+                    std::slice::from_ref(&col_ref.column),
+                )
                 .await;
 
             let speedup = current_cost.total_cost() / index_cost.total_cost();
@@ -469,7 +473,7 @@ impl IndexRecommendationEngine {
                 included_columns: vec![],
                 filter_condition: None,
                 estimated_size_bytes: self
-                    .estimate_index_size(&table_stats, &[col_ref.column.clone()]),
+                    .estimate_index_size(&table_stats, std::slice::from_ref(&col_ref.column)),
             };
 
             let improvement = PerformanceImprovement {
@@ -518,7 +522,7 @@ impl IndexRecommendationEngine {
         for col_ref in &pattern.where_columns {
             table_columns
                 .entry(col_ref.table.clone())
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(col_ref.column.clone());
         }
 
@@ -591,7 +595,7 @@ impl IndexRecommendationEngine {
                     included_columns: vec![],
                     filter_condition: None,
                     estimated_size_bytes: self
-                        .estimate_index_size(&table_stats, &[col_ref.column.clone()]),
+                        .estimate_index_size(&table_stats, std::slice::from_ref(&col_ref.column)),
                 };
 
                 let improvement = PerformanceImprovement {

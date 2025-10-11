@@ -29,6 +29,11 @@ members = [
 ]
 
 # Exclude benchmarks from default workspace build due to WAL replay issues
+# orbit-benchmarks contains comprehensive performance tests including:
+#   - OrbitQL query language benchmarks (TPC-H, TPC-C, TPC-DS)
+#   - Actor system performance benchmarks
+#   - Storage backend comparison benchmarks (with known WAL issues)
+#   - Heterogeneous compute acceleration benchmarks
 exclude = [
     "orbit-benchmarks",
     "orbit-desktop",

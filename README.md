@@ -98,6 +98,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 - **Phase 10**: Production Readiness ([5 GitHub Issues](https://github.com/TuringWorks/orbit-rs/issues?q=label%3Aphase-10))
 - **Phase 11**: Advanced Features ([5 GitHub Issues](https://github.com/TuringWorks/orbit-rs/issues?q=label%3Aphase-11))
 
+**🔬 Performance Benchmarks:**
+- **OrbitQL Benchmarks**: TPC-H, TPC-C, TPC-DS, and comprehensive query performance testing now available in [`orbit-benchmarks`](orbit-benchmarks/)
+- **Benchmark Suite**: Complete performance validation for query optimization, vectorized execution, and parallel processing
+
 **[📊 View Full Roadmap](docs/roadmap.md)** | **[📝 GitHub Project](https://github.com/orgs/TuringWorks/projects/1)**
 
 ## Contributing

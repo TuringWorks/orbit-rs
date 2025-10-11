@@ -179,6 +179,7 @@ pub struct ClusterManager {
 }
 
 /// Health monitoring for cluster nodes
+#[allow(dead_code)]
 pub struct HealthMonitor {
     /// Monitoring configuration
     config: ClusterConfig,
@@ -187,6 +188,7 @@ pub struct HealthMonitor {
 }
 
 /// Leader election manager
+#[allow(dead_code)]
 pub struct LeaderElection {
     /// Current leader node ID
     leader_id: Arc<RwLock<Option<String>>>,
@@ -227,6 +229,7 @@ pub struct DistributedQueryPlanner {
 }
 
 /// Query fragmentation engine
+#[allow(dead_code)]
 pub struct QueryFragmenter {
     /// Fragmentation strategies
     strategies: HashMap<String, Box<dyn FragmentationStrategy + Send + Sync>>,
@@ -361,6 +364,7 @@ pub enum ExchangeType {
 }
 
 /// Network communication manager
+#[allow(dead_code)]
 pub struct NetworkManager {
     /// Local node information
     local_node: Arc<NodeInfo>,
@@ -493,6 +497,7 @@ pub struct FaultToleranceManager {
 }
 
 /// Failure detection system
+#[allow(dead_code)]
 pub struct FailureDetector {
     /// Suspected failures
     suspected_failures: Arc<RwLock<HashSet<String>>>,
@@ -501,6 +506,7 @@ pub struct FailureDetector {
 }
 
 /// Recovery coordination
+#[allow(dead_code)]
 pub struct RecoveryCoordinator {
     /// Active recovery operations
     active_recoveries: Arc<RwLock<HashMap<String, RecoveryOperation>>>,
@@ -543,6 +549,7 @@ pub enum RecoveryStatus {
 }
 
 /// Replication manager
+#[allow(dead_code)]
 pub struct ReplicationManager {
     /// Replication factor
     replication_factor: usize,
@@ -709,6 +716,7 @@ impl FragmentationStrategy for HashFragmentationStrategy {
 }
 
 /// Resource scheduler for distributed execution
+#[allow(dead_code)]
 pub struct ResourceScheduler {
     /// Available nodes
     nodes: Arc<RwLock<HashMap<String, NodeInfo>>>,
