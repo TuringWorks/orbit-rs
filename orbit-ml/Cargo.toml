@@ -81,7 +81,7 @@ petgraph = "0.6"
 
 # Statistical Computing
 statrs = "0.17"
-rand = "0.8"
+rand = "0.9"
 rand_distr = "0.4"
 
 # Performance
