@@ -412,8 +412,10 @@ mod tests {
 
     #[test]
     fn test_optimizer_reset() {
-        let mut optimizer = AdamOptimizer::default();
-        optimizer.t = 10;
+        let mut optimizer = AdamOptimizer {
+            t: 10,
+            ..Default::default()
+        };
         optimizer.reset();
         assert_eq!(optimizer.t, 0);
     }
