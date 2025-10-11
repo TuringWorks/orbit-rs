@@ -238,7 +238,7 @@ impl MLEngine {
                 info!("⚙️  GPU support disabled in configuration - using CPU processing");
             }
         }
-        
+
         #[cfg(not(feature = "gpu"))]
         {
             if self.config.compute.enable_gpu {
@@ -275,12 +275,12 @@ impl MLEngine {
         use candle_core::Device;
 
         info!("🚀 Attempting GPU initialization for ML acceleration...");
-        
+
         match Device::cuda_if_available(0) {
             Ok(device) => {
                 info!("✅ GPU acceleration enabled: {:?}", device);
                 info!("🔥 CUDA device successfully initialized for high-performance ML operations");
-                
+
                 // Update metrics to reflect successful GPU initialization
                 {
                     let _metrics = self.metrics.write().await;
@@ -296,7 +296,7 @@ impl MLEngine {
                 info!("   - Ensure CUDA drivers are installed and compatible");
                 info!("   - Verify GPU hardware supports CUDA compute capability");
                 info!("   - Check system PATH includes CUDA binaries");
-                
+
                 // Graceful degradation - continue with CPU processing
                 // This ensures the ML engine remains functional without GPU
                 info!("✅ ML engine ready with CPU-based processing");
@@ -357,7 +357,7 @@ impl MLEngine {
     #[cfg(feature = "gpu")]
     pub fn is_gpu_available(&self) -> bool {
         use candle_core::Device;
-        
+
         match Device::cuda_if_available(0) {
             Ok(_) => {
                 debug!("🔍 GPU availability check: GPU is available");
@@ -506,7 +506,7 @@ impl MLEngineInterface for MLEngine {
     async fn health_check(&self) -> Result<EngineStatus> {
         let metrics = self.metrics.read().await;
         let mut features_enabled = self.get_enabled_features();
-        
+
         // Add runtime processing mode information
         features_enabled.push(format!("processing-mode: {}", self.get_processing_mode()));
 
