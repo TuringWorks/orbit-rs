@@ -348,13 +348,11 @@ impl QuadTree {
                 } else {
                     2
                 } // SW or NW
+            } else if point.y < center_y {
+                1
             } else {
-                if point.y < center_y {
-                    1
-                } else {
-                    3
-                } // SE or NE
-            };
+                3
+            }; // SE or NE
 
             if let Some(ref mut children) = node.children {
                 children[child_index].points.push((id, point));
