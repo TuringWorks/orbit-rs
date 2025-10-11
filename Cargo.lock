@@ -1489,7 +1489,7 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tonic",
- "tonic-build",
+ "tonic-build 0.12.3",
  "tower 0.4.13",
  "tower-service",
 ]
@@ -3965,7 +3965,7 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "tokio-test",
- "tonic-build",
+ "tonic-build 0.14.2",
  "tracing",
  "uuid",
 ]
@@ -4012,7 +4012,7 @@ dependencies = [
  "tokio-stream",
  "tokio-test",
  "tonic",
- "tonic-build",
+ "tonic-build 0.14.2",
  "tracing",
 ]
 
@@ -4177,7 +4177,7 @@ dependencies = [
  "tokio-stream",
  "tokio-util",
  "tonic",
- "tonic-build",
+ "tonic-build 0.14.2",
  "tower 0.4.13",
  "tower-lsp",
  "tracing",
@@ -6784,6 +6784,18 @@ dependencies = [
  "proc-macro2",
  "prost-build",
  "prost-types",
+ "quote",
+ "syn 2.0.106",
+]
+
+[[package]]
+name = "tonic-build"
+version = "0.14.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4c40aaccc9f9eccf2cd82ebc111adc13030d23e887244bc9cfa5d1d636049de3"
+dependencies = [
+ "prettyplease",
+ "proc-macro2",
  "quote",
  "syn 2.0.106",
 ]
