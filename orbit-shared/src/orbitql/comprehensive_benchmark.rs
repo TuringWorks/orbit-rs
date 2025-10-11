@@ -2047,8 +2047,8 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn test_comprehensive_benchmark_creation() {
-        let config = BenchmarkConfig::default();
+    async fn test_comprehensive_benchmark() {
+        let config = crate::orbitql::benchmark::BenchmarkConfig::default();
         let benchmark = ComprehensiveBenchmark::new(config).await;
         assert!(benchmark.is_ok());
     }

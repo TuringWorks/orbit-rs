@@ -6,7 +6,7 @@
 //! - Rotary positional encoding (RoPE)
 //! - Relative positional encoding
 
-use ndarray::{Array2, Array3};
+use ndarray::{Array1, Array2, Array3};
 use serde::{Deserialize, Serialize};
 
 use crate::error::Result;
@@ -424,6 +424,3 @@ impl PositionalEncoding for AlibiPositionalEncoding {
         Ok(Array2::<f64>::zeros((sequence_length, self.num_heads)))
     }
 }
-
-use ndarray::Array1;
-use rand;

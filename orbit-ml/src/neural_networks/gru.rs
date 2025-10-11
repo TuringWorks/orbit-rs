@@ -6,12 +6,23 @@ use ndarray::Array2;
 use crate::error::{MLError, Result};
 use crate::neural_networks::{NetworkArchitecture, NeuralNetwork, Optimizer};
 
+/// GRU (Gated Recurrent Unit) Neural Network implementation
+///
+/// A type of recurrent neural network that uses gating mechanisms
+/// to control information flow and address vanishing gradient problems.
 #[derive(Debug, Clone)]
 pub struct GRUNetwork {
     architecture: NetworkArchitecture,
 }
 
 impl GRUNetwork {
+    /// Create a new GRU network with given architecture
+    ///
+    /// # Arguments
+    /// * `architecture` - Network architecture specification
+    ///
+    /// # Returns
+    /// A new GRU network instance (placeholder implementation)
     pub async fn new(architecture: NetworkArchitecture) -> Result<Self> {
         Ok(Self { architecture })
     }

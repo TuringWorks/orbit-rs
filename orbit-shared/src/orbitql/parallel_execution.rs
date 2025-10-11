@@ -485,7 +485,7 @@ impl ParallelExecutor {
                     let batch = RecordBatch {
                         columns: vec![column],
                         row_count: 1000,
-                        schema: schema,
+                        schema,
                     };
                     Ok(vec![batch])
                 }),

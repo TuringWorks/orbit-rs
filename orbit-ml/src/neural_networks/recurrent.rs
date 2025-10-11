@@ -6,12 +6,23 @@ use ndarray::Array2;
 use crate::error::{MLError, Result};
 use crate::neural_networks::{NetworkArchitecture, NeuralNetwork, Optimizer};
 
+/// Recurrent Neural Network implementation
+///
+/// A neural network with feedback connections that can process
+/// sequences of data by maintaining internal state across time steps.
 #[derive(Debug, Clone)]
 pub struct RecurrentNetwork {
     architecture: NetworkArchitecture,
 }
 
 impl RecurrentNetwork {
+    /// Create a new recurrent neural network with given architecture
+    ///
+    /// # Arguments
+    /// * `architecture` - Network architecture specification
+    ///
+    /// # Returns
+    /// A new RNN instance (placeholder implementation)
     pub async fn new(architecture: NetworkArchitecture) -> Result<Self> {
         Ok(Self { architecture })
     }

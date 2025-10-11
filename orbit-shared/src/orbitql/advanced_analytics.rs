@@ -3799,7 +3799,7 @@ mod tests {
 
     #[test]
     fn test_linear_regression_model() {
-        let mut model = LinearRegressionModel::new();
+        let model = LinearRegressionModel::new();
         assert!(!model.is_trained);
 
         let features = QueryFeatures {

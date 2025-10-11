@@ -6,12 +6,23 @@ use ndarray::Array2;
 use crate::error::{MLError, Result};
 use crate::neural_networks::{NetworkArchitecture, NeuralNetwork, Optimizer};
 
+/// LSTM (Long Short-Term Memory) Neural Network implementation
+///
+/// A specialized recurrent neural network capable of learning long-term
+/// dependencies through gating mechanisms (forget, input, output gates).
 #[derive(Debug, Clone)]
 pub struct LSTMNetwork {
     architecture: NetworkArchitecture,
 }
 
 impl LSTMNetwork {
+    /// Create a new LSTM network with given architecture
+    ///
+    /// # Arguments
+    /// * `architecture` - Network architecture specification
+    ///
+    /// # Returns
+    /// A new LSTM network instance (placeholder implementation)
     pub async fn new(architecture: NetworkArchitecture) -> Result<Self> {
         Ok(Self { architecture })
     }

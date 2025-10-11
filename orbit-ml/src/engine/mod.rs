@@ -11,7 +11,7 @@ use tracing::{debug, info, warn};
 use uuid::Uuid;
 
 use crate::config::MLConfig;
-use crate::error::Result;
+use crate::error::{MLError, Result};
 use crate::inference::{InferenceConfig, InferenceJob, InferenceResult};
 use crate::models::{Model, ModelMetadata, ModelRegistry};
 use crate::training::{TrainingConfig, TrainingJob, TrainingStatus};
@@ -230,7 +230,7 @@ impl MLEngine {
         // Initialize GPU if available
         #[cfg(feature = "gpu")]
         {
-            if self.config.enable_gpu {
+            if self.config.compute.enable_gpu {
                 debug!("Initializing GPU support");
                 self.initialize_gpu().await?;
             }
@@ -239,7 +239,7 @@ impl MLEngine {
         // Initialize distributed computing if enabled
         #[cfg(feature = "distributed")]
         {
-            if self.config.enable_distributed {
+            if self.config.compute.enable_distributed {
                 debug!("Initializing distributed computing");
                 self.initialize_distributed().await?;
             }
@@ -257,18 +257,23 @@ impl MLEngine {
     /// Ok(()) if GPU initialization succeeds, error otherwise
     #[cfg(feature = "gpu")]
     async fn initialize_gpu(&self) -> Result<()> {
-        use candle_core::Device;
+        // TODO: Add candle_core dependency and implement GPU initialization
+        // use candle_core::Device;
 
-        match Device::cuda_if_available(0) {
-            Ok(_device) => {
-                info!("GPU support initialized successfully");
-                Ok(())
-            }
-            Err(e) => {
-                warn!("Failed to initialize GPU: {}", e);
-                Err(MLError::gpu(format!("GPU initialization failed: {}", e)))
-            }
-        }
+        // Placeholder implementation until candle_core is added
+        info!("GPU support initialization (placeholder)");
+        Ok(())
+
+        // match Device::cuda_if_available(0) {
+        //     Ok(_device) => {
+        //         info!("GPU support initialized successfully");
+        //         Ok(())
+        //     }
+        //     Err(e) => {
+        //         warn!("Failed to initialize GPU: {}", e);
+        //         Err(MLError::gpu(format!("GPU initialization failed: {}", e)))
+        //     }
+        // }
     }
 
     /// Initialize distributed computing environment for multi-node training

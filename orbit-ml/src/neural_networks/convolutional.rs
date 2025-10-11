@@ -13,6 +13,13 @@ pub struct ConvolutionalNetwork {
 }
 
 impl ConvolutionalNetwork {
+    /// Create a new convolutional neural network with given architecture
+    ///
+    /// # Arguments
+    /// * `architecture` - Network architecture specification
+    ///
+    /// # Returns
+    /// A new CNN instance (currently placeholder implementation)
     pub async fn new(architecture: NetworkArchitecture) -> Result<Self> {
         // TODO: Implement CNN initialization
         Ok(Self { architecture })
