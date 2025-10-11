@@ -55,7 +55,7 @@ env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
   REGISTRY: ghcr.io
-  IMAGE_NAMESPACE: ${{ github.repository_owner }}/orbit-rs
+  IMAGE_NAMESPACE: turingworks/orbit-rs
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
