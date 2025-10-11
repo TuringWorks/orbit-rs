@@ -330,19 +330,17 @@ impl VectorizedOperation for VectorizedScan {
 impl VectorizedOperation for VectorizedFilter {
     fn execute_batch(&self, input: &RecordBatch) -> Result<RecordBatch, VectorizationError> {
         // Apply vectorized filter operation
-        match &self.condition {
-            Expression::Binary {
-                left,
-                operator,
-                right,
-            } => {
-                if let (Expression::Identifier(col_name), Expression::Literal(value)) =
-                    (left.as_ref(), right.as_ref())
-                {
-                    return self.apply_simd_filter(input, col_name, operator, value);
-                }
+        if let Expression::Binary {
+            left,
+            operator,
+            right,
+        } = &self.condition
+        {
+            if let (Expression::Identifier(col_name), Expression::Literal(value)) =
+                (left.as_ref(), right.as_ref())
+            {
+                return self.apply_simd_filter(input, col_name, operator, value);
             }
-            _ => {}
         }
 
         // Fallback to non-SIMD implementation

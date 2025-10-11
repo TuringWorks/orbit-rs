@@ -309,6 +309,65 @@ orbit-operator/
 - Integration with Kubernetes ecosystem
 - Production-ready deployment automation
 
+### orbit-benchmarks
+**Purpose**: Comprehensive performance benchmarking and testing framework
+
+```
+orbit-benchmarks/                 # Performance benchmarks (excluded from workspace)
+├── Cargo.toml                   # Independent crate configuration
+├── README.md                    # Benchmark documentation and usage
+├── benches/                     # Criterion benchmarks
+│   ├── actor_benchmarks.rs      # Actor system performance
+│   ├── leader_election_benchmarks.rs # Raft consensus performance
+│   └── persistence_comparison.rs # Storage backend comparison (⚠️ WAL issues)
+├── src/
+│   ├── lib.rs                   # Benchmark framework exports
+│   ├── orbitql/                 # OrbitQL query benchmarks (NEW)
+│   │   ├── mod.rs               # OrbitQL benchmark exports
+│   │   ├── benchmark.rs         # Query performance framework
+│   │   └── comprehensive_benchmark.rs # TPC workload implementations
+│   ├── persistence/             # Storage backend benchmarks
+│   │   ├── mod.rs
+│   │   ├── config.rs
+│   │   ├── metrics.rs
+│   │   ├── cow_btree.rs
+│   │   ├── lsm_tree.rs
+│   │   └── rocksdb_impl.rs
+│   ├── compute/                 # Heterogeneous compute benchmarks
+│   │   └── mod.rs
+│   └── performance/             # General performance benchmarks
+│       └── mod.rs
+├── scripts/                     # Benchmark utilities
+│   ├── run_benchmarks.sh       # Master benchmark runner
+│   ├── analyze_results.py      # Result analysis and reporting
+│   └── README.md               # Script documentation
+├── examples/                    # Example benchmark usage
+│   ├── cow_btree_demo.rs
+│   ├── cow_btree_persistence_demo.rs
+│   ├── rocksdb_demo.rs
+│   └── configurable_backends_demo.rs
+└── docs/                        # Benchmark-specific documentation
+    ├── PERSISTENCE_ARCHITECTURE.md
+    └── DISASTER_RECOVERY.md
+```
+
+**Key Features**:
+- **OrbitQL Benchmarks**: TPC-H, TPC-C, TPC-DS industry-standard query benchmarks
+- **Query Performance**: Comprehensive query optimization, vectorization, and parallelization testing
+- **Actor System**: Virtual actor performance and message throughput benchmarks
+- **Consensus**: Raft leader election and state management performance
+- **Storage**: Multi-backend persistence performance comparison
+- **Heterogeneous Compute**: GPU and SIMD acceleration benchmarks
+- **CI/CD Integration**: Manual GitHub Actions workflow for performance validation
+- **WAL Replay Issues**: Known issues with persistence comparison benchmarks
+- **Independent Execution**: Excluded from workspace to prevent build interference
+
+**Recent Changes**:
+- ✅ **OrbitQL Benchmarks Moved**: Comprehensive query benchmarks relocated from `orbit-shared`
+- ✅ **TPC Workloads**: Industry-standard TPC-H, TPC-C, TPC-DS benchmark implementations
+- ✅ **Performance Framework**: Complete benchmark framework for query optimization validation
+- ⚠️ **WAL Issues**: Persistence comparison benchmarks may hang due to WAL replay loops
+
 ## Supporting Infrastructure
 
 ### examples/

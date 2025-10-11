@@ -50,6 +50,13 @@ cargo bench --bench leader_election_benchmarks
 - **Metrics**: Read/write performance, memory usage
 - **Status**: ⚠️ **Known WAL replay issues - use with caution**
 
+### OrbitQL Query Language Benchmarks 🆕
+- **Files**: `src/orbitql/benchmark.rs`, `src/orbitql/comprehensive_benchmark.rs`
+- **Focus**: Query engine performance with industry-standard workloads
+- **Metrics**: Query execution time, throughput, optimization effectiveness, vectorization performance
+- **Workloads**: TPC-H (22 queries), TPC-C (OLTP), TPC-DS (analytics), custom query patterns
+- **Status**: ✅ **Stable - Recently moved from orbit-shared**
+
 ## 🔒 CI/CD Exclusion Strategy
 
 ### Why Benchmarks Are Excluded

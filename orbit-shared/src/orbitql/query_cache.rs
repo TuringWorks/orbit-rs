@@ -818,7 +818,7 @@ impl QueryCacheManager {
 
     /// Invalidate cache entries
     pub async fn invalidate(&self, trigger: InvalidationTrigger) -> Result<usize, CacheError> {
-        let rules = self.invalidator.rules.read().unwrap();
+        let rules = self.invalidator.rules.read().unwrap().clone();
         let mut invalidated_count = 0;
 
         for rule in rules.iter() {
@@ -888,17 +888,14 @@ impl QueryCacheManager {
         let mut tags = HashSet::new();
 
         // Extract table names from query (simplified)
-        match query {
-            Statement::Select(select) => {
-                if !select.from.is_empty() {
-                    for from_clause in &select.from {
-                        if let crate::orbitql::ast::FromClause::Table { name, .. } = from_clause {
-                            tags.insert(format!("table:{}", name));
-                        }
+        if let Statement::Select(select) = query {
+            if !select.from.is_empty() {
+                for from_clause in &select.from {
+                    if let crate::orbitql::ast::FromClause::Table { name, .. } = from_clause {
+                        tags.insert(format!("table:{}", name));
                     }
                 }
             }
-            _ => {}
         }
 
         tags
@@ -1113,7 +1110,7 @@ impl Default for QueryCacheManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::orbitql::ast::{Statement, SelectStatement, FromClause, SelectField};
+    use crate::orbitql::ast::{FromClause, SelectField, SelectStatement, Statement};
 
     #[tokio::test]
     async fn test_cache_manager_creation() {

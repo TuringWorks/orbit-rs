@@ -19,7 +19,7 @@ LLM Client (Claude, GPT, etc.)
 │  │  ┌─────────────────────────┐    ││
 │  │  │   Intent Classification │    ││
 │  │  │   Entity Recognition    │    ││
-│  │  │   Query Understanding  │    ││
+│  │  │   Query Understanding   │    ││
 │  │  └─────────────────────────┘    ││
 │  └─────────────────────────────────┘│
 │  ┌─────────────────────────────────┐│
@@ -47,7 +47,7 @@ LLM Client (Claude, GPT, etc.)
 │         Orbit-RS Cluster            │
 │  ┌─────────────────────────────────┐│
 │  │      SQL Query Engine           ││
-│  │   (Phase 8 Implementation)     ││
+│  │   (Phase 8 Implementation)      ││
 │  └─────────────────────────────────┘│
 │  ┌─────────────────────────────────┐│
 │  │      Actor System               ││

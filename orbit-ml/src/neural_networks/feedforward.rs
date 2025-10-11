@@ -21,15 +21,19 @@ pub struct FeedforwardNetwork {
     biases: Vec<Array1<f64>>,
 
     /// Cached layer outputs (for backpropagation)
+    #[allow(dead_code)]
     layer_outputs: Vec<Array2<f64>>,
 
     /// Cached layer inputs (pre-activation)
+    #[allow(dead_code)]
     layer_inputs: Vec<Array2<f64>>,
 
     /// Weight gradients
+    #[allow(dead_code)]
     weight_gradients: Vec<Array2<f64>>,
 
     /// Bias gradients  
+    #[allow(dead_code)]
     bias_gradients: Vec<Array1<f64>>,
 }
 
@@ -87,6 +91,7 @@ impl FeedforwardNetwork {
     }
 
     /// Apply activation function
+    #[allow(clippy::only_used_in_recursion)]
     fn apply_activation(&self, input: &Array2<f64>, activation: &ActivationType) -> Array2<f64> {
         match activation {
             ActivationType::Linear => input.clone(),
@@ -204,12 +209,12 @@ impl NeuralNetwork for FeedforwardNetwork {
         // Store input for backpropagation
         // self.layer_outputs[0] = current_output.clone();
 
-        for (_i, layer) in self.architecture.layers.iter().enumerate() {
+        for layer in self.architecture.layers.iter() {
             match layer.layer_type {
                 LayerType::Dense => {
                     // Linear transformation: output = input * W^T + b
                     let linear_output = current_output.dot(&self.weights[layer_idx].t())
-                        + &self.biases[layer_idx]
+                        + self.biases[layer_idx]
                             .broadcast((current_output.nrows(), self.biases[layer_idx].len()))
                             .unwrap();
 

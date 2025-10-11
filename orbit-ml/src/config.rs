@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 /// Main configuration for the ML engine
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct MLConfig {
     /// Engine settings
     pub engine: EngineConfig,
@@ -130,7 +130,7 @@ pub struct ComputeConfig {
 }
 
 /// Multi-language runtime configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct RuntimeConfig {
     /// Python runtime configuration
     pub python: PythonConfig,
@@ -303,19 +303,6 @@ pub enum LogLevel {
     Trace,
 }
 
-impl Default for MLConfig {
-    fn default() -> Self {
-        Self {
-            engine: EngineConfig::default(),
-            storage: StorageConfig::default(),
-            compute: ComputeConfig::default(),
-            runtimes: RuntimeConfig::default(),
-            security: SecurityConfig::default(),
-            monitoring: MonitoringConfig::default(),
-        }
-    }
-}
-
 impl Default for EngineConfig {
     fn default() -> Self {
         Self {
@@ -351,16 +338,6 @@ impl Default for ComputeConfig {
             cpu_threads: None,     // Use all available cores
             memory_limit_mb: None, // No limit
             enable_mixed_precision: false,
-        }
-    }
-}
-
-impl Default for RuntimeConfig {
-    fn default() -> Self {
-        Self {
-            python: PythonConfig::default(),
-            javascript: JavaScriptConfig::default(),
-            lua: LuaConfig::default(),
         }
     }
 }

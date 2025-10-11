@@ -28,9 +28,7 @@
 
 pub mod advanced_analytics;
 pub mod ast;
-pub mod benchmark;
 pub mod cache;
-pub mod comprehensive_benchmark;
 pub mod cost_based_planner;
 pub mod cost_model;
 pub mod distributed;
