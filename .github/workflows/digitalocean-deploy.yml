@@ -50,7 +50,7 @@ on:
 env:
   DO_REGION: nyc3
   DEPLOYMENT_NAME: orbit-rs
-  CONTAINER_REGISTRY: ghcr.io/${{ github.repository_owner }}/orbit-rs
+  CONTAINER_REGISTRY: ghcr.io/${{ toLower(format('{0}/orbit-rs', github.repository_owner)) }}
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ inputs.deployment_environment || 'staging' }}
