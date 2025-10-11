@@ -114,12 +114,16 @@ The pipeline automatically builds GPU-enabled variants:
 
 ```bash
 
-# Pull GPU-enabled orbit-compute image
-podman pull ghcr.io/turingworks/orbit-rs/orbit-compute:latest-release-gpu-linux-amd64
+# GPU support is currently integrated into orbit-server
+# orbit-compute is a library providing compute acceleration capabilities
+# that are used by orbit-server when GPU resources are available
 
-# Run with GPU support
+# Pull orbit-server image (includes compute acceleration support)
+podman pull ghcr.io/turingworks/orbit-rs/orbit-server:latest-release
+
+# Run with GPU support (GPU features activated automatically when detected)
 podman run -d --gpus all -p 8080:8080 \
-  ghcr.io/turingworks/orbit-rs/orbit-compute:latest-release-gpu-linux-amd64
+  ghcr.io/turingworks/orbit-rs/orbit-server:latest-release
 ```
 
 ## 💾 Storage Configuration
