@@ -44,25 +44,39 @@ pub struct TrainingConfig {
     pub hyperparameters: HashMap<String, serde_json::Value>,
 }
 
-/// Optimizer types
+/// Optimizer types available for training
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum OptimizerType {
     /// Stochastic Gradient Descent
-    Sgd { momentum: Option<f64> },
+    Sgd {
+        /// Optional momentum factor (0.0 to 1.0)
+        momentum: Option<f64>,
+    },
 
-    /// Adam optimizer
+    /// Adam optimizer with adaptive learning rates
     Adam {
+        /// Exponential decay rate for first moment estimates (default: 0.9)
         beta1: f64,
+        /// Exponential decay rate for second moment estimates (default: 0.999)
         beta2: f64,
+        /// Small epsilon value for numerical stability (default: 1e-8)
         epsilon: f64,
     },
 
-    /// AdaGrad optimizer
-    AdaGrad { epsilon: f64 },
+    /// AdaGrad optimizer with adaptive learning rates
+    AdaGrad {
+        /// Small epsilon value for numerical stability
+        epsilon: f64,
+    },
 
     /// RMSprop optimizer
-    RmsProp { alpha: f64, epsilon: f64 },
+    RmsProp {
+        /// Decay factor for moving average (default: 0.99)
+        alpha: f64,
+        /// Small epsilon value for numerical stability
+        epsilon: f64,
+    },
 }
 
 /// Loss functions
@@ -81,12 +95,17 @@ pub enum LossFunction {
     /// Binary Cross Entropy Loss
     BinaryCrossEntropy,
 
-    /// Huber Loss
-    HuberLoss { delta: f64 },
+    /// Huber Loss (less sensitive to outliers than MSE)
+    HuberLoss {
+        /// Threshold parameter for switching between L1 and L2 loss
+        delta: f64,
+    },
 
-    /// Custom loss function
+    /// Custom loss function with configurable parameters
     Custom {
+        /// Name identifier for the custom loss function
         name: String,
+        /// Loss function parameters as key-value pairs
         parameters: HashMap<String, f64>,
     },
 }
