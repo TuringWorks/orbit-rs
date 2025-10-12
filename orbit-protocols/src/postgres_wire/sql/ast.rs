@@ -45,6 +45,12 @@ pub enum Statement {
     // Extensions
     CreateExtension(CreateExtensionStatement),
     DropExtension(DropExtensionStatement),
+
+    // Functions and Procedures (Phase 11)
+    CreateFunction(CreateFunctionStatement),
+    CreateProcedure(CreateProcedureStatement),
+    DropFunction(DropFunctionStatement),
+    DropProcedure(DropProcedureStatement),
 }
 
 // ===== DDL Statements =====
@@ -883,6 +889,202 @@ pub struct DropExtensionStatement {
     pub if_exists: bool,
     pub names: Vec<String>,
     pub cascade: bool,
+}
+
+// ===== Function and Procedure Statements (Phase 11) =====
+
+/// CREATE FUNCTION statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateFunctionStatement {
+    pub or_replace: bool,
+    pub name: FunctionName,
+    pub parameters: Vec<FunctionParameter>,
+    pub return_type: Option<SqlType>,
+    pub language: FunctionLanguage,
+    pub body: FunctionBody,
+    pub volatility: FunctionVolatility,
+    pub security: FunctionSecurity,
+    pub options: Vec<FunctionOption>,
+}
+
+/// CREATE PROCEDURE statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateProcedureStatement {
+    pub or_replace: bool,
+    pub name: FunctionName,
+    pub parameters: Vec<FunctionParameter>,
+    pub language: FunctionLanguage,
+    pub body: FunctionBody,
+    pub security: FunctionSecurity,
+    pub options: Vec<FunctionOption>,
+}
+
+/// DROP FUNCTION statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct DropFunctionStatement {
+    pub if_exists: bool,
+    pub names: Vec<FunctionSignature>,
+    pub cascade: bool,
+}
+
+/// DROP PROCEDURE statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct DropProcedureStatement {
+    pub if_exists: bool,
+    pub names: Vec<FunctionSignature>,
+    pub cascade: bool,
+}
+
+/// Function signature for DROP statements
+#[derive(Debug, Clone, PartialEq)]
+pub struct FunctionSignature {
+    pub name: FunctionName,
+    pub parameter_types: Vec<SqlType>,
+}
+
+/// Function parameter definition
+#[derive(Debug, Clone, PartialEq)]
+pub struct FunctionParameter {
+    pub name: Option<String>,
+    pub param_type: SqlType,
+    pub mode: ParameterMode,
+    pub default_value: Option<Expression>,
+}
+
+/// Parameter mode (IN, OUT, INOUT)
+#[derive(Debug, Clone, PartialEq)]
+pub enum ParameterMode {
+    In,
+    Out,
+    InOut,
+}
+
+/// Function language
+#[derive(Debug, Clone, PartialEq)]
+pub enum FunctionLanguage {
+    Sql,
+    PlPgSql,
+    C,
+    Internal,
+}
+
+/// Function body
+#[derive(Debug, Clone, PartialEq)]
+pub enum FunctionBody {
+    /// SQL statement(s) as a string
+    Sql(String),
+    /// PL/pgSQL block
+    PlPgSql(PlPgSqlBlock),
+}
+
+/// PL/pgSQL block structure
+#[derive(Debug, Clone, PartialEq)]
+pub struct PlPgSqlBlock {
+    pub declarations: Vec<PlPgSqlDeclaration>,
+    pub statements: Vec<PlPgSqlStatement>,
+}
+
+/// PL/pgSQL variable declaration
+#[derive(Debug, Clone, PartialEq)]
+pub struct PlPgSqlDeclaration {
+    pub name: String,
+    pub var_type: SqlType,
+    pub default_value: Option<Expression>,
+}
+
+/// PL/pgSQL statement
+#[derive(Debug, Clone, PartialEq)]
+pub enum PlPgSqlStatement {
+    /// Assignment: variable := expression
+    Assignment {
+        target: String,
+        value: Expression,
+    },
+    /// SQL statement execution
+    SqlStatement(Box<Statement>),
+    /// RETURN statement
+    Return(Option<Expression>),
+    /// IF-THEN-ELSIF-ELSE
+    If {
+        condition: Expression,
+        then_block: Vec<PlPgSqlStatement>,
+        elsif_blocks: Vec<(Expression, Vec<PlPgSqlStatement>)>,
+        else_block: Option<Vec<PlPgSqlStatement>>,
+    },
+    /// LOOP
+    Loop {
+        statements: Vec<PlPgSqlStatement>,
+    },
+    /// WHILE loop
+    While {
+        condition: Expression,
+        statements: Vec<PlPgSqlStatement>,
+    },
+    /// FOR loop
+    For {
+        variable: String,
+        lower_bound: Expression,
+        upper_bound: Expression,
+        statements: Vec<PlPgSqlStatement>,
+    },
+    /// EXIT statement
+    Exit {
+        label: Option<String>,
+        when_condition: Option<Expression>,
+    },
+    /// CONTINUE statement
+    Continue {
+        label: Option<String>,
+        when_condition: Option<Expression>,
+    },
+    /// RAISE statement for errors/notices
+    Raise {
+        level: RaiseLevel,
+        message: String,
+    },
+}
+
+/// RAISE level
+#[derive(Debug, Clone, PartialEq)]
+pub enum RaiseLevel {
+    Debug,
+    Log,
+    Info,
+    Notice,
+    Warning,
+    Exception,
+}
+
+/// Function volatility
+#[derive(Debug, Clone, PartialEq)]
+pub enum FunctionVolatility {
+    Immutable,
+    Stable,
+    Volatile,
+}
+
+/// Function security
+#[derive(Debug, Clone, PartialEq)]
+pub enum FunctionSecurity {
+    Invoker,
+    Definer,
+}
+
+/// Function options
+#[derive(Debug, Clone, PartialEq)]
+pub enum FunctionOption {
+    Cost(i32),
+    Rows(i32),
+    Strict,
+    Parallel(ParallelMode),
+}
+
+/// Parallel execution mode
+#[derive(Debug, Clone, PartialEq)]
+pub enum ParallelMode {
+    Safe,
+    Restricted,
+    Unsafe,
 }
 
 // Helper implementations
