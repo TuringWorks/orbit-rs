@@ -1,5 +1,6 @@
 pub mod actor_communication;
 pub mod addressable;
+pub mod cdc;
 pub mod cluster_manager;
 pub mod consensus;
 pub mod election_metrics;
@@ -19,6 +20,8 @@ pub mod router;
 pub mod saga;
 pub mod saga_recovery;
 pub mod spatial;
+pub mod stream_processing;
+pub mod streaming_integrations;
 pub mod timeseries;
 pub mod transaction_log;
 pub mod transactions;
@@ -32,6 +35,24 @@ pub use graph::{NodeId as GraphNodeId, RelationshipId as GraphRelationshipId};
 pub use mesh::*;
 pub use net::*;
 pub use router::*;
+
+// Re-export CDC functionality
+pub use cdc::{
+    CdcConsumer, CdcCoordinator, CdcEvent, CdcFilter, CdcStats, CdcStream, CdcSubscription,
+    DmlOperation,
+};
+
+// Re-export streaming integrations
+pub use streaming_integrations::{
+    KafkaCdcConsumer, KafkaConfig, KafkaStats, RabbitMqCdcConsumer, RabbitMqConfig, RabbitMqStats,
+    WebhookCdcConsumer, WebhookConfig, WebhookStats,
+};
+
+// Re-export stream processing
+pub use stream_processing::{
+    AggregationFunction, StreamEvent, StreamProcessor, StreamStats, WindowResult, WindowState,
+    WindowType,
+};
 
 // Re-export advanced transaction features (excluding conflicting core module)
 pub use transactions::{
