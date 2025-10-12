@@ -242,6 +242,18 @@ impl ExpressionEvaluator {
                 self.vector_distance(&left_val, &right_val, VectorOperator::CosineDistance)
             }
 
+            // JSON operators
+            BinaryOperator::JsonExtract => self.json_extract(&left_val, &right_val),
+            BinaryOperator::JsonExtractText => self.json_extract_text(&left_val, &right_val),
+            BinaryOperator::JsonPathExtract => self.json_path_extract(&left_val, &right_val),
+            BinaryOperator::JsonPathExtractText => self.json_path_extract_text(&left_val, &right_val),
+            BinaryOperator::JsonContains => self.json_contains(&left_val, &right_val),
+            BinaryOperator::JsonContainedBy => self.json_contained_by(&left_val, &right_val),
+            BinaryOperator::JsonExists => self.json_exists(&left_val, &right_val),
+            BinaryOperator::JsonExistsAny => self.json_exists_any(&left_val, &right_val),
+            BinaryOperator::JsonExistsAll => self.json_exists_all(&left_val, &right_val),
+            BinaryOperator::JsonConcat => self.json_concat(&left_val, &right_val),
+
             _ => Err(ProtocolError::PostgresError(format!(
                 "Binary operator {:?} not implemented",
                 operator
