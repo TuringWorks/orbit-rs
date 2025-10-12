@@ -56,7 +56,8 @@ env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
   REGISTRY: ghcr.io
-  IMAGE_NAMESPACE: ${{ github.repository_owner }}/orbit-rs
+  # Repository owner must be lowercase for container registry compatibility
+  IMAGE_NAMESPACE_OWNER: ${{ github.repository_owner }}
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -406,6 +407,9 @@ jobs:
         GPU_ENABLED="${{ matrix.gpu-enabled }}"
         GPU_SUFFIX="${{ matrix.gpu-enabled && '-gpu' || '' }}"
         
+        # Convert repository owner to lowercase for container registry compatibility
+        IMAGE_NAMESPACE=$(echo "${IMAGE_NAMESPACE_OWNER}/orbit-rs" | tr '[:upper:]' '[:lower:]')
+        
         # Build image
         podman build \
           --platform=${PLATFORM} \
@@ -435,6 +439,9 @@ jobs:
         echo "deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee -a /etc/sources.list.d/trivy.list
         sudo apt-get update
         sudo apt-get install trivy
+        
+        # Convert repository owner to lowercase for container registry compatibility
+        IMAGE_NAMESPACE=$(echo "${IMAGE_NAMESPACE_OWNER}/orbit-rs" | tr '[:upper:]' '[:lower:]')
         
         # Scan the image
         PLATFORM="${{ matrix.platform }}"
@@ -475,6 +482,9 @@ jobs:
     - name: Push container image
       if: needs.setup.outputs.should-push == 'true'
       run: |
+        # Convert repository owner to lowercase for container registry compatibility
+        IMAGE_NAMESPACE=$(echo "${IMAGE_NAMESPACE_OWNER}/orbit-rs" | tr '[:upper:]' '[:lower:]')
+        
         PLATFORM="${{ matrix.platform }}"
         VERSION="${{ needs.setup.outputs.version }}"
         BUILD_TYPE="${{ matrix.build-type }}"
@@ -488,6 +498,9 @@ jobs:
 
     - name: Generate image metadata
       run: |
+        # Convert repository owner to lowercase for container registry compatibility
+        IMAGE_NAMESPACE=$(echo "${IMAGE_NAMESPACE_OWNER}/orbit-rs" | tr '[:upper:]' '[:lower:]')
+        
         PLATFORM="${{ matrix.platform }}"
         VERSION="${{ needs.setup.outputs.version }}"
         BUILD_TYPE="${{ matrix.build-type }}"
@@ -556,6 +569,9 @@ jobs:
 
     - name: Create and push multi-platform manifest
       run: |
+        # Convert repository owner to lowercase for container registry compatibility
+        IMAGE_NAMESPACE=$(echo "${IMAGE_NAMESPACE_OWNER}/orbit-rs" | tr '[:upper:]' '[:lower:]')
+        
         VERSION="${{ needs.setup.outputs.version }}"
         BUILD_TYPE="${{ matrix.build-type }}"
         COMPONENT="${{ matrix.component }}"
@@ -927,6 +943,9 @@ jobs:
 
     - name: Create test namespace manifest
       run: |
+        # Convert repository owner to lowercase for container registry compatibility
+        IMAGE_NAMESPACE=$(echo "${IMAGE_NAMESPACE_OWNER}/orbit-rs" | tr '[:upper:]' '[:lower:]')
+        
         VERSION="${{ needs.setup.outputs.version }}"
         
         # Update Kubernetes manifests with new image tags
@@ -1017,6 +1036,9 @@ jobs:
 
     - name: Test Helm chart with new images
       run: |
+        # Convert repository owner to lowercase for container registry compatibility
+        IMAGE_NAMESPACE=$(echo "${IMAGE_NAMESPACE_OWNER}/orbit-rs" | tr '[:upper:]' '[:lower:]')
+        
         VERSION="${{ needs.setup.outputs.version }}"
         
         # Update Helm values for testing
