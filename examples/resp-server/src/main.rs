@@ -90,13 +90,13 @@ async fn create_orbit_client() -> Result<OrbitClient, Box<dyn Error>> {
 
 /// Create a mock OrbitClient for demonstration purposes
 async fn create_mock_orbit_client() -> Result<OrbitClient, Box<dyn Error>> {
-    info!("⚠️  Using mock OrbitClient for demonstration");
+    info!("⚠️  Using offline OrbitClient for demonstration");
     info!("   In production, ensure orbit-server is running and accessible");
 
-    // Create a minimal OrbitClient for demonstration
-    // This won't actually connect to a cluster but allows the RESP server to start
+    // Create an offline OrbitClient that doesn't require server connections
     let client = OrbitClient::builder()
-        .with_namespace("redis-demo-mock")
+        .with_namespace("redis-demo-offline")
+        .with_offline_mode(true)
         .build()
         .await?;
 

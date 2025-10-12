@@ -17,7 +17,8 @@
 //! ## Quick Start
 //!
 //! ```rust
-//! use orbit_ml::{MLEngine, NeuralNetwork, TrainingConfig};
+//! use orbit_ml::{MLEngine, NeuralNetworkBuilder, TrainingConfig};
+//! use orbit_ml::engine::MLEngineInterface;
 //!
 //! # #[tokio::main]
 //! # async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -25,16 +26,24 @@
 //! let engine = MLEngine::new().await?;
 //!
 //! // Create and train a neural network
-//! let nn = NeuralNetwork::feedforward()
+//! let _nn = NeuralNetworkBuilder::feedforward()
 //!     .layers(&[64, 32, 16, 1])
 //!     .activation("relu")
-//!     .build()?;
+//!     .build().await?;
 //!
 //! let config = TrainingConfig::default()
 //!     .epochs(100)
 //!     .learning_rate(0.001);
 //!
-//! let trained_model = engine.train(nn, &training_data, config).await?;
+//! // Example training data (in practice, this would be your actual data)
+//! let training_data = vec![0u8; 1024]; // Mock training data
+//!
+//! let _trained_job = engine.train_model(
+//!     "my_model".to_string(),
+//!     "neural_network".to_string(),
+//!     training_data,
+//!     config
+//! ).await?;
 //! # Ok(())
 //! # }
 //! ```
