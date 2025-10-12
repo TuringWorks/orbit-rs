@@ -53,6 +53,193 @@ impl DashboardGenerator {
         })
     }
 
+    /// Generate comprehensive production monitoring dashboard
+    pub fn generate_production_dashboard() -> PrometheusResult<String> {
+        let dashboard = GrafanaDashboard {
+            id: None,
+            title: "Orbit Production Monitoring".to_string(),
+            tags: vec!["orbit".to_string(), "prometheus".to_string(), "production".to_string()],
+            timezone: "browser".to_string(),
+            panels: vec![
+                // System Overview
+                Panel {
+                    id: 1,
+                    title: "Server Uptime".to_string(),
+                    panel_type: "singlestat".to_string(),
+                    targets: vec![Target {
+                        expr: "orbit_server_uptime_seconds".to_string(),
+                        legend_format: "Uptime".to_string(),
+                    }],
+                },
+                Panel {
+                    id: 2,
+                    title: "Memory Usage".to_string(),
+                    panel_type: "graph".to_string(),
+                    targets: vec![Target {
+                        expr: "orbit_server_memory_usage_bytes".to_string(),
+                        legend_format: "Memory".to_string(),
+                    }],
+                },
+                Panel {
+                    id: 3,
+                    title: "CPU Usage".to_string(),
+                    panel_type: "graph".to_string(),
+                    targets: vec![Target {
+                        expr: "orbit_server_cpu_usage_percent".to_string(),
+                        legend_format: "CPU %".to_string(),
+                    }],
+                },
+                // Query Performance
+                Panel {
+                    id: 4,
+                    title: "Query Execution Time (p50, p95, p99)".to_string(),
+                    panel_type: "graph".to_string(),
+                    targets: vec![
+                        Target {
+                            expr: "histogram_quantile(0.50, rate(orbit_query_execution_seconds_bucket[5m]))".to_string(),
+                            legend_format: "p50".to_string(),
+                        },
+                        Target {
+                            expr: "histogram_quantile(0.95, rate(orbit_query_execution_seconds_bucket[5m]))".to_string(),
+                            legend_format: "p95".to_string(),
+                        },
+                        Target {
+                            expr: "histogram_quantile(0.99, rate(orbit_query_execution_seconds_bucket[5m]))".to_string(),
+                            legend_format: "p99".to_string(),
+                        },
+                    ],
+                },
+                Panel {
+                    id: 5,
+                    title: "Slow Queries".to_string(),
+                    panel_type: "graph".to_string(),
+                    targets: vec![Target {
+                        expr: "rate(orbit_slow_queries_total[5m])".to_string(),
+                        legend_format: "Slow Queries/sec".to_string(),
+                    }],
+                },
+                Panel {
+                    id: 6,
+                    title: "Query Errors".to_string(),
+                    panel_type: "graph".to_string(),
+                    targets: vec![Target {
+                        expr: "rate(orbit_query_errors_total[5m])".to_string(),
+                        legend_format: "Errors/sec".to_string(),
+                    }],
+                },
+                // Database Metrics
+                Panel {
+                    id: 7,
+                    title: "Database Connections".to_string(),
+                    panel_type: "graph".to_string(),
+                    targets: vec![
+                        Target {
+                            expr: "orbit_db_connections_active".to_string(),
+                            legend_format: "Active".to_string(),
+                        },
+                        Target {
+                            expr: "orbit_db_connections_idle".to_string(),
+                            legend_format: "Idle".to_string(),
+                        },
+                    ],
+                },
+                Panel {
+                    id: 8,
+                    title: "Database Query Duration".to_string(),
+                    panel_type: "graph".to_string(),
+                    targets: vec![Target {
+                        expr: "rate(orbit_db_query_duration_seconds_sum[5m]) / rate(orbit_db_query_duration_seconds_count[5m])".to_string(),
+                        legend_format: "Avg Duration".to_string(),
+                    }],
+                },
+                // Transaction Metrics
+                Panel {
+                    id: 9,
+                    title: "Transaction Rate".to_string(),
+                    panel_type: "graph".to_string(),
+                    targets: vec![
+                        Target {
+                            expr: "rate(orbit_transaction_commits_total[5m])".to_string(),
+                            legend_format: "Commits/sec".to_string(),
+                        },
+                        Target {
+                            expr: "rate(orbit_transaction_rollbacks_total[5m])".to_string(),
+                            legend_format: "Rollbacks/sec".to_string(),
+                        },
+                    ],
+                },
+                Panel {
+                    id: 10,
+                    title: "Lock Contentions".to_string(),
+                    panel_type: "graph".to_string(),
+                    targets: vec![Target {
+                        expr: "rate(orbit_lock_contentions_total[5m])".to_string(),
+                        legend_format: "Contentions/sec".to_string(),
+                    }],
+                },
+                // I/O Metrics
+                Panel {
+                    id: 11,
+                    title: "Disk I/O Operations".to_string(),
+                    panel_type: "graph".to_string(),
+                    targets: vec![
+                        Target {
+                            expr: "rate(orbit_disk_reads_total[5m])".to_string(),
+                            legend_format: "Reads/sec".to_string(),
+                        },
+                        Target {
+                            expr: "rate(orbit_disk_writes_total[5m])".to_string(),
+                            legend_format: "Writes/sec".to_string(),
+                        },
+                    ],
+                },
+                Panel {
+                    id: 12,
+                    title: "Disk I/O Throughput".to_string(),
+                    panel_type: "graph".to_string(),
+                    targets: vec![
+                        Target {
+                            expr: "rate(orbit_disk_read_bytes_total[5m])".to_string(),
+                            legend_format: "Read Bytes/sec".to_string(),
+                        },
+                        Target {
+                            expr: "rate(orbit_disk_write_bytes_total[5m])".to_string(),
+                            legend_format: "Write Bytes/sec".to_string(),
+                        },
+                    ],
+                },
+                // Cache Metrics
+                Panel {
+                    id: 13,
+                    title: "Cache Hit Rate".to_string(),
+                    panel_type: "graph".to_string(),
+                    targets: vec![Target {
+                        expr: "rate(orbit_cache_hits_total[5m]) / (rate(orbit_cache_hits_total[5m]) + rate(orbit_cache_misses_total[5m]))".to_string(),
+                        legend_format: "Hit Rate".to_string(),
+                    }],
+                },
+                Panel {
+                    id: 14,
+                    title: "Cache Size".to_string(),
+                    panel_type: "graph".to_string(),
+                    targets: vec![Target {
+                        expr: "orbit_cache_size_bytes".to_string(),
+                        legend_format: "Cache Size".to_string(),
+                    }],
+                },
+            ],
+            time: TimeRange {
+                from: "now-1h".to_string(),
+                to: "now".to_string(),
+            },
+            refresh: "30s".to_string(),
+        };
+
+        serde_json::to_string_pretty(&dashboard).map_err(|e| {
+            PrometheusError::dashboard(format!("Failed to serialize dashboard: {}", e))
+        })
+    }
+
     /// Generate a simple HTML metrics page
     pub fn generate_html_dashboard() -> String {
         r#"

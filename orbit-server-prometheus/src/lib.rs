@@ -30,18 +30,24 @@
 //! }
 //! ```
 
+pub mod alerts;
 pub mod collector;
 pub mod config;
 pub mod dashboard;
 pub mod error;
 pub mod exporter;
+pub mod health;
 pub mod metrics;
+pub mod profiling;
 pub mod server;
 
+pub use alerts::*;
 pub use collector::*;
 pub use config::*;
 pub use dashboard::*;
 pub use error::*;
 pub use exporter::*;
+pub use health::*;
 pub use metrics::*;
+pub use profiling::*;
 pub use server::*;
