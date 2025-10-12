@@ -68,8 +68,10 @@ orbitServer:
     periodSeconds: 5
 
 # Orbit Client Configuration
+# NOTE: orbit-client is a library crate without a binary target.
+# Container images are not available. Disabled until binary is created.
 orbitClient:
-  enabled: true
+  enabled: false
   replicaCount: 1
   
   image:
@@ -91,8 +93,10 @@ orbitClient:
     RUST_LOG: "info"
 
 # Orbit Compute Configuration (CPU-only for small workload)
+# NOTE: orbit-compute is a library crate without a binary target.
+# Container images are not available. Disabled until binary is created.
 orbitCompute:
-  enabled: false  # Disabled by default for small workloads
+  enabled: false
   replicaCount: 1
   
   image:
