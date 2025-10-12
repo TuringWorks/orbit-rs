@@ -1829,7 +1829,7 @@ fn detect_detailed_microarch_and_features<R: raw_cpuid::CpuIdReader>(
 ) -> Result<(X86Microarch, X86Features), ComputeError> {
     let feature_info = cpuid.get_feature_info();
     let extended_features = cpuid.get_extended_feature_info();
-    let extended_function_info = cpuid.get_extended_feature_info();
+    let _extended_function_info = cpuid.get_extended_feature_info();
 
     match vendor {
         X86Vendor::AMD => {
@@ -1944,9 +1944,9 @@ fn detect_amd_microarch_and_model<R: raw_cpuid::CpuIdReader>(
         }
 
         // Default Zen 3/4 detection based on model numbers
-        if model >= 0x10 && model <= 0x1F {
+        if (0x10..=0x1F).contains(&model) {
             Ok((X86Microarch::Zen3 { epyc_model: None }, None))
-        } else if model >= 0x20 && model <= 0x2F {
+        } else if (0x20..=0x2F).contains(&model) {
             Ok((X86Microarch::Zen4 { epyc_model: None }, None))
         } else {
             Ok((X86Microarch::Zen3 { epyc_model: None }, None))
@@ -1975,7 +1975,7 @@ fn detect_amd_microarch_and_model<R: raw_cpuid::CpuIdReader>(
         }
 
         // Default Zen/Zen 2 detection
-        if model >= 0x30 && model <= 0x3F {
+        if (0x30..=0x3F).contains(&model) {
             Ok((X86Microarch::Zen2 { epyc_model: None }, None))
         } else {
             Ok((X86Microarch::Zen { epyc_model: None }, None))
@@ -2120,8 +2120,8 @@ fn detect_amd_specific_features<R: raw_cpuid::CpuIdReader>(
     microarch: &X86Microarch,
     epyc_model: &Option<EPYCModel>,
 ) -> Result<AMDSpecificFeatures, ComputeError> {
-    let extended_features = cpuid.get_extended_feature_info();
-    let amd_features = cpuid.get_extended_feature_info();
+    let _extended_features = cpuid.get_extended_feature_info();
+    let _amd_features = cpuid.get_extended_feature_info();
 
     let has_3d_v_cache = matches!(
         epyc_model,
