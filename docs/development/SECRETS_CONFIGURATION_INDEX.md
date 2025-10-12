@@ -178,8 +178,8 @@ category: development
 → **Start here:**
 1. Read: [Secrets Configuration Guide - Prerequisites](docs/SECRETS_CONFIGURATION_GUIDE.md#prerequisites)
 2. Run: `./scripts/prepare-secrets.sh staging`
-3. Follow: [Quick Start Guide](SECRETS_CONFIGURATION_IMPLEMENTATION_SUMMARY.md#quick-start-guide)
-4. Verify: [Verification Steps](SECRETS_CONFIGURATION_IMPLEMENTATION_SUMMARY.md#verification-steps)
+3. Follow: [Quick Start Guide](../wip/SECRETS_CONFIGURATION_IMPLEMENTATION_SUMMARY.md#quick-start-guide)
+4. Verify: [Verification Steps](../wip/SECRETS_CONFIGURATION_IMPLEMENTATION_SUMMARY.md#verification-steps)
 
 ---
 
@@ -187,9 +187,9 @@ category: development
 **I want to know what was changed in the workflow**
 
 → **Start here:**
-1. Read: [Workflow Fix Summary](WORKFLOW_FIX_SUMMARY.md)
+1. Read: [Workflow Fix Summary](../wip/WORKFLOW_FIX_SUMMARY.md)
 2. Review: [CI/CD Workflow](.github/workflows/ci-cd.yml) lines 183, 223
-3. Understand: [Why secrets can't be in conditionals](WORKFLOW_FIX_SUMMARY.md#root-cause)
+3. Understand: [Why secrets can't be in conditionals](../wip/WORKFLOW_FIX_SUMMARY.md#root-cause)
 
 ---
 
