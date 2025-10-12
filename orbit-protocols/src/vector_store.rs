@@ -3,8 +3,11 @@
 //! Provides vector storage and similarity search capabilities similar to Redis vector database
 //! and PostgreSQL pgvector extensions. Supports high-dimensional vector operations for
 //! machine learning embeddings and semantic search applications.
+//!
+//! Now with SIMD-optimized vector distance calculations for improved performance.
 
 use async_trait::async_trait;
+use orbit_shared::orbitql::simd_ops::SimdVectorOps;
 use orbit_shared::{Addressable, OrbitResult};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -166,54 +169,30 @@ impl VectorIndexConfig {
 pub struct VectorSimilarity;
 
 impl VectorSimilarity {
-    /// Calculate cosine similarity between two vectors
+    /// Calculate cosine similarity between two vectors using SIMD
     /// Returns value between -1 and 1, where 1 means identical direction
     pub fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
-        if a.len() != b.len() {
-            return 0.0;
-        }
-
-        let dot_product: f32 = a.iter().zip(b.iter()).map(|(x, y)| x * y).sum();
-        let magnitude_a: f32 = a.iter().map(|x| x * x).sum::<f32>().sqrt();
-        let magnitude_b: f32 = b.iter().map(|x| x * x).sum::<f32>().sqrt();
-
-        if magnitude_a == 0.0 || magnitude_b == 0.0 {
-            return 0.0;
-        }
-
-        dot_product / (magnitude_a * magnitude_b)
+        // Use SIMD-optimized implementation from simd_ops module
+        SimdVectorOps::cosine_similarity_f32(a, b)
     }
 
-    /// Calculate euclidean distance between two vectors
+    /// Calculate euclidean distance between two vectors using SIMD
     /// Returns distance (lower = more similar)
     pub fn euclidean_distance(a: &[f32], b: &[f32]) -> f32 {
-        if a.len() != b.len() {
-            return f32::INFINITY;
-        }
-
-        a.iter()
-            .zip(b.iter())
-            .map(|(x, y)| (x - y) * (x - y))
-            .sum::<f32>()
-            .sqrt()
+        // Use SIMD-optimized implementation from simd_ops module
+        SimdVectorOps::euclidean_distance_f32(a, b)
     }
 
-    /// Calculate dot product between two vectors
+    /// Calculate dot product between two vectors using SIMD
     pub fn dot_product(a: &[f32], b: &[f32]) -> f32 {
-        if a.len() != b.len() {
-            return 0.0;
-        }
-
-        a.iter().zip(b.iter()).map(|(x, y)| x * y).sum()
+        // Use SIMD-optimized implementation from simd_ops module
+        SimdVectorOps::dot_product_f32(a, b)
     }
 
-    /// Calculate Manhattan (L1) distance between two vectors
+    /// Calculate Manhattan (L1) distance between two vectors using SIMD
     pub fn manhattan_distance(a: &[f32], b: &[f32]) -> f32 {
-        if a.len() != b.len() {
-            return f32::INFINITY;
-        }
-
-        a.iter().zip(b.iter()).map(|(x, y)| (x - y).abs()).sum()
+        // Use SIMD-optimized implementation from simd_ops module
+        SimdVectorOps::manhattan_distance_f32(a, b)
     }
 
     /// Calculate similarity based on metric type

@@ -45,6 +45,7 @@ pub mod planner;
 pub mod production_deployment;
 pub mod profiler;
 pub mod query_cache;
+pub mod simd_ops;
 pub mod spatial;
 pub mod statistics;
 pub mod storage_integration;
