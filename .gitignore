@@ -215,4 +215,4 @@ lcov.info
 
 # Flamegraph
 flamegraph.svg
-perf.data
+perf.dataactionlint
