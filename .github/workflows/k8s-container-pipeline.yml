@@ -75,6 +75,7 @@ jobs:
       should-push: ${{ steps.should-push.outputs.should-push }}
       build-types: ${{ steps.build-types.outputs.build-types }}
       platforms: ${{ steps.platforms.outputs.platforms }}
+      image-namespace: ${{ steps.image-namespace.outputs.image-namespace }}
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -141,6 +142,15 @@ jobs:
           PLATFORMS="linux/amd64,linux/arm64"
         fi
         echo "platforms=${PLATFORMS}" >> $GITHUB_OUTPUT
+
+    - name: Determine image namespace
+      id: image-namespace
+      run: |
+        # Convert repository owner to lowercase for container registry compatibility
+        OWNER_LOWER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+        IMAGE_NAMESPACE="${OWNER_LOWER}/orbit-rs"
+        echo "image-namespace=${IMAGE_NAMESPACE}" >> $GITHUB_OUTPUT
+        echo "Determined image namespace: ${IMAGE_NAMESPACE}"
 
   # ============================================================================
   # CONTAINER IMAGE BUILDS
@@ -405,6 +415,7 @@ jobs:
         COMPONENT="${{ matrix.component }}"
         GPU_ENABLED="${{ matrix.gpu-enabled }}"
         GPU_SUFFIX="${{ matrix.gpu-enabled && '-gpu' || '' }}"
+        IMAGE_NAMESPACE="${{ needs.setup.outputs.image-namespace }}"
         
         # Build image
         podman build \
@@ -441,6 +452,7 @@ jobs:
         VERSION="${{ needs.setup.outputs.version }}"
         BUILD_TYPE="${{ matrix.build-type }}"
         COMPONENT="${{ matrix.component }}"
+        IMAGE_NAMESPACE="${{ needs.setup.outputs.image-namespace }}"
         IMAGE_TAG="${REGISTRY}/${IMAGE_NAMESPACE}/${COMPONENT}:${VERSION}-${BUILD_TYPE}-${PLATFORM//\//-}"
         
         # Export image for scanning (Podman doesn't directly support Trivy)
@@ -479,6 +491,7 @@ jobs:
         VERSION="${{ needs.setup.outputs.version }}"
         BUILD_TYPE="${{ matrix.build-type }}"
         COMPONENT="${{ matrix.component }}"
+        IMAGE_NAMESPACE="${{ needs.setup.outputs.image-namespace }}"
         
         # Push with version tag
         podman push ${REGISTRY}/${IMAGE_NAMESPACE}/${COMPONENT}:${VERSION}-${BUILD_TYPE}-${PLATFORM//\//-}
@@ -494,6 +507,7 @@ jobs:
         COMPONENT="${{ matrix.component }}"
         GPU_ENABLED="${{ matrix.gpu-enabled }}"
         GPU_SUFFIX="${{ matrix.gpu-enabled && '-gpu' || '' }}"
+        IMAGE_NAMESPACE="${{ needs.setup.outputs.image-namespace }}"
         IMAGE_TAG="${REGISTRY}/${IMAGE_NAMESPACE}/${COMPONENT}:${VERSION}-${BUILD_TYPE}${GPU_SUFFIX}-${PLATFORM//\//-}"
         
         # Get image info
@@ -559,6 +573,7 @@ jobs:
         VERSION="${{ needs.setup.outputs.version }}"
         BUILD_TYPE="${{ matrix.build-type }}"
         COMPONENT="${{ matrix.component }}"
+        IMAGE_NAMESPACE="${{ needs.setup.outputs.image-namespace }}"
         
         # Create manifest list
         podman manifest create ${REGISTRY}/${IMAGE_NAMESPACE}/${COMPONENT}:${VERSION}-${BUILD_TYPE}
@@ -928,6 +943,7 @@ jobs:
     - name: Create test namespace manifest
       run: |
         VERSION="${{ needs.setup.outputs.version }}"
+        IMAGE_NAMESPACE="${{ needs.setup.outputs.image-namespace }}"
         
         # Update Kubernetes manifests with new image tags
         mkdir -p k8s/test-deployment
@@ -1018,6 +1034,7 @@ jobs:
     - name: Test Helm chart with new images
       run: |
         VERSION="${{ needs.setup.outputs.version }}"
+        IMAGE_NAMESPACE="${{ needs.setup.outputs.image-namespace }}"
         
         # Update Helm values for testing
         cat > helm/orbit-rs/values-test.yaml << EOF
