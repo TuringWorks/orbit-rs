@@ -5,6 +5,7 @@
 
 name: Examples CI
 
+# Automated schedule disabled - use workflow_dispatch for manual runs
 on:
   workflow_dispatch:
     inputs:
@@ -13,9 +14,9 @@ on:
         required: false
         default: '.*'
         type: string
-  schedule:
-    # Run weekly on Sundays at 02:00 UTC
-    - cron: '0 2 * * 0'
+  # schedule:
+  #   # Run weekly on Sundays at 02:00 UTC
+  #   - cron: '0 2 * * 0'
 
 env:
   CARGO_TERM_COLOR: always
