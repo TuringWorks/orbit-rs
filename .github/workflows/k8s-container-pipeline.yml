@@ -18,6 +18,7 @@ on:
       - '.github/workflows/k8s-container-pipeline.yml'
       - 'containerfiles/**'
     tags: [ 'v*' ]
+  # Only run on PRs that are NOT from Dependabot to avoid disk space issues
   pull_request:
     branches: [ main, develop ]
     paths:
@@ -149,9 +150,12 @@ jobs:
     name: Build ${{ matrix.component }}-${{ matrix.build-type }} (${{ matrix.platform }})${{ matrix.gpu-enabled && '-gpu' || '' }}
     runs-on: ubuntu-latest
     needs: setup
-    if: success()
+    # Skip container builds for Dependabot PRs to avoid disk space issues
+    if: success() && github.actor != 'dependabot[bot]'
     strategy:
       fail-fast: false
+      # Reduce parallelism to avoid disk space issues
+      max-parallel: 2
       matrix:
         component: ["orbit-server", "orbit-client", "orbit-operator", "orbit-compute"]
         build-type: ${{ fromJson(needs.setup.outputs.build-types) }}
@@ -181,6 +185,47 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+      with:
+        # Use sparse checkout to reduce disk usage
+        sparse-checkout: |
+          orbit-server/
+          orbit-client/
+          orbit-operator/
+          orbit-compute/
+          Cargo.toml
+          Cargo.lock
+          .github/workflows/k8s-container-pipeline.yml
+          containerfiles/
+          config/
+        sparse-checkout-cone-mode: false
+
+    - name: Free up disk space for container builds
+      run: |
+        echo "=== Initial disk usage ==="
+        df -h
+        
+        echo "=== Cleaning up to free disk space ==="
+        # Remove large unused packages and files
+        sudo apt-get clean
+        sudo apt-get autoremove -y
+        
+        # Remove large directories that aren't needed for our builds
+        sudo rm -rf /usr/share/dotnet
+        sudo rm -rf /usr/local/share/boost
+        sudo rm -rf /opt/ghc
+        sudo rm -rf /usr/local/share/powershell
+        sudo rm -rf /usr/share/swift
+        sudo rm -rf /usr/local/lib/android
+        
+        # Clean Docker if it exists
+        docker system prune -af 2>/dev/null || true
+        
+        # Clean package cache
+        sudo apt-get clean
+        sudo rm -rf /var/lib/apt/lists/*
+        
+        echo "=== Final disk usage ==="
+        df -h
 
     - name: Set up QEMU for cross-platform builds
       uses: docker/setup-qemu-action@v3
@@ -246,8 +291,17 @@ jobs:
           BUILD_FLAGS="--release"
         fi
         
-        # Build the specific component
-        cargo build $BUILD_FLAGS --target $TARGET --package ${{ matrix.component }} --bin ${{ matrix.component }}
+        # Set environment variables to reduce memory usage
+        export CARGO_NET_RETRY=10
+        export CARGO_HTTP_TIMEOUT=300
+        export RUSTFLAGS="-C link-arg=-Wl,--no-keep-memory -C codegen-units=1"
+        
+        # Build the specific component with reduced parallelism to save memory/disk
+        cargo build $BUILD_FLAGS --target $TARGET --package ${{ matrix.component }} --bin ${{ matrix.component }} --jobs 1
+        
+        # Clean up build artifacts for other components to save disk space
+        find target -name "*.rlib" -not -path "*/deps/*" -delete 2>/dev/null || true
+        find target -name "*.rmeta" -not -path "*/deps/*" -delete 2>/dev/null || true
 
     - name: Create Containerfile
       run: |
@@ -365,6 +419,13 @@ jobs:
           --label="org.opencontainers.image.revision=${{ github.sha }}" \
           --label="org.opencontainers.image.licenses=BSD-3-Clause OR MIT" \
           .
+        
+        # Clean up build context and intermediate files to save disk space
+        rm -rf containerfiles/Containerfile.${COMPONENT}${GPU_SUFFIX} || true
+        podman system prune -f || true
+        
+        echo "=== Post-build disk usage ==="
+        df -h
 
     - name: Run container security scan with Trivy
       run: |
