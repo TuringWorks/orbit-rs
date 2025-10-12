@@ -10,9 +10,7 @@ on:
     branches: [ main, develop ]
     paths:
       - 'orbit-server/**'
-      - 'orbit-client/**'
       - 'orbit-operator/**'
-      - 'orbit-compute/**'
       - 'Cargo.toml'
       - 'Cargo.lock'
       - '.github/workflows/k8s-container-pipeline.yml'
@@ -23,9 +21,7 @@ on:
     branches: [ main, develop ]
     paths:
       - 'orbit-server/**'
-      - 'orbit-client/**'
       - 'orbit-operator/**'
-      - 'orbit-compute/**'
       - 'Cargo.toml'
       - 'Cargo.lock'
       - '.github/workflows/k8s-container-pipeline.yml'
@@ -56,7 +52,8 @@ env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
   REGISTRY: ghcr.io
-  IMAGE_NAMESPACE: ${{ github.repository_owner }}/orbit-rs
+  # Repository owner in lowercase to meet Docker registry naming requirements
+  IMAGE_NAMESPACE: turingworks/orbit-rs
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -157,26 +154,17 @@ jobs:
       # Reduce parallelism to avoid disk space issues
       max-parallel: 2
       matrix:
-        component: ["orbit-server", "orbit-client", "orbit-operator", "orbit-compute"]
+        # Only include components with binary targets (orbit-server, orbit-operator)
+        # orbit-client and orbit-compute are library crates without binaries
+        component: ["orbit-server", "orbit-operator"]
         build-type: ${{ fromJson(needs.setup.outputs.build-types) }}
         platform: ["linux/amd64", "linux/arm64"]
-        gpu-enabled: [false, true]
+        gpu-enabled: [false]
         include:
           - platform: "linux/amd64"
             runner-arch: "amd64"
           - platform: "linux/arm64"
             runner-arch: "arm64"
-        exclude:
-          # Only build GPU variants for orbit-compute
-          - component: "orbit-server"
-            gpu-enabled: true
-          - component: "orbit-client"
-            gpu-enabled: true
-          - component: "orbit-operator"
-            gpu-enabled: true
-          # No ARM64 GPU support for now (can be enabled later)
-          - platform: "linux/arm64"
-            gpu-enabled: true
     permissions:
       contents: read
       packages: write
@@ -189,9 +177,10 @@ jobs:
         # Use sparse checkout to reduce disk usage
         sparse-checkout: |
           orbit-server/
-          orbit-client/
           orbit-operator/
-          orbit-compute/
+          orbit-shared/
+          orbit-util/
+          orbit-proto/
           Cargo.toml
           Cargo.lock
           .github/workflows/k8s-container-pipeline.yml
@@ -263,8 +252,21 @@ jobs:
     - name: Install cross-compilation tools
       if: matrix.platform == 'linux/arm64'
       run: |
-        sudo apt-get install -y gcc-aarch64-linux-gnu
+        # Add ARM64 architecture and install cross-compilation tools
+        sudo dpkg --add-architecture arm64
+        sudo apt-get update
+        sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+        
+        # Install ARM64 development libraries for cross-compilation
+        sudo apt-get install -y libssl-dev:arm64 libsqlite3-dev:arm64
+        
+        # Set cross-compilation environment variables
         echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
+        echo "PKG_CONFIG_ALLOW_CROSS=1" >> $GITHUB_ENV
+        echo "PKG_CONFIG_PATH=/usr/lib/aarch64-linux-gnu/pkgconfig" >> $GITHUB_ENV
+        echo "OPENSSL_DIR=/usr" >> $GITHUB_ENV
+        echo "OPENSSL_LIB_DIR=/usr/lib/aarch64-linux-gnu" >> $GITHUB_ENV
+        echo "OPENSSL_INCLUDE_DIR=/usr/include" >> $GITHUB_ENV
 
     - name: Cache Rust dependencies
       uses: actions/cache@v4
@@ -538,7 +540,7 @@ jobs:
     if: needs.setup.outputs.should-push == 'true'
     strategy:
       matrix:
-        component: ["orbit-server", "orbit-client", "orbit-operator", "orbit-compute"]
+        component: ["orbit-server", "orbit-operator"]
         build-type: ${{ fromJson(needs.setup.outputs.build-types) }}
     permissions:
       contents: read
@@ -932,7 +934,7 @@ jobs:
         # Update Kubernetes manifests with new image tags
         mkdir -p k8s/test-deployment
         
-        for component in orbit-server orbit-client orbit-operator orbit-compute; do
+        for component in orbit-server orbit-operator; do
           cat > k8s/test-deployment/${component}-deployment.yaml << EOF
         apiVersion: apps/v1
         kind: Deployment
@@ -1027,22 +1029,10 @@ jobs:
             tag: ${VERSION}-release
             pullPolicy: IfNotPresent
           replicaCount: 1
-          
-        orbitClient:
-          image:
-            repository: ${REGISTRY}/${IMAGE_NAMESPACE}/orbit-client
-            tag: ${VERSION}-release
-            pullPolicy: IfNotPresent
             
         orbitOperator:
           image:
             repository: ${REGISTRY}/${IMAGE_NAMESPACE}/orbit-operator
-            tag: ${VERSION}-release
-            pullPolicy: IfNotPresent
-            
-        orbitCompute:
-          image:
-            repository: ${REGISTRY}/${IMAGE_NAMESPACE}/orbit-compute
             tag: ${VERSION}-release
             pullPolicy: IfNotPresent
         EOF
@@ -1076,7 +1066,7 @@ jobs:
           echo "✅ Download page updated"
         fi
         echo ""
-        echo "📦 Built images for components: orbit-server, orbit-client, orbit-operator, orbit-compute"
+        echo "📦 Built images for components: orbit-server, orbit-operator"
         echo "🏗️ Build types: ${{ needs.setup.outputs.build-types }}"
         echo "🖥️ Platforms: ${{ needs.setup.outputs.platforms }}"
         echo "📝 Version: ${{ needs.setup.outputs.version }}"
