@@ -5,6 +5,7 @@ pub mod cluster_manager;
 pub mod consensus;
 pub mod election_metrics;
 pub mod election_state;
+pub mod event_sourcing;
 pub mod exception;
 pub mod graph;
 pub mod graphrag;
@@ -16,6 +17,7 @@ pub mod orbitql;
 pub mod persistence;
 pub mod raft_transport;
 pub mod recovery;
+pub mod replication;
 pub mod router;
 pub mod saga;
 pub mod saga_recovery;
@@ -52,6 +54,17 @@ pub use streaming_integrations::{
 pub use stream_processing::{
     AggregationFunction, StreamEvent, StreamProcessor, StreamStats, WindowResult, WindowState,
     WindowType,
+};
+
+// Re-export event sourcing
+pub use event_sourcing::{
+    DomainEvent, EventSourcedAggregate, EventStore, EventStoreConfig, EventStoreStats, Snapshot,
+};
+
+// Re-export replication
+pub use replication::{
+    ReplicationConfig, ReplicationSlot, ReplicationSlotManager, ReplicationStats,
+    ReplicationStream,
 };
 
 // Re-export advanced transaction features (excluding conflicting core module)
