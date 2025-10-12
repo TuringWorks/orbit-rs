@@ -1,5 +1,7 @@
 pub mod actor_communication;
 pub mod addressable;
+pub mod backup;
+pub mod backup_scheduler;
 pub mod cdc;
 pub mod cluster_manager;
 pub mod consensus;
@@ -15,6 +17,7 @@ pub mod mesh;
 pub mod net;
 pub mod orbitql;
 pub mod persistence;
+pub mod pitr;
 pub mod raft_transport;
 pub mod recovery;
 pub mod replication;
@@ -104,3 +107,16 @@ pub use spatial::{
     SpatialRelation, SpatialStreamProcessor, DEFAULT_PRECISION, EARTH_RADIUS_METERS,
     UTM_ZONE_33N_SRID, WEB_MERCATOR_SRID, WGS84_SRID,
 };
+
+// Re-export backup and recovery functionality
+pub use backup::{
+    BackupCatalog, BackupConfiguration, BackupMetadata, BackupStatus, BackupSystem, BackupType,
+    CompressionAlgorithm as BackupCompressionAlgorithm, CompressionEngine, EncryptionAlgorithm,
+    EncryptionEngine, LocalStorageBackend,
+    RetentionPolicy as BackupRetentionPolicy, StorageBackend as BackupStorageBackend,
+    StorageBackendType, StorageStats as BackupStorageStats,
+};
+
+pub use backup_scheduler::{BackupSchedule, BackupScheduler, SchedulerStats};
+
+pub use pitr::{PointInTimeRecovery, RecoveryPlan, RecoveryPoint, RecoveryResult};
