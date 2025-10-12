@@ -41,6 +41,9 @@ tracing-subscriber = "0.3"
 dashmap.workspace = true
 rayon = "1.10"
 bytes = "1.0"
+# Backup and compression dependencies
+flate2 = "1.0"
+zstd = "0.13"
 
 [[bin]]
 name = "orbitql-lsp"
