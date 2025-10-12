@@ -193,9 +193,9 @@ jobs:
           orbit-client/
           orbit-operator/
           orbit-compute/
+          orbit-util/
           orbit-shared/
           orbit-proto/
-          orbit-util/
           Cargo.toml
           Cargo.lock
           .github/workflows/k8s-container-pipeline.yml
