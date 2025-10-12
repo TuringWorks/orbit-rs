@@ -1,3 +1,9 @@
+---
+layout: default
+title: Phase 8: SQL Query Engine Implementation Plan
+category: development
+---
+
 # Phase 8: SQL Query Engine Implementation Plan
 
 ## Overview - IMPLEMENTATION COMPLETE!

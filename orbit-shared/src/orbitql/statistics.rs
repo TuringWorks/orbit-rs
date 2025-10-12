@@ -432,7 +432,7 @@ mod tests {
         // Analyze a sample table
         let stats = manager.analyze_table("test_table").await.unwrap();
         assert_eq!(stats.row_count, 10000);
-        assert!(stats.histogram.len() > 0);
+        assert!(!stats.histogram.is_empty());
 
         // Retrieve cached statistics
         let cached_stats = manager.get_table_statistics("test_table").await.unwrap();

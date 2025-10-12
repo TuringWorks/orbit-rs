@@ -1,3 +1,9 @@
+---
+layout: default
+title: Orbit-RS Community Setup
+category: github
+---
+
 # Orbit-RS Community Setup
 
 This document outlines the community infrastructure for the Orbit-RS project.

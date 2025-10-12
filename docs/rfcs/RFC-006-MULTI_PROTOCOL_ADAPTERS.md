@@ -1,3 +1,9 @@
+---
+layout: default
+title: RFC-006: Multi-Protocol Adapters Analysis
+category: rfcs
+---
+
 # RFC-006: Multi-Protocol Adapters Analysis
 
 **Date**: October 9, 2025  

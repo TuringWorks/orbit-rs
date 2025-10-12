@@ -1,3 +1,9 @@
+---
+layout: default
+title: Orbit-RS: Complete Project Overview (Accurate Metrics)
+category: documentation
+---
+
 # Orbit-RS: Complete Project Overview (Accurate Metrics)
 
 > **Last Verified**: October 7, 2025 - Comprehensive audit of all project metrics

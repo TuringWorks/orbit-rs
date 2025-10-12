@@ -46,7 +46,7 @@ pub fn parse_begin(parser: &mut SqlParser) -> ParseResult<Statement> {
 }
 
 /// Parse COMMIT statement
-/// COMMIT [WORK | TRANSACTION] [AND [NO] CHAIN]
+/// COMMIT \[WORK | TRANSACTION\] \[AND \[NO\] CHAIN\]
 pub fn parse_commit(parser: &mut SqlParser) -> ParseResult<Statement> {
     parser.expect(Token::Commit)?;
 
@@ -81,7 +81,7 @@ pub fn parse_commit(parser: &mut SqlParser) -> ParseResult<Statement> {
 }
 
 /// Parse ROLLBACK statement
-/// ROLLBACK [WORK | TRANSACTION] [TO [SAVEPOINT] savepoint_name] [AND [NO] CHAIN]
+/// ROLLBACK \[WORK | TRANSACTION\] \[TO \[SAVEPOINT\] savepoint_name\] \[AND \[NO\] CHAIN\]
 pub fn parse_rollback(parser: &mut SqlParser) -> ParseResult<Statement> {
     parser.expect(Token::Rollback)?;
 
@@ -181,7 +181,7 @@ pub fn parse_savepoint(parser: &mut SqlParser) -> ParseResult<Statement> {
 }
 
 /// Parse RELEASE SAVEPOINT statement
-/// RELEASE [SAVEPOINT] savepoint_name
+/// RELEASE \[SAVEPOINT\] savepoint_name
 pub fn parse_release_savepoint(parser: &mut SqlParser) -> ParseResult<Statement> {
     parser.expect(Token::Release)?;
 

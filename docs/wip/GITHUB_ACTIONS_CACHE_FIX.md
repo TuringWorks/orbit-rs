@@ -1,3 +1,9 @@
+---
+layout: default
+title: GitHub Actions Cache Fix - core.rs Detection Issue
+category: wip
+---
+
 # GitHub Actions Cache Fix - core.rs Detection Issue
 
 **Date:** 2025-10-03  

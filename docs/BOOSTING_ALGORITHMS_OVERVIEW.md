@@ -1,3 +1,9 @@
+---
+layout: default
+title: OrbitQL Boosting Algorithms - Comprehensive Implementation
+category: documentation
+---
+
 # OrbitQL Boosting Algorithms - Comprehensive Implementation
 
 ## 🚀 Overview

@@ -1,3 +1,9 @@
+---
+layout: default
+title: Orbit-RS Copilot Instructions
+category: development
+---
+
 # Orbit-RS Copilot Instructions
 
 ## Project Overview

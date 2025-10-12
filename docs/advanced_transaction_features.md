@@ -1,3 +1,9 @@
+---
+layout: default
+title: Advanced Transaction Features Guide
+category: documentation
+---
+
 # Advanced Transaction Features Guide
 
 ## Table of Contents

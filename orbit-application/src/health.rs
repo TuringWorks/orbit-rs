@@ -2,7 +2,7 @@ use crate::{AppError, HealthConfig, Service};
 use async_trait::async_trait;
 use std::sync::Arc;
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct HealthChecker;
 
 impl HealthChecker {

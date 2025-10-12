@@ -1,3 +1,9 @@
+---
+layout: default
+title: RFC-003: Edge-Native Architecture for Orbit-RS
+category: rfcs
+---
+
 # RFC-003: Edge-Native Architecture for Orbit-RS
 
 **Date**: October 9, 2025  

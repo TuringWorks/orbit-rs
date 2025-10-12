@@ -145,9 +145,10 @@ pub struct ServiceMetrics {
 }
 
 /// Bean scope enumeration
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum BeanScope {
     /// Single instance per container (default)
+    #[default]
     Singleton,
     /// New instance per request
     Prototype,
@@ -157,12 +158,6 @@ pub enum BeanScope {
     Session,
     /// New instance per application
     Application,
-}
-
-impl Default for BeanScope {
-    fn default() -> Self {
-        Self::Singleton
-    }
 }
 
 /// Bean definition metadata
@@ -215,22 +210,17 @@ impl BeanDefinition {
 }
 
 /// Auto-wiring modes
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum AutowireMode {
     /// No autowiring
     No,
     /// Autowire by name
     ByName,
     /// Autowire by type
+    #[default]
     ByType,
     /// Autowire by constructor
     Constructor,
     /// Auto-detect autowiring mode
     Autodetect,
-}
-
-impl Default for AutowireMode {
-    fn default() -> Self {
-        Self::ByType
-    }
 }

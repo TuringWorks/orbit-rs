@@ -1,3 +1,9 @@
+---
+layout: default
+title: Real-Time Live Queries & Subscriptions - Feature Backlog
+category: backlog
+---
+
 # Real-Time Live Queries & Subscriptions - Feature Backlog
 
 ## 📋 Epic Overview

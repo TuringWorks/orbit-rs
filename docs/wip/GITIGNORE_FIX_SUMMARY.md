@@ -1,3 +1,9 @@
+---
+layout: default
+title: .gitignore Fix Summary - core.rs Missing in CI/CD
+category: wip
+---
+
 # .gitignore Fix Summary - core.rs Missing in CI/CD
 
 **Date:** 2025-10-03  

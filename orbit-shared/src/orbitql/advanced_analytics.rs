@@ -281,9 +281,10 @@ pub struct NetworkLayer {
 }
 
 /// Activation functions for neural network
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub enum ActivationFunction {
     /// Rectified Linear Unit: f(x) = max(0, x)
+    #[default]
     ReLU,
     /// Sigmoid: f(x) = 1 / (1 + e^(-x))
     Sigmoid,
@@ -1571,6 +1572,7 @@ pub struct LightGBMTree {
 
 /// LightGBM node
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct LightGBMNode {
     /// Feature index for split
     feature: Option<usize>,
@@ -1590,6 +1592,7 @@ pub struct LightGBMNode {
 
 /// Oblivious tree for CatBoost (symmetric tree)
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct ObliviousTree {
     /// Tree depth
     depth: usize,
@@ -1605,6 +1608,7 @@ pub struct ObliviousTree {
 
 /// XGBoost tree structure
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct XGBoostTree {
     /// Tree nodes
     nodes: Vec<XGBoostNode>,
@@ -1618,6 +1622,7 @@ pub struct XGBoostTree {
 
 /// XGBoost node
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct XGBoostNode {
     /// Feature index for split
     feature: Option<usize>,
@@ -1712,8 +1717,8 @@ impl ActivationFunction {
             }
             ActivationFunction::SELU => {
                 // SELU constants: λ ≈ 1.0507, α ≈ 1.6733
-                let lambda = 1.0507009873554804934193349852946;
-                let alpha = 1.6732632423543772848170429916717;
+                let lambda = 1.050_700_987_355_480_5;
+                let alpha = 1.673_263_242_354_377_2;
                 if x > 0.0 {
                     lambda * x
                 } else {
@@ -1811,8 +1816,8 @@ impl ActivationFunction {
                 }
             }
             ActivationFunction::SELU => {
-                let lambda = 1.0507009873554804934193349852946;
-                let alpha = 1.6732632423543772848170429916717;
+                let lambda = 1.050_700_987_355_480_5;
+                let alpha = 1.673_263_242_354_377_2;
                 if x > 0.0 {
                     lambda
                 } else {
@@ -1911,12 +1916,6 @@ impl ActivationFunction {
     /// Check if activation function is suitable for hidden layers
     pub fn is_hidden_suitable(&self) -> bool {
         !matches!(self, ActivationFunction::Softmax)
-    }
-}
-
-impl Default for ActivationFunction {
-    fn default() -> Self {
-        ActivationFunction::ReLU
     }
 }
 
@@ -2148,6 +2147,12 @@ pub struct TuningStatistics {
     pub current_score: f64,
 }
 
+impl Default for MLCostEstimator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MLCostEstimator {
     pub fn new() -> Self {
         Self {
@@ -2263,11 +2268,14 @@ impl MLCostEstimator {
         &self,
         example: TrainingExample,
     ) -> Result<(), AnalyticsError> {
-        let mut data = self.training_data.write().unwrap();
-        data.push(example);
+        let should_retrain = {
+            let mut data = self.training_data.write().unwrap();
+            data.push(example);
+            data.len() >= 100
+        };
 
         // Retrain if we have enough examples
-        if data.len() >= 100 {
+        if should_retrain {
             self.retrain_models().await?;
         }
 
@@ -2294,6 +2302,12 @@ impl MLCostEstimator {
             avg_accuracy: metadata.accuracy,
             training_examples: training_count,
         })
+    }
+}
+
+impl Default for LinearRegressionModel {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -2340,6 +2354,12 @@ impl RandomForestModel {
     }
 }
 
+impl Default for DecisionTree {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DecisionTree {
     pub fn new() -> Self {
         Self {
@@ -2355,6 +2375,12 @@ impl DecisionTree {
     }
 }
 
+impl Default for NeuralNetworkModel {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl NeuralNetworkModel {
     pub fn new() -> Self {
         Self {
@@ -2366,6 +2392,12 @@ impl NeuralNetworkModel {
             learning_rate: 0.001,
             is_trained: false,
         }
+    }
+}
+
+impl Default for AdaptiveOptimizer {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -2428,6 +2460,12 @@ impl AdaptiveOptimizer {
             avg_improvement: 0.25, // Mock data
             adaptation_cycles: 10,
         })
+    }
+}
+
+impl Default for WorkloadPatternAnalyzer {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -2543,6 +2581,12 @@ impl WorkloadPatternAnalyzer {
             trend_changes: 3,
             match_accuracy: 0.85,
         })
+    }
+}
+
+impl Default for AutoTuner {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -2691,6 +2735,12 @@ impl MetricsCollector {
 // BOOSTING ALGORITHM IMPLEMENTATIONS
 // =============================================================================
 
+impl Default for GradientBoostingModel {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl GradientBoostingModel {
     pub fn new() -> Self {
         Self {
@@ -2791,6 +2841,12 @@ impl GradientBoostingModel {
 
     pub fn get_feature_importance(&self) -> &[f64] {
         &self.feature_importance
+    }
+}
+
+impl Default for AdaBoostModel {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -2896,6 +2952,12 @@ impl AdaBoostModel {
         } else {
             100.0
         }
+    }
+}
+
+impl Default for LightGBMModel {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -3019,6 +3081,12 @@ impl LightGBMModel {
     }
 }
 
+impl Default for CatBoostModel {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CatBoostModel {
     pub fn new() -> Self {
         Self {
@@ -3121,6 +3189,12 @@ impl CatBoostModel {
         }
 
         prediction.max(0.0)
+    }
+}
+
+impl Default for XGBoostModel {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -3333,7 +3407,7 @@ impl XGBoostModel {
         }
 
         let mut prediction = 0.0;
-        let end_iteration = if let Some(_) = self.params.early_stopping_rounds {
+        let end_iteration = if self.params.early_stopping_rounds.is_some() {
             self.best_iteration.min(self.booster.len() - 1)
         } else {
             self.booster.len() - 1
@@ -3374,6 +3448,12 @@ impl Default for XGBoostParams {
 }
 
 // Ensemble Implementation
+impl Default for BoostingEnsemble {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl BoostingEnsemble {
     pub fn new() -> Self {
         Self {
@@ -3517,7 +3597,7 @@ impl BoostingEnsemble {
                 let mut weight_sum = 0.0;
 
                 if let (Some(ref model), Some(&weight)) =
-                    (&self.gb_model, self.model_weights.get(0))
+                    (&self.gb_model, self.model_weights.first())
                 {
                     weighted_sum += weight * model.predict(features);
                     weight_sum += weight;
@@ -3592,6 +3672,12 @@ impl BoostingEnsemble {
 }
 
 // Helper implementations for weak learners and tree structures
+
+impl Default for WeakLearner {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl WeakLearner {
     pub fn new() -> Self {
@@ -3732,7 +3818,7 @@ impl NeuralNetworkModel {
             output = layer.forward(&output);
         }
 
-        output.get(0).copied().unwrap_or(100.0).max(0.0)
+        output.first().copied().unwrap_or(100.0).max(0.0)
     }
 }
 

@@ -21,10 +21,13 @@ pub const SIMD_I64_WIDTH: usize = 8; // AVX-512: 8 i64 values
 /// Vectorized execution engine
 pub struct VectorizedExecutor {
     /// Batch size for vectorized operations
+    #[allow(dead_code)]
     batch_size: usize,
     /// SIMD instruction width
+    #[allow(dead_code)]
     simd_width: usize,
     /// Available vector register sets
+    #[allow(dead_code)]
     vector_registers: VectorRegisterSet,
     /// Configuration
     config: VectorizationConfig,
@@ -75,8 +78,11 @@ pub enum NullHandlingStrategy {
 #[derive(Debug, Clone)]
 pub struct VectorRegisterSet {
     /// Available registers for different data types
+    #[allow(dead_code)]
     f64_registers: Vec<VectorRegister<f64>>,
+    #[allow(dead_code)]
     i64_registers: Vec<VectorRegister<i64>>,
+    #[allow(dead_code)]
     string_registers: Vec<VectorRegister<String>>,
 }
 
@@ -330,19 +336,17 @@ impl VectorizedOperation for VectorizedScan {
 impl VectorizedOperation for VectorizedFilter {
     fn execute_batch(&self, input: &RecordBatch) -> Result<RecordBatch, VectorizationError> {
         // Apply vectorized filter operation
-        match &self.condition {
-            Expression::Binary {
-                left,
-                operator,
-                right,
-            } => {
-                if let (Expression::Identifier(col_name), Expression::Literal(value)) =
-                    (left.as_ref(), right.as_ref())
-                {
-                    return self.apply_simd_filter(input, col_name, operator, value);
-                }
+        if let Expression::Binary {
+            left,
+            operator,
+            right,
+        } = &self.condition
+        {
+            if let (Expression::Identifier(col_name), Expression::Literal(value)) =
+                (left.as_ref(), right.as_ref())
+            {
+                return self.apply_simd_filter(input, col_name, operator, value);
             }
-            _ => {}
         }
 
         // Fallback to non-SIMD implementation
@@ -825,6 +829,12 @@ impl VectorRegisterSet {
     }
 }
 
+impl Default for VectorRegisterSet {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<T> VectorRegister<T> {
     pub fn new(capacity: usize) -> Self {
         Self {
@@ -869,7 +879,7 @@ impl ColumnBatch {
 
 impl Bitmap {
     pub fn new(len: usize) -> Self {
-        let word_count = (len + 63) / 64; // Ceiling division
+        let word_count = len.div_ceil(64);
         Self {
             bits: vec![0; word_count],
             len,

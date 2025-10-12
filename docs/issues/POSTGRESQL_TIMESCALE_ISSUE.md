@@ -1,3 +1,9 @@
+---
+layout: default
+title: PostgreSQL TimescaleDB Compatibility Implementation
+category: issues
+---
+
 # PostgreSQL TimescaleDB Compatibility Implementation
 
 **Feature Type:** Protocol Adapter  

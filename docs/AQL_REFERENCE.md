@@ -1,3 +1,9 @@
+---
+layout: default
+title: AQL (ArrangoDB Query Language) Reference
+category: documentation
+---
+
 # AQL (ArrangoDB Query Language) Reference
 
 AQL (ArrangoDB Query Language) is a declarative query language for multi-model databases that combines the power of SQL-like syntax with native support for graph traversals and document operations. Orbit-RS provides a comprehensive AQL implementation optimized for distributed graph and time series data.

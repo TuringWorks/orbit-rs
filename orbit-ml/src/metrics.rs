@@ -13,3 +13,9 @@ impl MLMetrics {
         Self
     }
 }
+
+impl Default for MLMetrics {
+    fn default() -> Self {
+        Self::new()
+    }
+}

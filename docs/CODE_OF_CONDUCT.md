@@ -1,3 +1,9 @@
+---
+layout: default
+title: Contributor Covenant Code of Conduct
+category: documentation
+---
+
 # Contributor Covenant Code of Conduct
 
 ## Our Pledge

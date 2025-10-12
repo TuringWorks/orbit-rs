@@ -1,3 +1,11 @@
+---
+layout: default
+title: Orbit Server Provider-Based Persistence Architecture
+description: Comprehensive provider-based persistence system supporting multiple storage backends
+category: architecture
+tags: [persistence, storage, providers, architecture]
+---
+
 # Orbit Server Provider-Based Persistence Architecture
 
 ## Overview

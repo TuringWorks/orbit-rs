@@ -1,3 +1,9 @@
+---
+layout: default
+title: Changelog
+category: documentation
+---
+
 # Changelog
 
 All notable changes to the Orbit-RS project will be documented in this file.

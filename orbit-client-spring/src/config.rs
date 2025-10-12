@@ -8,7 +8,7 @@ use std::env;
 use std::path::Path;
 
 /// Spring-like application configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct AppConfig {
     pub application: ApplicationProperties,
     pub server: ServerProperties,
@@ -16,19 +16,6 @@ pub struct AppConfig {
     pub logging: LoggingProperties,
     pub security: SecurityProperties,
     pub custom: HashMap<String, ConfigValue>,
-}
-
-impl Default for AppConfig {
-    fn default() -> Self {
-        Self {
-            application: ApplicationProperties::default(),
-            server: ServerProperties::default(),
-            database: DatabaseProperties::default(),
-            logging: LoggingProperties::default(),
-            security: SecurityProperties::default(),
-            custom: HashMap::new(),
-        }
-    }
 }
 
 impl Configuration for AppConfig {

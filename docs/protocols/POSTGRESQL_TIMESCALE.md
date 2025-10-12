@@ -1,3 +1,9 @@
+---
+layout: default
+title: PostgreSQL TimescaleDB Compatibility
+category: protocols
+---
+
 # PostgreSQL TimescaleDB Compatibility
 
 ## Overview

@@ -1,3 +1,9 @@
+---
+layout: default
+title: Redis Time Series Compatibility
+category: protocols
+---
+
 # Redis Time Series Compatibility
 
 ## Overview

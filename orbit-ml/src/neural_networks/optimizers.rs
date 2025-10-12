@@ -145,7 +145,7 @@ impl AdamOptimizer {
     ///
     /// # Returns
     /// A new Adam optimizer with default configuration
-    pub fn default() -> Self {
+    pub fn with_defaults() -> Self {
         Self::new(0.001, 0.9, 0.999, 1e-8)
     }
 
@@ -154,6 +154,12 @@ impl AdamOptimizer {
             self.m.push(Array2::zeros((1, 1)));
             self.v.push(Array2::zeros((1, 1)));
         }
+    }
+}
+
+impl Default for AdamOptimizer {
+    fn default() -> Self {
+        Self::new(0.001, 0.9, 0.999, 1e-8)
     }
 }
 
@@ -406,8 +412,10 @@ mod tests {
 
     #[test]
     fn test_optimizer_reset() {
-        let mut optimizer = AdamOptimizer::default();
-        optimizer.t = 10;
+        let mut optimizer = AdamOptimizer {
+            t: 10,
+            ..Default::default()
+        };
         optimizer.reset();
         assert_eq!(optimizer.t, 0);
     }

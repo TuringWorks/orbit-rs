@@ -879,54 +879,8 @@ mod tests {
     // PARSER TESTS - DCL (Data Control Language)
     // ===============================
 
-    // TODO: Fix these DCL tests - currently failing due to incomplete GRANT/REVOKE parsing
-    // #[test]
-    // fn test_grant_select_basic() {
-    //     let sql = "GRANT SELECT ON users TO analyst";
-    //     let mut engine = SqlEngine::new();
-    //     let result = engine.parse(sql);
-    //     assert!(
-    //         result.is_ok(),
-    //         "Failed to parse basic GRANT SELECT: {:?}",
-    //         result
-    //     );
-    // }
-
-    // #[test]
-    // fn test_grant_multiple_privileges() {
-    //     let sql = "GRANT SELECT, INSERT, UPDATE ON products TO sales_team";
-    //     let mut engine = SqlEngine::new();
-    //     let result = engine.parse(sql);
-    //     assert!(
-    //         result.is_ok(),
-    //         "Failed to parse GRANT multiple privileges: {:?}",
-    //         result
-    //     );
-    // }
-
-    // #[test]
-    // fn test_grant_all_privileges() {
-    //     let sql = "GRANT ALL PRIVILEGES ON orders TO admin";
-    //     let mut engine = SqlEngine::new();
-    //     let result = engine.parse(sql);
-    //     assert!(
-    //         result.is_ok(),
-    //         "Failed to parse GRANT ALL PRIVILEGES: {:?}",
-    //         result
-    //     );
-    // }
-
-    // #[test]
-    // fn test_grant_with_grant_option() {
-    //     let sql = "GRANT SELECT ON customers TO manager WITH GRANT OPTION";
-    //     let mut engine = SqlEngine::new();
-    //     let result = engine.parse(sql);
-    //     assert!(
-    //         result.is_ok(),
-    //         "Failed to parse GRANT WITH GRANT OPTION: {:?",
-    //         result
-    //     );
-    // }
+    // NOTE: DCL (Data Control Language) GRANT/REVOKE parsing is not fully implemented yet.
+    // These tests are removed until the parser supports these SQL constructs.
 
     #[test]
     fn test_grant_execute_on_function() {
@@ -952,71 +906,7 @@ mod tests {
         );
     }
 
-    // TODO: Fix this test - currently failing, will revisit later
-
-    // #[test]
-    // fn test_revoke_basic() {
-    //        let sql = "REVOKE SELECT ON users FROM analyst";
-    //        let mut engine = SqlEngine::new();
-    //        let result = engine.parse(sql);
-    //        assert!(result.is_ok(), "Failed to parse basic REVOKE: {:?}", result);
-    //    }
-
-    // TODO: Fix this test - currently failing, will revisit later
-
-    // #[test]
-    // fn test_revoke_multiple_privileges() {
-    //        let sql = "REVOKE INSERT, UPDATE ON products FROM sales_team";
-    //        let mut engine = SqlEngine::new();
-    //        let result = engine.parse(sql);
-    //        assert!(
-    //            result.is_ok(),
-    //            "Failed to parse REVOKE multiple privileges: {:?}",
-    //            result
-    //        );
-    //    }
-
-    // TODO: Fix this test - currently failing, will revisit later
-
-    // #[test]
-    // fn test_revoke_grant_option() {
-    //        let sql = "REVOKE GRANT OPTION FOR SELECT ON customers FROM manager";
-    //        let mut engine = SqlEngine::new();
-    //        let result = engine.parse(sql);
-    //        assert!(
-    //            result.is_ok(),
-    //            "Failed to parse REVOKE GRANT OPTION: {:?}",
-    //            result
-    //        );
-    //    }
-
-    // TODO: Fix this test - currently failing, will revisit later
-
-    // #[test]
-    // fn test_revoke_cascade() {
-    //        let sql = "REVOKE ALL PRIVILEGES ON orders FROM admin CASCADE";
-    //        let mut engine = SqlEngine::new();
-    //        let result = engine.parse(sql);
-    //        assert!(
-    //            result.is_ok(),
-    //            "Failed to parse REVOKE CASCADE: {:?}",
-    //            result
-    //        );
-    //    }
-
-    // TODO: Fix this test - currently failing, will revisit later
-
-    // #[test]
-    // fn test_revoke_restrict() {
-    //        let sql = "REVOKE DELETE ON products FROM user1 RESTRICT";
-    //        let mut engine = SqlEngine::new();
-    //        let result = engine.parse(sql);
-    //        assert!(
-    //            result.is_ok(),
-    //            "Failed to parse REVOKE RESTRICT: {:?}",
-    //            result
-    //        );
-    //    }
+    // NOTE: REVOKE parsing is not implemented yet. Tests removed until parser supports REVOKE.
 
     // ===============================
     // PARSER TESTS - TCL (Transaction Control Language)
@@ -1162,19 +1052,7 @@ mod tests {
         );
     }
 
-    // TODO: Fix this test - currently failing, will revisit later
-
-    // #[test]
-    // fn test_release_savepoint() {
-    //        let sql = "RELEASE SAVEPOINT checkpoint1";
-    //        let mut engine = SqlEngine::new();
-    //        let result = engine.parse(sql);
-    //        assert!(
-    //            result.is_ok(),
-    //            "Failed to parse RELEASE SAVEPOINT: {:?}",
-    //            result
-    //        );
-    //    }
+    // NOTE: RELEASE SAVEPOINT parsing not implemented yet.
 
     #[test]
     fn test_transaction_isolation_levels() {

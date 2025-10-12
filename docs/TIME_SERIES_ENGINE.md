@@ -1,3 +1,9 @@
+---
+layout: default
+title: Orbit-RS Time Series Engine
+category: documentation
+---
+
 # Orbit-RS Time Series Engine
 
 ## Table of Contents
@@ -41,17 +47,17 @@ The time series engine follows a layered architecture:
          │                       │                       │
          ▼                       ▼                       ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                Time Series Engine Core                     │
+│                Time Series Engine Core                      │
 │  ┌─────────────────────────────────────────────────────┐    │
 │  │            Query Execution & Planning               │    │
-│  │  • Time Range Queries  • Aggregation Pushdown      │    │
-│  │  • Series Selection    • Memory Management         │    │
+│  │  • Time Range Queries  • Aggregation Pushdown       │    │
+│  │  • Series Selection    • Memory Management          │    │
 │  └─────────────────────────────────────────────────────┘    │
 └─────────────────────────────────────────────────────────────┘
          │
          ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                  Storage Abstraction                       │
+│                  Storage Abstraction                        │
 │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────┐  │
 │  │  Compression    │  │  Partitioning   │  │  Retention  │  │
 │  │     Layer       │  │     Manager     │  │   Policies  │  │
@@ -65,15 +71,15 @@ The time series engine follows a layered architecture:
          │
          ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                   Storage Backends                         │
-│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────┐  │
-│  │   In-Memory     │  │ Redis TimeSeries│  │PostgreSQL/  │  │
-│  │    Storage      │  │                 │  │ TimescaleDB │  │
-│  │                 │  │                 │  │             │  │
+│                   Storage Backends                          │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────-┐ │
+│  │   In-Memory     │  │ Redis TimeSeries│  │PostgreSQL/   │ │
+│  │    Storage      │  │                 │  │ TimescaleDB  │ │
+│  │                 │  │                 │  │              │ │
 │  │ • HashMap Index │  │ • Native TS     │  │ • Hypertables│ │
 │  │ • Memory Limits │  │ • Redis Modules │  │ • Compression│ │
 │  │ • Fast Lookups  │  │ • Clustering    │  │ • SQL Queries│ │
-│  └─────────────────┘  └─────────────────┘  └─────────────┘  │
+│  └─────────────────┘  └─────────────────┘  └─────────────-┘ │
 └─────────────────────────────────────────────────────────────┘
 ```
 

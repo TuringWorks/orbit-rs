@@ -32,14 +32,17 @@ impl Default for OrbitClientConfig {
 }
 
 /// Builder for configuring and creating an Orbit client
+#[derive(Default)]
 pub struct OrbitClientBuilder {
     config: OrbitClientConfig,
+    offline_mode: bool,
 }
 
 impl OrbitClientBuilder {
     pub fn new() -> Self {
         Self {
             config: OrbitClientConfig::default(),
+            offline_mode: false,
         }
     }
 
@@ -68,14 +71,17 @@ impl OrbitClientBuilder {
         self
     }
 
-    pub async fn build(self) -> OrbitResult<OrbitClient> {
-        OrbitClient::new(self.config).await
+    pub fn with_offline_mode(mut self, offline: bool) -> Self {
+        self.offline_mode = offline;
+        self
     }
-}
 
-impl Default for OrbitClientBuilder {
-    fn default() -> Self {
-        Self::new()
+    pub async fn build(self) -> OrbitResult<OrbitClient> {
+        if self.offline_mode {
+            OrbitClient::new_offline(self.config).await
+        } else {
+            OrbitClient::new(self.config).await
+        }
     }
 }
 
@@ -109,6 +115,30 @@ impl OrbitClient {
         // Start background tasks
         client.start_background_tasks().await;
 
+        Ok(client)
+    }
+
+    /// Create a new Orbit client in offline mode (no server connections)
+    pub async fn new_offline(config: OrbitClientConfig) -> OrbitResult<Self> {
+        let registry = ActorRegistry::new();
+        let connections = Arc::new(RwLock::new(HashMap::new()));
+        let invocation_system = Arc::new(InvocationSystem::new());
+
+        let client = Self {
+            config,
+            node_id: Some(NodeId {
+                key: "offline-node".to_string(),
+                namespace: "offline".to_string(),
+            }),
+            registry,
+            connections,
+            invocation_system,
+        };
+
+        // Start background tasks (but skip connection initialization)
+        client.start_background_tasks().await;
+
+        tracing::info!("OrbitClient initialized in offline mode");
         Ok(client)
     }
 

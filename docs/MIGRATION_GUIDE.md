@@ -1,3 +1,9 @@
+---
+layout: default
+title: Orbit Kotlin/JVM to Rust Migration Guide
+category: documentation
+---
+
 # Orbit Kotlin/JVM to Rust Migration Guide
 
 ## Overview

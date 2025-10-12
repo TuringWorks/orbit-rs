@@ -1,3 +1,9 @@
+---
+layout: default
+title: Kubernetes Storage Guide for Orbit-RS
+category: documentation
+---
+
 # Kubernetes Storage Guide for Orbit-RS
 
 ## 🎯 **TL;DR - What You Need to Know**

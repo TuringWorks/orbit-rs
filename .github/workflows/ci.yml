@@ -5,11 +5,15 @@
 # Note: ci-cd.yml handles Docker builds and deployment - this workflow focuses on Rust validation
 name: CI
 
+# Automated triggers disabled - use workflow_dispatch for manual runs
+# on:
+#   push:
+#     branches: [ main, develop ]
+#   pull_request:
+#     branches: [ main, develop ]
+
 on:
-  push:
-    branches: [ main, develop ]
-  pull_request:
-    branches: [ main, develop ]
+  workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always

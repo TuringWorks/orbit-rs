@@ -1,3 +1,9 @@
+---
+layout: default
+title: OrbitQL Parser Enhancements - Implementation Complete
+category: documentation
+---
+
 # OrbitQL Parser Enhancements - Implementation Complete
 
 **Advanced SQL Features Successfully Added to OrbitQL**

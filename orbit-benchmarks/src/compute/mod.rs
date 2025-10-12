@@ -34,7 +34,7 @@ impl Default for ComputeCapabilitiesStub {
     fn default() -> Self {
         Self {
             cpu_cores: num_cpus::get(),
-            gpu_devices: 0, // Would detect actual GPUs
+            gpu_devices: 0,    // Would detect actual GPUs
             neural_engines: 0, // Would detect actual neural engines
             architecture: std::env::consts::ARCH.to_string(),
         }
@@ -139,7 +139,9 @@ impl ComputeBenchmarkSuite {
     }
 
     /// Run comprehensive benchmark suite
-    pub async fn run_full_suite(&mut self) -> Result<ComputeBenchmarkReport, Box<dyn std::error::Error>> {
+    pub async fn run_full_suite(
+        &mut self,
+    ) -> Result<ComputeBenchmarkReport, Box<dyn std::error::Error>> {
         tracing::info!("Starting comprehensive compute benchmark suite");
 
         let mut results = Vec::new();
@@ -168,10 +170,12 @@ impl ComputeBenchmarkSuite {
 
         // Generate summary
         let summary = self.generate_summary(&results);
-        let system_info = format!("{} cores, {} GPU(s), {} Neural Engine(s)", 
-                                  self.capabilities.cpu_cores,
-                                  self.capabilities.gpu_devices,
-                                  self.capabilities.neural_engines);
+        let system_info = format!(
+            "{} cores, {} GPU(s), {} Neural Engine(s)",
+            self.capabilities.cpu_cores,
+            self.capabilities.gpu_devices,
+            self.capabilities.neural_engines
+        );
 
         let report = ComputeBenchmarkReport {
             results,
@@ -180,12 +184,17 @@ impl ComputeBenchmarkSuite {
             system_info,
         };
 
-        tracing::info!("Compute benchmark suite completed: {} tests", report.results.len());
+        tracing::info!(
+            "Compute benchmark suite completed: {} tests",
+            report.results.len()
+        );
         Ok(report)
     }
 
     /// Benchmark CPU operations
-    async fn benchmark_cpu_operations(&self) -> Result<Vec<ComputeBenchmarkResult>, Box<dyn std::error::Error>> {
+    async fn benchmark_cpu_operations(
+        &self,
+    ) -> Result<Vec<ComputeBenchmarkResult>, Box<dyn std::error::Error>> {
         let mut results = Vec::new();
 
         for &data_size in &self.config.data_sizes {
@@ -197,7 +206,10 @@ impl ComputeBenchmarkSuite {
     }
 
     /// Benchmark a specific CPU operation
-    async fn benchmark_cpu_operation(&self, data_size: usize) -> Result<ComputeBenchmarkResult, Box<dyn std::error::Error>> {
+    async fn benchmark_cpu_operation(
+        &self,
+        data_size: usize,
+    ) -> Result<ComputeBenchmarkResult, Box<dyn std::error::Error>> {
         let mut timings = Vec::new();
 
         // Warmup
@@ -223,7 +235,10 @@ impl ComputeBenchmarkSuite {
     }
 
     /// Simulate CPU workload (placeholder)
-    async fn simulate_cpu_workload(&self, data_size: usize) -> Result<(), Box<dyn std::error::Error>> {
+    async fn simulate_cpu_workload(
+        &self,
+        data_size: usize,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         // Simulate computation time based on data size
         let computation_time = Duration::from_nanos((data_size as u64) / 1000);
         tokio::time::sleep(computation_time).await;
@@ -231,11 +246,19 @@ impl ComputeBenchmarkSuite {
     }
 
     /// Benchmark GPU operations
-    async fn benchmark_gpu_operations(&self) -> Result<Vec<ComputeBenchmarkResult>, Box<dyn std::error::Error>> {
+    async fn benchmark_gpu_operations(
+        &self,
+    ) -> Result<Vec<ComputeBenchmarkResult>, Box<dyn std::error::Error>> {
         let mut results = Vec::new();
 
         for device_id in 0..self.capabilities.gpu_devices {
-            for data_size in self.config.data_sizes.iter().cloned().filter(|&size| size >= 65536) {
+            for data_size in self
+                .config
+                .data_sizes
+                .iter()
+                .cloned()
+                .filter(|&size| size >= 65536)
+            {
                 let result = self.benchmark_gpu_operation(device_id, data_size).await?;
                 results.push(result);
             }
@@ -245,7 +268,11 @@ impl ComputeBenchmarkSuite {
     }
 
     /// Benchmark a specific GPU operation
-    async fn benchmark_gpu_operation(&self, device_id: usize, data_size: usize) -> Result<ComputeBenchmarkResult, Box<dyn std::error::Error>> {
+    async fn benchmark_gpu_operation(
+        &self,
+        device_id: usize,
+        data_size: usize,
+    ) -> Result<ComputeBenchmarkResult, Box<dyn std::error::Error>> {
         let mut timings = Vec::new();
 
         // Warmup
@@ -271,7 +298,11 @@ impl ComputeBenchmarkSuite {
     }
 
     /// Simulate GPU workload (placeholder)
-    async fn simulate_gpu_workload(&self, _device_id: usize, data_size: usize) -> Result<(), Box<dyn std::error::Error>> {
+    async fn simulate_gpu_workload(
+        &self,
+        _device_id: usize,
+        data_size: usize,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         // Simulate GPU computation time (faster than CPU)
         let computation_time = Duration::from_nanos((data_size as u64) / 5000);
         tokio::time::sleep(computation_time).await;
@@ -279,7 +310,9 @@ impl ComputeBenchmarkSuite {
     }
 
     /// Benchmark Neural Engine operations
-    async fn benchmark_neural_operations(&self) -> Result<Vec<ComputeBenchmarkResult>, Box<dyn std::error::Error>> {
+    async fn benchmark_neural_operations(
+        &self,
+    ) -> Result<Vec<ComputeBenchmarkResult>, Box<dyn std::error::Error>> {
         let mut results = Vec::new();
 
         let result = self.benchmark_neural_operation(1024).await?;
@@ -289,7 +322,10 @@ impl ComputeBenchmarkSuite {
     }
 
     /// Benchmark a specific neural engine operation
-    async fn benchmark_neural_operation(&self, data_size: usize) -> Result<ComputeBenchmarkResult, Box<dyn std::error::Error>> {
+    async fn benchmark_neural_operation(
+        &self,
+        data_size: usize,
+    ) -> Result<ComputeBenchmarkResult, Box<dyn std::error::Error>> {
         let mut timings = Vec::new();
 
         // Warmup
@@ -315,7 +351,10 @@ impl ComputeBenchmarkSuite {
     }
 
     /// Simulate neural engine workload (placeholder)
-    async fn simulate_neural_workload(&self, data_size: usize) -> Result<(), Box<dyn std::error::Error>> {
+    async fn simulate_neural_workload(
+        &self,
+        data_size: usize,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         // Simulate neural inference time (very fast)
         let computation_time = Duration::from_nanos((data_size as u64) / 50000);
         tokio::time::sleep(computation_time).await;
@@ -323,7 +362,9 @@ impl ComputeBenchmarkSuite {
     }
 
     /// Benchmark system monitoring overhead
-    async fn benchmark_system_monitoring(&self) -> Result<Vec<ComputeBenchmarkResult>, Box<dyn std::error::Error>> {
+    async fn benchmark_system_monitoring(
+        &self,
+    ) -> Result<Vec<ComputeBenchmarkResult>, Box<dyn std::error::Error>> {
         let mut results = Vec::new();
         let mut timings = Vec::new();
 
@@ -488,7 +529,8 @@ impl ComputeBenchmarkSuite {
 }
 
 /// Helper function to run quick compute benchmark
-pub async fn quick_compute_benchmark() -> Result<ComputeBenchmarkReport, Box<dyn std::error::Error>> {
+pub async fn quick_compute_benchmark() -> Result<ComputeBenchmarkReport, Box<dyn std::error::Error>>
+{
     let config = ComputeBenchmarkConfig {
         iterations: 10,
         warmup_iterations: 2,

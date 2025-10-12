@@ -1,3 +1,9 @@
+---
+layout: default
+title: Orbit-RS Architecture
+category: architecture
+---
+
 # Orbit-RS Architecture
 
 ## Project Overview

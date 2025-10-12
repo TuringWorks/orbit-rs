@@ -14,6 +14,52 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::time::{timeout, Duration};
 
+/// Summary of MVCC benefits demonstrated
+///
+/// # How MVCC Prevents Deadlocks:
+///
+/// ## 1. Non-Blocking Reads
+/// - Read operations don't acquire locks on data
+/// - Reads use transaction snapshots to see consistent data
+/// - Writers don't block readers, readers don't block writers
+/// - **Result**: Eliminates most read-write deadlock scenarios
+///
+/// ## 2. Row Versioning
+/// - Each modification creates a new version rather than overwriting
+/// - Multiple transactions can work on different versions simultaneously  
+/// - Old versions remain visible to transactions that started before the change
+/// - **Result**: Reduces lock contention and wait times
+///
+/// ## 3. Consistent Lock Ordering
+/// - All transactions acquire locks in the same order (alphabetical by resource name)
+/// - Uses BTreeMap to maintain consistent ordering automatically
+/// - Prevents circular wait conditions that cause deadlocks
+/// - **Result**: Eliminates most write-write deadlock scenarios
+///
+/// ## 4. Deadlock Detection
+/// - Maintains wait-for graph to detect circular dependencies
+/// - Uses DFS algorithm to find cycles in the dependency graph
+/// - Immediately aborts one transaction when deadlock is detected
+/// - **Result**: Quick resolution of unavoidable deadlocks
+///
+/// ## 5. Application-Level Recovery
+/// - Provides clear error messages when deadlocks occur
+/// - Enables applications to implement retry logic with exponential backoff
+/// - Transactions can be safely retried after rollback
+/// - **Result**: Graceful handling of the remaining edge cases
+///
+/// # Performance Benefits:
+///
+/// - **Higher Concurrency**: More transactions can run simultaneously
+/// - **Better Throughput**: Fewer transactions blocked waiting for locks
+/// - **Predictable Performance**: Deadlocks are detected and resolved quickly
+/// - **Scalability**: System performance doesn't degrade with more concurrent users
+#[allow(dead_code)]
+pub fn mvcc_benefits_summary() {
+    // This function exists to hold the documentation above
+    println!("MVCC provides significant benefits for concurrent transaction processing!");
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -181,7 +227,7 @@ mod tests {
 
         println!("3. TX1 reads current balance...");
         let tx1_read = executor.mvcc_read("accounts", tx1, None).await.unwrap();
-        println!("   TX1 sees balance: {:?}", tx1_read.get(0));
+        println!("   TX1 sees balance: {:?}", tx1_read.first());
 
         println!("4. TX2 modifies balance...");
         let mut updates = HashMap::new();
@@ -195,21 +241,21 @@ mod tests {
 
         println!("5. TX1 reads again (should see same snapshot - no phantom reads)...");
         let tx1_read_again = executor.mvcc_read("accounts", tx1, None).await.unwrap();
-        println!("   TX1 still sees: {:?}", tx1_read_again.get(0));
+        println!("   TX1 still sees: {:?}", tx1_read_again.first());
 
         println!("6. TX2 commits changes...");
         executor.commit_transaction(tx2).await.unwrap();
 
         println!("7. TX1 reads once more (snapshot isolation - still sees original)...");
         let tx1_final_read = executor.mvcc_read("accounts", tx1, None).await.unwrap();
-        println!("   TX1 final read: {:?}", tx1_final_read.get(0));
+        println!("   TX1 final read: {:?}", tx1_final_read.first());
 
         executor.commit_transaction(tx1).await.unwrap();
 
         println!("8. New transaction sees committed changes...");
         let tx3 = executor.begin_transaction(None, None).await.unwrap();
         let tx3_read = executor.mvcc_read("accounts", tx3, None).await.unwrap();
-        println!("   TX3 sees updated balance: {:?}", tx3_read.get(0));
+        println!("   TX3 sees updated balance: {:?}", tx3_read.first());
 
         executor.commit_transaction(tx3).await.unwrap();
 
@@ -265,7 +311,7 @@ mod tests {
         let read_tx = executor.begin_transaction(None, None).await.unwrap();
         let current_data = executor.mvcc_read("users", read_tx, None).await.unwrap();
 
-        if let Some(row) = current_data.get(0) {
+        if let Some(row) = current_data.first() {
             if let Some(SqlValue::Text(name)) = row.get("name") {
                 println!("   Current version: {}", name);
             }
@@ -364,49 +410,4 @@ mod tests {
 
         Ok(())
     }
-}
-
-/// Summary of MVCC benefits demonstrated
-///
-/// # How MVCC Prevents Deadlocks:
-///
-/// ## 1. Non-Blocking Reads
-/// - Read operations don't acquire locks on data
-/// - Reads use transaction snapshots to see consistent data
-/// - Writers don't block readers, readers don't block writers
-/// - **Result**: Eliminates most read-write deadlock scenarios
-///
-/// ## 2. Row Versioning
-/// - Each modification creates a new version rather than overwriting
-/// - Multiple transactions can work on different versions simultaneously  
-/// - Old versions remain visible to transactions that started before the change
-/// - **Result**: Reduces lock contention and wait times
-///
-/// ## 3. Consistent Lock Ordering
-/// - All transactions acquire locks in the same order (alphabetical by resource name)
-/// - Uses BTreeMap to maintain consistent ordering automatically
-/// - Prevents circular wait conditions that cause deadlocks
-/// - **Result**: Eliminates most write-write deadlock scenarios
-///
-/// ## 4. Deadlock Detection
-/// - Maintains wait-for graph to detect circular dependencies
-/// - Uses DFS algorithm to find cycles in the dependency graph
-/// - Immediately aborts one transaction when deadlock is detected
-/// - **Result**: Quick resolution of unavoidable deadlocks
-///
-/// ## 5. Application-Level Recovery
-/// - Provides clear error messages when deadlocks occur
-/// - Enables applications to implement retry logic with exponential backoff
-/// - Transactions can be safely retried after rollback
-/// - **Result**: Graceful handling of the remaining edge cases
-///
-/// # Performance Benefits:
-///
-/// - **Higher Concurrency**: More transactions can run simultaneously
-/// - **Better Throughput**: Fewer transactions blocked waiting for locks
-/// - **Predictable Performance**: Deadlocks are detected and resolved quickly
-/// - **Scalability**: System performance doesn't degrade with more concurrent users
-pub fn mvcc_benefits_summary() {
-    // This function exists to hold the documentation above
-    println!("MVCC provides significant benefits for concurrent transaction processing!");
 }

@@ -75,7 +75,7 @@ impl AddressableReferenceConverter {
     }
 }
 
-/// Convert between Rust DateTime<Utc> and protobuf Timestamp
+/// Convert between Rust `DateTime<Utc>` and protobuf Timestamp
 pub struct TimestampConverter;
 
 impl TimestampConverter {

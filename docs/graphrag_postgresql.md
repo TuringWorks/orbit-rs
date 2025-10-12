@@ -1,3 +1,9 @@
+---
+layout: default
+title: GraphRAG PostgreSQL Integration
+category: documentation
+---
+
 # GraphRAG PostgreSQL Integration
 
 This document describes how to use GraphRAG functionality through PostgreSQL-compatible SQL function calls in Orbit-RS.

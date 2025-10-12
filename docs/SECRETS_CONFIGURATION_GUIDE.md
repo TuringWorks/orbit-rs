@@ -1,3 +1,9 @@
+---
+layout: default
+title: GitHub Secrets Configuration Guide
+category: documentation
+---
+
 # GitHub Secrets Configuration Guide
 
 **Repository:** orbit-rs  

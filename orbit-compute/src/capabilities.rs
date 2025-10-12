@@ -689,12 +689,13 @@ pub struct GPUDevice {
 }
 
 /// GPU vendor enumeration with detailed specifications
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum GPUVendor {
     /// Apple Silicon GPU
     Apple(AppleGPU),
     /// NVIDIA GPU
-    NVIDIA(NvidiaGPU),
+    NVIDIA(Box<NvidiaGPU>),
     /// AMD GPU
     AMD(AmdGPU),
     /// Intel GPU
@@ -1803,8 +1804,8 @@ fn detect_x86_64_capabilities() -> Result<CPUCapabilities, ComputeError> {
         detect_detailed_microarch_and_features(&vendor, &cpuid)?;
 
     let architecture = CPUArchitecture::X86_64 {
-        vendor,
-        microarchitecture,
+        vendor: vendor.clone(),
+        microarchitecture: microarchitecture.clone(),
         features: x86_features,
     };
 
@@ -1822,15 +1823,13 @@ fn detect_x86_64_capabilities() -> Result<CPUCapabilities, ComputeError> {
 
 /// Detailed microarchitecture and feature detection
 #[cfg(all(target_arch = "x86_64", feature = "runtime-detection"))]
-fn detect_detailed_microarch_and_features(
+fn detect_detailed_microarch_and_features<R: raw_cpuid::CpuIdReader>(
     vendor: &X86Vendor,
-    cpuid: &raw_cpuid::CpuId,
+    cpuid: &raw_cpuid::CpuId<R>,
 ) -> Result<(X86Microarch, X86Features), ComputeError> {
-    use raw_cpuid::CpuId;
-
     let feature_info = cpuid.get_feature_info();
     let extended_features = cpuid.get_extended_feature_info();
-    let extended_function_info = cpuid.get_extended_function_info();
+    let _extended_function_info = cpuid.get_extended_feature_info();
 
     match vendor {
         X86Vendor::AMD => {
@@ -1841,7 +1840,7 @@ fn detect_detailed_microarch_and_features(
                 avx_support: detect_avx_capabilities(&feature_info, &extended_features),
                 aes: feature_info.as_ref().is_some_and(|fi| fi.has_aesni()),
                 pclmulqdq: feature_info.as_ref().is_some_and(|fi| fi.has_pclmulqdq()),
-                rdrand: extended_features.as_ref().is_some_and(|ef| ef.has_rdrand()),
+                rdrand: feature_info.as_ref().is_some_and(|fi| fi.has_rdrand()),
                 sha: extended_features.as_ref().is_some_and(|ef| ef.has_sha()),
                 mpx: extended_features.as_ref().is_some_and(|ef| ef.has_mpx()),
                 cet: false, // Would need more detailed detection
@@ -1860,7 +1859,7 @@ fn detect_detailed_microarch_and_features(
                 avx_support: detect_avx_capabilities(&feature_info, &extended_features),
                 aes: feature_info.as_ref().is_some_and(|fi| fi.has_aesni()),
                 pclmulqdq: feature_info.as_ref().is_some_and(|fi| fi.has_pclmulqdq()),
-                rdrand: extended_features.as_ref().is_some_and(|ef| ef.has_rdrand()),
+                rdrand: feature_info.as_ref().is_some_and(|fi| fi.has_rdrand()),
                 sha: extended_features.as_ref().is_some_and(|ef| ef.has_sha()),
                 mpx: extended_features.as_ref().is_some_and(|ef| ef.has_mpx()),
                 cet: extended_features.as_ref().is_some_and(|ef| ef.has_cet_ss()),
@@ -1877,7 +1876,7 @@ fn detect_detailed_microarch_and_features(
                 avx_support: detect_avx_capabilities(&feature_info, &extended_features),
                 aes: feature_info.as_ref().is_some_and(|fi| fi.has_aesni()),
                 pclmulqdq: feature_info.as_ref().is_some_and(|fi| fi.has_pclmulqdq()),
-                rdrand: extended_features.as_ref().is_some_and(|ef| ef.has_rdrand()),
+                rdrand: feature_info.as_ref().is_some_and(|fi| fi.has_rdrand()),
                 sha: extended_features.as_ref().is_some_and(|ef| ef.has_sha()),
                 mpx: extended_features.as_ref().is_some_and(|ef| ef.has_mpx()),
                 cet: false,
@@ -1893,8 +1892,8 @@ fn detect_detailed_microarch_and_features(
 
 /// Detect AMD microarchitecture and EPYC model
 #[cfg(all(target_arch = "x86_64", feature = "runtime-detection"))]
-fn detect_amd_microarch_and_model(
-    cpuid: &raw_cpuid::CpuId,
+fn detect_amd_microarch_and_model<R: raw_cpuid::CpuIdReader>(
+    cpuid: &raw_cpuid::CpuId<R>,
 ) -> Result<(X86Microarch, Option<EPYCModel>), ComputeError> {
     let processor_brand = cpuid
         .get_processor_brand_string()
@@ -1904,30 +1903,50 @@ fn detect_amd_microarch_and_model(
     let feature_info = cpuid.get_feature_info();
     let family = feature_info.as_ref().map_or(0, |fi| fi.family_id());
     let model = feature_info.as_ref().map_or(0, |fi| fi.model_id());
-    let stepping = feature_info.as_ref().map_or(0, |fi| fi.stepping_id());
+    let _stepping = feature_info.as_ref().map_or(0, |fi| fi.stepping_id());
 
     // AMD Family 19h (Zen 3 and Zen 4)
     if family == 0x19 {
         if processor_brand.to_lowercase().contains("epyc") {
             if processor_brand.contains("9004") || processor_brand.contains("Genoa") {
                 let epyc_model = parse_genoa_model(&processor_brand);
-                return Ok((X86Microarch::Zen4 { epyc_model }, epyc_model));
+                return Ok((
+                    X86Microarch::Zen4 {
+                        epyc_model: epyc_model.clone(),
+                    },
+                    epyc_model,
+                ));
             } else if processor_brand.contains("9374F") || processor_brand.contains("Bergamo") {
                 let epyc_model = parse_bergamo_model(&processor_brand);
-                return Ok((X86Microarch::Zen4c { epyc_model }, epyc_model));
+                return Ok((
+                    X86Microarch::Zen4c {
+                        epyc_model: epyc_model.clone(),
+                    },
+                    epyc_model,
+                ));
             } else if processor_brand.contains("7003") || processor_brand.contains("Milan") {
                 let epyc_model = parse_milan_model(&processor_brand);
-                return Ok((X86Microarch::Zen3 { epyc_model }, epyc_model));
+                return Ok((
+                    X86Microarch::Zen3 {
+                        epyc_model: epyc_model.clone(),
+                    },
+                    epyc_model,
+                ));
             } else if processor_brand.contains("7V13") || processor_brand.contains("Milan-X") {
                 let epyc_model = parse_milan_x_model(&processor_brand);
-                return Ok((X86Microarch::Zen3 { epyc_model }, epyc_model));
+                return Ok((
+                    X86Microarch::Zen3 {
+                        epyc_model: epyc_model.clone(),
+                    },
+                    epyc_model,
+                ));
             }
         }
 
         // Default Zen 3/4 detection based on model numbers
-        if model >= 0x10 && model <= 0x1F {
+        if (0x10..=0x1F).contains(&model) {
             Ok((X86Microarch::Zen3 { epyc_model: None }, None))
-        } else if model >= 0x20 && model <= 0x2F {
+        } else if (0x20..=0x2F).contains(&model) {
             Ok((X86Microarch::Zen4 { epyc_model: None }, None))
         } else {
             Ok((X86Microarch::Zen3 { epyc_model: None }, None))
@@ -1938,15 +1957,25 @@ fn detect_amd_microarch_and_model(
         if processor_brand.to_lowercase().contains("epyc") {
             if processor_brand.contains("7002") || processor_brand.contains("Rome") {
                 let epyc_model = parse_rome_model(&processor_brand);
-                return Ok((X86Microarch::Zen2 { epyc_model }, epyc_model));
+                return Ok((
+                    X86Microarch::Zen2 {
+                        epyc_model: epyc_model.clone(),
+                    },
+                    epyc_model,
+                ));
             } else if processor_brand.contains("7001") || processor_brand.contains("Naples") {
                 let epyc_model = parse_naples_model(&processor_brand);
-                return Ok((X86Microarch::Zen { epyc_model }, epyc_model));
+                return Ok((
+                    X86Microarch::Zen {
+                        epyc_model: epyc_model.clone(),
+                    },
+                    epyc_model,
+                ));
             }
         }
 
         // Default Zen/Zen 2 detection
-        if model >= 0x30 && model <= 0x3F {
+        if (0x30..=0x3F).contains(&model) {
             Ok((X86Microarch::Zen2 { epyc_model: None }, None))
         } else {
             Ok((X86Microarch::Zen { epyc_model: None }, None))
@@ -2086,13 +2115,13 @@ fn extract_core_count(brand_string: &str) -> Option<u8> {
 
 // AMD-specific feature detection
 #[cfg(all(target_arch = "x86_64", feature = "runtime-detection"))]
-fn detect_amd_specific_features(
-    cpuid: &raw_cpuid::CpuId,
+fn detect_amd_specific_features<R: raw_cpuid::CpuIdReader>(
+    cpuid: &raw_cpuid::CpuId<R>,
     microarch: &X86Microarch,
     epyc_model: &Option<EPYCModel>,
 ) -> Result<AMDSpecificFeatures, ComputeError> {
-    let extended_features = cpuid.get_extended_feature_info();
-    let amd_features = cpuid.get_extended_function_info();
+    let _extended_features = cpuid.get_extended_feature_info();
+    let _amd_features = cpuid.get_extended_feature_info();
 
     let has_3d_v_cache = matches!(
         epyc_model,
@@ -2158,7 +2187,7 @@ fn detect_amd_specific_features(
 // Helper functions for detection
 #[cfg(all(target_arch = "x86_64", feature = "runtime-detection"))]
 fn detect_avx_capabilities(
-    feature_info: &Option<raw_cpuid::FeatureInfo>,
+    _feature_info: &Option<raw_cpuid::FeatureInfo>,
     extended_features: &Option<raw_cpuid::ExtendedFeatures>,
 ) -> AVXCapabilities {
     AVXCapabilities {
@@ -2177,7 +2206,7 @@ fn detect_avx_capabilities(
 }
 
 #[cfg(all(target_arch = "x86_64", feature = "runtime-detection"))]
-fn detect_intel_microarch(cpuid: &raw_cpuid::CpuId) -> X86Microarch {
+fn detect_intel_microarch<R: raw_cpuid::CpuIdReader>(cpuid: &raw_cpuid::CpuId<R>) -> X86Microarch {
     let feature_info = cpuid.get_feature_info();
     let family = feature_info.as_ref().map_or(0, |fi| fi.family_id());
     let model = feature_info.as_ref().map_or(0, |fi| fi.model_id());
@@ -2199,8 +2228,8 @@ fn detect_intel_microarch(cpuid: &raw_cpuid::CpuId) -> X86Microarch {
 }
 
 #[cfg(all(target_arch = "x86_64", feature = "runtime-detection"))]
-fn detect_intel_specific_features(
-    cpuid: &raw_cpuid::CpuId,
+fn detect_intel_specific_features<R: raw_cpuid::CpuIdReader>(
+    cpuid: &raw_cpuid::CpuId<R>,
 ) -> Result<IntelSpecificFeatures, ComputeError> {
     let extended_features = cpuid.get_extended_feature_info();
 

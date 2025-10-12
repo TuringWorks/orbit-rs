@@ -1,3 +1,9 @@
+---
+layout: default
+title: RFC: Alternative Persistence Implementations for orbit-rs
+category: rfcs
+---
+
 # RFC: Alternative Persistence Implementations for orbit-rs
 
 **Status**: Draft  

@@ -1,3 +1,9 @@
+---
+layout: default
+title: Advanced Transaction Features
+category: features
+---
+
 # Advanced Transaction Features
 
 ## Overview

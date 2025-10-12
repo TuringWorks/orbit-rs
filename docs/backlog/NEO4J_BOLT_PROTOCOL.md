@@ -1,3 +1,9 @@
+---
+layout: default
+title: Neo4j Bolt Protocol Compatibility - Feature Backlog
+category: backlog
+---
+
 # Neo4j Bolt Protocol Compatibility - Feature Backlog
 
 ## 📋 Epic Overview

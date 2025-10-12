@@ -1,3 +1,9 @@
+---
+layout: default
+title: Storage Backend Independence in Orbit-RS
+category: documentation
+---
+
 # Storage Backend Independence in Orbit-RS
 
 ## Quick Answer
@@ -12,7 +18,7 @@ Each storage backend is a complete, self-contained persistence solution. You cho
 ┌─────────────────────────────────────────────────────────┐
 │                 Orbit-RS Framework                      │
 │            (AddressableDirectoryProvider)               │
-└┬────────────┬─────────────┬─────────────┬─────────────┬┘
+└┬────────────┬─────────────┬─────────────┬─────────────┬-┘
  │            │             │             │             │
  │   Cloud    │   Local     │   Local     │   Local     │
  │  (REST)    │  (Embedded) │ (Embedded)  │ (Embedded)  │

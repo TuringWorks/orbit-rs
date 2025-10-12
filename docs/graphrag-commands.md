@@ -1,3 +1,9 @@
+---
+layout: default
+title: GraphRAG Commands Reference
+category: documentation
+---
+
 # GraphRAG Commands Reference
 
 This document describes the GraphRAG (Graph-enhanced Retrieval-Augmented Generation) commands available in Orbit-RS via the RESP protocol.

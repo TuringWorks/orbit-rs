@@ -1,3 +1,9 @@
+---
+layout: default
+title: PostgreSQL Wire Protocol - Implementation Complete ✅
+category: protocols
+---
+
 # PostgreSQL Wire Protocol - Implementation Complete ✅
 
 ## Summary

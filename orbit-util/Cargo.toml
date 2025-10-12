@@ -6,6 +6,9 @@ authors.workspace = true
 license.workspace = true
 description = "Orbit utilities and base functionality"
 
+[lib]
+path = "src/lib.rs"
+
 [dependencies]
 tracing.workspace = true
 tracing-subscriber.workspace = true

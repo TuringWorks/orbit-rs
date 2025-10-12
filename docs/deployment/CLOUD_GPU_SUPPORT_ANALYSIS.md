@@ -1,3 +1,9 @@
+---
+layout: default
+title: Cloud Provider GPU Support Analysis & Enhancement Plan
+category: deployment
+---
+
 # Cloud Provider GPU Support Analysis & Enhancement Plan
 
 **Date**: 2025-01-09  

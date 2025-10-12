@@ -1,3 +1,9 @@
+---
+layout: default
+title: Digital Ocean Deployment Guide
+category: deployment
+---
+
 # Digital Ocean Deployment Guide
 
 This guide provides comprehensive instructions for deploying Orbit-RS to Digital Ocean using droplets with optional GPU support and Digital Ocean Spaces for object storage.

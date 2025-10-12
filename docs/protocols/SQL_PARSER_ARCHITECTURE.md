@@ -1,3 +1,9 @@
+---
+layout: default
+title: SQL Parser Architecture Design
+category: protocols
+---
+
 # SQL Parser Architecture Design
 
 ## Overview

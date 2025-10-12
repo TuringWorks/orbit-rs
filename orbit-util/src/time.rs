@@ -10,7 +10,7 @@ impl TimeUtils {
         Utc::now()
     }
 
-    /// Convert SystemTime to DateTime<Utc>
+    /// Convert SystemTime to `DateTime<Utc>`
     pub fn from_system_time(system_time: SystemTime) -> DateTime<Utc> {
         system_time.into()
     }

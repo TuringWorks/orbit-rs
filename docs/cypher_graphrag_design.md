@@ -1,3 +1,9 @@
+---
+layout: default
+title: Cypher GraphRAG Procedures Design
+category: documentation
+---
+
 # Cypher GraphRAG Procedures Design
 
 ## Overview

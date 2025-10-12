@@ -29,7 +29,9 @@
 pub mod actors;
 pub mod codec;
 pub mod commands;
+// pub mod local_invocation;  // Disabled due to compilation issues
 pub mod server;
+pub mod simple_local;
 pub mod spatial_commands;
 pub mod types;
 
@@ -48,3 +50,5 @@ pub use spatial_commands::{
     GeofenceDefinition, GeofenceEngine, RedisSpatialCommands, RedisValue, SpatialDataSet,
 };
 pub use types::{RespArray, RespValue};
+// pub use local_invocation::{LocalActorRegistry, RespInvocationSystem, create_resp_orbit_client};  // Disabled
+pub use simple_local::SimpleLocalRegistry;

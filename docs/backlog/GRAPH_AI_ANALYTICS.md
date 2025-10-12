@@ -1,3 +1,9 @@
+---
+layout: default
+title: GraphML, GraphRAG, and Graph Analytics - Feature Backlog
+category: backlog
+---
+
 # GraphML, GraphRAG, and Graph Analytics - Feature Backlog
 
 ## 📋 Epic Overview

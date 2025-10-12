@@ -1,3 +1,9 @@
+---
+layout: default
+title: Orbit-RS Java Spring Boot Integration Implementation Summary
+category: documentation
+---
+
 # Orbit-RS Java Spring Boot Integration Implementation Summary
 
 ## Overview

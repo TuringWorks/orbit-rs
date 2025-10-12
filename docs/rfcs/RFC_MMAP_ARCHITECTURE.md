@@ -1,3 +1,9 @@
+---
+layout: default
+title: RFC: Memory-Mapped File Architecture for Orbit-RS
+category: rfcs
+---
+
 # RFC: Memory-Mapped File Architecture for Orbit-RS
 
 **RFC ID**: RFC-2024-001  

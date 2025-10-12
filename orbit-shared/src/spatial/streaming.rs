@@ -18,7 +18,9 @@ pub struct GpsDataPoint {
 
 /// Spatial streaming processor for real-time updates.
 pub struct SpatialStreamProcessor {
+    #[allow(dead_code)]
     batch_size: usize,
+    #[allow(dead_code)]
     processing_interval: Duration,
     alert_threshold_ms: u64,
 }
