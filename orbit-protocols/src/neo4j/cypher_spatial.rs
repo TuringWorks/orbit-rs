@@ -124,13 +124,13 @@ impl CypherSpatialExecutor {
 
             // Graph-specific spatial functions
             "spatial.closest" => self.spatial_closest(args).await,
-            "spatial.withinDistance" => self.spatial_within_distance(args).await,
+            "spatial.withindistance" => self.spatial_within_distance(args).await,
             "spatial.intersects" => self.spatial_intersects_graph(args).await,
             "spatial.layer" => self.spatial_layer(args).await,
 
             // Shortest path with spatial constraints
-            "shortestPath" => self.shortest_path_spatial(args).await,
-            "allShortestPaths" => self.all_shortest_paths_spatial(args).await,
+            "shortestpath" => self.shortest_path_spatial(args).await,
+            "allshortestpaths" => self.all_shortest_paths_spatial(args).await,
 
             // Spatial aggregation functions
             "collect.spatial" => self.collect_spatial(args).await,

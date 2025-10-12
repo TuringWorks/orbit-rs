@@ -23,8 +23,9 @@ pub enum PerformanceError {
 pub type PerformanceResult<T> = Result<T, PerformanceError>;
 
 /// Type alias for batch processor function
-type BatchProcessorFn<T> =
-    dyn Fn(Vec<T>) -> futures::future::BoxFuture<'static, PerformanceResult<Vec<bool>>> + Send + Sync;
+type BatchProcessorFn<T> = dyn Fn(Vec<T>) -> futures::future::BoxFuture<'static, PerformanceResult<Vec<bool>>>
+    + Send
+    + Sync;
 
 /// Configuration for batch processing benchmarks
 #[derive(Debug, Clone)]
@@ -320,7 +321,8 @@ where
     config: ConnectionPoolConfig,
     connections: Arc<Mutex<Vec<PooledConnection<C>>>>,
     semaphore: Arc<Semaphore>,
-    factory: Arc<dyn Fn() -> futures::future::BoxFuture<'static, PerformanceResult<C>> + Send + Sync>,
+    factory:
+        Arc<dyn Fn() -> futures::future::BoxFuture<'static, PerformanceResult<C>> + Send + Sync>,
     stats: Arc<RwLock<PoolStats>>,
 }
 
@@ -330,7 +332,10 @@ where
 {
     pub fn new<F>(config: ConnectionPoolConfig, factory: F) -> Self
     where
-        F: Fn() -> futures::future::BoxFuture<'static, PerformanceResult<C>> + Send + Sync + 'static,
+        F: Fn() -> futures::future::BoxFuture<'static, PerformanceResult<C>>
+            + Send
+            + Sync
+            + 'static,
     {
         let semaphore = Arc::new(Semaphore::new(config.max_size));
 
@@ -502,7 +507,9 @@ impl ResourceManager {
         // Check memory availability
         let mut current = self.current_memory.write().await;
         if *current + memory_estimate > self.max_memory {
-            return Err(PerformanceError::Internal("Memory limit exceeded".to_string()));
+            return Err(PerformanceError::Internal(
+                "Memory limit exceeded".to_string(),
+            ));
         }
 
         *current += memory_estimate;
@@ -612,7 +619,9 @@ impl PerformanceBenchmarkSuite {
         Ok(results)
     }
 
-    async fn benchmark_batch_processing(&self) -> PerformanceResult<Vec<PerformanceBenchmarkResult>> {
+    async fn benchmark_batch_processing(
+        &self,
+    ) -> PerformanceResult<Vec<PerformanceBenchmarkResult>> {
         let mut results = Vec::new();
 
         for &batch_size in &self.config.batch_sizes {
@@ -634,7 +643,7 @@ impl PerformanceBenchmarkSuite {
             processor.start().await;
 
             let start = Instant::now();
-            
+
             // Add operations
             for i in 0..self.config.iterations {
                 processor.add(i as i32).await?;
@@ -656,7 +665,7 @@ impl PerformanceBenchmarkSuite {
                 throughput_ops_per_sec: self.config.iterations as f64 / elapsed.as_secs_f64(),
                 success_rate: stats.successful_operations as f64 / stats.total_operations as f64,
                 resource_utilization: ResourceUtilization {
-                    memory_usage_mb: 10.0, // Placeholder
+                    memory_usage_mb: 10.0,   // Placeholder
                     cpu_usage_percent: 50.0, // Placeholder
                     connection_pool_utilization: 0.0,
                 },
@@ -666,7 +675,9 @@ impl PerformanceBenchmarkSuite {
         Ok(results)
     }
 
-    async fn benchmark_connection_pools(&self) -> PerformanceResult<Vec<PerformanceBenchmarkResult>> {
+    async fn benchmark_connection_pools(
+        &self,
+    ) -> PerformanceResult<Vec<PerformanceBenchmarkResult>> {
         let mut results = Vec::new();
 
         for &pool_size in &[5, 10, 20] {
@@ -700,7 +711,9 @@ impl PerformanceBenchmarkSuite {
 
             // Wait for all operations to complete
             for handle in handles {
-                handle.await.map_err(|e| PerformanceError::Internal(e.to_string()))??;
+                handle
+                    .await
+                    .map_err(|e| PerformanceError::Internal(e.to_string()))??;
             }
 
             let elapsed = start.elapsed();
@@ -724,7 +737,9 @@ impl PerformanceBenchmarkSuite {
         Ok(results)
     }
 
-    async fn benchmark_resource_management(&self) -> PerformanceResult<Vec<PerformanceBenchmarkResult>> {
+    async fn benchmark_resource_management(
+        &self,
+    ) -> PerformanceResult<Vec<PerformanceBenchmarkResult>> {
         let mut results = Vec::new();
 
         let manager = ResourceManager::new(1024 * 1024 * 100, 50); // 100MB, 50 concurrent

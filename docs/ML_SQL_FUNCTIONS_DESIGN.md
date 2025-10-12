@@ -1,3 +1,9 @@
+---
+layout: default
+title: ML SQL Functions Design for Orbit-RS
+category: documentation
+---
+
 # ML SQL Functions Design for Orbit-RS
 
 **Machine Learning capabilities integrated directly into the SQL engine for scalable data processing**

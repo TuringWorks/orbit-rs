@@ -1,3 +1,9 @@
+---
+layout: default
+title: Query Languages Comparison Guide
+category: documentation
+---
+
 # Query Languages Comparison Guide
 
 ## Table of Contents

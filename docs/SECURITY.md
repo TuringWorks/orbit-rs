@@ -1,3 +1,9 @@
+---
+layout: default
+title: Security Policy
+category: documentation
+---
+
 # Security Policy
 
 ## Supported Versions

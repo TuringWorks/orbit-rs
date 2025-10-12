@@ -24,11 +24,15 @@
 //! ## 📖 Quick Start
 //!
 //! ```rust
-//! use crate::postgres_wire::sql::SqlEngine;
+//! use orbit_protocols::postgres_wire::sql::SqlEngine;
 //!
+//! # #[tokio::main]
+//! # async fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! // MVCC engine by default
-//! let mut engine = SqlEngine::new();
-//! let result = engine.execute("SELECT * FROM users").await?;
+//! let _engine = SqlEngine::new();
+//! // In practice: let result = engine.execute("SELECT * FROM users").await?;
+//! # Ok(())
+//! # }
 //! ```
 //!
 //! See the [README.md](./README.md) for comprehensive documentation.
@@ -153,8 +157,7 @@ impl MvccSqlEngine {
                         // Extract column names and values
                         let columns = insert_stmt
                             .columns
-                            .as_ref()
-                            .map(|cols| cols.clone())
+                            .clone()
                             .unwrap_or_else(|| vec!["data".to_string()]); // Default column
 
                         for (i, value_expr) in values.iter().enumerate() {

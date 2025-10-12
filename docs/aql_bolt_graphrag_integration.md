@@ -1,3 +1,9 @@
+---
+layout: default
+title: AQL and Bolt GraphRAG Integration Guide
+category: documentation
+---
+
 # AQL and Bolt GraphRAG Integration Guide
 
 ## Overview

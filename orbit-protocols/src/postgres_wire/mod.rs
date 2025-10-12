@@ -36,6 +36,7 @@ pub mod protocol;
 pub mod query_engine;
 pub mod server;
 pub mod sql;
+pub mod storage;
 pub mod vector_engine;
 
 pub use graphrag_engine::GraphRAGQueryEngine;

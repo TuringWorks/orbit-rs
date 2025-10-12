@@ -452,7 +452,11 @@ impl IndexRecommendationEngine {
                 .estimate_current_query_cost(pattern, &table_stats)
                 .await;
             let index_cost = self
-                .estimate_index_query_cost(pattern, &col_ref.table, &[col_ref.column.clone()])
+                .estimate_index_query_cost(
+                    pattern,
+                    &col_ref.table,
+                    std::slice::from_ref(&col_ref.column),
+                )
                 .await;
 
             let speedup = current_cost.total_cost() / index_cost.total_cost();
@@ -469,7 +473,7 @@ impl IndexRecommendationEngine {
                 included_columns: vec![],
                 filter_condition: None,
                 estimated_size_bytes: self
-                    .estimate_index_size(&table_stats, &[col_ref.column.clone()]),
+                    .estimate_index_size(&table_stats, std::slice::from_ref(&col_ref.column)),
             };
 
             let improvement = PerformanceImprovement {
@@ -518,7 +522,7 @@ impl IndexRecommendationEngine {
         for col_ref in &pattern.where_columns {
             table_columns
                 .entry(col_ref.table.clone())
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(col_ref.column.clone());
         }
 
@@ -591,7 +595,7 @@ impl IndexRecommendationEngine {
                     included_columns: vec![],
                     filter_condition: None,
                     estimated_size_bytes: self
-                        .estimate_index_size(&table_stats, &[col_ref.column.clone()]),
+                        .estimate_index_size(&table_stats, std::slice::from_ref(&col_ref.column)),
                 };
 
                 let improvement = PerformanceImprovement {
@@ -675,9 +679,10 @@ impl IndexRecommendationEngine {
                 .await
             {
                 // Consider unused if not used in the last 30 days or very low usage
-                let is_unused = usage_stats.last_used.map_or(true, |last_used| {
-                    Utc::now() - last_used > Duration::days(30)
-                }) || usage_stats.usage_count < 5; // Very low usage
+                let is_unused = usage_stats
+                    .last_used
+                    .is_none_or(|last_used| Utc::now() - last_used > Duration::days(30))
+                    || usage_stats.usage_count < 5; // Very low usage
 
                 if is_unused {
                     unused_indexes.push(UnusedIndex {
@@ -818,6 +823,12 @@ impl IndexRecommendationEngine {
     }
 }
 
+impl Default for QueryPatternAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl QueryPatternAnalyzer {
     pub fn new() -> Self {
         Self {
@@ -833,7 +844,7 @@ impl QueryPatternAnalyzer {
         execution_time_ms: f64,
         rows_examined: u64,
         rows_returned: u64,
-        _used_indexes: &[String],
+        used_indexes: &[String],
     ) -> Result<(), Box<dyn std::error::Error>> {
         // Extract pattern from query
         let pattern_hash = self.generate_pattern_hash(query);
@@ -878,6 +889,19 @@ impl QueryPatternAnalyzer {
         stats.rows_returned_avg = (stats.rows_returned_avg * (pattern.frequency - 1) as u64
             + rows_returned)
             / pattern.frequency as u64;
+
+        // Update index usage stats
+        if !used_indexes.is_empty() {
+            stats.index_usage_count += 1;
+        } else {
+            stats.full_table_scan_count += 1;
+        }
+
+        // Update column access patterns
+        self.update_column_access_patterns(query).await;
+
+        // Update join patterns
+        self.update_join_patterns(query).await;
 
         Ok(())
     }
@@ -1062,6 +1086,130 @@ impl QueryPatternAnalyzer {
             BinaryOperator::Like => 0.1,
             _ => 0.1,
         }
+    }
+
+    /// Update column access patterns based on query analysis
+    async fn update_column_access_patterns(&self, query: &Statement) {
+        let mut patterns = self.column_access_patterns.write().await;
+
+        let where_cols = self.extract_where_columns(query);
+        let order_cols = self.extract_order_columns(query);
+        let group_cols = self.extract_group_columns(query);
+
+        // Track WHERE column usage
+        for col_ref in where_cols {
+            let key = format!("{}.{}", col_ref.table, col_ref.column);
+            let pattern = patterns.entry(key).or_insert_with(|| ColumnAccessPattern {
+                table: col_ref.table.clone(),
+                column: col_ref.column.clone(),
+                access_count: 0,
+                filter_usage_count: 0,
+                join_usage_count: 0,
+                order_usage_count: 0,
+                group_usage_count: 0,
+                selectivity_history: Vec::new(),
+                last_updated: Utc::now(),
+            });
+
+            pattern.access_count += 1;
+            pattern.filter_usage_count += 1;
+            pattern
+                .selectivity_history
+                .push(col_ref.selectivity_estimate);
+            pattern.last_updated = Utc::now();
+        }
+
+        // Track ORDER BY column usage
+        for col_ref in order_cols {
+            let key = format!("{}.{}", col_ref.table, col_ref.column);
+            let pattern = patterns.entry(key).or_insert_with(|| ColumnAccessPattern {
+                table: col_ref.table.clone(),
+                column: col_ref.column.clone(),
+                access_count: 0,
+                filter_usage_count: 0,
+                join_usage_count: 0,
+                order_usage_count: 0,
+                group_usage_count: 0,
+                selectivity_history: Vec::new(),
+                last_updated: Utc::now(),
+            });
+
+            pattern.access_count += 1;
+            pattern.order_usage_count += 1;
+            pattern.last_updated = Utc::now();
+        }
+
+        // Track GROUP BY column usage
+        for col_ref in group_cols {
+            let key = format!("{}.{}", col_ref.table, col_ref.column);
+            let pattern = patterns.entry(key).or_insert_with(|| ColumnAccessPattern {
+                table: col_ref.table.clone(),
+                column: col_ref.column.clone(),
+                access_count: 0,
+                filter_usage_count: 0,
+                join_usage_count: 0,
+                order_usage_count: 0,
+                group_usage_count: 0,
+                selectivity_history: Vec::new(),
+                last_updated: Utc::now(),
+            });
+
+            pattern.access_count += 1;
+            pattern.group_usage_count += 1;
+            pattern.last_updated = Utc::now();
+        }
+    }
+
+    /// Update join patterns based on query analysis
+    async fn update_join_patterns(&self, query: &Statement) {
+        let mut patterns = self.join_patterns.write().await;
+
+        let joins = self.extract_joins(query);
+
+        for join in joins {
+            let key = format!(
+                "{}.{}:{}.{}",
+                join.left_table, join.left_column, join.right_table, join.right_column
+            );
+
+            let pattern = patterns.entry(key).or_insert_with(|| JoinPattern {
+                left_table: join.left_table.clone(),
+                right_table: join.right_table.clone(),
+                join_columns: vec![(join.left_column.clone(), join.right_column.clone())],
+                frequency: 0,
+                avg_selectivity: 0.5, // Default estimate
+                last_seen: Utc::now(),
+            });
+
+            pattern.frequency += 1;
+            pattern.last_seen = Utc::now();
+
+            // Update join columns if not already present
+            let join_col_pair = (join.left_column, join.right_column);
+            if !pattern.join_columns.contains(&join_col_pair) {
+                pattern.join_columns.push(join_col_pair);
+            }
+        }
+    }
+
+    /// Get column access patterns for analysis
+    pub async fn get_column_access_patterns(&self) -> HashMap<String, ColumnAccessPattern> {
+        self.column_access_patterns.read().await.clone()
+    }
+
+    /// Get join patterns for analysis
+    pub async fn get_join_patterns(&self) -> HashMap<String, JoinPattern> {
+        self.join_patterns.read().await.clone()
+    }
+
+    /// Get column access pattern statistics
+    pub async fn get_column_usage_stats(&self) -> usize {
+        self.column_access_patterns.read().await.len()
+    }
+
+    /// Get join pattern statistics  
+    pub async fn get_join_usage_stats(&self) -> usize {
+        self.join_patterns.read().await.len()
     }
 }
 

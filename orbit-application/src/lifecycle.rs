@@ -5,7 +5,9 @@ use tracing::info;
 /// Lifecycle management for the application
 #[derive(Debug)]
 pub struct LifecycleManager {
+    #[allow(dead_code)]
     shutdown_token: tokio_util::sync::CancellationToken,
+    #[allow(dead_code)]
     event_bus: Arc<EventBus>,
 }
 

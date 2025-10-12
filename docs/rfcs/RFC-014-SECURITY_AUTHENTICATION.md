@@ -1,3 +1,9 @@
+---
+layout: default
+title: RFC-014: Security & Authentication Analysis
+category: rfcs
+---
+
 # RFC-014: Security & Authentication Analysis
 
 **Date**: October 9, 2025  

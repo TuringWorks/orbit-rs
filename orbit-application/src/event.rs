@@ -1,6 +1,6 @@
 use crate::{AppError, AppEvent};
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct EventBus;
 
 impl EventBus {

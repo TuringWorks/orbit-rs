@@ -103,7 +103,10 @@ pub enum MLError {
     /// Distributed computing errors
     #[cfg(feature = "distributed")]
     #[error("Distributed computing error: {message}")]
-    Distributed { message: String },
+    Distributed {
+        /// Error message describing the distributed computing issue
+        message: String,
+    },
 
     /// SQL extension errors
     #[error("SQL extension error: {message}")]

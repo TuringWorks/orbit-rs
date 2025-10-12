@@ -1,3 +1,9 @@
+---
+layout: default
+title: GitFlow for LLMs: An Execution Playbook
+category: guidelines
+---
+
 # GitFlow for LLMs: An Execution Playbook
 
 ## 1) Branch Roles (single source of truth)

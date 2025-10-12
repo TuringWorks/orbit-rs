@@ -1,3 +1,9 @@
+---
+layout: default
+title: Deployment Guide
+category: deployment
+---
+
 # Deployment Guide
 
 This guide covers deploying Orbit-RS in production environments, including Kubernetes deployment, CI/CD pipelines, and operational best practices.

@@ -1,3 +1,9 @@
+---
+layout: default
+title: Virtual Actor State Persistence and Activation in Orbit-RS
+category: documentation
+---
+
 # Virtual Actor State Persistence and Activation in Orbit-RS
 
 ## Overview

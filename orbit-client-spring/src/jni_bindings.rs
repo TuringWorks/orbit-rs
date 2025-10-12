@@ -11,8 +11,8 @@ use tokio::sync::RwLock;
 use tracing::{error, info, warn};
 
 /// Global application context holder for JNI
-static GLOBAL_CONTEXT: OnceLock<Arc<Mutex<Option<Arc<RwLock<ApplicationContext>>>>>> =
-    OnceLock::new();
+type GlobalContextType = Arc<Mutex<Option<Arc<RwLock<ApplicationContext>>>>>;
+static GLOBAL_CONTEXT: OnceLock<GlobalContextType> = OnceLock::new();
 
 /// Initialize the global context
 fn init_global_context() -> Arc<Mutex<Option<Arc<RwLock<ApplicationContext>>>>> {

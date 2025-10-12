@@ -1,3 +1,9 @@
+---
+layout: default
+title: GitHub Secrets Configuration - Implementation Summary
+category: wip
+---
+
 # GitHub Secrets Configuration - Implementation Summary
 
 **Date:** 2025-10-03  

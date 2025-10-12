@@ -21,7 +21,7 @@
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
 //!     let config = PrometheusConfig::default();
-//!     let exporter = PrometheusExporter::new(config).await?;
+//!     let mut exporter = PrometheusExporter::new(config).await?;
 //!     
 //!     exporter.start().await?;
 //!     exporter.run().await?;

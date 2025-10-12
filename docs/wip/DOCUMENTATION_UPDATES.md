@@ -1,3 +1,9 @@
+---
+layout: default
+title: Documentation Updates Summary
+category: wip
+---
+
 # Documentation Updates Summary
 
 **Date**: December 2024  

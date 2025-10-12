@@ -1,3 +1,9 @@
+---
+layout: default
+title: Competitive Analysis: Orbit-RS vs Time Series & Analytics Leaders
+category: rfcs
+---
+
 # Competitive Analysis: Orbit-RS vs Time Series & Analytics Leaders
 
 **Date**: October 9, 2025  

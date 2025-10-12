@@ -67,10 +67,13 @@ struct QuadNode {
 
 /// R-tree spatial index for complex geometries.
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct RTree {
     root: Option<RTreeNode>,
     max_entries: usize,
+    #[allow(dead_code)]
     min_entries: usize,
+    #[allow(dead_code)]
     split_strategy: RTreeSplitStrategy,
     geometry_count: usize,
 }
@@ -83,10 +86,14 @@ struct RTreeNode {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 struct RTreeEntry {
+    #[allow(dead_code)]
     id: u64,
     bounds: BoundingBox,
+    #[allow(dead_code)]
     geometry: Option<SpatialGeometry>,
+    #[allow(dead_code)]
     child: Option<Box<RTreeNode>>,
 }
 
@@ -105,6 +112,7 @@ pub enum RTreeSplitStrategy {
 #[derive(Debug, Clone)]
 pub struct GeohashGrid {
     precision: u8,
+    #[allow(dead_code)]
     grid_size: usize,
     cells: HashMap<String, Vec<(u64, SpatialGeometry)>>,
     point_count: usize,
@@ -112,6 +120,7 @@ pub struct GeohashGrid {
 
 /// K-d tree for high-dimensional spatial data.
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct KdTree {
     root: Option<KdNode>,
     dimensions: u8,
@@ -120,6 +129,7 @@ pub struct KdTree {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 struct KdNode {
     point: (u64, Point),
     left: Option<Box<KdNode>>,
@@ -220,13 +230,11 @@ impl QuadTree {
                     } else {
                         2
                     } // SW or NW
+                } else if point_clone.y < center_y {
+                    1
                 } else {
-                    if point_clone.y < center_y {
-                        1
-                    } else {
-                        3
-                    } // SE or NE
-                };
+                    3
+                }; // SE or NE
 
                 if let Some(ref mut children) = node.children {
                     // Remove the point from this node and add to appropriate child
@@ -257,13 +265,11 @@ impl QuadTree {
                 } else {
                     2
                 } // SW or NW
+            } else if point.y < center_y {
+                1
             } else {
-                if point.y < center_y {
-                    1
-                } else {
-                    3
-                } // SE or NE
-            };
+                3
+            }; // SE or NE
 
             Self::insert_point_recursive(
                 &mut children[child_index],
@@ -352,13 +358,11 @@ impl QuadTree {
                 } else {
                     2
                 } // SW or NW
+            } else if point.y < center_y {
+                1
             } else {
-                if point.y < center_y {
-                    1
-                } else {
-                    3
-                } // SE or NE
-            };
+                3
+            }; // SE or NE
 
             if let Some(ref mut children) = node.children {
                 children[child_index].points.push((id, point));
@@ -375,6 +379,7 @@ impl QuadTree {
         results
     }
 
+    #[allow(clippy::only_used_in_recursion)]
     fn query_bbox_recursive<'a>(
         &self,
         node: &'a QuadNode,
@@ -396,7 +401,7 @@ impl QuadTree {
         // Recursively search children
         if let Some(ref children) = node.children {
             for child in children.iter() {
-                self.query_bbox_recursive(child, bbox, results);
+                Self::query_bbox_recursive(self, child, bbox, results);
             }
         }
     }
@@ -556,10 +561,7 @@ impl GeohashGrid {
             }
         };
 
-        self.cells
-            .entry(geohash)
-            .or_insert_with(Vec::new)
-            .push((id, geometry));
+        self.cells.entry(geohash).or_default().push((id, geometry));
         self.point_count += 1;
         Ok(())
     }

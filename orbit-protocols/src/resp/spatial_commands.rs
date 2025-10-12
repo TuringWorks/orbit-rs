@@ -20,6 +20,7 @@ pub struct RedisSpatialCommands {
     /// Real-time geofencing engine
     geofence_engine: Arc<RwLock<GeofenceEngine>>,
     /// Streaming processor for real-time updates
+    #[allow(dead_code)]
     stream_processor: SpatialStreamProcessor,
 }
 
@@ -37,6 +38,7 @@ pub struct SpatialDataSet {
 #[derive(Debug, Clone)]
 pub struct GeofenceEngine {
     geofences: HashMap<String, GeofenceDefinition>,
+    #[allow(dead_code)]
     active_subscriptions: HashMap<String, Vec<String>>, // channel -> fence_ids
 }
 
@@ -143,7 +145,7 @@ impl RedisSpatialCommands {
 
     /// GEOADD key longitude latitude member [longitude latitude member ...]
     async fn geo_add(&self, args: Vec<RedisValue>) -> Result<RedisValue, SpatialError> {
-        if args.len() < 4 || (args.len() - 1) % 3 != 0 {
+        if args.len() < 4 || !(args.len() - 1).is_multiple_of(3) {
             return Err(SpatialError::OperationError(
                 "GEOADD requires key and longitude latitude member triplets".to_string(),
             ));

@@ -103,6 +103,11 @@ pub struct DeadlockDetector {
     pub lock_queue: HashMap<String, Vec<(TransactionId, LockMode)>>,
 }
 
+/// Type alias for transaction log storage
+type TransactionLog = Arc<RwLock<Vec<(TransactionId, String, DateTime<Utc>)>>>;
+/// Type alias for row predicate function
+type RowPredicate = Option<Box<dyn Fn(&HashMap<String, SqlValue>) -> bool + Send + Sync>>;
+
 /// MVCC-aware SQL executor
 pub struct MvccSqlExecutor {
     /// Tables with versioned rows
@@ -121,7 +126,13 @@ pub struct MvccSqlExecutor {
     deadlock_detector: Arc<Mutex<DeadlockDetector>>,
 
     /// Global transaction log for cleanup
-    transaction_log: Arc<RwLock<Vec<(TransactionId, String, DateTime<Utc>)>>>,
+    transaction_log: TransactionLog,
+}
+
+impl Default for MvccSqlExecutor {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl MvccSqlExecutor {
@@ -276,7 +287,7 @@ impl MvccSqlExecutor {
         &self,
         table_name: &str,
         transaction_id: TransactionId,
-        predicate: Option<Box<dyn Fn(&HashMap<String, SqlValue>) -> bool + Send + Sync>>,
+        predicate: RowPredicate,
     ) -> ProtocolResult<Vec<HashMap<String, SqlValue>>> {
         let tables = self.tables.read().await;
         let transactions = self.transactions.read().await;
@@ -353,7 +364,7 @@ impl MvccSqlExecutor {
         table_name: &str,
         transaction_id: TransactionId,
         updates: HashMap<String, SqlValue>,
-        predicate: Option<Box<dyn Fn(&HashMap<String, SqlValue>) -> bool + Send + Sync>>,
+        predicate: RowPredicate,
     ) -> ProtocolResult<usize> {
         // Acquire exclusive lock
         self.acquire_lock(table_name, transaction_id, LockMode::Exclusive)
@@ -422,7 +433,7 @@ impl MvccSqlExecutor {
         &self,
         table_name: &str,
         transaction_id: TransactionId,
-        predicate: Option<Box<dyn Fn(&HashMap<String, SqlValue>) -> bool + Send + Sync>>,
+        predicate: RowPredicate,
     ) -> ProtocolResult<usize> {
         // Acquire exclusive lock
         self.acquire_lock(table_name, transaction_id, LockMode::Exclusive)
@@ -471,13 +482,10 @@ impl MvccSqlExecutor {
         versions: &'a [RowVersion],
         snapshot: &TransactionSnapshot,
     ) -> Option<&'a RowVersion> {
-        for version in versions.iter().rev() {
-            // Check if this version is visible to the snapshot
-            if self.is_version_visible(version, snapshot) {
-                return Some(version);
-            }
-        }
-        None
+        versions
+            .iter()
+            .rev()
+            .find(|&version| self.is_version_visible(version, snapshot))
     }
 
     /// Determine if a row version is visible to a snapshot
@@ -582,6 +590,7 @@ impl MvccSqlExecutor {
     }
 
     /// DFS helper for deadlock detection
+    #[allow(clippy::only_used_in_recursion)]
     fn dfs_cycle_detection(
         &self,
         detector: &DeadlockDetector,
@@ -622,10 +631,7 @@ impl MvccSqlExecutor {
             name: name.to_string(),
             row_versions: BTreeMap::new(),
             schema: crate::postgres_wire::sql::executor::TableSchema {
-                name: crate::postgres_wire::sql::ast::TableName {
-                    schema: None,
-                    name: name.to_string(),
-                },
+                name: name.to_string(), // Use string directly
                 columns: Vec::new(),
                 constraints: Vec::new(),
                 indexes: Vec::new(),

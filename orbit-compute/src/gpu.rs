@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, info, warn};
 
 /// GPU device information
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -74,6 +74,7 @@ pub enum MemoryStrategy {
 pub struct GPUAccelerationManager {
     devices: Arc<RwLock<Vec<GPUDevice>>>,
     active_device: Arc<RwLock<Option<u32>>>,
+    #[allow(dead_code)]
     memory_strategies: HashMap<u32, MemoryStrategy>,
     initialization_complete: Arc<RwLock<bool>>,
 }
@@ -307,7 +308,7 @@ impl GPUAccelerationManager {
         let active_device = self
             .get_active_device()
             .await
-            .ok_or_else(|| ComputeError::NoGPUAvailable)?;
+            .ok_or(ComputeError::NoGPUAvailable)?;
 
         info!("Executing workload on GPU: {}", active_device.name);
 
@@ -424,9 +425,9 @@ pub struct ComputeResult {
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_gpu_manager_creation() {
-        let manager = GPUAccelerationManager::new();
+    #[tokio::test]
+    async fn test_gpu_manager_creation() {
+        let manager = GPUAccelerationManager::new().await;
         assert!(manager.is_ok());
     }
 }

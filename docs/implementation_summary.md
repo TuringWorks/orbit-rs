@@ -1,3 +1,9 @@
+---
+layout: default
+title: GraphRAG PostgreSQL Integration - Implementation Summary
+category: documentation
+---
+
 # GraphRAG PostgreSQL Integration - Implementation Summary
 
 ## Overview

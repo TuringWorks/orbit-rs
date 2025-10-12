@@ -1,3 +1,9 @@
+---
+layout: default
+title: DDL Implementation Summary
+category: protocols
+---
+
 # DDL Implementation Summary
 
 ## Overview

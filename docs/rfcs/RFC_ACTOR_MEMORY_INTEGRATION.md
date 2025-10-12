@@ -1,3 +1,9 @@
+---
+layout: default
+title: RFC: Virtual Actor Memory Management Integration
+category: rfcs
+---
+
 # RFC: Virtual Actor Memory Management Integration
 
 **Document**: RFC_ACTOR_MEMORY_INTEGRATION  

@@ -1,3 +1,9 @@
+---
+layout: default
+title: RESP/RESP2 Protocol Implementation - Status Report
+category: protocols
+---
+
 # RESP/RESP2 Protocol Implementation - Status Report
 
 ## ✅ Implementation Overview

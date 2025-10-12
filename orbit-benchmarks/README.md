@@ -1,6 +1,6 @@
 # Orbit Benchmarks
 
-This crate contains performance benchmarks for the Orbit distributed database system.
+This crate contains performance benchmarks for the Orbit distributed database system, including comprehensive OrbitQL query language benchmarks with industry-standard TPC workloads.
 
 ## Note
 
@@ -19,6 +19,10 @@ cargo test
 # Run specific benchmarks
 cargo bench --bench actor_benchmarks
 cargo bench --bench leader_election_benchmarks
+
+# Run OrbitQL query benchmarks (requires orbit-shared dependency)
+cargo check --lib  # Validates OrbitQL benchmarks compile correctly
+# Note: OrbitQL benchmarks are library modules, not Criterion benchmarks
 
 # WARNING: The persistence_comparison benchmark may hang due to WAL replay issues
 # Use with caution or avoid running it
@@ -40,17 +44,29 @@ cargo bench --bench leader_election_benchmarks
 - Includes comprehensive workload simulations
 - **Avoid running unless you understand the WAL replay issue**
 
+### 4. OrbitQL Query Language Benchmarks (`orbitql/`) 🆕
+- **NEW**: Comprehensive query performance benchmarks moved from `orbit-shared`
+- **TPC-H**: Industry-standard decision support benchmark (22 queries)
+- **TPC-C**: Online transaction processing benchmark
+- **TPC-DS**: Decision support benchmark with complex analytics
+- **Custom Workloads**: Specialized query patterns and optimization tests
+- **Features**: Query optimization validation, vectorized execution testing, parallel processing benchmarks
+
 ## Examples
 
-The crate also includes several examples demonstrating different persistence backends:
+The crate also includes several examples demonstrating different persistence backends and OrbitQL benchmarks:
 
 ```bash
-
-# Run examples
+# Run persistence examples
 cargo run --example cow_btree_demo
 cargo run --example cow_btree_persistence_demo
 cargo run --example rocksdb_demo
 cargo run --example configurable_backends_demo
+
+# Access OrbitQL benchmarks in Rust code
+# use orbit_benchmarks::orbitql::{
+#     BenchmarkFramework, BenchmarkConfig, ComprehensiveBenchmark
+# };
 ```
 
 ## Known Issues

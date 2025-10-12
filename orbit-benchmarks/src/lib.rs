@@ -22,11 +22,19 @@ pub mod compute;
 /// Performance benchmarks for transactions and batch processing (moved from orbit-shared)
 pub mod performance;
 
+/// OrbitQL query language benchmarks (moved from orbit-shared)
+pub mod orbitql;
+
 // Re-export commonly used items
-pub use persistence::{config::*, metrics::*, workload::*};
 pub use compute::{
     quick_compute_benchmark, ComputeBenchmarkReport, ComputeBenchmarkResult, ComputeBenchmarkSuite,
+};
+pub use orbitql::{
+    BenchmarkConfig, BenchmarkFramework, BenchmarkResults, ComprehensiveBenchmark,
+    ComprehensiveBenchmarkConfig, CustomWorkloadResults, OrbitQLComponents, QueryBenchmarkResult,
+    TpcCResults, TpcDsResults, TpcHResults,
 };
 pub use performance::{
     quick_performance_benchmark, PerformanceBenchmarkResult, PerformanceBenchmarkSuite,
 };
+pub use persistence::{config::*, metrics::*, workload::*};

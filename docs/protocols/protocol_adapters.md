@@ -1,3 +1,9 @@
+---
+layout: default
+title: Protocol Adapters
+category: protocols
+---
+
 # Protocol Adapters
 
 Orbit-RS provides multiple protocol adapters enabling clients to interact with the actor system using familiar protocols. This allows existing applications to integrate with Orbit-RS without requiring significant code changes.
@@ -8,43 +14,85 @@ Protocol adapters act as translation layers between external protocols and the O
 
 ### Supported Protocols
 
-- ✅ **Redis Protocol (RESP)** - **Complete Redis compatibility with 50+ commands** including VECTOR.*, TS.*, GRAPH.*, FT.* extensions
-- ✅ **PostgreSQL Wire Protocol** - Full DDL/DML support with vector operations and complex SQL parsing
-- ✅ **Model Context Protocol (MCP)** - AI agent integration with comprehensive tool support
-- 🚧 **Redis Time Series** - Time-series database with RedisTimeSeries compatibility (Phase 12)
-- 🚧 **PostgreSQL TimescaleDB** - Advanced time-series analytics and hypertables (Phase 12)
-- 🚧 **REST API** - HTTP/JSON interface for web applications (planned)
-- 🚧 **Neo4j Bolt Protocol** - Graph database compatibility (planned)
+- ✅ **Redis Protocol (RESP)** - **🎆 PRODUCTION-READY** - 50+ commands, all core data types, redis-cli support
+- 🧪 **PostgreSQL Wire Protocol** - **EXPERIMENTAL** - Basic SQL parsing for actor operations (30% complete)
+- 🧪 **Model Context Protocol (MCP)** - **EXPERIMENTAL** - Basic AI agent integration (partial implementation)
+- 📋 **Redis Extensions** - Vector operations (VECTOR.*), Time Series (TS.*), Graph DB (GRAPH.*), Search (FT.*) - *Planned*
+- 📋 **PostgreSQL TimescaleDB** - Advanced time-series analytics and hypertables - *Planned*
+- 📋 **REST API** - HTTP/JSON interface for web applications - *Planned*
+- 📋 **Neo4j Bolt Protocol** - Graph database compatibility - *Planned*
 
 ## Redis Protocol (RESP) Support ✅
 
 Connect to Orbit actors using any Redis client through the RESP (REdis Serialization Protocol) adapter.
 
-### Quick Start
+### 🚀 Quick Start
 
-Start the RESP server and connect with any Redis client:
+**Get Redis running in 30 seconds:**
 
 ```bash
+# Method 1: One-command startup (recommended)
+git clone https://github.com/TuringWorks/orbit-rs.git
+cd orbit-rs
+cargo build --release
+./start-orbit-redis.sh
 
-# Start the RESP server example
-cargo run --example resp-server
+# Method 2: Manual startup
+# Terminal 1: Start Orbit distributed actor runtime
+./target/release/orbit-server --grpc-port 50056 --dev-mode
 
-# In another terminal, connect with redis-cli
-redis-cli -h 127.0.0.1 -p 6380
+# Terminal 2: Start Redis protocol server
+./target/release/resp-server
 
-# Use Redis commands that operate on Orbit actors
-> SET mykey "hello world"
+# Terminal 3: Connect with ANY Redis client
+redis-cli -h 127.0.0.1 -p 6379  # Standard Redis port
+```
+
+**✅ Everything works perfectly:**
+
+```redis
+# String operations
+127.0.0.1:6379> SET mykey "hello world"
 OK
-> GET mykey  
+127.0.0.1:6379> GET mykey  
 "hello world"
-> HSET myhash field1 "value1"
+127.0.0.1:6379> DEL mykey
 (integer) 1
-> HGET myhash field1
-"value1"
-> LPUSH mylist item1 item2
+
+# Hash operations
+127.0.0.1:6379> HSET user:1 name "Alice" age "25" city "NYC"
+(integer) 3
+127.0.0.1:6379> HGETALL user:1
+1) "name"
+2) "Alice"
+3) "age"
+4) "25"
+5) "city"
+6) "NYC"
+
+# List operations
+127.0.0.1:6379> LPUSH tasks "task1" "task2"
 (integer) 2
-> PUBLISH mychannel "hello subscribers"
-(integer) 0
+127.0.0.1:6379> LRANGE tasks 0 -1
+1) "task2"
+2) "task1"
+
+# Set operations
+127.0.0.1:6379> SADD tags "redis" "orbit" "distributed"
+(integer) 3
+127.0.0.1:6379> SMEMBERS tags
+1) "redis"
+2) "orbit"
+3) "distributed"
+
+# Sorted Set operations
+127.0.0.1:6379> ZADD leaderboard 100 "player1" 85 "player2"
+(integer) 2
+127.0.0.1:6379> ZRANGE leaderboard 0 -1 WITHSCORES
+1) "player2"
+2) "85"
+3) "player1"
+4) "100"
 ```
 
 ### Supported Redis Commands
@@ -145,12 +193,12 @@ OK
 - **FLUSHALL** - Clear all databases
 - **COMMAND** - Get list of available commands
 
-## Redis Extensions - Advanced Features ✨
+## Redis Extensions - Advanced Features 📋 PLANNED
 
-Orbit-RS extends Redis with enterprise-grade features for AI/ML, time series, and graph database workloads.
+Orbit-RS will extend Redis with enterprise-grade features for AI/ML, time series, and graph database workloads in future releases.
 
-### Vector Operations (VECTOR.* namespace) 🤖
-**AI/ML vector search with multiple similarity metrics**
+### Vector Operations (VECTOR.* namespace) 📋 PLANNED
+**AI/ML vector search with multiple similarity metrics** - *Coming Soon*
 
 - **VECTOR.ADD** index id vector [metadata...] - Add vector with optional metadata
 - **VECTOR.GET** index id - Get vector and metadata by ID
@@ -168,8 +216,8 @@ VECTOR.ADD embeddings doc1 "0.1,0.2,0.3,0.4" title "AI Document" category "tech"
 VECTOR.SEARCH embeddings "0.1,0.2,0.3,0.4" 5 METRIC COSINE THRESHOLD 0.8
 ```
 
-### RedisSearch Compatible (FT.* namespace) 🔍
-**Full-text and vector search engine compatibility**
+### RedisSearch Compatible (FT.* namespace) 📋 PLANNED
+**Full-text and vector search engine compatibility** - *Coming Soon*
 
 - **FT.CREATE** index DIM dimension [options] - Create vector search index
 - **FT.ADD** index id vector [metadata...] - Add document to search index
@@ -177,8 +225,8 @@ VECTOR.SEARCH embeddings "0.1,0.2,0.3,0.4" 5 METRIC COSINE THRESHOLD 0.8
 - **FT.SEARCH** index vector limit [options] - Search documents
 - **FT.INFO** index - Get index information and statistics
 
-### Time Series (TS.* namespace) 📊
-**Complete RedisTimeSeries compatibility for IoT and monitoring**
+### Time Series (TS.* namespace) 📋 PLANNED
+**Complete RedisTimeSeries compatibility for IoT and monitoring** - *Coming Soon*
 
 - **TS.CREATE** key [options] - Create time series with retention policies
 - **TS.ALTER** key [options] - Modify time series configuration
@@ -202,8 +250,8 @@ TS.ADD temperature:sensor1 * 23.5
 TS.RANGE temperature:sensor1 - + AGGREGATION AVG 60000
 ```
 
-### Graph Database (GRAPH.* namespace) 🕸️
-**Cypher-like graph queries with execution planning**
+### Graph Database (GRAPH.* namespace) 📋 PLANNED
+**Cypher-like graph queries with execution planning** - *Coming Soon*
 
 - **GRAPH.QUERY** graph_name query - Execute graph query with write operations
 - **GRAPH.RO_QUERY** graph_name query - Execute read-only graph query
@@ -253,9 +301,9 @@ list_actor = "ListActor"
 pubsub_actor = "PubSubActor"
 ```
 
-## PostgreSQL Wire Protocol with Vector Support ✅
+## PostgreSQL Wire Protocol 🧪 EXPERIMENTAL
 
-Connect to Orbit actors using any PostgreSQL client with full SQL support and native vector operations for AI/ML workloads.
+Connect to Orbit actors using any PostgreSQL client. **Note**: This is an experimental implementation providing basic SQL parsing for actor operations.
 
 ### Quick Start
 
@@ -292,15 +340,14 @@ WHERE actor_id = 'user:alice';
 DELETE FROM actors WHERE actor_id = 'user:alice';
 ```
 
-#### Supported SQL Features Overview
+#### Currently Supported SQL Features
 
-✅ **All SQL statement keywords**: `SELECT`, `INSERT`, `UPDATE`, `DELETE`  
-✅ **All SQL clause keywords**: `FROM`, `WHERE`, `SET`, `INTO`, `VALUES`  
-✅ **WHERE operators**: `=`, `!=`, `<>` with full conditional logic  
-✅ **Complete JSON support**: Nested objects, arrays, special characters, Unicode  
-✅ **Case insensitive**: Keywords work in any case combination  
-✅ **Special characters**: Email addresses, paths, and complex identifiers supported  
-✅ **Robust parsing**: Handles whitespace, quotes, semicolons gracefully  
+✅ **Basic SQL statements**: `SELECT`, `INSERT`, `UPDATE`, `DELETE` (actor operations only)
+✅ **Basic SQL clauses**: `FROM`, `WHERE`, `SET`, `INTO`, `VALUES`
+✅ **WHERE operators**: `=`, `!=`, `<>` (limited conditional logic)
+✅ **JSON support**: Basic JSON state storage and retrieval
+✅ **Case insensitive**: Keywords work in any case combination
+♾️ **Note**: This is a basic implementation focused on actor state management, not full PostgreSQL compatibility
 
 ### Vector Database Capabilities
 
@@ -1080,36 +1127,36 @@ SET state = '{
 WHERE actor_id = 'config:logging';
 ```
 
-### Current PostgreSQL Features ✅
+### Planned PostgreSQL Features 📋
 
-Orbit-RS now provides comprehensive PostgreSQL compatibility with advanced SQL features:
+Future releases will expand PostgreSQL compatibility with advanced SQL features:
 
-#### Core SQL Operations (Fully Implemented)
+#### Core SQL Operations (Planned)
 - **SELECT** - Complete query support with JOINs, subqueries, window functions, CTEs
 - **INSERT** - Multi-row inserts, INSERT...SELECT, ON CONFLICT handling
 - **UPDATE** - Complex updates with FROM clauses, correlated subqueries
 - **DELETE** - Cascading deletes, EXISTS/NOT EXISTS conditions
 
-#### DDL Operations (Fully Implemented) 🆕
+#### DDL Operations (Planned)
 - **CREATE/ALTER/DROP TABLE** - Complete table lifecycle management
 - **CREATE/DROP INDEX** - B-tree, Hash, GiST, GIN, IVFFLAT, HNSW indexes
 - **CREATE/DROP VIEW** - Regular and materialized views
 - **CREATE/DROP SCHEMA** - Database organization and namespacing
 - **CREATE/DROP EXTENSION** - Extension management (including pgvector)
 
-#### DCL Operations (Fully Implemented) 🆕
+#### DCL Operations (Planned)
 - **GRANT/REVOKE** - Comprehensive permission management
 - **Role-based Access Control** - User and role management
 - **Schema-level Permissions** - Fine-grained access control
 - **Object-level Security** - Table, view, function permissions
 
-#### TCL Operations (Fully Implemented) 🆕
+#### TCL Operations (Planned)
 - **BEGIN/COMMIT/ROLLBACK** - Full transaction support
 - **SAVEPOINT** - Nested transaction points
 - **Isolation Levels** - READ COMMITTED, REPEATABLE READ, SERIALIZABLE
 - **Access Modes** - READ ONLY, READ WRITE transaction control
 
-#### Advanced SQL Features (Fully Implemented) 🆕
+#### Advanced SQL Features (Planned)
 - **Window Functions** - ROW_NUMBER, RANK, DENSE_RANK, LAG, LEAD, FIRST_VALUE, LAST_VALUE, NTILE
 - **Common Table Expressions** - WITH clauses including recursive CTEs
 - **Complex Expressions** - Full operator precedence, CASE statements
@@ -1117,29 +1164,12 @@ Orbit-RS now provides comprehensive PostgreSQL compatibility with advanced SQL f
 - **Subqueries** - Correlated and non-correlated in SELECT, WHERE, FROM clauses
 - **JOIN Operations** - INNER, LEFT, RIGHT, FULL OUTER, CROSS joins
 
-#### Vector Database Support (Fully Implemented) 🆕
+#### Vector Database Support (Planned)
 - **pgvector Extension** - CREATE EXTENSION vector support
 - **Vector Data Types** - VECTOR(n), HALFVEC(n), SPARSEVEC(n)
 - **Vector Indexes** - IVFFLAT and HNSW for similarity search
 - **Distance Operators** - `<->` (L2), `<#>` (inner product), `<=>` (cosine)
 - **Vector Functions** - VECTOR_DIMS, VECTOR_NORM, similarity scoring
-
-#### Data Type Support (Comprehensive)
-- **Numeric Types** - INTEGER, BIGINT, DECIMAL, NUMERIC, REAL, DOUBLE PRECISION
-- **Character Types** - CHAR, VARCHAR, TEXT with full Unicode support
-- **Date/Time Types** - DATE, TIME, TIMESTAMP (with/without timezone), INTERVAL
-- **JSON Types** - JSON, JSONB with indexing and operators
-- **Array Types** - Multi-dimensional arrays with indexing and slicing
-- **Vector Types** - Full pgvector compatibility
-- **UUID, BYTEA** - Advanced data type support
-
-#### Protocol Support (Production-Ready)
-- **PostgreSQL Wire Protocol** - Complete protocol v3.0 implementation
-- **Client Compatibility** - Works with all standard PostgreSQL clients
-- **Authentication** - Trust, MD5, SCRAM-SHA-256 (extensible)
-- **Prepared Statements** - Full parameter binding and execution
-- **Connection Pooling** - Efficient connection management
-- **SSL/TLS Support** - Secure connections (configurable)
 
 ### Future Enhancement Opportunities 🚧
 
@@ -1254,9 +1284,9 @@ let expression = parser.parse_expression(&tokens, &mut pos)?;
 - **Parenthesized Expressions**: Explicit precedence control with nested parsing
 - **Vector Operations**: pgvector compatibility with distance operators
 
-## Model Context Protocol (MCP) ✅
+## Model Context Protocol (MCP) 🧪 EXPERIMENTAL
 
-AI agent integration through the standardized Model Context Protocol, enabling AI systems to interact with Orbit-RS.
+AI agent integration through the standardized Model Context Protocol, enabling AI systems to interact with Orbit-RS. **Note**: This is an experimental implementation with basic functionality.
 
 ### MCP Server Setup
 

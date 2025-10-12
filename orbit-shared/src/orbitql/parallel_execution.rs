@@ -16,6 +16,9 @@ use crate::orbitql::ast::*;
 use crate::orbitql::vectorized_execution::*;
 use crate::orbitql::QueryValue;
 
+// Type aliases to reduce complexity
+type PartitionFunction = dyn Fn(&RecordBatch) -> Vec<usize> + Send + Sync;
+
 /// Default number of worker threads
 pub const DEFAULT_WORKER_THREADS: usize = 8;
 
@@ -27,8 +30,10 @@ pub struct ParallelExecutor {
     /// Thread pool for parallel execution
     thread_pool: Arc<ThreadPool>,
     /// Work scheduler
+    #[allow(dead_code)]
     scheduler: Arc<WorkScheduler>,
     /// Exchange operator for data redistribution
+    #[allow(dead_code)]
     exchange: Arc<ExchangeOperator>,
     /// Configuration
     config: ParallelExecutionConfig,
@@ -83,20 +88,25 @@ pub struct ThreadPool {
     /// Configuration
     config: ParallelExecutionConfig,
     /// Thread handles
+    #[allow(dead_code)]
     handles: Vec<thread::JoinHandle<()>>,
 }
 
 /// Worker thread
 pub struct Worker {
     /// Worker ID
+    #[allow(dead_code)]
     id: usize,
     /// Work queue
+    #[allow(dead_code)]
     queue: Arc<Mutex<VecDeque<Task>>>,
     /// Condition variable for work notification
     work_available: Arc<Condvar>,
     /// Reference to other queues for work stealing
+    #[allow(dead_code)]
     other_queues: Vec<Arc<Mutex<VecDeque<Task>>>>,
     /// Worker statistics
+    #[allow(dead_code)]
     stats: Arc<Mutex<WorkerStats>>,
 }
 
@@ -146,6 +156,7 @@ pub struct WorkScheduler {
     /// Scheduling strategy
     strategy: SchedulingStrategy,
     /// Task queue
+    #[allow(dead_code)]
     task_queue: Arc<Mutex<VecDeque<Task>>>,
     /// Worker load information
     worker_loads: Arc<RwLock<Vec<WorkerLoad>>>,
@@ -240,10 +251,12 @@ pub struct ExchangeOperator {
     /// Exchange type
     exchange_type: ExchangeType,
     /// Partition function
-    partition_func: Box<dyn Fn(&RecordBatch) -> Vec<usize> + Send + Sync>,
+    #[allow(clippy::type_complexity)]
+    partition_func: Box<PartitionFunction>,
     /// Communication channels
     channels: HashMap<usize, mpsc::UnboundedSender<RecordBatch>>,
     /// Buffer management
+    #[allow(dead_code)]
     buffers: Arc<RwLock<HashMap<usize, Vec<RecordBatch>>>>,
 }
 
@@ -1048,8 +1061,17 @@ impl ExchangeOperator {
             buffers: Arc::new(RwLock::new(HashMap::new())),
         }
     }
+}
 
+impl Default for ExchangeOperator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ExchangeOperator {
     /// Set exchange type and partition function
+    #[allow(clippy::type_complexity)]
     pub fn with_partitioning(
         mut self,
         exchange_type: ExchangeType,

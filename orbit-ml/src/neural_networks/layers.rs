@@ -67,7 +67,7 @@ impl Layer for DenseLayer {
     async fn forward(&self, input: &Array2<f64>) -> Result<Array2<f64>> {
         // output = input * W^T + b
         let output = input.dot(&self.weights.t())
-            + &self
+            + self
                 .biases
                 .broadcast((input.nrows(), self.biases.len()))
                 .unwrap();

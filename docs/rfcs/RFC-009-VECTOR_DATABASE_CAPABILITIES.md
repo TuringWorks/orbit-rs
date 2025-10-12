@@ -1,3 +1,9 @@
+---
+layout: default
+title: RFC-009: Vector Database & Similarity Search Analysis
+category: rfcs
+---
+
 # RFC-009: Vector Database & Similarity Search Analysis
 
 **Date**: October 9, 2025  

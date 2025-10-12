@@ -1,3 +1,9 @@
+---
+layout: default
+title: GraphRAG Architecture Design for Orbit-RS
+category: documentation
+---
+
 # GraphRAG Architecture Design for Orbit-RS
 
 ## 🎯 Executive Summary

@@ -6,10 +6,11 @@
 use crate::error::{ProtocolError, ProtocolResult};
 use crate::postgres_wire::sql::{
     ast::*,
-    expression_evaluator::ExpressionEvaluator,
+    expression_evaluator::{EvaluationContext, ExpressionEvaluator},
     parser::SqlParser,
     types::{SqlType, SqlValue},
 };
+use crate::postgres_wire::storage::{StorageBackendConfig, StorageBackendFactory, TableStorage};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -106,15 +107,15 @@ pub enum ExecutionResult {
 }
 
 /// Table schema definition
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct TableSchema {
-    pub name: TableName,
+    pub name: String, // Store as string for serialization
     pub columns: Vec<ColumnSchema>,
     pub constraints: Vec<TableConstraintSchema>,
     pub indexes: Vec<IndexSchema>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ColumnSchema {
     pub name: String,
     pub data_type: SqlType,
@@ -123,7 +124,7 @@ pub struct ColumnSchema {
     pub constraints: Vec<String>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct TableConstraintSchema {
     pub name: Option<String>,
     pub constraint_type: String,
@@ -132,7 +133,7 @@ pub struct TableConstraintSchema {
     pub referenced_columns: Option<Vec<String>>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct IndexSchema {
     pub name: String,
     pub table: String,
@@ -143,23 +144,23 @@ pub struct IndexSchema {
 }
 
 /// View definition
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ViewSchema {
-    pub name: TableName,
+    pub name: String, // Store as string for serialization
     pub query: String,
     pub columns: Option<Vec<String>>,
     pub materialized: bool,
 }
 
 /// Schema definition
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct SchemaDefinition {
     pub name: String,
     pub authorization: Option<String>,
 }
 
 /// Extension definition
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ExtensionDefinition {
     pub name: String,
     pub schema: Option<String>,
@@ -231,9 +232,15 @@ pub struct UserRole {
     pub can_grant: bool,
 }
 
+/// Type alias for table data storage
+type TableData = Arc<RwLock<HashMap<String, Vec<HashMap<String, SqlValue>>>>>;
+
 /// Comprehensive SQL executor
 pub struct SqlExecutor {
-    // Schema management
+    // Storage backend (pluggable: in-memory, LSM, cluster)
+    storage: Arc<dyn TableStorage>,
+
+    // Legacy in-memory storage for backward compatibility during transition
     tables: Arc<RwLock<HashMap<String, TableSchema>>>,
     views: Arc<RwLock<HashMap<String, ViewSchema>>>,
     schemas: Arc<RwLock<HashMap<String, SchemaDefinition>>>,
@@ -241,16 +248,21 @@ pub struct SqlExecutor {
 
     // Data storage (in-memory for demonstration)
     // In production, this would integrate with OrbitClient
-    table_data: Arc<RwLock<HashMap<String, Vec<HashMap<String, SqlValue>>>>>,
+    table_data: TableData,
 
     // Transaction management
     current_transaction: Arc<RwLock<Option<TransactionState>>>,
+    #[allow(dead_code)]
     transaction_log: Arc<RwLock<Vec<TransactionLogEntry>>>,
+    #[allow(dead_code)]
     savepoint_data: Arc<RwLock<HashMap<String, SavepointData>>>,
 
     // Security and permissions
+    #[allow(dead_code)]
     users: Arc<RwLock<HashMap<String, UserRole>>>,
+    #[allow(dead_code)]
     current_user: Arc<RwLock<String>>,
+    #[allow(dead_code)]
     permissions: Arc<RwLock<HashMap<String, Vec<Permission>>>>,
 
     // Settings and configuration
@@ -261,23 +273,65 @@ pub struct SqlExecutor {
     vector_extensions: Arc<RwLock<HashMap<String, bool>>>,
 
     // Expression evaluator
+    #[allow(dead_code)]
     expression_evaluator: Arc<RwLock<ExpressionEvaluator>>,
 }
 
 impl SqlExecutor {
-    /// Create a new SQL executor
-    pub fn new() -> Self {
-        Self::with_default_settings()
+    /// Create a new SQL executor with durable LSM storage (recommended)
+    pub async fn new() -> ProtocolResult<Self> {
+        let storage_config = StorageBackendConfig::default(); // Uses LSM by default
+        let storage = StorageBackendFactory::create_backend(&storage_config).await?;
+        storage.initialize().await?;
+        Ok(Self::with_storage(storage))
+    }
+
+    /// Create a new SQL executor with custom storage backend
+    pub async fn new_with_storage_config(config: StorageBackendConfig) -> ProtocolResult<Self> {
+        let storage = StorageBackendFactory::create_backend(&config).await?;
+        storage.initialize().await?;
+        Ok(Self::with_storage(storage))
+    }
+
+    /// Create a new SQL executor with provided storage backend
+    pub fn with_storage(storage: Arc<dyn TableStorage>) -> Self {
+        Self::with_storage_and_settings(storage)
     }
 
     /// Create a new SQL executor with vector support
-    pub fn new_with_vector_support(_orbit_client: orbit_client::OrbitClient) -> Self {
+    pub async fn new_with_vector_support(
+        _orbit_client: orbit_client::OrbitClient,
+    ) -> ProtocolResult<Self> {
         // TODO: Integrate with OrbitClient for production use
-        Self::with_default_settings()
+        Self::new().await
     }
 
-    /// Create SQL executor with default settings
-    fn with_default_settings() -> Self {
+    /// Legacy constructor for backward compatibility (uses in-memory storage)
+    #[deprecated(
+        note = "Use new() for durable storage or new_with_storage_config() for custom backends"
+    )]
+    pub fn new_in_memory() -> Self {
+        tokio::task::block_in_place(|| {
+            tokio::runtime::Handle::current().block_on(async {
+                let memory_config = StorageBackendConfig::Memory;
+                let storage = StorageBackendFactory::create_backend(&memory_config)
+                    .await
+                    .unwrap();
+                storage.initialize().await.unwrap();
+                Self::with_storage(storage)
+            })
+        })
+    }
+
+    /// Simple constructor for testing that creates basic in-memory storage without tokio runtime
+    pub fn new_simple_memory() -> Self {
+        use crate::postgres_wire::storage::memory::MemoryTableStorage;
+        let storage = Arc::new(MemoryTableStorage::default());
+        Self::with_storage(storage as Arc<dyn TableStorage>)
+    }
+
+    /// Create SQL executor with storage and default settings
+    fn with_storage_and_settings(storage: Arc<dyn TableStorage>) -> Self {
         let mut settings = HashMap::new();
         settings.insert("server_version".to_string(), "14.0 (Orbit-RS)".to_string());
         settings.insert("server_encoding".to_string(), "UTF8".to_string());
@@ -297,6 +351,7 @@ impl SqlExecutor {
         );
 
         Self {
+            storage,
             tables: Arc::new(RwLock::new(HashMap::new())),
             views: Arc::new(RwLock::new(HashMap::new())),
             schemas: Arc::new(RwLock::new(HashMap::new())),
@@ -313,6 +368,16 @@ impl SqlExecutor {
             vector_extensions: Arc::new(RwLock::new(HashMap::new())),
             expression_evaluator: Arc::new(RwLock::new(ExpressionEvaluator::new())),
         }
+    }
+
+    /// Shutdown the SQL executor and underlying storage
+    pub async fn shutdown(&self) -> ProtocolResult<()> {
+        self.storage.shutdown().await
+    }
+
+    /// Get storage metrics
+    pub async fn storage_metrics(&self) -> crate::postgres_wire::storage::StorageMetrics {
+        self.storage.metrics().await
     }
 
     /// Execute a SQL statement from string
@@ -456,7 +521,7 @@ impl SqlExecutor {
         }
 
         let table_schema = TableSchema {
-            name: stmt.name.clone(),
+            name: table_name.clone(), // Use string name
             columns,
             constraints,
             indexes: Vec::new(),
@@ -550,7 +615,7 @@ impl SqlExecutor {
         drop(views);
 
         let view_schema = ViewSchema {
-            name: stmt.name.clone(),
+            name: view_name.clone(),                    // Use string name
             query: "TODO: serialize query".to_string(), // TODO: Serialize SELECT statement
             columns: stmt.columns,
             materialized: stmt.materialized,
@@ -744,67 +809,38 @@ impl SqlExecutor {
 
     // DML Implementation methods
     async fn execute_select(&self, stmt: SelectStatement) -> ProtocolResult<ExecutionResult> {
-        // TODO: Implement comprehensive SELECT with JOINs, subqueries, window functions, CTEs
-        // For now, simple implementation
-
         let mut columns = Vec::new();
         let mut rows = Vec::new();
 
-        // Handle simple SELECT * FROM table queries
+        // Determine result columns from SELECT list
+        self.build_result_columns(&stmt.select_list, &stmt.from_clause, &mut columns)
+            .await?;
+
+        // Execute query based on FROM clause type
         if let Some(from_clause) = &stmt.from_clause {
-            if let FromClause::Table { name, .. } = from_clause {
-                let table_name = name.full_name();
-
-                // Get table schema
-                let tables = self.tables.read().await;
-                let table_schema = tables
-                    .get(&table_name)
-                    .ok_or_else(|| {
-                        ProtocolError::PostgresError(format!(
-                            "Table '{}' does not exist",
-                            table_name
-                        ))
-                    })?
-                    .clone();
-                drop(tables);
-
-                // Build column list
-                for item in &stmt.select_list {
-                    match item {
-                        SelectItem::Wildcard => {
-                            for col in &table_schema.columns {
-                                columns.push(col.name.clone());
-                            }
-                        }
-                        SelectItem::Expression { expr: _, alias } => {
-                            // TODO: Handle expressions properly
-                            columns.push(alias.clone().unwrap_or_else(|| "expr".to_string()));
-                        }
-                        SelectItem::QualifiedWildcard { qualifier: _ } => {
-                            // TODO: Handle qualified wildcards
-                            for col in &table_schema.columns {
-                                columns.push(col.name.clone());
-                            }
-                        }
+            rows = self
+                .execute_from_clause(from_clause, &stmt.where_clause, &columns)
+                .await?;
+        } else {
+            // SELECT without FROM clause - single row with expressions
+            let mut result_row = Vec::new();
+            for item in &stmt.select_list {
+                match item {
+                    SelectItem::Expression { expr, .. } => {
+                        let context = EvaluationContext {
+                            current_row: HashMap::new(),
+                            table_data: HashMap::new(),
+                            variables: HashMap::new(),
+                            current_table: None,
+                            window_frame: None,
+                        };
+                        let value = self.evaluate_where_condition(expr, &context).await?;
+                        result_row.push(Some(value.to_postgres_string()));
                     }
-                }
-
-                // Get table data
-                let table_data = self.table_data.read().await;
-                if let Some(data) = table_data.get(&table_name) {
-                    for row in data {
-                        let mut result_row = Vec::new();
-                        for col_name in &columns {
-                            let value = row
-                                .get(col_name)
-                                .map(|v| v.to_postgres_string())
-                                .or(Some("".to_string()));
-                            result_row.push(value);
-                        }
-                        rows.push(result_row);
-                    }
+                    _ => result_row.push(Some("".to_string())),
                 }
             }
+            rows.push(result_row);
         }
 
         Ok(ExecutionResult::Select {
@@ -884,14 +920,1094 @@ impl SqlExecutor {
         }
     }
 
-    async fn execute_update(&self, _stmt: UpdateStatement) -> ProtocolResult<ExecutionResult> {
-        // TODO: Implement UPDATE with proper WHERE clause evaluation
-        Ok(ExecutionResult::Update { count: 0 })
+    async fn execute_update(&self, stmt: UpdateStatement) -> ProtocolResult<ExecutionResult> {
+        let table_name = stmt.table.full_name();
+
+        // Get table schema
+        let tables = self.tables.read().await;
+        let _table_schema = tables
+            .get(&table_name)
+            .ok_or_else(|| {
+                ProtocolError::PostgresError(format!("Table '{}' does not exist", table_name))
+            })?
+            .clone();
+        drop(tables);
+
+        let mut count = 0;
+        let mut table_data = self.table_data.write().await;
+
+        if let Some(data) = table_data.get_mut(&table_name) {
+            for row in data.iter_mut() {
+                let mut should_update = true;
+
+                // Evaluate WHERE clause if present
+                if let Some(where_expr) = &stmt.where_clause {
+                    let context = EvaluationContext {
+                        current_row: row.clone(),
+                        table_data: HashMap::new(),
+                        variables: HashMap::new(),
+                        current_table: Some(table_name.clone()),
+                        window_frame: None,
+                    };
+
+                    match self.evaluate_where_condition(where_expr, &context).await {
+                        Ok(SqlValue::Boolean(b)) => should_update = b,
+                        Ok(SqlValue::Null) => should_update = false,
+                        Ok(_) => should_update = false, // Non-boolean result
+                        Err(_) => should_update = false, // Error in evaluation
+                    }
+                }
+
+                if should_update {
+                    // Apply updates
+                    for assignment in &stmt.set {
+                        let value = match &assignment.value {
+                            Expression::Literal(sql_val) => sql_val.clone(),
+                            _ => {
+                                // For complex expressions, use fallback for now
+                                SqlValue::Text("updated_value".to_string())
+                            }
+                        };
+
+                        // Handle different assignment target types
+                        match &assignment.target {
+                            AssignmentTarget::Column(col_name) => {
+                                row.insert(col_name.clone(), value);
+                            }
+                            AssignmentTarget::Columns(col_names) => {
+                                // For multiple column assignments, use first column for simplicity
+                                if let Some(first_col) = col_names.first() {
+                                    row.insert(first_col.clone(), value);
+                                }
+                            }
+                        }
+                    }
+                    count += 1;
+                }
+            }
+        }
+
+        Ok(ExecutionResult::Update { count })
     }
 
-    async fn execute_delete(&self, _stmt: DeleteStatement) -> ProtocolResult<ExecutionResult> {
-        // TODO: Implement DELETE with proper WHERE clause evaluation
-        Ok(ExecutionResult::Delete { count: 0 })
+    async fn execute_delete(&self, stmt: DeleteStatement) -> ProtocolResult<ExecutionResult> {
+        let table_name = stmt.table.full_name();
+
+        // Get table schema
+        let tables = self.tables.read().await;
+        let _table_schema = tables
+            .get(&table_name)
+            .ok_or_else(|| {
+                ProtocolError::PostgresError(format!("Table '{}' does not exist", table_name))
+            })?
+            .clone();
+        drop(tables);
+
+        let mut count = 0;
+        let mut table_data = self.table_data.write().await;
+
+        if let Some(data) = table_data.get_mut(&table_name) {
+            let mut indices_to_remove = Vec::new();
+
+            for (i, row) in data.iter().enumerate() {
+                let mut should_delete = true;
+
+                // Evaluate WHERE clause if present
+                if let Some(where_expr) = &stmt.where_clause {
+                    let context = EvaluationContext {
+                        current_row: row.clone(),
+                        table_data: HashMap::new(),
+                        variables: HashMap::new(),
+                        current_table: Some(table_name.clone()),
+                        window_frame: None,
+                    };
+
+                    match self.evaluate_where_condition(where_expr, &context).await {
+                        Ok(SqlValue::Boolean(b)) => should_delete = b,
+                        Ok(SqlValue::Null) => should_delete = false,
+                        Ok(_) => should_delete = false, // Non-boolean result
+                        Err(_) => should_delete = false, // Error in evaluation
+                    }
+                }
+
+                if should_delete {
+                    indices_to_remove.push(i);
+                }
+            }
+
+            // Remove rows in reverse order to maintain valid indices
+            for &index in indices_to_remove.iter().rev() {
+                data.remove(index);
+                count += 1;
+            }
+        }
+
+        Ok(ExecutionResult::Delete { count })
+    }
+
+    /// Helper method to evaluate WHERE conditions
+    async fn evaluate_where_condition(
+        &self,
+        expr: &Expression,
+        context: &EvaluationContext,
+    ) -> ProtocolResult<SqlValue> {
+        let mut evaluator = self.expression_evaluator.write().await;
+        evaluator.evaluate(expr, context)
+    }
+
+    /// Build result columns from SELECT list
+    async fn build_result_columns(
+        &self,
+        select_list: &[SelectItem],
+        from_clause: &Option<FromClause>,
+        columns: &mut Vec<String>,
+    ) -> ProtocolResult<()> {
+        for item in select_list {
+            match item {
+                SelectItem::Wildcard => {
+                    // Add all columns from all tables in FROM clause
+                    if let Some(from) = from_clause {
+                        self.add_wildcard_columns(from, columns).await?;
+                    }
+                }
+                SelectItem::Expression { expr, alias } => {
+                    // Try to resolve the column name from the expression
+                    let column_name = if let Some(alias) = alias {
+                        alias.clone()
+                    } else {
+                        self.resolve_expression_column_name(expr, from_clause)
+                            .await
+                            .unwrap_or_else(|| "expr".to_string())
+                    };
+                    columns.push(column_name);
+                }
+                SelectItem::QualifiedWildcard { qualifier } => {
+                    // Add all columns from qualified table
+                    if let Some(from) = from_clause {
+                        self.add_qualified_wildcard_columns(from, qualifier, columns)
+                            .await?;
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Add wildcard columns from FROM clause
+    fn add_wildcard_columns<'a>(
+        &'a self,
+        from_clause: &'a FromClause,
+        columns: &'a mut Vec<String>,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = ProtocolResult<()>> + Send + 'a>> {
+        Box::pin(async move {
+            match from_clause {
+                FromClause::Table { name, alias } => {
+                    // Handle information_schema tables
+                    if let Some(schema) = &name.schema {
+                        if schema.to_lowercase() == "information_schema" {
+                            self.add_information_schema_columns(&name.name, columns)
+                                .await?;
+                            return Ok(());
+                        }
+                    }
+
+                    let table_name = name.full_name();
+                    let tables = self.tables.read().await;
+                    if let Some(table_schema) = tables.get(&table_name) {
+                        for col in &table_schema.columns {
+                            let column_name = if let Some(table_alias) = alias {
+                                format!("{}.{}", table_alias.name, col.name)
+                            } else {
+                                col.name.clone()
+                            };
+                            columns.push(column_name);
+                        }
+                    }
+                }
+                FromClause::Join { left, right, .. } => {
+                    self.add_wildcard_columns(left, columns).await?;
+                    self.add_wildcard_columns(right, columns).await?;
+                }
+                _ => {} // TODO: Handle other FROM clause types
+            }
+            Ok(())
+        })
+    }
+
+    /// Resolve column name from expression
+    async fn resolve_expression_column_name(
+        &self,
+        expr: &Expression,
+        _from_clause: &Option<FromClause>,
+    ) -> Option<String> {
+        match expr {
+            Expression::Column(col_ref) => Some(col_ref.name.clone()),
+            Expression::Function(func_call) => match &func_call.name {
+                crate::postgres_wire::sql::ast::FunctionName::Simple(name) => Some(name.clone()),
+                crate::postgres_wire::sql::ast::FunctionName::Qualified { name, .. } => {
+                    Some(name.clone())
+                }
+            },
+            _ => None,
+        }
+    }
+
+    /// Add columns for information_schema tables
+    async fn add_information_schema_columns(
+        &self,
+        table_name: &str,
+        columns: &mut Vec<String>,
+    ) -> ProtocolResult<()> {
+        match table_name.to_lowercase().as_str() {
+            "tables" => {
+                columns.extend_from_slice(&[
+                    "table_catalog".to_string(),
+                    "table_schema".to_string(),
+                    "table_name".to_string(),
+                    "table_type".to_string(),
+                    "is_insertable_into".to_string(),
+                    "is_typed".to_string(),
+                    "commit_action".to_string(),
+                ]);
+            }
+            "columns" => {
+                columns.extend_from_slice(&[
+                    "table_catalog".to_string(),
+                    "table_schema".to_string(),
+                    "table_name".to_string(),
+                    "column_name".to_string(),
+                    "ordinal_position".to_string(),
+                    "column_default".to_string(),
+                    "is_nullable".to_string(),
+                    "data_type".to_string(),
+                    "character_maximum_length".to_string(),
+                    "character_octet_length".to_string(),
+                    "numeric_precision".to_string(),
+                    "numeric_scale".to_string(),
+                    "datetime_precision".to_string(),
+                    "udt_catalog".to_string(),
+                    "udt_schema".to_string(),
+                    "udt_name".to_string(),
+                ]);
+            }
+            "table_constraints" => {
+                columns.extend_from_slice(&[
+                    "constraint_catalog".to_string(),
+                    "constraint_schema".to_string(),
+                    "constraint_name".to_string(),
+                    "table_catalog".to_string(),
+                    "table_schema".to_string(),
+                    "table_name".to_string(),
+                    "constraint_type".to_string(),
+                    "is_deferrable".to_string(),
+                    "initially_deferred".to_string(),
+                ]);
+            }
+            "key_column_usage" => {
+                columns.extend_from_slice(&[
+                    "constraint_catalog".to_string(),
+                    "constraint_schema".to_string(),
+                    "constraint_name".to_string(),
+                    "table_catalog".to_string(),
+                    "table_schema".to_string(),
+                    "table_name".to_string(),
+                    "column_name".to_string(),
+                    "ordinal_position".to_string(),
+                    "position_in_unique_constraint".to_string(),
+                    "referenced_table_schema".to_string(),
+                    "referenced_table_name".to_string(),
+                    "referenced_column_name".to_string(),
+                ]);
+            }
+            _ => {
+                return Err(ProtocolError::PostgresError(format!(
+                    "information_schema table '{}' is not supported",
+                    table_name
+                )));
+            }
+        }
+        Ok(())
+    }
+
+    /// Add qualified wildcard columns
+    fn add_qualified_wildcard_columns<'a>(
+        &'a self,
+        from_clause: &'a FromClause,
+        qualifier: &'a str,
+        columns: &'a mut Vec<String>,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = ProtocolResult<()>> + Send + 'a>> {
+        Box::pin(async move {
+            match from_clause {
+                FromClause::Table { name, alias } => {
+                    let table_name = name.full_name();
+                    let alias_name = alias.as_ref().map(|a| &a.name).unwrap_or(&table_name);
+
+                    if alias_name == qualifier {
+                        let tables = self.tables.read().await;
+                        if let Some(table_schema) = tables.get(&table_name) {
+                            for col in &table_schema.columns {
+                                columns.push(format!("{}.{}", qualifier, col.name));
+                            }
+                        }
+                    }
+                }
+                FromClause::Join { left, right, .. } => {
+                    self.add_qualified_wildcard_columns(left, qualifier, columns)
+                        .await?;
+                    self.add_qualified_wildcard_columns(right, qualifier, columns)
+                        .await?;
+                }
+                _ => {} // TODO: Handle other FROM clause types
+            }
+            Ok(())
+        })
+    }
+
+    /// Execute FROM clause with JOIN support
+    async fn execute_from_clause(
+        &self,
+        from_clause: &FromClause,
+        where_clause: &Option<Expression>,
+        columns: &[String],
+    ) -> ProtocolResult<Vec<Vec<Option<String>>>> {
+        match from_clause {
+            FromClause::Table { name, .. } => {
+                self.execute_single_table(name, where_clause, columns).await
+            }
+            FromClause::Join {
+                left,
+                join_type,
+                right,
+                condition,
+            } => {
+                self.execute_join(left, join_type, right, condition, where_clause, columns)
+                    .await
+            }
+            _ => {
+                // TODO: Handle subqueries and other FROM clause types
+                Ok(Vec::new())
+            }
+        }
+    }
+
+    /// Execute single table query
+    async fn execute_single_table(
+        &self,
+        table_name: &TableName,
+        where_clause: &Option<Expression>,
+        columns: &[String],
+    ) -> ProtocolResult<Vec<Vec<Option<String>>>> {
+        let table_name_str = table_name.full_name();
+        let mut rows = Vec::new();
+
+        // Check for information_schema queries first
+        if let Some(schema) = &table_name.schema {
+            if schema.to_lowercase() == "information_schema" {
+                return self
+                    .handle_information_schema_query(table_name, where_clause, columns)
+                    .await;
+            }
+        }
+
+        // Check if table exists in schema
+        let tables = self.tables.read().await;
+        if !tables.contains_key(&table_name_str) {
+            return Err(ProtocolError::PostgresError(format!(
+                "Relation '{}' does not exist",
+                table_name_str
+            )));
+        }
+        drop(tables);
+
+        // Get table data
+        let table_data = self.table_data.read().await;
+        if let Some(data) = table_data.get(&table_name_str) {
+            for row in data {
+                // Apply WHERE clause if present
+                let should_include = if let Some(where_expr) = where_clause {
+                    let context = EvaluationContext {
+                        current_row: row.clone(),
+                        table_data: HashMap::new(),
+                        variables: HashMap::new(),
+                        current_table: Some(table_name_str.clone()),
+                        window_frame: None,
+                    };
+
+                    match self.evaluate_where_condition(where_expr, &context).await {
+                        Ok(SqlValue::Boolean(b)) => b,
+                        Ok(SqlValue::Null) => false,
+                        Ok(_) => false,
+                        Err(_) => false,
+                    }
+                } else {
+                    true
+                };
+
+                if should_include {
+                    let mut result_row = Vec::new();
+                    for col_name in columns {
+                        let value = row
+                            .get(col_name)
+                            .map(|v| v.to_postgres_string())
+                            .unwrap_or_else(|| "".to_string());
+                        result_row.push(Some(value));
+                    }
+                    rows.push(result_row);
+                }
+            }
+        }
+
+        Ok(rows)
+    }
+
+    /// Execute JOIN operation
+    async fn execute_join(
+        &self,
+        left: &FromClause,
+        join_type: &JoinType,
+        right: &FromClause,
+        condition: &JoinCondition,
+        where_clause: &Option<Expression>,
+        columns: &[String],
+    ) -> ProtocolResult<Vec<Vec<Option<String>>>> {
+        // Get left table data
+        let left_rows = self.get_table_rows_from_clause(left).await?;
+        let right_rows = self.get_table_rows_from_clause(right).await?;
+
+        let mut result_rows = Vec::new();
+
+        match join_type {
+            JoinType::Inner => {
+                // INNER JOIN - only matching rows
+                for left_row in &left_rows {
+                    for right_row in &right_rows {
+                        if self
+                            .evaluate_join_condition(condition, left_row, right_row)
+                            .await?
+                        {
+                            let joined_row = self.merge_rows(left_row, right_row);
+
+                            // Apply WHERE clause
+                            if self
+                                .apply_where_to_joined_row(&joined_row, where_clause)
+                                .await?
+                            {
+                                result_rows.push(self.project_columns(&joined_row, columns));
+                            }
+                        }
+                    }
+                }
+            }
+            JoinType::LeftOuter => {
+                // LEFT JOIN - all left rows, matching right rows or NULLs
+                for left_row in &left_rows {
+                    let mut matched = false;
+                    for right_row in &right_rows {
+                        if self
+                            .evaluate_join_condition(condition, left_row, right_row)
+                            .await?
+                        {
+                            let joined_row = self.merge_rows(left_row, right_row);
+
+                            if self
+                                .apply_where_to_joined_row(&joined_row, where_clause)
+                                .await?
+                            {
+                                result_rows.push(self.project_columns(&joined_row, columns));
+                            }
+                            matched = true;
+                        }
+                    }
+                    if !matched {
+                        // No match found, add with NULL values for right side
+                        let null_right_row = HashMap::new(); // Empty row represents NULLs
+                        let joined_row = self.merge_rows(left_row, &null_right_row);
+
+                        if self
+                            .apply_where_to_joined_row(&joined_row, where_clause)
+                            .await?
+                        {
+                            result_rows.push(self.project_columns(&joined_row, columns));
+                        }
+                    }
+                }
+            }
+            JoinType::RightOuter => {
+                // RIGHT JOIN - all right rows, matching left rows or NULLs
+                for right_row in &right_rows {
+                    let mut matched = false;
+                    for left_row in &left_rows {
+                        if self
+                            .evaluate_join_condition(condition, left_row, right_row)
+                            .await?
+                        {
+                            let joined_row = self.merge_rows(left_row, right_row);
+
+                            if self
+                                .apply_where_to_joined_row(&joined_row, where_clause)
+                                .await?
+                            {
+                                result_rows.push(self.project_columns(&joined_row, columns));
+                            }
+                            matched = true;
+                        }
+                    }
+                    if !matched {
+                        // No match found, add with NULL values for left side
+                        let null_left_row = HashMap::new();
+                        let joined_row = self.merge_rows(&null_left_row, right_row);
+
+                        if self
+                            .apply_where_to_joined_row(&joined_row, where_clause)
+                            .await?
+                        {
+                            result_rows.push(self.project_columns(&joined_row, columns));
+                        }
+                    }
+                }
+            }
+            JoinType::FullOuter => {
+                // FULL OUTER JOIN - combination of LEFT and RIGHT JOINs
+                let mut left_matched = vec![false; left_rows.len()];
+                let mut right_matched = vec![false; right_rows.len()];
+
+                // Find all matches
+                for (li, left_row) in left_rows.iter().enumerate() {
+                    for (ri, right_row) in right_rows.iter().enumerate() {
+                        if self
+                            .evaluate_join_condition(condition, left_row, right_row)
+                            .await?
+                        {
+                            let joined_row = self.merge_rows(left_row, right_row);
+
+                            if self
+                                .apply_where_to_joined_row(&joined_row, where_clause)
+                                .await?
+                            {
+                                result_rows.push(self.project_columns(&joined_row, columns));
+                            }
+                            left_matched[li] = true;
+                            right_matched[ri] = true;
+                        }
+                    }
+                }
+
+                // Add unmatched left rows
+                for (li, left_row) in left_rows.iter().enumerate() {
+                    if !left_matched[li] {
+                        let null_right_row = HashMap::new();
+                        let joined_row = self.merge_rows(left_row, &null_right_row);
+
+                        if self
+                            .apply_where_to_joined_row(&joined_row, where_clause)
+                            .await?
+                        {
+                            result_rows.push(self.project_columns(&joined_row, columns));
+                        }
+                    }
+                }
+
+                // Add unmatched right rows
+                for (ri, right_row) in right_rows.iter().enumerate() {
+                    if !right_matched[ri] {
+                        let null_left_row = HashMap::new();
+                        let joined_row = self.merge_rows(&null_left_row, right_row);
+
+                        if self
+                            .apply_where_to_joined_row(&joined_row, where_clause)
+                            .await?
+                        {
+                            result_rows.push(self.project_columns(&joined_row, columns));
+                        }
+                    }
+                }
+            }
+            JoinType::Cross => {
+                // CROSS JOIN - Cartesian product
+                for left_row in &left_rows {
+                    for right_row in &right_rows {
+                        let joined_row = self.merge_rows(left_row, right_row);
+
+                        if self
+                            .apply_where_to_joined_row(&joined_row, where_clause)
+                            .await?
+                        {
+                            result_rows.push(self.project_columns(&joined_row, columns));
+                        }
+                    }
+                }
+            }
+            _ => {
+                return Err(ProtocolError::PostgresError(format!(
+                    "JOIN type {:?} not implemented",
+                    join_type
+                )));
+            }
+        }
+
+        Ok(result_rows)
+    }
+
+    /// Get table rows from a FROM clause
+    async fn get_table_rows_from_clause(
+        &self,
+        from_clause: &FromClause,
+    ) -> ProtocolResult<Vec<HashMap<String, SqlValue>>> {
+        match from_clause {
+            FromClause::Table { name, alias } => {
+                let table_name = name.full_name();
+                let table_data = self.table_data.read().await;
+
+                if let Some(data) = table_data.get(&table_name) {
+                    let mut result = Vec::new();
+                    for row in data {
+                        let mut new_row = HashMap::new();
+                        for (key, value) in row {
+                            // Add both qualified and unqualified column names
+                            new_row.insert(key.clone(), value.clone());
+                            if let Some(table_alias) = alias {
+                                new_row
+                                    .insert(format!("{}.{}", table_alias.name, key), value.clone());
+                            } else {
+                                new_row.insert(format!("{}.{}", table_name, key), value.clone());
+                            }
+                        }
+                        result.push(new_row);
+                    }
+                    Ok(result)
+                } else {
+                    Ok(Vec::new())
+                }
+            }
+            _ => {
+                // For now, return empty for other types
+                Ok(Vec::new())
+            }
+        }
+    }
+
+    /// Evaluate JOIN condition
+    async fn evaluate_join_condition(
+        &self,
+        condition: &JoinCondition,
+        left_row: &HashMap<String, SqlValue>,
+        right_row: &HashMap<String, SqlValue>,
+    ) -> ProtocolResult<bool> {
+        match condition {
+            JoinCondition::On(expr) => {
+                let joined_row = self.merge_rows(left_row, right_row);
+                let context = EvaluationContext {
+                    current_row: joined_row,
+                    table_data: HashMap::new(),
+                    variables: HashMap::new(),
+                    current_table: None,
+                    window_frame: None,
+                };
+
+                match self.evaluate_where_condition(expr, &context).await {
+                    Ok(SqlValue::Boolean(b)) => Ok(b),
+                    Ok(SqlValue::Null) => Ok(false),
+                    Ok(_) => Ok(false),
+                    Err(_) => Ok(false),
+                }
+            }
+            JoinCondition::Using(columns) => {
+                // USING clause: join on equality of specified columns
+                for col in columns {
+                    let left_val = left_row.get(col).unwrap_or(&SqlValue::Null);
+                    let right_val = right_row.get(col).unwrap_or(&SqlValue::Null);
+
+                    if left_val != right_val {
+                        return Ok(false);
+                    }
+                }
+                Ok(true)
+            }
+            JoinCondition::Natural => {
+                // NATURAL join: join on all columns with the same name
+                let left_cols: std::collections::HashSet<_> = left_row.keys().collect();
+                let right_cols: std::collections::HashSet<_> = right_row.keys().collect();
+
+                for common_col in left_cols.intersection(&right_cols) {
+                    let left_val = left_row.get(*common_col).unwrap_or(&SqlValue::Null);
+                    let right_val = right_row.get(*common_col).unwrap_or(&SqlValue::Null);
+
+                    if left_val != right_val {
+                        return Ok(false);
+                    }
+                }
+                Ok(true)
+            }
+        }
+    }
+
+    /// Merge two rows for JOIN operation
+    fn merge_rows(
+        &self,
+        left_row: &HashMap<String, SqlValue>,
+        right_row: &HashMap<String, SqlValue>,
+    ) -> HashMap<String, SqlValue> {
+        let mut merged = left_row.clone();
+        merged.extend(right_row.clone());
+        merged
+    }
+
+    /// Apply WHERE clause to joined row
+    async fn apply_where_to_joined_row(
+        &self,
+        joined_row: &HashMap<String, SqlValue>,
+        where_clause: &Option<Expression>,
+    ) -> ProtocolResult<bool> {
+        if let Some(where_expr) = where_clause {
+            let context = EvaluationContext {
+                current_row: joined_row.clone(),
+                table_data: HashMap::new(),
+                variables: HashMap::new(),
+                current_table: None,
+                window_frame: None,
+            };
+
+            match self.evaluate_where_condition(where_expr, &context).await {
+                Ok(SqlValue::Boolean(b)) => Ok(b),
+                Ok(SqlValue::Null) => Ok(false),
+                Ok(_) => Ok(false),
+                Err(_) => Ok(false),
+            }
+        } else {
+            Ok(true)
+        }
+    }
+
+    /// Project columns from joined row
+    fn project_columns(
+        &self,
+        joined_row: &HashMap<String, SqlValue>,
+        columns: &[String],
+    ) -> Vec<Option<String>> {
+        let mut result = Vec::new();
+        for col_name in columns {
+            let value = joined_row
+                .get(col_name)
+                .map(|v| v.to_postgres_string())
+                .unwrap_or_default();
+            result.push(Some(value));
+        }
+        result
+    }
+
+    /// Handle information_schema queries
+    async fn handle_information_schema_query(
+        &self,
+        table_name: &TableName,
+        _where_clause: &Option<Expression>,
+        columns: &[String],
+    ) -> ProtocolResult<Vec<Vec<Option<String>>>> {
+        let table_name_lower = table_name.name.to_lowercase();
+
+        match table_name_lower.as_str() {
+            "tables" => self.query_information_schema_tables(columns).await,
+            "columns" => self.query_information_schema_columns(columns).await,
+            "table_constraints" => self.query_information_schema_constraints(columns).await,
+            "key_column_usage" => self.query_information_schema_key_usage(columns).await,
+            _ => Err(ProtocolError::PostgresError(format!(
+                "information_schema table '{}' is not supported",
+                table_name.name
+            ))),
+        }
+    }
+
+    /// Query information_schema.tables
+    async fn query_information_schema_tables(
+        &self,
+        columns: &[String],
+    ) -> ProtocolResult<Vec<Vec<Option<String>>>> {
+        let tables = self.tables.read().await;
+        let mut rows = Vec::new();
+
+        for (table_name, _table_schema) in tables.iter() {
+            let mut row_data = HashMap::new();
+
+            // Standard information_schema.tables columns
+            row_data.insert("table_catalog".to_string(), "orbit_demo".to_string());
+            row_data.insert("table_schema".to_string(), "public".to_string());
+            row_data.insert("table_name".to_string(), table_name.clone());
+            row_data.insert("table_type".to_string(), "BASE TABLE".to_string());
+            row_data.insert("is_insertable_into".to_string(), "YES".to_string());
+            row_data.insert("is_typed".to_string(), "NO".to_string());
+            row_data.insert("commit_action".to_string(), "".to_string());
+
+            // Project only requested columns
+            let mut result_row = Vec::new();
+            for col_name in columns {
+                let value = row_data
+                    .get(col_name)
+                    .cloned()
+                    .unwrap_or_else(|| "".to_string());
+                result_row.push(Some(value));
+            }
+            rows.push(result_row);
+        }
+
+        Ok(rows)
+    }
+
+    /// Query information_schema.columns
+    async fn query_information_schema_columns(
+        &self,
+        columns: &[String],
+    ) -> ProtocolResult<Vec<Vec<Option<String>>>> {
+        let tables = self.tables.read().await;
+        let mut rows = Vec::new();
+
+        for (table_name, table_schema) in tables.iter() {
+            for (ordinal_position, column) in table_schema.columns.iter().enumerate() {
+                let mut row_data = HashMap::new();
+
+                // Standard information_schema.columns columns
+                row_data.insert("table_catalog".to_string(), "orbit_demo".to_string());
+                row_data.insert("table_schema".to_string(), "public".to_string());
+                row_data.insert("table_name".to_string(), table_name.clone());
+                row_data.insert("column_name".to_string(), column.name.clone());
+                row_data.insert(
+                    "ordinal_position".to_string(),
+                    (ordinal_position + 1).to_string(),
+                );
+                row_data.insert(
+                    "column_default".to_string(),
+                    column
+                        .default
+                        .as_ref()
+                        .map(|d| d.to_postgres_string())
+                        .unwrap_or_else(|| "".to_string()),
+                );
+                row_data.insert(
+                    "is_nullable".to_string(),
+                    if column.nullable { "YES" } else { "NO" }.to_string(),
+                );
+                row_data.insert(
+                    "data_type".to_string(),
+                    Self::sql_type_to_pg_type(&column.data_type),
+                );
+                row_data.insert("character_maximum_length".to_string(), "".to_string());
+                row_data.insert("character_octet_length".to_string(), "".to_string());
+                row_data.insert("numeric_precision".to_string(), "".to_string());
+                row_data.insert("numeric_scale".to_string(), "".to_string());
+                row_data.insert("datetime_precision".to_string(), "".to_string());
+                row_data.insert("udt_catalog".to_string(), "orbit_demo".to_string());
+                row_data.insert("udt_schema".to_string(), "pg_catalog".to_string());
+                row_data.insert(
+                    "udt_name".to_string(),
+                    Self::sql_type_to_pg_type(&column.data_type),
+                );
+
+                // Project only requested columns
+                let mut result_row = Vec::new();
+                for col_name in columns {
+                    let value = row_data
+                        .get(col_name)
+                        .cloned()
+                        .unwrap_or_else(|| "".to_string());
+                    result_row.push(Some(value));
+                }
+                rows.push(result_row);
+            }
+        }
+
+        Ok(rows)
+    }
+
+    /// Query information_schema.table_constraints
+    async fn query_information_schema_constraints(
+        &self,
+        columns: &[String],
+    ) -> ProtocolResult<Vec<Vec<Option<String>>>> {
+        let tables = self.tables.read().await;
+        let mut rows = Vec::new();
+
+        for (table_name, table_schema) in tables.iter() {
+            for constraint in &table_schema.constraints {
+                let mut row_data = HashMap::new();
+
+                row_data.insert("constraint_catalog".to_string(), "orbit_demo".to_string());
+                row_data.insert("constraint_schema".to_string(), "public".to_string());
+                row_data.insert(
+                    "constraint_name".to_string(),
+                    constraint.name.clone().unwrap_or_else(|| {
+                        format!("{}_{}_constraint", table_name, constraint.constraint_type)
+                    }),
+                );
+                row_data.insert("table_catalog".to_string(), "orbit_demo".to_string());
+                row_data.insert("table_schema".to_string(), "public".to_string());
+                row_data.insert("table_name".to_string(), table_name.clone());
+                row_data.insert(
+                    "constraint_type".to_string(),
+                    constraint.constraint_type.clone(),
+                );
+                row_data.insert("is_deferrable".to_string(), "NO".to_string());
+                row_data.insert("initially_deferred".to_string(), "NO".to_string());
+
+                // Project only requested columns
+                let mut result_row = Vec::new();
+                for col_name in columns {
+                    let value = row_data
+                        .get(col_name)
+                        .cloned()
+                        .unwrap_or_else(|| "".to_string());
+                    result_row.push(Some(value));
+                }
+                rows.push(result_row);
+            }
+        }
+
+        Ok(rows)
+    }
+
+    /// Query information_schema.key_column_usage
+    async fn query_information_schema_key_usage(
+        &self,
+        columns: &[String],
+    ) -> ProtocolResult<Vec<Vec<Option<String>>>> {
+        let tables = self.tables.read().await;
+        let mut rows = Vec::new();
+
+        for (table_name, table_schema) in tables.iter() {
+            for constraint in &table_schema.constraints {
+                if matches!(
+                    constraint.constraint_type.as_str(),
+                    "PRIMARY KEY" | "FOREIGN KEY" | "UNIQUE"
+                ) {
+                    for (ordinal_position, column_name) in constraint.columns.iter().enumerate() {
+                        let mut row_data = HashMap::new();
+
+                        row_data.insert("constraint_catalog".to_string(), "orbit_demo".to_string());
+                        row_data.insert("constraint_schema".to_string(), "public".to_string());
+                        row_data.insert(
+                            "constraint_name".to_string(),
+                            constraint.name.clone().unwrap_or_else(|| {
+                                format!("{}_{}_constraint", table_name, constraint.constraint_type)
+                            }),
+                        );
+                        row_data.insert("table_catalog".to_string(), "orbit_demo".to_string());
+                        row_data.insert("table_schema".to_string(), "public".to_string());
+                        row_data.insert("table_name".to_string(), table_name.clone());
+                        row_data.insert("column_name".to_string(), column_name.clone());
+                        row_data.insert(
+                            "ordinal_position".to_string(),
+                            (ordinal_position + 1).to_string(),
+                        );
+
+                        // Foreign key specific fields
+                        if constraint.constraint_type == "FOREIGN KEY" {
+                            row_data.insert(
+                                "position_in_unique_constraint".to_string(),
+                                (ordinal_position + 1).to_string(),
+                            );
+                            if let Some(ref_table) = &constraint.referenced_table {
+                                row_data.insert(
+                                    "referenced_table_schema".to_string(),
+                                    "public".to_string(),
+                                );
+                                row_data
+                                    .insert("referenced_table_name".to_string(), ref_table.clone());
+                                if let Some(ref_cols) = &constraint.referenced_columns {
+                                    if let Some(ref_col) = ref_cols.get(ordinal_position) {
+                                        row_data.insert(
+                                            "referenced_column_name".to_string(),
+                                            ref_col.clone(),
+                                        );
+                                    }
+                                }
+                            }
+                        }
+
+                        // Project only requested columns
+                        let mut result_row = Vec::new();
+                        for col_name in columns {
+                            let value = row_data
+                                .get(col_name)
+                                .cloned()
+                                .unwrap_or_else(|| "".to_string());
+                            result_row.push(Some(value));
+                        }
+                        rows.push(result_row);
+                    }
+                }
+            }
+        }
+
+        Ok(rows)
+    }
+
+    /// Convert SqlType to PostgreSQL type name
+    fn sql_type_to_pg_type(sql_type: &SqlType) -> String {
+        match sql_type {
+            SqlType::Boolean => "boolean".to_string(),
+            SqlType::SmallInt => "smallint".to_string(),
+            SqlType::Integer => "integer".to_string(),
+            SqlType::BigInt => "bigint".to_string(),
+            SqlType::Real => "real".to_string(),
+            SqlType::DoublePrecision => "double precision".to_string(),
+            SqlType::Decimal { .. } => "numeric".to_string(),
+            SqlType::Numeric { .. } => "numeric".to_string(),
+            SqlType::Char(_) => "character".to_string(),
+            SqlType::Varchar(_) => "character varying".to_string(),
+            SqlType::Text => "text".to_string(),
+            SqlType::Date => "date".to_string(),
+            SqlType::Time { with_timezone } => {
+                if *with_timezone {
+                    "time with time zone".to_string()
+                } else {
+                    "time without time zone".to_string()
+                }
+            }
+            SqlType::Timestamp { with_timezone } => {
+                if *with_timezone {
+                    "timestamp with time zone".to_string()
+                } else {
+                    "timestamp without time zone".to_string()
+                }
+            }
+            SqlType::Interval => "interval".to_string(),
+            SqlType::Json => "json".to_string(),
+            SqlType::Jsonb => "jsonb".to_string(),
+            SqlType::Vector { dimensions } => match dimensions {
+                Some(dim) => format!("vector({})", dim),
+                None => "vector".to_string(),
+            },
+            SqlType::Array { element_type, .. } => {
+                format!("{}[]", Self::sql_type_to_pg_type(element_type))
+            }
+            SqlType::Uuid => "uuid".to_string(),
+            SqlType::Bytea => "bytea".to_string(),
+            SqlType::Inet => "inet".to_string(),
+            SqlType::Cidr => "cidr".to_string(),
+            SqlType::Macaddr => "macaddr".to_string(),
+            SqlType::Macaddr8 => "macaddr8".to_string(),
+            SqlType::Point => "point".to_string(),
+            SqlType::Line => "line".to_string(),
+            SqlType::Lseg => "lseg".to_string(),
+            SqlType::Box => "box".to_string(),
+            SqlType::Path => "path".to_string(),
+            SqlType::Polygon => "polygon".to_string(),
+            SqlType::Circle => "circle".to_string(),
+            SqlType::Xml => "xml".to_string(),
+            SqlType::Tsvector => "tsvector".to_string(),
+            SqlType::Tsquery => "tsquery".to_string(),
+            SqlType::HalfVec { dimensions } => match dimensions {
+                Some(dim) => format!("halfvec({})", dim),
+                None => "halfvec".to_string(),
+            },
+            SqlType::SparseVec { dimensions } => match dimensions {
+                Some(dim) => format!("sparsevec({})", dim),
+                None => "sparsevec".to_string(),
+            },
+            SqlType::Custom { type_name } => type_name.clone(),
+            SqlType::Composite { type_name } => type_name.clone(),
+            SqlType::Range { element_type } => {
+                format!("{}range", Self::sql_type_to_pg_type(element_type))
+            }
+            SqlType::Domain { domain_name, .. } => domain_name.clone(),
+        }
     }
 
     // DCL Implementation methods
@@ -1065,7 +2181,8 @@ impl SqlExecutor {
 }
 
 impl Default for SqlExecutor {
+    #[allow(deprecated)]
     fn default() -> Self {
-        Self::new()
+        Self::new_in_memory()
     }
 }

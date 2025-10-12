@@ -1,3 +1,9 @@
+---
+layout: default
+title: Orbit-RS Geospatial Data Enhancement Proposal
+category: documentation
+---
+
 # Orbit-RS Geospatial Data Enhancement Proposal
 
 **Status**: Proposal  

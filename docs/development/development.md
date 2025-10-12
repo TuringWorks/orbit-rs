@@ -1,3 +1,9 @@
+---
+layout: default
+title: Development Guide
+category: development
+---
+
 # Development Guide
 
 This guide covers development setup, contributing guidelines, testing procedures, and architectural considerations for Orbit-RS development.

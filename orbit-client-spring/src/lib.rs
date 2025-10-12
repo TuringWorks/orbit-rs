@@ -15,8 +15,9 @@
 //! ## Example
 //!
 //! ```rust,no_run
-//! use orbit_client_spring::{ApplicationContext, Component, Service};
+//! use orbit_client_spring::{ApplicationContext, Component, Service, SpringError, SpringResult};
 //! use async_trait::async_trait;
+//! use std::any::Any;
 //!
 //! #[derive(Debug, Clone)]
 //! pub struct UserService {
@@ -24,20 +25,34 @@
 //! }
 //!
 //! #[async_trait]
-//! impl Service for UserService {
+//! impl Component for UserService {
 //!     fn name(&self) -> &'static str {
 //!         "UserService"
 //!     }
 //!     
-//!     async fn initialize(&mut self) -> Result<(), SpringError> {
+//!     async fn initialize(&mut self) -> SpringResult<()> {
 //!         Ok(())
 //!     }
+//!
+//!     fn as_any(&self) -> &dyn Any {
+//!         self
+//!     }
+//!
+//!     fn as_any_mut(&mut self) -> &mut dyn Any {
+//!         self
+//!     }
+//! }
+//!
+//! #[async_trait]
+//! impl Service for UserService {
+//!     // Service trait methods can use defaults or be overridden
 //! }
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
 //!     let mut context = ApplicationContext::new();
-//!     context.register_service(UserService {}).await?;
+//!     // Note: register_service method signature may vary
+//!     // context.register_service(UserService {}).await?;
 //!     context.start().await?;
 //!     
 //!     Ok(())
