@@ -477,7 +477,7 @@ impl ParallelExecutor {
     }
 
     /// Execute parallel scan
-    async fn execute_parallel_scan(
+    pub async fn execute_parallel_scan(
         &self,
         scan: &ParallelScan,
     ) -> Result<Vec<RecordBatch>, ParallelExecutionError> {
@@ -529,7 +529,7 @@ impl ParallelExecutor {
     }
 
     /// Execute parallel join
-    async fn execute_parallel_join(
+    pub async fn execute_parallel_join(
         &self,
         join: &ParallelHashJoin,
     ) -> Result<Vec<RecordBatch>, ParallelExecutionError> {
@@ -553,7 +553,7 @@ impl ParallelExecutor {
     }
 
     /// Execute parallel aggregation
-    async fn execute_parallel_aggregation(
+    pub async fn execute_parallel_aggregation(
         &self,
         aggregation: &ParallelAggregation,
     ) -> Result<Vec<RecordBatch>, ParallelExecutionError> {
@@ -633,7 +633,7 @@ impl ParallelExecutor {
     }
 
     /// Execute tasks in parallel
-    async fn execute_tasks_parallel(
+    pub async fn execute_tasks_parallel(
         &self,
         tasks: Vec<Task>,
     ) -> Result<Vec<TaskResult>, ParallelExecutionError> {
@@ -743,6 +743,11 @@ impl ParallelExecutor {
     /// Get execution statistics
     pub fn get_stats(&self) -> ExecutionStats {
         self.stats.read().unwrap().clone()
+    }
+
+    /// Get the configuration
+    pub fn get_config(&self) -> &ParallelExecutionConfig {
+        &self.config
     }
 
     /// Shutdown the executor
