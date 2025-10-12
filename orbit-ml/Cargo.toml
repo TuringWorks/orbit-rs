@@ -8,11 +8,11 @@ description = "Machine Learning and Deep Learning engine for Orbit database"
 repository.workspace = true
 
 [features]
-default = ["neural-networks", "transformers", "graph-neural-networks", "python", "javascript", "lua"]
+default = ["neural-networks", "transformers", "graph-neural-networks"]
 neural-networks = []
 transformers = [] # Dependencies commented out for initial build
 graph-neural-networks = []
-python = [] # Dependencies commented out for initial build  
+python = ["pyo3"] # Python integration with PyO3
 javascript = [] # Dependencies commented out for initial build
 lua = [] # Dependencies commented out for initial build
 gpu = ["candle-core", "candle-nn"] # GPU acceleration with Candle
@@ -97,7 +97,8 @@ config = "0.14"
 
 # Metrics and Monitoring
 prometheus = "0.13"
-pyo3.workspace = true
+# PyO3 for Python integration - only enabled with python feature
+pyo3 = { workspace = true, optional = true }
 
 [dev-dependencies]
 # Testing dependencies

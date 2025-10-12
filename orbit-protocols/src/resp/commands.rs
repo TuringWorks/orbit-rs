@@ -8,6 +8,7 @@ use tracing::{debug, warn};
 
 use super::{
     actors::{HashActor, KeyValueActor, ListActor, PubSubActor, SetActor, SortedSetActor},
+    simple_local::SimpleLocalRegistry,
     RespValue,
 };
 use crate::{
@@ -34,6 +35,7 @@ use std::collections::HashMap;
 /// Redis command handler that translates Redis commands to Orbit actor operations
 pub struct CommandHandler {
     orbit_client: Arc<OrbitClient>,
+    local_registry: Arc<SimpleLocalRegistry>,
 }
 
 impl CommandHandler {
@@ -41,6 +43,7 @@ impl CommandHandler {
     pub fn new(orbit_client: OrbitClient) -> Self {
         Self {
             orbit_client: Arc::new(orbit_client),
+            local_registry: Arc::new(SimpleLocalRegistry::new()),
         }
     }
 
@@ -107,10 +110,10 @@ impl CommandHandler {
             // Hash commands
             "HGET" => self.cmd_hget(args).await,
             "HSET" => self.cmd_hset(args).await,
-            "HGETALL" => self.cmd_hgetall(&args[1..]).await,
-            "HMGET" => self.cmd_hmget(&args[1..]).await,
-            "HMSET" => self.cmd_hmset(&args[1..]).await,
-            "HDEL" => self.cmd_hdel(&args[1..]).await,
+            "HGETALL" => self.cmd_hgetall(args).await,
+            "HMGET" => self.cmd_hmget(args).await,
+            "HMSET" => self.cmd_hmset(args).await,
+            "HDEL" => self.cmd_hdel(args).await,
             "HEXISTS" => self.cmd_hexists(args).await,
             "HKEYS" => self.cmd_hkeys(args).await,
             "HVALS" => self.cmd_hvals(args).await,
@@ -336,18 +339,15 @@ impl CommandHandler {
             .as_string()
             .ok_or_else(|| ProtocolError::RespError("ERR invalid key".to_string()))?;
 
-        // Get KeyValueActor reference
-        let actor_ref = self
-            .orbit_client
-            .actor_reference::<KeyValueActor>(Key::StringKey { key: key.clone() })
-            .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
-
-        // Invoke get_value method on the actor
-        let value: Option<String> = actor_ref
-            .invoke("get_value", vec![])
+        // Use local registry to get the value
+        let result = self
+            .local_registry
+            .execute_keyvalue(&key, "get_value", &[])
             .await
             .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+
+        let value: Option<String> = serde_json::from_value(result)
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))?;
 
         debug!("GET {} -> {:?}", key, value);
         Ok(value
@@ -398,23 +398,24 @@ impl CommandHandler {
             }
         }
 
-        // Get KeyValueActor reference
-        let actor_ref = self
-            .orbit_client
-            .actor_reference::<KeyValueActor>(Key::StringKey { key: key.clone() })
-            .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
-
-        // Invoke set_value method on the actor
-        actor_ref
-            .invoke::<()>("set_value", vec![value.clone().into()])
+        // Use local registry to set the value
+        self.local_registry
+            .execute_keyvalue(
+                &key,
+                "set_value",
+                &[serde_json::Value::String(value.clone())],
+            )
             .await
             .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
 
         // Set expiration if provided
         if let Some(seconds) = expiration_seconds {
-            actor_ref
-                .invoke::<()>("set_expiration", vec![seconds.into()])
+            self.local_registry
+                .execute_keyvalue(
+                    &key,
+                    "set_expiration",
+                    &[serde_json::Value::Number(serde_json::Number::from(seconds))],
+                )
                 .await
                 .map_err(|e| {
                     ProtocolError::RespError(format!("ERR actor invocation failed: {}", e))
@@ -438,35 +439,24 @@ impl CommandHandler {
         let mut deleted_count = 0i64;
         for arg in args {
             if let Some(key_str) = arg.as_string() {
-                // Try to delete as KeyValueActor first
-                let key_ref_result = self
-                    .orbit_client
-                    .actor_reference::<KeyValueActor>(Key::StringKey {
-                        key: key_str.clone(),
-                    })
-                    .await;
-
-                if let Ok(actor_ref) = key_ref_result {
-                    // Try to delete the value using the actor method
-                    let delete_result: Result<bool, _> =
-                        actor_ref.invoke("delete_value", vec![]).await;
-
-                    match delete_result {
-                        Ok(existed) => {
-                            if existed {
-                                deleted_count += 1;
-                                debug!("DEL {} (KeyValue) -> deleted", key_str);
-                            } else {
-                                debug!("DEL {} (KeyValue) -> key didn't exist", key_str);
-                            }
-                        }
-                        Err(_) => {
-                            // Key might not exist or actor might not be accessible
-                            debug!("DEL {} -> key not found or inaccessible", key_str);
+                // Use local registry to delete key
+                match self
+                    .local_registry
+                    .execute_keyvalue(&key_str, "delete_value", &[])
+                    .await
+                {
+                    Ok(result) => {
+                        let existed: bool = serde_json::from_value(result).unwrap_or(false);
+                        if existed {
+                            deleted_count += 1;
+                            debug!("DEL {} -> deleted", key_str);
+                        } else {
+                            debug!("DEL {} -> key didn't exist", key_str);
                         }
                     }
-                } else {
-                    debug!("DEL {} -> actor reference failed", key_str);
+                    Err(_) => {
+                        debug!("DEL {} -> key not found or inaccessible", key_str);
+                    }
                 }
             }
         }
@@ -484,33 +474,24 @@ impl CommandHandler {
         let mut exists_count = 0i64;
         for arg in args {
             if let Some(key_str) = arg.as_string() {
-                // Check if KeyValueActor exists and has a value
-                let key_ref_result = self
-                    .orbit_client
-                    .actor_reference::<KeyValueActor>(Key::StringKey {
-                        key: key_str.clone(),
-                    })
-                    .await;
-
-                if let Ok(actor_ref) = key_ref_result {
-                    // Check if the key exists and is not expired
-                    let exists_result: Result<bool, _> = actor_ref.invoke("exists", vec![]).await;
-
-                    match exists_result {
-                        Ok(exists) => {
-                            if exists {
-                                exists_count += 1;
-                                debug!("EXISTS {} -> true", key_str);
-                            } else {
-                                debug!("EXISTS {} -> false (expired or empty)", key_str);
-                            }
-                        }
-                        Err(_) => {
-                            debug!("EXISTS {} -> false (actor invocation failed)", key_str);
+                // Use local registry to check if key exists
+                match self
+                    .local_registry
+                    .execute_keyvalue(&key_str, "exists", &[])
+                    .await
+                {
+                    Ok(result) => {
+                        let exists: bool = serde_json::from_value(result).unwrap_or(false);
+                        if exists {
+                            exists_count += 1;
+                            debug!("EXISTS {} -> true", key_str);
+                        } else {
+                            debug!("EXISTS {} -> false (expired or empty)", key_str);
                         }
                     }
-                } else {
-                    debug!("EXISTS {} -> false (no actor reference)", key_str);
+                    Err(_) => {
+                        debug!("EXISTS {} -> false (actor invocation failed)", key_str);
+                    }
                 }
             }
         }
@@ -660,18 +641,15 @@ impl CommandHandler {
             .as_string()
             .ok_or_else(|| ProtocolError::RespError("ERR invalid field".to_string()))?;
 
-        // Get HashActor reference
-        let actor_ref = self
-            .orbit_client
-            .actor_reference::<HashActor>(Key::StringKey { key: key.clone() })
-            .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
-
-        // Invoke hget method on the actor
-        let value: Option<String> = actor_ref
-            .invoke("hget", vec![field.clone().into()])
+        // Use local registry
+        let result = self
+            .local_registry
+            .execute_hash(&key, "hget", &[serde_json::Value::String(field.clone())])
             .await
             .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+
+        let value: Option<String> = serde_json::from_value(result)
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))?;
 
         debug!("HGET {} {} -> {:?}", key, field, value);
         Ok(value
@@ -703,20 +681,24 @@ impl CommandHandler {
                 .as_string()
                 .ok_or_else(|| ProtocolError::RespError("ERR invalid value".to_string()))?;
 
-            // Get HashActor reference
-            let actor_ref = self
-                .orbit_client
-                .actor_reference::<HashActor>(Key::StringKey { key: key.clone() })
-                .await
-                .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
-
-            // Invoke hset method on the actor
-            let was_new: bool = actor_ref
-                .invoke("hset", vec![field.clone().into(), value.clone().into()])
+            // Use local registry
+            let result = self
+                .local_registry
+                .execute_hash(
+                    &key,
+                    "hset",
+                    &[
+                        serde_json::Value::String(field.clone()),
+                        serde_json::Value::String(value.clone()),
+                    ],
+                )
                 .await
                 .map_err(|e| {
                     ProtocolError::RespError(format!("ERR actor invocation failed: {}", e))
                 })?;
+
+            let was_new: bool = serde_json::from_value(result)
+                .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))?;
 
             debug!("HSET {} {} {} -> new: {}", key, field, value, was_new);
             if was_new {
@@ -738,38 +720,28 @@ impl CommandHandler {
             .as_string()
             .ok_or_else(|| ProtocolError::RespError("ERR invalid key".to_string()))?;
 
-        // Get HashActor reference
-        let actor_ref = self
-            .orbit_client
-            .actor_reference::<HashActor>(Key::StringKey {
-                key: key_str.clone(),
-            })
+        // Use local registry
+        let result = self
+            .local_registry
+            .execute_hash(&key_str, "hgetall", &[])
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
 
-        // Get all fields and values
-        let fields_and_values: Result<Vec<(String, String)>, _> =
-            actor_ref.invoke("hgetall", vec![]).await;
+        let pairs: Vec<(String, String)> = serde_json::from_value(result)
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))?;
 
-        match fields_and_values {
-            Ok(pairs) => {
-                let mut result = Vec::new();
-                for (field, value) in pairs {
-                    result.push(RespValue::bulk_string_from_str(&field));
-                    result.push(RespValue::bulk_string_from_str(&value));
-                }
-                debug!(
-                    "HGETALL {} -> {} field-value pairs",
-                    key_str,
-                    result.len() / 2
-                );
-                Ok(RespValue::array(result))
-            }
-            Err(e) => {
-                debug!("HGETALL {} -> error: {}", key_str, e);
-                Ok(RespValue::array(vec![])) // Return empty array on error
-            }
+        let mut resp_result = Vec::new();
+        for (field, value) in pairs {
+            resp_result.push(RespValue::bulk_string_from_str(&field));
+            resp_result.push(RespValue::bulk_string_from_str(&value));
         }
+
+        debug!(
+            "HGETALL {} -> {} field-value pairs",
+            key_str,
+            resp_result.len() / 2
+        );
+        Ok(RespValue::array(resp_result))
     }
 
     async fn cmd_hmget(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
@@ -783,31 +755,31 @@ impl CommandHandler {
             .as_string()
             .ok_or_else(|| ProtocolError::RespError("ERR invalid key".to_string()))?;
 
-        // Get HashActor reference
-        let actor_ref = self
-            .orbit_client
-            .actor_reference::<HashActor>(Key::StringKey { key: key.clone() })
-            .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
-
         let mut result = Vec::new();
         for arg in &args[1..] {
             let field = arg
                 .as_string()
                 .ok_or_else(|| ProtocolError::RespError("ERR invalid field".to_string()))?;
 
-            // Get field value
-            let field_value: Result<Option<String>, _> =
-                actor_ref.invoke("hget", vec![field.clone().into()]).await;
-
-            match field_value {
-                Ok(Some(value)) => {
-                    result.push(RespValue::bulk_string_from_str(&value));
-                    debug!("HMGET {} {} -> {}", key, field, value);
-                }
-                Ok(None) => {
-                    result.push(RespValue::null());
-                    debug!("HMGET {} {} -> null (field not found)", key, field);
+            // Use local registry
+            match self
+                .local_registry
+                .execute_hash(&key, "hget", &[serde_json::Value::String(field.clone())])
+                .await
+            {
+                Ok(value_result) => {
+                    let value: Option<String> =
+                        serde_json::from_value(value_result).unwrap_or(None);
+                    match value {
+                        Some(val) => {
+                            result.push(RespValue::bulk_string_from_str(&val));
+                            debug!("HMGET {} {} -> {}", key, field, val);
+                        }
+                        None => {
+                            result.push(RespValue::null());
+                            debug!("HMGET {} {} -> null (field not found)", key, field);
+                        }
+                    }
                 }
                 Err(e) => {
                     debug!("HMGET {} {} -> error: {}", key, field, e);
@@ -830,14 +802,7 @@ impl CommandHandler {
             .as_string()
             .ok_or_else(|| ProtocolError::RespError("ERR invalid key".to_string()))?;
 
-        // Get HashActor reference
-        let actor_ref = self
-            .orbit_client
-            .actor_reference::<HashActor>(Key::StringKey { key: key.clone() })
-            .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
-
-        // Set field-value pairs
+        // Set field-value pairs using local registry
         for i in (1..args.len()).step_by(2) {
             if i + 1 >= args.len() {
                 break;
@@ -850,9 +815,16 @@ impl CommandHandler {
                 .as_string()
                 .ok_or_else(|| ProtocolError::RespError("ERR invalid value".to_string()))?;
 
-            // Invoke hset method on the actor
-            let _was_new: bool = actor_ref
-                .invoke("hset", vec![field.clone().into(), value.clone().into()])
+            // Use local registry
+            self.local_registry
+                .execute_hash(
+                    &key,
+                    "hset",
+                    &[
+                        serde_json::Value::String(field.clone()),
+                        serde_json::Value::String(value.clone()),
+                    ],
+                )
                 .await
                 .map_err(|e| {
                     ProtocolError::RespError(format!("ERR actor invocation failed: {}", e))
@@ -875,30 +847,26 @@ impl CommandHandler {
             .as_string()
             .ok_or_else(|| ProtocolError::RespError("ERR invalid key".to_string()))?;
 
-        // Get HashActor reference
-        let actor_ref = self
-            .orbit_client
-            .actor_reference::<HashActor>(Key::StringKey { key: key.clone() })
-            .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
-
         let mut deleted_count = 0i64;
         for arg in &args[1..] {
             let field = arg
                 .as_string()
                 .ok_or_else(|| ProtocolError::RespError("ERR invalid field".to_string()))?;
 
-            // Invoke hdel method on the actor
-            let was_deleted: Result<bool, _> =
-                actor_ref.invoke("hdel", vec![field.clone().into()]).await;
-
-            match was_deleted {
-                Ok(true) => {
-                    deleted_count += 1;
-                    debug!("HDEL {} {} -> deleted", key, field);
-                }
-                Ok(false) => {
-                    debug!("HDEL {} {} -> not found", key, field);
+            // Use local registry
+            match self
+                .local_registry
+                .execute_hash(&key, "hdel", &[serde_json::Value::String(field.clone())])
+                .await
+            {
+                Ok(result) => {
+                    let was_deleted: bool = serde_json::from_value(result).unwrap_or(false);
+                    if was_deleted {
+                        deleted_count += 1;
+                        debug!("HDEL {} {} -> deleted", key, field);
+                    } else {
+                        debug!("HDEL {} {} -> not found", key, field);
+                    }
                 }
                 Err(e) => {
                     debug!("HDEL {} {} -> error: {}", key, field, e);
@@ -923,32 +891,23 @@ impl CommandHandler {
             .as_string()
             .ok_or_else(|| ProtocolError::RespError("ERR invalid field".to_string()))?;
 
-        // Get HashActor reference
-        let actor_ref = self
-            .orbit_client
-            .actor_reference::<HashActor>(Key::StringKey { key: key.clone() })
+        // Use local registry
+        let result = self
+            .local_registry
+            .execute_hash(&key, "hexists", &[serde_json::Value::String(field.clone())])
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
 
-        // Check if field exists
-        let exists: Result<bool, _> = actor_ref
-            .invoke("hexists", vec![field.clone().into()])
-            .await;
+        let exists: bool = serde_json::from_value(result)
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))?;
 
-        match exists {
-            Ok(true) => {
-                debug!("HEXISTS {} {} -> 1 (exists)", key, field);
-                Ok(RespValue::integer(1))
-            }
-            Ok(false) => {
-                debug!("HEXISTS {} {} -> 0 (not found)", key, field);
-                Ok(RespValue::integer(0))
-            }
-            Err(e) => {
-                debug!("HEXISTS {} {} -> error: {}", key, field, e);
-                Ok(RespValue::integer(0))
-            }
-        }
+        debug!(
+            "HEXISTS {} {} -> {} (exists)",
+            key,
+            field,
+            if exists { 1 } else { 0 }
+        );
+        Ok(RespValue::integer(if exists { 1 } else { 0 }))
     }
 
     async fn cmd_hkeys(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
@@ -1036,26 +995,18 @@ impl CommandHandler {
             .as_string()
             .ok_or_else(|| ProtocolError::RespError("ERR invalid key".to_string()))?;
 
-        // Get HashActor reference
-        let actor_ref = self
-            .orbit_client
-            .actor_reference::<HashActor>(Key::StringKey { key: key.clone() })
+        // Use local registry
+        let result = self
+            .local_registry
+            .execute_hash(&key, "hlen", &[])
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
 
-        // Get hash length
-        let length: Result<usize, _> = actor_ref.invoke("hlen", vec![]).await;
+        let len: usize = serde_json::from_value(result)
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))?;
 
-        match length {
-            Ok(len) => {
-                debug!("HLEN {} -> {}", key, len);
-                Ok(RespValue::integer(len as i64))
-            }
-            Err(e) => {
-                debug!("HLEN {} -> error: {}", key, e);
-                Ok(RespValue::integer(0)) // Return 0 on error
-            }
-        }
+        debug!("HLEN {} -> {}", key, len);
+        Ok(RespValue::integer(len as i64))
     }
 
     // List commands
@@ -1080,18 +1031,15 @@ impl CommandHandler {
             }
         }
 
-        // Get ListActor reference
-        let actor_ref = self
-            .orbit_client
-            .actor_reference::<ListActor>(Key::StringKey { key: key.clone() })
-            .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
-
-        // Invoke lpush method on the actor
-        let new_length: i64 = actor_ref
-            .invoke("lpush", vec![values.clone().into()])
+        // Use local registry
+        let result = self
+            .local_registry
+            .execute_list(&key, "lpush", &[serde_json::to_value(&values).unwrap()])
             .await
             .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+
+        let new_length: i64 = serde_json::from_value(result)
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))?;
 
         debug!("LPUSH {} {:?} -> length: {}", key, values, new_length);
         Ok(RespValue::integer(new_length))
@@ -1213,16 +1161,17 @@ impl CommandHandler {
             1
         };
 
-        // Get ListActor reference
-        let actor_ref = self
-            .orbit_client
-            .actor_reference::<ListActor>(Key::StringKey { key: key.clone() })
-            .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+        // Use local registry
+        let result = self
+            .local_registry
+            .execute_list(&key, "rpop", &[serde_json::to_value(count).unwrap()])
+            .await;
 
-        // Invoke rpop method on the actor
-        let popped_items: Result<Vec<String>, _> =
-            actor_ref.invoke("rpop", vec![count.into()]).await;
+        let popped_items: Result<Vec<String>, _> = result
+            .map_err(|e| format!("ERR actor invocation failed: {}", e))
+            .and_then(|v| {
+                serde_json::from_value(v).map_err(|e| format!("Serialization error: {}", e))
+            });
 
         match popped_items {
             Ok(items) => {
@@ -1260,25 +1209,34 @@ impl CommandHandler {
             .as_string()
             .ok_or_else(|| ProtocolError::RespError("ERR invalid key".to_string()))?;
         let start = args[1]
-            .as_integer()
+            .as_string()
+            .and_then(|s| s.parse::<i64>().ok())
+            .or_else(|| args[1].as_integer())
             .ok_or_else(|| ProtocolError::RespError("ERR invalid start index".to_string()))?;
         let stop = args[2]
-            .as_integer()
+            .as_string()
+            .and_then(|s| s.parse::<i64>().ok())
+            .or_else(|| args[2].as_integer())
             .ok_or_else(|| ProtocolError::RespError("ERR invalid stop index".to_string()))?;
 
-        // Get ListActor reference
-        let actor_ref = self
-            .orbit_client
-            .actor_reference::<ListActor>(Key::StringKey {
-                key: key_str.clone(),
-            })
-            .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
-
-        // Get list range
-        let range_result: Result<Vec<String>, _> = actor_ref
-            .invoke("lrange", vec![start.into(), stop.into()])
+        // Use local registry
+        let result = self
+            .local_registry
+            .execute_list(
+                &key_str,
+                "lrange",
+                &[
+                    serde_json::to_value(start).unwrap(),
+                    serde_json::to_value(stop).unwrap(),
+                ],
+            )
             .await;
+
+        let range_result: Result<Vec<String>, _> = result
+            .map_err(|e| format!("ERR actor invocation failed: {}", e))
+            .and_then(|v| {
+                serde_json::from_value(v).map_err(|e| format!("Serialization error: {}", e))
+            });
 
         match range_result {
             Ok(items) => {
@@ -1688,18 +1646,17 @@ impl CommandHandler {
             }
         }
 
-        // Get SetActor reference
-        let actor_ref = self
-            .orbit_client
-            .actor_reference::<SetActor>(Key::StringKey {
-                key: key_str.clone(),
-            })
-            .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+        // Use local registry
+        let result = self
+            .local_registry
+            .execute_set(&key_str, "sadd", &[serde_json::to_value(&members).unwrap()])
+            .await;
 
-        // Add members to set
-        let added_count: Result<usize, _> =
-            actor_ref.invoke("sadd", vec![members.clone().into()]).await;
+        let added_count: Result<usize, _> = result
+            .map_err(|e| format!("ERR actor invocation failed: {}", e))
+            .and_then(|v| {
+                serde_json::from_value(v).map_err(|e| format!("Serialization error: {}", e))
+            });
 
         match added_count {
             Ok(count) => {
@@ -1733,18 +1690,17 @@ impl CommandHandler {
             }
         }
 
-        // Get SetActor reference
-        let actor_ref = self
-            .orbit_client
-            .actor_reference::<SetActor>(Key::StringKey {
-                key: key_str.clone(),
-            })
-            .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+        // Use local registry
+        let result = self
+            .local_registry
+            .execute_set(&key_str, "srem", &[serde_json::to_value(&members).unwrap()])
+            .await;
 
-        // Remove members from set
-        let removed_count: Result<usize, _> =
-            actor_ref.invoke("srem", vec![members.clone().into()]).await;
+        let removed_count: Result<usize, _> = result
+            .map_err(|e| format!("ERR actor invocation failed: {}", e))
+            .and_then(|v| {
+                serde_json::from_value(v).map_err(|e| format!("Serialization error: {}", e))
+            });
 
         match removed_count {
             Ok(count) => {
@@ -1769,17 +1725,17 @@ impl CommandHandler {
             .as_string()
             .ok_or_else(|| ProtocolError::RespError("ERR invalid key".to_string()))?;
 
-        // Get SetActor reference
-        let actor_ref = self
-            .orbit_client
-            .actor_reference::<SetActor>(Key::StringKey {
-                key: key_str.clone(),
-            })
-            .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+        // Use local registry
+        let result = self
+            .local_registry
+            .execute_set(&key_str, "smembers", &[])
+            .await;
 
-        // Get all set members
-        let members_result: Result<Vec<String>, _> = actor_ref.invoke("smembers", vec![]).await;
+        let members_result: Result<Vec<String>, _> = result
+            .map_err(|e| format!("ERR actor invocation failed: {}", e))
+            .and_then(|v| {
+                serde_json::from_value(v).map_err(|e| format!("Serialization error: {}", e))
+            });
 
         match members_result {
             Ok(members) => {
@@ -2077,13 +2033,6 @@ impl CommandHandler {
             .as_string()
             .ok_or_else(|| ProtocolError::RespError("ERR invalid key".to_string()))?;
 
-        // Get SortedSetActor reference
-        let actor_ref = self
-            .orbit_client
-            .actor_reference::<SortedSetActor>(Key::StringKey { key: key.clone() })
-            .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
-
         let mut added_count = 0;
 
         // Process score-member pairs
@@ -2102,10 +2051,24 @@ impl CommandHandler {
                 .as_string()
                 .ok_or_else(|| ProtocolError::RespError("ERR invalid member".to_string()))?;
 
-            // Invoke zadd method on the actor
-            let was_new: Result<bool, _> = actor_ref
-                .invoke("zadd", vec![member.clone().into(), score.into()])
+            // Use local registry
+            let result = self
+                .local_registry
+                .execute_sorted_set(
+                    &key,
+                    "zadd",
+                    &[
+                        serde_json::to_value(&member).unwrap(),
+                        serde_json::to_value(score).unwrap(),
+                    ],
+                )
                 .await;
+
+            let was_new: Result<bool, _> = result
+                .map_err(|e| format!("ERR actor invocation failed: {}", e))
+                .and_then(|v| {
+                    serde_json::from_value(v).map_err(|e| format!("Serialization error: {}", e))
+                });
 
             match was_new {
                 Ok(true) => {
@@ -2143,16 +2106,17 @@ impl CommandHandler {
             members.push(member);
         }
 
-        // Get SortedSetActor reference
-        let actor_ref = self
-            .orbit_client
-            .actor_reference::<SortedSetActor>(Key::StringKey { key: key.clone() })
-            .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+        // Use local registry
+        let result = self
+            .local_registry
+            .execute_sorted_set(&key, "zrem", &[serde_json::to_value(&members).unwrap()])
+            .await;
 
-        // Invoke zrem method on the actor
-        let removed_count: Result<usize, _> =
-            actor_ref.invoke("zrem", vec![members.clone().into()]).await;
+        let removed_count: Result<usize, _> = result
+            .map_err(|e| format!("ERR actor invocation failed: {}", e))
+            .and_then(|v| {
+                serde_json::from_value(v).map_err(|e| format!("Serialization error: {}", e))
+            });
 
         match removed_count {
             Ok(count) => {
@@ -2299,10 +2263,14 @@ impl CommandHandler {
             .as_string()
             .ok_or_else(|| ProtocolError::RespError("ERR invalid key".to_string()))?;
         let start = args[1]
-            .as_integer()
+            .as_string()
+            .and_then(|s| s.parse::<i64>().ok())
+            .or_else(|| args[1].as_integer())
             .ok_or_else(|| ProtocolError::RespError("ERR invalid start index".to_string()))?;
         let stop = args[2]
-            .as_integer()
+            .as_string()
+            .and_then(|s| s.parse::<i64>().ok())
+            .or_else(|| args[2].as_integer())
             .ok_or_else(|| ProtocolError::RespError("ERR invalid stop index".to_string()))?;
 
         let with_scores = if args.len() == 4 {
@@ -2314,20 +2282,25 @@ impl CommandHandler {
             false
         };
 
-        // Get SortedSetActor reference
-        let actor_ref = self
-            .orbit_client
-            .actor_reference::<SortedSetActor>(Key::StringKey { key: key.clone() })
-            .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
-
-        // Invoke zrange method on the actor
-        let range_result: Result<Vec<(String, Option<f64>)>, _> = actor_ref
-            .invoke(
+        // Use local registry
+        let result = self
+            .local_registry
+            .execute_sorted_set(
+                &key,
                 "zrange",
-                vec![start.into(), stop.into(), with_scores.into()],
+                &[
+                    serde_json::to_value(start).unwrap(),
+                    serde_json::to_value(stop).unwrap(),
+                    serde_json::to_value(with_scores).unwrap(),
+                ],
             )
             .await;
+
+        let range_result: Result<Vec<(String, Option<f64>)>, _> = result
+            .map_err(|e| format!("ERR actor invocation failed: {}", e))
+            .and_then(|v| {
+                serde_json::from_value(v).map_err(|e| format!("Serialization error: {}", e))
+            });
 
         match range_result {
             Ok(members) => {
@@ -2596,8 +2569,43 @@ impl CommandHandler {
         Ok(RespValue::ok())
     }
 
-    async fn cmd_command(&self, _args: &[RespValue]) -> ProtocolResult<RespValue> {
-        // Return list of supported commands
+    async fn cmd_command(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        // Handle COMMAND subcommands
+        if !args.is_empty() {
+            let subcommand = args[0].as_string().unwrap_or_default().to_uppercase();
+
+            match subcommand.as_str() {
+                "DOCS" => {
+                    // Return empty array for DOCS - redis-cli expects this for unknown commands
+                    debug!("COMMAND DOCS - returning empty array");
+                    return Ok(RespValue::array(vec![]));
+                }
+                "COUNT" => {
+                    // Return number of commands
+                    debug!("COMMAND COUNT - returning command count");
+                    return Ok(RespValue::integer(13)); // Number of basic commands we support
+                }
+                "LIST" => {
+                    // Return just command names
+                    let command_names = vec![
+                        "ping", "echo", "select", "get", "set", "del", "exists", "ttl", "expire",
+                        "keys", "info", "dbsize", "command",
+                    ];
+                    let names: Vec<RespValue> = command_names
+                        .into_iter()
+                        .map(RespValue::bulk_string_from_str)
+                        .collect();
+                    debug!("COMMAND LIST - returning command names");
+                    return Ok(RespValue::array(names));
+                }
+                _ => {
+                    debug!("COMMAND {} - unsupported subcommand", subcommand);
+                    return Ok(RespValue::array(vec![]));
+                }
+            }
+        }
+
+        // Return list of supported commands (default behavior)
         let commands = vec![
             // Connection
             vec![
@@ -2695,6 +2703,7 @@ impl CommandHandler {
             ],
         ];
 
+        debug!("COMMAND - returning full command list");
         Ok(RespValue::array(
             commands.into_iter().map(RespValue::array).collect(),
         ))

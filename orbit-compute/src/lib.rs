@@ -32,17 +32,16 @@
 //! ## Usage
 //!
 //! ```rust,no_run
-//! use orbit_compute::{HeterogeneousEngine, ExecutionConstraints};
+//! use orbit_compute::{HeterogeneousEngine, create_acceleration_engine};
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
-//!     let engine = HeterogeneousEngine::new().await?;
+//!     // Create acceleration engine with automatic capability detection
+//!     let engine = create_acceleration_engine().await?;
 //!     
-//!     let query = compile_query("SELECT SUM(value) FROM large_table WHERE condition = ?")?;
-//!     let constraints = ExecutionConstraints::balanced(); // Balance performance vs power
-//!     
-//!     let result = engine.execute_optimized(&query, &constraints).await?;
-//!     println!("Accelerated result: {:?}", result);
+//!     // Get engine status to see what capabilities are available
+//!     let status = engine.get_engine_status().await;
+//!     println!("Available compute units: {}", status.available_compute_units);
 //!     
 //!     Ok(())
 //! }

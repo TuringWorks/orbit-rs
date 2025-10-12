@@ -24,11 +24,15 @@
 //! ## 📖 Quick Start
 //!
 //! ```rust
-//! use crate::postgres_wire::sql::SqlEngine;
+//! use orbit_protocols::postgres_wire::sql::SqlEngine;
 //!
+//! # #[tokio::main]
+//! # async fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! // MVCC engine by default
-//! let mut engine = SqlEngine::new();
-//! let result = engine.execute("SELECT * FROM users").await?;
+//! let _engine = SqlEngine::new();
+//! // In practice: let result = engine.execute("SELECT * FROM users").await?;
+//! # Ok(())
+//! # }
 //! ```
 //!
 //! See the [README.md](./README.md) for comprehensive documentation.

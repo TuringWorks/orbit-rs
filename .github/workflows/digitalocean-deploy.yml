@@ -5,21 +5,6 @@
 name: Digital Ocean Deployment
 
 on:
-  push:
-    branches: [ main, develop ]
-    paths:
-      - 'orbit-server/**'
-      - 'orbit-client/**'
-      - 'orbit-operator/**'
-      - 'orbit-compute/**'
-      - 'deploy/**'
-      - 'config/**'
-      - '.github/workflows/digitalocean-deploy.yml'
-  pull_request:
-    branches: [ main, develop ]
-    paths:
-      - 'deploy/**'
-      - '.github/workflows/digitalocean-deploy.yml'
   workflow_dispatch:
     inputs:
       deployment_environment:
