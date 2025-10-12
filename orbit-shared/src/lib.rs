@@ -15,6 +15,7 @@ pub mod mesh;
 pub mod net;
 pub mod orbitql;
 pub mod persistence;
+pub mod pooling;
 pub mod raft_transport;
 pub mod recovery;
 pub mod replication;
@@ -103,4 +104,11 @@ pub use spatial::{
     SpatialAlert, SpatialError, SpatialFunctions, SpatialGeometry, SpatialIndex, SpatialOperations,
     SpatialRelation, SpatialStreamProcessor, DEFAULT_PRECISION, EARTH_RADIUS_METERS,
     UTM_ZONE_33N_SRID, WEB_MERCATOR_SRID, WGS84_SRID,
+};
+
+// Re-export advanced connection pooling
+pub use pooling::{
+    AdvancedConnectionPool, AdvancedPoolConfig, CircuitBreaker, CircuitBreakerConfig,
+    CircuitBreakerState, ConnectionHealth, ConnectionHealthMonitor, ConnectionLoadBalancer,
+    ConnectionPoolMetrics, HealthCheck, HealthStatus, LoadBalancingStrategy, NodeHealth, PoolTier,
 };
