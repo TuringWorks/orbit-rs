@@ -563,14 +563,14 @@ impl AqlGraphRAGEngine {
         let _options = self.parse_options_arg(&args[2])?;
 
         // For now, return a placeholder result
-        let mut result_obj = HashMap::new();
-        result_obj.insert("success".to_string(), AqlValue::Bool(true));
-        result_obj.insert("knowledge_graph".to_string(), AqlValue::String(kg_name));
-        result_obj.insert("query_text".to_string(), AqlValue::String(query_text));
-        result_obj.insert("results".to_string(), AqlValue::Array(Vec::new()));
-        result_obj.insert(
-            "message".to_string(),
-            AqlValue::String("Semantic search not yet implemented".to_string()),
+        let mut additional_fields = HashMap::new();
+        additional_fields.insert("query_text".to_string(), AqlValue::String(query_text));
+        additional_fields.insert("results".to_string(), AqlValue::Array(Vec::new()));
+
+        let result_obj = self.create_placeholder_result(
+            kg_name,
+            "Semantic search not yet implemented",
+            additional_fields,
         );
 
         Ok(AqlValue::Object(result_obj))
@@ -658,13 +658,13 @@ impl AqlGraphRAGEngine {
         let _options = self.parse_options_arg(&args[1])?;
 
         // For now, return a placeholder result
-        let mut result_obj = HashMap::new();
-        result_obj.insert("success".to_string(), AqlValue::Bool(true));
-        result_obj.insert("knowledge_graph".to_string(), AqlValue::String(kg_name));
-        result_obj.insert("entities".to_string(), AqlValue::Array(Vec::new()));
-        result_obj.insert(
-            "message".to_string(),
-            AqlValue::String("Entity listing not yet implemented".to_string()),
+        let mut additional_fields = HashMap::new();
+        additional_fields.insert("entities".to_string(), AqlValue::Array(Vec::new()));
+
+        let result_obj = self.create_placeholder_result(
+            kg_name,
+            "Entity listing not yet implemented",
+            additional_fields,
         );
 
         Ok(AqlValue::Object(result_obj))
@@ -685,14 +685,14 @@ impl AqlGraphRAGEngine {
         let _options = self.parse_options_arg(&args[2])?;
 
         // For now, return a placeholder result
-        let mut result_obj = HashMap::new();
-        result_obj.insert("success".to_string(), AqlValue::Bool(true));
-        result_obj.insert("knowledge_graph".to_string(), AqlValue::String(kg_name));
-        result_obj.insert("concept".to_string(), AqlValue::String(concept));
-        result_obj.insert("trends".to_string(), AqlValue::Array(Vec::new()));
-        result_obj.insert(
-            "message".to_string(),
-            AqlValue::String("Trend analysis not yet implemented".to_string()),
+        let mut additional_fields = HashMap::new();
+        additional_fields.insert("concept".to_string(), AqlValue::String(concept));
+        additional_fields.insert("trends".to_string(), AqlValue::Array(Vec::new()));
+
+        let result_obj = self.create_placeholder_result(
+            kg_name,
+            "Trend analysis not yet implemented",
+            additional_fields,
         );
 
         Ok(AqlValue::Object(result_obj))
@@ -712,13 +712,13 @@ impl AqlGraphRAGEngine {
         let _options = self.parse_options_arg(&args[1])?;
 
         // For now, return a placeholder result
-        let mut result_obj = HashMap::new();
-        result_obj.insert("success".to_string(), AqlValue::Bool(true));
-        result_obj.insert("knowledge_graph".to_string(), AqlValue::String(kg_name));
-        result_obj.insert("communities".to_string(), AqlValue::Array(Vec::new()));
-        result_obj.insert(
-            "message".to_string(),
-            AqlValue::String("Community detection not yet implemented".to_string()),
+        let mut additional_fields = HashMap::new();
+        additional_fields.insert("communities".to_string(), AqlValue::Array(Vec::new()));
+
+        let result_obj = self.create_placeholder_result(
+            kg_name,
+            "Community detection not yet implemented",
+            additional_fields,
         );
 
         Ok(AqlValue::Object(result_obj))
@@ -776,6 +776,31 @@ impl AqlGraphRAGEngine {
                 "Document argument must be string or object".to_string(),
             )),
         }
+    }
+
+    /// Helper to create a success result object with common fields
+    fn create_success_result(
+        &self,
+        kg_name: String,
+        additional_fields: HashMap<String, AqlValue>,
+    ) -> HashMap<String, AqlValue> {
+        let mut result = HashMap::new();
+        result.insert("success".to_string(), AqlValue::Bool(true));
+        result.insert("knowledge_graph".to_string(), AqlValue::String(kg_name));
+        result.extend(additional_fields);
+        result
+    }
+
+    /// Helper to create a placeholder result for unimplemented features
+    fn create_placeholder_result(
+        &self,
+        kg_name: String,
+        message: &str,
+        additional_fields: HashMap<String, AqlValue>,
+    ) -> HashMap<String, AqlValue> {
+        let mut result = self.create_success_result(kg_name, additional_fields);
+        result.insert("message".to_string(), AqlValue::String(message.to_string()));
+        result
     }
 
     /// Helper function to parse options argument

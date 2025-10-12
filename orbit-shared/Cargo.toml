@@ -42,6 +42,10 @@ dashmap.workspace = true
 rayon = "1.10"
 bytes = "1.0"
 
+# Code quality patterns
+regex.workspace = true
+paste.workspace = true
+
 [[bin]]
 name = "orbitql-lsp"
 path = "src/bin/orbitql-lsp.rs"
