@@ -259,6 +259,26 @@ cargo build --target aarch64-apple-darwin --release
 - Update vulnerable dependencies
 - Add exceptions for known false positives
 
+**4. Kubernetes Container Pipeline failures**
+
+*Issue: "no targets specified in the manifest" error*
+- **Cause**: The sparse checkout in `.github/workflows/k8s-container-pipeline.yml` is missing required workspace members
+- **Symptom**: Build fails with error like `failed to load manifest for workspace member`
+- **Solution**: Ensure all workspace member dependencies are included in the sparse-checkout configuration
+  ```yaml
+  sparse-checkout: |
+    orbit-server/
+    orbit-client/
+    orbit-operator/
+    orbit-compute/
+    orbit-util/        # Base utility library
+    orbit-shared/      # Shared types (depends on orbit-util)
+    orbit-proto/       # Protocol definitions (depends on orbit-util, orbit-shared)
+    Cargo.toml
+    Cargo.lock
+  ```
+- **Verification**: Run `cargo metadata --no-deps` to ensure all workspace members are visible
+
 
 ### Debugging Steps
 
