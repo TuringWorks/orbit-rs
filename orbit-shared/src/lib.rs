@@ -7,6 +7,7 @@ pub mod election_metrics;
 pub mod election_state;
 pub mod event_sourcing;
 pub mod exception;
+pub mod failover;
 pub mod graph;
 pub mod graphrag;
 pub mod integrated_recovery;
@@ -65,6 +66,12 @@ pub use event_sourcing::{
 pub use replication::{
     ReplicationConfig, ReplicationSlot, ReplicationSlotManager, ReplicationStats,
     ReplicationStream,
+};
+
+// Re-export failover
+pub use failover::{
+    FailoverManager, FailoverPolicy, FailoverResult, FailoverStrategy, FailureDetector,
+    FailureDetectionResult,
 };
 
 // Re-export advanced transaction features (excluding conflicting core module)
