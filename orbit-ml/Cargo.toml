@@ -96,7 +96,7 @@ rmp-serde = "1.3"
 config = "0.14"
 
 # Metrics and Monitoring
-prometheus = "0.13"
+prometheus = "0.14"
 # PyO3 for Python integration - only enabled with python feature
 pyo3 = { workspace = true, optional = true }
 

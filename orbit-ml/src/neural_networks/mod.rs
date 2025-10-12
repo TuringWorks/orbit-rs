@@ -323,7 +323,7 @@ impl NeuralNetworkBuilder {
     /// Set the input data shape
     ///
     /// # Arguments
-    /// * `shape` - Dimensions of input data (e.g., [784] for flattened MNIST)
+    /// * `shape` - Dimensions of input data (e.g., \[784\] for flattened MNIST)
     pub fn input_shape(mut self, shape: Vec<usize>) -> Self {
         self.input_shape = Some(shape);
         self
@@ -462,7 +462,7 @@ impl NeuralNetworkBuilder {
     /// Set the expected output shape of the network
     ///
     /// # Arguments
-    /// * `shape` - Dimensions of network output (e.g., [10] for 10-class classification)
+    /// * `shape` - Dimensions of network output (e.g., \[10\] for 10-class classification)
     pub fn output_shape(mut self, shape: Vec<usize>) -> Self {
         self.output_shape = Some(shape);
         self
