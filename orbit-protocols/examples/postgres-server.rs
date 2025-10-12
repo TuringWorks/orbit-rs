@@ -46,22 +46,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
         .init();
 
-    // Create a shared query engine so data persists across connections
+    // Create a shared query engine (with pluggable storage architecture available)
     let query_engine = QueryEngine::new();
 
     // Create PostgreSQL server on port 5433 (avoid conflict with real PostgreSQL)
     let server = PostgresServer::new_with_query_engine("127.0.0.1:5433", query_engine);
 
-    println!("🚀 PostgreSQL Wire Protocol Server starting on 127.0.0.1:5433");
+    println!(
+        "🚀 PostgreSQL Wire Protocol Server with Pluggable Storage starting on 127.0.0.1:5433"
+    );
+    println!("📦 Using storage backend: Memory (in development: LSM-Tree for persistence)");
     println!();
     println!("Connect with psql:");
     println!("  psql -h localhost -p 5433 -U orbit -d actors");
     println!();
     println!("Example queries:");
-    println!("  INSERT INTO actors (actor_id, actor_type, state) VALUES ('user:1', 'UserActor', '{{}}');");
-    println!("  SELECT * FROM actors;");
-    println!("  UPDATE actors SET state = '{{\"balance\": 1000}}' WHERE actor_id = 'user:1';");
-    println!("  DELETE FROM actors WHERE actor_id = 'user:1';");
+    println!("  CREATE TABLE users (id SERIAL PRIMARY KEY, name TEXT, email TEXT);");
+    println!("  INSERT INTO users (name, email) VALUES ('Alice', 'alice@example.com');");
+    println!("  SELECT * FROM users;");
+    println!("  UPDATE users SET email = 'alice.new@example.com' WHERE id = 1;");
+    println!("  DELETE FROM users WHERE id = 1;");
+    println!("  \\dt     -- List tables");
+    println!("  \\d users -- Describe table structure");
     println!();
 
     // Start the server

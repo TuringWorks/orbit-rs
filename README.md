@@ -29,11 +29,11 @@ Orbit is a framework for building distributed systems using virtual actors. A vi
 - 🏁 **Heterogeneous Compute**: **NEW!** Automatic hardware acceleration (CPU SIMD, GPU, Neural Engines) with 5-50x speedups for parallelizable workloads
 - 💎 **Distributed Transactions**: ACID-compliant with 2-phase commit, saga patterns, and distributed locks
 - 🔌 **Redis Protocol**: **✅ PRODUCTION-READY with 100% compatibility** - Full redis-cli support, 50+ commands, all data types working
-- 🖾 **PostgreSQL Protocol**: Complete wire protocol with advanced SQL features and pgvector support
+- 🖾 **PostgreSQL Protocol**: ⚠️ **IN DEVELOPMENT** - Basic wire protocol with partial SQL parsing (parser/executor ~30% complete)
 - 🤖 **AI Agent Integration**: Model Context Protocol (MCP) with comprehensive tool support for AI workflows
 - 🤖 **AI/ML Ready**: Native vector similarity search, embeddings storage, and semantic search capabilities
 - 📊 **Time Series**: Full RedisTimeSeries compatibility with aggregation, retention policies, and real-time analytics
-- 🕸️ **Graph Database**: Cypher-like queries with execution planning, profiling, and distributed graph operations
+- 🕸️ **Graph Database**: ⚠️ **EXPERIMENTAL** - Basic Cypher parser structure (~5% complete)
 - ☘️ **Kubernetes Native**: Custom operator with CRDs, Helm charts, and production-ready deployment
 - 📊 **Observability**: Built-in Prometheus metrics, Grafana dashboards, and comprehensive monitoring
 - 🛡️ **Enterprise Security**: Authentication, authorization, audit logging, and compliance features
@@ -117,8 +117,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
   - ✅ **Distributed actor storage** - Automatic scaling and fault tolerance
   - ✅ **Local registry optimization** - High performance with network fallback
   - ✅ **One-command startup** - `./start-orbit-redis.sh` gets you running instantly
-- ✅ **PostgreSQL Protocol** - Complete wire protocol with complex SQL parsing and pgvector support
-- ✅ **AI Agent Integration** - Model Context Protocol (MCP) with comprehensive tool support
+- ⚠️ **PostgreSQL Protocol** - **IN DEVELOPMENT** - Wire protocol framework exists, SQL executor ~30% complete
+- ⚠️ **AI Agent Integration** - **EXPERIMENTAL** - Basic MCP framework (~15% complete)
 - ✅ **Kubernetes Integration** - Native operator, Helm charts, production deployment
 - ✅ **Observability** - Prometheus metrics, Grafana dashboards, comprehensive monitoring
 
@@ -130,6 +130,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 **🔬 Performance Benchmarks:**
 - **OrbitQL Benchmarks**: TPC-H, TPC-C, TPC-DS, and comprehensive query performance testing now available in [`orbit-benchmarks`](orbit-benchmarks/)
 - **Benchmark Suite**: Complete performance validation for query optimization, vectorized execution, and parallel processing
+
+## 📄 **Feature Implementation Status Matrix**
+
+| Feature | Status | Completion | Production Ready | Test Coverage | Notes |
+|---------|--------|------------|------------------|---------------|-------|
+| **Core Actor System** | ✅ Complete | 95% | ✅ Yes | 731 tests | Virtual actors with lifecycle management |
+| **RESP (Redis) Protocol** | ✅ Complete | 95% | ✅ Yes | 292 tests | 50+ commands, all data types, redis-cli compatibility |
+| **PostgreSQL Wire Protocol** | 🧪 Experimental | 30% | ❌ No | 104 tests | Basic SQL parsing for actor operations only |
+| **Distributed Transactions** | ✅ Complete | 85% | ✅ Yes | 270 tests | 2PC, Saga patterns, distributed locks |
+| **Model Context Protocol (MCP)** | 🧪 Experimental | 15% | ❌ No | 44 tests | Basic AI agent integration framework |
+| **Neo4j Cypher Parser** | 📋 Planned | 5% | ❌ No | 18 tests | Basic parser structure, not functional |
+| **ArangoDB AQL Parser** | 📋 Planned | 5% | ❌ No | 44 tests | Basic parser structure, not functional |
+| **OrbitQL Engine** | 🚧 Active | 40% | ❌ No | 256 tests | Query planning works, optimizer incomplete |
+| **Persistence Layer** | 🚧 Active | 60% | ❌ No | 47 tests | RocksDB works, cloud storage partial |
+| **Kubernetes Integration** | 🚧 Active | 70% | ❌ No | 16 tests | Operator basics, needs production hardening |
+| **Heterogeneous Compute** | 🚧 Active | 65% | ❌ No | 26 tests | CPU/GPU detection works, optimization partial |
+| **Vector Operations** | 📋 Planned | 10% | ❌ No | 5 tests | Basic structure, no Redis/PostgreSQL extensions |
+| **Time Series** | 📋 Planned | 10% | ❌ No | 15 tests | Core structures only, no RedisTimeSeries compat |
+| **Graph Database** | 📋 Planned | 5% | ❌ No | 22 tests | Basic graph structures, no query execution |
+
+**Legend:** ✅ Complete | 🚧 Active Development | 🧪 Experimental | 📋 Planned
 
 **[📊 View Full Roadmap](docs/roadmap.md)** | **[📝 GitHub Project](https://github.com/orgs/TuringWorks/projects/1)**
 
