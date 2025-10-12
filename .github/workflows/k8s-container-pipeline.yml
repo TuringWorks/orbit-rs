@@ -10,9 +10,7 @@ on:
     branches: [ main, develop ]
     paths:
       - 'orbit-server/**'
-      - 'orbit-client/**'
       - 'orbit-operator/**'
-      - 'orbit-compute/**'
       - 'Cargo.toml'
       - 'Cargo.lock'
       - '.github/workflows/k8s-container-pipeline.yml'
@@ -23,9 +21,7 @@ on:
     branches: [ main, develop ]
     paths:
       - 'orbit-server/**'
-      - 'orbit-client/**'
       - 'orbit-operator/**'
-      - 'orbit-compute/**'
       - 'Cargo.toml'
       - 'Cargo.lock'
       - '.github/workflows/k8s-container-pipeline.yml'
@@ -178,9 +174,10 @@ jobs:
         # Use sparse checkout to reduce disk usage
         sparse-checkout: |
           orbit-server/
-          orbit-client/
           orbit-operator/
-          orbit-compute/
+          orbit-proto/
+          orbit-shared/
+          orbit-util/
           Cargo.toml
           Cargo.lock
           .github/workflows/k8s-container-pipeline.yml
