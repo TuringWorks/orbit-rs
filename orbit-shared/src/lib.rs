@@ -3,15 +3,18 @@ pub mod addressable;
 pub mod cdc;
 pub mod cluster_manager;
 pub mod consensus;
+pub mod data_sync;
 pub mod election_metrics;
 pub mod election_state;
 pub mod event_sourcing;
 pub mod exception;
+pub mod failover;
 pub mod graph;
 pub mod graphrag;
 pub mod integrated_recovery;
 pub mod k8s_election;
 pub mod mesh;
+pub mod multi_master;
 pub mod net;
 pub mod orbitql;
 pub mod persistence;
@@ -19,6 +22,7 @@ pub mod pooling;
 pub mod raft_transport;
 pub mod recovery;
 pub mod replication;
+pub mod rolling_upgrade;
 pub mod router;
 pub mod saga;
 pub mod saga_recovery;
@@ -66,6 +70,29 @@ pub use event_sourcing::{
 pub use replication::{
     ReplicationConfig, ReplicationSlot, ReplicationSlotManager, ReplicationStats,
     ReplicationStream,
+};
+
+// Re-export failover
+pub use failover::{
+    FailoverManager, FailoverPolicy, FailoverResult, FailoverStrategy, FailureDetector,
+    FailureDetectionResult,
+};
+
+// Re-export multi-master
+pub use multi_master::{
+    Conflict, ConflictResolution, ConflictResolutionStrategy, MultiMasterCluster,
+    MultiMasterConfig, WriteOperation,
+};
+
+// Re-export data sync
+pub use data_sync::{
+    DataSyncConfig, DataSyncCoordinator, SyncMode, SyncOperation, SyncStats, SyncStatus,
+};
+
+// Re-export rolling upgrade
+pub use rolling_upgrade::{
+    NodeUpgradePlan, RollingUpgradeConfig, RollingUpgradeManager, UpgradeOperation,
+    UpgradeStatus, UpgradeStrategy, Version,
 };
 
 // Re-export advanced transaction features (excluding conflicting core module)
