@@ -80,6 +80,14 @@ pkg-config has not been configured to support cross-compilation.
 - Updated Kubernetes manifest generation
 - Updated notification messages
 
+## Note on Helm Values Files
+
+Some Helm values files (e.g., `values-enterprise.yaml`, `values-small.yaml`) still reference `orbit-client` and `orbit-compute` repository configurations. These are intentionally left in place for future use when these components may be containerized as standalone services. For now:
+- `orbit-client` is a library used by applications, not a standalone service
+- `orbit-compute` is a library that provides compute acceleration features
+
+The CI/CD pipeline only builds containers for actual binary services (orbit-server, orbit-operator).
+
 ## Testing Recommendations
 
 1. **Verify Build Success:** Ensure both orbit-server and orbit-operator build successfully for amd64 and arm64
