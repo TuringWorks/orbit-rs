@@ -4,7 +4,6 @@
 //! to measure performance of critical operations.
 
 use orbit_shared::benchmarks::{BenchmarkSuite, StandardBenchmarks};
-use tokio;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -26,7 +25,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     suite
         .benchmark_sync("string_formatting", 1000, || {
-            let data = vec!["hello", "world", "benchmark", "test"];
+            let data = ["hello", "world", "benchmark", "test"];
             let _result = format!("{} {} {} {}", data[0], data[1], data[2], data[3]);
             Ok(())
         })

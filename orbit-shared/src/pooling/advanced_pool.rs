@@ -461,10 +461,11 @@ mod tests {
 
     #[derive(Debug, Clone)]
     struct MockConnection {
+        #[allow(dead_code)] // Used for testing connection uniqueness
         id: usize,
     }
 
-    async fn create_mock_connection(node_id: String) -> OrbitResult<MockConnection> {
+    async fn create_mock_connection(_node_id: String) -> OrbitResult<MockConnection> {
         static COUNTER: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
         let id = COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         Ok(MockConnection { id })

@@ -11,7 +11,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
-use uuid::Uuid;
 
 /// Replication slot represents a consumer's position in the event stream
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -308,6 +307,7 @@ pub struct ReplicationStats {
 pub struct ReplicationStream {
     slot_name: String,
     manager: Arc<ReplicationSlotManager>,
+    #[allow(dead_code)] // Buffer will be used in future streaming implementations
     buffer: Vec<CdcEvent>,
 }
 

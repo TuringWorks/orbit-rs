@@ -1,6 +1,6 @@
 //! Connection health monitoring implementation
 
-use crate::exception::{OrbitError, OrbitResult};
+use crate::exception::OrbitResult;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;

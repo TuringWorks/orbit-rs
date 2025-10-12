@@ -378,11 +378,9 @@ impl CdcCoordinator {
             loop {
                 match event_receiver.recv().await {
                     Ok(event) => {
-                        if filter.matches(&event) {
-                            if tx.send(event).await.is_err() {
-                                debug!("CDC subscription {} dropped", subscription_id);
-                                break;
-                            }
+                        if filter.matches(&event) && tx.send(event).await.is_err() {
+                            debug!("CDC subscription {} dropped", subscription_id);
+                            break;
                         }
                     }
                     Err(broadcast::error::RecvError::Lagged(skipped)) => {

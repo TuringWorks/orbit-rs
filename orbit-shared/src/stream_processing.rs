@@ -10,7 +10,6 @@ use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
-use tracing::info;
 
 /// Window types for stream processing
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -123,6 +122,7 @@ impl WindowState {
     }
 
     /// Check if window contains timestamp
+    #[allow(dead_code)] // Will be used for sliding/session window implementations
     fn contains(&self, timestamp: i64) -> bool {
         timestamp >= self.start_time && timestamp < self.end_time
     }

@@ -5,7 +5,7 @@
 //! store, snapshots, and event replay.
 
 use crate::cdc::CdcEvent;
-use crate::exception::{OrbitError, OrbitResult};
+use crate::exception::OrbitResult;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
