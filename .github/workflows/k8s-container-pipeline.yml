@@ -57,6 +57,7 @@ env:
   RUST_BACKTRACE: 1
   REGISTRY: ghcr.io
   IMAGE_NAMESPACE: ${{ github.repository_owner }}/orbit-rs
+  # Note: IMAGE_NAMESPACE may contain uppercase - use lowercase in shell scripts
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -406,12 +407,15 @@ jobs:
         GPU_ENABLED="${{ matrix.gpu-enabled }}"
         GPU_SUFFIX="${{ matrix.gpu-enabled && '-gpu' || '' }}"
         
+        # Convert IMAGE_NAMESPACE to lowercase for Docker/Podman compatibility
+        IMAGE_NAMESPACE_LOWER=$(echo "${IMAGE_NAMESPACE}" | tr '[:upper:]' '[:lower:]')
+        
         # Build image
         podman build \
           --platform=${PLATFORM} \
           --file=containerfiles/Containerfile.${COMPONENT}${GPU_SUFFIX} \
-          --tag=${REGISTRY}/${IMAGE_NAMESPACE}/${COMPONENT}:${VERSION}-${BUILD_TYPE}${GPU_SUFFIX}-${PLATFORM//\//-} \
-          --tag=${REGISTRY}/${IMAGE_NAMESPACE}/${COMPONENT}:${BUILD_TYPE}${GPU_SUFFIX}-${PLATFORM//\//-} \
+          --tag=${REGISTRY}/${IMAGE_NAMESPACE_LOWER}/${COMPONENT}:${VERSION}-${BUILD_TYPE}${GPU_SUFFIX}-${PLATFORM//\//-} \
+          --tag=${REGISTRY}/${IMAGE_NAMESPACE_LOWER}/${COMPONENT}:${BUILD_TYPE}${GPU_SUFFIX}-${PLATFORM//\//-} \
           --label="org.opencontainers.image.source=https://github.com/${{ github.repository }}" \
           --label="org.opencontainers.image.description=Orbit-RS ${COMPONENT} (${BUILD_TYPE})" \
           --label="org.opencontainers.image.version=${VERSION}" \
@@ -441,7 +445,10 @@ jobs:
         VERSION="${{ needs.setup.outputs.version }}"
         BUILD_TYPE="${{ matrix.build-type }}"
         COMPONENT="${{ matrix.component }}"
-        IMAGE_TAG="${REGISTRY}/${IMAGE_NAMESPACE}/${COMPONENT}:${VERSION}-${BUILD_TYPE}-${PLATFORM//\//-}"
+        
+        # Convert IMAGE_NAMESPACE to lowercase for Docker/Podman compatibility
+        IMAGE_NAMESPACE_LOWER=$(echo "${IMAGE_NAMESPACE}" | tr '[:upper:]' '[:lower:]')
+        IMAGE_TAG="${REGISTRY}/${IMAGE_NAMESPACE_LOWER}/${COMPONENT}:${VERSION}-${BUILD_TYPE}-${PLATFORM//\//-}"
         
         # Export image for scanning (Podman doesn't directly support Trivy)
         podman save --format=docker-archive ${IMAGE_TAG} > /tmp/${COMPONENT}-${BUILD_TYPE}-${PLATFORM//\//-}.tar
@@ -480,11 +487,14 @@ jobs:
         BUILD_TYPE="${{ matrix.build-type }}"
         COMPONENT="${{ matrix.component }}"
         
+        # Convert IMAGE_NAMESPACE to lowercase for Docker/Podman compatibility
+        IMAGE_NAMESPACE_LOWER=$(echo "${IMAGE_NAMESPACE}" | tr '[:upper:]' '[:lower:]')
+        
         # Push with version tag
-        podman push ${REGISTRY}/${IMAGE_NAMESPACE}/${COMPONENT}:${VERSION}-${BUILD_TYPE}-${PLATFORM//\//-}
+        podman push ${REGISTRY}/${IMAGE_NAMESPACE_LOWER}/${COMPONENT}:${VERSION}-${BUILD_TYPE}-${PLATFORM//\//-}
         
         # Push with build type tag  
-        podman push ${REGISTRY}/${IMAGE_NAMESPACE}/${COMPONENT}:${BUILD_TYPE}-${PLATFORM//\//-}
+        podman push ${REGISTRY}/${IMAGE_NAMESPACE_LOWER}/${COMPONENT}:${BUILD_TYPE}-${PLATFORM//\//-}
 
     - name: Generate image metadata
       run: |
@@ -494,7 +504,10 @@ jobs:
         COMPONENT="${{ matrix.component }}"
         GPU_ENABLED="${{ matrix.gpu-enabled }}"
         GPU_SUFFIX="${{ matrix.gpu-enabled && '-gpu' || '' }}"
-        IMAGE_TAG="${REGISTRY}/${IMAGE_NAMESPACE}/${COMPONENT}:${VERSION}-${BUILD_TYPE}${GPU_SUFFIX}-${PLATFORM//\//-}"
+        
+        # Convert IMAGE_NAMESPACE to lowercase for Docker/Podman compatibility
+        IMAGE_NAMESPACE_LOWER=$(echo "${IMAGE_NAMESPACE}" | tr '[:upper:]' '[:lower:]')
+        IMAGE_TAG="${REGISTRY}/${IMAGE_NAMESPACE_LOWER}/${COMPONENT}:${VERSION}-${BUILD_TYPE}${GPU_SUFFIX}-${PLATFORM//\//-}"
         
         # Get image info
         IMAGE_ID=$(podman images --format="{{.ID}}" ${IMAGE_TAG})
@@ -560,32 +573,35 @@ jobs:
         BUILD_TYPE="${{ matrix.build-type }}"
         COMPONENT="${{ matrix.component }}"
         
+        # Convert IMAGE_NAMESPACE to lowercase for Docker/Podman compatibility
+        IMAGE_NAMESPACE_LOWER=$(echo "${IMAGE_NAMESPACE}" | tr '[:upper:]' '[:lower:]')
+        
         # Create manifest list
-        podman manifest create ${REGISTRY}/${IMAGE_NAMESPACE}/${COMPONENT}:${VERSION}-${BUILD_TYPE}
+        podman manifest create ${REGISTRY}/${IMAGE_NAMESPACE_LOWER}/${COMPONENT}:${VERSION}-${BUILD_TYPE}
         
         # Add platform-specific images to manifest
         for PLATFORM in linux/amd64 linux/arm64; do
           PLATFORM_TAG=${PLATFORM//\//-}
-          podman manifest add ${REGISTRY}/${IMAGE_NAMESPACE}/${COMPONENT}:${VERSION}-${BUILD_TYPE} \
-            ${REGISTRY}/${IMAGE_NAMESPACE}/${COMPONENT}:${VERSION}-${BUILD_TYPE}-${PLATFORM_TAG}
+          podman manifest add ${REGISTRY}/${IMAGE_NAMESPACE_LOWER}/${COMPONENT}:${VERSION}-${BUILD_TYPE} \
+            ${REGISTRY}/${IMAGE_NAMESPACE_LOWER}/${COMPONENT}:${VERSION}-${BUILD_TYPE}-${PLATFORM_TAG}
         done
         
         # Push manifest
-        podman manifest push ${REGISTRY}/${IMAGE_NAMESPACE}/${COMPONENT}:${VERSION}-${BUILD_TYPE} \
-          ${REGISTRY}/${IMAGE_NAMESPACE}/${COMPONENT}:${VERSION}-${BUILD_TYPE}
+        podman manifest push ${REGISTRY}/${IMAGE_NAMESPACE_LOWER}/${COMPONENT}:${VERSION}-${BUILD_TYPE} \
+          ${REGISTRY}/${IMAGE_NAMESPACE_LOWER}/${COMPONENT}:${VERSION}-${BUILD_TYPE}
         
         # Create and push latest tags for main branch releases
         if [[ "${{ github.ref }}" == "refs/heads/main" || "${{ github.ref }}" == refs/tags/* ]]; then
-          podman manifest create ${REGISTRY}/${IMAGE_NAMESPACE}/${COMPONENT}:${BUILD_TYPE}
+          podman manifest create ${REGISTRY}/${IMAGE_NAMESPACE_LOWER}/${COMPONENT}:${BUILD_TYPE}
           
           for PLATFORM in linux/amd64 linux/arm64; do
             PLATFORM_TAG=${PLATFORM//\//-}
-            podman manifest add ${REGISTRY}/${IMAGE_NAMESPACE}/${COMPONENT}:${BUILD_TYPE} \
-              ${REGISTRY}/${IMAGE_NAMESPACE}/${COMPONENT}:${VERSION}-${BUILD_TYPE}-${PLATFORM_TAG}
+            podman manifest add ${REGISTRY}/${IMAGE_NAMESPACE_LOWER}/${COMPONENT}:${BUILD_TYPE} \
+              ${REGISTRY}/${IMAGE_NAMESPACE_LOWER}/${COMPONENT}:${VERSION}-${BUILD_TYPE}-${PLATFORM_TAG}
           done
           
-          podman manifest push ${REGISTRY}/${IMAGE_NAMESPACE}/${COMPONENT}:${BUILD_TYPE} \
-            ${REGISTRY}/${IMAGE_NAMESPACE}/${COMPONENT}:${BUILD_TYPE}
+          podman manifest push ${REGISTRY}/${IMAGE_NAMESPACE_LOWER}/${COMPONENT}:${BUILD_TYPE} \
+            ${REGISTRY}/${IMAGE_NAMESPACE_LOWER}/${COMPONENT}:${BUILD_TYPE}
         fi
 
   # ============================================================================
@@ -929,6 +945,9 @@ jobs:
       run: |
         VERSION="${{ needs.setup.outputs.version }}"
         
+        # Convert IMAGE_NAMESPACE to lowercase for Docker/Podman compatibility
+        IMAGE_NAMESPACE_LOWER=$(echo "${IMAGE_NAMESPACE}" | tr '[:upper:]' '[:lower:]')
+        
         # Update Kubernetes manifests with new image tags
         mkdir -p k8s/test-deployment
         
@@ -955,7 +974,7 @@ jobs:
             spec:
               containers:
               - name: ${component}
-                image: ${REGISTRY}/${IMAGE_NAMESPACE}/${component}:${VERSION}-release
+                image: ${REGISTRY}/${IMAGE_NAMESPACE_LOWER}/${component}:${VERSION}-release
                 ports:
                 - containerPort: 8080
                   name: http
@@ -1019,30 +1038,33 @@ jobs:
       run: |
         VERSION="${{ needs.setup.outputs.version }}"
         
+        # Convert IMAGE_NAMESPACE to lowercase for Docker/Podman compatibility
+        IMAGE_NAMESPACE_LOWER=$(echo "${IMAGE_NAMESPACE}" | tr '[:upper:]' '[:lower:]')
+        
         # Update Helm values for testing
         cat > helm/orbit-rs/values-test.yaml << EOF
         orbitServer:
           image:
-            repository: ${REGISTRY}/${IMAGE_NAMESPACE}/orbit-server
+            repository: ${REGISTRY}/${IMAGE_NAMESPACE_LOWER}/orbit-server
             tag: ${VERSION}-release
             pullPolicy: IfNotPresent
           replicaCount: 1
           
         orbitClient:
           image:
-            repository: ${REGISTRY}/${IMAGE_NAMESPACE}/orbit-client
+            repository: ${REGISTRY}/${IMAGE_NAMESPACE_LOWER}/orbit-client
             tag: ${VERSION}-release
             pullPolicy: IfNotPresent
             
         orbitOperator:
           image:
-            repository: ${REGISTRY}/${IMAGE_NAMESPACE}/orbit-operator
+            repository: ${REGISTRY}/${IMAGE_NAMESPACE_LOWER}/orbit-operator
             tag: ${VERSION}-release
             pullPolicy: IfNotPresent
             
         orbitCompute:
           image:
-            repository: ${REGISTRY}/${IMAGE_NAMESPACE}/orbit-compute
+            repository: ${REGISTRY}/${IMAGE_NAMESPACE_LOWER}/orbit-compute
             tag: ${VERSION}-release
             pullPolicy: IfNotPresent
         EOF
