@@ -392,17 +392,25 @@ impl MvccExecutionStrategy {
 
 /// Traditional (non-MVCC) execution strategy
 pub struct TraditionalExecutionStrategy {
-    parser: SqlParser,
-    executor: SqlExecutor,
+    pub parser: SqlParser,
+    pub executor: SqlExecutor,
     #[allow(dead_code)]
-    config: SqlEngineConfig,
+    pub config: SqlEngineConfig,
 }
 
 impl TraditionalExecutionStrategy {
-    pub fn new(config: SqlEngineConfig) -> Self {
+    pub async fn new(config: SqlEngineConfig) -> ProtocolResult<Self> {
+        Ok(Self {
+            parser: SqlParser::new(),
+            executor: SqlExecutor::new().await?,
+            config,
+        })
+    }
+
+    pub fn with_executor(executor: SqlExecutor, config: SqlEngineConfig) -> Self {
         Self {
             parser: SqlParser::new(),
-            executor: SqlExecutor::new(),
+            executor,
             config,
         }
     }
@@ -530,7 +538,21 @@ impl ConfigurableSqlEngine {
         let strategy: Box<dyn SqlExecutionStrategy> = match config.strategy {
             ExecutionStrategy::Mvcc => Box::new(MvccExecutionStrategy::new(config.clone())),
             ExecutionStrategy::Traditional => {
-                Box::new(TraditionalExecutionStrategy::new(config.clone()))
+                // Create executor using tokio runtime or current handle
+                use crate::postgres_wire::sql::executor::SqlExecutor;
+
+                // Use simple memory constructor for testing to avoid runtime issues
+                let executor = if cfg!(test) {
+                    SqlExecutor::new_simple_memory()
+                } else {
+                    #[allow(deprecated)]
+                    SqlExecutor::new_in_memory()
+                };
+
+                Box::new(TraditionalExecutionStrategy::with_executor(
+                    executor,
+                    config.clone(),
+                ))
             }
             ExecutionStrategy::Hybrid => {
                 // Default to MVCC for hybrid mode
@@ -628,7 +650,21 @@ impl ConfigurableSqlEngine {
                     Box::new(MvccExecutionStrategy::new(self.config.clone()))
                 }
                 ExecutionStrategy::Traditional => {
-                    Box::new(TraditionalExecutionStrategy::new(self.config.clone()))
+                    // Create executor using tokio runtime or current handle
+                    use crate::postgres_wire::sql::executor::SqlExecutor;
+
+                    // Use simple memory constructor for testing to avoid runtime issues
+                    let executor = if cfg!(test) {
+                        SqlExecutor::new_simple_memory()
+                    } else {
+                        #[allow(deprecated)]
+                        SqlExecutor::new_in_memory()
+                    };
+
+                    Box::new(TraditionalExecutionStrategy::with_executor(
+                        executor,
+                        self.config.clone(),
+                    ))
                 }
                 ExecutionStrategy::Hybrid => {
                     Box::new(MvccExecutionStrategy::new(self.config.clone()))

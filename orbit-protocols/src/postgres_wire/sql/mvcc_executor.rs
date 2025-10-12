@@ -631,10 +631,7 @@ impl MvccSqlExecutor {
             name: name.to_string(),
             row_versions: BTreeMap::new(),
             schema: crate::postgres_wire::sql::executor::TableSchema {
-                name: crate::postgres_wire::sql::ast::TableName {
-                    schema: None,
-                    name: name.to_string(),
-                },
+                name: name.to_string(), // Use string directly
                 columns: Vec::new(),
                 constraints: Vec::new(),
                 indexes: Vec::new(),
