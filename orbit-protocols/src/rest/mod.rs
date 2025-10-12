@@ -26,9 +26,11 @@
 pub mod handlers;
 pub mod models;
 pub mod server;
+pub mod sse;
 pub mod websocket;
 
 pub use handlers::*;
 pub use models::*;
 pub use server::RestApiServer;
+pub use sse::*;
 pub use websocket::WebSocketHandler;
