@@ -10,9 +10,10 @@ on:
     branches: [ main, develop ]
     paths:
       - 'orbit-server/**'
-      - 'orbit-client/**'
       - 'orbit-operator/**'
-      - 'orbit-compute/**'
+      - 'orbit-shared/**'
+      - 'orbit-util/**'
+      - 'orbit-proto/**'
       - 'Cargo.toml'
       - 'Cargo.lock'
       - '.github/workflows/k8s-container-pipeline.yml'
@@ -23,9 +24,10 @@ on:
     branches: [ main, develop ]
     paths:
       - 'orbit-server/**'
-      - 'orbit-client/**'
       - 'orbit-operator/**'
-      - 'orbit-compute/**'
+      - 'orbit-shared/**'
+      - 'orbit-util/**'
+      - 'orbit-proto/**'
       - 'Cargo.toml'
       - 'Cargo.lock'
       - '.github/workflows/k8s-container-pipeline.yml'
@@ -56,7 +58,7 @@ env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
   REGISTRY: ghcr.io
-  IMAGE_NAMESPACE: ${{ github.repository_owner }}/orbit-rs
+  IMAGE_NAMESPACE: ${{ github.repository_owner | lowercase }}/orbit-rs
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -157,26 +159,16 @@ jobs:
       # Reduce parallelism to avoid disk space issues
       max-parallel: 2
       matrix:
-        component: ["orbit-server", "orbit-client", "orbit-operator", "orbit-compute"]
+        # Only build components that have binary targets (main.rs)
+        component: ["orbit-server", "orbit-operator"]
         build-type: ${{ fromJson(needs.setup.outputs.build-types) }}
         platform: ["linux/amd64", "linux/arm64"]
-        gpu-enabled: [false, true]
+        gpu-enabled: [false]
         include:
           - platform: "linux/amd64"
             runner-arch: "amd64"
           - platform: "linux/arm64"
             runner-arch: "arm64"
-        exclude:
-          # Only build GPU variants for orbit-compute
-          - component: "orbit-server"
-            gpu-enabled: true
-          - component: "orbit-client"
-            gpu-enabled: true
-          - component: "orbit-operator"
-            gpu-enabled: true
-          # No ARM64 GPU support for now (can be enabled later)
-          - platform: "linux/arm64"
-            gpu-enabled: true
     permissions:
       contents: read
       packages: write
@@ -189,9 +181,10 @@ jobs:
         # Use sparse checkout to reduce disk usage
         sparse-checkout: |
           orbit-server/
-          orbit-client/
           orbit-operator/
-          orbit-compute/
+          orbit-shared/
+          orbit-util/
+          orbit-proto/
           Cargo.toml
           Cargo.lock
           .github/workflows/k8s-container-pipeline.yml
@@ -263,8 +256,12 @@ jobs:
     - name: Install cross-compilation tools
       if: matrix.platform == 'linux/arm64'
       run: |
-        sudo apt-get install -y gcc-aarch64-linux-gnu
+        sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+        # Set environment variables for cross-compilation
         echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
+        echo "CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
+        echo "CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++" >> $GITHUB_ENV
+        echo "AR_aarch64_unknown_linux_gnu=aarch64-linux-gnu-ar" >> $GITHUB_ENV
 
     - name: Cache Rust dependencies
       uses: actions/cache@v4
@@ -281,6 +278,8 @@ jobs:
     - name: Install system dependencies
       run: |
         sudo apt-get install -y pkg-config libssl-dev libsqlite3-dev protobuf-compiler
+        # Install perl and make for vendored OpenSSL builds (ARM64 cross-compilation)
+        sudo apt-get install -y perl make
 
     - name: Build binary
       run: |
@@ -295,6 +294,15 @@ jobs:
         export CARGO_NET_RETRY=10
         export CARGO_HTTP_TIMEOUT=300
         export RUSTFLAGS="-C link-arg=-Wl,--no-keep-memory -C codegen-units=1"
+        
+        # For ARM64 cross-compilation, use vendored OpenSSL to avoid cross-compilation issues
+        if [ "$TARGET" = "aarch64-unknown-linux-gnu" ]; then
+          export OPENSSL_STATIC=1
+          export OPENSSL_LIB_DIR=/usr/lib/x86_64-linux-gnu
+          export OPENSSL_INCLUDE_DIR=/usr/include
+          # Use openssl-sys vendored feature
+          BUILD_FLAGS="$BUILD_FLAGS --features openssl-sys/vendored"
+        fi
         
         # Build the specific component with reduced parallelism to save memory/disk
         cargo build $BUILD_FLAGS --target $TARGET --package ${{ matrix.component }} --bin ${{ matrix.component }} --jobs 1
@@ -538,7 +546,8 @@ jobs:
     if: needs.setup.outputs.should-push == 'true'
     strategy:
       matrix:
-        component: ["orbit-server", "orbit-client", "orbit-operator", "orbit-compute"]
+        # Only create manifests for components that have binaries
+        component: ["orbit-server", "orbit-operator"]
         build-type: ${{ fromJson(needs.setup.outputs.build-types) }}
     permissions:
       contents: read
@@ -932,7 +941,7 @@ jobs:
         # Update Kubernetes manifests with new image tags
         mkdir -p k8s/test-deployment
         
-        for component in orbit-server orbit-client orbit-operator orbit-compute; do
+        for component in orbit-server orbit-operator; do
           cat > k8s/test-deployment/${component}-deployment.yaml << EOF
         apiVersion: apps/v1
         kind: Deployment
@@ -1028,21 +1037,9 @@ jobs:
             pullPolicy: IfNotPresent
           replicaCount: 1
           
-        orbitClient:
-          image:
-            repository: ${REGISTRY}/${IMAGE_NAMESPACE}/orbit-client
-            tag: ${VERSION}-release
-            pullPolicy: IfNotPresent
-            
         orbitOperator:
           image:
             repository: ${REGISTRY}/${IMAGE_NAMESPACE}/orbit-operator
-            tag: ${VERSION}-release
-            pullPolicy: IfNotPresent
-            
-        orbitCompute:
-          image:
-            repository: ${REGISTRY}/${IMAGE_NAMESPACE}/orbit-compute
             tag: ${VERSION}-release
             pullPolicy: IfNotPresent
         EOF
@@ -1076,7 +1073,7 @@ jobs:
           echo "✅ Download page updated"
         fi
         echo ""
-        echo "📦 Built images for components: orbit-server, orbit-client, orbit-operator, orbit-compute"
+        echo "📦 Built images for components: orbit-server, orbit-operator"
         echo "🏗️ Build types: ${{ needs.setup.outputs.build-types }}"
         echo "🖥️ Platforms: ${{ needs.setup.outputs.platforms }}"
         echo "📝 Version: ${{ needs.setup.outputs.version }}"
