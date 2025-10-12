@@ -4168,6 +4168,7 @@ dependencies = [
  "prost",
  "prost-build",
  "rayon",
+ "regex",
  "serde",
  "serde_json",
  "sha2",

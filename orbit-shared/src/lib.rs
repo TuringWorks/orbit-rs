@@ -21,6 +21,7 @@ pub mod replication;
 pub mod router;
 pub mod saga;
 pub mod saga_recovery;
+pub mod security;
 pub mod spatial;
 pub mod stream_processing;
 pub mod streaming_integrations;
@@ -103,4 +104,14 @@ pub use spatial::{
     SpatialAlert, SpatialError, SpatialFunctions, SpatialGeometry, SpatialIndex, SpatialOperations,
     SpatialRelation, SpatialStreamProcessor, DEFAULT_PRECISION, EARTH_RADIUS_METERS,
     UTM_ZONE_33N_SRID, WEB_MERCATOR_SRID, WGS84_SRID,
+};
+
+// Re-export security functionality
+pub use security::{
+    AnomalyDetector, AuditEvent, AuditLogger, AuditPolicy, AuthToken, AuthenticationManager,
+    AuthenticationProvider, ComplianceMonitor, EncryptionManager, KeyManagementSystem,
+    KeyRotationPolicy, LdapAuthProvider, OAuth2AuthProvider, PolicyEngine, QueryValidator,
+    RbacEngine, RoleBasedAccessControl, SamlAuthProvider, SecurityAction, SecurityContext,
+    SecurityFramework, SecurityResource, SecuritySubject, SqlInjectionDetector, ThreatDetectionEngine,
+    TlsConfig, TlsVersion,
 };
