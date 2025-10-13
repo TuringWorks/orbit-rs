@@ -544,6 +544,8 @@ Success depends on execution speed and community building while maintaining tech
 <document_type>RULE</document_type>
 <document_id>TnABpZTTQTcRhFqswGQIPL</document_id>
 </document>
+<document>
 <document_type>RULE</document_type>
 <document_id>p9KJPeum2fC5wsm4EPiv6V</document_id>
+</document>
 </citations>

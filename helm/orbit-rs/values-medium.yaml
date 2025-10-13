@@ -1,0 +1,260 @@
+# Orbit-RS Helm Chart Values - Medium Workload Profile
+# Use Case: Production workloads, staging environments
+# Data Scale: 10GB - 1TB
+# Concurrent Users: 10-100
+# Expected Throughput: 1,000 - 50,000 ops/sec
+
+# Global settings
+global:
+  imageRegistry: "ghcr.io/turingworks/orbit-rs"
+  imageTag: "latest-release"
+  imagePullPolicy: IfNotPresent
+  storageClass: "standard"
+  
+# Orbit Server Configuration
+orbitServer:
+  enabled: true
+  replicaCount: 3
+  
+  image:
+    repository: orbit-server
+    tag: ""  # Uses global.imageTag if empty
+    pullPolicy: ""  # Uses global.imagePullPolicy if empty
+  
+  resources:
+    requests:
+      cpu: "2"
+      memory: "8Gi"
+      ephemeral-storage: "100Gi"
+    limits:
+      cpu: "8"
+      memory: "32Gi"
+      ephemeral-storage: "500Gi"
+  
+  # Environment variables for medium workload
+  env:
+    RUST_MIN_STACK: "8388608"  # 8MB stack
+    ORBIT_CACHE_SIZE: "4GB"
+    ORBIT_WAL_BUFFER_SIZE: "512MB"
+    ORBIT_QUERY_CACHE_SIZE: "1GB"
+    ORBIT_MAX_CONNECTIONS: "5000"
+    ORBIT_BACKGROUND_THREADS: "8"
+    RUST_LOG: "info"
+  
+  # Storage configuration
+  persistence:
+    enabled: true
+    storageClass: ""  # Uses global.storageClass if empty
+    size: "500Gi"
+    accessMode: ReadWriteOnce
+  
+  # Service configuration
+  service:
+    type: ClusterIP
+    port: 8080
+    targetPort: 8080
+  
+  # Health checks
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: 8080
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+  
+  readinessProbe:
+    httpGet:
+      path: /ready
+      port: 8080
+    initialDelaySeconds: 10
+    periodSeconds: 5
+    timeoutSeconds: 3
+
+  # Pod topology spread constraints for better availability
+  topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: topology.kubernetes.io/zone
+    whenUnsatisfiable: ScheduleAnyway
+    labelSelector:
+      matchLabels:
+        app: orbit-server
+
+# Orbit Client Configuration
+orbitClient:
+  enabled: true
+  replicaCount: 2
+  
+  image:
+    repository: orbit-client
+    tag: ""
+    pullPolicy: ""
+  
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "1Gi"
+    limits:
+      cpu: "2"
+      memory: "4Gi"
+  
+  env:
+    ORBIT_MAX_POOL_SIZE: "1000"
+    ORBIT_MIN_POOL_SIZE: "100"
+    ORBIT_KEEPALIVE_TIMEOUT: "60s"
+    RUST_LOG: "info"
+
+# Orbit Compute Configuration
+orbitCompute:
+  enabled: true
+  replicaCount: 2
+  
+  image:
+    repository: orbit-compute
+    tag: ""
+    pullPolicy: ""
+  
+  resources:
+    requests:
+      cpu: "4"
+      memory: "8Gi"
+    limits:
+      cpu: "16"
+      memory: "32Gi"
+  
+  # GPU configuration (disabled for medium workload)
+  gpu:
+    enabled: false
+    vendor: ""  # nvidia, amd, or auto
+    count: 0
+    memoryFraction: 0.8
+  
+  env:
+    ORBIT_COMPUTE_THREADS: "8"
+    RUST_LOG: "info"
+
+# Orbit Operator Configuration
+orbitOperator:
+  enabled: true
+  replicaCount: 1
+  
+  image:
+    repository: orbit-operator
+    tag: ""
+    pullPolicy: ""
+  
+  resources:
+    requests:
+      cpu: "200m"
+      memory: "512Mi"
+    limits:
+      cpu: "1"
+      memory: "2Gi"
+  
+  env:
+    ORBIT_RECONCILE_INTERVAL: "20s"
+    ORBIT_LEADER_ELECTION: "true"
+    ORBIT_METRICS_ENABLED: "true"
+    RUST_LOG: "info"
+
+# Service Account
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+# Pod Security Context
+podSecurityContext:
+  fsGroup: 1000
+  runAsUser: 1000
+  runAsGroup: 1000
+  runAsNonRoot: true
+
+# Security Context
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+    - ALL
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 1000
+
+# Node Selector
+nodeSelector: {}
+
+# Tolerations
+tolerations: []
+
+# Affinity
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+    - weight: 100
+      podAffinityTerm:
+        labelSelector:
+          matchLabels:
+            app: orbit-server
+        topologyKey: kubernetes.io/hostname
+
+# Autoscaling
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 75
+  targetMemoryUtilizationPercentage: 80
+
+# Monitoring
+monitoring:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+    interval: 30s
+    scrapeTimeout: 10s
+  
+  metrics:
+    enabled: true
+    port: 9090
+
+# Network Policies
+networkPolicy:
+  enabled: true
+  policyTypes:
+  - Ingress
+  - Egress
+  
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: orbit-clients
+    ports:
+    - protocol: TCP
+      port: 8080
+  
+  egress:
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 53
+    - protocol: UDP
+      port: 53
+
+# Pod Disruption Budget
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 2
+
+# Backup configuration
+backup:
+  enabled: true
+  schedule: "0 3 * * *"  # Daily at 3 AM
+  retention: "14d"
+  
+  storage:
+    enabled: true
+    storageClass: "backup-storage"
+    size: "1Ti"

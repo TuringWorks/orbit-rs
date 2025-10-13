@@ -28,6 +28,41 @@ pub struct EvaluationContext {
     pub window_frame: Option<WindowFrameContext>,
 }
 
+impl EvaluationContext {
+    /// Create a new empty evaluation context
+    pub fn empty() -> Self {
+        Self {
+            current_row: HashMap::new(),
+            table_data: HashMap::new(),
+            variables: HashMap::new(),
+            current_table: None,
+            window_frame: None,
+        }
+    }
+
+    /// Create context with a specific row
+    pub fn with_row(current_row: HashMap<String, SqlValue>) -> Self {
+        Self {
+            current_row,
+            table_data: HashMap::new(),
+            variables: HashMap::new(),
+            current_table: None,
+            window_frame: None,
+        }
+    }
+
+    /// Create context with row and table name
+    pub fn with_row_and_table(current_row: HashMap<String, SqlValue>, table_name: String) -> Self {
+        Self {
+            current_row,
+            table_data: HashMap::new(),
+            variables: HashMap::new(),
+            current_table: Some(table_name),
+            window_frame: None,
+        }
+    }
+}
+
 /// Window function evaluation context
 #[derive(Debug, Clone)]
 pub struct WindowFrameContext {
@@ -242,10 +277,10 @@ impl ExpressionEvaluator {
                 self.vector_distance(&left_val, &right_val, VectorOperator::CosineDistance)
             }
 
-            _ => Err(ProtocolError::PostgresError(format!(
-                "Binary operator {:?} not implemented",
-                operator
-            ))),
+            _ => Err(ProtocolError::not_implemented(
+                "Binary operator",
+                &format!("{:?}", operator),
+            )),
         }
     }
 
@@ -276,10 +311,10 @@ impl ExpressionEvaluator {
                 value,
                 SqlValue::Boolean(false)
             ))),
-            _ => Err(ProtocolError::PostgresError(format!(
-                "Unary operator {:?} not implemented",
-                operator
-            ))),
+            _ => Err(ProtocolError::not_implemented(
+                "Unary operator",
+                &format!("{:?}", operator),
+            )),
         }
     }
 
@@ -337,10 +372,7 @@ impl ExpressionEvaluator {
             "GREATEST" => self.evaluate_greatest(&args),
             "LEAST" => self.evaluate_least(&args),
 
-            _ => Err(ProtocolError::PostgresError(format!(
-                "Function '{}' not implemented",
-                func_name
-            ))),
+            _ => Err(ProtocolError::not_implemented("Function", &func_name)),
         }
     }
 
