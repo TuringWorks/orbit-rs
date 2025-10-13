@@ -198,6 +198,72 @@ FT.SEARCH products-idx "0.1,0.2,0.3" 10 DISTANCE_METRIC COSINE
 - **Redis Streams**: Time-series data processing
 - **Pub/Sub**: Real-time messaging
 - **Pipelining**: Batch operations for performance
+
+## 🔗 Enterprise Connection Pooling
+
+Orbit-RS features advanced connection pooling with enterprise-grade capabilities:
+
+### Multi-Tier Architecture
+
+- **Client Tier**: Connection pooling at the client level
+- **Application Tier**: Server-side connection management  
+- **Database Tier**: Backend connection optimization
+
+### Configuration
+
+```toml
+[pooling]
+enabled = true
+min_connections = 5
+max_connections = 100
+connection_timeout_secs = 30
+idle_timeout_secs = 300
+max_lifetime_secs = 3600
+health_check_interval_secs = 30
+load_balancing_strategy = "LeastConnections"
+tier = "Application"
+enable_dynamic_sizing = true
+target_utilization = 0.75
+
+# Circuit breaker configuration
+[pooling.circuit_breaker]
+enabled = true
+failure_threshold = 5
+failure_window_secs = 60
+recovery_timeout_secs = 30
+success_threshold = 3
+half_open_max_calls = 3
+
+# Per-protocol overrides
+[pooling.protocol_overrides.postgresql]
+max_connections = 150
+load_balancing_strategy = "RoundRobin"
+
+[pooling.protocol_overrides.redis]
+max_connections = 75
+load_balancing_strategy = "WeightedRoundRobin"
+```
+
+### Load Balancing Strategies
+
+- **RoundRobin**: Distribute connections evenly
+- **LeastConnections**: Route to least loaded nodes
+- **WeightedRoundRobin**: Weight-based distribution
+- **Random**: Random selection
+- **AffinityBased**: Session affinity routing
+
+### Circuit Breaker Protection
+
+- **Failure Detection**: Automatic failure detection
+- **Recovery Testing**: Half-open state recovery
+- **Cascade Prevention**: Prevent system-wide failures
+
+### Health Monitoring
+
+- **Real-time Health Checks**: Continuous connection monitoring
+- **Response Time Tracking**: Performance metrics
+- **Automatic Recovery**: Failed connection replacement
+- **Dynamic Scaling**: Adapt pool size to load
 - **Lua Scripting**: Custom operations (planned)
 
 ## 🌍 HTTP REST API
