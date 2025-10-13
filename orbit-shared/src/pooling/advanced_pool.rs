@@ -396,6 +396,11 @@ where
         self.connection.as_mut().unwrap()
     }
 
+    /// Get the node ID this connection belongs to
+    pub fn node_id(&self) -> &str {
+        &self.node_id
+    }
+
     /// Mark the connection as unhealthy (will not be returned to pool)
     pub fn mark_unhealthy(&mut self) {
         // The connection will be dropped instead of returned

@@ -1293,7 +1293,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "distributed-counter"
+name = "distributed-counter-example"
 version = "0.1.0"
 dependencies = [
  "anyhow",
