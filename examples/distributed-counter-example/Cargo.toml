@@ -1,13 +1,12 @@
 [package]
-name = "distributed-counter"
+name = "distributed-counter-example"
 version = "0.1.0"
 edition = "2021"
 license = "BSD-3-Clause"
 
-[[bin]]
-name = "distributed-counter"
-path = "src/main.rs"
-doc = false
+[[example]]
+name = "distributed_counter"
+path = "../distributed_counter.rs"
 
 [dependencies]
 orbit-client = { path = "../../orbit-client" }
