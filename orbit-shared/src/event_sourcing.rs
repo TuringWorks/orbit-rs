@@ -5,7 +5,7 @@
 //! store, snapshots, and event replay.
 
 use crate::cdc::CdcEvent;
-use crate::exception::{OrbitError, OrbitResult};
+use crate::exception::OrbitResult;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -226,10 +226,7 @@ impl EventStore {
     }
 
     /// Get all events for an aggregate type
-    pub async fn get_events_by_type(
-        &self,
-        aggregate_type: &str,
-    ) -> OrbitResult<Vec<DomainEvent>> {
+    pub async fn get_events_by_type(&self, aggregate_type: &str) -> OrbitResult<Vec<DomainEvent>> {
         let events = self.events.read().await;
 
         let mut result = Vec::new();

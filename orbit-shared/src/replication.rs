@@ -11,7 +11,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
-use uuid::Uuid;
 
 /// Replication slot represents a consumer's position in the event stream
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -222,12 +221,12 @@ impl ReplicationSlotManager {
         slot_name: &str,
         events: &[CdcEvent],
     ) -> OrbitResult<Vec<CdcEvent>> {
-        let slot = self
-            .get_slot(slot_name)
-            .await
-            .ok_or_else(|| OrbitError::AddressableNotFound {
-                reference: format!("Replication slot '{}'", slot_name),
-            })?;
+        let slot =
+            self.get_slot(slot_name)
+                .await
+                .ok_or_else(|| OrbitError::AddressableNotFound {
+                    reference: format!("Replication slot '{}'", slot_name),
+                })?;
 
         // Return events with LSN greater than slot's confirmed position
         let pending: Vec<_> = events
@@ -271,12 +270,12 @@ impl ReplicationSlotManager {
 
     /// Check slot lag
     pub async fn get_slot_lag(&self, slot_name: &str) -> OrbitResult<u64> {
-        let slot = self
-            .get_slot(slot_name)
-            .await
-            .ok_or_else(|| OrbitError::AddressableNotFound {
-                reference: format!("Replication slot '{}'", slot_name),
-            })?;
+        let slot =
+            self.get_slot(slot_name)
+                .await
+                .ok_or_else(|| OrbitError::AddressableNotFound {
+                    reference: format!("Replication slot '{}'", slot_name),
+                })?;
 
         let current = self.current_lsn().await;
         Ok(current.saturating_sub(slot.confirmed_flush_lsn))
@@ -308,6 +307,7 @@ pub struct ReplicationStats {
 pub struct ReplicationStream {
     slot_name: String,
     manager: Arc<ReplicationSlotManager>,
+    #[allow(dead_code)] // Buffer will be used in future streaming implementations
     buffer: Vec<CdcEvent>,
 }
 

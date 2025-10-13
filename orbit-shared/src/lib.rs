@@ -1,12 +1,16 @@
 pub mod actor_communication;
 pub mod addressable;
+pub mod benchmarks;
+pub mod builder_pattern;
 pub mod cdc;
 pub mod cluster_manager;
+pub mod config_utils;
 pub mod consensus;
-pub mod election_metrics;
 pub mod election_state;
+pub mod error_handling;
 pub mod event_sourcing;
 pub mod exception;
+pub mod execution_utils;
 pub mod graph;
 pub mod graphrag;
 pub mod integrated_recovery;
@@ -15,12 +19,14 @@ pub mod mesh;
 pub mod net;
 pub mod orbitql;
 pub mod persistence;
+pub mod pooling;
 pub mod raft_transport;
 pub mod recovery;
 pub mod replication;
 pub mod router;
 pub mod saga;
 pub mod saga_recovery;
+pub mod security_patterns;
 pub mod spatial;
 pub mod stream_processing;
 pub mod streaming_integrations;
@@ -64,8 +70,7 @@ pub use event_sourcing::{
 
 // Re-export replication
 pub use replication::{
-    ReplicationConfig, ReplicationSlot, ReplicationSlotManager, ReplicationStats,
-    ReplicationStream,
+    ReplicationConfig, ReplicationSlot, ReplicationSlotManager, ReplicationStats, ReplicationStream,
 };
 
 // Re-export advanced transaction features (excluding conflicting core module)
@@ -110,4 +115,9 @@ pub use spatial::{
 pub use triggers::{
     TriggerContext, TriggerCoordinator, TriggerDefinition, TriggerEvent, TriggerExecutor,
     TriggerFunction, TriggerLevel, TriggerResult, TriggerStats, TriggerTiming,
+// Re-export advanced connection pooling
+pub use pooling::{
+    AdvancedConnectionPool, AdvancedPoolConfig, CircuitBreaker, CircuitBreakerConfig,
+    CircuitBreakerState, ConnectionHealth, ConnectionHealthMonitor, ConnectionLoadBalancer,
+    ConnectionPoolMetrics, HealthCheck, HealthStatus, LoadBalancingStrategy, NodeHealth, PoolTier,
 };

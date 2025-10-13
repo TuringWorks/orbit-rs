@@ -55,6 +55,11 @@ mod mvcc_demo;
 #[cfg(test)]
 mod tests;
 
+// Include comprehensive executor unit tests
+#[cfg(test)]
+#[path = "executor_tests.rs"]
+mod executor_tests;
+
 pub use ast::{Expression, SelectStatement, Statement};
 pub use execution_strategy::{
     ConfigurableSqlEngine, ExecutionStrategy, SqlEngineConfig, SqlExecutionStrategy,

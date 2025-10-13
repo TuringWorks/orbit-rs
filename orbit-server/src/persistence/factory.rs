@@ -4,7 +4,7 @@
 //! providers based on configuration, supporting all available backends.
 
 use super::*;
-use crate::persistence::{cow_btree::*, lsm_tree::*, rocksdb::*};
+use crate::persistence::{cow_btree::*, lsm_tree::*, rocksdb::*, tikv::*};
 use std::sync::Arc;
 
 /// Create an addressable directory persistence provider based on configuration
@@ -29,6 +29,11 @@ pub async fn create_addressable_provider(
         }
         PersistenceConfig::RocksDB(rocks_config) => {
             let provider = RocksDbAddressableProvider::new(rocks_config.clone())?;
+            provider.initialize().await?;
+            Ok(Arc::new(provider))
+        }
+        PersistenceConfig::TiKV(tikv_config) => {
+            let provider = TiKVAddressableProvider::new(tikv_config.clone()).await?;
             provider.initialize().await?;
             Ok(Arc::new(provider))
         }
@@ -66,6 +71,11 @@ pub async fn create_cluster_provider(
         }
         PersistenceConfig::RocksDB(rocks_config) => {
             let provider = RocksDbClusterProvider::new(rocks_config.clone())?;
+            provider.initialize().await?;
+            Ok(Arc::new(provider))
+        }
+        PersistenceConfig::TiKV(tikv_config) => {
+            let provider = TiKVClusterProvider::new(tikv_config.clone()).await?;
             provider.initialize().await?;
             Ok(Arc::new(provider))
         }
@@ -195,6 +205,71 @@ pub fn load_config_from_env() -> OrbitResult<PersistenceConfig> {
             };
             Ok(PersistenceConfig::RocksDB(config))
         }
+        "tikv" => {
+            let pd_endpoints_str = std::env::var("ORBIT_TIKV_PD_ENDPOINTS")
+                .unwrap_or_else(|_| "127.0.0.1:2379".to_string());
+            let pd_endpoints: Vec<String> = pd_endpoints_str
+                .split(',')
+                .map(|s| s.trim().to_string())
+                .collect();
+
+            let config = TiKVConfig {
+                pd_endpoints,
+                connection_timeout: std::env::var("ORBIT_TIKV_CONNECTION_TIMEOUT")
+                    .ok()
+                    .and_then(|s| s.parse().ok()),
+                request_timeout: std::env::var("ORBIT_TIKV_REQUEST_TIMEOUT")
+                    .ok()
+                    .and_then(|s| s.parse().ok()),
+                max_connections: std::env::var("ORBIT_TIKV_MAX_CONNECTIONS")
+                    .ok()
+                    .and_then(|s| s.parse().ok()),
+                enable_pessimistic_txn: std::env::var("ORBIT_TIKV_ENABLE_PESSIMISTIC_TXN")
+                    .map(|s| s.parse().unwrap_or(false))
+                    .unwrap_or(false),
+                txn_timeout: std::env::var("ORBIT_TIKV_TXN_TIMEOUT")
+                    .ok()
+                    .and_then(|s| s.parse().ok()),
+                enable_async_commit: std::env::var("ORBIT_TIKV_ENABLE_ASYNC_COMMIT")
+                    .map(|s| s.parse().unwrap_or(true))
+                    .unwrap_or(true),
+                enable_one_pc: std::env::var("ORBIT_TIKV_ENABLE_ONE_PC")
+                    .map(|s| s.parse().unwrap_or(true))
+                    .unwrap_or(true),
+                batch_size: std::env::var("ORBIT_TIKV_BATCH_SIZE")
+                    .ok()
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(1000),
+                region_cache_size: std::env::var("ORBIT_TIKV_REGION_CACHE_SIZE")
+                    .ok()
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(1000),
+                coprocessor_pool_size: std::env::var("ORBIT_TIKV_COPROCESSOR_POOL_SIZE")
+                    .ok()
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(8),
+                enable_tls: std::env::var("ORBIT_TIKV_ENABLE_TLS")
+                    .map(|s| s.parse().unwrap_or(false))
+                    .unwrap_or(false),
+                ca_cert_path: std::env::var("ORBIT_TIKV_CA_CERT_PATH").ok(),
+                client_cert_path: std::env::var("ORBIT_TIKV_CLIENT_CERT_PATH").ok(),
+                client_key_path: std::env::var("ORBIT_TIKV_CLIENT_KEY_PATH").ok(),
+                key_prefix: std::env::var("ORBIT_TIKV_KEY_PREFIX")
+                    .unwrap_or_else(|_| "orbit".to_string()),
+                enable_compression: std::env::var("ORBIT_TIKV_ENABLE_COMPRESSION")
+                    .map(|s| s.parse().unwrap_or(true))
+                    .unwrap_or(true),
+                max_retries: std::env::var("ORBIT_TIKV_MAX_RETRIES")
+                    .ok()
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(3),
+                retry_delay_ms: std::env::var("ORBIT_TIKV_RETRY_DELAY_MS")
+                    .ok()
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(100),
+            };
+            Ok(PersistenceConfig::TiKV(config))
+        }
         _ => Err(OrbitError::configuration(format!(
             "Unknown persistence backend: {}",
             backend_type
@@ -257,6 +332,10 @@ impl PersistenceConfigBuilder {
             })),
             "rocksdb" => Ok(PersistenceConfig::RocksDB(RocksDbConfig {
                 data_dir,
+                ..Default::default()
+            })),
+            "tikv" => Ok(PersistenceConfig::TiKV(TiKVConfig {
+                key_prefix: data_dir,
                 ..Default::default()
             })),
             _ => Err(OrbitError::configuration(format!(
