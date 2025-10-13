@@ -187,36 +187,32 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## Running Examples
 
-Orbit-RS includes several examples to demonstrate different features:
+Orbit-RS includes several working examples to demonstrate different features:
 
 ### Hello World Example
 ```bash
 cargo run --example hello-world
 ```
 
-### Distributed Counter Example
+### PostgreSQL Storage Demo
 ```bash
-cargo run --example distributed-counter
+# Demonstrates the pluggable storage architecture
+cargo run --example postgres_storage_demo
 ```
 
-### Redis Protocol Example
+### AQL Parser Test
 ```bash
-
-# Start the RESP server
-cargo run --example resp-server
-
-# In another terminal, connect with redis-cli
-redis-cli -h 127.0.0.1 -p 6380
+# Demonstrates AQL (ArangoDB Query Language) parsing capabilities
+cargo run --example aql_parser_test
 ```
 
-### PostgreSQL Protocol Example
+### PostgreSQL Protocol Server
 ```bash
-
 # Start the PostgreSQL-compatible server
-cargo run --example pgvector-store
+cargo run --example postgres-server
 
 # In another terminal, connect with psql
-psql -h 127.0.0.1 -p 5433 -d orbit
+psql -h localhost -p 5433 -U orbit -d actors
 ```
 
 ## Configuration
