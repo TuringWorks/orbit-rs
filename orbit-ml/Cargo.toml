@@ -106,7 +106,7 @@ mockall.workspace = true
 tokio-test.workspace = true
 proptest.workspace = true
 cucumber.workspace = true
-criterion = "0.5"
+criterion = "0.7"
 tempfile = "3.0"
 approx = "0.5"
 

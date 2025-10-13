@@ -28,7 +28,7 @@ tempfile = "3.0"
 tonic = "0.12"
 prost = "0.13"
 futures.workspace = true
-tower = { version = "0.4", features = ["limit", "load-shed", "timeout"] }
+tower = { version = "0.5", features = ["limit", "load-shed", "timeout"] }
 hyper = "0.14"
 fastrand = "2.0"
 metrics = "0.23"

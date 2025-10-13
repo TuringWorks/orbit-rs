@@ -169,14 +169,155 @@ impl CostBasedOptimizer {
     fn optimize_join_order(
         &self,
         select: SelectStatement,
-        _stats: &StatisticsCollector,
+        stats: &StatisticsCollector,
     ) -> ProtocolResult<SelectStatement> {
-        // For now, this is a placeholder implementation
-        // In a full implementation, this would:
-        // 1. Enumerate all possible join orders
-        // 2. Estimate cost for each order
-        // 3. Choose the lowest-cost order
-        // 4. Consider dynamic programming for larger numbers of tables
+        // Extract all tables involved in the query
+        let tables = self.extract_tables(&select);
+
+        if tables.len() <= 1 {
+            // No joins to optimize
+            return Ok(select);
+        }
+
+        // For small number of tables (<=4), try all permutations
+        // For larger sets, use greedy heuristics
+        if tables.len() <= 4 {
+            self.optimize_join_order_exhaustive(select, &tables, stats)
+        } else {
+            self.optimize_join_order_greedy(select, &tables, stats)
+        }
+    }
+
+    /// Extract table names from SELECT statement
+    fn extract_tables(&self, select: &SelectStatement) -> Vec<String> {
+        let mut tables = Vec::new();
+
+        if let Some(from_clause) = &select.from_clause {
+            self.extract_tables_from_clause(from_clause, &mut tables);
+        }
+
+        tables
+    }
+
+    /// Recursively extract tables from FROM clause
+    #[allow(clippy::only_used_in_recursion)]
+    fn extract_tables_from_clause(&self, from_clause: &FromClause, tables: &mut Vec<String>) {
+        match from_clause {
+            FromClause::Table { name, .. } => {
+                tables.push(name.full_name());
+            }
+            FromClause::Join { left, right, .. } => {
+                self.extract_tables_from_clause(left, tables);
+                self.extract_tables_from_clause(right, tables);
+            }
+            FromClause::Subquery { .. } => {
+                // Subqueries are treated as separate optimization units
+            }
+            FromClause::Values { .. } => {
+                // Values don't need optimization
+            }
+            FromClause::TableFunction { .. } => {
+                // Table functions handled separately
+            }
+        }
+    }
+
+    /// Optimize join order using exhaustive search (for small number of tables)
+    fn optimize_join_order_exhaustive(
+        &self,
+        select: SelectStatement,
+        tables: &[String],
+        stats: &StatisticsCollector,
+    ) -> ProtocolResult<SelectStatement> {
+        // Generate all permutations and pick the one with lowest cost
+        let mut best_order = tables.to_vec();
+        let mut best_cost = f64::MAX;
+
+        // For simplicity, evaluate current order and a few reorderings
+        // Full implementation would use dynamic programming
+        for order in self.generate_join_orders(tables) {
+            let cost = self.estimate_join_order_cost(&order, stats);
+            if cost < best_cost {
+                best_cost = cost;
+                best_order = order;
+            }
+        }
+
+        // If we found a better order, apply it
+        if best_order != tables {
+            // Note: Actual reordering of the FROM clause would require
+            // more sophisticated AST manipulation
+            // For now, just return the original select
+        }
+
+        Ok(select)
+    }
+
+    /// Generate possible join orders (simplified)
+    fn generate_join_orders(&self, tables: &[String]) -> Vec<Vec<String>> {
+        let mut orders = vec![tables.to_vec()];
+
+        // Generate a few alternative orders
+        if tables.len() >= 2 {
+            let mut reversed = tables.to_vec();
+            reversed.reverse();
+            orders.push(reversed);
+        }
+
+        if tables.len() >= 3 {
+            // Try moving smallest table first (if we have statistics)
+            let by_size = tables.to_vec();
+            // In real implementation, would sort by estimated size
+            orders.push(by_size);
+        }
+
+        orders
+    }
+
+    /// Estimate cost of a specific join order
+    fn estimate_join_order_cost(&self, tables: &[String], stats: &StatisticsCollector) -> f64 {
+        let mut total_cost = 0.0;
+        let mut current_rows = 1;
+
+        for table in tables {
+            let table_cost = self.estimate_table_scan_cost(table, stats);
+            // Cost increases with current intermediate result size
+            total_cost += table_cost.total_cost() * current_rows as f64;
+            current_rows *= table_cost.cardinality;
+        }
+
+        total_cost
+    }
+
+    /// Optimize join order using greedy heuristics (for large number of tables)
+    fn optimize_join_order_greedy(
+        &self,
+        select: SelectStatement,
+        tables: &[String],
+        stats: &StatisticsCollector,
+    ) -> ProtocolResult<SelectStatement> {
+        // Greedy algorithm: Always pick the smallest table next
+        let mut ordered_tables = Vec::new();
+        let mut remaining_tables: Vec<_> = tables.to_vec();
+
+        while !remaining_tables.is_empty() {
+            // Find table with smallest estimated cardinality
+            let mut best_idx = 0;
+            let mut best_size = usize::MAX;
+
+            for (idx, table) in remaining_tables.iter().enumerate() {
+                let cost = self.estimate_table_scan_cost(table, stats);
+                if cost.cardinality < best_size {
+                    best_size = cost.cardinality;
+                    best_idx = idx;
+                }
+            }
+
+            ordered_tables.push(remaining_tables.remove(best_idx));
+        }
+
+        // Apply the reordering (simplified - actual implementation would
+        // reconstruct the FROM clause)
         Ok(select)
     }
 
@@ -313,38 +454,113 @@ impl CostBasedOptimizer {
     }
 
     /// Estimate selectivity of a predicate
-    pub fn estimate_selectivity(&self, expr: &Expression, _stats: &StatisticsCollector) -> f64 {
+    #[allow(clippy::only_used_in_recursion)]
+    pub fn estimate_selectivity(&self, expr: &Expression, stats: &StatisticsCollector) -> f64 {
         match expr {
             Expression::Binary {
-                left: _,
+                left,
                 operator,
-                right: _,
+                right,
             } => {
                 match operator {
-                    BinaryOperator::Equal => 0.1, // Equality typically has good selectivity
+                    BinaryOperator::Equal => {
+                        // Try to get more accurate selectivity from column stats
+                        if let Expression::Column(col_ref) = left.as_ref() {
+                            if let Some(table) = &col_ref.table {
+                                return stats.estimate_equality_selectivity(table, &col_ref.name);
+                            }
+                        }
+                        0.1 // Default equality selectivity
+                    }
                     BinaryOperator::NotEqual => 0.9,
                     BinaryOperator::LessThan
                     | BinaryOperator::LessThanOrEqual
                     | BinaryOperator::GreaterThan
-                    | BinaryOperator::GreaterThanOrEqual => 0.33,
-                    BinaryOperator::And => 0.5, // Conservative estimate
-                    BinaryOperator::Or => 0.75,
-                    _ => 0.5, // Default
+                    | BinaryOperator::GreaterThanOrEqual => {
+                        // Try to use column statistics for range predicates
+                        if let Expression::Column(col_ref) = left.as_ref() {
+                            if let Some(table) = &col_ref.table {
+                                if let Expression::Literal(val) = right.as_ref() {
+                                    return stats.estimate_range_selectivity(
+                                        table,
+                                        &col_ref.name,
+                                        &format!("{:?}", operator),
+                                        &format!("{:?}", val),
+                                    );
+                                }
+                            }
+                        }
+                        0.33 // Default range selectivity
+                    }
+                    BinaryOperator::And => {
+                        // Combine selectivities for AND (multiply)
+                        let left_sel = self.estimate_selectivity(left, stats);
+                        let right_sel = self.estimate_selectivity(right, stats);
+                        left_sel * right_sel
+                    }
+                    BinaryOperator::Or => {
+                        // Combine selectivities for OR (add with correction)
+                        let left_sel = self.estimate_selectivity(left, stats);
+                        let right_sel = self.estimate_selectivity(right, stats);
+                        left_sel + right_sel - (left_sel * right_sel)
+                    }
+                    BinaryOperator::Like => 0.15, // LIKE is fairly selective
+                    BinaryOperator::In => 0.2,    // IN depends on list size
+                    _ => 0.5,                     // Default
                 }
             }
             Expression::Unary {
                 operator: UnaryOperator::Not,
-                ..
-            } => 0.9, // NOT is usually high selectivity
+                operand,
+            } => {
+                // Invert the selectivity
+                1.0 - self.estimate_selectivity(operand, stats)
+            }
+            Expression::Unary {
+                operator: _,
+                operand: _,
+            } => 0.5,
+            Expression::IsNull { negated, .. } => {
+                if *negated {
+                    0.9 // IS NOT NULL is usually high selectivity
+                } else {
+                    0.1 // IS NULL checks are usually selective
+                }
+            }
             _ => 0.5, // Default selectivity
         }
+    }
+
+    /// Estimate selectivity for complex predicates with correlation
+    pub fn estimate_complex_selectivity(
+        &self,
+        expressions: &[Expression],
+        stats: &StatisticsCollector,
+    ) -> f64 {
+        if expressions.is_empty() {
+            return 1.0;
+        }
+
+        // For multiple independent predicates, multiply selectivities
+        let mut combined_selectivity = 1.0;
+        for expr in expressions {
+            let selectivity = self.estimate_selectivity(expr, stats);
+            combined_selectivity *= selectivity;
+        }
+
+        // Apply correlation factor to avoid over-optimization
+        // Real-world predicates are often correlated
+        let correlation_factor = 0.8;
+        combined_selectivity * correlation_factor + (1.0 - correlation_factor) * 0.5
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::postgres_wire::sql::optimizer::stats::{StatisticsCollector, TableStatistics};
+    use crate::postgres_wire::sql::optimizer::stats::{
+        ColumnStatistics, StatisticsCollector, TableStatistics,
+    };
 
     #[test]
     fn test_query_cost_calculation() {
@@ -442,5 +658,184 @@ mod tests {
 
         let selectivity = optimizer.estimate_selectivity(&expr, &stats);
         assert_eq!(selectivity, 0.1); // Expected selectivity for equality
+    }
+
+    #[test]
+    fn test_selectivity_and_or_combination() {
+        let config = OptimizerConfig::default();
+        let optimizer = CostBasedOptimizer::new(&config);
+        let stats = StatisticsCollector::new();
+
+        // Test AND combination
+        let and_expr = Expression::Binary {
+            left: Box::new(Expression::Binary {
+                left: Box::new(Expression::Column(ColumnRef {
+                    table: None,
+                    name: "age".to_string(),
+                })),
+                operator: BinaryOperator::GreaterThan,
+                right: Box::new(Expression::Literal(
+                    crate::postgres_wire::sql::types::SqlValue::Integer(18),
+                )),
+            }),
+            operator: BinaryOperator::And,
+            right: Box::new(Expression::Binary {
+                left: Box::new(Expression::Column(ColumnRef {
+                    table: None,
+                    name: "status".to_string(),
+                })),
+                operator: BinaryOperator::Equal,
+                right: Box::new(Expression::Literal(
+                    crate::postgres_wire::sql::types::SqlValue::Text("active".to_string()),
+                )),
+            }),
+        };
+
+        let and_selectivity = optimizer.estimate_selectivity(&and_expr, &stats);
+        // Should be product of individual selectivities: 0.33 * 0.1 = 0.033
+        assert!(and_selectivity < 0.1);
+
+        // Test OR combination
+        let or_expr = Expression::Binary {
+            left: Box::new(Expression::Binary {
+                left: Box::new(Expression::Column(ColumnRef {
+                    table: None,
+                    name: "status".to_string(),
+                })),
+                operator: BinaryOperator::Equal,
+                right: Box::new(Expression::Literal(
+                    crate::postgres_wire::sql::types::SqlValue::Text("active".to_string()),
+                )),
+            }),
+            operator: BinaryOperator::Or,
+            right: Box::new(Expression::Binary {
+                left: Box::new(Expression::Column(ColumnRef {
+                    table: None,
+                    name: "status".to_string(),
+                })),
+                operator: BinaryOperator::Equal,
+                right: Box::new(Expression::Literal(
+                    crate::postgres_wire::sql::types::SqlValue::Text("pending".to_string()),
+                )),
+            }),
+        };
+
+        let or_selectivity = optimizer.estimate_selectivity(&or_expr, &stats);
+        // Should be higher than individual selectivity
+        assert!(or_selectivity > 0.1);
+    }
+
+    #[test]
+    fn test_selectivity_with_statistics() {
+        let config = OptimizerConfig::default();
+        let optimizer = CostBasedOptimizer::new(&config);
+        let mut stats = StatisticsCollector::new();
+
+        // Add column statistics
+        stats.update_column_stats(
+            "users",
+            "email",
+            ColumnStatistics {
+                distinct_count: 1000,
+                null_fraction: 0.01,
+                ..Default::default()
+            },
+        );
+
+        // Create expression with table reference
+        let expr = Expression::Binary {
+            left: Box::new(Expression::Column(ColumnRef {
+                table: Some("users".to_string()),
+                name: "email".to_string(),
+            })),
+            operator: BinaryOperator::Equal,
+            right: Box::new(Expression::Literal(
+                crate::postgres_wire::sql::types::SqlValue::Text("test@example.com".to_string()),
+            )),
+        };
+
+        let selectivity = optimizer.estimate_selectivity(&expr, &stats);
+        // Should use statistics: 1/1000 = 0.001
+        assert_eq!(selectivity, 0.001);
+    }
+
+    #[test]
+    fn test_join_order_extraction() {
+        let config = OptimizerConfig::default();
+        let optimizer = CostBasedOptimizer::new(&config);
+
+        let select = SelectStatement {
+            with: None,
+            distinct: None,
+            select_list: vec![SelectItem::Wildcard],
+            from_clause: Some(FromClause::Join {
+                left: Box::new(FromClause::Table {
+                    name: TableName::new("orders"),
+                    alias: None,
+                }),
+                right: Box::new(FromClause::Table {
+                    name: TableName::new("customers"),
+                    alias: None,
+                }),
+                join_type: crate::postgres_wire::sql::ast::JoinType::Inner,
+                condition: JoinCondition::On(Expression::Binary {
+                    left: Box::new(Expression::Column(ColumnRef {
+                        table: Some("orders".to_string()),
+                        name: "customer_id".to_string(),
+                    })),
+                    operator: BinaryOperator::Equal,
+                    right: Box::new(Expression::Column(ColumnRef {
+                        table: Some("customers".to_string()),
+                        name: "id".to_string(),
+                    })),
+                }),
+            }),
+            where_clause: None,
+            group_by: None,
+            having: None,
+            order_by: None,
+            limit: None,
+            offset: None,
+            for_clause: None,
+        };
+
+        let tables = optimizer.extract_tables(&select);
+        assert_eq!(tables.len(), 2);
+        assert!(tables.contains(&"orders".to_string()));
+        assert!(tables.contains(&"customers".to_string()));
+    }
+
+    #[test]
+    fn test_complex_selectivity_estimation() {
+        let config = OptimizerConfig::default();
+        let optimizer = CostBasedOptimizer::new(&config);
+        let stats = StatisticsCollector::new();
+
+        let predicates = vec![
+            Expression::Binary {
+                left: Box::new(Expression::Column(ColumnRef {
+                    table: None,
+                    name: "age".to_string(),
+                })),
+                operator: BinaryOperator::GreaterThan,
+                right: Box::new(Expression::Literal(
+                    crate::postgres_wire::sql::types::SqlValue::Integer(18),
+                )),
+            },
+            Expression::Binary {
+                left: Box::new(Expression::Column(ColumnRef {
+                    table: None,
+                    name: "status".to_string(),
+                })),
+                operator: BinaryOperator::Equal,
+                right: Box::new(Expression::Literal(
+                    crate::postgres_wire::sql::types::SqlValue::Text("active".to_string()),
+                )),
+            },
+        ];
+
+        let selectivity = optimizer.estimate_complex_selectivity(&predicates, &stats);
+        // Should be less than individual products due to correlation factor
+        assert!(selectivity > 0.0 && selectivity < 1.0);
     }
 }

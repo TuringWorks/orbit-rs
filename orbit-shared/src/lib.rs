@@ -34,6 +34,7 @@ pub mod timeseries;
 pub mod transaction_log;
 pub mod transactions;
 pub mod transport;
+pub mod triggers;
 
 pub use addressable::*;
 pub use exception::*;
@@ -108,6 +109,12 @@ pub use spatial::{
     SpatialAlert, SpatialError, SpatialFunctions, SpatialGeometry, SpatialIndex, SpatialOperations,
     SpatialRelation, SpatialStreamProcessor, DEFAULT_PRECISION, EARTH_RADIUS_METERS,
     UTM_ZONE_33N_SRID, WEB_MERCATOR_SRID, WGS84_SRID,
+};
+
+// Re-export trigger functionality
+pub use triggers::{
+    TriggerContext, TriggerCoordinator, TriggerDefinition, TriggerEvent, TriggerExecutor,
+    TriggerFunction, TriggerLevel, TriggerResult, TriggerStats, TriggerTiming,
 };
 
 // Re-export advanced connection pooling
