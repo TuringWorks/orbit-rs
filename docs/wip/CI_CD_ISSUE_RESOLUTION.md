@@ -157,6 +157,8 @@ git status --ignored
 - [GITIGNORE_FIX_SUMMARY.md](./GITIGNORE_FIX_SUMMARY.md) - Original `.gitignore` fix
 - [GITHUB_ACTIONS_CACHE_FIX.md](./GITHUB_ACTIONS_CACHE_FIX.md) - Cache invalidation fix
 - [WORKFLOW_FIX_SUMMARY.md](./WORKFLOW_FIX_SUMMARY.md) - Workflow improvements
+- [COMPREHENSIVE_PROJECT_AUDIT.md](../COMPREHENSIVE_PROJECT_AUDIT.md) - Full project audit
+- [FIX_SUMMARY.md](../FIX_SUMMARY.md) - Summary of all fixes
 
 ---
 

@@ -26,6 +26,7 @@ members = [
     "examples/timeseries-demo",
     "examples/orbitql-example",
     "examples/multi-model-query-example",
+    "examples/benchmarks-demo",
 ]
 
 # Exclude benchmarks from default workspace build due to WAL replay issues
@@ -93,6 +94,11 @@ async-trait = "0.1"
 # Metrics
 metrics = "0.23"
 metrics-exporter-prometheus = "0.15"
+
+# Code quality and patterns
+regex = "1.10"
+paste = "1.0"
+exponential-backoff = "2.0"  # Replaces unmaintained backoff
 
 # Testing
 mockall = "0.13"

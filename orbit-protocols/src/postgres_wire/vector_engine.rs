@@ -259,7 +259,7 @@ impl VectorQueryEngine {
                 key: format!("table_{}", table_name),
             })
             .await
-            .map_err(|e| ProtocolError::PostgresError(format!("Failed to get actor: {}", e)))?;
+            .map_err(ProtocolError::failed_to_get_actor)?;
 
         // Create vector index
         let index_name = format!("{}_{}_idx", table_name, column_name);
@@ -269,13 +269,13 @@ impl VectorQueryEngine {
             similarity_metric,
         );
 
-        let config_value = serde_json::to_value(index_config)
-            .map_err(|e| ProtocolError::PostgresError(format!("Serialization error: {}", e)))?;
+        let config_value =
+            serde_json::to_value(index_config).map_err(ProtocolError::serialization_error)?;
 
         vector_actor_ref
             .invoke::<()>("create_index", vec![config_value])
             .await
-            .map_err(|e| ProtocolError::PostgresError(format!("Index creation failed: {}", e)))?;
+            .map_err(|e| ProtocolError::actor_error(format!("Index creation failed: {}", e)))?;
 
         Ok(QueryResult::Select {
             columns: vec!["message".to_string()],
@@ -312,7 +312,7 @@ impl VectorQueryEngine {
                 key: format!("table_{}", table_name),
             })
             .await
-            .map_err(|e| ProtocolError::PostgresError(format!("Failed to get actor: {}", e)))?;
+            .map_err(ProtocolError::failed_to_get_actor)?;
 
         // Parse column names and values
         let columns = if let Some(idx) = paren_idx {
@@ -359,15 +359,14 @@ impl VectorQueryEngine {
 
             if !vector_data.is_empty() {
                 let vector = Vector::with_metadata(vector_id, vector_data, metadata);
-                let vector_value = serde_json::to_value(vector).map_err(|e| {
-                    ProtocolError::PostgresError(format!("Serialization error: {}", e))
-                })?;
+                let vector_value =
+                    serde_json::to_value(vector).map_err(ProtocolError::serialization_error)?;
 
                 vector_actor_ref
                     .invoke::<()>("add_vector", vec![vector_value])
                     .await
                     .map_err(|e| {
-                        ProtocolError::PostgresError(format!("Vector insertion failed: {}", e))
+                        ProtocolError::actor_error(format!("Vector insertion failed: {}", e))
                     })?;
             }
         }
@@ -470,17 +469,17 @@ impl VectorQueryEngine {
                 key: format!("table_{}", table_name),
             })
             .await
-            .map_err(|e| ProtocolError::PostgresError(format!("Failed to get actor: {}", e)))?;
+            .map_err(ProtocolError::failed_to_get_actor)?;
 
         // Perform similarity search
         let search_params = VectorSearchParams::new(query_vector, similarity_metric, limit);
-        let search_params_value = serde_json::to_value(search_params)
-            .map_err(|e| ProtocolError::PostgresError(format!("Serialization error: {}", e)))?;
+        let search_params_value =
+            serde_json::to_value(search_params).map_err(ProtocolError::serialization_error)?;
 
         let results: serde_json::Value = vector_actor_ref
             .invoke("search_vectors", vec![search_params_value])
             .await
-            .map_err(|e| ProtocolError::PostgresError(format!("Search failed: {}", e)))?;
+            .map_err(|e| ProtocolError::actor_error(format!("Search failed: {}", e)))?;
 
         // Convert results to QueryResult
         let mut rows = Vec::new();
@@ -606,8 +605,9 @@ impl VectorQueryEngine {
             .map(|s| s.trim().parse::<f32>())
             .collect();
 
-        components
-            .map_err(|e| ProtocolError::PostgresError(format!("Invalid vector format: {}", e)))
+        components.map_err(|e| {
+            ProtocolError::serialization_error(format!("Invalid vector format: {}", e))
+        })
     }
 
     /// Extract vector literal from SQL expression

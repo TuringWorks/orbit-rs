@@ -32,4 +32,8 @@ pub mod resp;
 pub mod time_series;
 pub mod vector_store;
 
+// Test utilities for comprehensive testing
+#[cfg(test)]
+pub mod test_utils;
+
 pub use error::{ProtocolError, ProtocolResult};
