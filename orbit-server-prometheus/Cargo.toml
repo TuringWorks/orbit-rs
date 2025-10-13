@@ -18,9 +18,9 @@ anyhow.workspace = true
 async-trait = "0.1"
 thiserror = "1.0"
 tracing = "0.1"
-axum = "0.7"
-tower = "0.4"
-tower-http = "0.5"
+axum = "0.8"
+tower = "0.5"
+tower-http = "0.6"
 hyper = "1.0"
 chrono = { version = "0.4", features = ["serde"] }
 once_cell = "1.19"
