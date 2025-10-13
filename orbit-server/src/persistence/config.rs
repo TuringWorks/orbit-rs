@@ -575,13 +575,11 @@ impl PersistenceConfigBuilder {
                         name
                     )));
                 }
-                if config.enable_tls {
-                    if config.ca_cert_path.is_none() {
-                        return Err(OrbitError::configuration(format!(
-                            "TiKV provider '{}': CA certificate path required when TLS is enabled",
-                            name
-                        )));
-                    }
+                if config.enable_tls && config.ca_cert_path.is_none() {
+                    return Err(OrbitError::configuration(format!(
+                        "TiKV provider '{}': CA certificate path required when TLS is enabled",
+                        name
+                    )));
                 }
             }
             _ => {} // Other providers would have their validations here
