@@ -173,7 +173,7 @@ impl CostBasedOptimizer {
     ) -> ProtocolResult<SelectStatement> {
         // Extract all tables involved in the query
         let tables = self.extract_tables(&select);
-        
+
         if tables.len() <= 1 {
             // No joins to optimize
             return Ok(select);
@@ -191,15 +191,16 @@ impl CostBasedOptimizer {
     /// Extract table names from SELECT statement
     fn extract_tables(&self, select: &SelectStatement) -> Vec<String> {
         let mut tables = Vec::new();
-        
+
         if let Some(from_clause) = &select.from_clause {
             self.extract_tables_from_clause(from_clause, &mut tables);
         }
-        
+
         tables
     }
 
     /// Recursively extract tables from FROM clause
+    #[allow(clippy::only_used_in_recursion)]
     fn extract_tables_from_clause(&self, from_clause: &FromClause, tables: &mut Vec<String>) {
         match from_clause {
             FromClause::Table { name, .. } => {
@@ -255,7 +256,7 @@ impl CostBasedOptimizer {
     /// Generate possible join orders (simplified)
     fn generate_join_orders(&self, tables: &[String]) -> Vec<Vec<String>> {
         let mut orders = vec![tables.to_vec()];
-        
+
         // Generate a few alternative orders
         if tables.len() >= 2 {
             let mut reversed = tables.to_vec();
@@ -453,6 +454,7 @@ impl CostBasedOptimizer {
     }
 
     /// Estimate selectivity of a predicate
+    #[allow(clippy::only_used_in_recursion)]
     pub fn estimate_selectivity(&self, expr: &Expression, stats: &StatisticsCollector) -> f64 {
         match expr {
             Expression::Binary {
@@ -507,13 +509,17 @@ impl CostBasedOptimizer {
                     _ => 0.5,                     // Default
                 }
             }
-            Expression::Unary { operator, operand } => match operator {
-                UnaryOperator::Not => {
-                    // Invert the selectivity
-                    1.0 - self.estimate_selectivity(operand, stats)
-                }
-                _ => 0.5,
-            },
+            Expression::Unary {
+                operator: UnaryOperator::Not,
+                operand,
+            } => {
+                // Invert the selectivity
+                1.0 - self.estimate_selectivity(operand, stats)
+            }
+            Expression::Unary {
+                operator: _,
+                operand: _,
+            } => 0.5,
             Expression::IsNull { negated, .. } => {
                 if *negated {
                     0.9 // IS NOT NULL is usually high selectivity
@@ -521,7 +527,7 @@ impl CostBasedOptimizer {
                     0.1 // IS NULL checks are usually selective
                 }
             }
-            _ => 0.5,                        // Default selectivity
+            _ => 0.5, // Default selectivity
         }
     }
 

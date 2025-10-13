@@ -337,14 +337,16 @@ impl StorageSerializable for HashMap<String, SqlValue> {
                 SqlValue::Jsonb(jv) => {
                     // Encode as base64 of CBOR bytes and mark as __jsonb_b64
                     let bytes = jsonb::encode_jsonb(jv)?;
-                    let b64 = base64::encode(&bytes);
-                    let wrapper = JsonValue::Object(serde_json::Map::from_iter(vec![
-                        ("__jsonb_b64".to_string(), JsonValue::String(b64)),
-                    ]));
+                    let b64 =
+                        base64::prelude::Engine::encode(&base64::prelude::BASE64_STANDARD, &bytes);
+                    let wrapper = JsonValue::Object(serde_json::Map::from_iter(vec![(
+                        "__jsonb_b64".to_string(),
+                        JsonValue::String(b64),
+                    )]));
                     map.insert(k.clone(), wrapper);
                 }
                 SqlValue::Json(jv) => {
-                    map.insert(k.clone(), JsonValue::from(jv.clone()));
+                    map.insert(k.clone(), jv.clone());
                 }
                 _ => {
                     // Fallback to serde_json conversion for other SqlValue types
@@ -369,11 +371,16 @@ impl StorageSerializable for HashMap<String, SqlValue> {
         let mut result = HashMap::new();
         if let JsonValue::Object(map) = v {
             for (k, val) in map.into_iter() {
-                if let JsonValue::Object(inner) = val {
+                if let JsonValue::Object(ref inner) = val {
                     if let Some(JsonValue::String(b64)) = inner.get("__jsonb_b64") {
-                        let bytes = base64::decode(b64).map_err(|e| {
-                            ProtocolError::SerializationError(format!("base64 decode failed: {}", e))
-                        })?;
+                        let bytes =
+                            base64::prelude::Engine::decode(&base64::prelude::BASE64_STANDARD, b64)
+                                .map_err(|e| {
+                                    ProtocolError::SerializationError(format!(
+                                        "base64 decode failed: {}",
+                                        e
+                                    ))
+                                })?;
                         let jv = jsonb::decode_jsonb(&bytes)?;
                         result.insert(k, SqlValue::Jsonb(jv));
                         continue;

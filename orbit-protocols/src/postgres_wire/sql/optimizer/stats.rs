@@ -284,7 +284,7 @@ impl StatisticsCollector {
         // In a real implementation, this would sample column values
         // and create histogram buckets
         let mut histogram = Vec::new();
-        
+
         for i in 0..bucket_count {
             histogram.push(HistogramBucket {
                 lower_bound: format!("bucket_{}_lower", i),
@@ -321,13 +321,13 @@ impl StatisticsCollector {
     }
 
     /// Check if table needs statistics update based on modification threshold
-    pub fn needs_analyze(&self, table_name: &str, modification_threshold: f64) -> bool {
+    pub fn needs_analyze(&self, table_name: &str, _modification_threshold: f64) -> bool {
         if let Some(stats) = self.table_stats.get(table_name) {
             // Simple heuristic: if distinct_values is 0, needs analyze
             if stats.distinct_values == 0 {
                 return true;
             }
-            
+
             // In a real implementation, would track modifications since last analyze
             // and compare against threshold (e.g., 10% of rows modified)
             false

@@ -24,18 +24,11 @@ use crate::postgres_wire::sql::ast::*;
 #[derive(Debug, Clone, PartialEq)]
 pub enum QueryHint {
     /// Force use of a specific index
-    UseIndex {
-        table: String,
-        index: String,
-    },
+    UseIndex { table: String, index: String },
     /// Disable use of indexes
-    NoIndex {
-        table: String,
-    },
+    NoIndex { table: String },
     /// Force a specific join order
-    JoinOrder {
-        tables: Vec<String>,
-    },
+    JoinOrder { tables: Vec<String> },
     /// Force a specific join algorithm
     JoinMethod {
         left_table: String,
@@ -43,17 +36,11 @@ pub enum QueryHint {
         method: JoinMethod,
     },
     /// Disable specific optimization
-    NoOptimization {
-        optimization: String,
-    },
+    NoOptimization { optimization: String },
     /// Set parallel execution level
-    Parallel {
-        workers: usize,
-    },
+    Parallel { workers: usize },
     /// Force materialization of subquery
-    Materialize {
-        subquery_alias: String,
-    },
+    Materialize { subquery_alias: String },
 }
 
 /// Join methods that can be hinted
@@ -244,6 +231,7 @@ impl QueryOptimizer {
     }
 
     /// Convert table scans to index scans based on hint
+    #[allow(clippy::only_used_in_recursion)]
     fn convert_to_index_scan(
         &self,
         plan: planner::ExecutionPlan,
@@ -470,15 +458,13 @@ impl QueryOptimizer {
 
         if analyze {
             output.push_str("\n\nExecution Statistics:\n");
-            output.push_str("  Note: ANALYZE not yet implemented - no actual execution performed\n");
+            output
+                .push_str("  Note: ANALYZE not yet implemented - no actual execution performed\n");
         }
 
         if costs {
             let total_cost = self.estimate_plan_cost(&plan);
-            output.push_str(&format!(
-                "\n\nTotal Estimated Cost: {:.2}\n",
-                total_cost
-            ));
+            output.push_str(&format!("\n\nTotal Estimated Cost: {:.2}\n", total_cost));
         }
 
         Ok(output)
@@ -592,12 +578,9 @@ impl QueryOptimizer {
             }
             planner::ExecutionPlan::IndexScan { table, .. } => {
                 // Assume 10% selectivity for index scans
-                let cost = self.cost_optimizer.estimate_index_scan_cost(
-                    table,
-                    "index",
-                    0.1,
-                    &self.stats,
-                );
+                let cost =
+                    self.cost_optimizer
+                        .estimate_index_scan_cost(table, "index", 0.1, &self.stats);
                 cost.total_cost()
             }
             planner::ExecutionPlan::NestedLoopJoin { left, right, .. } => {
@@ -639,12 +622,9 @@ impl QueryOptimizer {
                 cost.total_cost()
             }
             planner::ExecutionPlan::IndexScan { table, .. } => {
-                let cost = self.cost_optimizer.estimate_index_scan_cost(
-                    table,
-                    "index",
-                    0.1,
-                    &self.stats,
-                );
+                let cost =
+                    self.cost_optimizer
+                        .estimate_index_scan_cost(table, "index", 0.1, &self.stats);
                 cost.total_cost()
             }
             planner::ExecutionPlan::Sort { input, .. } => {
@@ -688,7 +668,7 @@ mod tests {
     #[test]
     fn test_explain_query_basic() {
         let mut optimizer = QueryOptimizer::default();
-        
+
         // Create a simple SELECT statement
         let select = SelectStatement {
             with: None,
@@ -709,7 +689,7 @@ mod tests {
 
         let stmt = Statement::Select(Box::new(select));
         let result = optimizer.explain_query(stmt, false, false, false);
-        
+
         assert!(result.is_ok());
         let output = result.unwrap();
         assert!(output.contains("Query Execution Plan"));
@@ -719,7 +699,7 @@ mod tests {
     #[test]
     fn test_explain_query_with_costs() {
         let mut optimizer = QueryOptimizer::default();
-        
+
         // Add some statistics
         optimizer.update_statistics(
             "products",
@@ -751,7 +731,7 @@ mod tests {
 
         let stmt = Statement::Select(Box::new(select));
         let result = optimizer.explain_query(stmt, false, false, true);
-        
+
         assert!(result.is_ok());
         let output = result.unwrap();
         assert!(output.contains("Query Execution Plan"));
@@ -762,7 +742,7 @@ mod tests {
     #[test]
     fn test_explain_query_verbose() {
         let mut optimizer = QueryOptimizer::default();
-        
+
         let select = SelectStatement {
             with: None,
             distinct: None,
@@ -791,7 +771,7 @@ mod tests {
 
         let stmt = Statement::Select(Box::new(select));
         let result = optimizer.explain_query(stmt, false, true, false);
-        
+
         assert!(result.is_ok());
         let output = result.unwrap();
         assert!(output.contains("Verbose"));
@@ -800,7 +780,7 @@ mod tests {
     #[test]
     fn test_plan_cost_estimation() {
         let optimizer = QueryOptimizer::default();
-        
+
         let plan = planner::ExecutionPlan::TableScan {
             table: "test_table".to_string(),
             filter: None,
@@ -815,7 +795,7 @@ mod tests {
     #[test]
     fn test_query_hints_basic() {
         let mut optimizer = QueryOptimizer::default();
-        
+
         // Test adding hints
         optimizer.add_hint(QueryHint::UseIndex {
             table: "users".to_string(),
@@ -832,7 +812,7 @@ mod tests {
     #[test]
     fn test_use_index_hint() {
         let mut optimizer = QueryOptimizer::default();
-        
+
         optimizer.add_hint(QueryHint::UseIndex {
             table: "users".to_string(),
             index: "idx_email".to_string(),
@@ -857,21 +837,19 @@ mod tests {
 
         let stmt = Statement::Select(Box::new(select));
         let result = optimizer.optimize(stmt);
-        
+
         assert!(result.is_ok());
         let plan = result.unwrap();
-        
+
         // Check that the plan uses an index scan
         match plan {
-            planner::ExecutionPlan::Projection { input, .. } => {
-                match input.as_ref() {
-                    planner::ExecutionPlan::IndexScan { table, index, .. } => {
-                        assert_eq!(table, "users");
-                        assert_eq!(index, "idx_email");
-                    }
-                    _ => panic!("Expected IndexScan, got: {:?}", input),
+            planner::ExecutionPlan::Projection { input, .. } => match input.as_ref() {
+                planner::ExecutionPlan::IndexScan { table, index, .. } => {
+                    assert_eq!(table, "users");
+                    assert_eq!(index, "idx_email");
                 }
-            }
+                _ => panic!("Expected IndexScan, got: {:?}", input),
+            },
             _ => panic!("Expected Projection plan"),
         }
     }
@@ -879,7 +857,7 @@ mod tests {
     #[test]
     fn test_no_optimization_hint() {
         let mut optimizer = QueryOptimizer::default();
-        
+
         optimizer.add_hint(QueryHint::NoOptimization {
             optimization: "all".to_string(),
         });
@@ -903,14 +881,14 @@ mod tests {
 
         let stmt = Statement::Select(Box::new(select));
         let result = optimizer.optimize(stmt);
-        
+
         assert!(result.is_ok());
     }
 
     #[test]
     fn test_join_method_hint() {
         let optimizer = QueryOptimizer::default();
-        
+
         // Create a nested loop join plan
         let left = planner::ExecutionPlan::TableScan {
             table: "orders".to_string(),
@@ -918,7 +896,7 @@ mod tests {
             projection: vec!["*".to_string()],
             estimated_rows: 100,
         };
-        
+
         let right = planner::ExecutionPlan::TableScan {
             table: "customers".to_string(),
             filter: None,
@@ -943,7 +921,7 @@ mod tests {
 
         let result = optimizer.apply_single_hint(join_plan, &hint);
         assert!(result.is_ok());
-        
+
         let converted = result.unwrap();
         match converted {
             planner::ExecutionPlan::HashJoin { .. } => {

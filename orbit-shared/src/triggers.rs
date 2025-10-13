@@ -10,7 +10,6 @@
 
 use crate::cdc::{CdcEvent, DmlOperation};
 use crate::exception::{OrbitError, OrbitResult};
-use crate::mesh::NodeId;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -189,10 +188,7 @@ pub struct TriggerContext {
 
 impl TriggerContext {
     /// Create context from CDC event
-    pub fn from_cdc_event(
-        trigger: &TriggerDefinition,
-        event: &CdcEvent,
-    ) -> Self {
+    pub fn from_cdc_event(trigger: &TriggerDefinition, event: &CdcEvent) -> Self {
         Self {
             trigger_id: trigger.trigger_id,
             trigger_name: trigger.name.clone(),
@@ -448,7 +444,10 @@ impl TriggerCoordinator {
             table_triggers.retain(|t| t.name != trigger_name);
 
             if table_triggers.len() < original_len {
-                info!("Unregistered trigger '{}' from table '{}'", trigger_name, table);
+                info!(
+                    "Unregistered trigger '{}' from table '{}'",
+                    trigger_name, table
+                );
                 let mut stats = self.stats.write().await;
                 stats.total_triggers = stats.total_triggers.saturating_sub(1);
                 Ok(())
@@ -543,7 +542,11 @@ impl TriggerCoordinator {
 
             // Evaluate WHEN condition if present
             let should_execute = if let Some(ref condition) = trigger.when_condition {
-                match self.executor.evaluate_when_condition(condition, &context).await {
+                match self
+                    .executor
+                    .evaluate_when_condition(condition, &context)
+                    .await
+                {
                     Ok(result) => result,
                     Err(e) => {
                         warn!(
@@ -777,7 +780,9 @@ mod tests {
         );
 
         coordinator.register_trigger(trigger).await.unwrap();
-        let result = coordinator.unregister_trigger("users", "test_trigger").await;
+        let result = coordinator
+            .unregister_trigger("users", "test_trigger")
+            .await;
         assert!(result.is_ok());
 
         let stats = coordinator.get_stats().await;
@@ -904,7 +909,7 @@ mod tests {
         // to exceed the maximum. In real usage, this would happen when a trigger
         // fires another DML operation that triggers the same trigger again
         let recursion_key = format!("users::{}", TriggerTiming::Before as u8);
-        
+
         // Set depth to max + 1 to trigger recursion detection
         {
             let mut depth_map = coordinator.recursion_depth.write().await;
@@ -912,7 +917,9 @@ mod tests {
         }
 
         // This should fail due to recursion limit
-        let result = coordinator.fire_triggers(&event, TriggerTiming::Before).await;
+        let result = coordinator
+            .fire_triggers(&event, TriggerTiming::Before)
+            .await;
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("recursion depth"));
 

@@ -115,6 +115,8 @@ pub use spatial::{
 pub use triggers::{
     TriggerContext, TriggerCoordinator, TriggerDefinition, TriggerEvent, TriggerExecutor,
     TriggerFunction, TriggerLevel, TriggerResult, TriggerStats, TriggerTiming,
+};
+
 // Re-export advanced connection pooling
 pub use pooling::{
     AdvancedConnectionPool, AdvancedPoolConfig, CircuitBreaker, CircuitBreakerConfig,
