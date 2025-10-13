@@ -10,7 +10,6 @@ use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
-use tracing::info;
 
 /// Window types for stream processing
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -88,7 +87,9 @@ impl StreamEvent {
 
     /// Extract numeric value from event
     pub fn as_number(&self) -> Option<f64> {
-        self.value.as_f64().or_else(|| self.value.as_i64().map(|i| i as f64))
+        self.value
+            .as_f64()
+            .or_else(|| self.value.as_i64().map(|i| i as f64))
     }
 }
 
@@ -121,6 +122,7 @@ impl WindowState {
     }
 
     /// Check if window contains timestamp
+    #[allow(dead_code)] // Will be used for sliding/session window implementations
     fn contains(&self, timestamp: i64) -> bool {
         timestamp >= self.start_time && timestamp < self.end_time
     }
@@ -231,10 +233,7 @@ impl StreamProcessor {
 
                     // Create new window
                     key_windows.clear();
-                    key_windows.push(WindowState::new(
-                        chrono::Utc::now().timestamp_millis(),
-                        0,
-                    ));
+                    key_windows.push(WindowState::new(chrono::Utc::now().timestamp_millis(), 0));
 
                     // Update stats
                     let mut stats = self.stats.write().await;
@@ -254,7 +253,10 @@ impl StreamProcessor {
     }
 
     /// Compute aggregation over events
-    fn compute_aggregation(&self, events: &VecDeque<StreamEvent>) -> OrbitResult<serde_json::Value> {
+    fn compute_aggregation(
+        &self,
+        events: &VecDeque<StreamEvent>,
+    ) -> OrbitResult<serde_json::Value> {
         if events.is_empty() {
             return Ok(serde_json::Value::Null);
         }
@@ -262,17 +264,11 @@ impl StreamProcessor {
         match self.aggregation {
             AggregationFunction::Count => Ok(serde_json::json!(events.len())),
             AggregationFunction::Sum => {
-                let sum: f64 = events
-                    .iter()
-                    .filter_map(|e| e.as_number())
-                    .sum();
+                let sum: f64 = events.iter().filter_map(|e| e.as_number()).sum();
                 Ok(serde_json::json!(sum))
             }
             AggregationFunction::Avg => {
-                let values: Vec<f64> = events
-                    .iter()
-                    .filter_map(|e| e.as_number())
-                    .collect();
+                let values: Vec<f64> = events.iter().filter_map(|e| e.as_number()).collect();
                 if values.is_empty() {
                     return Ok(serde_json::Value::Null);
                 }
@@ -300,10 +296,8 @@ impl StreamProcessor {
                 Ok(serde_json::json!(values))
             }
             AggregationFunction::CountDistinct => {
-                let unique: std::collections::HashSet<_> = events
-                    .iter()
-                    .map(|e| e.value.to_string())
-                    .collect();
+                let unique: std::collections::HashSet<_> =
+                    events.iter().map(|e| e.value.to_string()).collect();
                 Ok(serde_json::json!(unique.len()))
             }
         }
@@ -368,10 +362,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_count_window() {
-        let processor = StreamProcessor::new(
-            WindowType::Count { count: 3 },
-            AggregationFunction::Sum,
-        );
+        let processor =
+            StreamProcessor::new(WindowType::Count { count: 3 }, AggregationFunction::Sum);
 
         // Add 3 events to complete window
         for i in 1..=3 {
@@ -396,34 +388,26 @@ mod tests {
         let events_deque: VecDeque<_> = events.into_iter().collect();
 
         // Test Sum
-        let processor = StreamProcessor::new(
-            WindowType::Count { count: 3 },
-            AggregationFunction::Sum,
-        );
+        let processor =
+            StreamProcessor::new(WindowType::Count { count: 3 }, AggregationFunction::Sum);
         let sum = processor.compute_aggregation(&events_deque).unwrap();
         assert_eq!(sum, serde_json::json!(6.0));
 
         // Test Avg
-        let processor = StreamProcessor::new(
-            WindowType::Count { count: 3 },
-            AggregationFunction::Avg,
-        );
+        let processor =
+            StreamProcessor::new(WindowType::Count { count: 3 }, AggregationFunction::Avg);
         let avg = processor.compute_aggregation(&events_deque).unwrap();
         assert_eq!(avg, serde_json::json!(2.0));
 
         // Test Min
-        let processor = StreamProcessor::new(
-            WindowType::Count { count: 3 },
-            AggregationFunction::Min,
-        );
+        let processor =
+            StreamProcessor::new(WindowType::Count { count: 3 }, AggregationFunction::Min);
         let min = processor.compute_aggregation(&events_deque).unwrap();
         assert_eq!(min, serde_json::json!(1.0));
 
         // Test Max
-        let processor = StreamProcessor::new(
-            WindowType::Count { count: 3 },
-            AggregationFunction::Max,
-        );
+        let processor =
+            StreamProcessor::new(WindowType::Count { count: 3 }, AggregationFunction::Max);
         let max = processor.compute_aggregation(&events_deque).unwrap();
         assert_eq!(max, serde_json::json!(3.0));
     }

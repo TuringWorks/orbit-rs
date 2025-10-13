@@ -10,9 +10,7 @@ on:
     branches: [ main, develop ]
     paths:
       - 'orbit-server/**'
-      - 'orbit-client/**'
       - 'orbit-operator/**'
-      - 'orbit-compute/**'
       - 'Cargo.toml'
       - 'Cargo.lock'
       - '.github/workflows/k8s-container-pipeline.yml'
@@ -23,9 +21,7 @@ on:
     branches: [ main, develop ]
     paths:
       - 'orbit-server/**'
-      - 'orbit-client/**'
       - 'orbit-operator/**'
-      - 'orbit-compute/**'
       - 'Cargo.toml'
       - 'Cargo.lock'
       - '.github/workflows/k8s-container-pipeline.yml'
@@ -158,7 +154,7 @@ jobs:
       # Reduce parallelism to avoid disk space issues
       max-parallel: 2
       matrix:
-        component: ["orbit-server", "orbit-client", "orbit-operator", "orbit-compute"]
+        component: ["orbit-server", "orbit-operator"]
         build-type: ${{ fromJson(needs.setup.outputs.build-types) }}
         platform: ["linux/amd64", "linux/arm64"]
         gpu-enabled: [false, true]
@@ -168,10 +164,8 @@ jobs:
           - platform: "linux/arm64"
             runner-arch: "arm64"
         exclude:
-          # Only build GPU variants for orbit-compute
+          # Disable GPU variants for all components (GPU support not implemented yet)
           - component: "orbit-server"
-            gpu-enabled: true
-          - component: "orbit-client"
             gpu-enabled: true
           - component: "orbit-operator"
             gpu-enabled: true

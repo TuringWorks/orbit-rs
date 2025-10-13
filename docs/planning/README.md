@@ -15,19 +15,19 @@ This directory contains comprehensive competitive analysis, strategic planning d
 ## 📚 Technical RFCs (Request for Comments)
 
 ### Database Core Capabilities
-1. **[RFC-001: Virtual Actor System](../rfcs/RFC-001-virtual-actor-system.md)** - Actor-native persistence and distributed computing
-2. **[RFC-002: Multi-Protocol Adapters](../rfcs/RFC-002-multi-protocol-adapters.md)** - Redis/SQL/gRPC/MCP protocol support  
-3. **[RFC-003: Distributed Transactions & ACID](../rfcs/RFC-003-distributed-transactions-acid.md)** - Cross-model transaction guarantees
-4. **[RFC-007: Storage Backend Architecture](../rfcs/RFC-007-storage-backend-architecture.md)** - LSM-Tree and memory-mapped storage
-8. **[RFC-008: Query Languages (OrbitQL/SQL)](../rfcs/RFC-008-query-languages-orbitql-sql.md)** - Unified multi-model query language
-9. **[RFC-009: Persistence & Durability](../rfcs/RFC-009-persistence-durability.md)** - Data consistency and disaster recovery
-10. **[RFC-010: Security & Authentication](../rfcs/RFC-010-security-authentication.md)** - Zero trust and enterprise compliance
+1. **[RFC-005: Virtual Actor System](../rfcs/RFC-005-VIRTUAL_ACTOR_SYSTEM.md)** - Actor-native persistence and distributed computing
+2. **[RFC-006: Multi-Protocol Adapters](../rfcs/RFC-006-MULTI_PROTOCOL_ADAPTERS.md)** - Redis/SQL/gRPC/MCP protocol support  
+3. **[RFC-007: Distributed Transactions & ACID](../rfcs/RFC-007-DISTRIBUTED_TRANSACTIONS.md)** - Cross-model transaction guarantees
+7. **[RFC-011: Storage Backend Architecture](../rfcs/RFC-011-STORAGE_BACKEND_ARCHITECTURE.md)** - LSM-Tree and memory-mapped storage
+8. **[RFC-012: Query Languages (OrbitQL/SQL)](../rfcs/RFC-012-QUERY_LANGUAGES.md)** - Unified multi-model query language
+9. **[RFC-013: Persistence & Durability](../rfcs/RFC-013-PERSISTENCE_DURABILITY.md)** - Data consistency and disaster recovery
+10. **[RFC-014: Security & Authentication](../rfcs/RFC-014-SECURITY_AUTHENTICATION.md)** - Zero trust and enterprise compliance
 
 ### Data Model Specializations
-4. **[RFC-004: Graph Database Capabilities](../rfcs/RFC-004-graph-database-capabilities.md)** - Network analysis and graph traversal
-5. **[RFC-005: Vector Database & Similarity Search](../rfcs/RFC-005-vector-database-similarity-search.md)** - AI/ML embeddings and semantic search
-6. **[RFC-006: Time Series Engine](../rfcs/RFC-006-time-series-engine.md)** - IoT and analytics workload optimization
-11. **[RFC-011: Key-Value Store](../rfcs/RFC-011-key-value-store.md)** - Redis-compatible caching and session management
+4. **[RFC-008: Graph Database Capabilities](../rfcs/RFC-008-GRAPH_DATABASE_CAPABILITIES.md)** - Network analysis and graph traversal
+5. **[RFC-009: Vector Database & Similarity Search](../rfcs/RFC-009-VECTOR_DATABASE_CAPABILITIES.md)** - AI/ML embeddings and semantic search
+6. **[RFC-010: Time Series Engine](../rfcs/RFC-010-TIME_SERIES_ENGINE.md)** - IoT and analytics workload optimization
+11. **[RFC-011: Key-Value Store](../rfcs/RFC-011-STORAGE_BACKEND_ARCHITECTURE.md)** - Redis-compatible caching and session management
 
 ### Operations & Deployment
 12. **[RFC-012: Kubernetes Operator & Cloud-Native](../rfcs/RFC-012-kubernetes-cloud-native.md)** - Container orchestration and cloud deployment

@@ -241,6 +241,102 @@ impl StatisticsCollector {
         Ok(())
     }
 
+    /// Analyze a table and update statistics with sampling
+    pub fn analyze_table_with_sampling(
+        &mut self,
+        table_name: &str,
+        sample_rate: f64,
+    ) -> Result<(), String> {
+        if !(0.0..=1.0).contains(&sample_rate) {
+            return Err("Sample rate must be between 0.0 and 1.0".to_string());
+        }
+
+        // In a real implementation, this would sample the table
+        // For now, create statistics based on sampling assumptions
+        let estimated_rows = 10000;
+        let sampled_rows = (estimated_rows as f64 * sample_rate) as usize;
+
+        self.update_table_stats(
+            table_name,
+            TableStatistics {
+                row_count: estimated_rows,
+                rows_per_page: 100,
+                average_row_size: 200,
+                null_frac: 0.05,
+                distinct_values: sampled_rows / 2,
+            },
+        );
+
+        Ok(())
+    }
+
+    /// Build histogram for a column based on sampled data
+    pub fn build_histogram(
+        &mut self,
+        table_name: &str,
+        column_name: &str,
+        bucket_count: usize,
+    ) -> Result<(), String> {
+        if bucket_count == 0 {
+            return Err("Bucket count must be greater than 0".to_string());
+        }
+
+        // In a real implementation, this would sample column values
+        // and create histogram buckets
+        let mut histogram = Vec::new();
+        
+        for i in 0..bucket_count {
+            histogram.push(HistogramBucket {
+                lower_bound: format!("bucket_{}_lower", i),
+                upper_bound: format!("bucket_{}_upper", i),
+                frequency: 1.0 / bucket_count as f64,
+            });
+        }
+
+        let key = format!("{}.{}", table_name, column_name);
+        if let Some(col_stats) = self.column_stats.get_mut(&key) {
+            col_stats.histogram = histogram;
+        } else {
+            // Create new column stats with histogram
+            self.update_column_stats(
+                table_name,
+                column_name,
+                ColumnStatistics {
+                    histogram,
+                    ..Default::default()
+                },
+            );
+        }
+
+        Ok(())
+    }
+
+    /// Mark table as needing statistics refresh
+    pub fn mark_table_stale(&mut self, table_name: &str) {
+        if let Some(stats) = self.table_stats.get_mut(table_name) {
+            // In a real implementation, would track last analyze time
+            // For now, just update a counter
+            stats.distinct_values = 0; // Mark as stale
+        }
+    }
+
+    /// Check if table needs statistics update based on modification threshold
+    pub fn needs_analyze(&self, table_name: &str, modification_threshold: f64) -> bool {
+        if let Some(stats) = self.table_stats.get(table_name) {
+            // Simple heuristic: if distinct_values is 0, needs analyze
+            if stats.distinct_values == 0 {
+                return true;
+            }
+            
+            // In a real implementation, would track modifications since last analyze
+            // and compare against threshold (e.g., 10% of rows modified)
+            false
+        } else {
+            // No statistics exist, definitely needs analyze
+            true
+        }
+    }
+
     /// Auto-update statistics based on data changes
     pub fn auto_update_stats(
         &mut self,
