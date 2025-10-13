@@ -44,107 +44,20 @@ impl CypherParser {
         Ok(query)
     }
 
-    /// Tokenize the query string
+    /// Tokenize the query string using decomposed tokenization strategy
     fn tokenize(&self, query: &str) -> ProtocolResult<Vec<Token>> {
-        let mut tokens = Vec::new();
-        let mut current_token = String::new();
-        let mut in_quotes = false;
-        let mut quote_char = '\0';
-
-        for ch in query.chars() {
-            match ch {
-                '"' | '\'' if !in_quotes => {
-                    if !current_token.is_empty() {
-                        tokens.push(Token::Identifier(current_token.clone()));
-                        current_token.clear();
-                    }
-                    in_quotes = true;
-                    quote_char = ch;
-                }
-                '"' | '\'' if in_quotes && ch == quote_char => {
-                    tokens.push(Token::String(current_token.clone()));
-                    current_token.clear();
-                    in_quotes = false;
-                }
-                ' ' | '\t' | '\n' | '\r' if !in_quotes => {
-                    if !current_token.is_empty() {
-                        tokens.push(self.classify_token(&current_token));
-                        current_token.clear();
-                    }
-                }
-                '(' if !in_quotes => {
-                    if !current_token.is_empty() {
-                        tokens.push(self.classify_token(&current_token));
-                        current_token.clear();
-                    }
-                    tokens.push(Token::LeftParen);
-                }
-                ')' if !in_quotes => {
-                    if !current_token.is_empty() {
-                        tokens.push(self.classify_token(&current_token));
-                        current_token.clear();
-                    }
-                    tokens.push(Token::RightParen);
-                }
-                '{' if !in_quotes => {
-                    if !current_token.is_empty() {
-                        tokens.push(self.classify_token(&current_token));
-                        current_token.clear();
-                    }
-                    tokens.push(Token::LeftBrace);
-                }
-                '}' if !in_quotes => {
-                    if !current_token.is_empty() {
-                        tokens.push(self.classify_token(&current_token));
-                        current_token.clear();
-                    }
-                    tokens.push(Token::RightBrace);
-                }
-                ',' if !in_quotes => {
-                    if !current_token.is_empty() {
-                        tokens.push(self.classify_token(&current_token));
-                        current_token.clear();
-                    }
-                    tokens.push(Token::Comma);
-                }
-                ':' if !in_quotes => {
-                    if !current_token.is_empty() {
-                        tokens.push(self.classify_token(&current_token));
-                        current_token.clear();
-                    }
-                    tokens.push(Token::Colon);
-                }
-                '=' if !in_quotes => {
-                    if !current_token.is_empty() {
-                        tokens.push(self.classify_token(&current_token));
-                        current_token.clear();
-                    }
-                    tokens.push(Token::Equals);
-                }
-                _ => {
-                    current_token.push(ch);
-                }
-            }
-        }
-
-        if !current_token.is_empty() {
-            if in_quotes {
-                return Err(ProtocolError::CypherError(
-                    "Unterminated string literal".to_string(),
-                ));
-            }
-            tokens.push(self.classify_token(&current_token));
-        }
-
-        if self.debug_mode {
-            debug!(tokens = ?tokens, "Tokenized query");
-        }
-
-        Ok(tokens)
+        let mut tokenizer = CypherTokenizer::new(query, self.debug_mode);
+        tokenizer.tokenize()
     }
 
     /// Classify a token based on its content
+    #[allow(dead_code)]
     fn classify_token(&self, token: &str) -> Token {
+        Self::classify_token_static(token)
+    }
+
+    /// Static token classification for use by tokenizer
+    fn classify_token_static(token: &str) -> Token {
         match token.to_uppercase().as_str() {
             "MATCH" => Token::Match,
             "CREATE" => Token::Create,
@@ -214,6 +127,123 @@ enum Token {
     Comma,
     Colon,
     Equals,
+}
+
+/// Specialized tokenizer for Cypher queries with reduced complexity
+#[derive(Debug)]
+struct CypherTokenizer {
+    #[allow(dead_code)]
+    query: String,
+    debug_mode: bool,
+    tokens: Vec<Token>,
+    current_token: String,
+    position: usize,
+    chars: Vec<char>,
+    in_quotes: bool,
+    quote_char: char,
+}
+
+impl CypherTokenizer {
+    fn new(query: &str, debug_mode: bool) -> Self {
+        Self {
+            query: query.to_string(),
+            debug_mode,
+            tokens: Vec::new(),
+            current_token: String::new(),
+            position: 0,
+            chars: query.chars().collect(),
+            in_quotes: false,
+            quote_char: '\0',
+        }
+    }
+
+    fn tokenize(&mut self) -> ProtocolResult<Vec<Token>> {
+        while self.position < self.chars.len() {
+            let ch = self.chars[self.position];
+            self.process_character(ch)?;
+            self.position += 1;
+        }
+
+        self.finalize_tokenization()?;
+
+        if self.debug_mode {
+            debug!(tokens = ?self.tokens, "Tokenized Cypher query");
+        }
+
+        Ok(self.tokens.clone())
+    }
+
+    fn process_character(&mut self, ch: char) -> ProtocolResult<()> {
+        if self.in_quotes {
+            self.handle_quoted_character(ch);
+        } else {
+            self.handle_unquoted_character(ch);
+        }
+        Ok(())
+    }
+
+    fn handle_quoted_character(&mut self, ch: char) {
+        if ch == self.quote_char {
+            self.tokens.push(Token::String(self.current_token.clone()));
+            self.current_token.clear();
+            self.in_quotes = false;
+            self.quote_char = '\0';
+        } else {
+            self.current_token.push(ch);
+        }
+    }
+
+    fn handle_unquoted_character(&mut self, ch: char) {
+        match ch {
+            '"' | '\'' => self.start_string_literal(ch),
+            ' ' | '\t' | '\n' | '\r' => self.handle_whitespace(),
+            '(' | ')' | '{' | '}' | ',' | ':' | '=' => self.handle_single_char_token(ch),
+            _ => self.current_token.push(ch),
+        }
+    }
+
+    fn start_string_literal(&mut self, quote: char) {
+        self.flush_current_token();
+        self.in_quotes = true;
+        self.quote_char = quote;
+    }
+
+    fn handle_whitespace(&mut self) {
+        self.flush_current_token();
+    }
+
+    fn handle_single_char_token(&mut self, ch: char) {
+        self.flush_current_token();
+        let token = match ch {
+            '(' => Token::LeftParen,
+            ')' => Token::RightParen,
+            '{' => Token::LeftBrace,
+            '}' => Token::RightBrace,
+            ',' => Token::Comma,
+            ':' => Token::Colon,
+            '=' => Token::Equals,
+            _ => unreachable!("Invalid single char token: {}", ch),
+        };
+        self.tokens.push(token);
+    }
+
+    fn flush_current_token(&mut self) {
+        if !self.current_token.is_empty() {
+            self.tokens
+                .push(CypherParser::classify_token_static(&self.current_token));
+            self.current_token.clear();
+        }
+    }
+
+    fn finalize_tokenization(&mut self) -> ProtocolResult<()> {
+        if self.in_quotes {
+            return Err(ProtocolError::CypherError(
+                "Unterminated string literal".to_string(),
+            ));
+        }
+        self.flush_current_token();
+        Ok(())
+    }
 }
 
 /// Token parser for building AST

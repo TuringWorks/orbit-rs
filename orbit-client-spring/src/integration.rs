@@ -203,43 +203,57 @@ impl OrbitIntegration {
     pub fn config_from_app_config(app_config: &AppConfig) -> OrbitClientConfig {
         let mut config = OrbitClientConfig::default();
 
-        // Extract Orbit-specific configuration from custom properties
         if let Some(orbit_config) = app_config.custom.get("orbit") {
             if let Ok(orbit_obj) = orbit_config.as_string() {
-                // Parse Orbit configuration from JSON string
-                if let Ok(parsed_config) = serde_json::from_str::<serde_json::Value>(orbit_obj) {
-                    // Extract peer configuration
-                    if let Some(peer_config) = parsed_config.get("peer") {
-                        // Update config based on parsed values
-                        debug!(
-                            "Configuring Orbit client from app config: {:?}",
-                            peer_config
-                        );
-                    }
-
-                    // Extract connection settings
-                    if let Some(auto_start) = parsed_config.get("auto_start") {
-                        if let Some(auto_start_bool) = auto_start.as_bool() {
-                            config.auto_start = auto_start_bool;
-                        }
-                    }
-
-                    if let Some(connection_timeout) = parsed_config.get("connection_timeout") {
-                        if let Some(timeout) = connection_timeout.as_u64() {
-                            config.connection_timeout = timeout;
-                        }
-                    }
-
-                    if let Some(request_timeout) = parsed_config.get("request_timeout") {
-                        if let Some(timeout) = request_timeout.as_u64() {
-                            config.request_timeout = timeout;
-                        }
-                    }
-                }
+                Self::parse_orbit_config(&mut config, orbit_obj);
             }
         }
 
         config
+    }
+
+    /// Parse Orbit configuration from JSON string
+    fn parse_orbit_config(config: &mut OrbitClientConfig, orbit_json: &str) {
+        if let Ok(parsed_config) = serde_json::from_str::<serde_json::Value>(orbit_json) {
+            Self::apply_peer_config(config, &parsed_config);
+            Self::apply_connection_settings(config, &parsed_config);
+        }
+    }
+
+    /// Apply peer configuration from parsed JSON
+    fn apply_peer_config(_config: &mut OrbitClientConfig, parsed_config: &serde_json::Value) {
+        if let Some(peer_config) = parsed_config.get("peer") {
+            debug!(
+                "Configuring Orbit client from app config: {:?}",
+                peer_config
+            );
+            // Here you would extract and apply peer-specific settings
+            // This is a placeholder for the actual peer config extraction
+        }
+    }
+
+    /// Apply connection settings from parsed JSON
+    fn apply_connection_settings(
+        config: &mut OrbitClientConfig,
+        parsed_config: &serde_json::Value,
+    ) {
+        if let Some(auto_start) = parsed_config.get("auto_start").and_then(|v| v.as_bool()) {
+            config.auto_start = auto_start;
+        }
+
+        if let Some(timeout) = parsed_config
+            .get("connection_timeout")
+            .and_then(|v| v.as_u64())
+        {
+            config.connection_timeout = timeout;
+        }
+
+        if let Some(timeout) = parsed_config
+            .get("request_timeout")
+            .and_then(|v| v.as_u64())
+        {
+            config.request_timeout = timeout;
+        }
     }
 
     /// Get Orbit client from Spring context
@@ -247,40 +261,54 @@ impl OrbitIntegration {
         let service_instance = context.get_service("OrbitClientService").await?;
         let service = service_instance.read().await;
 
-        if let Some(orbit_service) = service.as_any().downcast_ref::<OrbitClientService>() {
-            if let Some(client) = orbit_service.client() {
-                Ok(client)
-            } else {
-                Err(SpringError::orbit_integration(
-                    "Orbit client not initialized",
-                ))
-            }
-        } else {
-            Err(SpringError::orbit_integration(
-                "OrbitClientService not found or wrong type",
-            ))
-        }
+        let orbit_service = Self::extract_orbit_service(&*service)?;
+        Self::get_initialized_client(orbit_service)
+    }
+
+    /// Extract OrbitClientService from service instance
+    fn extract_orbit_service(service: &dyn Component) -> SpringResult<&OrbitClientService> {
+        service
+            .as_any()
+            .downcast_ref::<OrbitClientService>()
+            .ok_or_else(|| {
+                SpringError::orbit_integration("OrbitClientService not found or wrong type")
+            })
+    }
+
+    /// Get initialized client from service
+    fn get_initialized_client(
+        orbit_service: &OrbitClientService,
+    ) -> SpringResult<Arc<OrbitClient>> {
+        orbit_service
+            .client()
+            .ok_or_else(|| SpringError::orbit_integration("Orbit client not initialized"))
     }
 
     /// Perform health check on Orbit client
     pub async fn health_check(context: &ApplicationContext) -> SpringResult<OrbitHealthStatus> {
         match Self::get_client(context).await {
-            Ok(_client) => {
-                // In a real implementation, we would check the client's actual health
-                // For now, we'll assume if we can get the client, it's healthy
-                Ok(OrbitHealthStatus {
-                    connected: true,
-                    peer_count: 0, // Would get actual peer count
-                    last_heartbeat: chrono::Utc::now(),
-                    status: "UP".to_string(),
-                })
-            }
-            Err(e) => Ok(OrbitHealthStatus {
-                connected: false,
-                peer_count: 0,
-                last_heartbeat: chrono::Utc::now(),
-                status: format!("DOWN: {}", e),
-            }),
+            Ok(_client) => Ok(Self::create_healthy_status()),
+            Err(e) => Ok(Self::create_unhealthy_status(e)),
+        }
+    }
+
+    /// Create health status for healthy client
+    fn create_healthy_status() -> OrbitHealthStatus {
+        OrbitHealthStatus {
+            connected: true,
+            peer_count: 0, // Would get actual peer count in real implementation
+            last_heartbeat: chrono::Utc::now(),
+            status: "UP".to_string(),
+        }
+    }
+
+    /// Create health status for unhealthy client
+    fn create_unhealthy_status(error: SpringError) -> OrbitHealthStatus {
+        OrbitHealthStatus {
+            connected: false,
+            peer_count: 0,
+            last_heartbeat: chrono::Utc::now(),
+            status: format!("DOWN: {}", error),
         }
     }
 }

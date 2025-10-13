@@ -313,9 +313,10 @@ impl CdcCoordinator {
         if let Some(ref logger) = self.transaction_logger {
             let log_entry = TransactionLogEntry {
                 timestamp: event.timestamp,
-                transaction_id: crate::transactions::TransactionId::new(
-                    crate::mesh::NodeId::new("cdc".to_string(), "default".to_string()),
-                ),
+                transaction_id: crate::transactions::TransactionId::new(crate::mesh::NodeId::new(
+                    "cdc".to_string(),
+                    "default".to_string(),
+                )),
                 event: crate::transactions::TransactionEvent::Started,
                 details: Some(serde_json::to_value(&event).map_err(|e| {
                     OrbitError::internal(format!("Failed to serialize CDC event: {}", e))
@@ -329,19 +330,31 @@ impl CdcCoordinator {
         {
             let mut stats = self.stats.write().await;
             stats.total_events += 1;
-            *stats.events_by_operation.entry(event.operation.clone()).or_insert(0) += 1;
-            *stats.events_by_table.entry(event.table.clone()).or_insert(0) += 1;
+            *stats
+                .events_by_operation
+                .entry(event.operation.clone())
+                .or_insert(0) += 1;
+            *stats
+                .events_by_table
+                .entry(event.table.clone())
+                .or_insert(0) += 1;
         }
 
         // Broadcast to all subscribers
         match self.event_broadcast.send(event.clone()) {
             Ok(receiver_count) => {
-                debug!("CDC event {} broadcast to {} subscribers", event.event_id, receiver_count);
+                debug!(
+                    "CDC event {} broadcast to {} subscribers",
+                    event.event_id, receiver_count
+                );
                 Ok(())
             }
             Err(_) => {
                 // No active subscribers
-                debug!("CDC event {} captured but no active subscribers", event.event_id);
+                debug!(
+                    "CDC event {} captured but no active subscribers",
+                    event.event_id
+                );
                 Ok(())
             }
         }
@@ -354,7 +367,10 @@ impl CdcCoordinator {
         let (tx, rx) = tokio::sync::mpsc::channel(subscription.buffer_size);
 
         // Store subscription
-        self.subscriptions.write().await.insert(subscription_id, subscription);
+        self.subscriptions
+            .write()
+            .await
+            .insert(subscription_id, subscription);
 
         // Spawn task to filter and forward events
         let mut event_receiver = self.event_broadcast.subscribe();
@@ -362,15 +378,16 @@ impl CdcCoordinator {
             loop {
                 match event_receiver.recv().await {
                     Ok(event) => {
-                        if filter.matches(&event) {
-                            if tx.send(event).await.is_err() {
-                                debug!("CDC subscription {} dropped", subscription_id);
-                                break;
-                            }
+                        if filter.matches(&event) && tx.send(event).await.is_err() {
+                            debug!("CDC subscription {} dropped", subscription_id);
+                            break;
                         }
                     }
                     Err(broadcast::error::RecvError::Lagged(skipped)) => {
-                        error!("CDC subscription {} lagged, skipped {} events", subscription_id, skipped);
+                        error!(
+                            "CDC subscription {} lagged, skipped {} events",
+                            subscription_id, skipped
+                        );
                     }
                     Err(broadcast::error::RecvError::Closed) => {
                         debug!("CDC broadcast closed for subscription {}", subscription_id);
@@ -390,7 +407,13 @@ impl CdcCoordinator {
 
     /// Unsubscribe from CDC events
     pub async fn unsubscribe(&self, subscription_id: Uuid) -> OrbitResult<()> {
-        if self.subscriptions.write().await.remove(&subscription_id).is_some() {
+        if self
+            .subscriptions
+            .write()
+            .await
+            .remove(&subscription_id)
+            .is_some()
+        {
             info!("Removed CDC subscription {}", subscription_id);
             Ok(())
         } else {
@@ -509,10 +532,10 @@ mod tests {
         coordinator.capture_event(event.clone()).await.unwrap();
 
         // Receive the event
-        let received = tokio::time::timeout(
-            tokio::time::Duration::from_secs(1),
-            stream.next()
-        ).await.unwrap().unwrap();
+        let received = tokio::time::timeout(tokio::time::Duration::from_secs(1), stream.next())
+            .await
+            .unwrap()
+            .unwrap();
 
         assert_eq!(received.table, "users");
         assert_eq!(received.operation, DmlOperation::Insert);

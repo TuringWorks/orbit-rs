@@ -378,6 +378,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
 
 [[package]]
+name = "benchmarks-demo"
+version = "0.1.0"
+dependencies = [
+ "orbit-shared",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "bincode"
 version = "1.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4165,9 +4175,11 @@ dependencies = [
  "md5",
  "metrics 0.23.1",
  "orbit-util",
+ "paste",
  "prost",
  "prost-build",
  "rayon",
+ "regex",
  "serde",
  "serde_json",
  "sha2",
