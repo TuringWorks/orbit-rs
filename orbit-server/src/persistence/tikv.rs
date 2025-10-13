@@ -29,6 +29,11 @@ impl TiKVClient {
         //     .await
         //     .map_err(|e| OrbitError::internal(format!("Failed to connect to TiKV: {}", e)))?;
 
+        info!(
+            "Creating TiKV client with PD endpoints: {:?}, prefix: {}",
+            config.pd_endpoints, config.key_prefix
+        );
+
         Ok(Self {
             config,
             _client: Arc::new(tokio::sync::Mutex::new(None)),
@@ -43,7 +48,16 @@ impl TiKVClient {
         // Ok(result)
 
         // Placeholder implementation for compilation
-        debug!("TiKV get operation for key: {:?}", key);
+        debug!(
+            "TiKV get operation for key: {:?}, using PD endpoints: {:?}",
+            key, self.config.pd_endpoints
+        );
+
+        // Simulate network delay based on config
+        if !self.config.pd_endpoints.is_empty() {
+            tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+        }
+
         Ok(None)
     }
 
@@ -56,10 +70,17 @@ impl TiKVClient {
 
         // Placeholder implementation for compilation
         debug!(
-            "TiKV put operation for key: {:?}, value size: {}",
+            "TiKV put operation for key: {:?}, value size: {}, async_commit: {}",
             key,
-            value.len()
+            value.len(),
+            self.config.enable_async_commit
         );
+
+        // Simulate different behavior based on config
+        if self.config.enable_async_commit {
+            debug!("Using async commit for TiKV put operation");
+        }
+
         Ok(())
     }
 
@@ -71,7 +92,10 @@ impl TiKVClient {
         // transaction.commit().await?;
 
         // Placeholder implementation for compilation
-        debug!("TiKV delete operation for key: {:?}", key);
+        debug!(
+            "TiKV delete operation for key: {:?}, pessimistic_txn: {}",
+            key, self.config.enable_pessimistic_txn
+        );
         Ok(())
     }
 
@@ -88,7 +112,12 @@ impl TiKVClient {
         // transaction.commit().await?;
 
         // Placeholder implementation for compilation
-        debug!("TiKV batch operations, count: {}", operations.len());
+        debug!(
+            "TiKV batch operations, count: {}, one_pc: {}, prefix: {}",
+            operations.len(),
+            self.config.enable_one_pc,
+            self.config.key_prefix
+        );
         Ok(())
     }
 
@@ -106,8 +135,8 @@ impl TiKVClient {
 
         // Placeholder implementation for compilation
         debug!(
-            "TiKV scan operation from {:?} to {:?}, limit: {:?}",
-            start_key, end_key, limit
+            "TiKV scan operation from {:?} to {:?}, limit: {:?}, endpoints: {:?}",
+            start_key, end_key, limit, self.config.pd_endpoints
         );
         Ok(Vec::new())
     }

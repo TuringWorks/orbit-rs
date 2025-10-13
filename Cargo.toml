@@ -17,7 +17,7 @@ members = [
     "orbit-ml",
     "tests",
     "examples/hello-world",
-    "examples/distributed-counter",
+    "examples/distributed-counter-example",
     "examples/distributed-transactions",
     "examples/resp-server",
     "examples/vector-store",
