@@ -25,9 +25,9 @@ uuid = { version = "1.10", features = ["v4", "serde"] }
 serde_json = "1.0"
 tokio-util = "0.7"
 # HTTP/gRPC server dependencies
-axum = "0.7"
-tower = "0.4"
-tower-http = "0.5"
+axum = "0.8"
+tower = "0.5"
+tower-http = "0.6"
 hyper = "1.0"
 tonic = { workspace = true }
 prost = { workspace = true }
