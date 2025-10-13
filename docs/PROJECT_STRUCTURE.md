@@ -569,7 +569,9 @@ This layered architecture ensures clear separation of concerns, enables independ
 
 ## Related Documentation
 
-- [Overview](OVERVIEW.md) - High-level architecture and features
-- [Development Guide](development/DEVELOPMENT.md) - Development setup and guidelines
-- [Quick Start](QUICK_START.md) - Getting started with Orbit-RS
+- [Project Overview (Accurate)](PROJECT_OVERVIEW_ACCURATE.md) - High-level architecture and features
+- [Development Guide](DEVELOPMENT.md) - Development setup and guidelines
+- [Main README](../README.md) - Getting started with Orbit-RS
 - [Deployment Guide](deployment/DEPLOYMENT.md) - Production deployment
+- [Master Documentation](ORBIT_MASTER_DOCUMENTATION.md) - Comprehensive system documentation
+- [Architecture Documentation](architecture/ORBIT_ARCHITECTURE.md) - Detailed system architecture
