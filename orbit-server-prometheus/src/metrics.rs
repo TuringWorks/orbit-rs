@@ -30,6 +30,28 @@ pub struct OrbitMetrics {
     pub cache_misses_total: Counter,
     pub cache_size: Gauge,
 
+    /// Query performance metrics
+    pub query_execution_time: Histogram,
+    pub slow_queries_total: Counter,
+    pub query_errors_total: Counter,
+
+    /// Lock metrics
+    pub lock_acquisitions_total: Counter,
+    pub lock_wait_time: Histogram,
+    pub lock_contentions_total: Counter,
+
+    /// Transaction metrics
+    pub transactions_total: Counter,
+    pub transaction_duration: Histogram,
+    pub transaction_commits_total: Counter,
+    pub transaction_rollbacks_total: Counter,
+
+    /// I/O metrics
+    pub disk_reads_total: Counter,
+    pub disk_writes_total: Counter,
+    pub disk_read_bytes_total: Counter,
+    pub disk_write_bytes_total: Counter,
+
     /// Custom application metrics
     pub custom_metrics: Arc<std::sync::RwLock<HashMap<String, MetricValue>>>,
 
@@ -101,6 +123,24 @@ impl OrbitMetrics {
             cache_hits_total: metrics::counter!("orbit_cache_hits_total"),
             cache_misses_total: metrics::counter!("orbit_cache_misses_total"),
             cache_size: metrics::gauge!("orbit_cache_size_bytes"),
+
+            query_execution_time: metrics::histogram!("orbit_query_execution_seconds"),
+            slow_queries_total: metrics::counter!("orbit_slow_queries_total"),
+            query_errors_total: metrics::counter!("orbit_query_errors_total"),
+
+            lock_acquisitions_total: metrics::counter!("orbit_lock_acquisitions_total"),
+            lock_wait_time: metrics::histogram!("orbit_lock_wait_seconds"),
+            lock_contentions_total: metrics::counter!("orbit_lock_contentions_total"),
+
+            transactions_total: metrics::counter!("orbit_transactions_total"),
+            transaction_duration: metrics::histogram!("orbit_transaction_duration_seconds"),
+            transaction_commits_total: metrics::counter!("orbit_transaction_commits_total"),
+            transaction_rollbacks_total: metrics::counter!("orbit_transaction_rollbacks_total"),
+
+            disk_reads_total: metrics::counter!("orbit_disk_reads_total"),
+            disk_writes_total: metrics::counter!("orbit_disk_writes_total"),
+            disk_read_bytes_total: metrics::counter!("orbit_disk_read_bytes_total"),
+            disk_write_bytes_total: metrics::counter!("orbit_disk_write_bytes_total"),
 
             custom_metrics: Arc::new(std::sync::RwLock::new(HashMap::new())),
             created_at: now,
@@ -179,6 +219,62 @@ impl OrbitMetrics {
         self.update_timestamp();
     }
 
+    /// Record query execution
+    pub fn record_query_execution(&self, duration: Duration, is_slow: bool, success: bool) {
+        self.query_execution_time.record(duration.as_secs_f64());
+        
+        if is_slow {
+            self.slow_queries_total.increment(1);
+        }
+        
+        if !success {
+            self.query_errors_total.increment(1);
+        }
+        
+        self.update_timestamp();
+    }
+
+    /// Record lock acquisition
+    pub fn record_lock_acquisition(&self, wait_time: Duration, contended: bool) {
+        self.lock_acquisitions_total.increment(1);
+        self.lock_wait_time.record(wait_time.as_secs_f64());
+        
+        if contended {
+            self.lock_contentions_total.increment(1);
+        }
+        
+        self.update_timestamp();
+    }
+
+    /// Record transaction
+    pub fn record_transaction(&self, duration: Duration, committed: bool) {
+        self.transactions_total.increment(1);
+        self.transaction_duration.record(duration.as_secs_f64());
+        
+        if committed {
+            self.transaction_commits_total.increment(1);
+        } else {
+            self.transaction_rollbacks_total.increment(1);
+        }
+        
+        self.update_timestamp();
+    }
+
+    /// Record disk I/O
+    pub fn record_disk_io(&self, reads: u64, writes: u64, read_bytes: u64, write_bytes: u64) {
+        if reads > 0 {
+            self.disk_reads_total.increment(reads);
+            self.disk_read_bytes_total.increment(read_bytes);
+        }
+        
+        if writes > 0 {
+            self.disk_writes_total.increment(writes);
+            self.disk_write_bytes_total.increment(write_bytes);
+        }
+        
+        self.update_timestamp();
+    }
+
     /// Add custom metric
     pub fn add_custom_metric(&self, name: String, value: MetricValue) -> PrometheusResult<()> {
         let mut custom_metrics = self.custom_metrics.write().map_err(|e| {
@@ -241,7 +337,7 @@ impl OrbitMetrics {
         })?;
 
         Ok(MetricsSummary {
-            total_metrics: 12 + custom_metrics.len(), // 12 built-in metrics + custom
+            total_metrics: 29 + custom_metrics.len(), // 29 built-in metrics + custom
             custom_metrics_count: custom_metrics.len(),
             created_at: self.created_at,
             last_updated: *last_updated,
