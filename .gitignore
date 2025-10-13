@@ -216,3 +216,6 @@ lcov.info
 # Flamegraph
 flamegraph.svg
 perf.data
+# Jekyll vendor bundle
+docs/vendor/
+docs/.bundle/
