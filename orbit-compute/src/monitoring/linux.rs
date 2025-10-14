@@ -861,55 +861,75 @@ impl LinuxSystemMonitor {
         if let Ok(entries) = fs::read_dir("/sys/class/drm") {
             let mut device_index = 0;
             for entry in entries.flatten() {
-                let name = entry.file_name();
-                if let Some(name_str) = name.to_str() {
-                    if name_str.starts_with("card") && !name_str.contains('-') {
-                        // Try to get GPU vendor and name
-                        let vendor_path = format!("/sys/class/drm/{}/device/vendor", name_str);
-                        let device_path = format!("/sys/class/drm/{}/device/device", name_str);
-
-                        let vendor_id = fs::read_to_string(&vendor_path)
-                            .unwrap_or_default()
-                            .trim()
-                            .to_string();
-                        let device_id = fs::read_to_string(&device_path)
-                            .unwrap_or_default()
-                            .trim()
-                            .to_string();
-
-                        let vendor = match vendor_id.as_str() {
-                            "0x10de" => "NVIDIA",
-                            "0x1002" => "AMD",
-                            "0x8086" => "Intel",
-                            _ => "Unknown",
-                        }
-                        .to_string();
-
-                        let gpu_name = format!("{} GPU ({})", vendor, device_id);
-
-                        gpus.push(LinuxGPUInfo {
-                            device_index,
-                            name: gpu_name,
-                            vendor,
-                            pci_id: format!("{}:{}", vendor_id, device_id),
-                            driver: "unknown".to_string(),
-                            driver_version: "unknown".to_string(),
-                            memory_mb: 0, // Would need vendor-specific querying
-                            current_freq_mhz: None,
-                            max_freq_mhz: None,
-                            power_limit_w: None,
-                            cuda_supported: vendor_id == "0x10de",
-                            opencl_supported: true, // Assume OpenCL support
-                            vulkan_supported: true, // Assume Vulkan support
-                        });
-
-                        device_index += 1;
-                    }
+                if let Some(gpu_info) = Self::process_gpu_entry(&entry, device_index).await {
+                    gpus.push(gpu_info);
+                    device_index += 1;
                 }
             }
         }
 
         Ok(gpus)
+    }
+
+    /// Process a single GPU entry from /sys/class/drm
+    async fn process_gpu_entry(
+        entry: &std::fs::DirEntry,
+        device_index: u32,
+    ) -> Option<LinuxGPUInfo> {
+        let name = entry.file_name();
+        let name_str = name.to_str()?;
+
+        if !name_str.starts_with("card") || name_str.contains('-') {
+            return None;
+        }
+
+        let (vendor_id, device_id) = Self::read_gpu_ids(name_str).await;
+        let vendor = Self::parse_gpu_vendor(&vendor_id);
+        let gpu_name = format!("{} GPU ({})", vendor, device_id);
+
+        Some(LinuxGPUInfo {
+            device_index,
+            name: gpu_name,
+            vendor,
+            pci_id: format!("{}:{}", vendor_id, device_id),
+            driver: "unknown".to_string(),
+            driver_version: "unknown".to_string(),
+            memory_mb: 0, // Would need vendor-specific querying
+            current_freq_mhz: None,
+            max_freq_mhz: None,
+            power_limit_w: None,
+            cuda_supported: vendor_id == "0x10de",
+            opencl_supported: true, // Assume OpenCL support
+            vulkan_supported: true, // Assume Vulkan support
+        })
+    }
+
+    /// Read GPU vendor and device IDs
+    async fn read_gpu_ids(name_str: &str) -> (String, String) {
+        let vendor_path = format!("/sys/class/drm/{}/device/vendor", name_str);
+        let device_path = format!("/sys/class/drm/{}/device/device", name_str);
+
+        let vendor_id = fs::read_to_string(&vendor_path)
+            .unwrap_or_default()
+            .trim()
+            .to_string();
+        let device_id = fs::read_to_string(&device_path)
+            .unwrap_or_default()
+            .trim()
+            .to_string();
+
+        (vendor_id, device_id)
+    }
+
+    /// Parse GPU vendor from vendor ID
+    fn parse_gpu_vendor(vendor_id: &str) -> String {
+        match vendor_id {
+            "0x10de" => "NVIDIA",
+            "0x1002" => "AMD",
+            "0x8086" => "Intel",
+            _ => "Unknown",
+        }
+        .to_string()
     }
 
     /// Get hardware information from DMI

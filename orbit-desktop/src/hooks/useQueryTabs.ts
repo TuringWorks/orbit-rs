@@ -86,20 +86,6 @@ export const useQueryTabs = (): UseQueryTabsReturn => {
 
   const getCurrentTab = () => queryTabs[activeTabIndex];
 
-  const addSampleTab = (query: string, queryType: QueryType) => {
-    const newTab: QueryTab = {
-      id: Date.now().toString(),
-      name: `Sample ${queryTabs.length + 1}`,
-      query: query,
-      query_type: queryType,
-      unsaved_changes: false,
-      is_executing: false,
-    };
-
-    setQueryTabs(prev => [...prev, newTab]);
-    setActiveTabIndex(queryTabs.length);
-  };
-
   return {
     queryTabs,
     activeTabIndex,

@@ -372,29 +372,79 @@ impl MultiHeadAttention {
         for b in 0..batch_size {
             for i in 0..seq_len {
                 for h in 0..num_heads {
-                    // Find max for numerical stability
-                    let mut max_val = f64::NEG_INFINITY;
-                    for j in 0..key_seq_len {
-                        max_val = max_val.max(input[[b, i, h, j]]);
-                    }
-
-                    // Compute exp and sum
-                    let mut sum = 0.0;
-                    for j in 0..key_seq_len {
-                        let exp_val = (input[[b, i, h, j]] - max_val).exp();
-                        output[[b, i, h, j]] = exp_val;
-                        sum += exp_val;
-                    }
-
-                    // Normalize
-                    for j in 0..key_seq_len {
-                        output[[b, i, h, j]] /= sum;
-                    }
+                    self.apply_softmax_to_slice(&mut output, input, b, i, h, key_seq_len);
                 }
             }
         }
 
         output
+    }
+
+    /// Apply softmax to a single slice of the 4D tensor
+    fn apply_softmax_to_slice(
+        &self,
+        output: &mut Array4<f64>,
+        input: &Array4<f64>,
+        batch_idx: usize,
+        seq_idx: usize,
+        head_idx: usize,
+        key_seq_len: usize,
+    ) {
+        // Find max for numerical stability
+        let max_val = self.find_slice_max(input, batch_idx, seq_idx, head_idx, key_seq_len);
+
+        // Compute exp values and sum
+        let (exp_sum, exp_values) = self.compute_exp_values_and_sum(
+            input,
+            batch_idx,
+            seq_idx,
+            head_idx,
+            key_seq_len,
+            max_val,
+        );
+
+        // Store normalized values
+        for (j, exp_val) in exp_values.into_iter().enumerate() {
+            output[[batch_idx, seq_idx, head_idx, j]] = exp_val / exp_sum;
+        }
+    }
+
+    /// Find maximum value in a slice for numerical stability
+    fn find_slice_max(
+        &self,
+        input: &Array4<f64>,
+        batch_idx: usize,
+        seq_idx: usize,
+        head_idx: usize,
+        key_seq_len: usize,
+    ) -> f64 {
+        let mut max_val = f64::NEG_INFINITY;
+        for j in 0..key_seq_len {
+            max_val = max_val.max(input[[batch_idx, seq_idx, head_idx, j]]);
+        }
+        max_val
+    }
+
+    /// Compute exponential values and their sum
+    fn compute_exp_values_and_sum(
+        &self,
+        input: &Array4<f64>,
+        batch_idx: usize,
+        seq_idx: usize,
+        head_idx: usize,
+        key_seq_len: usize,
+        max_val: f64,
+    ) -> (f64, Vec<f64>) {
+        let mut exp_values = Vec::with_capacity(key_seq_len);
+        let mut sum = 0.0;
+
+        for j in 0..key_seq_len {
+            let exp_val = (input[[batch_idx, seq_idx, head_idx, j]] - max_val).exp();
+            exp_values.push(exp_val);
+            sum += exp_val;
+        }
+
+        (sum, exp_values)
     }
 }
 

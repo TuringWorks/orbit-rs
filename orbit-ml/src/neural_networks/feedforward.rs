@@ -91,7 +91,6 @@ impl FeedforwardNetwork {
     }
 
     /// Apply activation function
-    #[allow(clippy::only_used_in_recursion)]
     fn apply_activation(&self, input: &Array2<f64>, activation: &ActivationType) -> Array2<f64> {
         match activation {
             ActivationType::Linear => input.clone(),
@@ -99,37 +98,49 @@ impl FeedforwardNetwork {
             ActivationType::LeakyReLU { alpha } => {
                 input.map(|x| if *x > 0.0 { *x } else { alpha * x })
             }
-            ActivationType::ELU { alpha } => input.map(|x| {
-                if *x > 0.0 {
-                    *x
-                } else {
-                    alpha * (x.exp() - 1.0)
-                }
-            }),
+            ActivationType::ELU { alpha } => self.apply_elu_activation(input, *alpha),
             ActivationType::Swish => input.map(|x| x / (1.0 + (-x).exp())),
-            ActivationType::GELU => input
-                .map(|x| 0.5 * x * (1.0 + (x * 0.7978845608 * (1.0 + 0.044715 * x * x)).tanh())),
+            ActivationType::GELU => self.apply_gelu_activation(input),
             ActivationType::Sigmoid => input.map(|x| 1.0 / (1.0 + (-x).exp())),
             ActivationType::Tanh => input.map(|x| x.tanh()),
-            ActivationType::Softmax => {
-                let mut result = input.clone();
-                for mut row in result.rows_mut() {
-                    let max_val = row.iter().fold(f64::NEG_INFINITY, |a, &b| a.max(b));
-                    for val in row.iter_mut() {
-                        *val = (*val - max_val).exp();
-                    }
-                    let sum: f64 = row.sum();
-                    for val in row.iter_mut() {
-                        *val /= sum;
-                    }
-                }
-                result
-            }
+            ActivationType::Softmax => self.apply_softmax_activation(input),
             ActivationType::LogSoftmax => {
-                let softmax = self.apply_activation(input, &ActivationType::Softmax);
+                let softmax = self.apply_softmax_activation(input);
                 softmax.map(|x| x.ln())
             }
         }
+    }
+
+    /// Apply ELU activation function
+    fn apply_elu_activation(&self, input: &Array2<f64>, alpha: f64) -> Array2<f64> {
+        input.map(|x| {
+            if *x > 0.0 {
+                *x
+            } else {
+                alpha * (x.exp() - 1.0)
+            }
+        })
+    }
+
+    /// Apply GELU activation function
+    fn apply_gelu_activation(&self, input: &Array2<f64>) -> Array2<f64> {
+        input.map(|x| 0.5 * x * (1.0 + (x * 0.7978845608 * (1.0 + 0.044715 * x * x)).tanh()))
+    }
+
+    /// Apply Softmax activation function
+    fn apply_softmax_activation(&self, input: &Array2<f64>) -> Array2<f64> {
+        let mut result = input.clone();
+        for mut row in result.rows_mut() {
+            let max_val = row.iter().fold(f64::NEG_INFINITY, |a, &b| a.max(b));
+            for val in row.iter_mut() {
+                *val = (*val - max_val).exp();
+            }
+            let sum: f64 = row.sum();
+            for val in row.iter_mut() {
+                *val /= sum;
+            }
+        }
+        result
     }
 
     /// Apply activation derivative (for backpropagation)

@@ -163,26 +163,43 @@ async fn then_table_has_rows(
     let sql = format!("SELECT COUNT(*) as count FROM {}", table_name);
     world.execute_sql(&sql).await?;
     
-    if let Some(result) = &world.last_result {
-        if let Some(rows) = result.get("rows") {
-            if let Some(rows_array) = rows.as_array() {
-                if let Some(first_row) = rows_array.first() {
-                    if let Some(row_array) = first_row.as_array() {
-                        if let Some(count_value) = row_array.first() {
-                            if let Some(count_str) = count_value.as_str() {
-                                let actual_count: usize = count_str.parse()?;
-                                if actual_count != expected_count {
-                                    return Err(format!("Expected {} rows in table {} but got {}", 
-                                                     expected_count, table_name, actual_count).into());
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
+    let result = world.last_result.as_ref()
+        .ok_or("No query result available")?;
+    
+    let actual_count = extract_table_count(result)?;
+    
+    if actual_count != expected_count {
+        return Err(format!("Expected {} rows in table {} but got {}", 
+                         expected_count, table_name, actual_count).into());
     }
+    
     Ok(())
+}
+
+/// Extract the count value from a table count query result
+fn extract_table_count(result: &serde_json::Value) -> Result<usize, Box<dyn std::error::Error>> {
+    let rows = result.get("rows")
+        .ok_or("Result does not contain rows field")?;
+    
+    let rows_array = rows.as_array()
+        .ok_or("Rows field is not an array")?;
+    
+    let first_row = rows_array.first()
+        .ok_or("No rows in result")?;
+    
+    let row_array = first_row.as_array()
+        .ok_or("First row is not an array")?;
+    
+    let count_value = row_array.first()
+        .ok_or("No count value in first row")?;
+    
+    let count_str = count_value.as_str()
+        .ok_or("Count value is not a string")?;
+    
+    let count = count_str.parse::<usize>()
+        .map_err(|e| format!("Failed to parse count: {}", e))?;
+    
+    Ok(count)
 }
 
 // Vector similarity search step definitions

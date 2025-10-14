@@ -15,7 +15,7 @@ import {
   Filler,
 } from 'chart.js';
 import { Line, Bar, Pie, Scatter, Doughnut } from 'react-chartjs-2';
-import { QueryResultData, ChartConfig, VisualizationData } from '@/types';
+import { QueryResultData, ChartConfig } from '@/types';
 
 // Register Chart.js components
 ChartJS.register(
@@ -268,7 +268,7 @@ export const DataVisualization: React.FC<DataVisualizationProps> = ({
             backgroundColor: chartType === 'bar' ? config.color_scheme[0] + '80' : 'transparent',
             borderColor: config.color_scheme[0],
             borderWidth: 2,
-            fill: chartType === 'line' ? false : true,
+            fill: chartType !== 'line',
             tension: chartType === 'line' ? 0.4 : 0,
             pointBackgroundColor: config.color_scheme[0],
             pointBorderColor: config.color_scheme[0],
@@ -292,7 +292,7 @@ export const DataVisualization: React.FC<DataVisualizationProps> = ({
         };
 
       case 'pie':
-      case 'doughnut':
+      case 'doughnut': {
         // Group by x_axis and sum y_axis
         const grouped = data.rows.reduce((acc, row) => {
           const key = row[config.x_axis];
@@ -313,6 +313,7 @@ export const DataVisualization: React.FC<DataVisualizationProps> = ({
             borderWidth: 2,
           }]
         };
+      }
 
       default:
         return null;
@@ -325,7 +326,7 @@ export const DataVisualization: React.FC<DataVisualizationProps> = ({
       maintainAspectRatio: false,
       plugins: {
         title: {
-          display: !!config.title,
+          display: Boolean(config.title),
           text: config.title,
           color: '#ffffff',
           font: {

@@ -827,27 +827,47 @@ impl AdaptiveWorkloadScheduler {
     ) -> Result<Vec<ComputeUnit>, ComputeError> {
         let mut candidates = Vec::new();
 
-        // Add CPU candidates based on SIMD capabilities
+        // Add CPU candidates
+        self.add_cpu_candidates(&mut candidates);
+
+        // Add GPU candidates
+        self.add_gpu_candidates(&mut candidates);
+
+        // Add neural engine candidates
+        self.add_neural_candidates(&mut candidates);
+
+        // Filter by preferences and exclusions
+        Self::filter_candidates_by_preferences(&mut candidates, request);
+
+        Ok(candidates)
+    }
+
+    /// Add CPU candidates based on SIMD capabilities
+    fn add_cpu_candidates(&self, candidates: &mut Vec<ComputeUnit>) {
+        let logical_cores = self.capabilities.cpu.cores.logical_cores;
+
+        // Add x86 SIMD candidates
         if let Some(x86_features) = &self.capabilities.cpu.simd.x86_features {
             if x86_features.avx.avx512f {
                 candidates.push(ComputeUnit::CPU {
                     simd_type: CPUSIMDType::AVX512,
-                    thread_count: self.capabilities.cpu.cores.logical_cores,
+                    thread_count: logical_cores,
                 });
             }
             if x86_features.avx.avx2 {
                 candidates.push(ComputeUnit::CPU {
                     simd_type: CPUSIMDType::AVX2,
-                    thread_count: self.capabilities.cpu.cores.logical_cores,
+                    thread_count: logical_cores,
                 });
             }
         }
 
+        // Add ARM SIMD candidates
         if let Some(arm_features) = &self.capabilities.cpu.simd.arm_features {
             if arm_features.neon {
                 candidates.push(ComputeUnit::CPU {
                     simd_type: CPUSIMDType::NEON,
-                    thread_count: self.capabilities.cpu.cores.logical_cores,
+                    thread_count: logical_cores,
                 });
             }
             if let Some(sve) = &arm_features.sve {
@@ -855,27 +875,35 @@ impl AdaptiveWorkloadScheduler {
                     simd_type: CPUSIMDType::SVE {
                         vector_length: sve.vector_length,
                     },
-                    thread_count: self.capabilities.cpu.cores.logical_cores,
+                    thread_count: logical_cores,
                 });
             }
         }
+    }
 
-        // Add GPU candidates
+    /// Add GPU candidates
+    fn add_gpu_candidates(&self, candidates: &mut Vec<ComputeUnit>) {
         for (idx, gpu_device) in self.capabilities.gpu.available_devices.iter().enumerate() {
-            let api = match &gpu_device.vendor {
-                GPUVendor::Apple(_) => GPUComputeAPI::Metal,
-                GPUVendor::NVIDIA(_) => GPUComputeAPI::CUDA,
-                GPUVendor::AMD(_) => GPUComputeAPI::ROCm,
-                _ => GPUComputeAPI::OpenCL,
-            };
-
+            let api = Self::determine_gpu_api(&gpu_device.vendor);
             candidates.push(ComputeUnit::GPU {
                 device_id: idx,
                 api,
             });
         }
+    }
 
-        // Add neural engine candidates
+    /// Determine appropriate GPU API for vendor
+    fn determine_gpu_api(vendor: &GPUVendor) -> GPUComputeAPI {
+        match vendor {
+            GPUVendor::Apple(_) => GPUComputeAPI::Metal,
+            GPUVendor::NVIDIA(_) => GPUComputeAPI::CUDA,
+            GPUVendor::AMD(_) => GPUComputeAPI::ROCm,
+            _ => GPUComputeAPI::OpenCL,
+        }
+    }
+
+    /// Add neural engine candidates
+    fn add_neural_candidates(&self, candidates: &mut Vec<ComputeUnit>) {
         match &self.capabilities.neural {
             NeuralEngineCapabilities::AppleNeuralEngine { .. } => {
                 candidates.push(ComputeUnit::NeuralEngine {
@@ -889,15 +917,18 @@ impl AdaptiveWorkloadScheduler {
             }
             _ => {}
         }
+    }
 
-        // Filter by preferences and exclusions
+    /// Filter candidates by user preferences and exclusions
+    fn filter_candidates_by_preferences(
+        candidates: &mut Vec<ComputeUnit>,
+        request: &ScheduleRequest,
+    ) {
         candidates.retain(|candidate| {
             !request.excluded_compute.contains(candidate)
                 && (request.preferred_compute.is_empty()
                     || request.preferred_compute.contains(candidate))
         });
-
-        Ok(candidates)
     }
 
     /// Score candidate compute units
