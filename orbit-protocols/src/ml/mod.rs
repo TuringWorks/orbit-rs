@@ -277,7 +277,7 @@ pub trait ModelStorage: Send + Sync {
 
 /// Utility functions for ML operations
 pub mod utils {
-    use super::*;
+    use super::{MLError, MLResult};
 
     /// Convert SQL array to vector
     pub fn sql_array_to_vector(array: &[f64]) -> Vec<f64> {
@@ -317,7 +317,8 @@ pub mod utils {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{utils, FeatureSpec, FeatureType, MLValue};
+    use std::collections::HashMap;
 
     #[test]
     fn test_feature_spec_creation() {

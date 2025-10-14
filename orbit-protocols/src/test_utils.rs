@@ -629,4 +629,8 @@ pub mod test_fixtures {
 }
 
 /// Export test utilities for use in integration tests
-pub use test_fixtures::*;
+pub use test_fixtures::{
+    assertions, CustomerData, EntityData, GraphTestData, IntegrationTestHelper, MockSearchResult,
+    PerformanceResult, PerformanceTestSuite, ProductData, RelationshipData, SampleDataGenerator,
+    SqlTestFixture, VectorTestFixture,
+};

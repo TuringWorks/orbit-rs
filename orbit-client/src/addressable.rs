@@ -1,7 +1,7 @@
 //! Client-side addressable management and lifecycle
 
 use async_trait::async_trait;
-use orbit_shared::*;
+use orbit_shared::{Addressable, AddressableReference, NodeId, OrbitError, OrbitResult};
 use std::any::{Any, TypeId};
 use std::collections::HashMap;
 use std::fmt;
@@ -283,6 +283,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use orbit_shared::Key;
 
     struct TestActor;
 

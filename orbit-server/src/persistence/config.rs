@@ -350,6 +350,25 @@ impl PersistenceConfigBuilder {
         self
     }
 
+    /// Add a TiKV provider configuration
+    pub fn with_tikv<S: Into<String>>(
+        mut self,
+        name: S,
+        config: TiKVConfig,
+        is_default: bool,
+    ) -> Self {
+        let name = name.into();
+        self.configs
+            .insert(name.clone(), PersistenceConfig::TiKV(config));
+
+        if is_default {
+            self.default_addressable = Some(name.clone());
+            self.default_cluster = Some(name);
+        }
+
+        self
+    }
+
     /// Set different defaults for addressable and cluster providers
     pub fn with_defaults<S1, S2>(
         mut self,
@@ -531,6 +550,38 @@ impl PersistenceConfigBuilder {
                     Self::validate_provider_config(&format!("{}_backup", name), backup)?;
                 }
             }
+            PersistenceConfig::TiKV(config) => {
+                if config.pd_endpoints.is_empty() {
+                    return Err(OrbitError::configuration(format!(
+                        "TiKV provider '{}': PD endpoints cannot be empty",
+                        name
+                    )));
+                }
+                if config.key_prefix.is_empty() {
+                    return Err(OrbitError::configuration(format!(
+                        "TiKV provider '{}': key prefix cannot be empty",
+                        name
+                    )));
+                }
+                if config.batch_size == 0 {
+                    return Err(OrbitError::configuration(format!(
+                        "TiKV provider '{}': batch size must be > 0",
+                        name
+                    )));
+                }
+                if config.max_retries == 0 {
+                    return Err(OrbitError::configuration(format!(
+                        "TiKV provider '{}': max retries must be > 0",
+                        name
+                    )));
+                }
+                if config.enable_tls && config.ca_cert_path.is_none() {
+                    return Err(OrbitError::configuration(format!(
+                        "TiKV provider '{}': CA certificate path required when TLS is enabled",
+                        name
+                    )));
+                }
+            }
             _ => {} // Other providers would have their validations here
         }
 
@@ -707,6 +758,33 @@ impl PersistenceProviderConfig {
                     crate::persistence::cloud::DigitalOceanSpacesClusterNodeProvider::new(
                         config.clone(),
                     ),
+                );
+
+                addressable_provider.initialize().await?;
+                cluster_provider.initialize().await?;
+
+                registry
+                    .register_addressable_provider(
+                        format!("{}_addressable", name),
+                        addressable_provider,
+                        is_default_addressable,
+                    )
+                    .await?;
+
+                registry
+                    .register_cluster_provider(
+                        format!("{}_cluster", name),
+                        cluster_provider,
+                        is_default_cluster,
+                    )
+                    .await?;
+            }
+            PersistenceConfig::TiKV(config) => {
+                let addressable_provider = Arc::new(
+                    crate::persistence::tikv::TiKVAddressableProvider::new(config.clone()).await?,
+                );
+                let cluster_provider = Arc::new(
+                    crate::persistence::tikv::TiKVClusterProvider::new(config.clone()).await?,
                 );
 
                 addressable_provider.initialize().await?;
@@ -979,6 +1057,69 @@ impl EnvironmentConfig {
             tags,
         })
     }
+
+    /// Create TiKV configuration from environment variables
+    pub fn tikv_from_env(prefix: &str) -> OrbitResult<TiKVConfig> {
+        let get_env = |key: &str| -> OrbitResult<String> {
+            std::env::var(format!("{}_{}", prefix, key)).map_err(|_| {
+                OrbitError::configuration(format!(
+                    "Missing environment variable: {}_{}",
+                    prefix, key
+                ))
+            })
+        };
+
+        let get_env_opt =
+            |key: &str| -> Option<String> { std::env::var(format!("{}_{}", prefix, key)).ok() };
+
+        let endpoints_str = get_env("PD_ENDPOINTS")?;
+        let pd_endpoints: Vec<String> = endpoints_str
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .collect();
+
+        Ok(TiKVConfig {
+            pd_endpoints,
+            connection_timeout: get_env_opt("CONNECTION_TIMEOUT").and_then(|s| s.parse().ok()),
+            request_timeout: get_env_opt("REQUEST_TIMEOUT").and_then(|s| s.parse().ok()),
+            max_connections: get_env_opt("MAX_CONNECTIONS").and_then(|s| s.parse().ok()),
+            enable_pessimistic_txn: get_env_opt("ENABLE_PESSIMISTIC_TXN")
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(false),
+            txn_timeout: get_env_opt("TXN_TIMEOUT").and_then(|s| s.parse().ok()),
+            enable_async_commit: get_env_opt("ENABLE_ASYNC_COMMIT")
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(true),
+            enable_one_pc: get_env_opt("ENABLE_ONE_PC")
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(true),
+            batch_size: get_env_opt("BATCH_SIZE")
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(1000),
+            region_cache_size: get_env_opt("REGION_CACHE_SIZE")
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(1000),
+            coprocessor_pool_size: get_env_opt("COPROCESSOR_POOL_SIZE")
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(8),
+            enable_tls: get_env_opt("ENABLE_TLS")
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(false),
+            ca_cert_path: get_env_opt("CA_CERT_PATH"),
+            client_cert_path: get_env_opt("CLIENT_CERT_PATH"),
+            client_key_path: get_env_opt("CLIENT_KEY_PATH"),
+            key_prefix: get_env_opt("KEY_PREFIX").unwrap_or_else(|| "orbit".to_string()),
+            enable_compression: get_env_opt("ENABLE_COMPRESSION")
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(true),
+            max_retries: get_env_opt("MAX_RETRIES")
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(3),
+            retry_delay_ms: get_env_opt("RETRY_DELAY_MS")
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(100),
+        })
+    }
 }
 
 #[cfg(test)]
@@ -1028,5 +1169,66 @@ mod tests {
         let config = PersistenceProviderConfig::default_memory();
         assert_eq!(config.provider_names().len(), 1);
         assert!(config.provider_names().contains(&&"memory".to_string()));
+    }
+
+    #[test]
+    fn test_tikv_config_builder() {
+        let tikv_config = TiKVConfig {
+            pd_endpoints: vec!["127.0.0.1:2379".to_string(), "127.0.0.1:2380".to_string()],
+            enable_tls: true,
+            ca_cert_path: Some("/path/to/ca.crt".to_string()),
+            ..Default::default()
+        };
+
+        let config = PersistenceProviderConfig::builder()
+            .with_tikv("tikv", tikv_config, true)
+            .build()
+            .unwrap();
+
+        let (addressable_default, cluster_default) = config.defaults();
+        assert_eq!(addressable_default, Some(&"tikv".to_string()));
+        assert_eq!(cluster_default, Some(&"tikv".to_string()));
+    }
+
+    #[test]
+    fn test_tikv_config_validation_empty_endpoints() {
+        let tikv_config = TiKVConfig {
+            pd_endpoints: vec![], // Empty endpoints should fail validation
+            ..Default::default()
+        };
+
+        let result = PersistenceProviderConfig::builder()
+            .with_tikv("tikv", tikv_config, true)
+            .build();
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_tikv_config_validation_tls_without_ca() {
+        let tikv_config = TiKVConfig {
+            enable_tls: true,
+            ca_cert_path: None, // TLS enabled but no CA cert should fail validation
+            ..Default::default()
+        };
+
+        let result = PersistenceProviderConfig::builder()
+            .with_tikv("tikv", tikv_config, true)
+            .build();
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_tikv_default_config() {
+        let config = TiKVConfig::default();
+        assert_eq!(config.pd_endpoints, vec!["127.0.0.1:2379".to_string()]);
+        assert_eq!(config.key_prefix, "orbit");
+        assert!(config.enable_async_commit);
+        assert!(config.enable_one_pc);
+        assert!(!config.enable_pessimistic_txn);
+        assert!(!config.enable_tls);
+        assert_eq!(config.batch_size, 1000);
+        assert_eq!(config.max_retries, 3);
     }
 }

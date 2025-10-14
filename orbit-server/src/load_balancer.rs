@@ -1,6 +1,6 @@
 //! Load balancing and actor placement algorithms for the Orbit cluster
 
-use orbit_shared::*;
+use orbit_shared::{AddressableReference, NodeId, NodeInfo, NodeStatus, OrbitResult};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -223,6 +223,8 @@ pub struct LoadBalancerStats {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use orbit_shared::{Key, NodeCapabilities};
+    use std::collections::HashMap;
 
     fn create_test_nodes() -> Vec<NodeInfo> {
         vec![

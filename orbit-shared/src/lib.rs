@@ -34,15 +34,20 @@ pub mod timeseries;
 pub mod transaction_log;
 pub mod transactions;
 pub mod transport;
+pub mod triggers;
 
-pub use addressable::*;
-pub use exception::*;
+pub use addressable::{
+    ActorWithInt32Key, ActorWithInt64Key, ActorWithNoKey, ActorWithStringKey, Addressable,
+    AddressableInvocation, AddressableInvocationArgument, AddressableInvocationArguments,
+    AddressableLease, AddressableReference, AddressableType, Key, NamespacedAddressableReference,
+};
+pub use exception::{OrbitError, OrbitResult};
 // Re-export specific graph types to avoid conflicts
 pub use graph::{Direction, GraphNode, GraphRelationship, GraphStorage, InMemoryGraphStorage};
 pub use graph::{NodeId as GraphNodeId, RelationshipId as GraphRelationshipId};
-pub use mesh::*;
-pub use net::*;
-pub use router::*;
+pub use mesh::{Namespace, NodeCapabilities, NodeId, NodeInfo, NodeKey, NodeLease, NodeStatus};
+pub use net::{InvocationReason, Message, MessageContent, MessageTarget};
+pub use router::Route;
 
 // Re-export CDC functionality
 pub use cdc::{
@@ -108,6 +113,12 @@ pub use spatial::{
     SpatialAlert, SpatialError, SpatialFunctions, SpatialGeometry, SpatialIndex, SpatialOperations,
     SpatialRelation, SpatialStreamProcessor, DEFAULT_PRECISION, EARTH_RADIUS_METERS,
     UTM_ZONE_33N_SRID, WEB_MERCATOR_SRID, WGS84_SRID,
+};
+
+// Re-export trigger functionality
+pub use triggers::{
+    TriggerContext, TriggerCoordinator, TriggerDefinition, TriggerEvent, TriggerExecutor,
+    TriggerFunction, TriggerLevel, TriggerResult, TriggerStats, TriggerTiming,
 };
 
 // Re-export advanced connection pooling
