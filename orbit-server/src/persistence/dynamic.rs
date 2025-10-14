@@ -254,61 +254,94 @@ impl DynamicProviderManager {
 
         match self.config.failover.strategy {
             FailoverStrategy::Priority => {
-                // Use providers in priority order
-                let priorities = self.provider_priorities.read().await;
-                for provider_name in priorities.iter() {
-                    if let (Some(provider), Some(monitor)) =
-                        (providers.get(provider_name), monitors.get(provider_name))
-                    {
-                        let health = monitor.get_health().await;
-                        if health == ProviderHealth::Healthy || health == ProviderHealth::Unknown {
-                            return Some((provider_name.clone(), provider.clone()));
-                        }
-                    }
-                }
+                self.get_provider_by_priority(&providers, &monitors).await
             }
             FailoverStrategy::RoundRobin => {
-                // Simple round-robin among healthy providers
-                // TODO: Implement proper round-robin state tracking
-                for (provider_name, provider) in providers.iter() {
-                    if let Some(monitor) = monitors.get(provider_name) {
-                        let health = monitor.get_health().await;
-                        if health == ProviderHealth::Healthy || health == ProviderHealth::Unknown {
-                            return Some((provider_name.clone(), provider.clone()));
-                        }
-                    }
-                }
+                self.get_provider_by_round_robin(&providers, &monitors)
+                    .await
             }
             FailoverStrategy::LowestLatency => {
-                // Find provider with lowest average response time
-                let mut best_provider = None;
-                let mut best_latency = f64::MAX;
-
-                for (provider_name, provider) in providers.iter() {
-                    if let Some(monitor) = monitors.get(provider_name) {
-                        let health = monitor.get_health().await;
-                        if health == ProviderHealth::Healthy || health == ProviderHealth::Unknown {
-                            let metrics = monitor.get_metrics().await;
-                            if metrics.avg_response_time_ms < best_latency {
-                                best_latency = metrics.avg_response_time_ms;
-                                best_provider = Some((provider_name.clone(), provider.clone()));
-                            }
-                        }
-                    }
-                }
-
-                return best_provider;
+                self.get_provider_by_lowest_latency(&providers, &monitors)
+                    .await
             }
             FailoverStrategy::LoadBased => {
                 // TODO: Implement load-based selection
                 // For now, fall back to priority-based
-                return self.get_provider_by_priority(&providers, &monitors).await;
+                self.get_provider_by_priority(&providers, &monitors).await
             }
         }
+    }
 
+    /// Get provider using round-robin strategy among healthy providers
+    async fn get_provider_by_round_robin(
+        &self,
+        providers: &HashMap<String, Arc<dyn PersistenceProvider>>,
+        monitors: &HashMap<String, Arc<ProviderMonitor>>,
+    ) -> Option<(String, Arc<dyn PersistenceProvider>)> {
+        // Simple round-robin among healthy providers
+        // TODO: Implement proper round-robin state tracking
+        for (provider_name, provider) in providers.iter() {
+            if self.is_provider_healthy(provider_name, monitors).await {
+                return Some((provider_name.clone(), provider.clone()));
+            }
+        }
         None
     }
 
+    /// Get provider with lowest average response time
+    async fn get_provider_by_lowest_latency(
+        &self,
+        providers: &HashMap<String, Arc<dyn PersistenceProvider>>,
+        monitors: &HashMap<String, Arc<ProviderMonitor>>,
+    ) -> Option<(String, Arc<dyn PersistenceProvider>)> {
+        let mut best_provider = None;
+        let mut best_latency = f64::MAX;
+
+        for (provider_name, provider) in providers.iter() {
+            if let Some(metrics) = self
+                .get_provider_metrics_if_healthy(provider_name, monitors)
+                .await
+            {
+                if metrics.avg_response_time_ms < best_latency {
+                    best_latency = metrics.avg_response_time_ms;
+                    best_provider = Some((provider_name.clone(), provider.clone()));
+                }
+            }
+        }
+
+        best_provider
+    }
+
+    /// Check if a provider is healthy
+    async fn is_provider_healthy(
+        &self,
+        provider_name: &str,
+        monitors: &HashMap<String, Arc<ProviderMonitor>>,
+    ) -> bool {
+        if let Some(monitor) = monitors.get(provider_name) {
+            let health = monitor.get_health().await;
+            health == ProviderHealth::Healthy || health == ProviderHealth::Unknown
+        } else {
+            false
+        }
+    }
+
+    /// Get provider metrics if the provider is healthy
+    async fn get_provider_metrics_if_healthy(
+        &self,
+        provider_name: &str,
+        monitors: &HashMap<String, Arc<ProviderMonitor>>,
+    ) -> Option<ProviderMetrics> {
+        if let Some(monitor) = monitors.get(provider_name) {
+            let health = monitor.get_health().await;
+            if health == ProviderHealth::Healthy || health == ProviderHealth::Unknown {
+                return Some(monitor.get_metrics().await);
+            }
+        }
+        None
+    }
+
+    /// Get provider using priority-based strategy
     async fn get_provider_by_priority(
         &self,
         providers: &HashMap<String, Arc<dyn PersistenceProvider>>,
@@ -316,11 +349,8 @@ impl DynamicProviderManager {
     ) -> Option<(String, Arc<dyn PersistenceProvider>)> {
         let priorities = self.provider_priorities.read().await;
         for provider_name in priorities.iter() {
-            if let (Some(provider), Some(monitor)) =
-                (providers.get(provider_name), monitors.get(provider_name))
-            {
-                let health = monitor.get_health().await;
-                if health == ProviderHealth::Healthy || health == ProviderHealth::Unknown {
+            if let Some(provider) = providers.get(provider_name) {
+                if self.is_provider_healthy(provider_name, monitors).await {
                     return Some((provider_name.clone(), provider.clone()));
                 }
             }
