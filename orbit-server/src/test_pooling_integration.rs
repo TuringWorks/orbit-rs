@@ -106,7 +106,7 @@ mod tests {
             let conn = pool
                 .acquire()
                 .await
-                .expect(&format!("Failed to acquire connection {}", i));
+                .unwrap_or_else(|_| panic!("Failed to acquire connection {}", i));
             connections.push(conn);
         }
 

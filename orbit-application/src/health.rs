@@ -1,4 +1,4 @@
-use crate::{AppError, HealthConfig, Service};
+use crate::{config::HealthConfig, AppError, Service};
 use async_trait::async_trait;
 use std::sync::Arc;
 

@@ -293,7 +293,7 @@ SELECT
     ML_ADABOOST(
         ARRAY[transaction_amount, merchant_category, hour_of_day, day_of_week],
         is_fraud,
-        '{"n_estimators": 50, "learning_rate": 1.0, "algorithm": "SAMME.R"}'
+        '{"n_estimators": 50, "learning_rate": 1, "algorithm": "SAMME.R"}'
     ) as fraud_model
 FROM transaction_history
 WHERE labeled = true;`,

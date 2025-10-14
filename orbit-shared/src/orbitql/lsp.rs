@@ -4,14 +4,22 @@
 //! rich IDE features like syntax highlighting, autocomplete, error detection,
 //! hover information, and intelligent suggestions.
 
-use crate::orbitql::ast::*;
-use crate::orbitql::lexer::*;
-use crate::orbitql::parser::*;
+use crate::orbitql::ast::Statement;
+use crate::orbitql::lexer::Lexer;
+use crate::orbitql::parser::{ParseError, Parser};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tower_lsp::jsonrpc::Result;
-use tower_lsp::lsp_types::*;
+use tower_lsp::lsp_types::{
+    CompletionItem, CompletionItemKind, CompletionOptions, CompletionParams, CompletionResponse,
+    Diagnostic, DiagnosticOptions, DiagnosticServerCapabilities, DiagnosticSeverity,
+    DidChangeTextDocumentParams, DidOpenTextDocumentParams, DocumentFormattingParams,
+    Documentation, Hover, HoverContents, HoverParams, HoverProviderCapability, InitializeParams,
+    InitializeResult, InitializedParams, InsertTextFormat, MarkupContent, MarkupKind, MessageType,
+    OneOf, Position, Range, ServerCapabilities, ServerInfo, SignatureHelpOptions,
+    TextDocumentSyncCapability, TextDocumentSyncKind, TextEdit, Url,
+};
 use tower_lsp::{Client, LanguageServer, LspService, Server};
 
 /// OrbitQL Language Server

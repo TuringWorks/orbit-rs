@@ -23,14 +23,16 @@ pub mod lstm;
 pub mod optimizers;
 pub mod recurrent;
 
-pub use activations::*;
+pub use activations::Activations;
 pub use convolutional::ConvolutionalNetwork;
 pub use feedforward::FeedforwardNetwork;
 pub use gru::GRUNetwork;
-pub use layers::*;
+pub use layers::{Conv2DLayer, DenseLayer, DropoutLayer, Layer};
 pub use lstm::LSTMNetwork;
-pub use optimizers::*;
+pub use optimizers::{AdamOptimizer, Optimizer, SGDOptimizer};
 pub use recurrent::RecurrentNetwork;
+
+// ActivationType is already defined in this module, no need to re-export
 
 /// Neural network architecture types
 #[derive(Debug, Clone, Serialize, Deserialize)]

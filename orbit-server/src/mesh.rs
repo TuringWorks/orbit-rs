@@ -1,7 +1,10 @@
 //! Server-side mesh management and cluster coordination
 
 use dashmap::DashMap;
-use orbit_shared::*;
+use orbit_shared::{
+    AddressableLease, AddressableReference, NodeId, NodeInfo, NodeLease, NodeStatus, OrbitError,
+    OrbitResult,
+};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio::time::{interval, Duration};
@@ -258,6 +261,7 @@ pub struct ClusterStats {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use orbit_shared::Key;
 
     #[tokio::test]
     async fn test_addressable_directory() {

@@ -1,7 +1,10 @@
 use crate::addressable::AddressableReference;
 use crate::exception::{OrbitError, OrbitResult};
 use crate::mesh::NodeId;
-use crate::transactions::*;
+use crate::transactions::{
+    TransactionId, TransactionMessage, TransactionMessageSender, TransactionOperation,
+    TransactionState, TransactionVote,
+};
 use async_trait::async_trait;
 use futures::future::try_join_all;
 use std::collections::HashMap;
@@ -18,7 +21,14 @@ pub mod transaction_proto {
     tonic::include_proto!("orbit.transactions");
 }
 
-use transaction_proto::{transaction_service_client::TransactionServiceClient, *};
+use transaction_proto::{
+    transaction_message_proto, transaction_service_client::TransactionServiceClient,
+    transaction_state_proto, transaction_vote_proto, AbortMessage, AckMessage,
+    BroadcastMessageRequest, CommitMessage, PrepareMessage, QueryStatusMessage,
+    StatusResponseMessage, Target, TransactionIdProto, TransactionMessageProto,
+    TransactionMessageRequest, TransactionOperationProto, TransactionStateProto,
+    TransactionVoteProto, VoteMessage,
+};
 
 /// Configuration for gRPC transport
 #[derive(Debug, Clone)]

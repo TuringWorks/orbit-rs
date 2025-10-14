@@ -495,29 +495,53 @@ impl TriggerCoordinator {
         let table = &event.table;
         let trigger_event: TriggerEvent = event.operation.clone().into();
 
-        // Get all triggers for this table
-        let triggers = self.triggers.read().await;
-        let table_triggers = match triggers.get(table) {
-            Some(t) => t.clone(),
-            None => return Ok(Vec::new()),
-        };
-        drop(triggers);
-
-        // Filter triggers by timing, event, and enabled status
-        let matching_triggers: Vec<_> = table_triggers
-            .into_iter()
-            .filter(|t| t.timing == timing && t.matches_event(trigger_event))
-            .collect();
-
+        let matching_triggers = self
+            .get_matching_triggers(table, timing, trigger_event)
+            .await;
         if matching_triggers.is_empty() {
             return Ok(Vec::new());
         }
 
-        // Check recursion depth
         let recursion_key = format!("{}::{}", table, timing as u8);
+        self.check_and_increment_recursion_depth(&recursion_key, table)
+            .await?;
+
+        let results = self.execute_triggers(matching_triggers, event).await?;
+
+        self.decrement_recursion_depth(&recursion_key).await;
+
+        Ok(results)
+    }
+
+    /// Get matching triggers for the given table, timing, and event
+    async fn get_matching_triggers(
+        &self,
+        table: &str,
+        timing: TriggerTiming,
+        trigger_event: TriggerEvent,
+    ) -> Vec<TriggerDefinition> {
+        let triggers = self.triggers.read().await;
+        let table_triggers = match triggers.get(table) {
+            Some(t) => t.clone(),
+            None => return Vec::new(),
+        };
+        drop(triggers);
+
+        table_triggers
+            .into_iter()
+            .filter(|t| t.timing == timing && t.matches_event(trigger_event))
+            .collect()
+    }
+
+    /// Check recursion depth and increment if within limits
+    async fn check_and_increment_recursion_depth(
+        &self,
+        recursion_key: &str,
+        table: &str,
+    ) -> OrbitResult<()> {
         let current_depth = {
             let mut depth_map = self.recursion_depth.write().await;
-            let depth = depth_map.entry(recursion_key.clone()).or_insert(0);
+            let depth = depth_map.entry(recursion_key.to_string()).or_insert(0);
             *depth += 1;
             *depth
         };
@@ -525,7 +549,7 @@ impl TriggerCoordinator {
         if current_depth > self.max_recursion_depth {
             // Clean up depth counter
             let mut depth_map = self.recursion_depth.write().await;
-            depth_map.remove(&recursion_key);
+            depth_map.remove(recursion_key);
 
             return Err(OrbitError::internal(format!(
                 "Maximum trigger recursion depth ({}) exceeded for table '{}'",
@@ -533,60 +557,77 @@ impl TriggerCoordinator {
             )));
         }
 
+        Ok(())
+    }
+
+    /// Execute all matching triggers and return results
+    async fn execute_triggers(
+        &self,
+        matching_triggers: Vec<TriggerDefinition>,
+        event: &CdcEvent,
+    ) -> OrbitResult<Vec<TriggerResult>> {
         let mut results = Vec::new();
 
-        // Execute triggers in order
         for trigger in matching_triggers {
-            // Create context
             let context = TriggerContext::from_cdc_event(&trigger, event);
 
-            // Evaluate WHEN condition if present
-            let should_execute = if let Some(ref condition) = trigger.when_condition {
-                match self
-                    .executor
-                    .evaluate_when_condition(condition, &context)
-                    .await
-                {
-                    Ok(result) => result,
-                    Err(e) => {
-                        warn!(
-                            "Failed to evaluate WHEN condition for trigger '{}': {}",
-                            trigger.name, e
-                        );
-                        false
-                    }
-                }
-            } else {
-                true
-            };
-
-            if should_execute {
+            if self.should_execute_trigger(&trigger, &context).await {
                 let result = self.executor.execute_trigger(&trigger, &context).await?;
-
-                // Update statistics
-                let mut stats = self.stats.write().await;
-                stats.total_executions += 1;
-                if result.success {
-                    stats.successful_executions += 1;
-                } else {
-                    stats.failed_executions += 1;
-                }
-                stats.total_execution_time_micros += result.duration_micros;
-
+                self.update_trigger_statistics(&result).await;
                 results.push(result);
             }
         }
 
-        // Decrement recursion depth
+        Ok(results)
+    }
+
+    /// Check if trigger should be executed based on WHEN condition
+    async fn should_execute_trigger(
+        &self,
+        trigger: &TriggerDefinition,
+        context: &TriggerContext,
+    ) -> bool {
+        if let Some(ref condition) = trigger.when_condition {
+            match self
+                .executor
+                .evaluate_when_condition(condition, context)
+                .await
+            {
+                Ok(result) => result,
+                Err(e) => {
+                    warn!(
+                        "Failed to evaluate WHEN condition for trigger '{}': {}",
+                        trigger.name, e
+                    );
+                    false
+                }
+            }
+        } else {
+            true
+        }
+    }
+
+    /// Update trigger execution statistics
+    async fn update_trigger_statistics(&self, result: &TriggerResult) {
+        let mut stats = self.stats.write().await;
+        stats.total_executions += 1;
+        if result.success {
+            stats.successful_executions += 1;
+        } else {
+            stats.failed_executions += 1;
+        }
+        stats.total_execution_time_micros += result.duration_micros;
+    }
+
+    /// Decrement recursion depth and clean up if zero
+    async fn decrement_recursion_depth(&self, recursion_key: &str) {
         let mut depth_map = self.recursion_depth.write().await;
-        if let Some(depth) = depth_map.get_mut(&recursion_key) {
+        if let Some(depth) = depth_map.get_mut(recursion_key) {
             *depth = depth.saturating_sub(1);
             if *depth == 0 {
-                depth_map.remove(&recursion_key);
+                depth_map.remove(recursion_key);
             }
         }
-
-        Ok(results)
     }
 
     /// Get trigger statistics

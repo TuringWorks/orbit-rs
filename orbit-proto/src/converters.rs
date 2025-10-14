@@ -1,8 +1,13 @@
 //! Protocol buffer converters between Rust domain objects and protobuf messages
 
-use crate::*;
+use crate::{
+    key_proto, AddressableReferenceProto, InvocationReasonProto, KeyProto, NoKeyProto, NodeIdProto,
+    NodeStatusProto,
+};
 use chrono::{DateTime, Utc};
-use orbit_shared::*;
+use orbit_shared::{
+    AddressableReference, InvocationReason, Key, NodeId, NodeStatus, OrbitError, OrbitResult,
+};
 use prost_types::Timestamp;
 
 /// Convert between Rust Key enum and KeyProto

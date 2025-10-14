@@ -109,7 +109,6 @@ impl GPUSpatialEngine {
         eps: f64,
         min_points: usize,
     ) -> Result<Vec<u32>, SpatialError> {
-        // Simplified CPU implementation for now
         let mut cluster_labels = vec![0u32; points.len()];
         let mut current_cluster = 1u32;
 
@@ -118,29 +117,69 @@ impl GPUSpatialEngine {
                 continue; // Already processed
             }
 
-            let neighbors = self.find_neighbors(points, i, eps);
-
-            if neighbors.len() >= min_points {
-                // Start a new cluster
-                cluster_labels[i] = current_cluster;
-
-                // Process neighbors
-                let mut stack = neighbors;
-                while let Some(neighbor_idx) = stack.pop() {
-                    if cluster_labels[neighbor_idx] == 0 {
-                        cluster_labels[neighbor_idx] = current_cluster;
-                        let neighbor_neighbors = self.find_neighbors(points, neighbor_idx, eps);
-                        if neighbor_neighbors.len() >= min_points {
-                            stack.extend(neighbor_neighbors);
-                        }
-                    }
-                }
-
+            if self.should_start_new_cluster(points, i, eps, min_points) {
+                self.expand_cluster(
+                    points,
+                    i,
+                    eps,
+                    min_points,
+                    current_cluster,
+                    &mut cluster_labels,
+                );
                 current_cluster += 1;
             }
         }
 
         Ok(cluster_labels)
+    }
+
+    /// Check if a point should start a new cluster based on density
+    fn should_start_new_cluster(
+        &self,
+        points: &[Point],
+        point_idx: usize,
+        eps: f64,
+        min_points: usize,
+    ) -> bool {
+        let neighbors = self.find_neighbors(points, point_idx, eps);
+        neighbors.len() >= min_points
+    }
+
+    /// Expand cluster from a core point using density-connected points
+    fn expand_cluster(
+        &self,
+        points: &[Point],
+        core_point_idx: usize,
+        eps: f64,
+        min_points: usize,
+        cluster_id: u32,
+        cluster_labels: &mut [u32],
+    ) {
+        cluster_labels[core_point_idx] = cluster_id;
+        let initial_neighbors = self.find_neighbors(points, core_point_idx, eps);
+        let mut stack = initial_neighbors;
+
+        while let Some(neighbor_idx) = stack.pop() {
+            if cluster_labels[neighbor_idx] == 0 {
+                cluster_labels[neighbor_idx] = cluster_id;
+                self.process_neighbor_expansion(points, neighbor_idx, eps, min_points, &mut stack);
+            }
+        }
+    }
+
+    /// Process neighbor expansion for density connectivity
+    fn process_neighbor_expansion(
+        &self,
+        points: &[Point],
+        neighbor_idx: usize,
+        eps: f64,
+        min_points: usize,
+        stack: &mut Vec<usize>,
+    ) {
+        let neighbor_neighbors = self.find_neighbors(points, neighbor_idx, eps);
+        if neighbor_neighbors.len() >= min_points {
+            stack.extend(neighbor_neighbors);
+        }
     }
 
     /// K-means clustering implementation.
@@ -153,54 +192,94 @@ impl GPUSpatialEngine {
             return Ok(vec![]);
         }
 
-        // Simple K-means implementation
-        let mut centroids = Vec::with_capacity(k);
+        let mut centroids = self.initialize_centroids(points, k);
         let mut assignments = vec![0u32; points.len()];
 
-        // Initialize centroids randomly
+        // Iterate until convergence (simplified)
+        for _iteration in 0..10 {
+            self.assign_points_to_centroids(points, &centroids, &mut assignments);
+            self.update_centroids(points, &assignments, &mut centroids, k);
+        }
+
+        Ok(assignments)
+    }
+
+    /// Initialize centroids using simple distribution across points
+    fn initialize_centroids(&self, points: &[Point], k: usize) -> Vec<Point> {
+        let mut centroids = Vec::with_capacity(k);
         for i in 0..k {
             let idx = (i * points.len()) / k;
             centroids.push(points[idx].clone());
         }
+        centroids
+    }
 
-        // Iterate until convergence (simplified)
-        for _iteration in 0..10 {
-            // Assign points to closest centroid
-            for (i, point) in points.iter().enumerate() {
-                let mut min_distance = f64::INFINITY;
-                let mut closest_cluster = 0u32;
+    /// Assign each point to the closest centroid
+    fn assign_points_to_centroids(
+        &self,
+        points: &[Point],
+        centroids: &[Point],
+        assignments: &mut [u32],
+    ) {
+        for (i, point) in points.iter().enumerate() {
+            let closest_cluster = self.find_closest_centroid(point, centroids);
+            assignments[i] = closest_cluster;
+        }
+    }
 
-                for (j, centroid) in centroids.iter().enumerate() {
-                    let distance = point.distance_2d(centroid);
-                    if distance < min_distance {
-                        min_distance = distance;
-                        closest_cluster = j as u32;
-                    }
-                }
+    /// Find the index of the closest centroid to a given point
+    fn find_closest_centroid(&self, point: &Point, centroids: &[Point]) -> u32 {
+        let mut min_distance = f64::INFINITY;
+        let mut closest_cluster = 0u32;
 
-                assignments[i] = closest_cluster;
-            }
-
-            // Update centroids
-            for (cluster_id, centroid) in centroids.iter_mut().enumerate().take(k) {
-                let cluster_points: Vec<&Point> = points
-                    .iter()
-                    .enumerate()
-                    .filter(|(i, _)| assignments[*i] == cluster_id as u32)
-                    .map(|(_, p)| p)
-                    .collect();
-
-                if !cluster_points.is_empty() {
-                    let avg_x = cluster_points.iter().map(|p| p.x).sum::<f64>()
-                        / cluster_points.len() as f64;
-                    let avg_y = cluster_points.iter().map(|p| p.y).sum::<f64>()
-                        / cluster_points.len() as f64;
-                    *centroid = Point::new(avg_x, avg_y, None);
-                }
+        for (j, centroid) in centroids.iter().enumerate() {
+            let distance = point.distance_2d(centroid);
+            if distance < min_distance {
+                min_distance = distance;
+                closest_cluster = j as u32;
             }
         }
 
-        Ok(assignments)
+        closest_cluster
+    }
+
+    /// Update centroids based on current point assignments
+    fn update_centroids(
+        &self,
+        points: &[Point],
+        assignments: &[u32],
+        centroids: &mut [Point],
+        k: usize,
+    ) {
+        for (cluster_id, centroid) in centroids.iter_mut().enumerate().take(k) {
+            let cluster_points = self.get_cluster_points(points, assignments, cluster_id as u32);
+
+            if !cluster_points.is_empty() {
+                *centroid = self.calculate_centroid(&cluster_points);
+            }
+        }
+    }
+
+    /// Get all points assigned to a specific cluster
+    fn get_cluster_points<'a>(
+        &self,
+        points: &'a [Point],
+        assignments: &[u32],
+        cluster_id: u32,
+    ) -> Vec<&'a Point> {
+        points
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| assignments[*i] == cluster_id)
+            .map(|(_, p)| p)
+            .collect()
+    }
+
+    /// Calculate the centroid (average position) of a set of points
+    fn calculate_centroid(&self, points: &[&Point]) -> Point {
+        let avg_x = points.iter().map(|p| p.x).sum::<f64>() / points.len() as f64;
+        let avg_y = points.iter().map(|p| p.y).sum::<f64>() / points.len() as f64;
+        Point::new(avg_x, avg_y, None)
     }
 
     /// Hierarchical clustering (CPU fallback).

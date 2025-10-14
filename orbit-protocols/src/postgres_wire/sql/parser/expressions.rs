@@ -7,7 +7,11 @@
 #![allow(clippy::unnecessary_map_or)]
 
 use crate::error::ProtocolResult;
-use crate::postgres_wire::sql::ast::*;
+use crate::postgres_wire::sql::ast::{
+    BinaryOperator, CaseExpression, ColumnRef, Expression, FrameBound, FunctionCall, FunctionName,
+    NullsOrder, OrderByItem, SortDirection, UnaryOperator, WhenClause, WindowFrame,
+    WindowFunctionType,
+};
 use crate::postgres_wire::sql::lexer::Token;
 use crate::postgres_wire::sql::types::SqlType;
 

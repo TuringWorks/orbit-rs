@@ -12,8 +12,8 @@ use std::time::{Duration, Instant, SystemTime};
 use tokio::sync::{broadcast, mpsc};
 use uuid::Uuid;
 
-use crate::orbitql::ast::*;
-use crate::orbitql::vectorized_execution::*;
+use crate::orbitql::ast::Statement;
+use crate::orbitql::vectorized_execution::{BatchSchema, ColumnBatch, RecordBatch, VectorDataType};
 
 // Type aliases to reduce complexity
 type FailureCallbackFn = dyn Fn(String) + Send + Sync;

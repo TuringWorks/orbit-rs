@@ -3,7 +3,13 @@
 //! This module provides a high-performance, memory-efficient persistence backend
 //! using a Copy-on-Write B+ Tree data structure with Write-Ahead Logging (WAL).
 
-use super::*;
+use super::{
+    async_trait, AddressableDirectoryProvider, ClusterNodeProvider, OrbitError, OrbitResult,
+    PersistenceMetrics, PersistenceProvider, ProviderHealth, TransactionContext,
+};
+use orbit_shared::{
+    AddressableLease, AddressableReference, NodeId, NodeInfo, NodeLease, NodeStatus,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;

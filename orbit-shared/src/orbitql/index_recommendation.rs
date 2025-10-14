@@ -10,7 +10,9 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-use super::ast::*;
+use super::ast::{BinaryOperator, Expression, FromClause, Statement};
+#[cfg(test)]
+use super::ast::{SelectField, SelectStatement};
 use super::cost_model::{CostModel, QueryCost};
 use super::index_selection::{IndexMetadata, IndexSelector, IndexType, IndexUsageStats};
 use super::statistics::{StatisticsManager, TableStatistics};

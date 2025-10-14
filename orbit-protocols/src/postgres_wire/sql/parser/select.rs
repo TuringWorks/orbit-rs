@@ -6,7 +6,11 @@
 #![allow(clippy::unnecessary_map_or)]
 
 use crate::error::ProtocolResult;
-use crate::postgres_wire::sql::ast::*;
+use crate::postgres_wire::sql::ast::{
+    CommonTableExpression, DistinctClause, Expression, FromClause, JoinCondition, JoinType,
+    LimitClause, NullsOrder, OrderByItem, SelectItem, SelectStatement, SortDirection, TableAlias,
+    TableName, WithClause,
+};
 use crate::postgres_wire::sql::lexer::Token;
 use crate::postgres_wire::sql::parser::expressions::ExpressionParser;
 

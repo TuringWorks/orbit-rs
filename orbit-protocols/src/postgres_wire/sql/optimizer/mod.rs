@@ -18,7 +18,7 @@ pub mod rules;
 pub mod stats;
 
 use crate::error::ProtocolResult;
-use crate::postgres_wire::sql::ast::*;
+use crate::postgres_wire::sql::ast::Statement;
 
 /// Query optimization hints that can be provided to guide the optimizer
 #[derive(Debug, Clone, PartialEq)]
@@ -642,6 +642,10 @@ impl QueryOptimizer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::postgres_wire::sql::ast::{
+        BinaryOperator, ColumnRef, Expression, FromClause, SelectItem, SelectStatement, Statement,
+        TableName,
+    };
 
     #[test]
     fn test_optimizer_creation() {

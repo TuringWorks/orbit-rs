@@ -297,7 +297,7 @@ export const DataVisualization: React.FC<DataVisualizationProps> = ({
         const grouped = data.rows.reduce((acc, row) => {
           const key = row[config.x_axis];
           if (!acc[key]) acc[key] = 0;
-          acc[key] += parseFloat(row[config.y_axis]) || 0;
+          acc[key] += Number.parseFloat(row[config.y_axis]) || 0;
           return acc;
         }, {} as Record<string, number>);
 
@@ -471,8 +471,9 @@ export const DataVisualization: React.FC<DataVisualizationProps> = ({
           <h4>Chart Configuration</h4>
           
           <div className="config-group">
-            <label>Title</label>
+            <label htmlFor="chart-title">Title</label>
             <input
+              id="chart-title"
               type="text"
               value={config.title}
               onChange={(e) => setConfig({ ...config, title: e.target.value })}
@@ -489,8 +490,9 @@ export const DataVisualization: React.FC<DataVisualizationProps> = ({
           </div>
 
           <div className="config-group">
-            <label>X Axis</label>
+            <label htmlFor="chart-x-axis">X Axis</label>
             <Select
+              id="chart-x-axis"
               value={config.x_axis}
               onChange={(e) => setConfig({ ...config, x_axis: e.target.value })}
             >
@@ -503,8 +505,9 @@ export const DataVisualization: React.FC<DataVisualizationProps> = ({
           </div>
 
           <div className="config-group">
-            <label>Y Axis</label>
+            <label htmlFor="chart-y-axis">Y Axis</label>
             <Select
+              id="chart-y-axis"
               value={config.y_axis}
               onChange={(e) => setConfig({ ...config, y_axis: e.target.value })}
             >
@@ -523,8 +526,7 @@ export const DataVisualization: React.FC<DataVisualizationProps> = ({
                 checked={config.show_legend}
                 onChange={(e) => setConfig({ ...config, show_legend: e.target.checked })}
                 style={{ marginRight: '8px' }}
-              />
-              Show Legend
+              /><span>Show Legend</span>
             </label>
           </div>
 
@@ -535,13 +537,12 @@ export const DataVisualization: React.FC<DataVisualizationProps> = ({
                 checked={config.show_grid}
                 onChange={(e) => setConfig({ ...config, show_grid: e.target.checked })}
                 style={{ marginRight: '8px' }}
-              />
-              Show Grid
+              /><span>Show Grid</span>
             </label>
           </div>
 
           <div className="config-group">
-            <label>Data Summary</label>
+            <h5 style={{ margin: '0 0 8px 0', fontSize: '12px', color: '#ffffff' }}>Data Summary</h5>
             <div style={{ fontSize: '11px', color: '#888888' }}>
               Rows: {data.rows.length}<br />
               Columns: {data.columns.length}<br />

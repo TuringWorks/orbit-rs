@@ -201,7 +201,7 @@ mod tests {
         assert!(error.is_err());
         match error {
             Err(OrbitError::NetworkError(msg)) => assert_eq!(msg, "Failed"),
-            _ => panic!("Unexpected error type"),
+            _ => unreachable!("Test setup guarantees NetworkError"),
         }
     }
 

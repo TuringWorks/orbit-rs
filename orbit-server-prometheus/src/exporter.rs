@@ -1,4 +1,7 @@
-use crate::{MetricsCollector, OrbitMetrics, PrometheusConfig, PrometheusResult, PrometheusServer};
+use crate::{
+    collector::MetricsCollector, metrics::OrbitMetrics, server::PrometheusServer, PrometheusConfig,
+    PrometheusResult,
+};
 use std::sync::Arc;
 use tracing::info;
 

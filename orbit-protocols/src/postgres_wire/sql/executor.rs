@@ -5,7 +5,17 @@
 
 use crate::error::{ProtocolError, ProtocolResult};
 use crate::postgres_wire::sql::{
-    ast::*,
+    ast::{
+        AccessMode, AlterTableStatement, AssignmentTarget, BeginStatement, ColumnConstraint,
+        CommitStatement, CreateExtensionStatement, CreateIndexStatement, CreateSchemaStatement,
+        CreateTableStatement, CreateViewStatement, DeleteStatement, DescribeStatement,
+        DropExtensionStatement, DropIndexStatement, DropSchemaStatement, DropTableStatement,
+        DropViewStatement, ExplainStatement, Expression, FromClause, GrantStatement, IndexType,
+        InsertSource, InsertStatement, IsolationLevel, JoinCondition, JoinType, Privilege,
+        ReleaseSavepointStatement, RevokeStatement, RollbackStatement, SavepointStatement,
+        SelectItem, SelectStatement, ShowStatement, ShowVariable, Statement, TableConstraint,
+        TableName, UpdateStatement, UseStatement,
+    },
     expression_evaluator::{EvaluationContext, ExpressionEvaluator},
     parser::SqlParser,
     types::{SqlType, SqlValue},

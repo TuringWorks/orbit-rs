@@ -261,20 +261,66 @@ impl MultiHeadAttention {
         attention_mask: Option<&Array2<f64>>,
     ) -> Array4<f64> {
         if let Some(mask) = attention_mask {
-            let (batch_size, seq_len, num_heads, key_seq_len) = attention_scores.dim();
-            for b in 0..batch_size {
-                for i in 0..seq_len {
-                    for h in 0..num_heads {
-                        for j in 0..key_seq_len {
-                            if mask[[i, j]] == 0.0 {
-                                attention_scores[[b, i, h, j]] = f64::NEG_INFINITY;
-                            }
-                        }
-                    }
+            self.apply_mask_to_scores(&mut attention_scores, mask);
+        }
+        attention_scores
+    }
+
+    /// Helper function to apply mask values to attention scores
+    fn apply_mask_to_scores(&self, attention_scores: &mut Array4<f64>, mask: &Array2<f64>) {
+        let (batch_size, seq_len, num_heads, key_seq_len) = attention_scores.dim();
+
+        for b in 0..batch_size {
+            self.apply_mask_to_batch(attention_scores, mask, b, seq_len, num_heads, key_seq_len);
+        }
+    }
+
+    /// Helper function to apply mask to a single batch
+    fn apply_mask_to_batch(
+        &self,
+        attention_scores: &mut Array4<f64>,
+        mask: &Array2<f64>,
+        batch_idx: usize,
+        seq_len: usize,
+        num_heads: usize,
+        key_seq_len: usize,
+    ) {
+        for i in 0..seq_len {
+            if self.should_mask_position(mask, i, key_seq_len) {
+                self.mask_attention_heads(
+                    attention_scores,
+                    batch_idx,
+                    i,
+                    num_heads,
+                    key_seq_len,
+                    mask,
+                );
+            }
+        }
+    }
+
+    /// Check if any position in the sequence should be masked
+    fn should_mask_position(&self, mask: &Array2<f64>, seq_pos: usize, key_seq_len: usize) -> bool {
+        (0..key_seq_len).any(|j| mask[[seq_pos, j]] == 0.0)
+    }
+
+    /// Apply masking to all attention heads for a given position
+    fn mask_attention_heads(
+        &self,
+        attention_scores: &mut Array4<f64>,
+        batch_idx: usize,
+        seq_pos: usize,
+        num_heads: usize,
+        key_seq_len: usize,
+        mask: &Array2<f64>,
+    ) {
+        for h in 0..num_heads {
+            for j in 0..key_seq_len {
+                if mask[[seq_pos, j]] == 0.0 {
+                    attention_scores[[batch_idx, seq_pos, h, j]] = f64::NEG_INFINITY;
                 }
             }
         }
-        attention_scores
     }
 
     /// Applies dropout to attention probabilities
@@ -550,5 +596,3 @@ impl CrossAttention {
         )
     }
 }
-
-use rand;
