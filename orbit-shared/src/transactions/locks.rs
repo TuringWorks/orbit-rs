@@ -18,7 +18,7 @@ impl LockId {
     pub fn new(resource_id: String) -> Self {
         Self {
             resource_id: resource_id.clone(),
-            lock_key: format!("lock:{}", resource_id),
+            lock_key: format!("lock:{resource_id}"),
         }
     }
 

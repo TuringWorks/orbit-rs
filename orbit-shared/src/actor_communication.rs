@@ -503,8 +503,7 @@ impl ActorMessageRouter {
                 if let Err(e) = handle.sender.send(message) {
                     error!("Failed to send message to local actor {}: {}", target, e);
                     return Err(OrbitError::internal(format!(
-                        "Local actor send failed: {}",
-                        e
+                        "Local actor send failed: {e}"
                     )));
                 }
 

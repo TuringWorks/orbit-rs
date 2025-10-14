@@ -350,10 +350,9 @@ impl GraphRAGActor {
                                     result.warnings.extend(graph_result.warnings);
                                 }
                                 Err(e) => {
-                                    result.warnings.push(format!(
-                                        "Knowledge graph construction failed: {}",
-                                        e
-                                    ));
+                                    result
+                                        .warnings
+                                        .push(format!("Knowledge graph construction failed: {e}"));
                                     warn!(error = %e, "Knowledge graph construction failed");
                                 }
                             }
@@ -363,7 +362,7 @@ impl GraphRAGActor {
                 Err(e) => {
                     result
                         .warnings
-                        .push(format!("Entity extraction failed: {}", e));
+                        .push(format!("Entity extraction failed: {e}"));
                     warn!(error = %e, "Entity extraction failed");
                 }
             }
@@ -600,7 +599,7 @@ impl GraphRAGActor {
             .ok_or_else(|| OrbitError::internal("No LLM provider configured"))?;
 
         let _llm_provider = self.llm_providers.get(llm_provider_name).ok_or_else(|| {
-            OrbitError::internal(format!("LLM provider '{}' not found", llm_provider_name))
+            OrbitError::internal(format!("LLM provider '{llm_provider_name}' not found"))
         })?;
 
         // Build context text

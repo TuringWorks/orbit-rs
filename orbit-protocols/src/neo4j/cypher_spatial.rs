@@ -137,8 +137,7 @@ impl CypherSpatialExecutor {
             "reduce.distance" => self.reduce_distance(args).await,
 
             _ => Err(SpatialError::OperationError(format!(
-                "Unknown Cypher spatial function: {}",
-                function_name
+                "Unknown Cypher spatial function: {function_name}"
             ))),
         }
     }

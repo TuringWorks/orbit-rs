@@ -216,7 +216,25 @@ impl SagaRecoveryManager {
     async fn recover_saga_execution(&self, checkpoint: &SagaRecoveryCheckpoint) -> OrbitResult<()> {
         info!("Recovering saga execution: {}", checkpoint.saga_id);
 
-        // Check recovery attempts
+        // Validate recovery can proceed
+        self.validate_recovery_attempts(checkpoint)?;
+
+        // Reconstruct saga execution from checkpoint
+        let recovered_execution = self.reconstruct_saga_execution(checkpoint).await?;
+
+        // Execute recovery strategy based on saga state
+        self.execute_recovery_strategy(checkpoint, &recovered_execution)
+            .await?;
+
+        // Update recovery attempts counter
+        self.update_recovery_attempts(&checkpoint.saga_id).await;
+
+        info!("Saga recovery completed: {}", checkpoint.saga_id);
+        Ok(())
+    }
+
+    /// Validate that recovery attempts are within limits
+    fn validate_recovery_attempts(&self, checkpoint: &SagaRecoveryCheckpoint) -> OrbitResult<()> {
         if checkpoint.recovery_attempts >= self.config.max_recovery_attempts {
             error!(
                 "Max recovery attempts exceeded for saga: {}",
@@ -224,55 +242,97 @@ impl SagaRecoveryManager {
             );
             return Err(OrbitError::internal("Max recovery attempts exceeded"));
         }
+        Ok(())
+    }
 
-        // Reconstruct saga execution from checkpoint
-        let recovered_execution = self.reconstruct_saga_execution(checkpoint).await?;
-
-        // Determine recovery strategy based on saga state
+    /// Execute the appropriate recovery strategy based on saga state
+    async fn execute_recovery_strategy(
+        &self,
+        checkpoint: &SagaRecoveryCheckpoint,
+        recovered_execution: &SagaExecution,
+    ) -> OrbitResult<()> {
         match checkpoint.saga_state {
             SagaState::Initializing => {
-                // Saga was just starting - restart from beginning
-                info!("Restarting initializing saga: {}", checkpoint.saga_id);
-                self.restart_saga_execution(&recovered_execution).await?;
+                self.handle_initializing_saga_recovery(checkpoint, recovered_execution)
+                    .await
             }
             SagaState::Executing => {
-                // Saga was in progress - resume from current step
-                info!("Resuming executing saga: {}", checkpoint.saga_id);
-                self.resume_saga_execution(&recovered_execution).await?;
+                self.handle_executing_saga_recovery(checkpoint, recovered_execution)
+                    .await
             }
             SagaState::Compensating => {
-                // Saga was compensating - continue compensation
-                info!("Continuing saga compensation: {}", checkpoint.saga_id);
-                self.continue_saga_compensation(&recovered_execution)
-                    .await?;
+                self.handle_compensating_saga_recovery(checkpoint, recovered_execution)
+                    .await
             }
             SagaState::Paused => {
-                // Saga was paused - can be resumed when appropriate
-                info!(
-                    "Saga is paused, will resume when requested: {}",
-                    checkpoint.saga_id
-                );
-                self.store_paused_saga(&recovered_execution).await?;
+                self.handle_paused_saga_recovery(checkpoint, recovered_execution)
+                    .await
             }
             _ => {
-                debug!(
-                    "Saga {} is in non-recoverable state: {:?}",
-                    checkpoint.saga_id, checkpoint.saga_state
-                );
+                self.handle_non_recoverable_saga(checkpoint);
+                Ok(())
             }
         }
+    }
 
-        // Update recovery attempts
-        {
-            let mut checkpoints = self.checkpoints.write().await;
-            if let Some(checkpoint) = checkpoints.get_mut(&checkpoint.saga_id) {
-                checkpoint.recovery_attempts += 1;
-                checkpoint.last_updated = chrono::Utc::now().timestamp_millis();
-            }
+    /// Handle recovery of initializing saga
+    async fn handle_initializing_saga_recovery(
+        &self,
+        checkpoint: &SagaRecoveryCheckpoint,
+        recovered_execution: &SagaExecution,
+    ) -> OrbitResult<()> {
+        info!("Restarting initializing saga: {}", checkpoint.saga_id);
+        self.restart_saga_execution(recovered_execution).await
+    }
+
+    /// Handle recovery of executing saga
+    async fn handle_executing_saga_recovery(
+        &self,
+        checkpoint: &SagaRecoveryCheckpoint,
+        recovered_execution: &SagaExecution,
+    ) -> OrbitResult<()> {
+        info!("Resuming executing saga: {}", checkpoint.saga_id);
+        self.resume_saga_execution(recovered_execution).await
+    }
+
+    /// Handle recovery of compensating saga
+    async fn handle_compensating_saga_recovery(
+        &self,
+        checkpoint: &SagaRecoveryCheckpoint,
+        recovered_execution: &SagaExecution,
+    ) -> OrbitResult<()> {
+        info!("Continuing saga compensation: {}", checkpoint.saga_id);
+        self.continue_saga_compensation(recovered_execution).await
+    }
+
+    /// Handle recovery of paused saga
+    async fn handle_paused_saga_recovery(
+        &self,
+        checkpoint: &SagaRecoveryCheckpoint,
+        recovered_execution: &SagaExecution,
+    ) -> OrbitResult<()> {
+        info!(
+            "Saga is paused, will resume when requested: {}",
+            checkpoint.saga_id
+        );
+        self.store_paused_saga(recovered_execution).await
+    }
+
+    /// Handle non-recoverable saga states
+    fn handle_non_recoverable_saga(&self, checkpoint: &SagaRecoveryCheckpoint) {
+        debug!(
+            "Saga {} is in non-recoverable state: {:?}",
+            checkpoint.saga_id, checkpoint.saga_state
+        );
+    }
+
+    /// Update recovery attempts counter for a saga
+    async fn update_recovery_attempts(&self, saga_id: &SagaId) {
+        let mut checkpoints = self.checkpoints.write().await;
+        if let Some(checkpoint) = checkpoints.get_mut(saga_id) {
+            checkpoint.recovery_attempts += 1;
+            checkpoint.last_updated = chrono::Utc::now().timestamp_millis();
         }
-
-        info!("Saga recovery completed: {}", checkpoint.saga_id);
-        Ok(())
     }
 
     /// Reconstruct saga execution from checkpoint

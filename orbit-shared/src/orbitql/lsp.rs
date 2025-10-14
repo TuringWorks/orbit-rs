@@ -322,7 +322,7 @@ impl OrbitQLLanguageServer {
                     code: None,
                     code_description: None,
                     source: Some("orbitql".to_string()),
-                    message: format!("Parse error: {}", error),
+                    message: format!("Parse error: {error}"),
                     related_information: None,
                     tags: None,
                     data: None,
@@ -341,7 +341,7 @@ impl OrbitQLLanguageServer {
                             code: None,
                             code_description: None,
                             source: Some("orbitql".to_string()),
-                            message: format!("Unknown table or collection: {}", dep),
+                            message: format!("Unknown table or collection: {dep}"),
                             related_information: None,
                             tags: None,
                             data: None,
@@ -587,7 +587,7 @@ impl OrbitQLLanguageServer {
             );
 
             if let Some(desc) = &table_info.description {
-                content.push_str(&format!("{}\n\n", desc));
+                content.push_str(&format!("{desc}\n\n"));
             }
 
             content.push_str("**Columns:**\n");

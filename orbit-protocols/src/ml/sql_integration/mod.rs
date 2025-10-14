@@ -73,8 +73,7 @@ impl SqlMlBridge {
                     Ok(MLValue::Array(ml_array))
                 }
                 _ => Err(orbit_shared::OrbitError::internal(format!(
-                    "Unsupported SQL value type for ML conversion: {:?}",
-                    sql_value
+                    "Unsupported SQL value type for ML conversion: {sql_value:?}"
                 ))),
             }
         })
@@ -111,8 +110,7 @@ impl SqlMlBridge {
                             Ok(MLValue::Array(ml_array))
                         }
                         _ => Err(orbit_shared::OrbitError::internal(format!(
-                            "Unsupported SQL value type for ML conversion: {:?}",
-                            sql_value
+                            "Unsupported SQL value type for ML conversion: {sql_value:?}"
                         ))),
                     }
                 }
@@ -128,8 +126,7 @@ impl SqlMlBridge {
                     self.execute_ml_function(func_call).await
                 }
                 _ => Err(orbit_shared::OrbitError::internal(format!(
-                    "Expression type conversion not implemented: {:?}",
-                    expr
+                    "Expression type conversion not implemented: {expr:?}"
                 ))),
             }
         })

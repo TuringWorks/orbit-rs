@@ -342,15 +342,15 @@ pub enum ParallelExecutionError {
 impl std::fmt::Display for ParallelExecutionError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ParallelExecutionError::ThreadPoolError(msg) => write!(f, "Thread pool error: {}", msg),
-            ParallelExecutionError::SchedulingError(msg) => write!(f, "Scheduling error: {}", msg),
-            ParallelExecutionError::ExchangeError(msg) => write!(f, "Exchange error: {}", msg),
+            ParallelExecutionError::ThreadPoolError(msg) => write!(f, "Thread pool error: {msg}"),
+            ParallelExecutionError::SchedulingError(msg) => write!(f, "Scheduling error: {msg}"),
+            ParallelExecutionError::ExchangeError(msg) => write!(f, "Exchange error: {msg}"),
             ParallelExecutionError::TaskExecutionError(msg) => {
-                write!(f, "Task execution error: {}", msg)
+                write!(f, "Task execution error: {msg}")
             }
-            ParallelExecutionError::TimeoutError(msg) => write!(f, "Timeout error: {}", msg),
+            ParallelExecutionError::TimeoutError(msg) => write!(f, "Timeout error: {msg}"),
             ParallelExecutionError::ResourceExhausted(msg) => {
-                write!(f, "Resource exhausted: {}", msg)
+                write!(f, "Resource exhausted: {msg}")
             }
         }
     }
@@ -486,7 +486,7 @@ impl ParallelExecutor {
 
         // Create parallel scan tasks
         for i in 0..parallelism {
-            let task_id = format!("scan_task_{}", i);
+            let task_id = format!("scan_task_{i}");
             let schema = scan.schema.clone();
 
             let task = Task {
@@ -576,7 +576,7 @@ impl ParallelExecutor {
 
         // Create aggregation tasks
         for i in 0..aggregation.parallelism {
-            let task_id = format!("hash_agg_task_{}", i);
+            let task_id = format!("hash_agg_task_{i}");
             let _group_by = aggregation.group_by.clone();
             let _aggregates = aggregation.aggregates.clone();
 
@@ -668,7 +668,7 @@ impl ParallelExecutor {
         let mut tasks = Vec::new();
 
         for i in 0..join.build_parallelism {
-            let task_id = format!("build_task_{}", i);
+            let task_id = format!("build_task_{i}");
             let _condition = join.condition.clone();
 
             let task = Task {
@@ -702,7 +702,7 @@ impl ParallelExecutor {
         let mut tasks = Vec::new();
 
         for i in 0..join.probe_parallelism {
-            let task_id = format!("probe_task_{}", i);
+            let task_id = format!("probe_task_{i}");
             let _condition = join.condition.clone();
 
             let task = Task {

@@ -87,7 +87,7 @@ pub struct AqlDocument {
 impl AqlDocument {
     /// Create a new AQL document
     pub fn new(collection: &str, key: String, data: HashMap<String, AqlValue>) -> Self {
-        let id = format!("{}/{}", collection, key);
+        let id = format!("{collection}/{key}");
         let revision = format!("_{}", chrono::Utc::now().timestamp());
 
         Self {
@@ -242,7 +242,7 @@ impl AqlEdge {
         to: String,
         data: HashMap<String, AqlValue>,
     ) -> Self {
-        let id = format!("{}/{}", collection, key);
+        let id = format!("{collection}/{key}");
         let revision = format!("_{}", chrono::Utc::now().timestamp());
 
         Self {

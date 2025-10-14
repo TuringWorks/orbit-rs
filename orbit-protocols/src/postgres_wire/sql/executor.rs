@@ -481,7 +481,7 @@ impl SqlExecutor {
                 constraints: col_def
                     .constraints
                     .iter()
-                    .map(|c| format!("{:?}", c))
+                    .map(|c| format!("{c:?}"))
                     .collect(),
             });
         }
@@ -696,7 +696,7 @@ impl SqlExecutor {
         stmt: AlterTableStatement,
     ) -> ProtocolResult<ExecutionResult> {
         let table_name = stmt.name.full_name();
-        let actions: Vec<String> = stmt.actions.iter().map(|a| format!("{:?}", a)).collect();
+        let actions: Vec<String> = stmt.actions.iter().map(|a| format!("{a:?}")).collect();
 
         // TODO: Implement table alteration logic
 
@@ -1189,8 +1189,7 @@ impl SqlExecutor {
             }
             _ => {
                 return Err(ProtocolError::PostgresError(format!(
-                    "information_schema table '{}' is not supported",
-                    table_name
+                    "information_schema table '{table_name}' is not supported"
                 )));
             }
         }
@@ -1361,8 +1360,7 @@ impl SqlExecutor {
                     .await
             }
             JoinType::LeftSemi | JoinType::LeftAnti => Err(ProtocolError::PostgresError(format!(
-                "JOIN type {:?} not yet implemented",
-                join_type
+                "JOIN type {join_type:?} not yet implemented"
             ))),
         }
     }
@@ -1637,7 +1635,7 @@ impl SqlExecutor {
                                 new_row
                                     .insert(format!("{}.{}", table_alias.name, key), value.clone());
                             } else {
-                                new_row.insert(format!("{}.{}", table_name, key), value.clone());
+                                new_row.insert(format!("{table_name}.{key}"), value.clone());
                             }
                         }
                         result.push(new_row);
@@ -2027,7 +2025,7 @@ impl SqlExecutor {
             SqlType::Json => "json".to_string(),
             SqlType::Jsonb => "jsonb".to_string(),
             SqlType::Vector { dimensions } => match dimensions {
-                Some(dim) => format!("vector({})", dim),
+                Some(dim) => format!("vector({dim})"),
                 None => "vector".to_string(),
             },
             SqlType::Array { element_type, .. } => {
@@ -2050,11 +2048,11 @@ impl SqlExecutor {
             SqlType::Tsvector => "tsvector".to_string(),
             SqlType::Tsquery => "tsquery".to_string(),
             SqlType::HalfVec { dimensions } => match dimensions {
-                Some(dim) => format!("halfvec({})", dim),
+                Some(dim) => format!("halfvec({dim})"),
                 None => "halfvec".to_string(),
             },
             SqlType::SparseVec { dimensions } => match dimensions {
-                Some(dim) => format!("sparsevec({})", dim),
+                Some(dim) => format!("sparsevec({dim})"),
                 None => "sparsevec".to_string(),
             },
             SqlType::Custom { type_name } => type_name.clone(),
@@ -2068,7 +2066,7 @@ impl SqlExecutor {
 
     // DCL Implementation methods
     async fn execute_grant(&self, stmt: GrantStatement) -> ProtocolResult<ExecutionResult> {
-        let privileges: Vec<String> = stmt.privileges.iter().map(|p| format!("{:?}", p)).collect();
+        let privileges: Vec<String> = stmt.privileges.iter().map(|p| format!("{p:?}")).collect();
 
         // TODO: Implement proper permission management
 
@@ -2080,7 +2078,7 @@ impl SqlExecutor {
     }
 
     async fn execute_revoke(&self, stmt: RevokeStatement) -> ProtocolResult<ExecutionResult> {
-        let privileges: Vec<String> = stmt.privileges.iter().map(|p| format!("{:?}", p)).collect();
+        let privileges: Vec<String> = stmt.privileges.iter().map(|p| format!("{p:?}")).collect();
 
         // TODO: Implement proper permission management
 

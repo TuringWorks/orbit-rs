@@ -131,11 +131,11 @@ pub enum StatisticsError {
 impl std::fmt::Display for StatisticsError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            StatisticsError::TableNotFound(table) => write!(f, "Table not found: {}", table),
-            StatisticsError::IndexNotFound(index) => write!(f, "Index not found: {}", index),
-            StatisticsError::InvalidSample(msg) => write!(f, "Invalid sample: {}", msg),
-            StatisticsError::CollectionFailed(msg) => write!(f, "Collection failed: {}", msg),
-            StatisticsError::SerializationError(msg) => write!(f, "Serialization error: {}", msg),
+            StatisticsError::TableNotFound(table) => write!(f, "Table not found: {table}"),
+            StatisticsError::IndexNotFound(index) => write!(f, "Index not found: {index}"),
+            StatisticsError::InvalidSample(msg) => write!(f, "Invalid sample: {msg}"),
+            StatisticsError::CollectionFailed(msg) => write!(f, "Collection failed: {msg}"),
+            StatisticsError::SerializationError(msg) => write!(f, "Serialization error: {msg}"),
         }
     }
 }
@@ -301,7 +301,7 @@ impl StatisticsManager {
                         tracker.insert(table_name, 0);
                     }
                     Err(e) => {
-                        eprintln!("Failed to analyze table {}: {}", table_name, e);
+                        eprintln!("Failed to analyze table {table_name}: {e}");
                     }
                 }
             }

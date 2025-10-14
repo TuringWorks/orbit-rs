@@ -119,7 +119,7 @@ impl GinIndex {
                     let full_path = if path.is_empty() {
                         key.clone()
                     } else {
-                        format!("{}.{}", path, key)
+                        format!("{path}.{key}")
                     };
 
                     self.path_value_index
@@ -138,7 +138,7 @@ impl GinIndex {
                     let full_path = if path.is_empty() {
                         i.to_string()
                     } else {
-                        format!("{}[{}]", path, i)
+                        format!("{path}[{i}]")
                     };
 
                     let value_hash = self.hash_value(item);
@@ -304,7 +304,7 @@ impl GinIndex {
         if path.is_empty() {
             key.to_string()
         } else {
-            format!("{}.{}", path, key)
+            format!("{path}.{key}")
         }
     }
 
@@ -313,7 +313,7 @@ impl GinIndex {
         if path.is_empty() {
             index.to_string()
         } else {
-            format!("{}[{}]", path, index)
+            format!("{path}[{index}]")
         }
     }
 

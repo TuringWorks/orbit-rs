@@ -253,8 +253,7 @@ impl MvccSqlEngine {
                 // For other statements, fall back to non-transactional execution
                 // This could be enhanced to support DDL within transactions
                 Err(ProtocolError::PostgresError(format!(
-                    "Statement type not yet supported in MVCC transactions: {:?}",
-                    statement
+                    "Statement type not yet supported in MVCC transactions: {statement:?}"
                 )))
             }
         }
@@ -330,7 +329,7 @@ impl MvccSqlEngine {
             ast::Expression::Literal(value) => Ok(value.clone()),
             ast::Expression::Parameter(param_num) => {
                 // For now, return a placeholder
-                Ok(SqlValue::Text(format!("${}", param_num)))
+                Ok(SqlValue::Text(format!("${param_num}")))
             }
             _ => {
                 // For complex expressions, return a placeholder

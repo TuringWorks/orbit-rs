@@ -225,14 +225,14 @@ pub enum StorageError {
 impl std::fmt::Display for StorageError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            StorageError::IoError(msg) => write!(f, "I/O error: {}", msg),
-            StorageError::FormatError(msg) => write!(f, "Format error: {}", msg),
-            StorageError::AuthenticationError(msg) => write!(f, "Authentication error: {}", msg),
-            StorageError::NetworkError(msg) => write!(f, "Network error: {}", msg),
-            StorageError::SchemaError(msg) => write!(f, "Schema error: {}", msg),
-            StorageError::CompressionError(msg) => write!(f, "Compression error: {}", msg),
-            StorageError::PartitionError(msg) => write!(f, "Partition error: {}", msg),
-            StorageError::ConfigurationError(msg) => write!(f, "Configuration error: {}", msg),
+            StorageError::IoError(msg) => write!(f, "I/O error: {msg}"),
+            StorageError::FormatError(msg) => write!(f, "Format error: {msg}"),
+            StorageError::AuthenticationError(msg) => write!(f, "Authentication error: {msg}"),
+            StorageError::NetworkError(msg) => write!(f, "Network error: {msg}"),
+            StorageError::SchemaError(msg) => write!(f, "Schema error: {msg}"),
+            StorageError::CompressionError(msg) => write!(f, "Compression error: {msg}"),
+            StorageError::PartitionError(msg) => write!(f, "Partition error: {msg}"),
+            StorageError::ConfigurationError(msg) => write!(f, "Configuration error: {msg}"),
         }
     }
 }
@@ -277,9 +277,8 @@ impl StorageProvider for LocalStorageProvider {
 
         // Create parent directories if needed
         if let Some(parent) = full_path.parent() {
-            std::fs::create_dir_all(parent).map_err(|e| {
-                StorageError::IoError(format!("Failed to create directories: {}", e))
-            })?;
+            std::fs::create_dir_all(parent)
+                .map_err(|e| StorageError::IoError(format!("Failed to create directories: {e}")))?;
         }
 
         let file = std::fs::File::create(&full_path).map_err(|e| {
@@ -819,7 +818,7 @@ impl StorageEngine {
         let provider = self
             .providers
             .get(&provider_name)
-            .ok_or_else(|| StorageError::IoError(format!("Unknown provider: {}", provider_name)))?;
+            .ok_or_else(|| StorageError::IoError(format!("Unknown provider: {provider_name}")))?;
 
         // Get metadata (with caching)
         let metadata = self
@@ -881,12 +880,12 @@ impl StorageEngine {
         let provider = self
             .providers
             .get(&provider_name)
-            .ok_or_else(|| StorageError::IoError(format!("Unknown provider: {}", provider_name)))?;
+            .ok_or_else(|| StorageError::IoError(format!("Unknown provider: {provider_name}")))?;
 
         // Determine format
         let format_name = format.unwrap_or("parquet");
         let handler = self.format_handlers.get(format_name).ok_or_else(|| {
-            StorageError::FormatError(format!("Unsupported format: {}", format_name))
+            StorageError::FormatError(format!("Unsupported format: {format_name}"))
         })?;
 
         // Get writer
@@ -910,7 +909,7 @@ impl StorageEngine {
         let provider = self
             .providers
             .get(&provider_name)
-            .ok_or_else(|| StorageError::IoError(format!("Unknown provider: {}", provider_name)))?;
+            .ok_or_else(|| StorageError::IoError(format!("Unknown provider: {provider_name}")))?;
 
         let metadata = self
             .get_cached_metadata(table_path, provider.as_ref())

@@ -232,7 +232,7 @@ impl CostBasedQueryPlanner {
         Ok(PlanAlternative {
             plan,
             cost,
-            description: format!("Sequential scan on {}", table_name),
+            description: format!("Sequential scan on {table_name}"),
         })
     }
 
@@ -347,7 +347,7 @@ impl CostBasedQueryPlanner {
         Ok(PlanAlternative {
             plan,
             cost,
-            description: format!("Join order: {:?}", join_order),
+            description: format!("Join order: {join_order:?}"),
         })
     }
 
@@ -505,7 +505,7 @@ impl CostBasedQueryPlanner {
         Ok(PlanAlternative {
             plan,
             cost,
-            description: format!("Basic plan for {:?}", stmt),
+            description: format!("Basic plan for {stmt:?}"),
         })
     }
 
@@ -539,7 +539,7 @@ impl CostBasedQueryPlanner {
 
     fn generate_cache_key(&self, stmt: &Statement) -> String {
         // Simple cache key generation - in production, this would be more sophisticated
-        format!("{:?}", stmt)
+        format!("{stmt:?}")
     }
 
     async fn get_available_indexes(&self, _table_name: &str) -> Vec<IndexStatistics> {

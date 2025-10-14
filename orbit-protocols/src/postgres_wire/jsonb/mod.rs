@@ -258,14 +258,14 @@ pub type JsonbResult<T> = Result<T, JsonbError>;
 pub fn encode_jsonb(value: &serde_json::Value) -> crate::error::ProtocolResult<Vec<u8>> {
     use crate::error::ProtocolError;
     serde_cbor::to_vec(value)
-        .map_err(|e| ProtocolError::SerializationError(format!("CBOR encode failed: {}", e)))
+        .map_err(|e| ProtocolError::SerializationError(format!("CBOR encode failed: {e}")))
 }
 
 /// Decode CBOR bytes back into serde_json::Value.
 pub fn decode_jsonb(bytes: &[u8]) -> crate::error::ProtocolResult<serde_json::Value> {
     use crate::error::ProtocolError;
     serde_cbor::from_slice(bytes)
-        .map_err(|e| ProtocolError::SerializationError(format!("CBOR decode failed: {}", e)))
+        .map_err(|e| ProtocolError::SerializationError(format!("CBOR decode failed: {e}")))
 }
 
 #[cfg(test)]

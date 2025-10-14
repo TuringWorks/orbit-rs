@@ -44,11 +44,7 @@ impl fmt::Display for ParseError {
                 )
             }
             ParseError::UnexpectedEndOfInput { expected } => {
-                write!(
-                    f,
-                    "Unexpected end of input. Expected one of: {:?}",
-                    expected
-                )
+                write!(f, "Unexpected end of input. Expected one of: {expected:?}")
             }
             ParseError::InvalidExpression { message, token } => {
                 write!(
@@ -57,7 +53,7 @@ impl fmt::Display for ParseError {
                     message, token.line, token.column
                 )
             }
-            ParseError::LexError(msg) => write!(f, "Lexer error: {}", msg),
+            ParseError::LexError(msg) => write!(f, "Lexer error: {msg}"),
         }
     }
 }
@@ -747,7 +743,7 @@ impl Parser {
                                 "MAX" => AggregateFunction::Max,
                                 _ => {
                                     return Err(ParseError::InvalidExpression {
-                                        message: format!("Unknown aggregate function: {}", name),
+                                        message: format!("Unknown aggregate function: {name}"),
                                         token: token.clone(),
                                     })
                                 }

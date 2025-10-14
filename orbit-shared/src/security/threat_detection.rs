@@ -181,8 +181,7 @@ impl AnomalyDetector {
                     ThreatSeverity::Medium
                 },
                 description: format!(
-                    "Anomalous behavior detected for user {} (score: {:.2})",
-                    subject_id, anomaly_score
+                    "Anomalous behavior detected for user {subject_id} (score: {anomaly_score:.2})"
                 ),
                 detected_at: SystemTime::now(),
                 subject_id: Some(subject_id.to_string()),
@@ -283,7 +282,7 @@ impl BruteForceDetector {
         subject_id: &str,
         client_ip: &str,
     ) -> Option<DetectedThreat> {
-        let key = format!("{}:{}", subject_id, client_ip);
+        let key = format!("{subject_id}:{client_ip}");
         let mut attempts = self.failed_attempts.write().await;
 
         let now = SystemTime::now();
@@ -321,7 +320,7 @@ impl BruteForceDetector {
 
     /// Record failed authentication attempt
     pub async fn record_failed_attempt(&self, subject_id: &str, client_ip: &str) {
-        let key = format!("{}:{}", subject_id, client_ip);
+        let key = format!("{subject_id}:{client_ip}");
         let mut attempts = self.failed_attempts.write().await;
 
         attempts
@@ -332,7 +331,7 @@ impl BruteForceDetector {
 
     /// Clear failed attempts for a subject/IP
     pub async fn clear_attempts(&self, subject_id: &str, client_ip: &str) {
-        let key = format!("{}:{}", subject_id, client_ip);
+        let key = format!("{subject_id}:{client_ip}");
         let mut attempts = self.failed_attempts.write().await;
         attempts.remove(&key);
     }

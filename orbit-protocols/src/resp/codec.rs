@@ -109,7 +109,7 @@ fn parse_integer(src: &BytesMut) -> ProtocolResult<Option<(RespValue, usize)>> {
         let s = String::from_utf8_lossy(&src[1..end_pos]);
         let i = s
             .parse::<i64>()
-            .map_err(|e| ProtocolError::RespError(format!("Invalid integer: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("Invalid integer: {e}")))?;
         Ok(Some((RespValue::Integer(i), end_pos + 2)))
     } else {
         Ok(None)
@@ -122,7 +122,7 @@ fn parse_bulk_string(src: &BytesMut) -> ProtocolResult<Option<(RespValue, usize)
         let len_str = String::from_utf8_lossy(&src[1..len_end]);
         let len = len_str
             .parse::<i64>()
-            .map_err(|e| ProtocolError::RespError(format!("Invalid bulk string length: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("Invalid bulk string length: {e}")))?;
 
         if len == -1 {
             return Ok(Some((RespValue::NullBulkString, len_end + 2)));
@@ -151,7 +151,7 @@ fn parse_array(src: &BytesMut) -> ProtocolResult<Option<(RespValue, usize)>> {
         let count_str = String::from_utf8_lossy(&src[1..count_end]);
         let count = count_str
             .parse::<i64>()
-            .map_err(|e| ProtocolError::RespError(format!("Invalid array count: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("Invalid array count: {e}")))?;
 
         if count == -1 {
             return Ok(Some((RespValue::NullArray, count_end + 2)));

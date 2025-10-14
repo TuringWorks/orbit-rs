@@ -333,7 +333,7 @@ where
         let _permit = timeout(self.config.connect_timeout, self.semaphore.acquire())
             .await
             .map_err(|_| OrbitError::timeout("Connection pool timeout"))?
-            .map_err(|e| OrbitError::internal(format!("Semaphore error: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("Semaphore error: {e}")))?;
 
         // Try to get an existing connection
         {
@@ -481,7 +481,7 @@ impl ResourceManager {
         let permit = Arc::clone(&self.concurrency_limiter)
             .acquire_owned()
             .await
-            .map_err(|e| OrbitError::internal(format!("Concurrency limiter error: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("Concurrency limiter error: {e}")))?;
 
         // Check memory availability
         let mut current = self.current_memory.write().await;

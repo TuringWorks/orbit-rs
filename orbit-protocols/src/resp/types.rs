@@ -148,12 +148,12 @@ impl RespValue {
 impl fmt::Display for RespValue {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            RespValue::SimpleString(s) => write!(f, "\"{}\"", s),
-            RespValue::Error(s) => write!(f, "ERROR: {}", s),
-            RespValue::Integer(i) => write!(f, "{}", i),
+            RespValue::SimpleString(s) => write!(f, "\"{s}\""),
+            RespValue::Error(s) => write!(f, "ERROR: {s}"),
+            RespValue::Integer(i) => write!(f, "{i}"),
             RespValue::BulkString(b) => {
                 if let Ok(s) = std::str::from_utf8(b) {
-                    write!(f, "\"{}\"", s)
+                    write!(f, "\"{s}\"")
                 } else {
                     write!(f, "<binary:{} bytes>", b.len())
                 }
@@ -165,7 +165,7 @@ impl fmt::Display for RespValue {
                     if i > 0 {
                         write!(f, ", ")?;
                     }
-                    write!(f, "{}", val)?;
+                    write!(f, "{val}")?;
                 }
                 write!(f, "]")
             }

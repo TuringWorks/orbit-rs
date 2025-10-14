@@ -1120,17 +1120,17 @@ pub enum AnalyticsError {
 impl std::fmt::Display for AnalyticsError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            AnalyticsError::ModelTrainingError(msg) => write!(f, "Model training error: {}", msg),
-            AnalyticsError::PredictionError(msg) => write!(f, "Prediction error: {}", msg),
+            AnalyticsError::ModelTrainingError(msg) => write!(f, "Model training error: {msg}"),
+            AnalyticsError::PredictionError(msg) => write!(f, "Prediction error: {msg}"),
             AnalyticsError::PatternMatchingError(msg) => {
-                write!(f, "Pattern matching error: {}", msg)
+                write!(f, "Pattern matching error: {msg}")
             }
             AnalyticsError::AnomalyDetectionError(msg) => {
-                write!(f, "Anomaly detection error: {}", msg)
+                write!(f, "Anomaly detection error: {msg}")
             }
-            AnalyticsError::TuningError(msg) => write!(f, "Tuning error: {}", msg),
-            AnalyticsError::ConfigurationError(msg) => write!(f, "Configuration error: {}", msg),
-            AnalyticsError::DataError(msg) => write!(f, "Data error: {}", msg),
+            AnalyticsError::TuningError(msg) => write!(f, "Tuning error: {msg}"),
+            AnalyticsError::ConfigurationError(msg) => write!(f, "Configuration error: {msg}"),
+            AnalyticsError::DataError(msg) => write!(f, "Data error: {msg}"),
         }
     }
 }

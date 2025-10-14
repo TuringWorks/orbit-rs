@@ -542,7 +542,7 @@ fn read_cstring(cursor: &mut Cursor<&[u8]>) -> ProtocolResult<String> {
         .ok_or_else(|| ProtocolError::PostgresError("Unterminated string".to_string()))?;
 
     let s = String::from_utf8(buf[start..start + end].to_vec())
-        .map_err(|e| ProtocolError::PostgresError(format!("Invalid UTF-8: {}", e)))?;
+        .map_err(|e| ProtocolError::PostgresError(format!("Invalid UTF-8: {e}")))?;
 
     cursor.set_position((start + end + 1) as u64);
     Ok(s)

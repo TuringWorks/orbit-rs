@@ -319,7 +319,7 @@ impl CdcCoordinator {
                 )),
                 event: crate::transactions::TransactionEvent::Started,
                 details: Some(serde_json::to_value(&event).map_err(|e| {
-                    OrbitError::internal(format!("Failed to serialize CDC event: {}", e))
+                    OrbitError::internal(format!("Failed to serialize CDC event: {e}"))
                 })?),
             };
 
@@ -418,7 +418,7 @@ impl CdcCoordinator {
             Ok(())
         } else {
             Err(OrbitError::AddressableNotFound {
-                reference: format!("CDC subscription {}", subscription_id),
+                reference: format!("CDC subscription {subscription_id}"),
             })
         }
     }

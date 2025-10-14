@@ -211,6 +211,69 @@ struct PathState {
     hop_count: u32,
 }
 
+/// Search parameters extracted from query
+struct SearchParameters {
+    max_hops: u32,
+    max_results: usize,
+}
+
+/// Manages the search state for multi-hop reasoning
+struct PathSearchManager {
+    queue: VecDeque<PathState>,
+    found_paths: Vec<ReasoningPath>,
+    explored_count: usize,
+    max_results: usize,
+    max_hops: u32,
+}
+
+impl PathSearchManager {
+    fn new(initial_state: PathState, max_results: usize, max_hops: u32) -> Self {
+        let mut queue = VecDeque::new();
+        queue.push_back(initial_state);
+
+        Self {
+            queue,
+            found_paths: Vec::new(),
+            explored_count: 0,
+            max_results,
+            max_hops,
+        }
+    }
+
+    fn next_state(&mut self) -> Option<PathState> {
+        if let Some(state) = self.queue.pop_front() {
+            self.explored_count += 1;
+            Some(state)
+        } else {
+            None
+        }
+    }
+
+    fn add_found_path(&mut self, path: ReasoningPath) -> bool {
+        self.found_paths.push(path);
+        self.found_paths.len() >= self.max_results
+    }
+
+    fn should_expand(&self, state: &PathState) -> bool {
+        state.hop_count < self.max_hops
+    }
+
+    fn add_candidate_state(&mut self, state: PathState) {
+        self.queue.push_back(state);
+    }
+
+    fn get_results(mut self) -> (Vec<ReasoningPath>, usize) {
+        // Sort paths by score (descending)
+        self.found_paths.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+
+        (self.found_paths, self.explored_count)
+    }
+}
+
 impl MultiHopReasoningEngine {
     /// Create a new reasoning engine
     pub fn new(max_hops: u32) -> Self {
@@ -254,131 +317,189 @@ impl MultiHopReasoningEngine {
     ) -> OrbitResult<Vec<ReasoningPath>> {
         let start_time = std::time::Instant::now();
 
+        self.log_search_start(&query);
+        let search_params = self.extract_search_parameters(&query);
+        let initial_state = self.create_initial_state(&query);
+        let mut search_manager = PathSearchManager::new(
+            initial_state,
+            search_params.max_results,
+            search_params.max_hops,
+        );
+
+        // Execute breadth-first search
+        self.execute_search(&mut search_manager, orbit_client, kg_name, &query)
+            .await?;
+
+        let (found_paths, explored_count) = search_manager.get_results();
+        let query_time = start_time.elapsed();
+
+        self.finalize_search_results(&query, &found_paths, explored_count, query_time);
+
+        Ok(found_paths)
+    }
+
+    /// Extract search parameters from query
+    fn extract_search_parameters(&self, query: &ReasoningQuery) -> SearchParameters {
+        SearchParameters {
+            max_hops: query.max_hops.unwrap_or(self.max_hops),
+            max_results: query.max_results.unwrap_or(self.config.max_results),
+        }
+    }
+
+    /// Create initial search state
+    fn create_initial_state(&self, query: &ReasoningQuery) -> PathState {
+        let mut visited = HashSet::new();
+        visited.insert(query.from_entity.clone());
+
+        PathState {
+            current_node: query.from_entity.clone(),
+            path: vec![query.from_entity.clone()],
+            relationships: Vec::new(),
+            score: 1.0,
+            visited,
+            hop_count: 0,
+        }
+    }
+
+    /// Execute the breadth-first search
+    async fn execute_search(
+        &self,
+        search_manager: &mut PathSearchManager,
+        orbit_client: Arc<OrbitClient>,
+        kg_name: &str,
+        query: &ReasoningQuery,
+    ) -> OrbitResult<()> {
+        while let Some(current_state) = search_manager.next_state() {
+            // Check if we've reached the target
+            if current_state.current_node == query.to_entity {
+                let reasoning_path = self.create_reasoning_path(&current_state);
+                let should_stop = search_manager.add_found_path(reasoning_path);
+                if should_stop {
+                    break;
+                }
+                continue;
+            }
+
+            // Expand current state if within hop limit
+            if search_manager.should_expand(&current_state) {
+                self.expand_current_state(
+                    search_manager,
+                    &current_state,
+                    orbit_client.clone(),
+                    kg_name,
+                    &query.relationship_types,
+                )
+                .await;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Expand current state by exploring neighbors
+    async fn expand_current_state(
+        &self,
+        search_manager: &mut PathSearchManager,
+        current_state: &PathState,
+        orbit_client: Arc<OrbitClient>,
+        kg_name: &str,
+        relationship_types: &Option<Vec<String>>,
+    ) {
+        match self
+            .get_neighbors(
+                orbit_client,
+                kg_name,
+                &current_state.current_node,
+                relationship_types,
+            )
+            .await
+        {
+            Ok(neighbors) => {
+                for (neighbor_id, relationship_id, relationship_type, confidence) in neighbors {
+                    if self.should_prune(current_state, &neighbor_id, confidence) {
+                        continue;
+                    }
+
+                    let new_state = self.create_neighbor_state(
+                        current_state,
+                        neighbor_id,
+                        relationship_id,
+                        &relationship_type,
+                        confidence,
+                    );
+
+                    search_manager.add_candidate_state(new_state);
+                }
+            }
+            Err(e) => {
+                warn!(
+                    node_id = %current_state.current_node,
+                    error = %e,
+                    "Failed to get neighbors for node"
+                );
+            }
+        }
+    }
+
+    /// Create new path state for neighbor
+    fn create_neighbor_state(
+        &self,
+        current_state: &PathState,
+        neighbor_id: String,
+        relationship_id: String,
+        relationship_type: &str,
+        confidence: f32,
+    ) -> PathState {
+        let mut new_visited = current_state.visited.clone();
+        new_visited.insert(neighbor_id.clone());
+
+        let mut new_path = current_state.path.clone();
+        new_path.push(neighbor_id.clone());
+
+        let mut new_relationships = current_state.relationships.clone();
+        new_relationships.push(relationship_id);
+
+        let new_score = self.calculate_path_score(current_state, confidence, relationship_type);
+
+        PathState {
+            current_node: neighbor_id,
+            path: new_path,
+            relationships: new_relationships,
+            score: new_score,
+            visited: new_visited,
+            hop_count: current_state.hop_count + 1,
+        }
+    }
+
+    /// Create reasoning path from path state
+    fn create_reasoning_path(&self, state: &PathState) -> ReasoningPath {
+        ReasoningPath {
+            nodes: state.path.clone(),
+            relationships: state.relationships.clone(),
+            score: state.score,
+            length: state.hop_count as usize,
+            explanation: self.generate_path_explanation(state),
+        }
+    }
+
+    /// Log search start information
+    fn log_search_start(&self, query: &ReasoningQuery) {
         info!(
             from_entity = %query.from_entity,
             to_entity = %query.to_entity,
             max_hops = query.max_hops.unwrap_or(self.max_hops),
             "Starting multi-hop reasoning query"
         );
+    }
 
-        let max_hops = query.max_hops.unwrap_or(self.max_hops);
-        let max_results = query.max_results.unwrap_or(self.config.max_results);
-
-        // Initialize search
-        let mut queue = VecDeque::new();
-        let mut found_paths = Vec::new();
-        let mut explored_count = 0;
-
-        // Start with the source entity
-        let initial_state = PathState {
-            current_node: query.from_entity.clone(),
-            path: vec![query.from_entity.clone()],
-            relationships: Vec::new(),
-            score: 1.0,
-            visited: {
-                let mut set = HashSet::new();
-                set.insert(query.from_entity.clone());
-                set
-            },
-            hop_count: 0,
-        };
-
-        queue.push_back(initial_state);
-
-        // Breadth-first search with scoring
-        while let Some(current_state) = queue.pop_front() {
-            explored_count += 1;
-
-            // Check if we've reached the target
-            if current_state.current_node == query.to_entity {
-                let reasoning_path = ReasoningPath {
-                    nodes: current_state.path.clone(),
-                    relationships: current_state.relationships.clone(),
-                    score: current_state.score,
-                    length: current_state.hop_count as usize,
-                    explanation: self.generate_path_explanation(&current_state),
-                };
-
-                found_paths.push(reasoning_path);
-
-                // Stop if we have enough results
-                if found_paths.len() >= max_results {
-                    break;
-                }
-                continue;
-            }
-
-            // Don't expand further if we've reached max hops
-            if current_state.hop_count >= max_hops {
-                continue;
-            }
-
-            // Get neighboring nodes
-            match self
-                .get_neighbors(
-                    orbit_client.clone(),
-                    kg_name,
-                    &current_state.current_node,
-                    &query.relationship_types,
-                )
-                .await
-            {
-                Ok(neighbors) => {
-                    for (neighbor_id, relationship_id, relationship_type, confidence) in neighbors {
-                        // Apply pruning strategies
-                        if self.should_prune(&current_state, &neighbor_id, confidence) {
-                            continue;
-                        }
-
-                        // Create new path state
-                        let mut new_visited = current_state.visited.clone();
-                        new_visited.insert(neighbor_id.clone());
-
-                        let mut new_path = current_state.path.clone();
-                        new_path.push(neighbor_id.clone());
-
-                        let mut new_relationships = current_state.relationships.clone();
-                        new_relationships.push(relationship_id);
-
-                        let new_score = self.calculate_path_score(
-                            &current_state,
-                            confidence,
-                            &relationship_type,
-                        );
-
-                        let new_state = PathState {
-                            current_node: neighbor_id,
-                            path: new_path,
-                            relationships: new_relationships,
-                            score: new_score,
-                            visited: new_visited,
-                            hop_count: current_state.hop_count + 1,
-                        };
-
-                        queue.push_back(new_state);
-                    }
-                }
-                Err(e) => {
-                    warn!(
-                        node_id = %current_state.current_node,
-                        error = %e,
-                        "Failed to get neighbors for node"
-                    );
-                    continue;
-                }
-            }
-        }
-
-        // Sort paths by score (descending)
-        found_paths.sort_by(|a, b| {
-            b.score
-                .partial_cmp(&a.score)
-                .unwrap_or(std::cmp::Ordering::Equal)
-        });
-
-        let query_time = start_time.elapsed();
-
-        // Update statistics
+    /// Finalize search results and update statistics
+    fn finalize_search_results(
+        &mut self,
+        query: &ReasoningQuery,
+        found_paths: &[ReasoningPath],
+        explored_count: usize,
+        query_time: std::time::Duration,
+    ) {
         self.update_stats(
             explored_count,
             found_paths.len(),
@@ -393,8 +514,6 @@ impl MultiHopReasoningEngine {
             query_time_ms = query_time.as_millis(),
             "Multi-hop reasoning completed"
         );
-
-        Ok(found_paths)
     }
 
     /// Explain connection between two entities
@@ -464,8 +583,7 @@ impl MultiHopReasoningEngine {
         };
 
         let cypher_query = format!(
-            "MATCH (a {{id: '{}'}})-[r{}]->(b) RETURN b.id, r.id, type(r), COALESCE(r.confidence, 1.0) AS confidence",
-            node_id, relationship_filter
+            "MATCH (a {{id: '{node_id}'}})-[r{relationship_filter}]->(b) RETURN b.id, r.id, type(r), COALESCE(r.confidence, 1.0) AS confidence"
         );
 
         debug!(
@@ -480,15 +598,13 @@ impl MultiHopReasoningEngine {
             })
             .await
             .map_err(|e| {
-                OrbitError::internal(format!("Failed to get graph actor reference: {}", e))
+                OrbitError::internal(format!("Failed to get graph actor reference: {e}"))
             })?;
 
         let _result: serde_json::Value = graph_actor_ref
             .invoke("execute_query", vec![serde_json::json!(cypher_query)])
             .await
-            .map_err(|e| {
-                OrbitError::internal(format!("Failed to execute neighbor query: {}", e))
-            })?;
+            .map_err(|e| OrbitError::internal(format!("Failed to execute neighbor query: {e}")))?;
 
         // Parse query results (simplified - in reality would parse from QueryResult)
         // For now, return empty vector - this would be implemented based on actual QueryResult structure

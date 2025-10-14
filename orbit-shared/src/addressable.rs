@@ -16,9 +16,9 @@ pub enum Key {
 impl fmt::Display for Key {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Key::StringKey { key } => write!(f, "{}", key),
-            Key::Int32Key { key } => write!(f, "{}", key),
-            Key::Int64Key { key } => write!(f, "{}", key),
+            Key::StringKey { key } => write!(f, "{key}"),
+            Key::Int32Key { key } => write!(f, "{key}"),
+            Key::Int64Key { key } => write!(f, "{key}"),
             Key::NoKey => write!(f, "no-key"),
         }
     }

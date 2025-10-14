@@ -179,7 +179,7 @@ where
             tokio::time::timeout(self.config.connection_timeout, semaphore.acquire_owned())
                 .await
                 .map_err(|_| OrbitError::timeout("Connection pool timeout"))?
-                .map_err(|e| OrbitError::internal(format!("Semaphore error: {}", e)))?;
+                .map_err(|e| OrbitError::internal(format!("Semaphore error: {e}")))?;
 
         // Try to reuse an existing connection
         {

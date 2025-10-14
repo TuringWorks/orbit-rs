@@ -503,29 +503,29 @@ impl ExecutionPlan {
         match self {
             ExecutionPlan::TableScan { table, filter, .. } => {
                 if filter.is_some() {
-                    format!("Table Scan on {} (filtered)", table)
+                    format!("Table Scan on {table} (filtered)")
                 } else {
-                    format!("Table Scan on {}", table)
+                    format!("Table Scan on {table}")
                 }
             }
             ExecutionPlan::IndexScan { table, index, .. } => {
-                format!("Index Scan on {}.{}", table, index)
+                format!("Index Scan on {table}.{index}")
             }
             ExecutionPlan::NestedLoopJoin { join_type, .. } => {
-                format!("{:?} Nested Loop Join", join_type)
+                format!("{join_type:?} Nested Loop Join")
             }
             ExecutionPlan::HashJoin { join_type, .. } => {
-                format!("{:?} Hash Join", join_type)
+                format!("{join_type:?} Hash Join")
             }
             ExecutionPlan::MergeJoin { join_type, .. } => {
-                format!("{:?} Merge Join", join_type)
+                format!("{join_type:?} Merge Join")
             }
             ExecutionPlan::Sort { .. } => "Sort".to_string(),
             ExecutionPlan::Limit { .. } => "Limit".to_string(),
             ExecutionPlan::Aggregate { .. } => "Aggregate".to_string(),
-            ExecutionPlan::Insert { table, .. } => format!("Insert into {}", table),
-            ExecutionPlan::Update { table, .. } => format!("Update {}", table),
-            ExecutionPlan::Delete { table, .. } => format!("Delete from {}", table),
+            ExecutionPlan::Insert { table, .. } => format!("Insert into {table}"),
+            ExecutionPlan::Update { table, .. } => format!("Update {table}"),
+            ExecutionPlan::Delete { table, .. } => format!("Delete from {table}"),
             ExecutionPlan::Values { .. } => "Values".to_string(),
             ExecutionPlan::Projection { .. } => "Projection".to_string(),
             ExecutionPlan::Filter { .. } => "Filter".to_string(),

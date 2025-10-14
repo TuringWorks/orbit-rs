@@ -137,7 +137,7 @@ impl SqliteTransactionLogger {
         // Ensure database directory exists
         if let Some(parent) = config.database_path.parent() {
             tokio::fs::create_dir_all(parent).await.map_err(|e| {
-                OrbitError::internal(format!("Failed to create database directory: {}", e))
+                OrbitError::internal(format!("Failed to create database directory: {e}"))
             })?;
         }
 
@@ -147,7 +147,7 @@ impl SqliteTransactionLogger {
         // Configure connection pool
         let pool = SqlitePool::connect(&database_url)
             .await
-            .map_err(|e| OrbitError::internal(format!("Failed to connect to database: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("Failed to connect to database: {e}")))?;
 
         let logger = Self {
             pool,
@@ -214,7 +214,7 @@ impl SqliteTransactionLogger {
         sqlx::query(schema_sql)
             .execute(&self.pool)
             .await
-            .map_err(|e| OrbitError::internal(format!("Failed to initialize schema: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("Failed to initialize schema: {e}")))?;
 
         Ok(())
     }
@@ -225,22 +225,22 @@ impl SqliteTransactionLogger {
             sqlx::query("PRAGMA journal_mode = WAL")
                 .execute(&self.pool)
                 .await
-                .map_err(|e| OrbitError::internal(format!("Failed to enable WAL: {}", e)))?;
+                .map_err(|e| OrbitError::internal(format!("Failed to enable WAL: {e}")))?;
         }
 
         // Configure other performance settings
         sqlx::query("PRAGMA synchronous = NORMAL")
             .execute(&self.pool)
             .await
-            .map_err(|e| OrbitError::internal(format!("Failed to set synchronous mode: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("Failed to set synchronous mode: {e}")))?;
         sqlx::query("PRAGMA cache_size = 10000")
             .execute(&self.pool)
             .await
-            .map_err(|e| OrbitError::internal(format!("Failed to set cache size: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("Failed to set cache size: {e}")))?;
         sqlx::query("PRAGMA temp_store = memory")
             .execute(&self.pool)
             .await
-            .map_err(|e| OrbitError::internal(format!("Failed to set temp store: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("Failed to set temp store: {e}")))?;
 
         Ok(())
     }
@@ -271,13 +271,13 @@ impl SqliteTransactionLogger {
             .pool
             .begin()
             .await
-            .map_err(|e| OrbitError::internal(format!("Failed to begin transaction: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("Failed to begin transaction: {e}")))?;
 
         for entry in entries {
             let persistent_entry = PersistentLogEntry::from(entry.clone());
 
             let event_data = serde_json::to_string(&entry.event)
-                .map_err(|e| OrbitError::internal(format!("Failed to serialize event: {}", e)))?;
+                .map_err(|e| OrbitError::internal(format!("Failed to serialize event: {e}")))?;
 
             let details_json = entry
                 .details
@@ -300,12 +300,12 @@ impl SqliteTransactionLogger {
             .bind(persistent_entry.checksum)
             .bind(persistent_entry.archived)
             .execute(&mut *tx).await
-            .map_err(|e| OrbitError::internal(format!("Failed to insert log entry: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("Failed to insert log entry: {e}")))?;
         }
 
         tx.commit()
             .await
-            .map_err(|e| OrbitError::internal(format!("Failed to commit batch: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("Failed to commit batch: {e}")))?;
 
         Ok(())
     }
@@ -393,7 +393,7 @@ impl PersistentTransactionLogger for SqliteTransactionLogger {
         .bind(&transaction_id.id)
         .fetch_all(&self.pool)
         .await
-        .map_err(|e| OrbitError::internal(format!("Failed to query transaction log: {}", e)))?;
+        .map_err(|e| OrbitError::internal(format!("Failed to query transaction log: {e}")))?;
 
         let mut entries = Vec::new();
         for row in rows {
@@ -415,7 +415,7 @@ impl PersistentTransactionLogger for SqliteTransactionLogger {
         .bind(end_time)
         .fetch_all(&self.pool)
         .await
-        .map_err(|e| OrbitError::internal(format!("Failed to query time range: {}", e)))?;
+        .map_err(|e| OrbitError::internal(format!("Failed to query time range: {e}")))?;
 
         let mut entries = Vec::new();
         for row in rows {
@@ -432,7 +432,7 @@ impl PersistentTransactionLogger for SqliteTransactionLogger {
         .bind(before_timestamp)
         .execute(&self.pool)
         .await
-        .map_err(|e| OrbitError::internal(format!("Failed to archive entries: {}", e)))?;
+        .map_err(|e| OrbitError::internal(format!("Failed to archive entries: {e}")))?;
 
         let archived_count = result.rows_affected();
         if archived_count > 0 {
@@ -465,7 +465,7 @@ impl PersistentTransactionLogger for SqliteTransactionLogger {
         )
         .fetch_one(&self.pool)
         .await
-        .map_err(|e| OrbitError::internal(format!("Failed to get stats: {}", e)))?;
+        .map_err(|e| OrbitError::internal(format!("Failed to get stats: {e}")))?;
 
         let database_size = tokio::fs::metadata(&self.config.database_path)
             .await
@@ -504,13 +504,13 @@ impl PersistentTransactionLogger for SqliteTransactionLogger {
         sqlx::query("VACUUM")
             .execute(&self.pool)
             .await
-            .map_err(|e| OrbitError::internal(format!("Failed to vacuum database: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("Failed to vacuum database: {e}")))?;
 
         // Update statistics
         sqlx::query("ANALYZE")
             .execute(&self.pool)
             .await
-            .map_err(|e| OrbitError::internal(format!("Failed to analyze database: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("Failed to analyze database: {e}")))?;
 
         debug!("Transaction log maintenance completed");
         Ok(())
@@ -529,12 +529,12 @@ impl PersistentTransactionLogger for SqliteTransactionLogger {
         .bind(&transaction_id.id)
         .fetch_optional(&self.pool)
         .await
-        .map_err(|e| OrbitError::internal(format!("Failed to recover transaction state: {}", e)))?;
+        .map_err(|e| OrbitError::internal(format!("Failed to recover transaction state: {e}")))?;
 
         if let Some(row) = row {
             let event_data: String = row.get("event_data");
             let event: TransactionEvent = serde_json::from_str(&event_data)
-                .map_err(|e| OrbitError::internal(format!("Failed to deserialize event: {}", e)))?;
+                .map_err(|e| OrbitError::internal(format!("Failed to deserialize event: {e}")))?;
             Ok(Some(event))
         } else {
             Ok(None)
@@ -555,7 +555,7 @@ impl SqliteTransactionLogger {
         let details_str: Option<String> = row.get("details");
 
         let id = Uuid::parse_str(&id_str)
-            .map_err(|e| OrbitError::internal(format!("Invalid UUID: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("Invalid UUID: {e}")))?;
 
         let transaction_id = TransactionId {
             id: transaction_id_str,
@@ -564,15 +564,16 @@ impl SqliteTransactionLogger {
         };
 
         let event: TransactionEvent = serde_json::from_str(&event_data)
-            .map_err(|e| OrbitError::internal(format!("Failed to deserialize event: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("Failed to deserialize event: {e}")))?;
 
-        let details = if let Some(details_str) = details_str {
-            Some(serde_json::from_str(&details_str).map_err(|e| {
-                OrbitError::internal(format!("Failed to deserialize details: {}", e))
-            })?)
-        } else {
-            None
-        };
+        let details =
+            if let Some(details_str) = details_str {
+                Some(serde_json::from_str(&details_str).map_err(|e| {
+                    OrbitError::internal(format!("Failed to deserialize details: {e}"))
+                })?)
+            } else {
+                None
+            };
 
         Ok(PersistentLogEntry {
             id,

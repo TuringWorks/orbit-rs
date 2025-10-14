@@ -1518,12 +1518,12 @@ pub enum DeploymentError {
 impl std::fmt::Display for DeploymentError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            DeploymentError::ConfigurationError(msg) => write!(f, "Configuration error: {}", msg),
-            DeploymentError::EnvironmentError(msg) => write!(f, "Environment error: {}", msg),
-            DeploymentError::TestingError(msg) => write!(f, "Testing error: {}", msg),
-            DeploymentError::MonitoringError(msg) => write!(f, "Monitoring error: {}", msg),
-            DeploymentError::ValidationError(msg) => write!(f, "Validation error: {}", msg),
-            DeploymentError::DeploymentFailed(msg) => write!(f, "Deployment failed: {}", msg),
+            DeploymentError::ConfigurationError(msg) => write!(f, "Configuration error: {msg}"),
+            DeploymentError::EnvironmentError(msg) => write!(f, "Environment error: {msg}"),
+            DeploymentError::TestingError(msg) => write!(f, "Testing error: {msg}"),
+            DeploymentError::MonitoringError(msg) => write!(f, "Monitoring error: {msg}"),
+            DeploymentError::ValidationError(msg) => write!(f, "Validation error: {msg}"),
+            DeploymentError::DeploymentFailed(msg) => write!(f, "Deployment failed: {msg}"),
         }
     }
 }

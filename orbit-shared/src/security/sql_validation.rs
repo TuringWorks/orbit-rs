@@ -80,8 +80,7 @@ impl SqlInjectionDetector {
         for keyword in &self.blocked_keywords {
             if query_lower.contains(keyword) {
                 return Err(OrbitError::internal(format!(
-                    "Blocked keyword detected: {}",
-                    keyword
+                    "Blocked keyword detected: {keyword}"
                 )));
             }
         }
@@ -185,8 +184,7 @@ impl QueryValidator {
         for operation in &self.blocked_operations {
             if query_upper.contains(operation) {
                 return Err(OrbitError::internal(format!(
-                    "Blocked operation detected: {}",
-                    operation
+                    "Blocked operation detected: {operation}"
                 )));
             }
         }
@@ -247,8 +245,7 @@ impl QueryValidator {
                     let table_name = words[0].trim_matches(|c| c == '(' || c == ')');
                     if !allowed_tables.contains(&table_name.to_uppercase()) {
                         return Err(OrbitError::internal(format!(
-                            "Access to table '{}' is not allowed",
-                            table_name
+                            "Access to table '{table_name}' is not allowed"
                         )));
                     }
                 }

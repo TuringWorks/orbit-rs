@@ -13,5 +13,5 @@ pub async fn execute_tool(
     tool_name: &str,
     _parameters: HashMap<String, serde_json::Value>,
 ) -> McpToolResult {
-    McpToolResult::error(format!("Tool '{}' not yet implemented", tool_name))
+    McpToolResult::error(format!("Tool '{tool_name}' not yet implemented"))
 }

@@ -165,12 +165,12 @@ impl fmt::Display for OptimizationError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             OptimizationError::InvalidTransformation(msg) => {
-                write!(f, "Invalid transformation: {}", msg)
+                write!(f, "Invalid transformation: {msg}")
             }
             OptimizationError::UnsupportedOperation(msg) => {
-                write!(f, "Unsupported operation: {}", msg)
+                write!(f, "Unsupported operation: {msg}")
             }
-            OptimizationError::InternalError(msg) => write!(f, "Internal error: {}", msg),
+            OptimizationError::InternalError(msg) => write!(f, "Internal error: {msg}"),
         }
     }
 }
@@ -499,10 +499,7 @@ impl ProjectionPushdown {
     fn optimize_table_projection(&self, table_name: &str, columns: &[String]) {
         // In a real implementation, this would communicate with the storage layer
         // to inform it about the required columns for this table
-        println!(
-            "Optimizing table {} to only fetch columns: {:?}",
-            table_name, columns
-        );
+        println!("Optimizing table {table_name} to only fetch columns: {columns:?}");
     }
 }
 

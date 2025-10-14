@@ -72,8 +72,7 @@ impl GraphRAGQueryEngine {
             self.execute_graphrag_similar(sql).await
         } else {
             Err(ProtocolError::PostgresError(format!(
-                "Unknown GraphRAG function in query: {}",
-                sql
+                "Unknown GraphRAG function in query: {sql}"
             )))
         }
     }
@@ -100,7 +99,7 @@ impl GraphRAGQueryEngine {
                 key: kg_name.clone(),
             })
             .await
-            .map_err(|e| ProtocolError::PostgresError(format!("Actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::PostgresError(format!("Actor error: {e}")))?;
 
         // Create document processing request
         let request = GraphRAGDocumentRequest {
@@ -120,7 +119,7 @@ impl GraphRAGQueryEngine {
             )
             .await
             .map_err(|e| {
-                ProtocolError::PostgresError(format!("Document processing failed: {}", e))
+                ProtocolError::PostgresError(format!("Document processing failed: {e}"))
             })?;
 
         // Format as PostgreSQL result
@@ -158,7 +157,7 @@ impl GraphRAGQueryEngine {
                 key: kg_name.clone(),
             })
             .await
-            .map_err(|e| ProtocolError::PostgresError(format!("Actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::PostgresError(format!("Actor error: {e}")))?;
 
         // Create GraphRAG query
         let query = GraphRAGQuery {
@@ -175,7 +174,7 @@ impl GraphRAGQueryEngine {
         let result: GraphRAGQueryResult = actor_ref
             .invoke("query_rag", vec![serde_json::to_value(query).unwrap()])
             .await
-            .map_err(|e| ProtocolError::PostgresError(format!("RAG query failed: {}", e)))?;
+            .map_err(|e| ProtocolError::PostgresError(format!("RAG query failed: {e}")))?;
 
         // Format as PostgreSQL result
         let columns = vec![
@@ -216,7 +215,7 @@ impl GraphRAGQueryEngine {
                 key: kg_name.clone(),
             })
             .await
-            .map_err(|e| ProtocolError::PostgresError(format!("Actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::PostgresError(format!("Actor error: {e}")))?;
 
         // Create extraction request
         let request = GraphRAGDocumentRequest {
@@ -235,9 +234,7 @@ impl GraphRAGQueryEngine {
                 vec![serde_json::to_value(request).unwrap()],
             )
             .await
-            .map_err(|e| {
-                ProtocolError::PostgresError(format!("Entity extraction failed: {}", e))
-            })?;
+            .map_err(|e| ProtocolError::PostgresError(format!("Entity extraction failed: {e}")))?;
 
         // Format as PostgreSQL result
         let columns = vec![
@@ -272,7 +269,7 @@ impl GraphRAGQueryEngine {
                 key: kg_name.clone(),
             })
             .await
-            .map_err(|e| ProtocolError::PostgresError(format!("Actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::PostgresError(format!("Actor error: {e}")))?;
 
         // Create reasoning query
         let reasoning_query = ReasoningQuery {
@@ -291,7 +288,7 @@ impl GraphRAGQueryEngine {
                 vec![serde_json::to_value(reasoning_query).unwrap()],
             )
             .await
-            .map_err(|e| ProtocolError::PostgresError(format!("Reasoning failed: {}", e)))?;
+            .map_err(|e| ProtocolError::PostgresError(format!("Reasoning failed: {e}")))?;
 
         // Format as PostgreSQL result - one row per path
         let columns = vec![
@@ -355,13 +352,13 @@ impl GraphRAGQueryEngine {
                 key: kg_name.clone(),
             })
             .await
-            .map_err(|e| ProtocolError::PostgresError(format!("Actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::PostgresError(format!("Actor error: {e}")))?;
 
         // Get statistics
         let stats: GraphRAGStats = actor_ref
             .invoke("get_stats", vec![])
             .await
-            .map_err(|e| ProtocolError::PostgresError(format!("Failed to get stats: {}", e)))?;
+            .map_err(|e| ProtocolError::PostgresError(format!("Failed to get stats: {e}")))?;
 
         // Format as PostgreSQL result
         let columns = vec![

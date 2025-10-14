@@ -112,7 +112,7 @@ impl ExpressionEvaluator {
 
             Expression::Parameter(param_num) => {
                 // TODO: Handle prepared statement parameters
-                Ok(SqlValue::Text(format!("${}", param_num)))
+                Ok(SqlValue::Text(format!("${param_num}")))
             }
 
             Expression::Binary {
@@ -220,8 +220,7 @@ impl ExpressionEvaluator {
         }
 
         Err(ProtocolError::PostgresError(format!(
-            "Column '{}' not found",
-            column_name
+            "Column '{column_name}' not found"
         )))
     }
 
@@ -283,7 +282,7 @@ impl ExpressionEvaluator {
 
             _ => Err(ProtocolError::not_implemented(
                 "Binary operator",
-                &format!("{:?}", operator),
+                &format!("{operator:?}"),
             )),
         }
     }
@@ -317,7 +316,7 @@ impl ExpressionEvaluator {
             ))),
             _ => Err(ProtocolError::not_implemented(
                 "Unary operator",
-                &format!("{:?}", operator),
+                &format!("{operator:?}"),
             )),
         }
     }
@@ -533,8 +532,7 @@ impl ExpressionEvaluator {
                 }
                 "^" => Ok(SqlValue::DoublePrecision((*a as f64).powf(*b as f64))),
                 _ => Err(ProtocolError::PostgresError(format!(
-                    "Unknown arithmetic operator: {}",
-                    op
+                    "Unknown arithmetic operator: {op}"
                 ))),
             },
             (SqlValue::DoublePrecision(a), SqlValue::DoublePrecision(b)) => match op {
@@ -551,8 +549,7 @@ impl ExpressionEvaluator {
                 "%" => Ok(SqlValue::DoublePrecision(a % b)),
                 "^" => Ok(SqlValue::DoublePrecision(a.powf(*b))),
                 _ => Err(ProtocolError::PostgresError(format!(
-                    "Unknown arithmetic operator: {}",
-                    op
+                    "Unknown arithmetic operator: {op}"
                 ))),
             },
             // Type coercion for mixed types
@@ -563,8 +560,7 @@ impl ExpressionEvaluator {
                 self.arithmetic_op(left, &SqlValue::DoublePrecision(*b as f64), op)
             }
             _ => Err(ProtocolError::PostgresError(format!(
-                "Cannot perform arithmetic operation {} on {:?} and {:?}",
-                op, left, right
+                "Cannot perform arithmetic operation {op} on {left:?} and {right:?}"
             ))),
         }
     }
@@ -595,8 +591,7 @@ impl ExpressionEvaluator {
                 .ok_or_else(|| ProtocolError::PostgresError("Cannot compare values".to_string())),
 
             _ => Err(ProtocolError::PostgresError(format!(
-                "Cannot compare {:?} and {:?}",
-                left, right
+                "Cannot compare {left:?} and {right:?}"
             ))),
         }
     }
@@ -646,7 +641,7 @@ impl ExpressionEvaluator {
 
         let left_str = left.to_postgres_string();
         let right_str = right.to_postgres_string();
-        Ok(SqlValue::Text(format!("{}{}", left_str, right_str)))
+        Ok(SqlValue::Text(format!("{left_str}{right_str}")))
     }
 
     fn negate_value(&self, value: &SqlValue) -> ProtocolResult<SqlValue> {
@@ -657,8 +652,7 @@ impl ExpressionEvaluator {
             SqlValue::Real(f) => Ok(SqlValue::Real(-f)),
             SqlValue::Null => Ok(SqlValue::Null),
             _ => Err(ProtocolError::PostgresError(format!(
-                "Cannot negate {:?}",
-                value
+                "Cannot negate {value:?}"
             ))),
         }
     }

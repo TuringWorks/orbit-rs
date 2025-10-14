@@ -534,7 +534,7 @@ impl IndexRecommendationEngine {
                 let stats_manager = self.statistics_manager.read().await;
                 if let Some(table_stats) = stats_manager.get_table_statistics(table).await {
                     let index_spec = RecommendedIndex {
-                        index_name: format!("idx_{}_composite", table),
+                        index_name: format!("idx_{table}_composite"),
                         index_type: IndexType::BTree, // Multi-column indexes are typically B-Tree
                         columns: columns.clone(),
                         included_columns: vec![],
@@ -1070,7 +1070,7 @@ impl QueryPatternAnalyzer {
                     refs.push(ColumnReference {
                         table: "unknown".to_string(),
                         column: col.clone(),
-                        operator: format!("{:?}", operator),
+                        operator: format!("{operator:?}"),
                         selectivity_estimate: self.estimate_operator_selectivity(operator),
                     });
                 }

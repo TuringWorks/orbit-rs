@@ -165,7 +165,7 @@ impl JsonSchema {
             if !s.contains(pattern) {
                 errors.push(ValidationError {
                     path: path.to_string(),
-                    message: format!("String does not match pattern: {}", pattern),
+                    message: format!("String does not match pattern: {pattern}"),
                 });
             }
         }
@@ -176,7 +176,7 @@ impl JsonSchema {
             if n < min {
                 errors.push(ValidationError {
                     path: path.to_string(),
-                    message: format!("Number {} is less than minimum {}", n, min),
+                    message: format!("Number {n} is less than minimum {min}"),
                 });
             }
         }
@@ -185,7 +185,7 @@ impl JsonSchema {
             if n > max {
                 errors.push(ValidationError {
                     path: path.to_string(),
-                    message: format!("Number {} exceeds maximum {}", n, max),
+                    message: format!("Number {n} exceeds maximum {max}"),
                 });
             }
         }
@@ -195,9 +195,9 @@ impl JsonSchema {
         if let Some(items_schema) = &self.items {
             for (i, item) in arr.iter().enumerate() {
                 let item_path = if path.is_empty() {
-                    format!("[{}]", i)
+                    format!("[{i}]")
                 } else {
-                    format!("{}[{}]", path, i)
+                    format!("{path}[{i}]")
                 };
                 items_schema.validate_recursive(item, &item_path, errors);
             }
@@ -216,7 +216,7 @@ impl JsonSchema {
                 if !obj.contains_key(req_prop) {
                     errors.push(ValidationError {
                         path: path.to_string(),
-                        message: format!("Required property '{}' is missing", req_prop),
+                        message: format!("Required property '{req_prop}' is missing"),
                     });
                 }
             }
@@ -228,7 +228,7 @@ impl JsonSchema {
                 let prop_path = if path.is_empty() {
                     key.clone()
                 } else {
-                    format!("{}.{}", path, key)
+                    format!("{path}.{key}")
                 };
 
                 if let Some(prop_schema) = properties.get(key) {

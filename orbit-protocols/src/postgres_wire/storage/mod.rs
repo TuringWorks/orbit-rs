@@ -314,13 +314,12 @@ pub trait StorageSerializable {
 impl StorageSerializable for TableSchema {
     fn to_storage_bytes(&self) -> ProtocolResult<Vec<u8>> {
         serde_json::to_vec(self)
-            .map_err(|e| ProtocolError::SerializationError(format!("Serialization failed: {}", e)))
+            .map_err(|e| ProtocolError::SerializationError(format!("Serialization failed: {e}")))
     }
 
     fn from_storage_bytes(bytes: &[u8]) -> ProtocolResult<Self> {
-        serde_json::from_slice(bytes).map_err(|e| {
-            ProtocolError::SerializationError(format!("Deserialization failed: {}", e))
-        })
+        serde_json::from_slice(bytes)
+            .map_err(|e| ProtocolError::SerializationError(format!("Deserialization failed: {e}")))
     }
 }
 
@@ -357,7 +356,7 @@ impl StorageSerializable for HashMap<String, SqlValue> {
         }
 
         serde_json::to_vec(&JsonValue::Object(map))
-            .map_err(|e| ProtocolError::SerializationError(format!("Serialization failed: {}", e)))
+            .map_err(|e| ProtocolError::SerializationError(format!("Serialization failed: {e}")))
     }
 
     fn from_storage_bytes(bytes: &[u8]) -> ProtocolResult<Self> {
@@ -365,7 +364,7 @@ impl StorageSerializable for HashMap<String, SqlValue> {
         use serde_json::Value as JsonValue;
 
         let v: JsonValue = serde_json::from_slice(bytes).map_err(|e| {
-            ProtocolError::SerializationError(format!("Deserialization failed: {}", e))
+            ProtocolError::SerializationError(format!("Deserialization failed: {e}"))
         })?;
 
         let mut result = HashMap::new();
@@ -377,8 +376,7 @@ impl StorageSerializable for HashMap<String, SqlValue> {
                             base64::prelude::Engine::decode(&base64::prelude::BASE64_STANDARD, b64)
                                 .map_err(|e| {
                                     ProtocolError::SerializationError(format!(
-                                        "base64 decode failed: {}",
-                                        e
+                                        "base64 decode failed: {e}"
                                     ))
                                 })?;
                         let jv = jsonb::decode_jsonb(&bytes)?;
@@ -403,64 +401,59 @@ impl StorageSerializable for HashMap<String, SqlValue> {
 impl StorageSerializable for IndexSchema {
     fn to_storage_bytes(&self) -> ProtocolResult<Vec<u8>> {
         serde_json::to_vec(self)
-            .map_err(|e| ProtocolError::SerializationError(format!("Serialization failed: {}", e)))
+            .map_err(|e| ProtocolError::SerializationError(format!("Serialization failed: {e}")))
     }
 
     fn from_storage_bytes(bytes: &[u8]) -> ProtocolResult<Self> {
-        serde_json::from_slice(bytes).map_err(|e| {
-            ProtocolError::SerializationError(format!("Deserialization failed: {}", e))
-        })
+        serde_json::from_slice(bytes)
+            .map_err(|e| ProtocolError::SerializationError(format!("Deserialization failed: {e}")))
     }
 }
 
 impl StorageSerializable for ViewSchema {
     fn to_storage_bytes(&self) -> ProtocolResult<Vec<u8>> {
         serde_json::to_vec(self)
-            .map_err(|e| ProtocolError::SerializationError(format!("Serialization failed: {}", e)))
+            .map_err(|e| ProtocolError::SerializationError(format!("Serialization failed: {e}")))
     }
 
     fn from_storage_bytes(bytes: &[u8]) -> ProtocolResult<Self> {
-        serde_json::from_slice(bytes).map_err(|e| {
-            ProtocolError::SerializationError(format!("Deserialization failed: {}", e))
-        })
+        serde_json::from_slice(bytes)
+            .map_err(|e| ProtocolError::SerializationError(format!("Deserialization failed: {e}")))
     }
 }
 
 impl StorageSerializable for SchemaDefinition {
     fn to_storage_bytes(&self) -> ProtocolResult<Vec<u8>> {
         serde_json::to_vec(self)
-            .map_err(|e| ProtocolError::SerializationError(format!("Serialization failed: {}", e)))
+            .map_err(|e| ProtocolError::SerializationError(format!("Serialization failed: {e}")))
     }
 
     fn from_storage_bytes(bytes: &[u8]) -> ProtocolResult<Self> {
-        serde_json::from_slice(bytes).map_err(|e| {
-            ProtocolError::SerializationError(format!("Deserialization failed: {}", e))
-        })
+        serde_json::from_slice(bytes)
+            .map_err(|e| ProtocolError::SerializationError(format!("Deserialization failed: {e}")))
     }
 }
 
 impl StorageSerializable for ExtensionDefinition {
     fn to_storage_bytes(&self) -> ProtocolResult<Vec<u8>> {
         serde_json::to_vec(self)
-            .map_err(|e| ProtocolError::SerializationError(format!("Serialization failed: {}", e)))
+            .map_err(|e| ProtocolError::SerializationError(format!("Serialization failed: {e}")))
     }
 
     fn from_storage_bytes(bytes: &[u8]) -> ProtocolResult<Self> {
-        serde_json::from_slice(bytes).map_err(|e| {
-            ProtocolError::SerializationError(format!("Deserialization failed: {}", e))
-        })
+        serde_json::from_slice(bytes)
+            .map_err(|e| ProtocolError::SerializationError(format!("Deserialization failed: {e}")))
     }
 }
 
 impl StorageSerializable for Vec<HashMap<String, SqlValue>> {
     fn to_storage_bytes(&self) -> ProtocolResult<Vec<u8>> {
         serde_json::to_vec(self)
-            .map_err(|e| ProtocolError::SerializationError(format!("Serialization failed: {}", e)))
+            .map_err(|e| ProtocolError::SerializationError(format!("Serialization failed: {e}")))
     }
 
     fn from_storage_bytes(bytes: &[u8]) -> ProtocolResult<Self> {
-        serde_json::from_slice(bytes).map_err(|e| {
-            ProtocolError::SerializationError(format!("Deserialization failed: {}", e))
-        })
+        serde_json::from_slice(bytes)
+            .map_err(|e| ProtocolError::SerializationError(format!("Deserialization failed: {e}")))
     }
 }

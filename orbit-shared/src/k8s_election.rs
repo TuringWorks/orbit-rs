@@ -238,7 +238,7 @@ impl UniversalElectionManager {
                 NodeDiscoveryMethod::Static(nodes) => Ok(nodes
                     .iter()
                     .enumerate()
-                    .map(|(i, _addr)| NodeId::new(format!("node-{}", i), "cluster".to_string()))
+                    .map(|(i, _addr)| NodeId::new(format!("node-{i}"), "cluster".to_string()))
                     .collect()),
                 NodeDiscoveryMethod::Dns(dns_name) => Self::discover_dns_nodes(dns_name).await,
                 _ => {
@@ -262,7 +262,7 @@ impl UniversalElectionManager {
             .unwrap_or(3);
 
         let nodes: Vec<NodeId> = (0..pod_count)
-            .map(|i| NodeId::new(format!("orbit-server-{}", i), namespace.to_string()))
+            .map(|i| NodeId::new(format!("orbit-server-{i}"), namespace.to_string()))
             .collect();
 
         info!("Discovered {} Kubernetes nodes", nodes.len());
@@ -301,12 +301,7 @@ impl UniversalElectionManager {
             .unwrap_or(3);
 
         let nodes: Vec<NodeId> = (1..=replica_count)
-            .map(|i| {
-                NodeId::new(
-                    format!("{}_{}_{}", project, service, i),
-                    "compose".to_string(),
-                )
-            })
+            .map(|i| NodeId::new(format!("{project}_{service}_{i}"), "compose".to_string()))
             .collect();
 
         info!("Discovered {} Docker Compose nodes", nodes.len());
@@ -714,7 +709,7 @@ impl MockLeaseClient {
     }
 
     fn lease_key(namespace: &str, name: &str) -> String {
-        format!("{}/{}", namespace, name)
+        format!("{namespace}/{name}")
     }
 }
 

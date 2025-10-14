@@ -194,8 +194,7 @@ impl QueryEngine {
             self.parse_delete(&original_sql)
         } else {
             Err(ProtocolError::PostgresError(format!(
-                "Unsupported SQL statement: {}",
-                sql
+                "Unsupported SQL statement: {sql}"
             )))
         }
     }
@@ -522,8 +521,7 @@ impl QueryEngine {
     ) -> ProtocolResult<QueryResult> {
         if table.to_uppercase() != "ACTORS" {
             return Err(ProtocolError::PostgresError(format!(
-                "Unknown table: {}",
-                table
+                "Unknown table: {table}"
             )));
         }
 
@@ -586,8 +584,7 @@ impl QueryEngine {
     ) -> ProtocolResult<QueryResult> {
         if table.to_uppercase() != "ACTORS" {
             return Err(ProtocolError::PostgresError(format!(
-                "Unknown table: {}",
-                table
+                "Unknown table: {table}"
             )));
         }
 
@@ -639,8 +636,7 @@ impl QueryEngine {
     ) -> ProtocolResult<QueryResult> {
         if table.to_uppercase() != "ACTORS" {
             return Err(ProtocolError::PostgresError(format!(
-                "Unknown table: {}",
-                table
+                "Unknown table: {table}"
             )));
         }
 
@@ -682,8 +678,7 @@ impl QueryEngine {
     ) -> ProtocolResult<QueryResult> {
         if table.to_uppercase() != "ACTORS" {
             return Err(ProtocolError::PostgresError(format!(
-                "Unknown table: {}",
-                table
+                "Unknown table: {table}"
             )));
         }
 

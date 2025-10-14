@@ -40,13 +40,13 @@ pub enum ExecutionError {
 impl fmt::Display for ExecutionError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ExecutionError::PlanningError(msg) => write!(f, "Planning error: {}", msg),
-            ExecutionError::RuntimeError(msg) => write!(f, "Runtime error: {}", msg),
-            ExecutionError::AuthorizationError(msg) => write!(f, "Authorization error: {}", msg),
-            ExecutionError::ResourceExhausted(msg) => write!(f, "Resource exhausted: {}", msg),
-            ExecutionError::NetworkError(msg) => write!(f, "Network error: {}", msg),
-            ExecutionError::TimeoutError(msg) => write!(f, "Timeout error: {}", msg),
-            ExecutionError::Internal(msg) => write!(f, "Internal error: {}", msg),
+            ExecutionError::PlanningError(msg) => write!(f, "Planning error: {msg}"),
+            ExecutionError::RuntimeError(msg) => write!(f, "Runtime error: {msg}"),
+            ExecutionError::AuthorizationError(msg) => write!(f, "Authorization error: {msg}"),
+            ExecutionError::ResourceExhausted(msg) => write!(f, "Resource exhausted: {msg}"),
+            ExecutionError::NetworkError(msg) => write!(f, "Network error: {msg}"),
+            ExecutionError::TimeoutError(msg) => write!(f, "Timeout error: {msg}"),
+            ExecutionError::Internal(msg) => write!(f, "Internal error: {msg}"),
         }
     }
 }
@@ -365,8 +365,7 @@ impl QueryExecutor {
             Ok(result)
         } else {
             Err(ExecutionError::RuntimeError(format!(
-                "Table {} not found",
-                table
+                "Table {table} not found"
             )))
         }
     }
@@ -395,7 +394,7 @@ impl QueryExecutor {
             for right_row in &right_rows {
                 let mut joined_row = left_row.clone();
                 for (key, value) in right_row {
-                    joined_row.insert(format!("right_{}", key), value.clone());
+                    joined_row.insert(format!("right_{key}"), value.clone());
                 }
                 result.push(joined_row);
             }

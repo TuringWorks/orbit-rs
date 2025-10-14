@@ -936,7 +936,7 @@ fn parse_index_type(parser: &mut SqlParser) -> ParseResult<IndexType> {
                 "GIN" => IndexType::Gin,
                 _ => {
                     return Err(ParseError {
-                        message: format!("Unknown index method: {}", method),
+                        message: format!("Unknown index method: {method}"),
                         position: parser.position,
                         expected: vec!["BTREE, HASH, GIST, GIN, IVFFLAT, or HNSW".to_string()],
                         found: parser.current_token.clone(),

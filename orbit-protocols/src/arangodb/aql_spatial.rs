@@ -116,8 +116,7 @@ impl AQLSpatialExecutor {
             "FULLTEXT" => self.fulltext_spatial(args).await,
 
             _ => Err(SpatialError::OperationError(format!(
-                "Unknown AQL spatial function: {}",
-                function_name
+                "Unknown AQL spatial function: {function_name}"
             ))),
         }
     }
@@ -671,8 +670,7 @@ impl AQLSpatialExecutor {
             Ok(())
         } else {
             Err(SpatialError::OperationError(format!(
-                "Collection {} not found",
-                collection_name
+                "Collection {collection_name} not found"
             )))
         }
     }
@@ -684,7 +682,7 @@ impl AQLSpatialExecutor {
         field: String,
         index_type: SpatialIndexType,
     ) -> Result<String, SpatialError> {
-        let index_name = format!("{}_{}_spatial", collection_name, field);
+        let index_name = format!("{collection_name}_{field}_spatial");
         let index = SpatialIndex {
             name: index_name.clone(),
             collection: collection_name.clone(),

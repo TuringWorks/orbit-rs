@@ -461,52 +461,319 @@ async fn create_stateful_set(
 ) -> Result<()> {
     let statefulsets: Api<StatefulSet> = Api::namespaced(client.clone(), ns);
 
-    // Build environment variables
+    let env_vars = build_environment_variables(cluster, name);
+    let pod_spec = build_pod_spec(cluster, name, env_vars);
+    let statefulset_spec = build_statefulset_spec(cluster, name, pod_spec);
+    let statefulset = build_statefulset_resource(cluster, ns, name, statefulset_spec);
+
+    deploy_statefulset(&statefulsets, &statefulset, name).await
+}
+
+/// Build environment variables for the Orbit cluster
+fn build_environment_variables(
+    cluster: &OrbitCluster,
+    name: &str,
+) -> Vec<k8s_openapi::api::core::v1::EnvVar> {
     let mut env_vars = vec![
-        k8s_openapi::api::core::v1::EnvVar {
-            name: "POD_NAME".to_string(),
-            value_from: Some(k8s_openapi::api::core::v1::EnvVarSource {
-                field_ref: Some(k8s_openapi::api::core::v1::ObjectFieldSelector {
-                    field_path: "metadata.name".to_string(),
-                    ..Default::default()
-                }),
-                ..Default::default()
-            }),
-            ..Default::default()
-        },
-        k8s_openapi::api::core::v1::EnvVar {
-            name: "POD_NAMESPACE".to_string(),
-            value_from: Some(k8s_openapi::api::core::v1::EnvVarSource {
-                field_ref: Some(k8s_openapi::api::core::v1::ObjectFieldSelector {
-                    field_path: "metadata.namespace".to_string(),
-                    ..Default::default()
-                }),
-                ..Default::default()
-            }),
-            ..Default::default()
-        },
-        k8s_openapi::api::core::v1::EnvVar {
-            name: "ORBIT_CLUSTER_NAME".to_string(),
-            value: Some(name.to_string()),
-            ..Default::default()
-        },
-        k8s_openapi::api::core::v1::EnvVar {
-            name: "ORBIT_REPLICA_COUNT".to_string(),
-            value: Some(cluster.spec.replicas.to_string()),
-            ..Default::default()
-        },
+        create_pod_env_var("POD_NAME", "metadata.name"),
+        create_pod_env_var("POD_NAMESPACE", "metadata.namespace"),
+        create_simple_env_var("ORBIT_CLUSTER_NAME", name),
+        create_simple_env_var("ORBIT_REPLICA_COUNT", &cluster.spec.replicas.to_string()),
     ];
 
     // Add custom environment variables
     for (key, value) in &cluster.spec.env {
-        env_vars.push(k8s_openapi::api::core::v1::EnvVar {
-            name: key.clone(),
-            value: Some(value.clone()),
-            ..Default::default()
-        });
+        env_vars.push(create_simple_env_var(key, value));
     }
 
-    let statefulset = StatefulSet {
+    env_vars
+}
+
+/// Create environment variable from pod metadata
+fn create_pod_env_var(name: &str, field_path: &str) -> k8s_openapi::api::core::v1::EnvVar {
+    k8s_openapi::api::core::v1::EnvVar {
+        name: name.to_string(),
+        value_from: Some(k8s_openapi::api::core::v1::EnvVarSource {
+            field_ref: Some(k8s_openapi::api::core::v1::ObjectFieldSelector {
+                field_path: field_path.to_string(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        }),
+        ..Default::default()
+    }
+}
+
+/// Create simple environment variable with value
+fn create_simple_env_var(name: &str, value: &str) -> k8s_openapi::api::core::v1::EnvVar {
+    k8s_openapi::api::core::v1::EnvVar {
+        name: name.to_string(),
+        value: Some(value.to_string()),
+        ..Default::default()
+    }
+}
+
+/// Build the pod specification
+fn build_pod_spec(
+    cluster: &OrbitCluster,
+    name: &str,
+    env_vars: Vec<k8s_openapi::api::core::v1::EnvVar>,
+) -> PodSpec {
+    PodSpec {
+        service_account_name: Some(name.to_string()),
+        containers: vec![build_orbit_container(cluster, env_vars)],
+        volumes: Some(build_pod_volumes(name)),
+        ..Default::default()
+    }
+}
+
+/// Build the main Orbit server container
+fn build_orbit_container(
+    cluster: &OrbitCluster,
+    env_vars: Vec<k8s_openapi::api::core::v1::EnvVar>,
+) -> k8s_openapi::api::core::v1::Container {
+    k8s_openapi::api::core::v1::Container {
+        name: "orbit-server".to_string(),
+        image: Some(format!(
+            "{}:{}",
+            cluster.spec.image.repository, cluster.spec.image.tag
+        )),
+        image_pull_policy: Some(cluster.spec.image.pull_policy.clone()),
+        ports: Some(build_container_ports(cluster)),
+        env: Some(env_vars),
+        volume_mounts: Some(build_volume_mounts()),
+        resources: Some(build_resource_requirements(cluster)),
+        liveness_probe: Some(build_liveness_probe()),
+        readiness_probe: Some(build_readiness_probe()),
+        ..Default::default()
+    }
+}
+
+/// Build container ports
+fn build_container_ports(cluster: &OrbitCluster) -> Vec<k8s_openapi::api::core::v1::ContainerPort> {
+    vec![
+        k8s_openapi::api::core::v1::ContainerPort {
+            name: Some("grpc".to_string()),
+            container_port: cluster.spec.service.grpc_port as i32,
+            protocol: Some("TCP".to_string()),
+            ..Default::default()
+        },
+        k8s_openapi::api::core::v1::ContainerPort {
+            name: Some("health".to_string()),
+            container_port: cluster.spec.service.health_port as i32,
+            protocol: Some("TCP".to_string()),
+            ..Default::default()
+        },
+        k8s_openapi::api::core::v1::ContainerPort {
+            name: Some("metrics".to_string()),
+            container_port: cluster.spec.service.metrics_port as i32,
+            protocol: Some("TCP".to_string()),
+            ..Default::default()
+        },
+    ]
+}
+
+/// Build volume mounts
+fn build_volume_mounts() -> Vec<k8s_openapi::api::core::v1::VolumeMount> {
+    vec![
+        k8s_openapi::api::core::v1::VolumeMount {
+            name: "data".to_string(),
+            mount_path: "/app/data".to_string(),
+            ..Default::default()
+        },
+        k8s_openapi::api::core::v1::VolumeMount {
+            name: "config".to_string(),
+            mount_path: "/app/config".to_string(),
+            read_only: Some(true),
+            ..Default::default()
+        },
+    ]
+}
+
+/// Build resource requirements
+fn build_resource_requirements(
+    cluster: &OrbitCluster,
+) -> k8s_openapi::api::core::v1::ResourceRequirements {
+    k8s_openapi::api::core::v1::ResourceRequirements {
+        requests: Some({
+            let mut requests = BTreeMap::new();
+            requests.insert(
+                "cpu".to_string(),
+                k8s_openapi::apimachinery::pkg::api::resource::Quantity(
+                    cluster.spec.resources.cpu_request.clone(),
+                ),
+            );
+            requests.insert(
+                "memory".to_string(),
+                k8s_openapi::apimachinery::pkg::api::resource::Quantity(
+                    cluster.spec.resources.memory_request.clone(),
+                ),
+            );
+            requests
+        }),
+        limits: Some({
+            let mut limits = BTreeMap::new();
+            limits.insert(
+                "cpu".to_string(),
+                k8s_openapi::apimachinery::pkg::api::resource::Quantity(
+                    cluster.spec.resources.cpu_limit.clone(),
+                ),
+            );
+            limits.insert(
+                "memory".to_string(),
+                k8s_openapi::apimachinery::pkg::api::resource::Quantity(
+                    cluster.spec.resources.memory_limit.clone(),
+                ),
+            );
+            limits
+        }),
+        ..Default::default()
+    }
+}
+
+/// Build liveness probe
+fn build_liveness_probe() -> k8s_openapi::api::core::v1::Probe {
+    k8s_openapi::api::core::v1::Probe {
+        http_get: Some(k8s_openapi::api::core::v1::HTTPGetAction {
+            path: Some("/health/live".to_string()),
+            port: k8s_openapi::apimachinery::pkg::util::intstr::IntOrString::String(
+                "health".to_string(),
+            ),
+            ..Default::default()
+        }),
+        initial_delay_seconds: Some(30),
+        period_seconds: Some(30),
+        timeout_seconds: Some(5),
+        failure_threshold: Some(3),
+        success_threshold: Some(1),
+        ..Default::default()
+    }
+}
+
+/// Build readiness probe
+fn build_readiness_probe() -> k8s_openapi::api::core::v1::Probe {
+    k8s_openapi::api::core::v1::Probe {
+        http_get: Some(k8s_openapi::api::core::v1::HTTPGetAction {
+            path: Some("/health/ready".to_string()),
+            port: k8s_openapi::apimachinery::pkg::util::intstr::IntOrString::String(
+                "health".to_string(),
+            ),
+            ..Default::default()
+        }),
+        initial_delay_seconds: Some(10),
+        period_seconds: Some(10),
+        timeout_seconds: Some(3),
+        failure_threshold: Some(3),
+        success_threshold: Some(1),
+        ..Default::default()
+    }
+}
+
+/// Build pod volumes
+fn build_pod_volumes(name: &str) -> Vec<k8s_openapi::api::core::v1::Volume> {
+    vec![k8s_openapi::api::core::v1::Volume {
+        name: "config".to_string(),
+        config_map: Some(k8s_openapi::api::core::v1::ConfigMapVolumeSource {
+            name: format!("{}-config", name),
+            default_mode: Some(0o644),
+            ..Default::default()
+        }),
+        ..Default::default()
+    }]
+}
+
+/// Build StatefulSet specification
+fn build_statefulset_spec(
+    cluster: &OrbitCluster,
+    name: &str,
+    pod_spec: PodSpec,
+) -> StatefulSetSpec {
+    StatefulSetSpec {
+        service_name: format!("{}-headless", name),
+        replicas: Some(cluster.spec.replicas),
+        selector: k8s_openapi::apimachinery::pkg::apis::meta::v1::LabelSelector {
+            match_labels: Some(create_selector_labels(cluster)),
+            ..Default::default()
+        },
+        template: PodTemplateSpec {
+            metadata: Some(build_pod_template_metadata(cluster)),
+            spec: Some(pod_spec),
+        },
+        volume_claim_templates: build_volume_claim_templates(cluster, name),
+        ..Default::default()
+    }
+}
+
+/// Build pod template metadata
+fn build_pod_template_metadata(
+    cluster: &OrbitCluster,
+) -> k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta {
+    k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta {
+        labels: Some(create_labels(cluster)),
+        annotations: Some(build_pod_annotations(cluster)),
+        ..Default::default()
+    }
+}
+
+/// Build pod annotations
+fn build_pod_annotations(cluster: &OrbitCluster) -> BTreeMap<String, String> {
+    let mut annotations = BTreeMap::new();
+    if cluster.spec.monitoring.enabled {
+        annotations.insert("prometheus.io/scrape".to_string(), "true".to_string());
+        annotations.insert(
+            "prometheus.io/port".to_string(),
+            cluster.spec.service.metrics_port.to_string(),
+        );
+        annotations.insert("prometheus.io/path".to_string(), "/metrics".to_string());
+    }
+    annotations
+}
+
+/// Build volume claim templates if storage is configured
+fn build_volume_claim_templates(
+    cluster: &OrbitCluster,
+    _name: &str,
+) -> Option<Vec<k8s_openapi::api::core::v1::PersistentVolumeClaim>> {
+    if cluster.spec.storage.size != "0" {
+        Some(vec![k8s_openapi::api::core::v1::PersistentVolumeClaim {
+            metadata: k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta {
+                name: Some("data".to_string()),
+                labels: Some(create_labels(cluster)),
+                ..Default::default()
+            },
+            spec: Some(PersistentVolumeClaimSpec {
+                access_modes: Some(vec![cluster.spec.storage.access_mode.clone()]),
+                storage_class_name: cluster.spec.storage.storage_class.clone(),
+                resources: Some(k8s_openapi::api::core::v1::VolumeResourceRequirements {
+                    requests: Some({
+                        let mut requests = BTreeMap::new();
+                        requests.insert(
+                            "storage".to_string(),
+                            k8s_openapi::apimachinery::pkg::api::resource::Quantity(
+                                cluster.spec.storage.size.clone(),
+                            ),
+                        );
+                        requests
+                    }),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            }),
+            ..Default::default()
+        }])
+    } else {
+        None
+    }
+}
+
+/// Build the complete StatefulSet resource
+fn build_statefulset_resource(
+    cluster: &OrbitCluster,
+    ns: &str,
+    name: &str,
+    spec: StatefulSetSpec,
+) -> StatefulSet {
+    StatefulSet {
         metadata: k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta {
             name: Some(name.to_string()),
             namespace: Some(ns.to_string()),
@@ -514,160 +781,23 @@ async fn create_stateful_set(
             owner_references: Some(vec![cluster.controller_owner_ref(&()).unwrap()]),
             ..Default::default()
         },
-        spec: Some(StatefulSetSpec {
-            service_name: format!("{}-headless", name),
-            replicas: Some(cluster.spec.replicas),
-            selector: k8s_openapi::apimachinery::pkg::apis::meta::v1::LabelSelector {
-                match_labels: Some(create_selector_labels(cluster)),
-                ..Default::default()
-            },
-            template: PodTemplateSpec {
-                metadata: Some(k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta {
-                    labels: Some(create_labels(cluster)),
-                    annotations: Some({
-                        let mut annotations = BTreeMap::new();
-                        if cluster.spec.monitoring.enabled {
-                            annotations.insert("prometheus.io/scrape".to_string(), "true".to_string());
-                            annotations.insert("prometheus.io/port".to_string(), cluster.spec.service.metrics_port.to_string());
-                            annotations.insert("prometheus.io/path".to_string(), "/metrics".to_string());
-                        }
-                        annotations
-                    }),
-                    ..Default::default()
-                }),
-                spec: Some(PodSpec {
-                    service_account_name: Some(name.to_string()),
-                    containers: vec![k8s_openapi::api::core::v1::Container {
-                        name: "orbit-server".to_string(),
-                        image: Some(format!("{}:{}", cluster.spec.image.repository, cluster.spec.image.tag)),
-                        image_pull_policy: Some(cluster.spec.image.pull_policy.clone()),
-                        ports: Some(vec![
-                            k8s_openapi::api::core::v1::ContainerPort {
-                                name: Some("grpc".to_string()),
-                                container_port: cluster.spec.service.grpc_port as i32,
-                                protocol: Some("TCP".to_string()),
-                                ..Default::default()
-                            },
-                            k8s_openapi::api::core::v1::ContainerPort {
-                                name: Some("health".to_string()),
-                                container_port: cluster.spec.service.health_port as i32,
-                                protocol: Some("TCP".to_string()),
-                                ..Default::default()
-                            },
-                            k8s_openapi::api::core::v1::ContainerPort {
-                                name: Some("metrics".to_string()),
-                                container_port: cluster.spec.service.metrics_port as i32,
-                                protocol: Some("TCP".to_string()),
-                                ..Default::default()
-                            },
-                        ]),
-                        env: Some(env_vars),
-                        volume_mounts: Some(vec![
-                            k8s_openapi::api::core::v1::VolumeMount {
-                                name: "data".to_string(),
-                                mount_path: "/app/data".to_string(),
-                                ..Default::default()
-                            },
-                            k8s_openapi::api::core::v1::VolumeMount {
-                                name: "config".to_string(),
-                                mount_path: "/app/config".to_string(),
-                                read_only: Some(true),
-                                ..Default::default()
-                            },
-                        ]),
-                        resources: Some(k8s_openapi::api::core::v1::ResourceRequirements {
-                            requests: Some({
-                                let mut requests = BTreeMap::new();
-                                requests.insert("cpu".to_string(), k8s_openapi::apimachinery::pkg::api::resource::Quantity(cluster.spec.resources.cpu_request.clone()));
-                                requests.insert("memory".to_string(), k8s_openapi::apimachinery::pkg::api::resource::Quantity(cluster.spec.resources.memory_request.clone()));
-                                requests
-                            }),
-                            limits: Some({
-                                let mut limits = BTreeMap::new();
-                                limits.insert("cpu".to_string(), k8s_openapi::apimachinery::pkg::api::resource::Quantity(cluster.spec.resources.cpu_limit.clone()));
-                                limits.insert("memory".to_string(), k8s_openapi::apimachinery::pkg::api::resource::Quantity(cluster.spec.resources.memory_limit.clone()));
-                                limits
-                            }),
-                            ..Default::default()
-                        }),
-                        liveness_probe: Some(k8s_openapi::api::core::v1::Probe {
-                            http_get: Some(k8s_openapi::api::core::v1::HTTPGetAction {
-                                path: Some("/health/live".to_string()),
-                                port: k8s_openapi::apimachinery::pkg::util::intstr::IntOrString::String("health".to_string()),
-                                ..Default::default()
-                            }),
-                            initial_delay_seconds: Some(30),
-                            period_seconds: Some(30),
-                            timeout_seconds: Some(5),
-                            failure_threshold: Some(3),
-                            success_threshold: Some(1),
-                            ..Default::default()
-                        }),
-                        readiness_probe: Some(k8s_openapi::api::core::v1::Probe {
-                            http_get: Some(k8s_openapi::api::core::v1::HTTPGetAction {
-                                path: Some("/health/ready".to_string()),
-                                port: k8s_openapi::apimachinery::pkg::util::intstr::IntOrString::String("health".to_string()),
-                                ..Default::default()
-                            }),
-                            initial_delay_seconds: Some(10),
-                            period_seconds: Some(10),
-                            timeout_seconds: Some(3),
-                            failure_threshold: Some(3),
-                            success_threshold: Some(1),
-                            ..Default::default()
-                        }),
-                        ..Default::default()
-                    }],
-                    volumes: Some(vec![
-                        k8s_openapi::api::core::v1::Volume {
-                            name: "config".to_string(),
-                            config_map: Some(k8s_openapi::api::core::v1::ConfigMapVolumeSource {
-                                name: format!("{}-config", name),
-                                default_mode: Some(0o644),
-                                ..Default::default()
-                            }),
-                            ..Default::default()
-                        },
-                    ]),
-                    ..Default::default()
-                }),
-            },
-            volume_claim_templates: if cluster.spec.storage.size != "0" {
-                Some(vec![k8s_openapi::api::core::v1::PersistentVolumeClaim {
-                    metadata: k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta {
-                        name: Some("data".to_string()),
-                        labels: Some(create_labels(cluster)),
-                        ..Default::default()
-                    },
-                    spec: Some(PersistentVolumeClaimSpec {
-                        access_modes: Some(vec![cluster.spec.storage.access_mode.clone()]),
-                        storage_class_name: cluster.spec.storage.storage_class.clone(),
-                        resources: Some(k8s_openapi::api::core::v1::VolumeResourceRequirements {
-                            requests: Some({
-                                let mut requests = BTreeMap::new();
-                                requests.insert("storage".to_string(), k8s_openapi::apimachinery::pkg::api::resource::Quantity(cluster.spec.storage.size.clone()));
-                                requests
-                            }),
-                            ..Default::default()
-                        }),
-                        ..Default::default()
-                    }),
-                    ..Default::default()
-                }])
-            } else {
-                None
-            },
-            ..Default::default()
-        }),
+        spec: Some(spec),
         ..Default::default()
-    };
+    }
+}
 
+/// Deploy the StatefulSet to Kubernetes
+async fn deploy_statefulset(
+    statefulsets: &Api<StatefulSet>,
+    statefulset: &StatefulSet,
+    name: &str,
+) -> Result<()> {
     let pp = PostParams::default();
-    match statefulsets.create(&pp, &statefulset).await {
+    match statefulsets.create(&pp, statefulset).await {
         Ok(_) => info!("Created StatefulSet {}", name),
         Err(kube::Error::Api(ae)) if ae.code == 409 => {
             // Update existing StatefulSet
-            let patch = Patch::Merge(&statefulset);
+            let patch = Patch::Merge(statefulset);
             statefulsets
                 .patch(name, &PatchParams::default(), &patch)
                 .await?;
@@ -680,7 +810,6 @@ async fn create_stateful_set(
             )))
         }
     }
-
     Ok(())
 }
 

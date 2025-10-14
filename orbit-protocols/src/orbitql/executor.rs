@@ -617,14 +617,12 @@ impl OrbitQLExecutor {
                     indexes.insert(query.name.clone(), spatial_index);
                 } else {
                     return Err(SpatialError::OperationError(format!(
-                        "Column {} is not a spatial column",
-                        column_name
+                        "Column {column_name} is not a spatial column"
                     )));
                 }
             } else {
                 return Err(SpatialError::OperationError(format!(
-                    "Table {} not found",
-                    on
+                    "Table {on} not found"
                 )));
             }
         }
@@ -874,7 +872,7 @@ impl OrbitQLExecutor {
             Expression::Literal(query_value) => Ok(self.query_value_to_json(query_value)),
             Expression::Identifier(name) => {
                 // For now, return a placeholder
-                Ok(Value::String(format!("column:{}", name)))
+                Ok(Value::String(format!("column:{name}")))
             }
             Expression::Function { name, args } => {
                 // Handle spatial functions (non-recursively)
@@ -1096,7 +1094,7 @@ impl OrbitQLExecutor {
                     ))
                 }
             }
-            _ => Ok(Value::String(format!("spatial_function:{}", name))),
+            _ => Ok(Value::String(format!("spatial_function:{name}"))),
         }
     }
 

@@ -203,7 +203,7 @@ impl SecureConfigManager {
     /// Get required configuration value
     pub fn get_required_config(&self, key: &str) -> Result<String, OrbitError> {
         self.get_config(key)?.ok_or_else(|| {
-            OrbitError::internal(format!("Required configuration key missing: {}", key))
+            OrbitError::internal(format!("Required configuration key missing: {key}"))
         })
     }
 }
@@ -360,7 +360,7 @@ impl AttackDetector {
         for pattern in patterns {
             compiled_patterns.push(
                 regex::Regex::new(pattern)
-                    .map_err(|e| OrbitError::internal(format!("Invalid regex pattern: {}", e)))?,
+                    .map_err(|e| OrbitError::internal(format!("Invalid regex pattern: {e}")))?,
             );
         }
 

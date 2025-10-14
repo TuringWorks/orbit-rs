@@ -69,7 +69,7 @@ impl ActorSnapshot {
         use sha2::{Digest, Sha256};
         let serialized = serde_json::to_string(data).unwrap_or_default();
         let hash = Sha256::digest(serialized.as_bytes());
-        format!("{:x}", hash)
+        format!("{hash:x}")
     }
 
     /// Verify integrity of the snapshot
@@ -425,7 +425,7 @@ impl ActorStateManager {
         version: u64,
     ) -> OrbitResult<()> {
         let state_data = serde_json::to_value(state)
-            .map_err(|e| OrbitError::internal(format!("Failed to serialize state: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("Failed to serialize state: {e}")))?;
 
         let snapshot = ActorSnapshot::new(actor_ref.clone(), state_data, version);
 
@@ -458,10 +458,7 @@ impl ActorStateManager {
                     // Cache for 1 minute
                     let state: T =
                         serde_json::from_value(snapshot.state_data.clone()).map_err(|e| {
-                            OrbitError::internal(format!(
-                                "Failed to deserialize cached state: {}",
-                                e
-                            ))
+                            OrbitError::internal(format!("Failed to deserialize cached state: {e}"))
                         })?;
                     return Ok(Some((state, snapshot.version)));
                 }
@@ -476,7 +473,7 @@ impl ActorStateManager {
             }
 
             let state: T = serde_json::from_value(snapshot.state_data.clone())
-                .map_err(|e| OrbitError::internal(format!("Failed to deserialize state: {}", e)))?;
+                .map_err(|e| OrbitError::internal(format!("Failed to deserialize state: {e}")))?;
 
             // Update cache
             {
@@ -514,7 +511,7 @@ impl ActorStateManager {
             }
 
             let state: T = serde_json::from_value(snapshot.state_data)
-                .map_err(|e| OrbitError::internal(format!("Failed to deserialize state: {}", e)))?;
+                .map_err(|e| OrbitError::internal(format!("Failed to deserialize state: {e}")))?;
 
             Ok(Some(state))
         } else {

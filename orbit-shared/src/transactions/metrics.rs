@@ -17,7 +17,7 @@ pub struct TransactionMetrics {
 
 impl TransactionMetrics {
     pub fn new(node_id: NodeId) -> Self {
-        let metrics_prefix = format!("orbit.transaction.{}", node_id);
+        let metrics_prefix = format!("orbit.transaction.{node_id}");
 
         info!(
             "Transaction metrics initialized with prefix: {}",
@@ -143,7 +143,7 @@ pub struct SagaMetrics {
 
 impl SagaMetrics {
     pub fn new(node_id: NodeId) -> Self {
-        let metrics_prefix = format!("orbit.saga.{}", node_id);
+        let metrics_prefix = format!("orbit.saga.{node_id}");
 
         info!("Saga metrics initialized with prefix: {}", metrics_prefix);
 
@@ -248,7 +248,7 @@ pub struct LockMetrics {
 
 impl LockMetrics {
     pub fn new(node_id: NodeId) -> Self {
-        let metrics_prefix = format!("orbit.locks.{}", node_id);
+        let metrics_prefix = format!("orbit.locks.{node_id}");
 
         info!("Lock metrics initialized with prefix: {}", metrics_prefix);
 

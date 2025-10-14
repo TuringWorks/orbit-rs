@@ -153,7 +153,7 @@ fn parse_privilege_list(parser: &mut SqlParser) -> ParseResult<Vec<Privilege>> {
             }
             Some(token) => {
                 return Err(ParseError {
-                    message: format!("Expected privilege name, found {:?}", token),
+                    message: format!("Expected privilege name, found {token:?}"),
                     position: parser.position,
                     expected: vec![
                         "ALL".to_string(),
@@ -222,7 +222,7 @@ fn parse_object_reference(parser: &mut SqlParser) -> ParseResult<(ObjectType, St
         }
         Some(token) => {
             return Err(ParseError {
-                message: format!("Expected object type, found {:?}", token),
+                message: format!("Expected object type, found {token:?}"),
                 position: parser.position,
                 expected: vec![
                     "TABLE".to_string(),
@@ -254,7 +254,7 @@ fn parse_object_reference(parser: &mut SqlParser) -> ParseResult<(ObjectType, St
         }
         Some(token) => {
             return Err(ParseError {
-                message: format!("Expected object name, found {:?}", token),
+                message: format!("Expected object name, found {token:?}"),
                 position: parser.position,
                 expected: vec!["identifier".to_string()],
                 found: Some(token.clone()),
@@ -290,7 +290,7 @@ fn parse_grantee_list(parser: &mut SqlParser) -> ParseResult<Vec<String>> {
             }
             Some(token) => {
                 return Err(ParseError {
-                    message: format!("Expected grantee name, found {:?}", token),
+                    message: format!("Expected grantee name, found {token:?}"),
                     position: parser.position,
                     expected: vec!["identifier".to_string(), "PUBLIC".to_string()],
                     found: Some(token.clone()),
