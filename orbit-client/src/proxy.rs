@@ -1,7 +1,7 @@
 //! Actor proxy generation and utilities
 
-use crate::*;
-use orbit_shared::*;
+use crate::{ActorReference, InvocationSystem};
+use orbit_shared::{Addressable, AddressableReference};
 use std::sync::Arc;
 
 /// Macro for generating actor proxy methods
@@ -58,6 +58,7 @@ impl<T: Addressable + ?Sized> ActorReferenceExt<T> for ActorReference<dyn Addres
 mod tests {
     use super::*;
     use async_trait::async_trait;
+    use orbit_shared::{Key, OrbitError, OrbitResult};
 
     // Example actor trait for testing
     #[async_trait]
