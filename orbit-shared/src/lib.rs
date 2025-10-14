@@ -124,6 +124,8 @@ pub use security::{
     RbacEngine, RoleBasedAccessControl, SamlAuthProvider, SecurityAction, SecurityContext,
     SecurityFramework, SecurityResource, SecuritySubject, SqlInjectionDetector, ThreatDetectionEngine,
     TlsConfig, TlsVersion,
+};
+
 // Re-export trigger functionality
 pub use triggers::{
     TriggerContext, TriggerCoordinator, TriggerDefinition, TriggerEvent, TriggerExecutor,
