@@ -523,7 +523,18 @@ impl RecoveryRaftEventHandler {
     async fn initiate_leader_recovery_scan(&self) -> OrbitResult<()> {
         info!("Starting leader recovery scan for orphaned transactions");
 
-        // Get all known coordinators and check their health
+        let failed_coordinators = self.identify_failed_coordinators().await;
+        let transactions_to_recover = self
+            .collect_transactions_for_recovery(&failed_coordinators)
+            .await?;
+        self.process_recovery_transactions(transactions_to_recover, failed_coordinators.len())
+            .await?;
+
+        Ok(())
+    }
+
+    /// Identify coordinators that have failed
+    async fn identify_failed_coordinators(&self) -> Vec<crate::mesh::NodeId> {
         let coordinators = self.recovery_manager.coordinators.read().await;
         let mut failed_coordinators = Vec::new();
 
@@ -533,9 +544,17 @@ impl RecoveryRaftEventHandler {
             }
         }
 
-        // Find transactions from failed coordinators that need recovery
+        failed_coordinators
+    }
+
+    /// Collect all transactions that need recovery from failed coordinators
+    async fn collect_transactions_for_recovery(
+        &self,
+        failed_coordinators: &[crate::mesh::NodeId],
+    ) -> OrbitResult<Vec<crate::recovery::TransactionCheckpoint>> {
         let mut all_transactions_to_recover = Vec::new();
-        for failed_coordinator in &failed_coordinators {
+
+        for failed_coordinator in failed_coordinators {
             let transactions = self
                 .recovery_manager
                 .find_transactions_needing_recovery(failed_coordinator)
@@ -543,16 +562,25 @@ impl RecoveryRaftEventHandler {
             all_transactions_to_recover.extend(transactions);
         }
 
-        if !all_transactions_to_recover.is_empty() {
+        Ok(all_transactions_to_recover)
+    }
+
+    /// Process the collected transactions for recovery
+    async fn process_recovery_transactions(
+        &self,
+        transactions_to_recover: Vec<crate::recovery::TransactionCheckpoint>,
+        failed_coordinators_count: usize,
+    ) -> OrbitResult<()> {
+        if !transactions_to_recover.is_empty() {
             info!(
                 "Found {} total transactions needing recovery from {} failed coordinators",
-                all_transactions_to_recover.len(),
-                failed_coordinators.len()
+                transactions_to_recover.len(),
+                failed_coordinators_count
             );
 
             // Since this node just became leader, it should take over these transactions
             self.recovery_manager
-                .become_coordinator(all_transactions_to_recover)
+                .become_coordinator(transactions_to_recover)
                 .await?;
         } else {
             info!("No orphaned transactions found during leader recovery scan");

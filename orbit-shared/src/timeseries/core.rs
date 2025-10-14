@@ -44,37 +44,58 @@ impl TimeSeriesEngine {
         config: &TimeSeriesConfig,
     ) -> Result<Box<dyn StorageEngine + Send + Sync>> {
         match &config.storage_backend {
-            StorageBackend::Memory => {
-                info!("Using in-memory storage backend");
-                Ok(Box::new(MemoryStorage::new(config.memory_limit_mb)))
-            }
-            StorageBackend::Redis => {
-                info!("Using Redis TimeSeries backend");
-                let redis_config = config
-                    .redis_config
-                    .as_ref()
-                    .ok_or_else(|| anyhow!("Redis config required for Redis backend"))?;
-                Ok(Box::new(RedisStorage::new(redis_config).await?))
-            }
-            StorageBackend::PostgreSQL => {
-                info!("Using PostgreSQL TimescaleDB backend");
-                let pg_config = config
-                    .postgresql_config
-                    .as_ref()
-                    .ok_or_else(|| anyhow!("PostgreSQL config required for PostgreSQL backend"))?;
-                Ok(Box::new(PostgreSQLStorage::new(pg_config).await?))
-            }
-            StorageBackend::HybridRedisPostgres => {
-                info!("Using hybrid Redis+PostgreSQL backend");
-                // TODO: Implement hybrid storage that uses Redis for hot data and PostgreSQL for cold data
-                Err(anyhow!("Hybrid storage not yet implemented"))
-            }
-            StorageBackend::CustomDisk => {
-                info!("Using custom disk storage backend");
-                // TODO: Implement custom high-performance disk storage
-                Err(anyhow!("Custom disk storage not yet implemented"))
-            }
+            StorageBackend::Memory => Self::create_memory_storage(config),
+            StorageBackend::Redis => Self::create_redis_storage(config).await,
+            StorageBackend::PostgreSQL => Self::create_postgresql_storage(config).await,
+            StorageBackend::HybridRedisPostgres => Self::create_hybrid_storage().await,
+            StorageBackend::CustomDisk => Self::create_custom_disk_storage().await,
         }
+    }
+
+    /// Create memory storage backend
+    fn create_memory_storage(
+        config: &TimeSeriesConfig,
+    ) -> Result<Box<dyn StorageEngine + Send + Sync>> {
+        info!("Using in-memory storage backend");
+        Ok(Box::new(MemoryStorage::new(config.memory_limit_mb)))
+    }
+
+    /// Create Redis storage backend
+    async fn create_redis_storage(
+        config: &TimeSeriesConfig,
+    ) -> Result<Box<dyn StorageEngine + Send + Sync>> {
+        info!("Using Redis TimeSeries backend");
+        let redis_config = config
+            .redis_config
+            .as_ref()
+            .ok_or_else(|| anyhow!("Redis config required for Redis backend"))?;
+        Ok(Box::new(RedisStorage::new(redis_config).await?))
+    }
+
+    /// Create PostgreSQL storage backend
+    async fn create_postgresql_storage(
+        config: &TimeSeriesConfig,
+    ) -> Result<Box<dyn StorageEngine + Send + Sync>> {
+        info!("Using PostgreSQL TimescaleDB backend");
+        let pg_config = config
+            .postgresql_config
+            .as_ref()
+            .ok_or_else(|| anyhow!("PostgreSQL config required for PostgreSQL backend"))?;
+        Ok(Box::new(PostgreSQLStorage::new(pg_config).await?))
+    }
+
+    /// Create hybrid storage backend
+    async fn create_hybrid_storage() -> Result<Box<dyn StorageEngine + Send + Sync>> {
+        info!("Using hybrid Redis+PostgreSQL backend");
+        // TODO: Implement hybrid storage that uses Redis for hot data and PostgreSQL for cold data
+        Err(anyhow!("Hybrid storage not yet implemented"))
+    }
+
+    /// Create custom disk storage backend
+    async fn create_custom_disk_storage() -> Result<Box<dyn StorageEngine + Send + Sync>> {
+        info!("Using custom disk storage backend");
+        // TODO: Implement custom high-performance disk storage
+        Err(anyhow!("Custom disk storage not yet implemented"))
     }
 
     /// Create a new time series

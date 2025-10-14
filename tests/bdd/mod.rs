@@ -291,33 +291,54 @@ async fn then_first_result_has_id(
     world: &mut OrbitWorld,
     expected_id: String,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    if let Some(result) = &world.last_result {
-        if let Some(results_array) = result.as_array() {
-            if let Some(first_result) = results_array.first() {
-                if let Some(vector_obj) = first_result.get("vector") {
-                    if let Some(actual_id) = vector_obj.get("id") {
-                        if let Some(id_str) = actual_id.as_str() {
-                            if id_str != expected_id {
-                                return Err(format!("Expected first result ID '{}' but got '{}'", 
-                                                 expected_id, id_str).into());
-                            }
-                        } else {
-                            return Err("Vector ID is not a string".into());
-                        }
-                    } else {
-                        return Err("First result does not contain vector ID".into());
-                    }
-                } else {
-                    return Err("First result does not contain vector object".into());
-                }
-            } else {
-                return Err("No results found".into());
-            }
-        } else {
-            return Err("Search result is not an array".into());
-        }
-    } else {
-        return Err("No search result available".into());
+    let result = get_search_result(world)?;
+    let results_array = get_results_array(&result)?;
+    let first_result = get_first_result(&results_array)?;
+    let actual_id = extract_vector_id(&first_result)?;
+    
+    validate_expected_id(&actual_id, &expected_id)?;
+    Ok(())
+}
+
+/// Extract search result from world, returning error if none exists
+fn get_search_result(world: &OrbitWorld) -> Result<&serde_json::Value, Box<dyn std::error::Error>> {
+    world.last_result.as_ref()
+        .ok_or_else(|| "No search result available".into())
+}
+
+/// Extract results array from JSON value, returning error if not an array
+fn get_results_array(result: &serde_json::Value) -> Result<&Vec<serde_json::Value>, Box<dyn std::error::Error>> {
+    result.as_array()
+        .ok_or_else(|| "Search result is not an array".into())
+}
+
+/// Extract first result from results array, returning error if empty
+fn get_first_result(results_array: &[serde_json::Value]) -> Result<&serde_json::Value, Box<dyn std::error::Error>> {
+    results_array.first()
+        .ok_or_else(|| "No results found".into())
+}
+
+/// Extract vector ID from result object
+fn extract_vector_id(first_result: &serde_json::Value) -> Result<String, Box<dyn std::error::Error>> {
+    let vector_obj = first_result.get("vector")
+        .ok_or("First result does not contain vector object")?;
+    
+    let actual_id = vector_obj.get("id")
+        .ok_or("First result does not contain vector ID")?;
+    
+    actual_id.as_str()
+        .ok_or("Vector ID is not a string")
+        .map(|s| s.to_string())
+        .map_err(|e| e.into())
+}
+
+/// Validate that actual ID matches expected ID
+fn validate_expected_id(actual_id: &str, expected_id: &str) -> Result<(), Box<dyn std::error::Error>> {
+    if actual_id != expected_id {
+        return Err(format!(
+            "Expected first result ID '{}' but got '{}'", 
+            expected_id, actual_id
+        ).into());
     }
     Ok(())
 }

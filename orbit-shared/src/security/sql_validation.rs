@@ -28,7 +28,7 @@ impl SqlInjectionDetector {
             Regex::new(r"(?i)\b(union|union\s+all)\b.*\bselect\b").unwrap(),
             Regex::new(r"(?i);\s*(drop|delete|truncate|alter)\s+").unwrap(),
             Regex::new(r"(?i)'\s*(or|and)\s+'.*'='").unwrap(),
-            Regex::new(r"(?i)--\s*$").unwrap(),
+            Regex::new(r"(?i)--").unwrap(),
             Regex::new(r"(?i)/\*.*\*/").unwrap(),
             Regex::new(r"(?i)xp_cmdshell").unwrap(),
             Regex::new(r"(?i)exec\s*\(").unwrap(),

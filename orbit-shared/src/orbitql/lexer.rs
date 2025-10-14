@@ -503,303 +503,74 @@ impl Lexer {
 
                 // Comments
                 '-' if chars.clone().nth(1) == Some('-') => {
-                    // Single line comment
-                    chars.next(); // consume first -
-                    chars.next(); // consume second -
-                    let start_pos = position;
-                    position += 2;
-                    column += 2;
-
-                    let mut comment = String::new();
-                    while let Some(&ch) = chars.peek() {
-                        if ch == '\n' {
-                            break;
-                        }
-                        comment.push(ch);
-                        chars.next();
-                        column += 1;
-                        position += 1;
-                    }
-
-                    let comment_len = comment.len();
-                    tokens.push(Token::new(
-                        TokenType::Comment,
-                        comment,
+                    self.process_single_line_comment(
+                        &mut chars,
+                        &mut tokens,
+                        &mut position,
+                        &mut column,
                         line,
-                        column - comment_len,
-                        start_pos,
-                    ));
+                    )?;
                 }
 
                 '/' if chars.clone().nth(1) == Some('*') => {
-                    // Multi-line comment
-                    chars.next(); // consume /
-                    chars.next(); // consume *
-                    let start_pos = position;
-                    let start_column = column;
-                    position += 2;
-                    column += 2;
-
-                    let mut comment = String::new();
-                    let mut found_end = false;
-
-                    while let Some(ch) = chars.next() {
-                        if ch == '*' && chars.peek() == Some(&'/') {
-                            chars.next(); // consume /
-                            position += 2;
-                            column += 2;
-                            found_end = true;
-                            break;
-                        }
-
-                        if ch == '\n' {
-                            line += 1;
-                            column = 1;
-                        } else {
-                            column += 1;
-                        }
-                        position += 1;
-                        comment.push(ch);
-                    }
-
-                    if !found_end {
-                        return Err(LexError::UnterminatedString { line, column });
-                    }
-
-                    tokens.push(Token::new(
-                        TokenType::Comment,
-                        comment,
-                        line,
-                        start_column,
-                        start_pos,
-                    ));
+                    self.process_multi_line_comment(
+                        &mut chars,
+                        &mut tokens,
+                        &mut position,
+                        &mut column,
+                        &mut line,
+                    )?;
                 }
 
                 // String literals
                 '\'' | '"' => {
-                    let quote_char = ch;
-                    chars.next();
-                    let start_pos = position;
-                    let start_column = column;
-                    position += 1;
-                    column += 1;
-
-                    let mut string_value = String::new();
-                    let mut escaped = false;
-                    let mut terminated = false;
-
-                    for ch in chars.by_ref() {
-                        position += 1;
-                        column += 1;
-
-                        if escaped {
-                            match ch {
-                                'n' => string_value.push('\n'),
-                                't' => string_value.push('\t'),
-                                'r' => string_value.push('\r'),
-                                '\\' => string_value.push('\\'),
-                                '\'' => string_value.push('\''),
-                                '"' => string_value.push('"'),
-                                _ => {
-                                    return Err(LexError::InvalidEscape {
-                                        sequence: format!("\\{ch}"),
-                                        line,
-                                        column: column - 1,
-                                    });
-                                }
-                            }
-                            escaped = false;
-                        } else if ch == '\\' {
-                            escaped = true;
-                        } else if ch == quote_char {
-                            tokens.push(Token::new(
-                                TokenType::String,
-                                string_value,
-                                line,
-                                start_column,
-                                start_pos,
-                            ));
-                            terminated = true;
-                            break;
-                        } else {
-                            string_value.push(ch);
-                            if ch == '\n' {
-                                line += 1;
-                                column = 1;
-                            }
-                        }
-                    }
-
-                    if !terminated {
-                        return Err(LexError::UnterminatedString { line, column });
-                    }
+                    self.process_string_literal(
+                        ch,
+                        &mut chars,
+                        &mut tokens,
+                        &mut position,
+                        &mut column,
+                        &mut line,
+                    )?;
                 }
 
                 // Numbers
                 '0'..='9' => {
-                    let start_pos = position;
-                    let start_column = column;
-                    let mut number = String::new();
-                    let mut is_float = false;
-
-                    while let Some(&ch) = chars.peek() {
-                        if ch.is_ascii_digit() {
-                            number.push(ch);
-                            chars.next();
-                            position += 1;
-                            column += 1;
-                        } else if ch == '.' && !is_float {
-                            // Check if next character is a digit (not another dot or letter)
-                            if let Some(next_ch) = chars.clone().nth(1) {
-                                if next_ch.is_ascii_digit() {
-                                    is_float = true;
-                                    number.push(ch);
-                                    chars.next();
-                                    position += 1;
-                                    column += 1;
-                                } else {
-                                    break;
-                                }
-                            } else {
-                                break;
-                            }
-                        } else {
-                            break;
-                        }
-                    }
-
-                    let token_type = if is_float {
-                        TokenType::Float
-                    } else {
-                        TokenType::Integer
-                    };
-                    tokens.push(Token::new(
-                        token_type,
-                        number,
-                        line,
-                        start_column,
-                        start_pos,
-                    ));
+                    self.process_number(&mut chars, &mut tokens, &mut position, &mut column, line);
                 }
 
                 // Identifiers and keywords
                 'a'..='z' | 'A'..='Z' | '_' => {
-                    let start_pos = position;
-                    let start_column = column;
-                    let mut identifier = String::new();
-
-                    while let Some(&ch) = chars.peek() {
-                        if ch.is_ascii_alphanumeric() || ch == '_' {
-                            identifier.push(ch);
-                            chars.next();
-                            position += 1;
-                            column += 1;
-                        } else {
-                            break;
-                        }
-                    }
-
-                    let token_type = self
-                        .keywords
-                        .get(&identifier.to_uppercase())
-                        .cloned()
-                        .unwrap_or(TokenType::Identifier);
-
-                    tokens.push(Token::new(
-                        token_type,
-                        identifier,
+                    self.process_identifier(
+                        &mut chars,
+                        &mut tokens,
+                        &mut position,
+                        &mut column,
                         line,
-                        start_column,
-                        start_pos,
-                    ));
+                    );
                 }
 
                 // Parameters
                 '$' | '@' => {
-                    chars.next();
-                    let start_pos = position;
-                    let start_column = column;
-                    position += 1;
-                    column += 1;
-
-                    let mut param_name = String::new();
-                    param_name.push(ch);
-
-                    while let Some(&ch) = chars.peek() {
-                        if ch.is_ascii_alphanumeric() || ch == '_' {
-                            param_name.push(ch);
-                            chars.next();
-                            position += 1;
-                            column += 1;
-                        } else {
-                            break;
-                        }
-                    }
-
-                    tokens.push(Token::new(
-                        TokenType::Parameter,
-                        param_name,
+                    self.process_parameter(
+                        ch,
+                        &mut chars,
+                        &mut tokens,
+                        &mut position,
+                        &mut column,
                         line,
-                        start_column,
-                        start_pos,
-                    ));
+                    );
                 }
 
                 // Multi-character operators
                 '<' => {
-                    chars.next();
-                    let start_pos = position;
-                    let start_column = column;
-                    position += 1;
-                    column += 1;
-
-                    match chars.peek() {
-                        Some('=') => {
-                            chars.next();
-                            position += 1;
-                            column += 1;
-                            tokens.push(Token::new(
-                                TokenType::LessThanOrEqual,
-                                "<=".to_string(),
-                                line,
-                                start_column,
-                                start_pos,
-                            ));
-                        }
-                        Some('>') => {
-                            chars.next();
-                            position += 1;
-                            column += 1;
-                            tokens.push(Token::new(
-                                TokenType::NotEqual,
-                                "<>".to_string(),
-                                line,
-                                start_column,
-                                start_pos,
-                            ));
-                        }
-                        Some('-') => {
-                            chars.next();
-                            position += 1;
-                            column += 1;
-                            tokens.push(Token::new(
-                                TokenType::ArrowLeft,
-                                "<-".to_string(),
-                                line,
-                                start_column,
-                                start_pos,
-                            ));
-                        }
-                        _ => {
-                            tokens.push(Token::new(
-                                TokenType::LessThan,
-                                "<".to_string(),
-                                line,
-                                start_column,
-                                start_pos,
-                            ));
-                        }
-                    }
+                    self.process_less_than_operator(
+                        &mut chars,
+                        &mut tokens,
+                        &mut position,
+                        &mut column,
+                        line,
+                    );
                 }
 
                 '>' => {
@@ -1184,6 +955,384 @@ impl Lexer {
                 column,
                 position,
             ));
+        }
+    }
+
+    /// Process a single-line comment (--)
+    fn process_single_line_comment<I>(
+        &self,
+        chars: &mut std::iter::Peekable<I>,
+        tokens: &mut Vec<Token>,
+        position: &mut usize,
+        column: &mut usize,
+        line: usize,
+    ) -> Result<(), LexError>
+    where
+        I: Iterator<Item = char>,
+    {
+        chars.next(); // consume first -
+        chars.next(); // consume second -
+        let start_pos = *position;
+        *position += 2;
+        *column += 2;
+
+        let mut comment = String::new();
+        while let Some(&ch) = chars.peek() {
+            if ch == '\n' {
+                break;
+            }
+            comment.push(ch);
+            chars.next();
+            *column += 1;
+            *position += 1;
+        }
+
+        let comment_len = comment.len();
+        tokens.push(Token::new(
+            TokenType::Comment,
+            comment,
+            line,
+            *column - comment_len,
+            start_pos,
+        ));
+        Ok(())
+    }
+
+    /// Process a multi-line comment (/* */)
+    fn process_multi_line_comment<I>(
+        &self,
+        chars: &mut std::iter::Peekable<I>,
+        tokens: &mut Vec<Token>,
+        position: &mut usize,
+        column: &mut usize,
+        line: &mut usize,
+    ) -> Result<(), LexError>
+    where
+        I: Iterator<Item = char>,
+    {
+        chars.next(); // consume /
+        chars.next(); // consume *
+        let start_pos = *position;
+        let start_column = *column;
+        *position += 2;
+        *column += 2;
+
+        let mut comment = String::new();
+        let mut found_end = false;
+
+        while let Some(ch) = chars.next() {
+            if ch == '*' && chars.peek() == Some(&'/') {
+                chars.next(); // consume /
+                *position += 2;
+                *column += 2;
+                found_end = true;
+                break;
+            }
+
+            if ch == '\n' {
+                *line += 1;
+                *column = 1;
+            } else {
+                *column += 1;
+            }
+            *position += 1;
+            comment.push(ch);
+        }
+
+        if !found_end {
+            return Err(LexError::UnterminatedString {
+                line: *line,
+                column: *column,
+            });
+        }
+
+        tokens.push(Token::new(
+            TokenType::Comment,
+            comment,
+            *line,
+            start_column,
+            start_pos,
+        ));
+        Ok(())
+    }
+
+    /// Process a string literal
+    fn process_string_literal<I>(
+        &self,
+        quote_char: char,
+        chars: &mut std::iter::Peekable<I>,
+        tokens: &mut Vec<Token>,
+        position: &mut usize,
+        column: &mut usize,
+        line: &mut usize,
+    ) -> Result<(), LexError>
+    where
+        I: Iterator<Item = char>,
+    {
+        chars.next();
+        let start_pos = *position;
+        let start_column = *column;
+        *position += 1;
+        *column += 1;
+
+        let mut string_value = String::new();
+        let mut escaped = false;
+        let mut terminated = false;
+
+        for ch in chars.by_ref() {
+            *position += 1;
+            *column += 1;
+
+            if escaped {
+                match ch {
+                    'n' => string_value.push('\n'),
+                    't' => string_value.push('\t'),
+                    'r' => string_value.push('\r'),
+                    '\\' => string_value.push('\\'),
+                    '\'' => string_value.push('\''),
+                    '"' => string_value.push('"'),
+                    _ => {
+                        return Err(LexError::InvalidEscape {
+                            sequence: format!("\\{ch}"),
+                            line: *line,
+                            column: *column - 1,
+                        });
+                    }
+                }
+                escaped = false;
+            } else if ch == '\\' {
+                escaped = true;
+            } else if ch == quote_char {
+                tokens.push(Token::new(
+                    TokenType::String,
+                    string_value,
+                    *line,
+                    start_column,
+                    start_pos,
+                ));
+                terminated = true;
+                break;
+            } else {
+                string_value.push(ch);
+                if ch == '\n' {
+                    *line += 1;
+                    *column = 1;
+                }
+            }
+        }
+
+        if !terminated {
+            return Err(LexError::UnterminatedString {
+                line: *line,
+                column: *column,
+            });
+        }
+        Ok(())
+    }
+
+    /// Process a number (integer or float)
+    fn process_number<I>(
+        &self,
+        chars: &mut std::iter::Peekable<I>,
+        tokens: &mut Vec<Token>,
+        position: &mut usize,
+        column: &mut usize,
+        line: usize,
+    ) where
+        I: Iterator<Item = char> + Clone,
+    {
+        let start_pos = *position;
+        let start_column = *column;
+        let mut number = String::new();
+        let mut is_float = false;
+
+        while let Some(&ch) = chars.peek() {
+            if ch.is_ascii_digit() {
+                number.push(ch);
+                chars.next();
+                *position += 1;
+                *column += 1;
+            } else if ch == '.' && !is_float {
+                // Look ahead to see if next character is a digit
+                let mut chars_peek = chars.clone();
+                chars_peek.next(); // consume the dot
+                if let Some(&next_ch) = chars_peek.peek() {
+                    if next_ch.is_ascii_digit() {
+                        is_float = true;
+                        number.push(ch);
+                        chars.next();
+                        *position += 1;
+                        *column += 1;
+                    } else {
+                        break;
+                    }
+                } else {
+                    break;
+                }
+            } else {
+                break;
+            }
+        }
+
+        let token_type = if is_float {
+            TokenType::Float
+        } else {
+            TokenType::Integer
+        };
+        tokens.push(Token::new(
+            token_type,
+            number,
+            line,
+            start_column,
+            start_pos,
+        ));
+    }
+
+    /// Process an identifier or keyword
+    fn process_identifier<I>(
+        &self,
+        chars: &mut std::iter::Peekable<I>,
+        tokens: &mut Vec<Token>,
+        position: &mut usize,
+        column: &mut usize,
+        line: usize,
+    ) where
+        I: Iterator<Item = char>,
+    {
+        let start_pos = *position;
+        let start_column = *column;
+        let mut identifier = String::new();
+
+        while let Some(&ch) = chars.peek() {
+            if ch.is_ascii_alphanumeric() || ch == '_' {
+                identifier.push(ch);
+                chars.next();
+                *position += 1;
+                *column += 1;
+            } else {
+                break;
+            }
+        }
+
+        let token_type = self
+            .keywords
+            .get(&identifier.to_uppercase())
+            .cloned()
+            .unwrap_or(TokenType::Identifier);
+
+        tokens.push(Token::new(
+            token_type,
+            identifier,
+            line,
+            start_column,
+            start_pos,
+        ));
+    }
+
+    /// Process a parameter ($ or @ prefixed)
+    fn process_parameter<I>(
+        &self,
+        param_char: char,
+        chars: &mut std::iter::Peekable<I>,
+        tokens: &mut Vec<Token>,
+        position: &mut usize,
+        column: &mut usize,
+        line: usize,
+    ) where
+        I: Iterator<Item = char>,
+    {
+        chars.next();
+        let start_pos = *position;
+        let start_column = *column;
+        *position += 1;
+        *column += 1;
+
+        let mut param_name = String::new();
+        param_name.push(param_char);
+
+        while let Some(&ch) = chars.peek() {
+            if ch.is_ascii_alphanumeric() || ch == '_' {
+                param_name.push(ch);
+                chars.next();
+                *position += 1;
+                *column += 1;
+            } else {
+                break;
+            }
+        }
+
+        tokens.push(Token::new(
+            TokenType::Parameter,
+            param_name,
+            line,
+            start_column,
+            start_pos,
+        ));
+    }
+
+    /// Process less-than operator and its variants
+    fn process_less_than_operator<I>(
+        &self,
+        chars: &mut std::iter::Peekable<I>,
+        tokens: &mut Vec<Token>,
+        position: &mut usize,
+        column: &mut usize,
+        line: usize,
+    ) where
+        I: Iterator<Item = char>,
+    {
+        chars.next();
+        let start_pos = *position;
+        let start_column = *column;
+        *position += 1;
+        *column += 1;
+
+        match chars.peek() {
+            Some('=') => {
+                chars.next();
+                *position += 1;
+                *column += 1;
+                tokens.push(Token::new(
+                    TokenType::LessThanOrEqual,
+                    "<=".to_string(),
+                    line,
+                    start_column,
+                    start_pos,
+                ));
+            }
+            Some('>') => {
+                chars.next();
+                *position += 1;
+                *column += 1;
+                tokens.push(Token::new(
+                    TokenType::NotEqual,
+                    "<>".to_string(),
+                    line,
+                    start_column,
+                    start_pos,
+                ));
+            }
+            Some('-') => {
+                chars.next();
+                *position += 1;
+                *column += 1;
+                tokens.push(Token::new(
+                    TokenType::ArrowLeft,
+                    "<-".to_string(),
+                    line,
+                    start_column,
+                    start_pos,
+                ));
+            }
+            _ => {
+                tokens.push(Token::new(
+                    TokenType::LessThan,
+                    "<".to_string(),
+                    line,
+                    start_column,
+                    start_pos,
+                ));
+            }
         }
     }
 }

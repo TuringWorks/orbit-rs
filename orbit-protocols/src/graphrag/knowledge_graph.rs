@@ -269,6 +269,29 @@ impl KnowledgeGraphBuilder {
     ) -> OrbitResult<GraphConstructionResult> {
         let start_time = std::time::Instant::now();
 
+        self.log_processing_start(&request);
+        let config = request.config_override.as_ref().unwrap_or(&self.config);
+        let (filtered_entities, filtered_relationships) =
+            self.filter_by_confidence(&request, config);
+
+        let mut result =
+            self.create_initial_result(&request, &filtered_entities, &filtered_relationships);
+
+        self.process_all_entities(
+            orbit_client.clone(),
+            &filtered_entities,
+            &request.metadata,
+            &mut result,
+        )
+        .await;
+        self.process_all_relationships(orbit_client.clone(), &filtered_relationships, &mut result)
+            .await;
+
+        self.finalize_processing(result, start_time, &request.document_id)
+    }
+
+    /// Log the start of document processing
+    fn log_processing_start(&self, request: &DocumentGraphRequest) {
         info!(
             kg_name = %self.kg_name,
             document_id = %request.document_id,
@@ -276,13 +299,17 @@ impl KnowledgeGraphBuilder {
             relationships_count = request.relationships.len(),
             "Processing document for knowledge graph construction"
         );
+    }
 
-        // Use override config if provided
-        let config = request.config_override.as_ref().unwrap_or(&self.config);
-
-        // Filter entities and relationships by confidence
+    /// Filter entities and relationships by confidence thresholds
+    fn filter_by_confidence(
+        &self,
+        request: &DocumentGraphRequest,
+        config: &KnowledgeGraphConfig,
+    ) -> (Vec<ExtractedEntity>, Vec<ExtractedRelationship>) {
         let filtered_entities: Vec<_> = request
             .entities
+            .clone()
             .into_iter()
             .filter(|e| e.confidence >= config.entity_confidence_threshold)
             .take(config.max_entities_per_document)
@@ -290,6 +317,7 @@ impl KnowledgeGraphBuilder {
 
         let filtered_relationships: Vec<_> = request
             .relationships
+            .clone()
             .into_iter()
             .filter(|r| r.confidence >= config.relationship_confidence_threshold)
             .take(config.max_relationships_per_document)
@@ -301,7 +329,17 @@ impl KnowledgeGraphBuilder {
             "Filtered entities and relationships by confidence thresholds"
         );
 
-        let mut result = GraphConstructionResult {
+        (filtered_entities, filtered_relationships)
+    }
+
+    /// Create initial result structure
+    fn create_initial_result(
+        &self,
+        request: &DocumentGraphRequest,
+        filtered_entities: &[ExtractedEntity],
+        filtered_relationships: &[ExtractedRelationship],
+    ) -> GraphConstructionResult {
+        GraphConstructionResult {
             document_id: request.document_id.clone(),
             entities_processed: filtered_entities.len(),
             entities_created: 0,
@@ -313,12 +351,20 @@ impl KnowledgeGraphBuilder {
             warnings: Vec::new(),
             created_node_ids: Vec::new(),
             created_relationship_ids: Vec::new(),
-        };
+        }
+    }
 
-        // Process entities first
-        for entity in filtered_entities {
+    /// Process all entities in the document
+    async fn process_all_entities(
+        &mut self,
+        orbit_client: Arc<OrbitClient>,
+        entities: &[ExtractedEntity],
+        metadata: &HashMap<String, serde_json::Value>,
+        result: &mut GraphConstructionResult,
+    ) {
+        for entity in entities {
             match self
-                .process_entity(orbit_client.clone(), &entity, &request.metadata)
+                .process_entity(orbit_client.clone(), entity, metadata)
                 .await
             {
                 Ok(ProcessedEntity::Created(node_id)) => {
@@ -342,11 +388,18 @@ impl KnowledgeGraphBuilder {
                 }
             }
         }
+    }
 
-        // Process relationships
-        for relationship in filtered_relationships {
+    /// Process all relationships in the document
+    async fn process_all_relationships(
+        &mut self,
+        orbit_client: Arc<OrbitClient>,
+        relationships: &[ExtractedRelationship],
+        result: &mut GraphConstructionResult,
+    ) {
+        for relationship in relationships {
             match self
-                .process_relationship(orbit_client.clone(), &relationship)
+                .process_relationship(orbit_client.clone(), relationship)
                 .await
             {
                 Ok(ProcessedRelationship::Created(rel_id)) => {
@@ -372,7 +425,15 @@ impl KnowledgeGraphBuilder {
                 }
             }
         }
+    }
 
+    /// Finalize processing and return results
+    fn finalize_processing(
+        &mut self,
+        mut result: GraphConstructionResult,
+        start_time: std::time::Instant,
+        document_id: &str,
+    ) -> OrbitResult<GraphConstructionResult> {
         let processing_time = start_time.elapsed();
         result.processing_time_ms = processing_time.as_millis() as u64;
 
@@ -380,7 +441,7 @@ impl KnowledgeGraphBuilder {
         self.update_stats(&result);
 
         info!(
-            document_id = %request.document_id,
+            document_id = %document_id,
             entities_created = result.entities_created,
             entities_merged = result.entities_merged,
             relationships_created = result.relationships_created,

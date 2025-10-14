@@ -2,9 +2,6 @@
 //!
 //! Splits the large command handler into focused modules for better maintainability
 
-use super::RespValue;
-use crate::error::ProtocolResult;
-
 pub mod connection;
 pub mod graph;
 pub mod graphrag;
@@ -66,7 +63,9 @@ mod handler {
 
     /// Main command handler that delegates to specialized command modules
     pub struct CommandHandler {
+        #[allow(dead_code)] // Reserved for future use
         orbit_client: Arc<OrbitClient>,
+        #[allow(dead_code)] // Reserved for future use
         local_registry: Arc<SimpleLocalRegistry>,
 
         // Specialized command handlers

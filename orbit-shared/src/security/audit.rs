@@ -304,57 +304,7 @@ impl AuditLogger for InMemoryAuditLogger {
 
         let filtered: Vec<AuditEvent> = events
             .iter()
-            .filter(|e| {
-                // Filter by time range
-                if let Some(start) = filters.start_time {
-                    if e.timestamp < start {
-                        return false;
-                    }
-                }
-                if let Some(end) = filters.end_time {
-                    if e.timestamp > end {
-                        return false;
-                    }
-                }
-
-                // Filter by event type
-                if let Some(ref types) = filters.event_types {
-                    if !types.contains(&e.event_type) {
-                        return false;
-                    }
-                }
-
-                // Filter by subject
-                if let Some(ref subject_id) = filters.subject_id {
-                    if let Some(ref subject) = e.subject {
-                        if &subject.id != subject_id {
-                            return false;
-                        }
-                    } else {
-                        return false;
-                    }
-                }
-
-                // Filter by resource
-                if let Some(ref resource_id) = filters.resource_id {
-                    if let Some(ref resource) = e.resource {
-                        if &resource.id != resource_id {
-                            return false;
-                        }
-                    } else {
-                        return false;
-                    }
-                }
-
-                // Filter by result
-                if let Some(ref result) = filters.result {
-                    if &e.result != result {
-                        return false;
-                    }
-                }
-
-                true
-            })
+            .filter(|e| self.matches_all_filters(e, &filters))
             .take(filters.limit)
             .cloned()
             .collect();
@@ -411,6 +361,72 @@ impl AuditLogger for InMemoryAuditLogger {
             failure_rate,
             sensitive_data_accesses,
         })
+    }
+}
+
+impl InMemoryAuditLogger {
+    /// Check if an event matches all filters
+    fn matches_all_filters(&self, event: &AuditEvent, filters: &AuditQueryFilters) -> bool {
+        self.matches_time_filter(event, filters)
+            && self.matches_event_type_filter(event, filters)
+            && self.matches_subject_filter(event, filters)
+            && self.matches_resource_filter(event, filters)
+            && self.matches_result_filter(event, filters)
+    }
+
+    /// Check if event matches time range filter
+    fn matches_time_filter(&self, event: &AuditEvent, filters: &AuditQueryFilters) -> bool {
+        if let Some(start) = filters.start_time {
+            if event.timestamp < start {
+                return false;
+            }
+        }
+        if let Some(end) = filters.end_time {
+            if event.timestamp > end {
+                return false;
+            }
+        }
+        true
+    }
+
+    /// Check if event matches event type filter
+    fn matches_event_type_filter(&self, event: &AuditEvent, filters: &AuditQueryFilters) -> bool {
+        if let Some(ref types) = filters.event_types {
+            return types.contains(&event.event_type);
+        }
+        true
+    }
+
+    /// Check if event matches subject filter
+    fn matches_subject_filter(&self, event: &AuditEvent, filters: &AuditQueryFilters) -> bool {
+        if let Some(ref subject_id) = filters.subject_id {
+            if let Some(ref subject) = event.subject {
+                return &subject.id == subject_id;
+            } else {
+                return false;
+            }
+        }
+        true
+    }
+
+    /// Check if event matches resource filter
+    fn matches_resource_filter(&self, event: &AuditEvent, filters: &AuditQueryFilters) -> bool {
+        if let Some(ref resource_id) = filters.resource_id {
+            if let Some(ref resource) = event.resource {
+                return &resource.id == resource_id;
+            } else {
+                return false;
+            }
+        }
+        true
+    }
+
+    /// Check if event matches result filter
+    fn matches_result_filter(&self, event: &AuditEvent, filters: &AuditQueryFilters) -> bool {
+        if let Some(ref result) = filters.result {
+            return &event.result == result;
+        }
+        true
     }
 }
 

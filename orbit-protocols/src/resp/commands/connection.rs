@@ -10,6 +10,7 @@ use std::sync::Arc;
 
 /// Handler for connection commands
 pub struct ConnectionCommands {
+    #[allow(dead_code)] // Used by trait methods but compiler doesn't detect it
     base: BaseCommandHandler,
 }
 

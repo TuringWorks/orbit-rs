@@ -507,36 +507,61 @@ impl DistributedLockManager {
                     resource_id, transaction_id
                 );
 
-                // Remove from deadlock detector
-                if self.config.enable_deadlock_detection {
-                    self.deadlock_detector
-                        .remove_transaction(&transaction_id)
-                        .await;
-                }
-
-                // Process wait queue
-                if let Some(next_request) = lock.process_wait_queue() {
-                    if lock.try_acquire(
-                        next_request.owner.clone(),
-                        next_request.mode,
-                        self.config.default_lock_timeout,
-                    ) {
-                        info!(
-                            "Lock {} granted to waiting transaction {}",
-                            resource_id, next_request.owner.transaction_id
-                        );
-
-                        // Notify waiter
-                        let mut waiters = self.lock_waiters.lock().await;
-                        if let Some(sender) = waiters.remove(&next_request.owner.transaction_id) {
-                            let _ = sender.send(true);
-                        }
-                    }
-                }
+                self.remove_from_deadlock_detection(&transaction_id).await;
+                self.process_lock_wait_queue(lock, &resource_id).await;
             }
         }
 
         Ok(())
+    }
+
+    /// Remove transaction from deadlock detection if enabled
+    async fn remove_from_deadlock_detection(&self, transaction_id: &str) {
+        if self.config.enable_deadlock_detection {
+            self.deadlock_detector
+                .remove_transaction(transaction_id)
+                .await;
+        }
+    }
+
+    /// Process the wait queue for a released lock
+    async fn process_lock_wait_queue(&self, lock: &mut DistributedLock, resource_id: &str) {
+        if let Some(next_request) = lock.process_wait_queue() {
+            if self.try_grant_lock_to_waiter(lock, &next_request, resource_id) {
+                self.notify_waiting_transaction(&next_request.owner.transaction_id)
+                    .await;
+            }
+        }
+    }
+
+    /// Try to grant a lock to a waiting transaction
+    fn try_grant_lock_to_waiter(
+        &self,
+        lock: &mut DistributedLock,
+        request: &LockRequest,
+        resource_id: &str,
+    ) -> bool {
+        if lock.try_acquire(
+            request.owner.clone(),
+            request.mode,
+            self.config.default_lock_timeout,
+        ) {
+            info!(
+                "Lock {} granted to waiting transaction {}",
+                resource_id, request.owner.transaction_id
+            );
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Notify a waiting transaction that the lock is granted
+    async fn notify_waiting_transaction(&self, transaction_id: &str) {
+        let mut waiters = self.lock_waiters.lock().await;
+        if let Some(sender) = waiters.remove(transaction_id) {
+            let _ = sender.send(true);
+        }
     }
 
     /// Get lock status

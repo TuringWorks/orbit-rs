@@ -496,31 +496,56 @@ impl ActorMessageRouter {
         target: &AddressableReference,
         message: ActorMessage,
     ) -> OrbitResult<()> {
-        // Try to find the actor locally first
-        {
-            let local_actors = self.discovery_service.local_actors.read().await;
-            if let Some(handle) = local_actors.get(target) {
-                if let Err(e) = handle.sender.send(message) {
-                    error!("Failed to send message to local actor {}: {}", target, e);
-                    return Err(OrbitError::internal(format!(
-                        "Local actor send failed: {e}"
-                    )));
-                }
-
-                // Update last accessed time
-                {
-                    let mut last_accessed = handle.last_accessed.write().await;
-                    *last_accessed = Instant::now();
-                }
-
-                return Ok(());
-            }
+        // Try local routing first
+        if self.try_route_locally(target, message.clone()).await? {
+            return Ok(());
         }
 
-        // Actor not local, discover its location
+        // Route to remote actor
+        self.route_to_remote_actor(target, message).await
+    }
+
+    /// Try to route message to local actor
+    async fn try_route_locally(
+        &self,
+        target: &AddressableReference,
+        message: ActorMessage,
+    ) -> OrbitResult<bool> {
+        let local_actors = self.discovery_service.local_actors.read().await;
+        if let Some(handle) = local_actors.get(target) {
+            self.send_to_local_actor(handle, message).await?;
+            return Ok(true);
+        }
+        Ok(false)
+    }
+
+    /// Send message to a local actor handle
+    async fn send_to_local_actor(
+        &self,
+        handle: &ActorHandle,
+        message: ActorMessage,
+    ) -> OrbitResult<()> {
+        if let Err(e) = handle.sender.send(message) {
+            error!("Failed to send message to local actor: {}", e);
+            return Err(OrbitError::internal(format!(
+                "Local actor send failed: {e}"
+            )));
+        }
+
+        // Update last accessed time
+        let mut last_accessed = handle.last_accessed.write().await;
+        *last_accessed = Instant::now();
+        Ok(())
+    }
+
+    /// Route message to remote actor
+    async fn route_to_remote_actor(
+        &self,
+        target: &AddressableReference,
+        message: ActorMessage,
+    ) -> OrbitResult<()> {
         match self.discovery_service.discover_actor(target).await? {
             Some(node_id) => {
-                // Forward message to the remote node
                 info!("Forwarding message to actor {} on node {}", target, node_id);
                 self.forward_to_node(&node_id, message).await
             }

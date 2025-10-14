@@ -55,28 +55,55 @@ impl RespServer {
         let mut framed = Framed::new(socket, RespCodec::new());
 
         while let Some(result) = framed.next().await {
-            match result {
-                Ok(command) => {
-                    debug!("Received command: {}", command);
-
-                    let response = handler.handle_command(command).await.unwrap_or_else(|e| {
-                        error!("Command error: {}", e);
-                        RespValue::error(format!("ERR {e}"))
-                    });
-
-                    if let Err(e) = framed.send(response).await {
-                        error!("Send error: {}", e);
-                        break;
-                    }
-                }
-                Err(e) => {
-                    error!("Protocol error: {}", e);
-                    break;
-                }
+            if !Self::process_message_result(&mut framed, &handler, result).await? {
+                break;
             }
         }
 
         debug!("Connection closed");
         Ok(())
+    }
+
+    /// Process a single message result, returns false if connection should be closed
+    async fn process_message_result(
+        framed: &mut Framed<TcpStream, RespCodec>,
+        handler: &Arc<CommandHandler>,
+        result: Result<RespValue, crate::error::ProtocolError>,
+    ) -> ProtocolResult<bool> {
+        match result {
+            Ok(command) => {
+                debug!("Received command: {}", command);
+                let response = Self::handle_command_with_error_handling(handler, command).await;
+                Self::send_response(framed, response).await
+            }
+            Err(e) => {
+                error!("Protocol error: {}", e);
+                Ok(false) // Close connection on protocol error
+            }
+        }
+    }
+
+    /// Handle command with proper error handling
+    async fn handle_command_with_error_handling(
+        handler: &Arc<CommandHandler>,
+        command: RespValue,
+    ) -> RespValue {
+        handler.handle_command(command).await.unwrap_or_else(|e| {
+            error!("Command error: {}", e);
+            RespValue::error(format!("ERR {e}"))
+        })
+    }
+
+    /// Send response and handle send errors
+    async fn send_response(
+        framed: &mut Framed<TcpStream, RespCodec>,
+        response: RespValue,
+    ) -> ProtocolResult<bool> {
+        if let Err(e) = framed.send(response).await {
+            error!("Send error: {}", e);
+            Ok(false) // Close connection on send error
+        } else {
+            Ok(true) // Continue processing
+        }
     }
 }

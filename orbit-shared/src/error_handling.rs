@@ -53,6 +53,19 @@ where
     }
 }
 
+/// Helper macro to log at specific level
+macro_rules! log_at_level {
+    ($level:expr, $message:expr, $error:expr) => {
+        match $level {
+            tracing::Level::ERROR => tracing::error!("{}: {}", $message, $error),
+            tracing::Level::WARN => tracing::warn!("{}: {}", $message, $error),
+            tracing::Level::INFO => tracing::info!("{}: {}", $message, $error),
+            tracing::Level::DEBUG => tracing::debug!("{}: {}", $message, $error),
+            tracing::Level::TRACE => tracing::trace!("{}: {}", $message, $error),
+        }
+    };
+}
+
 /// Trait for error handling with automatic logging
 pub trait ErrorLog<T> {
     /// Log error at warn level and return it
@@ -81,15 +94,8 @@ impl<T> ErrorLog<T> for Result<T, OrbitError> {
     }
 
     fn log_error_with_level(self, level: tracing::Level, message: &str) -> Result<T, OrbitError> {
-        self.map_err(|e| {
-            match level {
-                tracing::Level::ERROR => tracing::error!("{}: {}", message, e),
-                tracing::Level::WARN => tracing::warn!("{}: {}", message, e),
-                tracing::Level::INFO => tracing::info!("{}: {}", message, e),
-                tracing::Level::DEBUG => tracing::debug!("{}: {}", message, e),
-                tracing::Level::TRACE => tracing::trace!("{}: {}", message, e),
-            }
-            e
+        self.inspect_err(|e| {
+            log_at_level!(level, message, e);
         })
     }
 }

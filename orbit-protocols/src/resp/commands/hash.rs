@@ -4,7 +4,7 @@
 //! that operate on hash-like data structures.
 
 use super::traits::{BaseCommandHandler, CommandHandler};
-use crate::error::{ProtocolError, ProtocolResult};
+use crate::error::ProtocolResult;
 use crate::resp::RespValue;
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -55,7 +55,7 @@ impl HashCommands {
 
     async fn cmd_hset(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
         // HSET needs at least 3 args and odd number (key + field-value pairs)
-        if args.len() < 3 || args.len() % 2 == 0 {
+        if args.len() < 3 || args.len().is_multiple_of(2) {
             return Err(crate::error::ProtocolError::RespError(
                 "ERR wrong number of arguments for 'hset' command".to_string(),
             ));
@@ -183,7 +183,7 @@ impl HashCommands {
 
     async fn cmd_hmset(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
         // HMSET needs at least 3 args and odd number (key + field-value pairs)
-        if args.len() < 3 || args.len() % 2 == 0 {
+        if args.len() < 3 || args.len().is_multiple_of(2) {
             return Err(crate::error::ProtocolError::RespError(
                 "ERR wrong number of arguments for 'hmset' command".to_string(),
             ));

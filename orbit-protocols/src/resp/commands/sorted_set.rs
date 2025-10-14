@@ -8,6 +8,7 @@ use orbit_client::OrbitClient;
 use std::sync::Arc;
 
 pub struct SortedSetCommands {
+    #[allow(dead_code)] // Reserved for future implementation
     base: BaseCommandHandler,
 }
 

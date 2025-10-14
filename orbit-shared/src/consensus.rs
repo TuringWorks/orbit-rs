@@ -289,11 +289,20 @@ impl RaftConsensus {
 
     /// Start election process
     async fn start_election(&self, transport: Arc<dyn RaftTransport>) -> OrbitResult<()> {
-        info!(
-            "Starting election for term: {}",
-            self.get_current_term().await + 1
-        );
+        let new_term = self.prepare_for_election().await;
+        info!("Starting election for term: {}", new_term);
 
+        let (last_log_index, last_log_term) = self.get_last_log_info().await;
+        let vote_results = self
+            .collect_votes(&transport, new_term, last_log_index, last_log_term)
+            .await;
+        let vote_count = self.process_vote_results(vote_results, new_term).await?;
+
+        self.finalize_election(vote_count, new_term).await
+    }
+
+    /// Prepare for election by transitioning to candidate and incrementing term
+    async fn prepare_for_election(&self) -> u64 {
         // Transition to candidate
         {
             let mut state = self.state.write().await;
@@ -319,18 +328,28 @@ impl RaftConsensus {
             votes.insert(self.node_id.clone(), true); // Vote for self
         }
 
-        // Get log information for vote request
-        let (last_log_index, last_log_term) = {
-            let log = self.log.read().await;
-            if log.is_empty() {
-                (0, 0)
-            } else {
-                let last_entry = log.last().unwrap();
-                (last_entry.index, last_entry.term)
-            }
-        };
+        new_term
+    }
 
-        // Send vote requests to all other nodes
+    /// Get last log entry information
+    async fn get_last_log_info(&self) -> (u64, u64) {
+        let log = self.log.read().await;
+        if log.is_empty() {
+            (0, 0)
+        } else {
+            let last_entry = log.last().unwrap();
+            (last_entry.index, last_entry.term)
+        }
+    }
+
+    /// Collect votes from other nodes
+    async fn collect_votes(
+        &self,
+        transport: &Arc<dyn RaftTransport>,
+        new_term: u64,
+        last_log_index: u64,
+        last_log_term: u64,
+    ) -> Vec<(NodeId, VoteResponse)> {
         let cluster_nodes = self.cluster_nodes.read().await;
         let mut vote_tasks = Vec::new();
 
@@ -345,7 +364,6 @@ impl RaftConsensus {
 
                 let node = node.clone();
                 let transport = transport.clone();
-                let _consensus = self.clone();
 
                 let task = tokio::spawn(async move {
                     match transport.send_vote_request(&node, request).await {
@@ -363,7 +381,7 @@ impl RaftConsensus {
 
         // Collect votes with timeout
         let election_timeout = *self.election_timeout.read().await;
-        let vote_results = tokio::time::timeout(election_timeout, async {
+        tokio::time::timeout(election_timeout, async {
             let mut results = Vec::new();
             for task in vote_tasks {
                 if let Ok(Some(result)) = task.await {
@@ -373,15 +391,22 @@ impl RaftConsensus {
             results
         })
         .await
-        .unwrap_or_default();
+        .unwrap_or_default()
+    }
 
-        // Process vote responses
+    /// Process vote results and return vote count
+    async fn process_vote_results(
+        &self,
+        vote_results: Vec<(NodeId, VoteResponse)>,
+        new_term: u64,
+    ) -> OrbitResult<usize> {
         let mut vote_count = 1; // Self vote
+
         for (node_id, response) in vote_results {
             if response.term > new_term {
                 // Higher term discovered, step down
                 self.step_down(response.term).await?;
-                return Ok(());
+                return Ok(0); // Election aborted
             }
 
             if response.vote_granted {
@@ -391,61 +416,71 @@ impl RaftConsensus {
             }
         }
 
-        // Check if we won the election
+        Ok(vote_count)
+    }
+
+    /// Finalize election based on vote count
+    async fn finalize_election(&self, vote_count: usize, new_term: u64) -> OrbitResult<()> {
+        let cluster_nodes = self.cluster_nodes.read().await;
         let cluster_size = cluster_nodes.len();
         let majority = cluster_size / 2 + 1;
 
         if vote_count >= majority {
             self.become_leader().await?;
-        } else {
+        } else if vote_count > 0 {
             // Election failed, return to follower
             self.step_down(new_term).await?;
         }
+        // If vote_count is 0, we already stepped down in process_vote_results
 
         Ok(())
     }
 
     /// Become leader
     async fn become_leader(&self) -> OrbitResult<()> {
-        info!(
-            "Becoming leader for term: {}",
-            self.get_current_term().await
-        );
+        let current_term = self.get_current_term().await;
+        info!("Becoming leader for term: {}", current_term);
 
-        {
-            let mut state = self.state.write().await;
-            *state = RaftState::Leader;
-        }
+        self.transition_to_leader_state().await;
+        self.initialize_leader_indices().await;
+        self.notify_leadership_event_handlers(current_term).await;
 
-        // Initialize leader state
+        Ok(())
+    }
+
+    /// Transition to leader state
+    async fn transition_to_leader_state(&self) {
+        let mut state = self.state.write().await;
+        *state = RaftState::Leader;
+    }
+
+    /// Initialize leader indices for all followers
+    async fn initialize_leader_indices(&self) {
         let log_len = {
             let log = self.log.read().await;
             log.len() as u64
         };
 
         let cluster_nodes = self.cluster_nodes.read().await;
-        {
-            let mut next_index = self.next_index.write().await;
-            let mut match_index = self.match_index.write().await;
+        let mut next_index = self.next_index.write().await;
+        let mut match_index = self.match_index.write().await;
 
-            for node in cluster_nodes.iter() {
-                if node != &self.node_id {
-                    next_index.insert(node.clone(), log_len + 1);
-                    match_index.insert(node.clone(), 0);
-                }
+        for node in cluster_nodes.iter() {
+            if node != &self.node_id {
+                next_index.insert(node.clone(), log_len + 1);
+                match_index.insert(node.clone(), 0);
             }
         }
+    }
 
-        // Notify event handlers
-        let current_term = self.get_current_term().await;
+    /// Notify event handlers about leadership
+    async fn notify_leadership_event_handlers(&self, current_term: u64) {
         let handlers = self.event_handlers.read().await;
         for handler in handlers.iter() {
             if let Err(e) = handler.on_leader_elected(&self.node_id, current_term).await {
                 error!("Leader elected event handler failed: {}", e);
             }
         }
-
-        Ok(())
     }
 
     /// Step down from candidate/leader to follower
