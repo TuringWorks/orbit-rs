@@ -58,11 +58,7 @@ impl AuditEvent {
     }
 
     /// Create a query audit event
-    pub fn new_query(
-        subject: &SecuritySubject,
-        resource: &SecurityResource,
-        query: &str,
-    ) -> Self {
+    pub fn new_query(subject: &SecuritySubject, resource: &SecurityResource, query: &str) -> Self {
         let mut event = Self::new(AuditEventType::Query, "QUERY".to_string());
         event.subject = Some(subject.clone());
         event.resource = Some(resource.clone());
@@ -125,7 +121,10 @@ impl AuditEvent {
         let data = format!(
             "{}:{}:{}:{}",
             self.id,
-            self.timestamp.duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs(),
+            self.timestamp
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
             self.action,
             self.result.as_str()
         );
@@ -207,10 +206,7 @@ pub trait AuditLogger: Send + Sync {
     async fn log(&self, event: AuditEvent) -> OrbitResult<()>;
 
     /// Query audit logs
-    async fn query(
-        &self,
-        filters: AuditQueryFilters,
-    ) -> OrbitResult<Vec<AuditEvent>>;
+    async fn query(&self, filters: AuditQueryFilters) -> OrbitResult<Vec<AuditEvent>>;
 
     /// Get audit statistics
     async fn get_statistics(&self, period: Duration) -> OrbitResult<AuditStatistics>;
@@ -303,10 +299,7 @@ impl AuditLogger for InMemoryAuditLogger {
         Ok(())
     }
 
-    async fn query(
-        &self,
-        filters: AuditQueryFilters,
-    ) -> OrbitResult<Vec<AuditEvent>> {
+    async fn query(&self, filters: AuditQueryFilters) -> OrbitResult<Vec<AuditEvent>> {
         let events = self.events.read().await;
 
         let filtered: Vec<AuditEvent> = events
@@ -373,10 +366,8 @@ impl AuditLogger for InMemoryAuditLogger {
         let events = self.events.read().await;
         let cutoff = SystemTime::now() - period;
 
-        let recent_events: Vec<&AuditEvent> = events
-            .iter()
-            .filter(|e| e.timestamp >= cutoff)
-            .collect();
+        let recent_events: Vec<&AuditEvent> =
+            events.iter().filter(|e| e.timestamp >= cutoff).collect();
 
         let total_events = recent_events.len();
         let mut events_by_type: HashMap<String, usize> = HashMap::new();
@@ -525,7 +516,9 @@ pub struct ComplianceReport {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::security::authorization::{SecuritySubject, SubjectType, SecurityResource, ResourceType};
+    use crate::security::authorization::{
+        ResourceType, SecurityResource, SecuritySubject, SubjectType,
+    };
 
     #[tokio::test]
     async fn test_audit_logger() {
@@ -577,7 +570,10 @@ mod tests {
         let failed_auth_event = AuditEvent::new_authentication(&subject, false);
         logger.log(failed_auth_event).await.unwrap();
 
-        let stats = logger.get_statistics(Duration::from_secs(3600)).await.unwrap();
+        let stats = logger
+            .get_statistics(Duration::from_secs(3600))
+            .await
+            .unwrap();
 
         assert_eq!(stats.total_events, 2);
         assert!(stats.success_rate > 0.0);

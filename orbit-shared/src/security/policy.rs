@@ -242,10 +242,8 @@ impl PolicyEngine {
         let mut allowed = false;
 
         // Sort policies by priority (higher priority first)
-        let mut sorted_policies: Vec<&SecurityPolicy> = policies
-            .values()
-            .filter(|p| p.enabled)
-            .collect();
+        let mut sorted_policies: Vec<&SecurityPolicy> =
+            policies.values().filter(|p| p.enabled).collect();
         sorted_policies.sort_by(|a, b| b.priority.cmp(&a.priority));
 
         // Evaluate each policy

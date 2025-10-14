@@ -8,15 +8,16 @@
 //! - SQL injection prevention
 //! - Security policy enforcement
 
+pub mod audit;
 pub mod authentication;
 pub mod authorization;
 pub mod encryption;
-pub mod audit;
-pub mod sql_validation;
 pub mod policy;
+pub mod sql_validation;
 pub mod threat_detection;
 
 // Re-export commonly used types
+pub use audit::{AuditEvent, AuditLogger, AuditPolicy, ComplianceMonitor};
 pub use authentication::{
     AuthenticationManager, AuthenticationProvider, LdapAuthProvider, OAuth2AuthProvider,
     SamlAuthProvider,
@@ -25,7 +26,6 @@ pub use authorization::{
     AccessPolicy, Permission, RbacEngine, Role, RoleBasedAccessControl, SecurityAction,
     SecurityResource, SecuritySubject,
 };
-pub use audit::{AuditEvent, AuditLogger, AuditPolicy, ComplianceMonitor};
 pub use encryption::{
     EncryptionManager, KeyManagementSystem, KeyRotationPolicy, TlsConfig, TlsVersion,
 };

@@ -137,12 +137,7 @@ pub struct Permission {
 
 impl Permission {
     /// Create a new permission
-    pub fn new(
-        id: String,
-        name: String,
-        description: String,
-        resource_type: ResourceType,
-    ) -> Self {
+    pub fn new(id: String, name: String, description: String, resource_type: ResourceType) -> Self {
         Self {
             id,
             name,
@@ -311,11 +306,16 @@ impl RbacEngine {
                 }
 
                 // Check if permission allows this action
-                if permission.actions.iter().any(|a| {
-                    std::mem::discriminant(a) == std::mem::discriminant(action)
-                }) {
+                if permission
+                    .actions
+                    .iter()
+                    .any(|a| std::mem::discriminant(a) == std::mem::discriminant(action))
+                {
                     // Check conditions
-                    if self.evaluate_conditions(&permission.conditions, subject, resource).await? {
+                    if self
+                        .evaluate_conditions(&permission.conditions, subject, resource)
+                        .await?
+                    {
                         return Ok(true);
                     }
                 }
@@ -325,7 +325,10 @@ impl RbacEngine {
         // Check policies
         let policies = self.policies.read().await;
         for policy in policies.iter() {
-            if self.policy_matches(policy, subject, resource, action).await? {
+            if self
+                .policy_matches(policy, subject, resource, action)
+                .await?
+            {
                 return Ok(policy.effect == PolicyEffect::Allow);
             }
         }
@@ -334,7 +337,10 @@ impl RbacEngine {
     }
 
     /// Get effective permissions for a subject
-    async fn get_effective_permissions(&self, subject: &SecuritySubject) -> OrbitResult<HashSet<String>> {
+    async fn get_effective_permissions(
+        &self,
+        subject: &SecuritySubject,
+    ) -> OrbitResult<HashSet<String>> {
         let mut effective_permissions = HashSet::new();
         let roles = self.roles.read().await;
 
@@ -411,7 +417,8 @@ impl RbacEngine {
         }
 
         // Evaluate conditions
-        self.evaluate_conditions(&policy.conditions, subject, resource).await
+        self.evaluate_conditions(&policy.conditions, subject, resource)
+            .await
     }
 
     /// Check if subject matches
@@ -421,9 +428,11 @@ impl RbacEngine {
             SubjectMatcher::User(id) => &subject.id == id,
             SubjectMatcher::Role(role) => subject.roles.contains(role),
             SubjectMatcher::Group(_) => false, // Stub for now
-            SubjectMatcher::Attribute(key, value) => {
-                subject.attributes.get(key).map(|v| v == value).unwrap_or(false)
-            }
+            SubjectMatcher::Attribute(key, value) => subject
+                .attributes
+                .get(key)
+                .map(|v| v == value)
+                .unwrap_or(false),
         }
     }
 
@@ -446,9 +455,9 @@ impl RbacEngine {
             ActionMatcher::Specific(a) => {
                 std::mem::discriminant(a) == std::mem::discriminant(action)
             }
-            ActionMatcher::Set(actions) => actions.iter().any(|a| {
-                std::mem::discriminant(a) == std::mem::discriminant(action)
-            }),
+            ActionMatcher::Set(actions) => actions
+                .iter()
+                .any(|a| std::mem::discriminant(a) == std::mem::discriminant(action)),
         }
     }
 }

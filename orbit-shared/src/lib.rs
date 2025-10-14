@@ -122,8 +122,8 @@ pub use security::{
     AuthenticationProvider, ComplianceMonitor, EncryptionManager, KeyManagementSystem,
     KeyRotationPolicy, LdapAuthProvider, OAuth2AuthProvider, PolicyEngine, QueryValidator,
     RbacEngine, RoleBasedAccessControl, SamlAuthProvider, SecurityAction, SecurityContext,
-    SecurityFramework, SecurityResource, SecuritySubject, SqlInjectionDetector, ThreatDetectionEngine,
-    TlsConfig, TlsVersion,
+    SecurityFramework, SecurityResource, SecuritySubject, SqlInjectionDetector,
+    ThreatDetectionEngine, TlsConfig, TlsVersion,
 };
 
 // Re-export trigger functionality

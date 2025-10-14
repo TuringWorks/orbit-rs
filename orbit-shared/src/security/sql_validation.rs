@@ -282,7 +282,9 @@ mod tests {
         let detector = SqlInjectionDetector::new();
 
         // Valid query should pass
-        assert!(detector.validate("SELECT * FROM users WHERE id = 1").is_ok());
+        assert!(detector
+            .validate("SELECT * FROM users WHERE id = 1")
+            .is_ok());
 
         // SQL injection attempts should fail
         assert!(detector
@@ -294,9 +296,7 @@ mod tests {
         assert!(detector
             .validate("SELECT * FROM users WHERE name = '' OR '1'='1'")
             .is_err());
-        assert!(detector
-            .validate("SELECT * FROM users -- comment")
-            .is_err());
+        assert!(detector.validate("SELECT * FROM users -- comment").is_err());
     }
 
     #[test]
@@ -304,10 +304,14 @@ mod tests {
         let detector = SqlInjectionDetector::new();
 
         // Balanced quotes should pass
-        assert!(detector.validate("SELECT * FROM users WHERE name = 'John'").is_ok());
+        assert!(detector
+            .validate("SELECT * FROM users WHERE name = 'John'")
+            .is_ok());
 
         // Unbalanced quotes should fail
-        assert!(detector.validate("SELECT * FROM users WHERE name = 'John").is_err());
+        assert!(detector
+            .validate("SELECT * FROM users WHERE name = 'John")
+            .is_err());
     }
 
     #[test]

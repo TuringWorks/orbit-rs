@@ -225,10 +225,7 @@ pub struct EncryptionManager {
 
 impl EncryptionManager {
     /// Create a new encryption manager
-    pub fn new(
-        key_management: Arc<KeyManagementSystem>,
-        tls_config: Option<TlsConfig>,
-    ) -> Self {
+    pub fn new(key_management: Arc<KeyManagementSystem>, tls_config: Option<TlsConfig>) -> Self {
         Self {
             key_management,
             tls_config,
@@ -306,10 +303,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_key_management_system() {
-        let kms = KeyManagementSystem::new(
-            KeyRotationPolicy::default(),
-            KeyStoreType::Memory,
-        );
+        let kms = KeyManagementSystem::new(KeyRotationPolicy::default(), KeyStoreType::Memory);
 
         // Generate and add a key
         let key = kms.generate_key("test-key".to_string()).unwrap();
@@ -336,10 +330,7 @@ mod tests {
         kms.add_key(key).await.unwrap();
         kms.set_active_key(key_id.clone()).await.unwrap();
 
-        let tls_config = TlsConfig::tls13(
-            "/path/to/cert".to_string(),
-            "/path/to/key".to_string(),
-        );
+        let tls_config = TlsConfig::tls13("/path/to/cert".to_string(), "/path/to/key".to_string());
 
         let manager = EncryptionManager::new(kms, Some(tls_config));
 
@@ -355,10 +346,7 @@ mod tests {
 
     #[test]
     fn test_tls_config() {
-        let config = TlsConfig::tls13(
-            "/path/to/cert".to_string(),
-            "/path/to/key".to_string(),
-        );
+        let config = TlsConfig::tls13("/path/to/cert".to_string(), "/path/to/key".to_string());
 
         assert_eq!(config.version, TlsVersion::Tls13);
         assert_eq!(config.cipher_suites.len(), 3);

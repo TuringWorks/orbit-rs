@@ -388,7 +388,10 @@ impl AuthenticationManager {
     }
 
     /// Authenticate using default provider
-    pub async fn authenticate(&self, credentials: &HashMap<String, String>) -> OrbitResult<AuthToken> {
+    pub async fn authenticate(
+        &self,
+        credentials: &HashMap<String, String>,
+    ) -> OrbitResult<AuthToken> {
         self.authenticate_with_provider(&self.default_provider, credentials)
             .await
     }
@@ -491,7 +494,10 @@ mod tests {
         );
 
         let mut credentials = HashMap::new();
-        credentials.insert("saml_response".to_string(), "saml_response_data".to_string());
+        credentials.insert(
+            "saml_response".to_string(),
+            "saml_response_data".to_string(),
+        );
 
         let token = provider.authenticate(&credentials).await.unwrap();
         assert!(token.is_valid());

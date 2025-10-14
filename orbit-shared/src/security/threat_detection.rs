@@ -154,11 +154,7 @@ impl AnomalyDetector {
     }
 
     /// Detect anomaly in user behavior
-    pub async fn detect_anomaly(
-        &self,
-        subject_id: &str,
-        action: &str,
-    ) -> Option<DetectedThreat> {
+    pub async fn detect_anomaly(&self, subject_id: &str, action: &str) -> Option<DetectedThreat> {
         let profiles = self.baseline_profiles.read().await;
 
         // Get user profile
@@ -405,9 +401,7 @@ mod tests {
 
         // Record multiple failed attempts
         for _ in 0..5 {
-            detector
-                .record_failed_attempt("user1", "192.168.1.1")
-                .await;
+            detector.record_failed_attempt("user1", "192.168.1.1").await;
         }
 
         // Check for brute force
