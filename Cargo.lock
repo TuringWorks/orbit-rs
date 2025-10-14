@@ -4208,6 +4208,7 @@ dependencies = [
  "anyhow",
  "async-stream",
  "async-trait",
+ "bincode",
  "bytes",
  "chrono",
  "dashmap 6.1.0",

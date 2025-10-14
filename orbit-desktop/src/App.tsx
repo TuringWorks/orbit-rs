@@ -8,7 +8,9 @@ import { QueryEditor } from '@/components/QueryEditor';
 import { MLModelManager } from '@/components/MLModelManager';
 import { DataVisualization } from '@/components/DataVisualization';
 import { SampleQueries } from '@/components/SampleQueries';
+import QueryResultsTable from '@/components/QueryResultsTable';
 import { TauriService, handleTauriError } from '@/services/tauri';
+import { useQueryTabs } from '@/hooks/useQueryTabs';
 import { 
   Connection, 
   QueryType, 
@@ -319,26 +321,26 @@ const ResultsContent = styled.div`
 const App: React.FC = () => {
   const [connections, setConnections] = useState<Connection[]>([]);
   const [currentConnection, setCurrentConnection] = useState<Connection | null>(null);
-  const [queryTabs, setQueryTabs] = useState<QueryTab[]>([
-    {
-      id: '1',
-      name: 'Query 1',
-      query: '-- Welcome to Orbit Desktop!\n-- Try some OrbitQL with ML functions:\n\nSELECT ML_XGBOOST(\n    ARRAY[age, income, credit_score],\n    loan_approved\n) as model_accuracy\nFROM loan_applications;',
-      query_type: QueryType.OrbitQL,
-      unsaved_changes: false,
-      is_executing: false,
-    }
-  ]);
-  const [activeTabIndex, setActiveTabIndex] = useState(0);
   const [resultsView, setResultsView] = useState<'table' | 'chart' | 'models'>('table');
   const [rightPanelView, setRightPanelView] = useState<'models' | 'samples'>('samples');
   const [error, setError] = useState<string | null>(null);
+  
+  const {
+    queryTabs,
+    activeTabIndex,
+    setActiveTabIndex,
+    createNewTab,
+    closeTab,
+    updateTabQuery,
+    updateTabState,
+    getCurrentTab
+  } = useQueryTabs();
 
   useEffect(() => {
     loadConnections();
     
     // Check if running in browser mode and show notification
-    if (typeof globalThis.window !== 'undefined' && (!globalThis.window.__TAURI_IPC__ || typeof globalThis.window.__TAURI_IPC__ !== 'function')) {
+    if (globalThis.window !== undefined && (!globalThis.window.__TAURI_IPC__ || typeof globalThis.window.__TAURI_IPC__ !== 'function')) {
       console.log('🌐 Running in browser mode with mock data. For full functionality, run as Tauri desktop app.');
     }
   }, []);
@@ -358,42 +360,6 @@ const App: React.FC = () => {
     }
   };
 
-  const createNewTab = (queryType: QueryType = QueryType.OrbitQL) => {
-    const newTab: QueryTab = {
-      id: Date.now().toString(),
-      name: `Query ${queryTabs.length + 1}`,
-      query: queryType === QueryType.Redis ? 'PING' : 'SELECT 1;',
-      query_type: queryType,
-      unsaved_changes: false,
-      is_executing: false,
-    };
-
-    setQueryTabs([...queryTabs, newTab]);
-    setActiveTabIndex(queryTabs.length);
-  };
-
-  const closeTab = (index: number) => {
-    if (queryTabs.length <= 1) return;
-
-    const newTabs = queryTabs.filter((_, i) => i !== index);
-    setQueryTabs(newTabs);
-    
-    if (activeTabIndex >= newTabs.length) {
-      setActiveTabIndex(newTabs.length - 1);
-    } else if (activeTabIndex > index) {
-      setActiveTabIndex(activeTabIndex - 1);
-    }
-  };
-
-  const updateTabQuery = (index: number, query: string) => {
-    const newTabs = [...queryTabs];
-    newTabs[index] = {
-      ...newTabs[index],
-      query,
-      unsaved_changes: true,
-    };
-    setQueryTabs(newTabs);
-  };
 
   const executeQuery = async (query: string) => {
     if (!currentConnection) {
@@ -401,17 +367,14 @@ const App: React.FC = () => {
       return;
     }
 
-    const currentTab = queryTabs[activeTabIndex];
+    const currentTab = getCurrentTab();
     if (!currentTab) return;
 
     // Update tab state to executing
-    const newTabs = [...queryTabs];
-    newTabs[activeTabIndex] = {
-      ...newTabs[activeTabIndex],
+    updateTabState(activeTabIndex, {
       is_executing: true,
       unsaved_changes: false,
-    };
-    setQueryTabs(newTabs);
+    });
     setError(null);
 
     try {
@@ -425,13 +388,10 @@ const App: React.FC = () => {
       const result = await TauriService.executeQuery(request);
       
       // Update tab with result
-      const updatedTabs = [...queryTabs];
-      updatedTabs[activeTabIndex] = {
-        ...updatedTabs[activeTabIndex],
+      updateTabState(activeTabIndex, {
         result,
         is_executing: false,
-      };
-      setQueryTabs(updatedTabs);
+      });
 
       // Switch to appropriate results view
       if (result.data && result.data.rows.length > 0) {
@@ -451,12 +411,7 @@ const App: React.FC = () => {
       setError(errorMessage);
       
       // Clear executing state
-      const updatedTabs = [...queryTabs];
-      updatedTabs[activeTabIndex] = {
-        ...updatedTabs[activeTabIndex],
-        is_executing: false,
-      };
-      setQueryTabs(updatedTabs);
+      updateTabState(activeTabIndex, { is_executing: false });
     }
   };
 
@@ -476,12 +431,7 @@ const App: React.FC = () => {
       const result = await TauriService.explainQuery(request);
       
       // Update tab with explain result
-      const newTabs = [...queryTabs];
-      newTabs[activeTabIndex] = {
-        ...newTabs[activeTabIndex],
-        result,
-      };
-      setQueryTabs(newTabs);
+      updateTabState(activeTabIndex, { result });
       setResultsView('table');
 
     } catch (err) {
@@ -508,7 +458,7 @@ const App: React.FC = () => {
     setActiveTabIndex(queryTabs.length);
   };
 
-  const currentTab = queryTabs[activeTabIndex];
+  const currentTab = getCurrentTab();
   const hasResults = currentTab?.result?.success && currentTab.result.data;
 
   return (
@@ -626,72 +576,7 @@ const App: React.FC = () => {
                           )}
                           
                           {resultsView === 'table' && currentTab?.result && (
-                            <div style={{ padding: '16px' }}>
-                              {currentTab.result.success ? (
-                                currentTab.result.data ? (
-                                  <div>
-                                    <div style={{ marginBottom: '12px', color: '#cccccc', fontSize: '13px' }}>
-                              Execution time: {currentTab.result?.execution_time?.toFixed(2) || 0}ms
-                              {currentTab.result?.rows_affected && (
-                                <> • Rows affected: {currentTab.result.rows_affected}</>
-                              )}
-                                    </div>
-                                    
-                                    <div style={{ overflow: 'auto', maxHeight: '400px' }}>
-                                      <table style={{ 
-                                        width: '100%', 
-                                        borderCollapse: 'collapse',
-                                        fontSize: '13px'
-                                      }}>
-                                        <thead>
-                                          <tr style={{ background: '#2d2d2d' }}>
-                                            {currentTab.result?.data?.columns.map(col => (
-                                              <th key={col.name} style={{ 
-                                                padding: '8px 12px', 
-                                                textAlign: 'left',
-                                                borderBottom: '1px solid #3c3c3c',
-                                                fontWeight: '600'
-                                              }}>
-                                                {col.name}
-                                                <div style={{ 
-                                                  fontSize: '10px', 
-                                                  color: '#888888',
-                                                  fontWeight: 'normal'
-                                                }}>
-                                                  {col.type}
-                                                </div>
-                                              </th>
-                                            ))}
-                                          </tr>
-                                        </thead>
-                                        <tbody>
-                                          {currentTab.result.data.rows.map((row, i) => (
-                                            <tr key={i} style={{ 
-                                              background: i % 2 === 0 ? '#1e1e1e' : '#252525' 
-                                            }}>
-                                              {currentTab.result.data!.columns.map(col => (
-                                                <td key={col.name} style={{ 
-                                                  padding: '8px 12px',
-                                                  borderBottom: '1px solid #3c3c3c'
-                                                }}>
-                                                  {String(row[col.name] ?? 'NULL')}
-                                                </td>
-                                              ))}
-                                            </tr>
-                                          ))}
-                                        </tbody>
-                                      </table>
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <div style={{ color: '#cccccc' }}>Query executed successfully</div>
-                                )
-                              ) : (
-                                <div style={{ color: '#d13438' }}>
-                                  Error: {currentTab.result.error}
-                                </div>
-                              )}
-                            </div>
+                            <QueryResultsTable result={currentTab.result} />
                           )}
                           
                           {resultsView === 'chart' && hasResults && (

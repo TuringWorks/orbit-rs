@@ -85,6 +85,25 @@ const createMockQueryResult = (): QueryResult => ({
 });
 
 /**
+ * Helper function to handle Tauri API responses and throw errors if needed
+ */
+const handleApiResponse = <T>(response: ApiResponse<T>, fallbackError: string): T => {
+  if (!response.success || !response.data) {
+    throw new Error(response.error || fallbackError);
+  }
+  return response.data;
+};
+
+/**
+ * Helper function for boolean responses that don't return data
+ */
+const handleBooleanResponse = (response: ApiResponse<boolean>, fallbackError: string): void => {
+  if (!response.success) {
+    throw new Error(response.error || fallbackError);
+  }
+};
+
+/**
  * Service for communicating with Tauri backend
  */
 export class TauriService {
@@ -92,18 +111,12 @@ export class TauriService {
   
   static async createConnection(connectionInfo: ConnectionInfo): Promise<string> {
     const response: ApiResponse<string> = await invoke('create_connection', { connectionInfo });
-    if (!response.success || !response.data) {
-      throw new Error(response.error || 'Failed to create connection');
-    }
-    return response.data;
+    return handleApiResponse(response, 'Failed to create connection');
   }
 
   static async testConnection(connectionInfo: ConnectionInfo): Promise<ConnectionStatus> {
     const response: ApiResponse<ConnectionStatus> = await invoke('test_connection', { connectionInfo });
-    if (!response.success || !response.data) {
-      throw new Error(response.error || 'Failed to test connection');
-    }
-    return response.data;
+    return handleApiResponse(response, 'Failed to test connection');
   }
 
   static async getConnections(): Promise<Connection[]> {
@@ -114,24 +127,17 @@ export class TauriService {
     }
     
     const response: ApiResponse<Connection[]> = await invoke('get_connections');
-    if (!response.success || !response.data) {
-      throw new Error(response.error || 'Failed to get connections');
-    }
-    return response.data;
+    return handleApiResponse(response, 'Failed to get connections');
   }
 
   static async disconnect(connectionId: string): Promise<void> {
     const response: ApiResponse<boolean> = await invoke('disconnect', { connectionId });
-    if (!response.success) {
-      throw new Error(response.error || 'Failed to disconnect');
-    }
+    handleBooleanResponse(response, 'Failed to disconnect');
   }
 
   static async deleteConnection(connectionId: string): Promise<void> {
     const response: ApiResponse<boolean> = await invoke('delete_connection', { connectionId });
-    if (!response.success) {
-      throw new Error(response.error || 'Failed to delete connection');
-    }
+    handleBooleanResponse(response, 'Failed to delete connection');
   }
 
   // Query Execution
@@ -144,10 +150,7 @@ export class TauriService {
     }
     
     const response: ApiResponse<QueryResult> = await invoke('execute_query', { request });
-    if (!response.success || !response.data) {
-      throw new Error(response.error || 'Failed to execute query');
-    }
-    return response.data;
+    return handleApiResponse(response, 'Failed to execute query');
   }
 
   static async getQueryHistory(connectionId: string, limit?: number): Promise<QueryRequest[]> {
@@ -155,18 +158,12 @@ export class TauriService {
       connectionId, 
       limit 
     });
-    if (!response.success || !response.data) {
-      throw new Error(response.error || 'Failed to get query history');
-    }
-    return response.data;
+    return handleApiResponse(response, 'Failed to get query history');
   }
 
   static async explainQuery(request: QueryRequest): Promise<QueryResult> {
     const response: ApiResponse<QueryResult> = await invoke('explain_query', { request });
-    if (!response.success || !response.data) {
-      throw new Error(response.error || 'Failed to explain query');
-    }
-    return response.data;
+    return handleApiResponse(response, 'Failed to explain query');
   }
 
   // ML Model Management
