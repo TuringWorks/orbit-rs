@@ -4,8 +4,11 @@ pub mod invocation;
 pub mod mesh;
 pub mod proxy;
 
-pub use addressable::*;
-pub use client::*;
-pub use invocation::*;
-pub use mesh::*;
-pub use proxy::*;
+pub use addressable::{
+    ActorConstructor, ActorContext, ActorImplementation, ActorInstance, ActorLifecycle,
+    ActorRegistry, DeactivationReason, DefaultActorConstructor,
+};
+pub use client::{ClientStats, OrbitClient, OrbitClientBuilder, OrbitClientConfig};
+pub use invocation::{ActorReference, InvocationResult, InvocationSystem};
+pub use mesh::AddressableLeaser;
+pub use proxy::{ActorProxy, ActorReferenceExt};

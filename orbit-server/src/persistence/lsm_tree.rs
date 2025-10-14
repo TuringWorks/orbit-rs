@@ -4,13 +4,14 @@
 //! for high-throughput write workloads with background compaction.
 
 use super::{
-    AddressableDirectoryProvider, ClusterNodeProvider, DiskBackupConfig, OrbitError, OrbitResult,
-    PersistenceMetrics, PersistenceProvider, ProviderHealth, TransactionContext,
+    AddressableDirectoryProvider, ClusterNodeProvider, OrbitError, OrbitResult, PersistenceMetrics,
+    PersistenceProvider, ProviderHealth, TransactionContext,
 };
 use async_trait::async_trait;
 use base64::{engine::general_purpose, Engine as _};
 use fastbloom_rs::{BloomFilter, FilterBuilder, Membership};
-use orbit_shared::{AddressableLease, AddressableReference, ClusterNode, LeaseData};
+use orbit_shared::mesh::{NodeInfo, NodeLease, NodeStatus};
+use orbit_shared::{AddressableLease, AddressableReference, NodeId};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;

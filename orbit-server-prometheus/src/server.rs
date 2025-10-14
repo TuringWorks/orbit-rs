@@ -1,4 +1,8 @@
-use crate::{MetricsFormatter, OrbitMetrics, PrometheusConfig, PrometheusError, PrometheusResult};
+use crate::{
+    config::ExportFormat,
+    metrics::{MetricsFormatter, OrbitMetrics},
+    PrometheusConfig, PrometheusError, PrometheusResult,
+};
 use axum::{
     extract::State,
     http::StatusCode,
@@ -104,7 +108,7 @@ async fn root_handler(State(state): State<ServerState>) -> impl IntoResponse {
 /// Metrics endpoint handler
 async fn metrics_handler(State(state): State<ServerState>) -> Result<Response, PrometheusError> {
     match state.config.export.format {
-        crate::ExportFormat::Prometheus => {
+        ExportFormat::Prometheus => {
             let formatted = MetricsFormatter::format_prometheus(&state.metrics)?;
             Ok((
                 StatusCode::OK,
@@ -113,7 +117,7 @@ async fn metrics_handler(State(state): State<ServerState>) -> Result<Response, P
             )
                 .into_response())
         }
-        crate::ExportFormat::Json => {
+        ExportFormat::Json => {
             let formatted = MetricsFormatter::format_json(&state.metrics)?;
             Ok((
                 StatusCode::OK,
@@ -122,7 +126,7 @@ async fn metrics_handler(State(state): State<ServerState>) -> Result<Response, P
             )
                 .into_response())
         }
-        crate::ExportFormat::OpenMetrics => {
+        ExportFormat::OpenMetrics => {
             // For now, fallback to Prometheus format
             let formatted = MetricsFormatter::format_prometheus(&state.metrics)?;
             Ok((

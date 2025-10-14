@@ -4,7 +4,7 @@
 //! large result sets and real-time query subscriptions that automatically
 //! update when underlying data changes.
 
-use crate::orbitql::executor::{ExecutionError, QueryExecutor, QueryMetadata, QueryResult};
+use crate::orbitql::executor::{QueryExecutor, QueryResult};
 use crate::orbitql::planner::{ExecutionPlan, PlanNode};
 use crate::orbitql::{QueryContext, QueryParams};
 

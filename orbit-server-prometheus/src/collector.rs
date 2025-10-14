@@ -1,4 +1,4 @@
-use crate::{OrbitMetrics, PrometheusConfig, PrometheusResult};
+use crate::{metrics::OrbitMetrics, PrometheusConfig, PrometheusResult};
 use std::sync::Arc;
 use tokio::time::interval;
 use tracing::{debug, info, warn};

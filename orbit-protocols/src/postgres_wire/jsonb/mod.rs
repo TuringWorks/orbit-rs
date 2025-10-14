@@ -107,11 +107,11 @@ pub mod path;
 pub mod schema;
 pub mod storage;
 
-pub use aggregation::*;
-pub use indexing::*;
-pub use path::*;
-pub use schema::*;
-pub use storage::*;
+pub use aggregation::{JsonAggregationFunctions, JsonAggregator, JsonObjectAggregator};
+pub use indexing::{GinIndex, JsonIndexType};
+pub use path::{FilterExpression, FilterOperator, JsonbPath, PathComponent};
+pub use schema::{JsonSchema, SchemaType, ValidationError, ValidationResult};
+pub use storage::JsonbBinary;
 
 /// Core JSONB value type supporting all PostgreSQL JSON types
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]

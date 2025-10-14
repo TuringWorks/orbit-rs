@@ -29,8 +29,8 @@ pub mod server;
 pub mod sse;
 pub mod websocket;
 
-pub use handlers::*;
-pub use models::*;
+pub use handlers::{ApiState, PaginationParams, list_actors, get_actor, create_actor, update_actor, delete_actor, invoke_actor, begin_transaction, commit_transaction, abort_transaction, health_check, openapi_spec};
+pub use models::{CreateActorRequest, InvokeActorRequest, UpdateActorStateRequest, SuccessResponse, ErrorResponse, ActorInfo, BeginTransactionRequest, TransactionOperation, TransactionInfo, PagedResponse, WebSocketMessage, SubscribeRequest};
 pub use server::RestApiServer;
-pub use sse::*;
+pub use sse::{SseParams, SseMessage, handle_cdc_events, handle_query_stream, QueryStreamParams};
 pub use websocket::WebSocketHandler;
