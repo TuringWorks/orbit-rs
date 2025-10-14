@@ -8,4 +8,6 @@ mod test_pooling_integration;
 
 pub use load_balancer::{LoadBalancer, LoadBalancerStats, LoadBalancingStrategy, NodeLoad};
 pub use mesh::{AddressableDirectory, ClusterManager, ClusterStats, DirectoryStats};
-pub use server::{OrbitServer, OrbitServerBuilder, OrbitServerConfig, ServerStats};
+pub use server::{
+    OrbitServer, OrbitServerBuilder, OrbitServerConfig, ProtocolConfig, ProtocolStats, ServerStats,
+};

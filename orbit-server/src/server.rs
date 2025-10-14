@@ -4,15 +4,42 @@ use crate::mesh::{AddressableDirectory, ClusterManager, ClusterStats, DirectoryS
 use crate::persistence::config::PersistenceProviderConfig;
 use crate::persistence::PersistenceProviderRegistry;
 use crate::LoadBalancer;
+use orbit_client::OrbitClient;
 use orbit_proto::{
     connection_service_server, health_check_response, health_service_server,
     OrbitConnectionService, OrbitHealthService,
 };
+use orbit_protocols::postgres_wire::{PostgresServer, QueryEngine};
+use orbit_protocols::resp::RespServer;
 use orbit_shared::{NodeCapabilities, NodeId, NodeInfo, NodeStatus, OrbitError, OrbitResult};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::time::{interval, Duration};
 use tonic::transport::Server;
+
+/// Configuration for protocol servers
+#[derive(Debug, Clone)]
+pub struct ProtocolConfig {
+    pub redis_enabled: bool,
+    pub redis_port: u16,
+    pub redis_bind_address: String,
+    pub postgres_enabled: bool,
+    pub postgres_port: u16,
+    pub postgres_bind_address: String,
+}
+
+impl Default for ProtocolConfig {
+    fn default() -> Self {
+        Self {
+            redis_enabled: true,
+            redis_port: 6379,
+            redis_bind_address: "127.0.0.1".to_string(),
+            postgres_enabled: true,
+            postgres_port: 5432,
+            postgres_bind_address: "127.0.0.1".to_string(),
+        }
+    }
+}
 
 /// Configuration for the Orbit server
 #[derive(Debug, Clone)]
@@ -25,6 +52,7 @@ pub struct OrbitServerConfig {
     pub max_addressables: Option<u32>,
     pub tags: HashMap<String, String>,
     pub persistence: PersistenceProviderConfig,
+    pub protocols: ProtocolConfig,
 }
 
 impl Default for OrbitServerConfig {
@@ -38,6 +66,7 @@ impl Default for OrbitServerConfig {
             max_addressables: None,
             tags: HashMap::new(),
             persistence: PersistenceProviderConfig::default_memory(),
+            protocols: ProtocolConfig::default(),
         }
     }
 }
@@ -93,6 +122,48 @@ impl OrbitServerBuilder {
         self
     }
 
+    /// Enable or disable Redis protocol server
+    pub fn with_redis_enabled(mut self, enabled: bool) -> Self {
+        self.config.protocols.redis_enabled = enabled;
+        self
+    }
+
+    /// Configure Redis server port
+    pub fn with_redis_port(mut self, port: u16) -> Self {
+        self.config.protocols.redis_port = port;
+        self
+    }
+
+    /// Configure Redis server bind address
+    pub fn with_redis_bind_address<S: Into<String>>(mut self, address: S) -> Self {
+        self.config.protocols.redis_bind_address = address.into();
+        self
+    }
+
+    /// Enable or disable PostgreSQL protocol server
+    pub fn with_postgres_enabled(mut self, enabled: bool) -> Self {
+        self.config.protocols.postgres_enabled = enabled;
+        self
+    }
+
+    /// Configure PostgreSQL server port
+    pub fn with_postgres_port(mut self, port: u16) -> Self {
+        self.config.protocols.postgres_port = port;
+        self
+    }
+
+    /// Configure PostgreSQL server bind address
+    pub fn with_postgres_bind_address<S: Into<String>>(mut self, address: S) -> Self {
+        self.config.protocols.postgres_bind_address = address.into();
+        self
+    }
+
+    /// Configure all protocol settings at once
+    pub fn with_protocols(mut self, protocols: ProtocolConfig) -> Self {
+        self.config.protocols = protocols;
+        self
+    }
+
     pub async fn build(self) -> OrbitResult<OrbitServer> {
         OrbitServer::new(self.config).await
     }
@@ -116,6 +187,8 @@ pub struct OrbitServer {
     health_service: OrbitHealthService,
     #[allow(dead_code)]
     persistence_registry: Arc<PersistenceProviderRegistry>,
+    /// PostgreSQL wire protocol server (initialized at startup)
+    postgres_server: Option<PostgresServer>,
 }
 
 impl OrbitServer {
@@ -147,6 +220,23 @@ impl OrbitServer {
         let connection_service = OrbitConnectionService::new();
         let health_service = OrbitHealthService::new();
 
+        // PostgreSQL server can be initialized immediately as it doesn't depend on OrbitClient
+        let postgres_server = if config.protocols.postgres_enabled {
+            let postgres_addr = format!(
+                "{}:{}",
+                config.protocols.postgres_bind_address, config.protocols.postgres_port
+            );
+            let query_engine = QueryEngine::new();
+            Some(PostgresServer::new_with_query_engine(
+                postgres_addr,
+                query_engine,
+            ))
+        } else {
+            None
+        };
+
+        // RESP server will be created after gRPC server starts
+
         let server = Self {
             config,
             node_info,
@@ -156,6 +246,7 @@ impl OrbitServer {
             connection_service,
             health_service,
             persistence_registry,
+            postgres_server,
         };
 
         Ok(server)
@@ -176,23 +267,108 @@ impl OrbitServer {
         // Start background tasks
         self.start_background_tasks().await;
 
-        // Start gRPC server
-        let addr = format!("{}:{}", self.config.bind_address, self.config.port)
+        // Create futures for all servers
+        let mut server_tasks = Vec::new();
+
+        // Start gRPC server (non-blocking)
+        let grpc_addr = format!("{}:{}", self.config.bind_address, self.config.port)
             .parse()
             .map_err(|e| OrbitError::configuration(format!("Invalid bind address: {}", e)))?;
 
-        tracing::info!("Starting Orbit server on {}", addr);
+        tracing::info!("Starting Orbit gRPC server on {}", grpc_addr);
 
-        Server::builder()
+        let grpc_server = Server::builder()
             .add_service(connection_service_server::ConnectionServiceServer::new(
                 self.connection_service.clone(),
             ))
             .add_service(health_service_server::HealthServiceServer::new(
                 self.health_service.clone(),
             ))
-            .serve(addr)
-            .await
-            .map_err(|e| OrbitError::network(format!("Server failed: {}", e)))?;
+            .serve(grpc_addr);
+
+        server_tasks.push(tokio::spawn(async move {
+            if let Err(e) = grpc_server.await {
+                tracing::error!("gRPC server failed: {}", e);
+            }
+        }));
+
+        // Give the gRPC server a moment to start
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        // Start RESP server if enabled (after gRPC server is ready)
+        if self.config.protocols.redis_enabled {
+            let redis_addr = format!(
+                "{}:{}",
+                self.config.protocols.redis_bind_address, self.config.protocols.redis_port
+            );
+            tracing::info!("Starting RESP (Redis) server on {}", redis_addr);
+
+            // Create OrbitClient that connects to this server
+            let server_url = format!("http://{}:{}", self.config.bind_address, self.config.port);
+            match OrbitClient::builder()
+                .with_namespace(self.config.namespace.clone())
+                .with_server_urls(vec![server_url])
+                .build()
+                .await
+            {
+                Ok(client) => {
+                    let resp_server = RespServer::new(redis_addr, client);
+                    server_tasks.push(tokio::spawn(async move {
+                        if let Err(e) = resp_server.run().await {
+                            tracing::error!("RESP server failed: {}", e);
+                        }
+                    }));
+                }
+                Err(e) => {
+                    tracing::error!("Failed to create OrbitClient for RESP server: {}", e);
+                }
+            }
+        }
+
+        // Start PostgreSQL server if enabled
+        if let Some(postgres_server) = self.postgres_server.take() {
+            let postgres_addr = format!(
+                "{}:{}",
+                self.config.protocols.postgres_bind_address, self.config.protocols.postgres_port
+            );
+            tracing::info!("Starting PostgreSQL server on {}", postgres_addr);
+
+            server_tasks.push(tokio::spawn(async move {
+                if let Err(e) = postgres_server.run().await {
+                    tracing::error!("PostgreSQL server failed: {}", e);
+                }
+            }));
+        }
+
+        tracing::info!("All Orbit servers started successfully");
+        tracing::info!(
+            "  - gRPC: {}:{}",
+            self.config.bind_address,
+            self.config.port
+        );
+        if self.config.protocols.redis_enabled {
+            tracing::info!(
+                "  - Redis: {}:{}",
+                self.config.protocols.redis_bind_address,
+                self.config.protocols.redis_port
+            );
+        }
+        if self.config.protocols.postgres_enabled {
+            tracing::info!(
+                "  - PostgreSQL: {}:{}",
+                self.config.protocols.postgres_bind_address,
+                self.config.protocols.postgres_port
+            );
+        }
+
+        // Wait for any server to finish (which likely means an error occurred)
+        if !server_tasks.is_empty() {
+            let (result, _index, _remaining) = futures::future::select_all(server_tasks).await;
+            if let Err(e) = result {
+                tracing::error!("One of the servers failed: {}", e);
+                return Err(OrbitError::network(format!("Server task failed: {}", e)));
+            }
+        }
 
         Ok(())
     }
@@ -228,11 +404,34 @@ impl OrbitServer {
         let cluster_stats = self.cluster_manager.stats().await;
         let directory_stats = self.addressable_directory.stats().await;
 
+        let protocol_stats = ProtocolStats {
+            redis_enabled: self.config.protocols.redis_enabled,
+            redis_address: if self.config.protocols.redis_enabled {
+                Some(format!(
+                    "{}:{}",
+                    self.config.protocols.redis_bind_address, self.config.protocols.redis_port
+                ))
+            } else {
+                None
+            },
+            postgres_enabled: self.config.protocols.postgres_enabled,
+            postgres_address: if self.config.protocols.postgres_enabled {
+                Some(format!(
+                    "{}:{}",
+                    self.config.protocols.postgres_bind_address,
+                    self.config.protocols.postgres_port
+                ))
+            } else {
+                None
+            },
+        };
+
         Ok(ServerStats {
             node_id: self.node_info.id.clone(),
             cluster_stats,
             directory_stats,
             supported_types: self.node_info.capabilities.addressable_types.clone(),
+            protocol_stats,
         })
     }
 
@@ -276,6 +475,15 @@ impl OrbitServer {
     }
 }
 
+/// Information about protocol servers
+#[derive(Debug, Clone)]
+pub struct ProtocolStats {
+    pub redis_enabled: bool,
+    pub redis_address: Option<String>,
+    pub postgres_enabled: bool,
+    pub postgres_address: Option<String>,
+}
+
 /// Statistics about the Orbit server
 #[derive(Debug, Clone)]
 pub struct ServerStats {
@@ -283,6 +491,7 @@ pub struct ServerStats {
     pub cluster_stats: ClusterStats,
     pub directory_stats: DirectoryStats,
     pub supported_types: Vec<String>,
+    pub protocol_stats: ProtocolStats,
 }
 
 #[cfg(test)]

@@ -14,6 +14,8 @@ path = "src/main.rs"
 orbit-util = { path = "../orbit-util" }
 orbit-shared = { path = "../orbit-shared" }
 orbit-proto = { path = "../orbit-proto" }
+orbit-protocols = { path = "../orbit-protocols" }
+orbit-client = { path = "../orbit-client" }
 tokio.workspace = true
 tokio-stream.workspace = true
 tonic.workspace = true
