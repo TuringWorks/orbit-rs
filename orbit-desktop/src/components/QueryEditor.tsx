@@ -349,13 +349,18 @@ export const QueryEditor: React.FC<QueryEditorProps> = ({
   };
 
   const handleFormat = () => {
-    // Simple formatting for SQL/OrbitQL
+    // Simple formatting for SQL/OrbitQL - using safe regex patterns to prevent ReDoS
     if (queryType === QueryType.SQL || queryType === QueryType.OrbitQL) {
+      // Safe regex patterns that don't allow backtracking
       const formatted = value
-        .replaceAll(/\s+/g, ' ')
-        .replaceAll(/\s*,\s*/g, ',\n  ')
-        .replaceAll(/\b(SELECT|FROM|WHERE|JOIN|GROUP BY|HAVING|ORDER BY|LIMIT)\b/gi, '\n$1')
-        .replaceAll(/^\s+/gm, '  ')
+        // Replace one or more whitespace with a single space (safe pattern)
+        .replaceAll(/[ \t\r\n]+/g, ' ')
+        // Format commas with newlines (safe pattern with specific chars)
+        .replaceAll(/[ \t]*,[ \t]*/g, ',\n  ')
+        // Format SQL keywords with newlines (safe word boundary pattern)
+        .replaceAll(/\b(?:SELECT|FROM|WHERE|JOIN|GROUP BY|HAVING|ORDER BY|LIMIT)\b/gi, '\n$1')
+        // Remove leading whitespace from each line (safe pattern)
+        .replaceAll(/^[ \t]+/gm, '  ')
         .trim();
       onChange(formatted);
     }
