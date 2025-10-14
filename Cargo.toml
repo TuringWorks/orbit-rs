@@ -48,6 +48,9 @@ license = "BSD-3-Clause OR MIT"
 description = "Orbit - Build distributed and scalable online services (Rust implementation)"
 repository = "https://github.com/TuringWorks/orbit-rs"
 
+[workspace.metadata.clippy]
+cognitive-complexity-threshold = 15
+
 [workspace.dependencies]
 pyo3 = "0.24.1"
 # Kubernetes operator dependencies  

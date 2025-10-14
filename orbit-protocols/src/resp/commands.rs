@@ -32,6 +32,24 @@ use orbit_client::OrbitClient;
 use orbit_shared::Key;
 use std::collections::HashMap;
 
+/// Command categories for organizing command dispatch
+#[derive(Debug, Clone)]
+enum CommandCategory {
+    Connection,
+    String,
+    Hash,
+    List,
+    PubSub,
+    Set,
+    SortedSet,
+    Vector,
+    TimeSeries,
+    Graph,
+    GraphRAG,
+    Server,
+    Unknown,
+}
+
 /// Redis command handler that translates Redis commands to Orbit actor operations
 pub struct CommandHandler {
     orbit_client: Arc<OrbitClient>,
@@ -49,6 +67,47 @@ impl CommandHandler {
 
     /// Handle a RESP command
     pub async fn handle_command(&self, command: RespValue) -> ProtocolResult<RespValue> {
+        let (command_name, args) = self.parse_command(command)?;
+        let category = self.get_command_category(&command_name);
+
+        debug!(
+            "Executing command: {} (category: {:?}) with {} args",
+            command_name,
+            category,
+            args.len()
+        );
+
+        match category {
+            CommandCategory::Connection => {
+                self.handle_connection_commands(&command_name, &args).await
+            }
+            CommandCategory::String => self.handle_string_commands(&command_name, &args).await,
+            CommandCategory::Hash => self.handle_hash_commands(&command_name, &args).await,
+            CommandCategory::List => self.handle_list_commands(&command_name, &args).await,
+            CommandCategory::PubSub => self.handle_pubsub_commands(&command_name, &args).await,
+            CommandCategory::Set => self.handle_set_commands(&command_name, &args).await,
+            CommandCategory::SortedSet => {
+                self.handle_sortedset_commands(&command_name, &args).await
+            }
+            CommandCategory::Vector => self.handle_vector_commands(&command_name, &args).await,
+            CommandCategory::TimeSeries => {
+                self.handle_timeseries_commands(&command_name, &args).await
+            }
+            CommandCategory::Graph => self.handle_graph_commands(&command_name, &args).await,
+            CommandCategory::GraphRAG => self.handle_graphrag_commands(&command_name, &args).await,
+            CommandCategory::Server => self.handle_server_commands(&command_name, &args).await,
+            CommandCategory::Unknown => {
+                warn!("Unknown command: {}", command_name);
+                Err(ProtocolError::RespError(format!(
+                    "ERR unknown command '{}'",
+                    command_name
+                )))
+            }
+        }
+    }
+
+    /// Parse command and extract name and arguments
+    fn parse_command(&self, command: RespValue) -> ProtocolResult<(String, Vec<RespValue>)> {
         let args = match command {
             RespValue::Array(args) => args,
             _ => {
@@ -67,23 +126,88 @@ impl CommandHandler {
             .ok_or_else(|| ProtocolError::RespError("Command name must be a string".to_string()))?
             .to_uppercase();
 
-        let args = &args[1..];
+        Ok((command_name, args[1..].to_vec()))
+    }
 
-        debug!(
-            "Executing command: {} with {} args",
-            command_name,
-            args.len()
-        );
-
-        match command_name.as_str() {
+    /// Categorize command for dispatch
+    fn get_command_category(&self, command_name: &str) -> CommandCategory {
+        match command_name {
             // Connection commands
+            "PING" | "ECHO" | "SELECT" | "AUTH" | "QUIT" => CommandCategory::Connection,
+
+            // String/Key commands
+            "GET" | "SET" | "DEL" | "EXISTS" | "TTL" | "EXPIRE" | "KEYS" | "APPEND"
+            | "GETRANGE" | "GETSET" | "MGET" | "MSET" | "SETEX" | "SETRANGE" | "STRLEN"
+            | "PERSIST" | "PEXPIRE" | "PTTL" | "RANDOMKEY" | "RENAME" | "TYPE" | "UNLINK" => {
+                CommandCategory::String
+            }
+
+            // Hash commands
+            "HGET" | "HSET" | "HGETALL" | "HMGET" | "HMSET" | "HDEL" | "HEXISTS" | "HKEYS"
+            | "HVALS" | "HLEN" | "HINCRBY" => CommandCategory::Hash,
+
+            // List commands
+            "LPUSH" | "RPUSH" | "LPOP" | "RPOP" | "LRANGE" | "LLEN" | "LINDEX" | "LSET"
+            | "LREM" | "LTRIM" | "LINSERT" | "BLPOP" | "BRPOP" => CommandCategory::List,
+
+            // Pub/Sub commands
+            "PUBLISH" | "SUBSCRIBE" | "UNSUBSCRIBE" | "PSUBSCRIBE" | "PUNSUBSCRIBE" | "PUBSUB" => {
+                CommandCategory::PubSub
+            }
+
+            // Set commands
+            "SADD" | "SREM" | "SMEMBERS" | "SCARD" | "SISMEMBER" | "SUNION" | "SINTER"
+            | "SDIFF" => CommandCategory::Set,
+
+            // Sorted Set commands
+            "ZADD" | "ZREM" | "ZCARD" | "ZSCORE" | "ZINCRBY" | "ZRANGE" | "ZRANGEBYSCORE"
+            | "ZCOUNT" | "ZRANK" => CommandCategory::SortedSet,
+
+            // Vector commands
+            cmd if cmd.starts_with("VECTOR.") || cmd.starts_with("FT.") => CommandCategory::Vector,
+
+            // Time Series commands
+            cmd if cmd.starts_with("TS.") => CommandCategory::TimeSeries,
+
+            // Graph commands
+            cmd if cmd.starts_with("GRAPH.") => CommandCategory::Graph,
+
+            // GraphRAG commands
+            cmd if cmd.starts_with("GRAPHRAG.") => CommandCategory::GraphRAG,
+
+            // Server commands
+            "INFO" | "DBSIZE" | "FLUSHDB" | "FLUSHALL" | "COMMAND" => CommandCategory::Server,
+
+            _ => CommandCategory::Unknown,
+        }
+    }
+
+    /// Handle connection commands
+    async fn handle_connection_commands(
+        &self,
+        command_name: &str,
+        args: &[RespValue],
+    ) -> ProtocolResult<RespValue> {
+        match command_name {
             "PING" => self.cmd_ping(args).await,
             "ECHO" => self.cmd_echo(args).await,
             "SELECT" => self.cmd_select(args).await,
             "AUTH" => self.cmd_auth(args).await,
             "QUIT" => self.cmd_quit(args).await,
+            _ => Err(ProtocolError::RespError(format!(
+                "ERR unknown connection command '{}'",
+                command_name
+            ))),
+        }
+    }
 
-            // String/Key commands
+    /// Handle string/key commands
+    async fn handle_string_commands(
+        &self,
+        command_name: &str,
+        args: &[RespValue],
+    ) -> ProtocolResult<RespValue> {
+        match command_name {
             "GET" => self.cmd_get(args).await,
             "SET" => self.cmd_set(args).await,
             "DEL" => self.cmd_del(args).await,
@@ -106,8 +230,20 @@ impl CommandHandler {
             "RENAME" => self.cmd_rename(args).await,
             "TYPE" => self.cmd_type(args).await,
             "UNLINK" => self.cmd_unlink(args).await,
+            _ => Err(ProtocolError::RespError(format!(
+                "ERR unknown string command '{}'",
+                command_name
+            ))),
+        }
+    }
 
-            // Hash commands
+    /// Handle hash commands
+    async fn handle_hash_commands(
+        &self,
+        command_name: &str,
+        args: &[RespValue],
+    ) -> ProtocolResult<RespValue> {
+        match command_name {
             "HGET" => self.cmd_hget(args).await,
             "HSET" => self.cmd_hset(args).await,
             "HGETALL" => self.cmd_hgetall(args).await,
@@ -119,8 +255,20 @@ impl CommandHandler {
             "HVALS" => self.cmd_hvals(args).await,
             "HLEN" => self.cmd_hlen(args).await,
             "HINCRBY" => self.cmd_hincrby(args).await,
+            _ => Err(ProtocolError::RespError(format!(
+                "ERR unknown hash command '{}'",
+                command_name
+            ))),
+        }
+    }
 
-            // List commands
+    /// Handle list commands
+    async fn handle_list_commands(
+        &self,
+        command_name: &str,
+        args: &[RespValue],
+    ) -> ProtocolResult<RespValue> {
+        match command_name {
             "LPUSH" => self.cmd_lpush(args).await,
             "RPUSH" => self.cmd_rpush(args).await,
             "LPOP" => self.cmd_lpop(args).await,
@@ -134,16 +282,40 @@ impl CommandHandler {
             "LINSERT" => self.cmd_linsert(args).await,
             "BLPOP" => self.cmd_blpop(args).await,
             "BRPOP" => self.cmd_brpop(args).await,
+            _ => Err(ProtocolError::RespError(format!(
+                "ERR unknown list command '{}'",
+                command_name
+            ))),
+        }
+    }
 
-            // Pub/Sub commands
+    /// Handle pub/sub commands
+    async fn handle_pubsub_commands(
+        &self,
+        command_name: &str,
+        args: &[RespValue],
+    ) -> ProtocolResult<RespValue> {
+        match command_name {
             "PUBLISH" => self.cmd_publish(args).await,
             "SUBSCRIBE" => self.cmd_subscribe(args).await,
             "UNSUBSCRIBE" => self.cmd_unsubscribe(args).await,
             "PSUBSCRIBE" => self.cmd_psubscribe(args).await,
             "PUNSUBSCRIBE" => self.cmd_punsubscribe(args).await,
             "PUBSUB" => self.cmd_pubsub(args).await,
+            _ => Err(ProtocolError::RespError(format!(
+                "ERR unknown pubsub command '{}'",
+                command_name
+            ))),
+        }
+    }
 
-            // Set commands
+    /// Handle set commands
+    async fn handle_set_commands(
+        &self,
+        command_name: &str,
+        args: &[RespValue],
+    ) -> ProtocolResult<RespValue> {
+        match command_name {
             "SADD" => self.cmd_sadd(args).await,
             "SREM" => self.cmd_srem(args).await,
             "SMEMBERS" => self.cmd_smembers(args).await,
@@ -152,8 +324,20 @@ impl CommandHandler {
             "SUNION" => self.cmd_sunion(args).await,
             "SINTER" => self.cmd_sinter(args).await,
             "SDIFF" => self.cmd_sdiff(args).await,
+            _ => Err(ProtocolError::RespError(format!(
+                "ERR unknown set command '{}'",
+                command_name
+            ))),
+        }
+    }
 
-            // Sorted Set commands
+    /// Handle sorted set commands
+    async fn handle_sortedset_commands(
+        &self,
+        command_name: &str,
+        args: &[RespValue],
+    ) -> ProtocolResult<RespValue> {
+        match command_name {
             "ZADD" => self.cmd_zadd(args).await,
             "ZREM" => self.cmd_zrem(args).await,
             "ZCARD" => self.cmd_zcard(args).await,
@@ -163,8 +347,21 @@ impl CommandHandler {
             "ZRANGEBYSCORE" => self.cmd_zrangebyscore(args).await,
             "ZCOUNT" => self.cmd_zcount(args).await,
             "ZRANK" => self.cmd_zrank(args).await,
+            _ => Err(ProtocolError::RespError(format!(
+                "ERR unknown sorted set command '{}'",
+                command_name
+            ))),
+        }
+    }
 
-            // Vector commands (VECTOR.* namespace)
+    /// Handle vector commands
+    async fn handle_vector_commands(
+        &self,
+        command_name: &str,
+        args: &[RespValue],
+    ) -> ProtocolResult<RespValue> {
+        match command_name {
+            // VECTOR.* namespace
             "VECTOR.ADD" => self.cmd_vector_add(args).await,
             "VECTOR.GET" => self.cmd_vector_get(args).await,
             "VECTOR.DEL" => self.cmd_vector_del(args).await,
@@ -173,15 +370,26 @@ impl CommandHandler {
             "VECTOR.COUNT" => self.cmd_vector_count(args).await,
             "VECTOR.SEARCH" => self.cmd_vector_search(args).await,
             "VECTOR.KNN" => self.cmd_vector_knn(args).await,
-
-            // RedisSearch-compatible vector commands (FT.* namespace)
+            // FT.* namespace (RedisSearch compatible)
             "FT.CREATE" => self.cmd_ft_create(args).await,
             "FT.ADD" => self.cmd_ft_add(args).await,
             "FT.DEL" => self.cmd_ft_del(args).await,
             "FT.SEARCH" => self.cmd_ft_search(args).await,
             "FT.INFO" => self.cmd_ft_info(args).await,
+            _ => Err(ProtocolError::RespError(format!(
+                "ERR unknown vector command '{}'",
+                command_name
+            ))),
+        }
+    }
 
-            // Time Series commands (TS.* namespace)
+    /// Handle time series commands
+    async fn handle_timeseries_commands(
+        &self,
+        command_name: &str,
+        args: &[RespValue],
+    ) -> ProtocolResult<RespValue> {
+        match command_name {
             "TS.CREATE" => self.cmd_ts_create(args).await,
             "TS.ALTER" => self.cmd_ts_alter(args).await,
             "TS.ADD" => self.cmd_ts_add(args).await,
@@ -199,8 +407,20 @@ impl CommandHandler {
             "TS.QUERYINDEX" => self.cmd_ts_queryindex(args).await,
             "TS.CREATERULE" => self.cmd_ts_createrule(args).await,
             "TS.DELETERULE" => self.cmd_ts_deleterule(args).await,
+            _ => Err(ProtocolError::RespError(format!(
+                "ERR unknown time series command '{}'",
+                command_name
+            ))),
+        }
+    }
 
-            // Graph commands (GRAPH.* namespace)
+    /// Handle graph commands
+    async fn handle_graph_commands(
+        &self,
+        command_name: &str,
+        args: &[RespValue],
+    ) -> ProtocolResult<RespValue> {
+        match command_name {
             "GRAPH.QUERY" => self.cmd_graph_query(args).await,
             "GRAPH.RO_QUERY" => self.cmd_graph_ro_query(args).await,
             "GRAPH.DELETE" => self.cmd_graph_delete(args).await,
@@ -209,8 +429,20 @@ impl CommandHandler {
             "GRAPH.PROFILE" => self.cmd_graph_profile(args).await,
             "GRAPH.SLOWLOG" => self.cmd_graph_slowlog(args).await,
             "GRAPH.CONFIG" => self.cmd_graph_config(args).await,
+            _ => Err(ProtocolError::RespError(format!(
+                "ERR unknown graph command '{}'",
+                command_name
+            ))),
+        }
+    }
 
-            // GraphRAG commands (GRAPHRAG.* namespace)
+    /// Handle GraphRAG commands
+    async fn handle_graphrag_commands(
+        &self,
+        command_name: &str,
+        args: &[RespValue],
+    ) -> ProtocolResult<RespValue> {
+        match command_name {
             "GRAPHRAG.BUILD" => self.cmd_graphrag_build(args).await,
             "GRAPHRAG.QUERY" => self.cmd_graphrag_query(args).await,
             "GRAPHRAG.EXTRACT" => self.cmd_graphrag_extract(args).await,
@@ -218,21 +450,29 @@ impl CommandHandler {
             "GRAPHRAG.STATS" => self.cmd_graphrag_stats(args).await,
             "GRAPHRAG.ENTITIES" => self.cmd_graphrag_entities(args).await,
             "GRAPHRAG.SIMILAR" => self.cmd_graphrag_similar(args).await,
+            _ => Err(ProtocolError::RespError(format!(
+                "ERR unknown GraphRAG command '{}'",
+                command_name
+            ))),
+        }
+    }
 
-            // Server commands
+    /// Handle server commands
+    async fn handle_server_commands(
+        &self,
+        command_name: &str,
+        args: &[RespValue],
+    ) -> ProtocolResult<RespValue> {
+        match command_name {
             "INFO" => self.cmd_info(args).await,
             "DBSIZE" => self.cmd_dbsize(args).await,
             "FLUSHDB" => self.cmd_flushdb(args).await,
             "FLUSHALL" => self.cmd_flushall(args).await,
             "COMMAND" => self.cmd_command(args).await,
-
-            _ => {
-                warn!("Unknown command: {}", command_name);
-                Err(ProtocolError::RespError(format!(
-                    "ERR unknown command '{}'",
-                    command_name
-                )))
-            }
+            _ => Err(ProtocolError::RespError(format!(
+                "ERR unknown server command '{}'",
+                command_name
+            ))),
         }
     }
 
