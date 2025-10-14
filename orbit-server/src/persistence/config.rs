@@ -434,167 +434,177 @@ impl PersistenceConfigBuilder {
 
     fn validate_provider_config(name: &str, config: &PersistenceConfig) -> OrbitResult<()> {
         match config {
-            PersistenceConfig::Memory(config) => {
-                if let Some(ref backup) = config.disk_backup {
-                    if backup.path.is_empty() {
-                        return Err(OrbitError::configuration(format!(
-                            "Memory provider '{}': backup path cannot be empty",
-                            name
-                        )));
-                    }
-                    if backup.sync_interval == 0 {
-                        return Err(OrbitError::configuration(format!(
-                            "Memory provider '{}': sync interval must be > 0",
-                            name
-                        )));
-                    }
-                }
-            }
-            PersistenceConfig::S3(config) => {
-                if config.endpoint.is_empty() {
-                    return Err(OrbitError::configuration(format!(
-                        "S3 provider '{}': endpoint cannot be empty",
-                        name
-                    )));
-                }
-                if config.bucket.is_empty() {
-                    return Err(OrbitError::configuration(format!(
-                        "S3 provider '{}': bucket cannot be empty",
-                        name
-                    )));
-                }
-                if config.access_key_id.is_empty() || config.secret_access_key.is_empty() {
-                    return Err(OrbitError::configuration(format!(
-                        "S3 provider '{}': access credentials cannot be empty",
-                        name
-                    )));
-                }
-            }
-            PersistenceConfig::Azure(config) => {
-                if config.account_name.is_empty() {
-                    return Err(OrbitError::configuration(format!(
-                        "Azure provider '{}': account name cannot be empty",
-                        name
-                    )));
-                }
-                if config.container_name.is_empty() {
-                    return Err(OrbitError::configuration(format!(
-                        "Azure provider '{}': container name cannot be empty",
-                        name
-                    )));
-                }
-            }
+            PersistenceConfig::Memory(config) => Self::validate_memory_config(name, config),
+            PersistenceConfig::S3(config) => Self::validate_s3_config(name, config),
+            PersistenceConfig::Azure(config) => Self::validate_azure_config(name, config),
             PersistenceConfig::GoogleCloud(config) => {
-                if config.project_id.is_empty() {
-                    return Err(OrbitError::configuration(format!(
-                        "Google Cloud provider '{}': project ID cannot be empty",
-                        name
-                    )));
-                }
-                if config.bucket_name.is_empty() {
-                    return Err(OrbitError::configuration(format!(
-                        "Google Cloud provider '{}': bucket name cannot be empty",
-                        name
-                    )));
-                }
+                Self::validate_google_cloud_config(name, config)
             }
             PersistenceConfig::DigitalOceanSpaces(config) => {
-                if config.endpoint.is_empty() {
-                    return Err(OrbitError::configuration(format!(
-                        "Digital Ocean Spaces provider '{}': endpoint cannot be empty",
-                        name
-                    )));
-                }
-                if config.space_name.is_empty() {
-                    return Err(OrbitError::configuration(format!(
-                        "Digital Ocean Spaces provider '{}': space name cannot be empty",
-                        name
-                    )));
-                }
-                if config.access_key_id.is_empty() || config.secret_access_key.is_empty() {
-                    return Err(OrbitError::configuration(format!(
-                        "Digital Ocean Spaces provider '{}': access credentials cannot be empty",
-                        name
-                    )));
-                }
-                if config.region.is_empty() {
-                    return Err(OrbitError::configuration(format!(
-                        "Digital Ocean Spaces provider '{}': region cannot be empty",
-                        name
-                    )));
-                }
+                Self::validate_do_spaces_config(name, config)
             }
-            PersistenceConfig::Etcd(config) => {
-                if config.endpoints.is_empty() {
-                    return Err(OrbitError::configuration(format!(
-                        "etcd provider '{}': endpoints cannot be empty",
-                        name
-                    )));
-                }
-                if config.lease_ttl == 0 {
-                    return Err(OrbitError::configuration(format!(
-                        "etcd provider '{}': lease TTL must be > 0",
-                        name
-                    )));
-                }
-            }
-            PersistenceConfig::Redis(config) => {
-                if config.url.is_empty() {
-                    return Err(OrbitError::configuration(format!(
-                        "Redis provider '{}': URL cannot be empty",
-                        name
-                    )));
-                }
-                if config.pool_size == 0 {
-                    return Err(OrbitError::configuration(format!(
-                        "Redis provider '{}': pool size must be > 0",
-                        name
-                    )));
-                }
-            }
-            PersistenceConfig::Composite(config) => {
-                // Recursively validate nested configurations
-                Self::validate_provider_config(&format!("{}_primary", name), &config.primary)?;
-                if let Some(ref backup) = config.backup {
-                    Self::validate_provider_config(&format!("{}_backup", name), backup)?;
-                }
-            }
-            PersistenceConfig::TiKV(config) => {
-                if config.pd_endpoints.is_empty() {
-                    return Err(OrbitError::configuration(format!(
-                        "TiKV provider '{}': PD endpoints cannot be empty",
-                        name
-                    )));
-                }
-                if config.key_prefix.is_empty() {
-                    return Err(OrbitError::configuration(format!(
-                        "TiKV provider '{}': key prefix cannot be empty",
-                        name
-                    )));
-                }
-                if config.batch_size == 0 {
-                    return Err(OrbitError::configuration(format!(
-                        "TiKV provider '{}': batch size must be > 0",
-                        name
-                    )));
-                }
-                if config.max_retries == 0 {
-                    return Err(OrbitError::configuration(format!(
-                        "TiKV provider '{}': max retries must be > 0",
-                        name
-                    )));
-                }
-                if config.enable_tls && config.ca_cert_path.is_none() {
-                    return Err(OrbitError::configuration(format!(
-                        "TiKV provider '{}': CA certificate path required when TLS is enabled",
-                        name
-                    )));
-                }
-            }
-            _ => {} // Other providers would have their validations here
+            PersistenceConfig::Etcd(config) => Self::validate_etcd_config(name, config),
+            PersistenceConfig::Redis(config) => Self::validate_redis_config(name, config),
+            PersistenceConfig::Composite(config) => Self::validate_composite_config(name, config),
+            PersistenceConfig::TiKV(config) => Self::validate_tikv_config(name, config),
+            _ => Ok(()), // Other providers would have their validations here
         }
+    }
 
+    /// Validate memory provider configuration
+    fn validate_memory_config(name: &str, config: &MemoryConfig) -> OrbitResult<()> {
+        if let Some(ref backup) = config.disk_backup {
+            Self::validate_non_empty_path(&backup.path, name, "backup path")?;
+            Self::validate_positive_value(backup.sync_interval, name, "sync interval")?;
+        }
         Ok(())
+    }
+
+    /// Validate S3 provider configuration
+    fn validate_s3_config(name: &str, config: &S3Config) -> OrbitResult<()> {
+        Self::validate_non_empty_field(&config.endpoint, name, "endpoint")?;
+        Self::validate_non_empty_field(&config.bucket, name, "bucket")?;
+        Self::validate_s3_credentials(name, &config.access_key_id, &config.secret_access_key)?;
+        Ok(())
+    }
+
+    /// Validate Azure provider configuration
+    fn validate_azure_config(name: &str, config: &AzureConfig) -> OrbitResult<()> {
+        Self::validate_non_empty_field(&config.account_name, name, "account name")?;
+        Self::validate_non_empty_field(&config.container_name, name, "container name")?;
+        Ok(())
+    }
+
+    /// Validate Google Cloud provider configuration
+    fn validate_google_cloud_config(name: &str, config: &GoogleCloudConfig) -> OrbitResult<()> {
+        Self::validate_non_empty_field(&config.project_id, name, "project ID")?;
+        Self::validate_non_empty_field(&config.bucket_name, name, "bucket name")?;
+        Ok(())
+    }
+
+    /// Validate Digital Ocean Spaces provider configuration
+    fn validate_do_spaces_config(name: &str, config: &DigitalOceanSpacesConfig) -> OrbitResult<()> {
+        Self::validate_non_empty_field(&config.endpoint, name, "endpoint")?;
+        Self::validate_non_empty_field(&config.space_name, name, "space name")?;
+        Self::validate_non_empty_field(&config.region, name, "region")?;
+        Self::validate_s3_credentials(name, &config.access_key_id, &config.secret_access_key)?;
+        Ok(())
+    }
+
+    /// Validate etcd provider configuration
+    fn validate_etcd_config(name: &str, config: &EtcdConfig) -> OrbitResult<()> {
+        if config.endpoints.is_empty() {
+            return Self::create_config_error(name, "endpoints cannot be empty");
+        }
+        Self::validate_positive_value(config.lease_ttl, name, "lease TTL")?;
+        Ok(())
+    }
+
+    /// Validate Redis provider configuration
+    fn validate_redis_config(name: &str, config: &RedisConfig) -> OrbitResult<()> {
+        Self::validate_non_empty_field(&config.url, name, "URL")?;
+        Self::validate_positive_value(config.pool_size, name, "pool size")?;
+        Ok(())
+    }
+
+    /// Validate composite provider configuration
+    fn validate_composite_config(name: &str, config: &CompositeConfig) -> OrbitResult<()> {
+        Self::validate_provider_config(&format!("{}_primary", name), &config.primary)?;
+        if let Some(ref backup) = config.backup {
+            Self::validate_provider_config(&format!("{}_backup", name), backup)?;
+        }
+        Ok(())
+    }
+
+    /// Validate TiKV provider configuration
+    fn validate_tikv_config(name: &str, config: &TiKVConfig) -> OrbitResult<()> {
+        if config.pd_endpoints.is_empty() {
+            return Self::create_config_error(name, "PD endpoints cannot be empty");
+        }
+        Self::validate_non_empty_field(&config.key_prefix, name, "key prefix")?;
+        Self::validate_positive_value(config.batch_size, name, "batch size")?;
+        Self::validate_positive_value(config.max_retries, name, "max retries")?;
+        Self::validate_tls_config(name, config)?;
+        Ok(())
+    }
+
+    /// Helper function to validate non-empty string fields
+    fn validate_non_empty_field(
+        value: &str,
+        provider_name: &str,
+        field_name: &str,
+    ) -> OrbitResult<()> {
+        if value.is_empty() {
+            Self::create_config_error(provider_name, &format!("{} cannot be empty", field_name))
+        } else {
+            Ok(())
+        }
+    }
+
+    /// Helper function to validate non-empty paths
+    fn validate_non_empty_path(
+        path: &str,
+        provider_name: &str,
+        field_name: &str,
+    ) -> OrbitResult<()> {
+        if path.is_empty() {
+            Self::create_config_error(provider_name, &format!("{} cannot be empty", field_name))
+        } else {
+            Ok(())
+        }
+    }
+
+    /// Helper function to validate positive numeric values
+    fn validate_positive_value(
+        value: impl PartialOrd + From<u8> + Copy,
+        provider_name: &str,
+        field_name: &str,
+    ) -> OrbitResult<()> {
+        if value <= 0.into() {
+            Self::create_config_error(provider_name, &format!("{} must be > 0", field_name))
+        } else {
+            Ok(())
+        }
+    }
+
+    /// Helper function to validate S3-style credentials
+    fn validate_s3_credentials(
+        provider_name: &str,
+        access_key: &str,
+        secret_key: &str,
+    ) -> OrbitResult<()> {
+        if access_key.is_empty() || secret_key.is_empty() {
+            Self::create_config_error(provider_name, "access credentials cannot be empty")
+        } else {
+            Ok(())
+        }
+    }
+
+    /// Helper function to validate TLS configuration
+    fn validate_tls_config(provider_name: &str, config: &TiKVConfig) -> OrbitResult<()> {
+        if config.enable_tls && config.ca_cert_path.is_none() {
+            Self::create_config_error(
+                provider_name,
+                "CA certificate path required when TLS is enabled",
+            )
+        } else {
+            Ok(())
+        }
+    }
+
+    /// Helper function to create configuration errors
+    fn create_config_error(provider_name: &str, message: &str) -> OrbitResult<()> {
+        let provider_type = provider_name.split('_').next().unwrap_or("Unknown");
+        let capitalized = format!(
+            "{}{}",
+            provider_type.chars().next().unwrap().to_uppercase(),
+            &provider_type[1..]
+        );
+
+        Err(OrbitError::configuration(format!(
+            "{} provider '{}': {}",
+            capitalized, provider_name, message
+        )))
     }
 
     /// Build the configuration

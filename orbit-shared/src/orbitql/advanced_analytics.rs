@@ -1457,6 +1457,15 @@ pub struct XGBoostModel {
     best_iteration: usize,
 }
 
+/// Early stopping state for XGBoost training
+#[derive(Debug, Clone)]
+struct EarlyStoppingState {
+    /// Best loss seen so far
+    best_loss: f64,
+    /// Patience counter
+    patience: usize,
+}
+
 /// XGBoost parameters
 #[derive(Debug, Clone)]
 pub struct XGBoostParams {
@@ -2760,48 +2769,90 @@ impl GradientBoostingModel {
     }
 
     pub fn train(&mut self, data: &[TrainingExample]) -> Result<(), AnalyticsError> {
-        if data.is_empty() {
-            return Err(AnalyticsError::ModelTrainingError(
-                "No training data".to_string(),
-            ));
+        self.validate_training_data(data)?;
+
+        let mut residuals = self.initialize_training(data);
+
+        // Gradient boosting iterations
+        for _iteration in 0..self.n_estimators {
+            if self.train_iteration(data, &mut residuals)? {
+                break; // Early stopping triggered
+            }
         }
 
-        // Initialize residuals with mean
+        self.finalize_training();
+        Ok(())
+    }
+
+    /// Validate training data
+    fn validate_training_data(&self, data: &[TrainingExample]) -> Result<(), AnalyticsError> {
+        if data.is_empty() {
+            Err(AnalyticsError::ModelTrainingError(
+                "No training data".to_string(),
+            ))
+        } else {
+            Ok(())
+        }
+    }
+
+    /// Initialize training by setting up residuals and clearing state
+    fn initialize_training(&mut self, data: &[TrainingExample]) -> Vec<f64> {
         let mean_target: f64 =
             data.iter().map(|ex| ex.actual_cost).sum::<f64>() / data.len() as f64;
-        let mut residuals: Vec<f64> = data.iter().map(|ex| ex.actual_cost - mean_target).collect();
+        let residuals: Vec<f64> = data.iter().map(|ex| ex.actual_cost - mean_target).collect();
 
         self.estimators.clear();
         self.loss_history.clear();
 
-        // Gradient boosting iterations
-        for _iteration in 0..self.n_estimators {
-            // Create weak learner to fit residuals
-            let mut weak_learner = WeakLearner::new();
-            weak_learner.train_on_residuals(data, &residuals)?;
+        residuals
+    }
 
-            // Update residuals
-            for (i, example) in data.iter().enumerate() {
-                let prediction = weak_learner.predict(&example.features);
-                residuals[i] -= self.learning_rate * prediction;
-            }
+    /// Train a single iteration and return whether early stopping was triggered
+    fn train_iteration(
+        &mut self,
+        data: &[TrainingExample],
+        residuals: &mut Vec<f64>,
+    ) -> Result<bool, AnalyticsError> {
+        // Create and train weak learner
+        let mut weak_learner = WeakLearner::new();
+        weak_learner.train_on_residuals(data, residuals)?;
 
-            weak_learner.weight = self.learning_rate;
-            self.estimators.push(weak_learner);
+        // Update residuals
+        self.update_residuals(data, &weak_learner, residuals);
 
-            // Calculate loss
-            let loss = residuals.iter().map(|r| r * r).sum::<f64>() / residuals.len() as f64;
-            self.loss_history.push(loss);
+        // Store the learner
+        weak_learner.weight = self.learning_rate;
+        self.estimators.push(weak_learner);
 
-            // Early stopping check
-            if loss < 1e-6 {
-                break;
-            }
+        // Check for early stopping
+        let loss = self.calculate_and_record_loss(residuals);
+        Ok(loss < 1e-6)
+    }
+
+    /// Update residuals based on weak learner predictions
+    fn update_residuals(
+        &self,
+        data: &[TrainingExample],
+        weak_learner: &WeakLearner,
+        residuals: &mut Vec<f64>,
+    ) {
+        for (i, example) in data.iter().enumerate() {
+            let prediction = weak_learner.predict(&example.features);
+            residuals[i] -= self.learning_rate * prediction;
         }
+    }
 
+    /// Calculate loss and record it in history
+    fn calculate_and_record_loss(&mut self, residuals: &[f64]) -> f64 {
+        let loss = residuals.iter().map(|r| r * r).sum::<f64>() / residuals.len() as f64;
+        self.loss_history.push(loss);
+        loss
+    }
+
+    /// Finalize training by setting flags and calculating feature importance
+    fn finalize_training(&mut self) {
         self.is_trained = true;
         self.calculate_feature_importance();
-        Ok(())
     }
 
     pub fn predict(&self, features: &QueryFeatures) -> f64 {
@@ -2864,73 +2915,133 @@ impl AdaBoostModel {
     }
 
     pub fn train(&mut self, data: &[TrainingExample]) -> Result<(), AnalyticsError> {
-        if data.is_empty() {
-            return Err(AnalyticsError::ModelTrainingError(
-                "No training data".to_string(),
-            ));
-        }
+        self.validate_training_data(data)?;
 
-        let n_samples = data.len();
-        let mut sample_weights = vec![1.0 / n_samples as f64; n_samples];
-
-        self.estimators.clear();
-        self.estimator_errors.clear();
-        self.estimator_weights.clear();
+        let mut sample_weights = self.initialize_sample_weights(data.len());
+        self.reset_training_state();
 
         for _ in 0..self.n_estimators {
-            // Train weak learner on weighted samples
-            let mut weak_learner = WeakLearner::new();
-            weak_learner.train_weighted(data, &sample_weights)?;
-
-            // Calculate weighted error
-            let mut weighted_error = 0.0;
-
-            for (i, example) in data.iter().enumerate() {
-                let prediction = weak_learner.predict(&example.features);
-                let error = (prediction - example.actual_cost).abs();
-
-                if error >= 10.0 {
-                    // Threshold for "incorrect" prediction in regression
-                    weighted_error += sample_weights[i];
-                }
-            }
-
-            // Avoid division by zero
-            if weighted_error >= 0.5 {
-                weighted_error = 0.5 - 1e-10;
-            }
-            if weighted_error <= 0.0 {
-                weighted_error = 1e-10;
-            }
-
-            // Calculate estimator weight
-            let alpha = self.learning_rate * (0.5 * ((1.0 - weighted_error) / weighted_error).ln());
-
-            // Update sample weights
-            for (i, example) in data.iter().enumerate() {
-                let prediction = weak_learner.predict(&example.features);
-                let error = (prediction - example.actual_cost).abs();
-
-                if error >= 10.0 {
-                    // Misclassified
-                    sample_weights[i] *= (weighted_error / (1.0 - weighted_error)).exp();
-                }
-            }
-
-            // Normalize weights
-            let weight_sum: f64 = sample_weights.iter().sum();
-            for weight in &mut sample_weights {
-                *weight /= weight_sum;
-            }
-
-            weak_learner.weight = alpha;
-            self.estimators.push((weak_learner, alpha));
-            self.estimator_errors.push(weighted_error);
-            self.estimator_weights.push(alpha);
+            self.train_iteration(data, &mut sample_weights)?;
         }
 
         self.is_trained = true;
         Ok(())
+    }
+
+    /// Validate training data
+    fn validate_training_data(&self, data: &[TrainingExample]) -> Result<(), AnalyticsError> {
+        if data.is_empty() {
+            Err(AnalyticsError::ModelTrainingError(
+                "No training data".to_string(),
+            ))
+        } else {
+            Ok(())
+        }
+    }
+
+    /// Initialize uniform sample weights
+    fn initialize_sample_weights(&self, n_samples: usize) -> Vec<f64> {
+        vec![1.0 / n_samples as f64; n_samples]
+    }
+
+    /// Reset training state
+    fn reset_training_state(&mut self) {
+        self.estimators.clear();
+        self.estimator_errors.clear();
+        self.estimator_weights.clear();
+    }
+
+    /// Train a single iteration
+    fn train_iteration(
+        &mut self,
+        data: &[TrainingExample],
+        sample_weights: &mut Vec<f64>,
+    ) -> Result<(), AnalyticsError> {
+        // Train weak learner
+        let mut weak_learner = WeakLearner::new();
+        weak_learner.train_weighted(data, sample_weights)?;
+
+        // Calculate and normalize weighted error
+        let mut weighted_error = self.calculate_weighted_error(data, &weak_learner, sample_weights);
+        weighted_error = self.normalize_weighted_error(weighted_error);
+
+        // Calculate estimator weight
+        let alpha = self.calculate_estimator_weight(weighted_error);
+
+        // Update sample weights
+        self.update_sample_weights(data, &weak_learner, sample_weights, weighted_error);
+
+        // Store the estimator
+        weak_learner.weight = alpha;
+        self.estimators.push((weak_learner, alpha));
+        self.estimator_errors.push(weighted_error);
+        self.estimator_weights.push(alpha);
+
+        Ok(())
+    }
+
+    /// Calculate weighted error for regression
+    fn calculate_weighted_error(
+        &self,
+        data: &[TrainingExample],
+        weak_learner: &WeakLearner,
+        sample_weights: &[f64],
+    ) -> f64 {
+        let mut weighted_error = 0.0;
+
+        for (i, example) in data.iter().enumerate() {
+            let prediction = weak_learner.predict(&example.features);
+            let error = (prediction - example.actual_cost).abs();
+
+            if error >= 10.0 {
+                // Threshold for "incorrect" prediction in regression
+                weighted_error += sample_weights[i];
+            }
+        }
+
+        weighted_error
+    }
+
+    /// Normalize weighted error to avoid division by zero
+    fn normalize_weighted_error(&self, weighted_error: f64) -> f64 {
+        if weighted_error >= 0.5 {
+            0.5 - 1e-10
+        } else if weighted_error <= 0.0 {
+            1e-10
+        } else {
+            weighted_error
+        }
+    }
+
+    /// Calculate estimator weight (alpha)
+    fn calculate_estimator_weight(&self, weighted_error: f64) -> f64 {
+        self.learning_rate * (0.5 * ((1.0 - weighted_error) / weighted_error).ln())
+    }
+
+    /// Update sample weights based on predictions
+    fn update_sample_weights(
+        &self,
+        data: &[TrainingExample],
+        weak_learner: &WeakLearner,
+        sample_weights: &mut Vec<f64>,
+        weighted_error: f64,
+    ) {
+        // Update weights for misclassified samples
+        for (i, example) in data.iter().enumerate() {
+            let prediction = weak_learner.predict(&example.features);
+            let error = (prediction - example.actual_cost).abs();
+
+            if error >= 10.0 {
+                // Misclassified
+                sample_weights[i] *= (weighted_error / (1.0 - weighted_error)).exp();
+            }
+        }
+
+        // Normalize weights
+        let weight_sum: f64 = sample_weights.iter().sum();
+        for weight in sample_weights {
+            *weight /= weight_sum;
+        }
     }
 
     pub fn predict(&self, features: &QueryFeatures) -> f64 {
@@ -2980,59 +3091,97 @@ impl LightGBMModel {
     }
 
     pub fn train(&mut self, data: &[TrainingExample]) -> Result<(), AnalyticsError> {
-        if data.is_empty() {
-            return Err(AnalyticsError::ModelTrainingError(
-                "No training data".to_string(),
-            ));
-        }
+        self.validate_training_data(data)?;
 
-        // Initialize with mean prediction
-        let mean_target: f64 =
-            data.iter().map(|ex| ex.actual_cost).sum::<f64>() / data.len() as f64;
-        let mut predictions = vec![mean_target; data.len()];
-
-        self.trees.clear();
-        self.evals_result.clear();
+        let mut predictions = self.initialize_training(data);
 
         let num_iterations = 100;
         for _iteration in 0..num_iterations {
-            // Calculate gradients and hessians
-            let gradients: Vec<f64> = data
-                .iter()
-                .enumerate()
-                .map(|(i, ex)| 2.0 * (predictions[i] - ex.actual_cost))
-                .collect();
-
-            let hessians = vec![2.0; data.len()];
-
-            // Build leaf-wise tree
-            let tree = self.build_lightgbm_tree(data, &gradients, &hessians)?;
-
-            // Update predictions
-            for (i, example) in data.iter().enumerate() {
-                predictions[i] += self.learning_rate * tree.predict(&example.features);
-            }
-
-            self.trees.push(tree);
-
-            // Calculate loss
-            let loss = data
-                .iter()
-                .enumerate()
-                .map(|(i, ex)| (predictions[i] - ex.actual_cost).powi(2))
-                .sum::<f64>()
-                / data.len() as f64;
-
-            self.evals_result.push(loss);
-
-            // Early stopping
-            if loss < 1e-6 {
-                break;
+            if self.train_iteration(data, &mut predictions)? {
+                break; // Early stopping triggered
             }
         }
 
         self.is_trained = true;
         Ok(())
+    }
+
+    /// Validate training data
+    fn validate_training_data(&self, data: &[TrainingExample]) -> Result<(), AnalyticsError> {
+        if data.is_empty() {
+            Err(AnalyticsError::ModelTrainingError(
+                "No training data".to_string(),
+            ))
+        } else {
+            Ok(())
+        }
+    }
+
+    /// Initialize training with mean predictions
+    fn initialize_training(&mut self, data: &[TrainingExample]) -> Vec<f64> {
+        let mean_target: f64 =
+            data.iter().map(|ex| ex.actual_cost).sum::<f64>() / data.len() as f64;
+        let predictions = vec![mean_target; data.len()];
+
+        self.trees.clear();
+        self.evals_result.clear();
+
+        predictions
+    }
+
+    /// Train a single iteration and return whether early stopping was triggered
+    fn train_iteration(
+        &mut self,
+        data: &[TrainingExample],
+        predictions: &mut Vec<f64>,
+    ) -> Result<bool, AnalyticsError> {
+        // Calculate gradients and hessians
+        let gradients = self.calculate_gradients(data, predictions);
+        let hessians = vec![2.0; data.len()];
+
+        // Build leaf-wise tree
+        let tree = self.build_lightgbm_tree(data, &gradients, &hessians)?;
+
+        // Update predictions
+        self.update_predictions(data, &tree, predictions);
+        self.trees.push(tree);
+
+        // Check for early stopping
+        let loss = self.calculate_and_record_loss(data, predictions);
+        Ok(loss < 1e-6)
+    }
+
+    /// Calculate gradients for current predictions
+    fn calculate_gradients(&self, data: &[TrainingExample], predictions: &[f64]) -> Vec<f64> {
+        data.iter()
+            .enumerate()
+            .map(|(i, ex)| 2.0 * (predictions[i] - ex.actual_cost))
+            .collect()
+    }
+
+    /// Update predictions with new tree
+    fn update_predictions(
+        &self,
+        data: &[TrainingExample],
+        tree: &LightGBMTree,
+        predictions: &mut Vec<f64>,
+    ) {
+        for (i, example) in data.iter().enumerate() {
+            predictions[i] += self.learning_rate * tree.predict(&example.features);
+        }
+    }
+
+    /// Calculate loss and record in history
+    fn calculate_and_record_loss(&mut self, data: &[TrainingExample], predictions: &[f64]) -> f64 {
+        let loss = data
+            .iter()
+            .enumerate()
+            .map(|(i, ex)| (predictions[i] - ex.actual_cost).powi(2))
+            .sum::<f64>()
+            / data.len() as f64;
+
+        self.evals_result.push(loss);
+        loss
     }
 
     fn build_lightgbm_tree(
@@ -3105,55 +3254,95 @@ impl CatBoostModel {
     }
 
     pub fn train(&mut self, data: &[TrainingExample]) -> Result<(), AnalyticsError> {
-        if data.is_empty() {
-            return Err(AnalyticsError::ModelTrainingError(
-                "No training data".to_string(),
-            ));
-        }
+        self.validate_training_data(data)?;
 
-        // Initialize with mean
-        let mean_target: f64 =
-            data.iter().map(|ex| ex.actual_cost).sum::<f64>() / data.len() as f64;
-        let mut predictions = vec![mean_target; data.len()];
-
-        self.trees.clear();
-        self.metrics_history.clear();
+        let mut predictions = self.initialize_training(data);
 
         for _iteration in 0..self.iterations {
-            // Calculate gradients
-            let gradients: Vec<f64> = data
-                .iter()
-                .enumerate()
-                .map(|(i, ex)| 2.0 * (predictions[i] - ex.actual_cost))
-                .collect();
-
-            // Build oblivious tree
-            let tree = self.build_oblivious_tree(data, &gradients)?;
-
-            // Update predictions
-            for (i, example) in data.iter().enumerate() {
-                predictions[i] += self.learning_rate * tree.predict(&example.features);
-            }
-
-            self.trees.push(tree);
-
-            // Calculate loss
-            let loss = data
-                .iter()
-                .enumerate()
-                .map(|(i, ex)| (predictions[i] - ex.actual_cost).powi(2))
-                .sum::<f64>()
-                / data.len() as f64;
-
-            self.metrics_history.push(loss);
-
-            if loss < 1e-6 {
-                break;
+            if self.train_iteration(data, &mut predictions)? {
+                break; // Early stopping triggered
             }
         }
 
         self.is_trained = true;
         Ok(())
+    }
+
+    /// Validate training data
+    fn validate_training_data(&self, data: &[TrainingExample]) -> Result<(), AnalyticsError> {
+        if data.is_empty() {
+            Err(AnalyticsError::ModelTrainingError(
+                "No training data".to_string(),
+            ))
+        } else {
+            Ok(())
+        }
+    }
+
+    /// Initialize training with mean predictions
+    fn initialize_training(&mut self, data: &[TrainingExample]) -> Vec<f64> {
+        let mean_target: f64 =
+            data.iter().map(|ex| ex.actual_cost).sum::<f64>() / data.len() as f64;
+        let predictions = vec![mean_target; data.len()];
+
+        self.trees.clear();
+        self.metrics_history.clear();
+
+        predictions
+    }
+
+    /// Train a single iteration and return whether early stopping was triggered
+    fn train_iteration(
+        &mut self,
+        data: &[TrainingExample],
+        predictions: &mut Vec<f64>,
+    ) -> Result<bool, AnalyticsError> {
+        // Calculate gradients
+        let gradients = self.calculate_gradients(data, predictions);
+
+        // Build oblivious tree
+        let tree = self.build_oblivious_tree(data, &gradients)?;
+
+        // Update predictions
+        self.update_predictions(data, &tree, predictions);
+        self.trees.push(tree);
+
+        // Check for early stopping
+        let loss = self.calculate_and_record_loss(data, predictions);
+        Ok(loss < 1e-6)
+    }
+
+    /// Calculate gradients for current predictions
+    fn calculate_gradients(&self, data: &[TrainingExample], predictions: &[f64]) -> Vec<f64> {
+        data.iter()
+            .enumerate()
+            .map(|(i, ex)| 2.0 * (predictions[i] - ex.actual_cost))
+            .collect()
+    }
+
+    /// Update predictions with new tree
+    fn update_predictions(
+        &self,
+        data: &[TrainingExample],
+        tree: &ObliviousTree,
+        predictions: &mut Vec<f64>,
+    ) {
+        for (i, example) in data.iter().enumerate() {
+            predictions[i] += self.learning_rate * tree.predict(&example.features);
+        }
+    }
+
+    /// Calculate loss and record in history
+    fn calculate_and_record_loss(&mut self, data: &[TrainingExample], predictions: &[f64]) -> f64 {
+        let loss = data
+            .iter()
+            .enumerate()
+            .map(|(i, ex)| (predictions[i] - ex.actual_cost).powi(2))
+            .sum::<f64>()
+            / data.len() as f64;
+
+        self.metrics_history.push(loss);
+        loss
     }
 
     fn build_oblivious_tree(
@@ -3212,63 +3401,121 @@ impl XGBoostModel {
     }
 
     pub fn train(&mut self, data: &[TrainingExample]) -> Result<(), AnalyticsError> {
-        if data.is_empty() {
-            return Err(AnalyticsError::ModelTrainingError(
-                "No training data".to_string(),
-            ));
-        }
+        self.validate_training_data(data)?;
 
-        // Initialize predictions with mean
-        let mean_target: f64 =
-            data.iter().map(|ex| ex.actual_cost).sum::<f64>() / data.len() as f64;
-        let mut predictions = vec![mean_target; data.len()];
-
-        self.booster.clear();
-        self.training_metrics.clear();
-
-        let mut best_loss = f64::INFINITY;
-        let mut patience = 0;
+        let mut predictions = self.initialize_training(data);
+        let mut early_stopping_state = self.init_early_stopping();
 
         for iteration in 0..self.params.n_estimators {
-            // Calculate gradients and hessians based on objective
-            let (gradients, hessians) = self.calculate_gradients_hessians(data, &predictions);
-
-            // Build tree
-            let tree = self.build_xgboost_tree(data, &gradients, &hessians)?;
-
-            // Update predictions
-            for (i, example) in data.iter().enumerate() {
-                predictions[i] += self.params.eta * tree.predict(&example.features);
-            }
-
-            self.booster.push(tree);
-
-            // Calculate training loss
-            let loss = self.calculate_loss(data, &predictions);
-            self.training_metrics.push(loss);
-
-            // Early stopping
-            if let Some(early_stopping) = self.params.early_stopping_rounds {
-                if loss < best_loss {
-                    best_loss = loss;
-                    self.best_iteration = iteration;
-                    patience = 0;
-                } else {
-                    patience += 1;
-                    if patience >= early_stopping {
-                        break;
-                    }
-                }
-            }
-
-            if loss < 1e-6 {
+            let should_stop =
+                self.train_iteration(data, &mut predictions, &mut early_stopping_state, iteration)?;
+            if should_stop {
                 break;
             }
         }
 
+        self.finalize_training();
+        Ok(())
+    }
+
+    /// Validate training data
+    fn validate_training_data(&self, data: &[TrainingExample]) -> Result<(), AnalyticsError> {
+        if data.is_empty() {
+            Err(AnalyticsError::ModelTrainingError(
+                "No training data".to_string(),
+            ))
+        } else {
+            Ok(())
+        }
+    }
+
+    /// Initialize training with mean predictions
+    fn initialize_training(&mut self, data: &[TrainingExample]) -> Vec<f64> {
+        let mean_target: f64 =
+            data.iter().map(|ex| ex.actual_cost).sum::<f64>() / data.len() as f64;
+        let predictions = vec![mean_target; data.len()];
+
+        self.booster.clear();
+        self.training_metrics.clear();
+
+        predictions
+    }
+
+    /// Initialize early stopping state
+    fn init_early_stopping(&self) -> EarlyStoppingState {
+        EarlyStoppingState {
+            best_loss: f64::INFINITY,
+            patience: 0,
+        }
+    }
+
+    /// Train a single iteration and return whether to stop training
+    fn train_iteration(
+        &mut self,
+        data: &[TrainingExample],
+        predictions: &mut Vec<f64>,
+        early_stopping_state: &mut EarlyStoppingState,
+        iteration: usize,
+    ) -> Result<bool, AnalyticsError> {
+        // Calculate gradients and hessians
+        let (gradients, hessians) = self.calculate_gradients_hessians(data, predictions);
+
+        // Build tree
+        let tree = self.build_xgboost_tree(data, &gradients, &hessians)?;
+
+        // Update predictions
+        self.update_predictions(data, &tree, predictions);
+        self.booster.push(tree);
+
+        // Calculate training loss
+        let loss = self.calculate_loss(data, predictions);
+        self.training_metrics.push(loss);
+
+        // Check stopping conditions
+        Ok(self.should_stop_training(loss, early_stopping_state, iteration))
+    }
+
+    /// Update predictions with new tree
+    fn update_predictions(
+        &self,
+        data: &[TrainingExample],
+        tree: &XGBoostTree,
+        predictions: &mut Vec<f64>,
+    ) {
+        for (i, example) in data.iter().enumerate() {
+            predictions[i] += self.params.eta * tree.predict(&example.features);
+        }
+    }
+
+    /// Check if training should stop
+    fn should_stop_training(
+        &mut self,
+        loss: f64,
+        early_stopping_state: &mut EarlyStoppingState,
+        iteration: usize,
+    ) -> bool {
+        // Early stopping logic
+        if let Some(early_stopping) = self.params.early_stopping_rounds {
+            if loss < early_stopping_state.best_loss {
+                early_stopping_state.best_loss = loss;
+                self.best_iteration = iteration;
+                early_stopping_state.patience = 0;
+            } else {
+                early_stopping_state.patience += 1;
+                if early_stopping_state.patience >= early_stopping {
+                    return true;
+                }
+            }
+        }
+
+        // Loss threshold stopping
+        loss < 1e-6
+    }
+
+    /// Finalize training by setting flags and calculating feature importance
+    fn finalize_training(&mut self) {
         self.is_trained = true;
         self.calculate_feature_importance();
-        Ok(())
     }
 
     fn calculate_gradients_hessians(
