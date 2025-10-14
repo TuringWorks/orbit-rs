@@ -125,9 +125,9 @@ pub enum KeyStoreType {
 /// Key management system
 pub struct KeyManagementSystem {
     keys: Arc<RwLock<HashMap<String, EncryptionKey>>>,
-    active_key_id: Arc<RwLock<String>>,
+    active_key_id: Arc<RwLock<Option<String>>>,
+    rotation_policy: KeyRotationPolicy,
     #[allow(dead_code)]
-    store_type: KeyStoreType,
     store_type: KeyStoreType,
 }
 

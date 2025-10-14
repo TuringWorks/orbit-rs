@@ -6,10 +6,12 @@
 
 use crate::error::ProtocolResult;
 use crate::postgres_wire::sql::ast::{
-    Assignment, ColumnRef, DeleteStatement, Expression, FromClause, FunctionCall, FunctionName,
-    InsertSource, InsertStatement, JoinCondition, OrderByItem, SelectItem, SelectStatement,
-    Statement, TableName, UpdateStatement,
+    Assignment, DeleteStatement, Expression, FromClause, FunctionName, InsertSource,
+    InsertStatement, JoinCondition, OrderByItem, SelectItem, SelectStatement, Statement,
+    UpdateStatement,
 };
+#[cfg(test)]
+use crate::postgres_wire::sql::ast::{ColumnRef, FunctionCall, TableName};
 use std::fmt;
 
 /// Physical execution plan for a query
