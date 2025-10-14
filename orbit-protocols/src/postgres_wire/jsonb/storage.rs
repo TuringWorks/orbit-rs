@@ -407,7 +407,10 @@ mod tests {
                 ("null".to_string(), JsonbValue::Null),
                 ("bool_true".to_string(), JsonbValue::Bool(true)),
                 ("bool_false".to_string(), JsonbValue::Bool(false)),
-                ("number".to_string(), JsonbValue::Number(3.14159)),
+                (
+                    "number".to_string(),
+                    JsonbValue::Number(std::f64::consts::PI),
+                ),
                 (
                     "string".to_string(),
                     JsonbValue::String("hello world".to_string()),

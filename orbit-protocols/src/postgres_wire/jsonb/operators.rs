@@ -510,7 +510,10 @@ mod tests {
         assert_eq!(JsonbValue::Null.to_text(), "");
         assert_eq!(JsonbValue::Bool(true).to_text(), "true");
         assert_eq!(JsonbValue::Number(42.0).to_text(), "42");
-        assert_eq!(JsonbValue::Number(3.14).to_text(), "3.14");
+        assert_eq!(
+            JsonbValue::Number(std::f64::consts::PI).to_text(),
+            "3.141592653589793"
+        );
         assert_eq!(JsonbValue::String("hello".to_string()).to_text(), "hello");
 
         let arr = JsonbValue::from_json_str(r#"[1, 2, 3]"#).unwrap();
