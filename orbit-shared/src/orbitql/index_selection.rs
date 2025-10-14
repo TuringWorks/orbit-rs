@@ -9,7 +9,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-use super::ast::*;
+use super::ast::{
+    BinaryOperator, Expression, FromClause, JoinClause, OrderByClause, SelectStatement, Statement,
+};
 use super::cost_model::{CostModel, QueryCost};
 use super::statistics::{IndexStatistics, StatisticsManager};
 

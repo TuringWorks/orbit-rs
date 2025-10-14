@@ -1,6 +1,8 @@
 //! Time-based partitioning strategies for time series data
 
-use super::*;
+#[cfg(test)]
+use super::TimeSeriesValue;
+use super::{DataPoint, DateTime, HashMap, TimeRange, Timestamp, Utc};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;

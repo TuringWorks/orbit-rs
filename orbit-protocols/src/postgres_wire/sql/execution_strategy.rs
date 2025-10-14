@@ -16,7 +16,7 @@
 
 use crate::error::{ProtocolError, ProtocolResult};
 use crate::postgres_wire::sql::{
-    ast::*,
+    ast::{AssignmentTarget, Expression, FromClause, InsertSource, IsolationLevel, Statement},
     executor::{ExecutionResult, SqlExecutor},
     mvcc_executor::{MvccSqlExecutor, TransactionId},
     parser::SqlParser,

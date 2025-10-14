@@ -1,5 +1,12 @@
 use async_trait::async_trait;
-use orbit_shared::{transactions::*, AddressableReference, Key, NodeId, OrbitError, OrbitResult};
+use orbit_shared::{
+    transactions::{
+        TransactionConfig, TransactionCoordinator, TransactionId, TransactionMessage,
+        TransactionMessageSender, TransactionOperation, TransactionParticipant, TransactionState,
+        TransactionVote,
+    },
+    AddressableReference, Key, NodeId, OrbitError, OrbitResult,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;

@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 // Note: Portable SIMD is unstable, so we use manual vectorization for now
 // use std::simd::{f64x8, i64x8, u64x8, Simd, SimdElement, SimdPartialEq, SimdPartialOrd};
 
-use crate::orbitql::ast::*;
+use crate::orbitql::ast::{AggregateFunction, BinaryOperator, Expression, JoinType};
 use crate::orbitql::QueryValue;
 
 /// Default batch size for vectorized operations

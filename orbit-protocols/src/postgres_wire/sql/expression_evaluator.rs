@@ -12,7 +12,11 @@
 
 use crate::error::{ProtocolError, ProtocolResult};
 use crate::postgres_wire::sql::{
-    ast::*,
+    ast::{
+        BinaryOperator, CaseExpression, ColumnRef, Expression, FunctionCall, FunctionName, InList,
+        OrderByItem, SelectStatement, UnaryOperator, VectorOperator, WindowFrame,
+        WindowFunctionType,
+    },
     types::{SqlType, SqlValue},
 };
 use std::cmp::Ordering;

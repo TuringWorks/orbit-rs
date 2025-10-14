@@ -4,7 +4,16 @@
 
 use super::expressions::ExpressionParser;
 use super::{utilities, ParseError, ParseResult, SqlParser};
-use crate::postgres_wire::sql::{ast::*, lexer::Token, types::SqlValue};
+use crate::postgres_wire::sql::{
+    ast::{
+        Assignment, AssignmentTarget, ColumnRef, ConflictAction, ConflictTarget, DeleteStatement,
+        DistinctClause, Expression, FromClause, InsertSource, InsertStatement, LimitClause,
+        NullsOrder, OnConflictClause, OrderByItem, SelectItem, SelectStatement, SortDirection,
+        Statement, TableAlias, UpdateStatement,
+    },
+    lexer::Token,
+    types::SqlValue,
+};
 
 /// Helper function to parse expressions using the proper expression parser
 fn parse_expression_with_parser(parser: &mut SqlParser) -> ParseResult<Expression> {

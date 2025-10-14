@@ -1,6 +1,9 @@
 //! Time series storage engine implementations
 
-use super::*;
+use super::{
+    AggregationType, DataPoint, HashMap, RetentionPolicy, SeriesId, TimeRange, TimeSeriesMetadata,
+    TimeSeriesValue, Timestamp, Utc,
+};
 use crate::timeseries::core::StorageStats;
 use anyhow::Result;
 use async_trait::async_trait;
@@ -8,6 +11,8 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::{debug, info};
+#[cfg(test)]
+use uuid::Uuid;
 
 /// Storage engine trait for time series data
 #[async_trait]

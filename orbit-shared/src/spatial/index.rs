@@ -211,76 +211,113 @@ impl QuadTree {
         max_depth: usize,
         max_points_per_node: usize,
     ) -> Result<(), SpatialError> {
-        // If this is a leaf node and not at max capacity, add the point
         if node.children.is_none() {
-            let point_clone = point.clone();
-            node.points.push((id, point));
-
-            // Check if we need to split
-            if node.points.len() > max_points_per_node && node.depth < max_depth {
-                Self::split_node(node)?;
-
-                // After splitting, redistribute the point to the correct child
-                let center_x = (node.bounds.min_x + node.bounds.max_x) / 2.0;
-                let center_y = (node.bounds.min_y + node.bounds.max_y) / 2.0;
-
-                let child_index = if point_clone.x < center_x {
-                    if point_clone.y < center_y {
-                        0
-                    } else {
-                        2
-                    } // SW or NW
-                } else if point_clone.y < center_y {
-                    1
-                } else {
-                    3
-                }; // SE or NE
-
-                if let Some(ref mut children) = node.children {
-                    // Remove the point from this node and add to appropriate child
-                    if let Some(pos) = node.points.iter().position(|(pid, _)| *pid == id) {
-                        let (removed_id, removed_point) = node.points.remove(pos);
-                        Self::insert_point_recursive(
-                            &mut children[child_index],
-                            removed_id,
-                            removed_point,
-                            max_depth,
-                            max_points_per_node,
-                        )?;
-                    }
-                }
-            }
-
-            return Ok(());
-        }
-
-        // Find the appropriate child quadrant
-        if let Some(ref mut children) = node.children {
-            let center_x = (node.bounds.min_x + node.bounds.max_x) / 2.0;
-            let center_y = (node.bounds.min_y + node.bounds.max_y) / 2.0;
-
-            let child_index = if point.x < center_x {
-                if point.y < center_y {
-                    0
-                } else {
-                    2
-                } // SW or NW
-            } else if point.y < center_y {
-                1
-            } else {
-                3
-            }; // SE or NE
-
-            Self::insert_point_recursive(
-                &mut children[child_index],
+            return Self::handle_leaf_node_insertion(
+                node,
                 id,
                 point,
+                max_depth,
+                max_points_per_node,
+            );
+        }
+
+        Self::insert_into_child_quadrant(node, id, point, max_depth, max_points_per_node)
+    }
+
+    /// Handle insertion into a leaf node, potentially splitting if necessary
+    fn handle_leaf_node_insertion(
+        node: &mut QuadNode,
+        id: u64,
+        point: Point,
+        max_depth: usize,
+        max_points_per_node: usize,
+    ) -> Result<(), SpatialError> {
+        let point_clone = point.clone();
+        node.points.push((id, point));
+
+        if Self::should_split_node(node, max_depth, max_points_per_node) {
+            Self::split_node(node)?;
+            Self::redistribute_point_after_split(
+                node,
+                id,
+                point_clone,
                 max_depth,
                 max_points_per_node,
             )?;
         }
 
         Ok(())
+    }
+
+    /// Check if a node should be split based on capacity and depth
+    fn should_split_node(node: &QuadNode, max_depth: usize, max_points_per_node: usize) -> bool {
+        node.points.len() > max_points_per_node && node.depth < max_depth
+    }
+
+    /// Redistribute a point to the correct child after node splitting
+    fn redistribute_point_after_split(
+        node: &mut QuadNode,
+        id: u64,
+        point: Point,
+        max_depth: usize,
+        max_points_per_node: usize,
+    ) -> Result<(), SpatialError> {
+        let child_index = Self::get_child_index(&node.bounds, &point);
+
+        if let Some(ref mut children) = node.children {
+            if let Some(pos) = node.points.iter().position(|(pid, _)| *pid == id) {
+                let (removed_id, removed_point) = node.points.remove(pos);
+                Self::insert_point_recursive(
+                    &mut children[child_index],
+                    removed_id,
+                    removed_point,
+                    max_depth,
+                    max_points_per_node,
+                )?
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Insert point into appropriate child quadrant
+    fn insert_into_child_quadrant(
+        node: &mut QuadNode,
+        id: u64,
+        point: Point,
+        max_depth: usize,
+        max_points_per_node: usize,
+    ) -> Result<(), SpatialError> {
+        if let Some(ref mut children) = node.children {
+            let child_index = Self::get_child_index(&node.bounds, &point);
+            Self::insert_point_recursive(
+                &mut children[child_index],
+                id,
+                point,
+                max_depth,
+                max_points_per_node,
+            )?
+        }
+
+        Ok(())
+    }
+
+    /// Get the child quadrant index for a point based on the node's bounds
+    fn get_child_index(bounds: &BoundingBox, point: &Point) -> usize {
+        let center_x = (bounds.min_x + bounds.max_x) / 2.0;
+        let center_y = (bounds.min_y + bounds.max_y) / 2.0;
+
+        if point.x < center_x {
+            if point.y < center_y {
+                0 // Southwest
+            } else {
+                2 // Northwest
+            }
+        } else if point.y < center_y {
+            1 // Southeast
+        } else {
+            3 // Northeast
+        }
     }
 
     fn split_node(node: &mut QuadNode) -> Result<(), SpatialError> {
