@@ -6,7 +6,7 @@
 //! - Resource-level access control
 //! - Policy-based authorization
 
-use crate::exception::{OrbitError, OrbitResult};
+use crate::exception::OrbitResult;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -14,7 +14,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 /// Security subject (user or service)
-#[derive(Debug, Clone, Serialize, Deserialize, Hash, Eq, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 pub struct SecuritySubject {
     pub id: String,
     pub name: String,
@@ -33,7 +33,7 @@ pub enum SubjectType {
 }
 
 /// Security resource
-#[derive(Debug, Clone, Serialize, Deserialize, Hash, Eq, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 pub struct SecurityResource {
     pub id: String,
     pub resource_type: ResourceType,
@@ -360,6 +360,7 @@ impl RbacEngine {
     }
 
     /// Collect inherited permissions recursively
+    #[allow(clippy::only_used_in_recursion)]
     fn collect_inherited_permissions(
         &self,
         role: &Role,

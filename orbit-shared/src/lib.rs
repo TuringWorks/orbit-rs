@@ -80,7 +80,7 @@ pub use replication::{
 
 // Re-export advanced transaction features (excluding conflicting core module)
 pub use transactions::{
-    locks, metrics, performance, security, DistributedTransaction, TransactionCoordinator,
+    locks, metrics, performance, DistributedTransaction, TransactionCoordinator,
     TransactionId,
 };
 
@@ -118,13 +118,14 @@ pub use spatial::{
 
 // Re-export security functionality
 pub use security::{
-    AnomalyDetector, AuditEvent, AuditLogger, AuditPolicy, AuthToken, AuthenticationManager,
+    AnomalyDetector, AuditEvent, AuditLogger, AuditPolicy, AuthenticationManager,
     AuthenticationProvider, ComplianceMonitor, EncryptionManager, KeyManagementSystem,
     KeyRotationPolicy, LdapAuthProvider, OAuth2AuthProvider, PolicyEngine, QueryValidator,
     RbacEngine, RoleBasedAccessControl, SamlAuthProvider, SecurityAction, SecurityContext,
-    SecurityFramework, SecurityResource, SecuritySubject, SqlInjectionDetector,
-    ThreatDetectionEngine, TlsConfig, TlsVersion,
+    SecurityFramework, SecurityResource, SecuritySubject, SqlInjectionDetector, ThreatDetectionEngine,
+    TlsConfig, TlsVersion,
 };
+pub use security::authentication::AuthToken;
 
 // Re-export trigger functionality
 pub use triggers::{

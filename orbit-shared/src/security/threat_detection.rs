@@ -17,6 +17,7 @@ use tokio::sync::RwLock;
 pub struct ThreatDetectionEngine {
     anomaly_detector: Arc<AnomalyDetector>,
     brute_force_detector: Arc<BruteForceDetector>,
+    #[allow(dead_code)]
     threat_rules: Arc<RwLock<Vec<ThreatRule>>>,
     detected_threats: Arc<RwLock<Vec<DetectedThreat>>>,
 }
@@ -65,10 +66,12 @@ impl ThreatDetectionEngine {
             detected_threats.extend(threats.clone());
         }
 
+        let risk_score = self.calculate_risk_score(&threats);
+        let recommended_actions = self.get_recommended_actions(&threats);
         Ok(ThreatAssessment {
             threats,
-            risk_score: self.calculate_risk_score(&threats),
-            recommended_actions: self.get_recommended_actions(&threats),
+            risk_score,
+            recommended_actions,
         })
     }
 
@@ -355,7 +358,7 @@ pub struct DetectedThreat {
 }
 
 /// Threat type
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum ThreatType {
     BruteForce,
     Anomaly,
@@ -365,7 +368,7 @@ pub enum ThreatType {
 }
 
 /// Threat severity
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum ThreatSeverity {
     Critical,
     High,

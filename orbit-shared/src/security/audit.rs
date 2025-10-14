@@ -449,11 +449,12 @@ impl ComplianceMonitor {
             violations.extend(rule_violations);
         }
 
+        let compliant = violations.is_empty();
         Ok(ComplianceReport {
             timestamp: SystemTime::now(),
             total_events_checked: events.len(),
             violations,
-            compliant: violations.is_empty(),
+            compliant,
         })
     }
 }

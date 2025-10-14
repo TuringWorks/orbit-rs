@@ -75,10 +75,15 @@ pub trait AuthenticationProvider: Send + Sync {
 
 /// LDAP authentication provider
 pub struct LdapAuthProvider {
+    #[allow(dead_code)]
     ldap_url: String,
+    #[allow(dead_code)]
     base_dn: String,
+    #[allow(dead_code)]
     bind_dn: String,
+    #[allow(dead_code)]
     bind_password: String,
+    #[allow(dead_code)]
     user_filter: String,
     tokens: Arc<RwLock<HashMap<String, AuthToken>>>,
     token_ttl: Duration,
@@ -177,9 +182,13 @@ impl AuthenticationProvider for LdapAuthProvider {
 
 /// OAuth2 authentication provider
 pub struct OAuth2AuthProvider {
+    #[allow(dead_code)]
     client_id: String,
+    #[allow(dead_code)]
     client_secret: String,
+    #[allow(dead_code)]
     authorization_url: String,
+    #[allow(dead_code)]
     token_url: String,
     scopes: Vec<String>,
     tokens: Arc<RwLock<HashMap<String, AuthToken>>>,
@@ -276,8 +285,11 @@ impl AuthenticationProvider for OAuth2AuthProvider {
 
 /// SAML authentication provider
 pub struct SamlAuthProvider {
+    #[allow(dead_code)]
     entity_id: String,
+    #[allow(dead_code)]
     sso_url: String,
+    #[allow(dead_code)]
     certificate: String,
     tokens: Arc<RwLock<HashMap<String, AuthToken>>>,
     token_ttl: Duration,

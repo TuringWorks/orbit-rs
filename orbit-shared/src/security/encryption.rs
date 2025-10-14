@@ -125,8 +125,9 @@ pub enum KeyStoreType {
 /// Key management system
 pub struct KeyManagementSystem {
     keys: Arc<RwLock<HashMap<String, EncryptionKey>>>,
-    active_key_id: Arc<RwLock<Option<String>>>,
-    rotation_policy: KeyRotationPolicy,
+    active_key_id: Arc<RwLock<String>>,
+    #[allow(dead_code)]
+    store_type: KeyStoreType,
     store_type: KeyStoreType,
 }
 
@@ -240,7 +241,7 @@ impl EncryptionManager {
             return Ok(data.to_vec());
         }
 
-        let key = self.key_management.get_active_key().await?;
+        let _key = self.key_management.get_active_key().await?;
 
         // In production, this would use actual encryption
         // For now, return a stub encrypted format
