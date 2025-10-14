@@ -1279,6 +1279,525 @@ Stop choosing between time series performance and data consistency. Orbit-RS giv
 - **Multi-Model Usage**: 70% of time series customers use multi-model features
 - **Cost Savings**: Average 40% total cost reduction vs specialized time series stacks
 
+## Spatial Database Market Analysis (54 Systems)
+
+### Market Context: Spatial & Geospatial Database Landscape
+
+**Source**: DB-Engines Spatial & Multi-Model Database Ranking (October 2025)  
+**Total Systems**: 54 spatial and multi-model database systems  
+**Market Dynamics**: Spatial databases showing strong integration with mainstream databases, with PostGIS leading but opportunities in specialized segments
+
+#### Complete Spatial Database Ranking
+
+| Rank | Database | Type | Score (Oct 2025) | YoY Change | Key Strength | Market Segment |
+|------|----------|------|------------------|------------|--------------|----------------|
+| 1 | **Oracle** | Relational, Multi-model | 1212.77 | -96.67 | Enterprise spatial | Enterprise GIS |
+| 2 | **MySQL** | Relational, Multi-model | 879.66 | -143.09 | Basic spatial support | Web Applications |
+| 3 | **SQL Server** | Relational, Multi-model | 715.05 | -87.04 | Spatial data types | Enterprise Windows |
+| 4 | **PostgreSQL** | Relational, Multi-model | 643.20 | -8.96 | PostGIS foundation | Open Source GIS |
+| 5 | **MongoDB** | Document, Multi-model | 368.01 | -37.20 | GeoJSON support | Modern Applications |
+| **17** | **PostGIS** | **Spatial, Multi-model** | **21.04** | **+0.48** | **Spatial database leader** | **GIS Standard** |
+| **35** | **SpatiaLite** | **Spatial, Multi-model** | **1.73** | **+0.20** | **SQLite spatial** | **Mobile/Embedded GIS** |
+| **43** | **GeoMesa** | **Spatial** | **0.80** | **+0.01** | **Big data spatial** | **Large Scale GIS** |
+| **46** | **Apache Sedona** | **Spatial** | **0.62** | **+0.30** | **Distributed spatial** | **Cluster Computing** |
+| **42** | **HEAVY.AI** | Relational, Multi-model | 1.16 | -0.24 | GPU-accelerated spatial | High-Performance Analytics |
+| **53** | **H2GIS** | **Spatial, Multi-model** | **0.00** | **±0.00** | **H2 spatial extension** | **Java Applications** |
+| **53** | **SpaceTime** | **Spatial, Multi-model** | **0.00** | **±0.00** | **Spatiotemporal** | **Research/Academic** |
+
+#### Spatial Database Market Trends
+
+**Growing Spatial Systems (Positive YoY)**:
+- **Apache Sedona** (#46): +0.30 (distributed spatial analytics gaining traction)
+- **SpatiaLite** (#35): +0.20 (mobile/embedded GIS growth)
+- **PostGIS** (#17): +0.48 (continued leadership in open source spatial)
+- **GeoMesa** (#43): +0.01 (stable big data spatial solutions)
+
+**Declining Spatial Leaders (Negative YoY)**:
+- **Oracle Spatial** (#1): -96.67 (enterprise spatial market challenges)
+- **SQL Server Spatial** (#3): -87.04 (cloud migration affecting on-premise spatial)
+- **MySQL Spatial** (#2): -143.09 (basic spatial features losing ground)
+- **HEAVY.AI** (#42): -0.24 (GPU spatial analytics facing competition)
+
+### Strategic Market Analysis
+
+#### Spatial Database Market Segmentation
+
+**1. Enterprise GIS & Mapping (45% of spatial market)**
+- **Leaders**: Oracle Spatial (#1), SQL Server Spatial (#3), PostGIS (#17)
+- **Characteristics**: Complex spatial queries, large datasets, enterprise integration
+- **Growth**: Mixed (traditional databases declining, PostGIS stable)
+- **Orbit-RS Opportunity**: Enterprise spatial with multi-model ACID and modern protocols
+
+**2. Web & Mobile GIS Applications (30% of spatial market)**
+- **Leaders**: MongoDB GeoJSON (#5), SpatiaLite (#35), MySQL Spatial (#2)
+- **Characteristics**: Location-based services, mobile apps, real-time spatial data
+- **Growth**: Strong growth in mobile/embedded segment (+0.20 SpatiaLite)
+- **Orbit-RS Opportunity**: Modern spatial APIs with multi-model capabilities
+
+**3. Big Data & Analytics Spatial (15% of spatial market)**
+- **Leaders**: GeoMesa (#43), Apache Sedona (#46), HEAVY.AI (#42)
+- **Characteristics**: Distributed spatial processing, large-scale geospatial analytics
+- **Growth**: Positive trend (Sedona +0.30, stable GeoMesa)
+- **Orbit-RS Opportunity**: Unified spatial + time series + graph analytics
+
+**4. Research & Scientific GIS (10% of spatial market)**
+- **Leaders**: H2GIS (#53), SpaceTime (#53), specialized research systems
+- **Characteristics**: Advanced spatial algorithms, research applications
+- **Growth**: Niche but stable requirements
+- **Orbit-RS Opportunity**: Advanced spatial analytics with research-grade capabilities
+
+#### Critical Market Gaps in Spatial Databases
+
+**Gap 1: Spatial + Multi-Model ACID Transactions**
+- **Problem**: No spatial database offers ACID guarantees across spatial and other data models
+- **Evidence**: PostGIS limited to spatial + relational; MongoDB spatial lacks ACID across models
+- **Market Impact**: Location-based applications need spatial + business data consistency
+- **Orbit-RS Advantage**: Only database with spatial + relational + graph + vector ACID
+
+**Gap 2: Real-Time Spatial Analytics with Complex Data**
+- **Problem**: Spatial databases excel at location queries but lack complex analytics integration
+- **Evidence**: Separate systems needed for spatial storage and graph/ML/time series analytics
+- **Market Impact**: Modern GIS applications need unified real-time spatial analytics
+- **Orbit-RS Advantage**: Spatial + graph + vector + time series analytics in single queries
+
+**Gap 3: Edge-to-Cloud Spatial Continuity**
+- **Problem**: Different spatial databases needed for mobile/edge vs cloud deployment
+- **Evidence**: SpatiaLite for mobile, PostGIS for server, different capabilities
+- **Market Impact**: IoT and mobile applications need consistent spatial capabilities
+- **Orbit-RS Advantage**: Same spatial database from edge devices to cloud with consistent features
+
+**Gap 4: Modern Spatial Protocol Access**
+- **Problem**: Spatial databases locked into SQL or proprietary APIs
+- **Evidence**: PostGIS (SQL only), MongoDB (MongoDB protocol), Oracle (SQL/proprietary)
+- **Market Impact**: Integration complexity for modern spatial applications
+- **Orbit-RS Advantage**: Spatial data via SQL, GraphQL, gRPC, Redis protocols
+
+**Gap 5: Unified Spatiotemporal Analytics**
+- **Problem**: Spatial and temporal data handled by separate specialized databases
+- **Evidence**: PostGIS + InfluxDB combinations common for spatiotemporal applications
+- **Market Impact**: IoT, logistics, and tracking applications need unified spatiotemporal
+- **Orbit-RS Advantage**: Native spatial + time series with unified queries and ACID
+
+### Spatial Database Leaders Competitive Analysis
+
+#### vs. PostGIS (Spatial Database Standard, Rank #17)
+|| Aspect | PostGIS | Orbit-RS | Advantage |
+||--------|---------|----------|-----------|
+|| **Spatial Performance** | Excellent | Competitive | **PostGIS** (mature) |
+|| **Data Models** | Spatial + Relational | All Models + Spatial | **Orbit-RS** |
+|| **Base Architecture** | PostgreSQL Extension | Native Multi-Model | **Orbit-RS** |
+|| **Spatial Standards** | Full OGC Compliance | OGC + Extensions | **PostGIS** (current) |
+|| **ACID Guarantees** | PostgreSQL ACID | Cross-Model ACID | **Orbit-RS** (scope) |
+|| **Multi-Protocol** | SQL Only | All Protocols | **Orbit-RS** |
+|| **Complex Analytics** | SQL + Spatial Functions | Multi-Model + Spatial | **Orbit-RS** |
+|| **Graph Analytics** | Complex SQL | Native + Spatial | **Orbit-RS** |
+|| **Vector Search** | None | Native + Spatial | **Orbit-RS** |
+|| **Time Series Integration** | Manual/Extensions | Native Spatiotemporal | **Orbit-RS** |
+|| **Market Position** | #17 (21.04 score, +0.48 YoY) | Target #15-25 | **PostGIS** (current) |
+|| **Edge Deployment** | PostgreSQL Overhead | Lightweight Native | **Orbit-RS** |
+|| **Ecosystem** | Massive GIS Ecosystem | Growing | **PostGIS** (mature) |
+|| **Cloud Deployment** | PostgreSQL-Based | Multi-Cloud Native | **Orbit-RS** |
+|| **Spatial Indexing** | R-Tree, GiST | Advanced Spatial Indexes | **PostGIS** (mature) |
+|| **3D/4D Support** | Full 3D/4D | Planned 3D/4D | **PostGIS** (current) |
+
+**Strategic Positioning**: "PostGIS spatial capabilities with native multi-model and modern architecture"
+
+**Displacement Strategy**:
+- **Phase 1**: Target new spatial applications not requiring PostgreSQL ecosystem
+- **Phase 2**: Challenge PostGIS in multi-model spatial scenarios
+- **Phase 3**: Offer simplified alternative to PostgreSQL + PostGIS complexity
+
+**Migration Path**:
+```sql
+-- PostGIS users can migrate spatial queries
+-- Standard spatial operations work unchanged
+SELECT name, 
+       ST_AsText(geometry) as location,
+       ST_Distance(geometry, ST_Point(-122.4194, 37.7749)) as distance_to_sf
+FROM locations 
+WHERE ST_DWithin(geometry, ST_Point(-122.4194, 37.7749), 1000);
+
+-- Plus new multi-model capabilities
+SELECT l.name,
+       ST_AsText(l.geometry) as location,
+       -- Time series integration
+       AVG(ts.temperature) as avg_temp,
+       -- Graph relationships
+       COUNT(TRAVERSE OUTBOUND 1..2 ON connected_to) as connections,
+       -- Vector similarity
+       VECTOR.SIMILARITY(l.feature_embedding, @target) as similarity
+FROM locations l
+JOIN sensor_data ts ON l.id = ts.location_id
+WHERE ST_DWithin(l.geometry, ST_Point(-122.4194, 37.7749), 1000)
+  AND ts.timestamp >= NOW() - INTERVAL '1 hour'
+GROUP BY l.id, l.name, l.geometry, l.feature_embedding;
+```
+
+#### vs. SpatiaLite (SQLite Spatial Extension, Rank #35)
+|| Aspect | SpatiaLite | Orbit-RS | Advantage |
+||--------|------------|----------|-----------|
+|| **Base Architecture** | SQLite Extension | Native Multi-Model | **Orbit-RS** |
+|| **Deployment Size** | Lightweight | Lightweight | **Tie** |
+|| **Mobile Suitability** | Excellent | Excellent | **Tie** |
+|| **Spatial Performance** | Good | Competitive | **SpatiaLite** (mature) |
+|| **Data Models** | Spatial + Relational | All Models + Spatial | **Orbit-RS** |
+|| **ACID Guarantees** | SQLite ACID | Cross-Model ACID | **Orbit-RS** (scope) |
+|| **Multi-Protocol** | SQL Only | All Protocols | **Orbit-RS** |
+|| **Scalability** | Single-User/File | Distributed | **Orbit-RS** |
+|| **Complex Analytics** | SQL + Spatial | Multi-Model + Spatial | **Orbit-RS** |
+|| **Graph Analytics** | None | Native + Spatial | **Orbit-RS** |
+|| **Vector Search** | None | Native + Spatial | **Orbit-RS** |
+|| **Market Position** | #35 (1.73 score, +0.20 YoY) | Target #15-25 | **Orbit-RS** (trajectory) |
+|| **Offline Operation** | Excellent | Native | **Tie** |
+|| **Embedded Systems** | Excellent | Optimized | **Tie** |
+|| **Multi-User** | Limited | Full Support | **Orbit-RS** |
+|| **Cloud Sync** | Manual | Native | **Orbit-RS** |
+
+**Strategic Positioning**: "SpatiaLite's mobile efficiency with full database capabilities and scalability"
+
+**Displacement Strategy**:
+- **Phase 1**: Target mobile/embedded spatial applications needing multi-user capabilities
+- **Phase 2**: Win scenarios requiring spatial + real-time data synchronization
+- **Phase 3**: Replace SpatiaLite + server database combinations with unified solution
+
+#### vs. GeoMesa (Big Data Spatial, Rank #43)
+|| Aspect | GeoMesa | Orbit-RS | Advantage |
+||--------|---------|----------|-----------|
+|| **Big Data Focus** | Hadoop/Spark Ecosystem | Native Distributed | **GeoMesa** (ecosystem) |
+|| **Spatial Scale** | Massive Datasets | Large Scale | **GeoMesa** (current) |
+|| **Data Models** | Spatial + Key-Value | All Models + Spatial | **Orbit-RS** |
+|| **Real-Time Processing** | Spark Streaming | Native | **Orbit-RS** (architecture) |
+|| **ACID Guarantees** | Limited | Full Cross-Model | **Orbit-RS** |
+|| **Multi-Protocol** | Hadoop APIs | All Protocols | **Orbit-RS** |
+|| **Complex Analytics** | Spark-Based | Multi-Model Native | **Orbit-RS** |
+|| **Time Series Integration** | Manual | Native Spatiotemporal | **Orbit-RS** |
+|| **Graph Analytics** | Spark GraphX | Native + Spatial | **Orbit-RS** |
+|| **Market Position** | #43 (0.80 score, +0.01 YoY) | Target #15-25 | **Orbit-RS** (trajectory) |
+|| **Deployment Complexity** | High (Hadoop) | Moderate | **Orbit-RS** |
+|| **Cloud Native** | Limited | Native | **Orbit-RS** |
+|| **Edge Deployment** | Not Suitable | Native | **Orbit-RS** |
+|| **Operational Overhead** | High | Low | **Orbit-RS** |
+
+**Strategic Positioning**: "GeoMesa's big data spatial capabilities without Hadoop complexity"
+
+**Displacement Strategy**:
+- **Phase 1**: Target GeoMesa deployments seeking simplified architecture
+- **Phase 2**: Win scenarios requiring spatial + real-time analytics without Spark
+- **Phase 3**: Replace GeoMesa + Hadoop stacks with unified cloud-native solution
+
+#### vs. Apache Sedona (Distributed Spatial, Rank #46)
+|| Aspect | Apache Sedona | Orbit-RS | Advantage |
+||--------|---------------|----------|-----------|
+|| **Distributed Architecture** | Spark-Based | Native Distributed | **Orbit-RS** (architecture) |
+|| **Spatial Performance** | Spark-Optimized | Native Optimized | **Apache Sedona** (current) |
+|| **Data Models** | Spatial + DataFrame | All Models + Spatial | **Orbit-RS** |
+|| **SQL Support** | Spark SQL | Native SQL + Extensions | **Orbit-RS** (native) |
+|| **ACID Guarantees** | Spark Limitations | Full Cross-Model | **Orbit-RS** |
+|| **Multi-Protocol** | Spark APIs | All Protocols | **Orbit-RS** |
+|| **Real-Time Processing** | Structured Streaming | Native | **Orbit-RS** |
+|| **Complex Analytics** | MLlib Integration | Multi-Model Native | **Apache Sedona** (ML) |
+|| **Graph Analytics** | GraphX | Native + Spatial | **Orbit-RS** |
+|| **Market Position** | #46 (0.62 score, +0.30 YoY) | Target #15-25 | **Orbit-RS** (trajectory) |
+|| **Operational Complexity** | High (Spark Cluster) | Moderate | **Orbit-RS** |
+|| **Cloud Integration** | Spark-Cloud | Multi-Cloud Native | **Orbit-RS** |
+|| **Edge Deployment** | Not Suitable | Native | **Orbit-RS** |
+|| **Developer Experience** | Spark Knowledge Required | Standard SQL | **Orbit-RS** |
+
+**Strategic Positioning**: "Apache Sedona's distributed spatial without Spark complexity"
+
+**Displacement Strategy**:
+- **Phase 1**: Target Apache Sedona users seeking operational simplification
+- **Phase 2**: Win scenarios requiring distributed spatial without Spark overhead
+- **Phase 3**: Replace Spark + Sedona stacks with cloud-native spatial analytics
+
+## Event Store Database Market Analysis (4 Systems)
+
+### Market Context: Event Sourcing & CQRS Database Landscape
+
+**Source**: DB-Engines Event Store Database Ranking (October 2025)  
+**Total Systems**: 4 specialized event store database systems  
+**Market Dynamics**: Small but critical niche market for event sourcing architectures with steady growth in modern application patterns
+
+#### Complete Event Store Database Ranking
+
+| Rank | Database | Type | Score (Oct 2025) | YoY Change | Key Strength | Market Segment |
+|------|----------|------|------------------|------------|--------------|----------------|
+| **1** | **Azure Data Explorer** | Relational, Multi-model | 3.13 | +0.01 | Cloud analytics + events | Enterprise Cloud |
+| **2** | **EventStoreDB (KurrentDB)** | Event, Multi-model | 1.09 | +0.01 | Purpose-built event store | Event Sourcing |
+| **3** | **NEventStore** | Event | 0.20 | +0.04 | .NET ecosystem | Enterprise .NET |
+| **4** | **IBM Db2 Event Store** | Multi-model | 0.17 | -0.01 | Enterprise integration | Legacy Enterprise |
+
+#### Event Store Market Trends
+
+**Growing Event Systems (Positive YoY)**:
+- **NEventStore** (#3): +0.04 (strongest growth in event sourcing segment)
+- **EventStoreDB** (#2): +0.01 (stable growth in purpose-built event stores)
+- **Azure Data Explorer** (#1): +0.01 (cloud analytics including event data)
+
+**Declining Event Systems (Negative YoY)**:
+- **IBM Db2 Event Store** (#4): -0.01 (legacy enterprise event solutions facing pressure)
+
+### Strategic Market Analysis
+
+#### Event Store Market Segmentation
+
+**1. Purpose-Built Event Sourcing (40% of event store market)**
+- **Leaders**: EventStoreDB (#2, 1.09), NEventStore (#3, 0.20)
+- **Characteristics**: CQRS patterns, event sourcing architectures, domain events
+- **Growth**: Stable to positive (+0.01 to +0.04 YoY)
+- **Orbit-RS Opportunity**: Event sourcing with multi-model ACID and unified analytics
+
+**2. Cloud Analytics with Events (35% of event store market)**
+- **Leaders**: Azure Data Explorer (#1, 3.13)
+- **Characteristics**: Event analytics, log analysis, time series events
+- **Growth**: Stable growth (+0.01 YoY)
+- **Orbit-RS Opportunity**: Unified event + time series + analytics with ACID guarantees
+
+**3. Enterprise Event Integration (20% of event store market)**
+- **Leaders**: IBM Db2 Event Store (#4, 0.17)
+- **Characteristics**: Enterprise integration, legacy system events, ESB patterns
+- **Growth**: Declining (-0.01 YoY)
+- **Orbit-RS Opportunity**: Modern event architecture with enterprise features
+
+**4. Framework-Specific Event Stores (5% of event store market)**
+- **Leaders**: NEventStore (.NET), other framework-specific solutions
+- **Characteristics**: Language/framework tied, development productivity
+- **Growth**: Mixed performance
+- **Orbit-RS Opportunity**: Language-agnostic event store with superior capabilities
+
+#### Critical Market Gaps in Event Stores
+
+**Gap 1: Event Sourcing + Multi-Model ACID**
+- **Problem**: No event store offers ACID guarantees across events and other data models
+- **Evidence**: EventStoreDB limited to events; Azure Data Explorer lacks event sourcing patterns
+- **Market Impact**: CQRS applications need consistent reads across event store and query models
+- **Orbit-RS Advantage**: Only database with event sourcing + relational + graph + vector ACID
+
+**Gap 2: Unified Event + Analytics Platform**
+- **Problem**: Event stores excel at append-only storage but lack complex analytics capabilities
+- **Evidence**: Separate systems needed for event storage and event analytics/ML
+- **Market Impact**: Modern event-driven applications need real-time event analytics
+- **Orbit-RS Advantage**: Event sourcing + graph + vector + time series analytics in single queries
+
+**Gap 3: Event Store + Query Model Integration**
+- **Problem**: CQRS patterns require separate databases for commands and queries
+- **Evidence**: EventStoreDB + PostgreSQL/MongoDB combinations common
+- **Market Impact**: Complex synchronization, eventual consistency challenges
+- **Orbit-RS Advantage**: Native event sourcing with integrated ACID query models
+
+**Gap 4: Modern Event Store Protocols**
+- **Problem**: Event stores locked into proprietary APIs or HTTP-only access
+- **Evidence**: EventStoreDB (gRPC/HTTP), NEventStore (.NET specific)
+- **Market Impact**: Integration complexity for polyglot event-driven architectures
+- **Orbit-RS Advantage**: Event data via SQL, gRPC, GraphQL, Redis protocols
+
+**Gap 5: Event Store Scalability + Multi-Model**
+- **Problem**: Purpose-built event stores limited to event data, lack broader database features
+- **Evidence**: EventStoreDB excellent for events but requires separate databases for other models
+- **Market Impact**: Event-driven applications need unified data platform
+- **Orbit-RS Advantage**: Event sourcing patterns within full multi-model database
+
+### Event Store Leaders Competitive Analysis
+
+#### vs. EventStoreDB (Purpose-Built Event Store Leader, Rank #2)
+|| Aspect | EventStoreDB | Orbit-RS | Advantage |
+||--------|--------------|----------|-----------|
+|| **Event Sourcing Performance** | Specialized | Competitive | **EventStoreDB** (purpose-built) |
+|| **Data Models** | Events Only | All Models + Events | **Orbit-RS** |
+|| **ACID Guarantees** | Event Stream ACID | Cross-Model ACID | **Orbit-RS** (scope) |
+|| **Event Stream Features** | Advanced (projections, etc.) | Built-in Event Patterns | **EventStoreDB** (mature) |
+|| **Multi-Protocol** | gRPC + HTTP | All Protocols | **Orbit-RS** |
+|| **Query Capabilities** | Event Queries + Projections | Multi-Model Queries | **Orbit-RS** |
+|| **CQRS Support** | Purpose-Built | Native Patterns | **EventStoreDB** (specialized) |
+|| **Event Analytics** | Limited | Full Analytics Platform | **Orbit-RS** |
+|| **Graph Analytics** | None | Native + Events | **Orbit-RS** |
+|| **Vector Search** | None | Native + Events | **Orbit-RS** |
+|| **Market Position** | #2 (1.09 score, +0.01 YoY) | Target #15-25 | **Orbit-RS** (trajectory) |
+|| **Clustering** | Built-in | Native Distributed | **Tie** |
+|| **Subscription Models** | Advanced | Event Patterns | **EventStoreDB** (mature) |
+|| **Snapshots** | Built-in | Configurable | **EventStoreDB** (mature) |
+|| **Integration Complexity** | Event Store + Query DB | Unified Platform | **Orbit-RS** |
+
+**Strategic Positioning**: "EventStoreDB's event sourcing excellence with full database capabilities"
+
+**Displacement Strategy**:
+- **Phase 1**: Target CQRS applications requiring complex query models
+- **Phase 2**: Challenge EventStoreDB in scenarios needing event + analytics integration
+- **Phase 3**: Replace EventStoreDB + query database combinations with unified solution
+
+**Migration Path**:
+```sql
+-- EventStoreDB users can migrate event sourcing patterns
+-- Standard event operations work with enhanced capabilities
+
+-- Event append (EventStoreDB compatible)
+INSERT INTO event_stream (stream_id, event_type, event_data, metadata)
+VALUES ('order-123', 'OrderCreated', 
+        '{"orderId": "123", "customerId": "456", "amount": 100.00}',
+        '{"timestamp": "2025-10-14T21:18:00Z", "version": 1}');
+
+-- Plus unified multi-model capabilities
+SELECT 
+       -- Event sourcing data
+       es.event_type,
+       JSON_EXTRACT(es.event_data, '$.amount') as order_amount,
+       -- Relational data
+       c.customer_name,
+       -- Time series analytics
+       AVG(ts.response_time) as avg_response_time,
+       -- Graph relationships
+       COUNT(TRAVERSE OUTBOUND 1..2 ON recommends) as recommendations,
+       -- Vector similarity for ML
+       VECTOR.SIMILARITY(c.preference_embedding, @target_profile) as similarity
+FROM event_stream es
+JOIN customers c ON JSON_EXTRACT(es.event_data, '$.customerId') = c.id
+JOIN performance_metrics ts ON es.stream_id = ts.entity_id
+WHERE es.stream_id = 'order-123'
+  AND es.event_type = 'OrderCreated'
+  AND ts.timestamp >= es.created_at - INTERVAL '1 minute'
+GROUP BY es.event_id, c.id;
+```
+
+#### vs. Azure Data Explorer (Cloud Analytics + Events Leader, Rank #1)
+|| Aspect | Azure Data Explorer | Orbit-RS | Advantage |
+||--------|---------------------|----------|-----------|
+|| **Cloud Integration** | Deep Azure | Multi-Cloud | **Azure Data Explorer** (Azure) |
+|| **Event Analytics** | Excellent | Competitive | **Azure Data Explorer** (mature) |
+|| **Data Models** | Relational + Analytics | All Models + Events | **Orbit-RS** |
+|| **Event Sourcing Patterns** | None | Native | **Orbit-RS** |
+|| **ACID Guarantees** | Limited | Cross-Model ACID | **Orbit-RS** |
+|| **Multi-Protocol** | HTTP + KQL | All Protocols | **Orbit-RS** |
+|| **Query Language** | KQL (Kusto) | SQL + Extensions | **Orbit-RS** (standards) |
+|| **Real-Time Processing** | Stream Analytics | Native | **Orbit-RS** (architecture) |
+|| **Graph Analytics** | Limited | Native + Events | **Orbit-RS** |
+|| **Vector Search** | None | Native + Events | **Orbit-RS** |
+|| **Market Position** | #1 (3.13 score, +0.01 YoY) | Target #15-25 | **Azure Data Explorer** (current) |
+|| **Scalability** | Massive (Azure) | Distributed | **Azure Data Explorer** (cloud) |
+|| **Cost Model** | Usage-Based (High) | Predictable | **Orbit-RS** |
+|| **Vendor Lock-in** | High (Azure) | None | **Orbit-RS** |
+|| **CQRS Support** | Manual | Native Patterns | **Orbit-RS** |
+
+**Strategic Positioning**: "Azure Data Explorer's analytics power without vendor lock-in plus native event sourcing"
+
+**Displacement Strategy**:
+- **Phase 1**: Target Azure Data Explorer users seeking multi-cloud flexibility
+- **Phase 2**: Win scenarios requiring event analytics + event sourcing patterns
+- **Phase 3**: Replace Azure Data Explorer + separate event stores with unified solution
+
+#### vs. NEventStore (.NET Event Store, Rank #3)
+|| Aspect | NEventStore | Orbit-RS | Advantage |
+||--------|-------------|----------|-----------|
+|| **.NET Integration** | Native .NET | Language Agnostic | **NEventStore** (.NET specific) |
+|| **Framework Coupling** | Tight .NET Coupling | Polyglot | **Orbit-RS** (flexibility) |
+|| **Event Sourcing Patterns** | .NET Specific | Universal Patterns | **Orbit-RS** |
+|| **Data Models** | Events Only | All Models + Events | **Orbit-RS** |
+|| **ACID Guarantees** | Storage-Dependent | Cross-Model ACID | **Orbit-RS** |
+|| **Multi-Protocol** | .NET APIs | All Protocols | **Orbit-RS** |
+|| **Storage Flexibility** | Multiple Backends | Native Distributed | **NEventStore** (flexibility) |
+|| **Query Capabilities** | Basic | Multi-Model Queries | **Orbit-RS** |
+|| **Graph Analytics** | None | Native + Events | **Orbit-RS** |
+|| **Vector Search** | None | Native + Events | **Orbit-RS** |
+|| **Market Position** | #3 (0.20 score, +0.04 YoY) | Target #15-25 | **Orbit-RS** (trajectory) |
+|| **Development Productivity** | High (.NET) | Competitive | **NEventStore** (.NET) |
+|| **Cross-Platform** | Limited | Full | **Orbit-RS** |
+|| **Enterprise Features** | Limited | Comprehensive | **Orbit-RS** |
+|| **Operational Complexity** | Low | Moderate | **NEventStore** |
+
+**Strategic Positioning**: "NEventStore's .NET productivity with enterprise scalability and multi-language support"
+
+**Displacement Strategy**:
+- **Phase 1**: Target .NET shops outgrowing NEventStore limitations
+- **Phase 2**: Win polyglot environments requiring event sourcing
+- **Phase 3**: Replace NEventStore in enterprise .NET architectures needing broader capabilities
+
+#### vs. IBM Db2 Event Store (Enterprise Event Integration, Rank #4)
+|| Aspect | IBM Db2 Event Store | Orbit-RS | Advantage |
+||--------|---------------------|----------|-----------|
+|| **Enterprise Integration** | Deep IBM Ecosystem | API-First | **IBM Db2 Event Store** (IBM) |
+|| **Legacy Compatibility** | Excellent | Good | **IBM Db2 Event Store** (legacy) |
+|| **Event Sourcing Patterns** | Limited | Native | **Orbit-RS** |
+|| **Data Models** | Multi-model Limited | All Models Native | **Orbit-RS** |
+|| **ACID Guarantees** | Db2 ACID | Cross-Model ACID | **Orbit-RS** (scope) |
+|| **Multi-Protocol** | IBM Protocols | All Protocols | **Orbit-RS** |
+|| **Modern Architecture** | Legacy-Based | Cloud-Native | **Orbit-RS** |
+|| **Query Capabilities** | SQL + Limited | Multi-Model SQL | **Orbit-RS** |
+|| **Graph Analytics** | None | Native + Events | **Orbit-RS** |
+|| **Vector Search** | None | Native + Events | **Orbit-RS** |
+|| **Market Position** | #4 (0.17 score, -0.01 YoY) | Target #15-25 | **Orbit-RS** (trajectory) |
+|| **Enterprise Support** | Comprehensive | Growing | **IBM Db2 Event Store** (current) |
+|| **Cost Model** | High Licensing | Competitive | **Orbit-RS** |
+|| **Cloud Strategy** | Hybrid Focus | Cloud-First | **Orbit-RS** |
+|| **Developer Experience** | Complex | Modern | **Orbit-RS** |
+
+**Strategic Positioning**: "IBM Db2 Event Store's enterprise reliability with modern event sourcing architecture"
+
+**Displacement Strategy**:
+- **Phase 1**: Target IBM shops modernizing event-driven architectures
+- **Phase 2**: Win scenarios requiring modern event sourcing patterns
+- **Phase 3**: Replace IBM Db2 Event Store in cloud migration projects
+
+### Event Sourcing Market Positioning Strategy
+
+#### Primary Value Proposition
+**"The Only Event Store with Full ACID Guarantees Across All Data Models"**
+
+Stop choosing between event sourcing and data consistency. Orbit-RS gives you EventStoreDB-level event sourcing performance with ACID transactions across events, relational, graph, and vector data.
+
+#### Market Entry Strategy
+
+**Phase 1: CQRS + Multi-Model Leadership (Q1-Q4 2025)**
+- **Target Market Share**: 25% of purpose-built event sourcing segment
+- **Primary Targets**: EventStoreDB (#2), NEventStore (#3)
+- **Strategy**: Event sourcing with integrated query models eliminating CQRS complexity
+- **Success Metrics**:
+  - 20+ CQRS deployments replacing event store + query database combinations
+  - Performance benchmarks matching EventStoreDB event throughput
+  - 3+ case studies showing unified event + analytics capabilities
+
+**Phase 2: Enterprise Event Platform (2026)**
+- **Target Market Share**: 15% of enterprise event integration segment
+- **Primary Targets**: Azure Data Explorer (#1), IBM Db2 Event Store (#4)
+- **Strategy**: Unified event platform with enterprise features and multi-cloud flexibility
+- **Success Metrics**:
+  - 50+ enterprise event-driven architectures
+  - Integration with major enterprise systems (SAP, Oracle, etc.)
+  - Performance competitive with Azure Data Explorer
+
+**Phase 3: Event-Driven Architecture Standard (2027)**
+- **Target Market Share**: 30% of event sourcing market overall
+- **Primary Targets**: Establish new "Unified Event Platform" category
+- **Strategy**: Replace event store + multiple database stacks with single solution
+- **Success Metrics**:
+  - Top 3 position in event store rankings
+  - 200+ event sourcing deployments
+  - Industry recognition as event sourcing innovation leader
+
+#### Investment Priorities for Event Sourcing Market
+
+**Year 1 Event Store Investments (15% of total R&D)**
+1. **Event Sourcing Engine (70% of event store investment)**
+   - Native event stream data structures
+   - Event ordering and versioning
+   - Projection and subscription patterns
+   - Target: Match EventStoreDB event throughput and features
+
+2. **CQRS Pattern Integration (20% of event store investment)**
+   - Unified command and query models
+   - Cross-model ACID transactions
+   - Event-driven view maintenance
+   - Target: Eliminate separate CQRS databases
+
+3. **Event Analytics Platform (10% of event store investment)**
+   - Real-time event stream analytics
+   - Event correlation and pattern detection
+   - Multi-model event queries
+   - Target: Unique event + analytics capabilities
+
+**Success Metrics**:
+- **Technical**: Match EventStoreDB event throughput (100K+ events/second)
+- **Market**: 50+ event sourcing deployments, recognition in event sourcing community
+- **Customer**: 80% successful migrations from EventStoreDB + query database stacks
+
 **Positioning**: "TimescaleDB's time-series optimization without PostgreSQL constraints"
 
 ### Search Engine Leaders

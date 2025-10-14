@@ -1777,6 +1777,35 @@ Payback Period: 18 months
 - **Market Entry Strategy**: Edge-first deployment competing with GridDB/TDengine, then enterprise monitoring
 - **Differentiation**: Time series + graph + vector analytics in single queries with ACID guarantees
 
+##### Event Store Database Market (4 Systems Analysis)
+
+**Market Overview**: Event stores represent a highly specialized but critical niche for event sourcing and CQRS architectures. Despite small market size, they show steady growth as modern applications adopt event-driven patterns.
+
+| Rank | Database | Type | Score | Trend | Key Strength | Market Segment |
+|------|----------|------|-------|-------|-------------|----------------|
+| 1 | **Azure Data Explorer** | Relational, Multi-model | 3.13 | +0.01 | Cloud analytics + events | Enterprise Cloud |
+| 2 | **EventStoreDB (KurrentDB)** | Event, Multi-model | 1.09 | +0.01 | Purpose-built event store | Event Sourcing |
+| 3 | **NEventStore** | Event | 0.20 | +0.04 | .NET ecosystem | Enterprise .NET |
+| 4 | **IBM Db2 Event Store** | Multi-model | 0.17 | -0.01 | Enterprise integration | Legacy Enterprise |
+
+**Growth Trends in Event Store Market**:
+- **Rising**: NEventStore (+0.04), EventStoreDB (+0.01), Azure Data Explorer (+0.01)
+- **Declining**: IBM Db2 Event Store (-0.01)
+- **Overall Trend**: Positive growth in purpose-built event sourcing, decline in legacy enterprise solutions
+
+**Market Gaps Identified**:
+1. **Event Sourcing + Multi-Model ACID**: No event store offers ACID across events + other models
+2. **Unified Event Analytics**: Event stores excel at storage but lack complex analytics integration
+3. **CQRS Integration**: Event stores require separate query databases, creating consistency challenges
+4. **Modern Protocol Access**: Event stores locked into proprietary APIs or HTTP-only access
+5. **Event Store Scalability**: Purpose-built event stores limited to event data, lack broader features
+
+**Orbit-RS Positioning in Event Store Market**:
+- **Primary Value**: Only event store offering ACID transactions across events + all other models
+- **Target Displacement**: EventStoreDB (#2, 1.09), Azure Data Explorer (#1, 3.13), NEventStore (#3, 0.20)
+- **Market Entry Strategy**: CQRS applications with integrated query models, enterprise event platforms
+- **Differentiation**: Event sourcing + graph + vector + time series analytics in single ACID transactions
+
 ##### In-Memory & Caching Systems
 | Rank | Database | Type | Score | Trend | Key Strength |
 |------|----------|------|-------|-------|-------------|
