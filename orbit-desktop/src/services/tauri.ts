@@ -15,7 +15,7 @@ import {
 // Check if running in Tauri environment
 const isTauri = (): boolean => {
   try {
-    return typeof globalThis.window !== 'undefined' && 
+    return globalThis.window !== undefined && 
            'window' in globalThis &&
            '__TAURI_IPC__' in globalThis.window && 
            typeof globalThis.window.__TAURI_IPC__ === 'function';
@@ -76,7 +76,7 @@ const createMockQueryResult = (): QueryResult => ({
     ],
     rows: [
       { id: 1, name: 'Sample Data', value: 100.5 },
-      { id: 2, name: 'Another Row', value: 250.0 }
+      { id: 2, name: 'Another Row', value: 250 }
     ]
   } as QueryResultData,
   error: null,
