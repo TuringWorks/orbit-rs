@@ -16,24 +16,23 @@ async fn main() -> anyhow::Result<()> {
 
     // Import required types when actually creating server
     use orbit_server::persistence::config::PersistenceProviderConfig;
-    use orbit_server::{OrbitServer, OrbitServerConfig};
+    use orbit_server::OrbitServer;
     use std::time::Duration;
 
-    // Create server configuration
-    let server_config = OrbitServerConfig {
-        namespace: "hello-world".to_string(),
-        bind_address: "127.0.0.1".to_string(),
-        port: 8080,
-        lease_duration: Duration::from_secs(300),
-        cleanup_interval: Duration::from_secs(60),
-        max_addressables: Some(1000),
-        tags: std::collections::HashMap::new(),
-        persistence: PersistenceProviderConfig::default_memory(),
-    };
-
-    // Create the server instance
+    // Create the server instance using the builder pattern
     println!("🏭 Creating Orbit server instance...");
-    match OrbitServer::new(server_config).await {
+    match OrbitServer::builder()
+        .with_namespace("hello-world")
+        .with_bind_address("127.0.0.1")
+        .with_port(8080)
+        .with_lease_duration(Duration::from_secs(300))
+        .with_max_addressables(1000)
+        .with_persistence(PersistenceProviderConfig::default_memory())
+        .with_redis_enabled(false) // Disable Redis for this simple example
+        .with_postgres_enabled(false) // Disable PostgreSQL for this simple example
+        .build()
+        .await
+    {
         Ok(mut server) => {
             println!("✅ Server instance created successfully!");
             println!();
