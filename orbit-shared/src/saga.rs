@@ -53,16 +53,25 @@ pub enum SagaState {
 }
 
 /// Result of executing a saga step
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum StepResult {
-    /// Step completed successfully
+    /// Step executed successfully
     Success,
-    /// Step failed with retriable error
-    RetryableFailure(String),
-    /// Step failed with non-retriable error
-    PermanentFailure(String),
     /// Step was skipped (conditional execution)
     Skipped,
+    /// Step failed but can be retried
+    RetryableFailure(String),
+    /// Step failed permanently (no retry)
+    PermanentFailure(String),
+}
+
+/// Outcome of processing a step result
+#[derive(Debug, Clone, PartialEq)]
+enum StepOutcome {
+    /// Continue with the next step
+    Continue,
+    /// Start compensation process
+    Compensate,
 }
 
 /// Configuration for saga execution
@@ -507,143 +516,225 @@ impl SagaOrchestrator {
 
     /// Execute a saga step by step
     pub async fn execute_saga(&self, saga_id: &SagaId) -> OrbitResult<SagaExecution> {
-        let (definition, mut execution) = {
-            let definitions = self.definitions.read().await;
-            let executions = self.executions.read().await;
-
-            let execution = executions
-                .get(saga_id)
-                .ok_or_else(|| OrbitError::internal("Saga execution not found"))?
-                .clone();
-
-            let definition = definitions
-                .get(&execution.definition_id)
-                .ok_or_else(|| OrbitError::internal("Saga definition not found"))?
-                .clone();
-
-            (definition, execution)
-        };
+        let (definition, mut execution) = self.load_saga_for_execution(saga_id).await?;
 
         execution.state = SagaState::Executing;
         self.update_execution(&execution).await?;
-
         info!("Executing saga: {}", saga_id);
 
-        // Execute steps in sequence (parallel execution would be more complex)
+        // Execute all steps in sequence
+        match self.execute_saga_steps(&mut execution, &definition).await {
+            Ok(()) => self.complete_saga_successfully(execution, saga_id).await,
+            Err(e) => {
+                warn!("Saga execution failed: {}", e);
+                Ok(execution) // Compensation already handled in execute_saga_steps
+            }
+        }
+    }
+
+    /// Load saga definition and execution for execution
+    async fn load_saga_for_execution(
+        &self,
+        saga_id: &SagaId,
+    ) -> OrbitResult<(SagaDefinition, SagaExecution)> {
+        let definitions = self.definitions.read().await;
+        let executions = self.executions.read().await;
+
+        let execution = executions
+            .get(saga_id)
+            .ok_or_else(|| OrbitError::internal("Saga execution not found"))?
+            .clone();
+
+        let definition = definitions
+            .get(&execution.definition_id)
+            .ok_or_else(|| OrbitError::internal("Saga definition not found"))?
+            .clone();
+
+        Ok((definition, execution))
+    }
+
+    /// Execute all steps in the saga
+    async fn execute_saga_steps(
+        &self,
+        execution: &mut SagaExecution,
+        definition: &SagaDefinition,
+    ) -> OrbitResult<()> {
         for step in &definition.steps {
             let step_id = step.metadata().step_id.clone();
-            execution.current_step = Some(step_id.clone());
-            execution.context.current_step = Some(step_id.clone());
-
-            // Notify event handlers
-            let handlers = self.event_handlers.read().await;
-            for handler in handlers.iter() {
-                if let Err(e) = handler.on_step_started(&execution, &step_id).await {
-                    error!("Saga event handler failed: {}", e);
-                }
-            }
-
-            debug!("Executing step: {}", step_id);
+            self.prepare_step_execution(execution, &step_id).await?;
 
             // Check if step should be executed
-            let should_execute = step.should_execute(&execution.context).await?;
-            if !should_execute {
+            if !step.should_execute(&execution.context).await? {
                 debug!("Skipping step: {}", step_id);
                 continue;
             }
 
-            // Prepare step
+            // Execute the step
             step.prepare(&execution.context).await?;
-
-            // Execute step with retries
             let result = self
                 .execute_step_with_retries(step.as_ref(), &execution.context, &definition.config)
                 .await;
 
-            match result {
-                Ok(StepResult::Success) => {
-                    execution.mark_step_completed(step_id.clone());
-                    execution
-                        .context
-                        .step_results
-                        .insert(step_id.clone(), StepResult::Success);
-
-                    // Update statistics
-                    {
-                        let mut stats = self.stats.write().await;
-                        stats.total_steps_executed += 1;
-                    }
-
-                    // Notify event handlers
-                    for handler in handlers.iter() {
-                        if let Err(e) = handler
-                            .on_step_completed(&execution, &step_id, &StepResult::Success)
-                            .await
-                        {
-                            error!("Saga event handler failed: {}", e);
-                        }
-                    }
-
-                    debug!("Step completed successfully: {}", step_id);
-                }
-                Ok(StepResult::Skipped) => {
-                    debug!("Step skipped: {}", step_id);
+            match self
+                .handle_step_result(execution, definition, &step_id, result)
+                .await?
+            {
+                StepOutcome::Continue => {
+                    step.cleanup(&execution.context).await?;
                     continue;
                 }
-                Ok(StepResult::RetryableFailure(msg)) | Ok(StepResult::PermanentFailure(msg)) => {
-                    let error_msg = msg;
-
-                    execution.mark_step_failed(step_id.clone(), error_msg.clone());
-                    execution.state = SagaState::Compensating;
-
-                    warn!("Step failed: {} - {}", step_id, error_msg);
-
-                    // Start compensation process
-                    self.compensate_saga(&mut execution, &definition).await?;
-                    return Ok(execution);
-                }
-                Err(e) => {
-                    let error_msg = e.to_string();
-
-                    execution.mark_step_failed(step_id.clone(), error_msg.clone());
-                    execution.state = SagaState::Compensating;
-
-                    warn!("Step failed: {} - {}", step_id, error_msg);
-
-                    // Start compensation process
-                    self.compensate_saga(&mut execution, &definition).await?;
-                    return Ok(execution);
+                StepOutcome::Compensate => {
+                    return Err(OrbitError::internal("Step failed, compensation initiated"));
                 }
             }
-
-            // Cleanup step
-            step.cleanup(&execution.context).await?;
         }
+        Ok(())
+    }
 
-        // All steps completed successfully
+    /// Prepare step for execution
+    async fn prepare_step_execution(
+        &self,
+        execution: &mut SagaExecution,
+        step_id: &str,
+    ) -> OrbitResult<()> {
+        execution.current_step = Some(step_id.to_string());
+        execution.context.current_step = Some(step_id.to_string());
+
+        self.notify_step_started(execution, step_id).await;
+        debug!("Executing step: {}", step_id);
+        Ok(())
+    }
+
+    /// Handle the result of a step execution
+    async fn handle_step_result(
+        &self,
+        execution: &mut SagaExecution,
+        definition: &SagaDefinition,
+        step_id: &str,
+        result: OrbitResult<StepResult>,
+    ) -> OrbitResult<StepOutcome> {
+        match result {
+            Ok(StepResult::Success) => {
+                self.handle_step_success(execution, step_id).await?;
+                Ok(StepOutcome::Continue)
+            }
+            Ok(StepResult::Skipped) => {
+                debug!("Step skipped: {}", step_id);
+                Ok(StepOutcome::Continue)
+            }
+            Ok(StepResult::RetryableFailure(msg)) | Ok(StepResult::PermanentFailure(msg)) => {
+                self.handle_step_failure(execution, definition, step_id, msg)
+                    .await?;
+                Ok(StepOutcome::Compensate)
+            }
+            Err(e) => {
+                self.handle_step_failure(execution, definition, step_id, e.to_string())
+                    .await?;
+                Ok(StepOutcome::Compensate)
+            }
+        }
+    }
+
+    /// Handle successful step execution
+    async fn handle_step_success(
+        &self,
+        execution: &mut SagaExecution,
+        step_id: &str,
+    ) -> OrbitResult<()> {
+        execution.mark_step_completed(step_id.to_string());
+        execution
+            .context
+            .step_results
+            .insert(step_id.to_string(), StepResult::Success);
+
+        self.update_step_success_stats().await;
+        self.notify_step_completed(execution, step_id, &StepResult::Success)
+            .await;
+        debug!("Step completed successfully: {}", step_id);
+        Ok(())
+    }
+
+    /// Handle failed step execution
+    async fn handle_step_failure(
+        &self,
+        execution: &mut SagaExecution,
+        definition: &SagaDefinition,
+        step_id: &str,
+        error_msg: String,
+    ) -> OrbitResult<()> {
+        execution.mark_step_failed(step_id.to_string(), error_msg.clone());
+        execution.state = SagaState::Compensating;
+        warn!("Step failed: {} - {}", step_id, error_msg);
+
+        // Start compensation process
+        self.compensate_saga(execution, definition).await?;
+        Ok(())
+    }
+
+    /// Complete saga successfully
+    async fn complete_saga_successfully(
+        &self,
+        mut execution: SagaExecution,
+        saga_id: &SagaId,
+    ) -> OrbitResult<SagaExecution> {
         execution.state = SagaState::Completed;
         execution.completed_at = Some(chrono::Utc::now().timestamp_millis());
         execution.current_step = None;
 
-        // Update statistics
-        {
-            let mut stats = self.stats.write().await;
-            stats.completed_sagas += 1;
-            stats.active_sagas = stats.active_sagas.saturating_sub(1);
-        }
-
-        // Notify event handlers
-        let handlers = self.event_handlers.read().await;
-        for handler in handlers.iter() {
-            if let Err(e) = handler.on_saga_completed(&execution).await {
-                error!("Saga event handler failed: {}", e);
-            }
-        }
+        self.update_completion_stats().await;
+        self.notify_saga_completed(&execution).await;
 
         info!("Saga completed successfully: {}", saga_id);
         self.update_execution(&execution).await?;
-
         Ok(execution)
+    }
+
+    /// Update statistics for successful step execution
+    async fn update_step_success_stats(&self) {
+        let mut stats = self.stats.write().await;
+        stats.total_steps_executed += 1;
+    }
+
+    /// Update statistics for saga completion
+    async fn update_completion_stats(&self) {
+        let mut stats = self.stats.write().await;
+        stats.completed_sagas += 1;
+        stats.active_sagas = stats.active_sagas.saturating_sub(1);
+    }
+
+    /// Notify event handlers of step start
+    async fn notify_step_started(&self, execution: &SagaExecution, step_id: &str) {
+        let handlers = self.event_handlers.read().await;
+        for handler in handlers.iter() {
+            if let Err(e) = handler.on_step_started(execution, step_id).await {
+                error!("Saga event handler failed: {}", e);
+            }
+        }
+    }
+
+    /// Notify event handlers of step completion
+    async fn notify_step_completed(
+        &self,
+        execution: &SagaExecution,
+        step_id: &str,
+        result: &StepResult,
+    ) {
+        let handlers = self.event_handlers.read().await;
+        for handler in handlers.iter() {
+            if let Err(e) = handler.on_step_completed(execution, step_id, result).await {
+                error!("Saga event handler failed: {}", e);
+            }
+        }
+    }
+
+    /// Notify event handlers of saga completion
+    async fn notify_saga_completed(&self, execution: &SagaExecution) {
+        let handlers = self.event_handlers.read().await;
+        for handler in handlers.iter() {
+            if let Err(e) = handler.on_saga_completed(execution).await {
+                error!("Saga event handler failed: {}", e);
+            }
+        }
     }
 
     /// Execute a step with retry logic
@@ -720,81 +811,147 @@ impl SagaOrchestrator {
     ) -> OrbitResult<()> {
         info!("Starting compensation for saga: {}", execution.saga_id);
 
-        // Notify event handlers
+        self.notify_compensation_started(execution).await;
+
+        match self.execute_compensation_steps(execution, definition).await {
+            Ok(()) => self.complete_compensation_successfully(execution).await,
+            Err(_) => self.handle_compensation_failure(execution).await,
+        }
+    }
+
+    /// Execute compensation for all completed steps
+    async fn execute_compensation_steps(
+        &self,
+        execution: &mut SagaExecution,
+        definition: &SagaDefinition,
+    ) -> OrbitResult<()> {
+        let completed_steps = execution.completed_steps.clone();
+
+        for step_id in completed_steps.iter().rev() {
+            if let Some(step) = self.find_step_by_id(definition, step_id) {
+                self.compensate_single_step(execution, step, step_id)
+                    .await?;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Find a step by its ID in the saga definition
+    fn find_step_by_id<'a>(
+        &self,
+        definition: &'a SagaDefinition,
+        step_id: &str,
+    ) -> Option<&'a Arc<dyn SagaStep>> {
+        definition
+            .steps
+            .iter()
+            .find(|s| s.metadata().step_id == step_id)
+    }
+
+    /// Compensate a single step
+    async fn compensate_single_step(
+        &self,
+        execution: &mut SagaExecution,
+        step: &Arc<dyn SagaStep>,
+        step_id: &str,
+    ) -> OrbitResult<()> {
+        debug!("Compensating step: {}", step_id);
+
+        match step.compensate(&execution.context).await {
+            Ok(StepResult::Success) => {
+                self.handle_step_compensation_success(execution, step_id)
+                    .await;
+                Ok(())
+            }
+            Ok(_) | Err(_) => {
+                error!("Failed to compensate step: {}", step_id);
+                Err(OrbitError::internal("Step compensation failed"))
+            }
+        }
+    }
+
+    /// Handle successful step compensation
+    async fn handle_step_compensation_success(&self, execution: &mut SagaExecution, step_id: &str) {
+        execution.mark_step_compensated(step_id.to_string());
+        self.update_compensation_success_stats().await;
+        debug!("Step compensated successfully: {}", step_id);
+    }
+
+    /// Complete compensation process successfully
+    async fn complete_compensation_successfully(
+        &self,
+        execution: &mut SagaExecution,
+    ) -> OrbitResult<()> {
+        execution.state = SagaState::Aborted;
+        execution.completed_at = Some(chrono::Utc::now().timestamp_millis());
+
+        self.update_compensation_complete_stats().await;
+        self.notify_compensation_completed(execution).await;
+
+        info!("Compensation completed for saga: {}", execution.saga_id);
+        Ok(())
+    }
+
+    /// Handle compensation failure
+    async fn handle_compensation_failure(&self, execution: &mut SagaExecution) -> OrbitResult<()> {
+        execution.state = SagaState::Failed;
+        execution.completed_at = Some(chrono::Utc::now().timestamp_millis());
+
+        self.update_compensation_failure_stats().await;
+        self.notify_saga_failed(execution).await;
+
+        Ok(())
+    }
+
+    /// Update statistics for successful step compensation
+    async fn update_compensation_success_stats(&self) {
+        let mut stats = self.stats.write().await;
+        stats.total_steps_compensated += 1;
+    }
+
+    /// Update statistics for completed compensation
+    async fn update_compensation_complete_stats(&self) {
+        let mut stats = self.stats.write().await;
+        stats.compensated_sagas += 1;
+        stats.active_sagas = stats.active_sagas.saturating_sub(1);
+    }
+
+    /// Update statistics for failed compensation
+    async fn update_compensation_failure_stats(&self) {
+        let mut stats = self.stats.write().await;
+        stats.failed_sagas += 1;
+        stats.active_sagas = stats.active_sagas.saturating_sub(1);
+    }
+
+    /// Notify event handlers that compensation started
+    async fn notify_compensation_started(&self, execution: &SagaExecution) {
         let handlers = self.event_handlers.read().await;
         for handler in handlers.iter() {
             if let Err(e) = handler.on_compensation_started(execution).await {
                 error!("Saga event handler failed: {}", e);
             }
         }
+    }
 
-        // Compensate completed steps in reverse order
-        let completed_steps = execution.completed_steps.clone();
-        for step_id in completed_steps.iter().rev() {
-            if let Some(step) = definition
-                .steps
-                .iter()
-                .find(|s| &s.metadata().step_id == step_id)
-            {
-                debug!("Compensating step: {}", step_id);
-
-                match step.compensate(&execution.context).await {
-                    Ok(StepResult::Success) => {
-                        execution.mark_step_compensated(step_id.clone());
-
-                        // Update statistics
-                        {
-                            let mut stats = self.stats.write().await;
-                            stats.total_steps_compensated += 1;
-                        }
-
-                        debug!("Step compensated successfully: {}", step_id);
-                    }
-                    Ok(_) | Err(_) => {
-                        error!("Failed to compensate step: {}", step_id);
-                        execution.state = SagaState::Failed;
-                        execution.completed_at = Some(chrono::Utc::now().timestamp_millis());
-
-                        // Update statistics
-                        {
-                            let mut stats = self.stats.write().await;
-                            stats.failed_sagas += 1;
-                            stats.active_sagas = stats.active_sagas.saturating_sub(1);
-                        }
-
-                        // Notify event handlers
-                        for handler in handlers.iter() {
-                            if let Err(e) = handler.on_saga_failed(execution).await {
-                                error!("Saga event handler failed: {}", e);
-                            }
-                        }
-
-                        return Ok(());
-                    }
-                }
-            }
-        }
-
-        // All compensations completed
-        execution.state = SagaState::Aborted;
-        execution.completed_at = Some(chrono::Utc::now().timestamp_millis());
-
-        // Update statistics
-        {
-            let mut stats = self.stats.write().await;
-            stats.compensated_sagas += 1;
-            stats.active_sagas = stats.active_sagas.saturating_sub(1);
-        }
-
-        // Notify event handlers
+    /// Notify event handlers that compensation completed
+    async fn notify_compensation_completed(&self, execution: &SagaExecution) {
+        let handlers = self.event_handlers.read().await;
         for handler in handlers.iter() {
             if let Err(e) = handler.on_compensation_completed(execution).await {
                 error!("Saga event handler failed: {}", e);
             }
         }
+    }
 
-        info!("Compensation completed for saga: {}", execution.saga_id);
-        Ok(())
+    /// Notify event handlers that saga failed
+    async fn notify_saga_failed(&self, execution: &SagaExecution) {
+        let handlers = self.event_handlers.read().await;
+        for handler in handlers.iter() {
+            if let Err(e) = handler.on_saga_failed(execution).await {
+                error!("Saga event handler failed: {}", e);
+            }
+        }
     }
 
     /// Update saga execution state

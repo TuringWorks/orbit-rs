@@ -326,14 +326,77 @@ impl StorageSerializable for TableSchema {
 
 impl StorageSerializable for HashMap<String, SqlValue> {
     fn to_storage_bytes(&self) -> ProtocolResult<Vec<u8>> {
-        serde_json::to_vec(self)
+        // Convert SqlValue::Jsonb to a compact binary representation (CBOR) wrapped in an object
+        // so that deserialization can distinguish binary-encoded jsonb from normal json string.
+        use crate::postgres_wire::jsonb;
+        use serde_json::Value as JsonValue;
+
+        let mut map = serde_json::Map::new();
+        for (k, v) in self.iter() {
+            match v {
+                SqlValue::Jsonb(jv) => {
+                    // Encode as base64 of CBOR bytes and mark as __jsonb_b64
+                    let bytes = jsonb::encode_jsonb(jv)?;
+                    let b64 =
+                        base64::prelude::Engine::encode(&base64::prelude::BASE64_STANDARD, &bytes);
+                    let wrapper = JsonValue::Object(serde_json::Map::from_iter(vec![(
+                        "__jsonb_b64".to_string(),
+                        JsonValue::String(b64),
+                    )]));
+                    map.insert(k.clone(), wrapper);
+                }
+                SqlValue::Json(jv) => {
+                    map.insert(k.clone(), jv.clone());
+                }
+                _ => {
+                    // Fallback to serde_json conversion for other SqlValue types
+                    let s = v.to_postgres_string();
+                    map.insert(k.clone(), JsonValue::String(s));
+                }
+            }
+        }
+
+        serde_json::to_vec(&JsonValue::Object(map))
             .map_err(|e| ProtocolError::SerializationError(format!("Serialization failed: {}", e)))
     }
 
     fn from_storage_bytes(bytes: &[u8]) -> ProtocolResult<Self> {
-        serde_json::from_slice(bytes).map_err(|e| {
+        use crate::postgres_wire::jsonb;
+        use serde_json::Value as JsonValue;
+
+        let v: JsonValue = serde_json::from_slice(bytes).map_err(|e| {
             ProtocolError::SerializationError(format!("Deserialization failed: {}", e))
-        })
+        })?;
+
+        let mut result = HashMap::new();
+        if let JsonValue::Object(map) = v {
+            for (k, val) in map.into_iter() {
+                if let JsonValue::Object(ref inner) = val {
+                    if let Some(JsonValue::String(b64)) = inner.get("__jsonb_b64") {
+                        let bytes =
+                            base64::prelude::Engine::decode(&base64::prelude::BASE64_STANDARD, b64)
+                                .map_err(|e| {
+                                    ProtocolError::SerializationError(format!(
+                                        "base64 decode failed: {}",
+                                        e
+                                    ))
+                                })?;
+                        let jv = jsonb::decode_jsonb(&bytes)?;
+                        result.insert(k, SqlValue::Jsonb(jv));
+                        continue;
+                    }
+                }
+
+                // Otherwise treat as string value stored via to_postgres_string
+                match val {
+                    JsonValue::String(s) => result.insert(k, SqlValue::Text(s)),
+                    JsonValue::Null => result.insert(k, SqlValue::Null),
+                    other => result.insert(k, SqlValue::Text(other.to_string())),
+                };
+            }
+        }
+
+        Ok(result)
     }
 }
 

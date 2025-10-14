@@ -1,6 +1,6 @@
 //! Time series query language and operations
 
-use super::*;
+use super::{AggregationType, HashMap, QueryResult, SeriesId, TimeRange, Timestamp, Utc};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;

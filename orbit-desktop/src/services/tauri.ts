@@ -9,17 +9,16 @@ import {
   MLFunctionInfo,
   ApiResponse,
   QueryType,
-  QueryResultData,
-  ColumnInfo
+  QueryResultData
 } from '@/types';
 
 // Check if running in Tauri environment
 const isTauri = (): boolean => {
   try {
-    return typeof window !== 'undefined' && 
+    return globalThis.window !== undefined && 
            'window' in globalThis &&
-           '__TAURI_IPC__' in window && 
-           typeof window.__TAURI_IPC__ === 'function';
+           '__TAURI_IPC__' in globalThis.window && 
+           typeof globalThis.window.__TAURI_IPC__ === 'function';
   } catch {
     return false;
   }
@@ -31,7 +30,7 @@ const createMockConnections = (): Connection[] => [
     id: 'mock-postgres',
     info: {
       name: 'Mock PostgreSQL',
-      connection_type: 'PostgreSQL' as any,
+      connection_type: 'PostgreSQL',
       host: 'localhost',
       port: 5432,
       database: 'demo',
@@ -41,16 +40,16 @@ const createMockConnections = (): Connection[] => [
       connection_timeout: null,
       additional_params: {},
     },
-    status: 'Connected' as any,
-    created_at: new Date(),
-    last_used: new Date(),
+    status: 'Connected',
+    created_at: new Date().toISOString(),
+    last_used: new Date().toISOString(),
     query_count: 0,
   },
   {
     id: 'mock-orbitql',
     info: {
       name: 'Mock OrbitQL',
-      connection_type: 'OrbitQL' as any,
+      connection_type: 'OrbitQL',
       host: 'localhost',
       port: 8080,
       database: null,
@@ -60,9 +59,9 @@ const createMockConnections = (): Connection[] => [
       connection_timeout: null,
       additional_params: {},
     },
-    status: 'Connected' as any,
-    created_at: new Date(),
-    last_used: new Date(),
+    status: 'Connected',
+    created_at: new Date().toISOString(),
+    last_used: new Date().toISOString(),
     query_count: 0,
   }
 ];
@@ -77,7 +76,7 @@ const createMockQueryResult = (): QueryResult => ({
     ],
     rows: [
       { id: 1, name: 'Sample Data', value: 100.5 },
-      { id: 2, name: 'Another Row', value: 250.0 }
+      { id: 2, name: 'Another Row', value: 250 }
     ]
   } as QueryResultData,
   error: null,

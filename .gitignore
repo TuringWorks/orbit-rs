@@ -216,3 +216,9 @@ lcov.info
 # Flamegraph
 flamegraph.svg
 perf.data
+# SonarQube analysis files
+.scannerwork/
+
+# Coverage files
+*.profraw
+target/coverage/

@@ -2,7 +2,10 @@ use crate::addressable::AddressableReference;
 use crate::exception::{OrbitError, OrbitResult};
 use crate::mesh::NodeId;
 use crate::transaction_log::PersistentTransactionLogger;
-use crate::transactions::*;
+use crate::transactions::{
+    DistributedTransaction, TransactionCoordinator, TransactionId, TransactionOperation,
+    TransactionState, TransactionVote,
+};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};

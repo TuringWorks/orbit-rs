@@ -12,8 +12,8 @@ use std::thread;
 use std::time::{Duration, Instant};
 use tokio::sync::{mpsc, oneshot};
 
-use crate::orbitql::ast::*;
-use crate::orbitql::vectorized_execution::*;
+use crate::orbitql::ast::{AggregateFunction, Expression, JoinType, Statement};
+use crate::orbitql::vectorized_execution::{BatchSchema, ColumnBatch, RecordBatch, VectorDataType};
 use crate::orbitql::QueryValue;
 
 // Type aliases to reduce complexity

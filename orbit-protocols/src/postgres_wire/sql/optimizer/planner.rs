@@ -5,7 +5,11 @@
 //! execute the query efficiently.
 
 use crate::error::ProtocolResult;
-use crate::postgres_wire::sql::ast::*;
+use crate::postgres_wire::sql::ast::{
+    Assignment, ColumnRef, DeleteStatement, Expression, FromClause, FunctionCall, FunctionName,
+    InsertSource, InsertStatement, JoinCondition, OrderByItem, SelectItem, SelectStatement,
+    Statement, TableName, UpdateStatement,
+};
 use std::fmt;
 
 /// Physical execution plan for a query

@@ -38,10 +38,10 @@ pub mod exporter;
 pub mod metrics;
 pub mod server;
 
-pub use collector::*;
-pub use config::*;
-pub use dashboard::*;
-pub use error::*;
-pub use exporter::*;
-pub use metrics::*;
-pub use server::*;
+pub use collector::MetricsCollector;
+pub use config::{DashboardConfig, PrometheusConfig};
+// pub use dashboard::{DashboardGenerator, GrafanaDashboard};
+pub use error::{PrometheusError, PrometheusResult};
+pub use exporter::PrometheusExporter;
+pub use metrics::{MetricType, OrbitMetrics};
+pub use server::PrometheusServer;

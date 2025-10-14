@@ -5,7 +5,17 @@
 
 use crate::error::{ProtocolError, ProtocolResult};
 use crate::postgres_wire::sql::{
-    ast::*,
+    ast::{
+        AccessMode, AlterTableStatement, AssignmentTarget, BeginStatement, ColumnConstraint,
+        CommitStatement, CreateExtensionStatement, CreateIndexStatement, CreateSchemaStatement,
+        CreateTableStatement, CreateViewStatement, DeleteStatement, DescribeStatement,
+        DropExtensionStatement, DropIndexStatement, DropSchemaStatement, DropTableStatement,
+        DropViewStatement, ExplainStatement, Expression, FromClause, GrantStatement, IndexType,
+        InsertSource, InsertStatement, IsolationLevel, JoinCondition, JoinType, Privilege,
+        ReleaseSavepointStatement, RevokeStatement, RollbackStatement, SavepointStatement,
+        SelectItem, SelectStatement, ShowStatement, ShowVariable, Statement, TableConstraint,
+        TableName, UpdateStatement, UseStatement,
+    },
     expression_evaluator::{EvaluationContext, ExpressionEvaluator},
     parser::SqlParser,
     types::{SqlType, SqlValue},
@@ -193,6 +203,13 @@ pub struct SavepointData {
     pub transaction_id: String,
     pub table_snapshot: HashMap<String, Vec<HashMap<String, SqlValue>>>,
     pub created_at: std::time::Instant,
+}
+
+/// Context for JOIN execution to reduce parameter passing
+struct JoinExecutionContext<'a> {
+    condition: &'a JoinCondition,
+    where_clause: &'a Option<Expression>,
+    columns: &'a [String],
 }
 
 /// Permission structure
@@ -440,10 +457,7 @@ impl SqlExecutor {
         // Check if table already exists
         let tables = self.tables.read().await;
         if tables.contains_key(&table_name) && !stmt.if_not_exists {
-            return Err(ProtocolError::PostgresError(format!(
-                "Table '{}' already exists",
-                table_name
-            )));
+            return Err(ProtocolError::already_exists("Table", &table_name));
         }
         drop(tables);
 
@@ -558,17 +572,14 @@ impl SqlExecutor {
 
         // Check if table exists
         let mut tables = self.tables.write().await;
-        let table = tables.get_mut(&table_name).ok_or_else(|| {
-            ProtocolError::PostgresError(format!("Table '{}' does not exist", table_name))
-        })?;
+        let table = tables
+            .get_mut(&table_name)
+            .ok_or_else(|| ProtocolError::table_not_found(&table_name))?;
 
         // Validate columns exist
         for col in &stmt.columns {
             if !table.columns.iter().any(|c| c.name == col.name) {
-                return Err(ProtocolError::PostgresError(format!(
-                    "Column '{}' does not exist in table '{}'",
-                    col.name, table_name
-                )));
+                return Err(ProtocolError::column_not_found(&col.name, &table_name));
             }
         }
 
@@ -607,10 +618,7 @@ impl SqlExecutor {
         // Check if view already exists
         let views = self.views.read().await;
         if views.contains_key(&view_name) && !stmt.if_not_exists {
-            return Err(ProtocolError::PostgresError(format!(
-                "View '{}' already exists",
-                view_name
-            )));
+            return Err(ProtocolError::already_exists("View", &view_name));
         }
         drop(views);
 
@@ -636,10 +644,7 @@ impl SqlExecutor {
         // Check if schema already exists
         let schemas = self.schemas.read().await;
         if schemas.contains_key(&schema_name) && !stmt.if_not_exists {
-            return Err(ProtocolError::PostgresError(format!(
-                "Schema '{}' already exists",
-                schema_name
-            )));
+            return Err(ProtocolError::already_exists("Schema", &schema_name));
         }
         drop(schemas);
 
@@ -663,10 +668,7 @@ impl SqlExecutor {
         // Check if extension already exists
         let extensions = self.extensions.read().await;
         if extensions.contains_key(&extension_name) && !stmt.if_not_exists {
-            return Err(ProtocolError::PostgresError(format!(
-                "Extension '{}' already exists",
-                extension_name
-            )));
+            return Err(ProtocolError::already_exists("Extension", &extension_name));
         }
         drop(extensions);
 
@@ -715,10 +717,7 @@ impl SqlExecutor {
 
         for table_name in &table_names {
             if !tables.contains_key(table_name) && !stmt.if_exists {
-                return Err(ProtocolError::PostgresError(format!(
-                    "Table '{}' does not exist",
-                    table_name
-                )));
+                return Err(ProtocolError::does_not_exist("Table", table_name));
             }
 
             tables.remove(table_name);
@@ -746,10 +745,7 @@ impl SqlExecutor {
 
         for view_name in &view_names {
             if !views.contains_key(view_name) && !stmt.if_exists {
-                return Err(ProtocolError::PostgresError(format!(
-                    "View '{}' does not exist",
-                    view_name
-                )));
+                return Err(ProtocolError::does_not_exist("View", view_name));
             }
 
             views.remove(view_name);
@@ -768,10 +764,7 @@ impl SqlExecutor {
 
         for schema_name in &schema_names {
             if !schemas.contains_key(schema_name) && !stmt.if_exists {
-                return Err(ProtocolError::PostgresError(format!(
-                    "Schema '{}' does not exist",
-                    schema_name
-                )));
+                return Err(ProtocolError::does_not_exist("Schema", schema_name));
             }
 
             schemas.remove(schema_name);
@@ -791,10 +784,7 @@ impl SqlExecutor {
 
         for extension_name in &extension_names {
             if !extensions.contains_key(extension_name) && !stmt.if_exists {
-                return Err(ProtocolError::PostgresError(format!(
-                    "Extension '{}' does not exist",
-                    extension_name
-                )));
+                return Err(ProtocolError::does_not_exist("Extension", extension_name));
             }
 
             if extension_name.to_lowercase() == "vector" {
@@ -827,13 +817,7 @@ impl SqlExecutor {
             for item in &stmt.select_list {
                 match item {
                     SelectItem::Expression { expr, .. } => {
-                        let context = EvaluationContext {
-                            current_row: HashMap::new(),
-                            table_data: HashMap::new(),
-                            variables: HashMap::new(),
-                            current_table: None,
-                            window_frame: None,
-                        };
+                        let context = EvaluationContext::empty();
                         let value = self.evaluate_where_condition(expr, &context).await?;
                         result_row.push(Some(value.to_postgres_string()));
                     }
@@ -857,9 +841,7 @@ impl SqlExecutor {
         let tables = self.tables.read().await;
         let table_schema = tables
             .get(&table_name)
-            .ok_or_else(|| {
-                ProtocolError::PostgresError(format!("Table '{}' does not exist", table_name))
-            })?
+            .ok_or_else(|| ProtocolError::table_not_found(&table_name))?
             .clone();
         drop(tables);
 
@@ -927,9 +909,7 @@ impl SqlExecutor {
         let tables = self.tables.read().await;
         let _table_schema = tables
             .get(&table_name)
-            .ok_or_else(|| {
-                ProtocolError::PostgresError(format!("Table '{}' does not exist", table_name))
-            })?
+            .ok_or_else(|| ProtocolError::table_not_found(&table_name))?
             .clone();
         drop(tables);
 
@@ -942,13 +922,8 @@ impl SqlExecutor {
 
                 // Evaluate WHERE clause if present
                 if let Some(where_expr) = &stmt.where_clause {
-                    let context = EvaluationContext {
-                        current_row: row.clone(),
-                        table_data: HashMap::new(),
-                        variables: HashMap::new(),
-                        current_table: Some(table_name.clone()),
-                        window_frame: None,
-                    };
+                    let context =
+                        EvaluationContext::with_row_and_table(row.clone(), table_name.clone());
 
                     match self.evaluate_where_condition(where_expr, &context).await {
                         Ok(SqlValue::Boolean(b)) => should_update = b,
@@ -997,9 +972,7 @@ impl SqlExecutor {
         let tables = self.tables.read().await;
         let _table_schema = tables
             .get(&table_name)
-            .ok_or_else(|| {
-                ProtocolError::PostgresError(format!("Table '{}' does not exist", table_name))
-            })?
+            .ok_or_else(|| ProtocolError::table_not_found(&table_name))?
             .clone();
         drop(tables);
 
@@ -1014,13 +987,8 @@ impl SqlExecutor {
 
                 // Evaluate WHERE clause if present
                 if let Some(where_expr) = &stmt.where_clause {
-                    let context = EvaluationContext {
-                        current_row: row.clone(),
-                        table_data: HashMap::new(),
-                        variables: HashMap::new(),
-                        current_table: Some(table_name.clone()),
-                        window_frame: None,
-                    };
+                    let context =
+                        EvaluationContext::with_row_and_table(row.clone(), table_name.clone());
 
                     match self.evaluate_where_condition(where_expr, &context).await {
                         Ok(SqlValue::Boolean(b)) => should_delete = b,
@@ -1312,10 +1280,7 @@ impl SqlExecutor {
         // Check if table exists in schema
         let tables = self.tables.read().await;
         if !tables.contains_key(&table_name_str) {
-            return Err(ProtocolError::PostgresError(format!(
-                "Relation '{}' does not exist",
-                table_name_str
-            )));
+            return Err(ProtocolError::relation_not_found(&table_name_str));
         }
         drop(tables);
 
@@ -1325,13 +1290,8 @@ impl SqlExecutor {
             for row in data {
                 // Apply WHERE clause if present
                 let should_include = if let Some(where_expr) = where_clause {
-                    let context = EvaluationContext {
-                        current_row: row.clone(),
-                        table_data: HashMap::new(),
-                        variables: HashMap::new(),
-                        current_table: Some(table_name_str.clone()),
-                        window_frame: None,
-                    };
+                    let context =
+                        EvaluationContext::with_row_and_table(row.clone(), table_name_str.clone());
 
                     match self.evaluate_where_condition(where_expr, &context).await {
                         Ok(SqlValue::Boolean(b)) => b,
@@ -1360,7 +1320,7 @@ impl SqlExecutor {
         Ok(rows)
     }
 
-    /// Execute JOIN operation
+    /// Execute JOIN operation using strategy pattern to reduce complexity
     async fn execute_join(
         &self,
         left: &FromClause,
@@ -1370,182 +1330,290 @@ impl SqlExecutor {
         where_clause: &Option<Expression>,
         columns: &[String],
     ) -> ProtocolResult<Vec<Vec<Option<String>>>> {
-        // Get left table data
         let left_rows = self.get_table_rows_from_clause(left).await?;
         let right_rows = self.get_table_rows_from_clause(right).await?;
 
-        let mut result_rows = Vec::new();
+        let join_context = JoinExecutionContext {
+            condition,
+            where_clause,
+            columns,
+        };
 
         match join_type {
             JoinType::Inner => {
-                // INNER JOIN - only matching rows
-                for left_row in &left_rows {
-                    for right_row in &right_rows {
-                        if self
-                            .evaluate_join_condition(condition, left_row, right_row)
-                            .await?
-                        {
-                            let joined_row = self.merge_rows(left_row, right_row);
-
-                            // Apply WHERE clause
-                            if self
-                                .apply_where_to_joined_row(&joined_row, where_clause)
-                                .await?
-                            {
-                                result_rows.push(self.project_columns(&joined_row, columns));
-                            }
-                        }
-                    }
-                }
+                self.execute_inner_join(&left_rows, &right_rows, &join_context)
+                    .await
             }
             JoinType::LeftOuter => {
-                // LEFT JOIN - all left rows, matching right rows or NULLs
-                for left_row in &left_rows {
-                    let mut matched = false;
-                    for right_row in &right_rows {
-                        if self
-                            .evaluate_join_condition(condition, left_row, right_row)
-                            .await?
-                        {
-                            let joined_row = self.merge_rows(left_row, right_row);
-
-                            if self
-                                .apply_where_to_joined_row(&joined_row, where_clause)
-                                .await?
-                            {
-                                result_rows.push(self.project_columns(&joined_row, columns));
-                            }
-                            matched = true;
-                        }
-                    }
-                    if !matched {
-                        // No match found, add with NULL values for right side
-                        let null_right_row = HashMap::new(); // Empty row represents NULLs
-                        let joined_row = self.merge_rows(left_row, &null_right_row);
-
-                        if self
-                            .apply_where_to_joined_row(&joined_row, where_clause)
-                            .await?
-                        {
-                            result_rows.push(self.project_columns(&joined_row, columns));
-                        }
-                    }
-                }
+                self.execute_left_join(&left_rows, &right_rows, &join_context)
+                    .await
             }
             JoinType::RightOuter => {
-                // RIGHT JOIN - all right rows, matching left rows or NULLs
-                for right_row in &right_rows {
-                    let mut matched = false;
-                    for left_row in &left_rows {
-                        if self
-                            .evaluate_join_condition(condition, left_row, right_row)
-                            .await?
-                        {
-                            let joined_row = self.merge_rows(left_row, right_row);
-
-                            if self
-                                .apply_where_to_joined_row(&joined_row, where_clause)
-                                .await?
-                            {
-                                result_rows.push(self.project_columns(&joined_row, columns));
-                            }
-                            matched = true;
-                        }
-                    }
-                    if !matched {
-                        // No match found, add with NULL values for left side
-                        let null_left_row = HashMap::new();
-                        let joined_row = self.merge_rows(&null_left_row, right_row);
-
-                        if self
-                            .apply_where_to_joined_row(&joined_row, where_clause)
-                            .await?
-                        {
-                            result_rows.push(self.project_columns(&joined_row, columns));
-                        }
-                    }
-                }
+                self.execute_right_join(&left_rows, &right_rows, &join_context)
+                    .await
             }
             JoinType::FullOuter => {
-                // FULL OUTER JOIN - combination of LEFT and RIGHT JOINs
-                let mut left_matched = vec![false; left_rows.len()];
-                let mut right_matched = vec![false; right_rows.len()];
-
-                // Find all matches
-                for (li, left_row) in left_rows.iter().enumerate() {
-                    for (ri, right_row) in right_rows.iter().enumerate() {
-                        if self
-                            .evaluate_join_condition(condition, left_row, right_row)
-                            .await?
-                        {
-                            let joined_row = self.merge_rows(left_row, right_row);
-
-                            if self
-                                .apply_where_to_joined_row(&joined_row, where_clause)
-                                .await?
-                            {
-                                result_rows.push(self.project_columns(&joined_row, columns));
-                            }
-                            left_matched[li] = true;
-                            right_matched[ri] = true;
-                        }
-                    }
-                }
-
-                // Add unmatched left rows
-                for (li, left_row) in left_rows.iter().enumerate() {
-                    if !left_matched[li] {
-                        let null_right_row = HashMap::new();
-                        let joined_row = self.merge_rows(left_row, &null_right_row);
-
-                        if self
-                            .apply_where_to_joined_row(&joined_row, where_clause)
-                            .await?
-                        {
-                            result_rows.push(self.project_columns(&joined_row, columns));
-                        }
-                    }
-                }
-
-                // Add unmatched right rows
-                for (ri, right_row) in right_rows.iter().enumerate() {
-                    if !right_matched[ri] {
-                        let null_left_row = HashMap::new();
-                        let joined_row = self.merge_rows(&null_left_row, right_row);
-
-                        if self
-                            .apply_where_to_joined_row(&joined_row, where_clause)
-                            .await?
-                        {
-                            result_rows.push(self.project_columns(&joined_row, columns));
-                        }
-                    }
-                }
+                self.execute_full_outer_join(&left_rows, &right_rows, &join_context)
+                    .await
             }
             JoinType::Cross => {
-                // CROSS JOIN - Cartesian product
-                for left_row in &left_rows {
-                    for right_row in &right_rows {
-                        let joined_row = self.merge_rows(left_row, right_row);
+                self.execute_cross_join(&left_rows, &right_rows, &join_context)
+                    .await
+            }
+            JoinType::LeftSemi | JoinType::LeftAnti => Err(ProtocolError::PostgresError(format!(
+                "JOIN type {:?} not yet implemented",
+                join_type
+            ))),
+        }
+    }
 
-                        if self
-                            .apply_where_to_joined_row(&joined_row, where_clause)
-                            .await?
-                        {
-                            result_rows.push(self.project_columns(&joined_row, columns));
-                        }
+    /// Execute INNER JOIN strategy
+    async fn execute_inner_join(
+        &self,
+        left_rows: &[HashMap<String, SqlValue>],
+        right_rows: &[HashMap<String, SqlValue>],
+        context: &JoinExecutionContext<'_>,
+    ) -> ProtocolResult<Vec<Vec<Option<String>>>> {
+        let mut result_rows = Vec::new();
+
+        for left_row in left_rows {
+            for right_row in right_rows {
+                if self
+                    .evaluate_join_condition(context.condition, left_row, right_row)
+                    .await?
+                {
+                    if let Some(result_row) = self
+                        .try_join_and_filter(left_row, right_row, context)
+                        .await?
+                    {
+                        result_rows.push(result_row);
                     }
                 }
-            }
-            _ => {
-                return Err(ProtocolError::PostgresError(format!(
-                    "JOIN type {:?} not implemented",
-                    join_type
-                )));
             }
         }
 
         Ok(result_rows)
+    }
+
+    /// Execute LEFT JOIN strategy  
+    async fn execute_left_join(
+        &self,
+        left_rows: &[HashMap<String, SqlValue>],
+        right_rows: &[HashMap<String, SqlValue>],
+        context: &JoinExecutionContext<'_>,
+    ) -> ProtocolResult<Vec<Vec<Option<String>>>> {
+        let mut result_rows = Vec::new();
+
+        for left_row in left_rows {
+            let mut matched = false;
+
+            for right_row in right_rows {
+                if self
+                    .evaluate_join_condition(context.condition, left_row, right_row)
+                    .await?
+                {
+                    if let Some(result_row) = self
+                        .try_join_and_filter(left_row, right_row, context)
+                        .await?
+                    {
+                        result_rows.push(result_row);
+                    }
+                    matched = true;
+                }
+            }
+
+            if !matched {
+                // Add left row with NULL values for right side
+                let null_right_row = Self::create_null_row();
+                if let Some(result_row) = self
+                    .try_join_and_filter(left_row, &null_right_row, context)
+                    .await?
+                {
+                    result_rows.push(result_row);
+                }
+            }
+        }
+
+        Ok(result_rows)
+    }
+
+    /// Execute RIGHT JOIN strategy
+    async fn execute_right_join(
+        &self,
+        left_rows: &[HashMap<String, SqlValue>],
+        right_rows: &[HashMap<String, SqlValue>],
+        context: &JoinExecutionContext<'_>,
+    ) -> ProtocolResult<Vec<Vec<Option<String>>>> {
+        let mut result_rows = Vec::new();
+
+        for right_row in right_rows {
+            let mut matched = false;
+
+            for left_row in left_rows {
+                if self
+                    .evaluate_join_condition(context.condition, left_row, right_row)
+                    .await?
+                {
+                    if let Some(result_row) = self
+                        .try_join_and_filter(left_row, right_row, context)
+                        .await?
+                    {
+                        result_rows.push(result_row);
+                    }
+                    matched = true;
+                }
+            }
+
+            if !matched {
+                // Add right row with NULL values for left side
+                let null_left_row = Self::create_null_row();
+                if let Some(result_row) = self
+                    .try_join_and_filter(&null_left_row, right_row, context)
+                    .await?
+                {
+                    result_rows.push(result_row);
+                }
+            }
+        }
+
+        Ok(result_rows)
+    }
+
+    /// Execute FULL OUTER JOIN strategy
+    async fn execute_full_outer_join(
+        &self,
+        left_rows: &[HashMap<String, SqlValue>],
+        right_rows: &[HashMap<String, SqlValue>],
+        context: &JoinExecutionContext<'_>,
+    ) -> ProtocolResult<Vec<Vec<Option<String>>>> {
+        let mut result_rows = Vec::new();
+        let mut left_matched = vec![false; left_rows.len()];
+        let mut right_matched = vec![false; right_rows.len()];
+
+        // Process all matching combinations
+        for (li, left_row) in left_rows.iter().enumerate() {
+            for (ri, right_row) in right_rows.iter().enumerate() {
+                if self
+                    .evaluate_join_condition(context.condition, left_row, right_row)
+                    .await?
+                {
+                    if let Some(result_row) = self
+                        .try_join_and_filter(left_row, right_row, context)
+                        .await?
+                    {
+                        result_rows.push(result_row);
+                    }
+                    left_matched[li] = true;
+                    right_matched[ri] = true;
+                }
+            }
+        }
+
+        // Add unmatched left rows
+        self.add_unmatched_left_rows(&mut result_rows, left_rows, &left_matched, context)
+            .await?;
+
+        // Add unmatched right rows
+        self.add_unmatched_right_rows(&mut result_rows, right_rows, &right_matched, context)
+            .await?;
+
+        Ok(result_rows)
+    }
+
+    /// Execute CROSS JOIN strategy - Cartesian product
+    async fn execute_cross_join(
+        &self,
+        left_rows: &[HashMap<String, SqlValue>],
+        right_rows: &[HashMap<String, SqlValue>],
+        context: &JoinExecutionContext<'_>,
+    ) -> ProtocolResult<Vec<Vec<Option<String>>>> {
+        let mut result_rows = Vec::new();
+
+        // CROSS JOIN ignores the join condition and produces Cartesian product
+        for left_row in left_rows {
+            for right_row in right_rows {
+                if let Some(result_row) = self
+                    .try_join_and_filter(left_row, right_row, context)
+                    .await?
+                {
+                    result_rows.push(result_row);
+                }
+            }
+        }
+
+        Ok(result_rows)
+    }
+
+    /// Helper to join rows and apply filtering
+    async fn try_join_and_filter(
+        &self,
+        left_row: &HashMap<String, SqlValue>,
+        right_row: &HashMap<String, SqlValue>,
+        context: &JoinExecutionContext<'_>,
+    ) -> ProtocolResult<Option<Vec<Option<String>>>> {
+        let joined_row = self.merge_rows(left_row, right_row);
+
+        if self
+            .apply_where_to_joined_row(&joined_row, context.where_clause)
+            .await?
+        {
+            Ok(Some(self.project_columns(&joined_row, context.columns)))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Create an empty HashMap for null row in JOIN operations
+    fn create_null_row() -> HashMap<String, SqlValue> {
+        HashMap::new()
+    }
+
+    /// Add unmatched left rows for FULL OUTER JOIN
+    async fn add_unmatched_left_rows(
+        &self,
+        result_rows: &mut Vec<Vec<Option<String>>>,
+        left_rows: &[HashMap<String, SqlValue>],
+        left_matched: &[bool],
+        context: &JoinExecutionContext<'_>,
+    ) -> ProtocolResult<()> {
+        let null_right_row = Self::create_null_row();
+
+        for (li, left_row) in left_rows.iter().enumerate() {
+            if !left_matched[li] {
+                if let Some(result_row) = self
+                    .try_join_and_filter(left_row, &null_right_row, context)
+                    .await?
+                {
+                    result_rows.push(result_row);
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Add unmatched right rows for FULL OUTER JOIN
+    async fn add_unmatched_right_rows(
+        &self,
+        result_rows: &mut Vec<Vec<Option<String>>>,
+        right_rows: &[HashMap<String, SqlValue>],
+        right_matched: &[bool],
+        context: &JoinExecutionContext<'_>,
+    ) -> ProtocolResult<()> {
+        let null_left_row = Self::create_null_row();
+
+        for (ri, right_row) in right_rows.iter().enumerate() {
+            if !right_matched[ri] {
+                if let Some(result_row) = self
+                    .try_join_and_filter(&null_left_row, right_row, context)
+                    .await?
+                {
+                    result_rows.push(result_row);
+                }
+            }
+        }
+
+        Ok(())
     }
 
     /// Get table rows from a FROM clause
@@ -1596,13 +1664,7 @@ impl SqlExecutor {
         match condition {
             JoinCondition::On(expr) => {
                 let joined_row = self.merge_rows(left_row, right_row);
-                let context = EvaluationContext {
-                    current_row: joined_row,
-                    table_data: HashMap::new(),
-                    variables: HashMap::new(),
-                    current_table: None,
-                    window_frame: None,
-                };
+                let context = EvaluationContext::with_row(joined_row);
 
                 match self.evaluate_where_condition(expr, &context).await {
                     Ok(SqlValue::Boolean(b)) => Ok(b),
@@ -1659,13 +1721,7 @@ impl SqlExecutor {
         where_clause: &Option<Expression>,
     ) -> ProtocolResult<bool> {
         if let Some(where_expr) = where_clause {
-            let context = EvaluationContext {
-                current_row: joined_row.clone(),
-                table_data: HashMap::new(),
-                variables: HashMap::new(),
-                current_table: None,
-                window_frame: None,
-            };
+            let context = EvaluationContext::with_row(joined_row.clone());
 
             match self.evaluate_where_condition(where_expr, &context).await {
                 Ok(SqlValue::Boolean(b)) => Ok(b),

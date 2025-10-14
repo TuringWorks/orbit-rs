@@ -351,7 +351,7 @@ export const MLModelManager: React.FC<MLModelManagerProps> = ({
     const k = 1024;
     const sizes = ['B', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    return Number.parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
   const formatAccuracy = (accuracy: number) => {
@@ -371,26 +371,28 @@ export const MLModelManager: React.FC<MLModelManagerProps> = ({
       [MLFunctionCategory.NLP]: [],
     };
 
-    mlFunctions.forEach(func => {
+    for (const func of mlFunctions) {
       groups[func.category].push(func);
-    });
+    }
 
     return groups;
   };
 
+  // Category display name mapping to reduce cognitive complexity
+  const categoryDisplayNames: Record<MLFunctionCategory, string> = {
+    [MLFunctionCategory.ModelManagement]: 'Model Management',
+    [MLFunctionCategory.Statistical]: 'Statistical Functions',
+    [MLFunctionCategory.SupervisedLearning]: 'Supervised Learning',
+    [MLFunctionCategory.UnsupervisedLearning]: 'Unsupervised Learning',
+    [MLFunctionCategory.BoostingAlgorithms]: 'Boosting Algorithms',
+    [MLFunctionCategory.FeatureEngineering]: 'Feature Engineering',
+    [MLFunctionCategory.VectorOperations]: 'Vector Operations',
+    [MLFunctionCategory.TimeSeries]: 'Time Series ML',
+    [MLFunctionCategory.NLP]: 'Natural Language Processing',
+  };
+
   const getCategoryDisplayName = (category: MLFunctionCategory) => {
-    switch (category) {
-      case MLFunctionCategory.ModelManagement: return 'Model Management';
-      case MLFunctionCategory.Statistical: return 'Statistical Functions';
-      case MLFunctionCategory.SupervisedLearning: return 'Supervised Learning';
-      case MLFunctionCategory.UnsupervisedLearning: return 'Unsupervised Learning';
-      case MLFunctionCategory.BoostingAlgorithms: return 'Boosting Algorithms';
-      case MLFunctionCategory.FeatureEngineering: return 'Feature Engineering';
-      case MLFunctionCategory.VectorOperations: return 'Vector Operations';
-      case MLFunctionCategory.TimeSeries: return 'Time Series ML';
-      case MLFunctionCategory.NLP: return 'Natural Language Processing';
-      default: return category;
-    }
+    return categoryDisplayNames[category] || category;
   };
 
   return (

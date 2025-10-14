@@ -5,7 +5,10 @@
 //! Integrates with the existing PostgreSQL-compatible optimizer infrastructure
 //! for sophisticated cost-based optimization of multi-model queries.
 
-use crate::orbitql::ast::*;
+use crate::orbitql::ast::{
+    BinaryOperator, Expression, FromClause, JoinClause, SelectField, SelectStatement, Statement,
+    UnaryOperator,
+};
 use crate::orbitql::cost_model::CostModel;
 use crate::orbitql::statistics::StatisticsManager;
 use serde::{Deserialize, Serialize};

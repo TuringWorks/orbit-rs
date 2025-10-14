@@ -4,7 +4,7 @@
 
 use super::{ParseError, ParseResult, SqlParser};
 use crate::postgres_wire::sql::{
-    ast::*,
+    ast::{BinaryOperator, ColumnRef, Expression, SelectStatement, TableName, UnaryOperator},
     lexer::Token,
     types::{SqlType, SqlValue},
 };
@@ -402,10 +402,189 @@ pub fn parse_literal_value(parser: &mut SqlParser) -> ParseResult<SqlValue> {
     }
 }
 
-/// Parse an expression (placeholder implementation)
+/// Parse an expression with proper operator precedence
 pub fn parse_expression(parser: &mut SqlParser) -> ParseResult<Expression> {
-    // For now, this is a very basic implementation
-    // TODO: Implement full expression parsing with precedence
+    parse_or_expression(parser)
+}
+
+/// Parse OR expressions (lowest precedence)
+fn parse_or_expression(parser: &mut SqlParser) -> ParseResult<Expression> {
+    let mut left = parse_and_expression(parser)?;
+
+    while parser.matches(&[Token::Or]) {
+        parser.advance()?;
+        let right = parse_and_expression(parser)?;
+        left = Expression::Binary {
+            left: Box::new(left),
+            operator: BinaryOperator::Or,
+            right: Box::new(right),
+        };
+    }
+
+    Ok(left)
+}
+
+/// Parse AND expressions
+fn parse_and_expression(parser: &mut SqlParser) -> ParseResult<Expression> {
+    let mut left = parse_equality_expression(parser)?;
+
+    while parser.matches(&[Token::And]) {
+        parser.advance()?;
+        let right = parse_equality_expression(parser)?;
+        left = Expression::Binary {
+            left: Box::new(left),
+            operator: BinaryOperator::And,
+            right: Box::new(right),
+        };
+    }
+
+    Ok(left)
+}
+
+/// Parse equality expressions (=, !=, <>, IS, IS NOT)
+fn parse_equality_expression(parser: &mut SqlParser) -> ParseResult<Expression> {
+    let mut left = parse_comparison_expression(parser)?;
+
+    while let Some(token) = &parser.current_token {
+        let operator = match token {
+            Token::Equal => BinaryOperator::Equal,
+            Token::NotEqual => BinaryOperator::NotEqual,
+            Token::Is => {
+                parser.advance()?;
+                if parser.matches(&[Token::Not]) {
+                    parser.advance()?;
+                    BinaryOperator::IsNot
+                } else {
+                    BinaryOperator::Is
+                }
+            }
+            _ => break,
+        };
+
+        if !matches!(operator, BinaryOperator::Is | BinaryOperator::IsNot) {
+            parser.advance()?;
+        }
+
+        let right = parse_comparison_expression(parser)?;
+        left = Expression::Binary {
+            left: Box::new(left),
+            operator,
+            right: Box::new(right),
+        };
+    }
+
+    Ok(left)
+}
+
+/// Parse comparison expressions (<, <=, >, >=, LIKE, IN, BETWEEN)
+fn parse_comparison_expression(parser: &mut SqlParser) -> ParseResult<Expression> {
+    let mut left = parse_additive_expression(parser)?;
+
+    while let Some(token) = &parser.current_token {
+        let operator = match token {
+            Token::LessThan => BinaryOperator::LessThan,
+            Token::LessThanOrEqual => BinaryOperator::LessThanOrEqual,
+            Token::GreaterThan => BinaryOperator::GreaterThan,
+            Token::GreaterThanOrEqual => BinaryOperator::GreaterThanOrEqual,
+            Token::Like => BinaryOperator::Like,
+            Token::ILike => BinaryOperator::ILike,
+            Token::In => BinaryOperator::In,
+            _ => break,
+        };
+
+        parser.advance()?;
+        let right = parse_additive_expression(parser)?;
+        left = Expression::Binary {
+            left: Box::new(left),
+            operator,
+            right: Box::new(right),
+        };
+    }
+
+    Ok(left)
+}
+
+/// Parse additive expressions (+, -, ||)
+fn parse_additive_expression(parser: &mut SqlParser) -> ParseResult<Expression> {
+    let mut left = parse_multiplicative_expression(parser)?;
+
+    while let Some(token) = &parser.current_token {
+        let operator = match token {
+            Token::Plus => BinaryOperator::Plus,
+            Token::Minus => BinaryOperator::Minus,
+            Token::Concat => BinaryOperator::Concat,
+            _ => break,
+        };
+
+        parser.advance()?;
+        let right = parse_multiplicative_expression(parser)?;
+        left = Expression::Binary {
+            left: Box::new(left),
+            operator,
+            right: Box::new(right),
+        };
+    }
+
+    Ok(left)
+}
+
+/// Parse multiplicative expressions (*, /, %)
+fn parse_multiplicative_expression(parser: &mut SqlParser) -> ParseResult<Expression> {
+    let mut left = parse_unary_expression(parser)?;
+
+    while let Some(token) = &parser.current_token {
+        let operator = match token {
+            Token::Multiply => BinaryOperator::Multiply,
+            Token::Divide => BinaryOperator::Divide,
+            Token::Modulo => BinaryOperator::Modulo,
+            _ => break,
+        };
+
+        parser.advance()?;
+        let right = parse_unary_expression(parser)?;
+        left = Expression::Binary {
+            left: Box::new(left),
+            operator,
+            right: Box::new(right),
+        };
+    }
+
+    Ok(left)
+}
+
+/// Parse unary expressions (NOT, -, +)
+fn parse_unary_expression(parser: &mut SqlParser) -> ParseResult<Expression> {
+    match &parser.current_token {
+        Some(Token::Not) => {
+            parser.advance()?;
+            let expr = parse_unary_expression(parser)?;
+            Ok(Expression::Unary {
+                operator: UnaryOperator::Not,
+                operand: Box::new(expr),
+            })
+        }
+        Some(Token::Minus) => {
+            parser.advance()?;
+            let expr = parse_unary_expression(parser)?;
+            Ok(Expression::Unary {
+                operator: UnaryOperator::Minus,
+                operand: Box::new(expr),
+            })
+        }
+        Some(Token::Plus) => {
+            parser.advance()?;
+            let expr = parse_unary_expression(parser)?;
+            Ok(Expression::Unary {
+                operator: UnaryOperator::Plus,
+                operand: Box::new(expr),
+            })
+        }
+        _ => parse_primary_expression(parser),
+    }
+}
+
+/// Parse primary expressions (literals, identifiers, parenthesized expressions)
+fn parse_primary_expression(parser: &mut SqlParser) -> ParseResult<Expression> {
     match &parser.current_token {
         Some(Token::StringLiteral(s)) => {
             let value = SqlValue::Text(s.clone());
@@ -438,10 +617,16 @@ pub fn parse_expression(parser: &mut SqlParser) -> ParseResult<Expression> {
                 name: col_name,
             }))
         }
+        Some(Token::LeftParen) => {
+            parser.advance()?;
+            let expr = parse_expression(parser)?;
+            parser.expect(Token::RightParen)?;
+            Ok(expr)
+        }
         _ => Err(ParseError {
             message: "Expected expression".to_string(),
             position: parser.position,
-            expected: vec!["expression".to_string()],
+            expected: vec!["literal, identifier, or parenthesized expression".to_string()],
             found: parser.current_token.clone(),
         }),
     }

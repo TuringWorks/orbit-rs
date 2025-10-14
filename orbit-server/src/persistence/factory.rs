@@ -3,9 +3,32 @@
 //! This module provides factory functions to create the appropriate persistence
 //! providers based on configuration, supporting all available backends.
 
-use super::*;
-use crate::persistence::{cow_btree::*, lsm_tree::*, rocksdb::*};
+use super::{
+    AddressableDirectoryProvider, ClusterNodeProvider, CompressionType, DiskBackupConfig,
+    MemoryConfig, PersistenceConfig, PersistenceProvider, PersistenceProviderRegistry,
+};
+use crate::persistence::{
+    cow_btree::{CowBTreeAddressableProvider, CowBTreeClusterProvider, CowBTreeConfig},
+    lsm_tree::{LsmTreeAddressableProvider, LsmTreeClusterProvider, LsmTreeConfig},
+    memory,
+    rocksdb::{RocksDbAddressableProvider, RocksDbClusterProvider, RocksDbConfig},
+    tikv::{TiKVAddressableProvider, TiKVClusterProvider, TiKVConfig},
+};
+use orbit_shared::OrbitError;
+use orbit_shared::OrbitResult;
 use std::sync::Arc;
+
+/// Helper function to create and initialize any provider that implements PersistenceProvider
+async fn create_and_initialize_provider<T, F, Fut>(factory_fn: F) -> OrbitResult<Arc<T>>
+where
+    T: PersistenceProvider + 'static,
+    F: FnOnce() -> Fut,
+    Fut: std::future::Future<Output = OrbitResult<T>>,
+{
+    let provider = factory_fn().await?;
+    provider.initialize().await?;
+    Ok(Arc::new(provider))
+}
 
 /// Create an addressable directory persistence provider based on configuration
 pub async fn create_addressable_provider(
@@ -13,33 +36,52 @@ pub async fn create_addressable_provider(
 ) -> OrbitResult<Arc<dyn AddressableDirectoryProvider>> {
     match config {
         PersistenceConfig::Memory(memory_config) => {
-            let provider = memory::MemoryAddressableDirectoryProvider::new(memory_config.clone());
-            provider.initialize().await?;
-            Ok(Arc::new(provider))
+            let config = memory_config.clone();
+            create_and_initialize_provider(|| async {
+                Ok(memory::MemoryAddressableDirectoryProvider::new(config))
+            })
+            .await
+            .map(|p| p as Arc<dyn AddressableDirectoryProvider>)
         }
         PersistenceConfig::CowBTree(cow_config) => {
-            let provider = CowBTreeAddressableProvider::new(cow_config.clone());
-            provider.initialize().await?;
-            Ok(Arc::new(provider))
+            let config = cow_config.clone();
+            create_and_initialize_provider(|| async {
+                Ok(CowBTreeAddressableProvider::new(config))
+            })
+            .await
+            .map(|p| p as Arc<dyn AddressableDirectoryProvider>)
         }
         PersistenceConfig::LsmTree(lsm_config) => {
-            let provider = LsmTreeAddressableProvider::new(lsm_config.clone()).await?;
-            provider.initialize().await?;
-            Ok(Arc::new(provider))
+            let config = lsm_config.clone();
+            create_and_initialize_provider(|| async {
+                LsmTreeAddressableProvider::new(config).await
+            })
+            .await
+            .map(|p| p as Arc<dyn AddressableDirectoryProvider>)
         }
         PersistenceConfig::RocksDB(rocks_config) => {
-            let provider = RocksDbAddressableProvider::new(rocks_config.clone())?;
-            provider.initialize().await?;
-            Ok(Arc::new(provider))
+            let config = rocks_config.clone();
+            create_and_initialize_provider(|| async { RocksDbAddressableProvider::new(config) })
+                .await
+                .map(|p| p as Arc<dyn AddressableDirectoryProvider>)
         }
-        // TODO: Implement other providers as needed
+        PersistenceConfig::TiKV(tikv_config) => {
+            let config = tikv_config.clone();
+            create_and_initialize_provider(|| async { TiKVAddressableProvider::new(config).await })
+                .await
+                .map(|p| p as Arc<dyn AddressableDirectoryProvider>)
+        }
         _ => {
             tracing::warn!(
                 "Unsupported persistence config for addressable provider, falling back to memory"
             );
-            let provider = memory::MemoryAddressableDirectoryProvider::new(MemoryConfig::default());
-            provider.initialize().await?;
-            Ok(Arc::new(provider))
+            create_and_initialize_provider(|| async {
+                Ok(memory::MemoryAddressableDirectoryProvider::new(
+                    MemoryConfig::default(),
+                ))
+            })
+            .await
+            .map(|p| p as Arc<dyn AddressableDirectoryProvider>)
         }
     }
 }
@@ -50,41 +92,78 @@ pub async fn create_cluster_provider(
 ) -> OrbitResult<Arc<dyn ClusterNodeProvider>> {
     match config {
         PersistenceConfig::Memory(memory_config) => {
-            let provider = memory::MemoryClusterNodeProvider::new(memory_config.clone());
-            provider.initialize().await?;
-            Ok(Arc::new(provider))
+            let config = memory_config.clone();
+            create_and_initialize_provider(|| async {
+                Ok(memory::MemoryClusterNodeProvider::new(config))
+            })
+            .await
+            .map(|p| p as Arc<dyn ClusterNodeProvider>)
         }
         PersistenceConfig::CowBTree(cow_config) => {
-            let provider = CowBTreeClusterProvider::new(cow_config.clone());
-            provider.initialize().await?;
-            Ok(Arc::new(provider))
+            let config = cow_config.clone();
+            create_and_initialize_provider(|| async { Ok(CowBTreeClusterProvider::new(config)) })
+                .await
+                .map(|p| p as Arc<dyn ClusterNodeProvider>)
         }
         PersistenceConfig::LsmTree(lsm_config) => {
-            let provider = LsmTreeClusterProvider::new(lsm_config.clone()).await?;
-            provider.initialize().await?;
-            Ok(Arc::new(provider))
+            let config = lsm_config.clone();
+            create_and_initialize_provider(|| async { LsmTreeClusterProvider::new(config).await })
+                .await
+                .map(|p| p as Arc<dyn ClusterNodeProvider>)
         }
         PersistenceConfig::RocksDB(rocks_config) => {
-            let provider = RocksDbClusterProvider::new(rocks_config.clone())?;
-            provider.initialize().await?;
-            Ok(Arc::new(provider))
+            let config = rocks_config.clone();
+            create_and_initialize_provider(|| async { RocksDbClusterProvider::new(config) })
+                .await
+                .map(|p| p as Arc<dyn ClusterNodeProvider>)
         }
-        // TODO: Implement other providers as needed
+        PersistenceConfig::TiKV(tikv_config) => {
+            let config = tikv_config.clone();
+            create_and_initialize_provider(|| async { TiKVClusterProvider::new(config).await })
+                .await
+                .map(|p| p as Arc<dyn ClusterNodeProvider>)
+        }
         _ => {
             tracing::warn!(
                 "Unsupported persistence config for cluster provider, falling back to memory"
             );
-            let provider = memory::MemoryClusterNodeProvider::new(MemoryConfig::default());
-            provider.initialize().await?;
-            Ok(Arc::new(provider))
+            create_and_initialize_provider(|| async {
+                Ok(memory::MemoryClusterNodeProvider::new(
+                    MemoryConfig::default(),
+                ))
+            })
+            .await
+            .map(|p| p as Arc<dyn ClusterNodeProvider>)
         }
     }
 }
 
+/// Helper function to parse environment variable with default value
+fn parse_env_var<T>(key: &str, default: T) -> T
+where
+    T: std::str::FromStr + Clone,
+{
+    std::env::var(key)
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(default)
+}
+
+/// Helper function to parse boolean environment variable with default
+fn parse_env_bool(key: &str, default: bool) -> bool {
+    std::env::var(key)
+        .map(|s| s.parse().unwrap_or(default))
+        .unwrap_or(default)
+}
+
+/// Helper function to get environment variable with default string value
+fn get_env_string(key: &str, default: &str) -> String {
+    std::env::var(key).unwrap_or_else(|_| default.to_string())
+}
+
 /// Load persistence configuration from environment variables
 pub fn load_config_from_env() -> OrbitResult<PersistenceConfig> {
-    let backend_type =
-        std::env::var("ORBIT_PERSISTENCE_BACKEND").unwrap_or_else(|_| "memory".to_string());
+    let backend_type = get_env_string("ORBIT_PERSISTENCE_BACKEND", "memory");
 
     match backend_type.as_str() {
         "memory" => {
@@ -93,12 +172,8 @@ pub fn load_config_from_env() -> OrbitResult<PersistenceConfig> {
                 .and_then(|s| s.parse().ok());
 
             let disk_backup = if std::env::var("ORBIT_MEMORY_DISK_BACKUP").is_ok() {
-                let path = std::env::var("ORBIT_MEMORY_BACKUP_PATH")
-                    .unwrap_or_else(|_| "./orbit_backup.json".to_string());
-                let sync_interval = std::env::var("ORBIT_MEMORY_BACKUP_INTERVAL")
-                    .ok()
-                    .and_then(|s| s.parse().ok())
-                    .unwrap_or(300); // 5 minutes
+                let path = get_env_string("ORBIT_MEMORY_BACKUP_PATH", "./orbit_backup.json");
+                let sync_interval = parse_env_var("ORBIT_MEMORY_BACKUP_INTERVAL", 300u64);
 
                 Some(DiskBackupConfig {
                     path,
@@ -116,23 +191,11 @@ pub fn load_config_from_env() -> OrbitResult<PersistenceConfig> {
         }
         "cow_btree" => {
             let config = CowBTreeConfig {
-                data_dir: std::env::var("ORBIT_COW_DATA_DIR")
-                    .unwrap_or_else(|_| "./orbit_cow_data".to_string()),
-                max_keys_per_node: std::env::var("ORBIT_COW_MAX_KEYS_PER_NODE")
-                    .ok()
-                    .and_then(|s| s.parse().ok())
-                    .unwrap_or(16),
-                wal_buffer_size: std::env::var("ORBIT_COW_WAL_BUFFER_SIZE")
-                    .ok()
-                    .and_then(|s| s.parse().ok())
-                    .unwrap_or(1024 * 1024), // 1MB
-                enable_compression: std::env::var("ORBIT_COW_ENABLE_COMPRESSION")
-                    .map(|s| s.parse().unwrap_or(true))
-                    .unwrap_or(true),
-                wal_sync_interval: std::env::var("ORBIT_COW_WAL_SYNC_INTERVAL")
-                    .ok()
-                    .and_then(|s| s.parse().ok())
-                    .unwrap_or(5),
+                data_dir: get_env_string("ORBIT_COW_DATA_DIR", "./orbit_cow_data"),
+                max_keys_per_node: parse_env_var("ORBIT_COW_MAX_KEYS_PER_NODE", 16),
+                wal_buffer_size: parse_env_var("ORBIT_COW_WAL_BUFFER_SIZE", 1024 * 1024),
+                enable_compression: parse_env_bool("ORBIT_COW_ENABLE_COMPRESSION", true),
+                wal_sync_interval: parse_env_var("ORBIT_COW_WAL_SYNC_INTERVAL", 5),
             };
             Ok(PersistenceConfig::CowBTree(config))
         }
@@ -194,6 +257,71 @@ pub fn load_config_from_env() -> OrbitResult<PersistenceConfig> {
                     .unwrap_or(256 * 1024 * 1024), // 256MB
             };
             Ok(PersistenceConfig::RocksDB(config))
+        }
+        "tikv" => {
+            let pd_endpoints_str = std::env::var("ORBIT_TIKV_PD_ENDPOINTS")
+                .unwrap_or_else(|_| "127.0.0.1:2379".to_string());
+            let pd_endpoints: Vec<String> = pd_endpoints_str
+                .split(',')
+                .map(|s| s.trim().to_string())
+                .collect();
+
+            let config = TiKVConfig {
+                pd_endpoints,
+                connection_timeout: std::env::var("ORBIT_TIKV_CONNECTION_TIMEOUT")
+                    .ok()
+                    .and_then(|s| s.parse().ok()),
+                request_timeout: std::env::var("ORBIT_TIKV_REQUEST_TIMEOUT")
+                    .ok()
+                    .and_then(|s| s.parse().ok()),
+                max_connections: std::env::var("ORBIT_TIKV_MAX_CONNECTIONS")
+                    .ok()
+                    .and_then(|s| s.parse().ok()),
+                enable_pessimistic_txn: std::env::var("ORBIT_TIKV_ENABLE_PESSIMISTIC_TXN")
+                    .map(|s| s.parse().unwrap_or(false))
+                    .unwrap_or(false),
+                txn_timeout: std::env::var("ORBIT_TIKV_TXN_TIMEOUT")
+                    .ok()
+                    .and_then(|s| s.parse().ok()),
+                enable_async_commit: std::env::var("ORBIT_TIKV_ENABLE_ASYNC_COMMIT")
+                    .map(|s| s.parse().unwrap_or(true))
+                    .unwrap_or(true),
+                enable_one_pc: std::env::var("ORBIT_TIKV_ENABLE_ONE_PC")
+                    .map(|s| s.parse().unwrap_or(true))
+                    .unwrap_or(true),
+                batch_size: std::env::var("ORBIT_TIKV_BATCH_SIZE")
+                    .ok()
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(1000),
+                region_cache_size: std::env::var("ORBIT_TIKV_REGION_CACHE_SIZE")
+                    .ok()
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(1000),
+                coprocessor_pool_size: std::env::var("ORBIT_TIKV_COPROCESSOR_POOL_SIZE")
+                    .ok()
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(8),
+                enable_tls: std::env::var("ORBIT_TIKV_ENABLE_TLS")
+                    .map(|s| s.parse().unwrap_or(false))
+                    .unwrap_or(false),
+                ca_cert_path: std::env::var("ORBIT_TIKV_CA_CERT_PATH").ok(),
+                client_cert_path: std::env::var("ORBIT_TIKV_CLIENT_CERT_PATH").ok(),
+                client_key_path: std::env::var("ORBIT_TIKV_CLIENT_KEY_PATH").ok(),
+                key_prefix: std::env::var("ORBIT_TIKV_KEY_PREFIX")
+                    .unwrap_or_else(|_| "orbit".to_string()),
+                enable_compression: std::env::var("ORBIT_TIKV_ENABLE_COMPRESSION")
+                    .map(|s| s.parse().unwrap_or(true))
+                    .unwrap_or(true),
+                max_retries: std::env::var("ORBIT_TIKV_MAX_RETRIES")
+                    .ok()
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(3),
+                retry_delay_ms: std::env::var("ORBIT_TIKV_RETRY_DELAY_MS")
+                    .ok()
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(100),
+            };
+            Ok(PersistenceConfig::TiKV(config))
         }
         _ => Err(OrbitError::configuration(format!(
             "Unknown persistence backend: {}",
@@ -257,6 +385,10 @@ impl PersistenceConfigBuilder {
             })),
             "rocksdb" => Ok(PersistenceConfig::RocksDB(RocksDbConfig {
                 data_dir,
+                ..Default::default()
+            })),
+            "tikv" => Ok(PersistenceConfig::TiKV(TiKVConfig {
+                key_prefix: data_dir,
                 ..Default::default()
             })),
             _ => Err(OrbitError::configuration(format!(

@@ -338,7 +338,7 @@ const App: React.FC = () => {
     loadConnections();
     
     // Check if running in browser mode and show notification
-    if (typeof window !== 'undefined' && (!window.__TAURI_IPC__ || typeof window.__TAURI_IPC__ !== 'function')) {
+    if (typeof globalThis.window !== 'undefined' && (!globalThis.window.__TAURI_IPC__ || typeof globalThis.window.__TAURI_IPC__ !== 'function')) {
       console.log('🌐 Running in browser mode with mock data. For full functionality, run as Tauri desktop app.');
     }
   }, []);

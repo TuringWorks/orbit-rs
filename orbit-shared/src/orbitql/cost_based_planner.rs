@@ -8,7 +8,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-use super::ast::*;
+#[cfg(test)]
+use super::ast::SelectField;
+use super::ast::{BinaryOperator, Expression, FromClause, JoinClause, SelectStatement, Statement};
 use super::cost_model::{CardinalityEstimate, CostModel, QueryCost};
 use super::optimizer::QueryOptimizer;
 use super::planner::{ExecutionPlan, PlanNode, PlanningError};
