@@ -49,7 +49,7 @@
 
 ## 🚀 Quick Start - Multi-Protocol Database Server
 
-**Get a production-ready PostgreSQL + Redis + REST API server running in 30 seconds:**
+**Get a production-ready PostgreSQL + Redis + gRPC server running in 30 seconds:**
 
 ```bash
 # Clone and build
@@ -57,13 +57,12 @@ git clone https://github.com/TuringWorks/orbit-rs.git
 cd orbit-rs
 cargo build --release
 
-# Start multi-protocol server (one command!)
-orbit-server --dev-mode
+# Start integrated multi-protocol server
+cargo run --package orbit-server --example integrated-server
 
 # 🎉 All protocols now active:
 # PostgreSQL: localhost:5432
 # Redis: localhost:6379  
-# REST API: localhost:8080
 # gRPC: localhost:50051
 ```
 
@@ -71,19 +70,21 @@ orbit-server --dev-mode
 
 ```bash
 # PostgreSQL - use any PostgreSQL client
-psql -h localhost -p 5432 -U postgres
-postgres=# CREATE TABLE users (id SERIAL, name TEXT, email TEXT);
-postgres=# INSERT INTO users (name, email) VALUES ('Alice', 'alice@example.com');
-postgres=# SELECT * FROM users;
+psql -h localhost -p 5432 -U orbit -d actors
+actors=# CREATE TABLE users (id SERIAL, name TEXT, email TEXT);
+actors=# INSERT INTO users (name, email) VALUES ('Alice', 'alice@example.com');
+actors=# SELECT * FROM users;
 
 # Redis - use redis-cli or any Redis client  
 redis-cli -h localhost -p 6379
+127.0.0.1:6379> SET mykey "Hello Orbit"
+127.0.0.1:6379> GET mykey
 127.0.0.1:6379> HSET user:1 name "Alice" email "alice@example.com"
 127.0.0.1:6379> HGETALL user:1
 
-# HTTP REST - use curl or any HTTP client
-curl http://localhost:8080/health
-curl "http://localhost:8080/api/users?name=Alice"
+# Test cross-protocol consistency
+127.0.0.1:6379> PING
+PONG
 ```
 
 ### **🔢 Vector Operations Across Protocols**

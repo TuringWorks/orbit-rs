@@ -24,7 +24,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // Initialize logging
     tracing_subscriber::registry()
         .with(tracing_subscriber::EnvFilter::new(
-            std::env::var("RUST_LOG").unwrap_or_else(|_| "info,orbit_server=debug,orbit_protocols=debug".into()),
+            std::env::var("RUST_LOG")
+                .unwrap_or_else(|_| "info,orbit_server=debug,orbit_protocols=debug".into()),
         ))
         .with(tracing_subscriber::fmt::layer())
         .init();
@@ -58,17 +59,21 @@ async fn main() -> Result<(), Box<dyn Error>> {
     info!("");
     info!("🌐 Protocol Servers:");
     info!("   - gRPC: 127.0.0.1:50051 (Orbit clients)");
-    
+
     if stats.protocol_stats.redis_enabled {
-        info!("   - Redis: {} (redis-cli, Redis clients)", 
-              stats.protocol_stats.redis_address.unwrap());
+        info!(
+            "   - Redis: {} (redis-cli, Redis clients)",
+            stats.protocol_stats.redis_address.unwrap()
+        );
     }
-    
+
     if stats.protocol_stats.postgres_enabled {
-        info!("   - PostgreSQL: {} (psql, PostgreSQL clients)", 
-              stats.protocol_stats.postgres_address.unwrap());
+        info!(
+            "   - PostgreSQL: {} (psql, PostgreSQL clients)",
+            stats.protocol_stats.postgres_address.unwrap()
+        );
     }
-    
+
     info!("");
     info!("📡 Client Connection Examples:");
     info!("   Redis:      redis-cli -h localhost -p 6379");

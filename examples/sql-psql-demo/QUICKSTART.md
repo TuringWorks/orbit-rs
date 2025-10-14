@@ -1,6 +1,20 @@
 # Quick Start Guide
 
-## 🚀 Start the Demo in 30 Seconds
+## 🚀 Start the Integrated Server (RECOMMENDED)
+
+**Get PostgreSQL + Redis + gRPC in one command:**
+
+```bash
+# From project root
+cargo run --package orbit-server --example integrated-server
+
+# Connect with any client:
+# PostgreSQL: psql -h localhost -p 5432 -U orbit -d actors
+# Redis: redis-cli -h localhost -p 6379
+# gRPC: grpcurl -plaintext localhost:50051 list
+```
+
+## 🚀 Alternative: SQL Demo Only
 
 ```bash
 cd examples/sql-psql-demo
@@ -9,17 +23,16 @@ cd examples/sql-psql-demo
 
 Then choose option 1-4 to run the demo scripts, or option 5 for interactive psql.
 
-## 🔗 Manual Connection
+## 🔗 Manual PostgreSQL Server Only
 
-If you want to connect directly with psql:
+If you want just the PostgreSQL server:
 
 ```bash
-# Terminal 1: Start server
-./run_demo.sh --build-only
-cargo run --bin postgres_server
+# Terminal 1: Start PostgreSQL server only
+cargo run --package orbit-server --example postgres-server
 
 # Terminal 2: Connect with psql  
-psql -h localhost -p 5433 -U orbit -d orbit_demo
+psql -h localhost -p 5433 -U orbit -d actors
 ```
 
 ## 📝 Quick SQL Commands to Try

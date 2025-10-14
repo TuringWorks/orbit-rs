@@ -47,7 +47,7 @@ Download from [Protocol Buffers releases](https://github.com/protocolbuffers/pro
 choco install protoc
 ```
 
-## 🚀 30-Second Quick Start
+## 🎆 30-Second Quick Start
 
 ### 1. Clone and Build
 
@@ -57,24 +57,36 @@ cd orbit-rs
 cargo build --release
 ```
 
-### 2. Start Multi-Protocol Server
+### 2. Start Integrated Multi-Protocol Server
 
 ```bash
-# Development mode - all protocols enabled automatically
-orbit-server --dev-mode
+# Run the integrated server with all protocols enabled
+cargo run --package orbit-server --example integrated-server
 
 # 🎉 Server starting with all protocols:
-# PostgreSQL: localhost:5432
-# Redis: localhost:6379
-# REST API: localhost:8080  
-# gRPC: localhost:50051
+# gRPC: localhost:50051 (Orbit clients)
+# Redis: localhost:6379 (redis-cli, Redis clients)
+# PostgreSQL: localhost:5432 (psql, PostgreSQL clients)
+```
+
+### Alternative: Simple Examples
+
+```bash
+# Simple server without protocols (basic actor system only)
+cargo run --example hello-world
+
+# PostgreSQL server only
+cargo run --package orbit-server --example postgres-server
+
+# Redis server only
+cargo run --example resp-server
 ```
 
 ### 3. Connect with Standard Clients
 
 **PostgreSQL** - Use any PostgreSQL client:
 ```bash
-psql -h localhost -p 5432 -U postgres
+psql -h localhost -p 5432 -U orbit -d actors
 ```
 
 **Redis** - Use redis-cli or any Redis client:
@@ -82,47 +94,58 @@ psql -h localhost -p 5432 -U postgres
 redis-cli -h localhost -p 6379
 ```
 
-**HTTP REST** - Use curl or any HTTP client:
+**gRPC** - Use OrbitClient or grpcurl:
 ```bash
-curl http://localhost:8080/health
+# List gRPC services
+grpcurl -plaintext localhost:50051 list
 ```
 
 ### 4. Verify Multi-Protocol Access
 
 ```bash
 # Test all protocols are working
-psql -h localhost -p 5432 -c "SELECT 'PostgreSQL Connected!';"
+psql -h localhost -p 5432 -U orbit -d actors -c "SELECT 'PostgreSQL Connected!';"
 redis-cli -h localhost -p 6379 ping
-curl http://localhost:8080/health
+grpcurl -plaintext localhost:50051 orbit.HealthService/Check
 ```
 
 ## 🔄 Multi-Protocol Data Demo
 
 **The same data is accessible through all protocols** - here's how:
 
-### Write Data via PostgreSQL, Read via Redis
+### Cross-Protocol Data Consistency Demo
+
+**The key innovation: Same data, different protocols!**
 
 ```bash
-# Terminal 1: Write data via SQL
-psql -h localhost -p 5432 -U postgres
-postgres=# CREATE TABLE users (id SERIAL PRIMARY KEY, name TEXT, email TEXT);
-postgres=# INSERT INTO users (name, email) VALUES ('Alice', 'alice@example.com');
-postgres=# INSERT INTO users (name, email) VALUES ('Bob', 'bob@example.com');
-
-# Terminal 2: Read same data via Redis
+# Terminal 1: Write data via Redis
 redis-cli -h localhost -p 6379
-127.0.0.1:6379> HGETALL user:1
-1) "name"
-2) "Alice"
-3) "email" 
-4) "alice@example.com"
+127.0.0.1:6379> SET greeting "Hello from Redis!"
+OK
+127.0.0.1:6379> HSET user:alice name "Alice" email "alice@orbit.com" role "admin"
+(integer) 3
 
-127.0.0.1:6379> HGETALL user:2
+# Terminal 2: Create table and insert via PostgreSQL
+psql -h localhost -p 5432 -U orbit -d actors
+actors=# CREATE TABLE users (id SERIAL PRIMARY KEY, name TEXT, email TEXT, role TEXT);
+CREATE TABLE
+actors=# INSERT INTO users (name, email, role) VALUES ('Bob', 'bob@orbit.com', 'user');
+INSERT 0 1
+
+# Terminal 3: Verify cross-protocol access
+# Read Redis data via SQL
+actors=# SELECT * FROM orbit_keys WHERE key = 'greeting';
+# Read SQL data via Redis  
+127.0.0.1:6379> HGETALL user:bob
 1) "name"
 2) "Bob"
 3) "email"
-4) "bob@example.com"
+4) "bob@orbit.com"
+5) "role"
+6) "user"
 ```
+
+✨ **Same underlying data store, multiple protocol interfaces!**
 
 ### Vector Operations Across Protocols
 
@@ -293,30 +316,46 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 Orbit-RS includes several working examples to demonstrate different features:
 
-### Hello World Example
+### Integrated Multi-Protocol Server (RECOMMENDED)
+```bash
+# Run the full integrated server with all protocols
+cargo run --package orbit-server --example integrated-server
+
+# Connect with any client:
+# PostgreSQL: psql -h localhost -p 5432 -U orbit -d actors
+# Redis: redis-cli -h localhost -p 6379
+# gRPC: grpcurl -plaintext localhost:50051 list
+```
+
+### Individual Protocol Examples
+
+**Hello World (Basic Actor System)**
 ```bash
 cargo run --example hello-world
 ```
 
-### PostgreSQL Storage Demo
+**PostgreSQL Server Only**
 ```bash
-# Demonstrates the pluggable storage architecture
+cargo run --package orbit-server --example postgres-server
+# Connect: psql -h localhost -p 5433 -U orbit -d actors
+```
+
+**Redis Server Only**
+```bash
+cargo run --example resp-server
+# Connect: redis-cli -h localhost -p 6379
+```
+
+**Other Demos**
+```bash
+# Storage architecture demo
 cargo run --example postgres_storage_demo
-```
 
-### AQL Parser Test
-```bash
-# Demonstrates AQL (ArangoDB Query Language) parsing capabilities
+# Query language parsing
 cargo run --example aql_parser_test
-```
 
-### PostgreSQL Protocol Server
-```bash
-# Start the PostgreSQL-compatible server
-cargo run --example postgres-server
-
-# In another terminal, connect with psql
-psql -h localhost -p 5433 -U orbit -d actors
+# Distributed counter
+cargo run --example distributed_counter
 ```
 
 ## ⚙️ Configuration
