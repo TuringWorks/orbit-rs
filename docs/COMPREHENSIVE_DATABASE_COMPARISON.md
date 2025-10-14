@@ -1806,6 +1806,43 @@ Payback Period: 18 months
 - **Market Entry Strategy**: CQRS applications with integrated query models, enterprise event platforms
 - **Differentiation**: Event sourcing + graph + vector + time series analytics in single ACID transactions
 
+##### RDF Store Database Market (24 Systems Analysis)
+
+**Market Overview**: RDF stores represent a specialized but critical niche for semantic web, knowledge graphs, and linked data applications. Despite being a smaller market, RDF stores are essential for organizations implementing semantic data architectures.
+
+| Rank | Database | Type | Score | Trend | Key Strength | Market Segment |
+|------|----------|------|-------|-------|-------------|----------------|
+| 4 | **Virtuoso** | Multi-model | 2.74 | -1.18 | Universal RDF server | Semantic Web |
+| 5 | **Apache Jena TDB** | RDF | 2.53 | -0.47 | Java RDF framework | Open Source RDF |
+| 6 | **GraphDB** | Multi-model | 2.30 | -0.47 | Enterprise RDF platform | Knowledge Graphs |
+| 7 | **Amazon Neptune** | Multi-model | 2.26 | +0.09 | Managed graph + RDF | Cloud RDF |
+| 8 | **Stardog** | Multi-model | 1.73 | -0.18 | Enterprise knowledge graph | Enterprise KG |
+| 9 | **Blazegraph** | Multi-model | 0.77 | +0.03 | High-performance RDF | Large Scale RDF |
+| 10 | **AllegroGraph** | Multi-model | 0.74 | -0.06 | Multi-model RDF | Semantic Analytics |
+| 11 | **RDF4J** | RDF | 0.67 | -0.11 | Java RDF toolkit | Development Framework |
+| 12 | **Strabon** | RDF | 0.28 | -0.05 | Geospatial RDF | Spatial Semantic |
+| 13 | **RDFox** | Multi-model | 0.28 | +0.04 | In-memory RDF | High Performance |
+| 14 | **RedStore** | RDF | 0.23 | +0.04 | Lightweight RDF | Embedded RDF |
+| 15 | **AnzoGraph DB** | Multi-model | 0.23 | 0.00 | Massively parallel RDF | Analytics RDF |
+
+**Growth Trends in RDF Store Market**:
+- **Rising**: Amazon Neptune (+0.09), RDFox (+0.04), RedStore (+0.04), Blazegraph (+0.03)
+- **Declining**: Virtuoso (-1.18), Apache Jena TDB (-0.47), GraphDB (-0.47), Stardog (-0.18)
+- **Overall Trend**: Traditional RDF stores declining, cloud and high-performance solutions growing
+
+**Market Gaps Identified**:
+1. **RDF + Multi-Model ACID**: No RDF store offers ACID across RDF + other models
+2. **RDF + Modern Analytics**: RDF stores lack modern analytics (ML, vector search) integration
+3. **RDF Protocol Modernization**: RDF stores locked into SPARQL endpoints and HTTP-only
+4. **RDF + Real-Time Integration**: RDF stores designed for static semantic data, poor real-time
+5. **Edge-to-Cloud RDF Continuity**: Different RDF solutions needed for edge vs cloud deployment
+
+**Orbit-RS Positioning in RDF Store Market**:
+- **Primary Value**: Only RDF store offering ACID transactions across RDF + all other models
+- **Target Displacement**: Virtuoso (#4, 2.74), Apache Jena TDB (#5, 2.53), GraphDB (#6, 2.30)
+- **Market Entry Strategy**: Modern knowledge graphs with integrated analytics, cloud RDF platforms
+- **Differentiation**: RDF + vector search + graph analytics + time series in single ACID transactions
+
 ##### In-Memory & Caching Systems
 | Rank | Database | Type | Score | Trend | Key Strength |
 |------|----------|------|-------|-------|-------------|

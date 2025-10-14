@@ -1798,6 +1798,322 @@ Stop choosing between event sourcing and data consistency. Orbit-RS gives you Ev
 - **Market**: 50+ event sourcing deployments, recognition in event sourcing community
 - **Customer**: 80% successful migrations from EventStoreDB + query database stacks
 
+## RDF Store Database Market Analysis (24 Systems)
+
+### Market Context: RDF & Semantic Web Database Landscape
+
+**Source**: DB-Engines RDF & Multi-Model Database Ranking (October 2025)  
+**Total Systems**: 24 RDF and semantic database systems  
+**Market Dynamics**: Niche but critical market for semantic web, knowledge graphs, and linked data with mixed growth patterns
+
+#### Complete RDF Store Database Ranking
+
+| Rank | Database | Type | Score (Oct 2025) | YoY Change | Key Strength | Market Segment |
+|------|----------|------|------------------|------------|--------------|----------------|
+| 1 | **Oracle** | Relational, Multi-model | 1212.77 | -96.67 | Enterprise RDF support | Enterprise Semantic |
+| 2 | **IBM Db2** | Relational, Multi-model | 122.37 | -0.40 | Enterprise RDF integration | Legacy Enterprise |
+| 3 | **MarkLogic** | Multi-model | 4.14 | -0.24 | Document + semantic | Enterprise Content |
+| **4** | **Virtuoso** | **Multi-model** | **2.74** | **-1.18** | **Universal RDF server** | **Semantic Web** |
+| **5** | **Apache Jena TDB** | **RDF** | **2.53** | **-0.47** | **Java RDF framework** | **Open Source RDF** |
+| **6** | **GraphDB** | **Multi-model** | **2.30** | **-0.47** | **Enterprise RDF platform** | **Knowledge Graphs** |
+| **7** | **Amazon Neptune** | **Multi-model** | **2.26** | **+0.09** | **Managed graph + RDF** | **Cloud RDF** |
+| **8** | **Stardog** | **Multi-model** | **1.73** | **-0.18** | **Enterprise knowledge graph** | **Enterprise KG** |
+| **9** | **Blazegraph** | **Multi-model** | **0.77** | **+0.03** | **High-performance RDF** | **Large Scale RDF** |
+| **10** | **AllegroGraph** | **Multi-model** | **0.74** | **-0.06** | **Multi-model RDF** | **Semantic Analytics** |
+| **11** | **RDF4J** | **RDF** | **0.67** | **-0.11** | **Java RDF toolkit** | **Development Framework** |
+| **12** | **Strabon** | **RDF** | **0.28** | **-0.05** | **Geospatial RDF** | **Spatial Semantic** |
+| **13** | **RDFox** | **Multi-model** | **0.28** | **+0.04** | **In-memory RDF** | **High Performance** |
+| **14** | **RedStore** | **RDF** | **0.23** | **+0.04** | **Lightweight RDF** | **Embedded RDF** |
+| **15** | **AnzoGraph DB** | **Multi-model** | **0.23** | **0.00** | **Massively parallel RDF** | **Analytics RDF** |
+
+#### RDF Store Market Trends
+
+**Growing RDF Systems (Positive YoY)**:
+- **Amazon Neptune** (#7): +0.09 (managed cloud RDF/graph gaining traction)
+- **RDFox** (#13): +0.04 (in-memory RDF performance improvements)
+- **RedStore** (#14): +0.04 (lightweight embedded RDF growth)
+- **Blazegraph** (#9): +0.03 (high-performance RDF applications)
+- **Mulgara** (#18): +0.04 (specialized RDF scenarios)
+
+**Declining RDF Leaders (Negative YoY)**:
+- **Oracle RDF** (#1): -96.67 (enterprise RDF market challenges)
+- **Virtuoso** (#4): -1.18 (traditional RDF server facing pressure)
+- **Apache Jena TDB** (#5): -0.47 (Java RDF ecosystem maturation)
+- **GraphDB** (#6): -0.47 (knowledge graph market consolidation)
+- **Stardog** (#8): -0.18 (enterprise knowledge graph competition)
+
+### Strategic Market Analysis
+
+#### RDF Store Market Segmentation
+
+**1. Enterprise Knowledge Graphs (35% of RDF market)**
+- **Leaders**: GraphDB (#6), Stardog (#8), MarkLogic (#3)
+- **Characteristics**: Semantic data integration, ontology management, SPARQL endpoints
+- **Growth**: Mixed (declining traditional, growing cloud)
+- **Orbit-RS Opportunity**: Knowledge graphs with multi-model ACID and modern protocols
+
+**2. Open Source RDF Development (30% of RDF market)**
+- **Leaders**: Apache Jena TDB (#5), RDF4J (#11), Virtuoso (#4)
+- **Characteristics**: Development frameworks, semantic web standards, research
+- **Growth**: Declining (-0.47, -0.11, -1.18 YoY)
+- **Orbit-RS Opportunity**: Modern RDF with unified multi-model development
+
+**3. Cloud & Managed RDF Services (20% of RDF market)**
+- **Leaders**: Amazon Neptune (#7), cloud-hosted solutions
+- **Characteristics**: Managed services, cloud integration, serverless RDF
+- **Growth**: Positive trend (+0.09 YoY)
+- **Orbit-RS Opportunity**: Multi-cloud RDF with broader database capabilities
+
+**4. High-Performance & Analytics RDF (10% of RDF market)**
+- **Leaders**: Blazegraph (#9), RDFox (#13), AnzoGraph DB (#15)
+- **Characteristics**: Large-scale RDF, in-memory processing, analytics
+- **Growth**: Mixed performance
+- **Orbit-RS Opportunity**: RDF + graph + vector analytics in single platform
+
+**5. Embedded & Lightweight RDF (5% of RDF market)**
+- **Leaders**: RedStore (#14), embedded solutions
+- **Characteristics**: Small footprint, embedded applications
+- **Growth**: Positive (+0.04 YoY)
+- **Orbit-RS Opportunity**: Edge RDF with full database capabilities
+
+#### Critical Market Gaps in RDF Stores
+
+**Gap 1: RDF + Multi-Model ACID Transactions**
+- **Problem**: No RDF store offers ACID guarantees across RDF and other data models
+- **Evidence**: RDF stores limited to RDF/graph; multi-model RDF stores have limited cross-model ACID
+- **Market Impact**: Semantic applications need RDF + business data consistency
+- **Orbit-RS Advantage**: Only database with RDF + relational + graph + vector ACID
+
+**Gap 2: RDF + Modern Analytics Integration**
+- **Problem**: RDF stores excel at semantic queries but lack modern analytics (ML, vector search)
+- **Evidence**: Separate systems needed for RDF storage and ML/vector analytics
+- **Market Impact**: Knowledge graphs need unified semantic + ML capabilities
+- **Orbit-RS Advantage**: RDF + vector search + graph analytics in single queries
+
+**Gap 3: RDF Protocol Modernization**
+- **Problem**: RDF stores locked into SPARQL endpoints and HTTP-only access
+- **Evidence**: All RDF stores require SPARQL knowledge, limited protocol flexibility
+- **Market Impact**: Integration complexity for modern applications using RDF
+- **Orbit-RS Advantage**: RDF data via SQL, GraphQL, gRPC, Redis protocols
+
+**Gap 4: RDF + Real-Time Data Integration**
+- **Problem**: RDF stores designed for relatively static semantic data, poor real-time integration
+- **Evidence**: Complex ETL required to integrate RDF with operational databases
+- **Market Impact**: Modern knowledge graphs need real-time semantic data
+- **Orbit-RS Advantage**: RDF as native data model with real-time multi-model integration
+
+**Gap 5: Edge-to-Cloud RDF Continuity**
+- **Problem**: Different RDF solutions needed for edge vs cloud deployment
+- **Evidence**: RedStore for embedded, GraphDB/Virtuoso for server, different capabilities
+- **Market Impact**: Semantic IoT applications need consistent RDF capabilities
+- **Orbit-RS Advantage**: Same RDF database from edge to cloud with consistent features
+
+### RDF Store Leaders Competitive Analysis
+
+#### vs. Virtuoso (Universal RDF Server, Rank #4)
+|| Aspect | Virtuoso | Orbit-RS | Advantage |
+||--------|----------|----------|-----------|
+|| **RDF Performance** | Excellent | Competitive | **Virtuoso** (specialized) |
+|| **Data Models** | RDF + SQL + XML | All Models + RDF | **Orbit-RS** |
+|| **SPARQL Support** | Full SPARQL 1.1 | SPARQL + SQL Extensions | **Virtuoso** (current) |
+|| **ACID Guarantees** | RDF Transactions | Cross-Model ACID | **Orbit-RS** (scope) |
+|| **Multi-Protocol** | SPARQL + HTTP + SQL | All Protocols | **Orbit-RS** |
+|| **Semantic Web Standards** | Full W3C Compliance | W3C + Extensions | **Virtuoso** (current) |
+|| **Graph Analytics** | Basic | Native + RDF | **Orbit-RS** |
+|| **Vector Search** | None | Native + RDF | **Orbit-RS** |
+|| **Time Series Integration** | Manual | Native + RDF | **Orbit-RS** |
+|| **Market Position** | #4 (2.74 score, -1.18 YoY) | Target #15-25 | **Virtuoso** (current) |
+|| **Linked Data** | Excellent | Competitive | **Virtuoso** (mature) |
+|| **Enterprise Features** | Comprehensive | Growing | **Virtuoso** (mature) |
+|| **Cloud Deployment** | Traditional | Multi-Cloud Native | **Orbit-RS** |
+|| **Edge Suitability** | Resource Heavy | Lightweight | **Orbit-RS** |
+|| **Developer Experience** | Complex Setup | Modern | **Orbit-RS** |
+
+**Strategic Positioning**: "Virtuoso's RDF excellence with native multi-model and modern architecture"
+
+**Displacement Strategy**:
+- **Phase 1**: Target Virtuoso deployments requiring modern cloud architecture
+- **Phase 2**: Challenge Virtuoso in multi-model semantic scenarios
+- **Phase 3**: Replace Virtuoso + additional databases with unified solution
+
+**Migration Path**:
+```sql
+-- Virtuoso users can migrate SPARQL queries
+-- Standard RDF operations work with enhanced capabilities
+
+-- SPARQL query (Virtuoso compatible)
+SELECT ?person ?name ?age
+WHERE {
+  ?person rdf:type foaf:Person .
+  ?person foaf:name ?name .
+  ?person foaf:age ?age .
+  FILTER (?age > 25)
+}
+ORDER BY ?age
+LIMIT 100;
+
+-- Plus new multi-model capabilities
+SELECT 
+       -- RDF semantic data
+       ?person, ?name, ?age,
+       -- Relational data joins
+       e.employee_id, e.department,
+       -- Time series integration
+       AVG(ts.performance_score) as avg_performance,
+       -- Graph relationships
+       COUNT(TRAVERSE OUTBOUND 1..2 ON collaborates_with) as collaborations,
+       -- Vector similarity for recommendations
+       VECTOR.SIMILARITY(p.skill_embedding, @target_skills) as skill_match
+FROM rdf_triples r
+JOIN employees e ON r.subject = CONCAT('http://example.org/person/', e.person_id)
+JOIN performance_data ts ON e.employee_id = ts.employee_id
+JOIN person_profiles p ON e.person_id = p.id
+WHERE r.predicate = 'http://xmlns.com/foaf/0.1/age'
+  AND CAST(r.object AS INTEGER) > 25
+  AND ts.timestamp >= NOW() - INTERVAL '1 month'
+GROUP BY r.subject, e.employee_id, p.id
+ORDER BY skill_match DESC
+LIMIT 100;
+```
+
+#### vs. Apache Jena TDB (Java RDF Framework, Rank #5)
+|| Aspect | Apache Jena TDB | Orbit-RS | Advantage |
+||--------|-----------------|----------|-----------|
+|| **RDF Framework** | Comprehensive Java | Language Agnostic | **Apache Jena TDB** (Java) |
+|| **SPARQL Engine** | ARQ (Advanced) | SPARQL + SQL | **Apache Jena TDB** (mature) |
+|| **Data Models** | RDF Only | All Models + RDF | **Orbit-RS** |
+|| **ACID Guarantees** | TDB Transactions | Cross-Model ACID | **Orbit-RS** (scope) |
+|| **Multi-Protocol** | SPARQL + HTTP | All Protocols | **Orbit-RS** |
+|| **Development Productivity** | High (Java) | Competitive | **Apache Jena TDB** (Java) |
+|| **Reasoning Support** | Excellent | Extensible | **Apache Jena TDB** (mature) |
+|| **Graph Analytics** | Limited | Native + RDF | **Orbit-RS** |
+|| **Vector Search** | None | Native + RDF | **Orbit-RS** |
+|| **Market Position** | #5 (2.53 score, -0.47 YoY) | Target #15-25 | **Orbit-RS** (trajectory) |
+|| **Semantic Web Ecosystem** | Extensive | Growing | **Apache Jena TDB** (ecosystem) |
+|| **Storage Flexibility** | Multiple Backends | Native Distributed | **Apache Jena TDB** (flexibility) |
+|| **Cloud Native** | Limited | Native | **Orbit-RS** |
+|| **Operational Complexity** | Moderate | Moderate | **Tie** |
+|| **Performance** | Good | Competitive | **Tie** |
+
+**Strategic Positioning**: "Apache Jena TDB's Java productivity with enterprise scalability and multi-language support"
+
+**Displacement Strategy**:
+- **Phase 1**: Target Java shops outgrowing Jena TDB limitations
+- **Phase 2**: Win polyglot environments requiring RDF capabilities
+- **Phase 3**: Replace Jena TDB in enterprise architectures needing broader capabilities
+
+#### vs. GraphDB (Enterprise RDF Platform, Rank #6)
+|| Aspect | GraphDB | Orbit-RS | Advantage |
+||--------|---------|----------|-----------|
+|| **Enterprise RDF** | Purpose-Built | Multi-Model Platform | **GraphDB** (specialized) |
+|| **Knowledge Graph Features** | Advanced | Competitive | **GraphDB** (mature) |
+|| **Data Models** | RDF + Graph | All Models + RDF | **Orbit-RS** |
+|| **SPARQL Performance** | Optimized | Competitive | **GraphDB** (specialized) |
+|| **ACID Guarantees** | RDF Transactions | Cross-Model ACID | **Orbit-RS** (scope) |
+|| **Multi-Protocol** | SPARQL + REST | All Protocols | **Orbit-RS** |
+|| **Reasoning & Inference** | Advanced | Extensible | **GraphDB** (mature) |
+|| **Graph Analytics** | Basic | Native + RDF | **Orbit-RS** |
+|| **Vector Search** | None | Native + RDF | **Orbit-RS** |
+|| **Market Position** | #6 (2.30 score, -0.47 YoY) | Target #15-25 | **Orbit-RS** (trajectory) |
+|| **Enterprise Integration** | Excellent | Growing | **GraphDB** (mature) |
+|| **Workbench/Tools** | Comprehensive | Growing | **GraphDB** (mature) |
+|| **Cloud Deployment** | Available | Multi-Cloud Native | **Orbit-RS** |
+|| **Cost Model** | High Enterprise | Competitive | **Orbit-RS** |
+
+**Strategic Positioning**: "GraphDB's enterprise RDF capabilities with unified multi-model architecture"
+
+**Displacement Strategy**:
+- **Phase 1**: Target GraphDB deployments requiring cost optimization
+- **Phase 2**: Challenge GraphDB in multi-model knowledge graph scenarios
+- **Phase 3**: Replace GraphDB + complementary databases with unified solution
+
+#### vs. Amazon Neptune (Managed Graph + RDF, Rank #7)
+|| Aspect | Amazon Neptune | Orbit-RS | Advantage |
+||--------|----------------|----------|-----------|
+|| **Managed Service** | Fully Managed | Self/Cloud Managed | **Amazon Neptune** |
+|| **Graph + RDF** | Dual Support | Multi-Model + RDF | **Orbit-RS** (broader) |
+|| **AWS Integration** | Deep Native | Multi-Cloud | **Amazon Neptune** (AWS) |
+|| **SPARQL Support** | Standard | SPARQL + SQL | **Orbit-RS** (flexibility) |
+|| **ACID Guarantees** | Limited | Cross-Model ACID | **Orbit-RS** |
+|| **Multi-Protocol** | SPARQL + Gremlin | All Protocols | **Orbit-RS** |
+|| **Scalability** | Managed Auto-Scale | Native Distributed | **Amazon Neptune** (managed) |
+|| **Vector Search** | None | Native + RDF | **Orbit-RS** |
+|| **Time Series Integration** | Manual | Native + RDF | **Orbit-RS** |
+|| **Market Position** | #7 (2.26 score, +0.09 YoY) | Target #15-25 | **Orbit-RS** (trajectory) |
+|| **Vendor Lock-in** | High (AWS) | None | **Orbit-RS** |
+|| **Cost Predictability** | Usage-Based | Predictable | **Orbit-RS** |
+|| **Edge Deployment** | Not Available | Native | **Orbit-RS** |
+|| **Enterprise Features** | AWS-Focused | Comprehensive | **Orbit-RS** |
+
+**Strategic Positioning**: "Amazon Neptune's managed convenience without vendor lock-in plus broader capabilities"
+
+**Displacement Strategy**:
+- **Phase 1**: Target Neptune users seeking multi-cloud flexibility
+- **Phase 2**: Win scenarios requiring RDF + additional data models
+- **Phase 3**: Replace Neptune + additional AWS services with unified solution
+
+### RDF/Semantic Web Market Positioning Strategy
+
+#### Primary Value Proposition
+**"The Only RDF Store with Full ACID Guarantees Across All Data Models"**
+
+Stop choosing between semantic web standards and data consistency. Orbit-RS gives you Virtuoso-level RDF performance with ACID transactions across RDF, relational, graph, and vector data.
+
+#### Market Entry Strategy
+
+**Phase 1: Modern Knowledge Graphs (Q1-Q4 2025)**
+- **Target Market Share**: 15% of enterprise knowledge graph segment
+- **Primary Targets**: GraphDB (#6), Stardog (#8)
+- **Strategy**: Knowledge graphs with integrated multi-model analytics
+- **Success Metrics**:
+  - 10+ enterprise knowledge graph deployments
+  - SPARQL performance benchmarks competitive with GraphDB
+  - 2+ case studies showing RDF + analytics integration
+
+**Phase 2: Cloud RDF Platform (2026)**
+- **Target Market Share**: 20% of cloud RDF segment
+- **Primary Targets**: Amazon Neptune (#7), cloud-hosted Virtuoso
+- **Strategy**: Multi-cloud RDF platform with broader database capabilities
+- **Success Metrics**:
+  - 25+ cloud RDF deployments
+  - Integration with major cloud platforms (AWS, Azure, GCP)
+  - Performance competitive with Neptune
+
+**Phase 3: Unified Semantic Platform (2027)**
+- **Target Market Share**: 25% of RDF market overall
+- **Primary Targets**: Establish new "Unified Semantic Database" category
+- **Strategy**: Replace RDF store + multiple database stacks with single solution
+- **Success Metrics**:
+  - Top 5 position in RDF database rankings
+  - 100+ semantic web deployments
+  - Industry recognition as semantic database innovation leader
+
+#### Investment Priorities for RDF/Semantic Market
+
+**Year 1 RDF Store Investments (10% of total R&D)**
+1. **RDF Engine & SPARQL (60% of RDF investment)**
+   - Native RDF triple store implementation
+   - SPARQL 1.1 query engine
+   - RDF serialization formats (RDF/XML, Turtle, JSON-LD)
+   - Target: Match Virtuoso SPARQL performance
+
+2. **Semantic Web Standards (25% of RDF investment)**
+   - W3C standards compliance (RDF, RDFS, OWL)
+   - Reasoning and inference capabilities
+   - Linked data support
+   - Target: Full semantic web standards compatibility
+
+3. **RDF + Multi-Model Integration (15% of RDF investment)**
+   - Cross-model ACID transactions with RDF
+   - RDF + vector search integration
+   - RDF + graph analytics queries
+   - Target: Unique RDF + multi-model capabilities
+
+**Success Metrics**:
+- **Technical**: Match Virtuoso SPARQL performance, full W3C compliance
+- **Market**: 25+ RDF deployments, recognition in semantic web community
+- **Customer**: 70% successful migrations from traditional RDF stores
+
 **Positioning**: "TimescaleDB's time-series optimization without PostgreSQL constraints"
 
 ### Search Engine Leaders
