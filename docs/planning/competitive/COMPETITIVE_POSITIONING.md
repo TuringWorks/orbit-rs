@@ -28,16 +28,49 @@ Orbit-RS is positioned as the definitive next-generation database that eliminate
 **Unique Value**: Only database offering ACID guarantees across relational, graph, vector, time series, and document models in a single transaction.
 
 #### Competitive Landscape
-- **Document Databases**: MongoDB, CouchDB, Firebase - Document-only ACID
-- **Graph Databases**: Neo4j, TigerGraph - Graph-only ACID  
-- **Relational Databases**: PostgreSQL, MySQL, Aurora - Relational-only ACID
-- **Multi-Model Databases**: ArangoDB, CosmosDB - Multi-model but limited ACID scope
-- **Vector Databases**: Pinecone, Weaviate, Qdrant - No ACID guarantees
-- **Distributed Databases**: Cassandra, ScyllaDB - Eventual consistency, no ACID
-- **AI/ML Databases**: MindsDB - ML-focused with limited ACID
-- **Foundation Layer**: FoundationDB - Strong ACID but complex multi-model
-- **Backend-as-a-Service**: Supabase, Firebase - Limited multi-model capabilities
-- **Client-Side**: RxDB - Client-only ACID guarantees
+
+**1. Relational Databases (RDBMS)**
+- **Commercial**: Oracle Database, Microsoft SQL Server, IBM Db2, Teradata - Enterprise-grade but single-model ACID
+- **Open-Source**: PostgreSQL, MySQL, MariaDB, SQLite, Firebird, H2 - Relational-only ACID
+- **Cloud-Native**: Amazon Aurora, Google Cloud SQL, Azure SQL Database, AlloyDB - Cloud-optimized but relational-only
+
+**2. NoSQL Databases**
+- **Key-Value Stores**: Redis, Riak, Aerospike, DynamoDB - Fast but limited ACID
+- **Document Stores**: MongoDB, CouchDB, Couchbase, ArangoDB - Document-only ACID
+- **Column-Oriented**: Apache Cassandra, HBase, ScyllaDB - Eventual consistency, no ACID
+- **Graph Databases**: Neo4j, Amazon Neptune, JanusGraph, ArangoDB - Graph-only ACID
+
+**3. NewSQL / Distributed SQL**
+- **Distributed ACID**: CockroachDB, YugabyteDB, TiDB, Spanner (Google), NuoDB, VoltDB, SingleStore - Strong ACID but relational-focused
+
+**4. Search & Analytics Engines**
+- **Search**: Elasticsearch, OpenSearch, Solr - Text search without transactional guarantees
+- **Analytics**: ClickHouse, Apache Druid, Apache Pinot - Fast analytics but limited ACID
+- **Enterprise**: Splunk, Rockset - Specialized analytics without multi-model ACID
+
+**5. Time-Series Databases**
+- **Specialized**: InfluxDB, TimescaleDB, QuestDB, Prometheus, VictoriaMetrics, TDengine - Time-series only
+
+**6. Object / Multimodel Databases**
+- **Multi-Model**: OrientDB, MarkLogic, Couchbase (multi-model), FoundationDB - Multi-model but limited cross-model ACID
+
+**7. Embedded / Mobile Databases**
+- **Lightweight**: SQLite, Realm, Berkeley DB, LevelDB, RocksDB - Local-only ACID
+
+**8. Ledger & Blockchain Databases**
+- **Immutable**: BigchainDB, Hyperledger Fabric, Ethereum state DBs - Specialized use cases
+
+**9. Specialized / Scientific**
+- **Scientific**: SciDB, MonetDB, Rasdaman, HDF5 - Domain-specific without general ACID
+
+**10. Vector Databases**
+- **AI/ML**: Pinecone, Weaviate, Qdrant, Milvus, Chroma - No ACID guarantees
+
+**11. Backend-as-a-Service**
+- **BaaS**: Supabase, Firebase - Limited multi-model capabilities
+
+**12. Client-Side**
+- **Reactive**: RxDB - Client-only ACID guarantees
 
 #### Market Impact
 - **Cost Reduction**: Eliminates need for 3-5 specialized databases per application
@@ -289,6 +322,226 @@ Orbit-RS is positioned as the definitive next-generation database that eliminate
 | **Sync Gateway** | Built-in Mobile | External | **CouchDB** |
 
 **Positioning**: "CouchDB's offline-first with multi-model and ACID guarantees"
+
+### Commercial Relational Database Leaders
+
+#### vs. Oracle Database (Enterprise RDBMS Leader)
+| Aspect | Oracle Database | Orbit-RS | Advantage |
+|--------|-----------------|----------|-----------|
+| **Data Models** | Relational + JSON | All Models Native | **Orbit-RS** |
+| **SQL Standards** | Advanced Oracle SQL | Standard SQL + Extensions | **Oracle** (features) |
+| **Enterprise Features** | Comprehensive | Growing | **Oracle** |
+| **Multi-Model ACID** | JSON within Tables | Cross-Model | **Orbit-RS** |
+| **Licensing Cost** | Very High | Cost-Effective | **Orbit-RS** |
+| **Cloud Deployment** | Oracle Cloud Focus | Multi-Cloud | **Orbit-RS** |
+| **Protocol Support** | SQL + REST | Multi-Protocol | **Orbit-RS** |
+| **Edge Deployment** | Not Suitable | Native | **Orbit-RS** |
+| **Vector Search** | Extensions | Native HNSW/IVF | **Orbit-RS** |
+| **Graph Analytics** | Complex PL/SQL | Native Cypher-like | **Orbit-RS** |
+| **Time Series** | Extensions | Native | **Orbit-RS** |
+
+**Positioning**: "Oracle's enterprise reliability with modern multi-model architecture at fraction of cost"
+
+#### vs. Microsoft SQL Server (Enterprise Windows Leader)
+| Aspect | SQL Server | Orbit-RS | Advantage |
+|--------|------------|----------|-----------|
+| **Platform Support** | Windows-Centric | Cross-Platform | **Orbit-RS** |
+| **Data Models** | Relational + JSON/XML | All Models Native | **Orbit-RS** |
+| **Integration** | Deep Microsoft Stack | API-First | **SQL Server** (Microsoft) |
+| **Enterprise Features** | Mature (Always On, etc.) | Growing | **SQL Server** |
+| **Multi-Model ACID** | Limited to JSON | Cross-Model | **Orbit-RS** |
+| **Cost Model** | Per-Core Licensing | Usage-Based | **Orbit-RS** |
+| **Cloud Strategy** | Azure SQL Focus | Multi-Cloud | **Orbit-RS** |
+| **Protocol Support** | TDS + REST | Multi-Protocol | **Orbit-RS** |
+| **Modern Workloads** | Extensions Required | Native | **Orbit-RS** |
+
+**Positioning**: "SQL Server's enterprise features with modern architecture and no Microsoft lock-in"
+
+#### vs. IBM Db2 (Enterprise Mainframe/Unix Leader)
+| Aspect | IBM Db2 | Orbit-RS | Advantage |
+|--------|---------|----------|-----------|
+| **Enterprise Heritage** | Decades of Mainframe | Modern Architecture | **IBM Db2** (proven) |
+| **Data Models** | Relational + pureXML | All Models Native | **Orbit-RS** |
+| **High Availability** | Mature (HADR, etc.) | Actor-Based | **IBM Db2** (proven) |
+| **Performance** | Mainframe Optimized | Modern Distributed | **Orbit-RS** (modern) |
+| **Cost** | Very High | Cost-Effective | **Orbit-RS** |
+| **Modern APIs** | Limited | Multi-Protocol | **Orbit-RS** |
+| **Cloud Native** | Hybrid Approach | Cloud-First | **Orbit-RS** |
+| **Developer Experience** | Legacy Tools | Modern Tooling | **Orbit-RS** |
+
+**Positioning**: "Db2's enterprise reliability with modern cloud-native architecture"
+
+### NoSQL Database Leaders
+
+#### vs. Redis (In-Memory Key-Value Leader)
+| Aspect | Redis | Orbit-RS | Advantage |
+|--------|-------|----------|-----------|
+| **Data Structures** | Rich (Hash, Set, etc.) | All Models + Structures | **Orbit-RS** |
+| **Performance** | Ultra-Fast In-Memory | Fast Multi-Model | **Redis** (speed) |
+| **Persistence** | Optional (RDB/AOF) | Native ACID | **Orbit-RS** |
+| **Protocol Support** | Redis Protocol | Multi-Protocol incl. Redis | **Orbit-RS** |
+| **Complex Queries** | Limited Lua Scripts | Full SQL + Graph | **Orbit-RS** |
+| **ACID Guarantees** | None | Full Cross-Model | **Orbit-RS** |
+| **Memory Usage** | RAM-Only Primary | Intelligent Tiering | **Orbit-RS** |
+| **Clustering** | Redis Cluster | Actor-Native | **Orbit-RS** (flexibility) |
+| **Graph Operations** | None | Native | **Orbit-RS** |
+| **Vector Search** | RediSearch Extension | Native | **Orbit-RS** |
+
+**Positioning**: "Redis performance with full database capabilities and ACID guarantees"
+
+#### vs. Apache Cassandra (Wide-Column Leader)
+| Aspect | Cassandra | Orbit-RS | Advantage |
+|--------|-----------|----------|-----------|
+| **Data Model** | Wide-Column | All Models | **Orbit-RS** |
+| **Distributed Scale** | Proven Massive | Growing | **Cassandra** |
+| **Consistency Model** | Eventual/Tunable | ACID Multi-Model | **Orbit-RS** |
+| **Write Performance** | Optimized | Competitive | **Cassandra** |
+| **Complex Queries** | Limited CQL | Full Multi-Model | **Orbit-RS** |
+| **ACID Guarantees** | None | Full Cross-Model | **Orbit-RS** |
+| **Multi-Protocol** | CQL Only | All Protocols | **Orbit-RS** |
+| **Operational Complexity** | High | Moderate | **Orbit-RS** |
+| **Time Series** | Manual Modeling | Native | **Orbit-RS** |
+| **Graph Analytics** | None | Native | **Orbit-RS** |
+
+**Positioning**: "Cassandra's scale with ACID guarantees and query flexibility"
+
+#### vs. Amazon DynamoDB (Cloud NoSQL Leader)
+| Aspect | DynamoDB | Orbit-RS | Advantage |
+|--------|----------|----------|-----------|
+| **Managed Service** | Fully Managed | Self/Cloud Managed | **DynamoDB** |
+| **Data Model** | Key-Value + Document | All Models | **Orbit-RS** |
+| **AWS Integration** | Deep Native | Multi-Cloud | **DynamoDB** (AWS) |
+| **Global Tables** | Built-in | Roadmap | **DynamoDB** |
+| **Complex Queries** | Limited | Full Multi-Model | **Orbit-RS** |
+| **ACID Scope** | Single-Item | Cross-Model | **Orbit-RS** |
+| **Cost Predictability** | Pay-per-Request | Predictable | **Orbit-RS** |
+| **Vendor Lock-in** | High (AWS) | None | **Orbit-RS** |
+| **Multi-Protocol** | AWS SDKs | All Protocols | **Orbit-RS** |
+| **Vector Search** | None | Native | **Orbit-RS** |
+| **Graph Queries** | None | Native | **Orbit-RS** |
+
+**Positioning**: "DynamoDB's ease of use without AWS lock-in, plus full multi-model capabilities"
+
+### NewSQL/Distributed SQL Leaders
+
+#### vs. Google Spanner (Global Distributed SQL)
+| Aspect | Google Spanner | Orbit-RS | Advantage |
+|--------|----------------|----------|-----------|
+| **Global Distribution** | Proven Massive Scale | Growing | **Spanner** |
+| **ACID Guarantees** | Strong Global | Strong Multi-Model | **Orbit-RS** (scope) |
+| **SQL Compatibility** | Google SQL Dialect | Standard SQL | **Orbit-RS** (standards) |
+| **Multi-Model** | Relational Only | All Models | **Orbit-RS** |
+| **Protocol Support** | gRPC + SQL | Multi-Protocol | **Orbit-RS** |
+| **Clock Synchronization** | TrueTime (HW req) | Logical Clocks | **Spanner** (precision) |
+| **Vendor Lock-in** | High (Google) | None | **Orbit-RS** |
+| **Cost** | Very High | Cost-Effective | **Orbit-RS** |
+| **Edge Deployment** | Not Suitable | Native | **Orbit-RS** |
+| **Vector Search** | None | Native | **Orbit-RS** |
+| **Graph Analytics** | None | Native | **Orbit-RS** |
+
+**Positioning**: "Spanner's global consistency with multi-model flexibility and no Google lock-in"
+
+#### vs. TiDB (MySQL-Compatible Distributed SQL)
+| Aspect | TiDB | Orbit-RS | Advantage |
+|--------|------|----------|-----------|
+| **MySQL Compatibility** | High | Good | **TiDB** |
+| **Distributed Architecture** | TiKV-based | Actor-Native | **TiDB** (mature) |
+| **HTAP Capabilities** | TiFlash Columnar | Native Multi-Model | **Orbit-RS** (unified) |
+| **Multi-Model** | Relational + JSON | All Models | **Orbit-RS** |
+| **Protocol Support** | MySQL Protocol | Multi-Protocol | **Orbit-RS** |
+| **Open Source** | Apache 2.0 | Apache 2.0 | **Tie** |
+| **Cloud Deployment** | TiDB Cloud | Multi-Cloud | **Tie** |
+| **Vector Search** | Extensions | Native | **Orbit-RS** |
+| **Graph Analytics** | None | Native | **Orbit-RS** |
+| **Time Series** | Manual | Native | **Orbit-RS** |
+
+**Positioning**: "TiDB's MySQL compatibility with comprehensive multi-model architecture"
+
+### Time-Series Database Leaders
+
+#### vs. InfluxDB (Time-Series Leader)
+| Aspect | InfluxDB | Orbit-RS | Advantage |
+|--------|----------|----------|-----------|
+| **Time-Series Performance** | Specialized | Competitive | **InfluxDB** |
+| **Data Models** | Time-Series Only | All Models | **Orbit-RS** |
+| **Query Language** | InfluxQL/Flux | SQL + Extensions | **Orbit-RS** (standards) |
+| **ACID Guarantees** | Limited | Full Cross-Model | **Orbit-RS** |
+| **Multi-Protocol** | HTTP/gRPC | All Protocols | **Orbit-RS** |
+| **Complex Queries** | Time-Series Only | Cross-Model | **Orbit-RS** |
+| **Graph Analytics** | None | Native | **Orbit-RS** |
+| **Vector Search** | None | Native | **Orbit-RS** |
+| **Edge Deployment** | Limited | Native | **Orbit-RS** |
+| **Cost Model** | Usage-Based | Predictable | **Orbit-RS** |
+
+**Positioning**: "InfluxDB's time-series performance plus full database capabilities"
+
+#### vs. TimescaleDB (PostgreSQL Time-Series Extension)
+| Aspect | TimescaleDB | Orbit-RS | Advantage |
+|--------|-------------|----------|-----------|
+| **Base Architecture** | PostgreSQL Extension | Native Multi-Model | **Orbit-RS** |
+| **Time-Series Performance** | Optimized | Competitive | **TimescaleDB** |
+| **SQL Compatibility** | Full PostgreSQL | Standard SQL | **TimescaleDB** (compatibility) |
+| **Multi-Model** | Relational + Time | All Models Native | **Orbit-RS** |
+| **Protocol Support** | PostgreSQL Wire | Multi-Protocol | **Orbit-RS** |
+| **ACID Guarantees** | PostgreSQL ACID | Cross-Model ACID | **Orbit-RS** |
+| **Vector Search** | pgvector Extension | Native | **Orbit-RS** |
+| **Graph Queries** | Complex SQL | Native | **Orbit-RS** |
+| **Cloud Deployment** | Timescale Cloud | Multi-Cloud | **Tie** |
+| **Edge Suitability** | PostgreSQL Overhead | Lightweight | **Orbit-RS** |
+
+**Positioning**: "TimescaleDB's time-series optimization without PostgreSQL constraints"
+
+### Search Engine Leaders
+
+#### vs. Elasticsearch (Search & Analytics Leader)
+| Aspect | Elasticsearch | Orbit-RS | Advantage |
+|--------|---------------|----------|-----------|
+| **Full-Text Search** | Industry Leading | Competitive | **Elasticsearch** |
+| **Data Models** | Document + Search | All Models | **Orbit-RS** |
+| **Query DSL** | Powerful JSON DSL | SQL + Extensions | **Elasticsearch** (search) |
+| **ACID Guarantees** | None | Full Cross-Model | **Orbit-RS** |
+| **Multi-Protocol** | REST + Native | All Protocols | **Orbit-RS** |
+| **Analytics** | Kibana/Aggregations | Native SQL Analytics | **Orbit-RS** (SQL) |
+| **Vector Search** | Dense Vector | Native HNSW/IVF | **Orbit-RS** (performance) |
+| **Graph Analytics** | None | Native | **Orbit-RS** |
+| **Operational Complexity** | High | Moderate | **Orbit-RS** |
+| **Data Consistency** | Eventually Consistent | ACID | **Orbit-RS** |
+
+**Positioning**: "Elasticsearch's search power with database consistency and multi-model support"
+
+### Vector Database Leaders
+
+#### vs. Pinecone (Vector Search Leader)
+| Aspect | Pinecone | Orbit-RS | Advantage |
+|--------|----------|----------|-----------|
+| **Vector Performance** | Specialized | Competitive | **Pinecone** |
+| **Data Models** | Vector + Metadata | All Models | **Orbit-RS** |
+| **ACID Guarantees** | None | Full Cross-Model | **Orbit-RS** |
+| **Complex Queries** | Vector Only | Multi-Model SQL | **Orbit-RS** |
+| **Managed Service** | Fully Managed | Self/Cloud Managed | **Pinecone** |
+| **Cost Model** | Usage-Based | Predictable | **Orbit-RS** |
+| **Metadata Filtering** | Basic | Full Database | **Orbit-RS** |
+| **Graph Analytics** | None | Native | **Orbit-RS** |
+| **Multi-Protocol** | REST API | All Protocols | **Orbit-RS** |
+| **Vendor Lock-in** | High | None | **Orbit-RS** |
+
+**Positioning**: "Pinecone's vector performance with full database capabilities and no vendor lock-in"
+
+#### vs. Weaviate (AI-Native Vector DB)
+| Aspect | Weaviate | Orbit-RS | Advantage |
+|--------|----------|----------|-----------|
+| **AI Integration** | Built-in Models | Extensible | **Weaviate** |
+| **Vector Algorithms** | Multiple Types | HNSW/IVF Optimized | **Tie** |
+| **GraphQL API** | Native | Multi-Protocol | **Weaviate** (GraphQL) |
+| **Data Models** | Vector + Object | All Models | **Orbit-RS** |
+| **ACID Guarantees** | Limited | Full Cross-Model | **Orbit-RS** |
+| **Complex Queries** | Vector-Focused | Multi-Model SQL | **Orbit-RS** |
+| **Graph Analytics** | Basic | Native | **Orbit-RS** |
+| **Open Source** | Yes | Yes | **Tie** |
+| **Multi-Tenancy** | Built-in | Actor-Based | **Tie** |
+| **Hybrid Search** | Vector + Keyword | Multi-Modal | **Orbit-RS** |
+
+**Positioning**: "Weaviate's AI-native approach with comprehensive database capabilities"
 
 ### Key Competitive Insights
 
