@@ -4,17 +4,14 @@
 //! for creating persistence providers from configuration.
 
 use super::{
-    AWSS3Config, AzureConfig, CompositeConfig, DigitalOceanSpacesConfig, EtcdConfig, FlashConfig,
-    GCPStorageConfig, GoogleCloudConfig, KubernetesConfig, MemoryConfig, MinIOConfig,
-    PersistenceConfig, PersistenceProvider, PersistenceProviderRegistry, RedisConfig, S3Config,
+    AWSS3Config, AzureConfig, CompositeConfig, DigitalOceanSpacesConfig, EtcdConfig,
+    GCPStorageConfig, GoogleCloudConfig, MemoryConfig, PersistenceConfig, PersistenceProvider,
+    PersistenceProviderRegistry, RedisConfig, S3Config,
 };
 use crate::persistence::{
-    cloud::{
-        DigitalOceanSpacesAddressableDirectoryProvider, DigitalOceanSpacesClusterNodeProvider,
-        S3AddressableDirectoryProvider, S3ClusterNodeProvider,
-    },
+    cloud::{S3AddressableDirectoryProvider, S3ClusterNodeProvider},
     memory::{MemoryAddressableDirectoryProvider, MemoryClusterNodeProvider},
-    tikv::{TiKVAddressableProvider, TiKVClusterProvider, TiKVConfig},
+    tikv::TiKVConfig,
 };
 use orbit_shared::{OrbitError, OrbitResult};
 use serde::{Deserialize, Serialize};
