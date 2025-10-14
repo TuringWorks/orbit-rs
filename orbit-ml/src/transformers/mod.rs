@@ -656,13 +656,14 @@ impl Transformer {
         top_p: Option<f64>,
     ) -> Result<Array2<i32>> {
         self.validate_generation_parameters()?;
-        
+
         let (batch_size, initial_seq_len) = input_ids.dim();
         let mut generated_ids = input_ids.clone();
 
         for _ in initial_seq_len..max_length {
-            generated_ids = self.generate_next_token(generated_ids, batch_size, temperature, top_k, top_p)?;
-            
+            generated_ids =
+                self.generate_next_token(generated_ids, batch_size, temperature, top_k, top_p)?;
+
             if self.should_stop_generation(&generated_ids, batch_size)? {
                 break;
             }
@@ -692,14 +693,14 @@ impl Transformer {
     ) -> Result<Array2<i32>> {
         // Forward pass to get logits
         let outputs = self.forward(&generated_ids, None, None, None, None, None)?;
-        
+
         // Extract and process logits for next token prediction
         let last_token_logits = self.extract_last_token_logits(&outputs, batch_size)?;
         let scaled_logits = last_token_logits.mapv(|x| x / temperature);
-        
+
         // Sample next tokens
         let next_token_ids = self.sample_token(&scaled_logits, top_k, top_p)?;
-        
+
         // Append new tokens to sequences
         self.append_tokens_to_sequences(&generated_ids, &next_token_ids, batch_size)
     }
@@ -712,13 +713,13 @@ impl Transformer {
     ) -> Result<Array2<f64>> {
         let (_, current_seq_len, vocab_size) = outputs.dim();
         let mut last_token_logits = Array2::<f64>::zeros((batch_size, vocab_size));
-        
+
         for b in 0..batch_size {
             for v in 0..vocab_size {
                 last_token_logits[[b, v]] = outputs[[b, current_seq_len - 1, v]];
             }
         }
-        
+
         Ok(last_token_logits)
     }
 
@@ -731,7 +732,7 @@ impl Transformer {
     ) -> Result<Array2<i32>> {
         let current_seq_len = generated_ids.dim().1;
         let mut new_generated = Array2::<i32>::zeros((batch_size, current_seq_len + 1));
-        
+
         for b in 0..batch_size {
             // Copy existing tokens
             for t in 0..current_seq_len {
@@ -740,7 +741,7 @@ impl Transformer {
             // Add new token
             new_generated[[b, current_seq_len]] = next_token_ids[b];
         }
-        
+
         Ok(new_generated)
     }
 
@@ -752,7 +753,7 @@ impl Transformer {
     ) -> Result<bool> {
         if let Some(eos_id) = self.config.eos_token_id {
             let current_seq_len = generated_ids.dim().1;
-            
+
             for b in 0..batch_size {
                 if generated_ids[[b, current_seq_len - 1]] != eos_id as i32 {
                     return Ok(false);

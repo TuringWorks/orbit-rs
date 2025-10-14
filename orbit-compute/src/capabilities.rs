@@ -1907,7 +1907,10 @@ fn detect_amd_microarch_and_model<R: raw_cpuid::CpuIdReader>(
     match family {
         0x19 => detect_zen_3_4_architecture(&processor_brand, model),
         0x17 => detect_zen_1_2_architecture(&processor_brand, model),
-        _ => Ok((X86Microarch::Unknown(format!("AMD Family {:#x}", family)), None)),
+        _ => Ok((
+            X86Microarch::Unknown(format!("AMD Family {:#x}", family)),
+            None,
+        )),
     }
 }
 
@@ -2025,11 +2028,21 @@ fn create_epyc_result(
     };
 
     let microarch = match model_type {
-        EPYCModelType::Genoa => X86Microarch::Zen4 { epyc_model: epyc_model.clone() },
-        EPYCModelType::Bergamo => X86Microarch::Zen4c { epyc_model: epyc_model.clone() },
-        EPYCModelType::Milan | EPYCModelType::MilanX => X86Microarch::Zen3 { epyc_model: epyc_model.clone() },
-        EPYCModelType::Rome => X86Microarch::Zen2 { epyc_model: epyc_model.clone() },
-        EPYCModelType::Naples => X86Microarch::Zen { epyc_model: epyc_model.clone() },
+        EPYCModelType::Genoa => X86Microarch::Zen4 {
+            epyc_model: epyc_model.clone(),
+        },
+        EPYCModelType::Bergamo => X86Microarch::Zen4c {
+            epyc_model: epyc_model.clone(),
+        },
+        EPYCModelType::Milan | EPYCModelType::MilanX => X86Microarch::Zen3 {
+            epyc_model: epyc_model.clone(),
+        },
+        EPYCModelType::Rome => X86Microarch::Zen2 {
+            epyc_model: epyc_model.clone(),
+        },
+        EPYCModelType::Naples => X86Microarch::Zen {
+            epyc_model: epyc_model.clone(),
+        },
     };
 
     Ok((microarch, epyc_model))
@@ -2547,7 +2560,7 @@ enum ChipGeneration {
 #[cfg(target_os = "macos")]
 fn create_apple_chip_variant(generation: ChipGeneration, cpu_brand: &str) -> AppleChip {
     let cores = CoreConfiguration::default();
-    
+
     match generation {
         ChipGeneration::M4 => AppleChip::M4 {
             variant: determine_m4_variant(cpu_brand),

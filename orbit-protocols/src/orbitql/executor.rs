@@ -4,6 +4,8 @@
 //! providing advanced spatial query processing, real-time streaming, and GPU acceleration.
 //! It uses the unified OrbitQL AST from orbit-shared.
 
+#![allow(unused_imports)]
+
 use orbit_shared::orbitql::{
     ast::{
         BinaryOperator, CreateDefinition, CreateObjectType, CreateStatement, DataType,
@@ -1256,6 +1258,7 @@ impl OrbitQLExecutor {
     }
 
     /// Process a single row update
+    #[allow(dead_code)]
     async fn process_row_update(
         &self,
         row: &mut Row,
@@ -1322,6 +1325,7 @@ impl OrbitQLExecutor {
     }
 
     /// Apply a single assignment to a row
+    #[allow(dead_code)]
     async fn apply_assignment(
         &self,
         row: &mut Row,

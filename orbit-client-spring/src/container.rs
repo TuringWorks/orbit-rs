@@ -176,10 +176,13 @@ impl Container {
         let type_id = TypeId::of::<T>();
         let type_name = std::any::type_name::<T>();
 
-        let bean_names = self.type_registry.get(&type_id)
+        let bean_names = self
+            .type_registry
+            .get(&type_id)
             .ok_or_else(|| SpringError::bean_not_found(format!("type: {}", type_name)))?;
 
-        self.resolve_bean_from_candidates(bean_names, type_name).await
+        self.resolve_bean_from_candidates(bean_names.as_slice(), type_name)
+            .await
     }
 
     /// Resolve bean from multiple candidates, handling primary bean selection
