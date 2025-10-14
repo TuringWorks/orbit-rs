@@ -61,7 +61,7 @@ cargo build --release
 cargo run --package orbit-server --example integrated-server
 
 # 🎉 All protocols now active:
-# PostgreSQL: localhost:5432
+# PostgreSQL: localhost:15432 (non-conflicting port)
 # Redis: localhost:6379  
 # gRPC: localhost:50051
 ```
@@ -70,7 +70,7 @@ cargo run --package orbit-server --example integrated-server
 
 ```bash
 # PostgreSQL - use any PostgreSQL client
-psql -h localhost -p 5432 -U orbit -d actors
+psql -h localhost -p 15432 -U orbit -d actors
 actors=# CREATE TABLE users (id SERIAL, name TEXT, email TEXT);
 actors=# INSERT INTO users (name, email) VALUES ('Alice', 'alice@example.com');
 actors=# SELECT * FROM users;

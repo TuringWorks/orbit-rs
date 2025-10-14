@@ -4,15 +4,15 @@
 //! all three protocols simultaneously:
 //! - gRPC (port 50051) - for Orbit client connections
 //! - Redis RESP (port 6379) - for Redis clients
-//! - PostgreSQL (port 5432) - for PostgreSQL clients
+//! - PostgreSQL (port 15432) - for PostgreSQL clients (avoids conflict with system PostgreSQL)
 //!
 //! Usage:
-//!   cargo run --example integrated-server
+//!   cargo run --package orbit-server --example integrated-server
 //!
 //! Then connect with various clients:
 //!   redis-cli -h localhost -p 6379
-//!   psql -h localhost -p 5432 -U orbit -d actors
-//!   grpcurl -plaintext localhost:50051 ...
+//!   psql -h localhost -p 15432 -U orbit -d actors
+//!   grpcurl -plaintext localhost:50051 list
 
 use orbit_server::{OrbitServer, ProtocolConfig};
 use std::error::Error;
@@ -38,7 +38,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         redis_port: 6379,
         redis_bind_address: "127.0.0.1".to_string(),
         postgres_enabled: true,
-        postgres_port: 5432,
+        postgres_port: 15432, // Use non-conflicting port to avoid clash with system PostgreSQL
         postgres_bind_address: "127.0.0.1".to_string(),
     };
 
@@ -77,8 +77,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
     info!("");
     info!("📡 Client Connection Examples:");
     info!("   Redis:      redis-cli -h localhost -p 6379");
-    info!("   PostgreSQL: psql -h localhost -p 5432 -U orbit -d actors");
-    info!("   gRPC:       Use OrbitClient or grpcurl localhost:50051");
+    info!("   PostgreSQL: psql -h localhost -p 15432 -U orbit -d actors");
+    info!("   gRPC:       Use OrbitClient or grpcurl -plaintext localhost:50051 list");
     info!("");
     info!("💡 Try these Redis commands:");
     info!("   > SET mykey \"Hello Orbit\"");

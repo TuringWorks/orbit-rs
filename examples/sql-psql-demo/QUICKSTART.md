@@ -9,7 +9,7 @@
 cargo run --package orbit-server --example integrated-server
 
 # Connect with any client:
-# PostgreSQL: psql -h localhost -p 5432 -U orbit -d actors
+# PostgreSQL: psql -h localhost -p 15432 -U orbit -d actors
 # Redis: redis-cli -h localhost -p 6379
 # gRPC: grpcurl -plaintext localhost:50051 list
 ```

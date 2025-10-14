@@ -66,7 +66,7 @@ cargo run --package orbit-server --example integrated-server
 # 🎉 Server starting with all protocols:
 # gRPC: localhost:50051 (Orbit clients)
 # Redis: localhost:6379 (redis-cli, Redis clients)
-# PostgreSQL: localhost:5432 (psql, PostgreSQL clients)
+# PostgreSQL: localhost:15432 (psql, PostgreSQL clients)
 ```
 
 ### Alternative: Simple Examples
@@ -86,7 +86,7 @@ cargo run --example resp-server
 
 **PostgreSQL** - Use any PostgreSQL client:
 ```bash
-psql -h localhost -p 5432 -U orbit -d actors
+psql -h localhost -p 15432 -U orbit -d actors
 ```
 
 **Redis** - Use redis-cli or any Redis client:
@@ -104,7 +104,7 @@ grpcurl -plaintext localhost:50051 list
 
 ```bash
 # Test all protocols are working
-psql -h localhost -p 5432 -U orbit -d actors -c "SELECT 'PostgreSQL Connected!';"
+psql -h localhost -p 15432 -U orbit -d actors -c "SELECT 'PostgreSQL Connected!';"
 redis-cli -h localhost -p 6379 ping
 grpcurl -plaintext localhost:50051 orbit.HealthService/Check
 ```
@@ -126,7 +126,7 @@ OK
 (integer) 3
 
 # Terminal 2: Create table and insert via PostgreSQL
-psql -h localhost -p 5432 -U orbit -d actors
+psql -h localhost -p 15432 -U orbit -d actors
 actors=# CREATE TABLE users (id SERIAL PRIMARY KEY, name TEXT, email TEXT, role TEXT);
 CREATE TABLE
 actors=# INSERT INTO users (name, email, role) VALUES ('Bob', 'bob@orbit.com', 'user');
@@ -322,7 +322,7 @@ Orbit-RS includes several working examples to demonstrate different features:
 cargo run --package orbit-server --example integrated-server
 
 # Connect with any client:
-# PostgreSQL: psql -h localhost -p 5432 -U orbit -d actors
+# PostgreSQL: psql -h localhost -p 15432 -U orbit -d actors
 # Redis: redis-cli -h localhost -p 6379
 # gRPC: grpcurl -plaintext localhost:50051 list
 ```
