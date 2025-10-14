@@ -63,7 +63,7 @@ ndarray = { version = "0.15", features = ["serde"] }
 # hf-hub = { version = "0.3", optional = true }
 
 # Graph Processing
-petgraph = "0.6"
+petgraph = "0.7"
 
 # Multi-language Support (commented out for initial build)
 # pyo3 = { version = "0.22", features = ["auto-initialize"], optional = true }
