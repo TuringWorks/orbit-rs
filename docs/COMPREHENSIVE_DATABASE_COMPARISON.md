@@ -1742,17 +1742,40 @@ Payback Period: 18 months
 | 252 | Deep Lake | Vector | 0.48 | +0.18 | ML data lake |
 | 295 | Vald | Vector | 0.24 | -0.07 | Cloud-native vector |
 
-##### Time Series Specialists
-| Rank | Database | Type | Score | Trend | Key Strength |
-|------|----------|------|-------|-------|-------------|
-| 28 | InfluxDB | Time Series, Multi-model | 21.91 | -0.49 | Time series leader |
-| 48 | Prometheus | Time Series | 7.48 | +0.17 | Monitoring standard |
-| 64 | TimescaleDB | Time Series, Multi-model | 4.59 | +0.79 | PostgreSQL extension |
-| 75 | QuestDB | Time Series, Multi-model | 3.59 | +0.76 | High-performance TS |
-| 120 | GridDB | Time Series, Multi-model | 2.01 | +0.10 | IoT time series |
-| 137 | TDengine | Time Series, Multi-model | 1.73 | -0.74 | IoT specialist |
-| 141 | Apache IoTDB | Time Series | 1.64 | +0.26 | IoT time series |
-| 146 | VictoriaMetrics | Time Series | 1.57 | +0.28 | Prometheus alternative |
+##### Time Series Database Market (62 Systems Analysis)
+
+**Market Overview**: Time series databases represent a critical segment with mixed growth patterns. While traditional leaders like InfluxDB face declining market share (-0.49 YoY), newer entrants like TimescaleDB (+0.79) and QuestDB (+0.76) show strong growth.
+
+| Rank | Database | Type | Score | Trend | Key Strength | Market Segment |
+|------|----------|------|-------|-------|-------------|----------------|
+| 4 | **InfluxDB** | Time Series, Multi-model | 21.91 | -0.49 | Time series leader | Enterprise Monitoring |
+| 10 | **Prometheus** | Time Series | 7.48 | +0.17 | Monitoring standard | DevOps/Kubernetes |
+| 13 | **TimescaleDB** | Time Series, Multi-model | 4.59 | +0.79 | PostgreSQL extension | Enterprise SQL |
+| 15 | **QuestDB** | Time Series, Multi-model | 3.59 | +0.76 | High-performance TS | Financial/Trading |
+| 20 | **GridDB** | Time Series, Multi-model | 2.01 | +0.10 | IoT time series | Industrial IoT |
+| 21 | **TDengine** | Time Series, Multi-model | 1.73 | -0.74 | IoT specialist | Edge Computing |
+| 22 | **Apache IoTDB** | Time Series | 1.64 | +0.26 | IoT time series | Industrial IoT |
+| 24 | **VictoriaMetrics** | Time Series | 1.57 | +0.28 | Prometheus alternative | Cloud Monitoring |
+| 25 | **OpenTSDB** | Time Series | 1.53 | -0.05 | Hadoop-based | Big Data Analytics |
+| 27 | **Amazon Timestream** | Time Series | 1.28 | +0.08 | Managed cloud | Serverless TS |
+| 30 | **M3DB** | Time Series | 0.86 | -0.10 | Uber's time series | Large Scale Metrics |
+
+**Growth Trends in Time Series Market**:
+- **Rising Stars**: TimescaleDB (+0.79), QuestDB (+0.76), VictoriaMetrics (+0.28)
+- **Declining Leaders**: InfluxDB (-0.49), TDengine (-0.74), M3DB (-0.10)
+- **Stable Growth**: Prometheus (+0.17), GridDB (+0.10), Apache IoTDB (+0.26)
+
+**Market Gaps Identified**:
+1. **ACID Transactions**: No time series database offers true ACID across time series + other models
+2. **Multi-Model Analytics**: Time series databases limited to single model queries
+3. **Edge-Cloud Continuity**: Different databases needed for edge vs cloud deployment
+4. **Protocol Standardization**: Each database has proprietary query language (InfluxQL, PromQL, etc.)
+
+**Orbit-RS Positioning in Time Series Market**:
+- **Primary Value**: Only database offering ACID transactions across time series + all other models
+- **Target Displacement**: InfluxDB (#4, 21.91), TimescaleDB (#13, 4.59), QuestDB (#15, 3.59)
+- **Market Entry Strategy**: Edge-first deployment competing with GridDB/TDengine, then enterprise monitoring
+- **Differentiation**: Time series + graph + vector analytics in single queries with ACID guarantees
 
 ##### In-Memory & Caching Systems
 | Rank | Database | Type | Score | Trend | Key Strength |
