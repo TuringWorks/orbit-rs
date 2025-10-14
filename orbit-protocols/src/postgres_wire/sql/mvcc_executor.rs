@@ -11,7 +11,10 @@
 //! - Deadlock detection and resolution
 
 use crate::error::{ProtocolError, ProtocolResult};
-use crate::postgres_wire::sql::{ast::*, types::SqlValue};
+use crate::postgres_wire::sql::{
+    ast::{AccessMode, IsolationLevel},
+    types::SqlValue,
+};
 use chrono::{DateTime, Utc};
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;

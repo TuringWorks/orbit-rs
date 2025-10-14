@@ -4,7 +4,16 @@
 //! with full support for tables, indexes, views, schemas, and extensions.
 
 use super::{utilities, ParseError, ParseResult, SqlParser};
-use crate::postgres_wire::sql::{ast::*, lexer::Token};
+use crate::postgres_wire::sql::{
+    ast::{
+        AlterColumnAction, AlterTableAction, AlterTableStatement, ColumnConstraint,
+        ColumnDefinition, CreateExtensionStatement, CreateIndexStatement, CreateSchemaStatement,
+        CreateTableStatement, CreateViewStatement, DropExtensionStatement, DropIndexStatement,
+        DropSchemaStatement, DropTableStatement, DropViewStatement, IndexColumn, IndexOption,
+        IndexType, NullsOrder, SortDirection, Statement, TableConstraint, TableOption,
+    },
+    lexer::Token,
+};
 
 /// Parse CREATE TABLE statement
 pub fn parse_create_table(parser: &mut SqlParser) -> ParseResult<Statement> {

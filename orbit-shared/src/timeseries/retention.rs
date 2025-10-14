@@ -1,6 +1,6 @@
 //! Time series data retention management
 
-use super::*;
+use super::{DownsamplingRule, HashMap, RetentionPolicy, SeriesId};
 use anyhow::Result;
 use tokio::time::{interval, Duration};
 use tracing::{error, info, warn};

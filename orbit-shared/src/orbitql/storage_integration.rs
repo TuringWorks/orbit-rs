@@ -11,8 +11,8 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 use tokio::io::{AsyncRead, AsyncWrite};
 
-use crate::orbitql::ast::*;
-use crate::orbitql::vectorized_execution::*;
+use crate::orbitql::ast::Expression;
+use crate::orbitql::vectorized_execution::{BatchSchema, ColumnBatch, RecordBatch, VectorDataType};
 use crate::orbitql::QueryValue;
 
 /// Storage engine abstraction for different storage backends

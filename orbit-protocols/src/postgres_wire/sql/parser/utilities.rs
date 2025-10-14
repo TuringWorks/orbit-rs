@@ -4,7 +4,7 @@
 
 use super::{ParseError, ParseResult, SqlParser};
 use crate::postgres_wire::sql::{
-    ast::*,
+    ast::{BinaryOperator, ColumnRef, Expression, SelectStatement, TableName, UnaryOperator},
     lexer::Token,
     types::{SqlType, SqlValue},
 };

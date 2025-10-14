@@ -3,7 +3,13 @@
 //! This module provides the query planner that converts optimized AST
 //! into executable query execution plans.
 
-use crate::orbitql::ast::*;
+#[cfg(test)]
+use crate::orbitql::ast::BinaryOperator;
+use crate::orbitql::ast::{
+    AggregateFunction, DeleteStatement, Expression, FromClause, GraphPattern, InsertStatement,
+    JoinType, SelectField, SelectStatement, SortDirection, Statement, TimeRange,
+    TimeSeriesAggregation, TimeWindow, UpdateStatement,
+};
 use crate::orbitql::optimizer::OptimizationError;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

@@ -3,7 +3,13 @@
 //! This module provides the `Parser` struct that converts a stream of tokens
 //! into an Abstract Syntax Tree (AST) for OrbitQL queries.
 
-use crate::orbitql::ast::*;
+use crate::orbitql::ast::{
+    AggregateFunction, BinaryOperator, CreateDefinition, CreateObjectType, CreateStatement,
+    DeleteStatement, DropStatement, Expression, FetchClause, FromClause, InsertStatement,
+    InsertValues, JoinClause, JoinType, LiveStatement, OrderByClause, RelateStatement, SelectField,
+    SelectStatement, SortDirection, Statement, TransactionStatement, UnaryOperator,
+    UpdateStatement, WhenClause, WithClause,
+};
 use crate::orbitql::lexer::{LexError, Token, TokenType};
 use crate::orbitql::QueryValue;
 use serde::{Deserialize, Serialize};

@@ -7,12 +7,27 @@
 
 // Re-export the unified OrbitQL from orbit-shared
 pub use orbit_shared::orbitql::{
+    ast::AggregateFunction,
+    ast::CreateStatement,
+    ast::DeleteStatement,
+    ast::FetchClause,
+
+    ast::InsertStatement,
+    ast::SelectField,
+    // Core AST types
+    ast::Statement,
+    ast::TimeDuration,
+    ast::TimeExpression,
+    ast::TimeRange,
+    ast::TimeUnit,
+    ast::TimeWindow,
+    ast::UpdateStatement,
+    ast::WhenClause,
     // LSP types
     create_default_schema,
     start_lsp_server,
     // Distributed execution types
     ActorNodeInfo,
-    AggregateFunction,
     BinaryOperator,
     // Cache types
     CacheConfig,
@@ -24,8 +39,6 @@ pub use orbit_shared::orbitql::{
     ChangeNotification,
     ChangeType,
     ColumnInfo,
-    CreateStatement,
-    DeleteStatement,
     DistributedExecutionContext,
     DistributedExecutionPlan,
     DistributedQueryExecutor,
@@ -38,12 +51,9 @@ pub use orbit_shared::orbitql::{
     ExecutionPlan,
     ExecutionStats,
     Expression,
-    FetchClause,
-
     FromClause,
     FunctionInfo,
     IndexInfo,
-    InsertStatement,
     InvalidationEvent,
     JoinClause,
     JoinType,
@@ -89,7 +99,6 @@ pub use orbit_shared::orbitql::{
     ResourceUsage,
 
     SchemaInfo,
-    SelectField,
     SelectStatement,
     // Spatial types
     SpatialFunctionCategory,
@@ -98,8 +107,6 @@ pub use orbit_shared::orbitql::{
     SpatialParameter,
     SpatialParameterType,
     SpatialReturnType,
-    // Core AST types
-    Statement,
     StreamingConfig,
     StreamingQueryBuilder,
     StreamingQueryExecutor,
@@ -108,17 +115,10 @@ pub use orbit_shared::orbitql::{
     TableInfo,
     TableType,
 
-    TimeDuration,
-    TimeExpression,
-    TimeRange,
-    TimeUnit,
-    TimeWindow,
     Token,
     TokenType,
 
     UnaryOperator,
-    UpdateStatement,
-    WhenClause,
     SPATIAL_FUNCTIONS,
 };
 

@@ -352,10 +352,10 @@ export const QueryEditor: React.FC<QueryEditorProps> = ({
     // Simple formatting for SQL/OrbitQL
     if (queryType === QueryType.SQL || queryType === QueryType.OrbitQL) {
       const formatted = value
-        .replace(/\s+/g, ' ')
-        .replace(/\s*,\s*/g, ',\n  ')
-        .replace(/\b(SELECT|FROM|WHERE|JOIN|GROUP BY|HAVING|ORDER BY|LIMIT)\b/gi, '\n$1')
-        .replace(/^\s+/gm, '  ')
+        .replaceAll(/\s+/g, ' ')
+        .replaceAll(/\s*,\s*/g, ',\n  ')
+        .replaceAll(/\b(SELECT|FROM|WHERE|JOIN|GROUP BY|HAVING|ORDER BY|LIMIT)\b/gi, '\n$1')
+        .replaceAll(/^\s+/gm, '  ')
         .trim();
       onChange(formatted);
     }

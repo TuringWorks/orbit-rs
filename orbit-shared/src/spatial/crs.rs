@@ -369,7 +369,7 @@ impl Default for CoordinateTransformer {
 
 /// Utility functions for common coordinate operations.
 pub mod utils {
-    use super::*;
+    use super::{Point, PI};
 
     /// Convert degrees to radians.
     pub fn deg_to_rad(degrees: f64) -> f64 {

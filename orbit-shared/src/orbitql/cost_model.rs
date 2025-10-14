@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 use super::statistics::{IndexStatistics, TableStatistics};
-use crate::orbitql::ast::*;
+use crate::orbitql::ast::{FromClause, JoinType, SelectStatement, Statement};
 
 /// Comprehensive cost breakdown for query operations
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

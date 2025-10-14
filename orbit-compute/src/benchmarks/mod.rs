@@ -171,60 +171,105 @@ impl BenchmarkSuite {
 
     /// Benchmark CPU SIMD operations
     async fn benchmark_cpu_simd(&self) -> ComputeResult<Vec<BenchmarkResult>> {
+        let simd_types = self.detect_available_simd_types();
         let mut results = Vec::new();
 
-        // Determine available SIMD types
-        let simd_types = if let Some(x86_features) = &self.capabilities.cpu.simd.x86_features {
-            let mut types = Vec::new();
-            if x86_features.avx.avx2 {
-                types.push(CPUSIMDType::AVX2);
-            }
-            if x86_features.avx.avx512f {
-                types.push(CPUSIMDType::AVX512);
-            }
-            types
-        } else if let Some(arm_features) = &self.capabilities.cpu.simd.arm_features {
-            let mut types = Vec::new();
-            if arm_features.neon {
-                types.push(CPUSIMDType::NEON);
-            }
-            if let Some(sve) = &arm_features.sve {
-                types.push(CPUSIMDType::SVE {
-                    vector_length: sve.vector_length,
-                });
-            }
-            types
-        } else {
-            Vec::new()
-        };
-
         for simd_type in simd_types {
-            for &data_size in &self.config.data_sizes {
-                // Element-wise operations
-                let result = self
-                    .benchmark_simd_operation(
-                        simd_type.clone(),
-                        SIMDOperationType::ElementWise,
-                        data_size,
-                    )
-                    .await?;
-                results.push(result);
+            let simd_results = self.benchmark_simd_type(simd_type).await?;
+            results.extend(simd_results);
+        }
 
-                // Matrix operations (for larger sizes)
-                if data_size >= 65536 {
-                    let result = self
-                        .benchmark_simd_operation(
-                            simd_type.clone(),
-                            SIMDOperationType::MatrixOps,
-                            data_size,
-                        )
-                        .await?;
-                    results.push(result);
-                }
+        Ok(results)
+    }
+
+    /// Detect available SIMD types based on CPU features
+    fn detect_available_simd_types(&self) -> Vec<CPUSIMDType> {
+        if let Some(x86_features) = &self.capabilities.cpu.simd.x86_features {
+            return self.collect_x86_simd_types(x86_features);
+        }
+
+        if let Some(arm_features) = &self.capabilities.cpu.simd.arm_features {
+            return self.collect_arm_simd_types(arm_features);
+        }
+
+        Vec::new()
+    }
+
+    /// Collect available x86 SIMD types
+    fn collect_x86_simd_types(
+        &self,
+        x86_features: &crate::capabilities::X86SIMDFeatures,
+    ) -> Vec<CPUSIMDType> {
+        let mut types = Vec::new();
+
+        if x86_features.avx.avx2 {
+            types.push(CPUSIMDType::AVX2);
+        }
+        if x86_features.avx.avx512f {
+            types.push(CPUSIMDType::AVX512);
+        }
+
+        types
+    }
+
+    /// Collect available ARM SIMD types
+    fn collect_arm_simd_types(
+        &self,
+        arm_features: &crate::capabilities::ARMSIMDFeatures,
+    ) -> Vec<CPUSIMDType> {
+        let mut types = Vec::new();
+
+        if arm_features.neon {
+            types.push(CPUSIMDType::NEON);
+        }
+        if let Some(sve) = &arm_features.sve {
+            types.push(CPUSIMDType::SVE {
+                vector_length: sve.vector_length,
+            });
+        }
+
+        types
+    }
+
+    /// Benchmark all data sizes for a specific SIMD type
+    async fn benchmark_simd_type(
+        &self,
+        simd_type: CPUSIMDType,
+    ) -> ComputeResult<Vec<BenchmarkResult>> {
+        let mut results = Vec::new();
+
+        for &data_size in &self.config.data_sizes {
+            results.push(
+                self.benchmark_elementwise_simd(&simd_type, data_size)
+                    .await?,
+            );
+
+            if data_size >= 65536 {
+                results.push(self.benchmark_matrix_simd(&simd_type, data_size).await?);
             }
         }
 
         Ok(results)
+    }
+
+    /// Benchmark element-wise SIMD operations
+    async fn benchmark_elementwise_simd(
+        &self,
+        simd_type: &CPUSIMDType,
+        data_size: usize,
+    ) -> ComputeResult<BenchmarkResult> {
+        self.benchmark_simd_operation(simd_type.clone(), SIMDOperationType::ElementWise, data_size)
+            .await
+    }
+
+    /// Benchmark matrix SIMD operations
+    async fn benchmark_matrix_simd(
+        &self,
+        simd_type: &CPUSIMDType,
+        data_size: usize,
+    ) -> ComputeResult<BenchmarkResult> {
+        self.benchmark_simd_operation(simd_type.clone(), SIMDOperationType::MatrixOps, data_size)
+            .await
     }
 
     /// Benchmark a specific SIMD operation

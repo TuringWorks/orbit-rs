@@ -118,48 +118,92 @@ impl ConnectionHealthMonitor {
             loop {
                 ticker.tick().await;
 
-                let mut results = Vec::new();
-
-                for check in &health_checks {
-                    match check.check_health().await {
-                        Ok(mut health) => {
-                            // Adjust status based on response time
-                            if health.status == HealthStatus::Healthy {
-                                if health.response_time_ms >= failed_threshold {
-                                    health.status = HealthStatus::Failed;
-                                    health.error = Some(format!(
-                                        "Response time {}ms exceeds threshold {}ms",
-                                        health.response_time_ms, failed_threshold
-                                    ));
-                                } else if health.response_time_ms >= degraded_threshold {
-                                    health.status = HealthStatus::Degraded;
-                                    health.error = Some(format!(
-                                        "Response time {}ms exceeds degraded threshold {}ms",
-                                        health.response_time_ms, degraded_threshold
-                                    ));
-                                }
-                            }
-
-                            if health.status != HealthStatus::Healthy {
-                                debug!(
-                                    "Connection health check: {:?} - {:?}",
-                                    health.status, health.error
-                                );
-                            }
-
-                            results.push(health);
-                        }
-                        Err(e) => {
-                            warn!("Health check failed: {}", e);
-                            results.push(ConnectionHealth::failed(e.to_string()));
-                        }
-                    }
-                }
+                let results = Self::perform_health_checks(
+                    &health_checks,
+                    degraded_threshold,
+                    failed_threshold,
+                )
+                .await;
 
                 let mut status = health_status.write().await;
                 *status = results;
             }
         });
+    }
+
+    /// Perform health checks on all registered checks
+    async fn perform_health_checks(
+        health_checks: &[Arc<dyn HealthCheck>],
+        degraded_threshold: u64,
+        failed_threshold: u64,
+    ) -> Vec<ConnectionHealth> {
+        let mut results = Vec::new();
+
+        for check in health_checks {
+            let health_result =
+                Self::process_single_health_check(check, degraded_threshold, failed_threshold)
+                    .await;
+            results.push(health_result);
+        }
+
+        results
+    }
+
+    /// Process a single health check and adjust status based on thresholds
+    async fn process_single_health_check(
+        check: &Arc<dyn HealthCheck>,
+        degraded_threshold: u64,
+        failed_threshold: u64,
+    ) -> ConnectionHealth {
+        match check.check_health().await {
+            Ok(mut health) => {
+                Self::adjust_health_status_by_response_time(
+                    &mut health,
+                    degraded_threshold,
+                    failed_threshold,
+                );
+
+                Self::log_unhealthy_status(&health);
+                health
+            }
+            Err(e) => {
+                warn!("Health check failed: {}", e);
+                ConnectionHealth::failed(e.to_string())
+            }
+        }
+    }
+
+    /// Adjust health status based on response time thresholds
+    fn adjust_health_status_by_response_time(
+        health: &mut ConnectionHealth,
+        degraded_threshold: u64,
+        failed_threshold: u64,
+    ) {
+        if health.status == HealthStatus::Healthy {
+            if health.response_time_ms >= failed_threshold {
+                health.status = HealthStatus::Failed;
+                health.error = Some(format!(
+                    "Response time {}ms exceeds threshold {}ms",
+                    health.response_time_ms, failed_threshold
+                ));
+            } else if health.response_time_ms >= degraded_threshold {
+                health.status = HealthStatus::Degraded;
+                health.error = Some(format!(
+                    "Response time {}ms exceeds degraded threshold {}ms",
+                    health.response_time_ms, degraded_threshold
+                ));
+            }
+        }
+    }
+
+    /// Log unhealthy connection status
+    fn log_unhealthy_status(health: &ConnectionHealth) {
+        if health.status != HealthStatus::Healthy {
+            debug!(
+                "Connection health check: {:?} - {:?}",
+                health.status, health.error
+            );
+        }
     }
 
     /// Get the current health status of all connections

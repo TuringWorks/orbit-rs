@@ -52,7 +52,11 @@ pub mod streaming;
 pub mod vectorized_execution;
 
 // Re-export core types
-pub use ast::*;
+pub use ast::{
+    BinaryOperator, Expression, FromClause, GeometryLiteral, JoinClause, JoinType, OrderByClause,
+    SelectStatement, SpatialFilter, SpatialIndexConfig, SpatialIndexType, SpatialOperator,
+    StreamTrigger, StreamingClause, UnaryOperator, WindowSpec,
+};
 pub use cache::{
     CacheConfig, CacheHealth, CacheKey, CacheStatistics, CachedQueryExecutor, InvalidationEvent,
     QueryCache,

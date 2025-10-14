@@ -55,7 +55,7 @@ export interface QueryResult {
   error?: string;
   execution_time: number;
   rows_affected?: number;
-  timestamp: string;
+  timestamp?: string;
 }
 
 export interface QueryResultData {
@@ -235,24 +235,3 @@ export interface Theme {
   info: string;
 }
 
-// Chart and visualization types
-export interface ChartConfig {
-  type: string;
-  title: string;
-  x_axis: string;
-  y_axis: string;
-  color_scheme: string[];
-  show_legend: boolean;
-  show_grid: boolean;
-}
-
-export interface VisualizationData {
-  labels: string[];
-  datasets: {
-    label: string;
-    data: number[];
-    backgroundColor?: string | string[];
-    borderColor?: string | string[];
-    borderWidth?: number;
-  }[];
-}

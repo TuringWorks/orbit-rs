@@ -5,7 +5,13 @@
 
 use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use tower_lsp::lsp_types::*;
+use tower_lsp::lsp_types::{
+    CompletionItem, CompletionItemKind, CompletionOptions, CompletionParams,
+    DocumentFormattingParams, Hover, HoverContents, HoverParams, HoverProviderCapability,
+    InitializeParams, InitializeResult, MarkedString, OneOf, Position, Range, ServerCapabilities,
+    ServerInfo, TextDocumentIdentifier, TextDocumentPositionParams, TextDocumentSyncCapability,
+    TextDocumentSyncKind, TextEdit, Url,
+};
 
 /// Simple OrbitQL LSP Server
 struct SimpleOrbitQLServer {

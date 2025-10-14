@@ -12,8 +12,8 @@ use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::sync::{broadcast, mpsc, RwLock as TokioRwLock};
 
-use crate::orbitql::ast::*;
-use crate::orbitql::vectorized_execution::*;
+use crate::orbitql::ast::Statement;
+use crate::orbitql::vectorized_execution::RecordBatch;
 use crate::orbitql::ExecutionPlan;
 use crate::orbitql::QueryValue;
 

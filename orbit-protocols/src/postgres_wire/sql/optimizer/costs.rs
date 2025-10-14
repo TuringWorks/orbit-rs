@@ -6,7 +6,10 @@
 
 use super::{stats::StatisticsCollector, OptimizerConfig};
 use crate::error::ProtocolResult;
-use crate::postgres_wire::sql::ast::*;
+use crate::postgres_wire::sql::ast::{
+    BinaryOperator, ColumnRef, Expression, FromClause, JoinCondition, SelectItem, SelectStatement,
+    Statement, TableName, UnaryOperator,
+};
 
 /// Cost-based optimizer that uses statistics for optimization decisions
 pub struct CostBasedOptimizer {

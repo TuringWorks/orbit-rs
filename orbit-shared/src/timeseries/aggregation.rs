@@ -1,6 +1,6 @@
 //! Time series aggregation functions
 
-use super::*;
+use super::DataPoint;
 use anyhow::Result;
 use std::time::Duration;
 

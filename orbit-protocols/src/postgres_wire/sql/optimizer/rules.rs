@@ -6,7 +6,10 @@
 
 use super::OptimizerConfig;
 use crate::error::ProtocolResult;
-use crate::postgres_wire::sql::ast::*;
+use crate::postgres_wire::sql::ast::{
+    BinaryOperator, DeleteStatement, Expression, InsertStatement, SelectStatement, Statement,
+    UnaryOperator, UpdateStatement,
+};
 use crate::postgres_wire::sql::types::SqlValue;
 
 /// Rule-based optimizer that applies transformation rules
