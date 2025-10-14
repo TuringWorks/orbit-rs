@@ -117,6 +117,102 @@ impl Default for OrbitQLExecutor {
     }
 }
 
+/// Statement execution strategy pattern to reduce cognitive complexity
+struct StatementExecutor<'a> {
+    executor: &'a OrbitQLExecutor,
+}
+
+impl<'a> StatementExecutor<'a> {
+    fn new(executor: &'a OrbitQLExecutor) -> Self {
+        Self { executor }
+    }
+
+    async fn execute(&self, statement: Statement) -> Result<ExecutionResult, SpatialError> {
+        match statement {
+            Statement::Select(select) => self.execute_select_strategy(select).await,
+            Statement::Insert(insert) => self.execute_insert_strategy(insert).await,
+            Statement::Update(update) => self.execute_update_strategy(update).await,
+            Statement::Delete(delete) => self.execute_delete_strategy(delete).await,
+            Statement::Create(create) => self.execute_create_strategy(create).await,
+            Statement::Drop(drop) => self.execute_drop_strategy(drop).await,
+            Statement::Transaction(tx) => self.execute_transaction_strategy(tx).await,
+            Statement::Live(live) => self.execute_live_strategy(live).await,
+            Statement::Relate(relate) => self.execute_relate_strategy(relate).await,
+            Statement::GraphRAG(graphrag) => self.execute_graphrag_strategy(graphrag).await,
+        }
+    }
+
+    async fn execute_select_strategy(
+        &self,
+        select: SelectStatement,
+    ) -> Result<ExecutionResult, SpatialError> {
+        self.executor.execute_select(select).await
+    }
+
+    async fn execute_insert_strategy(
+        &self,
+        insert: InsertStatement,
+    ) -> Result<ExecutionResult, SpatialError> {
+        self.executor.execute_insert(insert).await
+    }
+
+    async fn execute_update_strategy(
+        &self,
+        update: UpdateStatement,
+    ) -> Result<ExecutionResult, SpatialError> {
+        self.executor.execute_update(update).await
+    }
+
+    async fn execute_delete_strategy(
+        &self,
+        delete: DeleteStatement,
+    ) -> Result<ExecutionResult, SpatialError> {
+        self.executor.execute_delete(delete).await
+    }
+
+    async fn execute_create_strategy(
+        &self,
+        create: CreateStatement,
+    ) -> Result<ExecutionResult, SpatialError> {
+        self.executor.execute_create(create).await
+    }
+
+    async fn execute_drop_strategy(
+        &self,
+        drop: DropStatement,
+    ) -> Result<ExecutionResult, SpatialError> {
+        self.executor.execute_drop(drop).await
+    }
+
+    async fn execute_transaction_strategy(
+        &self,
+        tx: TransactionStatement,
+    ) -> Result<ExecutionResult, SpatialError> {
+        self.executor.execute_transaction(tx).await
+    }
+
+    async fn execute_live_strategy(
+        &self,
+        live: LiveStatement,
+    ) -> Result<ExecutionResult, SpatialError> {
+        self.executor.execute_live(live).await
+    }
+
+    async fn execute_relate_strategy(
+        &self,
+        relate: RelateStatement,
+    ) -> Result<ExecutionResult, SpatialError> {
+        self.executor.execute_relate(relate).await
+    }
+
+    async fn execute_graphrag_strategy(
+        &self,
+        graphrag: GraphRAGStatement,
+    ) -> Result<ExecutionResult, SpatialError> {
+        self.executor.execute_graphrag(graphrag).await
+    }
+}
+
 impl OrbitQLExecutor {
     /// Create a new OrbitQL executor
     pub fn new() -> Self {
@@ -129,30 +225,15 @@ impl OrbitQLExecutor {
         }
     }
 
-    /// Execute an OrbitQL statement
+    /// Execute an OrbitQL statement using strategy pattern for better maintainability
     pub async fn execute(&self, statement: Statement) -> Result<ExecutionResult, SpatialError> {
         let start_time = Instant::now();
 
-        let result = match statement {
-            Statement::Select(select) => self.execute_select(select).await,
-            Statement::Insert(insert) => self.execute_insert(insert).await,
-            Statement::Update(update) => self.execute_update(update).await,
-            Statement::Delete(delete) => self.execute_delete(delete).await,
-            Statement::Create(create) => self.execute_create(create).await,
-            Statement::Drop(drop) => self.execute_drop(drop).await,
-            Statement::Transaction(tx) => self.execute_transaction(tx).await,
-            Statement::Live(live) => self.execute_live(live).await,
-            Statement::Relate(relate) => self.execute_relate(relate).await,
-            Statement::GraphRAG(graphrag) => self.execute_graphrag(graphrag).await,
-        };
+        let executor = StatementExecutor::new(self);
+        let mut result = executor.execute(statement).await?;
 
-        match result {
-            Ok(mut exec_result) => {
-                exec_result.execution_time = start_time.elapsed();
-                Ok(exec_result)
-            }
-            Err(e) => Err(e),
-        }
+        result.execution_time = start_time.elapsed();
+        Ok(result)
     }
 
     /// Execute SELECT statement with full spatial support

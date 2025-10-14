@@ -219,14 +219,23 @@ async fn load_config(args: &Args) -> Result<OrbitServerConfig, Box<dyn Error>> {
 }
 
 /// Apply command line argument overrides to configuration
-fn apply_cli_overrides(_config: &mut OrbitServerConfig, args: &Args) {
-    // Apply CLI overrides to config
-    // This would override specific config values based on CLI args
-
-    if args.dev_mode {
-        info!("🔧 Applying development mode configuration overrides");
-        // Set development-friendly defaults
-    }
+fn apply_cli_overrides(config: &mut OrbitServerConfig, args: &Args) {
+    apply_network_overrides(config, args);
+    apply_mode_overrides(config, args);
 
     info!("⚙️  Configuration applied with CLI overrides");
+}
+
+/// Apply network-related CLI overrides
+fn apply_network_overrides(config: &mut OrbitServerConfig, args: &Args) {
+    config.bind_address = args.bind.clone();
+    config.port = args.grpc_port;
+}
+
+/// Apply mode-specific CLI overrides
+fn apply_mode_overrides(_config: &mut OrbitServerConfig, args: &Args) {
+    if args.dev_mode {
+        info!("🔧 Applying development mode configuration overrides");
+        // Set development-friendly defaults here
+    }
 }

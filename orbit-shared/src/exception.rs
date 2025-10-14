@@ -38,6 +38,18 @@ pub enum OrbitError {
     Internal(String),
 }
 
+impl From<String> for OrbitError {
+    fn from(msg: String) -> Self {
+        OrbitError::Internal(msg)
+    }
+}
+
+impl From<&str> for OrbitError {
+    fn from(msg: &str) -> Self {
+        OrbitError::Internal(msg.to_string())
+    }
+}
+
 impl OrbitError {
     pub fn network<S: Into<String>>(msg: S) -> Self {
         OrbitError::NetworkError(msg.into())

@@ -68,7 +68,10 @@ pub struct KafkaCdcConsumer {
 impl KafkaCdcConsumer {
     /// Create a new Kafka CDC consumer
     pub async fn new(config: KafkaConfig) -> OrbitResult<Self> {
-        info!("Initializing Kafka CDC consumer with brokers: {}", config.brokers);
+        info!(
+            "Initializing Kafka CDC consumer with brokers: {}",
+            config.brokers
+        );
 
         // In a real implementation, we would initialize the Kafka producer here
         // For now, we'll just validate the configuration
@@ -198,7 +201,10 @@ pub struct RabbitMqCdcConsumer {
 impl RabbitMqCdcConsumer {
     /// Create a new RabbitMQ CDC consumer
     pub async fn new(config: RabbitMqConfig) -> OrbitResult<Self> {
-        info!("Initializing RabbitMQ CDC consumer with URL: {}", config.url);
+        info!(
+            "Initializing RabbitMQ CDC consumer with URL: {}",
+            config.url
+        );
 
         // Validate configuration
         if config.url.is_empty() {
@@ -221,7 +227,10 @@ impl RabbitMqCdcConsumer {
         self.config
             .routing_key
             .replace("{table}", &event.table)
-            .replace("{operation}", &format!("{:?}", event.operation).to_lowercase())
+            .replace(
+                "{operation}",
+                &format!("{:?}", event.operation).to_lowercase(),
+            )
     }
 }
 
@@ -349,7 +358,10 @@ impl WebhookCdcConsumer {
 #[async_trait]
 impl CdcConsumer for WebhookCdcConsumer {
     async fn process_event(&self, event: &CdcEvent) -> OrbitResult<()> {
-        debug!("Sending CDC event {} to webhook {}", event.event_id, self.config.url);
+        debug!(
+            "Sending CDC event {} to webhook {}",
+            event.event_id, self.config.url
+        );
 
         // Serialize event
         let payload = serde_json::to_vec(event).map_err(|e| {

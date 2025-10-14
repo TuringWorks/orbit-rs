@@ -1,4 +1,4 @@
-use crate::{AppError, AppEvent};
+use crate::AppError;
 
 #[derive(Debug, Default)]
 pub struct EventBus;
@@ -8,7 +8,7 @@ impl EventBus {
         Self
     }
 
-    pub async fn publish(&self, _event: AppEvent) -> Result<(), AppError> {
+    pub async fn publish<T>(&self, _event: T) -> Result<(), AppError> {
         Ok(())
     }
 }

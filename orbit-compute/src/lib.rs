@@ -52,17 +52,20 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 // Re-export key types for convenient access
-#[allow(ambiguous_glob_reexports)]
-pub use capabilities::*;
-pub use engine::*;
-pub use errors::*;
-pub use monitoring::*;
-pub use query::*;
-#[allow(ambiguous_glob_reexports)]
-pub use scheduler::*;
+pub use capabilities::{
+    CPUArchitecture, CPUCapabilities, GPUCapabilities, GPUDevice, NPUCapabilities,
+    NeuralEngineCapabilities, UniversalComputeCapabilities,
+};
+pub use engine::{EngineConfig, EngineStatus, HeterogeneousEngine};
+pub use errors::{ComputeError, ComputeResult};
+pub use monitoring::{MockSystemMonitorState, SystemInfo, SystemMonitor};
+pub use query::{AccelerationStrategy, QueryAnalysis};
+pub use scheduler::{AdaptiveWorkloadScheduler, ComputeUnit, WorkloadType};
 
 #[cfg(feature = "benchmarks")]
-pub use benchmarks::*;
+pub use benchmarks::{
+    BenchmarkConfig, BenchmarkReport, BenchmarkResult, BenchmarkSuite, BenchmarkSummary,
+};
 
 /// Hardware capability detection and runtime feature discovery
 pub mod capabilities;

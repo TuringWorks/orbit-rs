@@ -1,13 +1,23 @@
 ---
 layout: default
-title: "Quick Start Guide"
-subtitle: "Get up and running with Orbit-RS in minutes"
+title: "Quick Start Guide - Multi-Protocol Database Server"
+subtitle: "Get PostgreSQL, Redis, REST API, and gRPC running in 30 seconds"
 category: "getting-started"
 ---
 
 # Orbit-RS Quick Start Guide
 
-Get up and running with Orbit-RS in just a few minutes.
+**One Server, All Protocols** - Get a production-ready PostgreSQL + Redis + REST API + gRPC server running in 30 seconds.
+
+## 🎯 What You'll Get
+
+**Single `orbit-server` command gives you:**
+- 🐘 **PostgreSQL server** (port 5432) - Full SQL with pgvector support
+- 🔴 **Redis server** (port 6379) - Key-value + vector operations
+- 🌍 **HTTP REST API** (port 8080) - Web-friendly JSON interface  
+- 📡 **gRPC API** (port 50051) - High-performance actor management
+
+**✨ Key Innovation**: Same data accessible through any protocol with instant consistency!
 
 ## Prerequisites
 
@@ -37,49 +47,143 @@ Download from [Protocol Buffers releases](https://github.com/protocolbuffers/pro
 choco install protoc
 ```
 
-## Installation
+## 🚀 30-Second Quick Start
 
-### 1. Clone the Repository
+### 1. Clone and Build
 
 ```bash
 git clone https://github.com/TuringWorks/orbit-rs.git
 cd orbit-rs
-```
-
-### 2. Build the Project
-
-```bash
-
-# Build in release mode for optimal performance
 cargo build --release
-
-# Or build in debug mode for development
-cargo build
 ```
 
-### 3. Run Tests
+### 2. Start Multi-Protocol Server
 
 ```bash
+# Development mode - all protocols enabled automatically
+orbit-server --dev-mode
 
-# Run all tests
-cargo test
-
-# Run tests for a specific workspace
-cargo test --workspace
-
-# Run tests with output
-cargo test -- --nocapture
+# 🎉 Server starting with all protocols:
+# PostgreSQL: localhost:5432
+# Redis: localhost:6379
+# REST API: localhost:8080  
+# gRPC: localhost:50051
 ```
 
-### 4. Verify Installation
+### 3. Connect with Standard Clients
+
+**PostgreSQL** - Use any PostgreSQL client:
+```bash
+psql -h localhost -p 5432 -U postgres
+```
+
+**Redis** - Use redis-cli or any Redis client:
+```bash
+redis-cli -h localhost -p 6379
+```
+
+**HTTP REST** - Use curl or any HTTP client:
+```bash
+curl http://localhost:8080/health
+```
+
+### 4. Verify Multi-Protocol Access
 
 ```bash
+# Test all protocols are working
+psql -h localhost -p 5432 -c "SELECT 'PostgreSQL Connected!';"
+redis-cli -h localhost -p 6379 ping
+curl http://localhost:8080/health
+```
 
-# Check that examples compile
-cargo check --examples
+## 🔄 Multi-Protocol Data Demo
 
-# Run a simple example
-cargo run --example hello-world
+**The same data is accessible through all protocols** - here's how:
+
+### Write Data via PostgreSQL, Read via Redis
+
+```bash
+# Terminal 1: Write data via SQL
+psql -h localhost -p 5432 -U postgres
+postgres=# CREATE TABLE users (id SERIAL PRIMARY KEY, name TEXT, email TEXT);
+postgres=# INSERT INTO users (name, email) VALUES ('Alice', 'alice@example.com');
+postgres=# INSERT INTO users (name, email) VALUES ('Bob', 'bob@example.com');
+
+# Terminal 2: Read same data via Redis
+redis-cli -h localhost -p 6379
+127.0.0.1:6379> HGETALL user:1
+1) "name"
+2) "Alice"
+3) "email" 
+4) "alice@example.com"
+
+127.0.0.1:6379> HGETALL user:2
+1) "name"
+2) "Bob"
+3) "email"
+4) "bob@example.com"
+```
+
+### Vector Operations Across Protocols
+
+```bash
+# PostgreSQL with pgvector
+psql -h localhost -p 5432 -U postgres
+postgres=# CREATE EXTENSION vector;
+postgres=# CREATE TABLE documents (
+    id SERIAL PRIMARY KEY,
+    content TEXT,
+    embedding VECTOR(3)  -- Using 3D vectors for demo
+);
+postgres=# INSERT INTO documents (content, embedding) VALUES 
+    ('Machine learning', '[0.1, 0.2, 0.3]'),
+    ('Deep learning', '[0.15, 0.25, 0.35]'),
+    ('Data science', '[0.2, 0.3, 0.4]');
+
+# Vector similarity search via SQL
+postgres=# SELECT content, embedding <-> '[0.1, 0.2, 0.3]' AS distance 
+           FROM documents 
+           ORDER BY embedding <-> '[0.1, 0.2, 0.3]' 
+           LIMIT 2;
+```
+
+```bash
+# Same vector operations via Redis
+redis-cli -h localhost -p 6379
+
+# Add vectors with metadata
+127.0.0.1:6379> VECTOR.ADD doc-embeddings doc1 "0.1,0.2,0.3" content "Machine learning"
+127.0.0.1:6379> VECTOR.ADD doc-embeddings doc2 "0.15,0.25,0.35" content "Deep learning"
+127.0.0.1:6379> VECTOR.ADD doc-embeddings doc3 "0.2,0.3,0.4" content "Data science"
+
+# Vector similarity search
+127.0.0.1:6379> VECTOR.SEARCH doc-embeddings "0.1,0.2,0.3" 2 METRIC COSINE
+1) 1) "doc1"
+   2) "1.000000"
+2) 1) "doc2"
+   2) "0.998"
+```
+
+### REST API Access
+
+```bash
+# Query data via HTTP REST API
+curl "http://localhost:8080/api/users"
+curl "http://localhost:8080/api/users/1"
+
+# Vector search via REST
+curl -X POST "http://localhost:8080/api/vectors/search" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "collection": "doc-embeddings",
+    "vector": [0.1, 0.2, 0.3],
+    "limit": 5,
+    "metric": "cosine"
+  }'
+
+# Health and status endpoints
+curl http://localhost:8080/health
+curl http://localhost:8080/metrics
 ```
 
 ## Basic Usage
@@ -187,67 +291,158 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## Running Examples
 
-Orbit-RS includes several examples to demonstrate different features:
+Orbit-RS includes several working examples to demonstrate different features:
 
 ### Hello World Example
 ```bash
 cargo run --example hello-world
 ```
 
-### Distributed Counter Example
+### PostgreSQL Storage Demo
 ```bash
-cargo run --example distributed-counter
+# Demonstrates the pluggable storage architecture
+cargo run --example postgres_storage_demo
 ```
 
-### Redis Protocol Example
+### AQL Parser Test
 ```bash
-
-# Start the RESP server
-cargo run --example resp-server
-
-# In another terminal, connect with redis-cli
-redis-cli -h 127.0.0.1 -p 6380
+# Demonstrates AQL (ArangoDB Query Language) parsing capabilities
+cargo run --example aql_parser_test
 ```
 
-### PostgreSQL Protocol Example
+### PostgreSQL Protocol Server
 ```bash
-
 # Start the PostgreSQL-compatible server
-cargo run --example pgvector-store
+cargo run --example postgres-server
 
 # In another terminal, connect with psql
-psql -h 127.0.0.1 -p 5433 -d orbit
+psql -h localhost -p 5433 -U orbit -d actors
 ```
 
-## Configuration
+## ⚙️ Configuration
 
-### Basic Configuration
+### Development vs Production Modes
 
-Create a configuration file `orbit-config.toml`:
-
-```toml
-[cluster]
-namespace = "my-app"
-port = 8080
-
-[storage]
-backend = "sqlite"
-connection_string = "orbit.db"
-
-[metrics]
-enabled = true
-port = 9090
-```
-
-### Environment Variables
-
-You can also configure Orbit-RS using environment variables:
+**Development Mode** (`--dev-mode`):
+- All protocols enabled automatically
+- Verbose debug logging
+- Development-friendly defaults
+- Use for local testing only
 
 ```bash
-export ORBIT_NAMESPACE="my-app"
-export ORBIT_PORT="8080"
-export ORBIT_STORAGE_BACKEND="sqlite"
-export ORBIT_METRICS_ENABLED="true"
+# Development - all protocols active
+orbit-server --dev-mode
+```
+
+**Production Mode**:
+- Uses configuration file
+- Controlled protocol activation
+- Production logging levels
+- Security settings enabled
+
+```bash
+# Production with configuration file
+orbit-server --config /etc/orbit/production.toml
+```
+
+### Production Configuration
+
+Create `/etc/orbit/production.toml`:
+
+```toml
+[server]
+bind_address = "0.0.0.0"
+environment = "Production"
+node_id = "orbit-prod-01"
+
+# Enable only needed protocols
+[protocols.postgresql]
+enabled = true
+port = 5432
+max_connections = 5000
+
+[protocols.redis]  
+enabled = true
+port = 6379
+max_connections = 5000
+
+[protocols.rest]
+enabled = false  # Disable if not needed
+
+[protocols.grpc]
+enabled = true
+port = 50051
+
+# Vector operations
+[protocols.postgresql.vector_ops]
+default_metric = "cosine"
+max_dimensions = 1536
+batch_size = 1000
+enable_simd = true
+
+# Production security
+[security.authentication]
+enabled = true
+methods = ["JWT"]
+
+[security.authentication.jwt]
+secret_key = "${JWT_SECRET}"  # From environment
+expiration_secs = 3600
+
+# Performance tuning
+[performance.memory]
+max_memory_mb = 16384  # 16GB
+
+[performance.cpu]
+worker_threads = 32
+enable_simd = true
+
+# Production logging
+[logging]
+level = "warn"
+format = "json"
+
+[[logging.outputs]]
+output_type = "file"
+file_path = "/var/log/orbit/orbit-server.log"
+
+# Monitoring
+[monitoring.metrics]
+enabled = true
+port = 9090
+
+[monitoring.health_checks]
+enabled = true
+port = 8081
+```
+
+### Generate Configuration Template
+
+```bash
+# Generate example configuration
+orbit-server --generate-config > orbit-server.toml
+
+# Edit for your needs
+vim orbit-server.toml
+
+# Run with configuration
+orbit-server --config orbit-server.toml
+```
+
+### Command Line Options
+
+```bash
+# Enable specific protocols
+orbit-server \
+  --enable-postgresql \
+  --enable-redis \
+  --postgres-port 5432 \
+  --redis-port 6379
+
+# With clustering
+orbit-server \
+  --config production.toml \
+  --seed-nodes node1:7946,node2:7946
 ```
 
 ## Development Setup
@@ -329,13 +524,35 @@ error: Address already in use (os error 48)
 - 🐛 [Issue Tracker](https://github.com/TuringWorks/orbit-rs/issues)
 - 💬 [Discussions](https://github.com/TuringWorks/orbit-rs/discussions)
 
-## Next Steps
+## 🚀 Next Steps
 
-Now that you have Orbit-RS running, explore these advanced features:
+Now that you have Orbit-RS multi-protocol server running, explore these guides:
 
-- [Transaction Features](features/transaction_features.md) - Advanced distributed transactions
-- [Protocol Adapters](protocols/protocol_adapters.md) - Redis and PostgreSQL compatibility  
-- [Deployment Guide](deployment/DEPLOYMENT.md) - Production deployment with Kubernetes
-- [Development Guide](../DEVELOPMENT.md) - Contributing to Orbit-RS
-- [Compute Acceleration Guide](COMPUTE_ACCELERATION_GUIDE.md) - GPU acceleration and workload optimization
-- [Project Roadmap](ROADMAP_CURRENT.md) - Current development plans
+### **Multi-Protocol Features**
+- 🌟 **[Native Multi-Protocol Guide](NATIVE_MULTIPROTOCOL.md)** - Complete multi-protocol documentation
+- 🔄 **[Multi-Protocol Demo](../examples/multiprotocol-demo/)** - Interactive demonstration
+- ⚙️ **[Configuration Reference](CONFIGURATION.md)** - Complete configuration guide
+- 📊 **[Performance Tuning](PERFORMANCE_TUNING.md)** - Optimize for your workload
+
+### **Protocol-Specific Guides**  
+- 🐘 **[PostgreSQL Compatibility](postgres/POSTGRESQL_GUIDE.md)** - SQL features and pgvector
+- 🔴 **[Redis Compatibility](redis/REDIS_GUIDE.md)** - Key-value and vector operations
+- 🌍 **[REST API Reference](rest/REST_API.md)** - HTTP endpoints and usage
+- 🔢 **[Vector Operations Guide](VECTOR_OPERATIONS.md)** - Cross-protocol vector search
+
+### **Advanced Features**
+- 💎 **[Transaction Features](features/transaction_features.md)** - Distributed ACID transactions
+- 📊 **[Real-time Streaming](streaming/STREAMING_GUIDE.md)** - CDC and event sourcing
+- ☘️ **[Kubernetes Deployment](kubernetes_deployment.md)** - Production deployment
+- 🚀 **[Actor System Guide](actors/ACTOR_GUIDE.md)** - Virtual actors and distribution
+
+### **Development & Operations**
+- 👩‍💻 **[Development Guide](../DEVELOPMENT.md)** - Contributing to Orbit-RS
+- 🛡️ **[Security Guide](security/SECURITY_GUIDE.md)** - Authentication and authorization
+- 📊 **[Monitoring Guide](monitoring/MONITORING_GUIDE.md)** - Metrics and observability
+- 🐛 **[Troubleshooting](troubleshooting/TROUBLESHOOTING.md)** - Common issues and solutions
+
+### **Migration Guides**
+- 🔄 **[PostgreSQL Migration](migration/FROM_POSTGRESQL.md)** - Migrate from PostgreSQL
+- 🔄 **[Redis Migration](migration/FROM_REDIS.md)** - Migrate from Redis
+- 🔄 **[Multi-Database Migration](migration/MULTI_DATABASE.md)** - Consolidate multiple databases

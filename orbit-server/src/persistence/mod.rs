@@ -22,6 +22,7 @@ pub mod cow_btree;
 pub mod factory;
 pub mod lsm_tree;
 pub mod rocksdb;
+pub mod tikv;
 
 /// Configuration for different storage providers
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -58,6 +59,8 @@ pub enum PersistenceConfig {
     LsmTree(crate::persistence::lsm_tree::LsmTreeConfig),
     /// RocksDB embedded database
     RocksDB(crate::persistence::rocksdb::RocksDbConfig),
+    /// TiKV distributed transactional key-value store
+    TiKV(crate::persistence::tikv::TiKVConfig),
 }
 
 /// Memory storage configuration
@@ -410,6 +413,75 @@ pub struct GCPPrefetchConfig {
     pub thread_count: u32,
     /// Prefetch patterns (file extensions or patterns)
     pub patterns: Vec<String>,
+}
+
+/// TiKV configuration for distributed storage
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TiKVConfig {
+    /// List of PD (Placement Driver) endpoints
+    pub pd_endpoints: Vec<String>,
+    /// Connection timeout in seconds
+    pub connection_timeout: Option<u64>,
+    /// Request timeout in seconds
+    pub request_timeout: Option<u64>,
+    /// Maximum number of connections in the pool
+    pub max_connections: Option<u32>,
+    /// Enable pessimistic transactions (default: optimistic)
+    pub enable_pessimistic_txn: bool,
+    /// Transaction timeout in seconds
+    pub txn_timeout: Option<u64>,
+    /// Enable async commit for better performance
+    pub enable_async_commit: bool,
+    /// Enable one-phase commit optimization
+    pub enable_one_pc: bool,
+    /// Batch size for bulk operations
+    pub batch_size: usize,
+    /// Region cache size
+    pub region_cache_size: usize,
+    /// Coprocessor pool size
+    pub coprocessor_pool_size: usize,
+    /// Enable TLS/SSL
+    pub enable_tls: bool,
+    /// CA certificate path for TLS
+    pub ca_cert_path: Option<String>,
+    /// Client certificate path for mTLS
+    pub client_cert_path: Option<String>,
+    /// Client private key path for mTLS
+    pub client_key_path: Option<String>,
+    /// Key prefix for organizing data
+    pub key_prefix: String,
+    /// Enable compression for stored data
+    pub enable_compression: bool,
+    /// Maximum retries for failed operations
+    pub max_retries: u32,
+    /// Retry backoff delay in milliseconds
+    pub retry_delay_ms: u64,
+}
+
+impl Default for TiKVConfig {
+    fn default() -> Self {
+        Self {
+            pd_endpoints: vec!["127.0.0.1:2379".to_string()],
+            connection_timeout: Some(30),
+            request_timeout: Some(10),
+            max_connections: Some(10),
+            enable_pessimistic_txn: false,
+            txn_timeout: Some(30),
+            enable_async_commit: true,
+            enable_one_pc: true,
+            batch_size: 1000,
+            region_cache_size: 1000,
+            coprocessor_pool_size: 8,
+            enable_tls: false,
+            ca_cert_path: None,
+            client_cert_path: None,
+            client_key_path: None,
+            key_prefix: "orbit".to_string(),
+            enable_compression: true,
+            max_retries: 3,
+            retry_delay_ms: 100,
+        }
+    }
 }
 
 /// Compression types for storage optimization

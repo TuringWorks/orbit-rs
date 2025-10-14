@@ -167,17 +167,20 @@ impl MultiHeadAttention {
 
         Ok(reshaped)
     }
+}
 
-    /// Computes scaled dot-product attention: Attention(Q,K,V) = softmax(QK^T/sqrt(d_k))V
-    ///
-    /// # Arguments
-    /// * `query` - Query tensor of shape [batch, seq_len, num_heads, head_size]
-    /// * `key` - Key tensor of shape [batch, key_seq_len, num_heads, head_size]
-    /// * `value` - Value tensor of shape [batch, key_seq_len, num_heads, head_size]
-    /// * `attention_mask` - Optional mask to prevent attention to certain positions
-    ///
-    /// # Returns
-    /// Context tensor of shape [batch, seq_len, num_heads, head_size]
+/// Parameters for single attention score computation
+struct AttentionIndices {
+    batch: usize,
+    query_pos: usize,
+    head: usize,
+    key_pos: usize,
+    head_size: usize,
+}
+
+impl MultiHeadAttention {
+    /// Computes scaled dot-product attention using decomposed approach for better maintainability
+    /// Attention(Q,K,V) = softmax(QK^T/sqrt(d_k))V
     fn scaled_dot_product_attention(
         &self,
         query: &Array4<f64>,
@@ -185,10 +188,33 @@ impl MultiHeadAttention {
         value: &Array4<f64>,
         attention_mask: Option<&Array2<f64>>,
     ) -> Result<Array4<f64>> {
+        // Step 1: Compute raw attention scores
+        let attention_scores = self.compute_attention_scores(query, key)?;
+
+        // Step 2: Apply attention mask if provided
+        let masked_scores = self.apply_attention_mask(attention_scores, attention_mask);
+
+        // Step 3: Apply softmax to get attention probabilities
+        let attention_probs = self.softmax_4d(&masked_scores);
+
+        // Step 4: Apply dropout
+        let dropped_probs = self.apply_attention_dropout(&attention_probs);
+
+        // Step 5: Apply attention to values
+        let context = self.apply_attention_to_values(&dropped_probs, value)?;
+
+        Ok(context)
+    }
+
+    /// Computes raw attention scores: Q * K^T / sqrt(d_k)
+    fn compute_attention_scores(
+        &self,
+        query: &Array4<f64>,
+        key: &Array4<f64>,
+    ) -> Result<Array4<f64>> {
         let (batch_size, seq_len, num_heads, head_size) = query.dim();
         let key_seq_len = key.shape()[1];
 
-        // Compute attention scores: Q * K^T / sqrt(d_k)
         let mut attention_scores =
             Array4::<f64>::zeros((batch_size, seq_len, num_heads, key_seq_len));
 
@@ -196,44 +222,127 @@ impl MultiHeadAttention {
             for i in 0..seq_len {
                 for h in 0..num_heads {
                     for j in 0..key_seq_len {
-                        let mut score = 0.0;
-                        for d in 0..head_size {
-                            score += query[[b, i, h, d]] * key[[b, j, h, d]];
-                        }
+                        let indices = AttentionIndices {
+                            batch: b,
+                            query_pos: i,
+                            head: h,
+                            key_pos: j,
+                            head_size,
+                        };
+                        let score = self.compute_single_attention_score(query, key, indices);
                         attention_scores[[b, i, h, j]] = score * self.scale;
                     }
                 }
             }
         }
 
-        // Apply attention mask if provided
+        Ok(attention_scores)
+    }
+
+    /// Computes a single attention score between query and key positions
+    fn compute_single_attention_score(
+        &self,
+        query: &Array4<f64>,
+        key: &Array4<f64>,
+        indices: AttentionIndices,
+    ) -> f64 {
+        let mut score = 0.0;
+        for d in 0..indices.head_size {
+            score += query[[indices.batch, indices.query_pos, indices.head, d]]
+                * key[[indices.batch, indices.key_pos, indices.head, d]];
+        }
+        score
+    }
+
+    /// Applies attention mask to prevent attention to certain positions
+    fn apply_attention_mask(
+        &self,
+        mut attention_scores: Array4<f64>,
+        attention_mask: Option<&Array2<f64>>,
+    ) -> Array4<f64> {
         if let Some(mask) = attention_mask {
-            for b in 0..batch_size {
-                for i in 0..seq_len {
-                    for h in 0..num_heads {
-                        for j in 0..key_seq_len {
-                            if mask[[i, j]] == 0.0 {
-                                attention_scores[[b, i, h, j]] = f64::NEG_INFINITY;
-                            }
-                        }
-                    }
+            self.apply_mask_to_scores(&mut attention_scores, mask);
+        }
+        attention_scores
+    }
+
+    /// Helper function to apply mask values to attention scores
+    fn apply_mask_to_scores(&self, attention_scores: &mut Array4<f64>, mask: &Array2<f64>) {
+        let (batch_size, seq_len, num_heads, key_seq_len) = attention_scores.dim();
+
+        for b in 0..batch_size {
+            self.apply_mask_to_batch(attention_scores, mask, b, seq_len, num_heads, key_seq_len);
+        }
+    }
+
+    /// Helper function to apply mask to a single batch
+    fn apply_mask_to_batch(
+        &self,
+        attention_scores: &mut Array4<f64>,
+        mask: &Array2<f64>,
+        batch_idx: usize,
+        seq_len: usize,
+        num_heads: usize,
+        key_seq_len: usize,
+    ) {
+        for i in 0..seq_len {
+            if self.should_mask_position(mask, i, key_seq_len) {
+                self.mask_attention_heads(
+                    attention_scores,
+                    batch_idx,
+                    i,
+                    num_heads,
+                    key_seq_len,
+                    mask,
+                );
+            }
+        }
+    }
+
+    /// Check if any position in the sequence should be masked
+    fn should_mask_position(&self, mask: &Array2<f64>, seq_pos: usize, key_seq_len: usize) -> bool {
+        (0..key_seq_len).any(|j| mask[[seq_pos, j]] == 0.0)
+    }
+
+    /// Apply masking to all attention heads for a given position
+    fn mask_attention_heads(
+        &self,
+        attention_scores: &mut Array4<f64>,
+        batch_idx: usize,
+        seq_pos: usize,
+        num_heads: usize,
+        key_seq_len: usize,
+        mask: &Array2<f64>,
+    ) {
+        for h in 0..num_heads {
+            for j in 0..key_seq_len {
+                if mask[[seq_pos, j]] == 0.0 {
+                    attention_scores[[batch_idx, seq_pos, h, j]] = f64::NEG_INFINITY;
                 }
             }
         }
+    }
 
-        // Apply softmax to get attention probabilities
-        let attention_probs = self.softmax_4d(&attention_scores);
-
-        // Apply dropout (simplified - in practice would be stochastic)
-        let dropped_probs = attention_probs.mapv(|x| {
+    /// Applies dropout to attention probabilities
+    fn apply_attention_dropout(&self, attention_probs: &Array4<f64>) -> Array4<f64> {
+        attention_probs.mapv(|x| {
             if rand::random::<f64>() < self.dropout_prob {
                 0.0
             } else {
                 x
             }
-        });
+        })
+    }
 
-        // Apply attention to values
+    /// Applies attention probabilities to values to compute context
+    fn apply_attention_to_values(
+        &self,
+        attention_probs: &Array4<f64>,
+        value: &Array4<f64>,
+    ) -> Result<Array4<f64>> {
+        let (batch_size, seq_len, num_heads, head_size) = value.dim();
+        let key_seq_len = attention_probs.shape()[3];
+
         let mut context = Array4::<f64>::zeros((batch_size, seq_len, num_heads, head_size));
 
         for b in 0..batch_size {
@@ -242,7 +351,7 @@ impl MultiHeadAttention {
                     for d in 0..head_size {
                         let mut weighted_sum = 0.0;
                         for j in 0..key_seq_len {
-                            weighted_sum += dropped_probs[[b, i, h, j]] * value[[b, j, h, d]];
+                            weighted_sum += attention_probs[[b, i, h, j]] * value[[b, j, h, d]];
                         }
                         context[[b, i, h, d]] = weighted_sum;
                     }
@@ -487,5 +596,3 @@ impl CrossAttention {
         )
     }
 }
-
-use rand;
