@@ -180,103 +180,141 @@ impl GinIndex {
 
     fn deindex_value(&mut self, row_id: u64, value: &JsonbValue, path: &str) -> JsonbResult<()> {
         match value {
-            JsonbValue::Object(obj) => {
-                for (key, val) in obj {
-                    // Remove from key index
-                    if let Some(key_set) = self.key_index.get_mut(key) {
-                        key_set.remove(&row_id);
-                        if key_set.is_empty() {
-                            self.key_index.remove(key);
-                        }
-                    }
+            JsonbValue::Object(obj) => self.deindex_object(row_id, obj, path),
+            JsonbValue::Array(arr) => self.deindex_array(row_id, arr, path),
+            _ => self.deindex_primitive(row_id, value, path),
+        }
+    }
 
-                    // Remove from value index
-                    let value_hash = self.hash_value(val);
-                    if let Some(value_set) = self.value_index.get_mut(&value_hash) {
-                        value_set.remove(&row_id);
-                        if value_set.is_empty() {
-                            self.value_index.remove(&value_hash);
-                        }
-                    }
-
-                    // Remove from path-value index
-                    let full_path = if path.is_empty() {
-                        key.clone()
-                    } else {
-                        format!("{}.{}", path, key)
-                    };
-
-                    if let Some(path_map) = self.path_value_index.get_mut(&full_path) {
-                        if let Some(value_set) = path_map.get_mut(&value_hash) {
-                            value_set.remove(&row_id);
-                            if value_set.is_empty() {
-                                path_map.remove(&value_hash);
-                            }
-                        }
-                        if path_map.is_empty() {
-                            self.path_value_index.remove(&full_path);
-                        }
-                    }
-
-                    self.deindex_value(row_id, val, &full_path)?;
-                }
-            }
-            JsonbValue::Array(arr) => {
-                for (i, item) in arr.iter().enumerate() {
-                    let full_path = if path.is_empty() {
-                        i.to_string()
-                    } else {
-                        format!("{}[{}]", path, i)
-                    };
-
-                    let value_hash = self.hash_value(item);
-                    if let Some(value_set) = self.value_index.get_mut(&value_hash) {
-                        value_set.remove(&row_id);
-                        if value_set.is_empty() {
-                            self.value_index.remove(&value_hash);
-                        }
-                    }
-
-                    if let Some(path_map) = self.path_value_index.get_mut(&full_path) {
-                        if let Some(value_set) = path_map.get_mut(&value_hash) {
-                            value_set.remove(&row_id);
-                            if value_set.is_empty() {
-                                path_map.remove(&value_hash);
-                            }
-                        }
-                        if path_map.is_empty() {
-                            self.path_value_index.remove(&full_path);
-                        }
-                    }
-
-                    self.deindex_value(row_id, item, &full_path)?;
-                }
-            }
-            _ => {
-                let value_hash = self.hash_value(value);
-                if let Some(value_set) = self.value_index.get_mut(&value_hash) {
-                    value_set.remove(&row_id);
-                    if value_set.is_empty() {
-                        self.value_index.remove(&value_hash);
-                    }
-                }
-
-                if !path.is_empty() {
-                    if let Some(path_map) = self.path_value_index.get_mut(path) {
-                        if let Some(value_set) = path_map.get_mut(&value_hash) {
-                            value_set.remove(&row_id);
-                            if value_set.is_empty() {
-                                path_map.remove(&value_hash);
-                            }
-                        }
-                        if path_map.is_empty() {
-                            self.path_value_index.remove(path);
-                        }
-                    }
-                }
-            }
+    /// Remove object values from all relevant indexes
+    fn deindex_object(
+        &mut self,
+        row_id: u64,
+        obj: &std::collections::HashMap<String, JsonbValue>,
+        path: &str,
+    ) -> JsonbResult<()> {
+        for (key, val) in obj {
+            self.deindex_object_entry(row_id, key, val, path)?;
         }
         Ok(())
+    }
+
+    /// Remove a single object key-value pair from indexes
+    fn deindex_object_entry(
+        &mut self,
+        row_id: u64,
+        key: &str,
+        val: &JsonbValue,
+        path: &str,
+    ) -> JsonbResult<()> {
+        // Remove from key index
+        self.remove_from_key_index(row_id, key);
+
+        let value_hash = self.hash_value(val);
+        let full_path = self.build_object_path(path, key);
+
+        // Remove from value and path-value indexes
+        self.remove_from_value_index(row_id, value_hash);
+        self.remove_from_path_value_index(row_id, &full_path, value_hash);
+
+        // Recursively deindex nested values
+        self.deindex_value(row_id, val, &full_path)
+    }
+
+    /// Remove array values from all relevant indexes
+    fn deindex_array(&mut self, row_id: u64, arr: &[JsonbValue], path: &str) -> JsonbResult<()> {
+        for (i, item) in arr.iter().enumerate() {
+            self.deindex_array_item(row_id, i, item, path)?;
+        }
+        Ok(())
+    }
+
+    /// Remove a single array item from indexes
+    fn deindex_array_item(
+        &mut self,
+        row_id: u64,
+        index: usize,
+        item: &JsonbValue,
+        path: &str,
+    ) -> JsonbResult<()> {
+        let value_hash = self.hash_value(item);
+        let full_path = self.build_array_path(path, index);
+
+        // Remove from value and path-value indexes
+        self.remove_from_value_index(row_id, value_hash);
+        self.remove_from_path_value_index(row_id, &full_path, value_hash);
+
+        // Recursively deindex nested values
+        self.deindex_value(row_id, item, &full_path)
+    }
+
+    /// Remove primitive values from indexes
+    fn deindex_primitive(
+        &mut self,
+        row_id: u64,
+        value: &JsonbValue,
+        path: &str,
+    ) -> JsonbResult<()> {
+        let value_hash = self.hash_value(value);
+        self.remove_from_value_index(row_id, value_hash);
+
+        if !path.is_empty() {
+            self.remove_from_path_value_index(row_id, path, value_hash);
+        }
+        Ok(())
+    }
+
+    /// Helper to remove entry from key index
+    fn remove_from_key_index(&mut self, row_id: u64, key: &str) {
+        if let Some(key_set) = self.key_index.get_mut(key) {
+            key_set.remove(&row_id);
+            if key_set.is_empty() {
+                self.key_index.remove(key);
+            }
+        }
+    }
+
+    /// Helper to remove entry from value index
+    fn remove_from_value_index(&mut self, row_id: u64, value_hash: u64) {
+        if let Some(value_set) = self.value_index.get_mut(&value_hash) {
+            value_set.remove(&row_id);
+            if value_set.is_empty() {
+                self.value_index.remove(&value_hash);
+            }
+        }
+    }
+
+    /// Helper to remove entry from path-value index
+    fn remove_from_path_value_index(&mut self, row_id: u64, path: &str, value_hash: u64) {
+        if let Some(path_map) = self.path_value_index.get_mut(path) {
+            if let Some(value_set) = path_map.get_mut(&value_hash) {
+                value_set.remove(&row_id);
+                if value_set.is_empty() {
+                    path_map.remove(&value_hash);
+                }
+            }
+            if path_map.is_empty() {
+                self.path_value_index.remove(path);
+            }
+        }
+    }
+
+    /// Build path for object property
+    fn build_object_path(&self, path: &str, key: &str) -> String {
+        if path.is_empty() {
+            key.to_string()
+        } else {
+            format!("{}.{}", path, key)
+        }
+    }
+
+    /// Build path for array index
+    fn build_array_path(&self, path: &str, index: usize) -> String {
+        if path.is_empty() {
+            index.to_string()
+        } else {
+            format!("{}[{}]", path, index)
+        }
     }
 
     #[allow(clippy::only_used_in_recursion)]

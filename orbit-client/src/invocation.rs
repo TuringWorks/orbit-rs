@@ -1,6 +1,9 @@
 //! Actor invocation system for routing and executing actor method calls
 
-use orbit_shared::*;
+use orbit_shared::{
+    AddressableInvocation, AddressableInvocationArgument, AddressableInvocationArguments,
+    AddressableReference, InvocationReason, OrbitError, OrbitResult,
+};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{oneshot, RwLock};
@@ -255,6 +258,7 @@ impl<T: ?Sized> std::fmt::Debug for ActorReference<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use orbit_shared::{Addressable, Key};
 
     #[tokio::test]
     async fn test_invocation_system() {

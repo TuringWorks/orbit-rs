@@ -111,61 +111,84 @@ impl JsonbValue {
     /// ```
     pub fn contains(&self, other: &JsonbValue) -> JsonbResult<bool> {
         match (self, other) {
-            // Null contains only null
+            // Handle null containment
             (JsonbValue::Null, JsonbValue::Null) => Ok(true),
-            (_, JsonbValue::Null) => Ok(false),
-            (JsonbValue::Null, _) => Ok(false),
+            (_, JsonbValue::Null) | (JsonbValue::Null, _) => Ok(false),
 
-            // Primitive values must be equal
+            // Handle primitive type containment
             (JsonbValue::Bool(a), JsonbValue::Bool(b)) => Ok(a == b),
-            (JsonbValue::Number(a), JsonbValue::Number(b)) => Ok((a - b).abs() < f64::EPSILON),
+            (JsonbValue::Number(a), JsonbValue::Number(b)) => Ok(self.numbers_equal(*a, *b)),
             (JsonbValue::String(a), JsonbValue::String(b)) => Ok(a == b),
 
-            // Array containment: all elements of `other` must be in `self`
+            // Handle complex type containment
             (JsonbValue::Array(self_arr), JsonbValue::Array(other_arr)) => {
-                for other_item in other_arr {
-                    let mut found = false;
-                    for self_item in self_arr {
-                        if self_item.contains(other_item)? {
-                            found = true;
-                            break;
-                        }
-                    }
-                    if !found {
-                        return Ok(false);
-                    }
-                }
-                Ok(true)
+                self.array_contains_array(self_arr, other_arr)
             }
-
-            // Object containment: all key-value pairs of `other` must be in `self`
             (JsonbValue::Object(self_obj), JsonbValue::Object(other_obj)) => {
-                for (key, other_value) in other_obj {
-                    match self_obj.get(key) {
-                        Some(self_value) => {
-                            if !self_value.contains(other_value)? {
-                                return Ok(false);
-                            }
-                        }
-                        None => return Ok(false),
-                    }
-                }
-                Ok(true)
+                self.object_contains_object(self_obj, other_obj)
             }
-
-            // Cross-type containment: array can contain any value, object cannot contain primitives
-            (JsonbValue::Array(arr), value) => {
-                for item in arr {
-                    if item.contains(value)? {
-                        return Ok(true);
-                    }
-                }
-                Ok(false)
-            }
+            (JsonbValue::Array(arr), value) => self.array_contains_value(arr, value),
 
             // Other combinations are false
             _ => Ok(false),
         }
+    }
+
+    /// Check if two numbers are equal within floating point precision
+    fn numbers_equal(&self, a: f64, b: f64) -> bool {
+        (a - b).abs() < f64::EPSILON
+    }
+
+    /// Check if an array contains all elements of another array
+    fn array_contains_array(
+        &self,
+        self_arr: &[JsonbValue],
+        other_arr: &[JsonbValue],
+    ) -> JsonbResult<bool> {
+        for other_item in other_arr {
+            if !self.array_contains_element(self_arr, other_item)? {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+
+    /// Check if an array contains a specific element
+    fn array_contains_element(
+        &self,
+        arr: &[JsonbValue],
+        element: &JsonbValue,
+    ) -> JsonbResult<bool> {
+        for item in arr {
+            if item.contains(element)? {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+
+    /// Check if an object contains all key-value pairs of another object
+    fn object_contains_object(
+        &self,
+        self_obj: &std::collections::HashMap<String, JsonbValue>,
+        other_obj: &std::collections::HashMap<String, JsonbValue>,
+    ) -> JsonbResult<bool> {
+        for (key, other_value) in other_obj {
+            match self_obj.get(key) {
+                Some(self_value) => {
+                    if !self_value.contains(other_value)? {
+                        return Ok(false);
+                    }
+                }
+                None => return Ok(false),
+            }
+        }
+        Ok(true)
+    }
+
+    /// Check if an array contains a specific value
+    fn array_contains_value(&self, arr: &[JsonbValue], value: &JsonbValue) -> JsonbResult<bool> {
+        self.array_contains_element(arr, value)
     }
 
     /// `<@` operator: Is the left JSON value contained within the right JSON value?
@@ -510,7 +533,10 @@ mod tests {
         assert_eq!(JsonbValue::Null.to_text(), "");
         assert_eq!(JsonbValue::Bool(true).to_text(), "true");
         assert_eq!(JsonbValue::Number(42.0).to_text(), "42");
-        assert_eq!(JsonbValue::Number(3.14).to_text(), "3.14");
+        assert_eq!(
+            JsonbValue::Number(std::f64::consts::PI).to_text(),
+            "3.141592653589793"
+        );
         assert_eq!(JsonbValue::String("hello".to_string()).to_text(), "hello");
 
         let arr = JsonbValue::from_json_str(r#"[1, 2, 3]"#).unwrap();
