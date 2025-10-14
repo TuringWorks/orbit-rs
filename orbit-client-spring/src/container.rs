@@ -174,40 +174,48 @@ impl Container {
     /// Get bean by type
     pub async fn get_bean_by_type<T: 'static>(&self) -> SpringResult<BeanInstance> {
         let type_id = TypeId::of::<T>();
+        let type_name = std::any::type_name::<T>();
 
-        if let Some(bean_names) = self.type_registry.get(&type_id) {
-            if bean_names.is_empty() {
-                return Err(SpringError::bean_not_found(format!(
-                    "type: {}",
-                    std::any::type_name::<T>()
-                )));
-            }
+        let bean_names = self.type_registry.get(&type_id)
+            .ok_or_else(|| SpringError::bean_not_found(format!("type: {}", type_name)))?;
 
-            // If multiple beans of same type, look for primary
-            if bean_names.len() > 1 {
-                for name in bean_names.iter() {
-                    if let Some(definition) = self.definitions.get(name) {
-                        if definition.primary {
-                            return self.get_bean(name).await;
-                        }
-                    }
-                }
+        self.resolve_bean_from_candidates(bean_names, type_name).await
+    }
 
-                // No primary found, return error for ambiguous beans
-                return Err(SpringError::dependency_injection(format!(
-                    "Multiple beans of type {} found, no primary bean specified",
-                    std::any::type_name::<T>()
-                )));
-            }
-
-            // Single bean found
-            let bean_name = &bean_names[0];
-            return self.get_bean(bean_name).await;
+    /// Resolve bean from multiple candidates, handling primary bean selection
+    async fn resolve_bean_from_candidates(
+        &self,
+        bean_names: &[String],
+        type_name: &str,
+    ) -> SpringResult<BeanInstance> {
+        if bean_names.is_empty() {
+            return Err(SpringError::bean_not_found(format!("type: {}", type_name)));
         }
 
-        Err(SpringError::bean_not_found(format!(
-            "type: {}",
-            std::any::type_name::<T>()
+        if bean_names.len() == 1 {
+            return self.get_bean(&bean_names[0]).await;
+        }
+
+        self.find_primary_bean(bean_names, type_name).await
+    }
+
+    /// Find primary bean among multiple candidates
+    async fn find_primary_bean(
+        &self,
+        bean_names: &[String],
+        type_name: &str,
+    ) -> SpringResult<BeanInstance> {
+        for name in bean_names.iter() {
+            if let Some(definition) = self.definitions.get(name) {
+                if definition.primary {
+                    return self.get_bean(name).await;
+                }
+            }
+        }
+
+        Err(SpringError::dependency_injection(format!(
+            "Multiple beans of type {} found, no primary bean specified",
+            type_name
         )))
     }
 

@@ -1903,89 +1903,136 @@ fn detect_amd_microarch_and_model<R: raw_cpuid::CpuIdReader>(
     let feature_info = cpuid.get_feature_info();
     let family = feature_info.as_ref().map_or(0, |fi| fi.family_id());
     let model = feature_info.as_ref().map_or(0, |fi| fi.model_id());
-    let _stepping = feature_info.as_ref().map_or(0, |fi| fi.stepping_id());
 
-    // AMD Family 19h (Zen 3 and Zen 4)
-    if family == 0x19 {
-        if processor_brand.to_lowercase().contains("epyc") {
-            if processor_brand.contains("9004") || processor_brand.contains("Genoa") {
-                let epyc_model = parse_genoa_model(&processor_brand);
-                return Ok((
-                    X86Microarch::Zen4 {
-                        epyc_model: epyc_model.clone(),
-                    },
-                    epyc_model,
-                ));
-            } else if processor_brand.contains("9374F") || processor_brand.contains("Bergamo") {
-                let epyc_model = parse_bergamo_model(&processor_brand);
-                return Ok((
-                    X86Microarch::Zen4c {
-                        epyc_model: epyc_model.clone(),
-                    },
-                    epyc_model,
-                ));
-            } else if processor_brand.contains("7003") || processor_brand.contains("Milan") {
-                let epyc_model = parse_milan_model(&processor_brand);
-                return Ok((
-                    X86Microarch::Zen3 {
-                        epyc_model: epyc_model.clone(),
-                    },
-                    epyc_model,
-                ));
-            } else if processor_brand.contains("7V13") || processor_brand.contains("Milan-X") {
-                let epyc_model = parse_milan_x_model(&processor_brand);
-                return Ok((
-                    X86Microarch::Zen3 {
-                        epyc_model: epyc_model.clone(),
-                    },
-                    epyc_model,
-                ));
-            }
-        }
+    match family {
+        0x19 => detect_zen_3_4_architecture(&processor_brand, model),
+        0x17 => detect_zen_1_2_architecture(&processor_brand, model),
+        _ => Ok((X86Microarch::Unknown(format!("AMD Family {:#x}", family)), None)),
+    }
+}
 
-        // Default Zen 3/4 detection based on model numbers
-        if (0x10..=0x1F).contains(&model) {
-            Ok((X86Microarch::Zen3 { epyc_model: None }, None))
-        } else if (0x20..=0x2F).contains(&model) {
-            Ok((X86Microarch::Zen4 { epyc_model: None }, None))
-        } else {
-            Ok((X86Microarch::Zen3 { epyc_model: None }, None))
+/// Detect Zen 3/4 architecture (Family 19h)
+#[cfg(all(target_arch = "x86_64", feature = "runtime-detection"))]
+fn detect_zen_3_4_architecture(
+    processor_brand: &str,
+    model: u32,
+) -> Result<(X86Microarch, Option<EPYCModel>), ComputeError> {
+    if processor_brand.to_lowercase().contains("epyc") {
+        return detect_zen_3_4_epyc_models(processor_brand);
+    }
+
+    Ok(detect_zen_3_4_consumer_models(model))
+}
+
+/// Detect Zen 1/2 architecture (Family 17h)
+#[cfg(all(target_arch = "x86_64", feature = "runtime-detection"))]
+fn detect_zen_1_2_architecture(
+    processor_brand: &str,
+    model: u32,
+) -> Result<(X86Microarch, Option<EPYCModel>), ComputeError> {
+    if processor_brand.to_lowercase().contains("epyc") {
+        return detect_zen_1_2_epyc_models(processor_brand);
+    }
+
+    Ok(detect_zen_1_2_consumer_models(model))
+}
+
+/// Detect EPYC models for Zen 3/4
+#[cfg(all(target_arch = "x86_64", feature = "runtime-detection"))]
+fn detect_zen_3_4_epyc_models(
+    processor_brand: &str,
+) -> Result<(X86Microarch, Option<EPYCModel>), ComputeError> {
+    let epyc_patterns = [
+        ("9004", "Genoa", EPYCModelType::Genoa),
+        ("9374F", "Bergamo", EPYCModelType::Bergamo),
+        ("7003", "Milan", EPYCModelType::Milan),
+        ("7V13", "Milan-X", EPYCModelType::MilanX),
+    ];
+
+    for (model_code, name, model_type) in epyc_patterns {
+        if processor_brand.contains(model_code) || processor_brand.contains(name) {
+            return create_epyc_result(processor_brand, model_type);
         }
     }
-    // AMD Family 17h (Zen and Zen 2)
-    else if family == 0x17 {
-        if processor_brand.to_lowercase().contains("epyc") {
-            if processor_brand.contains("7002") || processor_brand.contains("Rome") {
-                let epyc_model = parse_rome_model(&processor_brand);
-                return Ok((
-                    X86Microarch::Zen2 {
-                        epyc_model: epyc_model.clone(),
-                    },
-                    epyc_model,
-                ));
-            } else if processor_brand.contains("7001") || processor_brand.contains("Naples") {
-                let epyc_model = parse_naples_model(&processor_brand);
-                return Ok((
-                    X86Microarch::Zen {
-                        epyc_model: epyc_model.clone(),
-                    },
-                    epyc_model,
-                ));
-            }
-        }
 
-        // Default Zen/Zen 2 detection
-        if (0x30..=0x3F).contains(&model) {
-            Ok((X86Microarch::Zen2 { epyc_model: None }, None))
-        } else {
-            Ok((X86Microarch::Zen { epyc_model: None }, None))
+    // Default Zen 3 for unrecognized EPYC
+    Ok((X86Microarch::Zen3 { epyc_model: None }, None))
+}
+
+/// Detect EPYC models for Zen 1/2
+#[cfg(all(target_arch = "x86_64", feature = "runtime-detection"))]
+fn detect_zen_1_2_epyc_models(
+    processor_brand: &str,
+) -> Result<(X86Microarch, Option<EPYCModel>), ComputeError> {
+    let epyc_patterns = [
+        ("7002", "Rome", EPYCModelType::Rome),
+        ("7001", "Naples", EPYCModelType::Naples),
+    ];
+
+    for (model_code, name, model_type) in epyc_patterns {
+        if processor_brand.contains(model_code) || processor_brand.contains(name) {
+            return create_epyc_result(processor_brand, model_type);
         }
-    } else {
-        Ok((
-            X86Microarch::Unknown(format!("AMD Family {:#x}", family)),
-            None,
-        ))
     }
+
+    // Default Zen for unrecognized EPYC
+    Ok((X86Microarch::Zen { epyc_model: None }, None))
+}
+
+/// Detect consumer Zen 3/4 models
+#[cfg(all(target_arch = "x86_64", feature = "runtime-detection"))]
+fn detect_zen_3_4_consumer_models(model: u32) -> (X86Microarch, Option<EPYCModel>) {
+    match model {
+        0x10..=0x1F => (X86Microarch::Zen3 { epyc_model: None }, None),
+        0x20..=0x2F => (X86Microarch::Zen4 { epyc_model: None }, None),
+        _ => (X86Microarch::Zen3 { epyc_model: None }, None),
+    }
+}
+
+/// Detect consumer Zen 1/2 models
+#[cfg(all(target_arch = "x86_64", feature = "runtime-detection"))]
+fn detect_zen_1_2_consumer_models(model: u32) -> (X86Microarch, Option<EPYCModel>) {
+    match model {
+        0x30..=0x3F => (X86Microarch::Zen2 { epyc_model: None }, None),
+        _ => (X86Microarch::Zen { epyc_model: None }, None),
+    }
+}
+
+/// EPYC model type enum for pattern matching
+#[cfg(all(target_arch = "x86_64", feature = "runtime-detection"))]
+enum EPYCModelType {
+    Genoa,
+    Bergamo,
+    Milan,
+    MilanX,
+    Rome,
+    Naples,
+}
+
+/// Create EPYC result based on model type
+#[cfg(all(target_arch = "x86_64", feature = "runtime-detection"))]
+fn create_epyc_result(
+    processor_brand: &str,
+    model_type: EPYCModelType,
+) -> Result<(X86Microarch, Option<EPYCModel>), ComputeError> {
+    let epyc_model = match model_type {
+        EPYCModelType::Genoa => parse_genoa_model(processor_brand),
+        EPYCModelType::Bergamo => parse_bergamo_model(processor_brand),
+        EPYCModelType::Milan => parse_milan_model(processor_brand),
+        EPYCModelType::MilanX => parse_milan_x_model(processor_brand),
+        EPYCModelType::Rome => parse_rome_model(processor_brand),
+        EPYCModelType::Naples => parse_naples_model(processor_brand),
+    };
+
+    let microarch = match model_type {
+        EPYCModelType::Genoa => X86Microarch::Zen4 { epyc_model: epyc_model.clone() },
+        EPYCModelType::Bergamo => X86Microarch::Zen4c { epyc_model: epyc_model.clone() },
+        EPYCModelType::Milan | EPYCModelType::MilanX => X86Microarch::Zen3 { epyc_model: epyc_model.clone() },
+        EPYCModelType::Rome => X86Microarch::Zen2 { epyc_model: epyc_model.clone() },
+        EPYCModelType::Naples => X86Microarch::Zen { epyc_model: epyc_model.clone() },
+    };
+
+    Ok((microarch, epyc_model))
 }
 
 // EPYC model parsing functions
@@ -2438,9 +2485,16 @@ fn detect_arm_vendor_and_soc() -> Result<(ARMVendor, ARMSoC), ComputeError> {
 /// Detect Apple Silicon chip and capabilities
 #[cfg(target_os = "macos")]
 fn detect_apple_silicon() -> Result<(ARMVendor, ARMSoC), ComputeError> {
+    let cpu_brand = get_macos_cpu_brand_string()?;
+    let chip = parse_apple_chip(&cpu_brand);
+    Ok((ARMVendor::Apple(chip), ARMSoC::Unknown))
+}
+
+/// Get CPU brand string from macOS system info
+#[cfg(target_os = "macos")]
+fn get_macos_cpu_brand_string() -> Result<String, ComputeError> {
     use std::process::Command;
 
-    // Get system info using sysctl
     let output = Command::new("sysctl")
         .arg("-n")
         .arg("machdep.cpu.brand_string")
@@ -2454,86 +2508,112 @@ fn detect_apple_silicon() -> Result<(ARMVendor, ARMSoC), ComputeError> {
             )
         })?;
 
-    let cpu_brand = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
 
-    // Parse Apple Silicon chip from brand string
-    let chip = if cpu_brand.contains("M4") {
-        if cpu_brand.contains("Max") {
-            AppleChip::M4 {
-                variant: M4Variant::M4Max,
-                cores: CoreConfiguration::default(),
-            }
-        } else if cpu_brand.contains("Pro") {
-            AppleChip::M4 {
-                variant: M4Variant::M4Pro,
-                cores: CoreConfiguration::default(),
-            }
-        } else {
-            AppleChip::M4 {
-                variant: M4Variant::M4,
-                cores: CoreConfiguration::default(),
-            }
+/// Parse Apple chip information from brand string
+#[cfg(target_os = "macos")]
+fn parse_apple_chip(cpu_brand: &str) -> AppleChip {
+    let chip_generations = [
+        ("M4", ChipGeneration::M4),
+        ("M3", ChipGeneration::M3),
+        ("M2", ChipGeneration::M2),
+        ("M1", ChipGeneration::M1),
+    ];
+
+    for (chip_name, generation) in chip_generations {
+        if cpu_brand.contains(chip_name) {
+            return create_apple_chip_variant(generation, cpu_brand);
         }
-    } else if cpu_brand.contains("M3") {
-        if cpu_brand.contains("Max") {
-            AppleChip::M3 {
-                variant: M3Variant::M3Max,
-                cores: CoreConfiguration::default(),
-            }
-        } else if cpu_brand.contains("Pro") {
-            AppleChip::M3 {
-                variant: M3Variant::M3Pro,
-                cores: CoreConfiguration::default(),
-            }
-        } else {
-            AppleChip::M3 {
-                variant: M3Variant::M3,
-                cores: CoreConfiguration::default(),
-            }
-        }
-    } else if cpu_brand.contains("M2") {
-        if cpu_brand.contains("Max") {
-            AppleChip::M2 {
-                variant: M2Variant::M2Max,
-                cores: CoreConfiguration::default(),
-            }
-        } else if cpu_brand.contains("Pro") {
-            AppleChip::M2 {
-                variant: M2Variant::M2Pro,
-                cores: CoreConfiguration::default(),
-            }
-        } else {
-            AppleChip::M2 {
-                variant: M2Variant::M2,
-                cores: CoreConfiguration::default(),
-            }
-        }
-    } else if cpu_brand.contains("M1") {
-        if cpu_brand.contains("Max") {
-            AppleChip::M1 {
-                variant: M1Variant::M1Max,
-                cores: CoreConfiguration::default(),
-            }
-        } else if cpu_brand.contains("Pro") {
-            AppleChip::M1 {
-                variant: M1Variant::M1Pro,
-                cores: CoreConfiguration::default(),
-            }
-        } else {
-            AppleChip::M1 {
-                variant: M1Variant::M1,
-                cores: CoreConfiguration::default(),
-            }
-        }
+    }
+
+    // Fallback to M1 if detection fails
+    AppleChip::M1 {
+        variant: M1Variant::M1,
+        cores: CoreConfiguration::default(),
+    }
+}
+
+/// Apple chip generation enum for parsing
+#[cfg(target_os = "macos")]
+enum ChipGeneration {
+    M4,
+    M3,
+    M2,
+    M1,
+}
+
+/// Create Apple chip variant based on generation and brand string
+#[cfg(target_os = "macos")]
+fn create_apple_chip_variant(generation: ChipGeneration, cpu_brand: &str) -> AppleChip {
+    let cores = CoreConfiguration::default();
+    
+    match generation {
+        ChipGeneration::M4 => AppleChip::M4 {
+            variant: determine_m4_variant(cpu_brand),
+            cores,
+        },
+        ChipGeneration::M3 => AppleChip::M3 {
+            variant: determine_m3_variant(cpu_brand),
+            cores,
+        },
+        ChipGeneration::M2 => AppleChip::M2 {
+            variant: determine_m2_variant(cpu_brand),
+            cores,
+        },
+        ChipGeneration::M1 => AppleChip::M1 {
+            variant: determine_m1_variant(cpu_brand),
+            cores,
+        },
+    }
+}
+
+/// Determine M4 variant from brand string
+#[cfg(target_os = "macos")]
+fn determine_m4_variant(cpu_brand: &str) -> M4Variant {
+    if cpu_brand.contains("Max") {
+        M4Variant::M4Max
+    } else if cpu_brand.contains("Pro") {
+        M4Variant::M4Pro
     } else {
-        // Fallback to M1 if detection fails
-        AppleChip::M1 {
-            variant: M1Variant::M1,
-            cores: CoreConfiguration::default(),
-        }
-    };
+        M4Variant::M4
+    }
+}
 
-    Ok((ARMVendor::Apple(chip), ARMSoC::Unknown))
+/// Determine M3 variant from brand string
+#[cfg(target_os = "macos")]
+fn determine_m3_variant(cpu_brand: &str) -> M3Variant {
+    if cpu_brand.contains("Max") {
+        M3Variant::M3Max
+    } else if cpu_brand.contains("Pro") {
+        M3Variant::M3Pro
+    } else {
+        M3Variant::M3
+    }
+}
+
+/// Determine M2 variant from brand string
+#[cfg(target_os = "macos")]
+fn determine_m2_variant(cpu_brand: &str) -> M2Variant {
+    if cpu_brand.contains("Max") {
+        M2Variant::M2Max
+    } else if cpu_brand.contains("Pro") {
+        M2Variant::M2Pro
+    } else {
+        M2Variant::M2
+    }
+}
+
+/// Determine M1 variant from brand string
+#[cfg(target_os = "macos")]
+fn determine_m1_variant(cpu_brand: &str) -> M1Variant {
+    if cpu_brand.contains("Max") {
+        M1Variant::M1Max
+    } else if cpu_brand.contains("Pro") {
+        M1Variant::M1Pro
+    } else {
+        M1Variant::M1
+    }
 }
 
 /// Fallback detection for non-macOS platforms

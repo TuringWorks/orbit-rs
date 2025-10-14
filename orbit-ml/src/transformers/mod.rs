@@ -655,61 +655,112 @@ impl Transformer {
         top_k: Option<usize>,
         top_p: Option<f64>,
     ) -> Result<Array2<i32>> {
+        self.validate_generation_parameters()?;
+        
+        let (batch_size, initial_seq_len) = input_ids.dim();
+        let mut generated_ids = input_ids.clone();
+
+        for _ in initial_seq_len..max_length {
+            generated_ids = self.generate_next_token(generated_ids, batch_size, temperature, top_k, top_p)?;
+            
+            if self.should_stop_generation(&generated_ids, batch_size)? {
+                break;
+            }
+        }
+
+        Ok(generated_ids)
+    }
+
+    /// Validate that generation parameters are compatible with model
+    fn validate_generation_parameters(&self) -> Result<()> {
         if self.config.architecture_type != TransformerArchitecture::DecoderOnly {
             return Err(MLError::model(
                 "Generate method only supports decoder-only architectures",
             ));
         }
+        Ok(())
+    }
 
-        let (batch_size, initial_seq_len) = input_ids.dim();
-        let mut generated_ids = input_ids.clone();
+    /// Generate the next token for all sequences in the batch
+    fn generate_next_token(
+        &self,
+        generated_ids: Array2<i32>,
+        batch_size: usize,
+        temperature: f64,
+        top_k: Option<usize>,
+        top_p: Option<f64>,
+    ) -> Result<Array2<i32>> {
+        // Forward pass to get logits
+        let outputs = self.forward(&generated_ids, None, None, None, None, None)?;
+        
+        // Extract and process logits for next token prediction
+        let last_token_logits = self.extract_last_token_logits(&outputs, batch_size)?;
+        let scaled_logits = last_token_logits.mapv(|x| x / temperature);
+        
+        // Sample next tokens
+        let next_token_ids = self.sample_token(&scaled_logits, top_k, top_p)?;
+        
+        // Append new tokens to sequences
+        self.append_tokens_to_sequences(&generated_ids, &next_token_ids, batch_size)
+    }
 
-        for _ in initial_seq_len..max_length {
-            // Forward pass to get logits
-            let outputs = self.forward(&generated_ids, None, None, None, None, None)?;
-
-            // Get logits for the last position
-            let (_, current_seq_len, vocab_size) = outputs.dim();
-            // Extract logits for the last token
-            let mut last_token_logits = Array2::<f64>::zeros((batch_size, vocab_size));
-            for b in 0..batch_size {
-                for v in 0..vocab_size {
-                    last_token_logits[[b, v]] = outputs[[b, current_seq_len - 1, v]];
-                }
-            }
-
-            // Apply temperature scaling
-            let scaled_logits = last_token_logits.mapv(|x| x / temperature);
-
-            // Sample next token (simplified sampling - would need proper implementation)
-            let next_token_id = self.sample_token(&scaled_logits, top_k, top_p)?;
-
-            // Append to generated sequence
-            let mut new_generated = Array2::<i32>::zeros((batch_size, current_seq_len + 1));
-            for b in 0..batch_size {
-                for t in 0..current_seq_len {
-                    new_generated[[b, t]] = generated_ids[[b, t]];
-                }
-                new_generated[[b, current_seq_len]] = next_token_id[b];
-            }
-            generated_ids = new_generated;
-
-            // Check for end of sequence tokens
-            if let Some(eos_id) = self.config.eos_token_id {
-                let mut all_finished = true;
-                for b in 0..batch_size {
-                    if generated_ids[[b, current_seq_len]] != eos_id as i32 {
-                        all_finished = false;
-                        break;
-                    }
-                }
-                if all_finished {
-                    break;
-                }
+    /// Extract logits for the last token in each sequence
+    fn extract_last_token_logits(
+        &self,
+        outputs: &Array3<f64>,
+        batch_size: usize,
+    ) -> Result<Array2<f64>> {
+        let (_, current_seq_len, vocab_size) = outputs.dim();
+        let mut last_token_logits = Array2::<f64>::zeros((batch_size, vocab_size));
+        
+        for b in 0..batch_size {
+            for v in 0..vocab_size {
+                last_token_logits[[b, v]] = outputs[[b, current_seq_len - 1, v]];
             }
         }
+        
+        Ok(last_token_logits)
+    }
 
-        Ok(generated_ids)
+    /// Append new tokens to existing sequences
+    fn append_tokens_to_sequences(
+        &self,
+        generated_ids: &Array2<i32>,
+        next_token_ids: &Array1<i32>,
+        batch_size: usize,
+    ) -> Result<Array2<i32>> {
+        let current_seq_len = generated_ids.dim().1;
+        let mut new_generated = Array2::<i32>::zeros((batch_size, current_seq_len + 1));
+        
+        for b in 0..batch_size {
+            // Copy existing tokens
+            for t in 0..current_seq_len {
+                new_generated[[b, t]] = generated_ids[[b, t]];
+            }
+            // Add new token
+            new_generated[[b, current_seq_len]] = next_token_ids[b];
+        }
+        
+        Ok(new_generated)
+    }
+
+    /// Check if generation should stop (all sequences reached EOS)
+    fn should_stop_generation(
+        &self,
+        generated_ids: &Array2<i32>,
+        batch_size: usize,
+    ) -> Result<bool> {
+        if let Some(eos_id) = self.config.eos_token_id {
+            let current_seq_len = generated_ids.dim().1;
+            
+            for b in 0..batch_size {
+                if generated_ids[[b, current_seq_len - 1]] != eos_id as i32 {
+                    return Ok(false);
+                }
+            }
+            return Ok(true);
+        }
+        Ok(false)
     }
 
     /// Simple token sampling (placeholder implementation)
