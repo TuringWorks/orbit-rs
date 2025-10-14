@@ -38,6 +38,22 @@ pub struct PostgresWireProtocol {
     portals: HashMap<String, (String, Vec<Option<bytes::Bytes>>)>,
 }
 
+/// Result of processing data in the connection loop
+#[derive(Debug)]
+enum ConnectionLoopResult {
+    Continue,
+    ClientDisconnected,
+    ClientTerminated,
+}
+
+/// Result of processing a single message
+#[derive(Debug)]
+enum MessageResult {
+    Continue,
+    Terminate,
+    Error(ProtocolError),
+}
+
 impl PostgresWireProtocol {
     /// Create a new PostgreSQL protocol handler
     pub fn new() -> Self {
@@ -77,39 +93,97 @@ impl PostgresWireProtocol {
         let mut write_buf = BytesMut::with_capacity(8192);
 
         loop {
-            // Read data from client
-            let n = stream.read_buf(&mut read_buf).await?;
-
-            if n == 0 {
-                info!("Client disconnected");
-                break;
-            }
-
-            // Process messages
-            while let Some(msg) = FrontendMessage::parse(&mut read_buf)? {
-                debug!("Received message: {:?}", msg);
-
-                match self.handle_message(msg, &mut write_buf).await {
-                    Ok(should_continue) => {
-                        if !should_continue {
-                            info!("Client terminated connection");
-                            return Ok(());
-                        }
-                    }
-                    Err(e) => {
-                        error!("Error handling message: {}", e);
-                        self.send_error(&mut write_buf, &e.to_string());
-                    }
+            match self
+                .read_and_process_data(&mut stream, &mut read_buf, &mut write_buf)
+                .await?
+            {
+                ConnectionLoopResult::Continue => continue,
+                ConnectionLoopResult::ClientDisconnected => {
+                    info!("Client disconnected");
+                    break;
                 }
-
-                // Flush write buffer
-                if !write_buf.is_empty() {
-                    stream.write_all(&write_buf).await?;
-                    write_buf.clear();
+                ConnectionLoopResult::ClientTerminated => {
+                    info!("Client terminated connection");
+                    return Ok(());
                 }
             }
         }
 
+        Ok(())
+    }
+
+    /// Read and process data from the client
+    async fn read_and_process_data(
+        &mut self,
+        stream: &mut TcpStream,
+        read_buf: &mut BytesMut,
+        write_buf: &mut BytesMut,
+    ) -> ProtocolResult<ConnectionLoopResult> {
+        let n = stream.read_buf(read_buf).await?;
+
+        if n == 0 {
+            return Ok(ConnectionLoopResult::ClientDisconnected);
+        }
+
+        self.process_pending_messages(stream, read_buf, write_buf)
+            .await
+    }
+
+    /// Process all pending messages in the read buffer
+    async fn process_pending_messages(
+        &mut self,
+        stream: &mut TcpStream,
+        read_buf: &mut BytesMut,
+        write_buf: &mut BytesMut,
+    ) -> ProtocolResult<ConnectionLoopResult> {
+        while let Some(msg) = FrontendMessage::parse(read_buf)? {
+            debug!("Received message: {:?}", msg);
+
+            match self.process_single_message(msg, write_buf).await {
+                MessageResult::Continue => {}
+                MessageResult::Terminate => {
+                    return Ok(ConnectionLoopResult::ClientTerminated);
+                }
+                MessageResult::Error(e) => {
+                    error!("Error handling message: {}", e);
+                    self.send_error(write_buf, &e.to_string());
+                }
+            }
+
+            self.flush_write_buffer(stream, write_buf).await?;
+        }
+
+        Ok(ConnectionLoopResult::Continue)
+    }
+
+    /// Process a single message
+    async fn process_single_message(
+        &mut self,
+        msg: FrontendMessage,
+        write_buf: &mut BytesMut,
+    ) -> MessageResult {
+        match self.handle_message(msg, write_buf).await {
+            Ok(should_continue) => {
+                if should_continue {
+                    MessageResult::Continue
+                } else {
+                    MessageResult::Terminate
+                }
+            }
+            Err(e) => MessageResult::Error(e),
+        }
+    }
+
+    /// Flush the write buffer to the stream
+    async fn flush_write_buffer(
+        &mut self,
+        stream: &mut TcpStream,
+        write_buf: &mut BytesMut,
+    ) -> ProtocolResult<()> {
+        if !write_buf.is_empty() {
+            stream.write_all(write_buf).await?;
+            write_buf.clear();
+        }
         Ok(())
     }
 
@@ -332,13 +406,13 @@ impl PostgresWireProtocol {
         let (statement_name, params) = self
             .portals
             .get(portal)
-            .ok_or_else(|| ProtocolError::PostgresError(format!("Portal not found: {}", portal)))?;
+            .ok_or_else(|| ProtocolError::PostgresError(format!("Portal not found: {portal}")))?;
 
         let query = self
             .prepared_statements
             .get(statement_name)
             .ok_or_else(|| {
-                ProtocolError::PostgresError(format!("Statement not found: {}", statement_name))
+                ProtocolError::PostgresError(format!("Statement not found: {statement_name}"))
             })?;
 
         // For now, ignore parameters and execute the query
@@ -431,19 +505,19 @@ impl PostgresWireProtocol {
             }
             QueryResult::Insert { count } => {
                 BackendMessage::CommandComplete {
-                    tag: format!("INSERT 0 {}", count),
+                    tag: format!("INSERT 0 {count}"),
                 }
                 .encode(buf);
             }
             QueryResult::Update { count } => {
                 BackendMessage::CommandComplete {
-                    tag: format!("UPDATE {}", count),
+                    tag: format!("UPDATE {count}"),
                 }
                 .encode(buf);
             }
             QueryResult::Delete { count } => {
                 BackendMessage::CommandComplete {
-                    tag: format!("DELETE {}", count),
+                    tag: format!("DELETE {count}"),
                 }
                 .encode(buf);
             }

@@ -18,7 +18,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Ok(())
         }
         Err(e) => {
-            eprintln!("cargo:warning=Failed to compile protobuf files: {}", e);
+            eprintln!("cargo:warning=Failed to compile protobuf files: {e}");
             eprintln!(
                 "cargo:warning=This is likely due to missing protoc (Protocol Buffers compiler)"
             );

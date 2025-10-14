@@ -194,7 +194,7 @@ impl MLFunctionRegistry {
     pub async fn execute_function(&self, name: &str, args: Vec<MLValue>) -> MLResult<MLValue> {
         match self.functions.get(name) {
             Some(function) => function.execute(args).await,
-            None => Err(MLError::internal(format!("Unknown ML function: {}", name))),
+            None => Err(MLError::internal(format!("Unknown ML function: {name}"))),
         }
     }
 }

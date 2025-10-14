@@ -172,10 +172,10 @@ pub enum VectorizationError {
 impl std::fmt::Display for VectorizationError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            VectorizationError::SizeMismatch(msg) => write!(f, "Size mismatch: {}", msg),
-            VectorizationError::TypeMismatch(msg) => write!(f, "Type mismatch: {}", msg),
-            VectorizationError::SimdNotSupported(msg) => write!(f, "SIMD not supported: {}", msg),
-            VectorizationError::InternalError(msg) => write!(f, "Internal error: {}", msg),
+            VectorizationError::SizeMismatch(msg) => write!(f, "Size mismatch: {msg}"),
+            VectorizationError::TypeMismatch(msg) => write!(f, "Type mismatch: {msg}"),
+            VectorizationError::SimdNotSupported(msg) => write!(f, "SIMD not supported: {msg}"),
+            VectorizationError::InternalError(msg) => write!(f, "Internal error: {msg}"),
         }
     }
 }
@@ -379,7 +379,7 @@ impl VectorizedFilter {
             .iter()
             .position(|col| col.name == col_name)
             .ok_or_else(|| {
-                VectorizationError::InternalError(format!("Column {} not found", col_name))
+                VectorizationError::InternalError(format!("Column {col_name} not found"))
             })?;
 
         let column = &input.columns[column_idx];
@@ -423,8 +423,7 @@ impl VectorizedFilter {
                 BinaryOperator::LessThanOrEqual => value <= filter_value,
                 _ => {
                     return Err(VectorizationError::SimdNotSupported(format!(
-                        "Operator {:?} not supported",
-                        operator
+                        "Operator {operator:?} not supported"
                     )))
                 }
             };
@@ -454,8 +453,7 @@ impl VectorizedFilter {
                 BinaryOperator::LessThanOrEqual => value <= filter_value,
                 _ => {
                     return Err(VectorizationError::SimdNotSupported(format!(
-                        "Operator {:?} not supported",
-                        operator
+                        "Operator {operator:?} not supported"
                     )))
                 }
             };
@@ -588,7 +586,7 @@ impl VectorizedOperation for VectorizedProjection {
             let output_name = if i < self.output_names.len() {
                 self.output_names[i].clone()
             } else {
-                format!("col_{}", i)
+                format!("col_{i}")
             };
 
             let column = self.evaluate_expression(expression, input)?;
@@ -637,7 +635,7 @@ impl VectorizedProjection {
                     .find(|col| col.name == *col_name)
                     .cloned()
                     .ok_or_else(|| {
-                        VectorizationError::InternalError(format!("Column {} not found", col_name))
+                        VectorizationError::InternalError(format!("Column {col_name} not found"))
                     })
             }
             Expression::Literal(value) => {
@@ -756,8 +754,7 @@ impl VectorizedProjection {
                 }
                 _ => {
                     return Err(VectorizationError::SimdNotSupported(format!(
-                        "Operator {:?} not supported",
-                        operator
+                        "Operator {operator:?} not supported"
                     )))
                 }
             };
@@ -801,8 +798,7 @@ impl VectorizedProjection {
                 BinaryOperator::Divide => left_val / right_val, // IEEE 754 handles division by zero
                 _ => {
                     return Err(VectorizationError::SimdNotSupported(format!(
-                        "Operator {:?} not supported",
-                        operator
+                        "Operator {operator:?} not supported"
                     )))
                 }
             };

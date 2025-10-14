@@ -604,13 +604,13 @@ pub enum DistributedError {
 impl std::fmt::Display for DistributedError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            DistributedError::NodeUnavailable(node) => write!(f, "Node unavailable: {}", node),
-            DistributedError::NetworkError(msg) => write!(f, "Network error: {}", msg),
-            DistributedError::FragmentationError(msg) => write!(f, "Fragmentation error: {}", msg),
-            DistributedError::SchedulingError(msg) => write!(f, "Scheduling error: {}", msg),
-            DistributedError::ReplicationError(msg) => write!(f, "Replication error: {}", msg),
-            DistributedError::ConsistencyError(msg) => write!(f, "Consistency error: {}", msg),
-            DistributedError::TimeoutError(msg) => write!(f, "Timeout error: {}", msg),
+            DistributedError::NodeUnavailable(node) => write!(f, "Node unavailable: {node}"),
+            DistributedError::NetworkError(msg) => write!(f, "Network error: {msg}"),
+            DistributedError::FragmentationError(msg) => write!(f, "Fragmentation error: {msg}"),
+            DistributedError::SchedulingError(msg) => write!(f, "Scheduling error: {msg}"),
+            DistributedError::ReplicationError(msg) => write!(f, "Replication error: {msg}"),
+            DistributedError::ConsistencyError(msg) => write!(f, "Consistency error: {msg}"),
+            DistributedError::TimeoutError(msg) => write!(f, "Timeout error: {msg}"),
         }
     }
 }
@@ -636,7 +636,7 @@ impl FragmentationStrategy for HashFragmentationStrategy {
             Statement::Select(_select) => {
                 // Create scan fragments for each node
                 for (i, node) in available_nodes.iter().enumerate() {
-                    let fragment_id = format!("scan_{}", i);
+                    let fragment_id = format!("scan_{i}");
 
                     let fragment = ExecutionFragment {
                         fragment_id: fragment_id.clone(),

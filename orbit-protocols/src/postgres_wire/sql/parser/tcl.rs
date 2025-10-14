@@ -156,7 +156,7 @@ pub fn parse_savepoint(parser: &mut SqlParser) -> ParseResult<Statement> {
         }
         Some(token) => {
             return Err(ParseError {
-                message: format!("Expected savepoint name, found {:?}", token),
+                message: format!("Expected savepoint name, found {token:?}"),
                 position: parser.position,
                 expected: vec!["identifier".to_string()],
                 found: Some(token.clone()),
@@ -199,7 +199,7 @@ pub fn parse_release_savepoint(parser: &mut SqlParser) -> ParseResult<Statement>
         }
         Some(token) => {
             return Err(ParseError {
-                message: format!("Expected savepoint name, found {:?}", token),
+                message: format!("Expected savepoint name, found {token:?}"),
                 position: parser.position,
                 expected: vec!["identifier".to_string()],
                 found: Some(token.clone()),
@@ -241,8 +241,7 @@ fn parse_isolation_level(parser: &mut SqlParser) -> ParseResult<IsolationLevel> 
                 }
                 Some(token) => Err(ParseError {
                     message: format!(
-                        "Expected UNCOMMITTED or COMMITTED after READ, found {:?}",
-                        token
+                        "Expected UNCOMMITTED or COMMITTED after READ, found {token:?}"
                     ),
                     position: parser.position,
                     expected: vec!["UNCOMMITTED".to_string(), "COMMITTED".to_string()],
@@ -266,7 +265,7 @@ fn parse_isolation_level(parser: &mut SqlParser) -> ParseResult<IsolationLevel> 
             Ok(IsolationLevel::Serializable)
         }
         Some(token) => Err(ParseError {
-            message: format!("Expected isolation level, found {:?}", token),
+            message: format!("Expected isolation level, found {token:?}"),
             position: parser.position,
             expected: vec![
                 "READ UNCOMMITTED".to_string(),
@@ -299,7 +298,7 @@ fn parse_access_mode(parser: &mut SqlParser) -> ParseResult<AccessMode> {
             Ok(AccessMode::ReadOnly)
         }
         Some(token) => Err(ParseError {
-            message: format!("Expected WRITE or ONLY after READ, found {:?}", token),
+            message: format!("Expected WRITE or ONLY after READ, found {token:?}"),
             position: parser.position,
             expected: vec!["WRITE".to_string(), "ONLY".to_string()],
             found: Some(token.clone()),

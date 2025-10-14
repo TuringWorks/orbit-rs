@@ -28,13 +28,13 @@ pub enum PlanningError {
 impl fmt::Display for PlanningError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            PlanningError::UnsupportedOperation(msg) => write!(f, "Unsupported operation: {}", msg),
-            PlanningError::InvalidPlan(msg) => write!(f, "Invalid plan: {}", msg),
-            PlanningError::CostEstimationError(msg) => write!(f, "Cost estimation error: {}", msg),
+            PlanningError::UnsupportedOperation(msg) => write!(f, "Unsupported operation: {msg}"),
+            PlanningError::InvalidPlan(msg) => write!(f, "Invalid plan: {msg}"),
+            PlanningError::CostEstimationError(msg) => write!(f, "Cost estimation error: {msg}"),
             PlanningError::ResourceConstraintViolation(msg) => {
-                write!(f, "Resource constraint violation: {}", msg)
+                write!(f, "Resource constraint violation: {msg}")
             }
-            PlanningError::OptimizationError(err) => write!(f, "Optimization error: {}", err),
+            PlanningError::OptimizationError(err) => write!(f, "Optimization error: {err}"),
         }
     }
 }

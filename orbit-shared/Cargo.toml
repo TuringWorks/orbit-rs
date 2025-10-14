@@ -41,9 +41,10 @@ tracing-subscriber = "0.3"
 dashmap.workspace = true
 rayon = "1.10"
 bytes = "1.0"
+# Security dependencies
+regex.workspace = true
 
 # Code quality patterns
-regex.workspace = true
 paste.workspace = true
 
 [[bin]]

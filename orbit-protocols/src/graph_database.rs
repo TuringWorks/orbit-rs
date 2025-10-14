@@ -278,7 +278,7 @@ impl GraphActor {
                 crate::cypher::cypher_parser::CypherClause::Match { pattern } => {
                     let step = PlanStep {
                         operation: "NodeScan".to_string(),
-                        description: format!("Scan nodes matching pattern: {:?}", pattern),
+                        description: format!("Scan nodes matching pattern: {pattern:?}"),
                         estimated_rows: 1000, // Simplified estimation
                         estimated_cost: 10.0,
                         children: vec![],
@@ -289,7 +289,7 @@ impl GraphActor {
                 crate::cypher::cypher_parser::CypherClause::Create { pattern } => {
                     let step = PlanStep {
                         operation: "Create".to_string(),
-                        description: format!("Create nodes/relationships: {:?}", pattern),
+                        description: format!("Create nodes/relationships: {pattern:?}"),
                         estimated_rows: 1,
                         estimated_cost: 5.0,
                         children: vec![],
@@ -461,8 +461,7 @@ impl GraphActor {
             }
             _ => {
                 return Err(ProtocolError::CypherError(format!(
-                    "Unknown configuration parameter: {}",
-                    parameter
+                    "Unknown configuration parameter: {parameter}"
                 )));
             }
         }
@@ -547,8 +546,7 @@ impl GraphManager {
     pub fn create_graph(&mut self, name: String) -> ProtocolResult<()> {
         if self.graphs.contains_key(&name) {
             return Err(ProtocolError::CypherError(format!(
-                "Graph '{}' already exists",
-                name
+                "Graph '{name}' already exists"
             )));
         }
 

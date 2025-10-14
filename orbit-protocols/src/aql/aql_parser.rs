@@ -424,8 +424,7 @@ impl AqlTokenParser {
                 }
                 Some(token) => {
                     return Err(ProtocolError::ParseError(format!(
-                        "Unexpected token: {:?}",
-                        token
+                        "Unexpected token: {token:?}"
                     )));
                 }
                 None => break,

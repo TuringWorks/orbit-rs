@@ -338,12 +338,11 @@ impl fmt::Display for LexError {
             LexError::UnexpectedCharacter { char, line, column } => {
                 write!(
                     f,
-                    "Unexpected character '{}' at line {}, column {}",
-                    char, line, column
+                    "Unexpected character '{char}' at line {line}, column {column}"
                 )
             }
             LexError::UnterminatedString { line, column } => {
-                write!(f, "Unterminated string at line {}, column {}", line, column)
+                write!(f, "Unterminated string at line {line}, column {column}")
             }
             LexError::InvalidNumber {
                 value,
@@ -352,8 +351,7 @@ impl fmt::Display for LexError {
             } => {
                 write!(
                     f,
-                    "Invalid number '{}' at line {}, column {}",
-                    value, line, column
+                    "Invalid number '{value}' at line {line}, column {column}"
                 )
             }
             LexError::InvalidEscape {
@@ -363,8 +361,7 @@ impl fmt::Display for LexError {
             } => {
                 write!(
                     f,
-                    "Invalid escape sequence '{}' at line {}, column {}",
-                    sequence, line, column
+                    "Invalid escape sequence '{sequence}' at line {line}, column {column}"
                 )
             }
         }
@@ -605,7 +602,7 @@ impl Lexer {
                                 '"' => string_value.push('"'),
                                 _ => {
                                     return Err(LexError::InvalidEscape {
-                                        sequence: format!("\\{}", ch),
+                                        sequence: format!("\\{ch}"),
                                         line,
                                         column: column - 1,
                                     });

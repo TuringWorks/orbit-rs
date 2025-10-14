@@ -26,6 +26,7 @@ pub mod replication;
 pub mod router;
 pub mod saga;
 pub mod saga_recovery;
+pub mod security;
 pub mod security_patterns;
 pub mod spatial;
 pub mod stream_processing;
@@ -79,8 +80,7 @@ pub use replication::{
 
 // Re-export advanced transaction features (excluding conflicting core module)
 pub use transactions::{
-    locks, metrics, performance, security, DistributedTransaction, TransactionCoordinator,
-    TransactionId,
+    locks, metrics, performance, DistributedTransaction, TransactionCoordinator, TransactionId,
 };
 
 // Re-export time series functionality (excluding conflicting core module)
@@ -113,6 +113,17 @@ pub use spatial::{
     SpatialAlert, SpatialError, SpatialFunctions, SpatialGeometry, SpatialIndex, SpatialOperations,
     SpatialRelation, SpatialStreamProcessor, DEFAULT_PRECISION, EARTH_RADIUS_METERS,
     UTM_ZONE_33N_SRID, WEB_MERCATOR_SRID, WGS84_SRID,
+};
+
+// Re-export security functionality
+pub use security::authentication::AuthToken;
+pub use security::{
+    AnomalyDetector, AuditEvent, AuditLogger, AuditPolicy, AuthenticationManager,
+    AuthenticationProvider, ComplianceMonitor, EncryptionManager, KeyManagementSystem,
+    KeyRotationPolicy, LdapAuthProvider, OAuth2AuthProvider, PolicyEngine, QueryValidator,
+    RbacEngine, RoleBasedAccessControl, SamlAuthProvider, SecurityAction, SecurityContext,
+    SecurityFramework, SecurityResource, SecuritySubject, SqlInjectionDetector,
+    ThreatDetectionEngine, TlsConfig, TlsVersion,
 };
 
 // Re-export trigger functionality

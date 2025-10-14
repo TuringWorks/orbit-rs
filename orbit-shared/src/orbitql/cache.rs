@@ -84,7 +84,7 @@ impl CacheKey {
 
         // Hash parameters
         hasher = std::collections::hash_map::DefaultHasher::new();
-        format!("{:?}", params).hash(&mut hasher); // TODO: Implement proper parameter hashing
+        format!("{params:?}").hash(&mut hasher); // TODO: Implement proper parameter hashing
         let param_hash = hasher.finish();
 
         // Hash context (simplified)

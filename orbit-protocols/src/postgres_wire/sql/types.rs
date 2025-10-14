@@ -465,8 +465,8 @@ impl SqlValue {
                 let elements: Vec<String> = v.iter().map(|f| f.to_string()).collect();
                 format!("[{}]", elements.join(","))
             }
-            SqlValue::Point(x, y) => format!("({},{})", x, y),
-            _ => format!("{:?}", self), // Fallback for complex types
+            SqlValue::Point(x, y) => format!("({x},{y})"),
+            _ => format!("{self:?}"), // Fallback for complex types
         }
     }
 
@@ -506,7 +506,7 @@ impl SqlValue {
             SqlType::Boolean => match s.to_lowercase().as_str() {
                 "t" | "true" | "1" | "yes" | "on" => Ok(SqlValue::Boolean(true)),
                 "f" | "false" | "0" | "no" | "off" => Ok(SqlValue::Boolean(false)),
-                _ => Err(format!("Invalid boolean value: {}", s)),
+                _ => Err(format!("Invalid boolean value: {s}")),
             },
             SqlType::SmallInt => s
                 .parse::<i16>()
@@ -546,7 +546,7 @@ impl SqlValue {
                     .collect();
                 values.map(SqlValue::Vector).map_err(|e| e.to_string())
             }
-            _ => Err(format!("Parsing not implemented for type {:?}", sql_type)),
+            _ => Err(format!("Parsing not implemented for type {sql_type:?}")),
         }
     }
 }
@@ -567,26 +567,26 @@ impl std::fmt::Display for SqlType {
             SqlType::Decimal {
                 precision: Some(p),
                 scale: Some(s),
-            } => write!(f, "DECIMAL({},{})", p, s),
+            } => write!(f, "DECIMAL({p},{s})"),
             SqlType::Decimal {
                 precision: Some(p),
                 scale: None,
-            } => write!(f, "DECIMAL({})", p),
+            } => write!(f, "DECIMAL({p})"),
             SqlType::Decimal { .. } => write!(f, "DECIMAL"),
             SqlType::Numeric {
                 precision: Some(p),
                 scale: Some(s),
-            } => write!(f, "NUMERIC({},{})", p, s),
+            } => write!(f, "NUMERIC({p},{s})"),
             SqlType::Numeric {
                 precision: Some(p),
                 scale: None,
-            } => write!(f, "NUMERIC({})", p),
+            } => write!(f, "NUMERIC({p})"),
             SqlType::Numeric { .. } => write!(f, "NUMERIC"),
             SqlType::Real => write!(f, "REAL"),
             SqlType::DoublePrecision => write!(f, "DOUBLE PRECISION"),
-            SqlType::Char(Some(n)) => write!(f, "CHAR({})", n),
+            SqlType::Char(Some(n)) => write!(f, "CHAR({n})"),
             SqlType::Char(None) => write!(f, "CHAR"),
-            SqlType::Varchar(Some(n)) => write!(f, "VARCHAR({})", n),
+            SqlType::Varchar(Some(n)) => write!(f, "VARCHAR({n})"),
             SqlType::Varchar(None) => write!(f, "VARCHAR"),
             SqlType::Text => write!(f, "TEXT"),
             SqlType::Bytea => write!(f, "BYTEA"),
@@ -609,26 +609,26 @@ impl std::fmt::Display for SqlType {
             SqlType::Array {
                 element_type,
                 dimensions: Some(d),
-            } => write!(f, "{}[{}]", element_type, d),
+            } => write!(f, "{element_type}[{d}]"),
             SqlType::Array {
                 element_type,
                 dimensions: None,
-            } => write!(f, "{}[]", element_type),
+            } => write!(f, "{element_type}[]"),
             SqlType::Uuid => write!(f, "UUID"),
             SqlType::Vector {
                 dimensions: Some(d),
-            } => write!(f, "VECTOR({})", d),
+            } => write!(f, "VECTOR({d})"),
             SqlType::Vector { dimensions: None } => write!(f, "VECTOR"),
             SqlType::HalfVec {
                 dimensions: Some(d),
-            } => write!(f, "HALFVEC({})", d),
+            } => write!(f, "HALFVEC({d})"),
             SqlType::HalfVec { dimensions: None } => write!(f, "HALFVEC"),
             SqlType::SparseVec {
                 dimensions: Some(d),
-            } => write!(f, "SPARSEVEC({})", d),
+            } => write!(f, "SPARSEVEC({d})"),
             SqlType::SparseVec { dimensions: None } => write!(f, "SPARSEVEC"),
-            SqlType::Custom { type_name } => write!(f, "{}", type_name),
-            _ => write!(f, "{:?}", self),
+            SqlType::Custom { type_name } => write!(f, "{type_name}"),
+            _ => write!(f, "{self:?}"),
         }
     }
 }

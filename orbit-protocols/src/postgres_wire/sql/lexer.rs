@@ -695,7 +695,7 @@ impl Lexer {
             Token::Parameter(param_num)
         } else {
             // If parsing fails, treat as identifier
-            Token::Identifier(format!("${}", number))
+            Token::Identifier(format!("${number}"))
         }
     }
 

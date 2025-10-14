@@ -130,7 +130,7 @@ impl ConnectionPool {
         debug!("Creating new gRPC connection to: {}", endpoint_url);
 
         let mut endpoint = Endpoint::from_shared(endpoint_url.to_string())
-            .map_err(|e| OrbitError::internal(format!("Invalid endpoint URL: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("Invalid endpoint URL: {e}")))?;
 
         // Configure endpoint
         endpoint = endpoint
@@ -150,7 +150,7 @@ impl ConnectionPool {
 
         // Create channel
         let channel = endpoint.connect().await.map_err(|e| {
-            OrbitError::network(format!("Failed to connect to {}: {}", endpoint_url, e))
+            OrbitError::network(format!("Failed to connect to {endpoint_url}: {e}"))
         })?;
 
         let client = TransactionServiceClient::new(channel)
@@ -502,7 +502,7 @@ impl TransactionMessageSender for GrpcTransactionMessageSender {
                     )
                     .await
                     .map_err(|_| OrbitError::timeout("broadcast timeout"))?
-                    .map_err(|e| OrbitError::network(format!("Broadcast failed: {}", e)))?
+                    .map_err(|e| OrbitError::network(format!("Broadcast failed: {e}")))?
                     .into_inner();
 
                     if response.failed_sends > 0 {

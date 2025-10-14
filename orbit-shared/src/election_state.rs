@@ -65,10 +65,7 @@ impl ElectionState {
 
         if let Some(existing_vote) = &self.voted_for {
             if existing_vote != &candidate {
-                return Err(format!(
-                    "Already voted for {} in term {}",
-                    existing_vote, term
-                ));
+                return Err(format!("Already voted for {existing_vote} in term {term}"));
             }
         }
 
@@ -195,10 +192,10 @@ impl ElectionStateManager {
 
         let content = fs::read_to_string(&self.state_path)
             .await
-            .map_err(|e| OrbitError::internal(format!("Failed to read election state: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("Failed to read election state: {e}")))?;
 
         let loaded_state: ElectionState = serde_json::from_str(&content)
-            .map_err(|e| OrbitError::internal(format!("Failed to parse election state: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("Failed to parse election state: {e}")))?;
 
         {
             let mut state = self.state.write().await;
@@ -216,13 +213,13 @@ impl ElectionStateManager {
     pub async fn save(&self) -> OrbitResult<()> {
         let state = self.state.read().await;
         let content = serde_json::to_string_pretty(&*state).map_err(|e| {
-            OrbitError::internal(format!("Failed to serialize election state: {}", e))
+            OrbitError::internal(format!("Failed to serialize election state: {e}"))
         })?;
 
         // Create parent directory if it doesn't exist
         if let Some(parent) = self.state_path.parent() {
             fs::create_dir_all(parent).await.map_err(|e| {
-                OrbitError::internal(format!("Failed to create state directory: {}", e))
+                OrbitError::internal(format!("Failed to create state directory: {e}"))
             })?;
         }
 
@@ -230,12 +227,12 @@ impl ElectionStateManager {
         let temp_path = self.state_path.with_extension("tmp");
         fs::write(&temp_path, content)
             .await
-            .map_err(|e| OrbitError::internal(format!("Failed to write election state: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("Failed to write election state: {e}")))?;
 
         fs::rename(&temp_path, &self.state_path)
             .await
             .map_err(|e| {
-                OrbitError::internal(format!("Failed to update election state file: {}", e))
+                OrbitError::internal(format!("Failed to update election state file: {e}"))
             })?;
 
         Ok(())
@@ -371,13 +368,13 @@ impl ElectionStateManager {
     pub async fn export_state(&self) -> OrbitResult<String> {
         let state = self.state.read().await;
         serde_json::to_string_pretty(&*state)
-            .map_err(|e| OrbitError::internal(format!("Failed to export election state: {}", e)))
+            .map_err(|e| OrbitError::internal(format!("Failed to export election state: {e}")))
     }
 
     /// Import election state (for recovery)
     pub async fn import_state(&self, state_json: &str) -> OrbitResult<()> {
         let imported_state: ElectionState = serde_json::from_str(state_json)
-            .map_err(|e| OrbitError::internal(format!("Failed to parse imported state: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("Failed to parse imported state: {e}")))?;
 
         {
             let mut state = self.state.write().await;

@@ -74,8 +74,7 @@ impl VectorQueryEngine {
             self.handle_vector_function(sql).await
         } else {
             Err(ProtocolError::PostgresError(format!(
-                "Unsupported vector query: {}",
-                sql
+                "Unsupported vector query: {sql}"
             )))
         }
     }
@@ -256,13 +255,13 @@ impl VectorQueryEngine {
         let vector_actor_ref = self
             .orbit_client
             .actor_reference::<VectorActor>(Key::StringKey {
-                key: format!("table_{}", table_name),
+                key: format!("table_{table_name}"),
             })
             .await
             .map_err(ProtocolError::failed_to_get_actor)?;
 
         // Create vector index
-        let index_name = format!("{}_{}_idx", table_name, column_name);
+        let index_name = format!("{table_name}_{column_name}_idx");
         let index_config = VectorIndexConfig::new(
             index_name,
             384, // Default dimension - should be extracted from table schema
@@ -275,7 +274,7 @@ impl VectorQueryEngine {
         vector_actor_ref
             .invoke::<()>("create_index", vec![config_value])
             .await
-            .map_err(|e| ProtocolError::actor_error(format!("Index creation failed: {}", e)))?;
+            .map_err(|e| ProtocolError::actor_error(format!("Index creation failed: {e}")))?;
 
         Ok(QueryResult::Select {
             columns: vec!["message".to_string()],
@@ -309,7 +308,7 @@ impl VectorQueryEngine {
         let vector_actor_ref = self
             .orbit_client
             .actor_reference::<VectorActor>(Key::StringKey {
-                key: format!("table_{}", table_name),
+                key: format!("table_{table_name}"),
             })
             .await
             .map_err(ProtocolError::failed_to_get_actor)?;
@@ -366,7 +365,7 @@ impl VectorQueryEngine {
                     .invoke::<()>("add_vector", vec![vector_value])
                     .await
                     .map_err(|e| {
-                        ProtocolError::actor_error(format!("Vector insertion failed: {}", e))
+                        ProtocolError::actor_error(format!("Vector insertion failed: {e}"))
                     })?;
             }
         }
@@ -466,7 +465,7 @@ impl VectorQueryEngine {
         let vector_actor_ref = self
             .orbit_client
             .actor_reference::<VectorActor>(Key::StringKey {
-                key: format!("table_{}", table_name),
+                key: format!("table_{table_name}"),
             })
             .await
             .map_err(ProtocolError::failed_to_get_actor)?;
@@ -479,7 +478,7 @@ impl VectorQueryEngine {
         let results: serde_json::Value = vector_actor_ref
             .invoke("search_vectors", vec![search_params_value])
             .await
-            .map_err(|e| ProtocolError::actor_error(format!("Search failed: {}", e)))?;
+            .map_err(|e| ProtocolError::actor_error(format!("Search failed: {e}")))?;
 
         // Convert results to QueryResult
         let mut rows = Vec::new();
@@ -605,9 +604,8 @@ impl VectorQueryEngine {
             .map(|s| s.trim().parse::<f32>())
             .collect();
 
-        components.map_err(|e| {
-            ProtocolError::serialization_error(format!("Invalid vector format: {}", e))
-        })
+        components
+            .map_err(|e| ProtocolError::serialization_error(format!("Invalid vector format: {e}")))
     }
 
     /// Extract vector literal from SQL expression

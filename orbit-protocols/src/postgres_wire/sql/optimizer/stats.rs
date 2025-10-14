@@ -137,7 +137,7 @@ impl StatisticsCollector {
         column_name: &str,
         stats: ColumnStatistics,
     ) {
-        let key = format!("{}.{}", table_name, column_name);
+        let key = format!("{table_name}.{column_name}");
         self.column_stats.insert(key, stats);
     }
 
@@ -147,7 +147,7 @@ impl StatisticsCollector {
         table_name: &str,
         column_name: &str,
     ) -> Option<&ColumnStatistics> {
-        let key = format!("{}.{}", table_name, column_name);
+        let key = format!("{table_name}.{column_name}");
         self.column_stats.get(&key)
     }
 
@@ -287,13 +287,13 @@ impl StatisticsCollector {
 
         for i in 0..bucket_count {
             histogram.push(HistogramBucket {
-                lower_bound: format!("bucket_{}_lower", i),
-                upper_bound: format!("bucket_{}_upper", i),
+                lower_bound: format!("bucket_{i}_lower"),
+                upper_bound: format!("bucket_{i}_upper"),
                 frequency: 1.0 / bucket_count as f64,
             });
         }
 
-        let key = format!("{}.{}", table_name, column_name);
+        let key = format!("{table_name}.{column_name}");
         if let Some(col_stats) = self.column_stats.get_mut(&key) {
             col_stats.histogram = histogram;
         } else {
@@ -381,7 +381,7 @@ impl StatisticsCollector {
         // Export table stats
         for (table_name, stats) in &self.table_stats {
             export.insert(
-                format!("table:{}", table_name),
+                format!("table:{table_name}"),
                 serde_json::json!({
                     "row_count": stats.row_count,
                     "rows_per_page": stats.rows_per_page,

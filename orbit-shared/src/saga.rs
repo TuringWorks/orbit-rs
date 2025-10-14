@@ -206,7 +206,7 @@ impl SagaContext {
         match self.data.get(key) {
             Some(value) => {
                 let typed_value = serde_json::from_value(value.clone()).map_err(|e| {
-                    OrbitError::internal(format!("Failed to deserialize context data: {}", e))
+                    OrbitError::internal(format!("Failed to deserialize context data: {e}"))
                 })?;
                 Ok(Some(typed_value))
             }
@@ -270,8 +270,7 @@ impl SagaDefinition {
             let step_id = &step.metadata().step_id;
             if !step_ids.insert(step_id.clone()) {
                 return Err(OrbitError::internal(format!(
-                    "Duplicate step ID: {}",
-                    step_id
+                    "Duplicate step ID: {step_id}"
                 )));
             }
         }
@@ -468,7 +467,7 @@ impl SagaOrchestrator {
             definitions
                 .get(definition_id)
                 .ok_or_else(|| {
-                    OrbitError::internal(format!("Saga definition not found: {}", definition_id))
+                    OrbitError::internal(format!("Saga definition not found: {definition_id}"))
                 })?
                 .clone()
         };
@@ -762,8 +761,7 @@ impl SagaOrchestrator {
                 Ok(StepResult::RetryableFailure(msg)) => {
                     if retry_count >= max_retries {
                         return Ok(StepResult::PermanentFailure(format!(
-                            "Max retries exceeded: {}",
-                            msg
+                            "Max retries exceeded: {msg}"
                         )));
                     }
 

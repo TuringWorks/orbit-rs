@@ -321,7 +321,7 @@ impl SqlExecutionStrategy for MvccExecutionStrategy {
                 })
             }
             _ => Ok(UnifiedExecutionResult::Other {
-                message: format!("Statement executed: {:?}", statement),
+                message: format!("Statement executed: {statement:?}"),
                 transaction_id: Some(transaction_id),
             }),
         }
@@ -384,7 +384,7 @@ impl MvccExecutionStrategy {
     fn evaluate_expression(&self, expr: &Expression) -> ProtocolResult<SqlValue> {
         match expr {
             Expression::Literal(value) => Ok(value.clone()),
-            Expression::Parameter(num) => Ok(SqlValue::Text(format!("${}", num))),
+            Expression::Parameter(num) => Ok(SqlValue::Text(format!("${num}"))),
             _ => Ok(SqlValue::Text("evaluated_expr".to_string())),
         }
     }
@@ -513,7 +513,7 @@ impl TraditionalExecutionStrategy {
                 transaction_id,
             },
             _ => UnifiedExecutionResult::Other {
-                message: format!("Operation completed: {:?}", result),
+                message: format!("Operation completed: {result:?}"),
                 transaction_id,
             },
         }

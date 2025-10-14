@@ -7,9 +7,10 @@
 use super::{stats::StatisticsCollector, OptimizerConfig};
 use crate::error::ProtocolResult;
 use crate::postgres_wire::sql::ast::{
-    BinaryOperator, ColumnRef, Expression, FromClause, JoinCondition, SelectItem, SelectStatement,
-    Statement, TableName, UnaryOperator,
+    BinaryOperator, Expression, FromClause, SelectStatement, Statement, UnaryOperator,
 };
+#[cfg(test)]
+use crate::postgres_wire::sql::ast::{ColumnRef, JoinCondition, SelectItem, TableName};
 
 /// Cost-based optimizer that uses statistics for optimization decisions
 pub struct CostBasedOptimizer {
@@ -153,7 +154,7 @@ impl CostBasedOptimizer {
         if self.config.enable_join_reorder {
             let before = optimized.clone();
             optimized = self.optimize_join_order(optimized, stats)?;
-            if format!("{:?}", before) != format!("{:?}", optimized) {
+            if format!("{before:?}") != format!("{optimized:?}") {
                 steps.push("Applied cost-based join reordering".to_string());
             }
         }
@@ -161,7 +162,7 @@ impl CostBasedOptimizer {
         // 2. Access method optimization
         let before = optimized.clone();
         optimized = self.optimize_access_methods(optimized, stats)?;
-        if format!("{:?}", before) != format!("{:?}", optimized) {
+        if format!("{before:?}") != format!("{optimized:?}") {
             steps.push("Optimized access methods".to_string());
         }
 
@@ -521,8 +522,8 @@ impl CostBasedOptimizer {
                 return stats.estimate_range_selectivity(
                     table,
                     &col_ref.name,
-                    &format!("{:?}", operator),
-                    &format!("{:?}", val),
+                    &format!("{operator:?}"),
+                    &format!("{val:?}"),
                 );
             }
         }

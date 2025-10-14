@@ -59,8 +59,7 @@ impl AqlGraphRAGEngine {
             "GRAPHRAG_ANALYZE_TRENDS" => self.execute_analyze_trends(args).await,
             "GRAPHRAG_DETECT_COMMUNITIES" => self.execute_detect_communities(args).await,
             _ => Err(ProtocolError::AqlError(format!(
-                "Unknown GraphRAG function: {}",
-                function_name
+                "Unknown GraphRAG function: {function_name}"
             ))),
         }
     }
@@ -113,7 +112,7 @@ impl AqlGraphRAGEngine {
                 key: kg_name.clone(),
             })
             .await
-            .map_err(|e| ProtocolError::AqlError(format!("Actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::AqlError(format!("Actor error: {e}")))?;
 
         // Create document processing request
         let request = GraphRAGDocumentRequest {
@@ -132,7 +131,7 @@ impl AqlGraphRAGEngine {
                 vec![serde_json::to_value(request).unwrap()],
             )
             .await
-            .map_err(|e| ProtocolError::AqlError(format!("Document processing failed: {}", e)))?;
+            .map_err(|e| ProtocolError::AqlError(format!("Document processing failed: {e}")))?;
 
         // Format as AQL result
         let mut result_obj = HashMap::new();
@@ -206,7 +205,7 @@ impl AqlGraphRAGEngine {
                 key: kg_name.clone(),
             })
             .await
-            .map_err(|e| ProtocolError::AqlError(format!("Actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::AqlError(format!("Actor error: {e}")))?;
 
         // Create extraction request
         let request = GraphRAGDocumentRequest {
@@ -225,7 +224,7 @@ impl AqlGraphRAGEngine {
                 vec![serde_json::to_value(request).unwrap()],
             )
             .await
-            .map_err(|e| ProtocolError::AqlError(format!("Entity extraction failed: {}", e)))?;
+            .map_err(|e| ProtocolError::AqlError(format!("Entity extraction failed: {e}")))?;
 
         // Convert entities to AQL format
         let entities: Vec<AqlValue> = result
@@ -310,7 +309,7 @@ impl AqlGraphRAGEngine {
                 key: kg_name.clone(),
             })
             .await
-            .map_err(|e| ProtocolError::AqlError(format!("Actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::AqlError(format!("Actor error: {e}")))?;
 
         // Create GraphRAG query
         let query = GraphRAGQuery {
@@ -327,7 +326,7 @@ impl AqlGraphRAGEngine {
         let result: GraphRAGQueryResult = actor_ref
             .invoke("query_rag", vec![serde_json::to_value(query).unwrap()])
             .await
-            .map_err(|e| ProtocolError::AqlError(format!("RAG query failed: {}", e)))?;
+            .map_err(|e| ProtocolError::AqlError(format!("RAG query failed: {e}")))?;
 
         // Format as AQL result
         let mut result_obj = HashMap::new();
@@ -456,7 +455,7 @@ impl AqlGraphRAGEngine {
                 key: kg_name.clone(),
             })
             .await
-            .map_err(|e| ProtocolError::AqlError(format!("Actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::AqlError(format!("Actor error: {e}")))?;
 
         // Create reasoning query
         let reasoning_query = ReasoningQuery {
@@ -475,7 +474,7 @@ impl AqlGraphRAGEngine {
                 vec![serde_json::to_value(reasoning_query).unwrap()],
             )
             .await
-            .map_err(|e| ProtocolError::AqlError(format!("Reasoning failed: {}", e)))?;
+            .map_err(|e| ProtocolError::AqlError(format!("Reasoning failed: {e}")))?;
 
         // Convert paths to AQL format
         let aql_paths: Vec<AqlValue> = paths
@@ -594,13 +593,13 @@ impl AqlGraphRAGEngine {
                 key: kg_name.clone(),
             })
             .await
-            .map_err(|e| ProtocolError::AqlError(format!("Actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::AqlError(format!("Actor error: {e}")))?;
 
         // Get statistics
         let stats: GraphRAGStats = actor_ref
             .invoke("get_stats", vec![])
             .await
-            .map_err(|e| ProtocolError::AqlError(format!("Failed to get stats: {}", e)))?;
+            .map_err(|e| ProtocolError::AqlError(format!("Failed to get stats: {e}")))?;
 
         // Format as AQL result
         let mut result_obj = HashMap::new();
@@ -824,8 +823,7 @@ impl AqlGraphRAGEngine {
         match arg {
             AqlValue::String(s) => Ok(s.clone()),
             _ => Err(ProtocolError::AqlError(format!(
-                "{} argument must be a string",
-                arg_name
+                "{arg_name} argument must be a string"
             ))),
         }
     }

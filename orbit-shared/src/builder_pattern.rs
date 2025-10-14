@@ -199,28 +199,26 @@ pub mod parsers {
         match s.to_lowercase().as_str() {
             "true" | "1" | "yes" | "on" => Ok(true),
             "false" | "0" | "no" | "off" => Ok(false),
-            _ => Err(format!("Invalid boolean value: {}", s)),
+            _ => Err(format!("Invalid boolean value: {s}")),
         }
     }
 
     /// Parse integer types
     pub fn parse_u32(s: &str) -> Result<u32, String> {
-        s.parse().map_err(|e| format!("Invalid u32: {}", e))
+        s.parse().map_err(|e| format!("Invalid u32: {e}"))
     }
 
     pub fn parse_u64(s: &str) -> Result<u64, String> {
-        s.parse().map_err(|e| format!("Invalid u64: {}", e))
+        s.parse().map_err(|e| format!("Invalid u64: {e}"))
     }
 
     pub fn parse_usize(s: &str) -> Result<usize, String> {
-        s.parse().map_err(|e| format!("Invalid usize: {}", e))
+        s.parse().map_err(|e| format!("Invalid usize: {e}"))
     }
 
     /// Parse duration from milliseconds
     pub fn parse_duration_ms(s: &str) -> Result<Duration, String> {
-        let ms: u64 = s
-            .parse()
-            .map_err(|e| format!("Invalid duration ms: {}", e))?;
+        let ms: u64 = s.parse().map_err(|e| format!("Invalid duration ms: {e}"))?;
         Ok(Duration::from_millis(ms))
     }
 
@@ -228,7 +226,7 @@ pub mod parsers {
     pub fn parse_duration_secs(s: &str) -> Result<Duration, String> {
         let secs: u64 = s
             .parse()
-            .map_err(|e| format!("Invalid duration secs: {}", e))?;
+            .map_err(|e| format!("Invalid duration secs: {e}"))?;
         Ok(Duration::from_secs(secs))
     }
 

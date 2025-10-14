@@ -596,7 +596,7 @@ impl QueryProfiler {
             bottlenecks.push(PerformanceBottleneck {
                 bottleneck_type: BottleneckType::CPU,
                 severity: 8,
-                description: format!("High CPU usage detected (avg: {:.1}%)", avg_cpu),
+                description: format!("High CPU usage detected (avg: {avg_cpu:.1}%)"),
                 affected_operation: "Query execution".to_string(),
                 time_impact: Duration::from_millis(
                     (total_duration.as_millis() as f64 * 0.6) as u64,

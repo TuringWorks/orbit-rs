@@ -296,7 +296,7 @@ impl StreamingQueryExecutor {
                     data.insert("id".to_string(), crate::orbitql::QueryValue::Integer(i));
                     data.insert(
                         "name".to_string(),
-                        crate::orbitql::QueryValue::String(format!("Row {}", i)),
+                        crate::orbitql::QueryValue::String(format!("Row {i}")),
                     );
                     data
                 },
@@ -442,8 +442,7 @@ impl StreamingQueryExecutor {
             Ok(())
         } else {
             Err(OrbitError::execution(format!(
-                "Subscription {} not found",
-                subscription_id
+                "Subscription {subscription_id} not found"
             )))
         }
     }

@@ -135,8 +135,7 @@ impl RedisSpatialCommands {
             "GEO.TS.TRAJECTORY" => self.geo_ts_trajectory(args).await,
 
             _ => Err(SpatialError::OperationError(format!(
-                "Unknown Redis spatial command: {}",
-                command
+                "Unknown Redis spatial command: {command}"
             ))),
         }
     }

@@ -421,8 +421,7 @@ impl TriggerCoordinator {
         // Check for duplicate trigger names on the same table
         if table_triggers.iter().any(|t| t.name == name) {
             return Err(OrbitError::internal(format!(
-                "Trigger '{}' already exists on table '{}'",
-                name, table
+                "Trigger '{name}' already exists on table '{table}'"
             )));
         }
 
@@ -453,14 +452,12 @@ impl TriggerCoordinator {
                 Ok(())
             } else {
                 Err(OrbitError::internal(format!(
-                    "Trigger '{}' not found on table '{}'",
-                    trigger_name, table
+                    "Trigger '{trigger_name}' not found on table '{table}'"
                 )))
             }
         } else {
             Err(OrbitError::internal(format!(
-                "No triggers found for table '{}'",
-                table
+                "No triggers found for table '{table}'"
             )))
         }
     }

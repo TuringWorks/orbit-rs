@@ -190,13 +190,15 @@ impl CoordinateTransformer {
             return Ok(point.clone());
         }
 
-        let _source_crs = self.registry.get(source_srid).ok_or_else(|| {
-            SpatialError::CRSError(format!("Unknown source SRID: {}", source_srid))
-        })?;
+        let _source_crs = self
+            .registry
+            .get(source_srid)
+            .ok_or_else(|| SpatialError::CRSError(format!("Unknown source SRID: {source_srid}")))?;
 
-        let _target_crs = self.registry.get(target_srid).ok_or_else(|| {
-            SpatialError::CRSError(format!("Unknown target SRID: {}", target_srid))
-        })?;
+        let _target_crs = self
+            .registry
+            .get(target_srid)
+            .ok_or_else(|| SpatialError::CRSError(format!("Unknown target SRID: {target_srid}")))?;
 
         // Handle common transformations directly
         match (source_srid, target_srid) {
@@ -209,8 +211,7 @@ impl CoordinateTransformer {
                 self.utm_north_to_wgs84(point, utm_zone)
             }
             _ => Err(SpatialError::CRSError(format!(
-                "Transformation from SRID {} to {} not implemented",
-                source_srid, target_srid
+                "Transformation from SRID {source_srid} to {target_srid} not implemented"
             ))),
         }
     }
@@ -255,10 +256,7 @@ impl CoordinateTransformer {
         let zone = utm_srid - 32600; // Extract UTM zone number
 
         if !(1..=60).contains(&zone) {
-            return Err(SpatialError::CRSError(format!(
-                "Invalid UTM zone: {}",
-                zone
-            )));
+            return Err(SpatialError::CRSError(format!("Invalid UTM zone: {zone}")));
         }
 
         let lon_rad = point.x.to_radians();
@@ -311,10 +309,7 @@ impl CoordinateTransformer {
         let zone = utm_srid - 32600;
 
         if !(1..=60).contains(&zone) {
-            return Err(SpatialError::CRSError(format!(
-                "Invalid UTM zone: {}",
-                zone
-            )));
+            return Err(SpatialError::CRSError(format!("Invalid UTM zone: {zone}")));
         }
 
         // UTM parameters

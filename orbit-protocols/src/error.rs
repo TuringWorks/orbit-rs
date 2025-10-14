@@ -77,67 +77,63 @@ impl From<serde_json::Error> for ProtocolError {
 impl ProtocolError {
     /// Create a "Table does not exist" error
     pub fn table_not_found(table_name: &str) -> Self {
-        ProtocolError::PostgresError(format!("Table '{}' does not exist", table_name))
+        ProtocolError::PostgresError(format!("Table '{table_name}' does not exist"))
     }
 
     /// Create an "Actor error" from any error
     pub fn actor_error<E: std::fmt::Display>(err: E) -> Self {
-        ProtocolError::PostgresError(format!("Actor error: {}", err))
+        ProtocolError::PostgresError(format!("Actor error: {err}"))
     }
 
     /// Create a "Transaction not found" error
     pub fn transaction_not_found<T: std::fmt::Display>(tx_id: T) -> Self {
-        ProtocolError::PostgresError(format!("Transaction {} not found", tx_id))
+        ProtocolError::PostgresError(format!("Transaction {tx_id} not found"))
     }
 
     /// Create a "Failed to get actor" error
     pub fn failed_to_get_actor<E: std::fmt::Display>(err: E) -> Self {
-        ProtocolError::PostgresError(format!("Failed to get actor: {}", err))
+        ProtocolError::PostgresError(format!("Failed to get actor: {err}"))
     }
 
     /// Create a serialization error
     pub fn serialization_error<E: std::fmt::Display>(err: E) -> Self {
-        ProtocolError::PostgresError(format!("Serialization error: {}", err))
+        ProtocolError::PostgresError(format!("Serialization error: {err}"))
     }
 
     /// Create a "Portal not found" error
     pub fn portal_not_found(portal: &str) -> Self {
-        ProtocolError::PostgresError(format!("Portal not found: {}", portal))
+        ProtocolError::PostgresError(format!("Portal not found: {portal}"))
     }
 
     /// Create a "Statement not found" error
     pub fn statement_not_found(statement: &str) -> Self {
-        ProtocolError::PostgresError(format!("Statement not found: {}", statement))
+        ProtocolError::PostgresError(format!("Statement not found: {statement}"))
     }
 
     /// Helper for "already exists" errors
     pub fn already_exists(resource_type: &str, name: &str) -> Self {
-        ProtocolError::PostgresError(format!("{} '{}' already exists", resource_type, name))
+        ProtocolError::PostgresError(format!("{resource_type} '{name}' already exists"))
     }
 
     /// Helper for "does not exist" errors  
     pub fn does_not_exist(resource_type: &str, name: &str) -> Self {
-        ProtocolError::PostgresError(format!("{} '{}' does not exist", resource_type, name))
+        ProtocolError::PostgresError(format!("{resource_type} '{name}' does not exist"))
     }
 
     /// Helper for relation does not exist errors (common in PostgreSQL)
     pub fn relation_not_found(relation_name: &str) -> Self {
-        ProtocolError::PostgresError(format!("Relation '{}' does not exist", relation_name))
+        ProtocolError::PostgresError(format!("Relation '{relation_name}' does not exist"))
     }
 
     /// Helper for column not found errors
     pub fn column_not_found(column_name: &str, table_name: &str) -> Self {
         ProtocolError::PostgresError(format!(
-            "Column '{}' does not exist in table '{}'",
-            column_name, table_name
+            "Column '{column_name}' does not exist in table '{table_name}'"
         ))
     }
 
     /// Helper for "not implemented" errors
     pub fn not_implemented(feature_type: &str, feature_name: &str) -> Self {
-        ProtocolError::PostgresError(format!(
-            "{} '{}' not implemented",
-            feature_type, feature_name
-        ))
+        ProtocolError::PostgresError(format!("{feature_type} '{feature_name}' not implemented"))
     }
 }

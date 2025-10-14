@@ -28,7 +28,7 @@ where
     fn to_orbit_error(self, context: &str) -> Result<T, OrbitError> {
         self.map_err(|e| {
             let orbit_error: OrbitError = e.into();
-            OrbitError::internal(format!("{}: {}", context, orbit_error))
+            OrbitError::internal(format!("{context}: {orbit_error}"))
         })
     }
 
@@ -133,8 +133,7 @@ impl SecurityValidator for String {
         for pattern in &dangerous_patterns {
             if upper_self.contains(pattern) {
                 return Err(OrbitError::internal(format!(
-                    "Input contains potentially dangerous SQL pattern: {}",
-                    pattern
+                    "Input contains potentially dangerous SQL pattern: {pattern}"
                 )));
             }
         }
@@ -157,8 +156,7 @@ impl SecurityValidator for String {
         for pattern in &dangerous_patterns {
             if lower_self.contains(pattern) {
                 return Err(OrbitError::internal(format!(
-                    "Input contains potentially dangerous XSS pattern: {}",
-                    pattern
+                    "Input contains potentially dangerous XSS pattern: {pattern}"
                 )));
             }
         }
@@ -180,12 +178,11 @@ impl SecurityValidator for String {
         use regex::Regex;
 
         let regex = Regex::new(allowed_pattern)
-            .map_err(|e| OrbitError::internal(format!("Invalid regex pattern: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("Invalid regex pattern: {e}")))?;
 
         if !regex.is_match(self) {
             return Err(OrbitError::internal(format!(
-                "Input contains invalid characters. Allowed pattern: {}",
-                allowed_pattern
+                "Input contains invalid characters. Allowed pattern: {allowed_pattern}"
             )));
         }
         Ok(())

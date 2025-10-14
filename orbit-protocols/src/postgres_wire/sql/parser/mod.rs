@@ -89,7 +89,7 @@ impl SqlParser {
             Some(Token::Savepoint) => self.parse_savepoint_statement(),
 
             Some(token) => Err(ParseError {
-                message: format!("Unexpected token at start of statement: {:?}", token),
+                message: format!("Unexpected token at start of statement: {token:?}"),
                 position: self.position,
                 expected: vec![
                     "CREATE".to_string(),
@@ -138,7 +138,7 @@ impl SqlParser {
                 Ok(())
             } else {
                 Err(ParseError {
-                    message: format!("Expected {:?}, found {:?}", expected, token),
+                    message: format!("Expected {expected:?}, found {token:?}"),
                     position: self.position,
                     expected: vec![format!("{:?}", expected)],
                     found: Some(token.clone()),
@@ -146,7 +146,7 @@ impl SqlParser {
             }
         } else {
             Err(ParseError {
-                message: format!("Expected {:?}, found EOF", expected),
+                message: format!("Expected {expected:?}, found EOF"),
                 position: self.position,
                 expected: vec![format!("{:?}", expected)],
                 found: None,
@@ -177,7 +177,7 @@ impl SqlParser {
             Some(Token::Extension) => ddl::parse_create_extension(self),
 
             Some(token) => Err(ParseError {
-                message: format!("Unexpected token after CREATE: {:?}", token),
+                message: format!("Unexpected token after CREATE: {token:?}"),
                 position: self.position,
                 expected: vec![
                     "TABLE".to_string(),
@@ -206,7 +206,7 @@ impl SqlParser {
             Some(Token::Table) => ddl::parse_alter_table(self),
 
             Some(token) => Err(ParseError {
-                message: format!("Unexpected token after ALTER: {:?}", token),
+                message: format!("Unexpected token after ALTER: {token:?}"),
                 position: self.position,
                 expected: vec!["TABLE".to_string()],
                 found: Some(token.clone()),
@@ -233,7 +233,7 @@ impl SqlParser {
             Some(Token::Extension) => ddl::parse_drop_extension(self),
 
             Some(token) => Err(ParseError {
-                message: format!("Unexpected token after DROP: {:?}", token),
+                message: format!("Unexpected token after DROP: {token:?}"),
                 position: self.position,
                 expected: vec![
                     "TABLE".to_string(),

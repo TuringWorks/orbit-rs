@@ -809,7 +809,7 @@ impl QueryCacheManager {
             access_count: 1,
             size_bytes: estimated_size,
             ttl: self.config.cache_ttl,
-            tags: HashSet::from([format!("table:{}", table_name)]),
+            tags: HashSet::from([format!("table:{table_name}")]),
         };
 
         cache.table_metadata.insert(table_name, entry);
@@ -888,7 +888,7 @@ impl QueryCacheManager {
 
     fn calculate_query_hash(&self, query: &Statement) -> QueryHash {
         let mut hasher = DefaultHasher::new();
-        format!("{:?}", query).hash(&mut hasher);
+        format!("{query:?}").hash(&mut hasher);
         hasher.finish()
     }
 
@@ -900,7 +900,7 @@ impl QueryCacheManager {
             if !select.from.is_empty() {
                 for from_clause in &select.from {
                     if let crate::orbitql::ast::FromClause::Table { name, .. } = from_clause {
-                        tags.insert(format!("table:{}", name));
+                        tags.insert(format!("table:{name}"));
                     }
                 }
             }
@@ -1070,11 +1070,11 @@ pub enum CacheError {
 impl std::fmt::Display for CacheError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            CacheError::ResultTooLarge(size) => write!(f, "Result too large: {} bytes", size),
-            CacheError::SerializationError(msg) => write!(f, "Serialization error: {}", msg),
-            CacheError::NetworkError(msg) => write!(f, "Network error: {}", msg),
-            CacheError::InvalidationError(msg) => write!(f, "Invalidation error: {}", msg),
-            CacheError::ConsistencyError(msg) => write!(f, "Consistency error: {}", msg),
+            CacheError::ResultTooLarge(size) => write!(f, "Result too large: {size} bytes"),
+            CacheError::SerializationError(msg) => write!(f, "Serialization error: {msg}"),
+            CacheError::NetworkError(msg) => write!(f, "Network error: {msg}"),
+            CacheError::InvalidationError(msg) => write!(f, "Invalidation error: {msg}"),
+            CacheError::ConsistencyError(msg) => write!(f, "Consistency error: {msg}"),
         }
     }
 }

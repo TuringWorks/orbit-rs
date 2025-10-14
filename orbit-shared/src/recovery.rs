@@ -220,7 +220,7 @@ impl TransactionRecoveryManager {
 
         // Persist checkpoint to log
         let _checkpoint_data = serde_json::to_value(&checkpoint)
-            .map_err(|e| OrbitError::internal(format!("Failed to serialize checkpoint: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("Failed to serialize checkpoint: {e}")))?;
 
         // This would ideally be stored in a dedicated recovery log
         debug!(
@@ -517,85 +517,142 @@ impl TransactionRecoveryManager {
             transactions.len()
         );
 
-        // Notify event handlers
+        // Notify event handlers about coordinator election
+        self.notify_coordinator_elected().await;
+
+        // Process all transactions
+        self.process_coordinator_transactions(transactions).await;
+
+        Ok(())
+    }
+
+    /// Notify event handlers about coordinator election
+    async fn notify_coordinator_elected(&self) {
         let handlers = self.event_handlers.read().await;
         for handler in handlers.iter() {
             if let Err(e) = handler.on_coordinator_elected(&self.node_id).await {
                 error!("Recovery event handler failed: {}", e);
             }
         }
+    }
 
-        // Process each transaction
+    /// Process all transactions under coordinator supervision
+    async fn process_coordinator_transactions(&self, transactions: Vec<TransactionCheckpoint>) {
         for checkpoint in transactions {
             let transaction_id = checkpoint.transaction_id.clone();
-            if let Err(e) = self.recover_transaction(checkpoint).await {
-                error!("Failed to recover transaction {}: {}", transaction_id, e);
-
-                let mut stats = self.stats.write().await;
-                stats.failed_recoveries += 1;
-            } else {
-                let mut stats = self.stats.write().await;
-                stats.successful_recoveries += 1;
-                stats.transactions_recovered += 1;
+            match self.recover_transaction(checkpoint).await {
+                Ok(()) => {
+                    self.update_recovery_success_stats(&transaction_id).await;
+                }
+                Err(e) => {
+                    self.handle_recovery_failure(&transaction_id, e).await;
+                }
             }
-
-            let mut stats = self.stats.write().await;
-            stats.total_recoveries += 1;
+            self.increment_total_recoveries().await;
         }
+    }
 
-        Ok(())
+    /// Update statistics for successful recovery
+    async fn update_recovery_success_stats(&self, _transaction_id: &TransactionId) {
+        let mut stats = self.stats.write().await;
+        stats.successful_recoveries += 1;
+        stats.transactions_recovered += 1;
+    }
+
+    /// Handle recovery failure and update statistics
+    async fn handle_recovery_failure(
+        &self,
+        transaction_id: &TransactionId,
+        error: crate::OrbitError,
+    ) {
+        error!(
+            "Failed to recover transaction {}: {}",
+            transaction_id, error
+        );
+        let mut stats = self.stats.write().await;
+        stats.failed_recoveries += 1;
+    }
+
+    /// Increment total recoveries counter
+    async fn increment_total_recoveries(&self) {
+        let mut stats = self.stats.write().await;
+        stats.total_recoveries += 1;
     }
 
     /// Recover a single transaction
     async fn recover_transaction(&self, checkpoint: TransactionCheckpoint) -> OrbitResult<()> {
         info!("Recovering transaction: {}", checkpoint.transaction_id);
 
-        // Notify event handlers
+        // Notify handlers about recovery start
+        self.notify_recovery_start(&checkpoint.transaction_id).await;
+
+        // Execute the appropriate recovery strategy
+        let success = self
+            .execute_transaction_recovery_strategy(&checkpoint)
+            .await?;
+
+        // Notify handlers about recovery completion
+        self.notify_recovery_complete(&checkpoint.transaction_id, success)
+            .await;
+
+        Ok(())
+    }
+
+    /// Notify event handlers about recovery start
+    async fn notify_recovery_start(&self, transaction_id: &TransactionId) {
         let handlers = self.event_handlers.read().await;
         for handler in handlers.iter() {
-            if let Err(e) = handler.on_recovery_start(&checkpoint.transaction_id).await {
+            if let Err(e) = handler.on_recovery_start(transaction_id).await {
                 error!("Recovery event handler failed: {}", e);
             }
         }
+    }
 
-        let success = match checkpoint.current_state {
+    /// Notify event handlers about recovery completion
+    async fn notify_recovery_complete(&self, transaction_id: &TransactionId, success: bool) {
+        let handlers = self.event_handlers.read().await;
+        for handler in handlers.iter() {
+            if let Err(e) = handler.on_recovery_complete(transaction_id, success).await {
+                error!("Recovery event handler failed: {}", e);
+            }
+        }
+    }
+
+    /// Execute the appropriate recovery strategy based on transaction state
+    async fn execute_transaction_recovery_strategy(
+        &self,
+        checkpoint: &TransactionCheckpoint,
+    ) -> OrbitResult<bool> {
+        match checkpoint.current_state {
             TransactionState::Preparing => {
                 // Transaction was in prepare phase - need to determine if we should commit or abort
-                self.recover_preparing_transaction(&checkpoint).await?
+                self.recover_preparing_transaction(checkpoint).await
             }
             TransactionState::Prepared => {
                 // All participants voted yes - should commit
-                self.recover_prepared_transaction(&checkpoint).await?
+                self.recover_prepared_transaction(checkpoint).await
             }
             TransactionState::Committing => {
                 // Transaction was committing - continue commit
-                self.recover_committing_transaction(&checkpoint).await?
+                self.recover_committing_transaction(checkpoint).await
             }
             TransactionState::Aborting => {
                 // Transaction was aborting - continue abort
-                self.recover_aborting_transaction(&checkpoint).await?
+                self.recover_aborting_transaction(checkpoint).await
             }
             _ => {
-                debug!(
-                    "Transaction {} is in non-recoverable state: {:?}",
-                    checkpoint.transaction_id, checkpoint.current_state
-                );
-                true
-            }
-        };
-
-        // Notify event handlers
-        let handlers = self.event_handlers.read().await;
-        for handler in handlers.iter() {
-            if let Err(e) = handler
-                .on_recovery_complete(&checkpoint.transaction_id, success)
-                .await
-            {
-                error!("Recovery event handler failed: {}", e);
+                self.handle_non_recoverable_transaction(checkpoint);
+                Ok(true)
             }
         }
+    }
 
-        Ok(())
+    /// Handle non-recoverable transaction states
+    fn handle_non_recoverable_transaction(&self, checkpoint: &TransactionCheckpoint) {
+        debug!(
+            "Transaction {} is in non-recoverable state: {:?}",
+            checkpoint.transaction_id, checkpoint.current_state
+        );
     }
 
     /// Recover transaction in preparing state

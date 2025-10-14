@@ -878,8 +878,7 @@ impl DistributedQueryExecutor {
             Ok(())
         } else {
             Err(OrbitError::execution(format!(
-                "Execution {} not found",
-                execution_id
+                "Execution {execution_id} not found"
             )))
         }
     }

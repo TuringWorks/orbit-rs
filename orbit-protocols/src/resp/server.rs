@@ -61,7 +61,7 @@ impl RespServer {
 
                     let response = handler.handle_command(command).await.unwrap_or_else(|e| {
                         error!("Command error: {}", e);
-                        RespValue::error(format!("ERR {}", e))
+                        RespValue::error(format!("ERR {e}"))
                     });
 
                     if let Err(e) = framed.send(response).await {

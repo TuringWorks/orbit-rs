@@ -62,8 +62,7 @@ impl BoltGraphRAGProcedures {
             "orbit.graphrag.processdocuments" => self.execute_process_documents(args).await,
             "orbit.graphrag.streamentities" => self.execute_stream_entities(args).await,
             _ => Err(ProtocolError::CypherError(format!(
-                "Unknown GraphRAG procedure: {}",
-                procedure_name
+                "Unknown GraphRAG procedure: {procedure_name}"
             ))),
         }
     }
@@ -112,7 +111,7 @@ impl BoltGraphRAGProcedures {
                 key: kg_name.clone(),
             })
             .await
-            .map_err(|e| ProtocolError::CypherError(format!("Actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::CypherError(format!("Actor error: {e}")))?;
 
         // Create document processing request
         let request = GraphRAGDocumentRequest {
@@ -131,9 +130,7 @@ impl BoltGraphRAGProcedures {
                 vec![serde_json::to_value(request).unwrap()],
             )
             .await
-            .map_err(|e| {
-                ProtocolError::CypherError(format!("Document processing failed: {}", e))
-            })?;
+            .map_err(|e| ProtocolError::CypherError(format!("Document processing failed: {e}")))?;
 
         // Format as Cypher result
         let columns = vec![
@@ -189,7 +186,7 @@ impl BoltGraphRAGProcedures {
                 key: kg_name.clone(),
             })
             .await
-            .map_err(|e| ProtocolError::CypherError(format!("Actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::CypherError(format!("Actor error: {e}")))?;
 
         // Create extraction request
         let request = GraphRAGDocumentRequest {
@@ -208,7 +205,7 @@ impl BoltGraphRAGProcedures {
                 vec![serde_json::to_value(request).unwrap()],
             )
             .await
-            .map_err(|e| ProtocolError::CypherError(format!("Entity extraction failed: {}", e)))?;
+            .map_err(|e| ProtocolError::CypherError(format!("Entity extraction failed: {e}")))?;
 
         // Format as Cypher result with multiple rows (one per entity)
         let columns = vec![
@@ -280,7 +277,7 @@ impl BoltGraphRAGProcedures {
                 key: kg_name.clone(),
             })
             .await
-            .map_err(|e| ProtocolError::CypherError(format!("Actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::CypherError(format!("Actor error: {e}")))?;
 
         // Create GraphRAG query
         let query = GraphRAGQuery {
@@ -297,7 +294,7 @@ impl BoltGraphRAGProcedures {
         let result: GraphRAGQueryResult = actor_ref
             .invoke("query_rag", vec![serde_json::to_value(query).unwrap()])
             .await
-            .map_err(|e| ProtocolError::CypherError(format!("RAG query failed: {}", e)))?;
+            .map_err(|e| ProtocolError::CypherError(format!("RAG query failed: {e}")))?;
 
         // Format as Cypher result
         let columns = vec![
@@ -362,7 +359,7 @@ impl BoltGraphRAGProcedures {
                 key: kg_name.clone(),
             })
             .await
-            .map_err(|e| ProtocolError::CypherError(format!("Actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::CypherError(format!("Actor error: {e}")))?;
 
         // Create reasoning query
         let reasoning_query = ReasoningQuery {
@@ -381,7 +378,7 @@ impl BoltGraphRAGProcedures {
                 vec![serde_json::to_value(reasoning_query).unwrap()],
             )
             .await
-            .map_err(|e| ProtocolError::CypherError(format!("Reasoning failed: {}", e)))?;
+            .map_err(|e| ProtocolError::CypherError(format!("Reasoning failed: {e}")))?;
 
         // Format as Cypher result - one row per path
         let columns = vec![
@@ -455,7 +452,7 @@ impl BoltGraphRAGProcedures {
         ];
 
         let _rows = [vec![
-            Some(format!("Similar to {}", entity)),
+            Some(format!("Similar to {entity}")),
             Some("0.0".to_string()),
             Some("{}".to_string()),
         ]];
@@ -521,13 +518,13 @@ impl BoltGraphRAGProcedures {
                 key: kg_name.clone(),
             })
             .await
-            .map_err(|e| ProtocolError::CypherError(format!("Actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::CypherError(format!("Actor error: {e}")))?;
 
         // Get statistics
         let stats: GraphRAGStats = actor_ref
             .invoke("get_stats", vec![])
             .await
-            .map_err(|e| ProtocolError::CypherError(format!("Failed to get stats: {}", e)))?;
+            .map_err(|e| ProtocolError::CypherError(format!("Failed to get stats: {e}")))?;
 
         // Format as Cypher result
         let columns = vec![
@@ -778,8 +775,7 @@ impl BoltGraphRAGProcedures {
         match arg {
             JsonValue::String(s) => Ok(s.clone()),
             _ => Err(ProtocolError::CypherError(format!(
-                "{} argument must be a string",
-                arg_name
+                "{arg_name} argument must be a string"
             ))),
         }
     }

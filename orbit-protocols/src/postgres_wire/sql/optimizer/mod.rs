@@ -407,14 +407,14 @@ impl QueryOptimizer {
     pub fn explain_optimization(&mut self, statement: Statement) -> ProtocolResult<Vec<String>> {
         let mut steps = Vec::new();
 
-        steps.push(format!("Original query: {:#?}", statement));
+        steps.push(format!("Original query: {statement:#?}"));
 
         // Rule-based optimization steps
         if self.config.enable_rule_based {
             let (optimized, rule_steps) =
                 self.rule_optimizer.optimize_with_steps(statement.clone())?;
             steps.extend(rule_steps);
-            steps.push(format!("After rule-based optimization: {:#?}", optimized));
+            steps.push(format!("After rule-based optimization: {optimized:#?}"));
         }
 
         // Cost-based optimization steps
@@ -429,7 +429,7 @@ impl QueryOptimizer {
                 .cost_optimizer
                 .optimize_with_steps(statement, &self.stats)?;
             steps.extend(cost_steps);
-            steps.push(format!("After cost-based optimization: {:#?}", optimized));
+            steps.push(format!("After cost-based optimization: {optimized:#?}"));
         }
 
         Ok(steps)
@@ -464,7 +464,7 @@ impl QueryOptimizer {
 
         if costs {
             let total_cost = self.estimate_plan_cost(&plan);
-            output.push_str(&format!("\n\nTotal Estimated Cost: {:.2}\n", total_cost));
+            output.push_str(&format!("\n\nTotal Estimated Cost: {total_cost:.2}\n"));
         }
 
         Ok(output)
@@ -486,13 +486,11 @@ impl QueryOptimizer {
         if costs {
             let node_cost = self.estimate_node_cost(plan);
             output.push_str(&format!(
-                "{}-> {} (cost={:.2}, rows={})\n",
-                prefix, description, node_cost, estimated_rows
+                "{prefix}-> {description} (cost={node_cost:.2}, rows={estimated_rows})\n"
             ));
         } else {
             output.push_str(&format!(
-                "{}-> {} (rows={})\n",
-                prefix, description, estimated_rows
+                "{prefix}-> {description} (rows={estimated_rows})\n"
             ));
         }
 
@@ -541,14 +539,14 @@ impl QueryOptimizer {
                 projection,
                 ..
             } => {
-                output.push_str(&format!("{}Table: {}\n", prefix, table));
+                output.push_str(&format!("{prefix}Table: {table}\n"));
                 output.push_str(&format!(
                     "{}Projection: {}\n",
                     prefix,
                     projection.join(", ")
                 ));
                 if let Some(f) = filter {
-                    output.push_str(&format!("{}Filter: {:?}\n", prefix, f));
+                    output.push_str(&format!("{prefix}Filter: {f:?}\n"));
                 }
             }
             planner::ExecutionPlan::IndexScan {
@@ -557,10 +555,10 @@ impl QueryOptimizer {
                 filter,
                 ..
             } => {
-                output.push_str(&format!("{}Table: {}\n", prefix, table));
-                output.push_str(&format!("{}Index: {}\n", prefix, index));
+                output.push_str(&format!("{prefix}Table: {table}\n"));
+                output.push_str(&format!("{prefix}Index: {index}\n"));
                 if let Some(f) = filter {
-                    output.push_str(&format!("{}Filter: {:?}\n", prefix, f));
+                    output.push_str(&format!("{prefix}Filter: {f:?}\n"));
                 }
             }
             _ => {}

@@ -103,7 +103,7 @@ impl KafkaCdcConsumer {
     /// Serialize CDC event to Kafka message
     fn serialize_event(&self, event: &CdcEvent) -> OrbitResult<Vec<u8>> {
         serde_json::to_vec(event).map_err(|e| {
-            OrbitError::internal(format!("Failed to serialize CDC event for Kafka: {}", e))
+            OrbitError::internal(format!("Failed to serialize CDC event for Kafka: {e}"))
         })
     }
 
@@ -246,7 +246,7 @@ impl CdcConsumer for RabbitMqCdcConsumer {
 
         // Serialize event
         let payload = serde_json::to_vec(event).map_err(|e| {
-            OrbitError::internal(format!("Failed to serialize CDC event for RabbitMQ: {}", e))
+            OrbitError::internal(format!("Failed to serialize CDC event for RabbitMQ: {e}"))
         })?;
 
         // In a real implementation, we would publish to RabbitMQ here
@@ -365,7 +365,7 @@ impl CdcConsumer for WebhookCdcConsumer {
 
         // Serialize event
         let payload = serde_json::to_vec(event).map_err(|e| {
-            OrbitError::internal(format!("Failed to serialize CDC event for webhook: {}", e))
+            OrbitError::internal(format!("Failed to serialize CDC event for webhook: {e}"))
         })?;
 
         // In a real implementation, we would make HTTP request here with retries

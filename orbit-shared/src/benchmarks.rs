@@ -200,8 +200,7 @@ impl BenchmarkSuite {
             if fastest.ops_per_sec > 0.0 && slowest.ops_per_sec > 0.0 {
                 let ratio = fastest.ops_per_sec / slowest.ops_per_sec;
                 report.push_str(&format!(
-                    "- **Performance ratio**: {:.2}x difference\n",
-                    ratio
+                    "- **Performance ratio**: {ratio:.2}x difference\n"
                 ));
             }
         }
@@ -299,7 +298,7 @@ impl StandardBenchmarks {
             .benchmark_sync("string_concatenation", 5000, || {
                 let s1 = "Hello";
                 let s2 = "World";
-                let _result = format!("{} {}", s1, s2);
+                let _result = format!("{s1} {s2}");
                 Ok(())
             })
             .await?;

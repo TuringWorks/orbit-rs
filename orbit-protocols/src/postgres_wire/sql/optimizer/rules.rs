@@ -341,12 +341,12 @@ impl RuleBasedOptimizer {
     fn statements_equal(&self, a: &Statement, b: &Statement) -> bool {
         // For now, use debug formatting comparison
         // In a real implementation, would use proper AST comparison
-        format!("{:?}", a) == format!("{:?}", b)
+        format!("{a:?}") == format!("{b:?}")
     }
 
     /// Check if two SELECT statements are equal
     fn select_statements_equal(&self, a: &SelectStatement, b: &SelectStatement) -> bool {
-        format!("{:?}", a) == format!("{:?}", b)
+        format!("{a:?}") == format!("{b:?}")
     }
 }
 

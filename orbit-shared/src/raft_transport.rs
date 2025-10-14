@@ -69,7 +69,7 @@ impl GrpcRaftTransport {
         let address = {
             let addresses = self.node_addresses.read().await;
             addresses.get(target_node).cloned().ok_or_else(|| {
-                OrbitError::cluster(format!("Address not found for node: {}", target_node))
+                OrbitError::cluster(format!("Address not found for node: {target_node}"))
             })?
         };
 
@@ -79,12 +79,12 @@ impl GrpcRaftTransport {
         let channel = tokio::time::timeout(
             self.connection_timeout,
             tonic::transport::Endpoint::from_shared(address.clone())
-                .map_err(|e| OrbitError::internal(format!("Invalid endpoint: {}", e)))?
+                .map_err(|e| OrbitError::internal(format!("Invalid endpoint: {e}")))?
                 .connect(),
         )
         .await
-        .map_err(|_| OrbitError::timeout(format!("Connection timeout to {}", address)))?
-        .map_err(|e| OrbitError::network(format!("Connection failed to {}: {}", address, e)))?;
+        .map_err(|_| OrbitError::timeout(format!("Connection timeout to {address}")))?
+        .map_err(|e| OrbitError::network(format!("Connection failed to {address}: {e}")))?;
 
         let client = RaftConsensusClient::new(channel);
 
@@ -151,16 +151,14 @@ impl RaftTransport for GrpcRaftTransport {
                 warn!("Vote request to {} failed: {}", target, status);
                 self.remove_client(target).await;
                 Err(OrbitError::network(format!(
-                    "Vote request failed: {}",
-                    status
+                    "Vote request failed: {status}"
                 )))
             }
             Err(_) => {
                 warn!("Vote request to {} timed out", target);
                 self.remove_client(target).await;
                 Err(OrbitError::timeout(format!(
-                    "Vote request timeout to {}",
-                    target
+                    "Vote request timeout to {target}"
                 )))
             }
         }
@@ -210,16 +208,14 @@ impl RaftTransport for GrpcRaftTransport {
                 warn!("Append entries to {} failed: {}", target, status);
                 self.remove_client(target).await;
                 Err(OrbitError::network(format!(
-                    "Append entries failed: {}",
-                    status
+                    "Append entries failed: {status}"
                 )))
             }
             Err(_) => {
                 warn!("Append entries to {} timed out", target);
                 self.remove_client(target).await;
                 Err(OrbitError::timeout(format!(
-                    "Append entries timeout to {}",
-                    target
+                    "Append entries timeout to {target}"
                 )))
             }
         }
@@ -314,7 +310,7 @@ impl RaftConsensusService for GrpcRaftHandler {
             }
             Err(e) => {
                 error!("Failed to handle vote request: {}", e);
-                Err(Status::internal(format!("Vote request failed: {}", e)))
+                Err(Status::internal(format!("Vote request failed: {e}")))
             }
         }
     }
@@ -362,7 +358,7 @@ impl RaftConsensusService for GrpcRaftHandler {
             }
             Err(e) => {
                 error!("Failed to handle append entries: {}", e);
-                Err(Status::internal(format!("Append entries failed: {}", e)))
+                Err(Status::internal(format!("Append entries failed: {e}")))
             }
         }
     }
@@ -378,7 +374,7 @@ pub async fn start_raft_server(
 
     let addr = bind_address
         .parse()
-        .map_err(|e| OrbitError::configuration(format!("Invalid bind address: {}", e)))?;
+        .map_err(|e| OrbitError::configuration(format!("Invalid bind address: {e}")))?;
 
     info!("Starting Raft gRPC server on {}", addr);
 
@@ -386,7 +382,7 @@ pub async fn start_raft_server(
         .add_service(server)
         .serve(addr)
         .await
-        .map_err(|e| OrbitError::network(format!("Failed to start Raft server: {}", e)))?;
+        .map_err(|e| OrbitError::network(format!("Failed to start Raft server: {e}")))?;
 
     Ok(())
 }

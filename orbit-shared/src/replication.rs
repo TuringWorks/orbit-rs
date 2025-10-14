@@ -129,8 +129,7 @@ impl ReplicationSlotManager {
 
         if slots.contains_key(&name) {
             return Err(OrbitError::internal(format!(
-                "Replication slot '{}' already exists",
-                name
+                "Replication slot '{name}' already exists"
             )));
         }
 
@@ -173,7 +172,7 @@ impl ReplicationSlotManager {
             Ok(())
         } else {
             Err(OrbitError::AddressableNotFound {
-                reference: format!("Replication slot '{}'", name),
+                reference: format!("Replication slot '{name}'"),
             })
         }
     }
@@ -198,7 +197,7 @@ impl ReplicationSlotManager {
             Ok(())
         } else {
             Err(OrbitError::AddressableNotFound {
-                reference: format!("Replication slot '{}'", name),
+                reference: format!("Replication slot '{name}'"),
             })
         }
     }
@@ -225,7 +224,7 @@ impl ReplicationSlotManager {
             self.get_slot(slot_name)
                 .await
                 .ok_or_else(|| OrbitError::AddressableNotFound {
-                    reference: format!("Replication slot '{}'", slot_name),
+                    reference: format!("Replication slot '{slot_name}'"),
                 })?;
 
         // Return events with LSN greater than slot's confirmed position
@@ -274,7 +273,7 @@ impl ReplicationSlotManager {
             self.get_slot(slot_name)
                 .await
                 .ok_or_else(|| OrbitError::AddressableNotFound {
-                    reference: format!("Replication slot '{}'", slot_name),
+                    reference: format!("Replication slot '{slot_name}'"),
                 })?;
 
         let current = self.current_lsn().await;

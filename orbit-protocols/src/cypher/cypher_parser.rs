@@ -276,8 +276,7 @@ impl TokenParser {
                 Ok(())
             }
             Some(token) => Err(ProtocolError::CypherError(format!(
-                "Expected {:?}, found {:?}",
-                expected, token
+                "Expected {expected:?}, found {token:?}"
             ))),
             None => Err(ProtocolError::CypherError(
                 "Unexpected end of query".to_string(),
@@ -304,8 +303,7 @@ impl TokenParser {
                 }
                 Some(token) => {
                     return Err(ProtocolError::CypherError(format!(
-                        "Unexpected token: {:?}",
-                        token
+                        "Unexpected token: {token:?}"
                     )));
                 }
                 None => break,
@@ -436,10 +434,7 @@ impl TokenParser {
                         if let Ok(int_val) = n.parse::<i64>() {
                             serde_json::Value::Number(serde_json::Number::from(int_val))
                         } else {
-                            return Err(ProtocolError::CypherError(format!(
-                                "Invalid number: {}",
-                                n
-                            )));
+                            return Err(ProtocolError::CypherError(format!("Invalid number: {n}")));
                         }
                     }
                     _ => {

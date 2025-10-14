@@ -56,7 +56,7 @@ impl JsonbBinary {
         // Verify magic bytes
         let mut magic = [0u8; 5];
         cursor.read_exact(&mut magic).map_err(|e| {
-            JsonbError::SerializationError(format!("Failed to read magic bytes: {}", e))
+            JsonbError::SerializationError(format!("Failed to read magic bytes: {e}"))
         })?;
 
         if magic != JSONB_MAGIC {
@@ -67,9 +67,9 @@ impl JsonbBinary {
 
         // Read version
         let mut version = [0u8; 1];
-        cursor.read_exact(&mut version).map_err(|e| {
-            JsonbError::SerializationError(format!("Failed to read version: {}", e))
-        })?;
+        cursor
+            .read_exact(&mut version)
+            .map_err(|e| JsonbError::SerializationError(format!("Failed to read version: {e}")))?;
 
         if version[0] != JSONB_VERSION {
             return Err(JsonbError::SerializationError(format!(
@@ -155,9 +155,9 @@ impl JsonbBinary {
     /// Deserialize a JsonbValue from the cursor
     fn deserialize_value(cursor: &mut Cursor<&Vec<u8>>) -> JsonbResult<JsonbValue> {
         let mut type_tag = [0u8; 1];
-        cursor.read_exact(&mut type_tag).map_err(|e| {
-            JsonbError::SerializationError(format!("Failed to read type tag: {}", e))
-        })?;
+        cursor
+            .read_exact(&mut type_tag)
+            .map_err(|e| JsonbError::SerializationError(format!("Failed to read type tag: {e}")))?;
 
         match type_tag[0] {
             0x00 => Ok(JsonbValue::Null),
@@ -166,7 +166,7 @@ impl JsonbBinary {
             0x03 => {
                 let mut bytes = [0u8; 8];
                 cursor.read_exact(&mut bytes).map_err(|e| {
-                    JsonbError::SerializationError(format!("Failed to read number: {}", e))
+                    JsonbError::SerializationError(format!("Failed to read number: {e}"))
                 })?;
                 Ok(JsonbValue::Number(f64::from_le_bytes(bytes)))
             }
@@ -174,10 +174,10 @@ impl JsonbBinary {
                 let length = Self::read_length(cursor)?;
                 let mut bytes = vec![0u8; length];
                 cursor.read_exact(&mut bytes).map_err(|e| {
-                    JsonbError::SerializationError(format!("Failed to read string: {}", e))
+                    JsonbError::SerializationError(format!("Failed to read string: {e}"))
                 })?;
                 let s = String::from_utf8(bytes).map_err(|e| {
-                    JsonbError::SerializationError(format!("Invalid UTF-8 string: {}", e))
+                    JsonbError::SerializationError(format!("Invalid UTF-8 string: {e}"))
                 })?;
                 Ok(JsonbValue::String(s))
             }
@@ -197,10 +197,10 @@ impl JsonbBinary {
                     let key_length = Self::read_length(cursor)?;
                     let mut key_bytes = vec![0u8; key_length];
                     cursor.read_exact(&mut key_bytes).map_err(|e| {
-                        JsonbError::SerializationError(format!("Failed to read object key: {}", e))
+                        JsonbError::SerializationError(format!("Failed to read object key: {e}"))
                     })?;
                     let key = String::from_utf8(key_bytes).map_err(|e| {
-                        JsonbError::SerializationError(format!("Invalid UTF-8 key: {}", e))
+                        JsonbError::SerializationError(format!("Invalid UTF-8 key: {e}"))
                     })?;
                     // Read value
                     let value = Self::deserialize_value(cursor)?;
@@ -234,7 +234,7 @@ impl JsonbBinary {
         let mut first_byte = [0u8; 1];
         cursor
             .read_exact(&mut first_byte)
-            .map_err(|e| JsonbError::SerializationError(format!("Failed to read length: {}", e)))?;
+            .map_err(|e| JsonbError::SerializationError(format!("Failed to read length: {e}")))?;
 
         let first = first_byte[0];
         if first < 0x80 {
@@ -242,13 +242,13 @@ impl JsonbBinary {
         } else if first < 0xC0 {
             let mut second_byte = [0u8; 1];
             cursor.read_exact(&mut second_byte).map_err(|e| {
-                JsonbError::SerializationError(format!("Failed to read length byte 2: {}", e))
+                JsonbError::SerializationError(format!("Failed to read length byte 2: {e}"))
             })?;
             Ok((((first & 0x3F) as usize) << 8) | (second_byte[0] as usize))
         } else {
             let mut bytes = [0u8; 4];
             cursor.read_exact(&mut bytes).map_err(|e| {
-                JsonbError::SerializationError(format!("Failed to read length bytes: {}", e))
+                JsonbError::SerializationError(format!("Failed to read length bytes: {e}"))
             })?;
             Ok(u32::from_le_bytes(bytes) as usize)
         }

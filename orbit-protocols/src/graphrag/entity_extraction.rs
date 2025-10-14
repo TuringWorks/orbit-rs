@@ -355,7 +355,7 @@ impl EntityExtractionActor {
                 };
 
                 let regex = regex.map_err(|e| {
-                    OrbitError::internal(format!("Invalid regex pattern '{}': {}", pattern_str, e))
+                    OrbitError::internal(format!("Invalid regex pattern '{pattern_str}': {e}"))
                 })?;
 
                 for mat in regex.find_iter(&request.text) {

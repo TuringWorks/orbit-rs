@@ -94,7 +94,7 @@ impl SimpleLocalRegistry {
             _ => Err(OrbitError::InvocationFailed {
                 addressable_type: "KeyValueActor".to_string(),
                 method: method.to_string(),
-                reason: format!("Unknown method: {}", method),
+                reason: format!("Unknown method: {method}"),
             }),
         }
     }
@@ -193,7 +193,7 @@ impl SimpleLocalRegistry {
             _ => Err(OrbitError::InvocationFailed {
                 addressable_type: "HashActor".to_string(),
                 method: method.to_string(),
-                reason: format!("Unknown method: {}", method),
+                reason: format!("Unknown method: {method}"),
             }),
         }
     }
@@ -291,7 +291,7 @@ impl SimpleLocalRegistry {
             _ => Err(OrbitError::InvocationFailed {
                 addressable_type: "ListActor".to_string(),
                 method: method.to_string(),
-                reason: format!("Unknown method: {}", method),
+                reason: format!("Unknown method: {method}"),
             }),
         }
     }
@@ -351,7 +351,7 @@ impl SimpleLocalRegistry {
             _ => Err(OrbitError::InvocationFailed {
                 addressable_type: "SetActor".to_string(),
                 method: method.to_string(),
-                reason: format!("Unknown method: {}", method),
+                reason: format!("Unknown method: {method}"),
             }),
         }
     }
@@ -442,7 +442,7 @@ impl SimpleLocalRegistry {
             _ => Err(OrbitError::InvocationFailed {
                 addressable_type: "SortedSetActor".to_string(),
                 method: method.to_string(),
-                reason: format!("Unknown method: {}", method),
+                reason: format!("Unknown method: {method}"),
             }),
         }
     }

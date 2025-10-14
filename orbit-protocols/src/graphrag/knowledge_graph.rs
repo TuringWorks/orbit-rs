@@ -525,7 +525,7 @@ impl KnowledgeGraphBuilder {
 
         // Add document metadata
         for (key, value) in document_metadata {
-            properties.insert(format!("doc_{}", key), value.clone());
+            properties.insert(format!("doc_{key}"), value.clone());
         }
 
         // Generate unique node ID
@@ -553,13 +553,13 @@ impl KnowledgeGraphBuilder {
             })
             .await
             .map_err(|e| {
-                OrbitError::internal(format!("Failed to get graph actor reference: {}", e))
+                OrbitError::internal(format!("Failed to get graph actor reference: {e}"))
             })?;
 
         graph_actor_ref
             .invoke::<serde_json::Value>("execute_query", vec![serde_json::json!(cypher_query)])
             .await
-            .map_err(|e| OrbitError::internal(format!("Failed to create entity node: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("Failed to create entity node: {e}")))?;
 
         Ok(node_id)
     }
@@ -610,13 +610,13 @@ impl KnowledgeGraphBuilder {
             })
             .await
             .map_err(|e| {
-                OrbitError::internal(format!("Failed to get graph actor reference: {}", e))
+                OrbitError::internal(format!("Failed to get graph actor reference: {e}"))
             })?;
 
         graph_actor_ref
             .invoke::<serde_json::Value>("execute_query", vec![serde_json::json!(cypher_query)])
             .await
-            .map_err(|e| OrbitError::internal(format!("Failed to create relationship: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("Failed to create relationship: {e}")))?;
 
         Ok(rel_id)
     }
@@ -681,13 +681,13 @@ impl KnowledgeGraphBuilder {
             })
             .await
             .map_err(|e| {
-                OrbitError::internal(format!("Failed to get graph actor reference: {}", e))
+                OrbitError::internal(format!("Failed to get graph actor reference: {e}"))
             })?;
 
         graph_actor_ref
             .invoke::<serde_json::Value>("execute_query", vec![serde_json::json!(cypher_query)])
             .await
-            .map_err(|e| OrbitError::internal(format!("Failed to merge entity: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("Failed to merge entity: {e}")))?;
 
         Ok(())
     }
@@ -721,7 +721,7 @@ impl KnowledgeGraphBuilder {
                     serde_json::Value::Bool(b) => b.to_string(),
                     _ => format!("'{}'", value.to_string().replace('\'', "\\'")),
                 };
-                format!("{}: {}", key, value_str)
+                format!("{key}: {value_str}")
             })
             .collect::<Vec<_>>()
             .join(", ")

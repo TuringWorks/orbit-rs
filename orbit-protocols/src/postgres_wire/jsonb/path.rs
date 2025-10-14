@@ -353,8 +353,8 @@ impl JsonbPath {
         component: &PathComponent,
     ) -> fmt::Result {
         match component {
-            PathComponent::Key(key) => write!(f, "{}", key),
-            PathComponent::Index(idx) => write!(f, "[{}]", idx),
+            PathComponent::Key(key) => write!(f, "{key}"),
+            PathComponent::Index(idx) => write!(f, "[{idx}]"),
             PathComponent::Slice { start, end } => self.write_slice(f, *start, *end),
             PathComponent::Wildcard => write!(f, "*"),
             PathComponent::Filter(_) => write!(f, "[?(...)]"), // Simplified display
@@ -369,11 +369,11 @@ impl JsonbPath {
     ) -> fmt::Result {
         write!(f, "[")?;
         if let Some(s) = start {
-            write!(f, "{}", s)?;
+            write!(f, "{s}")?;
         }
         write!(f, ":")?;
         if let Some(e) = end {
-            write!(f, "{}", e)?;
+            write!(f, "{e}")?;
         }
         write!(f, "]")
     }
@@ -399,7 +399,7 @@ impl JsonbValue {
                 PathComponent::Key(key) => match current {
                     JsonbValue::Object(obj) => {
                         current = obj.get(key).ok_or_else(|| {
-                            JsonbError::PathNotFound(format!("Key '{}' not found", key))
+                            JsonbError::PathNotFound(format!("Key '{key}' not found"))
                         })?;
                     }
                     _ => return Ok(None),
@@ -440,7 +440,7 @@ impl JsonbValue {
                 PathComponent::Key(key) => match current {
                     JsonbValue::Object(obj) => {
                         current = obj.get_mut(key).ok_or_else(|| {
-                            JsonbError::PathNotFound(format!("Key '{}' not found", key))
+                            JsonbError::PathNotFound(format!("Key '{key}' not found"))
                         })?;
                     }
                     _ => return Ok(None),

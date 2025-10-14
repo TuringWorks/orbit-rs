@@ -248,8 +248,7 @@ impl MvccSqlExecutor {
             Ok(())
         } else {
             Err(ProtocolError::PostgresError(format!(
-                "Transaction {} not found",
-                transaction_id
+                "Transaction {transaction_id} not found"
             )))
         }
     }
@@ -279,8 +278,7 @@ impl MvccSqlExecutor {
             Ok(())
         } else {
             Err(ProtocolError::PostgresError(format!(
-                "Transaction {} not found",
-                transaction_id
+                "Transaction {transaction_id} not found"
             )))
         }
     }
@@ -296,11 +294,11 @@ impl MvccSqlExecutor {
         let transactions = self.transactions.read().await;
 
         let transaction = transactions.get(&transaction_id).ok_or_else(|| {
-            ProtocolError::PostgresError(format!("Transaction {} not found", transaction_id))
+            ProtocolError::PostgresError(format!("Transaction {transaction_id} not found"))
         })?;
 
         let table = tables.get(table_name).ok_or_else(|| {
-            ProtocolError::PostgresError(format!("Table '{}' does not exist", table_name))
+            ProtocolError::PostgresError(format!("Table '{table_name}' does not exist"))
         })?;
 
         let mut result = Vec::new();
@@ -338,7 +336,7 @@ impl MvccSqlExecutor {
         let mut tables = self.tables.write().await;
 
         let table = tables.get_mut(table_name).ok_or_else(|| {
-            ProtocolError::PostgresError(format!("Table '{}' does not exist", table_name))
+            ProtocolError::PostgresError(format!("Table '{table_name}' does not exist"))
         })?;
 
         // Generate a row key (simplified - in practice would use primary key)
@@ -377,11 +375,11 @@ impl MvccSqlExecutor {
         let transactions = self.transactions.read().await;
 
         let transaction = transactions.get(&transaction_id).ok_or_else(|| {
-            ProtocolError::PostgresError(format!("Transaction {} not found", transaction_id))
+            ProtocolError::PostgresError(format!("Transaction {transaction_id} not found"))
         })?;
 
         let table = tables.get_mut(table_name).ok_or_else(|| {
-            ProtocolError::PostgresError(format!("Table '{}' does not exist", table_name))
+            ProtocolError::PostgresError(format!("Table '{table_name}' does not exist"))
         })?;
 
         let mut updated_count = 0;
@@ -446,11 +444,11 @@ impl MvccSqlExecutor {
         let transactions = self.transactions.read().await;
 
         let transaction = transactions.get(&transaction_id).ok_or_else(|| {
-            ProtocolError::PostgresError(format!("Transaction {} not found", transaction_id))
+            ProtocolError::PostgresError(format!("Transaction {transaction_id} not found"))
         })?;
 
         let table = tables.get_mut(table_name).ok_or_else(|| {
-            ProtocolError::PostgresError(format!("Table '{}' does not exist", table_name))
+            ProtocolError::PostgresError(format!("Table '{table_name}' does not exist"))
         })?;
 
         let mut deleted_count = 0;
@@ -625,8 +623,7 @@ impl MvccSqlExecutor {
 
         if tables.contains_key(name) {
             return Err(ProtocolError::PostgresError(format!(
-                "Table '{}' already exists",
-                name
+                "Table '{name}' already exists"
             )));
         }
 

@@ -44,16 +44,16 @@ pub enum McpError {
 impl std::fmt::Display for McpError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            McpError::InvalidRequest(msg) => write!(f, "Invalid request: {}", msg),
-            McpError::MethodNotFound(method) => write!(f, "Method not found: {}", method),
+            McpError::InvalidRequest(msg) => write!(f, "Invalid request: {msg}"),
+            McpError::MethodNotFound(method) => write!(f, "Method not found: {method}"),
             McpError::AuthenticationRequired => write!(f, "Authentication required"),
-            McpError::PermissionDenied(msg) => write!(f, "Permission denied: {}", msg),
-            McpError::ResourceNotFound(resource) => write!(f, "Resource not found: {}", resource),
+            McpError::PermissionDenied(msg) => write!(f, "Permission denied: {msg}"),
+            McpError::ResourceNotFound(resource) => write!(f, "Resource not found: {resource}"),
             McpError::RateLimitExceeded => write!(f, "Rate limit exceeded"),
-            McpError::InternalError(msg) => write!(f, "Internal error: {}", msg),
-            McpError::ToolError(msg) => write!(f, "Tool error: {}", msg),
-            McpError::SqlError(msg) => write!(f, "SQL error: {}", msg),
-            McpError::ActorError(msg) => write!(f, "Actor error: {}", msg),
+            McpError::InternalError(msg) => write!(f, "Internal error: {msg}"),
+            McpError::ToolError(msg) => write!(f, "Tool error: {msg}"),
+            McpError::SqlError(msg) => write!(f, "SQL error: {msg}"),
+            McpError::ActorError(msg) => write!(f, "Actor error: {msg}"),
         }
     }
 }

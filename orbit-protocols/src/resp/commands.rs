@@ -32,6 +32,24 @@ use orbit_client::OrbitClient;
 use orbit_shared::Key;
 use std::collections::HashMap;
 
+/// Command categories for organizing command dispatch
+#[derive(Debug, Clone)]
+enum CommandCategory {
+    Connection,
+    String,
+    Hash,
+    List,
+    PubSub,
+    Set,
+    SortedSet,
+    Vector,
+    TimeSeries,
+    Graph,
+    GraphRAG,
+    Server,
+    Unknown,
+}
+
 /// Redis command handler that translates Redis commands to Orbit actor operations
 pub struct CommandHandler {
     orbit_client: Arc<OrbitClient>,
@@ -49,6 +67,46 @@ impl CommandHandler {
 
     /// Handle a RESP command
     pub async fn handle_command(&self, command: RespValue) -> ProtocolResult<RespValue> {
+        let (command_name, args) = self.parse_command(command)?;
+        let category = self.get_command_category(&command_name);
+
+        debug!(
+            "Executing command: {} (category: {:?}) with {} args",
+            command_name,
+            category,
+            args.len()
+        );
+
+        match category {
+            CommandCategory::Connection => {
+                self.handle_connection_commands(&command_name, &args).await
+            }
+            CommandCategory::String => self.handle_string_commands(&command_name, &args).await,
+            CommandCategory::Hash => self.handle_hash_commands(&command_name, &args).await,
+            CommandCategory::List => self.handle_list_commands(&command_name, &args).await,
+            CommandCategory::PubSub => self.handle_pubsub_commands(&command_name, &args).await,
+            CommandCategory::Set => self.handle_set_commands(&command_name, &args).await,
+            CommandCategory::SortedSet => {
+                self.handle_sortedset_commands(&command_name, &args).await
+            }
+            CommandCategory::Vector => self.handle_vector_commands(&command_name, &args).await,
+            CommandCategory::TimeSeries => {
+                self.handle_timeseries_commands(&command_name, &args).await
+            }
+            CommandCategory::Graph => self.handle_graph_commands(&command_name, &args).await,
+            CommandCategory::GraphRAG => self.handle_graphrag_commands(&command_name, &args).await,
+            CommandCategory::Server => self.handle_server_commands(&command_name, &args).await,
+            CommandCategory::Unknown => {
+                warn!("Unknown command: {}", command_name);
+                Err(ProtocolError::RespError(format!(
+                    "ERR unknown command '{command_name}'"
+                )))
+            }
+        }
+    }
+
+    /// Parse command and extract name and arguments
+    fn parse_command(&self, command: RespValue) -> ProtocolResult<(String, Vec<RespValue>)> {
         let args = match command {
             RespValue::Array(args) => args,
             _ => {
@@ -67,23 +125,87 @@ impl CommandHandler {
             .ok_or_else(|| ProtocolError::RespError("Command name must be a string".to_string()))?
             .to_uppercase();
 
-        let args = &args[1..];
+        Ok((command_name, args[1..].to_vec()))
+    }
 
-        debug!(
-            "Executing command: {} with {} args",
-            command_name,
-            args.len()
-        );
-
-        match command_name.as_str() {
+    /// Categorize command for dispatch
+    fn get_command_category(&self, command_name: &str) -> CommandCategory {
+        match command_name {
             // Connection commands
+            "PING" | "ECHO" | "SELECT" | "AUTH" | "QUIT" => CommandCategory::Connection,
+
+            // String/Key commands
+            "GET" | "SET" | "DEL" | "EXISTS" | "TTL" | "EXPIRE" | "KEYS" | "APPEND"
+            | "GETRANGE" | "GETSET" | "MGET" | "MSET" | "SETEX" | "SETRANGE" | "STRLEN"
+            | "PERSIST" | "PEXPIRE" | "PTTL" | "RANDOMKEY" | "RENAME" | "TYPE" | "UNLINK" => {
+                CommandCategory::String
+            }
+
+            // Hash commands
+            "HGET" | "HSET" | "HGETALL" | "HMGET" | "HMSET" | "HDEL" | "HEXISTS" | "HKEYS"
+            | "HVALS" | "HLEN" | "HINCRBY" => CommandCategory::Hash,
+
+            // List commands
+            "LPUSH" | "RPUSH" | "LPOP" | "RPOP" | "LRANGE" | "LLEN" | "LINDEX" | "LSET"
+            | "LREM" | "LTRIM" | "LINSERT" | "BLPOP" | "BRPOP" => CommandCategory::List,
+
+            // Pub/Sub commands
+            "PUBLISH" | "SUBSCRIBE" | "UNSUBSCRIBE" | "PSUBSCRIBE" | "PUNSUBSCRIBE" | "PUBSUB" => {
+                CommandCategory::PubSub
+            }
+
+            // Set commands
+            "SADD" | "SREM" | "SMEMBERS" | "SCARD" | "SISMEMBER" | "SUNION" | "SINTER"
+            | "SDIFF" => CommandCategory::Set,
+
+            // Sorted Set commands
+            "ZADD" | "ZREM" | "ZCARD" | "ZSCORE" | "ZINCRBY" | "ZRANGE" | "ZRANGEBYSCORE"
+            | "ZCOUNT" | "ZRANK" => CommandCategory::SortedSet,
+
+            // Vector commands
+            cmd if cmd.starts_with("VECTOR.") || cmd.starts_with("FT.") => CommandCategory::Vector,
+
+            // Time Series commands
+            cmd if cmd.starts_with("TS.") => CommandCategory::TimeSeries,
+
+            // Graph commands
+            cmd if cmd.starts_with("GRAPH.") => CommandCategory::Graph,
+
+            // GraphRAG commands
+            cmd if cmd.starts_with("GRAPHRAG.") => CommandCategory::GraphRAG,
+
+            // Server commands
+            "INFO" | "DBSIZE" | "FLUSHDB" | "FLUSHALL" | "COMMAND" => CommandCategory::Server,
+
+            _ => CommandCategory::Unknown,
+        }
+    }
+
+    /// Handle connection commands
+    async fn handle_connection_commands(
+        &self,
+        command_name: &str,
+        args: &[RespValue],
+    ) -> ProtocolResult<RespValue> {
+        match command_name {
             "PING" => self.cmd_ping(args).await,
             "ECHO" => self.cmd_echo(args).await,
             "SELECT" => self.cmd_select(args).await,
             "AUTH" => self.cmd_auth(args).await,
             "QUIT" => self.cmd_quit(args).await,
+            _ => Err(ProtocolError::RespError(format!(
+                "ERR unknown connection command '{command_name}'"
+            ))),
+        }
+    }
 
-            // String/Key commands
+    /// Handle string/key commands
+    async fn handle_string_commands(
+        &self,
+        command_name: &str,
+        args: &[RespValue],
+    ) -> ProtocolResult<RespValue> {
+        match command_name {
             "GET" => self.cmd_get(args).await,
             "SET" => self.cmd_set(args).await,
             "DEL" => self.cmd_del(args).await,
@@ -106,8 +228,19 @@ impl CommandHandler {
             "RENAME" => self.cmd_rename(args).await,
             "TYPE" => self.cmd_type(args).await,
             "UNLINK" => self.cmd_unlink(args).await,
+            _ => Err(ProtocolError::RespError(format!(
+                "ERR unknown string command '{command_name}'"
+            ))),
+        }
+    }
 
-            // Hash commands
+    /// Handle hash commands
+    async fn handle_hash_commands(
+        &self,
+        command_name: &str,
+        args: &[RespValue],
+    ) -> ProtocolResult<RespValue> {
+        match command_name {
             "HGET" => self.cmd_hget(args).await,
             "HSET" => self.cmd_hset(args).await,
             "HGETALL" => self.cmd_hgetall(args).await,
@@ -119,8 +252,19 @@ impl CommandHandler {
             "HVALS" => self.cmd_hvals(args).await,
             "HLEN" => self.cmd_hlen(args).await,
             "HINCRBY" => self.cmd_hincrby(args).await,
+            _ => Err(ProtocolError::RespError(format!(
+                "ERR unknown hash command '{command_name}'"
+            ))),
+        }
+    }
 
-            // List commands
+    /// Handle list commands
+    async fn handle_list_commands(
+        &self,
+        command_name: &str,
+        args: &[RespValue],
+    ) -> ProtocolResult<RespValue> {
+        match command_name {
             "LPUSH" => self.cmd_lpush(args).await,
             "RPUSH" => self.cmd_rpush(args).await,
             "LPOP" => self.cmd_lpop(args).await,
@@ -134,16 +278,38 @@ impl CommandHandler {
             "LINSERT" => self.cmd_linsert(args).await,
             "BLPOP" => self.cmd_blpop(args).await,
             "BRPOP" => self.cmd_brpop(args).await,
+            _ => Err(ProtocolError::RespError(format!(
+                "ERR unknown list command '{command_name}'"
+            ))),
+        }
+    }
 
-            // Pub/Sub commands
+    /// Handle pub/sub commands
+    async fn handle_pubsub_commands(
+        &self,
+        command_name: &str,
+        args: &[RespValue],
+    ) -> ProtocolResult<RespValue> {
+        match command_name {
             "PUBLISH" => self.cmd_publish(args).await,
             "SUBSCRIBE" => self.cmd_subscribe(args).await,
             "UNSUBSCRIBE" => self.cmd_unsubscribe(args).await,
             "PSUBSCRIBE" => self.cmd_psubscribe(args).await,
             "PUNSUBSCRIBE" => self.cmd_punsubscribe(args).await,
             "PUBSUB" => self.cmd_pubsub(args).await,
+            _ => Err(ProtocolError::RespError(format!(
+                "ERR unknown pubsub command '{command_name}'"
+            ))),
+        }
+    }
 
-            // Set commands
+    /// Handle set commands
+    async fn handle_set_commands(
+        &self,
+        command_name: &str,
+        args: &[RespValue],
+    ) -> ProtocolResult<RespValue> {
+        match command_name {
             "SADD" => self.cmd_sadd(args).await,
             "SREM" => self.cmd_srem(args).await,
             "SMEMBERS" => self.cmd_smembers(args).await,
@@ -152,8 +318,19 @@ impl CommandHandler {
             "SUNION" => self.cmd_sunion(args).await,
             "SINTER" => self.cmd_sinter(args).await,
             "SDIFF" => self.cmd_sdiff(args).await,
+            _ => Err(ProtocolError::RespError(format!(
+                "ERR unknown set command '{command_name}'"
+            ))),
+        }
+    }
 
-            // Sorted Set commands
+    /// Handle sorted set commands
+    async fn handle_sortedset_commands(
+        &self,
+        command_name: &str,
+        args: &[RespValue],
+    ) -> ProtocolResult<RespValue> {
+        match command_name {
             "ZADD" => self.cmd_zadd(args).await,
             "ZREM" => self.cmd_zrem(args).await,
             "ZCARD" => self.cmd_zcard(args).await,
@@ -163,8 +340,20 @@ impl CommandHandler {
             "ZRANGEBYSCORE" => self.cmd_zrangebyscore(args).await,
             "ZCOUNT" => self.cmd_zcount(args).await,
             "ZRANK" => self.cmd_zrank(args).await,
+            _ => Err(ProtocolError::RespError(format!(
+                "ERR unknown sorted set command '{command_name}'"
+            ))),
+        }
+    }
 
-            // Vector commands (VECTOR.* namespace)
+    /// Handle vector commands
+    async fn handle_vector_commands(
+        &self,
+        command_name: &str,
+        args: &[RespValue],
+    ) -> ProtocolResult<RespValue> {
+        match command_name {
+            // VECTOR.* namespace
             "VECTOR.ADD" => self.cmd_vector_add(args).await,
             "VECTOR.GET" => self.cmd_vector_get(args).await,
             "VECTOR.DEL" => self.cmd_vector_del(args).await,
@@ -173,15 +362,25 @@ impl CommandHandler {
             "VECTOR.COUNT" => self.cmd_vector_count(args).await,
             "VECTOR.SEARCH" => self.cmd_vector_search(args).await,
             "VECTOR.KNN" => self.cmd_vector_knn(args).await,
-
-            // RedisSearch-compatible vector commands (FT.* namespace)
+            // FT.* namespace (RedisSearch compatible)
             "FT.CREATE" => self.cmd_ft_create(args).await,
             "FT.ADD" => self.cmd_ft_add(args).await,
             "FT.DEL" => self.cmd_ft_del(args).await,
             "FT.SEARCH" => self.cmd_ft_search(args).await,
             "FT.INFO" => self.cmd_ft_info(args).await,
+            _ => Err(ProtocolError::RespError(format!(
+                "ERR unknown vector command '{command_name}'"
+            ))),
+        }
+    }
 
-            // Time Series commands (TS.* namespace)
+    /// Handle time series commands
+    async fn handle_timeseries_commands(
+        &self,
+        command_name: &str,
+        args: &[RespValue],
+    ) -> ProtocolResult<RespValue> {
+        match command_name {
             "TS.CREATE" => self.cmd_ts_create(args).await,
             "TS.ALTER" => self.cmd_ts_alter(args).await,
             "TS.ADD" => self.cmd_ts_add(args).await,
@@ -199,8 +398,19 @@ impl CommandHandler {
             "TS.QUERYINDEX" => self.cmd_ts_queryindex(args).await,
             "TS.CREATERULE" => self.cmd_ts_createrule(args).await,
             "TS.DELETERULE" => self.cmd_ts_deleterule(args).await,
+            _ => Err(ProtocolError::RespError(format!(
+                "ERR unknown time series command '{command_name}'"
+            ))),
+        }
+    }
 
-            // Graph commands (GRAPH.* namespace)
+    /// Handle graph commands
+    async fn handle_graph_commands(
+        &self,
+        command_name: &str,
+        args: &[RespValue],
+    ) -> ProtocolResult<RespValue> {
+        match command_name {
             "GRAPH.QUERY" => self.cmd_graph_query(args).await,
             "GRAPH.RO_QUERY" => self.cmd_graph_ro_query(args).await,
             "GRAPH.DELETE" => self.cmd_graph_delete(args).await,
@@ -209,8 +419,19 @@ impl CommandHandler {
             "GRAPH.PROFILE" => self.cmd_graph_profile(args).await,
             "GRAPH.SLOWLOG" => self.cmd_graph_slowlog(args).await,
             "GRAPH.CONFIG" => self.cmd_graph_config(args).await,
+            _ => Err(ProtocolError::RespError(format!(
+                "ERR unknown graph command '{command_name}'"
+            ))),
+        }
+    }
 
-            // GraphRAG commands (GRAPHRAG.* namespace)
+    /// Handle GraphRAG commands
+    async fn handle_graphrag_commands(
+        &self,
+        command_name: &str,
+        args: &[RespValue],
+    ) -> ProtocolResult<RespValue> {
+        match command_name {
             "GRAPHRAG.BUILD" => self.cmd_graphrag_build(args).await,
             "GRAPHRAG.QUERY" => self.cmd_graphrag_query(args).await,
             "GRAPHRAG.EXTRACT" => self.cmd_graphrag_extract(args).await,
@@ -218,21 +439,27 @@ impl CommandHandler {
             "GRAPHRAG.STATS" => self.cmd_graphrag_stats(args).await,
             "GRAPHRAG.ENTITIES" => self.cmd_graphrag_entities(args).await,
             "GRAPHRAG.SIMILAR" => self.cmd_graphrag_similar(args).await,
+            _ => Err(ProtocolError::RespError(format!(
+                "ERR unknown GraphRAG command '{command_name}'"
+            ))),
+        }
+    }
 
-            // Server commands
+    /// Handle server commands
+    async fn handle_server_commands(
+        &self,
+        command_name: &str,
+        args: &[RespValue],
+    ) -> ProtocolResult<RespValue> {
+        match command_name {
             "INFO" => self.cmd_info(args).await,
             "DBSIZE" => self.cmd_dbsize(args).await,
             "FLUSHDB" => self.cmd_flushdb(args).await,
             "FLUSHALL" => self.cmd_flushall(args).await,
             "COMMAND" => self.cmd_command(args).await,
-
-            _ => {
-                warn!("Unknown command: {}", command_name);
-                Err(ProtocolError::RespError(format!(
-                    "ERR unknown command '{}'",
-                    command_name
-                )))
-            }
+            _ => Err(ProtocolError::RespError(format!(
+                "ERR unknown server command '{command_name}'"
+            ))),
         }
     }
 
@@ -344,10 +571,10 @@ impl CommandHandler {
             .local_registry
             .execute_keyvalue(&key, "get_value", &[])
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {e}")))?;
 
         let value: Option<String> = serde_json::from_value(result)
-            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {e}")))?;
 
         debug!("GET {} -> {:?}", key, value);
         Ok(value
@@ -406,7 +633,7 @@ impl CommandHandler {
                 &[serde_json::Value::String(value.clone())],
             )
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {e}")))?;
 
         // Set expiration if provided
         if let Some(seconds) = expiration_seconds {
@@ -418,7 +645,7 @@ impl CommandHandler {
                 )
                 .await
                 .map_err(|e| {
-                    ProtocolError::RespError(format!("ERR actor invocation failed: {}", e))
+                    ProtocolError::RespError(format!("ERR actor invocation failed: {e}"))
                 })?;
         }
 
@@ -538,6 +765,23 @@ impl CommandHandler {
     }
 
     async fn cmd_expire(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        let (key_str, seconds) = self.parse_expire_arguments(args)?;
+        self.validate_expire_time(seconds)?;
+
+        let actor_ref = self.get_key_actor_reference(&key_str).await;
+        let result = self.set_key_expiration(&actor_ref, &key_str, seconds).await;
+
+        debug!(
+            "EXPIRE {} {} -> {}",
+            key_str,
+            seconds,
+            if result == 1 { "timeout set" } else { "failed" }
+        );
+        Ok(RespValue::integer(result))
+    }
+
+    /// Parse and validate EXPIRE command arguments
+    fn parse_expire_arguments(&self, args: &[RespValue]) -> ProtocolResult<(String, i64)> {
         if args.len() != 2 {
             return Err(ProtocolError::RespError(
                 "ERR wrong number of arguments for 'expire' command".to_string(),
@@ -551,61 +795,56 @@ impl CommandHandler {
             .as_integer()
             .ok_or_else(|| ProtocolError::RespError("ERR invalid timeout".to_string()))?;
 
+        Ok((key_str, seconds))
+    }
+
+    /// Validate expire time is not negative
+    fn validate_expire_time(&self, seconds: i64) -> ProtocolResult<()> {
         if seconds < 0 {
             return Err(ProtocolError::RespError(
                 "ERR invalid expire time in 'expire' command".to_string(),
             ));
         }
+        Ok(())
+    }
 
-        // Get KeyValueActor reference and set expiration
-        let key_ref_result = self
-            .orbit_client
+    /// Get actor reference for key operations
+    async fn get_key_actor_reference(
+        &self,
+        key: &str,
+    ) -> Option<orbit_client::ActorReference<KeyValueActor>> {
+        self.orbit_client
             .actor_reference::<KeyValueActor>(Key::StringKey {
-                key: key_str.clone(),
+                key: key.to_string(),
             })
-            .await;
+            .await
+            .ok()
+    }
 
-        if let Ok(actor_ref) = key_ref_result {
-            // First check if the key exists
-            let exists_result: Result<bool, _> = actor_ref.invoke("exists", vec![]).await;
+    /// Set expiration on key if it exists
+    async fn set_key_expiration(
+        &self,
+        actor_ref: &Option<orbit_client::ActorReference<KeyValueActor>>,
+        _key: &str,
+        seconds: i64,
+    ) -> i64 {
+        let Some(actor_ref) = actor_ref else {
+            return 0; // No actor reference means key doesn't exist
+        };
 
-            match exists_result {
-                Ok(exists) => {
-                    if exists {
-                        // Key exists, set expiration
-                        let expire_result: Result<(), _> = actor_ref
-                            .invoke("set_expiration", vec![(seconds as u64).into()])
-                            .await;
+        // Check if key exists first
+        let exists = actor_ref.invoke("exists", vec![]).await.unwrap_or(false);
+        if !exists {
+            return 0; // Key doesn't exist
+        }
 
-                        match expire_result {
-                            Ok(_) => {
-                                debug!("EXPIRE {} {} -> timeout set", key_str, seconds);
-                                Ok(RespValue::integer(1)) // 1 means timeout was set
-                            }
-                            Err(e) => {
-                                debug!(
-                                    "EXPIRE {} {} -> failed to set expiration: {}",
-                                    key_str, seconds, e
-                                );
-                                Ok(RespValue::integer(0)) // 0 means key doesn't exist or operation failed
-                            }
-                        }
-                    } else {
-                        debug!("EXPIRE {} {} -> key doesn't exist", key_str, seconds);
-                        Ok(RespValue::integer(0)) // 0 means key doesn't exist
-                    }
-                }
-                Err(_) => {
-                    debug!(
-                        "EXPIRE {} {} -> key doesn't exist or inaccessible",
-                        key_str, seconds
-                    );
-                    Ok(RespValue::integer(0)) // 0 means key doesn't exist
-                }
-            }
-        } else {
-            debug!("EXPIRE {} {} -> no actor reference", key_str, seconds);
-            Ok(RespValue::integer(0)) // 0 means key doesn't exist
+        // Set expiration
+        match actor_ref
+            .invoke::<()>("set_expiration", vec![(seconds as u64).into()])
+            .await
+        {
+            Ok(_) => 1,  // Success
+            Err(_) => 0, // Failed
         }
     }
 
@@ -646,10 +885,10 @@ impl CommandHandler {
             .local_registry
             .execute_hash(&key, "hget", &[serde_json::Value::String(field.clone())])
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {e}")))?;
 
         let value: Option<String> = serde_json::from_value(result)
-            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {e}")))?;
 
         debug!("HGET {} {} -> {:?}", key, field, value);
         Ok(value
@@ -694,11 +933,11 @@ impl CommandHandler {
                 )
                 .await
                 .map_err(|e| {
-                    ProtocolError::RespError(format!("ERR actor invocation failed: {}", e))
+                    ProtocolError::RespError(format!("ERR actor invocation failed: {e}"))
                 })?;
 
             let was_new: bool = serde_json::from_value(result)
-                .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))?;
+                .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {e}")))?;
 
             debug!("HSET {} {} {} -> new: {}", key, field, value, was_new);
             if was_new {
@@ -725,10 +964,10 @@ impl CommandHandler {
             .local_registry
             .execute_hash(&key_str, "hgetall", &[])
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {e}")))?;
 
         let pairs: Vec<(String, String)> = serde_json::from_value(result)
-            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {e}")))?;
 
         let mut resp_result = Vec::new();
         for (field, value) in pairs {
@@ -827,7 +1066,7 @@ impl CommandHandler {
                 )
                 .await
                 .map_err(|e| {
-                    ProtocolError::RespError(format!("ERR actor invocation failed: {}", e))
+                    ProtocolError::RespError(format!("ERR actor invocation failed: {e}"))
                 })?;
 
             debug!("HMSET {} {} {}", key, field, value);
@@ -896,10 +1135,10 @@ impl CommandHandler {
             .local_registry
             .execute_hash(&key, "hexists", &[serde_json::Value::String(field.clone())])
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {e}")))?;
 
         let exists: bool = serde_json::from_value(result)
-            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {e}")))?;
 
         debug!(
             "HEXISTS {} {} -> {} (exists)",
@@ -926,7 +1165,7 @@ impl CommandHandler {
             .orbit_client
             .actor_reference::<HashActor>(Key::StringKey { key: key.clone() })
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {e}")))?;
 
         // Get all keys
         let keys: Result<Vec<String>, _> = actor_ref.invoke("hkeys", vec![]).await;
@@ -963,7 +1202,7 @@ impl CommandHandler {
             .orbit_client
             .actor_reference::<HashActor>(Key::StringKey { key: key.clone() })
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {e}")))?;
 
         // Get all values
         let values: Result<Vec<String>, _> = actor_ref.invoke("hvals", vec![]).await;
@@ -1000,10 +1239,10 @@ impl CommandHandler {
             .local_registry
             .execute_hash(&key, "hlen", &[])
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {e}")))?;
 
         let len: usize = serde_json::from_value(result)
-            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {e}")))?;
 
         debug!("HLEN {} -> {}", key, len);
         Ok(RespValue::integer(len as i64))
@@ -1036,10 +1275,10 @@ impl CommandHandler {
             .local_registry
             .execute_list(&key, "lpush", &[serde_json::to_value(&values).unwrap()])
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {e}")))?;
 
         let new_length: i64 = serde_json::from_value(result)
-            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {e}")))?;
 
         debug!("LPUSH {} {:?} -> length: {}", key, values, new_length);
         Ok(RespValue::integer(new_length))
@@ -1070,7 +1309,7 @@ impl CommandHandler {
             .orbit_client
             .actor_reference::<ListActor>(Key::StringKey { key: key.clone() })
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {e}")))?;
 
         // Invoke rpush method on the actor
         let new_length: Result<usize, _> =
@@ -1084,8 +1323,7 @@ impl CommandHandler {
             Err(e) => {
                 debug!("RPUSH {} {:?} -> error: {}", key, values, e);
                 Err(ProtocolError::RespError(format!(
-                    "ERR actor invocation failed: {}",
-                    e
+                    "ERR actor invocation failed: {e}"
                 )))
             }
         }
@@ -1113,7 +1351,7 @@ impl CommandHandler {
             .orbit_client
             .actor_reference::<ListActor>(Key::StringKey { key: key.clone() })
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {e}")))?;
 
         // Invoke lpop method on the actor
         let popped_items: Result<Vec<String>, _> =
@@ -1168,9 +1406,9 @@ impl CommandHandler {
             .await;
 
         let popped_items: Result<Vec<String>, _> = result
-            .map_err(|e| format!("ERR actor invocation failed: {}", e))
+            .map_err(|e| format!("ERR actor invocation failed: {e}"))
             .and_then(|v| {
-                serde_json::from_value(v).map_err(|e| format!("Serialization error: {}", e))
+                serde_json::from_value(v).map_err(|e| format!("Serialization error: {e}"))
             });
 
         match popped_items {
@@ -1233,9 +1471,9 @@ impl CommandHandler {
             .await;
 
         let range_result: Result<Vec<String>, _> = result
-            .map_err(|e| format!("ERR actor invocation failed: {}", e))
+            .map_err(|e| format!("ERR actor invocation failed: {e}"))
             .and_then(|v| {
-                serde_json::from_value(v).map_err(|e| format!("Serialization error: {}", e))
+                serde_json::from_value(v).map_err(|e| format!("Serialization error: {e}"))
             });
 
         match range_result {
@@ -1276,7 +1514,7 @@ impl CommandHandler {
             .orbit_client
             .actor_reference::<ListActor>(Key::StringKey { key: key.clone() })
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {e}")))?;
 
         // Invoke llen method on the actor
         let length: Result<usize, _> = actor_ref.invoke("llen", vec![]).await;
@@ -1312,7 +1550,7 @@ impl CommandHandler {
             .orbit_client
             .actor_reference::<ListActor>(Key::StringKey { key: key.clone() })
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {e}")))?;
 
         // Invoke lindex method on the actor
         let element: Result<Option<String>, _> =
@@ -1356,7 +1594,7 @@ impl CommandHandler {
             .orbit_client
             .actor_reference::<ListActor>(Key::StringKey { key: key.clone() })
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {e}")))?;
 
         // Invoke lset method on the actor
         let set_result: Result<bool, _> = actor_ref
@@ -1377,8 +1615,7 @@ impl CommandHandler {
             Err(e) => {
                 debug!("LSET {} {} {} -> error: {}", key, index, value, e);
                 Err(ProtocolError::RespError(format!(
-                    "ERR actor invocation failed: {}",
-                    e
+                    "ERR actor invocation failed: {e}"
                 )))
             }
         }
@@ -1406,7 +1643,7 @@ impl CommandHandler {
             .orbit_client
             .actor_reference::<ListActor>(Key::StringKey { key: key.clone() })
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {e}")))?;
 
         // Invoke lrem method on the actor
         let removed_count: Result<usize, _> = actor_ref
@@ -1447,7 +1684,7 @@ impl CommandHandler {
             .orbit_client
             .actor_reference::<ListActor>(Key::StringKey { key: key.clone() })
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {e}")))?;
 
         // Invoke ltrim method on the actor
         let trim_result: Result<(), _> = actor_ref
@@ -1462,8 +1699,7 @@ impl CommandHandler {
             Err(e) => {
                 debug!("LTRIM {} {} {} -> error: {}", key, start, stop, e);
                 Err(ProtocolError::RespError(format!(
-                    "ERR actor invocation failed: {}",
-                    e
+                    "ERR actor invocation failed: {e}"
                 )))
             }
         }
@@ -1499,7 +1735,7 @@ impl CommandHandler {
             .orbit_client
             .actor_reference::<ListActor>(Key::StringKey { key: key.clone() })
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {e}")))?;
 
         // Invoke linsert method on the actor
         let result_length: Result<i64, _> = actor_ref
@@ -1554,13 +1790,13 @@ impl CommandHandler {
                 key: channel.clone(),
             })
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {e}")))?;
 
         // Invoke publish method on the actor
         let subscriber_count: i64 = actor_ref
             .invoke("publish", vec![message.clone().into()])
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {e}")))?;
 
         debug!(
             "PUBLISH {} {} -> subscribers: {}",
@@ -1653,9 +1889,9 @@ impl CommandHandler {
             .await;
 
         let added_count: Result<usize, _> = result
-            .map_err(|e| format!("ERR actor invocation failed: {}", e))
+            .map_err(|e| format!("ERR actor invocation failed: {e}"))
             .and_then(|v| {
-                serde_json::from_value(v).map_err(|e| format!("Serialization error: {}", e))
+                serde_json::from_value(v).map_err(|e| format!("Serialization error: {e}"))
             });
 
         match added_count {
@@ -1697,9 +1933,9 @@ impl CommandHandler {
             .await;
 
         let removed_count: Result<usize, _> = result
-            .map_err(|e| format!("ERR actor invocation failed: {}", e))
+            .map_err(|e| format!("ERR actor invocation failed: {e}"))
             .and_then(|v| {
-                serde_json::from_value(v).map_err(|e| format!("Serialization error: {}", e))
+                serde_json::from_value(v).map_err(|e| format!("Serialization error: {e}"))
             });
 
         match removed_count {
@@ -1732,9 +1968,9 @@ impl CommandHandler {
             .await;
 
         let members_result: Result<Vec<String>, _> = result
-            .map_err(|e| format!("ERR actor invocation failed: {}", e))
+            .map_err(|e| format!("ERR actor invocation failed: {e}"))
             .and_then(|v| {
-                serde_json::from_value(v).map_err(|e| format!("Serialization error: {}", e))
+                serde_json::from_value(v).map_err(|e| format!("Serialization error: {e}"))
             });
 
         match members_result {
@@ -1771,7 +2007,7 @@ impl CommandHandler {
                 key: key_str.clone(),
             })
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {e}")))?;
 
         // Get set cardinality (size)
         let size_result: Result<usize, _> = actor_ref.invoke("scard", vec![]).await;
@@ -1809,7 +2045,7 @@ impl CommandHandler {
                 key: key_str.clone(),
             })
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {e}")))?;
 
         // Check if member exists in set
         let is_member_result: Result<bool, _> = actor_ref
@@ -1849,7 +2085,7 @@ impl CommandHandler {
                     key: key_str.clone(),
                 })
                 .await
-                .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+                .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {e}")))?;
 
             // Get set members
             let members_result: Result<Vec<String>, _> = actor_ref.invoke("smembers", vec![]).await;
@@ -1898,7 +2134,7 @@ impl CommandHandler {
                     key: key_str.clone(),
                 })
                 .await
-                .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+                .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {e}")))?;
 
             // Get set members
             let members_result: Result<Vec<String>, _> = actor_ref.invoke("smembers", vec![]).await;
@@ -1945,56 +2181,95 @@ impl CommandHandler {
     }
 
     async fn cmd_sdiff(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        self.validate_sdiff_args(args)?;
+
+        let first_key = self.extract_first_key(args)?;
+        let mut result_set = self.get_initial_set(&first_key).await?;
+
+        self.remove_subsequent_sets(&mut result_set, &args[1..])
+            .await;
+
+        let result = self.convert_set_to_resp_array(result_set);
+        debug!("SDIFF: Final result has {} members", result.len());
+        Ok(RespValue::array(result))
+    }
+
+    /// Validate arguments for SDIFF command
+    fn validate_sdiff_args(&self, args: &[RespValue]) -> ProtocolResult<()> {
         if args.is_empty() {
             return Err(ProtocolError::RespError(
                 "ERR wrong number of arguments for 'sdiff' command".to_string(),
             ));
         }
+        Ok(())
+    }
 
-        let first_key = args[0]
+    /// Extract the first key from SDIFF arguments
+    fn extract_first_key(&self, args: &[RespValue]) -> ProtocolResult<String> {
+        args[0]
             .as_string()
-            .ok_or_else(|| ProtocolError::RespError("ERR invalid key".to_string()))?;
+            .ok_or_else(|| ProtocolError::RespError("ERR invalid key".to_string()))
+    }
 
-        // Get first set
+    /// Get the initial set for SDIFF operation
+    async fn get_initial_set(
+        &self,
+        first_key: &str,
+    ) -> ProtocolResult<std::collections::HashSet<String>> {
         let actor_ref = self
             .orbit_client
             .actor_reference::<SetActor>(Key::StringKey {
-                key: first_key.clone(),
+                key: first_key.to_string(),
             })
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {e}")))?;
 
-        let first_members_result: Result<Vec<String>, _> =
-            actor_ref.invoke("smembers", vec![]).await;
+        let members_result: Result<Vec<String>, _> = actor_ref.invoke("smembers", vec![]).await;
 
-        let mut result_set: std::collections::HashSet<String> = match first_members_result {
-            Ok(members) => members.into_iter().collect(),
+        match members_result {
+            Ok(members) => {
+                let result_set: std::collections::HashSet<String> = members.into_iter().collect();
+                debug!(
+                    "SDIFF: Started with {} members from key {}",
+                    result_set.len(),
+                    first_key
+                );
+                Ok(result_set)
+            }
             Err(_) => {
                 debug!("SDIFF: Failed to get members from first key {}", first_key);
-                return Ok(RespValue::array(vec![]));
+                Ok(std::collections::HashSet::new())
             }
-        };
+        }
+    }
 
-        debug!(
-            "SDIFF: Started with {} members from key {}",
-            result_set.len(),
-            first_key
-        );
+    /// Remove members from subsequent sets
+    async fn remove_subsequent_sets(
+        &self,
+        result_set: &mut std::collections::HashSet<String>,
+        remaining_args: &[RespValue],
+    ) {
+        for arg in remaining_args {
+            if let Ok(key_str) = arg.as_string().ok_or("ERR invalid key") {
+                self.remove_members_from_key(result_set, &key_str).await;
+            }
+        }
+    }
 
-        // Remove elements from subsequent sets
-        for arg in &args[1..] {
-            let key_str = arg
-                .as_string()
-                .ok_or_else(|| ProtocolError::RespError("ERR invalid key".to_string()))?;
+    /// Remove members from a specific key
+    async fn remove_members_from_key(
+        &self,
+        result_set: &mut std::collections::HashSet<String>,
+        key_str: &str,
+    ) {
+        let actor_ref = self
+            .orbit_client
+            .actor_reference::<SetActor>(Key::StringKey {
+                key: key_str.to_string(),
+            })
+            .await;
 
-            let actor_ref = self
-                .orbit_client
-                .actor_reference::<SetActor>(Key::StringKey {
-                    key: key_str.clone(),
-                })
-                .await
-                .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
-
+        if let Ok(actor_ref) = actor_ref {
             let members_result: Result<Vec<String>, _> = actor_ref.invoke("smembers", vec![]).await;
 
             if let Ok(members) = members_result {
@@ -2009,15 +2284,20 @@ impl CommandHandler {
             } else {
                 debug!("SDIFF: Failed to get members from key {}", key_str);
             }
+        } else {
+            debug!("SDIFF: Failed to get actor reference for key {}", key_str);
         }
+    }
 
-        let result: Vec<RespValue> = result_set
+    /// Convert HashSet to RespValue array
+    fn convert_set_to_resp_array(
+        &self,
+        result_set: std::collections::HashSet<String>,
+    ) -> Vec<RespValue> {
+        result_set
             .into_iter()
             .map(|member| RespValue::bulk_string_from_str(&member))
-            .collect();
-
-        debug!("SDIFF: Final result has {} members", result.len());
-        Ok(RespValue::array(result))
+            .collect()
     }
 
     // Sorted Set commands
@@ -2065,9 +2345,9 @@ impl CommandHandler {
                 .await;
 
             let was_new: Result<bool, _> = result
-                .map_err(|e| format!("ERR actor invocation failed: {}", e))
+                .map_err(|e| format!("ERR actor invocation failed: {e}"))
                 .and_then(|v| {
-                    serde_json::from_value(v).map_err(|e| format!("Serialization error: {}", e))
+                    serde_json::from_value(v).map_err(|e| format!("Serialization error: {e}"))
                 });
 
             match was_new {
@@ -2113,9 +2393,9 @@ impl CommandHandler {
             .await;
 
         let removed_count: Result<usize, _> = result
-            .map_err(|e| format!("ERR actor invocation failed: {}", e))
+            .map_err(|e| format!("ERR actor invocation failed: {e}"))
             .and_then(|v| {
-                serde_json::from_value(v).map_err(|e| format!("Serialization error: {}", e))
+                serde_json::from_value(v).map_err(|e| format!("Serialization error: {e}"))
             });
 
         match removed_count {
@@ -2146,7 +2426,7 @@ impl CommandHandler {
             .orbit_client
             .actor_reference::<SortedSetActor>(Key::StringKey { key: key.clone() })
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {e}")))?;
 
         // Invoke zcard method on the actor
         let size: Result<usize, _> = actor_ref.invoke("zcard", vec![]).await;
@@ -2182,7 +2462,7 @@ impl CommandHandler {
             .orbit_client
             .actor_reference::<SortedSetActor>(Key::StringKey { key: key.clone() })
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {e}")))?;
 
         // Invoke zscore method on the actor
         let score: Result<Option<f64>, _> = actor_ref
@@ -2230,7 +2510,7 @@ impl CommandHandler {
             .orbit_client
             .actor_reference::<SortedSetActor>(Key::StringKey { key: key.clone() })
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {e}")))?;
 
         // Invoke zincrby method on the actor
         let new_score: Result<f64, _> = actor_ref
@@ -2245,8 +2525,7 @@ impl CommandHandler {
             Err(e) => {
                 debug!("ZINCRBY {} {} {} -> error: {}", key, increment, member, e);
                 Err(ProtocolError::RespError(format!(
-                    "ERR actor invocation failed: {}",
-                    e
+                    "ERR actor invocation failed: {e}"
                 )))
             }
         }
@@ -2297,9 +2576,9 @@ impl CommandHandler {
             .await;
 
         let range_result: Result<Vec<(String, Option<f64>)>, _> = result
-            .map_err(|e| format!("ERR actor invocation failed: {}", e))
+            .map_err(|e| format!("ERR actor invocation failed: {e}"))
             .and_then(|v| {
-                serde_json::from_value(v).map_err(|e| format!("Serialization error: {}", e))
+                serde_json::from_value(v).map_err(|e| format!("Serialization error: {e}"))
             });
 
         match range_result {
@@ -2365,7 +2644,7 @@ impl CommandHandler {
             .orbit_client
             .actor_reference::<SortedSetActor>(Key::StringKey { key: key.clone() })
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {e}")))?;
 
         // Invoke zrangebyscore method on the actor
         let range_result: Result<Vec<(String, Option<f64>)>, _> = actor_ref
@@ -2432,7 +2711,7 @@ impl CommandHandler {
             .orbit_client
             .actor_reference::<SortedSetActor>(Key::StringKey { key: key.clone() })
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {e}")))?;
 
         // Invoke zcount method on the actor
         let count_result: Result<usize, _> = actor_ref
@@ -2470,7 +2749,7 @@ impl CommandHandler {
             .orbit_client
             .actor_reference::<SortedSetActor>(Key::StringKey { key: key.clone() })
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {e}")))?;
 
         // Invoke zrank method on the actor
         let rank_result: Result<Option<usize>, _> =
@@ -2729,12 +3008,12 @@ impl CommandHandler {
             .orbit_client
             .actor_reference::<KeyValueActor>(Key::StringKey { key: key.clone() })
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {e}")))?;
 
         let new_length: usize = actor_ref
             .invoke("append_value", vec![value.clone().into()])
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {e}")))?;
 
         debug!("APPEND {} {} -> {}", key, value, new_length);
         Ok(RespValue::integer(new_length as i64))
@@ -2761,12 +3040,12 @@ impl CommandHandler {
             .orbit_client
             .actor_reference::<KeyValueActor>(Key::StringKey { key: key.clone() })
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {e}")))?;
 
         let result: Option<String> = actor_ref
             .invoke("get_range", vec![start.into(), end.into()])
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {e}")))?;
 
         debug!("GETRANGE {} {} {} -> {:?}", key, start, end, result);
         Ok(result
@@ -2792,12 +3071,12 @@ impl CommandHandler {
             .orbit_client
             .actor_reference::<KeyValueActor>(Key::StringKey { key: key.clone() })
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {e}")))?;
 
         let old_value: Option<String> = actor_ref
             .invoke("get_and_set", vec![new_value.clone().into()])
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {e}")))?;
 
         debug!("GETSET {} {} -> {:?}", key, new_value, old_value);
         Ok(old_value
@@ -2863,13 +3142,13 @@ impl CommandHandler {
                 .orbit_client
                 .actor_reference::<KeyValueActor>(Key::StringKey { key: key.clone() })
                 .await
-                .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+                .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {e}")))?;
 
             actor_ref
                 .invoke::<()>("set_value", vec![value.clone().into()])
                 .await
                 .map_err(|e| {
-                    ProtocolError::RespError(format!("ERR actor invocation failed: {}", e))
+                    ProtocolError::RespError(format!("ERR actor invocation failed: {e}"))
                 })?;
         }
 
@@ -2904,17 +3183,17 @@ impl CommandHandler {
             .orbit_client
             .actor_reference::<KeyValueActor>(Key::StringKey { key: key.clone() })
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {e}")))?;
 
         actor_ref
             .invoke::<()>("set_value", vec![value.clone().into()])
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {e}")))?;
 
         actor_ref
             .invoke::<()>("set_expiration", vec![(seconds as u64).into()])
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {e}")))?;
 
         debug!("SETEX {} {} {}", key, seconds, value);
         Ok(RespValue::ok())
@@ -2947,7 +3226,7 @@ impl CommandHandler {
             .orbit_client
             .actor_reference::<KeyValueActor>(Key::StringKey { key: key.clone() })
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {e}")))?;
 
         let new_length: usize = actor_ref
             .invoke(
@@ -2955,7 +3234,7 @@ impl CommandHandler {
                 vec![(offset as usize).into(), value.clone().into()],
             )
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {e}")))?;
 
         debug!("SETRANGE {} {} {} -> {}", key, offset, value, new_length);
         Ok(RespValue::integer(new_length as i64))
@@ -2976,12 +3255,12 @@ impl CommandHandler {
             .orbit_client
             .actor_reference::<KeyValueActor>(Key::StringKey { key: key.clone() })
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {e}")))?;
 
         let length: usize = actor_ref
             .invoke("strlen", vec![])
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {e}")))?;
 
         debug!("STRLEN {} -> {}", key, length);
         Ok(RespValue::integer(length as i64))
@@ -3023,6 +3302,54 @@ impl CommandHandler {
     }
 
     async fn cmd_pexpire(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        let (key, milliseconds) = self.validate_and_parse_pexpire_args(args)?;
+
+        let actor_ref_result = self
+            .orbit_client
+            .actor_reference::<KeyValueActor>(Key::StringKey { key: key.clone() })
+            .await;
+
+        let actor_ref = match actor_ref_result {
+            Ok(actor_ref) => actor_ref,
+            Err(_) => {
+                debug!("PEXPIRE {} {} -> no actor reference", key, milliseconds);
+                return Ok(RespValue::integer(0));
+            }
+        };
+
+        // Check if key exists and apply expiration
+        let exists_result: Result<bool, _> = actor_ref.invoke("exists", vec![]).await;
+        let exists = exists_result.unwrap_or(false);
+
+        if !exists {
+            debug!("PEXPIRE {} {} -> key doesn't exist", key, milliseconds);
+            return Ok(RespValue::integer(0));
+        }
+
+        // Set expiration
+        let expire_result: Result<(), _> = actor_ref
+            .invoke("set_pexpiration", vec![(milliseconds as u64).into()])
+            .await;
+
+        let result = match expire_result {
+            Ok(_) => {
+                debug!("PEXPIRE {} {} -> timeout set", key, milliseconds);
+                1
+            }
+            Err(_) => {
+                debug!(
+                    "PEXPIRE {} {} -> failed to set expiration",
+                    key, milliseconds
+                );
+                0
+            }
+        };
+
+        Ok(RespValue::integer(result))
+    }
+
+    /// Validate and parse PEXPIRE command arguments
+    fn validate_and_parse_pexpire_args(&self, args: &[RespValue]) -> ProtocolResult<(String, i64)> {
         if args.len() != 2 {
             return Err(ProtocolError::RespError(
                 "ERR wrong number of arguments for 'pexpire' command".to_string(),
@@ -3042,48 +3369,7 @@ impl CommandHandler {
             ));
         }
 
-        let actor_ref_result = self
-            .orbit_client
-            .actor_reference::<KeyValueActor>(Key::StringKey { key: key.clone() })
-            .await;
-
-        if let Ok(actor_ref) = actor_ref_result {
-            let exists_result: Result<bool, _> = actor_ref.invoke("exists", vec![]).await;
-
-            match exists_result {
-                Ok(exists) => {
-                    if exists {
-                        let expire_result: Result<(), _> = actor_ref
-                            .invoke("set_pexpiration", vec![(milliseconds as u64).into()])
-                            .await;
-
-                        match expire_result {
-                            Ok(_) => {
-                                debug!("PEXPIRE {} {} -> timeout set", key, milliseconds);
-                                Ok(RespValue::integer(1))
-                            }
-                            Err(_) => {
-                                debug!(
-                                    "PEXPIRE {} {} -> failed to set expiration",
-                                    key, milliseconds
-                                );
-                                Ok(RespValue::integer(0))
-                            }
-                        }
-                    } else {
-                        debug!("PEXPIRE {} {} -> key doesn't exist", key, milliseconds);
-                        Ok(RespValue::integer(0))
-                    }
-                }
-                Err(_) => {
-                    debug!("PEXPIRE {} {} -> key doesn't exist", key, milliseconds);
-                    Ok(RespValue::integer(0))
-                }
-            }
-        } else {
-            debug!("PEXPIRE {} {} -> no actor reference", key, milliseconds);
-            Ok(RespValue::integer(0))
-        }
+        Ok((key, milliseconds))
     }
 
     async fn cmd_pttl(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
@@ -3154,7 +3440,7 @@ impl CommandHandler {
                 key: old_key.clone(),
             })
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {e}")))?;
 
         let value: Option<String> = old_actor_ref
             .invoke("get_value", vec![])
@@ -3174,18 +3460,18 @@ impl CommandHandler {
                 key: new_key.clone(),
             })
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {e}")))?;
 
         new_actor_ref
             .invoke::<()>("set_value", vec![value.into()])
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {e}")))?;
 
         // Delete the old key
         old_actor_ref
             .invoke::<()>("delete_value", vec![])
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {e}")))?;
 
         debug!("RENAME {} {} -> OK", old_key, new_key);
         Ok(RespValue::ok())
@@ -3202,79 +3488,109 @@ impl CommandHandler {
             .as_string()
             .ok_or_else(|| ProtocolError::RespError("ERR invalid key".to_string()))?;
 
-        // Try different actor types to determine the type
-        // First try KeyValueActor (string type)
-        let kv_result = self
-            .orbit_client
-            .actor_reference::<KeyValueActor>(Key::StringKey { key: key.clone() })
-            .await;
+        let key_type = self.determine_key_type(&key).await;
+        debug!("TYPE {} -> {}", key, key_type);
+        Ok(RespValue::simple_string(key_type))
+    }
 
-        if let Ok(actor_ref) = kv_result {
-            let exists: Result<bool, _> = actor_ref.invoke("exists", vec![]).await;
-            if exists.unwrap_or(false) {
-                debug!("TYPE {} -> string", key);
-                return Ok(RespValue::simple_string("string"));
-            }
+    /// Determine the type of a Redis key by checking different actor types
+    async fn determine_key_type(&self, key: &str) -> &'static str {
+        // Check each actor type in order of preference
+        if self.check_string_type(key).await {
+            return "string";
         }
+        if self.check_hash_type(key).await {
+            return "hash";
+        }
+        if self.check_list_type(key).await {
+            return "list";
+        }
+        if self.check_set_type(key).await {
+            return "set";
+        }
+        if self.check_zset_type(key).await {
+            return "zset";
+        }
+        "none"
+    }
 
-        // Try HashActor
-        let hash_result = self
+    /// Check if key exists as a string type
+    async fn check_string_type(&self, key: &str) -> bool {
+        if let Ok(actor_ref) = self
             .orbit_client
-            .actor_reference::<HashActor>(Key::StringKey { key: key.clone() })
-            .await;
+            .actor_reference::<KeyValueActor>(Key::StringKey {
+                key: key.to_string(),
+            })
+            .await
+        {
+            actor_ref.invoke("exists", vec![]).await.unwrap_or(false)
+        } else {
+            false
+        }
+    }
 
-        if let Ok(actor_ref) = hash_result {
+    /// Check if key exists as a hash type
+    async fn check_hash_type(&self, key: &str) -> bool {
+        if let Ok(actor_ref) = self
+            .orbit_client
+            .actor_reference::<HashActor>(Key::StringKey {
+                key: key.to_string(),
+            })
+            .await
+        {
             let len: Result<usize, _> = actor_ref.invoke("hlen", vec![]).await;
-            if len.unwrap_or(0) > 0 {
-                debug!("TYPE {} -> hash", key);
-                return Ok(RespValue::simple_string("hash"));
-            }
+            len.unwrap_or(0) > 0
+        } else {
+            false
         }
+    }
 
-        // Try ListActor
-        let list_result = self
+    /// Check if key exists as a list type
+    async fn check_list_type(&self, key: &str) -> bool {
+        if let Ok(actor_ref) = self
             .orbit_client
-            .actor_reference::<ListActor>(Key::StringKey { key: key.clone() })
-            .await;
-
-        if let Ok(actor_ref) = list_result {
+            .actor_reference::<ListActor>(Key::StringKey {
+                key: key.to_string(),
+            })
+            .await
+        {
             let len: Result<usize, _> = actor_ref.invoke("llen", vec![]).await;
-            if len.unwrap_or(0) > 0 {
-                debug!("TYPE {} -> list", key);
-                return Ok(RespValue::simple_string("list"));
-            }
+            len.unwrap_or(0) > 0
+        } else {
+            false
         }
+    }
 
-        // Try SetActor
-        let set_result = self
+    /// Check if key exists as a set type
+    async fn check_set_type(&self, key: &str) -> bool {
+        if let Ok(actor_ref) = self
             .orbit_client
-            .actor_reference::<SetActor>(Key::StringKey { key: key.clone() })
-            .await;
-
-        if let Ok(actor_ref) = set_result {
+            .actor_reference::<SetActor>(Key::StringKey {
+                key: key.to_string(),
+            })
+            .await
+        {
             let len: Result<usize, _> = actor_ref.invoke("scard", vec![]).await;
-            if len.unwrap_or(0) > 0 {
-                debug!("TYPE {} -> set", key);
-                return Ok(RespValue::simple_string("set"));
-            }
+            len.unwrap_or(0) > 0
+        } else {
+            false
         }
+    }
 
-        // Try SortedSetActor
-        let zset_result = self
+    /// Check if key exists as a sorted set type
+    async fn check_zset_type(&self, key: &str) -> bool {
+        if let Ok(actor_ref) = self
             .orbit_client
-            .actor_reference::<SortedSetActor>(Key::StringKey { key: key.clone() })
-            .await;
-
-        if let Ok(actor_ref) = zset_result {
+            .actor_reference::<SortedSetActor>(Key::StringKey {
+                key: key.to_string(),
+            })
+            .await
+        {
             let len: Result<usize, _> = actor_ref.invoke("zcard", vec![]).await;
-            if len.unwrap_or(0) > 0 {
-                debug!("TYPE {} -> zset", key);
-                return Ok(RespValue::simple_string("zset"));
-            }
+            len.unwrap_or(0) > 0
+        } else {
+            false
         }
-
-        debug!("TYPE {} -> none", key);
-        Ok(RespValue::simple_string("none"))
     }
 
     async fn cmd_unlink(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
@@ -3306,12 +3622,12 @@ impl CommandHandler {
             .orbit_client
             .actor_reference::<HashActor>(Key::StringKey { key: key.clone() })
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {e}")))?;
 
         let result: Result<i64, String> = actor_ref
             .invoke("hincrby", vec![field.clone().into(), increment.into()])
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {e}")))?;
 
         match result {
             Ok(new_value) => {
@@ -3341,12 +3657,12 @@ impl CommandHandler {
             .orbit_client
             .actor_reference::<ListActor>(Key::StringKey { key: key.clone() })
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {e}")))?;
 
         let values: Vec<String> = actor_ref
             .invoke("lpop", vec![1i64.into()])
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {e}")))?;
 
         if values.is_empty() {
             debug!("BLPOP {} -> null (empty list)", key);
@@ -3377,12 +3693,12 @@ impl CommandHandler {
             .orbit_client
             .actor_reference::<ListActor>(Key::StringKey { key: key.clone() })
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {e}")))?;
 
         let values: Vec<String> = actor_ref
             .invoke("rpop", vec![1i64.into()])
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {e}")))?;
 
         if values.is_empty() {
             debug!("BRPOP {} -> null (empty list)", key);
@@ -3426,8 +3742,7 @@ impl CommandHandler {
                 Ok(RespValue::integer(0))
             }
             _ => Err(ProtocolError::RespError(format!(
-                "ERR unknown PUBSUB subcommand '{}'",
-                subcommand
+                "ERR unknown PUBSUB subcommand '{subcommand}'"
             ))),
         }
     }
@@ -3497,8 +3812,7 @@ impl CommandHandler {
             "DOT" | "DOTPRODUCT" | "IP" | "INNER" => Ok(SimilarityMetric::DotProduct),
             "MANHATTAN" | "L1" | "MAN" => Ok(SimilarityMetric::Manhattan),
             _ => Err(ProtocolError::RespError(format!(
-                "Unknown similarity metric '{}'. Use: COSINE, EUCLIDEAN, DOT, or MANHATTAN",
-                metric_str
+                "Unknown similarity metric '{metric_str}'. Use: COSINE, EUCLIDEAN, DOT, or MANHATTAN"
             ))),
         }
     }
@@ -3506,7 +3820,7 @@ impl CommandHandler {
     /// Format vector data for Redis response
     fn format_vector_data(&self, data: &[f32]) -> String {
         data.iter()
-            .map(|f| format!("{:.6}", f))
+            .map(|f| format!("{f:.6}"))
             .collect::<Vec<_>>()
             .join(",")
     }
@@ -3570,12 +3884,12 @@ impl CommandHandler {
             .orbit_client
             .actor_reference::<VectorActor>(Key::StringKey { key: index.clone() })
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {e}")))?;
 
         actor_ref
             .invoke::<()>("add_vector", vec![serde_json::to_value(vector).unwrap()])
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR failed to add vector: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR failed to add vector: {e}")))?;
 
         debug!("VECTOR.ADD {} {} -> OK", index, id);
         Ok(RespValue::ok())
@@ -3599,12 +3913,12 @@ impl CommandHandler {
             .orbit_client
             .actor_reference::<VectorActor>(Key::StringKey { key: index.clone() })
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {e}")))?;
 
         let vector: Option<Vector> = actor_ref
             .invoke("get_vector", vec![id.clone().into()])
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR failed to get vector: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR failed to get vector: {e}")))?;
 
         match vector {
             Some(vec) => {
@@ -3648,12 +3962,12 @@ impl CommandHandler {
             .orbit_client
             .actor_reference::<VectorActor>(Key::StringKey { key: index.clone() })
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {e}")))?;
 
         let deleted: bool = actor_ref
             .invoke("remove_vector", vec![id.clone().into()])
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR failed to delete vector: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR failed to delete vector: {e}")))?;
 
         debug!(
             "VECTOR.DEL {} {} -> {}",
@@ -3679,12 +3993,12 @@ impl CommandHandler {
             .orbit_client
             .actor_reference::<VectorActor>(Key::StringKey { key: index.clone() })
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {e}")))?;
 
         let stats: VectorStats = actor_ref
             .invoke("get_stats", vec![])
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR failed to get stats: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR failed to get stats: {e}")))?;
 
         debug!("VECTOR.STATS {} -> {} vectors", index, stats.vector_count);
 
@@ -3721,12 +4035,12 @@ impl CommandHandler {
             .orbit_client
             .actor_reference::<VectorActor>(Key::StringKey { key: index.clone() })
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {e}")))?;
 
         let ids: Vec<String> = actor_ref
             .invoke("list_vector_ids", vec![])
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR failed to list vectors: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR failed to list vectors: {e}")))?;
 
         debug!("VECTOR.LIST {} -> {} IDs", index, ids.len());
 
@@ -3753,12 +4067,12 @@ impl CommandHandler {
             .orbit_client
             .actor_reference::<VectorActor>(Key::StringKey { key: index.clone() })
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {e}")))?;
 
         let count: usize = actor_ref
             .invoke("vector_count", vec![])
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR failed to get count: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR failed to get count: {e}")))?;
 
         debug!("VECTOR.COUNT {} -> {}", index, count);
         Ok(RespValue::integer(count as i64))
@@ -3861,7 +4175,7 @@ impl CommandHandler {
             .orbit_client
             .actor_reference::<VectorActor>(Key::StringKey { key: index.clone() })
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {e}")))?;
 
         let results: Vec<VectorSearchResult> = actor_ref
             .invoke(
@@ -3869,7 +4183,7 @@ impl CommandHandler {
                 vec![serde_json::to_value(search_params).unwrap()],
             )
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR search failed: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR search failed: {e}")))?;
 
         debug!("VECTOR.SEARCH {} -> {} results", index, results.len());
 
@@ -3929,7 +4243,7 @@ impl CommandHandler {
             .orbit_client
             .actor_reference::<VectorActor>(Key::StringKey { key: index.clone() })
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {e}")))?;
 
         let results: Vec<VectorSearchResult> = actor_ref
             .invoke(
@@ -3941,7 +4255,7 @@ impl CommandHandler {
                 ],
             )
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR KNN search failed: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR KNN search failed: {e}")))?;
 
         debug!("VECTOR.KNN {} k={} -> {} results", index, k, results.len());
 
@@ -4005,8 +4319,7 @@ impl CommandHandler {
                     }
                     _ => {
                         return Err(ProtocolError::RespError(format!(
-                            "ERR unknown parameter: {}",
-                            param
+                            "ERR unknown parameter: {param}"
                         )));
                     }
                 }
@@ -4025,7 +4338,7 @@ impl CommandHandler {
                 key: index_name.clone(),
             })
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {e}")))?;
 
         actor_ref
             .invoke::<()>(
@@ -4033,7 +4346,7 @@ impl CommandHandler {
                 vec![serde_json::to_value(index_config).unwrap()],
             )
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR failed to create index: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR failed to create index: {e}")))?;
 
         debug!(
             "FT.CREATE {} DIM {} METRIC {:?} -> OK",
@@ -4103,17 +4416,17 @@ impl CommandHandler {
             .orbit_client
             .actor_reference::<VectorActor>(Key::StringKey { key: index.clone() })
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {e}")))?;
 
         let stats: VectorStats = actor_ref
             .invoke("get_stats", vec![])
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR failed to get info: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR failed to get info: {e}")))?;
 
         let indices: Vec<VectorIndexConfig> = actor_ref
             .invoke("list_indices", vec![])
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR failed to list indices: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR failed to list indices: {e}")))?;
 
         debug!(
             "FT.INFO {} -> {} vectors, {} indices",
@@ -4211,8 +4524,7 @@ impl CommandHandler {
     fn parse_aggregation(&self, agg_str: &str) -> ProtocolResult<AggregationType> {
         AggregationType::parse(agg_str)
             .ok_or_else(|| ProtocolError::RespError(format!(
-                "Unknown aggregation function '{}'. Use: AVG, SUM, MIN, MAX, COUNT, FIRST, LAST, RANGE, STD",
-                agg_str
+                "Unknown aggregation function '{agg_str}'. Use: AVG, SUM, MIN, MAX, COUNT, FIRST, LAST, RANGE, STD"
             )))
     }
 
@@ -4220,8 +4532,7 @@ impl CommandHandler {
     fn parse_duplicate_policy(&self, policy_str: &str) -> ProtocolResult<DuplicatePolicy> {
         DuplicatePolicy::parse(policy_str).ok_or_else(|| {
             ProtocolError::RespError(format!(
-                "Unknown duplicate policy '{}'. Use: BLOCK, FIRST, LAST, MIN, MAX, SUM",
-                policy_str
+                "Unknown duplicate policy '{policy_str}'. Use: BLOCK, FIRST, LAST, MIN, MAX, SUM"
             ))
         })
     }
@@ -4367,13 +4678,13 @@ impl CommandHandler {
             .orbit_client
             .actor_reference::<TimeSeriesActor>(Key::StringKey { key: key.clone() })
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {e}")))?;
 
         actor_ref
             .invoke::<()>("update_config", vec![serde_json::to_value(config).unwrap()])
             .await
             .map_err(|e| {
-                ProtocolError::RespError(format!("ERR failed to create time series: {}", e))
+                ProtocolError::RespError(format!("ERR failed to create time series: {e}"))
             })?;
 
         debug!("TS.CREATE {} -> OK", key);
@@ -4397,13 +4708,13 @@ impl CommandHandler {
             .orbit_client
             .actor_reference::<TimeSeriesActor>(Key::StringKey { key: key.clone() })
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {e}")))?;
 
         actor_ref
             .invoke::<()>("update_config", vec![serde_json::to_value(config).unwrap()])
             .await
             .map_err(|e| {
-                ProtocolError::RespError(format!("ERR failed to alter time series: {}", e))
+                ProtocolError::RespError(format!("ERR failed to alter time series: {e}"))
             })?;
 
         debug!("TS.ALTER {} -> OK", key);
@@ -4428,7 +4739,7 @@ impl CommandHandler {
             .orbit_client
             .actor_reference::<TimeSeriesActor>(Key::StringKey { key: key.clone() })
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {e}")))?;
 
         // If additional configuration is provided, update the series config first
         if args.len() > 3 {
@@ -4441,7 +4752,7 @@ impl CommandHandler {
         actor_ref
             .invoke::<()>("add_sample", vec![timestamp.into(), value.into()])
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR failed to add sample: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR failed to add sample: {e}")))?;
 
         debug!("TS.ADD {} {} {} -> {}", key, timestamp, value, timestamp);
         Ok(RespValue::integer(timestamp as i64))
@@ -4469,7 +4780,7 @@ impl CommandHandler {
                 .orbit_client
                 .actor_reference::<TimeSeriesActor>(Key::StringKey { key: key.clone() })
                 .await
-                .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+                .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {e}")))?;
 
             let result = actor_ref
                 .invoke::<()>("add_sample", vec![timestamp.into(), value.into()])
@@ -4477,7 +4788,7 @@ impl CommandHandler {
 
             match result {
                 Ok(_) => results.push(RespValue::integer(timestamp as i64)),
-                Err(e) => results.push(RespValue::bulk_string_from_str(format!("ERR {}", e))),
+                Err(e) => results.push(RespValue::bulk_string_from_str(format!("ERR {e}"))),
             }
 
             i += 3;
@@ -4520,7 +4831,7 @@ impl CommandHandler {
             .orbit_client
             .actor_reference::<TimeSeriesActor>(Key::StringKey { key: key.clone() })
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {e}")))?;
 
         // If additional configuration is provided, update the series config first
         if args.len() > 2 {
@@ -4533,7 +4844,7 @@ impl CommandHandler {
         let new_value: f64 = actor_ref
             .invoke("increment_by", vec![timestamp.into(), increment.into()])
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR failed to increment: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR failed to increment: {e}")))?;
 
         debug!("TS.INCRBY {} {} -> {}", key, increment, new_value);
         Ok(RespValue::integer(timestamp as i64))
@@ -4572,7 +4883,7 @@ impl CommandHandler {
             .orbit_client
             .actor_reference::<TimeSeriesActor>(Key::StringKey { key: key.clone() })
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {e}")))?;
 
         // If additional configuration is provided, update the series config first
         if args.len() > 2 {
@@ -4585,7 +4896,7 @@ impl CommandHandler {
         let new_value: f64 = actor_ref
             .invoke("increment_by", vec![timestamp.into(), decrement.into()])
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR failed to decrement: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR failed to decrement: {e}")))?;
 
         debug!("TS.DECRBY {} {} -> {}", key, -decrement, new_value);
         Ok(RespValue::integer(timestamp as i64))
@@ -4609,14 +4920,12 @@ impl CommandHandler {
             .orbit_client
             .actor_reference::<TimeSeriesActor>(Key::StringKey { key: key.clone() })
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {e}")))?;
 
         let deleted_count: usize = actor_ref
             .invoke("delete_range", vec![from_ts.into(), to_ts.into()])
             .await
-            .map_err(|e| {
-                ProtocolError::RespError(format!("ERR failed to delete samples: {}", e))
-            })?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR failed to delete samples: {e}")))?;
 
         debug!("TS.DEL {} {} {} -> {}", key, from_ts, to_ts, deleted_count);
         Ok(RespValue::integer(deleted_count as i64))
@@ -4638,12 +4947,12 @@ impl CommandHandler {
             .orbit_client
             .actor_reference::<TimeSeriesActor>(Key::StringKey { key: key.clone() })
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {e}")))?;
 
         let sample: Option<Sample> = actor_ref
             .invoke("get_latest", vec![])
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR failed to get sample: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR failed to get sample: {e}")))?;
 
         match sample {
             Some(s) => {
@@ -4721,12 +5030,12 @@ impl CommandHandler {
             .orbit_client
             .actor_reference::<TimeSeriesActor>(Key::StringKey { key: key.clone() })
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {e}")))?;
 
         let stats: TimeSeriesStats = actor_ref
             .invoke("get_stats", vec![])
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR failed to get stats: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR failed to get stats: {e}")))?;
 
         debug!("TS.INFO {} -> {} samples", key, stats.total_samples);
 
@@ -4789,7 +5098,7 @@ impl CommandHandler {
             .orbit_client
             .actor_reference::<TimeSeriesActor>(Key::StringKey { key: key.clone() })
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {e}")))?;
 
         // Check for aggregation parameters
         let samples = if let Some(agg_idx) = args.iter().position(|arg| {
@@ -4827,14 +5136,14 @@ impl CommandHandler {
                 )
                 .await
                 .map_err(|e| {
-                    ProtocolError::RespError(format!("ERR failed to get aggregated range: {}", e))
+                    ProtocolError::RespError(format!("ERR failed to get aggregated range: {e}"))
                 })?;
             samples
         } else {
             let samples: Vec<Sample> = actor_ref
                 .invoke("get_range", vec![from_ts.into(), to_ts.into()])
                 .await
-                .map_err(|e| ProtocolError::RespError(format!("ERR failed to get range: {}", e)))?;
+                .map_err(|e| ProtocolError::RespError(format!("ERR failed to get range: {e}")))?;
             samples
         };
 
@@ -4872,7 +5181,7 @@ impl CommandHandler {
             .orbit_client
             .actor_reference::<TimeSeriesActor>(Key::StringKey { key: key.clone() })
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {e}")))?;
 
         // Check for aggregation parameters
         let samples = if let Some(agg_idx) = args.iter().position(|arg| {
@@ -4911,7 +5220,7 @@ impl CommandHandler {
                 )
                 .await
                 .map_err(|e| {
-                    ProtocolError::RespError(format!("ERR failed to get aggregated range: {}", e))
+                    ProtocolError::RespError(format!("ERR failed to get aggregated range: {e}"))
                 })?;
             samples.reverse();
             samples
@@ -4920,7 +5229,7 @@ impl CommandHandler {
                 .invoke("get_range_reverse", vec![from_ts.into(), to_ts.into()])
                 .await
                 .map_err(|e| {
-                    ProtocolError::RespError(format!("ERR failed to get reverse range: {}", e))
+                    ProtocolError::RespError(format!("ERR failed to get reverse range: {e}"))
                 })?;
             samples
         };
@@ -5138,7 +5447,7 @@ impl CommandHandler {
                 key: source_key.clone(),
             })
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {e}")))?;
 
         actor_ref
             .invoke::<()>(
@@ -5146,7 +5455,7 @@ impl CommandHandler {
                 vec![serde_json::to_value(rule).unwrap()],
             )
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR failed to create rule: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR failed to create rule: {e}")))?;
 
         debug!(
             "TS.CREATERULE {} {} {} {} -> OK",
@@ -5175,12 +5484,12 @@ impl CommandHandler {
                 key: source_key.clone(),
             })
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {e}")))?;
 
         let deleted: bool = actor_ref
             .invoke("delete_compaction_rule", vec![dest_key.clone().into()])
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR failed to delete rule: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR failed to delete rule: {e}")))?;
 
         debug!(
             "TS.DELETERULE {} {} -> {}",
@@ -5214,12 +5523,12 @@ impl CommandHandler {
                 key: graph_name.clone(),
             })
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {e}")))?;
 
         let result: crate::cypher::graph_engine::QueryResult = actor_ref
             .invoke("execute_query", vec![query.clone().into()])
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR query execution failed: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR query execution failed: {e}")))?;
 
         debug!(
             "GRAPH.QUERY {} -> {} nodes, {} relationships",
@@ -5293,12 +5602,12 @@ impl CommandHandler {
                 key: graph_name.clone(),
             })
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {e}")))?;
 
         let result: crate::cypher::graph_engine::QueryResult = actor_ref
             .invoke("execute_read_only_query", vec![query.clone().into()])
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR query execution failed: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR query execution failed: {e}")))?;
 
         debug!(
             "GRAPH.RO_QUERY {} -> {} nodes, {} relationships",
@@ -5375,8 +5684,7 @@ impl CommandHandler {
                 Ok(RespValue::ok())
             }
             Err(_) => Err(ProtocolError::RespError(format!(
-                "ERR graph '{}' not found",
-                graph_name
+                "ERR graph '{graph_name}' not found"
             ))),
         }
     }
@@ -5417,12 +5725,12 @@ impl CommandHandler {
                 key: graph_name.clone(),
             })
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {e}")))?;
 
         let plan: ExecutionPlan = actor_ref
             .invoke("explain_query", vec![query.clone().into()])
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR explain failed: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR explain failed: {e}")))?;
 
         debug!(
             "GRAPH.EXPLAIN {} -> {} steps, cost {}",
@@ -5474,12 +5782,12 @@ impl CommandHandler {
                 key: graph_name.clone(),
             })
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {e}")))?;
 
         let profile: QueryProfile = actor_ref
             .invoke("profile_query", vec![query.clone().into()])
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR profile failed: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR profile failed: {e}")))?;
 
         debug!(
             "GRAPH.PROFILE {} -> {} ms total",
@@ -5503,9 +5811,9 @@ impl CommandHandler {
             let step_info = vec![
                 RespValue::bulk_string_from_str(format!("{}: {}", i + 1, step.operation)),
                 RespValue::bulk_string_from_str(&step.description),
-                RespValue::bulk_string_from_str(format!("Records produced: {}", actual_rows)),
-                RespValue::bulk_string_from_str(format!("Execution time: {} ms", step_time)),
-                RespValue::bulk_string_from_str(format!("Memory used: {} bytes", memory_used)),
+                RespValue::bulk_string_from_str(format!("Records produced: {actual_rows}")),
+                RespValue::bulk_string_from_str(format!("Execution time: {step_time} ms")),
+                RespValue::bulk_string_from_str(format!("Memory used: {memory_used} bytes")),
             ];
             plan_with_metrics.push(RespValue::array(step_info));
         }
@@ -5546,13 +5854,13 @@ impl CommandHandler {
                 key: graph_name.clone(),
             })
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {e}")))?;
 
         let slow_queries: Vec<SlowQuery> = actor_ref
             .invoke("get_slow_queries", vec![])
             .await
             .map_err(|e| {
-                ProtocolError::RespError(format!("ERR failed to get slow queries: {}", e))
+                ProtocolError::RespError(format!("ERR failed to get slow queries: {e}"))
             })?;
 
         debug!(
@@ -5607,8 +5915,7 @@ impl CommandHandler {
                     "MAX_RELATIONSHIPS" => Ok(RespValue::bulk_string_from_str("10000000")),
                     "PROFILING_ENABLED" => Ok(RespValue::bulk_string_from_str("false")),
                     _ => Err(ProtocolError::RespError(format!(
-                        "ERR unknown configuration parameter: {}",
-                        parameter
+                        "ERR unknown configuration parameter: {parameter}"
                     ))),
                 }
             }
@@ -5635,14 +5942,12 @@ impl CommandHandler {
                         Ok(RespValue::ok())
                     }
                     _ => Err(ProtocolError::RespError(format!(
-                        "ERR unknown configuration parameter: {}",
-                        parameter
+                        "ERR unknown configuration parameter: {parameter}"
                     ))),
                 }
             }
             _ => Err(ProtocolError::RespError(format!(
-                "ERR unknown config operation: {}",
-                operation
+                "ERR unknown config operation: {operation}"
             ))),
         }
     }
@@ -5689,7 +5994,7 @@ impl CommandHandler {
                 key: kg_name.clone(),
             })
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {e}")))?;
 
         // Create document processing request
         let request = GraphRAGDocumentRequest {
@@ -5709,7 +6014,7 @@ impl CommandHandler {
             )
             .await
             .map_err(|e| {
-                ProtocolError::RespError(format!("ERR document processing failed: {}", e))
+                ProtocolError::RespError(format!("ERR document processing failed: {e}"))
             })?;
 
         debug!(
@@ -5805,7 +6110,7 @@ impl CommandHandler {
                 key: kg_name.clone(),
             })
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {e}")))?;
 
         // Create GraphRAG query
         let query = GraphRAGQuery {
@@ -5822,7 +6127,7 @@ impl CommandHandler {
         let result: GraphRAGQueryResult = actor_ref
             .invoke("query_rag", vec![serde_json::to_value(query).unwrap()])
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR query execution failed: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR query execution failed: {e}")))?;
 
         debug!(
             "GRAPHRAG.QUERY {} '{}' -> {} entities involved",
@@ -5925,7 +6230,7 @@ impl CommandHandler {
                 key: kg_name.clone(),
             })
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {e}")))?;
 
         // Create document processing request (extract only, don't build graph)
         let request = GraphRAGDocumentRequest {
@@ -5944,9 +6249,7 @@ impl CommandHandler {
                 vec![serde_json::to_value(request).unwrap()],
             )
             .await
-            .map_err(|e| {
-                ProtocolError::RespError(format!("ERR entity extraction failed: {}", e))
-            })?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR entity extraction failed: {e}")))?;
 
         debug!(
             "GRAPHRAG.EXTRACT {} {} -> {} entities, {} relationships extracted",
@@ -6034,7 +6337,7 @@ impl CommandHandler {
                 key: kg_name.clone(),
             })
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {e}")))?;
 
         // Create reasoning query using the reasoning engine
         use crate::graphrag::multi_hop_reasoning::ReasoningQuery;
@@ -6056,7 +6359,7 @@ impl CommandHandler {
                 vec![serde_json::to_value(reasoning_query).unwrap()],
             )
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR reasoning failed: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR reasoning failed: {e}")))?;
 
         debug!(
             "GRAPHRAG.REASON {} '{}' -> '{}' -> {} paths found",
@@ -6132,14 +6435,14 @@ impl CommandHandler {
                 key: kg_name.clone(),
             })
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {e}")))?;
 
         // Get statistics
         use crate::graphrag::GraphRAGStats;
         let stats: GraphRAGStats = actor_ref
             .invoke("get_stats", vec![])
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR failed to get stats: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR failed to get stats: {e}")))?;
 
         debug!(
             "GRAPHRAG.STATS {} -> {} documents processed",

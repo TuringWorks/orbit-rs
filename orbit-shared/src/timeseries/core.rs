@@ -121,7 +121,7 @@ impl TimeSeriesEngine {
         {
             let metadata_map = self.series_metadata.read().await;
             if !metadata_map.contains_key(&series_id) {
-                return Err(anyhow!("Series {} does not exist", series_id));
+                return Err(anyhow!("Series {series_id} does not exist"));
             }
         }
 
@@ -156,7 +156,7 @@ impl TimeSeriesEngine {
         {
             let metadata_map = self.series_metadata.read().await;
             if !metadata_map.contains_key(&series_id) {
-                return Err(anyhow!("Series {} does not exist", series_id));
+                return Err(anyhow!("Series {series_id} does not exist"));
             }
         }
 
@@ -190,7 +190,7 @@ impl TimeSeriesEngine {
             let metadata_map = self.series_metadata.read().await;
             metadata_map
                 .get(&series_id)
-                .ok_or_else(|| anyhow!("Series {} does not exist", series_id))?
+                .ok_or_else(|| anyhow!("Series {series_id} does not exist"))?
                 .clone()
         };
 
@@ -232,7 +232,7 @@ impl TimeSeriesEngine {
             let metadata_map = self.series_metadata.read().await;
             metadata_map
                 .get(&series_id)
-                .ok_or_else(|| anyhow!("Series {} does not exist", series_id))?
+                .ok_or_else(|| anyhow!("Series {series_id} does not exist"))?
                 .clone()
         };
 
@@ -269,7 +269,7 @@ impl TimeSeriesEngine {
         let metadata_map = self.series_metadata.read().await;
         metadata_map
             .get(&series_id)
-            .ok_or_else(|| anyhow!("Series {} does not exist", series_id))
+            .ok_or_else(|| anyhow!("Series {series_id} does not exist"))
             .cloned()
     }
 
@@ -282,7 +282,7 @@ impl TimeSeriesEngine {
         {
             let mut metadata_map = self.series_metadata.write().await;
             if !metadata_map.contains_key(&series_id) {
-                return Err(anyhow!("Series {} does not exist", series_id));
+                return Err(anyhow!("Series {series_id} does not exist"));
             }
             metadata_map.insert(series_id, metadata.clone());
         }
@@ -300,7 +300,7 @@ impl TimeSeriesEngine {
         {
             let mut metadata_map = self.series_metadata.write().await;
             if metadata_map.remove(&series_id).is_none() {
-                return Err(anyhow!("Series {} does not exist", series_id));
+                return Err(anyhow!("Series {series_id} does not exist"));
             }
         }
 
