@@ -64,6 +64,132 @@ pub enum FilterOperator {
     Exists,
 }
 
+/// Parser for path strings to reduce cognitive complexity
+struct PathParser {
+    path: String,
+    position: usize,
+    components: Vec<PathComponent>,
+    current_key: String,
+    recursive: bool,
+}
+
+impl PathParser {
+    fn new(path: &str) -> Self {
+        Self {
+            path: path.to_owned(),
+            position: 0,
+            components: Vec::new(),
+            current_key: String::new(),
+            recursive: path.starts_with("**"),
+        }
+    }
+
+    fn peek_char(&self) -> Option<char> {
+        self.path.chars().nth(self.position)
+    }
+
+    fn next_char(&mut self) -> Option<char> {
+        let ch = self.peek_char();
+        if ch.is_some() {
+            self.position += 1;
+        }
+        ch
+    }
+
+    fn parse(mut self) -> JsonbResult<JsonbPath> {
+        self.handle_recursive_prefix();
+
+        while let Some(ch) = self.next_char() {
+            match ch {
+                '.' => self.handle_dot(),
+                '[' => self.handle_bracket()?,
+                '*' => self.handle_wildcard()?,
+                _ => self.current_key.push(ch),
+            }
+        }
+
+        self.finalize_current_key();
+
+        Ok(JsonbPath {
+            components: self.components,
+            recursive: self.recursive,
+        })
+    }
+
+    fn handle_recursive_prefix(&mut self) {
+        if self.recursive {
+            self.next_char(); // consume first *
+            self.next_char(); // consume second *
+            if self.peek_char() == Some('.') {
+                self.next_char(); // consume dot after **
+            }
+        }
+    }
+
+    fn handle_dot(&mut self) {
+        if !self.current_key.is_empty() {
+            self.components
+                .push(PathComponent::Key(self.current_key.clone()));
+            self.current_key.clear();
+        }
+    }
+
+    fn handle_bracket(&mut self) -> JsonbResult<()> {
+        if !self.current_key.is_empty() {
+            self.components
+                .push(PathComponent::Key(self.current_key.clone()));
+            self.current_key.clear();
+        }
+
+        let bracket_content = self.extract_bracket_content();
+        let component = JsonbPath::parse_bracket_content(&bracket_content)?;
+        self.components.push(component);
+        Ok(())
+    }
+
+    fn extract_bracket_content(&mut self) -> String {
+        let mut bracket_content = String::new();
+        let mut bracket_depth = 1;
+
+        while let Some(ch) = self.next_char() {
+            match ch {
+                '[' => {
+                    bracket_depth += 1;
+                    bracket_content.push(ch);
+                }
+                ']' => {
+                    bracket_depth -= 1;
+                    if bracket_depth == 0 {
+                        break;
+                    }
+                    bracket_content.push(ch);
+                }
+                _ => bracket_content.push(ch),
+            }
+        }
+
+        bracket_content
+    }
+
+    fn handle_wildcard(&mut self) -> JsonbResult<()> {
+        if self.peek_char() == Some('*') {
+            self.next_char(); // consume second *
+            return Err(JsonbError::InvalidPath(
+                "** can only appear at the beginning of a path".to_string(),
+            ));
+        }
+        self.components.push(PathComponent::Wildcard);
+        Ok(())
+    }
+
+    fn finalize_current_key(&mut self) {
+        if !self.current_key.is_empty() {
+            self.components
+                .push(PathComponent::Key(self.current_key.clone()));
+        }
+    }
+}
+
 impl JsonbPath {
     /// Create a new empty path
     pub fn new() -> Self {
@@ -80,74 +206,8 @@ impl JsonbPath {
             return Ok(Self::new());
         }
 
-        let mut components = Vec::new();
-        let mut chars = path.chars().peekable();
-        let mut current_key = String::new();
-        let recursive = path.starts_with("**");
-
-        if recursive {
-            chars.next(); // consume first *
-            chars.next(); // consume second *
-            if chars.peek() == Some(&'.') {
-                chars.next(); // consume dot after **
-            }
-        }
-
-        while let Some(ch) = chars.next() {
-            match ch {
-                '.' => {
-                    if !current_key.is_empty() {
-                        components.push(PathComponent::Key(current_key.clone()));
-                        current_key.clear();
-                    }
-                }
-                '[' => {
-                    if !current_key.is_empty() {
-                        components.push(PathComponent::Key(current_key.clone()));
-                        current_key.clear();
-                    }
-
-                    // Parse array index or slice
-                    let mut bracket_content = String::new();
-                    let mut bracket_depth = 1;
-
-                    for ch in chars.by_ref() {
-                        if ch == '[' {
-                            bracket_depth += 1;
-                        } else if ch == ']' {
-                            bracket_depth -= 1;
-                            if bracket_depth == 0 {
-                                break;
-                            }
-                        }
-                        bracket_content.push(ch);
-                    }
-
-                    components.push(Self::parse_bracket_content(&bracket_content)?);
-                }
-                '*' => {
-                    if chars.peek() == Some(&'*') {
-                        chars.next(); // consume second *
-                        return Err(JsonbError::InvalidPath(
-                            "** can only appear at the beginning of a path".to_string(),
-                        ));
-                    }
-                    components.push(PathComponent::Wildcard);
-                }
-                _ => {
-                    current_key.push(ch);
-                }
-            }
-        }
-
-        if !current_key.is_empty() {
-            components.push(PathComponent::Key(current_key));
-        }
-
-        Ok(Self {
-            components,
-            recursive,
-        })
+        let parser = PathParser::new(path);
+        parser.parse()
     }
 
     /// Parse the content inside brackets [...]
@@ -252,45 +312,77 @@ impl Default for JsonbPath {
     }
 }
 
-impl fmt::Display for JsonbPath {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl JsonbPath {
+    fn write_recursive_prefix(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.recursive {
             write!(f, "**")?;
             if !self.components.is_empty() {
                 write!(f, ".")?;
             }
         }
+        Ok(())
+    }
 
+    fn write_components(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         for (i, component) in self.components.iter().enumerate() {
             if i > 0 {
-                match component {
-                    PathComponent::Index(_) | PathComponent::Slice { .. } => {
-                        // No separator for array access
-                    }
-                    _ => write!(f, ".")?,
-                }
+                self.write_separator(f, component)?;
             }
-
-            match component {
-                PathComponent::Key(key) => write!(f, "{}", key)?,
-                PathComponent::Index(idx) => write!(f, "[{}]", idx)?,
-                PathComponent::Slice { start, end } => {
-                    write!(f, "[")?;
-                    if let Some(s) = start {
-                        write!(f, "{}", s)?;
-                    }
-                    write!(f, ":")?;
-                    if let Some(e) = end {
-                        write!(f, "{}", e)?;
-                    }
-                    write!(f, "]")?;
-                }
-                PathComponent::Wildcard => write!(f, "*")?,
-                PathComponent::Filter(_) => write!(f, "[?(...)]")?, // Simplified display
-            }
+            self.write_component(f, component)?;
         }
-
         Ok(())
+    }
+
+    fn write_separator(
+        &self,
+        f: &mut fmt::Formatter<'_>,
+        component: &PathComponent,
+    ) -> fmt::Result {
+        match component {
+            PathComponent::Index(_) | PathComponent::Slice { .. } => {
+                // No separator for array access
+                Ok(())
+            }
+            _ => write!(f, "."),
+        }
+    }
+
+    fn write_component(
+        &self,
+        f: &mut fmt::Formatter<'_>,
+        component: &PathComponent,
+    ) -> fmt::Result {
+        match component {
+            PathComponent::Key(key) => write!(f, "{}", key),
+            PathComponent::Index(idx) => write!(f, "[{}]", idx),
+            PathComponent::Slice { start, end } => self.write_slice(f, *start, *end),
+            PathComponent::Wildcard => write!(f, "*"),
+            PathComponent::Filter(_) => write!(f, "[?(...)]"), // Simplified display
+        }
+    }
+
+    fn write_slice(
+        &self,
+        f: &mut fmt::Formatter<'_>,
+        start: Option<usize>,
+        end: Option<usize>,
+    ) -> fmt::Result {
+        write!(f, "[")?;
+        if let Some(s) = start {
+            write!(f, "{}", s)?;
+        }
+        write!(f, ":")?;
+        if let Some(e) = end {
+            write!(f, "{}", e)?;
+        }
+        write!(f, "]")
+    }
+}
+
+impl fmt::Display for JsonbPath {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.write_recursive_prefix(f)?;
+        self.write_components(f)
     }
 }
 
@@ -302,41 +394,32 @@ impl JsonbValue {
         }
 
         let mut current = self;
-
         for component in &path.components {
             match component {
-                PathComponent::Key(key) => {
-                    if let JsonbValue::Object(obj) = current {
+                PathComponent::Key(key) => match current {
+                    JsonbValue::Object(obj) => {
                         current = obj.get(key).ok_or_else(|| {
                             JsonbError::PathNotFound(format!("Key '{}' not found", key))
                         })?;
-                    } else {
-                        return Ok(None);
                     }
-                }
-                PathComponent::Index(index) => {
-                    if let JsonbValue::Array(arr) = current {
+                    _ => return Ok(None),
+                },
+                PathComponent::Index(index) => match current {
+                    JsonbValue::Array(arr) => {
                         if *index >= arr.len() {
                             return Err(JsonbError::IndexOutOfBounds { index: *index });
                         }
                         current = &arr[*index];
-                    } else {
-                        return Ok(None);
                     }
-                }
-                PathComponent::Slice { start: _, end: _ } => {
-                    // For slice operations, we need to return owned data
-                    // This is a limitation of the current design - slices create new data
+                    _ => return Ok(None),
+                },
+                PathComponent::Slice { .. } => {
                     return Err(JsonbError::InvalidOperation(
                         "Slice operations require owned data access".to_string(),
                     ));
                 }
-                PathComponent::Wildcard => {
-                    // Wildcard matching would return multiple values - simplified here
-                    return Ok(Some(current));
-                }
-                PathComponent::Filter(_filter) => {
-                    // Filter evaluation would be implemented here
+                PathComponent::Wildcard | PathComponent::Filter(_) => {
+                    // Simplified implementation - just return current value
                     return Ok(Some(current));
                 }
             }
@@ -352,30 +435,26 @@ impl JsonbValue {
         }
 
         let mut current = self;
-
         for component in &path.components {
             match component {
-                PathComponent::Key(key) => {
-                    if let JsonbValue::Object(obj) = current {
+                PathComponent::Key(key) => match current {
+                    JsonbValue::Object(obj) => {
                         current = obj.get_mut(key).ok_or_else(|| {
                             JsonbError::PathNotFound(format!("Key '{}' not found", key))
                         })?;
-                    } else {
-                        return Ok(None);
                     }
-                }
-                PathComponent::Index(index) => {
-                    if let JsonbValue::Array(arr) = current {
+                    _ => return Ok(None),
+                },
+                PathComponent::Index(index) => match current {
+                    JsonbValue::Array(arr) => {
                         if *index >= arr.len() {
                             return Err(JsonbError::IndexOutOfBounds { index: *index });
                         }
                         current = &mut arr[*index];
-                    } else {
-                        return Ok(None);
                     }
-                }
+                    _ => return Ok(None),
+                },
                 _ => {
-                    // Other component types not implemented for mutable access
                     return Err(JsonbError::InvalidOperation(
                         "Mutable access not supported for this path component".to_string(),
                     ));

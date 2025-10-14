@@ -461,73 +461,114 @@ impl CostBasedOptimizer {
                 left,
                 operator,
                 right,
-            } => {
-                match operator {
-                    BinaryOperator::Equal => {
-                        // Try to get more accurate selectivity from column stats
-                        if let Expression::Column(col_ref) = left.as_ref() {
-                            if let Some(table) = &col_ref.table {
-                                return stats.estimate_equality_selectivity(table, &col_ref.name);
-                            }
-                        }
-                        0.1 // Default equality selectivity
-                    }
-                    BinaryOperator::NotEqual => 0.9,
-                    BinaryOperator::LessThan
-                    | BinaryOperator::LessThanOrEqual
-                    | BinaryOperator::GreaterThan
-                    | BinaryOperator::GreaterThanOrEqual => {
-                        // Try to use column statistics for range predicates
-                        if let Expression::Column(col_ref) = left.as_ref() {
-                            if let Some(table) = &col_ref.table {
-                                if let Expression::Literal(val) = right.as_ref() {
-                                    return stats.estimate_range_selectivity(
-                                        table,
-                                        &col_ref.name,
-                                        &format!("{:?}", operator),
-                                        &format!("{:?}", val),
-                                    );
-                                }
-                            }
-                        }
-                        0.33 // Default range selectivity
-                    }
-                    BinaryOperator::And => {
-                        // Combine selectivities for AND (multiply)
-                        let left_sel = self.estimate_selectivity(left, stats);
-                        let right_sel = self.estimate_selectivity(right, stats);
-                        left_sel * right_sel
-                    }
-                    BinaryOperator::Or => {
-                        // Combine selectivities for OR (add with correction)
-                        let left_sel = self.estimate_selectivity(left, stats);
-                        let right_sel = self.estimate_selectivity(right, stats);
-                        left_sel + right_sel - (left_sel * right_sel)
-                    }
-                    BinaryOperator::Like => 0.15, // LIKE is fairly selective
-                    BinaryOperator::In => 0.2,    // IN depends on list size
-                    _ => 0.5,                     // Default
-                }
+            } => self.estimate_binary_selectivity(left, operator, right, stats),
+            Expression::Unary { operator, operand } => {
+                self.estimate_unary_selectivity(operator, operand, stats)
             }
-            Expression::Unary {
-                operator: UnaryOperator::Not,
-                operand,
-            } => {
-                // Invert the selectivity
-                1.0 - self.estimate_selectivity(operand, stats)
-            }
-            Expression::Unary {
-                operator: _,
-                operand: _,
-            } => 0.5,
-            Expression::IsNull { negated, .. } => {
-                if *negated {
-                    0.9 // IS NOT NULL is usually high selectivity
-                } else {
-                    0.1 // IS NULL checks are usually selective
-                }
-            }
+            Expression::IsNull { negated, .. } => self.estimate_null_selectivity(*negated),
             _ => 0.5, // Default selectivity
+        }
+    }
+
+    /// Estimate selectivity for binary expressions
+    fn estimate_binary_selectivity(
+        &self,
+        left: &Expression,
+        operator: &BinaryOperator,
+        right: &Expression,
+        stats: &StatisticsCollector,
+    ) -> f64 {
+        match operator {
+            BinaryOperator::Equal => self.estimate_equality_selectivity(left, stats),
+            BinaryOperator::NotEqual => 0.9,
+            BinaryOperator::LessThan
+            | BinaryOperator::LessThanOrEqual
+            | BinaryOperator::GreaterThan
+            | BinaryOperator::GreaterThanOrEqual => {
+                self.estimate_range_selectivity_for_expr(left, operator, right, stats)
+            }
+            BinaryOperator::And => self.estimate_and_selectivity(left, right, stats),
+            BinaryOperator::Or => self.estimate_or_selectivity(left, right, stats),
+            BinaryOperator::Like => 0.15,
+            BinaryOperator::In => 0.2,
+            _ => 0.5,
+        }
+    }
+
+    /// Estimate selectivity for equality operations
+    fn estimate_equality_selectivity(&self, left: &Expression, stats: &StatisticsCollector) -> f64 {
+        if let Expression::Column(col_ref) = left {
+            if let Some(table) = &col_ref.table {
+                return stats.estimate_equality_selectivity(table, &col_ref.name);
+            }
+        }
+        0.1 // Default equality selectivity
+    }
+
+    /// Estimate selectivity for range operations
+    fn estimate_range_selectivity_for_expr(
+        &self,
+        left: &Expression,
+        operator: &BinaryOperator,
+        right: &Expression,
+        stats: &StatisticsCollector,
+    ) -> f64 {
+        if let (Expression::Column(col_ref), Expression::Literal(val)) = (left, right) {
+            if let Some(table) = &col_ref.table {
+                return stats.estimate_range_selectivity(
+                    table,
+                    &col_ref.name,
+                    &format!("{:?}", operator),
+                    &format!("{:?}", val),
+                );
+            }
+        }
+        0.33 // Default range selectivity
+    }
+
+    /// Estimate selectivity for AND operations
+    fn estimate_and_selectivity(
+        &self,
+        left: &Expression,
+        right: &Expression,
+        stats: &StatisticsCollector,
+    ) -> f64 {
+        let left_sel = self.estimate_selectivity(left, stats);
+        let right_sel = self.estimate_selectivity(right, stats);
+        left_sel * right_sel
+    }
+
+    /// Estimate selectivity for OR operations
+    fn estimate_or_selectivity(
+        &self,
+        left: &Expression,
+        right: &Expression,
+        stats: &StatisticsCollector,
+    ) -> f64 {
+        let left_sel = self.estimate_selectivity(left, stats);
+        let right_sel = self.estimate_selectivity(right, stats);
+        left_sel + right_sel - (left_sel * right_sel)
+    }
+
+    /// Estimate selectivity for unary expressions
+    fn estimate_unary_selectivity(
+        &self,
+        operator: &UnaryOperator,
+        operand: &Expression,
+        stats: &StatisticsCollector,
+    ) -> f64 {
+        match operator {
+            UnaryOperator::Not => 1.0 - self.estimate_selectivity(operand, stats),
+            _ => 0.5,
+        }
+    }
+
+    /// Estimate selectivity for NULL checks
+    fn estimate_null_selectivity(&self, negated: bool) -> f64 {
+        if negated {
+            0.9 // IS NOT NULL is usually high selectivity
+        } else {
+            0.1 // IS NULL checks are usually selective
         }
     }
 
