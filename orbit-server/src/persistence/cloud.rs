@@ -4,6 +4,7 @@
 //! including AWS S3, Azure Blob Storage, and Google Cloud Storage.
 
 use super::*;
+use orbit_shared::{AddressableLease, AddressableReference, Key, NodeId, NodeInfo, NodeLease};
 use reqwest::Client;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;

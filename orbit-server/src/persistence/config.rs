@@ -3,9 +3,21 @@
 //! This module provides configuration builders, validation, and factory methods
 //! for creating persistence providers from configuration.
 
-use super::*;
-use crate::persistence::cloud::*;
-use crate::persistence::memory::*;
+use super::{
+    AWSS3Config, AzureConfig, CompositeConfig, DigitalOceanSpacesConfig, EtcdConfig, FlashConfig,
+    GCPStorageConfig, GoogleCloudConfig, KubernetesConfig, MemoryConfig, MinIOConfig,
+    PersistenceConfig, PersistenceProvider, PersistenceProviderRegistry, RedisConfig, S3Config,
+};
+use crate::persistence::{
+    cloud::{
+        DigitalOceanSpacesAddressableDirectoryProvider, DigitalOceanSpacesClusterNodeProvider,
+        S3AddressableDirectoryProvider, S3ClusterNodeProvider,
+    },
+    memory::{MemoryAddressableDirectoryProvider, MemoryClusterNodeProvider},
+    tikv::{TiKVAddressableProvider, TiKVClusterProvider, TiKVConfig},
+};
+use orbit_shared::{OrbitError, OrbitResult};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;

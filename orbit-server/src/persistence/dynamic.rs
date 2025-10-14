@@ -3,8 +3,11 @@
 //! This module provides health monitoring, circuit breaker patterns, and automatic
 //! failover capabilities for persistence providers.
 
-use super::*;
-use crate::persistence::config::*;
+use super::{AddressableDirectoryProvider, ClusterNodeProvider, PersistenceProvider};
+use crate::persistence::config::{
+    DynamicProviderConfig, FailoverConfig, FailoverStrategy, HealthMonitorConfig,
+};
+use orbit_shared::{OrbitError, OrbitResult};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};

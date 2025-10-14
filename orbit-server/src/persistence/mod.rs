@@ -5,7 +5,9 @@
 //! specialized storage systems.
 
 use async_trait::async_trait;
-use orbit_shared::{OrbitError, OrbitResult};
+use orbit_shared::{
+    AddressableLease, AddressableReference, NodeId, NodeInfo, NodeLease, OrbitError, OrbitResult,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;

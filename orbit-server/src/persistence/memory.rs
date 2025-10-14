@@ -5,6 +5,9 @@
 
 use super::*;
 use dashmap::DashMap;
+use orbit_shared::{
+    AddressableLease, AddressableReference, NodeId, NodeInfo, NodeLease, NodeStatus,
+};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::fs;

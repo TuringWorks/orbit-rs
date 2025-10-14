@@ -5,6 +5,7 @@
 //! with Raft consensus.
 
 use super::*;
+use orbit_shared::{AddressableLease, AddressableReference, NodeId, NodeInfo, NodeLease};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;

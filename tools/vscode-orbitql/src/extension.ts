@@ -1,4 +1,9 @@
-import * as vscode from 'vscode';
+import {
+    ExtensionContext,
+    workspace,
+    window,
+    commands
+} from 'vscode';
 import {
     LanguageClient,
     LanguageClientOptions,
@@ -8,9 +13,9 @@ import {
 
 let client: LanguageClient;
 
-export async function activate(context: vscode.ExtensionContext) {
+export async function activate(context: ExtensionContext) {
     // Get configuration
-    const config = vscode.workspace.getConfiguration('orbitql');
+    const config = workspace.getConfiguration('orbitql');
     const serverPath = config.get<string>('server.path', 'orbitql-lsp');
     const serverArgs = config.get<string[]>('server.args', []);
     const traceLevel = config.get<string>('trace.server', 'off');
@@ -37,7 +42,7 @@ export async function activate(context: vscode.ExtensionContext) {
         ],
         synchronize: {
             // Notify the server about file changes to OrbitQL files
-            fileEvents: vscode.workspace.createFileSystemWatcher('**/*.{oql,orbitql}')
+            fileEvents: workspace.createFileSystemWatcher('**/*.{oql,orbitql}')
         },
         // Pass configuration to the server
         initializationOptions: {
@@ -60,13 +65,13 @@ export async function activate(context: vscode.ExtensionContext) {
     try {
         await client.start();
         
-        vscode.window.showInformationMessage('OrbitQL Language Server started successfully');
+        window.showInformationMessage('OrbitQL Language Server started successfully');
 
         // Register additional commands
         registerCommands(context);
 
     } catch (error) {
-        vscode.window.showErrorMessage(`Failed to start OrbitQL Language Server: ${error}`);
+        window.showErrorMessage(`Failed to start OrbitQL Language Server: ${error}`);
         console.error('Failed to start LSP client:', error);
     }
 }
@@ -78,18 +83,18 @@ export function deactivate(): Thenable<void> | undefined {
     return client.stop();
 }
 
-function registerCommands(context: vscode.ExtensionContext) {
+function registerCommands(context: ExtensionContext) {
     // Command to restart the language server
-    const restartCommand = vscode.commands.registerCommand('orbitql.restart', async () => {
+    const restartCommand = commands.registerCommand('orbitql.restart', async () => {
         if (client) {
             await client.stop();
             await client.start();
-            vscode.window.showInformationMessage('OrbitQL Language Server restarted');
+            window.showInformationMessage('OrbitQL Language Server restarted');
         }
     });
 
     // Command to show server status
-    const statusCommand = vscode.commands.registerCommand('orbitql.status', () => {
+    const statusCommand = commands.registerCommand('orbitql.status', () => {
         if (client) {
             const state = client.state;
             let statusText = 'Unknown';
@@ -101,31 +106,31 @@ function registerCommands(context: vscode.ExtensionContext) {
                 case 3: statusText = 'Stopping'; break;
             }
             
-            vscode.window.showInformationMessage(`OrbitQL Language Server Status: ${statusText}`);
+            window.showInformationMessage(`OrbitQL Language Server Status: ${statusText}`);
         } else {
-            vscode.window.showWarningMessage('OrbitQL Language Server is not initialized');
+            window.showWarningMessage('OrbitQL Language Server is not initialized');
         }
     });
 
     // Command to format the current OrbitQL document
-    const formatCommand = vscode.commands.registerCommand('orbitql.format', async () => {
-        const editor = vscode.window.activeTextEditor;
+    const formatCommand = commands.registerCommand('orbitql.format', async () => {
+        const editor = window.activeTextEditor;
         if (editor && editor.document.languageId === 'orbitql') {
-            await vscode.commands.executeCommand('editor.action.formatDocument');
+            await commands.executeCommand('editor.action.formatDocument');
         } else {
-            vscode.window.showWarningMessage('No active OrbitQL document to format');
+            window.showWarningMessage('No active OrbitQL document to format');
         }
     });
 
     // Command to validate the current OrbitQL document
-    const validateCommand = vscode.commands.registerCommand('orbitql.validate', async () => {
-        const editor = vscode.window.activeTextEditor;
+    const validateCommand = commands.registerCommand('orbitql.validate', async () => {
+        const editor = window.activeTextEditor;
         if (editor && editor.document.languageId === 'orbitql') {
             // Trigger diagnostics refresh
-            await vscode.commands.executeCommand('editor.action.marker.next');
-            vscode.window.showInformationMessage('OrbitQL document validated');
+            await commands.executeCommand('editor.action.marker.next');
+            window.showInformationMessage('OrbitQL document validated');
         } else {
-            vscode.window.showWarningMessage('No active OrbitQL document to validate');
+            window.showWarningMessage('No active OrbitQL document to validate');
         }
     });
 
@@ -133,14 +138,14 @@ function registerCommands(context: vscode.ExtensionContext) {
 }
 
 // Handle configuration changes
-vscode.workspace.onDidChangeConfiguration(event => {
+workspace.onDidChangeConfiguration(event => {
     if (event.affectsConfiguration('orbitql')) {
-        vscode.window.showInformationMessage(
+        window.showInformationMessage(
             'OrbitQL configuration changed. Restart the language server to apply changes.',
             'Restart'
         ).then(selection => {
             if (selection === 'Restart') {
-                vscode.commands.executeCommand('orbitql.restart');
+                commands.executeCommand('orbitql.restart');
             }
         });
     }

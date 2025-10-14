@@ -1,6 +1,6 @@
 //! Main Orbit server implementation for hosting actors and managing the cluster
 
-use crate::mesh::{AddressableDirectory, ClusterManager, ClusterStats};
+use crate::mesh::{AddressableDirectory, ClusterManager, ClusterStats, DirectoryStats};
 use crate::persistence::config::PersistenceProviderConfig;
 use crate::persistence::PersistenceProviderRegistry;
 use crate::LoadBalancer;

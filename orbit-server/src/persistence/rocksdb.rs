@@ -8,6 +8,9 @@ use ::rocksdb::{
     BlockBasedOptions, Cache, Options, TransactionDB, TransactionDBOptions,
     WriteBatchWithTransaction,
 };
+use orbit_shared::{
+    AddressableLease, AddressableReference, NodeId, NodeInfo, NodeLease, NodeStatus,
+};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::Instant;
