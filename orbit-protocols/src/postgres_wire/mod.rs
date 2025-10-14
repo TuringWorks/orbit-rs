@@ -31,6 +31,7 @@
 //! - ✅ SQL parsing (SELECT, INSERT, UPDATE, DELETE)
 
 pub mod graphrag_engine;
+pub mod jsonb;
 pub mod messages;
 pub mod protocol;
 pub mod query_engine;

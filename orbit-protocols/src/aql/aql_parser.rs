@@ -45,180 +45,20 @@ impl AqlParser {
         Ok(query)
     }
 
-    /// Tokenize the AQL query string
+    /// Tokenize the AQL query string using decomposed tokenization strategy
     fn tokenize(&self, query: &str) -> ProtocolResult<Vec<AqlToken>> {
-        let mut tokens = Vec::new();
-        let mut current_token = String::new();
-        let mut in_quotes = false;
-        let mut quote_char = '\0';
-        let mut chars = query.chars().peekable();
-
-        while let Some(ch) = chars.next() {
-            match ch {
-                '"' | '\'' if !in_quotes => {
-                    if !current_token.is_empty() {
-                        tokens.push(self.classify_token(&current_token));
-                        current_token.clear();
-                    }
-                    in_quotes = true;
-                    quote_char = ch;
-                }
-                '"' | '\'' if in_quotes && ch == quote_char => {
-                    tokens.push(AqlToken::String(current_token.clone()));
-                    current_token.clear();
-                    in_quotes = false;
-                }
-                ' ' | '\t' | '\n' | '\r' if !in_quotes => {
-                    if !current_token.is_empty() {
-                        tokens.push(self.classify_token(&current_token));
-                        current_token.clear();
-                    }
-                }
-                '(' if !in_quotes => {
-                    if !current_token.is_empty() {
-                        tokens.push(self.classify_token(&current_token));
-                        current_token.clear();
-                    }
-                    tokens.push(AqlToken::LeftParen);
-                }
-                ')' if !in_quotes => {
-                    if !current_token.is_empty() {
-                        tokens.push(self.classify_token(&current_token));
-                        current_token.clear();
-                    }
-                    tokens.push(AqlToken::RightParen);
-                }
-                '{' if !in_quotes => {
-                    if !current_token.is_empty() {
-                        tokens.push(self.classify_token(&current_token));
-                        current_token.clear();
-                    }
-                    tokens.push(AqlToken::LeftBrace);
-                }
-                '}' if !in_quotes => {
-                    if !current_token.is_empty() {
-                        tokens.push(self.classify_token(&current_token));
-                        current_token.clear();
-                    }
-                    tokens.push(AqlToken::RightBrace);
-                }
-                '[' if !in_quotes => {
-                    if !current_token.is_empty() {
-                        tokens.push(self.classify_token(&current_token));
-                        current_token.clear();
-                    }
-                    tokens.push(AqlToken::LeftBracket);
-                }
-                ']' if !in_quotes => {
-                    if !current_token.is_empty() {
-                        tokens.push(self.classify_token(&current_token));
-                        current_token.clear();
-                    }
-                    tokens.push(AqlToken::RightBracket);
-                }
-                ',' if !in_quotes => {
-                    if !current_token.is_empty() {
-                        tokens.push(self.classify_token(&current_token));
-                        current_token.clear();
-                    }
-                    tokens.push(AqlToken::Comma);
-                }
-                ':' if !in_quotes => {
-                    if !current_token.is_empty() {
-                        tokens.push(self.classify_token(&current_token));
-                        current_token.clear();
-                    }
-                    tokens.push(AqlToken::Colon);
-                }
-                '=' if !in_quotes => {
-                    if !current_token.is_empty() {
-                        tokens.push(self.classify_token(&current_token));
-                        current_token.clear();
-                    }
-                    // Check for == operator
-                    if chars.peek() == Some(&'=') {
-                        chars.next(); // consume second =
-                        tokens.push(AqlToken::Equals);
-                    } else {
-                        tokens.push(AqlToken::Assignment);
-                    }
-                }
-                '!' if !in_quotes => {
-                    if chars.peek() == Some(&'=') {
-                        if !current_token.is_empty() {
-                            tokens.push(self.classify_token(&current_token));
-                            current_token.clear();
-                        }
-                        chars.next(); // consume =
-                        tokens.push(AqlToken::NotEquals);
-                    } else {
-                        current_token.push(ch);
-                    }
-                }
-                '<' if !in_quotes => {
-                    if !current_token.is_empty() {
-                        tokens.push(self.classify_token(&current_token));
-                        current_token.clear();
-                    }
-                    if chars.peek() == Some(&'=') {
-                        chars.next(); // consume =
-                        tokens.push(AqlToken::LessOrEqual);
-                    } else {
-                        tokens.push(AqlToken::Less);
-                    }
-                }
-                '>' if !in_quotes => {
-                    if !current_token.is_empty() {
-                        tokens.push(self.classify_token(&current_token));
-                        current_token.clear();
-                    }
-                    if chars.peek() == Some(&'=') {
-                        chars.next(); // consume =
-                        tokens.push(AqlToken::GreaterOrEqual);
-                    } else {
-                        tokens.push(AqlToken::Greater);
-                    }
-                }
-                '.' if !in_quotes => {
-                    if chars.peek() == Some(&'.') {
-                        if !current_token.is_empty() {
-                            tokens.push(self.classify_token(&current_token));
-                            current_token.clear();
-                        }
-                        chars.next(); // consume second .
-                        tokens.push(AqlToken::Range);
-                    } else {
-                        if !current_token.is_empty() {
-                            tokens.push(self.classify_token(&current_token));
-                            current_token.clear();
-                        }
-                        tokens.push(AqlToken::Dot);
-                    }
-                }
-                _ => {
-                    current_token.push(ch);
-                }
-            }
-        }
-
-        if !current_token.is_empty() {
-            if in_quotes {
-                return Err(ProtocolError::ParseError(
-                    "Unterminated string literal".to_string(),
-                ));
-            }
-            tokens.push(self.classify_token(&current_token));
-        }
-
-        if self.debug_mode {
-            debug!(tokens = ?tokens, "Tokenized AQL query");
-        }
-
-        Ok(tokens)
+        let mut tokenizer = AqlTokenizer::new(query, self.debug_mode);
+        tokenizer.tokenize()
     }
 
     /// Classify a token based on its content
+    #[allow(dead_code)]
     fn classify_token(&self, token: &str) -> AqlToken {
+        Self::classify_token_static(token)
+    }
+
+    /// Static token classification for use by tokenizer
+    fn classify_token_static(token: &str) -> AqlToken {
         match token.to_uppercase().as_str() {
             "FOR" => AqlToken::For,
             "IN" => AqlToken::In,
@@ -337,6 +177,191 @@ enum AqlToken {
     Comma,
     Colon,
     Dot,
+}
+
+/// Specialized tokenizer for AQL queries with reduced complexity
+#[derive(Debug)]
+struct AqlTokenizer {
+    #[allow(dead_code)]
+    query: String,
+    debug_mode: bool,
+    tokens: Vec<AqlToken>,
+    current_token: String,
+    position: usize,
+    chars: Vec<char>,
+    in_quotes: bool,
+    quote_char: char,
+}
+
+impl AqlTokenizer {
+    fn new(query: &str, debug_mode: bool) -> Self {
+        Self {
+            query: query.to_string(),
+            debug_mode,
+            tokens: Vec::new(),
+            current_token: String::new(),
+            position: 0,
+            chars: query.chars().collect(),
+            in_quotes: false,
+            quote_char: '\0',
+        }
+    }
+
+    fn tokenize(&mut self) -> ProtocolResult<Vec<AqlToken>> {
+        while self.position < self.chars.len() {
+            let ch = self.chars[self.position];
+            self.process_character(ch)?;
+            self.position += 1;
+        }
+
+        self.finalize_tokenization()?;
+
+        if self.debug_mode {
+            debug!(tokens = ?self.tokens, "Tokenized AQL query");
+        }
+
+        Ok(self.tokens.clone())
+    }
+
+    fn process_character(&mut self, ch: char) -> ProtocolResult<()> {
+        if self.in_quotes {
+            self.handle_quoted_character(ch);
+        } else {
+            self.handle_unquoted_character(ch)?;
+        }
+        Ok(())
+    }
+
+    fn handle_quoted_character(&mut self, ch: char) {
+        if ch == self.quote_char {
+            self.tokens
+                .push(AqlToken::String(self.current_token.clone()));
+            self.current_token.clear();
+            self.in_quotes = false;
+            self.quote_char = '\0';
+        } else {
+            self.current_token.push(ch);
+        }
+    }
+
+    fn handle_unquoted_character(&mut self, ch: char) -> ProtocolResult<()> {
+        match ch {
+            '"' | '\'' => self.start_string_literal(ch),
+            ' ' | '\t' | '\n' | '\r' => self.handle_whitespace(),
+            '(' | ')' | '{' | '}' | '[' | ']' | ',' | ':' => self.handle_single_char_token(ch),
+            '=' => self.handle_equals_operator(),
+            '!' => self.handle_exclamation_operator()?,
+            '<' => self.handle_less_operator(),
+            '>' => self.handle_greater_operator(),
+            '.' => self.handle_dot_operator(),
+            _ => self.current_token.push(ch),
+        }
+        Ok(())
+    }
+
+    fn start_string_literal(&mut self, quote: char) {
+        self.flush_current_token();
+        self.in_quotes = true;
+        self.quote_char = quote;
+    }
+
+    fn handle_whitespace(&mut self) {
+        self.flush_current_token();
+    }
+
+    fn handle_single_char_token(&mut self, ch: char) {
+        self.flush_current_token();
+        let token = match ch {
+            '(' => AqlToken::LeftParen,
+            ')' => AqlToken::RightParen,
+            '{' => AqlToken::LeftBrace,
+            '}' => AqlToken::RightBrace,
+            '[' => AqlToken::LeftBracket,
+            ']' => AqlToken::RightBracket,
+            ',' => AqlToken::Comma,
+            ':' => AqlToken::Colon,
+            _ => unreachable!("Invalid single char token: {}", ch),
+        };
+        self.tokens.push(token);
+    }
+
+    fn handle_equals_operator(&mut self) {
+        self.flush_current_token();
+        if self.peek_char() == Some('=') {
+            self.position += 1; // consume second =
+            self.tokens.push(AqlToken::Equals);
+        } else {
+            self.tokens.push(AqlToken::Assignment);
+        }
+    }
+
+    fn handle_exclamation_operator(&mut self) -> ProtocolResult<()> {
+        if self.peek_char() == Some('=') {
+            self.flush_current_token();
+            self.position += 1; // consume =
+            self.tokens.push(AqlToken::NotEquals);
+        } else {
+            self.current_token.push('!');
+        }
+        Ok(())
+    }
+
+    fn handle_less_operator(&mut self) {
+        self.flush_current_token();
+        if self.peek_char() == Some('=') {
+            self.position += 1; // consume =
+            self.tokens.push(AqlToken::LessOrEqual);
+        } else {
+            self.tokens.push(AqlToken::Less);
+        }
+    }
+
+    fn handle_greater_operator(&mut self) {
+        self.flush_current_token();
+        if self.peek_char() == Some('=') {
+            self.position += 1; // consume =
+            self.tokens.push(AqlToken::GreaterOrEqual);
+        } else {
+            self.tokens.push(AqlToken::Greater);
+        }
+    }
+
+    fn handle_dot_operator(&mut self) {
+        if self.peek_char() == Some('.') {
+            self.flush_current_token();
+            self.position += 1; // consume second .
+            self.tokens.push(AqlToken::Range);
+        } else {
+            self.flush_current_token();
+            self.tokens.push(AqlToken::Dot);
+        }
+    }
+
+    fn peek_char(&self) -> Option<char> {
+        if self.position + 1 < self.chars.len() {
+            Some(self.chars[self.position + 1])
+        } else {
+            None
+        }
+    }
+
+    fn flush_current_token(&mut self) {
+        if !self.current_token.is_empty() {
+            self.tokens
+                .push(AqlParser::classify_token_static(&self.current_token));
+            self.current_token.clear();
+        }
+    }
+
+    fn finalize_tokenization(&mut self) -> ProtocolResult<()> {
+        if self.in_quotes {
+            return Err(ProtocolError::ParseError(
+                "Unterminated string literal".to_string(),
+            ));
+        }
+        self.flush_current_token();
+        Ok(())
+    }
 }
 
 /// Token parser for building AQL AST

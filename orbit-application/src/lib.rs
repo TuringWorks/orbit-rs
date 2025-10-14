@@ -37,14 +37,16 @@ pub mod plugin;
 pub mod service;
 pub mod telemetry;
 
-pub use config::*;
-pub use error::*;
-pub use event::*;
-pub use health::*;
-pub use lifecycle::*;
-pub use plugin::*;
-pub use service::*;
-pub use telemetry::*;
+pub use config::{AppConfig, PluginConfig, TelemetryConfig};
+pub use error::{AppError, AppResult};
+pub use event::EventBus;
+pub use health::HealthChecker;
+use health::HealthService;
+pub use lifecycle::LifecycleManager;
+pub use plugin::PluginManager;
+pub use service::{Service, ServiceRegistry};
+pub use telemetry::TelemetryManager;
+use telemetry::TelemetryService;
 
 use std::sync::Arc;
 use tokio::sync::RwLock;

@@ -354,7 +354,7 @@ export const QueryEditor: React.FC<QueryEditorProps> = ({
       const formatted = value
         .replace(/\s+/g, ' ')
         .replace(/\s*,\s*/g, ',\n  ')
-        .replace(/\s*(SELECT|FROM|WHERE|JOIN|GROUP BY|HAVING|ORDER BY|LIMIT)\s+/gi, '\n$1 ')
+        .replace(/\b(SELECT|FROM|WHERE|JOIN|GROUP BY|HAVING|ORDER BY|LIMIT)\b/gi, '\n$1')
         .replace(/^\s+/gm, '  ')
         .trim();
       onChange(formatted);

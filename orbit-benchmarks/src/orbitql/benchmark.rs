@@ -12,12 +12,12 @@ use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant, SystemTime};
 use tokio::sync::Semaphore;
 
-use orbit_shared::orbitql::ast::*;
-use orbit_shared::orbitql::cost_based_planner::*;
-use orbit_shared::orbitql::optimizer::*;
-use orbit_shared::orbitql::parallel_execution::*;
-use orbit_shared::orbitql::query_cache::*;
-use orbit_shared::orbitql::vectorized_execution::*;
+use orbit_shared::orbitql::ast::{QueryNode, QueryPlan};
+use orbit_shared::orbitql::cost_based_planner::CostBasedQueryPlanner;
+use orbit_shared::orbitql::optimizer::QueryOptimizer;
+use orbit_shared::orbitql::parallel_execution::ParallelExecutor;
+use orbit_shared::orbitql::query_cache::QueryCacheManager;
+use orbit_shared::orbitql::vectorized_execution::VectorizedExecutor;
 use orbit_shared::orbitql::QueryValue;
 
 /// Performance benchmarking framework

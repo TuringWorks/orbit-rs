@@ -15,8 +15,8 @@ use crate::neural_networks::layers::{LayerNorm, Linear};
 pub mod attention;
 pub mod positional_encoding;
 
-pub use attention::*;
-pub use positional_encoding::*;
+pub use attention::MultiHeadAttention;
+pub use positional_encoding::{PositionalEncoding, SinusoidalPositionalEncoding};
 
 /// Core Transformer model
 #[derive(Debug, Clone)]
