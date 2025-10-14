@@ -1,0 +1,39 @@
+# Git attributes for better blame and diff handling
+
+# Mark Rust files for proper diff and blame handling
+*.rs text eol=lf diff=rust
+
+# Ignore formatting commits for blame (requires git 2.23+)
+# This helps tools like SonarQube get better blame information
+*.rs filter=format-ignore-blame
+
+# TypeScript and JavaScript files
+*.ts text eol=lf
+*.tsx text eol=lf  
+*.js text eol=lf
+*.jsx text eol=lf
+
+# Configuration files
+*.toml text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.json text eol=lf
+
+# Documentation
+*.md text eol=lf
+*.txt text eol=lf
+
+# Scripts
+*.sh text eol=lf
+*.py text eol=lf
+
+# Binary files
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary

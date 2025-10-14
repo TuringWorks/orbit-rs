@@ -1,0 +1,6 @@
+# Git revisions to ignore for blame
+# This file contains commits that should be ignored when computing blame information.
+# It's particularly useful for formatting commits that don't change functionality.
+
+# Fix compiler warnings and improve code quality (formatting commit)
+87943e2cbd994cc3ce25eecbc499ee51964edaa9
