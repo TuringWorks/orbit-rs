@@ -57,5 +57,5 @@ name = "orbitql-lsp-simple"
 path = "src/bin/orbitql-lsp-simple.rs"
 
 [build-dependencies]
-tonic-build = "0.12"
+tonic-build = "0.14"
 prost-build = "0.13"
