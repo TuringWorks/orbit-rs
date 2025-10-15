@@ -27,7 +27,7 @@ tokio-util = "0.7"
 md5 = "0.7"
 tempfile = "3.0"
 tonic = "0.12"
-prost = "0.13"
+prost = "0.14"
 futures.workspace = true
 tower = { version = "0.5", features = ["limit", "load-shed", "timeout"] }
 hyper = "0.14"
