@@ -111,7 +111,7 @@ tempfile = "3.0"
 approx = "0.5"
 
 [build-dependencies]
-tonic-build = "0.12"
+tonic-build = "0.14"
 prost-build = "0.13"
 
 # [[bin]]
