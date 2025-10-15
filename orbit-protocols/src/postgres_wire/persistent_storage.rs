@@ -555,7 +555,11 @@ impl PersistentTableStorage for RocksDbTableStorage {
                     if !columns.is_empty() {
                         let mut filtered_values = HashMap::new();
                         for column in &columns {
-                            if let Some(value) = row.values.get(column) {
+                            // Try both original case and uppercase for compatibility
+                            let value = row.values.get(column)
+                                .or_else(|| row.values.get(&column.to_uppercase()))
+                                .or_else(|| row.values.get(&column.to_lowercase()));
+                            if let Some(value) = value {
                                 filtered_values.insert(column.clone(), value.clone());
                             }
                         }

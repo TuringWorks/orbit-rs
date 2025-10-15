@@ -961,21 +961,30 @@ impl QueryEngine {
             vec![]
         };
 
-        // Execute select query
+        // Execute select query - pass normalized column names to storage
+        let storage_columns = if columns.len() == 1 && columns[0] == "*" {
+            // For SELECT *, pass empty columns to storage (no filtering)
+            vec![]
+        } else {
+            // Normalize column names to uppercase
+            columns.into_iter().map(|c| c.to_uppercase()).collect()
+        };
+        
         let rows = storage
-            .select_rows(table, columns.clone(), conditions, None)
+            .select_rows(table, storage_columns.clone(), conditions, None)
             .await?;
 
         // Convert TableRows to QueryResult format
-        let result_columns = if columns.len() == 1 && columns[0] == "*" {
-            // For SELECT *, get columns from schema
+        let result_columns = if storage_columns.is_empty() {
+            // For SELECT *, get columns from schema and normalize to uppercase
             if let Some(schema) = storage.get_table_schema(table).await? {
-                schema.columns.into_iter().map(|c| c.name).collect()
+                schema.columns.into_iter().map(|c| c.name.to_uppercase()).collect()
             } else {
                 vec![]
             }
         } else {
-            columns
+            // Use the normalized column names
+            storage_columns.clone()
         };
 
         let result_rows: Vec<Vec<Option<String>>> = rows
