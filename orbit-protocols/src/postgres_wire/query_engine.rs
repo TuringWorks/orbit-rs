@@ -969,7 +969,7 @@ impl QueryEngine {
             // Normalize column names to uppercase
             columns.into_iter().map(|c| c.to_uppercase()).collect()
         };
-        
+
         let rows = storage
             .select_rows(table, storage_columns.clone(), conditions, None)
             .await?;
@@ -978,7 +978,11 @@ impl QueryEngine {
         let result_columns = if storage_columns.is_empty() {
             // For SELECT *, get columns from schema and normalize to uppercase
             if let Some(schema) = storage.get_table_schema(table).await? {
-                schema.columns.into_iter().map(|c| c.name.to_uppercase()).collect()
+                schema
+                    .columns
+                    .into_iter()
+                    .map(|c| c.name.to_uppercase())
+                    .collect()
             } else {
                 vec![]
             }
@@ -994,7 +998,10 @@ impl QueryEngine {
                     .iter()
                     .map(|col| {
                         // Try both original case and uppercase for compatibility
-                        let value = row.values.get(col).or_else(|| row.values.get(&col.to_uppercase()));
+                        let value = row
+                            .values
+                            .get(col)
+                            .or_else(|| row.values.get(&col.to_uppercase()));
                         value.map(|v| match v {
                             JsonValue::String(s) => s.clone(),
                             JsonValue::Number(n) => n.to_string(),
@@ -1051,20 +1058,27 @@ impl QueryEngine {
             if matches!(column_def.data_type, ColumnType::Serial) {
                 // Generate next ID - for now use a simple counter based on current time
                 let next_id = chrono::Utc::now().timestamp_micros() % 1000000;
-                row_values.insert(column_def.name.to_uppercase(), JsonValue::Number(serde_json::Number::from(next_id)));
+                row_values.insert(
+                    column_def.name.to_uppercase(),
+                    JsonValue::Number(serde_json::Number::from(next_id)),
+                );
             }
         }
 
         for (col, val) in columns.iter().zip(values.iter()) {
             let col_upper = col.to_uppercase();
-            
+
             // Skip SERIAL columns as they're auto-generated
-            if let Some(column_def) = schema.columns.iter().find(|c| c.name.to_uppercase() == col_upper) {
+            if let Some(column_def) = schema
+                .columns
+                .iter()
+                .find(|c| c.name.to_uppercase() == col_upper)
+            {
                 if matches!(column_def.data_type, ColumnType::Serial) {
                     continue;
                 }
             }
-            
+
             // Try to parse as JSON, fall back to string
             let json_val = match serde_json::from_str(val) {
                 Ok(json) => json,
@@ -1111,7 +1125,7 @@ impl QueryEngine {
             set_values.insert(col.to_uppercase(), json_val); // Normalize to uppercase
         }
 
-        // Convert WHERE clause to QueryConditions  
+        // Convert WHERE clause to QueryConditions
         let conditions = if let Some(wc) = where_clause {
             wc.conditions
                 .into_iter()

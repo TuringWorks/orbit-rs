@@ -175,8 +175,11 @@ impl RocksDbTableStorage {
     /// Evaluate query condition against a row
     fn matches_condition(&self, row: &TableRow, condition: &QueryCondition) -> bool {
         // Try both original case and uppercase for compatibility
-        let row_value = match row.values.get(&condition.column)
-            .or_else(|| row.values.get(&condition.column.to_uppercase())) {
+        let row_value = match row
+            .values
+            .get(&condition.column)
+            .or_else(|| row.values.get(&condition.column.to_uppercase()))
+        {
             Some(value) => value,
             None => return false, // Column doesn't exist in row
         };
@@ -556,7 +559,9 @@ impl PersistentTableStorage for RocksDbTableStorage {
                         let mut filtered_values = HashMap::new();
                         for column in &columns {
                             // Try both original case and uppercase for compatibility
-                            let value = row.values.get(column)
+                            let value = row
+                                .values
+                                .get(column)
                                 .or_else(|| row.values.get(&column.to_uppercase()))
                                 .or_else(|| row.values.get(&column.to_lowercase()));
                             if let Some(value) = value {
