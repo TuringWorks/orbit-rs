@@ -695,12 +695,12 @@ pub fn parse_drop_extension(parser: &mut SqlParser) -> ParseResult<Statement> {
         if let Some(Token::Identifier(ext_name)) = &parser.current_token {
             names.push(ext_name.clone());
             parser.advance()?;
-
-            if parser.matches(&[Token::Comma]) {
-                parser.advance()?;
-            } else {
-                break;
-            }
+        } else if let Some(Token::StringLiteral(ext_name)) = &parser.current_token {
+            names.push(ext_name.clone());
+            parser.advance()?;
+        } else if matches!(&parser.current_token, Some(Token::Vector)) {
+            names.push("vector".to_string());
+            parser.advance()?;
         } else {
             return Err(ParseError {
                 message: "Expected extension name".to_string(),
@@ -708,6 +708,12 @@ pub fn parse_drop_extension(parser: &mut SqlParser) -> ParseResult<Statement> {
                 expected: vec!["extension name".to_string()],
                 found: parser.current_token.clone(),
             });
+        }
+
+        if parser.matches(&[Token::Comma]) {
+            parser.advance()?;
+        } else {
+            break;
         }
     }
 
