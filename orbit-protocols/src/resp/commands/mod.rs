@@ -11,7 +11,9 @@ pub mod pubsub;
 pub mod server;
 pub mod set;
 pub mod sorted_set;
-// pub mod string; // TODO: fix this module
+pub mod string;
+pub mod string_persistent;
+// pub mod string_simple; // Replaced by full string implementation
 pub mod time_series;
 pub mod traits;
 pub mod vector;
@@ -26,9 +28,6 @@ mod handler {
 
     use super::{
         connection::ConnectionCommands,
-        // graph::GraphCommands, // TODO: fix
-        // graphrag::GraphRAGCommands, // TODO: fix
-        // string::StringCommands, // TODO: Implement string commands
         hash::HashCommands,
         list::ListCommands,
         // pubsub::PubSubCommands, // TODO: fix
@@ -37,6 +36,9 @@ mod handler {
         sorted_set::SortedSetCommands,
         // time_series::TimeSeriesCommands, // TODO: fix
         // vector::VectorCommands, // TODO: fix
+        // graph::GraphCommands, // TODO: fix
+        // graphrag::GraphRAGCommands, // TODO: fix
+        string::StringCommands,
     };
     use crate::error::ProtocolResult;
     use crate::resp::simple_local::SimpleLocalRegistry;
@@ -70,7 +72,7 @@ mod handler {
 
         // Specialized command handlers
         connection: ConnectionCommands,
-        // string: StringCommands, // TODO
+        string: StringCommands,
         hash: HashCommands,
         list: ListCommands,
         // pubsub: PubSubCommands, // TODO: fix
@@ -91,7 +93,7 @@ mod handler {
 
             Self {
                 connection: ConnectionCommands::new(orbit_client.clone()),
-                // string: StringCommands::new(orbit_client.clone(), local_registry.clone()), // TODO
+                string: StringCommands::new(orbit_client.clone()),
                 hash: HashCommands::new(orbit_client.clone()),
                 list: ListCommands::new(orbit_client.clone()),
                 // pubsub: PubSubCommands::new(orbit_client.clone(), local_registry.clone()), // TODO: fix
@@ -124,11 +126,7 @@ mod handler {
                     CommandHandlerTrait::handle(&self.connection, &command_name, &args).await
                 }
                 CommandCategory::String => {
-                    // CommandHandlerTrait::handle(&self.string, &command_name, &args).await // TODO
-                    Err(ProtocolError::RespError(format!(
-                        "ERR string commands not yet modularized: {}",
-                        command_name
-                    )))
+                    CommandHandlerTrait::handle(&self.string, &command_name, &args).await
                 }
                 CommandCategory::Hash => {
                     CommandHandlerTrait::handle(&self.hash, &command_name, &args).await
@@ -203,9 +201,8 @@ mod handler {
                 // String/Key commands
                 "GET" | "SET" | "DEL" | "EXISTS" | "TTL" | "EXPIRE" | "KEYS" | "APPEND"
                 | "GETRANGE" | "GETSET" | "MGET" | "MSET" | "SETEX" | "SETRANGE" | "STRLEN"
-                | "PERSIST" | "PEXPIRE" | "PTTL" | "RANDOMKEY" | "RENAME" | "TYPE" | "UNLINK" => {
-                    CommandCategory::String
-                }
+                | "INCR" | "DECR" | "INCRBY" | "DECRBY" | "SETNX" | "PERSIST" | "PEXPIRE"
+                | "PTTL" | "RANDOMKEY" | "RENAME" | "TYPE" | "UNLINK" => CommandCategory::String,
 
                 // Hash commands
                 "HGET" | "HSET" | "HGETALL" | "HMGET" | "HMSET" | "HDEL" | "HEXISTS" | "HKEYS"

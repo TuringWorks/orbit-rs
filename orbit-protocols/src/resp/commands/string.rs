@@ -1,546 +1,597 @@
-//! String command handlers for Redis RESP protocol
+//! Simple String command handlers for Redis RESP protocol
 //!
-//! This module implements Redis string commands like GET, SET, DEL, etc.
+//! This module implements basic Redis string commands (GET, SET, DEL, etc.)
+//! using the current command handler pattern.
 
-use super::traits::{BaseHandler, CommandHandler};
-use crate::resp::types::RespType;
+use super::traits::{BaseCommandHandler, CommandHandler};
+use crate::error::{ProtocolError, ProtocolResult};
+use crate::resp::RespValue;
 use async_trait::async_trait;
-use orbit_shared::error_utils::{app_error, parse_error, ErrorContext, Result};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use bytes::Bytes;
+use orbit_client::OrbitClient;
+use std::sync::Arc;
+use tracing::debug;
 
-pub struct StringHandler {
-    base: BaseHandler,
+pub struct StringCommands {
+    base: BaseCommandHandler,
 }
 
-impl StringHandler {
-    pub fn new(base: BaseHandler) -> Self {
-        Self { base }
-    }
-
-    /// Parse TTL value from arguments
-    fn parse_ttl(args: &[RespType]) -> Result<Option<Duration>> {
-        if args.len() >= 2 {
-            match &args[1] {
-                RespType::BulkString(ttl_str) => {
-                    let ttl: u64 = ttl_str
-                        .parse()
-                        .map_err(|_| parse_error!("Invalid TTL value", ttl_str))?;
-                    Ok(Some(Duration::from_secs(ttl)))
-                }
-                RespType::Integer(ttl) => {
-                    if *ttl >= 0 {
-                        Ok(Some(Duration::from_secs(*ttl as u64)))
-                    } else {
-                        Err(parse_error!("TTL cannot be negative"))
-                    }
-                }
-                _ => Err(parse_error!("Invalid TTL type")),
-            }
-        } else {
-            Ok(None)
+impl StringCommands {
+    pub fn new(orbit_client: Arc<OrbitClient>) -> Self {
+        let local_registry = Arc::new(crate::resp::simple_local::SimpleLocalRegistry::new());
+        Self {
+            base: BaseCommandHandler::new(orbit_client, local_registry),
         }
     }
 
-    /// Parse SET command options (EX, PX, NX, XX)
-    fn parse_set_options(args: &[RespType]) -> Result<(Option<Duration>, Option<String>)> {
-        let mut ttl = None;
-        let mut condition = None;
-
-        let mut i = 2; // Start after key and value
-        while i < args.len() {
-            match &args[i] {
-                RespType::BulkString(opt) => match opt.to_uppercase().as_str() {
-                    "EX" => {
-                        if i + 1 >= args.len() {
-                            return Err(parse_error!("EX requires a value"));
-                        }
-                        ttl = Some(
-                            Self::parse_ttl(&args[i + 1..])?
-                                .ok_or_else(|| parse_error!("Invalid EX value"))?,
-                        );
-                        i += 2;
-                    }
-                    "PX" => {
-                        if i + 1 >= args.len() {
-                            return Err(parse_error!("PX requires a value"));
-                        }
-                        if let Some(ms_ttl) = Self::parse_ttl(&args[i + 1..])? {
-                            ttl = Some(Duration::from_millis(ms_ttl.as_secs() * 1000));
-                        }
-                        i += 2;
-                    }
-                    "NX" => {
-                        condition = Some("NX".to_string());
-                        i += 1;
-                    }
-                    "XX" => {
-                        condition = Some("XX".to_string());
-                        i += 1;
-                    }
-                    _ => return Err(parse_error!("Unknown SET option", opt)),
-                },
-                _ => return Err(parse_error!("Invalid SET option type")),
-            }
-        }
-
-        Ok((ttl, condition))
-    }
-}
-
-#[async_trait]
-impl CommandHandler for StringHandler {
-    async fn handle_command(&self, command: &str, args: &[RespType]) -> Result<RespType> {
-        match command.to_uppercase().as_str() {
-            "GET" => self.handle_get(args).await,
-            "SET" => self.handle_set(args).await,
-            "DEL" => self.handle_del(args).await,
-            "EXISTS" => self.handle_exists(args).await,
-            "STRLEN" => self.handle_strlen(args).await,
-            "GETSET" => self.handle_getset(args).await,
-            "MGET" => self.handle_mget(args).await,
-            "MSET" => self.handle_mset(args).await,
-            "INCR" => self.handle_incr(args).await,
-            "DECR" => self.handle_decr(args).await,
-            "INCRBY" => self.handle_incrby(args).await,
-            "DECRBY" => self.handle_decrby(args).await,
-            "APPEND" => self.handle_append(args).await,
-            "SETEX" => self.handle_setex(args).await,
-            "SETNX" => self.handle_setnx(args).await,
-            _ => Err(app_error(&format!("Unknown string command: {}", command))),
-        }
-    }
-
-    fn validate_args(&self, command: &str, args: &[RespType]) -> Result<()> {
-        let min_args = match command.to_uppercase().as_str() {
-            "GET" | "DEL" | "EXISTS" | "STRLEN" | "INCR" | "DECR" => 1,
-            "SET" | "GETSET" | "INCRBY" | "DECRBY" | "APPEND" | "SETNX" => 2,
-            "SETEX" => 3,
-            "MGET" | "MSET" => 1, // At least one key/value pair
-            _ => 0,
-        };
-
-        if args.len() < min_args {
-            return Err(parse_error!(&format!(
-                "Wrong number of arguments for '{}' command",
-                command
+    // Delegate trait methods to avoid duplicate code
+    fn validate_arg_count(
+        &self,
+        command_name: &str,
+        args: &[RespValue],
+        expected: usize,
+    ) -> ProtocolResult<()> {
+        if args.len() != expected {
+            return Err(ProtocolError::RespError(format!(
+                "ERR wrong number of arguments for '{}' command",
+                command_name.to_lowercase()
             )));
         }
-
-        // Validate key types for commands that expect string keys
-        for (i, arg) in args.iter().enumerate() {
-            match command.to_uppercase().as_str() {
-                "GET" | "SET" | "DEL" | "EXISTS" | "STRLEN" | "GETSET" | "INCR" | "DECR"
-                | "INCRBY" | "DECRBY" | "APPEND" | "SETEX" | "SETNX"
-                    if i == 0 =>
-                {
-                    if !matches!(arg, RespType::BulkString(_)) {
-                        return Err(parse_error!("Key must be a string"));
-                    }
-                }
-                "MGET" | "MSET" => {
-                    if !matches!(arg, RespType::BulkString(_)) {
-                        return Err(parse_error!("Keys must be strings"));
-                    }
-                }
-                _ => {}
-            }
-        }
-
         Ok(())
     }
-}
 
-// Individual command implementations
-impl StringHandler {
-    async fn handle_get(&self, args: &[RespType]) -> Result<RespType> {
-        self.validate_args("GET", args)?;
-
-        let key = self
-            .extract_string(&args[0])
-            .context("Failed to extract key from GET command")?;
-
-        match self.base.client.get(&key).await {
-            Ok(Some(value)) => Ok(RespType::BulkString(value)),
-            Ok(None) => Ok(RespType::Null),
-            Err(e) => Err(app_error(&format!("GET operation failed: {}", e))),
-        }
+    fn get_string_arg(
+        &self,
+        args: &[RespValue],
+        index: usize,
+        command_name: &str,
+    ) -> ProtocolResult<String> {
+        args.get(index).and_then(|v| v.as_string()).ok_or_else(|| {
+            ProtocolError::RespError(format!(
+                "ERR invalid argument for '{}' command",
+                command_name.to_lowercase()
+            ))
+        })
     }
 
-    async fn handle_set(&self, args: &[RespType]) -> Result<RespType> {
-        self.validate_args("SET", args)?;
+    async fn cmd_get(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        self.validate_arg_count("GET", args, 1)?;
 
-        let key = self
-            .extract_string(&args[0])
-            .context("Failed to extract key from SET command")?;
-        let value = self
-            .extract_string(&args[1])
-            .context("Failed to extract value from SET command")?;
+        let key = self.get_string_arg(args, 0, "GET")?;
 
-        let (ttl, condition) = Self::parse_set_options(args)?;
-
-        // Handle conditional SET operations
-        match condition.as_deref() {
-            Some("NX") => {
-                // SET IF NOT EXISTS
-                let exists = self
-                    .base
-                    .client
-                    .exists(&key)
-                    .await
-                    .map_err(|e| app_error(&format!("EXISTS check failed: {}", e)))?;
-                if exists {
-                    return Ok(RespType::Null);
-                }
-            }
-            Some("XX") => {
-                // SET IF EXISTS
-                let exists = self
-                    .base
-                    .client
-                    .exists(&key)
-                    .await
-                    .map_err(|e| app_error(&format!("EXISTS check failed: {}", e)))?;
-                if !exists {
-                    return Ok(RespType::Null);
-                }
-            }
-            _ => {}
-        }
-
-        // Perform the SET operation
-        match ttl {
-            Some(duration) => {
-                self.base
-                    .client
-                    .set_with_expiry(&key, &value, duration)
-                    .await
-                    .map_err(|e| app_error(&format!("SET with expiry failed: {}", e)))?;
-            }
-            None => {
-                self.base
-                    .client
-                    .set(&key, &value)
-                    .await
-                    .map_err(|e| app_error(&format!("SET operation failed: {}", e)))?;
-            }
-        }
-
-        Ok(RespType::SimpleString("OK".to_string()))
-    }
-
-    async fn handle_del(&self, args: &[RespType]) -> Result<RespType> {
-        self.validate_args("DEL", args)?;
-
-        let mut deleted = 0i64;
-        for arg in args {
-            let key = self
-                .extract_string(arg)
-                .context("Failed to extract key from DEL command")?;
-
-            match self.base.client.delete(&key).await {
-                Ok(true) => deleted += 1,
-                Ok(false) => {} // Key didn't exist
-                Err(e) => return Err(app_error(&format!("DEL operation failed: {}", e))),
-            }
-        }
-
-        Ok(RespType::Integer(deleted))
-    }
-
-    async fn handle_exists(&self, args: &[RespType]) -> Result<RespType> {
-        self.validate_args("EXISTS", args)?;
-
-        let mut count = 0i64;
-        for arg in args {
-            let key = self
-                .extract_string(arg)
-                .context("Failed to extract key from EXISTS command")?;
-
-            match self.base.client.exists(&key).await {
-                Ok(true) => count += 1,
-                Ok(false) => {}
-                Err(e) => return Err(app_error(&format!("EXISTS operation failed: {}", e))),
-            }
-        }
-
-        Ok(RespType::Integer(count))
-    }
-
-    async fn handle_strlen(&self, args: &[RespType]) -> Result<RespType> {
-        self.validate_args("STRLEN", args)?;
-
-        let key = self
-            .extract_string(&args[0])
-            .context("Failed to extract key from STRLEN command")?;
-
-        match self.base.client.get(&key).await {
-            Ok(Some(value)) => Ok(RespType::Integer(value.len() as i64)),
-            Ok(None) => Ok(RespType::Integer(0)),
-            Err(e) => Err(app_error(&format!("STRLEN operation failed: {}", e))),
-        }
-    }
-
-    async fn handle_getset(&self, args: &[RespType]) -> Result<RespType> {
-        self.validate_args("GETSET", args)?;
-
-        let key = self
-            .extract_string(&args[0])
-            .context("Failed to extract key from GETSET command")?;
-        let new_value = self
-            .extract_string(&args[1])
-            .context("Failed to extract value from GETSET command")?;
-
-        // Get the old value first
-        let old_value = match self.base.client.get(&key).await {
-            Ok(value) => value,
-            Err(e) => return Err(app_error(&format!("GETSET get operation failed: {}", e))),
-        };
-
-        // Set the new value
-        self.base
-            .client
-            .set(&key, &new_value)
+        let result = self
+            .base
+            .local_registry
+            .execute_keyvalue(&key, "get_value", &[])
             .await
-            .map_err(|e| app_error(&format!("GETSET set operation failed: {}", e)))?;
+            .map_err(|e| {
+                crate::error::ProtocolError::RespError(format!(
+                    "ERR actor invocation failed: {}",
+                    e
+                ))
+            })?;
 
-        match old_value {
-            Some(value) => Ok(RespType::BulkString(value)),
-            None => Ok(RespType::Null),
-        }
+        let value: Option<String> = serde_json::from_value(result).map_err(|e| {
+            crate::error::ProtocolError::RespError(format!("ERR serialization error: {}", e))
+        })?;
+
+        debug!("GET {} -> {:?}", key, value);
+
+        Ok(value
+            .map(|v| RespValue::BulkString(Bytes::from(v.into_bytes())))
+            .unwrap_or(RespValue::null()))
     }
 
-    async fn handle_mget(&self, args: &[RespType]) -> Result<RespType> {
-        self.validate_args("MGET", args)?;
+    async fn cmd_set(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        if args.len() < 2 {
+            return Err(crate::error::ProtocolError::RespError(
+                "ERR wrong number of arguments for 'set' command".to_string(),
+            ));
+        }
+
+        let key = self.get_string_arg(args, 0, "SET")?;
+        let value = self.get_string_arg(args, 1, "SET")?;
+
+        let _result = self
+            .base
+            .local_registry
+            .execute_keyvalue(
+                &key,
+                "set_value",
+                &[serde_json::Value::String(value.clone())],
+            )
+            .await
+            .map_err(|e| {
+                crate::error::ProtocolError::RespError(format!(
+                    "ERR actor invocation failed: {}",
+                    e
+                ))
+            })?;
+
+        debug!("SET {} {}", key, value);
+
+        Ok(RespValue::ok())
+    }
+
+    async fn cmd_del(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        if args.is_empty() {
+            return Err(crate::error::ProtocolError::RespError(
+                "ERR wrong number of arguments for 'del' command".to_string(),
+            ));
+        }
+
+        let mut deleted_count = 0i64;
+
+        for arg in args {
+            let key = self.get_string_arg(&[arg.clone()], 0, "DEL")?;
+
+            // Check if key exists first
+            match self
+                .base
+                .local_registry
+                .execute_keyvalue(&key, "get_value", &[])
+                .await
+            {
+                Ok(result) => {
+                    let exists: Option<String> = serde_json::from_value(result).unwrap_or(None);
+                    if exists.is_some() {
+                        // Try to delete
+                        let _result = self
+                            .base
+                            .local_registry
+                            .execute_keyvalue(&key, "set_value", &[serde_json::Value::Null])
+                            .await
+                            .map_err(|e| {
+                                crate::error::ProtocolError::RespError(format!(
+                                    "ERR actor invocation failed: {}",
+                                    e
+                                ))
+                            })?;
+                        deleted_count += 1;
+                    }
+                }
+                Err(_) => {
+                    // Key doesn't exist, continue
+                }
+            }
+        }
+
+        debug!("DEL -> {} keys deleted", deleted_count);
+
+        Ok(RespValue::Integer(deleted_count))
+    }
+
+    async fn cmd_exists(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        if args.is_empty() {
+            return Err(crate::error::ProtocolError::RespError(
+                "ERR wrong number of arguments for 'exists' command".to_string(),
+            ));
+        }
+
+        let mut exists_count = 0i64;
+
+        for arg in args {
+            let key = self.get_string_arg(&[arg.clone()], 0, "EXISTS")?;
+
+            match self
+                .base
+                .local_registry
+                .execute_keyvalue(&key, "get_value", &[])
+                .await
+            {
+                Ok(result) => {
+                    let value: Option<String> = serde_json::from_value(result).unwrap_or(None);
+                    if value.is_some() {
+                        exists_count += 1;
+                    }
+                }
+                Err(_) => {
+                    // Key doesn't exist
+                }
+            }
+        }
+
+        debug!("EXISTS -> {} keys exist", exists_count);
+
+        Ok(RespValue::Integer(exists_count))
+    }
+
+    async fn cmd_strlen(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        self.validate_arg_count("STRLEN", args, 1)?;
+
+        let key = self.get_string_arg(args, 0, "STRLEN")?;
+
+        let result = self
+            .base
+            .local_registry
+            .execute_keyvalue(&key, "get_value", &[])
+            .await
+            .map_err(|e| {
+                crate::error::ProtocolError::RespError(format!(
+                    "ERR actor invocation failed: {}",
+                    e
+                ))
+            })?;
+
+        let value: Option<String> = serde_json::from_value(result).map_err(|e| {
+            crate::error::ProtocolError::RespError(format!("ERR serialization error: {}", e))
+        })?;
+
+        let length = value.map(|v| v.len() as i64).unwrap_or(0);
+        debug!("STRLEN {} -> {}", key, length);
+
+        Ok(RespValue::Integer(length))
+    }
+
+    async fn cmd_mget(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        if args.is_empty() {
+            return Err(ProtocolError::RespError(
+                "ERR wrong number of arguments for 'mget' command".to_string(),
+            ));
+        }
 
         let mut results = Vec::new();
 
         for arg in args {
-            let key = self
-                .extract_string(arg)
-                .context("Failed to extract key from MGET command")?;
+            let key = self.get_string_arg(&[arg.clone()], 0, "MGET")?;
 
-            match self.base.client.get(&key).await {
-                Ok(Some(value)) => results.push(RespType::BulkString(value)),
-                Ok(None) => results.push(RespType::Null),
-                Err(e) => {
-                    return Err(app_error(&format!(
-                        "MGET operation failed for key {}: {}",
-                        key, e
-                    )))
+            match self
+                .base
+                .local_registry
+                .execute_keyvalue(&key, "get_value", &[])
+                .await
+            {
+                Ok(result) => {
+                    let value: Option<String> = serde_json::from_value(result).unwrap_or(None);
+                    if let Some(v) = value {
+                        results.push(RespValue::BulkString(Bytes::from(v.into_bytes())));
+                    } else {
+                        results.push(RespValue::null());
+                    }
+                }
+                Err(_) => {
+                    results.push(RespValue::null());
                 }
             }
         }
 
-        Ok(RespType::Array(results))
+        debug!("MGET -> {} values", results.len());
+        Ok(RespValue::Array(results))
     }
 
-    async fn handle_mset(&self, args: &[RespType]) -> Result<RespType> {
-        self.validate_args("MSET", args)?;
-
+    async fn cmd_mset(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
         if args.len() % 2 != 0 {
-            return Err(parse_error!("Wrong number of arguments for MSET"));
+            return Err(ProtocolError::RespError(
+                "ERR wrong number of arguments for 'mset' command".to_string(),
+            ));
         }
 
         for chunk in args.chunks(2) {
-            let key = self
-                .extract_string(&chunk[0])
-                .context("Failed to extract key from MSET command")?;
-            let value = self
-                .extract_string(&chunk[1])
-                .context("Failed to extract value from MSET command")?;
+            let key = self.get_string_arg(&chunk, 0, "MSET")?;
+            let value = self.get_string_arg(&chunk, 1, "MSET")?;
 
-            self.base
-                .client
-                .set(&key, &value)
+            let _result = self
+                .base
+                .local_registry
+                .execute_keyvalue(
+                    &key,
+                    "set_value",
+                    &[serde_json::Value::String(value.clone())],
+                )
                 .await
-                .map_err(|e| app_error(&format!("MSET operation failed for key {}: {}", key, e)))?;
+                .map_err(|e| {
+                    crate::error::ProtocolError::RespError(format!(
+                        "ERR actor invocation failed: {}",
+                        e
+                    ))
+                })?;
+
+            debug!("MSET {} {}", key, value);
         }
 
-        Ok(RespType::SimpleString("OK".to_string()))
+        Ok(RespValue::ok())
     }
 
-    async fn handle_incr(&self, args: &[RespType]) -> Result<RespType> {
-        self.handle_incrby_impl(args, 1).await
+    async fn cmd_incr(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        self.cmd_incrby_impl(args, 1).await
     }
 
-    async fn handle_decr(&self, args: &[RespType]) -> Result<RespType> {
-        self.handle_incrby_impl(args, -1).await
+    async fn cmd_decr(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        self.cmd_incrby_impl(args, -1).await
     }
 
-    async fn handle_incrby(&self, args: &[RespType]) -> Result<RespType> {
-        self.validate_args("INCRBY", args)?;
+    async fn cmd_incrby(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        if args.len() != 2 {
+            return Err(ProtocolError::RespError(
+                "ERR wrong number of arguments for 'incrby' command".to_string(),
+            ));
+        }
 
-        let increment = self
-            .extract_integer(&args[1])
-            .context("Failed to extract increment from INCRBY command")?;
-
-        self.handle_incrby_impl(&args[..1], increment).await
+        let increment = self.get_int_arg(args, 1, "INCRBY")?;
+        self.cmd_incrby_impl(&args[..1], increment).await
     }
 
-    async fn handle_decrby(&self, args: &[RespType]) -> Result<RespType> {
-        self.validate_args("DECRBY", args)?;
+    async fn cmd_decrby(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        if args.len() != 2 {
+            return Err(ProtocolError::RespError(
+                "ERR wrong number of arguments for 'decrby' command".to_string(),
+            ));
+        }
 
-        let decrement = self
-            .extract_integer(&args[1])
-            .context("Failed to extract decrement from DECRBY command")?;
-
-        self.handle_incrby_impl(&args[..1], -decrement).await
+        let decrement = self.get_int_arg(args, 1, "DECRBY")?;
+        self.cmd_incrby_impl(&args[..1], -decrement).await
     }
 
-    async fn handle_incrby_impl(&self, args: &[RespType], delta: i64) -> Result<RespType> {
-        let key = self
-            .extract_string(&args[0])
-            .context("Failed to extract key from increment command")?;
+    async fn cmd_incrby_impl(&self, args: &[RespValue], delta: i64) -> ProtocolResult<RespValue> {
+        let key = self.get_string_arg(args, 0, "INCR")?;
 
-        let current_value = match self.base.client.get(&key).await {
-            Ok(Some(value)) => value
-                .parse::<i64>()
-                .map_err(|_| parse_error!("Value is not an integer", &value))?,
-            Ok(None) => 0,
-            Err(e) => {
-                return Err(app_error(&format!(
-                    "Failed to get value for increment: {}",
-                    e
-                )))
+        // Get current value
+        let current_value = match self
+            .base
+            .local_registry
+            .execute_keyvalue(&key, "get_value", &[])
+            .await
+        {
+            Ok(result) => {
+                let value: Option<String> = serde_json::from_value(result).unwrap_or(None);
+                match value {
+                    Some(v) => v.parse::<i64>().map_err(|_| {
+                        ProtocolError::RespError(
+                            "ERR value is not an integer or out of range".to_string(),
+                        )
+                    })?,
+                    None => 0,
+                }
             }
+            Err(_) => 0, // Key doesn't exist, start from 0
         };
 
         let new_value = current_value + delta;
         let new_value_str = new_value.to_string();
 
-        self.base
-            .client
-            .set(&key, &new_value_str)
+        // Set the new value
+        let _result = self
+            .base
+            .local_registry
+            .execute_keyvalue(
+                &key,
+                "set_value",
+                &[serde_json::Value::String(new_value_str)],
+            )
             .await
-            .map_err(|e| app_error(&format!("Failed to set incremented value: {}", e)))?;
+            .map_err(|e| {
+                crate::error::ProtocolError::RespError(format!(
+                    "ERR actor invocation failed: {}",
+                    e
+                ))
+            })?;
 
-        Ok(RespType::Integer(new_value))
+        debug!("INCR/DECR {} -> {}", key, new_value);
+        Ok(RespValue::Integer(new_value))
     }
 
-    async fn handle_append(&self, args: &[RespType]) -> Result<RespType> {
-        self.validate_args("APPEND", args)?;
+    async fn cmd_append(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        if args.len() != 2 {
+            return Err(ProtocolError::RespError(
+                "ERR wrong number of arguments for 'append' command".to_string(),
+            ));
+        }
 
-        let key = self
-            .extract_string(&args[0])
-            .context("Failed to extract key from APPEND command")?;
-        let append_value = self
-            .extract_string(&args[1])
-            .context("Failed to extract value from APPEND command")?;
+        let key = self.get_string_arg(args, 0, "APPEND")?;
+        let append_value = self.get_string_arg(args, 1, "APPEND")?;
 
-        let current_value = self
+        // Get current value
+        let current_value = match self
             .base
-            .client
-            .get(&key)
+            .local_registry
+            .execute_keyvalue(&key, "get_value", &[])
             .await
-            .map_err(|e| app_error(&format!("APPEND get operation failed: {}", e)))?
-            .unwrap_or_default();
+        {
+            Ok(result) => {
+                let value: Option<String> = serde_json::from_value(result).unwrap_or(None);
+                value.unwrap_or_default()
+            }
+            Err(_) => String::new(), // Key doesn't exist, start with empty string
+        };
 
         let new_value = format!("{}{}", current_value, append_value);
         let new_length = new_value.len() as i64;
 
-        self.base
-            .client
-            .set(&key, &new_value)
+        // Set the new value
+        let _result = self
+            .base
+            .local_registry
+            .execute_keyvalue(&key, "set_value", &[serde_json::Value::String(new_value)])
             .await
-            .map_err(|e| app_error(&format!("APPEND set operation failed: {}", e)))?;
+            .map_err(|e| {
+                crate::error::ProtocolError::RespError(format!(
+                    "ERR actor invocation failed: {}",
+                    e
+                ))
+            })?;
 
-        Ok(RespType::Integer(new_length))
+        debug!("APPEND {} -> new length {}", key, new_length);
+        Ok(RespValue::Integer(new_length))
     }
 
-    async fn handle_setex(&self, args: &[RespType]) -> Result<RespType> {
-        self.validate_args("SETEX", args)?;
-
-        let key = self
-            .extract_string(&args[0])
-            .context("Failed to extract key from SETEX command")?;
-        let ttl_seconds = self
-            .extract_integer(&args[1])
-            .context("Failed to extract TTL from SETEX command")?;
-        let value = self
-            .extract_string(&args[2])
-            .context("Failed to extract value from SETEX command")?;
-
-        if ttl_seconds <= 0 {
-            return Err(parse_error!("TTL must be positive"));
+    async fn cmd_getset(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        if args.len() != 2 {
+            return Err(ProtocolError::RespError(
+                "ERR wrong number of arguments for 'getset' command".to_string(),
+            ));
         }
 
-        let ttl = Duration::from_secs(ttl_seconds as u64);
+        let key = self.get_string_arg(args, 0, "GETSET")?;
+        let new_value = self.get_string_arg(args, 1, "GETSET")?;
 
-        self.base
-            .client
-            .set_with_expiry(&key, &value, ttl)
+        // Get the current value first
+        let old_value = match self
+            .base
+            .local_registry
+            .execute_keyvalue(&key, "get_value", &[])
             .await
-            .map_err(|e| app_error(&format!("SETEX operation failed: {}", e)))?;
+        {
+            Ok(result) => {
+                let value: Option<String> = serde_json::from_value(result).unwrap_or(None);
+                value
+                    .map(|v| RespValue::BulkString(Bytes::from(v.into_bytes())))
+                    .unwrap_or(RespValue::null())
+            }
+            Err(_) => RespValue::null(), // Key doesn't exist
+        };
 
-        Ok(RespType::SimpleString("OK".to_string()))
+        // Set the new value
+        let _result = self
+            .base
+            .local_registry
+            .execute_keyvalue(
+                &key,
+                "set_value",
+                &[serde_json::Value::String(new_value.clone())],
+            )
+            .await
+            .map_err(|e| {
+                crate::error::ProtocolError::RespError(format!(
+                    "ERR actor invocation failed: {}",
+                    e
+                ))
+            })?;
+
+        debug!("GETSET {} -> new value set", key);
+        Ok(old_value)
     }
 
-    async fn handle_setnx(&self, args: &[RespType]) -> Result<RespType> {
-        self.validate_args("SETNX", args)?;
+    // Helper method to get integer argument
+    fn get_int_arg(
+        &self,
+        args: &[RespValue],
+        index: usize,
+        command_name: &str,
+    ) -> ProtocolResult<i64> {
+        args.get(index).and_then(|v| v.as_integer()).ok_or_else(|| {
+            ProtocolError::RespError(format!(
+                "ERR invalid integer argument for '{}' command",
+                command_name.to_lowercase()
+            ))
+        })
+    }
+}
 
-        let key = self
-            .extract_string(&args[0])
-            .context("Failed to extract key from SETNX command")?;
-        let value = self
-            .extract_string(&args[1])
-            .context("Failed to extract value from SETNX command")?;
+#[async_trait]
+impl CommandHandler for StringCommands {
+    fn supported_commands(&self) -> &[&'static str] {
+        &[
+            "GET", "SET", "DEL", "EXISTS", "STRLEN", "MGET", "MSET", "INCR", "DECR", "INCRBY",
+            "DECRBY", "APPEND", "GETSET", "SETEX", "SETNX",
+        ]
+    }
 
-        let exists = self
-            .base
-            .client
-            .exists(&key)
-            .await
-            .map_err(|e| app_error(&format!("SETNX exists check failed: {}", e)))?;
-
-        if exists {
-            Ok(RespType::Integer(0))
-        } else {
-            self.base
-                .client
-                .set(&key, &value)
-                .await
-                .map_err(|e| app_error(&format!("SETNX set operation failed: {}", e)))?;
-            Ok(RespType::Integer(1))
+    async fn handle(&self, command_name: &str, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        match command_name.to_uppercase().as_str() {
+            "GET" => self.cmd_get(args).await,
+            "SET" => self.cmd_set(args).await,
+            "DEL" => self.cmd_del(args).await,
+            "EXISTS" => self.cmd_exists(args).await,
+            "STRLEN" => self.cmd_strlen(args).await,
+            "MGET" => self.cmd_mget(args).await,
+            "MSET" => self.cmd_mset(args).await,
+            "INCR" => self.cmd_incr(args).await,
+            "DECR" => self.cmd_decr(args).await,
+            "INCRBY" => self.cmd_incrby(args).await,
+            "DECRBY" => self.cmd_decrby(args).await,
+            "APPEND" => self.cmd_append(args).await,
+            "GETSET" => self.cmd_getset(args).await,
+            "SETEX" => self.cmd_setex(args).await,
+            "SETNX" => self.cmd_setnx(args).await,
+            _ => Err(ProtocolError::RespError(format!(
+                "ERR unknown string command '{}'",
+                command_name
+            ))),
         }
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::resp::types::RespType;
+// Individual command implementations
+impl StringCommands {
+    async fn cmd_setex(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        self.validate_arg_count("SETEX", args, 3)?;
 
-    #[test]
-    fn test_parse_ttl() {
-        let args = vec![
-            RespType::BulkString("key".to_string()),
-            RespType::BulkString("300".to_string()),
-        ];
+        let key = self.get_string_arg(args, 0, "SETEX")?;
+        let ttl_seconds = self.get_int_arg(args, 1, "SETEX")?;
+        let value = self.get_string_arg(args, 2, "SETEX")?;
 
-        let ttl = StringHandler::parse_ttl(&args[1..]).unwrap();
-        assert_eq!(ttl, Some(Duration::from_secs(300)));
+        if ttl_seconds <= 0 {
+            return Err(ProtocolError::RespError(
+                "ERR invalid expire time in setex".to_string(),
+            ));
+        }
 
-        let args = vec![
-            RespType::BulkString("key".to_string()),
-            RespType::Integer(600),
-        ];
+        // Set the value first
+        let _result = self
+            .base
+            .local_registry
+            .execute_keyvalue(
+                &key,
+                "set_value",
+                &[serde_json::Value::String(value.clone())],
+            )
+            .await
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
 
-        let ttl = StringHandler::parse_ttl(&args[1..]).unwrap();
-        assert_eq!(ttl, Some(Duration::from_secs(600)));
+        // Set the expiration
+        let _result = self
+            .base
+            .local_registry
+            .execute_keyvalue(
+                &key,
+                "set_expiration",
+                &[serde_json::Value::Number(serde_json::Number::from(
+                    ttl_seconds as u64,
+                ))],
+            )
+            .await
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+
+        debug!("SETEX {} {} {}", key, ttl_seconds, value);
+        Ok(RespValue::ok())
     }
 
-    #[test]
-    fn test_parse_set_options() {
-        let args = vec![
-            RespType::BulkString("key".to_string()),
-            RespType::BulkString("value".to_string()),
-            RespType::BulkString("EX".to_string()),
-            RespType::BulkString("300".to_string()),
-            RespType::BulkString("NX".to_string()),
-        ];
+    async fn cmd_setnx(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        self.validate_arg_count("SETNX", args, 2)?;
 
-        let (ttl, condition) = StringHandler::parse_set_options(&args).unwrap();
-        assert_eq!(ttl, Some(Duration::from_secs(300)));
-        assert_eq!(condition, Some("NX".to_string()));
+        let key = self.get_string_arg(args, 0, "SETNX")?;
+        let value = self.get_string_arg(args, 1, "SETNX")?;
+
+        // Check if key exists
+        let result = self
+            .base
+            .local_registry
+            .execute_keyvalue(&key, "exists", &[])
+            .await
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+
+        let exists: bool = serde_json::from_value(result)
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))?;
+
+        if exists {
+            Ok(RespValue::Integer(0)) // Key exists, return 0
+        } else {
+            // Set the value since key doesn't exist
+            let _result = self
+                .base
+                .local_registry
+                .execute_keyvalue(
+                    &key,
+                    "set_value",
+                    &[serde_json::Value::String(value.clone())],
+                )
+                .await
+                .map_err(|e| {
+                    ProtocolError::RespError(format!("ERR actor invocation failed: {}", e))
+                })?;
+
+            debug!("SETNX {} {}", key, value);
+            Ok(RespValue::Integer(1))
+        }
     }
 }

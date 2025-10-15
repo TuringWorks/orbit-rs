@@ -27,6 +27,7 @@ pub mod mcp;
 pub mod ml; // New ML module
 pub mod neo4j;
 pub mod orbitql;
+pub mod persistence;
 pub mod postgres_wire;
 pub mod resp;
 pub mod time_series;

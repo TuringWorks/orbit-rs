@@ -378,6 +378,25 @@ impl PersistenceConfigBuilder {
         self
     }
 
+    /// Add a RocksDB provider configuration
+    pub fn with_rocksdb<S: Into<String>>(
+        mut self,
+        name: S,
+        config: crate::persistence::rocksdb::RocksDbConfig,
+        is_default: bool,
+    ) -> Self {
+        let name = name.into();
+        self.configs
+            .insert(name.clone(), PersistenceConfig::RocksDB(config));
+
+        if is_default {
+            self.default_addressable = Some(name.clone());
+            self.default_cluster = Some(name);
+        }
+
+        self
+    }
+
     /// Set different defaults for addressable and cluster providers
     pub fn with_defaults<S1, S2>(
         mut self,
@@ -447,6 +466,7 @@ impl PersistenceConfigBuilder {
             PersistenceConfig::Redis(config) => Self::validate_redis_config(name, config),
             PersistenceConfig::Composite(config) => Self::validate_composite_config(name, config),
             PersistenceConfig::TiKV(config) => Self::validate_tikv_config(name, config),
+            PersistenceConfig::RocksDB(config) => Self::validate_rocksdb_config(name, config),
             _ => Ok(()), // Other providers would have their validations here
         }
     }
@@ -525,6 +545,24 @@ impl PersistenceConfigBuilder {
         Self::validate_positive_value(config.batch_size, name, "batch size")?;
         Self::validate_positive_value(config.max_retries, name, "max retries")?;
         Self::validate_tls_config(name, config)?;
+        Ok(())
+    }
+
+    /// Validate RocksDB provider configuration
+    fn validate_rocksdb_config(
+        name: &str,
+        config: &crate::persistence::rocksdb::RocksDbConfig,
+    ) -> OrbitResult<()> {
+        Self::validate_non_empty_field(&config.data_dir, name, "data directory")?;
+        Self::validate_positive_value(config.max_background_jobs, name, "max background jobs")?;
+        Self::validate_positive_value(config.write_buffer_size, name, "write buffer size")?;
+        Self::validate_positive_value(
+            config.max_write_buffer_number,
+            name,
+            "max write buffer number",
+        )?;
+        Self::validate_positive_value(config.target_file_size_base, name, "target file size base")?;
+        Self::validate_positive_value(config.block_cache_size, name, "block cache size")?;
         Ok(())
     }
 
@@ -804,6 +842,33 @@ impl PersistenceProviderConfig {
                 );
                 let cluster_provider = Arc::new(
                     crate::persistence::tikv::TiKVClusterProvider::new(config.clone()).await?,
+                );
+
+                addressable_provider.initialize().await?;
+                cluster_provider.initialize().await?;
+
+                registry
+                    .register_addressable_provider(
+                        format!("{}_addressable", name),
+                        addressable_provider,
+                        is_default_addressable,
+                    )
+                    .await?;
+
+                registry
+                    .register_cluster_provider(
+                        format!("{}_cluster", name),
+                        cluster_provider,
+                        is_default_cluster,
+                    )
+                    .await?;
+            }
+            PersistenceConfig::RocksDB(config) => {
+                let addressable_provider = Arc::new(
+                    crate::persistence::rocksdb::RocksDbAddressableProvider::new(config.clone())?,
+                );
+                let cluster_provider = Arc::new(
+                    crate::persistence::rocksdb::RocksDbClusterProvider::new(config.clone())?,
                 );
 
                 addressable_provider.initialize().await?;

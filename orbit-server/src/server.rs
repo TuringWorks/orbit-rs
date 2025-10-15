@@ -9,7 +9,7 @@ use orbit_proto::{
     connection_service_server, health_check_response, health_service_server,
     OrbitConnectionService, OrbitHealthService,
 };
-use orbit_protocols::postgres_wire::{PostgresServer, QueryEngine};
+use orbit_protocols::postgres_wire::{PostgresServer, QueryEngine, RocksDbTableStorage};
 use orbit_protocols::resp::RespServer;
 use orbit_shared::{NodeCapabilities, NodeId, NodeInfo, NodeStatus, OrbitError, OrbitResult};
 use std::collections::HashMap;
@@ -220,13 +220,47 @@ impl OrbitServer {
         let connection_service = OrbitConnectionService::new();
         let health_service = OrbitHealthService::new();
 
-        // PostgreSQL server can be initialized immediately as it doesn't depend on OrbitClient
+        // PostgreSQL server can be initialized with persistent storage if available
         let postgres_server = if config.protocols.postgres_enabled {
             let postgres_addr = format!(
                 "{}:{}",
                 config.protocols.postgres_bind_address, config.protocols.postgres_port
             );
-            let query_engine = QueryEngine::new();
+
+            // Try to create QueryEngine with persistent storage if RocksDB is available
+            let query_engine = {
+                // Check if we have a RocksDB provider configured
+                // The addressable provider is registered as "rocksdb_addressable"
+                match persistence_registry
+                    .get_addressable_provider("rocksdb_addressable")
+                    .await
+                {
+                    Ok(_provider) => {
+                        // Create a separate RocksDB instance for PostgreSQL table storage
+                        // Use the same data directory structure as the server but with postgresql subdirectory
+                        let pg_data_path = "./orbit_integrated_data/postgresql";
+
+                        match RocksDbTableStorage::new(&pg_data_path) {
+                            Ok(storage) => {
+                                tracing::info!(
+                                    "PostgreSQL using persistent RocksDB storage at: {}",
+                                    pg_data_path
+                                );
+                                QueryEngine::new_with_persistent_storage(Arc::new(storage))
+                            }
+                            Err(e) => {
+                                tracing::warn!("Failed to create PostgreSQL persistent storage, falling back to memory: {}", e);
+                                QueryEngine::new()
+                            }
+                        }
+                    }
+                    Err(_) => {
+                        tracing::info!("PostgreSQL using in-memory storage (no RocksDB persistence configured)");
+                        QueryEngine::new()
+                    }
+                }
+            };
+
             Some(PostgresServer::new_with_query_engine(
                 postgres_addr,
                 query_engine,

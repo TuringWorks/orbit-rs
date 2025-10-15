@@ -7,6 +7,7 @@ use tokio::sync::RwLock;
 
 use crate::error::{ProtocolError, ProtocolResult};
 use crate::postgres_wire::graphrag_engine::GraphRAGQueryEngine;
+use crate::postgres_wire::persistent_storage::{PersistentTableStorage, QueryCondition, TableRow};
 use crate::postgres_wire::vector_engine::VectorQueryEngine;
 use orbit_client::OrbitClient;
 
@@ -50,6 +51,23 @@ enum Statement {
         table: String,
         where_clause: Option<WhereClause>,
     },
+    CreateTable {
+        table: String,
+        columns: Vec<SimpleColumnDef>,
+        if_not_exists: bool,
+    },
+    DropTable {
+        table: String,
+        if_exists: bool,
+    },
+}
+
+/// Simple column definition for basic DDL support
+#[derive(Debug, Clone)]
+struct SimpleColumnDef {
+    name: String,
+    data_type: String,
+    constraints: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -75,9 +93,11 @@ struct ActorRecord {
 
 /// Query engine that translates SQL to actor operations
 pub struct QueryEngine {
-    // In-memory storage for demonstration
+    // In-memory storage for demonstration (legacy actor operations)
     // TODO: Replace with OrbitClient integration
     actors: Arc<RwLock<HashMap<String, ActorRecord>>>,
+    // Optional persistent table storage for regular SQL tables
+    persistent_storage: Option<Arc<dyn PersistentTableStorage>>,
     // Optional vector query engine for pgvector compatibility
     vector_engine: Option<VectorQueryEngine>,
     // Optional GraphRAG query engine
@@ -89,6 +109,17 @@ impl QueryEngine {
     pub fn new() -> Self {
         Self {
             actors: Arc::new(RwLock::new(HashMap::new())),
+            persistent_storage: None,
+            vector_engine: None,
+            graphrag_engine: None,
+        }
+    }
+
+    /// Create a new query engine with persistent storage
+    pub fn new_with_persistent_storage(storage: Arc<dyn PersistentTableStorage>) -> Self {
+        Self {
+            actors: Arc::new(RwLock::new(HashMap::new())),
+            persistent_storage: Some(storage),
             vector_engine: None,
             graphrag_engine: None,
         }
@@ -101,6 +132,20 @@ impl QueryEngine {
         // This needs to be fixed when OrbitClient supports cloning or sharing
         Self {
             actors: Arc::new(RwLock::new(HashMap::new())),
+            persistent_storage: None,
+            vector_engine: Some(VectorQueryEngine::new(orbit_client)),
+            graphrag_engine: Some(GraphRAGQueryEngine::new_placeholder()),
+        }
+    }
+
+    /// Create a new query engine with both persistent storage and vector support
+    pub fn new_with_persistent_and_vector_support(
+        storage: Arc<dyn PersistentTableStorage>,
+        orbit_client: OrbitClient,
+    ) -> Self {
+        Self {
+            actors: Arc::new(RwLock::new(HashMap::new())),
+            persistent_storage: Some(storage),
             vector_engine: Some(VectorQueryEngine::new(orbit_client)),
             graphrag_engine: Some(GraphRAGQueryEngine::new_placeholder()),
         }
@@ -131,26 +176,100 @@ impl QueryEngine {
         // Handle regular SQL queries
         let statement = self.parse_sql(sql)?;
 
+        // Route queries based on table type and storage availability
         match statement {
             Statement::Select {
                 columns,
                 table,
                 where_clause,
-            } => self.execute_select(columns, &table, where_clause).await,
+            } => {
+                if table.to_uppercase() == "ACTORS" {
+                    self.execute_actor_select(columns, &table, where_clause)
+                        .await
+                } else if let Some(ref storage) = self.persistent_storage {
+                    self.execute_persistent_select(storage, columns, &table, where_clause)
+                        .await
+                } else {
+                    Err(ProtocolError::PostgresError(format!(
+                        "Table '{}' not found. Use actors table for actor queries or enable persistent storage.",
+                        table
+                    )))
+                }
+            }
             Statement::Insert {
                 table,
                 columns,
                 values,
-            } => self.execute_insert(&table, columns, values).await,
+            } => {
+                if table.to_uppercase() == "ACTORS" {
+                    self.execute_actor_insert(&table, columns, values).await
+                } else if let Some(ref storage) = self.persistent_storage {
+                    self.execute_persistent_insert(storage, &table, columns, values)
+                        .await
+                } else {
+                    Err(ProtocolError::PostgresError(format!(
+                        "Table '{}' not found. Use actors table for actor queries or enable persistent storage.",
+                        table
+                    )))
+                }
+            }
             Statement::Update {
                 table,
                 set_clauses,
                 where_clause,
-            } => self.execute_update(&table, set_clauses, where_clause).await,
+            } => {
+                if table.to_uppercase() == "ACTORS" {
+                    self.execute_actor_update(&table, set_clauses, where_clause)
+                        .await
+                } else if let Some(ref storage) = self.persistent_storage {
+                    self.execute_persistent_update(storage, &table, set_clauses, where_clause)
+                        .await
+                } else {
+                    Err(ProtocolError::PostgresError(format!(
+                        "Table '{}' not found. Use actors table for actor queries or enable persistent storage.",
+                        table
+                    )))
+                }
+            }
             Statement::Delete {
                 table,
                 where_clause,
-            } => self.execute_delete(&table, where_clause).await,
+            } => {
+                if table.to_uppercase() == "ACTORS" {
+                    self.execute_actor_delete(&table, where_clause).await
+                } else if let Some(ref storage) = self.persistent_storage {
+                    self.execute_persistent_delete(storage, &table, where_clause)
+                        .await
+                } else {
+                    Err(ProtocolError::PostgresError(format!(
+                        "Table '{}' not found. Use actors table for actor queries or enable persistent storage.",
+                        table
+                    )))
+                }
+            }
+            Statement::CreateTable {
+                table,
+                columns,
+                if_not_exists,
+            } => {
+                if let Some(ref storage) = self.persistent_storage {
+                    self.execute_create_table(storage, &table, columns, if_not_exists)
+                        .await
+                } else {
+                    Err(ProtocolError::PostgresError(
+                        "CREATE TABLE requires persistent storage to be enabled".to_string(),
+                    ))
+                }
+            }
+            Statement::DropTable { table, if_exists } => {
+                if let Some(ref storage) = self.persistent_storage {
+                    self.execute_drop_table(storage, &table, if_exists).await
+                } else {
+                    Err(ProtocolError::PostgresError(
+                        "DROP TABLE requires persistent storage to be enabled".to_string(),
+                    ))
+                }
+            }
         }
     }
 
@@ -192,6 +311,10 @@ impl QueryEngine {
             self.parse_update(&original_sql)
         } else if sql.starts_with("DELETE") {
             self.parse_delete(&original_sql)
+        } else if sql.starts_with("CREATE TABLE") {
+            self.parse_create_table(&original_sql)
+        } else if sql.starts_with("DROP TABLE") {
+            self.parse_drop_table(&original_sql)
         } else {
             Err(ProtocolError::PostgresError(format!(
                 "Unsupported SQL statement: {sql}"
@@ -512,8 +635,88 @@ impl QueryEngine {
         })
     }
 
-    /// Execute SELECT query
-    async fn execute_select(
+    /// Parse CREATE TABLE statement
+    fn parse_create_table(&self, sql: &str) -> ProtocolResult<Statement> {
+        // Simple parser: CREATE TABLE [IF NOT EXISTS] table_name (column_definitions)
+        let sql_upper = sql.to_uppercase();
+
+        // Check for IF NOT EXISTS
+        let if_not_exists = sql_upper.contains("IF NOT EXISTS");
+
+        // Find table name
+        let table_start = if if_not_exists {
+            sql_upper.find("EXISTS").unwrap() + 6
+        } else {
+            sql_upper.find("TABLE").unwrap() + 5
+        };
+
+        let table_end = sql[table_start..].find('(').unwrap() + table_start;
+        let table_name = sql[table_start..table_end].trim().to_uppercase();
+
+        // Find column definitions between parentheses
+        let col_start = table_end + 1;
+        let col_end = sql.rfind(')').ok_or_else(|| {
+            ProtocolError::PostgresError(
+                "Invalid CREATE TABLE syntax: missing closing parenthesis".to_string(),
+            )
+        })?;
+
+        let column_defs_str = &sql[col_start..col_end];
+        let mut columns = Vec::new();
+
+        // Split by commas and parse each column definition
+        for col_def in column_defs_str.split(',') {
+            let col_def = col_def.trim();
+            let parts: Vec<&str> = col_def.split_whitespace().collect();
+
+            if parts.len() >= 2 {
+                let name = parts[0].to_string();
+                let data_type = parts[1].to_string();
+                let constraints = parts[2..].iter().map(|s| s.to_string()).collect();
+
+                columns.push(SimpleColumnDef {
+                    name,
+                    data_type,
+                    constraints,
+                });
+            }
+        }
+
+        Ok(Statement::CreateTable {
+            table: table_name,
+            columns,
+            if_not_exists,
+        })
+    }
+
+    /// Parse DROP TABLE statement
+    fn parse_drop_table(&self, sql: &str) -> ProtocolResult<Statement> {
+        // Simple parser: DROP TABLE [IF EXISTS] table_name
+        let sql_upper = sql.to_uppercase();
+
+        // Check for IF EXISTS
+        let if_exists = sql_upper.contains("IF EXISTS");
+
+        // Find table name
+        let table_start = if if_exists {
+            sql_upper.find("EXISTS").unwrap() + 6
+        } else {
+            sql_upper.find("TABLE").unwrap() + 5
+        };
+
+        let table_name = sql[table_start..]
+            .trim()
+            .trim_end_matches(';')
+            .to_uppercase();
+
+        Ok(Statement::DropTable {
+            table: table_name,
+            if_exists,
+        })
+    }
+
+    /// Execute SELECT query on actors table
+    async fn execute_actor_select(
         &self,
         columns: Vec<String>,
         table: &str,
@@ -575,8 +778,8 @@ impl QueryEngine {
         })
     }
 
-    /// Execute INSERT query
-    async fn execute_insert(
+    /// Execute INSERT query on actors table
+    async fn execute_actor_insert(
         &self,
         table: &str,
         columns: Vec<String>,
@@ -627,8 +830,8 @@ impl QueryEngine {
         Ok(QueryResult::Insert { count: 1 })
     }
 
-    /// Execute UPDATE query
-    async fn execute_update(
+    /// Execute UPDATE query on actors table
+    async fn execute_actor_update(
         &self,
         table: &str,
         set_clauses: Vec<(String, String)>,
@@ -670,8 +873,8 @@ impl QueryEngine {
         Ok(QueryResult::Update { count })
     }
 
-    /// Execute DELETE query
-    async fn execute_delete(
+    /// Execute DELETE query on actors table
+    async fn execute_actor_delete(
         &self,
         table: &str,
         where_clause: Option<WhereClause>,
@@ -723,6 +926,333 @@ impl QueryEngine {
             }
         }
         true
+    }
+
+    /// Execute SELECT query on persistent storage
+    async fn execute_persistent_select(
+        &self,
+        storage: &Arc<dyn PersistentTableStorage>,
+        columns: Vec<String>,
+        table: &str,
+        where_clause: Option<WhereClause>,
+    ) -> ProtocolResult<QueryResult> {
+        // Check if table exists
+        if !storage.table_exists(table).await? {
+            return Err(ProtocolError::PostgresError(format!(
+                "Table '{}' does not exist",
+                table
+            )));
+        }
+
+        // Convert WHERE clause to QueryConditions
+        let conditions = if let Some(wc) = where_clause {
+            wc.conditions
+                .into_iter()
+                .map(|c| QueryCondition {
+                    column: c.column,
+                    operator: c.operator,
+                    value: match serde_json::from_str(&c.value) {
+                        Ok(json_val) => json_val,
+                        Err(_) => JsonValue::String(c.value),
+                    },
+                })
+                .collect()
+        } else {
+            vec![]
+        };
+
+        // Execute select query
+        let rows = storage
+            .select_rows(table, columns.clone(), conditions, None)
+            .await?;
+
+        // Convert TableRows to QueryResult format
+        let result_columns = if columns.len() == 1 && columns[0] == "*" {
+            // For SELECT *, get columns from schema
+            if let Some(schema) = storage.get_table_schema(table).await? {
+                schema.columns.into_iter().map(|c| c.name).collect()
+            } else {
+                vec![]
+            }
+        } else {
+            columns
+        };
+
+        let result_rows: Vec<Vec<Option<String>>> = rows
+            .into_iter()
+            .map(|row| {
+                result_columns
+                    .iter()
+                    .map(|col| {
+                        row.values.get(col).map(|v| match v {
+                            JsonValue::String(s) => s.clone(),
+                            JsonValue::Number(n) => n.to_string(),
+                            JsonValue::Bool(b) => b.to_string(),
+                            JsonValue::Null => "NULL".to_string(),
+                            _ => v.to_string(),
+                        })
+                    })
+                    .collect()
+            })
+            .collect();
+
+        Ok(QueryResult::Select {
+            columns: result_columns,
+            rows: result_rows,
+        })
+    }
+
+    /// Execute INSERT query on persistent storage
+    async fn execute_persistent_insert(
+        &self,
+        storage: &Arc<dyn PersistentTableStorage>,
+        table: &str,
+        columns: Vec<String>,
+        values: Vec<String>,
+    ) -> ProtocolResult<QueryResult> {
+        if columns.len() != values.len() {
+            return Err(ProtocolError::PostgresError(
+                "Column count doesn't match value count".to_string(),
+            ));
+        }
+
+        // Check if table exists
+        if !storage.table_exists(table).await? {
+            return Err(ProtocolError::PostgresError(format!(
+                "Table '{}' does not exist",
+                table
+            )));
+        }
+
+        // Build row data
+        let mut row_values = std::collections::HashMap::new();
+        let now = chrono::Utc::now();
+
+        for (col, val) in columns.iter().zip(values.iter()) {
+            // Try to parse as JSON, fall back to string
+            let json_val = match serde_json::from_str(val) {
+                Ok(json) => json,
+                Err(_) => JsonValue::String(val.clone()),
+            };
+            row_values.insert(col.clone(), json_val);
+        }
+
+        let row = TableRow {
+            values: row_values,
+            created_at: now,
+            updated_at: now,
+        };
+
+        // Insert the row
+        storage.insert_row(table, row).await?;
+
+        Ok(QueryResult::Insert { count: 1 })
+    }
+
+    /// Execute UPDATE query on persistent storage
+    async fn execute_persistent_update(
+        &self,
+        storage: &Arc<dyn PersistentTableStorage>,
+        table: &str,
+        set_clauses: Vec<(String, String)>,
+        where_clause: Option<WhereClause>,
+    ) -> ProtocolResult<QueryResult> {
+        // Check if table exists
+        if !storage.table_exists(table).await? {
+            return Err(ProtocolError::PostgresError(format!(
+                "Table '{}' does not exist",
+                table
+            )));
+        }
+
+        // Convert SET clauses to HashMap
+        let mut set_values = std::collections::HashMap::new();
+        for (col, val) in set_clauses {
+            let json_val = match serde_json::from_str(&val) {
+                Ok(json) => json,
+                Err(_) => JsonValue::String(val),
+            };
+            set_values.insert(col, json_val);
+        }
+
+        // Convert WHERE clause to QueryConditions
+        let conditions = if let Some(wc) = where_clause {
+            wc.conditions
+                .into_iter()
+                .map(|c| QueryCondition {
+                    column: c.column,
+                    operator: c.operator,
+                    value: match serde_json::from_str(&c.value) {
+                        Ok(json_val) => json_val,
+                        Err(_) => JsonValue::String(c.value),
+                    },
+                })
+                .collect()
+        } else {
+            vec![]
+        };
+
+        // Execute update
+        let count = storage.update_rows(table, set_values, conditions).await?;
+
+        Ok(QueryResult::Update {
+            count: count as usize,
+        })
+    }
+
+    /// Execute DELETE query on persistent storage
+    async fn execute_persistent_delete(
+        &self,
+        storage: &Arc<dyn PersistentTableStorage>,
+        table: &str,
+        where_clause: Option<WhereClause>,
+    ) -> ProtocolResult<QueryResult> {
+        // Check if table exists
+        if !storage.table_exists(table).await? {
+            return Err(ProtocolError::PostgresError(format!(
+                "Table '{}' does not exist",
+                table
+            )));
+        }
+
+        // Convert WHERE clause to QueryConditions
+        let conditions = if let Some(wc) = where_clause {
+            wc.conditions
+                .into_iter()
+                .map(|c| QueryCondition {
+                    column: c.column,
+                    operator: c.operator,
+                    value: match serde_json::from_str(&c.value) {
+                        Ok(json_val) => json_val,
+                        Err(_) => JsonValue::String(c.value),
+                    },
+                })
+                .collect()
+        } else {
+            vec![]
+        };
+
+        // Execute delete
+        let count = storage.delete_rows(table, conditions).await?;
+
+        Ok(QueryResult::Delete {
+            count: count as usize,
+        })
+    }
+
+    /// Execute CREATE TABLE on persistent storage
+    async fn execute_create_table(
+        &self,
+        storage: &Arc<dyn PersistentTableStorage>,
+        table: &str,
+        columns: Vec<SimpleColumnDef>,
+        if_not_exists: bool,
+    ) -> ProtocolResult<QueryResult> {
+        use crate::postgres_wire::persistent_storage::{ColumnDefinition, ColumnType, TableSchema};
+
+        // Check if table already exists
+        if storage.table_exists(table).await? {
+            if if_not_exists {
+                // IF NOT EXISTS specified, just return success without creating
+                return Ok(QueryResult::Select {
+                    columns: vec![],
+                    rows: vec![],
+                });
+            } else {
+                return Err(ProtocolError::PostgresError(format!(
+                    "Table '{}' already exists",
+                    table
+                )));
+            }
+        }
+
+        // Convert simple column definitions to persistent storage format
+        let mut column_defs = Vec::new();
+        for col in columns {
+            let column_type = match col.data_type.to_uppercase().as_str() {
+                "INTEGER" | "INT" => ColumnType::Integer,
+                "BIGINT" => ColumnType::BigInt,
+                "SERIAL" => ColumnType::Serial,
+                "TEXT" => ColumnType::Text,
+                "BOOLEAN" | "BOOL" => ColumnType::Boolean,
+                "JSON" => ColumnType::Json,
+                "TIMESTAMP" => ColumnType::Timestamp,
+                data_type => {
+                    if data_type.starts_with("VARCHAR") {
+                        // Extract length if present
+                        let len = if let Some(start) = data_type.find('(') {
+                            let end = data_type.find(')').unwrap_or(data_type.len());
+                            data_type[start + 1..end].parse().unwrap_or(255)
+                        } else {
+                            255
+                        };
+                        ColumnType::Varchar(len)
+                    } else {
+                        // Default to text for unknown types
+                        ColumnType::Text
+                    }
+                }
+            };
+
+            let nullable = !col
+                .constraints
+                .iter()
+                .any(|c| c.to_uppercase() == "NOT" || c.to_uppercase().contains("NULL"));
+
+            column_defs.push(ColumnDefinition {
+                name: col.name,
+                data_type: column_type,
+                nullable,
+                default_value: None, // TODO: Parse DEFAULT values
+            });
+        }
+
+        let schema = TableSchema {
+            name: table.to_string(),
+            columns: column_defs,
+            created_at: chrono::Utc::now(),
+            row_count: 0,
+        };
+
+        // Create the table
+        storage.create_table(schema).await?;
+
+        Ok(QueryResult::Select {
+            columns: vec![],
+            rows: vec![],
+        })
+    }
+
+    /// Execute DROP TABLE on persistent storage
+    async fn execute_drop_table(
+        &self,
+        storage: &Arc<dyn PersistentTableStorage>,
+        table: &str,
+        if_exists: bool,
+    ) -> ProtocolResult<QueryResult> {
+        // Check if table exists
+        if !storage.table_exists(table).await? {
+            if if_exists {
+                // IF EXISTS specified, just return success without dropping
+                return Ok(QueryResult::Select {
+                    columns: vec![],
+                    rows: vec![],
+                });
+            } else {
+                return Err(ProtocolError::PostgresError(format!(
+                    "Table '{}' does not exist",
+                    table
+                )));
+            }
+        }
+
+        // Drop the table
+        storage.drop_table(table).await?;
+
+        Ok(QueryResult::Select {
+            columns: vec![],
+            rows: vec![],
+        })
     }
 }
 

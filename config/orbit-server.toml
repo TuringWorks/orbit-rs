@@ -50,7 +50,7 @@ max_message_size = 4194304  # 4MB
 # PostgreSQL Wire Protocol Server
 [protocols.postgresql]
 enabled = true
-port = 5432
+port = 15432
 max_connections = 1000
 connection_timeout_secs = 30
 

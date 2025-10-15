@@ -33,6 +33,7 @@
 pub mod graphrag_engine;
 pub mod jsonb;
 pub mod messages;
+pub mod persistent_storage;
 pub mod protocol;
 pub mod query_engine;
 pub mod server;
@@ -42,6 +43,10 @@ pub mod vector_engine;
 
 pub use graphrag_engine::GraphRAGQueryEngine;
 pub use messages::{BackendMessage, FieldDescription, FrontendMessage, TransactionStatus};
+pub use persistent_storage::{
+    ColumnDefinition, ColumnType, PersistentTableStorage, QueryCondition, RocksDbTableStorage,
+    TableRow, TableSchema,
+};
 pub use protocol::PostgresWireProtocol;
 pub use query_engine::{QueryEngine, QueryResult};
 pub use server::PostgresServer;

@@ -47,9 +47,9 @@
 - 🔧 **Advanced Connection Pooling**: Circuit breakers and health monitoring
 - 🛡️ **Enterprise Security**: Authentication, authorization, and audit logging
 
-## 🚀 Quick Start - Multi-Protocol Database Server
+## 🚀 Quick Start - Persistent Multi-Protocol Database Server
 
-**Get a production-ready PostgreSQL + Redis + gRPC server running in 30 seconds:**
+**Get a production-ready PostgreSQL + Redis + gRPC server with RocksDB persistence running in 30 seconds:**
 
 ```bash
 # Clone and build
@@ -57,34 +57,43 @@ git clone https://github.com/TuringWorks/orbit-rs.git
 cd orbit-rs
 cargo build --release
 
-# Start integrated multi-protocol server
+# Start integrated multi-protocol server with RocksDB persistence
 cargo run --package orbit-server --example integrated-server
 
-# 🎉 All protocols now active:
-# PostgreSQL: localhost:15432 (non-conflicting port)
-# Redis: localhost:6379  
+# 🎉 All protocols now active with persistent storage:
+# PostgreSQL: localhost:15432 (persisted with RocksDB)
+# Redis: localhost:6379 (persisted with RocksDB)
 # gRPC: localhost:50051
+# Data Directory: ./orbit_integrated_data (RocksDB LSM-tree files)
 ```
 
-### **Connect with Standard Clients**
+### **Connect with Standard Clients - Data Persists Across Restarts!**
 
 ```bash
-# PostgreSQL - use any PostgreSQL client
+# PostgreSQL - use any PostgreSQL client (data persisted with RocksDB)
 psql -h localhost -p 15432 -U orbit -d actors
 actors=# CREATE TABLE users (id SERIAL, name TEXT, email TEXT);
 actors=# INSERT INTO users (name, email) VALUES ('Alice', 'alice@example.com');
 actors=# SELECT * FROM users;
 
-# Redis - use redis-cli or any Redis client  
+# Redis - use redis-cli or any Redis client (data persisted with RocksDB)
 redis-cli -h localhost -p 6379
-127.0.0.1:6379> SET mykey "Hello Orbit"
-127.0.0.1:6379> GET mykey
+127.0.0.1:6379> SET greeting "Hello Persistent World"
+127.0.0.1:6379> SET counter 42
+127.0.0.1:6379> SET temp_key "Expires in 30 seconds" EX 30
+127.0.0.1:6379> GET greeting
+"Hello Persistent World"
+127.0.0.1:6379> INCR counter
+(integer) 43
+127.0.0.1:6379> TTL temp_key
+(integer) 28
 127.0.0.1:6379> HSET user:1 name "Alice" email "alice@example.com"
 127.0.0.1:6379> HGETALL user:1
 
-# Test cross-protocol consistency
-127.0.0.1:6379> PING
-PONG
+# 🔄 Test persistence: Stop server (Ctrl+C), restart, data survives!
+# All Redis data including TTL expiration is preserved across restarts
+127.0.0.1:6379> GET greeting  # Still works after restart!
+"Hello Persistent World"
 ```
 
 ### **🔢 Vector Operations Across Protocols**
@@ -145,7 +154,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 - 🏢 **Enterprise Ready**: Replace separate PostgreSQL and Redis deployments
 
 **✅ Production-Ready Multi-Protocol Features:**
-- 🐘 **PostgreSQL Wire Protocol** - **🆕 NEW!** Native PostgreSQL server with SQL and pgvector support
+- 🐘 **PostgreSQL Wire Protocol** - **🆕 PERSISTENT!** Native PostgreSQL server with SQL, DDL, and pgvector support + RocksDB persistence
 - 🔴 **Redis RESP Protocol** - **100% Production-Ready** with full redis-cli compatibility
 - 🌍 **HTTP REST API** - **🆕 NEW!** Web-friendly JSON interface for all operations
 - 📡 **gRPC Actor API** - High-performance actor system management
@@ -163,6 +172,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 - ✅ **Kubernetes Integration** - Native operator, Helm charts, production deployment
 - ✅ **Observability** - Prometheus metrics, Grafana dashboards, comprehensive monitoring
 
+**🚀 NEW Phase 12 Features - Production-Ready RocksDB Persistence:**
+- ✅ **RocksDB Integration** - **🆕 COMPLETE!** LSM-tree storage for high-performance persistence
+- ✅ **Redis Data Persistence** - All Redis commands with TTL support persist across restarts
+- ✅ **PostgreSQL Data Persistence** - SQL tables and data survive server restarts
+- ✅ **Configurable Storage Backend** - RocksDB, Memory, TiKV, and Cloud storage options
+- ✅ **Background TTL Cleanup** - Automatic expiration of Redis keys with background cleanup
+- ✅ **Write-Ahead Logging** - Durability guarantees with WAL for crash consistency
+- ✅ **LSM-tree Optimization** - Write-optimized storage with configurable compaction
+- ✅ **Column Family Support** - Organized data separation for performance
+- ✅ **Production Configuration** - Tuned write buffers, caching, and compression settings
+
 **🎉 NEW Phase 11 Features - Advanced JSON/JSONB:**
 - ✅ **Complete JSONB Implementation** - **🆕 COMPLETE!** Full PostgreSQL-compatible JSON Binary format
 - ✅ **JSON Path Expressions** - PostgreSQL-compatible path syntax ($.key[0].nested)
@@ -174,9 +194,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 - ✅ **43+ Comprehensive Tests** - Full test coverage with PostgreSQL compatibility
 
 **🚀 What's Next:**
-- **Phase 12**: Advanced SQL Query Optimization
-- **Phase 13**: Multi-Cloud Federation & Replication
-- **Phase 14**: AI/ML Workload Acceleration
+- **Phase 13**: Advanced SQL Query Optimization  
+- **Phase 14**: Multi-Cloud Federation & Replication
+- **Phase 15**: AI/ML Workload Acceleration
 
 **🔬 Performance Benchmarks:**
 - **Built-in Benchmarking System**: **🆕 NEW!** Comprehensive performance measurement with statistical analysis:
@@ -199,7 +219,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 | **Advanced Connection Pooling** | ✅ Complete | 90% | ✅ Yes | 12 tests | Circuit breakers, health monitoring, load balancing |
 | **Security Patterns** | ✅ Complete | 90% | ✅ Yes | 5 tests | Rate limiting, attack detection, audit logging |
 | **RESP (Redis) Protocol** | ✅ Complete | 95% | ✅ Yes | 292 tests | 50+ commands, all data types, redis-cli compatibility |
-| **PostgreSQL Wire Protocol** | 🧪 Experimental | 30% | ❌ No | 104 tests | Basic SQL parsing for actor operations only |
+| **PostgreSQL Wire Protocol** | ✅ Complete | 75% | ✅ Yes | 104+ tests | Full SQL DDL/DML with RocksDB persistence |
 | **Distributed Transactions** | ✅ Complete | 85% | ✅ Yes | 270 tests | 2PC, Saga patterns, distributed locks |
 | **Model Context Protocol (MCP)** | 🧪 Experimental | 15% | ❌ No | 44 tests | Basic AI agent integration framework |
 | **Neo4j Cypher Parser** | 📋 Planned | 5% | ❌ No | 18 tests | Basic parser structure, not functional |

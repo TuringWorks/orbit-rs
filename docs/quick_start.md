@@ -7,17 +7,19 @@ category: "getting-started"
 
 # Orbit-RS Quick Start Guide
 
-**One Server, All Protocols** - Get a production-ready PostgreSQL + Redis + REST API + gRPC server running in 30 seconds.
+**One Server, All Protocols, Persistent Storage** - Get a production-ready PostgreSQL + Redis + REST API + gRPC server with RocksDB persistence running in 30 seconds.
 
 ## 🎯 What You'll Get
 
 **Single `orbit-server` command gives you:**
-- 🐘 **PostgreSQL server** (port 5432) - Full SQL with pgvector support
-- 🔴 **Redis server** (port 6379) - Key-value + vector operations
+- 🐘 **PostgreSQL server** (port 15432) - Full SQL with pgvector support + **RocksDB persistence**
+- 🔴 **Redis server** (port 6379) - Key-value + TTL operations + **RocksDB persistence**
 - 🌍 **HTTP REST API** (port 8080) - Web-friendly JSON interface  
 - 📡 **gRPC API** (port 50051) - High-performance actor management
+- 🗄️ **RocksDB Storage** - LSM-tree persistent storage for all data
+- 🔄 **Data Persistence** - All data survives server restarts with TTL support
 
-**✨ Key Innovation**: Same data accessible through any protocol with instant consistency!
+**✨ Key Innovation**: Same data accessible through any protocol with instant consistency **and full persistence**!
 
 ## Prerequisites
 
@@ -57,16 +59,17 @@ cd orbit-rs
 cargo build --release
 ```
 
-### 2. Start Integrated Multi-Protocol Server
+### 2. Start Integrated Multi-Protocol Server with RocksDB Persistence
 
 ```bash
-# Run the integrated server with all protocols enabled
+# Run the integrated server with all protocols enabled and RocksDB persistence
 cargo run --package orbit-server --example integrated-server
 
-# 🎉 Server starting with all protocols:
+# 🎉 Server starting with all protocols and persistent storage:
 # gRPC: localhost:50051 (Orbit clients)
-# Redis: localhost:6379 (redis-cli, Redis clients)
-# PostgreSQL: localhost:15432 (psql, PostgreSQL clients)
+# Redis: localhost:6379 (redis-cli, Redis clients) - PERSISTED with RocksDB
+# PostgreSQL: localhost:15432 (psql, PostgreSQL clients) - PERSISTED with RocksDB
+# Data Directory: ./orbit_integrated_data (LSM-tree files)
 ```
 
 ### Alternative: Simple Examples
