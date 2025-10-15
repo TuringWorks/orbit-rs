@@ -226,6 +226,7 @@ impl RocksDbTableStorage {
     }
 
     /// Load all table schemas into cache
+    #[allow(dead_code)] // Reserved for future schema caching optimization
     async fn load_schemas_to_cache(&self) -> ProtocolResult<()> {
         let tables_cf = self.get_cf(CF_TABLES)?;
         let mut cache = self.schema_cache.write().await;

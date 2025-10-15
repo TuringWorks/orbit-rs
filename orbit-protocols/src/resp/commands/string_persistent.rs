@@ -15,6 +15,7 @@ use std::sync::Arc;
 use tracing::debug;
 
 pub struct PersistentStringCommands {
+    #[allow(dead_code)] // Reserved for future actor integration
     orbit_client: Arc<OrbitClient>,
     redis_provider: Arc<dyn RedisDataProvider>,
 }

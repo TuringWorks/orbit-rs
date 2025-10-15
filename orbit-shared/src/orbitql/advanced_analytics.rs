@@ -2811,7 +2811,7 @@ impl GradientBoostingModel {
     fn train_iteration(
         &mut self,
         data: &[TrainingExample],
-        residuals: &mut Vec<f64>,
+        residuals: &mut [f64],
     ) -> Result<bool, AnalyticsError> {
         // Create and train weak learner
         let mut weak_learner = WeakLearner::new();
@@ -2834,7 +2834,7 @@ impl GradientBoostingModel {
         &self,
         data: &[TrainingExample],
         weak_learner: &WeakLearner,
-        residuals: &mut Vec<f64>,
+        residuals: &mut [f64],
     ) {
         for (i, example) in data.iter().enumerate() {
             let prediction = weak_learner.predict(&example.features);
@@ -3133,7 +3133,7 @@ impl LightGBMModel {
     fn train_iteration(
         &mut self,
         data: &[TrainingExample],
-        predictions: &mut Vec<f64>,
+        predictions: &mut [f64],
     ) -> Result<bool, AnalyticsError> {
         // Calculate gradients and hessians
         let gradients = self.calculate_gradients(data, predictions);
@@ -3164,7 +3164,7 @@ impl LightGBMModel {
         &self,
         data: &[TrainingExample],
         tree: &LightGBMTree,
-        predictions: &mut Vec<f64>,
+        predictions: &mut [f64],
     ) {
         for (i, example) in data.iter().enumerate() {
             predictions[i] += self.learning_rate * tree.predict(&example.features);
@@ -3295,7 +3295,7 @@ impl CatBoostModel {
     fn train_iteration(
         &mut self,
         data: &[TrainingExample],
-        predictions: &mut Vec<f64>,
+        predictions: &mut [f64],
     ) -> Result<bool, AnalyticsError> {
         // Calculate gradients
         let gradients = self.calculate_gradients(data, predictions);
@@ -3325,7 +3325,7 @@ impl CatBoostModel {
         &self,
         data: &[TrainingExample],
         tree: &ObliviousTree,
-        predictions: &mut Vec<f64>,
+        predictions: &mut [f64],
     ) {
         for (i, example) in data.iter().enumerate() {
             predictions[i] += self.learning_rate * tree.predict(&example.features);
@@ -3453,7 +3453,7 @@ impl XGBoostModel {
     fn train_iteration(
         &mut self,
         data: &[TrainingExample],
-        predictions: &mut Vec<f64>,
+        predictions: &mut [f64],
         early_stopping_state: &mut EarlyStoppingState,
         iteration: usize,
     ) -> Result<bool, AnalyticsError> {
@@ -3480,7 +3480,7 @@ impl XGBoostModel {
         &self,
         data: &[TrainingExample],
         tree: &XGBoostTree,
-        predictions: &mut Vec<f64>,
+        predictions: &mut [f64],
     ) {
         for (i, example) in data.iter().enumerate() {
             predictions[i] += self.params.eta * tree.predict(&example.features);

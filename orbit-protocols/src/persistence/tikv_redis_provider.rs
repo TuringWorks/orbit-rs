@@ -57,6 +57,7 @@ impl TiKVRedisDataProvider {
     }
 
     /// Parse expiration key to get timestamp and original key
+    #[allow(dead_code)] // Utility method for future expiration key parsing
     fn parse_expiration_key(&self, exp_key: &str) -> Option<(u64, String)> {
         let prefix = format!("{}exp:", self.key_prefix);
         if !exp_key.starts_with(&prefix) {
@@ -161,6 +162,7 @@ impl TiKVRedisDataProvider {
     }
 
     /// Static helper for parsing expiration keys (for use in async context)
+    #[allow(dead_code)] // Static utility method for future use
     fn parse_expiration_key_static(key_prefix: &str, exp_key: &str) -> Option<(u64, String)> {
         let prefix = format!("{}exp:", key_prefix);
         if !exp_key.starts_with(&prefix) {

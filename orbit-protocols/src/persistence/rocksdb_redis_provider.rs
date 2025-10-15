@@ -68,6 +68,7 @@ impl RocksDbRedisDataProvider {
     }
 
     /// Get the metadata column family handle
+    #[allow(dead_code)] // Reserved for future metadata operations
     fn metadata_cf(&self) -> &rocksdb::ColumnFamily {
         self.db
             .cf_handle(CF_METADATA)
@@ -181,6 +182,7 @@ impl RocksDbRedisDataProvider {
     }
 
     /// Parse expiration key to get timestamp and original key
+    #[allow(dead_code)] // Utility method for future expiration key parsing
     fn parse_expiration_key(exp_key: &str) -> Option<(u64, &str)> {
         let parts: Vec<&str> = exp_key.splitn(2, ':').collect();
         if parts.len() == 2 {

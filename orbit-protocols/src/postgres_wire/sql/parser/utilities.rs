@@ -476,7 +476,7 @@ fn parse_equality_expression(parser: &mut SqlParser) -> ParseResult<Expression> 
     Ok(left)
 }
 
-/// Parse comparison expressions (<, <=, >, >=, LIKE, IN, BETWEEN)
+/// Parse comparison expressions (<, <=, >, >=, LIKE, IN, BETWEEN, vector operators)
 fn parse_comparison_expression(parser: &mut SqlParser) -> ParseResult<Expression> {
     let mut left = parse_additive_expression(parser)?;
 
@@ -489,6 +489,10 @@ fn parse_comparison_expression(parser: &mut SqlParser) -> ParseResult<Expression
             Token::Like => BinaryOperator::Like,
             Token::ILike => BinaryOperator::ILike,
             Token::In => BinaryOperator::In,
+            // Vector distance operators
+            Token::VectorDistance => BinaryOperator::VectorDistance,
+            Token::VectorInnerProduct => BinaryOperator::VectorInnerProduct,
+            Token::VectorCosineDistance => BinaryOperator::VectorCosineDistance,
             _ => break,
         };
 
@@ -587,6 +591,17 @@ fn parse_unary_expression(parser: &mut SqlParser) -> ParseResult<Expression> {
 fn parse_primary_expression(parser: &mut SqlParser) -> ParseResult<Expression> {
     match &parser.current_token {
         Some(Token::StringLiteral(s)) => {
+            // Check if this looks like a vector literal [1,2,3]
+            if s.starts_with('[') && s.ends_with(']') {
+                // Try to parse as vector literal
+                let inner = &s[1..s.len() - 1];
+                if let Ok(values) = parse_vector_elements(inner) {
+                    let value = SqlValue::Vector(values);
+                    parser.advance()?;
+                    return Ok(Expression::Literal(value));
+                }
+            }
+            // Fall back to string literal
             let value = SqlValue::Text(s.clone());
             parser.advance()?;
             Ok(Expression::Literal(value))
@@ -630,6 +645,17 @@ fn parse_primary_expression(parser: &mut SqlParser) -> ParseResult<Expression> {
             found: parser.current_token.clone(),
         }),
     }
+}
+
+/// Parse vector elements from a comma-separated string like "1,2,3"
+fn parse_vector_elements(s: &str) -> Result<Vec<f32>, ()> {
+    if s.trim().is_empty() {
+        return Ok(Vec::new());
+    }
+
+    s.split(',')
+        .map(|element| element.trim().parse::<f32>().map_err(|_| ()))
+        .collect()
 }
 
 /// Parse a SELECT statement (placeholder implementation)

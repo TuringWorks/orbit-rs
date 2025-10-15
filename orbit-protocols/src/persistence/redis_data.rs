@@ -170,6 +170,7 @@ impl Default for RedisDataConfig {
 /// In-memory implementation for testing
 pub struct MemoryRedisDataProvider {
     data: tokio::sync::RwLock<HashMap<String, RedisValue>>,
+    #[allow(dead_code)] // May be used in future for cleanup intervals, etc.
     config: RedisDataConfig,
     metrics: tokio::sync::RwLock<RedisDataMetrics>,
 }

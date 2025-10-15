@@ -53,6 +53,8 @@ mod integration_test;
 #[cfg(test)]
 mod mvcc_demo;
 #[cfg(test)]
+mod pgvector_tests;
+#[cfg(test)]
 mod tests;
 
 // Include comprehensive executor unit tests

@@ -13,6 +13,7 @@ use crate::postgres_wire::sql::{
         IndexType, NullsOrder, SortDirection, Statement, TableConstraint, TableOption,
     },
     lexer::Token,
+    types::SqlValue,
 };
 
 /// Parse CREATE TABLE statement
@@ -153,12 +154,44 @@ pub fn parse_create_index(parser: &mut SqlParser) -> ParseResult<Statement> {
         Vec::new()
     };
 
+    // Extract parameters for vector indexes
+    let final_index_type = match index_type {
+        IndexType::IvfFlat { .. } => {
+            let lists = options
+                .iter()
+                .find(|opt| opt.name.to_lowercase() == "lists")
+                .and_then(|opt| match &opt.value {
+                    SqlValue::Integer(i) => Some(*i),
+                    _ => None,
+                });
+            IndexType::IvfFlat { lists }
+        }
+        IndexType::Hnsw { .. } => {
+            let m = options
+                .iter()
+                .find(|opt| opt.name.to_lowercase() == "m")
+                .and_then(|opt| match &opt.value {
+                    SqlValue::Integer(i) => Some(*i),
+                    _ => None,
+                });
+            let ef_construction = options
+                .iter()
+                .find(|opt| opt.name.to_lowercase() == "ef_construction")
+                .and_then(|opt| match &opt.value {
+                    SqlValue::Integer(i) => Some(*i),
+                    _ => None,
+                });
+            IndexType::Hnsw { m, ef_construction }
+        }
+        other => other,
+    };
+
     Ok(Statement::CreateIndex(CreateIndexStatement {
         if_not_exists,
         name,
         table,
         columns,
-        index_type,
+        index_type: final_index_type,
         where_clause,
         options,
     }))
@@ -940,6 +973,17 @@ fn parse_index_type(parser: &mut SqlParser) -> ParseResult<IndexType> {
                 "HASH" => IndexType::Hash,
                 "GIST" => IndexType::Gist,
                 "GIN" => IndexType::Gin,
+                "IVFFLAT" => {
+                    parser.advance()?;
+                    return Ok(IndexType::IvfFlat { lists: None });
+                }
+                "HNSW" => {
+                    parser.advance()?;
+                    return Ok(IndexType::Hnsw {
+                        m: None,
+                        ef_construction: None,
+                    });
+                }
                 _ => {
                     return Err(ParseError {
                         message: format!("Unknown index method: {method}"),
@@ -954,83 +998,14 @@ fn parse_index_type(parser: &mut SqlParser) -> ParseResult<IndexType> {
         }
         Some(Token::IvfFlat) => {
             parser.advance()?;
-            // Parse optional lists parameter
-            let lists = if parser.matches(&[Token::LeftParen]) {
-                parser.advance()?;
-                parser.expect(Token::Lists)?;
-                parser.expect(Token::Equal)?;
-                if let Some(Token::NumericLiteral(num)) = &parser.current_token {
-                    let lists = num.parse::<i32>().map_err(|_| ParseError {
-                        message: "Invalid lists parameter".to_string(),
-                        position: parser.position,
-                        expected: vec!["integer".to_string()],
-                        found: parser.current_token.clone(),
-                    })?;
-                    parser.advance()?;
-                    parser.expect(Token::RightParen)?;
-                    Some(lists)
-                } else {
-                    return Err(ParseError {
-                        message: "Expected numeric value for lists parameter".to_string(),
-                        position: parser.position,
-                        expected: vec!["integer".to_string()],
-                        found: parser.current_token.clone(),
-                    });
-                }
-            } else {
-                None
-            };
-            Ok(IndexType::IvfFlat { lists })
+            Ok(IndexType::IvfFlat { lists: None })
         }
         Some(Token::Hnsw) => {
             parser.advance()?;
-            // Parse optional parameters
-            let (mut m, mut ef_construction) = (None, None);
-
-            if parser.matches(&[Token::LeftParen]) {
-                parser.advance()?;
-
-                while !parser.matches(&[Token::RightParen]) {
-                    match &parser.current_token {
-                        Some(Token::M) => {
-                            parser.advance()?;
-                            parser.expect(Token::Equal)?;
-                            if let Some(Token::NumericLiteral(num)) = &parser.current_token {
-                                m = Some(num.parse::<i32>().map_err(|_| ParseError {
-                                    message: "Invalid m parameter".to_string(),
-                                    position: parser.position,
-                                    expected: vec!["integer".to_string()],
-                                    found: parser.current_token.clone(),
-                                })?);
-                                parser.advance()?;
-                            }
-                        }
-                        Some(Token::EfConstruction) => {
-                            parser.advance()?;
-                            parser.expect(Token::Equal)?;
-                            if let Some(Token::NumericLiteral(num)) = &parser.current_token {
-                                ef_construction =
-                                    Some(num.parse::<i32>().map_err(|_| ParseError {
-                                        message: "Invalid ef_construction parameter".to_string(),
-                                        position: parser.position,
-                                        expected: vec!["integer".to_string()],
-                                        found: parser.current_token.clone(),
-                                    })?);
-                                parser.advance()?;
-                            }
-                        }
-                        _ => break,
-                    }
-
-                    if parser.matches(&[Token::Comma]) {
-                        parser.advance()?;
-                    }
-                }
-
-                parser.expect(Token::RightParen)?;
-            }
-
-            Ok(IndexType::Hnsw { m, ef_construction })
+            Ok(IndexType::Hnsw {
+                m: None,
+                ef_construction: None,
+            })
         }
         _ => Err(ParseError {
             message: "Expected index method name".to_string(),
@@ -1055,6 +1030,15 @@ fn parse_index_column(parser: &mut SqlParser) -> ParseResult<IndexColumn> {
             found: parser.current_token.clone(),
         });
     };
+
+    // Parse optional vector operation class (e.g., vector_l2_ops, vector_cosine_ops, etc.)
+    if let Some(Token::Identifier(op_class)) = &parser.current_token {
+        if op_class.starts_with("vector_") {
+            // Skip vector operation class - we store it as part of the column name for now
+            // This could be enhanced to have a separate field in IndexColumn
+            parser.advance()?;
+        }
+    }
 
     // Parse optional ASC/DESC
     let direction = if parser.matches(&[Token::Identifier("ASC".to_string())]) {
@@ -1196,27 +1180,31 @@ fn parse_index_options(parser: &mut SqlParser) -> ParseResult<Vec<IndexOption>> 
     let mut options = Vec::new();
 
     while !parser.matches(&[Token::RightParen]) {
-        if let Some(Token::Identifier(option_name)) = &parser.current_token {
-            let name = option_name.clone();
-            parser.advance()?;
-
-            parser.expect(Token::Equal)?;
-            let value = utilities::parse_literal_value(parser)?;
-
-            options.push(IndexOption { name, value });
-
-            if parser.matches(&[Token::Comma]) {
-                parser.advance()?;
-            } else {
-                break;
+        let name = match &parser.current_token {
+            Some(Token::Identifier(option_name)) => option_name.clone(),
+            Some(Token::Lists) => "lists".to_string(),
+            Some(Token::M) => "m".to_string(),
+            Some(Token::EfConstruction) => "ef_construction".to_string(),
+            _ => {
+                return Err(ParseError {
+                    message: "Expected option name in WITH clause".to_string(),
+                    position: parser.position,
+                    expected: vec!["option name".to_string()],
+                    found: parser.current_token.clone(),
+                });
             }
+        };
+        parser.advance()?;
+
+        parser.expect(Token::Equal)?;
+        let value = utilities::parse_literal_value(parser)?;
+
+        options.push(IndexOption { name, value });
+
+        if parser.matches(&[Token::Comma]) {
+            parser.advance()?;
         } else {
-            return Err(ParseError {
-                message: "Expected option name in WITH clause".to_string(),
-                position: parser.position,
-                expected: vec!["option name".to_string()],
-                found: parser.current_token.clone(),
-            });
+            break;
         }
     }
 

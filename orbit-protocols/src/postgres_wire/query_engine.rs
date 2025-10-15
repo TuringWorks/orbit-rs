@@ -340,6 +340,38 @@ impl QueryEngine {
                     rows: vec![vec![Some(format!("{} completed successfully", operation))]],
                 }
             }
+            UnifiedExecutionResult::CreateExtension { .. } => QueryResult::Select {
+                columns: vec!["message".to_string()],
+                rows: vec![vec![Some(format!("CREATE EXTENSION"))]],
+            },
+            UnifiedExecutionResult::CreateSchema { .. } => QueryResult::Select {
+                columns: vec!["message".to_string()],
+                rows: vec![vec![Some(format!("CREATE SCHEMA"))]],
+            },
+            UnifiedExecutionResult::CreateView { .. } => QueryResult::Select {
+                columns: vec!["message".to_string()],
+                rows: vec![vec![Some(format!("CREATE VIEW"))]],
+            },
+            UnifiedExecutionResult::DropTable { .. } => QueryResult::Select {
+                columns: vec!["message".to_string()],
+                rows: vec![vec![Some(format!("DROP TABLE"))]],
+            },
+            UnifiedExecutionResult::DropIndex { .. } => QueryResult::Select {
+                columns: vec!["message".to_string()],
+                rows: vec![vec![Some(format!("DROP INDEX"))]],
+            },
+            UnifiedExecutionResult::DropExtension { .. } => QueryResult::Select {
+                columns: vec!["message".to_string()],
+                rows: vec![vec![Some(format!("DROP EXTENSION"))]],
+            },
+            UnifiedExecutionResult::DropSchema { .. } => QueryResult::Select {
+                columns: vec!["message".to_string()],
+                rows: vec![vec![Some(format!("DROP SCHEMA"))]],
+            },
+            UnifiedExecutionResult::DropView { .. } => QueryResult::Select {
+                columns: vec!["message".to_string()],
+                rows: vec![vec![Some(format!("DROP VIEW"))]],
+            },
             UnifiedExecutionResult::Other { message, .. } => {
                 // Return the message from the operation
                 QueryResult::Select {
@@ -1405,7 +1437,8 @@ mod tests {
             assert_eq!(columns.len(), 1);
             assert_eq!(columns[0], "message");
             assert_eq!(rows.len(), 1);
-            assert!(rows[0][0].as_ref().unwrap().contains("Extension"));
+            let message = rows[0][0].as_ref().unwrap();
+            assert!(message.contains("Extension") || message.contains("EXTENSION"));
             println!("✅ CREATE EXTENSION vector result: {:?}", rows[0][0]);
         }
     }

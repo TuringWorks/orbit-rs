@@ -24,6 +24,7 @@ use crate::postgres_wire::sql::{
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::fmt;
 
 /// SQL execution engine configuration
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -105,6 +106,46 @@ pub enum UnifiedExecutionResult {
         table_name: String,
         transaction_id: Option<TransactionId>,
     },
+    /// Create extension result
+    CreateExtension {
+        extension_name: String,
+        transaction_id: Option<TransactionId>,
+    },
+    /// Create schema result
+    CreateSchema {
+        schema_name: String,
+        transaction_id: Option<TransactionId>,
+    },
+    /// Create view result
+    CreateView {
+        view_name: String,
+        transaction_id: Option<TransactionId>,
+    },
+    /// Drop table result
+    DropTable {
+        table_names: Vec<String>,
+        transaction_id: Option<TransactionId>,
+    },
+    /// Drop index result
+    DropIndex {
+        index_names: Vec<String>,
+        transaction_id: Option<TransactionId>,
+    },
+    /// Drop extension result
+    DropExtension {
+        extension_names: Vec<String>,
+        transaction_id: Option<TransactionId>,
+    },
+    /// Drop schema result
+    DropSchema {
+        schema_names: Vec<String>,
+        transaction_id: Option<TransactionId>,
+    },
+    /// Drop view result
+    DropView {
+        view_names: Vec<String>,
+        transaction_id: Option<TransactionId>,
+    },
     /// Transaction control result
     Transaction {
         transaction_id: TransactionId,
@@ -115,6 +156,61 @@ pub enum UnifiedExecutionResult {
         message: String,
         transaction_id: Option<TransactionId>,
     },
+}
+
+impl fmt::Display for UnifiedExecutionResult {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            UnifiedExecutionResult::Select { row_count, .. } => {
+                write!(f, "SELECT {}", row_count)
+            }
+            UnifiedExecutionResult::Insert { count, .. } => {
+                write!(f, "INSERT 0 {}", count)
+            }
+            UnifiedExecutionResult::Update { count, .. } => {
+                write!(f, "UPDATE {}", count)
+            }
+            UnifiedExecutionResult::Delete { count, .. } => {
+                write!(f, "DELETE {}", count)
+            }
+            UnifiedExecutionResult::CreateTable { .. } => {
+                write!(f, "CREATE TABLE")
+            }
+            UnifiedExecutionResult::CreateIndex { .. } => {
+                write!(f, "CREATE INDEX")
+            }
+            UnifiedExecutionResult::CreateExtension { .. } => {
+                write!(f, "CREATE EXTENSION")
+            }
+            UnifiedExecutionResult::CreateSchema { .. } => {
+                write!(f, "CREATE SCHEMA")
+            }
+            UnifiedExecutionResult::CreateView { .. } => {
+                write!(f, "CREATE VIEW")
+            }
+            UnifiedExecutionResult::DropTable { .. } => {
+                write!(f, "DROP TABLE")
+            }
+            UnifiedExecutionResult::DropIndex { .. } => {
+                write!(f, "DROP INDEX")
+            }
+            UnifiedExecutionResult::DropExtension { .. } => {
+                write!(f, "DROP EXTENSION")
+            }
+            UnifiedExecutionResult::DropSchema { .. } => {
+                write!(f, "DROP SCHEMA")
+            }
+            UnifiedExecutionResult::DropView { .. } => {
+                write!(f, "DROP VIEW")
+            }
+            UnifiedExecutionResult::Transaction { operation, .. } => {
+                write!(f, "{}", operation.to_uppercase())
+            }
+            UnifiedExecutionResult::Other { message, .. } => {
+                write!(f, "{}", message)
+            }
+        }
+    }
 }
 
 /// Strategy trait for SQL execution engines
@@ -320,8 +416,61 @@ impl SqlExecutionStrategy for MvccExecutionStrategy {
                     transaction_id: Some(transaction_id),
                 })
             }
+            Statement::CreateExtension(ext_stmt) => Ok(UnifiedExecutionResult::CreateExtension {
+                extension_name: ext_stmt.name.clone(),
+                transaction_id: Some(transaction_id),
+            }),
+            Statement::DropExtension(ext_stmt) => {
+                let extension_names = ext_stmt.names.clone();
+                Ok(UnifiedExecutionResult::DropExtension {
+                    extension_names,
+                    transaction_id: Some(transaction_id),
+                })
+            }
+            Statement::CreateIndex(index_stmt) => {
+                let index_name = index_stmt
+                    .name
+                    .clone()
+                    .unwrap_or_else(|| format!("{}_idx", index_stmt.table.name));
+                let table_name = index_stmt.table.name.clone();
+                Ok(UnifiedExecutionResult::CreateIndex {
+                    index_name,
+                    table_name,
+                    transaction_id: Some(transaction_id),
+                })
+            }
+            Statement::CreateSchema(schema_stmt) => Ok(UnifiedExecutionResult::CreateSchema {
+                schema_name: schema_stmt.name.clone(),
+                transaction_id: Some(transaction_id),
+            }),
+            Statement::CreateView(view_stmt) => Ok(UnifiedExecutionResult::CreateView {
+                view_name: view_stmt.name.name.clone(),
+                transaction_id: Some(transaction_id),
+            }),
+            Statement::DropTable(drop_stmt) => {
+                let table_names = drop_stmt.names.iter().map(|n| n.name.clone()).collect();
+                Ok(UnifiedExecutionResult::DropTable {
+                    table_names,
+                    transaction_id: Some(transaction_id),
+                })
+            }
+            Statement::DropIndex(drop_stmt) => Ok(UnifiedExecutionResult::DropIndex {
+                index_names: drop_stmt.names.clone(),
+                transaction_id: Some(transaction_id),
+            }),
+            Statement::DropSchema(drop_stmt) => Ok(UnifiedExecutionResult::DropSchema {
+                schema_names: drop_stmt.names.clone(),
+                transaction_id: Some(transaction_id),
+            }),
+            Statement::DropView(drop_stmt) => {
+                let view_names = drop_stmt.names.iter().map(|n| n.name.clone()).collect();
+                Ok(UnifiedExecutionResult::DropView {
+                    view_names,
+                    transaction_id: Some(transaction_id),
+                })
+            }
             _ => Ok(UnifiedExecutionResult::Other {
-                message: format!("Statement executed: {statement:?}"),
+                message: "Command completed successfully".to_string(),
                 transaction_id: Some(transaction_id),
             }),
         }
@@ -512,8 +661,44 @@ impl TraditionalExecutionStrategy {
                 table_name,
                 transaction_id,
             },
+            ExecutionResult::CreateExtension { extension_name } => {
+                UnifiedExecutionResult::CreateExtension {
+                    extension_name,
+                    transaction_id,
+                }
+            }
+            ExecutionResult::CreateSchema { schema_name } => UnifiedExecutionResult::CreateSchema {
+                schema_name,
+                transaction_id,
+            },
+            ExecutionResult::CreateView { view_name } => UnifiedExecutionResult::CreateView {
+                view_name,
+                transaction_id,
+            },
+            ExecutionResult::DropTable { table_names } => UnifiedExecutionResult::DropTable {
+                table_names,
+                transaction_id,
+            },
+            ExecutionResult::DropIndex { index_names } => UnifiedExecutionResult::DropIndex {
+                index_names,
+                transaction_id,
+            },
+            ExecutionResult::DropExtension { extension_names } => {
+                UnifiedExecutionResult::DropExtension {
+                    extension_names,
+                    transaction_id,
+                }
+            }
+            ExecutionResult::DropSchema { schema_names } => UnifiedExecutionResult::DropSchema {
+                schema_names,
+                transaction_id,
+            },
+            ExecutionResult::DropView { view_names } => UnifiedExecutionResult::DropView {
+                view_names,
+                transaction_id,
+            },
             _ => UnifiedExecutionResult::Other {
-                message: format!("Operation completed: {result:?}"),
+                message: "Command completed successfully".to_string(),
                 transaction_id,
             },
         }
