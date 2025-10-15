@@ -174,7 +174,9 @@ impl RocksDbTableStorage {
 
     /// Evaluate query condition against a row
     fn matches_condition(&self, row: &TableRow, condition: &QueryCondition) -> bool {
-        let row_value = match row.values.get(&condition.column) {
+        // Try both original case and uppercase for compatibility
+        let row_value = match row.values.get(&condition.column)
+            .or_else(|| row.values.get(&condition.column.to_uppercase())) {
             Some(value) => value,
             None => return false, // Column doesn't exist in row
         };
