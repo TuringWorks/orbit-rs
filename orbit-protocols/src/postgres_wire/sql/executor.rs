@@ -847,7 +847,9 @@ impl SqlExecutor {
 
         // Handle VALUES clause
         if let InsertSource::Values(values_list) = stmt.source {
+            let columns_explicitly_specified = stmt.columns.is_some();
             let insert_columns = stmt.columns.unwrap_or_else(|| {
+                // If no columns specified, use all columns
                 table_schema
                     .columns
                     .iter()
@@ -858,10 +860,43 @@ impl SqlExecutor {
             let mut count = 0;
             let mut rows_to_insert = Vec::new();
 
-            // First, evaluate all expressions without holding locks
+            // First, validate column count vs values count for each row
+            // If columns were explicitly specified, the count should match exactly
+            if columns_explicitly_specified {
+                for values in &values_list {
+                    if values.len() != insert_columns.len() {
+                        return Err(ProtocolError::PostgresError(format!(
+                            "Column count doesn't match value count: expected {} columns but got {} values",
+                            insert_columns.len(),
+                            values.len()
+                        )));
+                    }
+                }
+            }
+
+            // Now process all rows
             for values in values_list {
                 let mut row = HashMap::new();
 
+                // Add auto-increment values for columns that look like auto-increment
+                // This is a heuristic: if column name contains 'id' and is not in the insert list
+                let current_time_micros = chrono::Utc::now().timestamp_micros();
+                for column_def in &table_schema.columns {
+                    let col_name_lower = column_def.name.to_lowercase();
+                    let is_likely_auto_increment =
+                        col_name_lower == "id" || col_name_lower.ends_with("_id");
+                    let is_in_insert_columns = insert_columns
+                        .iter()
+                        .any(|c| c.eq_ignore_ascii_case(&column_def.name));
+
+                    if is_likely_auto_increment && !is_in_insert_columns {
+                        // Generate a simple auto-increment ID
+                        let next_id = (current_time_micros % 1000000) + count as i64;
+                        row.insert(column_def.name.clone(), SqlValue::BigInt(next_id));
+                    }
+                }
+
+                // Add explicitly provided values
                 for (i, value_expr) in values.iter().enumerate() {
                     if i < insert_columns.len() {
                         let col_name = &insert_columns[i];
