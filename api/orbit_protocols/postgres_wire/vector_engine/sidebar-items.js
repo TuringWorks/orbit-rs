@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["VectorColumnType"],"struct":["VectorColumn","VectorQueryEngine","VectorTable"]};

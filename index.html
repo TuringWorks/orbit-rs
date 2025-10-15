@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Orbit-RS Documentation | The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform</title>
+<meta name="generator" content="Jekyll v4.4.1" />
+<meta property="og:title" content="Orbit-RS Documentation" />
+<meta name="author" content="TuringWorks" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<meta property="og:description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<link rel="canonical" href="https://turingworks.github.io/orbit-rs/" />
+<meta property="og:url" content="https://turingworks.github.io/orbit-rs/" />
+<meta property="og:site_name" content="Orbit-RS Documentation" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Orbit-RS Documentation" />
+<meta name="twitter:site" content="@TuringWorksAI" />
+<meta name="twitter:creator" content="@TuringWorks" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebSite","author":{"@type":"Person","name":"TuringWorks"},"description":"The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform","headline":"Orbit-RS Documentation","name":"TuringWorks","sameAs":["https://github.com/TuringWorks/orbit-rs","https://discord.gg/orbit-rs","https://twitter.com/TuringWorksAI"],"url":"https://turingworks.github.io/orbit-rs/"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/orbit-rs/assets/main.css">
+  <link rel="stylesheet" href="/orbit-rs/assets/css/custom.css"><link type="application/atom+xml" rel="alternate" href="https://turingworks.github.io/orbit-rs/feed.xml" title="Orbit-RS Documentation" /></head><body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/orbit-rs/">Orbit-RS Documentation</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/orbit-rs/">Orbit-RS Documentation</a><a class="page-link" href="/orbit-rs/project_overview.html">Orbit-RS: Comprehensive Project Overview</a><a class="page-link" href="/orbit-rs/quick_start.html">Quick Start Guide - Multi-Protocol Database Server</a><a class="page-link" href="/orbit-rs/roadmap/">Development Roadmap</a><a class="page-link" href="/orbit-rs/features/">Orbit-RS Feature Index</a><a class="page-link" href="/orbit-rs/compute-acceleration/">Hardware Acceleration Guide</a><a class="page-link" href="/orbit-rs/contributing.html">Contributing Guide</a><a class="page-link" href="/orbit-rs/overview.html">Architecture Overview</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <h1 id="orbit-rs-documentation">Orbit-RS Documentation</h1>
+<p><strong>The Next-Generation Distributed Database System</strong></p>
+
+<p><a href="https://github.com/TuringWorks/orbit-rs"><img src="https://img.shields.io/badge/version-0.1.0-blue.svg" alt="Version" /></a>
+<a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-green.svg" alt="License" /></a>
+<a href="https://github.com/TuringWorks/orbit-rs/actions"><img src="https://img.shields.io/badge/build-passing-brightgreen.svg" alt="Build Status" /></a>
+<a href="https://codecov.io/gh/TuringWorks/orbit-rs"><img src="https://img.shields.io/badge/coverage-79%25-yellow.svg" alt="Coverage" /></a></p>
+
+<hr />
+
+<h2 id="-quick-start">🚀 Quick Start</h2>
+
+<p><strong>New to Orbit-RS?</strong> Get up and running in 5 minutes:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Install Orbit-RS</span>
+cargo <span class="nb">install </span>orbit-rs
+
+<span class="c"># Start a local instance</span>
+orbit-rs start <span class="nt">--port</span> 5432
+
+<span class="c"># Connect with any PostgreSQL client</span>
+psql <span class="nt">-h</span> localhost <span class="nt">-p</span> 5432 <span class="nt">-U</span> orbit
+</code></pre></div></div>
+
+<table>
+  <tbody>
+    <tr>
+      <td><a href="/orbit-rs/quick_start.html">📖 <strong>Full Quick Start Guide</strong></a></td>
+      <td><a href="/orbit-rs/project_overview.html">🎯 <strong>See Project Overview</strong></a></td>
+    </tr>
+  </tbody>
+</table>
+
+<hr />
+
+<h2 id="-documentation-sections">📚 Documentation Sections</h2>
+
+<h3 id="️-getting-started">🏗️ <strong>Getting Started</strong></h3>
+<p>Perfect for developers new to Orbit-RS or distributed databases.</p>
+
+<ul>
+  <li><a href="/orbit-rs/quick_start.html">🚀 <strong>Quick Start Guide</strong></a> - Get running in 5 minutes</li>
+  <li><a href="/orbit-rs/project_overview.html">📖 <strong>Project Overview</strong></a> - Architecture, features, and use cases</li>
+  <li><a href="/orbit-rs/PROJECT_STRUCTURE.html">🎯 <strong>Project Structure</strong></a> - Codebase organization</li>
+  <li><a href="/orbit-rs/overview.html">🔍 <strong>Architecture Details</strong></a> - Understanding Orbit-RS design</li>
+  <li><a href="/orbit-rs/contributing.html">⚙️ <strong>Development Guide</strong></a> - Setup and configuration</li>
+</ul>
+
+<h3 id="️-development--api">🛠️ <strong>Development &amp; API</strong></h3>
+<p>For developers building applications with Orbit-RS.</p>
+
+<ul>
+  <li><a href="https://turingworks.github.io/orbit-rs/api/">📝 <strong>API Reference</strong></a> - Complete API documentation</li>
+  <li><a href="/orbit-rs/NETWORK_LAYER.html">🔌 <strong>Protocol Support</strong></a> - Network layer and protocol details</li>
+  <li><a href="/orbit-rs/contributing.html#testing">🧪 <strong>Testing Guide</strong></a> - Writing and running tests</li>
+  <li><a href="/orbit-rs/contributing.html">🤝 <strong>Contributing</strong></a> - How to contribute to Orbit-RS</li>
+  <li><a href="/orbit-rs/contributing.html">⚙️ <strong>Development Setup</strong></a> - Setting up development environment</li>
+</ul>
+
+<h3 id="-operations--deployment">🚢 <strong>Operations &amp; Deployment</strong></h3>
+<p>For system administrators and DevOps engineers.</p>
+
+<ul>
+  <li><a href="/orbit-rs/kubernetes_deployment.html">☸️ <strong>Kubernetes Deployment</strong></a> - Production Kubernetes setup</li>
+  <li><a href="/orbit-rs/DOCKER_REMOVAL_SUMMARY.html">🐳 <strong>Docker Guide</strong></a> - Docker considerations</li>
+  <li><a href="/orbit-rs/PERSISTENCE_ARCHITECTURE.html">📉 <strong>Storage Architecture</strong></a> - Storage backends and persistence</li>
+  <li><a href="/orbit-rs/SECURITY.html">🔒 <strong>Security</strong></a> - Security policies and practices</li>
+  <li><a href="/orbit-rs/KUBERNETES_STORAGE_GUIDE.html">💾 <strong>Storage Guide</strong></a> - Kubernetes persistence</li>
+  <li><a href="/orbit-rs/LSM_TREE_IMPLEMENTATION.html">⚡ <strong>Performance</strong></a> - Storage performance optimization</li>
+</ul>
+
+<h3 id="-feature-guides">🎯 <strong>Feature Guides</strong></h3>
+<p>Deep dives into Orbit-RS capabilities.</p>
+
+<ul>
+  <li><a href="/orbit-rs/ORBITQL_REFERENCE.html">🗓️ <strong>SQL Engine</strong></a> - OrbitQL and SQL capabilities</li>
+  <li><a href="/orbit-rs/TIME_SERIES_ENGINE.html">📈 <strong>Time Series</strong></a> - Time-series data management</li>
+  <li><a href="/orbit-rs/GRAPH_DATABASE.html">🕸️ <strong>Graph Database</strong></a> - Graph data models and queries</li>
+  <li><a href="/orbit-rs/vector_commands.html">📄 <strong>Vector Operations</strong></a> - Vector database operations</li>
+  <li><a href="/orbit-rs/compute-acceleration/">⚡ <strong>Hardware Acceleration</strong></a> - GPU/Neural compute acceleration 🆕</li>
+  <li><a href="/orbit-rs/rfcs/heterogeneous-compute/">🧠 <strong>Compute Architecture</strong></a> - Technical deep-dive on acceleration</li>
+  <li><a href="/orbit-rs/AQL_REFERENCE.html">🔍 <strong>AQL Reference</strong></a> - ArangoDB Query Language support</li>
+  <li><a href="/orbit-rs/GraphRAG_ARCHITECTURE.html">🤖 <strong>GraphRAG Integration</strong></a> - AI and graph analytics</li>
+</ul>
+
+<h3 id="-project-information">📋 <strong>Project Information</strong></h3>
+<p>Project status, roadmap, and community information.</p>
+
+<ul>
+  <li><a href="/orbit-rs/roadmap/">🗺️ <strong>Roadmap</strong></a> - Development roadmap and upcoming features</li>
+  <li><a href="/orbit-rs/PROJECT_STATUS.html">📉 <strong>Project Status</strong></a> - Current implementation status</li>
+  <li><a href="/orbit-rs/CHANGELOG.html">🔄 <strong>Changelog</strong></a> - Version history and changes</li>
+  <li><a href="/orbit-rs/MIGRATION_GUIDE.html">❓ <strong>Migration Guide</strong></a> - Kotlin/JVM to Rust migration</li>
+  <li><a href="/orbit-rs/contributing.html">💬 <strong>Contributing</strong></a> - Community guidelines and support</li>
+</ul>
+
+<hr />
+
+<h2 id="-current-status-phase-8-complete">🎯 Current Status: Phase 8 Complete</h2>
+
+<p>Orbit-RS has reached <strong>Phase 8</strong> completion with a fully functional SQL engine and multi-protocol support:</p>
+
+<div class="status-grid">
+
+  <table>
+    <thead>
+      <tr>
+        <th>Component</th>
+        <th>Status</th>
+        <th>Features</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>🎭 Actor System</strong></td>
+        <td>✅ <strong>Complete</strong></td>
+        <td>Distributed actors, proxy generation, lifecycle management</td>
+      </tr>
+      <tr>
+        <td><strong>🌐 Network Layer</strong></td>
+        <td>✅ <strong>Complete</strong></td>
+        <td>gRPC services, Protocol Buffers, connection pooling</td>
+      </tr>
+      <tr>
+        <td><strong>🔄 Transactions</strong></td>
+        <td>✅ <strong>Complete</strong></td>
+        <td>2PC, Saga pattern, distributed locks, ACID compliance</td>
+      </tr>
+      <tr>
+        <td><strong>📊 SQL Engine</strong></td>
+        <td>✅ <strong>Complete</strong></td>
+        <td>Full DDL/DML/DCL/TCL, JOINs, aggregates, vector operations</td>
+      </tr>
+      <tr>
+        <td><strong>🔌 Protocols</strong></td>
+        <td>✅ <strong>Complete</strong></td>
+        <td>Redis RESP, PostgreSQL wire protocol, MCP server</td>
+      </tr>
+      <tr>
+        <td><strong>☸️ Kubernetes</strong></td>
+        <td>✅ <strong>Complete</strong></td>
+        <td>Operator, Helm charts, production deployment</td>
+      </tr>
+      <tr>
+        <td><strong>📈 Performance</strong></td>
+        <td>🟡 <strong>Planned</strong></td>
+        <td>Query optimization, vectorization, parallel processing</td>
+      </tr>
+      <tr>
+        <td><strong>🕸️ Graph Database</strong></td>
+        <td>🟡 <strong>Planned</strong></td>
+        <td>Neo4j Bolt protocol, Cypher language support</td>
+      </tr>
+    </tbody>
+  </table>
+
+</div>
+
+<p><strong>Performance Metrics:</strong></p>
+<ul>
+  <li><strong>Throughput:</strong> 500K+ messages/second per core</li>
+  <li><strong>SQL Compatibility:</strong> Full ANSI SQL with PostgreSQL extensions</li>
+  <li><strong>Test Coverage:</strong> 79 passing tests with comprehensive scenarios</li>
+  <li><strong>Code Quality:</strong> 150,000+ lines of production-ready Rust</li>
+</ul>
+
+<table>
+  <tbody>
+    <tr>
+      <td><a href="/orbit-rs/features/">📉 <strong>View Detailed Status</strong></a></td>
+      <td><a href="/orbit-rs/roadmap/">🗺️ <strong>See Full Roadmap</strong></a></td>
+    </tr>
+  </tbody>
+</table>
+
+<hr />
+
+<h2 id="-key-features">🌟 Key Features</h2>
+
+<div class="features-grid">
+
+  <h3 id="distributed-actor-system">🎭 <strong>Distributed Actor System</strong></h3>
+  <p>Built on a powerful actor model for scalable, fault-tolerant distributed computing.</p>
+  <ul>
+    <li><strong>Addressable Actors:</strong> String and UUID-based actor addressing</li>
+    <li><strong>Lifecycle Management:</strong> Automatic registration, activation, and cleanup</li>
+    <li><strong>Proxy Generation:</strong> Type-safe client-side actor references</li>
+    <li><strong>Message Routing:</strong> Transparent cross-cluster message routing</li>
+  </ul>
+
+  <h3 id="multi-protocol-support">🔌 <strong>Multi-Protocol Support</strong></h3>
+  <p>Native support for multiple database protocols and query languages.</p>
+  <ul>
+    <li><strong>PostgreSQL Wire Protocol:</strong> Full compatibility with PostgreSQL clients</li>
+    <li><strong>Redis RESP Protocol:</strong> 50+ Redis commands with clustering support</li>
+    <li><strong>Model Context Protocol:</strong> AI agent integration for autonomous operations</li>
+    <li><strong>Vector Operations:</strong> pgvector compatibility with similarity search</li>
+  </ul>
+
+  <h3 id="advanced-sql-engine">📊 <strong>Advanced SQL Engine</strong></h3>
+  <p>Enterprise-grade SQL engine with modern capabilities.</p>
+  <ul>
+    <li><strong>Complete SQL Support:</strong> DDL, DML, DCL, TCL operations</li>
+    <li><strong>Vector Database:</strong> High-performance similarity search with HNSW/IVFFLAT</li>
+    <li><strong>Complex Queries:</strong> JOINs, subqueries, CTEs, window functions</li>
+    <li><strong>Transaction Support:</strong> ACID compliance with distributed transactions</li>
+  </ul>
+
+  <h3 id="cloud-native">☁️ <strong>Cloud-Native</strong></h3>
+  <p>Designed for modern cloud and Kubernetes deployments.</p>
+  <ul>
+    <li><strong>Kubernetes Operator:</strong> Custom resources for cluster management</li>
+    <li><strong>Helm Charts:</strong> Production-ready deployment templates</li>
+    <li><strong>Auto-scaling:</strong> Dynamic cluster scaling based on workload</li>
+    <li><strong>Multi-platform:</strong> Support for linux/amd64 and linux/arm64</li>
+  </ul>
+
+  <h3 id="hardware-acceleration-">⚡ <strong>Hardware Acceleration</strong> 🆕</h3>
+  <p>Powerful heterogeneous compute engine for maximum performance.</p>
+  <ul>
+    <li><strong>CPU SIMD:</strong> AVX-512, NEON optimization with 3-8x speedups</li>
+    <li><strong>GPU Acceleration:</strong> Metal, CUDA, OpenCL with 5-50x speedups</li>
+    <li><strong>Neural Engines:</strong> Apple ANE, Snapdragon DSP for AI workloads</li>
+    <li><strong>Auto-Detection:</strong> Intelligent hardware discovery and workload routing</li>
+    <li><strong>Cross-Platform:</strong> macOS, Windows, Linux, Android, iOS support</li>
+  </ul>
+
+</div>
+
+<hr />
+
+<h2 id="️-development-roadmap">🛣️ Development Roadmap</h2>
+
+<p>Orbit-RS follows a structured development approach with clearly defined phases:</p>
+
+<h3 id="-next-up-phase-9---query-optimization-q2-2024">🎯 <strong>Next Up: Phase 9 - Query Optimization</strong> <em>(Q2 2024)</em></h3>
+<ul>
+  <li><strong>Cost-Based Query Planner:</strong> Intelligent query optimization</li>
+  <li><strong>Vectorized Execution:</strong> SIMD-optimized batch processing</li>
+  <li><strong>Parallel Processing:</strong> Multi-threaded query execution</li>
+  <li><strong>Index Intelligence:</strong> Automatic index recommendations</li>
+  <li><strong>Query Caching:</strong> Multi-level intelligent caching</li>
+</ul>
+
+<h3 id="-coming-soon">🔮 <strong>Coming Soon</strong></h3>
+<ul>
+  <li><strong>Phase 10:</strong> Production readiness with HA, monitoring, backup/recovery</li>
+  <li><strong>Phase 11:</strong> Advanced features with stored procedures and full-text search</li>
+  <li><strong>Phase 12:</strong> Time-series database with Redis TimeSeries compatibility</li>
+  <li><strong>Phase 13:</strong> Neo4j Bolt protocol with complete Cypher support</li>
+</ul>
+
+<table>
+  <tbody>
+    <tr>
+      <td><a href="/orbit-rs/roadmap/">📋 <strong>View Complete Roadmap</strong></a></td>
+      <td><a href="https://github.com/TuringWorks/orbit-rs/projects">📉 <strong>Track Progress</strong></a></td>
+    </tr>
+  </tbody>
+</table>
+
+<hr />
+
+<h2 id="-learning-resources">🎓 Learning Resources</h2>
+
+<div class="resources-grid">
+
+  <h3 id="tutorials">📖 <strong>Tutorials</strong></h3>
+  <ul>
+    <li><a href="/orbit-rs/quick_start.html">🚀 <strong>Getting Started Tutorial</strong></a> - Your first Orbit-RS application</li>
+    <li><a href="/orbit-rs/ORBITQL_REFERENCE.html">🔍 <strong>SQL Tutorial</strong></a> - OrbitQL features and vector operations</li>
+    <li><a href="/orbit-rs/advanced_transaction_features.html">🎭 <strong>Transaction Programming</strong></a> - Building with distributed transactions</li>
+    <li><a href="/orbit-rs/kubernetes_deployment.html">☸️ <strong>Kubernetes Deployment</strong></a> - Production deployment guide</li>
+  </ul>
+
+  <h3 id="documentation">📚 <strong>Documentation</strong></h3>
+  <ul>
+    <li><a href="/orbit-rs/project_overview.html">🗺️ <strong>Architecture Overview</strong></a> - Understanding Orbit-RS design principles</li>
+    <li><a href="/orbit-rs/LSM_TREE_IMPLEMENTATION.html">⚡ <strong>Performance Guide</strong></a> - Storage optimization and tuning</li>
+    <li><a href="/orbit-rs/ORBITQL_IMPLEMENTATION_TRACKING.html">📈 <strong>Implementation Tracking</strong></a> - Development progress</li>
+  </ul>
+
+  <h3 id="development-resources">🔧 <strong>Development Resources</strong></h3>
+  <ul>
+    <li><a href="/orbit-rs/PROJECT_STRUCTURE.html">📝 <strong>Project Structure</strong></a> - Understanding the codebase</li>
+    <li><a href="/orbit-rs/MIGRATION_GUIDE.html">🔄 <strong>Migration Guide</strong></a> - Moving from other databases</li>
+    <li><a href="/orbit-rs/SECURITY.html">🔒 <strong>Security Guide</strong></a> - Security best practices</li>
+  </ul>
+
+</div>
+
+<hr />
+
+<h2 id="-community--support">🤝 Community &amp; Support</h2>
+
+<div class="community-grid">
+
+  <h3 id="get-help">💬 <strong>Get Help</strong></h3>
+  <ul>
+    <li><a href="https://github.com/TuringWorks/orbit-rs/issues">💬 <strong>GitHub Issues</strong></a> - Bug reports and questions</li>
+    <li><a href="https://github.com/TuringWorks/orbit-rs/discussions">💡 <strong>GitHub Discussions</strong></a> - Community Q&amp;A (Enable in repository settings)</li>
+    <li><a href="mailto:contact@turingworks.com">📧 <strong>Contact Email</strong></a> - General inquiries</li>
+    <li><a href="support/">🆘 <strong>Support Portal</strong></a> - Enterprise support options</li>
+  </ul>
+
+  <h3 id="report-issues">🐛 <strong>Report Issues</strong></h3>
+  <ul>
+    <li><a href="https://github.com/TuringWorks/orbit-rs/issues/new?template=bug_report.md">🐞 <strong>Bug Reports</strong></a></li>
+    <li><a href="https://github.com/TuringWorks/orbit-rs/issues/new?template=feature_request.md">💡 <strong>Feature Requests</strong></a></li>
+    <li><a href="mailto:security@turingworks.com">🔒 <strong>Security Issues</strong></a> - Responsible disclosure</li>
+  </ul>
+
+  <h3 id="contributing">📝 <strong>Contributing</strong></h3>
+  <ul>
+    <li><a href="/orbit-rs/contributing.html">📋 <strong>Contribution Guide</strong></a> - How to contribute code</li>
+    <li><a href="/orbit-rs/README.md">📝 <strong>Documentation</strong></a> - Documentation structure and guides</li>
+    <li><a href="/orbit-rs/contributing.html#testing">🧪 <strong>Testing</strong></a> - Adding tests and benchmarks</li>
+    <li><a href="/orbit-rs/contributing.html">🎨 <strong>Development</strong></a> - Development workflow</li>
+  </ul>
+
+</div>
+
+<hr />
+
+<h2 id="-license--legal">📄 License &amp; Legal</h2>
+
+<p>Orbit-RS is released under the <strong>Apache License 2.0</strong>.</p>
+
+<ul>
+  <li><a href="https://github.com/TuringWorks/orbit-rs/blob/main/LICENSE">📜 <strong>License</strong></a></li>
+  <li><a href="https://github.com/TuringWorks/orbit-rs/security/policy">🔒 <strong>Security Policy</strong></a></li>
+  <li><a href="https://github.com/TuringWorks/orbit-rs/blob/main/CODE_OF_CONDUCT.md">🏢 <strong>Code of Conduct</strong></a></li>
+  <li><a href="legal/terms/">⚖️ <strong>Terms of Service</strong></a></li>
+  <li><a href="legal/privacy/">🔐 <strong>Privacy Policy</strong></a></li>
+</ul>
+
+<hr />
+
+<h2 id="-quick-links">🎯 Quick Links</h2>
+
+<div class="quick-links">
+
+  <p><strong>For Developers:</strong></p>
+  <ul>
+    <li><a href="https://turingworks.github.io/orbit-rs/api/">📖 API Documentation</a></li>
+    <li><a href="/orbit-rs/contributing.html">🔧 Development Setup</a></li>
+    <li><a href="/orbit-rs/contributing.html">🧪 <strong>Testing Guide</strong></a> - Adding tests and benchmarks</li>
+  </ul>
+
+  <p><strong>For Operators:</strong></p>
+  <ul>
+    <li><a href="/orbit-rs/KUBERNETES_STORAGE_GUIDE.html">☘️ Kubernetes Guide</a></li>
+    <li><a href="/orbit-rs/KUBERNETES_STORAGE_GUIDE.html">📉 Storage Setup</a></li>
+    <li><a href="/orbit-rs/SECURITY.html">🔒 Security Configuration</a></li>
+  </ul>
+
+  <p><strong>For Decision Makers:</strong></p>
+  <ul>
+    <li><a href="/orbit-rs/features/">📉 Project Status</a></li>
+    <li><a href="/orbit-rs/roadmap/">🗺️ Roadmap &amp; Timeline</a></li>
+    <li><a href="/orbit-rs/project_overview.html">💼 Architecture Overview</a></li>
+  </ul>
+
+</div>
+
+<hr />
+
+<div class="footer-info">
+
+  <p><strong>🌟 Star us on GitHub:</strong> <a href="https://github.com/TuringWorks/orbit-rs">TuringWorks/orbit-rs</a></p>
+
+  <p><strong>📧 Questions?</strong> Reach out on <a href="https://discord.gg/orbit-rs">Discord</a> or <a href="https://github.com/TuringWorks/orbit-rs/discussions">GitHub Discussions</a></p>
+
+  <p><strong>💼 Enterprise?</strong> Contact us at <a href="mailto:enterprise@turingworks.com">enterprise@turingworks.com</a></p>
+
+</div>
+
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/orbit-rs/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Orbit-RS Documentation</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">TuringWorks</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

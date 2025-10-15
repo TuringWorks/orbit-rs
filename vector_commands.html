@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Vector Commands Documentation | Orbit-RS Documentation</title>
+<meta name="generator" content="Jekyll v4.4.1" />
+<meta property="og:title" content="Vector Commands Documentation" />
+<meta name="author" content="TuringWorks" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<meta property="og:description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<link rel="canonical" href="https://turingworks.github.io/orbit-rs/vector_commands.html" />
+<meta property="og:url" content="https://turingworks.github.io/orbit-rs/vector_commands.html" />
+<meta property="og:site_name" content="Orbit-RS Documentation" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Vector Commands Documentation" />
+<meta name="twitter:site" content="@TuringWorksAI" />
+<meta name="twitter:creator" content="@TuringWorks" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","author":{"@type":"Person","name":"TuringWorks"},"description":"The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform","headline":"Vector Commands Documentation","url":"https://turingworks.github.io/orbit-rs/vector_commands.html"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/orbit-rs/assets/main.css">
+  <link rel="stylesheet" href="/orbit-rs/assets/css/custom.css"><link type="application/atom+xml" rel="alternate" href="https://turingworks.github.io/orbit-rs/feed.xml" title="Orbit-RS Documentation" /></head><body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/orbit-rs/">Orbit-RS Documentation</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/orbit-rs/">Orbit-RS Documentation</a><a class="page-link" href="/orbit-rs/project_overview.html">Orbit-RS: Comprehensive Project Overview</a><a class="page-link" href="/orbit-rs/quick_start.html">Quick Start Guide - Multi-Protocol Database Server</a><a class="page-link" href="/orbit-rs/roadmap/">Development Roadmap</a><a class="page-link" href="/orbit-rs/features/">Orbit-RS Feature Index</a><a class="page-link" href="/orbit-rs/compute-acceleration/">Hardware Acceleration Guide</a><a class="page-link" href="/orbit-rs/contributing.html">Contributing Guide</a><a class="page-link" href="/orbit-rs/overview.html">Architecture Overview</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <h1 id="vector-commands-documentation">Vector Commands Documentation</h1>
+
+<h2 id="-features">🚀 Features</h2>
+
+<ul>
+  <li><strong>Full Redis Protocol Compatibility</strong>: All commands work with standard Redis clients</li>
+  <li><strong>Multiple Similarity Metrics</strong>: Cosine, Euclidean, Dot Product, and Manhattan distance</li>
+  <li><strong>Metadata Support</strong>: Store and filter vectors by key-value metadata</li>
+  <li><strong>High-Dimensional Vectors</strong>: Support for vectors of any dimension</li>
+  <li><strong>Efficient Search</strong>: K-nearest neighbors and similarity search with thresholds</li>
+  <li><strong>RedisSearch Compatibility</strong>: FT.* commands for existing RedisSearch applications</li>
+</ul>
+
+<h2 id="-vector-commands">📋 VECTOR.* Commands</h2>
+
+<h3 id="basic-vector-operations">Basic Vector Operations</h3>
+
+<h4 id="vectoradd">VECTOR.ADD</h4>
+<p>Add a vector to an index with optional metadata.</p>
+
+<p><strong>Syntax:</strong></p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>VECTOR.ADD &lt;index&gt; &lt;id&gt; &lt;vector&gt; [key value ...]
+</code></pre></div></div>
+
+<p><strong>Parameters:</strong></p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">index</code>: Name of the vector index</li>
+  <li><code class="language-plaintext highlighter-rouge">id</code>: Unique identifier for the vector</li>
+  <li><code class="language-plaintext highlighter-rouge">vector</code>: Comma-separated float values (e.g., “1.0,2.0,3.0”)</li>
+  <li><code class="language-plaintext highlighter-rouge">key value</code>: Optional metadata key-value pairs</li>
+</ul>
+
+<p><strong>Examples:</strong></p>
+<pre><code class="language-redis">
+# Add a simple vector
+VECTOR.ADD my-index doc1 "0.1,0.2,0.3,0.4"
+
+# Add vector with metadata
+VECTOR.ADD my-index doc2 "0.5,0.6,0.7,0.8" title "Document 2" category "AI" author "John Doe"
+</code></pre>
+
+<p><strong>Returns:</strong> <code class="language-plaintext highlighter-rouge">OK</code> on success</p>
+
+<hr />
+
+<h4 id="vectorget">VECTOR.GET</h4>
+<p>Retrieve a vector and its metadata by ID.</p>
+
+<p><strong>Syntax:</strong></p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>VECTOR.GET &lt;index&gt; &lt;id&gt;
+</code></pre></div></div>
+
+<p><strong>Examples:</strong></p>
+<pre><code class="language-redis">VECTOR.GET my-index doc1
+</code></pre>
+
+<p><strong>Returns:</strong> Array containing <code class="language-plaintext highlighter-rouge">[id, vector_data, key1, value1, key2, value2, ...]</code> or <code class="language-plaintext highlighter-rouge">null</code> if not found</p>
+
+<hr />
+
+<h4 id="vectordel">VECTOR.DEL</h4>
+<p>Delete a vector from an index.</p>
+
+<p><strong>Syntax:</strong></p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>VECTOR.DEL &lt;index&gt; &lt;id&gt;
+</code></pre></div></div>
+
+<p><strong>Examples:</strong></p>
+<pre><code class="language-redis">VECTOR.DEL my-index doc1
+</code></pre>
+
+<p><strong>Returns:</strong> <code class="language-plaintext highlighter-rouge">1</code> if vector was deleted, <code class="language-plaintext highlighter-rouge">0</code> if not found</p>
+
+<hr />
+
+<h4 id="vectorcount">VECTOR.COUNT</h4>
+<p>Get the number of vectors in an index.</p>
+
+<p><strong>Syntax:</strong></p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>VECTOR.COUNT &lt;index&gt;
+</code></pre></div></div>
+
+<p><strong>Examples:</strong></p>
+<pre><code class="language-redis">VECTOR.COUNT my-index
+</code></pre>
+
+<p><strong>Returns:</strong> Integer count of vectors</p>
+
+<hr />
+
+<h4 id="vectorlist">VECTOR.LIST</h4>
+<p>List all vector IDs in an index.</p>
+
+<p><strong>Syntax:</strong></p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>VECTOR.LIST &lt;index&gt;
+</code></pre></div></div>
+
+<p><strong>Examples:</strong></p>
+<pre><code class="language-redis">VECTOR.LIST my-index
+</code></pre>
+
+<p><strong>Returns:</strong> Array of vector IDs</p>
+
+<hr />
+
+<h4 id="vectorstats">VECTOR.STATS</h4>
+<p>Get statistics about a vector index.</p>
+
+<p><strong>Syntax:</strong></p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>VECTOR.STATS &lt;index&gt;
+</code></pre></div></div>
+
+<p><strong>Examples:</strong></p>
+<pre><code class="language-redis">VECTOR.STATS my-index
+</code></pre>
+
+<p><strong>Returns:</strong> Array with statistics:</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>[
+  "vector_count", 150,
+  "index_count", 1,
+  "avg_dimension", "384.00",
+  "min_dimension", 384,
+  "max_dimension", 384,
+  "avg_metadata_keys", "2.50"
+]
+</code></pre></div></div>
+
+<h3 id="vector-search-operations">Vector Search Operations</h3>
+
+<h4 id="vectorsearch">VECTOR.SEARCH</h4>
+<p>Perform similarity search with advanced filtering options.</p>
+
+<p><strong>Syntax:</strong></p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>VECTOR.SEARCH &lt;index&gt; &lt;vector&gt; &lt;limit&gt; [METRIC &lt;metric&gt;] [THRESHOLD &lt;threshold&gt;] [key value ...]
+</code></pre></div></div>
+
+<p><strong>Parameters:</strong></p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">index</code>: Name of the vector index</li>
+  <li><code class="language-plaintext highlighter-rouge">vector</code>: Query vector as comma-separated floats</li>
+  <li><code class="language-plaintext highlighter-rouge">limit</code>: Maximum number of results to return</li>
+  <li><code class="language-plaintext highlighter-rouge">METRIC</code>: Similarity metric (COSINE, EUCLIDEAN, DOT, MANHATTAN)</li>
+  <li><code class="language-plaintext highlighter-rouge">THRESHOLD</code>: Minimum similarity threshold</li>
+  <li><code class="language-plaintext highlighter-rouge">key value</code>: Metadata filters (only vectors matching all filters are returned)</li>
+</ul>
+
+<p><strong>Examples:</strong></p>
+<pre><code class="language-redis">
+# Basic similarity search
+VECTOR.SEARCH my-index "0.1,0.2,0.3,0.4" 5
+
+# Search with cosine similarity
+VECTOR.SEARCH my-index "0.1,0.2,0.3,0.4" 10 METRIC COSINE
+
+# Search with threshold
+VECTOR.SEARCH my-index "0.1,0.2,0.3,0.4" 5 METRIC COSINE THRESHOLD 0.8
+
+# Search with metadata filters
+VECTOR.SEARCH my-index "0.1,0.2,0.3,0.4" 5 METRIC COSINE category AI author "John Doe"
+</code></pre>
+
+<p><strong>Returns:</strong> Array of results, each containing <code class="language-plaintext highlighter-rouge">[id, score, vector_data, metadata...]</code></p>
+
+<hr />
+
+<h4 id="vectorknn">VECTOR.KNN</h4>
+<p>Perform k-nearest neighbors search.</p>
+
+<p><strong>Syntax:</strong></p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>VECTOR.KNN &lt;index&gt; &lt;vector&gt; &lt;k&gt; [METRIC &lt;metric&gt;]
+</code></pre></div></div>
+
+<p><strong>Parameters:</strong></p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">index</code>: Name of the vector index</li>
+  <li><code class="language-plaintext highlighter-rouge">vector</code>: Query vector as comma-separated floats</li>
+  <li><code class="language-plaintext highlighter-rouge">k</code>: Number of nearest neighbors to return</li>
+  <li><code class="language-plaintext highlighter-rouge">METRIC</code>: Similarity metric (optional, defaults to COSINE)</li>
+</ul>
+
+<p><strong>Examples:</strong></p>
+<pre><code class="language-redis">
+# Find 5 nearest neighbors
+VECTOR.KNN my-index "0.1,0.2,0.3,0.4" 5
+
+# KNN with specific metric
+VECTOR.KNN my-index "0.1,0.2,0.3,0.4" 3 EUCLIDEAN
+</code></pre>
+
+<p><strong>Returns:</strong> Array of results, each containing <code class="language-plaintext highlighter-rouge">[id, score]</code></p>
+
+<h2 id="-ft-commands-redissearch-compatible">🚀 FT.* Commands (RedisSearch Compatible)</h2>
+
+<h3 id="index-management">Index Management</h3>
+
+<h4 id="ftcreate">FT.CREATE</h4>
+<p>Create a vector index with specified dimension and distance metric.</p>
+
+<p><strong>Syntax:</strong></p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>FT.CREATE &lt;index&gt; DIM &lt;dimension&gt; [DISTANCE_METRIC &lt;metric&gt;]
+</code></pre></div></div>
+
+<p><strong>Parameters:</strong></p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">index</code>: Name of the index to create</li>
+  <li><code class="language-plaintext highlighter-rouge">DIM</code>: Vector dimension (required)</li>
+  <li><code class="language-plaintext highlighter-rouge">DISTANCE_METRIC</code>: Similarity metric (COSINE, EUCLIDEAN, DOT, MANHATTAN)</li>
+</ul>
+
+<p><strong>Examples:</strong></p>
+<pre><code class="language-redis">
+# Create index with default cosine similarity
+FT.CREATE my-ft-index DIM 384
+
+# Create index with Euclidean distance
+FT.CREATE my-ft-index DIM 384 DISTANCE_METRIC EUCLIDEAN
+</code></pre>
+
+<p><strong>Returns:</strong> <code class="language-plaintext highlighter-rouge">OK</code> on success</p>
+
+<hr />
+
+<h4 id="ftinfo">FT.INFO</h4>
+<p>Get information about a vector index.</p>
+
+<p><strong>Syntax:</strong></p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>FT.INFO &lt;index&gt;
+</code></pre></div></div>
+
+<p><strong>Examples:</strong></p>
+<pre><code class="language-redis">FT.INFO my-ft-index
+</code></pre>
+
+<p><strong>Returns:</strong> Array with index information including vector count, dimensions, and index configurations</p>
+
+<h3 id="vector-operations">Vector Operations</h3>
+
+<h4 id="ftadd">FT.ADD</h4>
+<p>Add a vector to an index (equivalent to VECTOR.ADD).</p>
+
+<p><strong>Syntax:</strong></p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>FT.ADD &lt;index&gt; &lt;id&gt; &lt;vector&gt; [key value ...]
+</code></pre></div></div>
+
+<p><strong>Examples:</strong></p>
+<pre><code class="language-redis">FT.ADD my-ft-index doc1 "0.1,0.2,0.3" title "Document 1"
+</code></pre>
+
+<p><strong>Returns:</strong> <code class="language-plaintext highlighter-rouge">OK</code> on success</p>
+
+<hr />
+
+<h4 id="ftdel">FT.DEL</h4>
+<p>Delete a vector from an index (equivalent to VECTOR.DEL).</p>
+
+<p><strong>Syntax:</strong></p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>FT.DEL &lt;index&gt; &lt;id&gt;
+</code></pre></div></div>
+
+<p><strong>Examples:</strong></p>
+<pre><code class="language-redis">FT.DEL my-ft-index doc1
+</code></pre>
+
+<p><strong>Returns:</strong> <code class="language-plaintext highlighter-rouge">1</code> if deleted, <code class="language-plaintext highlighter-rouge">0</code> if not found</p>
+
+<hr />
+
+<h4 id="ftsearch">FT.SEARCH</h4>
+<p>Search for similar vectors (equivalent to VECTOR.SEARCH with DISTANCE_METRIC parameter).</p>
+
+<p><strong>Syntax:</strong></p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>FT.SEARCH &lt;index&gt; &lt;vector&gt; &lt;limit&gt; [DISTANCE_METRIC &lt;metric&gt;] [key value ...]
+</code></pre></div></div>
+
+<p><strong>Examples:</strong></p>
+<pre><code class="language-redis">FT.SEARCH my-ft-index "0.1,0.2,0.3" 5 DISTANCE_METRIC COSINE
+</code></pre>
+
+<p><strong>Returns:</strong> Array of search results</p>
+
+<h2 id="-similarity-metrics">📊 Similarity Metrics</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>Metric</th>
+      <th>Aliases</th>
+      <th>Description</th>
+      <th>Use Case</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">COSINE</code></td>
+      <td><code class="language-plaintext highlighter-rouge">COS</code></td>
+      <td>Cosine similarity (normalized dot product)</td>
+      <td>Text embeddings, semantic similarity</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">EUCLIDEAN</code></td>
+      <td><code class="language-plaintext highlighter-rouge">L2</code>, <code class="language-plaintext highlighter-rouge">EUCL</code></td>
+      <td>Euclidean distance (L2 norm)</td>
+      <td>Spatial data, image features</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">DOT</code></td>
+      <td><code class="language-plaintext highlighter-rouge">DOTPRODUCT</code>, <code class="language-plaintext highlighter-rouge">IP</code>, <code class="language-plaintext highlighter-rouge">INNER</code></td>
+      <td>Dot product similarity</td>
+      <td>When magnitude matters</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">MANHATTAN</code></td>
+      <td><code class="language-plaintext highlighter-rouge">L1</code>, <code class="language-plaintext highlighter-rouge">MAN</code></td>
+      <td>Manhattan distance (L1 norm)</td>
+      <td>High-dimensional sparse data</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="-vector-data-formats">🔄 Vector Data Formats</h2>
+
+<p>Vectors can be provided in multiple formats:</p>
+
+<h3 id="string-format-recommended">String Format (Recommended)</h3>
+<pre><code class="language-redis">VECTOR.ADD my-index doc1 "0.1,0.2,0.3,0.4,0.5"
+</code></pre>
+
+<h3 id="array-format">Array Format</h3>
+<pre><code class="language-redis">VECTOR.ADD my-index doc1 ["0.1", "0.2", "0.3", "0.4", "0.5"]
+</code></pre>
+
+<h2 id="-performance-tips">📈 Performance Tips</h2>
+
+<ol>
+  <li><strong>Use appropriate dimensions</strong>: Higher dimensions provide more precision but slower search</li>
+  <li><strong>Choose the right metric</strong>:
+    <ul>
+      <li>Use COSINE for normalized vectors (embeddings)</li>
+      <li>Use EUCLIDEAN for coordinate data</li>
+      <li>Use DOT when magnitude is important</li>
+    </ul>
+  </li>
+  <li><strong>Leverage metadata filtering</strong>: Pre-filter by metadata before vector similarity</li>
+  <li><strong>Set reasonable thresholds</strong>: Avoid returning too many low-similarity results</li>
+</ol>
+
+<h2 id="️-usage-examples">🛠️ Usage Examples</h2>
+
+<h3 id="complete-workflow-example">Complete Workflow Example</h3>
+
+<pre><code class="language-redis">
+# 1. Create vectors with metadata
+VECTOR.ADD ml-embeddings doc1 "0.1,0.2,0.3,0.4" title "Machine Learning Basics" category "AI" difficulty "beginner"
+VECTOR.ADD ml-embeddings doc2 "0.2,0.3,0.4,0.5" title "Deep Learning Advanced" category "AI" difficulty "advanced"  
+VECTOR.ADD ml-embeddings doc3 "0.8,0.7,0.6,0.5" title "Statistics Fundamentals" category "Math" difficulty "intermediate"
+
+# 2. Get vector count and statistics
+VECTOR.COUNT ml-embeddings
+VECTOR.STATS ml-embeddings
+
+# 3. Search for similar vectors
+VECTOR.SEARCH ml-embeddings "0.15,0.25,0.35,0.45" 5 METRIC COSINE THRESHOLD 0.7
+
+# 4. Search with metadata filtering (only AI category)
+VECTOR.SEARCH ml-embeddings "0.15,0.25,0.35,0.45" 3 METRIC COSINE category AI
+
+# 5. Find nearest neighbors
+VECTOR.KNN ml-embeddings "0.15,0.25,0.35,0.45" 3
+
+# 6. Get specific vector
+VECTOR.GET ml-embeddings doc1
+
+# 7. List all vectors
+VECTOR.LIST ml-embeddings
+
+# 8. Delete vector
+VECTOR.DEL ml-embeddings doc3
+</code></pre>
+
+<h3 id="ft-commands-example">FT Commands Example</h3>
+
+<pre><code class="language-redis">
+# 1. Create FT index
+FT.CREATE semantic-search DIM 384 DISTANCE_METRIC COSINE
+
+# 2. Add vectors
+FT.ADD semantic-search embedding1 "0.1,0.2,..." title "Document Title"
+
+# 3. Search 
+FT.SEARCH semantic-search "0.1,0.2,..." 10 DISTANCE_METRIC COSINE
+
+# 4. Get index info
+FT.INFO semantic-search
+</code></pre>
+
+<h2 id="-integration-with-applications">🔧 Integration with Applications</h2>
+
+<h3 id="python-example">Python Example</h3>
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">import</span> <span class="n">redis</span>
+
+<span class="c1"># Connect to Orbit vector store
+</span><span class="n">r</span> <span class="o">=</span> <span class="n">redis</span><span class="p">.</span><span class="nc">Redis</span><span class="p">(</span><span class="n">host</span><span class="o">=</span><span class="sh">'</span><span class="s">127.0.0.1</span><span class="sh">'</span><span class="p">,</span> <span class="n">port</span><span class="o">=</span><span class="mi">6381</span><span class="p">)</span>
+
+<span class="c1"># Add vector with metadata
+</span><span class="n">r</span><span class="p">.</span><span class="nf">execute_command</span><span class="p">(</span><span class="sh">'</span><span class="s">VECTOR.ADD</span><span class="sh">'</span><span class="p">,</span> <span class="sh">'</span><span class="s">my-index</span><span class="sh">'</span><span class="p">,</span> <span class="sh">'</span><span class="s">doc1</span><span class="sh">'</span><span class="p">,</span> 
+                  <span class="sh">'</span><span class="s">0.1,0.2,0.3,0.4</span><span class="sh">'</span><span class="p">,</span> 
+                  <span class="sh">'</span><span class="s">title</span><span class="sh">'</span><span class="p">,</span> <span class="sh">'</span><span class="s">My Document</span><span class="sh">'</span><span class="p">,</span>
+                  <span class="sh">'</span><span class="s">category</span><span class="sh">'</span><span class="p">,</span> <span class="sh">'</span><span class="s">AI</span><span class="sh">'</span><span class="p">)</span>
+
+<span class="c1"># Search for similar vectors
+</span><span class="n">results</span> <span class="o">=</span> <span class="n">r</span><span class="p">.</span><span class="nf">execute_command</span><span class="p">(</span><span class="sh">'</span><span class="s">VECTOR.SEARCH</span><span class="sh">'</span><span class="p">,</span> <span class="sh">'</span><span class="s">my-index</span><span class="sh">'</span><span class="p">,</span> 
+                           <span class="sh">'</span><span class="s">0.1,0.2,0.3,0.4</span><span class="sh">'</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> 
+                           <span class="sh">'</span><span class="s">METRIC</span><span class="sh">'</span><span class="p">,</span> <span class="sh">'</span><span class="s">COSINE</span><span class="sh">'</span><span class="p">,</span>
+                           <span class="sh">'</span><span class="s">THRESHOLD</span><span class="sh">'</span><span class="p">,</span> <span class="sh">'</span><span class="s">0.8</span><span class="sh">'</span><span class="p">)</span>
+</code></pre></div></div>
+
+<h3 id="nodejs-example">Node.js Example</h3>
+<div class="language-javascript highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">redis</span> <span class="o">=</span> <span class="nf">require</span><span class="p">(</span><span class="dl">'</span><span class="s1">redis</span><span class="dl">'</span><span class="p">);</span>
+<span class="kd">const</span> <span class="nx">client</span> <span class="o">=</span> <span class="nx">redis</span><span class="p">.</span><span class="nf">createClient</span><span class="p">({</span><span class="na">host</span><span class="p">:</span> <span class="dl">'</span><span class="s1">127.0.0.1</span><span class="dl">'</span><span class="p">,</span> <span class="na">port</span><span class="p">:</span> <span class="mi">6381</span><span class="p">});</span>
+
+<span class="c1">// Add vector</span>
+<span class="k">await</span> <span class="nx">client</span><span class="p">.</span><span class="nf">sendCommand</span><span class="p">([</span><span class="dl">'</span><span class="s1">VECTOR.ADD</span><span class="dl">'</span><span class="p">,</span> <span class="dl">'</span><span class="s1">my-index</span><span class="dl">'</span><span class="p">,</span> <span class="dl">'</span><span class="s1">doc1</span><span class="dl">'</span><span class="p">,</span> 
+                         <span class="dl">'</span><span class="s1">0.1,0.2,0.3,0.4</span><span class="dl">'</span><span class="p">,</span> 
+                         <span class="dl">'</span><span class="s1">title</span><span class="dl">'</span><span class="p">,</span> <span class="dl">'</span><span class="s1">My Document</span><span class="dl">'</span><span class="p">]);</span>
+
+<span class="c1">// Search vectors</span>
+<span class="kd">const</span> <span class="nx">results</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">client</span><span class="p">.</span><span class="nf">sendCommand</span><span class="p">([</span>
+  <span class="dl">'</span><span class="s1">VECTOR.SEARCH</span><span class="dl">'</span><span class="p">,</span> <span class="dl">'</span><span class="s1">my-index</span><span class="dl">'</span><span class="p">,</span> <span class="dl">'</span><span class="s1">0.1,0.2,0.3,0.4</span><span class="dl">'</span><span class="p">,</span> <span class="dl">'</span><span class="s1">5</span><span class="dl">'</span>
+<span class="p">]);</span>
+</code></pre></div></div>
+
+<h2 id="-error-handling">🚨 Error Handling</h2>
+
+<p>Common error responses:</p>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">ERR wrong number of arguments</code>: Incorrect command syntax</li>
+  <li><code class="language-plaintext highlighter-rouge">ERR invalid vector format</code>: Vector data not properly formatted</li>
+  <li><code class="language-plaintext highlighter-rouge">ERR unknown similarity metric</code>: Invalid metric name</li>
+  <li><code class="language-plaintext highlighter-rouge">ERR limit must be positive</code>: Invalid limit value</li>
+  <li><code class="language-plaintext highlighter-rouge">ERR actor error</code>: Internal server error</li>
+</ul>
+
+<h2 id="-advanced-use-cases">🎯 Advanced Use Cases</h2>
+
+<h3 id="semantic-search">Semantic Search</h3>
+<pre><code class="language-redis">
+# Store document embeddings
+VECTOR.ADD docs doc1 "..." title "Introduction to AI" tags "ai,ml,intro"
+VECTOR.ADD docs doc2 "..." title "Deep Learning" tags "ai,dl,advanced"
+
+# Find semantically similar documents
+VECTOR.SEARCH docs "query_embedding..." 10 METRIC COSINE THRESHOLD 0.7
+</code></pre>
+
+<h3 id="image-similarity">Image Similarity</h3>
+<pre><code class="language-redis">
+# Store image feature vectors
+VECTOR.ADD images img1 "..." filename "photo1.jpg" category "landscape"
+VECTOR.ADD images img2 "..." filename "photo2.jpg" category "portrait"
+
+# Find similar images
+VECTOR.SEARCH images "query_features..." 5 METRIC EUCLIDEAN
+</code></pre>
+
+<h3 id="recommendation-system">Recommendation System</h3>
+<pre><code class="language-redis">
+# Store user preference vectors
+VECTOR.ADD users user123 "..." age "25" location "NYC"
+
+# Find similar users
+VECTOR.KNN users "user_profile..." 10 COSINE
+</code></pre>
+
+<p>This implementation provides production-ready vector storage and search capabilities with full Redis protocol compatibility, making it easy to integrate into existing applications and workflows.</p>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/orbit-rs/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Orbit-RS Documentation</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">TuringWorks</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

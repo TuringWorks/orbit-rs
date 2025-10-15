@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["JoinMethod","QueryHint"],"mod":["costs","planner","rules","stats"],"struct":["OptimizerConfig","QueryHints","QueryOptimizer"]};

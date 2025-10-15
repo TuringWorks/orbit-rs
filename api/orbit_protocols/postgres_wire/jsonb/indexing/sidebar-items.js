@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["JsonIndexType"],"struct":["BTreeIndex","ExpressionIndex","GinIndex","HashIndex"]};

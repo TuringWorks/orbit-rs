@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["AxisOrder"],"mod":["utils"],"struct":["CRSParameters","CoordinateReferenceSystem","CoordinateTransformer","EPSGRegistry","TransformationParameters"]};

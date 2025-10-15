@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>CI/CD Pipeline Documentation | Orbit-RS Documentation</title>
+<meta name="generator" content="Jekyll v4.4.1" />
+<meta property="og:title" content="CI/CD Pipeline Documentation" />
+<meta name="author" content="TuringWorks" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<meta property="og:description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<link rel="canonical" href="https://turingworks.github.io/orbit-rs/CICD.html" />
+<meta property="og:url" content="https://turingworks.github.io/orbit-rs/CICD.html" />
+<meta property="og:site_name" content="Orbit-RS Documentation" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="CI/CD Pipeline Documentation" />
+<meta name="twitter:site" content="@TuringWorksAI" />
+<meta name="twitter:creator" content="@TuringWorks" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","author":{"@type":"Person","name":"TuringWorks"},"description":"The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform","headline":"CI/CD Pipeline Documentation","url":"https://turingworks.github.io/orbit-rs/CICD.html"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/orbit-rs/assets/main.css">
+  <link rel="stylesheet" href="/orbit-rs/assets/css/custom.css"><link type="application/atom+xml" rel="alternate" href="https://turingworks.github.io/orbit-rs/feed.xml" title="Orbit-RS Documentation" /></head><body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/orbit-rs/">Orbit-RS Documentation</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/orbit-rs/">Orbit-RS Documentation</a><a class="page-link" href="/orbit-rs/project_overview.html">Orbit-RS: Comprehensive Project Overview</a><a class="page-link" href="/orbit-rs/quick_start.html">Quick Start Guide - Multi-Protocol Database Server</a><a class="page-link" href="/orbit-rs/roadmap/">Development Roadmap</a><a class="page-link" href="/orbit-rs/features/">Orbit-RS Feature Index</a><a class="page-link" href="/orbit-rs/compute-acceleration/">Hardware Acceleration Guide</a><a class="page-link" href="/orbit-rs/contributing.html">Contributing Guide</a><a class="page-link" href="/orbit-rs/overview.html">Architecture Overview</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <h1 id="cicd-pipeline-documentation">CI/CD Pipeline Documentation</h1>
+
+<h2 id="overview">Overview</h2>
+
+<p>Orbit-RS uses a comprehensive CI/CD pipeline that provides:</p>
+
+<ul>
+  <li>✅ <strong>Multi-platform builds</strong> for ARM64 and x64 on macOS, Windows, and Linux</li>
+  <li>🔒 <strong>Comprehensive security scanning</strong> with cargo-audit</li>
+  <li>📦 <strong>Automated releases</strong> with checksums and detailed changelogs</li>
+  <li>🛡️ <strong>Helm chart validation</strong> for Kubernetes deployments</li>
+  <li>🧪 <strong>Multiple build profiles</strong> (debug and release)</li>
+  <li>📊 <strong>Automated failure notifications</strong> via GitHub issues</li>
+</ul>
+
+<h2 id="workflows">Workflows</h2>
+
+<h3 id="1-enhanced-cicd-pipeline-ci-cd-enhancedyml">1. Enhanced CI/CD Pipeline (<code class="language-plaintext highlighter-rouge">ci-cd-enhanced.yml</code>)</h3>
+
+<p><strong>Primary production pipeline</strong> that handles all aspects of building, testing, and releasing Orbit-RS.</p>
+
+<h4 id="triggers">Triggers</h4>
+<ul>
+  <li><strong>Push</strong> to <code class="language-plaintext highlighter-rouge">main</code> or <code class="language-plaintext highlighter-rouge">develop</code> branches</li>
+  <li><strong>Tags</strong> matching <code class="language-plaintext highlighter-rouge">v*</code> pattern</li>
+  <li><strong>Pull Requests</strong> to <code class="language-plaintext highlighter-rouge">main</code> or <code class="language-plaintext highlighter-rouge">develop</code></li>
+  <li><strong>Manual dispatch</strong> with custom options</li>
+</ul>
+
+<h4 id="jobs">Jobs</h4>
+
+<h5 id="security--quality-checks">Security &amp; Quality Checks</h5>
+<ul>
+  <li><strong>Rust checks</strong>: Format, lint, test, security audit</li>
+  <li><strong>Helm checks</strong>: Chart validation and templating</li>
+  <li><strong>Security scans</strong>: Cargo audit and vulnerability scanning</li>
+</ul>
+
+<h5 id="multi-platform-builds">Multi-Platform Builds</h5>
+<p>Builds both debug and release binaries for:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Platform</th>
+      <th>Architecture</th>
+      <th>Package Format</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>macOS</strong></td>
+      <td>Intel (x64)</td>
+      <td><code class="language-plaintext highlighter-rouge">.tar.gz</code></td>
+    </tr>
+    <tr>
+      <td><strong>macOS</strong></td>
+      <td>Apple Silicon (ARM64)</td>
+      <td><code class="language-plaintext highlighter-rouge">.tar.gz</code></td>
+    </tr>
+    <tr>
+      <td><strong>Linux</strong></td>
+      <td>x86_64</td>
+      <td><code class="language-plaintext highlighter-rouge">.tar.gz</code></td>
+    </tr>
+    <tr>
+      <td><strong>Linux</strong></td>
+      <td>ARM64</td>
+      <td><code class="language-plaintext highlighter-rouge">.tar.gz</code></td>
+    </tr>
+    <tr>
+      <td><strong>Windows</strong></td>
+      <td>x86_64</td>
+      <td><code class="language-plaintext highlighter-rouge">.zip</code></td>
+    </tr>
+    <tr>
+      <td><strong>Windows</strong></td>
+      <td>ARM64</td>
+      <td><code class="language-plaintext highlighter-rouge">.zip</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<h5 id="release-creation">Release Creation</h5>
+<p>Automatically creates GitHub releases with:</p>
+<ul>
+  <li>All platform binaries (debug + release)</li>
+  <li>SHA256 checksums</li>
+  <li>Comprehensive changelog</li>
+  <li>Security information</li>
+</ul>
+
+<h4 id="usage-examples">Usage Examples</h4>
+
+<p><strong>Trigger a release:</strong></p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>git tag v1.0.0
+git push origin v1.0.0
+</code></pre></div></div>
+
+<p><strong>Manual dispatch with options:</strong></p>
+<ol>
+  <li>Go to Actions → Enhanced CI/CD Pipeline</li>
+  <li>Click “Run workflow”</li>
+  <li>Select branch and options</li>
+</ol>
+
+<h3 id="2-test-release-workflow-test-releaseyml">2. Test Release Workflow (<code class="language-plaintext highlighter-rouge">test-release.yml</code>)</h3>
+
+<p><strong>Development/testing pipeline</strong> for validating builds without creating official releases.</p>
+
+<h4 id="features">Features</h4>
+<ul>
+  <li>Manual platform selection</li>
+  <li>Test tag creation and cleanup</li>
+  <li>Focused testing on specific targets</li>
+  <li>7-day artifact retention</li>
+</ul>
+
+<h4 id="usage">Usage</h4>
+<ol>
+  <li>Go to Actions → Test Release</li>
+  <li>Click “Run workflow”</li>
+  <li>Configure:
+    <ul>
+      <li><strong>Test tag</strong>: <code class="language-plaintext highlighter-rouge">test-v0.1.0</code></li>
+      <li><strong>Platforms</strong>: Select which platforms to build</li>
+    </ul>
+  </li>
+</ol>
+
+<h3 id="3-legacy-cicd-pipeline-ci-cdyml">3. Legacy CI/CD Pipeline (<code class="language-plaintext highlighter-rouge">ci-cd.yml</code>)</h3>
+
+<p>Original pipeline renamed to avoid conflicts. Can be disabled or removed after migration.</p>
+
+<h2 id="supported-features">Supported Features</h2>
+
+<h3 id="build-configurations">Build Configurations</h3>
+
+<p><strong>Debug Builds:</strong></p>
+<ul>
+  <li>Include debug symbols</li>
+  <li>Faster compilation</li>
+  <li>Larger binary size</li>
+  <li>Useful for development and troubleshooting</li>
+</ul>
+
+<p><strong>Release Builds:</strong></p>
+<ul>
+  <li>Optimized performance</li>
+  <li>Smaller binary size</li>
+  <li>Production-ready</li>
+</ul>
+
+<h3 id="security-features">Security Features</h3>
+
+<ol>
+  <li><strong>Cargo Security Audit</strong>
+    <ul>
+      <li>Scans dependencies for known vulnerabilities</li>
+      <li>Generates JSON reports</li>
+      <li>Uploaded as artifacts</li>
+    </ul>
+  </li>
+  <li><strong>Dependency Checking</strong>
+    <ul>
+      <li><code class="language-plaintext highlighter-rouge">cargo-deny</code> for license and advisory checking</li>
+      <li>Automated vulnerability detection</li>
+    </ul>
+  </li>
+</ol>
+
+<h3 id="release-assets">Release Assets</h3>
+
+<p>Each release includes:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>📦 Release Assets
+├── 🍎 macOS
+│   ├── orbit-rs-v1.0.0-aarch64-apple-darwin-release.tar.gz (Apple Silicon)
+│   ├── orbit-rs-v1.0.0-x86_64-apple-darwin-release.tar.gz (Intel)
+│   ├── orbit-rs-v1.0.0-aarch64-apple-darwin-debug.tar.gz (Debug)
+│   └── orbit-rs-v1.0.0-x86_64-apple-darwin-debug.tar.gz (Debug)
+├── 🐧 Linux
+│   ├── orbit-rs-v1.0.0-aarch64-unknown-linux-gnu-release.tar.gz (ARM64)
+│   ├── orbit-rs-v1.0.0-x86_64-unknown-linux-gnu-release.tar.gz (x64)
+│   ├── orbit-rs-v1.0.0-aarch64-unknown-linux-gnu-debug.tar.gz (Debug)
+│   └── orbit-rs-v1.0.0-x86_64-unknown-linux-gnu-debug.tar.gz (Debug)
+├── 🪟 Windows
+│   ├── orbit-rs-v1.0.0-aarch64-pc-windows-msvc-release.zip (ARM64)
+│   ├── orbit-rs-v1.0.0-x86_64-pc-windows-msvc-release.zip (x64)
+│   ├── orbit-rs-v1.0.0-aarch64-pc-windows-msvc-debug.zip (Debug)
+│   └── orbit-rs-v1.0.0-x86_64-pc-windows-msvc-debug.zip (Debug)
+└── 📋 checksums.txt (SHA256 hashes)
+</code></pre></div></div>
+
+<p>Each package contains:</p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">orbit-server</code> binary</li>
+  <li><code class="language-plaintext highlighter-rouge">orbit-client</code> binary (if available)</li>
+  <li><code class="language-plaintext highlighter-rouge">README.md</code></li>
+  <li><code class="language-plaintext highlighter-rouge">LICENSE</code> files</li>
+  <li><code class="language-plaintext highlighter-rouge">config/</code> directory</li>
+  <li><code class="language-plaintext highlighter-rouge">helm/</code> charts</li>
+  <li><code class="language-plaintext highlighter-rouge">k8s/</code> manifests</li>
+  <li><code class="language-plaintext highlighter-rouge">VERSION.txt</code> with build information</li>
+</ul>
+
+<h2 id="configuration">Configuration</h2>
+
+<h3 id="environment-variables">Environment Variables</h3>
+
+<p>Set these in your repository settings under Settings → Secrets and Variables → Actions:</p>
+
+<h4 id="required-secrets">Required Secrets</h4>
+<pre><code class="language-env">GITHUB_TOKEN=&lt;automatic&gt;  # Provided by GitHub
+</code></pre>
+
+<h4 id="optional-secrets-for-kubernetes-deployment">Optional Secrets (for Kubernetes deployment)</h4>
+<pre><code class="language-env">KUBE_CONFIG_STAGING=&lt;base64-encoded-kubeconfig&gt;
+KUBE_CONFIG_PRODUCTION=&lt;base64-encoded-kubeconfig&gt;
+</code></pre>
+
+<h4 id="optional-variables">Optional Variables</h4>
+<pre><code class="language-env">RUST_BACKTRACE=1  # Enable Rust backtraces
+</code></pre>
+
+<h3 id="helm-configuration">Helm Configuration</h3>
+
+<p>The pipeline auto-creates basic Helm charts if they don’t exist. For custom deployments:</p>
+
+<ol>
+  <li>Create <code class="language-plaintext highlighter-rouge">helm/orbit-rs/</code> directory</li>
+  <li>Add your <code class="language-plaintext highlighter-rouge">Chart.yaml</code>, <code class="language-plaintext highlighter-rouge">values.yaml</code>, and templates</li>
+  <li>Pipeline will validate and use your charts</li>
+</ol>
+
+<h2 id="local-development">Local Development</h2>
+
+<h3 id="testing-the-pipeline-locally">Testing the Pipeline Locally</h3>
+
+<p><strong>1. Run individual checks:</strong></p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Format check</span>
+cargo <span class="nb">fmt</span> <span class="nt">--all</span> <span class="nt">--</span> <span class="nt">--check</span>
+
+<span class="c"># Clippy lints</span>
+cargo clippy <span class="nt">--all-targets</span> <span class="nt">--features</span><span class="o">=</span><span class="s2">"resp,postgres-wire,cypher,rest"</span> <span class="nt">--</span> <span class="nt">-D</span> warnings
+
+<span class="c"># Tests</span>
+cargo <span class="nb">test</span> <span class="nt">--workspace</span> <span class="nt">--verbose</span> <span class="nt">--all-features</span>
+
+<span class="c"># Security audit</span>
+cargo audit
+
+<span class="c"># Helm validation (if available)</span>
+helm lint helm/orbit-rs
+</code></pre></div></div>
+
+<p><strong>2. Cross-compilation testing:</strong></p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Install target</span>
+rustup target add aarch64-apple-darwin
+
+<span class="c"># Build for different target</span>
+cargo build <span class="nt">--target</span> aarch64-apple-darwin <span class="nt">--release</span>
+</code></pre></div></div>
+
+<h3 id="creating-releases">Creating Releases</h3>
+
+<h4 id="development-releases">Development Releases</h4>
+<ol>
+  <li>Use the Test Release workflow for validation</li>
+  <li>Select specific platforms to reduce build time</li>
+  <li>Review artifacts before creating official releases</li>
+</ol>
+
+<h4 id="official-releases">Official Releases</h4>
+<ol>
+  <li>Ensure all tests pass on <code class="language-plaintext highlighter-rouge">main</code> branch</li>
+  <li>Create and push a version tag:
+    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>git tag v1.0.0
+git push origin v1.0.0
+</code></pre></div>    </div>
+  </li>
+  <li>Monitor the Enhanced CI/CD Pipeline</li>
+  <li>Review the created release on GitHub</li>
+</ol>
+
+<h3 id="version-naming">Version Naming</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>Pattern</th>
+      <th>Type</th>
+      <th>Example</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">v*.*.*</code></td>
+      <td>Release</td>
+      <td><code class="language-plaintext highlighter-rouge">v1.0.0</code></td>
+      <td>Official release</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">v*.*.*-alpha.*</code></td>
+      <td>Pre-release</td>
+      <td><code class="language-plaintext highlighter-rouge">v1.0.0-alpha.1</code></td>
+      <td>Alpha version</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">v*.*.*-beta.*</code></td>
+      <td>Pre-release</td>
+      <td><code class="language-plaintext highlighter-rouge">v1.0.0-beta.2</code></td>
+      <td>Beta version</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">v*.*.*-rc.*</code></td>
+      <td>Pre-release</td>
+      <td><code class="language-plaintext highlighter-rouge">v1.0.0-rc.1</code></td>
+      <td>Release candidate</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">test-*</code></td>
+      <td>Test</td>
+      <td><code class="language-plaintext highlighter-rouge">test-v1.0.0</code></td>
+      <td>Test builds (auto-cleanup)</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="troubleshooting">Troubleshooting</h2>
+
+<h3 id="common-issues">Common Issues</h3>
+
+<p><strong>1. Build failures</strong></p>
+<ul>
+  <li>Check Rust toolchain compatibility</li>
+  <li>Verify all features are available on target platform</li>
+  <li>Review dependency issues in logs</li>
+</ul>
+
+<p><strong>2. Helm validation failures</strong></p>
+<ul>
+  <li>Ensure <code class="language-plaintext highlighter-rouge">helm/orbit-rs/</code> directory exists</li>
+  <li>Validate Chart.yaml syntax</li>
+  <li>Check template rendering</li>
+</ul>
+
+<p><strong>3. Security scan failures</strong></p>
+<ul>
+  <li>Review cargo-audit output</li>
+  <li>Update vulnerable dependencies</li>
+  <li>Add exceptions for known false positives</li>
+</ul>
+
+<p><strong>4. Kubernetes Container Pipeline failures</strong></p>
+
+<p><em>Issue: “no targets specified in the manifest” error</em></p>
+<ul>
+  <li><strong>Cause</strong>: The sparse checkout in <code class="language-plaintext highlighter-rouge">.github/workflows/k8s-container-pipeline.yml</code> is missing required workspace members</li>
+  <li><strong>Symptom</strong>: Build fails with error like <code class="language-plaintext highlighter-rouge">failed to load manifest for workspace member</code></li>
+  <li><strong>Solution</strong>: Ensure all workspace member dependencies are included in the sparse-checkout configuration
+    <div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">sparse-checkout</span><span class="pi">:</span> <span class="pi">|</span>
+  <span class="s">orbit-server/</span>
+  <span class="s">orbit-client/</span>
+  <span class="s">orbit-operator/</span>
+  <span class="s">orbit-compute/</span>
+  <span class="s">orbit-util/        # Base utility library</span>
+  <span class="s">orbit-shared/      # Shared types (depends on orbit-util)</span>
+  <span class="s">orbit-proto/       # Protocol definitions (depends on orbit-util, orbit-shared)</span>
+  <span class="s">Cargo.toml</span>
+  <span class="s">Cargo.lock</span>
+</code></pre></div>    </div>
+  </li>
+  <li><strong>Verification</strong>: Run <code class="language-plaintext highlighter-rouge">cargo metadata --no-deps</code> to ensure all workspace members are visible</li>
+</ul>
+
+<h3 id="debugging-steps">Debugging Steps</h3>
+
+<ol>
+  <li><strong>Check workflow logs</strong> in GitHub Actions</li>
+  <li><strong>Test locally</strong> using the commands above</li>
+  <li><strong>Use Test Release workflow</strong> for isolated testing</li>
+  <li><strong>Review artifacts</strong> for specific failure patterns</li>
+  <li><strong>Check GitHub Issues</strong> for automated failure reports</li>
+</ol>
+
+<h3 id="getting-help">Getting Help</h3>
+
+<ul>
+  <li><strong>GitHub Issues</strong>: Automated failure notifications</li>
+  <li><strong>Workflow Logs</strong>: Detailed step-by-step information</li>
+  <li><strong>Artifacts</strong>: Download and inspect build outputs</li>
+  <li><strong>Security Tab</strong>: Review vulnerability scan results</li>
+</ul>
+
+<h2 id="best-practices">Best Practices</h2>
+
+<h3 id="for-developers">For Developers</h3>
+
+<ol>
+  <li><strong>Test locally</strong> before pushing</li>
+  <li><strong>Use descriptive commit messages</strong> (affects changelog)</li>
+  <li><strong>Update documentation</strong> when adding features</li>
+  <li><strong>Review security scan results</strong> regularly</li>
+</ol>
+
+<h3 id="for-releases">For Releases</h3>
+
+<ol>
+  <li><strong>Use semantic versioning</strong> (<code class="language-plaintext highlighter-rouge">v1.0.0</code>, <code class="language-plaintext highlighter-rouge">v1.0.1</code>, etc.)</li>
+  <li><strong>Test with Test Release workflow</strong> first</li>
+  <li><strong>Review generated artifacts</strong> before public release</li>
+  <li><strong>Monitor deployment</strong> health after release</li>
+</ol>
+
+<h3 id="for-security">For Security</h3>
+
+<ol>
+  <li><strong>Keep dependencies updated</strong></li>
+  <li><strong>Review security audit results</strong></li>
+  <li><strong>Monitor vulnerability notifications</strong></li>
+  <li><strong>Test security patches</strong> promptly</li>
+</ol>
+
+<h2 id="migration-from-legacy-pipeline">Migration from Legacy Pipeline</h2>
+
+<ol>
+  <li><strong>Test new pipeline</strong> with Test Release workflow</li>
+  <li><strong>Verify all required secrets</strong> are configured</li>
+  <li><strong>Disable legacy workflow</strong> by renaming or removing</li>
+  <li><strong>Update documentation</strong> references</li>
+  <li><strong>Train team</strong> on new workflow features</li>
+</ol>
+
+<hr />
+
+<p>For questions or issues with the CI/CD pipeline, please create a GitHub issue or check the automated failure notifications.</p>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/orbit-rs/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Orbit-RS Documentation</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">TuringWorks</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

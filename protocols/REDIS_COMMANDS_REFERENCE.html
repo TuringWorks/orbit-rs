@@ -1,0 +1,1213 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Redis Commands Reference - Orbit-RS RESP Protocol | Orbit-RS Documentation</title>
+<meta name="generator" content="Jekyll v4.4.1" />
+<meta property="og:title" content="Redis Commands Reference - Orbit-RS RESP Protocol" />
+<meta name="author" content="TuringWorks" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<meta property="og:description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<link rel="canonical" href="https://turingworks.github.io/orbit-rs/protocols/REDIS_COMMANDS_REFERENCE.html" />
+<meta property="og:url" content="https://turingworks.github.io/orbit-rs/protocols/REDIS_COMMANDS_REFERENCE.html" />
+<meta property="og:site_name" content="Orbit-RS Documentation" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Redis Commands Reference - Orbit-RS RESP Protocol" />
+<meta name="twitter:site" content="@TuringWorksAI" />
+<meta name="twitter:creator" content="@TuringWorks" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","author":{"@type":"Person","name":"TuringWorks"},"description":"The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform","headline":"Redis Commands Reference - Orbit-RS RESP Protocol","url":"https://turingworks.github.io/orbit-rs/protocols/REDIS_COMMANDS_REFERENCE.html"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/orbit-rs/assets/main.css">
+  <link rel="stylesheet" href="/orbit-rs/assets/css/custom.css"><link type="application/atom+xml" rel="alternate" href="https://turingworks.github.io/orbit-rs/feed.xml" title="Orbit-RS Documentation" /></head><body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/orbit-rs/">Orbit-RS Documentation</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/orbit-rs/">Orbit-RS Documentation</a><a class="page-link" href="/orbit-rs/project_overview.html">Orbit-RS: Comprehensive Project Overview</a><a class="page-link" href="/orbit-rs/quick_start.html">Quick Start Guide - Multi-Protocol Database Server</a><a class="page-link" href="/orbit-rs/roadmap/">Development Roadmap</a><a class="page-link" href="/orbit-rs/features/">Orbit-RS Feature Index</a><a class="page-link" href="/orbit-rs/compute-acceleration/">Hardware Acceleration Guide</a><a class="page-link" href="/orbit-rs/contributing.html">Contributing Guide</a><a class="page-link" href="/orbit-rs/overview.html">Architecture Overview</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <h1 id="redis-commands-reference---orbit-rs-resp-protocol">Redis Commands Reference - Orbit-RS RESP Protocol</h1>
+
+<h2 id="overview">Overview</h2>
+
+<p>Orbit-RS provides full Redis compatibility through the RESP (Redis Serialization Protocol) adapter, supporting:</p>
+<ul>
+  <li>✅ <strong>Standard Redis Commands</strong> - All core Redis functionality</li>
+  <li>✅ <strong>Vector Operations</strong> - AI/ML vector search with multiple similarity metrics</li>
+  <li>✅ <strong>Time Series</strong> - Complete RedisTimeSeries compatibility</li>
+  <li>✅ <strong>Graph Database</strong> - Cypher-like graph queries and operations</li>
+  <li>✅ <strong>Search Engine</strong> - RedisSearch-compatible full-text and vector search</li>
+</ul>
+
+<h2 id="connection-commands">Connection Commands</h2>
+
+<h3 id="ping-message">PING [message]</h3>
+<p>Test server connection and optionally echo message.</p>
+<pre><code class="language-redis">PING
+
+# "PONG"
+
+PING "hello world" 
+
+# "hello world"
+</code></pre>
+
+<h3 id="echo-message">ECHO message</h3>
+<p>Echo the given message back to client.</p>
+<pre><code class="language-redis">ECHO "Hello Redis!"
+
+# "Hello Redis!"
+</code></pre>
+
+<h3 id="select-db">SELECT db</h3>
+<p>Select database (logical separation, no-op for compatibility).</p>
+<pre><code class="language-redis">SELECT 0
+
+# OK
+</code></pre>
+
+<h3 id="auth-username-password">AUTH [username] password</h3>
+<p>Authenticate with server (placeholder implementation).</p>
+<pre><code class="language-redis">AUTH mypassword
+
+# OK
+
+AUTH myuser mypassword
+
+# OK
+</code></pre>
+
+<h3 id="quit">QUIT</h3>
+<p>Close connection gracefully.</p>
+<pre><code class="language-redis">QUIT
+
+# OK
+</code></pre>
+
+<h2 id="stringkey-commands">String/Key Commands</h2>
+
+<h3 id="get-key">GET key</h3>
+<p>Retrieve value by key from KeyValueActor.</p>
+<pre><code class="language-redis">SET mykey "hello world"
+GET mykey
+
+# "hello world"
+</code></pre>
+
+<h3 id="set-key-value-ex-seconds-px-milliseconds">SET key value [EX seconds] [PX milliseconds]</h3>
+<p>Set key to value with optional expiration.</p>
+<pre><code class="language-redis">SET mykey "value"
+
+# OK
+
+SET mykey "value" EX 3600
+
+# OK (expires in 1 hour)
+
+SET mykey "value" PX 60000
+
+# OK (expires in 60 seconds)
+</code></pre>
+
+<h3 id="del-key-key-">DEL key [key …]</h3>
+<p>Delete one or more keys.</p>
+<pre><code class="language-redis">DEL key1 key2 key3
+
+# (integer) 2
+</code></pre>
+
+<h3 id="exists-key-key-">EXISTS key [key …]</h3>
+<p>Check if keys exist.</p>
+<pre><code class="language-redis">EXISTS key1 key2
+
+# (integer) 1
+</code></pre>
+
+<h3 id="ttl-key">TTL key</h3>
+<p>Get time-to-live in seconds (-1 = no expiration, -2 = key doesn’t exist).</p>
+<pre><code class="language-redis">TTL mykey
+
+# (integer) 299
+</code></pre>
+
+<h3 id="expire-key-seconds">EXPIRE key seconds</h3>
+<p>Set expiration time in seconds.</p>
+<pre><code class="language-redis">EXPIRE mykey 300
+
+# (integer) 1
+</code></pre>
+
+<h3 id="extended-string-commands">Extended String Commands</h3>
+
+<h4 id="append-key-value">APPEND key value</h4>
+<p>Append value to existing string.</p>
+<pre><code class="language-redis">SET mykey "Hello"
+APPEND mykey " World"
+
+# (integer) 11
+GET mykey
+
+# "Hello World"
+</code></pre>
+
+<h4 id="getrange-key-start-end">GETRANGE key start end</h4>
+<p>Get substring by byte range.</p>
+<pre><code class="language-redis">SET mykey "Hello World"
+GETRANGE mykey 0 4
+
+# "Hello"
+</code></pre>
+
+<h4 id="getset-key-value">GETSET key value</h4>
+<p>Set new value and return old value atomically.</p>
+<pre><code class="language-redis">SET mykey "old"
+GETSET mykey "new"
+
+# "old"
+</code></pre>
+
+<h4 id="mget-key-key-">MGET key [key …]</h4>
+<p>Get multiple keys at once.</p>
+<pre><code class="language-redis">MSET key1 "value1" key2 "value2" key3 "value3"
+MGET key1 key2 key3
+
+# 1) "value1"
+# 2) "value2"
+# 3) "value3"
+</code></pre>
+
+<h4 id="mset-key-value-key-value-">MSET key value [key value …]</h4>
+<p>Set multiple key-value pairs.</p>
+<pre><code class="language-redis">MSET key1 "value1" key2 "value2" key3 "value3"
+
+# OK
+</code></pre>
+
+<h4 id="setex-key-seconds-value">SETEX key seconds value</h4>
+<p>Set key with expiration time.</p>
+<pre><code class="language-redis">SETEX mykey 60 "temporary value"
+
+# OK
+</code></pre>
+
+<h4 id="setrange-key-offset-value">SETRANGE key offset value</h4>
+<p>Overwrite string at specific offset.</p>
+<pre><code class="language-redis">SET mykey "Hello World"
+SETRANGE mykey 6 "Redis"
+
+# (integer) 11
+GET mykey
+
+# "Hello Redis"
+</code></pre>
+
+<h4 id="strlen-key">STRLEN key</h4>
+<p>Get string length.</p>
+<pre><code class="language-redis">SET mykey "Hello World"
+STRLEN mykey
+
+# (integer) 11
+</code></pre>
+
+<h2 id="hash-commands">Hash Commands</h2>
+
+<h3 id="hget-key-field">HGET key field</h3>
+<p>Get field value from hash.</p>
+<pre><code class="language-redis">HSET user:1 name "Alice" age "30"
+HGET user:1 name
+
+# "Alice"
+</code></pre>
+
+<h3 id="hset-key-field-value-field-value-">HSET key field value [field value …]</h3>
+<p>Set field values in hash.</p>
+<pre><code class="language-redis">HSET user:1 name "Alice" age "30" city "NYC"
+
+# (integer) 3
+</code></pre>
+
+<h3 id="hgetall-key">HGETALL key</h3>
+<p>Get all field-value pairs from hash.</p>
+<pre><code class="language-redis">HGETALL user:1
+
+# 1) "name"
+# 2) "Alice"
+# 3) "age"
+# 4) "30"
+# 5) "city"
+# 6) "NYC"
+</code></pre>
+
+<h3 id="hdel-key-field-field-">HDEL key field [field …]</h3>
+<p>Delete fields from hash.</p>
+<pre><code class="language-redis">HDEL user:1 age city
+
+# (integer) 2
+</code></pre>
+
+<h3 id="hexists-key-field">HEXISTS key field</h3>
+<p>Check if field exists in hash.</p>
+<pre><code class="language-redis">HEXISTS user:1 name
+
+# (integer) 1
+</code></pre>
+
+<h3 id="hkeys-key">HKEYS key</h3>
+<p>Get all field names from hash.</p>
+<pre><code class="language-redis">HKEYS user:1
+
+# 1) "name"
+# 2) "age"
+# 3) "city"
+</code></pre>
+
+<h3 id="hvals-key">HVALS key</h3>
+<p>Get all values from hash.</p>
+<pre><code class="language-redis">HVALS user:1
+
+# 1) "Alice"
+# 2) "30"
+# 3) "NYC"
+</code></pre>
+
+<h3 id="hlen-key">HLEN key</h3>
+<p>Get number of fields in hash.</p>
+<pre><code class="language-redis">HLEN user:1
+
+# (integer) 3
+</code></pre>
+
+<h3 id="extended-hash-commands">Extended Hash Commands</h3>
+
+<h4 id="hmget-key-field-field-">HMGET key field [field …]</h4>
+<p>Get multiple field values.</p>
+<pre><code class="language-redis">HMGET user:1 name age city
+
+# 1) "Alice"
+# 2) "30"
+# 3) "NYC"
+</code></pre>
+
+<h4 id="hmset-key-field-value-field-value-">HMSET key field value [field value …]</h4>
+<p>Set multiple field values (legacy, use HSET).</p>
+<pre><code class="language-redis">HMSET user:1 name "Alice" age "30"
+
+# OK
+</code></pre>
+
+<h4 id="hincrby-key-field-increment">HINCRBY key field increment</h4>
+<p>Increment field by integer value.</p>
+<pre><code class="language-redis">HSET user:1 score 100
+HINCRBY user:1 score 50
+
+# (integer) 150
+</code></pre>
+
+<h2 id="list-commands">List Commands</h2>
+
+<h3 id="lpush-key-element-element-">LPUSH key element [element …]</h3>
+<p>Push elements to left (head) of list.</p>
+<pre><code class="language-redis">LPUSH mylist "world" "hello"
+
+# (integer) 2
+</code></pre>
+
+<h3 id="rpush-key-element-element-">RPUSH key element [element …]</h3>
+<p>Push elements to right (tail) of list.</p>
+<pre><code class="language-redis">RPUSH mylist "foo" "bar"
+
+# (integer) 4
+</code></pre>
+
+<h3 id="lpop-key-count">LPOP key [count]</h3>
+<p>Pop element(s) from left (head) of list.</p>
+<pre><code class="language-redis">LPOP mylist
+
+# "hello"
+
+LPOP mylist 2
+
+# 1) "world"
+# 2) "foo"
+</code></pre>
+
+<h3 id="rpop-key-count">RPOP key [count]</h3>
+<p>Pop element(s) from right (tail) of list.</p>
+<pre><code class="language-redis">RPOP mylist
+
+# "bar"
+
+RPOP mylist 2
+
+# 1) "foo"
+# 2) "world"
+</code></pre>
+
+<h3 id="lrange-key-start-stop">LRANGE key start stop</h3>
+<p>Get range of elements from list.</p>
+<pre><code class="language-redis">LRANGE mylist 0 -1
+
+# 1) "hello"
+# 2) "world"
+# 3) "foo"
+# 4) "bar"
+
+LRANGE mylist 1 2
+
+# 1) "world"
+# 2) "foo"
+</code></pre>
+
+<h3 id="llen-key">LLEN key</h3>
+<p>Get length of list.</p>
+<pre><code class="language-redis">LLEN mylist
+
+# (integer) 4
+</code></pre>
+
+<h3 id="extended-list-commands">Extended List Commands</h3>
+
+<h4 id="lindex-key-index">LINDEX key index</h4>
+<p>Get element at index.</p>
+<pre><code class="language-redis">LINDEX mylist 0
+
+# "hello"
+
+LINDEX mylist -1
+
+# "bar"
+</code></pre>
+
+<h4 id="lset-key-index-element">LSET key index element</h4>
+<p>Set element at index.</p>
+<pre><code class="language-redis">LSET mylist 0 "hi"
+
+# OK
+</code></pre>
+
+<h4 id="lrem-key-count-element">LREM key count element</h4>
+<p>Remove elements equal to element.</p>
+<pre><code class="language-redis">LREM mylist 2 "foo"
+
+# (integer) 1
+</code></pre>
+
+<h4 id="ltrim-key-start-stop">LTRIM key start stop</h4>
+<p>Trim list to specified range.</p>
+<pre><code class="language-redis">LTRIM mylist 1 -1
+
+# OK
+</code></pre>
+
+<h4 id="linsert-key-beforeafter-pivot-element">LINSERT key BEFORE|AFTER pivot element</h4>
+<p>Insert element before or after pivot.</p>
+<pre><code class="language-redis">LINSERT mylist BEFORE "world" "beautiful"
+
+# (integer) 5
+</code></pre>
+
+<h4 id="blpop-key-key--timeout">BLPOP key [key …] timeout</h4>
+<p>Blocking left pop (non-blocking in current implementation).</p>
+<pre><code class="language-redis">BLPOP mylist 10
+
+# 1) "mylist"
+# 2) "element"
+</code></pre>
+
+<h4 id="brpop-key-key--timeout">BRPOP key [key …] timeout</h4>
+<p>Blocking right pop (non-blocking in current implementation).</p>
+<pre><code class="language-redis">BRPOP mylist 10
+
+# 1) "mylist"
+# 2) "element"
+</code></pre>
+
+<h2 id="set-commands">Set Commands</h2>
+
+<h3 id="sadd-key-member-member-">SADD key member [member …]</h3>
+<p>Add members to set.</p>
+<pre><code class="language-redis">SADD myset "apple" "banana" "cherry"
+
+# (integer) 3
+</code></pre>
+
+<h3 id="srem-key-member-member-">SREM key member [member …]</h3>
+<p>Remove members from set.</p>
+<pre><code class="language-redis">SREM myset "banana"
+
+# (integer) 1
+</code></pre>
+
+<h3 id="smembers-key">SMEMBERS key</h3>
+<p>Get all members of set.</p>
+<pre><code class="language-redis">SMEMBERS myset
+
+# 1) "apple"
+# 2) "cherry"
+</code></pre>
+
+<h3 id="scard-key">SCARD key</h3>
+<p>Get cardinality (size) of set.</p>
+<pre><code class="language-redis">SCARD myset
+
+# (integer) 2
+</code></pre>
+
+<h3 id="sismember-key-member">SISMEMBER key member</h3>
+<p>Check if member exists in set.</p>
+<pre><code class="language-redis">SISMEMBER myset "apple"
+
+# (integer) 1
+</code></pre>
+
+<h3 id="sunion-key-key-">SUNION key [key …]</h3>
+<p>Return union of sets.</p>
+<pre><code class="language-redis">SADD set1 "a" "b" "c"
+SADD set2 "c" "d" "e"
+SUNION set1 set2
+
+# 1) "a"
+# 2) "b"
+# 3) "c"
+# 4) "d"
+# 5) "e"
+</code></pre>
+
+<h3 id="sinter-key-key-">SINTER key [key …]</h3>
+<p>Return intersection of sets.</p>
+<pre><code class="language-redis">SINTER set1 set2
+
+# 1) "c"
+</code></pre>
+
+<h3 id="sdiff-key-key-">SDIFF key [key …]</h3>
+<p>Return difference of sets.</p>
+<pre><code class="language-redis">SDIFF set1 set2
+
+# 1) "a"
+# 2) "b"
+</code></pre>
+
+<h2 id="sorted-set-commands">Sorted Set Commands</h2>
+
+<h3 id="zadd-key-score-member-score-member-">ZADD key score member [score member …]</h3>
+<p>Add members with scores to sorted set.</p>
+<pre><code class="language-redis">ZADD leaderboard 100 "alice" 85 "bob" 92 "charlie"
+
+# (integer) 3
+</code></pre>
+
+<h3 id="zrem-key-member-member-">ZREM key member [member …]</h3>
+<p>Remove members from sorted set.</p>
+<pre><code class="language-redis">ZREM leaderboard "bob"
+
+# (integer) 1
+</code></pre>
+
+<h3 id="zcard-key">ZCARD key</h3>
+<p>Get cardinality of sorted set.</p>
+<pre><code class="language-redis">ZCARD leaderboard
+
+# (integer) 2
+</code></pre>
+
+<h3 id="zscore-key-member">ZSCORE key member</h3>
+<p>Get score of member.</p>
+<pre><code class="language-redis">ZSCORE leaderboard "alice"
+
+# "100"
+</code></pre>
+
+<h3 id="zincrby-key-increment-member">ZINCRBY key increment member</h3>
+<p>Increment score of member.</p>
+<pre><code class="language-redis">ZINCRBY leaderboard 10 "charlie"
+
+# "102"
+</code></pre>
+
+<h3 id="zrange-key-start-stop-withscores">ZRANGE key start stop [WITHSCORES]</h3>
+<p>Get members by rank range.</p>
+<pre><code class="language-redis">ZRANGE leaderboard 0 -1 WITHSCORES
+
+# 1) "alice"
+# 2) "100"
+# 3) "charlie"
+# 4) "102"
+</code></pre>
+
+<h3 id="zrangebyscore-key-min-max-withscores">ZRANGEBYSCORE key min max [WITHSCORES]</h3>
+<p>Get members by score range.</p>
+<pre><code class="language-redis">ZRANGEBYSCORE leaderboard 90 110 WITHSCORES
+
+# 1) "alice"
+# 2) "100"
+# 3) "charlie"
+# 4) "102"
+</code></pre>
+
+<h3 id="zcount-key-min-max">ZCOUNT key min max</h3>
+<p>Count members in score range.</p>
+<pre><code class="language-redis">ZCOUNT leaderboard 90 110
+
+# (integer) 2
+</code></pre>
+
+<h3 id="zrank-key-member">ZRANK key member</h3>
+<p>Get rank of member (0-based).</p>
+<pre><code class="language-redis">ZRANK leaderboard "alice"
+
+# (integer) 0
+</code></pre>
+
+<h2 id="pubsub-commands">Pub/Sub Commands</h2>
+
+<h3 id="publish-channel-message">PUBLISH channel message</h3>
+<p>Publish message to channel.</p>
+<pre><code class="language-redis">PUBLISH news "Breaking news!"
+
+# (integer) 3
+</code></pre>
+
+<h3 id="subscribe-channel-channel-">SUBSCRIBE channel [channel …]</h3>
+<p>Subscribe to channels.</p>
+<pre><code class="language-redis">SUBSCRIBE news weather sports
+
+# 1) "subscribe"
+# 2) "news"
+# 3) (integer) 1
+</code></pre>
+
+<h3 id="unsubscribe-channel-channel-">UNSUBSCRIBE [channel [channel …]]</h3>
+<p>Unsubscribe from channels.</p>
+<pre><code class="language-redis">UNSUBSCRIBE news
+
+# 1) "unsubscribe"
+# 2) "news"
+# 3) (integer) 0
+</code></pre>
+
+<h3 id="psubscribe-pattern-pattern-">PSUBSCRIBE pattern [pattern …]</h3>
+<p>Subscribe to channel patterns.</p>
+<pre><code class="language-redis">PSUBSCRIBE news.*
+
+# 1) "psubscribe"
+# 2) "news.*"
+# 3) (integer) 1
+</code></pre>
+
+<h3 id="punsubscribe-pattern-pattern-">PUNSUBSCRIBE [pattern [pattern …]]</h3>
+<p>Unsubscribe from channel patterns.</p>
+<pre><code class="language-redis">PUNSUBSCRIBE news.*
+
+# 1) "punsubscribe"
+# 2) "news.*"
+# 3) (integer) 0
+</code></pre>
+
+<h3 id="pubsub-subcommand-argument-argument-">PUBSUB subcommand [argument [argument …]]</h3>
+<p>Introspect pub/sub system.</p>
+<pre><code class="language-redis">PUBSUB CHANNELS
+
+# 1) "news"
+# 2) "weather"
+
+PUBSUB NUMSUB news weather
+
+# 1) "news"
+# 2) (integer) 3
+# 3) "weather"
+# 4) (integer) 1
+</code></pre>
+
+<h2 id="vector-operations-vector-namespace">Vector Operations (VECTOR.* namespace)</h2>
+
+<h3 id="vectoradd-index-id-vector-key-value-">VECTOR.ADD index id vector [key value …]</h3>
+<p>Add vector with optional metadata to index.</p>
+<pre><code class="language-redis">VECTOR.ADD doc_embeddings doc1 "0.1,0.2,0.3,0.4" title "First Document" category "tech"
+
+# OK
+</code></pre>
+
+<h3 id="vectorget-index-id">VECTOR.GET index id</h3>
+<p>Get vector and metadata by ID.</p>
+<pre><code class="language-redis">VECTOR.GET doc_embeddings doc1
+
+# 1) "doc1"
+# 2) "0.100000,0.200000,0.300000,0.400000"
+# 3) "title"
+# 4) "First Document"
+# 5) "category"
+# 6) "tech"
+</code></pre>
+
+<h3 id="vectordel-index-id">VECTOR.DEL index id</h3>
+<p>Delete vector from index.</p>
+<pre><code class="language-redis">VECTOR.DEL doc_embeddings doc1
+
+# (integer) 1
+</code></pre>
+
+<h3 id="vectorstats-index">VECTOR.STATS index</h3>
+<p>Get statistics for vector index.</p>
+<pre><code class="language-redis">VECTOR.STATS doc_embeddings
+
+# 1) "vector_count"
+# 2) (integer) 1000
+# 3) "index_count"
+# 4) (integer) 1
+# 5) "avg_dimension"
+# 6) "768.00"
+</code></pre>
+
+<h3 id="vectorlist-index">VECTOR.LIST index</h3>
+<p>List all vector IDs in index.</p>
+<pre><code class="language-redis">VECTOR.LIST doc_embeddings
+
+# 1) "doc1"
+# 2) "doc2"
+# 3) "doc3"
+</code></pre>
+
+<h3 id="vectorcount-index">VECTOR.COUNT index</h3>
+<p>Get count of vectors in index.</p>
+<pre><code class="language-redis">VECTOR.COUNT doc_embeddings
+
+# (integer) 1000
+</code></pre>
+
+<h3 id="vectorsearch-index-vector-limit-metric-metric-threshold-threshold-key-value-">VECTOR.SEARCH index vector limit [METRIC metric] [THRESHOLD threshold] [key value …]</h3>
+<p>Perform vector similarity search.</p>
+<pre><code class="language-redis">VECTOR.SEARCH doc_embeddings "0.1,0.2,0.3,0.4" 5 METRIC COSINE THRESHOLD 0.8 category "tech"
+
+# 1) 1) "doc1"
+#    2) "0.950000"
+#    3) "0.100000,0.200000,0.300000,0.400000"
+#    4) "title"
+#    5) "First Document"
+# 2) 1) "doc2"
+#    2) "0.920000"
+#    3) "0.150000,0.180000,0.320000,0.380000"
+</code></pre>
+
+<h3 id="vectorknn-index-vector-k-metric-metric">VECTOR.KNN index vector k [METRIC metric]</h3>
+<p>K-nearest neighbors search.</p>
+<pre><code class="language-redis">VECTOR.KNN doc_embeddings "0.1,0.2,0.3,0.4" 3 METRIC EUCLIDEAN
+
+# 1) 1) "doc1"
+#    2) "0.050000"
+# 2) 1) "doc2"
+#    2) "0.082000"
+</code></pre>
+
+<h2 id="redissearch-compatible-commands-ft-namespace">RedisSearch Compatible Commands (FT.* namespace)</h2>
+
+<h3 id="ftcreate-index-dim-dimension-distance_metric-metric">FT.CREATE index DIM dimension [DISTANCE_METRIC metric]</h3>
+<p>Create vector index.</p>
+<pre><code class="language-redis">FT.CREATE doc_index DIM 768 DISTANCE_METRIC COSINE
+
+# OK
+</code></pre>
+
+<h3 id="ftadd-index-id-vector-key-value-">FT.ADD index id vector [key value …]</h3>
+<p>Add document to index (alias for VECTOR.ADD).</p>
+<pre><code class="language-redis">FT.ADD doc_index doc1 "0.1,0.2,0.3,..." title "Document"
+
+# OK
+</code></pre>
+
+<h3 id="ftdel-index-id">FT.DEL index id</h3>
+<p>Delete document from index.</p>
+<pre><code class="language-redis">FT.DEL doc_index doc1
+
+# (integer) 1
+</code></pre>
+
+<h3 id="ftsearch-index-vector-limit-distance_metric-metric-key-value-">FT.SEARCH index vector limit [DISTANCE_METRIC metric] [key value …]</h3>
+<p>Search index (converted to VECTOR.SEARCH format).</p>
+<pre><code class="language-redis">FT.SEARCH doc_index "0.1,0.2,0.3,..." 10 DISTANCE_METRIC COSINE
+
+# (search results)
+</code></pre>
+
+<h3 id="ftinfo-index">FT.INFO index</h3>
+<p>Get index information.</p>
+<pre><code class="language-redis">FT.INFO doc_index
+
+# 1) "index_name"
+# 2) "doc_index"
+# 3) "num_docs"
+# 4) (integer) 1000
+</code></pre>
+
+<h2 id="time-series-commands-ts-namespace">Time Series Commands (TS.* namespace)</h2>
+
+<h3 id="tscreate-key-retention-retentiontime-chunk_size-size-duplicate_policy-policy-labels-label-value-">TS.CREATE key [RETENTION retentionTime] [CHUNK_SIZE size] [DUPLICATE_POLICY policy] [LABELS label value …]</h3>
+<p>Create time series.</p>
+<pre><code class="language-redis">TS.CREATE temperature:sensor1 RETENTION 3600000 CHUNK_SIZE 4096 LABELS sensor_id "001" location "office"
+
+# OK
+</code></pre>
+
+<h3 id="tsalter-key-retention-retentiontime-chunk_size-size-duplicate_policy-policy-labels-label-value-">TS.ALTER key [RETENTION retentionTime] [CHUNK_SIZE size] [DUPLICATE_POLICY policy] [LABELS label value …]</h3>
+<p>Alter time series configuration.</p>
+<pre><code class="language-redis">TS.ALTER temperature:sensor1 RETENTION 7200000
+
+# OK
+</code></pre>
+
+<h3 id="tsadd-key-timestamp-value-retention-retentiontime-chunk_size-size-duplicate_policy-policy-labels-label-value-">TS.ADD key timestamp value [RETENTION retentionTime] [CHUNK_SIZE size] [DUPLICATE_POLICY policy] [LABELS label value …]</h3>
+<p>Add sample to time series.</p>
+<pre><code class="language-redis">TS.ADD temperature:sensor1 1609459200000 23.5
+
+# (integer) 1609459200000
+
+TS.ADD temperature:sensor1 * 24.1
+
+# (integer) 1609459260000
+</code></pre>
+
+<h3 id="tsmadd-key1-timestamp1-value1-key2-timestamp2-value2-">TS.MADD key1 timestamp1 value1 [key2 timestamp2 value2 …]</h3>
+<p>Add multiple samples.</p>
+<pre><code class="language-redis">TS.MADD temperature:sensor1 1609459200000 23.5 temperature:sensor2 1609459200000 22.8
+
+# 1) (integer) 1609459200000
+# 2) (integer) 1609459200000
+</code></pre>
+
+<h3 id="tsincrby-key-value-timestamp-timestamp-retention-retentiontime-chunk_size-size-duplicate_policy-policy-labels-label-value-">TS.INCRBY key value [TIMESTAMP timestamp] [RETENTION retentionTime] [CHUNK_SIZE size] [DUPLICATE_POLICY policy] [LABELS label value …]</h3>
+<p>Increment time series by value.</p>
+<pre><code class="language-redis">TS.INCRBY counter:requests 1 TIMESTAMP 1609459200000
+
+# (integer) 1609459200000
+</code></pre>
+
+<h3 id="tsdecrby-key-value-timestamp-timestamp-retention-retentiontime-chunk_size-size-duplicate_policy-policy-labels-label-value-">TS.DECRBY key value [TIMESTAMP timestamp] [RETENTION retentionTime] [CHUNK_SIZE size] [DUPLICATE_POLICY policy] [LABELS label value …]</h3>
+<p>Decrement time series by value.</p>
+<pre><code class="language-redis">TS.DECRBY counter:requests 1 TIMESTAMP 1609459200000
+
+# (integer) 1609459200000
+</code></pre>
+
+<h3 id="tsdel-key-fromtimestamp-totimestamp">TS.DEL key fromTimestamp toTimestamp</h3>
+<p>Delete samples in time range.</p>
+<pre><code class="language-redis">TS.DEL temperature:sensor1 1609459200000 1609459260000
+
+# (integer) 2
+</code></pre>
+
+<h3 id="tsget-key">TS.GET key</h3>
+<p>Get latest sample.</p>
+<pre><code class="language-redis">TS.GET temperature:sensor1
+
+# 1) (integer) 1609459260000
+# 2) "24.1"
+</code></pre>
+
+<h3 id="tsmget-filter-labelvalue--key1-key2-">TS.MGET [FILTER label=value …] key1 [key2 …]</h3>
+<p>Get latest samples from multiple time series.</p>
+<pre><code class="language-redis">TS.MGET temperature:sensor1 temperature:sensor2
+
+# 1) 1) "temperature:sensor1"
+#    2) (integer) 1609459260000
+#    3) "24.1"
+# 2) 1) "temperature:sensor2"
+#    2) (integer) 1609459260000
+#    3) "22.8"
+</code></pre>
+
+<h3 id="tsinfo-key">TS.INFO key</h3>
+<p>Get time series information.</p>
+<pre><code class="language-redis">TS.INFO temperature:sensor1
+
+# 1) "totalSamples"
+# 2) (integer) 100
+# 3) "memoryUsage"
+# 4) (integer) 4096
+# 5) "firstTimestamp"
+# 6) (integer) 1609459200000
+# 7) "lastTimestamp"
+# 8) (integer) 1609459260000
+</code></pre>
+
+<h3 id="tsrange-key-fromtimestamp-totimestamp-aggregation-aggregation-bucketduration">TS.RANGE key fromTimestamp toTimestamp [AGGREGATION aggregation bucketDuration]</h3>
+<p>Get samples in time range.</p>
+<pre><code class="language-redis">TS.RANGE temperature:sensor1 1609459200000 1609459260000
+
+# 1) 1) (integer) 1609459200000
+#    2) "23.5"
+# 2) 1) (integer) 1609459260000
+#    2) "24.1"
+
+TS.RANGE temperature:sensor1 1609459200000 1609459260000 AGGREGATION AVG 60000
+
+# 1) 1) (integer) 1609459200000
+#    2) "23.8"
+</code></pre>
+
+<h3 id="tsrevrange-key-fromtimestamp-totimestamp-aggregation-aggregation-bucketduration">TS.REVRANGE key fromTimestamp toTimestamp [AGGREGATION aggregation bucketDuration]</h3>
+<p>Get samples in reverse time order.</p>
+<pre><code class="language-redis">TS.REVRANGE temperature:sensor1 1609459200000 1609459260000
+
+# 2) 1) (integer) 1609459260000
+#    2) "24.1"
+# 1) 1) (integer) 1609459200000
+#    2) "23.5"
+</code></pre>
+
+<h3 id="tsmrange-fromtimestamp-totimestamp-aggregation-aggregation-bucketduration-filter-labelvalue--key1-key2-">TS.MRANGE fromTimestamp toTimestamp [AGGREGATION aggregation bucketDuration] [FILTER label=value …] key1 [key2 …]</h3>
+<p>Get range from multiple time series.</p>
+<pre><code class="language-redis">TS.MRANGE 1609459200000 1609459260000 temperature:sensor1 temperature:sensor2
+
+# 1) 1) "temperature:sensor1"
+#    2) (empty array)
+#    3) 1) 1) (integer) 1609459200000
+#          2) "23.5"
+#       2) 1) (integer) 1609459260000
+#          2) "24.1"
+</code></pre>
+
+<h3 id="tsmrevrange-fromtimestamp-totimestamp-aggregation-aggregation-bucketduration-filter-labelvalue--key1-key2-">TS.MREVRANGE fromTimestamp toTimestamp [AGGREGATION aggregation bucketDuration] [FILTER label=value …] key1 [key2 …]</h3>
+<p>Get reverse range from multiple time series.</p>
+<pre><code class="language-redis">TS.MREVRANGE 1609459200000 1609459260000 temperature:sensor1 temperature:sensor2
+
+# (reverse time order results)
+</code></pre>
+
+<h3 id="tsqueryindex-filter-labelvalue-">TS.QUERYINDEX [FILTER label=value …]</h3>
+<p>Query time series index (placeholder).</p>
+<pre><code class="language-redis">TS.QUERYINDEX
+
+# (empty array)
+</code></pre>
+
+<h3 id="tscreaterule-sourcekey-destkey-aggregation-aggregation-bucketduration-retention">TS.CREATERULE sourceKey destKey AGGREGATION aggregation bucketDuration [retention]</h3>
+<p>Create compaction rule.</p>
+<pre><code class="language-redis">TS.CREATERULE temperature:sensor1 temperature:sensor1:hourly AGGREGATION AVG 3600000
+
+# OK
+</code></pre>
+
+<h3 id="tsdeleterule-sourcekey-destkey">TS.DELETERULE sourceKey destKey</h3>
+<p>Delete compaction rule.</p>
+<pre><code class="language-redis">TS.DELETERULE temperature:sensor1 temperature:sensor1:hourly
+
+# OK
+</code></pre>
+
+<h2 id="graph-database-commands-graph-namespace">Graph Database Commands (GRAPH.* namespace)</h2>
+
+<h3 id="graphquery-graph_name-query">GRAPH.QUERY graph_name query</h3>
+<p>Execute graph query.</p>
+<pre><code class="language-redis">GRAPH.QUERY social "MATCH (p:Person) RETURN p.name"
+
+# 1) 1) "p.name"
+# 2) 1) 1) "Alice"
+#    2) 1) "Bob"
+#    3) 1) "Charlie"
+# 3) 1) "Cached execution"
+#    2) "Query internal execution time: 0.000000 milliseconds"
+</code></pre>
+
+<h3 id="graphro_query-graph_name-query">GRAPH.RO_QUERY graph_name query</h3>
+<p>Execute read-only graph query.</p>
+<pre><code class="language-redis">GRAPH.RO_QUERY social "MATCH (p:Person) WHERE p.age &gt; 25 RETURN p"
+
+# (query results similar to GRAPH.QUERY)
+</code></pre>
+
+<h3 id="graphdelete-graph_name">GRAPH.DELETE graph_name</h3>
+<p>Delete entire graph.</p>
+<pre><code class="language-redis">GRAPH.DELETE social
+
+# OK
+</code></pre>
+
+<h3 id="graphlist">GRAPH.LIST</h3>
+<p>List all graphs.</p>
+<pre><code class="language-redis">GRAPH.LIST
+
+# 1) "demo_graph"
+# 2) "social_network"
+</code></pre>
+
+<h3 id="graphexplain-graph_name-query">GRAPH.EXPLAIN graph_name query</h3>
+<p>Get execution plan for query.</p>
+<pre><code class="language-redis">GRAPH.EXPLAIN social "MATCH (p:Person) RETURN p"
+
+# 1) 1) "1: Scan"
+#    2) "Node Scan | (p:Person)"
+#    3) "Estimated rows: 1000"
+#    4) "Cost: 1000.00"
+# 2) 1) "Total estimated cost: 1000.00"
+</code></pre>
+
+<h3 id="graphprofile-graph_name-query">GRAPH.PROFILE graph_name query</h3>
+<p>Profile query execution.</p>
+<pre><code class="language-redis">GRAPH.PROFILE social "MATCH (p:Person) RETURN p"
+
+# 1) (empty array)
+# 2) (empty array)
+# 3) 1) "1: Scan"
+#    2) "Node Scan | (p:Person)"
+#    3) "Records produced: 1000"
+#    4) "Execution time: 5 ms"
+#    5) "Memory used: 8192 bytes"
+</code></pre>
+
+<h3 id="graphslowlog-graph_name">GRAPH.SLOWLOG graph_name</h3>
+<p>Get slow query log.</p>
+<pre><code class="language-redis">GRAPH.SLOWLOG social
+
+# 1) 1) (integer) 1
+#    2) (integer) 1609459200
+#    3) (integer) 1500
+#    4) "MATCH (p:Person) RETURN p"
+#    5) 1) "index_scan"
+#       2) "node_scan"
+</code></pre>
+
+<h3 id="graphconfig-getset-parameter-value">GRAPH.CONFIG GET|SET parameter [value]</h3>
+<p>Configure graph settings.</p>
+<pre><code class="language-redis">GRAPH.CONFIG GET timeout
+
+# 1) "timeout"
+# 2) "1000"
+
+GRAPH.CONFIG SET timeout 2000
+
+# OK
+</code></pre>
+
+<h2 id="server-commands">Server Commands</h2>
+
+<h3 id="info-section">INFO [section]</h3>
+<p>Get server information with Orbit-specific details.</p>
+<pre><code class="language-redis">INFO
+
+# # Server
+# redis_version:7.0.0-orbit
+# redis_git_sha1:00000000
+# redis_git_dirty:0
+# redis_mode:standalone
+# os:Darwin 23.6.0 x86_64
+# arch_bits:64
+# process_id:12345
+# uptime_in_seconds:3600
+# 
+# # Orbit
+# orbit_mode:protocol_adapter
+# orbit_actor_count:0
+# orbit_cluster_nodes:1
+</code></pre>
+
+<h3 id="dbsize">DBSIZE</h3>
+<p>Get number of keys (placeholder implementation).</p>
+<pre><code class="language-redis">DBSIZE
+
+# (integer) 0
+</code></pre>
+
+<h3 id="flushdb">FLUSHDB</h3>
+<p>Clear current database (placeholder implementation).</p>
+<pre><code class="language-redis">FLUSHDB
+
+# OK
+</code></pre>
+
+<h3 id="flushall">FLUSHALL</h3>
+<p>Clear all databases (placeholder implementation).</p>
+<pre><code class="language-redis">FLUSHALL
+
+# OK
+</code></pre>
+
+<h3 id="command">COMMAND</h3>
+<p>Get list of available commands.</p>
+<pre><code class="language-redis">COMMAND
+
+# 1) 1) "ping"
+#    2) (integer) -1
+#    3) (integer) 1
+#    4) (integer) 0
+#    5) (integer) 0
+# 2) 1) "get"
+#    2) (integer) 2
+#    3) (integer) 1
+#    4) (integer) 1
+#    5) (integer) 1
+# ... (all supported commands)
+</code></pre>
+
+<h2 id="additional-string-commands">Additional String Commands</h2>
+
+<h3 id="persist-key">PERSIST key</h3>
+<p>Remove expiration from key.</p>
+<pre><code class="language-redis">EXPIRE mykey 60
+PERSIST mykey
+
+# (integer) 1
+TTL mykey
+
+# (integer) -1
+</code></pre>
+
+<h3 id="pexpire-key-milliseconds">PEXPIRE key milliseconds</h3>
+<p>Set expiration in milliseconds.</p>
+<pre><code class="language-redis">PEXPIRE mykey 60000
+
+# (integer) 1
+</code></pre>
+
+<h3 id="pttl-key">PTTL key</h3>
+<p>Get TTL in milliseconds.</p>
+<pre><code class="language-redis">PTTL mykey
+
+# (integer) 59850
+</code></pre>
+
+<h3 id="randomkey">RANDOMKEY</h3>
+<p>Get random key (placeholder implementation).</p>
+<pre><code class="language-redis">RANDOMKEY
+
+# (nil)
+</code></pre>
+
+<h3 id="rename-oldkey-newkey">RENAME oldkey newkey</h3>
+<p>Rename key.</p>
+<pre><code class="language-redis">SET oldkey "value"
+RENAME oldkey newkey
+
+# OK
+GET newkey
+
+# "value"
+</code></pre>
+
+<h3 id="type-key">TYPE key</h3>
+<p>Get type of key.</p>
+<pre><code class="language-redis">SET mystring "value"
+HSET myhash field value
+LPUSH mylist item
+TYPE mystring
+
+# string
+TYPE myhash
+
+# hash
+TYPE mylist
+
+# list
+</code></pre>
+
+<h3 id="unlink-key-key-">UNLINK key [key …]</h3>
+<p>Asynchronous delete (same as DEL in current implementation).</p>
+<pre><code class="language-redis">UNLINK key1 key2 key3
+
+# (integer) 2
+</code></pre>
+
+<h2 id="actor-integration">Actor Integration</h2>
+
+<p>Each command family maps to specific Orbit actors:</p>
+
+<ul>
+  <li><strong>String commands</strong> → <code class="language-plaintext highlighter-rouge">KeyValueActor</code> - TTL-aware key-value storage</li>
+  <li><strong>Hash commands</strong> → <code class="language-plaintext highlighter-rouge">HashActor</code> - Hash map operations</li>
+  <li><strong>List commands</strong> → <code class="language-plaintext highlighter-rouge">ListActor</code> - Ordered list with push/pop</li>
+  <li><strong>Set commands</strong> → <code class="language-plaintext highlighter-rouge">SetActor</code> - Unique member sets</li>
+  <li><strong>Sorted Set commands</strong> → <code class="language-plaintext highlighter-rouge">SortedSetActor</code> - Score-ordered sets</li>
+  <li><strong>Pub/Sub commands</strong> → <code class="language-plaintext highlighter-rouge">PubSubActor</code> - Message channels</li>
+  <li><strong>Vector commands</strong> → <code class="language-plaintext highlighter-rouge">VectorActor</code> - AI/ML vector operations</li>
+  <li><strong>Time Series commands</strong> → <code class="language-plaintext highlighter-rouge">TimeSeriesActor</code> - Time-series data</li>
+  <li><strong>Graph commands</strong> → <code class="language-plaintext highlighter-rouge">GraphActor</code> - Graph database operations</li>
+</ul>
+
+<h2 id="configuration">Configuration</h2>
+
+<div class="language-toml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">[</span><span class="n">protocols</span><span class="k">.</span><span class="n">redis</span><span class="k">]</span>
+<span class="n">enabled</span> <span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+<span class="n">host</span> <span class="o">=</span><span class="w"> </span><span class="s">"0.0.0.0"</span>
+<span class="n">port</span> <span class="o">=</span><span class="w"> </span><span class="mi">6380</span>
+<span class="n">max_connections</span> <span class="o">=</span><span class="w"> </span><span class="mi">1000</span>
+<span class="n">default_ttl</span> <span class="o">=</span><span class="w"> </span><span class="mi">3600</span>
+
+<span class="k">[</span><span class="n">protocols</span><span class="k">.</span><span class="n">redis</span><span class="k">.</span><span class="n">vector</span><span class="k">]</span>
+<span class="n">default_similarity_metric</span> <span class="o">=</span><span class="w"> </span><span class="s">"cosine"</span>
+<span class="n">index_type</span> <span class="o">=</span><span class="w"> </span><span class="s">"hnsw"</span>
+<span class="n">ef_construction</span> <span class="o">=</span><span class="w"> </span><span class="mi">200</span>
+<span class="n">m</span> <span class="o">=</span><span class="w"> </span><span class="mi">16</span>
+
+<span class="k">[</span><span class="n">protocols</span><span class="k">.</span><span class="n">redis</span><span class="k">.</span><span class="n">timeseries</span><span class="k">]</span>
+<span class="n">default_retention</span> <span class="o">=</span><span class="w"> </span><span class="mi">86400000</span>  <span class="c"># 24 hours in milliseconds</span>
+<span class="n">default_chunk_size</span> <span class="o">=</span><span class="w"> </span><span class="mi">4096</span>
+<span class="n">default_duplicate_policy</span> <span class="o">=</span><span class="w"> </span><span class="s">"block"</span>
+
+<span class="k">[</span><span class="n">protocols</span><span class="k">.</span><span class="n">redis</span><span class="k">.</span><span class="n">graph</span><span class="k">]</span>
+<span class="n">query_timeout</span> <span class="o">=</span><span class="w"> </span><span class="mi">30000</span>  <span class="c"># 30 seconds</span>
+<span class="n">max_query_result_set</span> <span class="o">=</span><span class="w"> </span><span class="mi">10000</span>
+<span class="n">enable_query_cache</span> <span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+</code></pre></div></div>
+
+<h2 id="performance-notes">Performance Notes</h2>
+
+<ul>
+  <li><strong>Concurrent Operations</strong>: All commands support concurrent execution</li>
+  <li><strong>Memory Efficiency</strong>: Actors activate on-demand and deactivate when idle</li>
+  <li><strong>Distributed</strong>: Commands can access actors across the cluster</li>
+  <li><strong>ACID Compliance</strong>: All operations benefit from Orbit’s transaction guarantees</li>
+  <li><strong>Scalability</strong>: Linear scaling with cluster size</li>
+</ul>
+
+<h2 id="compatibility">Compatibility</h2>
+
+<ul>
+  <li>✅ <strong>Redis Clients</strong>: Compatible with all standard Redis clients</li>
+  <li>✅ <strong>Protocol Version</strong>: Full RESP2 support</li>
+  <li>✅ <strong>Extensions</strong>: Vector, Time Series, Graph extensions</li>
+  <li>✅ <strong>Error Handling</strong>: Redis-compatible error responses</li>
+  <li>✅ <strong>Type System</strong>: Full Redis type compatibility</li>
+</ul>
+
+<p>This comprehensive command set makes Orbit-RS a drop-in replacement for Redis with enterprise-grade distributed computing capabilities and advanced AI/ML features.</p>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/orbit-rs/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Orbit-RS Documentation</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">TuringWorks</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

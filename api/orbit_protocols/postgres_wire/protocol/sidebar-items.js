@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ConnectionLoopResult","ConnectionState","MessageResult"],"struct":["PostgresWireProtocol"]};

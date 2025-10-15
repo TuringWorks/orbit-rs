@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["JsonbError","JsonbValue"],"fn":["decode_jsonb","encode_jsonb"],"mod":["aggregation","indexing","operators","path","schema","storage"],"type":["JsonbResult"]};

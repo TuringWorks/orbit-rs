@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Schema-less with Optional Schema - Feature Backlog | Orbit-RS Documentation</title>
+<meta name="generator" content="Jekyll v4.4.1" />
+<meta property="og:title" content="Schema-less with Optional Schema - Feature Backlog" />
+<meta name="author" content="TuringWorks" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<meta property="og:description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<link rel="canonical" href="https://turingworks.github.io/orbit-rs/backlog/SCHEMA_FLEXIBILITY.html" />
+<meta property="og:url" content="https://turingworks.github.io/orbit-rs/backlog/SCHEMA_FLEXIBILITY.html" />
+<meta property="og:site_name" content="Orbit-RS Documentation" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Schema-less with Optional Schema - Feature Backlog" />
+<meta name="twitter:site" content="@TuringWorksAI" />
+<meta name="twitter:creator" content="@TuringWorks" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","author":{"@type":"Person","name":"TuringWorks"},"description":"The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform","headline":"Schema-less with Optional Schema - Feature Backlog","url":"https://turingworks.github.io/orbit-rs/backlog/SCHEMA_FLEXIBILITY.html"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/orbit-rs/assets/main.css">
+  <link rel="stylesheet" href="/orbit-rs/assets/css/custom.css"><link type="application/atom+xml" rel="alternate" href="https://turingworks.github.io/orbit-rs/feed.xml" title="Orbit-RS Documentation" /></head><body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/orbit-rs/">Orbit-RS Documentation</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/orbit-rs/">Orbit-RS Documentation</a><a class="page-link" href="/orbit-rs/project_overview.html">Orbit-RS: Comprehensive Project Overview</a><a class="page-link" href="/orbit-rs/quick_start.html">Quick Start Guide - Multi-Protocol Database Server</a><a class="page-link" href="/orbit-rs/roadmap/">Development Roadmap</a><a class="page-link" href="/orbit-rs/features/">Orbit-RS Feature Index</a><a class="page-link" href="/orbit-rs/compute-acceleration/">Hardware Acceleration Guide</a><a class="page-link" href="/orbit-rs/contributing.html">Contributing Guide</a><a class="page-link" href="/orbit-rs/overview.html">Architecture Overview</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <h1 id="schema-less-with-optional-schema---feature-backlog">Schema-less with Optional Schema - Feature Backlog</h1>
+
+<h2 id="-epic-overview">📋 Epic Overview</h2>
+
+<p><strong>Epic ID</strong>: ORBIT-022<br />
+<strong>Epic Title</strong>: Flexible Schema Management System<br />
+<strong>Priority</strong>: 🔥 High<br />
+<strong>Phase</strong>: Q2 2025<br />
+<strong>Total Effort</strong>: 8-10 weeks<br />
+<strong>Status</strong>: Planned</p>
+
+<h2 id="-epic-description">🎯 Epic Description</h2>
+
+<p>Implement a flexible schema management system that supports both schema-less operations (like MongoDB) and optional schema validation (like JSON Schema). This enables rapid prototyping with gradual schema evolution while maintaining data quality and type safety when needed.</p>
+
+<h2 id="-business-value">📈 Business Value</h2>
+
+<h3 id="primary-benefits">Primary Benefits</h3>
+<ul>
+  <li><strong>Rapid Development</strong>: Start building without predefined schemas</li>
+  <li><strong>Gradual Evolution</strong>: Add schema validation as applications mature</li>
+  <li><strong>Developer Productivity</strong>: Reduce boilerplate code and rigid structure requirements</li>
+  <li><strong>Data Quality</strong>: Optional validation ensures data integrity when needed</li>
+</ul>
+
+<h3 id="target-use-cases">Target Use Cases</h3>
+<ol>
+  <li><strong>Rapid Prototyping</strong>: Quick application development without schema design</li>
+  <li><strong>Content Management</strong>: Flexible document structures for CMS applications</li>
+  <li><strong>IoT Data Ingestion</strong>: Variable sensor data formats</li>
+  <li><strong>API Gateway</strong>: Dynamic request/response validation</li>
+  <li><strong>Multi-tenant Applications</strong>: Different schema requirements per tenant</li>
+  <li><strong>Legacy System Integration</strong>: Accommodate varying data formats</li>
+</ol>
+
+<h2 id="️-technical-architecture">🏗️ Technical Architecture</h2>
+
+<h3 id="core-components">Core Components</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Schema Management System</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">SchemaManager</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="n">schema_registry</span><span class="p">:</span> <span class="n">SchemaRegistry</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">validator</span><span class="p">:</span> <span class="n">SchemaValidator</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">migrator</span><span class="p">:</span> <span class="n">SchemaMigrator</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">inference_engine</span><span class="p">:</span> <span class="n">SchemaInferenceEngine</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="k">pub</span> <span class="k">trait</span> <span class="n">SchemaFlexibleActor</span><span class="p">:</span> <span class="n">ActorWithStringKey</span> <span class="p">{</span>
+    <span class="c1">// Schema-less operations</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">insert_document</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">table</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="nn">serde_json</span><span class="p">::</span><span class="n">Value</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">DocumentId</span><span class="o">&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">update_document</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">table</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span> <span class="n">id</span><span class="p">:</span> <span class="n">DocumentId</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="nn">serde_json</span><span class="p">::</span><span class="n">Value</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">query_documents</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">table</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span> <span class="n">query</span><span class="p">:</span> <span class="n">JsonQuery</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="nn">serde_json</span><span class="p">::</span><span class="n">Value</span><span class="o">&gt;&gt;</span><span class="p">;</span>
+    
+    <span class="c1">// Schema management</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">define_schema</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">table</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span> <span class="n">schema</span><span class="p">:</span> <span class="n">JsonSchema</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">SchemaVersion</span><span class="o">&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">get_schema</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">table</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span> <span class="n">version</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="n">SchemaVersion</span><span class="o">&gt;</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="nb">Option</span><span class="o">&lt;</span><span class="n">JsonSchema</span><span class="o">&gt;&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">validate_against_schema</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">table</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="o">&amp;</span><span class="nn">serde_json</span><span class="p">::</span><span class="n">Value</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">ValidationResult</span><span class="o">&gt;</span><span class="p">;</span>
+    
+    <span class="c1">// Schema evolution</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">evolve_schema</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">table</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span> <span class="n">new_schema</span><span class="p">:</span> <span class="n">JsonSchema</span><span class="p">,</span> <span class="n">migration</span><span class="p">:</span> <span class="n">SchemaMigration</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">SchemaVersion</span><span class="o">&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">infer_schema</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">table</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span> <span class="n">sample_size</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="nb">usize</span><span class="o">&gt;</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">JsonSchema</span><span class="o">&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">get_schema_history</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">table</span><span class="p">:</span> <span class="nb">String</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="n">SchemaHistoryEntry</span><span class="o">&gt;&gt;</span><span class="p">;</span>
+    
+    <span class="c1">// Validation modes</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">set_validation_mode</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">table</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span> <span class="n">mode</span><span class="p">:</span> <span class="n">ValidationMode</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">validate_batch</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">table</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span> <span class="n">documents</span><span class="p">:</span> <span class="o">&amp;</span><span class="p">[</span><span class="nn">serde_json</span><span class="p">::</span><span class="n">Value</span><span class="p">])</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="n">ValidationResult</span><span class="o">&gt;&gt;</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="c1">// Schema Registry</span>
+<span class="k">pub</span> <span class="k">trait</span> <span class="n">SchemaRegistry</span> <span class="p">{</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">register_schema</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">table</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span> <span class="n">schema</span><span class="p">:</span> <span class="n">JsonSchema</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">SchemaVersion</span><span class="o">&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">get_schema</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">table</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span> <span class="n">version</span><span class="p">:</span> <span class="n">SchemaVersion</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="nb">Option</span><span class="o">&lt;</span><span class="n">JsonSchema</span><span class="o">&gt;&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">list_schemas</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">table</span><span class="p">:</span> <span class="nb">String</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="n">SchemaVersion</span><span class="o">&gt;&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">delete_schema</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">table</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span> <span class="n">version</span><span class="p">:</span> <span class="n">SchemaVersion</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="nb">bool</span><span class="o">&gt;</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="c1">// Schema Validator</span>
+<span class="k">pub</span> <span class="k">trait</span> <span class="n">SchemaValidator</span> <span class="p">{</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">validate</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">schema</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">JsonSchema</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="o">&amp;</span><span class="nn">serde_json</span><span class="p">::</span><span class="n">Value</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">ValidationResult</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">validate_batch</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">schema</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">JsonSchema</span><span class="p">,</span> <span class="n">documents</span><span class="p">:</span> <span class="o">&amp;</span><span class="p">[</span><span class="nn">serde_json</span><span class="p">::</span><span class="n">Value</span><span class="p">])</span> <span class="k">-&gt;</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">ValidationResult</span><span class="o">&gt;</span><span class="p">;</span>
+    <span class="k">fn</span> <span class="nf">supports_format</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">format</span><span class="p">:</span> <span class="o">&amp;</span><span class="nb">str</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">bool</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="schema-definition-examples">Schema Definition Examples</h3>
+
+<h4 id="json-schema-specification">JSON Schema Specification</h4>
+<div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span><span class="w">
+  </span><span class="nl">"$schema"</span><span class="p">:</span><span class="w"> </span><span class="s2">"http://json-schema.org/draft-07/schema#"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"object"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"properties"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">
+    </span><span class="nl">"id"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">
+      </span><span class="nl">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"string"</span><span class="p">,</span><span class="w">
+      </span><span class="nl">"format"</span><span class="p">:</span><span class="w"> </span><span class="s2">"uuid"</span><span class="w">
+    </span><span class="p">},</span><span class="w">
+    </span><span class="nl">"email"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">
+      </span><span class="nl">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"string"</span><span class="p">,</span><span class="w">
+      </span><span class="nl">"format"</span><span class="p">:</span><span class="w"> </span><span class="s2">"email"</span><span class="w">
+    </span><span class="p">},</span><span class="w">
+    </span><span class="nl">"age"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">
+      </span><span class="nl">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"integer"</span><span class="p">,</span><span class="w">
+      </span><span class="nl">"minimum"</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w">
+      </span><span class="nl">"maximum"</span><span class="p">:</span><span class="w"> </span><span class="mi">150</span><span class="w">
+    </span><span class="p">},</span><span class="w">
+    </span><span class="nl">"profile"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">
+      </span><span class="nl">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"object"</span><span class="p">,</span><span class="w">
+      </span><span class="nl">"properties"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">
+        </span><span class="nl">"name"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nl">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"string"</span><span class="p">},</span><span class="w">
+        </span><span class="nl">"bio"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nl">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"string"</span><span class="p">,</span><span class="w"> </span><span class="nl">"maxLength"</span><span class="p">:</span><span class="w"> </span><span class="mi">500</span><span class="p">}</span><span class="w">
+      </span><span class="p">},</span><span class="w">
+      </span><span class="nl">"required"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"name"</span><span class="p">]</span><span class="w">
+    </span><span class="p">},</span><span class="w">
+    </span><span class="nl">"tags"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">
+      </span><span class="nl">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"array"</span><span class="p">,</span><span class="w">
+      </span><span class="nl">"items"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nl">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"string"</span><span class="p">},</span><span class="w">
+      </span><span class="nl">"uniqueItems"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="w">
+    </span><span class="p">}</span><span class="w">
+  </span><span class="p">},</span><span class="w">
+  </span><span class="nl">"required"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"id"</span><span class="p">,</span><span class="w"> </span><span class="s2">"email"</span><span class="p">],</span><span class="w">
+  </span><span class="nl">"additionalProperties"</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="w">
+</span><span class="p">}</span><span class="w">
+</span></code></pre></div></div>
+
+<h4 id="dynamic-schema-usage">Dynamic Schema Usage</h4>
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Schema-less insertion</span>
+<span class="k">let</span> <span class="n">user_data</span> <span class="o">=</span> <span class="nd">json!</span><span class="p">({</span>
+    <span class="s">"name"</span><span class="p">:</span> <span class="s">"Alice"</span><span class="p">,</span>
+    <span class="s">"age"</span><span class="p">:</span> <span class="mi">30</span><span class="p">,</span>
+    <span class="s">"preferences"</span><span class="p">:</span> <span class="p">{</span>
+        <span class="s">"theme"</span><span class="p">:</span> <span class="s">"dark"</span><span class="p">,</span>
+        <span class="s">"notifications"</span><span class="p">:</span> <span class="kc">true</span>
+    <span class="p">}</span>
+<span class="p">});</span>
+
+<span class="n">actor</span><span class="nf">.insert_document</span><span class="p">(</span><span class="s">"users"</span><span class="p">,</span> <span class="n">user_data</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+
+<span class="c1">// Later, define a schema</span>
+<span class="k">let</span> <span class="n">schema</span> <span class="o">=</span> <span class="nd">json!</span><span class="p">({</span>
+    <span class="s">"type"</span><span class="p">:</span> <span class="s">"object"</span><span class="p">,</span>
+    <span class="s">"properties"</span><span class="p">:</span> <span class="p">{</span>
+        <span class="s">"name"</span><span class="p">:</span> <span class="p">{</span><span class="s">"type"</span><span class="p">:</span> <span class="s">"string"</span><span class="p">},</span>
+        <span class="s">"age"</span><span class="p">:</span> <span class="p">{</span><span class="s">"type"</span><span class="p">:</span> <span class="s">"integer"</span><span class="p">,</span> <span class="s">"minimum"</span><span class="p">:</span> <span class="mi">0</span><span class="p">},</span>
+        <span class="s">"email"</span><span class="p">:</span> <span class="p">{</span><span class="s">"type"</span><span class="p">:</span> <span class="s">"string"</span><span class="p">,</span> <span class="s">"format"</span><span class="p">:</span> <span class="s">"email"</span><span class="p">}</span>
+    <span class="p">},</span>
+    <span class="s">"required"</span><span class="p">:</span> <span class="p">[</span><span class="s">"name"</span><span class="p">,</span> <span class="s">"email"</span><span class="p">]</span>
+<span class="p">});</span>
+
+<span class="k">let</span> <span class="n">schema_version</span> <span class="o">=</span> <span class="n">actor</span><span class="nf">.define_schema</span><span class="p">(</span><span class="s">"users"</span><span class="p">,</span> <span class="nn">JsonSchema</span><span class="p">::</span><span class="nf">from_value</span><span class="p">(</span><span class="n">schema</span><span class="p">)</span><span class="o">?</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+
+<span class="c1">// Enable validation</span>
+<span class="n">actor</span><span class="nf">.set_validation_mode</span><span class="p">(</span><span class="s">"users"</span><span class="p">,</span> <span class="nn">ValidationMode</span><span class="p">::</span><span class="n">Strict</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h4 id="schema-migration">Schema Migration</h4>
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Define migration from v1 to v2</span>
+<span class="k">let</span> <span class="n">migration</span> <span class="o">=</span> <span class="n">SchemaMigration</span> <span class="p">{</span>
+    <span class="n">from_version</span><span class="p">:</span> <span class="nn">SchemaVersion</span><span class="p">::</span><span class="n">V1</span><span class="p">,</span>
+    <span class="n">to_version</span><span class="p">:</span> <span class="nn">SchemaVersion</span><span class="p">::</span><span class="n">V2</span><span class="p">,</span>
+    <span class="n">transformations</span><span class="p">:</span> <span class="nd">vec!</span><span class="p">[</span>
+        <span class="nn">Transformation</span><span class="p">::</span><span class="n">AddField</span> <span class="p">{</span>
+            <span class="n">path</span><span class="p">:</span> <span class="s">"$.email"</span><span class="p">,</span>
+            <span class="n">default_value</span><span class="p">:</span> <span class="nd">json!</span><span class="p">(</span><span class="s">"unknown@example.com"</span><span class="p">),</span>
+            <span class="n">required</span><span class="p">:</span> <span class="kc">true</span><span class="p">,</span>
+        <span class="p">},</span>
+        <span class="nn">Transformation</span><span class="p">::</span><span class="n">RenameField</span> <span class="p">{</span>
+            <span class="n">from</span><span class="p">:</span> <span class="s">"$.preferences.theme"</span><span class="p">,</span>
+            <span class="n">to</span><span class="p">:</span> <span class="s">"$.ui_theme"</span><span class="p">,</span>
+        <span class="p">},</span>
+        <span class="nn">Transformation</span><span class="p">::</span><span class="n">RemoveField</span> <span class="p">{</span>
+            <span class="n">path</span><span class="p">:</span> <span class="s">"$.deprecated_field"</span><span class="p">,</span>
+        <span class="p">},</span>
+    <span class="p">],</span>
+<span class="p">};</span>
+
+<span class="n">actor</span><span class="nf">.evolve_schema</span><span class="p">(</span><span class="s">"users"</span><span class="p">,</span> <span class="n">new_schema</span><span class="p">,</span> <span class="n">migration</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h2 id="-feature-breakdown">📦 Feature Breakdown</h2>
+
+<h3 id="phase-221-schema-less-foundation-3-4-weeks">Phase 22.1: Schema-less Foundation (3-4 weeks)</h3>
+
+<h4 id="-user-stories">📋 User Stories</h4>
+
+<p><strong>ORBIT-022-001: Schema-less Document Operations</strong></p>
+<ul>
+  <li><strong>As a</strong> developer <strong>I want</strong> to insert documents without predefined schemas <strong>so that</strong> I can iterate quickly during development</li>
+  <li><strong>Acceptance Criteria:</strong>
+    <ul>
+      <li>Insert arbitrary JSON documents into collections</li>
+      <li>Query documents with flexible filters</li>
+      <li>Update documents with partial data</li>
+      <li>Support for nested objects and arrays</li>
+      <li>Automatic field indexing for common query patterns</li>
+    </ul>
+  </li>
+</ul>
+
+<p><strong>ORBIT-022-002: Dynamic Indexing System</strong></p>
+<ul>
+  <li><strong>As a</strong> performance-conscious developer <strong>I want</strong> automatic indexing <strong>so that</strong> my queries remain fast without manual optimization</li>
+  <li><strong>Acceptance Criteria:</strong>
+    <ul>
+      <li>Automatic index creation for frequently queried fields</li>
+      <li>Composite index support for multi-field queries</li>
+      <li>Index usage statistics and recommendations</li>
+      <li>Background index maintenance</li>
+      <li>Index memory usage optimization</li>
+    </ul>
+  </li>
+</ul>
+
+<h4 id="-technical-tasks">🔧 Technical Tasks</h4>
+
+<ul class="task-list">
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>ORBIT-022-T001</strong>: Implement schema-less document storage actor</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>ORBIT-022-T002</strong>: Build flexible JSON query engine</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>ORBIT-022-T003</strong>: Create dynamic indexing system</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>ORBIT-022-T004</strong>: Implement partial document updates</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>ORBIT-022-T005</strong>: Add field existence and type detection</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>ORBIT-022-T006</strong>: Build query optimization for schema-less data</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>ORBIT-022-T007</strong>: Create performance monitoring for dynamic queries</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>ORBIT-022-T008</strong>: Implement memory-efficient document storage</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>ORBIT-022-T009</strong>: Add batch operations for high-throughput scenarios</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>ORBIT-022-T010</strong>: Build comprehensive error handling</li>
+</ul>
+
+<h3 id="phase-222-optional-schema-validation-3-4-weeks">Phase 22.2: Optional Schema Validation (3-4 weeks)</h3>
+
+<h4 id="-user-stories-1">📋 User Stories</h4>
+
+<p><strong>ORBIT-022-003: JSON Schema Definition &amp; Validation</strong></p>
+<ul>
+  <li><strong>As a</strong> data architect <strong>I want</strong> to define JSON schemas <strong>so that</strong> I can ensure data quality and consistency</li>
+  <li><strong>Acceptance Criteria:</strong>
+    <ul>
+      <li>Full JSON Schema Draft-07 support</li>
+      <li>Custom format validators (email, URL, UUID, etc.)</li>
+      <li>Nested object and array validation</li>
+      <li>Conditional validation rules</li>
+      <li>Human-readable validation error messages</li>
+    </ul>
+  </li>
+</ul>
+
+<p><strong>ORBIT-022-004: Flexible Validation Modes</strong></p>
+<ul>
+  <li><strong>As a</strong> application developer <strong>I want</strong> configurable validation <strong>so that</strong> I can balance flexibility with data quality</li>
+  <li><strong>Acceptance Criteria:</strong>
+    <ul>
+      <li>Strict mode: Reject invalid documents</li>
+      <li>Warning mode: Log validation errors but allow insertion</li>
+      <li>Advisory mode: Collect validation statistics</li>
+      <li>Per-field validation control</li>
+      <li>Validation bypass for administrative operations</li>
+    </ul>
+  </li>
+</ul>
+
+<p><strong>ORBIT-022-005: Schema Inference Engine</strong></p>
+<ul>
+  <li><strong>As a</strong> data analyst <strong>I want</strong> automatic schema generation <strong>so that</strong> I can understand my data structure</li>
+  <li><strong>Acceptance Criteria:</strong>
+    <ul>
+      <li>Analyze existing documents to generate schemas</li>
+      <li>Statistical field type inference</li>
+      <li>Optional vs required field detection</li>
+      <li>Schema quality metrics and confidence scores</li>
+      <li>Incremental schema refinement</li>
+    </ul>
+  </li>
+</ul>
+
+<h4 id="-technical-tasks-1">🔧 Technical Tasks</h4>
+
+<ul class="task-list">
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>ORBIT-022-T011</strong>: Implement JSON Schema validator engine</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>ORBIT-022-T012</strong>: Build custom format validators</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>ORBIT-022-T013</strong>: Create validation mode management</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>ORBIT-022-T014</strong>: Implement schema inference algorithms</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>ORBIT-022-T015</strong>: Add validation error reporting system</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>ORBIT-022-T016</strong>: Build schema quality metrics</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>ORBIT-022-T017</strong>: Create validation performance optimization</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>ORBIT-022-T018</strong>: Implement conditional validation rules</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>ORBIT-022-T019</strong>: Add validation caching for performance</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>ORBIT-022-T020</strong>: Build schema comparison and diff tools</li>
+</ul>
+
+<h3 id="phase-223-schema-evolution--migration-2-3-weeks">Phase 22.3: Schema Evolution &amp; Migration (2-3 weeks)</h3>
+
+<h4 id="-user-stories-2">📋 User Stories</h4>
+
+<p><strong>ORBIT-022-006: Schema Evolution Management</strong></p>
+<ul>
+  <li><strong>As a</strong> database administrator <strong>I want</strong> managed schema evolution <strong>so that</strong> I can update schemas without data loss</li>
+  <li><strong>Acceptance Criteria:</strong>
+    <ul>
+      <li>Version-controlled schema changes</li>
+      <li>Backward compatibility checking</li>
+      <li>Migration planning and execution</li>
+      <li>Rollback capabilities for failed migrations</li>
+      <li>Schema change impact analysis</li>
+    </ul>
+  </li>
+</ul>
+
+<p><strong>ORBIT-022-007: Data Migration Framework</strong></p>
+<ul>
+  <li><strong>As a</strong> DevOps engineer <strong>I want</strong> automated data migration <strong>so that</strong> schema changes don’t require manual intervention</li>
+  <li><strong>Acceptance Criteria:</strong>
+    <ul>
+      <li>Field transformation rules (add, remove, rename, type conversion)</li>
+      <li>Batch migration for large datasets</li>
+      <li>Progress monitoring and pause/resume capability</li>
+      <li>Migration validation and verification</li>
+      <li>Zero-downtime migration support</li>
+    </ul>
+  </li>
+</ul>
+
+<h4 id="-technical-tasks-2">🔧 Technical Tasks</h4>
+
+<ul class="task-list">
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>ORBIT-022-T021</strong>: Implement schema versioning system</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>ORBIT-022-T022</strong>: Build migration planning engine</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>ORBIT-022-T023</strong>: Create data transformation framework</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>ORBIT-022-T024</strong>: Implement batch migration with progress tracking</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>ORBIT-022-T025</strong>: Add migration validation and rollback</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>ORBIT-022-T026</strong>: Build schema compatibility checker</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>ORBIT-022-T027</strong>: Create zero-downtime migration strategy</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>ORBIT-022-T028</strong>: Implement migration history and audit trails</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>ORBIT-022-T029</strong>: Add schema change impact analysis</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>ORBIT-022-T030</strong>: Build migration monitoring and alerting</li>
+</ul>
+
+<h2 id="-testing-strategy">🧪 Testing Strategy</h2>
+
+<h3 id="unit-testing">Unit Testing</h3>
+<ul>
+  <li>JSON Schema validation accuracy</li>
+  <li>Schema inference algorithm correctness</li>
+  <li>Migration transformation logic</li>
+  <li>Validation mode switching</li>
+  <li>Performance optimization effectiveness</li>
+</ul>
+
+<h3 id="integration-testing">Integration Testing</h3>
+<ul>
+  <li>End-to-end schema-less to schema-full workflows</li>
+  <li>Complex migration scenarios</li>
+  <li>Multi-tenant schema isolation</li>
+  <li>Large dataset migration performance</li>
+  <li>Cross-model schema integration</li>
+</ul>
+
+<h3 id="performance-testing">Performance Testing</h3>
+<ul>
+  <li>Schema-less operation performance vs traditional databases</li>
+  <li>Validation overhead measurement</li>
+  <li>Migration speed for large datasets (1M+ documents)</li>
+  <li>Memory usage optimization</li>
+  <li>Concurrent validation performance</li>
+</ul>
+
+<h2 id="-success-metrics">📏 Success Metrics</h2>
+
+<h3 id="technical-metrics">Technical Metrics</h3>
+<ul>
+  <li><strong>Validation Performance</strong>: &lt;5ms validation time for typical documents</li>
+  <li><strong>Migration Speed</strong>: 100k documents/minute migration rate</li>
+  <li><strong>Schema Inference Accuracy</strong>: 95% correct field type detection</li>
+  <li><strong>Memory Efficiency</strong>: &lt;50MB overhead per schema</li>
+  <li><strong>Concurrent Validation</strong>: Support 10k concurrent validations</li>
+</ul>
+
+<h3 id="business-metrics">Business Metrics</h3>
+<ul>
+  <li><strong>Development Velocity</strong>: 50% faster initial development without schema design</li>
+  <li><strong>Data Quality</strong>: 80% improvement in data consistency with optional schemas</li>
+  <li><strong>Migration Success</strong>: 99.9% successful schema migrations</li>
+  <li><strong>Developer Satisfaction</strong>: 90% positive feedback on schema flexibility</li>
+</ul>
+
+<h2 id="-validation-examples">🧪 Validation Examples</h2>
+
+<h3 id="schema-less-to-schema-evolution">Schema-less to Schema Evolution</h3>
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Start schema-less</span>
+<span class="k">let</span> <span class="n">user1</span> <span class="o">=</span> <span class="nd">json!</span><span class="p">({</span><span class="s">"name"</span><span class="p">:</span> <span class="s">"Alice"</span><span class="p">,</span> <span class="s">"age"</span><span class="p">:</span> <span class="mi">30</span><span class="p">});</span>
+<span class="k">let</span> <span class="n">user2</span> <span class="o">=</span> <span class="nd">json!</span><span class="p">({</span><span class="s">"name"</span><span class="p">:</span> <span class="s">"Bob"</span><span class="p">,</span> <span class="s">"email"</span><span class="p">:</span> <span class="s">"bob@example.com"</span><span class="p">});</span>
+<span class="n">actor</span><span class="nf">.insert_document</span><span class="p">(</span><span class="s">"users"</span><span class="p">,</span> <span class="n">user1</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+<span class="n">actor</span><span class="nf">.insert_document</span><span class="p">(</span><span class="s">"users"</span><span class="p">,</span> <span class="n">user2</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+
+<span class="c1">// Infer schema from existing data</span>
+<span class="k">let</span> <span class="n">inferred_schema</span> <span class="o">=</span> <span class="n">actor</span><span class="nf">.infer_schema</span><span class="p">(</span><span class="s">"users"</span><span class="p">,</span> <span class="nf">Some</span><span class="p">(</span><span class="mi">1000</span><span class="p">))</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+<span class="nd">println!</span><span class="p">(</span><span class="s">"Inferred schema: {}"</span><span class="p">,</span> <span class="n">inferred_schema</span><span class="p">);</span>
+
+<span class="c1">// Define stricter schema</span>
+<span class="k">let</span> <span class="n">strict_schema</span> <span class="o">=</span> <span class="nd">json!</span><span class="p">({</span>
+    <span class="s">"type"</span><span class="p">:</span> <span class="s">"object"</span><span class="p">,</span>
+    <span class="s">"properties"</span><span class="p">:</span> <span class="p">{</span>
+        <span class="s">"name"</span><span class="p">:</span> <span class="p">{</span><span class="s">"type"</span><span class="p">:</span> <span class="s">"string"</span><span class="p">},</span>
+        <span class="s">"email"</span><span class="p">:</span> <span class="p">{</span><span class="s">"type"</span><span class="p">:</span> <span class="s">"string"</span><span class="p">,</span> <span class="s">"format"</span><span class="p">:</span> <span class="s">"email"</span><span class="p">},</span>
+        <span class="s">"age"</span><span class="p">:</span> <span class="p">{</span><span class="s">"type"</span><span class="p">:</span> <span class="s">"integer"</span><span class="p">,</span> <span class="s">"minimum"</span><span class="p">:</span> <span class="mi">0</span><span class="p">}</span>
+    <span class="p">},</span>
+    <span class="s">"required"</span><span class="p">:</span> <span class="p">[</span><span class="s">"name"</span><span class="p">,</span> <span class="s">"email"</span><span class="p">]</span>
+<span class="p">});</span>
+
+<span class="c1">// Migrate data to comply with new schema</span>
+<span class="k">let</span> <span class="n">migration</span> <span class="o">=</span> <span class="n">SchemaMigration</span> <span class="p">{</span>
+    <span class="n">transformations</span><span class="p">:</span> <span class="nd">vec!</span><span class="p">[</span>
+        <span class="nn">Transformation</span><span class="p">::</span><span class="n">AddField</span> <span class="p">{</span>
+            <span class="n">path</span><span class="p">:</span> <span class="s">"$.email"</span><span class="p">,</span>
+            <span class="n">default_value</span><span class="p">:</span> <span class="nd">json!</span><span class="p">(</span><span class="s">"noemail@example.com"</span><span class="p">),</span>
+            <span class="n">condition</span><span class="p">:</span> <span class="nf">Some</span><span class="p">(</span><span class="s">"$.email == null"</span><span class="p">),</span>
+        <span class="p">}</span>
+    <span class="p">]</span>
+<span class="p">};</span>
+
+<span class="n">actor</span><span class="nf">.evolve_schema</span><span class="p">(</span><span class="s">"users"</span><span class="p">,</span> <span class="nn">JsonSchema</span><span class="p">::</span><span class="nf">from_value</span><span class="p">(</span><span class="n">strict_schema</span><span class="p">)</span><span class="o">?</span><span class="p">,</span> <span class="n">migration</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h2 id="-innovation-opportunities">🚀 Innovation Opportunities</h2>
+
+<h3 id="future-enhancements">Future Enhancements</h3>
+<ul>
+  <li><strong>AI-Powered Schema Suggestions</strong>: Machine learning-based schema recommendations</li>
+  <li><strong>GraphQL Schema Generation</strong>: Automatic GraphQL schema from JSON schemas</li>
+  <li><strong>Schema Marketplace</strong>: Shared schema repository for common use cases</li>
+  <li><strong>Visual Schema Designer</strong>: GUI for schema creation and migration planning</li>
+  <li><strong>Real-time Schema Monitoring</strong>: Live schema drift detection and alerts</li>
+</ul>
+
+<h3 id="research-areas">Research Areas</h3>
+<ul>
+  <li><strong>Probabilistic Schemas</strong>: Schemas with confidence intervals for uncertain data</li>
+  <li><strong>Temporal Schemas</strong>: Time-aware schema validation for evolving data</li>
+  <li><strong>Federated Schema Management</strong>: Cross-database schema consistency</li>
+  <li><strong>Blockchain Schema Provenance</strong>: Immutable schema change history</li>
+</ul>
+
+<p>This flexible schema system will enable Orbit-RS to support both rapid development scenarios and mature production applications requiring strong data governance, providing the best of both schema-less and schema-full approaches.</p>
+
+<h2 id="-implementation-timeline">📅 Implementation Timeline</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>Phase</th>
+      <th>Duration</th>
+      <th>Deliverables</th>
+      <th>Dependencies</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Phase 22.1</strong></td>
+      <td>3-4 weeks</td>
+      <td>Schema-less operations, dynamic indexing</td>
+      <td>Document storage actors</td>
+    </tr>
+    <tr>
+      <td><strong>Phase 22.2</strong></td>
+      <td>3-4 weeks</td>
+      <td>JSON Schema validation, inference engine</td>
+      <td>Phase 22.1 completion</td>
+    </tr>
+    <tr>
+      <td><strong>Phase 22.3</strong></td>
+      <td>2-3 weeks</td>
+      <td>Schema evolution, migration framework</td>
+      <td>Phase 22.2 completion</td>
+    </tr>
+  </tbody>
+</table>
+
+<p><strong>Total Timeline</strong>: 8-10 weeks<br />
+<strong>Risk Factors</strong>: Migration complexity, performance optimization<br />
+<strong>Mitigation</strong>: Incremental rollout, comprehensive testing, performance benchmarking</p>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/orbit-rs/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Orbit-RS Documentation</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">TuringWorks</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

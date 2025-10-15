@@ -1,0 +1,1298 @@
+<h1 id="rfc-003-edge-native-architecture-for-orbit-rs">RFC-003: Edge-Native Architecture for Orbit-RS</h1>
+
+<p><strong>Date</strong>: October 9, 2025<br />
+<strong>Author</strong>: AI Assistant<br />
+<strong>Status</strong>: Draft<br />
+<strong>Tracking Issue</strong>: TBD</p>
+
+<h2 id="summary">Summary</h2>
+
+<p>This RFC proposes an edge-native architecture for Orbit-RS that enables seamless deployment and operation from single devices to cloud clusters, with intelligent data synchronization, offline capability, and context-aware optimization. This addresses the growing edge computing market largely ignored by cloud-centric database incumbents.</p>
+
+<h2 id="motivation">Motivation</h2>
+
+<p>Current database systems are designed for cloud-first deployment and fail at the edge:</p>
+
+<ul>
+  <li><strong>Resource Constraints</strong>: Cloud databases require substantial compute and memory (&gt;1GB RAM, multiple cores)</li>
+  <li><strong>Connectivity Assumptions</strong>: Assume reliable, high-bandwidth internet connectivity</li>
+  <li><strong>Centralized Architecture</strong>: Data must be centralized for processing and analytics</li>
+  <li><strong>Operational Complexity</strong>: Require skilled DBAs and complex infrastructure</li>
+  <li><strong>Latency Issues</strong>: Round-trip to cloud introduces unacceptable latency for real-time applications</li>
+</ul>
+
+<p><strong>Market Opportunity</strong>: The edge computing market is projected to reach $250B by 2025, with database and analytics being critical components largely unaddressed by incumbents.</p>
+
+<h2 id="design-goals">Design Goals</h2>
+
+<h3 id="primary-goals">Primary Goals</h3>
+<ol>
+  <li><strong>Resource Efficiency</strong>: Operate effectively on constrained edge devices (100MB RAM, single core)</li>
+  <li><strong>Offline-First</strong>: Full functionality without network connectivity, with intelligent sync</li>
+  <li><strong>Seamless Scaling</strong>: Same system from single device to global cluster</li>
+  <li><strong>Context Awareness</strong>: Adapt behavior based on device capabilities and environment</li>
+</ol>
+
+<h3 id="secondary-goals">Secondary Goals</h3>
+<ol>
+  <li><strong>Low Latency</strong>: Sub-millisecond query response for local data</li>
+  <li><strong>Autonomous Operation</strong>: Self-managing with minimal human intervention</li>
+  <li><strong>Privacy Preservation</strong>: Process sensitive data locally without cloud transmission</li>
+  <li><strong>Resilience</strong>: Graceful degradation under resource constraints</li>
+</ol>
+
+<h2 id="market-analysis">Market Analysis</h2>
+
+<h3 id="edge-computing-segments">Edge Computing Segments</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>Segment</th>
+      <th>Device Types</th>
+      <th>Key Requirements</th>
+      <th>Market Size</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Industrial IoT</strong></td>
+      <td>Sensors, PLCs, Edge Gateways</td>
+      <td>Real-time processing, Offline capability</td>
+      <td>$45B</td>
+    </tr>
+    <tr>
+      <td><strong>Retail/POS</strong></td>
+      <td>Point of sale, Digital signage</td>
+      <td>Transaction processing, Analytics</td>
+      <td>$15B</td>
+    </tr>
+    <tr>
+      <td><strong>Autonomous Vehicles</strong></td>
+      <td>ECUs, Infotainment systems</td>
+      <td>Ultra-low latency, Safety-critical</td>
+      <td>$35B</td>
+    </tr>
+    <tr>
+      <td><strong>Smart Cities</strong></td>
+      <td>Traffic systems, Environmental sensors</td>
+      <td>Distributed processing, Coordination</td>
+      <td>$25B</td>
+    </tr>
+    <tr>
+      <td><strong>Healthcare</strong></td>
+      <td>Medical devices, Patient monitoring</td>
+      <td>Privacy, Real-time alerts</td>
+      <td>$30B</td>
+    </tr>
+    <tr>
+      <td><strong>Gaming/AR/VR</strong></td>
+      <td>Mobile devices, Headsets</td>
+      <td>Ultra-low latency, High throughput</td>
+      <td>$40B</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 id="competitive-gaps">Competitive Gaps</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>Incumbent</th>
+      <th>Edge Capability</th>
+      <th>Limitations</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Snowflake</strong></td>
+      <td>None</td>
+      <td>Cloud-only, high resource requirements</td>
+    </tr>
+    <tr>
+      <td><strong>Databricks</strong></td>
+      <td>Limited</td>
+      <td>Requires Spark clusters, complex setup</td>
+    </tr>
+    <tr>
+      <td><strong>ClickHouse</strong></td>
+      <td>Basic</td>
+      <td>High memory usage, complex configuration</td>
+    </tr>
+    <tr>
+      <td><strong>DuckDB</strong></td>
+      <td>Single Node</td>
+      <td>No distributed capability, limited scale</td>
+    </tr>
+    <tr>
+      <td><strong>InfluxDB</strong></td>
+      <td>Edge Agent</td>
+      <td>Limited analytical capability</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="detailed-design">Detailed Design</h2>
+
+<h3 id="architecture-overview">Architecture Overview</h3>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>┌─────────────────────────────────────────────────────────────────┐
+│                        Global Cloud Tier                       │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐  │
+│  │ Global Analytics│  │  Data Governance│  │Model Management │  │
+│  │    Platform     │  │ &amp; Compliance    │  │ &amp; Distribution  │  │
+│  └─────────────────┘  └─────────────────┘  └─────────────────┘  │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                    ┌─────────┼─────────┐
+                    │         │         │
+┌─────────────────────────────────────────────────────────────────┐
+│                     Regional Edge Tier                         │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐  │
+│  │Regional Data Hub│  │ Edge Coordinator│  │ Model Cache     │  │
+│  │ &amp; Aggregation   │  │ &amp; Load Balancer │  │ &amp; Distribution  │  │
+│  └─────────────────┘  └─────────────────┘  └─────────────────┘  │
+└─────────────────────────────────────────────────────────────────┘
+            │                    │                    │
+    ┌───────┴───────┐    ┌───────┴───────┐    ┌───────┴───────┐
+    │               │    │               │    │               │
+┌─────────────────────────────────────────────────────────────────┐
+│                      Local Edge Tier                           │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐  │
+│  │ Edge Gateway    │  │ Local Analytics │  │Device Cluster   │  │
+│  │ (100MB-1GB RAM) │  │  &amp; Coordination │  │ Coordination    │  │
+│  └─────────────────┘  └─────────────────┘  └─────────────────┘  │
+└─────────────────────────────────────────────────────────────────┘
+            │                    │                    │
+    ┌───────┴───────┐    ┌───────┴───────┐    ┌───────┴───────┐
+    │               │    │               │    │               │
+┌─────────────────────────────────────────────────────────────────┐
+│                      Device Tier                               │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐  │
+│  │   IoT Sensors   │  │  Mobile Devices │  │ Embedded Systems│  │
+│  │ (10-100MB RAM)  │  │ (500MB-2GB RAM) │  │ (50-500MB RAM)  │  │
+│  │ • Collect data  │  │ • Local queries │  │ • Real-time     │  │
+│  │ • Basic filter  │  │ • Sync when     │  │   processing    │  │
+│  │ • Batch upload  │  │   connected     │  │ • Offline ops   │  │
+│  └─────────────────┘  └─────────────────┘  └─────────────────┘  │
+└─────────────────────────────────────────────────────────────────┘
+</code></pre></div></div>
+
+<h3 id="core-components">Core Components</h3>
+
+<h4 id="1-resource-adaptive-actor-system">1. Resource-Adaptive Actor System</h4>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="cd">/// Resource-aware actor management for edge deployment</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">EdgeActorManager</span> <span class="p">{</span>
+    <span class="cd">/// Current device capabilities</span>
+    <span class="n">device_profile</span><span class="p">:</span> <span class="n">DeviceProfile</span><span class="p">,</span>
+    <span class="cd">/// Resource monitoring and prediction</span>
+    <span class="n">resource_monitor</span><span class="p">:</span> <span class="nb">Arc</span><span class="o">&lt;</span><span class="n">EdgeResourceMonitor</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="cd">/// Adaptive actor placement strategy</span>
+    <span class="n">placement_strategy</span><span class="p">:</span> <span class="n">AdaptiveActorPlacement</span><span class="p">,</span>
+    <span class="cd">/// Memory pressure handler</span>
+    <span class="n">memory_manager</span><span class="p">:</span> <span class="n">EdgeMemoryManager</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="cd">/// Device capability profile</span>
+<span class="nd">#[derive(Debug,</span> <span class="nd">Clone)]</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">DeviceProfile</span> <span class="p">{</span>
+    <span class="cd">/// Available memory (MB)</span>
+    <span class="n">available_memory_mb</span><span class="p">:</span> <span class="nb">u32</span><span class="p">,</span>
+    <span class="cd">/// CPU cores and frequency</span>
+    <span class="n">cpu_info</span><span class="p">:</span> <span class="n">CpuInfo</span><span class="p">,</span>
+    <span class="cd">/// Storage capacity and type</span>
+    <span class="n">storage_info</span><span class="p">:</span> <span class="n">StorageInfo</span><span class="p">,</span>
+    <span class="cd">/// Network capabilities</span>
+    <span class="n">network_info</span><span class="p">:</span> <span class="n">NetworkInfo</span><span class="p">,</span>
+    <span class="cd">/// Power constraints (for battery devices)</span>
+    <span class="n">power_profile</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="n">PowerProfile</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="cd">/// Device class (sensor, gateway, mobile, etc.)</span>
+    <span class="n">device_class</span><span class="p">:</span> <span class="n">DeviceClass</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="nd">#[derive(Debug,</span> <span class="nd">Clone)]</span>
+<span class="k">pub</span> <span class="k">enum</span> <span class="n">DeviceClass</span> <span class="p">{</span>
+    <span class="cd">/// Ultra-constrained sensors (10-50MB RAM)</span>
+    <span class="n">MicroDevice</span> <span class="p">{</span> <span class="n">ram_mb</span><span class="p">:</span> <span class="nb">u32</span> <span class="p">},</span>
+    <span class="cd">/// IoT gateways and embedded systems (50-200MB RAM)</span>
+    <span class="n">EdgeDevice</span> <span class="p">{</span> <span class="n">ram_mb</span><span class="p">:</span> <span class="nb">u32</span><span class="p">,</span> <span class="n">cpu_cores</span><span class="p">:</span> <span class="nb">u32</span> <span class="p">},</span>
+    <span class="cd">/// Mobile and edge servers (200MB-2GB RAM)</span>
+    <span class="n">MobileDevice</span> <span class="p">{</span> <span class="n">ram_mb</span><span class="p">:</span> <span class="nb">u32</span><span class="p">,</span> <span class="n">cpu_cores</span><span class="p">:</span> <span class="nb">u32</span><span class="p">,</span> <span class="n">gpu_available</span><span class="p">:</span> <span class="nb">bool</span> <span class="p">},</span>
+    <span class="cd">/// Edge data centers (2GB+ RAM)</span>
+    <span class="n">EdgeDataCenter</span> <span class="p">{</span> <span class="n">ram_gb</span><span class="p">:</span> <span class="nb">u32</span><span class="p">,</span> <span class="n">cpu_cores</span><span class="p">:</span> <span class="nb">u32</span><span class="p">,</span> <span class="n">high_performance</span><span class="p">:</span> <span class="nb">bool</span> <span class="p">},</span>
+<span class="p">}</span>
+
+<span class="k">impl</span> <span class="n">EdgeActorManager</span> <span class="p">{</span>
+    <span class="cd">/// Create adaptive actor system based on device capabilities</span>
+    <span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">new</span><span class="p">(</span><span class="n">device_profile</span><span class="p">:</span> <span class="n">DeviceProfile</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="k">Self</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="c1">// Determine optimal configuration for device class</span>
+        <span class="k">let</span> <span class="n">config</span> <span class="o">=</span> <span class="k">Self</span><span class="p">::</span><span class="nf">compute_optimal_config</span><span class="p">(</span><span class="o">&amp;</span><span class="n">device_profile</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+        
+        <span class="c1">// Initialize resource monitor</span>
+        <span class="k">let</span> <span class="n">resource_monitor</span> <span class="o">=</span> <span class="nn">Arc</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="nn">EdgeResourceMonitor</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span>
+            <span class="o">&amp;</span><span class="n">device_profile</span><span class="p">,</span>
+            <span class="n">config</span><span class="py">.monitoring_interval</span>
+        <span class="p">)</span><span class="o">?</span><span class="p">);</span>
+        
+        <span class="c1">// Configure memory management strategy</span>
+        <span class="k">let</span> <span class="n">memory_manager</span> <span class="o">=</span> <span class="nn">EdgeMemoryManager</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span>
+            <span class="n">device_profile</span><span class="py">.available_memory_mb</span><span class="p">,</span>
+            <span class="n">config</span><span class="py">.memory_strategy</span>
+        <span class="p">)</span><span class="o">?</span><span class="p">;</span>
+        
+        <span class="c1">// Set up adaptive placement strategy</span>
+        <span class="k">let</span> <span class="n">placement_strategy</span> <span class="o">=</span> <span class="nn">AdaptiveActorPlacement</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span>
+            <span class="o">&amp;</span><span class="n">device_profile</span><span class="p">,</span>
+            <span class="n">config</span><span class="py">.placement_strategy</span>
+        <span class="p">)</span><span class="o">?</span><span class="p">;</span>
+        
+        <span class="nf">Ok</span><span class="p">(</span><span class="k">Self</span> <span class="p">{</span>
+            <span class="n">device_profile</span><span class="p">,</span>
+            <span class="n">resource_monitor</span><span class="p">,</span>
+            <span class="n">placement_strategy</span><span class="p">,</span>
+            <span class="n">memory_manager</span><span class="p">,</span>
+        <span class="p">})</span>
+    <span class="p">}</span>
+    
+    <span class="cd">/// Dynamically adjust actor placement based on resource availability</span>
+    <span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">rebalance_actors</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="k">let</span> <span class="n">resource_snapshot</span> <span class="o">=</span> <span class="k">self</span><span class="py">.resource_monitor</span><span class="nf">.current_state</span><span class="p">();</span>
+        
+        <span class="c1">// Check if rebalancing is needed</span>
+        <span class="k">if</span> <span class="o">!</span><span class="k">self</span><span class="nf">.needs_rebalancing</span><span class="p">(</span><span class="o">&amp;</span><span class="n">resource_snapshot</span><span class="p">)</span> <span class="p">{</span>
+            <span class="k">return</span> <span class="nf">Ok</span><span class="p">(());</span>
+        <span class="p">}</span>
+        
+        <span class="k">match</span> <span class="n">resource_snapshot</span><span class="py">.pressure_level</span> <span class="p">{</span>
+            <span class="nn">ResourcePressure</span><span class="p">::</span><span class="n">Low</span> <span class="k">=&gt;</span> <span class="p">{</span>
+                <span class="c1">// Opportunity to activate more actors or increase processing</span>
+                <span class="k">self</span><span class="nf">.scale_up_processing</span><span class="p">()</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+            <span class="p">},</span>
+            <span class="nn">ResourcePressure</span><span class="p">::</span><span class="n">Medium</span> <span class="k">=&gt;</span> <span class="p">{</span>
+                <span class="c1">// Optimize current actor distribution</span>
+                <span class="k">self</span><span class="nf">.optimize_current_placement</span><span class="p">()</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+            <span class="p">},</span>
+            <span class="nn">ResourcePressure</span><span class="p">::</span><span class="n">High</span> <span class="k">=&gt;</span> <span class="p">{</span>
+                <span class="c1">// Aggressive resource management</span>
+                <span class="k">self</span><span class="nf">.emergency_resource_management</span><span class="p">()</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+            <span class="p">},</span>
+            <span class="nn">ResourcePressure</span><span class="p">::</span><span class="n">Critical</span> <span class="k">=&gt;</span> <span class="p">{</span>
+                <span class="c1">// Shed load to maintain core functionality</span>
+                <span class="k">self</span><span class="nf">.critical_load_shedding</span><span class="p">()</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+            <span class="p">}</span>
+        <span class="p">}</span>
+        
+        <span class="nf">Ok</span><span class="p">(())</span>
+    <span class="p">}</span>
+    
+    <span class="cd">/// Emergency resource management under severe constraints</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">critical_load_shedding</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="c1">// Identify non-essential actors</span>
+        <span class="k">let</span> <span class="n">actors</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.get_all_actors</span><span class="p">()</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+        <span class="k">let</span> <span class="k">mut</span> <span class="n">load_shedding_candidates</span> <span class="o">=</span> <span class="nn">Vec</span><span class="p">::</span><span class="nf">new</span><span class="p">();</span>
+        
+        <span class="k">for</span> <span class="n">actor</span> <span class="k">in</span> <span class="n">actors</span> <span class="p">{</span>
+            <span class="k">let</span> <span class="n">priority</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.get_actor_priority</span><span class="p">(</span><span class="o">&amp;</span><span class="n">actor</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+            <span class="k">let</span> <span class="n">resource_usage</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.get_actor_resource_usage</span><span class="p">(</span><span class="o">&amp;</span><span class="n">actor</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+            
+            <span class="c1">// Shed low-priority, high-resource actors first</span>
+            <span class="k">if</span> <span class="n">priority</span> <span class="o">&lt;</span> <span class="nn">Priority</span><span class="p">::</span><span class="n">High</span> <span class="o">&amp;&amp;</span> <span class="n">resource_usage</span><span class="py">.memory_mb</span> <span class="o">&gt;</span> <span class="mi">10</span> <span class="p">{</span>
+                <span class="n">load_shedding_candidates</span><span class="nf">.push</span><span class="p">((</span><span class="n">actor</span><span class="p">,</span> <span class="n">priority</span><span class="p">,</span> <span class="n">resource_usage</span><span class="p">));</span>
+            <span class="p">}</span>
+        <span class="p">}</span>
+        
+        <span class="c1">// Sort by priority and resource usage</span>
+        <span class="n">load_shedding_candidates</span><span class="nf">.sort_by_key</span><span class="p">(|(</span><span class="n">_</span><span class="p">,</span> <span class="n">priority</span><span class="p">,</span> <span class="n">usage</span><span class="p">)|</span> <span class="p">{</span>
+            <span class="p">(</span><span class="n">priority</span><span class="nf">.clone</span><span class="p">(),</span> <span class="nn">std</span><span class="p">::</span><span class="nn">cmp</span><span class="p">::</span><span class="nf">Reverse</span><span class="p">(</span><span class="n">usage</span><span class="py">.memory_mb</span><span class="p">))</span>
+        <span class="p">});</span>
+        
+        <span class="c1">// Gradually shed load until resources are available</span>
+        <span class="k">let</span> <span class="n">target_free_memory</span> <span class="o">=</span> <span class="k">self</span><span class="py">.device_profile.available_memory_mb</span> <span class="o">/</span> <span class="mi">4</span><span class="p">;</span> <span class="c1">// 25% free</span>
+        <span class="k">let</span> <span class="k">mut</span> <span class="n">freed_memory</span> <span class="o">=</span> <span class="mi">0u32</span><span class="p">;</span>
+        
+        <span class="k">for</span> <span class="p">(</span><span class="n">actor</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">usage</span><span class="p">)</span> <span class="k">in</span> <span class="n">load_shedding_candidates</span> <span class="p">{</span>
+            <span class="k">if</span> <span class="n">freed_memory</span> <span class="o">&gt;=</span> <span class="n">target_free_memory</span> <span class="p">{</span>
+                <span class="k">break</span><span class="p">;</span>
+            <span class="p">}</span>
+            
+            <span class="c1">// Persist actor state before deactivation</span>
+            <span class="k">self</span><span class="nf">.persist_actor_state</span><span class="p">(</span><span class="o">&amp;</span><span class="n">actor</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+            
+            <span class="c1">// Deactivate actor</span>
+            <span class="k">self</span><span class="nf">.deactivate_actor</span><span class="p">(</span><span class="o">&amp;</span><span class="n">actor</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+            
+            <span class="n">freed_memory</span> <span class="o">+=</span> <span class="n">usage</span><span class="py">.memory_mb</span><span class="p">;</span>
+            
+            <span class="nn">tracing</span><span class="p">::</span><span class="nd">info!</span><span class="p">(</span>
+                <span class="n">actor_id</span> <span class="o">=</span> <span class="o">?</span><span class="n">actor</span><span class="nf">.id</span><span class="p">(),</span>
+                <span class="n">freed_memory_mb</span> <span class="o">=</span> <span class="n">usage</span><span class="py">.memory_mb</span><span class="p">,</span>
+                <span class="s">"Deactivated actor due to memory pressure"</span>
+            <span class="p">);</span>
+        <span class="p">}</span>
+        
+        <span class="nf">Ok</span><span class="p">(())</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h4 id="2-intelligent-data-synchronization">2. Intelligent Data Synchronization</h4>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="cd">/// Edge-aware data synchronization with conflict resolution</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">EdgeSyncManager</span> <span class="p">{</span>
+    <span class="cd">/// Local data store</span>
+    <span class="n">local_store</span><span class="p">:</span> <span class="nb">Arc</span><span class="o">&lt;</span><span class="k">dyn</span> <span class="n">PersistenceProvider</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="cd">/// Sync policies per data type</span>
+    <span class="n">sync_policies</span><span class="p">:</span> <span class="n">HashMap</span><span class="o">&lt;</span><span class="nb">String</span><span class="p">,</span> <span class="n">SyncPolicy</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="cd">/// Network monitor</span>
+    <span class="n">network_monitor</span><span class="p">:</span> <span class="nb">Arc</span><span class="o">&lt;</span><span class="n">NetworkMonitor</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="cd">/// Conflict resolver</span>
+    <span class="n">conflict_resolver</span><span class="p">:</span> <span class="n">ConflictResolver</span><span class="p">,</span>
+    <span class="cd">/// Sync queue and batching</span>
+    <span class="n">sync_queue</span><span class="p">:</span> <span class="nb">Arc</span><span class="o">&lt;</span><span class="n">Mutex</span><span class="o">&lt;</span><span class="n">SyncQueue</span><span class="o">&gt;&gt;</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="cd">/// Synchronization policy configuration</span>
+<span class="nd">#[derive(Debug,</span> <span class="nd">Clone)]</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">SyncPolicy</span> <span class="p">{</span>
+    <span class="cd">/// How often to attempt sync</span>
+    <span class="n">sync_frequency</span><span class="p">:</span> <span class="n">SyncFrequency</span><span class="p">,</span>
+    <span class="cd">/// Data freshness requirements</span>
+    <span class="n">freshness_requirement</span><span class="p">:</span> <span class="n">Duration</span><span class="p">,</span>
+    <span class="cd">/// Conflict resolution strategy</span>
+    <span class="n">conflict_resolution</span><span class="p">:</span> <span class="n">ConflictResolutionStrategy</span><span class="p">,</span>
+    <span class="cd">/// Bandwidth constraints</span>
+    <span class="n">bandwidth_limit</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="nb">u64</span><span class="o">&gt;</span><span class="p">,</span> <span class="c1">// bytes/sec</span>
+    <span class="cd">/// Compression settings</span>
+    <span class="n">compression</span><span class="p">:</span> <span class="n">CompressionConfig</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="nd">#[derive(Debug,</span> <span class="nd">Clone)]</span>
+<span class="k">pub</span> <span class="k">enum</span> <span class="n">SyncFrequency</span> <span class="p">{</span>
+    <span class="cd">/// Immediate sync when network available</span>
+    <span class="n">Immediate</span><span class="p">,</span>
+    <span class="cd">/// Batch sync at intervals</span>
+    <span class="n">Batched</span> <span class="p">{</span> <span class="n">interval</span><span class="p">:</span> <span class="n">Duration</span> <span class="p">},</span>
+    <span class="cd">/// Sync only when explicitly triggered</span>
+    <span class="n">Manual</span><span class="p">,</span>
+    <span class="cd">/// Adaptive based on data importance and network quality</span>
+    <span class="n">Adaptive</span> <span class="p">{</span> <span class="n">base_interval</span><span class="p">:</span> <span class="n">Duration</span><span class="p">,</span> <span class="n">importance_factor</span><span class="p">:</span> <span class="nb">f64</span> <span class="p">},</span>
+<span class="p">}</span>
+
+<span class="nd">#[derive(Debug,</span> <span class="nd">Clone)]</span>
+<span class="k">pub</span> <span class="k">enum</span> <span class="n">ConflictResolutionStrategy</span> <span class="p">{</span>
+    <span class="cd">/// Last write wins</span>
+    <span class="n">LastWriteWins</span><span class="p">,</span>
+    <span class="cd">/// Use vector clocks for causality</span>
+    <span class="n">CausalConsistency</span><span class="p">,</span>
+    <span class="cd">/// Custom conflict resolution function</span>
+    <span class="n">CustomResolver</span> <span class="p">{</span> <span class="n">resolver_name</span><span class="p">:</span> <span class="nb">String</span> <span class="p">},</span>
+    <span class="cd">/// Merge strategies for different data types</span>
+    <span class="n">DataTypeMerge</span> <span class="p">{</span> <span class="n">merge_strategy</span><span class="p">:</span> <span class="n">MergeStrategy</span> <span class="p">},</span>
+<span class="p">}</span>
+
+<span class="k">impl</span> <span class="n">EdgeSyncManager</span> <span class="p">{</span>
+    <span class="cd">/// Intelligent sync scheduling based on network conditions</span>
+    <span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">schedule_sync</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="k">let</span> <span class="n">network_state</span> <span class="o">=</span> <span class="k">self</span><span class="py">.network_monitor</span><span class="nf">.current_state</span><span class="p">();</span>
+        
+        <span class="k">match</span> <span class="n">network_state</span><span class="py">.connectivity</span> <span class="p">{</span>
+            <span class="nn">NetworkConnectivity</span><span class="p">::</span><span class="n">Offline</span> <span class="k">=&gt;</span> <span class="p">{</span>
+                <span class="c1">// Queue data for future sync</span>
+                <span class="k">self</span><span class="nf">.queue_for_later_sync</span><span class="p">()</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+            <span class="p">},</span>
+            <span class="nn">NetworkConnectivity</span><span class="p">::</span><span class="n">Limited</span> <span class="p">{</span> <span class="n">bandwidth</span><span class="p">,</span> <span class="n">latency</span> <span class="p">}</span> <span class="k">=&gt;</span> <span class="p">{</span>
+                <span class="c1">// Prioritize critical data, compress aggressively</span>
+                <span class="k">self</span><span class="nf">.sync_critical_data_only</span><span class="p">(</span><span class="n">bandwidth</span><span class="p">,</span> <span class="n">latency</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+            <span class="p">},</span>
+            <span class="nn">NetworkConnectivity</span><span class="p">::</span><span class="n">Good</span> <span class="p">{</span> <span class="n">bandwidth</span><span class="p">,</span> <span class="n">latency</span> <span class="p">}</span> <span class="k">=&gt;</span> <span class="p">{</span>
+                <span class="c1">// Normal sync operations</span>
+                <span class="k">self</span><span class="nf">.perform_normal_sync</span><span class="p">(</span><span class="n">bandwidth</span><span class="p">,</span> <span class="n">latency</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+            <span class="p">},</span>
+            <span class="nn">NetworkConnectivity</span><span class="p">::</span><span class="n">Excellent</span> <span class="p">{</span> <span class="n">bandwidth</span><span class="p">,</span> <span class="n">latency</span> <span class="p">}</span> <span class="k">=&gt;</span> <span class="p">{</span>
+                <span class="c1">// Opportunistic bulk sync</span>
+                <span class="k">self</span><span class="nf">.opportunistic_bulk_sync</span><span class="p">(</span><span class="n">bandwidth</span><span class="p">,</span> <span class="n">latency</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+            <span class="p">}</span>
+        <span class="p">}</span>
+        
+        <span class="nf">Ok</span><span class="p">(())</span>
+    <span class="p">}</span>
+    
+    <span class="cd">/// Sync only critical data under bandwidth constraints</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">sync_critical_data_only</span><span class="p">(</span>
+        <span class="o">&amp;</span><span class="k">self</span><span class="p">,</span>
+        <span class="n">available_bandwidth</span><span class="p">:</span> <span class="nb">u64</span><span class="p">,</span>
+        <span class="n">network_latency</span><span class="p">:</span> <span class="n">Duration</span>
+    <span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="k">let</span> <span class="n">sync_queue</span> <span class="o">=</span> <span class="k">self</span><span class="py">.sync_queue</span><span class="nf">.lock</span><span class="p">()</span><span class="k">.await</span><span class="p">;</span>
+        
+        <span class="c1">// Filter for high-priority items only</span>
+        <span class="k">let</span> <span class="n">critical_items</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">_</span><span class="o">&gt;</span> <span class="o">=</span> <span class="n">sync_queue</span>
+            <span class="nf">.pending_items</span><span class="p">()</span>
+            <span class="nf">.filter</span><span class="p">(|</span><span class="n">item</span><span class="p">|</span> <span class="n">item</span><span class="py">.priority</span> <span class="o">&gt;=</span> <span class="nn">Priority</span><span class="p">::</span><span class="n">High</span><span class="p">)</span>
+            <span class="nf">.cloned</span><span class="p">()</span>
+            <span class="nf">.collect</span><span class="p">();</span>
+        
+        <span class="k">if</span> <span class="n">critical_items</span><span class="nf">.is_empty</span><span class="p">()</span> <span class="p">{</span>
+            <span class="k">return</span> <span class="nf">Ok</span><span class="p">(());</span>
+        <span class="p">}</span>
+        
+        <span class="c1">// Sort by priority and estimated transfer size</span>
+        <span class="k">let</span> <span class="k">mut</span> <span class="n">sorted_items</span> <span class="o">=</span> <span class="n">critical_items</span><span class="p">;</span>
+        <span class="n">sorted_items</span><span class="nf">.sort_by_key</span><span class="p">(|</span><span class="n">item</span><span class="p">|</span> <span class="p">{</span>
+            <span class="p">(</span><span class="nn">std</span><span class="p">::</span><span class="nn">cmp</span><span class="p">::</span><span class="nf">Reverse</span><span class="p">(</span><span class="n">item</span><span class="py">.priority</span><span class="p">),</span> <span class="n">item</span><span class="py">.estimated_size</span><span class="p">)</span>
+        <span class="p">});</span>
+        
+        <span class="c1">// Calculate how much we can sync within bandwidth budget</span>
+        <span class="k">let</span> <span class="n">sync_budget</span> <span class="o">=</span> <span class="n">available_bandwidth</span> <span class="o">*</span> <span class="mi">60</span><span class="p">;</span> <span class="c1">// 1 minute worth of bandwidth</span>
+        <span class="k">let</span> <span class="k">mut</span> <span class="n">transferred</span> <span class="o">=</span> <span class="mi">0u64</span><span class="p">;</span>
+        
+        <span class="k">for</span> <span class="n">item</span> <span class="k">in</span> <span class="n">sorted_items</span> <span class="p">{</span>
+            <span class="k">if</span> <span class="n">transferred</span> <span class="o">+</span> <span class="n">item</span><span class="py">.estimated_size</span> <span class="o">&gt;</span> <span class="n">sync_budget</span> <span class="p">{</span>
+                <span class="k">break</span><span class="p">;</span>
+            <span class="p">}</span>
+            
+            <span class="c1">// Compress data aggressively for bandwidth-constrained sync</span>
+            <span class="k">let</span> <span class="n">compressed_data</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.compress_for_sync</span><span class="p">(</span><span class="o">&amp;</span><span class="n">item</span><span class="p">,</span> <span class="nn">CompressionLevel</span><span class="p">::</span><span class="n">Maximum</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+            
+            <span class="c1">// Perform sync with retry logic</span>
+            <span class="k">match</span> <span class="k">self</span><span class="nf">.sync_item_with_retry</span><span class="p">(</span><span class="o">&amp;</span><span class="n">compressed_data</span><span class="p">,</span> <span class="n">network_latency</span><span class="p">)</span><span class="k">.await</span> <span class="p">{</span>
+                <span class="nf">Ok</span><span class="p">(</span><span class="n">actual_size</span><span class="p">)</span> <span class="k">=&gt;</span> <span class="p">{</span>
+                    <span class="n">transferred</span> <span class="o">+=</span> <span class="n">actual_size</span><span class="p">;</span>
+                    <span class="k">self</span><span class="nf">.mark_item_synced</span><span class="p">(</span><span class="o">&amp;</span><span class="n">item</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+                <span class="p">},</span>
+                <span class="nf">Err</span><span class="p">(</span><span class="n">e</span><span class="p">)</span> <span class="k">=&gt;</span> <span class="p">{</span>
+                    <span class="nn">tracing</span><span class="p">::</span><span class="nd">warn!</span><span class="p">(</span>
+                        <span class="n">item_id</span> <span class="o">=</span> <span class="o">?</span><span class="n">item</span><span class="py">.id</span><span class="p">,</span>
+                        <span class="n">error</span> <span class="o">=</span> <span class="o">?</span><span class="n">e</span><span class="p">,</span>
+                        <span class="s">"Failed to sync critical item"</span>
+                    <span class="p">);</span>
+                <span class="p">}</span>
+            <span class="p">}</span>
+        <span class="p">}</span>
+        
+        <span class="nf">Ok</span><span class="p">(())</span>
+    <span class="p">}</span>
+    
+    <span class="cd">/// Opportunistic bulk sync when network conditions are excellent</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">opportunistic_bulk_sync</span><span class="p">(</span>
+        <span class="o">&amp;</span><span class="k">self</span><span class="p">,</span>
+        <span class="n">available_bandwidth</span><span class="p">:</span> <span class="nb">u64</span><span class="p">,</span>
+        <span class="n">_network_latency</span><span class="p">:</span> <span class="n">Duration</span>
+    <span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="c1">// Use high bandwidth to sync everything possible</span>
+        <span class="k">let</span> <span class="n">sync_queue</span> <span class="o">=</span> <span class="k">self</span><span class="py">.sync_queue</span><span class="nf">.lock</span><span class="p">()</span><span class="k">.await</span><span class="p">;</span>
+        <span class="k">let</span> <span class="n">all_pending</span> <span class="o">=</span> <span class="n">sync_queue</span><span class="nf">.all_pending_items</span><span class="p">();</span>
+        
+        <span class="c1">// Group items for efficient batching</span>
+        <span class="k">let</span> <span class="n">batches</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.create_sync_batches</span><span class="p">(</span><span class="o">&amp;</span><span class="n">all_pending</span><span class="p">,</span> <span class="n">available_bandwidth</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+        
+        <span class="c1">// Process batches in parallel for maximum throughput</span>
+        <span class="k">let</span> <span class="k">mut</span> <span class="n">batch_tasks</span> <span class="o">=</span> <span class="nn">Vec</span><span class="p">::</span><span class="nf">new</span><span class="p">();</span>
+        
+        <span class="k">for</span> <span class="n">batch</span> <span class="k">in</span> <span class="n">batches</span> <span class="p">{</span>
+            <span class="k">let</span> <span class="n">sync_task</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.sync_batch_parallel</span><span class="p">(</span><span class="n">batch</span><span class="p">);</span>
+            <span class="n">batch_tasks</span><span class="nf">.push</span><span class="p">(</span><span class="n">sync_task</span><span class="p">);</span>
+        <span class="p">}</span>
+        
+        <span class="c1">// Wait for all batches to complete</span>
+        <span class="k">let</span> <span class="n">results</span> <span class="o">=</span> <span class="nn">futures</span><span class="p">::</span><span class="nn">future</span><span class="p">::</span><span class="nf">join_all</span><span class="p">(</span><span class="n">batch_tasks</span><span class="p">)</span><span class="k">.await</span><span class="p">;</span>
+        
+        <span class="c1">// Process results and update sync queue</span>
+        <span class="k">for</span> <span class="n">result</span> <span class="k">in</span> <span class="n">results</span> <span class="p">{</span>
+            <span class="k">match</span> <span class="n">result</span> <span class="p">{</span>
+                <span class="nf">Ok</span><span class="p">(</span><span class="n">synced_items</span><span class="p">)</span> <span class="k">=&gt;</span> <span class="p">{</span>
+                    <span class="k">for</span> <span class="n">item</span> <span class="k">in</span> <span class="n">synced_items</span> <span class="p">{</span>
+                        <span class="k">self</span><span class="nf">.mark_item_synced</span><span class="p">(</span><span class="o">&amp;</span><span class="n">item</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+                    <span class="p">}</span>
+                <span class="p">},</span>
+                <span class="nf">Err</span><span class="p">(</span><span class="n">e</span><span class="p">)</span> <span class="k">=&gt;</span> <span class="p">{</span>
+                    <span class="nn">tracing</span><span class="p">::</span><span class="nd">warn!</span><span class="p">(</span><span class="n">error</span> <span class="o">=</span> <span class="o">?</span><span class="n">e</span><span class="p">,</span> <span class="s">"Batch sync failed"</span><span class="p">);</span>
+                <span class="p">}</span>
+            <span class="p">}</span>
+        <span class="p">}</span>
+        
+        <span class="nf">Ok</span><span class="p">(())</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h4 id="3-context-aware-query-optimization">3. Context-Aware Query Optimization</h4>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="cd">/// Query optimizer that adapts to edge device constraints</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">EdgeQueryOptimizer</span> <span class="p">{</span>
+    <span class="cd">/// Current device context</span>
+    <span class="n">device_context</span><span class="p">:</span> <span class="nb">Arc</span><span class="o">&lt;</span><span class="n">RwLock</span><span class="o">&lt;</span><span class="n">DeviceContext</span><span class="o">&gt;&gt;</span><span class="p">,</span>
+    <span class="cd">/// Query performance history</span>
+    <span class="n">performance_history</span><span class="p">:</span> <span class="n">QueryPerformanceTracker</span><span class="p">,</span>
+    <span class="cd">/// Resource predictor</span>
+    <span class="n">resource_predictor</span><span class="p">:</span> <span class="n">ResourcePredictor</span><span class="p">,</span>
+    <span class="cd">/// Optimization strategies</span>
+    <span class="n">strategies</span><span class="p">:</span> <span class="n">HashMap</span><span class="o">&lt;</span><span class="n">DeviceClass</span><span class="p">,</span> <span class="n">OptimizationStrategy</span><span class="o">&gt;</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="cd">/// Dynamic device context</span>
+<span class="nd">#[derive(Debug,</span> <span class="nd">Clone)]</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">DeviceContext</span> <span class="p">{</span>
+    <span class="cd">/// Current resource availability</span>
+    <span class="n">current_resources</span><span class="p">:</span> <span class="n">ResourceSnapshot</span><span class="p">,</span>
+    <span class="cd">/// Network connectivity status</span>
+    <span class="n">network_status</span><span class="p">:</span> <span class="n">NetworkConnectivity</span><span class="p">,</span>
+    <span class="cd">/// Battery level (if applicable)</span>
+    <span class="n">battery_level</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="nb">u8</span><span class="o">&gt;</span><span class="p">,</span> <span class="c1">// percentage</span>
+    <span class="cd">/// Thermal state</span>
+    <span class="n">thermal_state</span><span class="p">:</span> <span class="n">ThermalState</span><span class="p">,</span>
+    <span class="cd">/// User activity level</span>
+    <span class="n">user_activity</span><span class="p">:</span> <span class="n">UserActivity</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="nd">#[derive(Debug,</span> <span class="nd">Clone)]</span>
+<span class="k">pub</span> <span class="k">enum</span> <span class="n">ThermalState</span> <span class="p">{</span>
+    <span class="n">Normal</span><span class="p">,</span>
+    <span class="n">Warm</span><span class="p">,</span>
+    <span class="n">Hot</span><span class="p">,</span>
+    <span class="n">Critical</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="nd">#[derive(Debug,</span> <span class="nd">Clone)]</span>
+<span class="k">pub</span> <span class="k">enum</span> <span class="n">UserActivity</span> <span class="p">{</span>
+    <span class="cd">/// Device is actively being used</span>
+    <span class="n">Active</span><span class="p">,</span>
+    <span class="cd">/// Device is idle but responsive</span>
+    <span class="n">Idle</span><span class="p">,</span>
+    <span class="cd">/// Device is in background/sleep mode</span>
+    <span class="n">Background</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="k">impl</span> <span class="n">EdgeQueryOptimizer</span> <span class="p">{</span>
+    <span class="cd">/// Optimize query for current edge context</span>
+    <span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">optimize_query</span><span class="p">(</span>
+        <span class="o">&amp;</span><span class="k">self</span><span class="p">,</span>
+        <span class="n">query</span><span class="p">:</span> <span class="n">Query</span><span class="p">,</span>
+        <span class="n">priority</span><span class="p">:</span> <span class="n">Priority</span>
+    <span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">OptimizedQuery</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="k">let</span> <span class="n">context</span> <span class="o">=</span> <span class="k">self</span><span class="py">.device_context</span><span class="nf">.read</span><span class="p">()</span><span class="k">.await</span><span class="p">;</span>
+        
+        <span class="c1">// Select optimization strategy based on current context</span>
+        <span class="k">let</span> <span class="n">strategy</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.select_optimization_strategy</span><span class="p">(</span><span class="o">&amp;</span><span class="n">context</span><span class="p">,</span> <span class="n">priority</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+        
+        <span class="k">let</span> <span class="k">mut</span> <span class="n">optimized_query</span> <span class="o">=</span> <span class="n">query</span><span class="p">;</span>
+        
+        <span class="c1">// Apply resource-aware optimizations</span>
+        <span class="n">optimized_query</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.apply_resource_optimizations</span><span class="p">(</span><span class="n">optimized_query</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">context</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+        
+        <span class="c1">// Apply network-aware optimizations</span>
+        <span class="n">optimized_query</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.apply_network_optimizations</span><span class="p">(</span><span class="n">optimized_query</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">context</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+        
+        <span class="c1">// Apply battery-aware optimizations (if applicable)</span>
+        <span class="k">if</span> <span class="k">let</span> <span class="nf">Some</span><span class="p">(</span><span class="n">battery_level</span><span class="p">)</span> <span class="o">=</span> <span class="n">context</span><span class="py">.battery_level</span> <span class="p">{</span>
+            <span class="n">optimized_query</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.apply_battery_optimizations</span><span class="p">(</span><span class="n">optimized_query</span><span class="p">,</span> <span class="n">battery_level</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+        <span class="p">}</span>
+        
+        <span class="c1">// Apply thermal management</span>
+        <span class="n">optimized_query</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.apply_thermal_optimizations</span><span class="p">(</span><span class="n">optimized_query</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">context</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+        
+        <span class="c1">// Predict resource usage and adjust if necessary</span>
+        <span class="k">let</span> <span class="n">predicted_usage</span> <span class="o">=</span> <span class="k">self</span><span class="py">.resource_predictor</span><span class="nf">.predict_usage</span><span class="p">(</span><span class="o">&amp;</span><span class="n">optimized_query</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+        <span class="k">if</span> <span class="o">!</span><span class="k">self</span><span class="nf">.can_execute_safely</span><span class="p">(</span><span class="o">&amp;</span><span class="n">predicted_usage</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">context</span><span class="p">)</span> <span class="p">{</span>
+            <span class="n">optimized_query</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.apply_aggressive_optimization</span><span class="p">(</span><span class="n">optimized_query</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">context</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+        <span class="p">}</span>
+        
+        <span class="nf">Ok</span><span class="p">(</span><span class="n">OptimizedQuery</span> <span class="p">{</span>
+            <span class="n">query</span><span class="p">:</span> <span class="n">optimized_query</span><span class="p">,</span>
+            <span class="n">strategy</span><span class="p">:</span> <span class="n">strategy</span><span class="p">,</span>
+            <span class="n">predicted_resources</span><span class="p">:</span> <span class="n">predicted_usage</span><span class="p">,</span>
+        <span class="p">})</span>
+    <span class="p">}</span>
+    
+    <span class="cd">/// Apply optimizations based on available resources</span>
+    <span class="k">fn</span> <span class="nf">apply_resource_optimizations</span><span class="p">(</span>
+        <span class="o">&amp;</span><span class="k">self</span><span class="p">,</span>
+        <span class="n">query</span><span class="p">:</span> <span class="n">Query</span><span class="p">,</span>
+        <span class="n">context</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">DeviceContext</span>
+    <span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">Query</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="k">let</span> <span class="k">mut</span> <span class="n">optimized</span> <span class="o">=</span> <span class="n">query</span><span class="p">;</span>
+        
+        <span class="c1">// Memory-constrained optimization</span>
+        <span class="k">if</span> <span class="n">context</span><span class="py">.current_resources.available_memory_mb</span> <span class="o">&lt;</span> <span class="mi">50</span> <span class="p">{</span>
+            <span class="c1">// Use streaming execution instead of materializing results</span>
+            <span class="n">optimized</span><span class="py">.execution_mode</span> <span class="o">=</span> <span class="nn">ExecutionMode</span><span class="p">::</span><span class="n">Streaming</span><span class="p">;</span>
+            
+            <span class="c1">// Reduce batch sizes</span>
+            <span class="n">optimized</span><span class="py">.batch_size</span> <span class="o">=</span> <span class="n">optimized</span><span class="py">.batch_size</span><span class="nf">.map</span><span class="p">(|</span><span class="n">size</span><span class="p">|</span> <span class="n">size</span><span class="nf">.min</span><span class="p">(</span><span class="mi">1000</span><span class="p">));</span>
+            
+            <span class="c1">// Prefer index-based access over full scans</span>
+            <span class="n">optimized</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.prefer_index_access</span><span class="p">(</span><span class="n">optimized</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+        <span class="p">}</span>
+        
+        <span class="c1">// CPU-constrained optimization</span>
+        <span class="k">if</span> <span class="n">context</span><span class="py">.current_resources.cpu_utilization</span> <span class="o">&gt;</span> <span class="mi">80</span> <span class="p">{</span>
+            <span class="c1">// Reduce parallelism</span>
+            <span class="n">optimized</span><span class="py">.max_parallelism</span> <span class="o">=</span> <span class="nf">Some</span><span class="p">(</span><span class="mi">1</span><span class="p">);</span>
+            
+            <span class="c1">// Simplify complex operations</span>
+            <span class="n">optimized</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.simplify_operations</span><span class="p">(</span><span class="n">optimized</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+            
+            <span class="c1">// Use approximate algorithms where acceptable</span>
+            <span class="n">optimized</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.apply_approximations</span><span class="p">(</span><span class="n">optimized</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+        <span class="p">}</span>
+        
+        <span class="nf">Ok</span><span class="p">(</span><span class="n">optimized</span><span class="p">)</span>
+    <span class="p">}</span>
+    
+    <span class="cd">/// Apply optimizations based on network conditions</span>
+    <span class="k">fn</span> <span class="nf">apply_network_optimizations</span><span class="p">(</span>
+        <span class="o">&amp;</span><span class="k">self</span><span class="p">,</span>
+        <span class="n">query</span><span class="p">:</span> <span class="n">Query</span><span class="p">,</span>
+        <span class="n">context</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">DeviceContext</span>
+    <span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">Query</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="k">let</span> <span class="k">mut</span> <span class="n">optimized</span> <span class="o">=</span> <span class="n">query</span><span class="p">;</span>
+        
+        <span class="k">match</span> <span class="n">context</span><span class="py">.network_status</span> <span class="p">{</span>
+            <span class="nn">NetworkConnectivity</span><span class="p">::</span><span class="n">Offline</span> <span class="k">=&gt;</span> <span class="p">{</span>
+                <span class="c1">// Restrict query to local data only</span>
+                <span class="n">optimized</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.restrict_to_local_data</span><span class="p">(</span><span class="n">optimized</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+            <span class="p">},</span>
+            <span class="nn">NetworkConnectivity</span><span class="p">::</span><span class="n">Limited</span> <span class="p">{</span> <span class="n">bandwidth</span><span class="p">,</span> <span class="o">..</span> <span class="p">}</span> <span class="k">=&gt;</span> <span class="p">{</span>
+                <span class="c1">// Minimize data transfer</span>
+                <span class="n">optimized</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.minimize_data_transfer</span><span class="p">(</span><span class="n">optimized</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+                
+                <span class="c1">// Use compression for any remote data</span>
+                <span class="n">optimized</span><span class="py">.compression</span> <span class="o">=</span> <span class="nf">Some</span><span class="p">(</span><span class="nn">CompressionConfig</span><span class="p">::</span><span class="nf">aggressive</span><span class="p">());</span>
+                
+                <span class="c1">// Prefer cached/local data over remote</span>
+                <span class="n">optimized</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.prefer_local_data</span><span class="p">(</span><span class="n">optimized</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+            <span class="p">},</span>
+            <span class="nn">NetworkConnectivity</span><span class="p">::</span><span class="n">Good</span> <span class="p">{</span> <span class="o">..</span> <span class="p">}</span> <span class="p">|</span> <span class="nn">NetworkConnectivity</span><span class="p">::</span><span class="n">Excellent</span> <span class="p">{</span> <span class="o">..</span> <span class="p">}</span> <span class="k">=&gt;</span> <span class="p">{</span>
+                <span class="c1">// Normal network optimizations</span>
+                <span class="n">optimized</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.apply_standard_network_optimizations</span><span class="p">(</span><span class="n">optimized</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+            <span class="p">}</span>
+        <span class="p">}</span>
+        
+        <span class="nf">Ok</span><span class="p">(</span><span class="n">optimized</span><span class="p">)</span>
+    <span class="p">}</span>
+    
+    <span class="cd">/// Apply battery-aware optimizations</span>
+    <span class="k">fn</span> <span class="nf">apply_battery_optimizations</span><span class="p">(</span>
+        <span class="o">&amp;</span><span class="k">self</span><span class="p">,</span>
+        <span class="n">query</span><span class="p">:</span> <span class="n">Query</span><span class="p">,</span>
+        <span class="n">battery_level</span><span class="p">:</span> <span class="nb">u8</span>
+    <span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">Query</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="k">let</span> <span class="k">mut</span> <span class="n">optimized</span> <span class="o">=</span> <span class="n">query</span><span class="p">;</span>
+        
+        <span class="k">if</span> <span class="n">battery_level</span> <span class="o">&lt;</span> <span class="mi">20</span> <span class="p">{</span>
+            <span class="c1">// Aggressive power saving</span>
+            <span class="n">optimized</span><span class="py">.execution_mode</span> <span class="o">=</span> <span class="nn">ExecutionMode</span><span class="p">::</span><span class="n">PowerSaving</span><span class="p">;</span>
+            <span class="n">optimized</span><span class="py">.max_parallelism</span> <span class="o">=</span> <span class="nf">Some</span><span class="p">(</span><span class="mi">1</span><span class="p">);</span>
+            
+            <span class="c1">// Defer non-critical queries</span>
+            <span class="k">if</span> <span class="n">optimized</span><span class="py">.priority</span> <span class="o">&lt;</span> <span class="nn">Priority</span><span class="p">::</span><span class="n">High</span> <span class="p">{</span>
+                <span class="n">optimized</span><span class="py">.execution_hint</span> <span class="o">=</span> <span class="nf">Some</span><span class="p">(</span><span class="nn">ExecutionHint</span><span class="p">::</span><span class="n">DeferUntilCharging</span><span class="p">);</span>
+            <span class="p">}</span>
+        <span class="p">}</span> <span class="k">else</span> <span class="k">if</span> <span class="n">battery_level</span> <span class="o">&lt;</span> <span class="mi">50</span> <span class="p">{</span>
+            <span class="c1">// Moderate power optimization</span>
+            <span class="n">optimized</span><span class="py">.max_parallelism</span> <span class="o">=</span> <span class="n">optimized</span><span class="py">.max_parallelism</span><span class="nf">.map</span><span class="p">(|</span><span class="n">p</span><span class="p">|</span> <span class="n">p</span> <span class="o">/</span> <span class="mi">2</span><span class="p">);</span>
+            
+            <span class="c1">// Reduce background processing</span>
+            <span class="k">if</span> <span class="n">optimized</span><span class="py">.priority</span> <span class="o">==</span> <span class="nn">Priority</span><span class="p">::</span><span class="n">Background</span> <span class="p">{</span>
+                <span class="n">optimized</span><span class="py">.execution_hint</span> <span class="o">=</span> <span class="nf">Some</span><span class="p">(</span><span class="nn">ExecutionHint</span><span class="p">::</span><span class="n">LimitedResource</span><span class="p">);</span>
+            <span class="p">}</span>
+        <span class="p">}</span>
+        
+        <span class="nf">Ok</span><span class="p">(</span><span class="n">optimized</span><span class="p">)</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h4 id="4-offline-capable-distributed-transactions">4. Offline-Capable Distributed Transactions</h4>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="cd">/// Transaction system designed for edge environments with intermittent connectivity</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">EdgeTransactionManager</span> <span class="p">{</span>
+    <span class="cd">/// Local transaction log</span>
+    <span class="n">local_log</span><span class="p">:</span> <span class="nb">Arc</span><span class="o">&lt;</span><span class="n">TransactionLog</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="cd">/// Conflict-free replicated data types (CRDTs) for offline operation</span>
+    <span class="n">crdt_manager</span><span class="p">:</span> <span class="n">CRDTManager</span><span class="p">,</span>
+    <span class="cd">/// Vector clock for causal ordering</span>
+    <span class="n">vector_clock</span><span class="p">:</span> <span class="nb">Arc</span><span class="o">&lt;</span><span class="n">Mutex</span><span class="o">&lt;</span><span class="n">VectorClock</span><span class="o">&gt;&gt;</span><span class="p">,</span>
+    <span class="cd">/// Sync coordinator for eventual consistency</span>
+    <span class="n">sync_coordinator</span><span class="p">:</span> <span class="nb">Arc</span><span class="o">&lt;</span><span class="n">EdgeSyncCoordinator</span><span class="o">&gt;</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="cd">/// CRDT-based data structures for offline operation</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">CRDTManager</span> <span class="p">{</span>
+    <span class="cd">/// Grow-only counters</span>
+    <span class="n">counters</span><span class="p">:</span> <span class="n">HashMap</span><span class="o">&lt;</span><span class="nb">String</span><span class="p">,</span> <span class="n">GCounter</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="cd">/// Last-write-wins registers</span>
+    <span class="n">registers</span><span class="p">:</span> <span class="n">HashMap</span><span class="o">&lt;</span><span class="nb">String</span><span class="p">,</span> <span class="n">LWWRegister</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="cd">/// Observed-remove sets</span>
+    <span class="n">sets</span><span class="p">:</span> <span class="n">HashMap</span><span class="o">&lt;</span><span class="nb">String</span><span class="p">,</span> <span class="n">ORSet</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="cd">/// Conflict-free data structures</span>
+    <span class="n">maps</span><span class="p">:</span> <span class="n">HashMap</span><span class="o">&lt;</span><span class="nb">String</span><span class="p">,</span> <span class="n">ORMap</span><span class="o">&gt;</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="k">impl</span> <span class="n">EdgeTransactionManager</span> <span class="p">{</span>
+    <span class="cd">/// Begin transaction that can operate offline</span>
+    <span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">begin_edge_transaction</span><span class="p">(</span>
+        <span class="o">&amp;</span><span class="k">self</span><span class="p">,</span>
+        <span class="n">isolation_level</span><span class="p">:</span> <span class="n">IsolationLevel</span>
+    <span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">EdgeTransaction</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="c1">// Generate unique transaction ID with node identifier</span>
+        <span class="k">let</span> <span class="n">tx_id</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.generate_transaction_id</span><span class="p">()</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+        
+        <span class="c1">// Create vector clock snapshot for causal consistency</span>
+        <span class="k">let</span> <span class="n">clock_snapshot</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="k">let</span> <span class="n">clock</span> <span class="o">=</span> <span class="k">self</span><span class="py">.vector_clock</span><span class="nf">.lock</span><span class="p">()</span><span class="k">.await</span><span class="p">;</span>
+            <span class="n">clock</span><span class="nf">.snapshot</span><span class="p">()</span>
+        <span class="p">};</span>
+        
+        <span class="c1">// Initialize transaction context</span>
+        <span class="k">let</span> <span class="n">tx_context</span> <span class="o">=</span> <span class="n">EdgeTransactionContext</span> <span class="p">{</span>
+            <span class="n">tx_id</span><span class="p">,</span>
+            <span class="n">isolation_level</span><span class="p">,</span>
+            <span class="n">vector_clock</span><span class="p">:</span> <span class="n">clock_snapshot</span><span class="p">,</span>
+            <span class="n">local_operations</span><span class="p">:</span> <span class="nn">Vec</span><span class="p">::</span><span class="nf">new</span><span class="p">(),</span>
+            <span class="n">crdt_operations</span><span class="p">:</span> <span class="nn">Vec</span><span class="p">::</span><span class="nf">new</span><span class="p">(),</span>
+            <span class="n">offline_mode</span><span class="p">:</span> <span class="o">!</span><span class="k">self</span><span class="nf">.is_connected_to_cluster</span><span class="p">()</span><span class="k">.await</span><span class="p">,</span>
+        <span class="p">};</span>
+        
+        <span class="c1">// Log transaction start</span>
+        <span class="k">self</span><span class="py">.local_log</span><span class="nf">.log_transaction_start</span><span class="p">(</span><span class="o">&amp;</span><span class="n">tx_context</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+        
+        <span class="nf">Ok</span><span class="p">(</span><span class="n">EdgeTransaction</span> <span class="p">{</span>
+            <span class="n">context</span><span class="p">:</span> <span class="nn">Arc</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="nn">Mutex</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="n">tx_context</span><span class="p">)),</span>
+            <span class="n">manager</span><span class="p">:</span> <span class="nn">Arc</span><span class="p">::</span><span class="nf">downgrade</span><span class="p">(</span><span class="k">self</span><span class="p">),</span>
+        <span class="p">})</span>
+    <span class="p">}</span>
+    
+    <span class="cd">/// Commit transaction with offline capability</span>
+    <span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">commit_edge_transaction</span><span class="p">(</span>
+        <span class="o">&amp;</span><span class="k">self</span><span class="p">,</span>
+        <span class="n">transaction</span><span class="p">:</span> <span class="n">EdgeTransaction</span>
+    <span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">CommitResult</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="k">let</span> <span class="k">mut</span> <span class="n">context</span> <span class="o">=</span> <span class="n">transaction</span><span class="py">.context</span><span class="nf">.lock</span><span class="p">()</span><span class="k">.await</span><span class="p">;</span>
+        
+        <span class="k">if</span> <span class="n">context</span><span class="py">.offline_mode</span> <span class="p">{</span>
+            <span class="c1">// Offline commit using CRDTs</span>
+            <span class="k">self</span><span class="nf">.commit_offline</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span> <span class="n">context</span><span class="p">)</span><span class="k">.await</span>
+        <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+            <span class="c1">// Online commit with coordination</span>
+            <span class="k">self</span><span class="nf">.commit_online</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span> <span class="n">context</span><span class="p">)</span><span class="k">.await</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+    
+    <span class="cd">/// Commit transaction in offline mode</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">commit_offline</span><span class="p">(</span>
+        <span class="o">&amp;</span><span class="k">self</span><span class="p">,</span>
+        <span class="n">context</span><span class="p">:</span> <span class="o">&amp;</span><span class="k">mut</span> <span class="n">EdgeTransactionContext</span>
+    <span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">CommitResult</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="c1">// Apply all CRDT operations locally</span>
+        <span class="k">for</span> <span class="n">crdt_op</span> <span class="k">in</span> <span class="o">&amp;</span><span class="n">context</span><span class="py">.crdt_operations</span> <span class="p">{</span>
+            <span class="k">match</span> <span class="n">crdt_op</span> <span class="p">{</span>
+                <span class="nn">CRDTOperation</span><span class="p">::</span><span class="n">CounterIncrement</span> <span class="p">{</span> <span class="n">counter_id</span><span class="p">,</span> <span class="n">delta</span> <span class="p">}</span> <span class="k">=&gt;</span> <span class="p">{</span>
+                    <span class="k">let</span> <span class="n">counter</span> <span class="o">=</span> <span class="k">self</span><span class="py">.crdt_manager</span>
+                        <span class="py">.counters</span>
+                        <span class="nf">.entry</span><span class="p">(</span><span class="n">counter_id</span><span class="nf">.clone</span><span class="p">())</span>
+                        <span class="nf">.or_insert_with</span><span class="p">(</span><span class="nn">GCounter</span><span class="p">::</span><span class="n">new</span><span class="p">);</span>
+                    <span class="n">counter</span><span class="nf">.increment</span><span class="p">(</span><span class="o">*</span><span class="n">delta</span><span class="p">);</span>
+                <span class="p">},</span>
+                <span class="nn">CRDTOperation</span><span class="p">::</span><span class="n">RegisterSet</span> <span class="p">{</span> <span class="n">register_id</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">timestamp</span> <span class="p">}</span> <span class="k">=&gt;</span> <span class="p">{</span>
+                    <span class="k">let</span> <span class="n">register</span> <span class="o">=</span> <span class="k">self</span><span class="py">.crdt_manager</span>
+                        <span class="py">.registers</span>
+                        <span class="nf">.entry</span><span class="p">(</span><span class="n">register_id</span><span class="nf">.clone</span><span class="p">())</span>
+                        <span class="nf">.or_insert_with</span><span class="p">(</span><span class="nn">LWWRegister</span><span class="p">::</span><span class="n">new</span><span class="p">);</span>
+                    <span class="n">register</span><span class="nf">.set</span><span class="p">(</span><span class="n">value</span><span class="nf">.clone</span><span class="p">(),</span> <span class="o">*</span><span class="n">timestamp</span><span class="p">);</span>
+                <span class="p">},</span>
+                <span class="nn">CRDTOperation</span><span class="p">::</span><span class="n">SetAdd</span> <span class="p">{</span> <span class="n">set_id</span><span class="p">,</span> <span class="n">element</span> <span class="p">}</span> <span class="k">=&gt;</span> <span class="p">{</span>
+                    <span class="k">let</span> <span class="n">set</span> <span class="o">=</span> <span class="k">self</span><span class="py">.crdt_manager</span>
+                        <span class="py">.sets</span>
+                        <span class="nf">.entry</span><span class="p">(</span><span class="n">set_id</span><span class="nf">.clone</span><span class="p">())</span>
+                        <span class="nf">.or_insert_with</span><span class="p">(</span><span class="nn">ORSet</span><span class="p">::</span><span class="n">new</span><span class="p">);</span>
+                    <span class="n">set</span><span class="nf">.add</span><span class="p">(</span><span class="n">element</span><span class="nf">.clone</span><span class="p">());</span>
+                <span class="p">},</span>
+                <span class="nn">CRDTOperation</span><span class="p">::</span><span class="n">SetRemove</span> <span class="p">{</span> <span class="n">set_id</span><span class="p">,</span> <span class="n">element</span> <span class="p">}</span> <span class="k">=&gt;</span> <span class="p">{</span>
+                    <span class="k">let</span> <span class="n">set</span> <span class="o">=</span> <span class="k">self</span><span class="py">.crdt_manager</span>
+                        <span class="py">.sets</span>
+                        <span class="nf">.entry</span><span class="p">(</span><span class="n">set_id</span><span class="nf">.clone</span><span class="p">())</span>
+                        <span class="nf">.or_insert_with</span><span class="p">(</span><span class="nn">ORSet</span><span class="p">::</span><span class="n">new</span><span class="p">);</span>
+                    <span class="n">set</span><span class="nf">.remove</span><span class="p">(</span><span class="n">element</span><span class="p">);</span>
+                <span class="p">}</span>
+            <span class="p">}</span>
+        <span class="p">}</span>
+        
+        <span class="c1">// Update vector clock</span>
+        <span class="p">{</span>
+            <span class="k">let</span> <span class="k">mut</span> <span class="n">clock</span> <span class="o">=</span> <span class="k">self</span><span class="py">.vector_clock</span><span class="nf">.lock</span><span class="p">()</span><span class="k">.await</span><span class="p">;</span>
+            <span class="n">clock</span><span class="nf">.increment_local</span><span class="p">();</span>
+            <span class="n">context</span><span class="py">.vector_clock</span> <span class="o">=</span> <span class="n">clock</span><span class="nf">.snapshot</span><span class="p">();</span>
+        <span class="p">}</span>
+        
+        <span class="c1">// Log successful offline commit</span>
+        <span class="k">self</span><span class="py">.local_log</span><span class="nf">.log_offline_commit</span><span class="p">(</span><span class="o">&amp;</span><span class="n">context</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+        
+        <span class="c1">// Queue for later synchronization</span>
+        <span class="k">self</span><span class="py">.sync_coordinator</span><span class="nf">.queue_for_sync</span><span class="p">(</span><span class="n">context</span><span class="nf">.clone</span><span class="p">())</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+        
+        <span class="nf">Ok</span><span class="p">(</span><span class="nn">CommitResult</span><span class="p">::</span><span class="n">OfflineCommit</span> <span class="p">{</span>
+            <span class="n">tx_id</span><span class="p">:</span> <span class="n">context</span><span class="py">.tx_id</span><span class="p">,</span>
+            <span class="n">vector_clock</span><span class="p">:</span> <span class="n">context</span><span class="py">.vector_clock</span><span class="nf">.clone</span><span class="p">(),</span>
+        <span class="p">})</span>
+    <span class="p">}</span>
+    
+    <span class="cd">/// Synchronize offline transactions when connectivity is restored</span>
+    <span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">synchronize_offline_transactions</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">SyncResult</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="k">let</span> <span class="n">pending_transactions</span> <span class="o">=</span> <span class="k">self</span><span class="py">.local_log</span><span class="nf">.get_pending_sync_transactions</span><span class="p">()</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+        
+        <span class="k">if</span> <span class="n">pending_transactions</span><span class="nf">.is_empty</span><span class="p">()</span> <span class="p">{</span>
+            <span class="k">return</span> <span class="nf">Ok</span><span class="p">(</span><span class="nn">SyncResult</span><span class="p">::</span><span class="n">NoTransactionsToSync</span><span class="p">);</span>
+        <span class="p">}</span>
+        
+        <span class="k">let</span> <span class="k">mut</span> <span class="n">sync_results</span> <span class="o">=</span> <span class="nn">Vec</span><span class="p">::</span><span class="nf">new</span><span class="p">();</span>
+        
+        <span class="k">for</span> <span class="n">tx_context</span> <span class="k">in</span> <span class="n">pending_transactions</span> <span class="p">{</span>
+            <span class="k">match</span> <span class="k">self</span><span class="nf">.sync_single_transaction</span><span class="p">(</span><span class="n">tx_context</span><span class="p">)</span><span class="k">.await</span> <span class="p">{</span>
+                <span class="nf">Ok</span><span class="p">(</span><span class="n">result</span><span class="p">)</span> <span class="k">=&gt;</span> <span class="p">{</span>
+                    <span class="n">sync_results</span><span class="nf">.push</span><span class="p">(</span><span class="n">result</span><span class="p">);</span>
+                <span class="p">},</span>
+                <span class="nf">Err</span><span class="p">(</span><span class="n">e</span><span class="p">)</span> <span class="k">=&gt;</span> <span class="p">{</span>
+                    <span class="nn">tracing</span><span class="p">::</span><span class="nd">error!</span><span class="p">(</span>
+                        <span class="n">tx_id</span> <span class="o">=</span> <span class="o">?</span><span class="n">tx_context</span><span class="py">.tx_id</span><span class="p">,</span>
+                        <span class="n">error</span> <span class="o">=</span> <span class="o">?</span><span class="n">e</span><span class="p">,</span>
+                        <span class="s">"Failed to sync offline transaction"</span>
+                    <span class="p">);</span>
+                    <span class="c1">// Continue with other transactions</span>
+                <span class="p">}</span>
+            <span class="p">}</span>
+        <span class="p">}</span>
+        
+        <span class="nf">Ok</span><span class="p">(</span><span class="nn">SyncResult</span><span class="p">::</span><span class="n">Synchronized</span> <span class="p">{</span>
+            <span class="n">successful_syncs</span><span class="p">:</span> <span class="n">sync_results</span><span class="nf">.len</span><span class="p">(),</span>
+            <span class="n">total_transactions</span><span class="p">:</span> <span class="n">pending_transactions</span><span class="nf">.len</span><span class="p">(),</span>
+        <span class="p">})</span>
+    <span class="p">}</span>
+    
+    <span class="cd">/// Merge CRDT states during synchronization</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">merge_crdt_states</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">remote_states</span><span class="p">:</span> <span class="n">CRDTStates</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="c1">// Merge counters</span>
+        <span class="k">for</span> <span class="p">(</span><span class="n">counter_id</span><span class="p">,</span> <span class="n">remote_counter</span><span class="p">)</span> <span class="k">in</span> <span class="n">remote_states</span><span class="py">.counters</span> <span class="p">{</span>
+            <span class="k">let</span> <span class="n">local_counter</span> <span class="o">=</span> <span class="k">self</span><span class="py">.crdt_manager</span>
+                <span class="py">.counters</span>
+                <span class="nf">.entry</span><span class="p">(</span><span class="n">counter_id</span><span class="p">)</span>
+                <span class="nf">.or_insert_with</span><span class="p">(</span><span class="nn">GCounter</span><span class="p">::</span><span class="n">new</span><span class="p">);</span>
+            <span class="n">local_counter</span><span class="nf">.merge</span><span class="p">(</span><span class="n">remote_counter</span><span class="p">);</span>
+        <span class="p">}</span>
+        
+        <span class="c1">// Merge registers (last-write-wins based on timestamp)</span>
+        <span class="k">for</span> <span class="p">(</span><span class="n">register_id</span><span class="p">,</span> <span class="n">remote_register</span><span class="p">)</span> <span class="k">in</span> <span class="n">remote_states</span><span class="py">.registers</span> <span class="p">{</span>
+            <span class="k">let</span> <span class="n">local_register</span> <span class="o">=</span> <span class="k">self</span><span class="py">.crdt_manager</span>
+                <span class="py">.registers</span>
+                <span class="nf">.entry</span><span class="p">(</span><span class="n">register_id</span><span class="p">)</span>
+                <span class="nf">.or_insert_with</span><span class="p">(</span><span class="nn">LWWRegister</span><span class="p">::</span><span class="n">new</span><span class="p">);</span>
+            <span class="n">local_register</span><span class="nf">.merge</span><span class="p">(</span><span class="n">remote_register</span><span class="p">);</span>
+        <span class="p">}</span>
+        
+        <span class="c1">// Merge sets</span>
+        <span class="k">for</span> <span class="p">(</span><span class="n">set_id</span><span class="p">,</span> <span class="n">remote_set</span><span class="p">)</span> <span class="k">in</span> <span class="n">remote_states</span><span class="py">.sets</span> <span class="p">{</span>
+            <span class="k">let</span> <span class="n">local_set</span> <span class="o">=</span> <span class="k">self</span><span class="py">.crdt_manager</span>
+                <span class="py">.sets</span>
+                <span class="nf">.entry</span><span class="p">(</span><span class="n">set_id</span><span class="p">)</span>
+                <span class="nf">.or_insert_with</span><span class="p">(</span><span class="nn">ORSet</span><span class="p">::</span><span class="n">new</span><span class="p">);</span>
+            <span class="n">local_set</span><span class="nf">.merge</span><span class="p">(</span><span class="n">remote_set</span><span class="p">);</span>
+        <span class="p">}</span>
+        
+        <span class="nf">Ok</span><span class="p">(())</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="deployment-configurations">Deployment Configurations</h3>
+
+<h4 id="1-micro-device-configuration-10-50mb-ram">1. Micro-Device Configuration (10-50MB RAM)</h4>
+
+<div class="language-toml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">[</span><span class="n">edge_profile</span><span class="k">.</span><span class="n">micro_device</span><span class="k">]</span>
+<span class="n">device_class</span> <span class="o">=</span><span class="w"> </span><span class="s">"MicroDevice"</span>
+<span class="n">target_memory_mb</span> <span class="o">=</span><span class="w"> </span><span class="mi">20</span>
+<span class="n">max_actors</span> <span class="o">=</span><span class="w"> </span><span class="mi">5</span>
+<span class="n">persistence_backend</span> <span class="o">=</span><span class="w"> </span><span class="s">"embedded_kv"</span>
+<span class="n">sync_mode</span> <span class="o">=</span><span class="w"> </span><span class="s">"batch_only"</span>
+<span class="n">compression</span> <span class="o">=</span><span class="w"> </span><span class="s">"aggressive"</span>
+
+<span class="k">[</span><span class="n">edge_profile</span><span class="k">.</span><span class="n">micro_device</span><span class="k">.</span><span class="n">features</span><span class="k">]</span>
+<span class="n">time_series</span> <span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+<span class="n">basic_analytics</span> <span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+<span class="n">vector_similarity</span> <span class="o">=</span><span class="w"> </span><span class="kc">false</span>  <span class="c"># Too resource intensive</span>
+<span class="n">graph_processing</span> <span class="o">=</span><span class="w"> </span><span class="kc">false</span>
+<span class="n">ml_inference</span> <span class="o">=</span><span class="w"> </span><span class="kc">false</span>
+
+<span class="k">[</span><span class="n">edge_profile</span><span class="k">.</span><span class="n">micro_device</span><span class="k">.</span><span class="n">optimization</span><span class="k">]</span>
+<span class="n">query_cache_size_mb</span> <span class="o">=</span><span class="w"> </span><span class="mi">2</span>
+<span class="n">actor_cache_size</span> <span class="o">=</span><span class="w"> </span><span class="mi">10</span>
+<span class="n">background_processing</span> <span class="o">=</span><span class="w"> </span><span class="kc">false</span>
+<span class="n">real_time_sync</span> <span class="o">=</span><span class="w"> </span><span class="kc">false</span>
+</code></pre></div></div>
+
+<h4 id="2-iot-gateway-configuration-50-200mb-ram">2. IoT Gateway Configuration (50-200MB RAM)</h4>
+
+<div class="language-toml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">[</span><span class="n">edge_profile</span><span class="k">.</span><span class="n">iot_gateway</span><span class="k">]</span>
+<span class="n">device_class</span> <span class="o">=</span><span class="w"> </span><span class="s">"EdgeDevice"</span>
+<span class="n">target_memory_mb</span> <span class="o">=</span><span class="w"> </span><span class="mi">100</span>
+<span class="n">max_actors</span> <span class="o">=</span><span class="w"> </span><span class="mi">50</span>
+<span class="n">persistence_backend</span> <span class="o">=</span><span class="w"> </span><span class="s">"lsm_tree"</span>
+<span class="n">sync_mode</span> <span class="o">=</span><span class="w"> </span><span class="s">"adaptive"</span>
+<span class="n">compression</span> <span class="o">=</span><span class="w"> </span><span class="s">"balanced"</span>
+
+<span class="k">[</span><span class="n">edge_profile</span><span class="k">.</span><span class="n">iot_gateway</span><span class="k">.</span><span class="n">features</span><span class="k">]</span>
+<span class="n">time_series</span> <span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+<span class="n">basic_analytics</span> <span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+<span class="n">vector_similarity</span> <span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+<span class="n">graph_processing</span> <span class="o">=</span><span class="w"> </span><span class="s">"limited"</span>  <span class="c"># Small graphs only</span>
+<span class="n">ml_inference</span> <span class="o">=</span><span class="w"> </span><span class="s">"basic"</span>       <span class="c"># Simple models only</span>
+
+<span class="k">[</span><span class="n">edge_profile</span><span class="k">.</span><span class="n">iot_gateway</span><span class="k">.</span><span class="n">optimization</span><span class="k">]</span>
+<span class="n">query_cache_size_mb</span> <span class="o">=</span><span class="w"> </span><span class="mi">20</span>
+<span class="n">actor_cache_size</span> <span class="o">=</span><span class="w"> </span><span class="mi">100</span>
+<span class="n">background_processing</span> <span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+<span class="n">real_time_sync</span> <span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+<span class="n">local_aggregation</span> <span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+</code></pre></div></div>
+
+<h4 id="3-mobile-device-configuration-200mb-2gb-ram">3. Mobile Device Configuration (200MB-2GB RAM)</h4>
+
+<div class="language-toml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">[</span><span class="n">edge_profile</span><span class="k">.</span><span class="n">mobile_device</span><span class="k">]</span>
+<span class="n">device_class</span> <span class="o">=</span><span class="w"> </span><span class="s">"MobileDevice"</span>
+<span class="n">target_memory_mb</span> <span class="o">=</span><span class="w"> </span><span class="mi">500</span>
+<span class="n">max_actors</span> <span class="o">=</span><span class="w"> </span><span class="mi">200</span>
+<span class="n">persistence_backend</span> <span class="o">=</span><span class="w"> </span><span class="s">"hybrid"</span>
+<span class="n">sync_mode</span> <span class="o">=</span><span class="w"> </span><span class="s">"intelligent"</span>
+<span class="n">compression</span> <span class="o">=</span><span class="w"> </span><span class="s">"adaptive"</span>
+
+<span class="k">[</span><span class="n">edge_profile</span><span class="k">.</span><span class="n">mobile_device</span><span class="k">.</span><span class="n">features</span><span class="k">]</span>
+<span class="n">time_series</span> <span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+<span class="n">advanced_analytics</span> <span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+<span class="n">vector_similarity</span> <span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+<span class="n">graph_processing</span> <span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+<span class="n">ml_inference</span> <span class="o">=</span><span class="w"> </span><span class="s">"advanced"</span>
+
+<span class="k">[</span><span class="n">edge_profile</span><span class="k">.</span><span class="n">mobile_device</span><span class="k">.</span><span class="n">optimization</span><span class="k">]</span>
+<span class="n">query_cache_size_mb</span> <span class="o">=</span><span class="w"> </span><span class="mi">100</span>
+<span class="n">actor_cache_size</span> <span class="o">=</span><span class="w"> </span><span class="mi">500</span>
+<span class="n">background_processing</span> <span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+<span class="n">real_time_sync</span> <span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+<span class="n">adaptive_quality</span> <span class="o">=</span><span class="w"> </span><span class="kc">true</span>  <span class="c"># Reduce quality under battery/thermal pressure</span>
+</code></pre></div></div>
+
+<h4 id="4-edge-data-center-configuration-2gb-ram">4. Edge Data Center Configuration (2GB+ RAM)</h4>
+
+<div class="language-toml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">[</span><span class="n">edge_profile</span><span class="k">.</span><span class="n">edge_datacenter</span><span class="k">]</span>
+<span class="n">device_class</span> <span class="o">=</span><span class="w"> </span><span class="s">"EdgeDataCenter"</span>
+<span class="n">target_memory_gb</span> <span class="o">=</span><span class="w"> </span><span class="mi">8</span>
+<span class="n">max_actors</span> <span class="o">=</span><span class="w"> </span><span class="mi">5000</span>
+<span class="n">persistence_backend</span> <span class="o">=</span><span class="w"> </span><span class="s">"distributed"</span>
+<span class="n">sync_mode</span> <span class="o">=</span><span class="w"> </span><span class="s">"real_time"</span>
+<span class="n">compression</span> <span class="o">=</span><span class="w"> </span><span class="s">"minimal"</span>
+
+<span class="k">[</span><span class="n">edge_profile</span><span class="k">.</span><span class="n">edge_datacenter</span><span class="k">.</span><span class="n">features</span><span class="k">]</span>
+<span class="n">time_series</span> <span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+<span class="n">full_analytics</span> <span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+<span class="n">vector_similarity</span> <span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+<span class="n">graph_processing</span> <span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+<span class="n">ml_inference</span> <span class="o">=</span><span class="w"> </span><span class="s">"full"</span>
+<span class="n">distributed_queries</span> <span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+
+<span class="k">[</span><span class="n">edge_profile</span><span class="k">.</span><span class="n">edge_datacenter</span><span class="k">.</span><span class="n">optimization</span><span class="k">]</span>
+<span class="n">query_cache_size_gb</span> <span class="o">=</span><span class="w"> </span><span class="mi">2</span>
+<span class="n">actor_cache_size</span> <span class="o">=</span><span class="w"> </span><span class="mi">10000</span>
+<span class="n">background_processing</span> <span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+<span class="n">real_time_sync</span> <span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+<span class="n">multi_tenancy</span> <span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+</code></pre></div></div>
+
+<h2 id="implementation-plan">Implementation Plan</h2>
+
+<h3 id="phase-1-foundation-12-14-weeks">Phase 1: Foundation (12-14 weeks)</h3>
+<ol>
+  <li><strong>Week 1-3</strong>: Resource-adaptive actor system and device profiling</li>
+  <li><strong>Week 4-6</strong>: Basic offline capability with local persistence</li>
+  <li><strong>Week 7-9</strong>: Network monitoring and adaptive sync infrastructure</li>
+  <li><strong>Week 10-12</strong>: Edge-optimized query planning and execution</li>
+  <li><strong>Week 13-14</strong>: Integration testing and basic deployment configs</li>
+</ol>
+
+<h3 id="phase-2-advanced-edge-features-14-16-weeks">Phase 2: Advanced Edge Features (14-16 weeks)</h3>
+<ol>
+  <li><strong>Week 15-18</strong>: CRDT implementation for offline transactions</li>
+  <li><strong>Week 19-22</strong>: Intelligent data synchronization with conflict resolution</li>
+  <li><strong>Week 23-26</strong>: Context-aware query optimization</li>
+  <li><strong>Week 27-28</strong>: Battery and thermal management integration</li>
+  <li><strong>Week 29-30</strong>: Multi-tier edge architecture support</li>
+</ol>
+
+<h3 id="phase-3-production-edge-deployment-10-12-weeks">Phase 3: Production Edge Deployment (10-12 weeks)</h3>
+<ol>
+  <li><strong>Week 31-34</strong>: Edge device packaging and deployment automation</li>
+  <li><strong>Week 35-37</strong>: Monitoring and management tools for edge deployments</li>
+  <li><strong>Week 38-40</strong>: Performance optimization and resource tuning</li>
+  <li><strong>Week 41-42</strong>: Security and privacy features for edge</li>
+</ol>
+
+<h3 id="phase-4-ecosystem-integration-8-10-weeks">Phase 4: Ecosystem Integration (8-10 weeks)</h3>
+<ol>
+  <li><strong>Week 43-45</strong>: Integration with edge computing platforms (AWS IoT, Azure IoT Edge)</li>
+  <li><strong>Week 46-47</strong>: Mobile SDK and development tools</li>
+  <li><strong>Week 48-49</strong>: Edge analytics dashboard and management console</li>
+  <li><strong>Week 50-52</strong>: Documentation, examples, and partner integrations</li>
+</ol>
+
+<h2 id="use-cases--market-applications">Use Cases &amp; Market Applications</h2>
+
+<h3 id="1-industrial-iot-and-manufacturing">1. Industrial IoT and Manufacturing</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Example: Smart factory edge deployment</span>
+<span class="k">let</span> <span class="n">factory_config</span> <span class="o">=</span> <span class="n">EdgeConfig</span> <span class="p">{</span>
+    <span class="n">device_class</span><span class="p">:</span> <span class="nn">DeviceClass</span><span class="p">::</span><span class="n">EdgeDevice</span> <span class="p">{</span> <span class="n">ram_mb</span><span class="p">:</span> <span class="mi">150</span><span class="p">,</span> <span class="n">cpu_cores</span><span class="p">:</span> <span class="mi">2</span> <span class="p">},</span>
+    <span class="n">deployment_mode</span><span class="p">:</span> <span class="nn">DeploymentMode</span><span class="p">::</span><span class="n">Industrial</span> <span class="p">{</span>
+        <span class="n">reliability_requirements</span><span class="p">:</span> <span class="nn">ReliabilityLevel</span><span class="p">::</span><span class="n">High</span><span class="p">,</span>
+        <span class="n">real_time_constraints</span><span class="p">:</span> <span class="nn">Duration</span><span class="p">::</span><span class="nf">from_millis</span><span class="p">(</span><span class="mi">10</span><span class="p">),</span>
+        <span class="n">offline_capability_required</span><span class="p">:</span> <span class="k">true</span><span class="p">,</span>
+    <span class="p">},</span>
+    <span class="n">data_models</span><span class="p">:</span> <span class="nd">vec!</span><span class="p">[</span>
+        <span class="nn">DataModel</span><span class="p">::</span><span class="n">TimeSeries</span><span class="p">,</span>   <span class="c1">// Sensor readings</span>
+        <span class="nn">DataModel</span><span class="p">::</span><span class="n">Graph</span><span class="p">,</span>        <span class="c1">// Equipment relationships</span>
+        <span class="nn">DataModel</span><span class="p">::</span><span class="n">Relational</span><span class="p">,</span>   <span class="c1">// Production schedules</span>
+    <span class="p">],</span>
+<span class="p">};</span>
+
+<span class="c1">// Real-time quality control query</span>
+<span class="k">let</span> <span class="n">quality_query</span> <span class="o">=</span> <span class="s">r#"
+    SELECT 
+        equipment.line_id,
+        TS.AVERAGE(temperature.reading, '5m') as avg_temp,
+        TS.ANOMALY_DETECTION(pressure.reading, 'isolation_forest') as anomaly_score,
+        GRAPH.SHORTEST_PATH(equipment.id, quality_station.id) as inspection_path
+    FROM production_equipment equipment
+    JOIN time_series temperature ON equipment.id = temperature.sensor_id
+    JOIN time_series pressure ON equipment.id = pressure.sensor_id
+    WHERE temperature.timestamp &gt; NOW() - INTERVAL '1 hour'
+      AND anomaly_score &gt; 0.8
+    ORDER BY anomaly_score DESC
+"#</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h3 id="2-retail-and-point-of-sale-systems">2. Retail and Point-of-Sale Systems</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Example: Smart retail edge deployment</span>
+<span class="k">let</span> <span class="n">retail_config</span> <span class="o">=</span> <span class="n">EdgeConfig</span> <span class="p">{</span>
+    <span class="n">device_class</span><span class="p">:</span> <span class="nn">DeviceClass</span><span class="p">::</span><span class="n">MobileDevice</span> <span class="p">{</span> 
+        <span class="n">ram_mb</span><span class="p">:</span> <span class="mi">512</span><span class="p">,</span> 
+        <span class="n">cpu_cores</span><span class="p">:</span> <span class="mi">4</span><span class="p">,</span> 
+        <span class="n">gpu_available</span><span class="p">:</span> <span class="k">false</span> 
+    <span class="p">},</span>
+    <span class="n">deployment_mode</span><span class="p">:</span> <span class="nn">DeploymentMode</span><span class="p">::</span><span class="n">Retail</span> <span class="p">{</span>
+        <span class="n">transaction_processing</span><span class="p">:</span> <span class="k">true</span><span class="p">,</span>
+        <span class="n">inventory_tracking</span><span class="p">:</span> <span class="k">true</span><span class="p">,</span>
+        <span class="n">customer_analytics</span><span class="p">:</span> <span class="k">true</span><span class="p">,</span>
+        <span class="n">offline_sales_capability</span><span class="p">:</span> <span class="k">true</span><span class="p">,</span>
+    <span class="p">},</span>
+    <span class="n">sync_policy</span><span class="p">:</span> <span class="n">SyncPolicy</span> <span class="p">{</span>
+        <span class="n">critical_data</span><span class="p">:</span> <span class="nn">SyncFrequency</span><span class="p">::</span><span class="n">Immediate</span><span class="p">,</span>      <span class="c1">// Transactions</span>
+        <span class="n">analytics_data</span><span class="p">:</span> <span class="nn">SyncFrequency</span><span class="p">::</span><span class="n">Batched</span> <span class="p">{</span> <span class="n">interval</span><span class="p">:</span> <span class="nn">Duration</span><span class="p">::</span><span class="nf">from_secs</span><span class="p">(</span><span class="mi">300</span><span class="p">)</span> <span class="p">},</span>
+        <span class="n">inventory_data</span><span class="p">:</span> <span class="nn">SyncFrequency</span><span class="p">::</span><span class="n">Adaptive</span> <span class="p">{</span> <span class="n">base_interval</span><span class="p">:</span> <span class="nn">Duration</span><span class="p">::</span><span class="nf">from_secs</span><span class="p">(</span><span class="mi">60</span><span class="p">)</span> <span class="p">},</span>
+    <span class="p">},</span>
+<span class="p">};</span>
+
+<span class="c1">// Real-time inventory and customer analytics</span>
+<span class="k">let</span> <span class="n">retail_query</span> <span class="o">=</span> <span class="s">r#"
+    SELECT 
+        product.sku,
+        current_inventory.quantity,
+        -- Vector similarity for product recommendations
+        VECTOR.KNN_SEARCH(product.feature_vector, customer.preference_vector, 5) as recommendations,
+        -- Time series for demand forecasting
+        TS.FORECAST(sales_history.quantity, 7) as demand_forecast,
+        -- ML for dynamic pricing
+        ML_PREDICT('pricing_model', 
+            ARRAY[current_inventory.quantity, demand_forecast, competitor_price]
+        ) as suggested_price
+    FROM products product
+    JOIN inventory current_inventory ON product.sku = current_inventory.sku
+    JOIN time_series sales_history ON product.sku = sales_history.sku
+    WHERE current_inventory.quantity &lt; product.reorder_point
+      OR demand_forecast &gt; current_inventory.quantity
+    ORDER BY suggested_price DESC
+"#</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h3 id="3-autonomous-vehicles-and-transportation">3. Autonomous Vehicles and Transportation</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Example: Autonomous vehicle edge deployment</span>
+<span class="k">let</span> <span class="n">vehicle_config</span> <span class="o">=</span> <span class="n">EdgeConfig</span> <span class="p">{</span>
+    <span class="n">device_class</span><span class="p">:</span> <span class="nn">DeviceClass</span><span class="p">::</span><span class="n">MobileDevice</span> <span class="p">{</span> 
+        <span class="n">ram_mb</span><span class="p">:</span> <span class="mi">1024</span><span class="p">,</span> 
+        <span class="n">cpu_cores</span><span class="p">:</span> <span class="mi">8</span><span class="p">,</span> 
+        <span class="n">gpu_available</span><span class="p">:</span> <span class="k">true</span> 
+    <span class="p">},</span>
+    <span class="n">deployment_mode</span><span class="p">:</span> <span class="nn">DeploymentMode</span><span class="p">::</span><span class="n">Autonomous</span> <span class="p">{</span>
+        <span class="n">safety_critical</span><span class="p">:</span> <span class="k">true</span><span class="p">,</span>
+        <span class="n">ultra_low_latency</span><span class="p">:</span> <span class="nn">Duration</span><span class="p">::</span><span class="nf">from_micros</span><span class="p">(</span><span class="mi">100</span><span class="p">),</span>
+        <span class="n">real_time_ml_inference</span><span class="p">:</span> <span class="k">true</span><span class="p">,</span>
+        <span class="n">sensor_fusion_required</span><span class="p">:</span> <span class="k">true</span><span class="p">,</span>
+    <span class="p">},</span>
+    <span class="n">redundancy</span><span class="p">:</span> <span class="n">RedundancyConfig</span> <span class="p">{</span>
+        <span class="n">data_replication</span><span class="p">:</span> <span class="nn">ReplicationFactor</span><span class="p">::</span><span class="n">Three</span><span class="p">,</span>
+        <span class="n">computation_redundancy</span><span class="p">:</span> <span class="k">true</span><span class="p">,</span>
+        <span class="n">failure_detection_ms</span><span class="p">:</span> <span class="mi">5</span><span class="p">,</span>
+    <span class="p">},</span>
+<span class="p">};</span>
+
+<span class="c1">// Real-time sensor fusion and decision making</span>
+<span class="k">let</span> <span class="n">autonomous_query</span> <span class="o">=</span> <span class="s">r#"
+    SELECT 
+        sensor_reading.timestamp,
+        sensor_reading.sensor_type,
+        -- Time series for trajectory prediction
+        TS.PREDICT_NEXT_VALUES(vehicle_trajectory.path, 10) as predicted_path,
+        -- Vector similarity for object classification
+        VECTOR.CLASSIFY(lidar_data.point_cloud, object_models) as detected_objects,
+        -- Graph analysis for optimal routing
+        GRAPH.SHORTEST_PATH(current_location, destination, traffic_network) as optimal_route,
+        -- ML for decision making
+        ML_PREDICT('driving_decision_model',
+            ARRAY[predicted_path, detected_objects, traffic_conditions, weather_data]
+        ) as driving_action
+    FROM sensor_readings sensor_reading
+    JOIN time_series vehicle_trajectory ON vehicle_id = $vehicle_id
+    WHERE sensor_reading.timestamp &gt; NOW() - INTERVAL '100 milliseconds'
+    ORDER BY sensor_reading.timestamp DESC
+    LIMIT 1000
+"#</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h2 id="performance-targets">Performance Targets</h2>
+
+<h3 id="resource-efficiency">Resource Efficiency</h3>
+<ul>
+  <li><strong>Memory Usage</strong>: 50-90% less than cloud equivalents
+    <ul>
+      <li>Micro devices: 10-50MB total RAM usage</li>
+      <li>IoT gateways: 50-200MB total RAM usage</li>
+      <li>Mobile devices: 200MB-1GB total RAM usage</li>
+    </ul>
+  </li>
+  <li><strong>CPU Usage</strong>: &lt;50% utilization under normal load</li>
+  <li><strong>Battery Life</strong>: &lt;5% battery drain per hour for mobile deployments</li>
+  <li><strong>Storage</strong>: &lt;100MB disk footprint for basic configurations</li>
+</ul>
+
+<h3 id="latency-targets">Latency Targets</h3>
+<ul>
+  <li><strong>Local queries</strong>: &lt;1ms p99 latency</li>
+  <li><strong>Cross-device queries</strong>: &lt;10ms p99 latency within local network</li>
+  <li><strong>Offline-to-online sync</strong>: &lt;100ms for typical data volumes</li>
+  <li><strong>Real-time analytics</strong>: &lt;5ms processing delay</li>
+</ul>
+
+<h3 id="scalability">Scalability</h3>
+<ul>
+  <li><strong>Single device</strong>: 10-10,000 actors depending on device class</li>
+  <li><strong>Local cluster</strong>: 100-100,000 actors across 2-50 devices</li>
+  <li><strong>Edge-to-cloud</strong>: Seamless scaling from edge to unlimited cloud resources</li>
+  <li><strong>Sync throughput</strong>: 1MB-1GB per second depending on network conditions</li>
+</ul>
+
+<h2 id="competitive-advantages">Competitive Advantages</h2>
+
+<h3 id="unique-differentiators">Unique Differentiators</h3>
+<ol>
+  <li><strong>Seamless Scale</strong>: Same system from IoT sensor to cloud cluster</li>
+  <li><strong>Offline Intelligence</strong>: Full database and analytics capabilities without connectivity</li>
+  <li><strong>Resource Efficiency</strong>: 10x better resource utilization than cloud databases</li>
+  <li><strong>Context Awareness</strong>: Adaptive behavior based on device capabilities and environment</li>
+  <li><strong>Multi-Modal Edge</strong>: Graph, time series, vector, and relational data at the edge</li>
+</ol>
+
+<h3 id="market-positioning-vs-competitors">Market Positioning vs Competitors</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>Capability</th>
+      <th>Orbit-RS Edge</th>
+      <th>AWS IoT</th>
+      <th>Azure IoT Edge</th>
+      <th>Google Edge AI</th>
+      <th>Industrial Solutions</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Database at Edge</strong></td>
+      <td>✅ Full OLTP+OLAP</td>
+      <td>❌ Limited</td>
+      <td>❌ Limited</td>
+      <td>❌ None</td>
+      <td>⚠️ Basic</td>
+    </tr>
+    <tr>
+      <td><strong>Offline Operation</strong></td>
+      <td>✅ Full functionality</td>
+      <td>⚠️ Basic</td>
+      <td>⚠️ Basic</td>
+      <td>❌ Limited</td>
+      <td>⚠️ Basic</td>
+    </tr>
+    <tr>
+      <td><strong>Multi-Modal Data</strong></td>
+      <td>✅ All types</td>
+      <td>❌ Time series only</td>
+      <td>❌ Limited</td>
+      <td>❌ ML only</td>
+      <td>❌ Single type</td>
+    </tr>
+    <tr>
+      <td><strong>Resource Efficiency</strong></td>
+      <td>✅ 10-50MB</td>
+      <td>❌ 100MB+</td>
+      <td>❌ 200MB+</td>
+      <td>❌ 500MB+</td>
+      <td>⚠️ Varies</td>
+    </tr>
+    <tr>
+      <td><strong>Real-time Analytics</strong></td>
+      <td>✅ &lt;1ms</td>
+      <td>⚠️ 100ms+</td>
+      <td>⚠️ 100ms+</td>
+      <td>⚠️ 50ms+</td>
+      <td>⚠️ Seconds</td>
+    </tr>
+    <tr>
+      <td><strong>Seamless Scaling</strong></td>
+      <td>✅ Edge to cloud</td>
+      <td>❌ Separate systems</td>
+      <td>❌ Separate systems</td>
+      <td>❌ Cloud only</td>
+      <td>❌ Fixed scale</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="conclusion">Conclusion</h2>
+
+<p>The Edge-Native Architecture positions Orbit-RS to capture the rapidly growing edge computing market by addressing fundamental limitations of cloud-centric database systems. This represents a strategic opportunity to establish market leadership in a space largely ignored by incumbents.</p>
+
+<p><strong>Key Benefits:</strong></p>
+<ol>
+  <li><strong>Market Leadership</strong>: First-mover advantage in edge-native database systems</li>
+  <li><strong>Technical Superiority</strong>: Unique combination of efficiency, capability, and intelligence</li>
+  <li><strong>Broad Applicability</strong>: Single solution for diverse edge computing scenarios</li>
+  <li><strong>Future-Proof</strong>: Architecture scales seamlessly from current edge to future ubiquitous computing</li>
+</ol>
+
+<p><strong>Success Metrics:</strong></p>
+<ul>
+  <li><strong>Adoption</strong>: 10,000+ edge deployments across 5+ industries within 18 months</li>
+  <li><strong>Performance</strong>: 10x better resource efficiency than alternatives</li>
+  <li><strong>Developer Experience</strong>: &lt;1 hour from download to production edge deployment</li>
+  <li><strong>Market Recognition</strong>: Recognized as edge database category leader</li>
+</ul>
+
+<p>The Edge-Native Architecture, combined with the Columnar Analytics Engine and Multi-Modal Query capabilities, creates a comprehensive competitive moat that would be extremely difficult for incumbents to replicate given their cloud-centric architectural constraints.</p>

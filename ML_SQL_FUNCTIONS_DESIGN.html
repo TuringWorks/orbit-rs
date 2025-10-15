@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>ML SQL Functions Design for Orbit-RS | Orbit-RS Documentation</title>
+<meta name="generator" content="Jekyll v4.4.1" />
+<meta property="og:title" content="ML SQL Functions Design for Orbit-RS" />
+<meta name="author" content="TuringWorks" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<meta property="og:description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<link rel="canonical" href="https://turingworks.github.io/orbit-rs/ML_SQL_FUNCTIONS_DESIGN.html" />
+<meta property="og:url" content="https://turingworks.github.io/orbit-rs/ML_SQL_FUNCTIONS_DESIGN.html" />
+<meta property="og:site_name" content="Orbit-RS Documentation" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="ML SQL Functions Design for Orbit-RS" />
+<meta name="twitter:site" content="@TuringWorksAI" />
+<meta name="twitter:creator" content="@TuringWorks" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","author":{"@type":"Person","name":"TuringWorks"},"description":"The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform","headline":"ML SQL Functions Design for Orbit-RS","url":"https://turingworks.github.io/orbit-rs/ML_SQL_FUNCTIONS_DESIGN.html"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/orbit-rs/assets/main.css">
+  <link rel="stylesheet" href="/orbit-rs/assets/css/custom.css"><link type="application/atom+xml" rel="alternate" href="https://turingworks.github.io/orbit-rs/feed.xml" title="Orbit-RS Documentation" /></head><body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/orbit-rs/">Orbit-RS Documentation</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/orbit-rs/">Orbit-RS Documentation</a><a class="page-link" href="/orbit-rs/project_overview.html">Orbit-RS: Comprehensive Project Overview</a><a class="page-link" href="/orbit-rs/quick_start.html">Quick Start Guide - Multi-Protocol Database Server</a><a class="page-link" href="/orbit-rs/roadmap/">Development Roadmap</a><a class="page-link" href="/orbit-rs/features/">Orbit-RS Feature Index</a><a class="page-link" href="/orbit-rs/compute-acceleration/">Hardware Acceleration Guide</a><a class="page-link" href="/orbit-rs/contributing.html">Contributing Guide</a><a class="page-link" href="/orbit-rs/overview.html">Architecture Overview</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <h1 id="ml-sql-functions-design-for-orbit-rs">ML SQL Functions Design for Orbit-RS</h1>
+
+<p><strong>Machine Learning capabilities integrated directly into the SQL engine for scalable data processing</strong></p>
+
+<h2 id="-vision--objectives">🎯 <strong>Vision &amp; Objectives</strong></h2>
+
+<p>Transform Orbit-RS into a <strong>“Database + ML Engine”</strong> that provides:</p>
+<ul>
+  <li><strong>In-database ML functions</strong> accessible via SQL</li>
+  <li><strong>Zero-copy ML operations</strong> on data without ETL</li>
+  <li><strong>Distributed ML training</strong> across actor clusters</li>
+  <li><strong>Real-time inference</strong> at query time</li>
+  <li><strong>Vector similarity</strong> with advanced ML algorithms</li>
+</ul>
+
+<h2 id="️-architecture-overview">🏗️ <strong>Architecture Overview</strong></h2>
+
+<h3 id="1-sql-function-registry"><strong>1. SQL Function Registry</strong></h3>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Linear Regression</span>
+<span class="k">SELECT</span> <span class="n">name</span><span class="p">,</span> <span class="n">ML_LINEAR_REGRESSION</span><span class="p">(</span><span class="n">features</span><span class="p">,</span> <span class="n">target</span><span class="p">)</span> <span class="n">OVER</span> <span class="p">(</span><span class="k">PARTITION</span> <span class="k">BY</span> <span class="n">category</span><span class="p">)</span> 
+<span class="k">FROM</span> <span class="n">sales_data</span><span class="p">;</span>
+
+<span class="c1">-- Clustering</span>
+<span class="k">SELECT</span> <span class="o">*</span><span class="p">,</span> <span class="n">ML_KMEANS</span><span class="p">(</span><span class="n">features</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span> <span class="k">AS</span> <span class="n">cluster_id</span> 
+<span class="k">FROM</span> <span class="n">customer_data</span><span class="p">;</span>
+
+<span class="c1">-- Neural Network Inference</span>
+<span class="k">SELECT</span> <span class="nb">text</span><span class="p">,</span> <span class="n">ML_PREDICT</span><span class="p">(</span><span class="s1">'sentiment_model'</span><span class="p">,</span> <span class="nb">text</span><span class="p">)</span> <span class="k">AS</span> <span class="n">sentiment</span> 
+<span class="k">FROM</span> <span class="n">reviews</span><span class="p">;</span>
+
+<span class="c1">-- Vector Similarity with ML</span>
+<span class="k">SELECT</span> <span class="n">title</span><span class="p">,</span> <span class="n">ML_SEMANTIC_SEARCH</span><span class="p">(</span><span class="n">embedding</span><span class="p">,</span> <span class="s1">'query text'</span><span class="p">,</span> <span class="mi">10</span><span class="p">)</span> <span class="k">AS</span> <span class="n">similarity</span>
+<span class="k">FROM</span> <span class="n">documents</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h3 id="2-ml-function-categories"><strong>2. ML Function Categories</strong></h3>
+
+<h4 id="-statistical-functions"><strong>🔢 Statistical Functions</strong></h4>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">ML_LINEAR_REGRESSION(features, target)</code> - Linear regression training/prediction</li>
+  <li><code class="language-plaintext highlighter-rouge">ML_LOGISTIC_REGRESSION(features, target)</code> - Logistic regression</li>
+  <li><code class="language-plaintext highlighter-rouge">ML_CORRELATION(x, y)</code> - Pearson correlation coefficient</li>
+  <li><code class="language-plaintext highlighter-rouge">ML_COVARIANCE(x, y)</code> - Covariance calculation</li>
+  <li><code class="language-plaintext highlighter-rouge">ML_ZSCORE(value, mean, std)</code> - Z-score normalization</li>
+</ul>
+
+<h4 id="-machine-learning-models"><strong>🧠 Machine Learning Models</strong></h4>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">ML_KMEANS(features, k)</code> - K-means clustering</li>
+  <li><code class="language-plaintext highlighter-rouge">ML_SVM(features, target)</code> - Support Vector Machine</li>
+  <li><code class="language-plaintext highlighter-rouge">ML_DECISION_TREE(features, target)</code> - Decision tree</li>
+  <li><code class="language-plaintext highlighter-rouge">ML_RANDOM_FOREST(features, target)</code> - Random forest</li>
+  <li><code class="language-plaintext highlighter-rouge">ML_NEURAL_NETWORK(features, target, layers)</code> - Neural network</li>
+</ul>
+
+<h4 id="-model-management"><strong>🎯 Model Management</strong></h4>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">ML_TRAIN_MODEL(name, algorithm, features, target)</code> - Train and save model</li>
+  <li><code class="language-plaintext highlighter-rouge">ML_PREDICT(model_name, features)</code> - Prediction using saved model</li>
+  <li><code class="language-plaintext highlighter-rouge">ML_EVALUATE_MODEL(model_name, test_features, test_target)</code> - Model evaluation</li>
+  <li><code class="language-plaintext highlighter-rouge">ML_UPDATE_MODEL(model_name, new_features, new_target)</code> - Online learning</li>
+</ul>
+
+<h4 id="-feature-engineering"><strong>📊 Feature Engineering</strong></h4>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">ML_NORMALIZE(values, method)</code> - Min-max, z-score, robust scaling</li>
+  <li><code class="language-plaintext highlighter-rouge">ML_ENCODE_CATEGORICAL(category, method)</code> - One-hot, label encoding</li>
+  <li><code class="language-plaintext highlighter-rouge">ML_POLYNOMIAL_FEATURES(features, degree)</code> - Polynomial feature expansion</li>
+  <li><code class="language-plaintext highlighter-rouge">ML_PCA(features, components)</code> - Principal Component Analysis</li>
+  <li><code class="language-plaintext highlighter-rouge">ML_FEATURE_SELECTION(features, target, method)</code> - Feature selection</li>
+</ul>
+
+<h4 id="-vector--embedding-operations"><strong>🔍 Vector &amp; Embedding Operations</strong></h4>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">ML_EMBED_TEXT(text, model)</code> - Text to vector embedding</li>
+  <li><code class="language-plaintext highlighter-rouge">ML_EMBED_IMAGE(image_url, model)</code> - Image to vector embedding</li>
+  <li><code class="language-plaintext highlighter-rouge">ML_SIMILARITY_SEARCH(query_vector, target_vectors, k)</code> - Advanced similarity</li>
+  <li><code class="language-plaintext highlighter-rouge">ML_VECTOR_CLUSTER(vectors, k)</code> - Vector clustering</li>
+  <li><code class="language-plaintext highlighter-rouge">ML_DIMENSIONALITY_REDUCTION(vectors, method, dims)</code> - UMAP, t-SNE</li>
+</ul>
+
+<h4 id="️-time-series-functions"><strong>🕰️ Time Series Functions</strong></h4>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">ML_FORECAST(timeseries, periods)</code> - Time series forecasting</li>
+  <li><code class="language-plaintext highlighter-rouge">ML_SEASONALITY_DECOMPOSE(timeseries)</code> - Seasonal decomposition</li>
+  <li><code class="language-plaintext highlighter-rouge">ML_ANOMALY_DETECTION(timeseries)</code> - Anomaly detection</li>
+  <li><code class="language-plaintext highlighter-rouge">ML_CHANGEPOINT_DETECTION(timeseries)</code> - Change point detection</li>
+</ul>
+
+<h4 id="️-natural-language-processing"><strong>🗣️ Natural Language Processing</strong></h4>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">ML_SENTIMENT_ANALYSIS(text)</code> - Sentiment classification</li>
+  <li><code class="language-plaintext highlighter-rouge">ML_EXTRACT_ENTITIES(text)</code> - Named entity recognition</li>
+  <li><code class="language-plaintext highlighter-rouge">ML_SUMMARIZE_TEXT(text, max_length)</code> - Text summarization</li>
+  <li><code class="language-plaintext highlighter-rouge">ML_TRANSLATE(text, source_lang, target_lang)</code> - Translation</li>
+</ul>
+
+<h2 id="-implementation-architecture">🔧 <strong>Implementation Architecture</strong></h2>
+
+<h3 id="core-components"><strong>Core Components</strong></h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// New ML module structure</span>
+<span class="n">orbit</span><span class="o">-</span><span class="n">protocols</span><span class="o">/</span><span class="n">src</span><span class="o">/</span><span class="n">ml</span><span class="o">/</span>
+<span class="err">├──</span> <span class="k">mod</span><span class="py">.rs</span>                    <span class="c1">// ML module entry point</span>
+<span class="err">├──</span> <span class="n">functions</span><span class="o">/</span>                <span class="c1">// ML function implementations</span>
+<span class="err">│</span>   <span class="err">├──</span> <span class="n">statistical</span><span class="py">.rs</span>        <span class="c1">// Statistical functions</span>
+<span class="err">│</span>   <span class="err">├──</span> <span class="n">supervised</span><span class="py">.rs</span>         <span class="c1">// Supervised learning</span>
+<span class="err">│</span>   <span class="err">├──</span> <span class="n">unsupervised</span><span class="py">.rs</span>       <span class="c1">// Clustering, PCA, etc.</span>
+<span class="err">│</span>   <span class="err">├──</span> <span class="n">neural</span><span class="py">.rs</span>             <span class="c1">// Neural networks</span>
+<span class="err">│</span>   <span class="err">├──</span> <span class="n">nlp</span><span class="py">.rs</span>               <span class="c1">// NLP functions</span>
+<span class="err">│</span>   <span class="err">├──</span> <span class="n">timeseries</span><span class="py">.rs</span>        <span class="c1">// Time series functions</span>
+<span class="err">│</span>   <span class="err">└──</span> <span class="n">vectors</span><span class="py">.rs</span>           <span class="c1">// Advanced vector operations</span>
+<span class="err">├──</span> <span class="n">models</span><span class="o">/</span>                   <span class="c1">// Model management</span>
+<span class="err">│</span>   <span class="err">├──</span> <span class="n">registry</span><span class="py">.rs</span>           <span class="c1">// Model storage and retrieval</span>
+<span class="err">│</span>   <span class="err">├──</span> <span class="n">serialization</span><span class="py">.rs</span>      <span class="c1">// Model persistence</span>
+<span class="err">│</span>   <span class="err">└──</span> <span class="n">versioning</span><span class="py">.rs</span>         <span class="c1">// Model versioning</span>
+<span class="err">├──</span> <span class="n">engines</span><span class="o">/</span>                  <span class="c1">// ML computation engines</span>
+<span class="err">│</span>   <span class="err">├──</span> <span class="n">candle_engine</span><span class="py">.rs</span>      <span class="c1">// Candle/Torch integration</span>
+<span class="err">│</span>   <span class="err">├──</span> <span class="n">onnx_engine</span><span class="py">.rs</span>        <span class="c1">// ONNX runtime</span>
+<span class="err">│</span>   <span class="err">└──</span> <span class="n">distributed</span><span class="py">.rs</span>        <span class="c1">// Distributed training</span>
+<span class="err">└──</span> <span class="n">sql_integration</span><span class="o">/</span>          <span class="c1">// SQL engine integration</span>
+    <span class="err">├──</span> <span class="n">function_registry</span><span class="py">.rs</span>  <span class="c1">// Register ML functions</span>
+    <span class="err">├──</span> <span class="n">executor</span><span class="py">.rs</span>           <span class="c1">// ML function execution</span>
+    <span class="err">└──</span> <span class="n">optimizer</span><span class="py">.rs</span>          <span class="c1">// ML-aware query optimization</span>
+</code></pre></div></div>
+
+<h3 id="sql-engine-integration"><strong>SQL Engine Integration</strong></h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Extended FunctionCall enum in AST</span>
+<span class="k">pub</span> <span class="k">enum</span> <span class="n">MLFunction</span> <span class="p">{</span>
+    <span class="c1">// Statistical</span>
+    <span class="n">LinearRegression</span> <span class="p">{</span> <span class="n">features</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">Expression</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">target</span><span class="p">:</span> <span class="n">Expression</span> <span class="p">},</span>
+    <span class="n">LogisticRegression</span> <span class="p">{</span> <span class="n">features</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">Expression</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">target</span><span class="p">:</span> <span class="n">Expression</span> <span class="p">},</span>
+    
+    <span class="c1">// Clustering  </span>
+    <span class="n">KMeans</span> <span class="p">{</span> <span class="n">features</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">Expression</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">k</span><span class="p">:</span> <span class="nb">u32</span> <span class="p">},</span>
+    <span class="n">DBSCAN</span> <span class="p">{</span> <span class="n">features</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">Expression</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">eps</span><span class="p">:</span> <span class="nb">f64</span><span class="p">,</span> <span class="n">min_samples</span><span class="p">:</span> <span class="nb">u32</span> <span class="p">},</span>
+    
+    <span class="c1">// Model Management</span>
+    <span class="n">TrainModel</span> <span class="p">{</span> <span class="n">name</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span> <span class="n">algorithm</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span> <span class="n">features</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">Expression</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">target</span><span class="p">:</span> <span class="n">Expression</span> <span class="p">},</span>
+    <span class="n">Predict</span> <span class="p">{</span> <span class="n">model_name</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span> <span class="n">features</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">Expression</span><span class="o">&gt;</span> <span class="p">},</span>
+    
+    <span class="c1">// Feature Engineering</span>
+    <span class="n">Normalize</span> <span class="p">{</span> <span class="n">values</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">Expression</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">method</span><span class="p">:</span> <span class="n">NormalizationMethod</span> <span class="p">},</span>
+    <span class="n">PCA</span> <span class="p">{</span> <span class="n">features</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">Expression</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">components</span><span class="p">:</span> <span class="nb">u32</span> <span class="p">},</span>
+    
+    <span class="c1">// Vector Operations</span>
+    <span class="n">EmbedText</span> <span class="p">{</span> <span class="n">text</span><span class="p">:</span> <span class="n">Expression</span><span class="p">,</span> <span class="n">model</span><span class="p">:</span> <span class="nb">String</span> <span class="p">},</span>
+    <span class="n">SimilaritySearch</span> <span class="p">{</span> <span class="n">query</span><span class="p">:</span> <span class="n">Expression</span><span class="p">,</span> <span class="n">vectors</span><span class="p">:</span> <span class="n">Expression</span><span class="p">,</span> <span class="n">k</span><span class="p">:</span> <span class="nb">u32</span> <span class="p">},</span>
+    
+    <span class="c1">// NLP</span>
+    <span class="n">SentimentAnalysis</span> <span class="p">{</span> <span class="n">text</span><span class="p">:</span> <span class="n">Expression</span> <span class="p">},</span>
+    <span class="n">ExtractEntities</span> <span class="p">{</span> <span class="n">text</span><span class="p">:</span> <span class="n">Expression</span> <span class="p">},</span>
+    
+    <span class="c1">// Time Series</span>
+    <span class="n">Forecast</span> <span class="p">{</span> <span class="n">timeseries</span><span class="p">:</span> <span class="n">Expression</span><span class="p">,</span> <span class="n">periods</span><span class="p">:</span> <span class="nb">u32</span> <span class="p">},</span>
+    <span class="n">AnomalyDetection</span> <span class="p">{</span> <span class="n">timeseries</span><span class="p">:</span> <span class="n">Expression</span> <span class="p">},</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="distributed-ml-processing"><strong>Distributed ML Processing</strong></h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// ML Actor for distributed processing</span>
+
+<span class="nd">#[async_trait]</span>
+<span class="k">pub</span> <span class="k">trait</span> <span class="n">MLActor</span><span class="p">:</span> <span class="n">Addressable</span> <span class="p">{</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">train_model</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">request</span><span class="p">:</span> <span class="n">TrainModelRequest</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">ModelMetadata</span><span class="o">&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">predict</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">request</span><span class="p">:</span> <span class="n">PredictRequest</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">PredictionResult</span><span class="o">&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">evaluate_model</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">request</span><span class="p">:</span> <span class="n">EvaluateRequest</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">EvaluationResult</span><span class="o">&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">update_model</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">request</span><span class="p">:</span> <span class="n">UpdateModelRequest</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="c1">// Distributed training coordination</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">DistributedTrainer</span> <span class="p">{</span>
+    <span class="n">coordinator</span><span class="p">:</span> <span class="n">ActorRef</span><span class="o">&lt;</span><span class="n">MLCoordinator</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="n">workers</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">ActorRef</span><span class="o">&lt;</span><span class="n">MLWorker</span><span class="o">&gt;&gt;</span><span class="p">,</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h2 id="-scalability-features">🚀 <strong>Scalability Features</strong></h2>
+
+<h3 id="1-distributed-training"><strong>1. Distributed Training</strong></h3>
+<ul>
+  <li><strong>Parameter Server Architecture</strong>: Central parameter coordination</li>
+  <li><strong>Federated Learning</strong>: Train across multiple nodes without data movement</li>
+  <li><strong>Gradient Aggregation</strong>: Efficient distributed gradient computation</li>
+  <li><strong>Model Parallelism</strong>: Split large models across cluster nodes</li>
+</ul>
+
+<h3 id="2-query-time-inference"><strong>2. Query-Time Inference</strong></h3>
+<ul>
+  <li><strong>Model Caching</strong>: Hot models cached in memory across cluster</li>
+  <li><strong>Batch Processing</strong>: Automatically batch inference requests</li>
+  <li><strong>Streaming ML</strong>: Real-time inference on streaming data</li>
+  <li><strong>Approximate Algorithms</strong>: Fast approximate ML for interactive queries</li>
+</ul>
+
+<h3 id="3-vector-database-integration"><strong>3. Vector Database Integration</strong></h3>
+<ul>
+  <li><strong>ML-Enhanced Indexing</strong>: Use ML models to improve vector indexes</li>
+  <li><strong>Learned Indexes</strong>: Neural network-based indexing structures</li>
+  <li><strong>Adaptive Similarity</strong>: ML-learned similarity metrics</li>
+  <li><strong>Semantic Caching</strong>: Cache similar queries using embeddings</li>
+</ul>
+
+<h2 id="-ml-libraries-integration">🧪 <strong>ML Libraries Integration</strong></h2>
+
+<h3 id="primary-candle-rust-native"><strong>Primary: Candle (Rust-Native)</strong></h3>
+<div class="language-toml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">[</span><span class="n">dependencies</span><span class="k">]</span>
+<span class="n">candle-core</span> <span class="o">=</span><span class="w"> </span><span class="s">"0.6"</span>
+<span class="n">candle-nn</span> <span class="o">=</span><span class="w"> </span><span class="s">"0.6"</span>  
+<span class="n">candle-transformers</span> <span class="o">=</span><span class="w"> </span><span class="s">"0.6"</span>
+<span class="n">candle-datasets</span> <span class="o">=</span><span class="w"> </span><span class="s">"0.6"</span>
+</code></pre></div></div>
+
+<h3 id="secondary-onnx-runtime"><strong>Secondary: ONNX Runtime</strong></h3>
+<div class="language-toml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">ort</span> <span class="o">=</span><span class="w"> </span><span class="s">"2.0"</span>  <span class="c"># ONNX Runtime for pre-trained models</span>
+</code></pre></div></div>
+
+<h3 id="statistics-statrs"><strong>Statistics: Statrs</strong></h3>
+<div class="language-toml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">statrs</span> <span class="o">=</span><span class="w"> </span><span class="s">"0.16"</span>  <span class="c"># Statistical functions</span>
+</code></pre></div></div>
+
+<h3 id="linear-algebra-ndarray"><strong>Linear Algebra: Ndarray</strong></h3>
+<div class="language-toml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">ndarray</span> <span class="o">=</span><span class="w"> </span><span class="s">"0.15"</span>
+<span class="n">ndarray-linalg</span> <span class="o">=</span><span class="w"> </span><span class="s">"0.16"</span>
+</code></pre></div></div>
+
+<h2 id="-performance-optimizations">📊 <strong>Performance Optimizations</strong></h2>
+
+<h3 id="1-vectorized-operations"><strong>1. Vectorized Operations</strong></h3>
+<ul>
+  <li><strong>SIMD Instructions</strong>: Use AVX/AVX-512 for vector operations</li>
+  <li><strong>GPU Acceleration</strong>: CUDA/ROCm for ML computations</li>
+  <li><strong>Batched Inference</strong>: Process multiple rows simultaneously</li>
+  <li><strong>Columnar Storage</strong>: Column-oriented ML processing</li>
+</ul>
+
+<h3 id="2-memory-management"><strong>2. Memory Management</strong></h3>
+<ul>
+  <li><strong>Zero-Copy Operations</strong>: Direct ML on stored data</li>
+  <li><strong>Memory Pools</strong>: Pre-allocated memory for ML operations</li>
+  <li><strong>Lazy Evaluation</strong>: Defer ML computations until needed</li>
+  <li><strong>Result Caching</strong>: Cache ML results for repeated queries</li>
+</ul>
+
+<h3 id="3-query-optimization"><strong>3. Query Optimization</strong></h3>
+<ul>
+  <li><strong>ML Predicate Pushdown</strong>: Push ML filters down to storage</li>
+  <li><strong>Feature Pre-computation</strong>: Cache expensive feature engineering</li>
+  <li><strong>Model-Aware Optimization</strong>: Optimize queries based on model characteristics</li>
+  <li><strong>Approximate Results</strong>: Fast approximate ML for exploratory queries</li>
+</ul>
+
+<h2 id="-use-cases--examples">🎯 <strong>Use Cases &amp; Examples</strong></h2>
+
+<h3 id="real-time-analytics"><strong>Real-Time Analytics</strong></h3>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Real-time fraud detection</span>
+<span class="k">SELECT</span> 
+    <span class="n">transaction_id</span><span class="p">,</span>
+    <span class="n">amount</span><span class="p">,</span>
+    <span class="n">ML_PREDICT</span><span class="p">(</span><span class="s1">'fraud_model'</span><span class="p">,</span> 
+        <span class="n">ARRAY</span><span class="p">[</span><span class="n">amount</span><span class="p">,</span> <span class="n">merchant_category</span><span class="p">,</span> <span class="n">hour_of_day</span><span class="p">,</span> <span class="n">day_of_week</span><span class="p">])</span> <span class="k">AS</span> <span class="n">fraud_score</span>
+<span class="k">FROM</span> <span class="n">transactions</span> 
+<span class="k">WHERE</span> <span class="nb">timestamp</span> <span class="o">&gt;</span> <span class="n">NOW</span><span class="p">()</span> <span class="o">-</span> <span class="n">INTERVAL</span> <span class="s1">'1 hour'</span>
+  <span class="k">AND</span> <span class="n">ML_PREDICT</span><span class="p">(</span><span class="s1">'fraud_model'</span><span class="p">,</span> 
+        <span class="n">ARRAY</span><span class="p">[</span><span class="n">amount</span><span class="p">,</span> <span class="n">merchant_category</span><span class="p">,</span> <span class="n">hour_of_day</span><span class="p">,</span> <span class="n">day_of_week</span><span class="p">])</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">.</span><span class="mi">8</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h3 id="customer-analytics"><strong>Customer Analytics</strong></h3>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Customer segmentation and lifetime value</span>
+<span class="k">WITH</span> <span class="n">customer_features</span> <span class="k">AS</span> <span class="p">(</span>
+    <span class="k">SELECT</span> 
+        <span class="n">customer_id</span><span class="p">,</span>
+        <span class="n">ARRAY</span><span class="p">[</span><span class="n">total_spent</span><span class="p">,</span> <span class="n">order_frequency</span><span class="p">,</span> <span class="n">avg_order_value</span><span class="p">,</span> <span class="n">days_since_last_order</span><span class="p">]</span> <span class="k">as</span> <span class="n">features</span>
+    <span class="k">FROM</span> <span class="n">customer_metrics</span>
+<span class="p">)</span>
+<span class="k">SELECT</span> 
+    <span class="n">customer_id</span><span class="p">,</span>
+    <span class="n">ML_KMEANS</span><span class="p">(</span><span class="n">features</span><span class="p">,</span> <span class="mi">5</span><span class="p">)</span> <span class="k">AS</span> <span class="n">segment</span><span class="p">,</span>
+    <span class="n">ML_PREDICT</span><span class="p">(</span><span class="s1">'clv_model'</span><span class="p">,</span> <span class="n">features</span><span class="p">)</span> <span class="k">AS</span> <span class="n">predicted_lifetime_value</span>
+<span class="k">FROM</span> <span class="n">customer_features</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h3 id="content-recommendation"><strong>Content Recommendation</strong></h3>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Semantic content recommendations</span>
+<span class="k">SELECT</span> 
+    <span class="k">c</span><span class="p">.</span><span class="n">title</span><span class="p">,</span>
+    <span class="k">c</span><span class="p">.</span><span class="n">content</span><span class="p">,</span>
+    <span class="n">ML_SIMILARITY_SEARCH</span><span class="p">(</span>
+        <span class="n">ML_EMBED_TEXT</span><span class="p">(</span><span class="k">c</span><span class="p">.</span><span class="n">content</span><span class="p">,</span> <span class="s1">'sentence-transformers'</span><span class="p">),</span> 
+        <span class="n">ML_EMBED_TEXT</span><span class="p">(</span><span class="s1">'machine learning tutorials'</span><span class="p">,</span> <span class="s1">'sentence-transformers'</span><span class="p">),</span>
+        <span class="mi">10</span>
+    <span class="p">)</span> <span class="k">AS</span> <span class="n">similarity_score</span>
+<span class="k">FROM</span> <span class="n">content</span> <span class="k">c</span>
+<span class="k">WHERE</span> <span class="n">ML_SIMILARITY_SEARCH</span><span class="p">(</span>
+    <span class="n">ML_EMBED_TEXT</span><span class="p">(</span><span class="k">c</span><span class="p">.</span><span class="n">content</span><span class="p">,</span> <span class="s1">'sentence-transformers'</span><span class="p">),</span> 
+    <span class="n">ML_EMBED_TEXT</span><span class="p">(</span><span class="s1">'machine learning tutorials'</span><span class="p">,</span> <span class="s1">'sentence-transformers'</span><span class="p">),</span>
+    <span class="mi">10</span>
+<span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">.</span><span class="mi">7</span>
+<span class="k">ORDER</span> <span class="k">BY</span> <span class="n">similarity_score</span> <span class="k">DESC</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h3 id="time-series-forecasting"><strong>Time Series Forecasting</strong></h3>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Sales forecasting with seasonality</span>
+<span class="k">SELECT</span> 
+    <span class="nb">date</span><span class="p">,</span>
+    <span class="n">actual_sales</span><span class="p">,</span>
+    <span class="n">ML_FORECAST</span><span class="p">(</span>
+        <span class="n">actual_sales</span> <span class="n">OVER</span> <span class="p">(</span><span class="k">ORDER</span> <span class="k">BY</span> <span class="nb">date</span> <span class="k">ROWS</span> <span class="mi">365</span> <span class="k">PRECEDING</span><span class="p">),</span>
+        <span class="mi">30</span>
+    <span class="p">)</span> <span class="k">AS</span> <span class="n">forecasted_sales</span><span class="p">,</span>
+    <span class="n">ML_ANOMALY_DETECTION</span><span class="p">(</span>
+        <span class="n">actual_sales</span> <span class="n">OVER</span> <span class="p">(</span><span class="k">ORDER</span> <span class="k">BY</span> <span class="nb">date</span> <span class="k">ROWS</span> <span class="mi">90</span> <span class="k">PRECEDING</span><span class="p">)</span>
+    <span class="p">)</span> <span class="k">AS</span> <span class="n">is_anomaly</span>
+<span class="k">FROM</span> <span class="n">daily_sales</span>
+<span class="k">ORDER</span> <span class="k">BY</span> <span class="nb">date</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h2 id="️-security--privacy">🛡️ <strong>Security &amp; Privacy</strong></h2>
+
+<h3 id="model-security"><strong>Model Security</strong></h3>
+<ul>
+  <li><strong>Model Encryption</strong>: Encrypt stored models</li>
+  <li><strong>Access Control</strong>: Role-based access to ML functions</li>
+  <li><strong>Audit Logging</strong>: Log all ML operations</li>
+  <li><strong>Model Versioning</strong>: Track model changes and rollbacks</li>
+</ul>
+
+<h3 id="data-privacy"><strong>Data Privacy</strong></h3>
+<ul>
+  <li><strong>Differential Privacy</strong>: Add noise to protect sensitive data</li>
+  <li><strong>Federated Learning</strong>: Train without centralizing data</li>
+  <li><strong>Secure Aggregation</strong>: Private gradient aggregation</li>
+  <li><strong>Data Anonymization</strong>: ML-powered data anonymization</li>
+</ul>
+
+<h2 id="️-implementation-roadmap">🗺️ <strong>Implementation Roadmap</strong></h2>
+
+<h3 id="phase-1-foundation-4-6-weeks"><strong>Phase 1: Foundation (4-6 weeks)</strong></h3>
+<ul class="task-list">
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />ML function registry and SQL integration</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Basic statistical functions (mean, std, correlation)</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Simple linear/logistic regression</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Vector similarity enhancements</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Model storage and retrieval</li>
+</ul>
+
+<h3 id="phase-2-core-ml-6-8-weeks"><strong>Phase 2: Core ML (6-8 weeks)</strong></h3>
+<ul class="task-list">
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />K-means clustering and DBSCAN</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Decision trees and random forest</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Feature engineering functions</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />PCA and dimensionality reduction</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Model evaluation metrics</li>
+</ul>
+
+<h3 id="phase-3-advanced-ml-8-10-weeks"><strong>Phase 3: Advanced ML (8-10 weeks)</strong></h3>
+<ul class="task-list">
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Neural network support via Candle</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />NLP functions (sentiment, NER)</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Time series forecasting</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />ONNX integration for pre-trained models</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Distributed training coordination</li>
+</ul>
+
+<h3 id="phase-4-production-features-6-8-weeks"><strong>Phase 4: Production Features (6-8 weeks)</strong></h3>
+<ul class="task-list">
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Model versioning and A/B testing</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />GPU acceleration</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Streaming ML inference</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Performance monitoring</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Advanced security features</li>
+</ul>
+
+<h2 id="-success-metrics">🎯 <strong>Success Metrics</strong></h2>
+
+<h3 id="performance-targets"><strong>Performance Targets</strong></h3>
+<ul>
+  <li><strong>Inference Latency</strong>: &lt; 10ms for simple models, &lt; 100ms for complex models</li>
+  <li><strong>Training Speed</strong>: 10x faster than traditional ETL → ML pipeline</li>
+  <li><strong>Memory Efficiency</strong>: &lt; 20% overhead for ML-enabled queries</li>
+  <li><strong>Scalability</strong>: Linear scaling to 100+ nodes for distributed training</li>
+</ul>
+
+<h3 id="functionality-goals"><strong>Functionality Goals</strong></h3>
+<ul>
+  <li><strong>SQL Compatibility</strong>: 95% compatibility with existing PostgreSQL ML extensions</li>
+  <li><strong>Model Support</strong>: 20+ ML algorithms implemented natively</li>
+  <li><strong>Integration</strong>: Seamless integration with existing vector operations</li>
+  <li><strong>Ease of Use</strong>: ML accessible to SQL users without Python/R knowledge</li>
+</ul>
+
+<p>This design transforms Orbit-RS into a <strong>“Intelligent Database”</strong> that brings ML computation directly to the data, eliminating the need for complex ETL pipelines and enabling real-time intelligent applications.</p>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/orbit-rs/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Orbit-RS Documentation</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">TuringWorks</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

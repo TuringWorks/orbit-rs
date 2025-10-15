@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>LSM Tree Implementation Plan for orbit-rs | Orbit-RS Documentation</title>
+<meta name="generator" content="Jekyll v4.4.1" />
+<meta property="og:title" content="LSM Tree Implementation Plan for orbit-rs" />
+<meta name="author" content="TuringWorks" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<meta property="og:description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<link rel="canonical" href="https://turingworks.github.io/orbit-rs/LSM_TREE_IMPLEMENTATION.html" />
+<meta property="og:url" content="https://turingworks.github.io/orbit-rs/LSM_TREE_IMPLEMENTATION.html" />
+<meta property="og:site_name" content="Orbit-RS Documentation" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="LSM Tree Implementation Plan for orbit-rs" />
+<meta name="twitter:site" content="@TuringWorksAI" />
+<meta name="twitter:creator" content="@TuringWorks" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","author":{"@type":"Person","name":"TuringWorks"},"description":"The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform","headline":"LSM Tree Implementation Plan for orbit-rs","url":"https://turingworks.github.io/orbit-rs/LSM_TREE_IMPLEMENTATION.html"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/orbit-rs/assets/main.css">
+  <link rel="stylesheet" href="/orbit-rs/assets/css/custom.css"><link type="application/atom+xml" rel="alternate" href="https://turingworks.github.io/orbit-rs/feed.xml" title="Orbit-RS Documentation" /></head><body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/orbit-rs/">Orbit-RS Documentation</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/orbit-rs/">Orbit-RS Documentation</a><a class="page-link" href="/orbit-rs/project_overview.html">Orbit-RS: Comprehensive Project Overview</a><a class="page-link" href="/orbit-rs/quick_start.html">Quick Start Guide - Multi-Protocol Database Server</a><a class="page-link" href="/orbit-rs/roadmap/">Development Roadmap</a><a class="page-link" href="/orbit-rs/features/">Orbit-RS Feature Index</a><a class="page-link" href="/orbit-rs/compute-acceleration/">Hardware Acceleration Guide</a><a class="page-link" href="/orbit-rs/contributing.html">Contributing Guide</a><a class="page-link" href="/orbit-rs/overview.html">Architecture Overview</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <h1 id="lsm-tree-implementation-plan-for-orbit-rs">LSM Tree Implementation Plan for orbit-rs</h1>
+
+<h2 id="executive-summary">Executive Summary</h2>
+
+<p>Implementing a Log Structured Merge Tree (LSM Tree) for orbit-rs will provide:</p>
+<ul>
+  <li><strong>10x faster writes</strong> for actor state updates and lease renewals</li>
+  <li><strong>Guaranteed durability</strong> through Write-Ahead Logging (WAL)</li>
+  <li><strong>Efficient space utilization</strong> through compaction</li>
+  <li><strong>Point-in-time recovery</strong> for catastrophic failures</li>
+  <li><strong>Multi-model data optimization</strong> for diverse orbit-rs workloads</li>
+</ul>
+
+<h2 id="architecture-overview">Architecture Overview</h2>
+
+<h3 id="core-components">Core Components</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">pub</span> <span class="k">struct</span> <span class="n">OrbitLSMTree</span> <span class="p">{</span>
+    <span class="c1">// In-memory components</span>
+    <span class="n">memtable</span><span class="p">:</span> <span class="nb">Arc</span><span class="o">&lt;</span><span class="n">RwLock</span><span class="o">&lt;</span><span class="n">MemTable</span><span class="o">&gt;&gt;</span><span class="p">,</span>
+    <span class="n">immutable_memtables</span><span class="p">:</span> <span class="nb">Arc</span><span class="o">&lt;</span><span class="n">RwLock</span><span class="o">&lt;</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="n">MemTable</span><span class="o">&gt;&gt;&gt;</span><span class="p">,</span>
+    
+    <span class="c1">// Persistent components  </span>
+    <span class="n">wal</span><span class="p">:</span> <span class="n">WriteAheadLog</span><span class="p">,</span>
+    <span class="n">sstable_manager</span><span class="p">:</span> <span class="n">SSTableManager</span><span class="p">,</span>
+    <span class="n">compaction_scheduler</span><span class="p">:</span> <span class="n">CompactionScheduler</span><span class="p">,</span>
+    
+    <span class="c1">// Configuration</span>
+    <span class="n">config</span><span class="p">:</span> <span class="n">LSMConfig</span><span class="p">,</span>
+    <span class="n">metrics</span><span class="p">:</span> <span class="nb">Arc</span><span class="o">&lt;</span><span class="n">LSMMetrics</span><span class="o">&gt;</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">LSMConfig</span> <span class="p">{</span>
+    <span class="c1">// Memory management</span>
+    <span class="k">pub</span> <span class="n">memtable_size_mb</span><span class="p">:</span> <span class="nb">usize</span><span class="p">,</span>        <span class="c1">// Default: 64MB</span>
+    <span class="k">pub</span> <span class="n">max_memtables</span><span class="p">:</span> <span class="nb">usize</span><span class="p">,</span>           <span class="c1">// Default: 4</span>
+    <span class="k">pub</span> <span class="n">write_buffer_size</span><span class="p">:</span> <span class="nb">usize</span><span class="p">,</span>       <span class="c1">// Default: 16MB</span>
+    
+    <span class="c1">// Compaction strategy</span>
+    <span class="k">pub</span> <span class="n">compaction_strategy</span><span class="p">:</span> <span class="n">CompactionStrategy</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">max_levels</span><span class="p">:</span> <span class="nb">usize</span><span class="p">,</span>              <span class="c1">// Default: 7</span>
+    <span class="k">pub</span> <span class="n">level_size_multiplier</span><span class="p">:</span> <span class="nb">usize</span><span class="p">,</span>   <span class="c1">// Default: 10</span>
+    
+    <span class="c1">// Durability settings</span>
+    <span class="k">pub</span> <span class="n">wal_sync_mode</span><span class="p">:</span> <span class="n">WALSyncMode</span><span class="p">,</span>     <span class="c1">// Default: PerWrite</span>
+    <span class="k">pub</span> <span class="n">snapshot_interval_secs</span><span class="p">:</span> <span class="nb">u64</span><span class="p">,</span>    <span class="c1">// Default: 300 (5 minutes)</span>
+    
+    <span class="c1">// Performance tuning</span>
+    <span class="k">pub</span> <span class="n">bloom_filter_bits_per_key</span><span class="p">:</span> <span class="nb">usize</span><span class="p">,</span> <span class="c1">// Default: 10</span>
+    <span class="k">pub</span> <span class="n">block_cache_size_mb</span><span class="p">:</span> <span class="nb">usize</span><span class="p">,</span>        <span class="c1">// Default: 256MB</span>
+    <span class="k">pub</span> <span class="n">compression</span><span class="p">:</span> <span class="n">CompressionType</span><span class="p">,</span>       <span class="c1">// Default: Lz4</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="data-model-integration">Data Model Integration</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Orbit-specific key-value layout</span>
+<span class="k">pub</span> <span class="k">enum</span> <span class="n">OrbitKey</span> <span class="p">{</span>
+    <span class="n">ActorLease</span> <span class="p">{</span> <span class="n">namespace</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span> <span class="n">actor_id</span><span class="p">:</span> <span class="nb">String</span> <span class="p">},</span>
+    <span class="n">ClusterNode</span> <span class="p">{</span> <span class="n">node_id</span><span class="p">:</span> <span class="nb">String</span> <span class="p">},</span>
+    <span class="n">OrbitQLCache</span> <span class="p">{</span> <span class="n">query_hash</span><span class="p">:</span> <span class="nb">u64</span> <span class="p">},</span>
+    <span class="n">TimeSeries</span> <span class="p">{</span> <span class="n">metric</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span> <span class="n">timestamp</span><span class="p">:</span> <span class="nb">u64</span> <span class="p">},</span>
+<span class="p">}</span>
+
+<span class="k">pub</span> <span class="k">enum</span> <span class="n">OrbitValue</span> <span class="p">{</span>
+    <span class="nf">ActorLease</span><span class="p">(</span><span class="n">AddressableLease</span><span class="p">),</span>
+    <span class="nf">ClusterNode</span><span class="p">(</span><span class="n">NodeInfo</span><span class="p">),</span> 
+    <span class="nf">QueryResult</span><span class="p">(</span><span class="n">CachedQueryResult</span><span class="p">),</span>
+    <span class="nf">TimeSeriesPoint</span><span class="p">(</span><span class="n">TimeSeriesData</span><span class="p">),</span>
+<span class="p">}</span>
+
+<span class="c1">// Specialized serialization for orbit-rs data types</span>
+<span class="k">impl</span> <span class="n">Serializable</span> <span class="k">for</span> <span class="n">OrbitKey</span> <span class="p">{</span> <span class="cm">/* ... */</span> <span class="p">}</span>
+<span class="k">impl</span> <span class="n">Serializable</span> <span class="k">for</span> <span class="n">OrbitValue</span> <span class="p">{</span> <span class="cm">/* ... */</span> <span class="p">}</span>
+</code></pre></div></div>
+
+<h2 id="implementation-phases">Implementation Phases</h2>
+
+<h3 id="phase-1-core-lsm-engine-4-6-weeks">Phase 1: Core LSM Engine (4-6 weeks)</h3>
+
+<h4 id="week-1-2-memtable--wal">Week 1-2: MemTable &amp; WAL</h4>
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// orbit-server/src/persistence/lsm/memtable.rs</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">MemTable</span> <span class="p">{</span>
+    <span class="n">data</span><span class="p">:</span> <span class="n">SkipMap</span><span class="o">&lt;</span><span class="n">OrbitKey</span><span class="p">,</span> <span class="n">OrbitValue</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="n">size_bytes</span><span class="p">:</span> <span class="n">AtomicUsize</span><span class="p">,</span>
+    <span class="n">created_at</span><span class="p">:</span> <span class="n">Instant</span><span class="p">,</span>
+    <span class="n">sealed</span><span class="p">:</span> <span class="n">AtomicBool</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="c1">// orbit-server/src/persistence/lsm/wal.rs</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">WriteAheadLog</span> <span class="p">{</span>
+    <span class="n">writer</span><span class="p">:</span> <span class="n">BufWriter</span><span class="o">&lt;</span><span class="n">File</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="n">sequence_number</span><span class="p">:</span> <span class="n">AtomicU64</span><span class="p">,</span>
+    <span class="n">sync_mode</span><span class="p">:</span> <span class="n">WALSyncMode</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="k">impl</span> <span class="n">WriteAheadLog</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">append</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span> <span class="k">self</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">OrbitKey</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">OrbitValue</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="nb">u64</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="k">let</span> <span class="n">entry</span> <span class="o">=</span> <span class="n">WALEntry</span> <span class="p">{</span>
+            <span class="n">sequence</span><span class="p">:</span> <span class="k">self</span><span class="py">.sequence_number</span><span class="nf">.fetch_add</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="nn">Ordering</span><span class="p">::</span><span class="n">SeqCst</span><span class="p">),</span>
+            <span class="n">key</span><span class="p">:</span> <span class="n">key</span><span class="nf">.clone</span><span class="p">(),</span>
+            <span class="n">value</span><span class="p">:</span> <span class="n">value</span><span class="nf">.clone</span><span class="p">(),</span>
+            <span class="n">timestamp</span><span class="p">:</span> <span class="nn">SystemTime</span><span class="p">::</span><span class="nf">now</span><span class="p">(),</span>
+        <span class="p">};</span>
+        
+        <span class="k">self</span><span class="py">.writer</span><span class="nf">.write_all</span><span class="p">(</span><span class="o">&amp;</span><span class="n">entry</span><span class="nf">.serialize</span><span class="p">())</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+        <span class="k">if</span> <span class="k">self</span><span class="py">.sync_mode</span> <span class="o">==</span> <span class="nn">WALSyncMode</span><span class="p">::</span><span class="n">PerWrite</span> <span class="p">{</span>
+            <span class="k">self</span><span class="py">.writer</span><span class="nf">.flush</span><span class="p">()</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+        <span class="p">}</span>
+        <span class="nf">Ok</span><span class="p">(</span><span class="n">entry</span><span class="py">.sequence</span><span class="p">)</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h4 id="week-3-4-sstable-implementation">Week 3-4: SSTable Implementation</h4>
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// orbit-server/src/persistence/lsm/sstable.rs</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">SSTable</span> <span class="p">{</span>
+    <span class="n">file_path</span><span class="p">:</span> <span class="n">PathBuf</span><span class="p">,</span>
+    <span class="n">metadata</span><span class="p">:</span> <span class="n">SSTableMetadata</span><span class="p">,</span>
+    <span class="n">bloom_filter</span><span class="p">:</span> <span class="n">BloomFilter</span><span class="p">,</span>
+    <span class="n">index</span><span class="p">:</span> <span class="n">BlockIndex</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">SSTableWriter</span> <span class="p">{</span>
+    <span class="n">writer</span><span class="p">:</span> <span class="n">BufWriter</span><span class="o">&lt;</span><span class="n">File</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="n">index_builder</span><span class="p">:</span> <span class="n">BlockIndexBuilder</span><span class="p">,</span>
+    <span class="n">bloom_builder</span><span class="p">:</span> <span class="n">BloomFilterBuilder</span><span class="p">,</span>
+    <span class="n">compression</span><span class="p">:</span> <span class="n">CompressionType</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="k">impl</span> <span class="n">SSTableWriter</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">write_batch</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span> <span class="k">self</span><span class="p">,</span> <span class="n">entries</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="p">(</span><span class="n">OrbitKey</span><span class="p">,</span> <span class="n">OrbitValue</span><span class="p">)</span><span class="o">&gt;</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="c1">// Sort entries by key for efficient range queries</span>
+        <span class="k">let</span> <span class="k">mut</span> <span class="n">sorted_entries</span> <span class="o">=</span> <span class="n">entries</span><span class="p">;</span>
+        <span class="n">sorted_entries</span><span class="nf">.sort_by_key</span><span class="p">(|(</span><span class="n">k</span><span class="p">,</span> <span class="n">_</span><span class="p">)|</span> <span class="n">k</span><span class="nf">.clone</span><span class="p">());</span>
+        
+        <span class="k">for</span> <span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span> <span class="k">in</span> <span class="n">sorted_entries</span> <span class="p">{</span>
+            <span class="c1">// Add to bloom filter</span>
+            <span class="k">self</span><span class="py">.bloom_builder</span><span class="nf">.add</span><span class="p">(</span><span class="o">&amp;</span><span class="n">key</span><span class="p">);</span>
+            
+            <span class="c1">// Compress and write block</span>
+            <span class="k">let</span> <span class="n">block</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.create_block</span><span class="p">(</span><span class="o">&amp;</span><span class="n">key</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">value</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+            <span class="k">let</span> <span class="n">compressed_block</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.compress_block</span><span class="p">(</span><span class="n">block</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+            
+            <span class="c1">// Update index</span>
+            <span class="k">let</span> <span class="n">offset</span> <span class="o">=</span> <span class="k">self</span><span class="py">.writer</span><span class="nf">.stream_position</span><span class="p">()</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+            <span class="k">self</span><span class="py">.index_builder</span><span class="nf">.add_entry</span><span class="p">(</span><span class="n">key</span><span class="nf">.clone</span><span class="p">(),</span> <span class="n">offset</span><span class="p">,</span> <span class="n">compressed_block</span><span class="nf">.len</span><span class="p">());</span>
+            
+            <span class="k">self</span><span class="py">.writer</span><span class="nf">.write_all</span><span class="p">(</span><span class="o">&amp;</span><span class="n">compressed_block</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+        <span class="p">}</span>
+        
+        <span class="nf">Ok</span><span class="p">(())</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h4 id="week-5-6-read-path--bloom-filters">Week 5-6: Read Path &amp; Bloom Filters</h4>
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">impl</span> <span class="n">OrbitLSMTree</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">get</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">OrbitKey</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="nb">Option</span><span class="o">&lt;</span><span class="n">OrbitValue</span><span class="o">&gt;&gt;</span> <span class="p">{</span>
+        <span class="c1">// 1. Check memtable first (fastest)</span>
+        <span class="k">if</span> <span class="k">let</span> <span class="nf">Some</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="o">=</span> <span class="k">self</span><span class="py">.memtable</span><span class="nf">.read</span><span class="p">()</span><span class="k">.await</span><span class="nf">.get</span><span class="p">(</span><span class="n">key</span><span class="p">)</span> <span class="p">{</span>
+            <span class="k">return</span> <span class="nf">Ok</span><span class="p">(</span><span class="nf">Some</span><span class="p">(</span><span class="n">value</span><span class="nf">.clone</span><span class="p">()));</span>
+        <span class="p">}</span>
+        
+        <span class="c1">// 2. Check immutable memtables</span>
+        <span class="k">for</span> <span class="n">memtable</span> <span class="k">in</span> <span class="k">self</span><span class="py">.immutable_memtables</span><span class="nf">.read</span><span class="p">()</span><span class="k">.await</span><span class="nf">.iter</span><span class="p">()</span> <span class="p">{</span>
+            <span class="k">if</span> <span class="k">let</span> <span class="nf">Some</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="o">=</span> <span class="n">memtable</span><span class="nf">.get</span><span class="p">(</span><span class="n">key</span><span class="p">)</span> <span class="p">{</span>
+                <span class="k">return</span> <span class="nf">Ok</span><span class="p">(</span><span class="nf">Some</span><span class="p">(</span><span class="n">value</span><span class="nf">.clone</span><span class="p">()));</span>
+            <span class="p">}</span>
+        <span class="p">}</span>
+        
+        <span class="c1">// 3. Check SSTables (with bloom filter optimization)</span>
+        <span class="k">for</span> <span class="n">level</span> <span class="k">in</span> <span class="mi">0</span><span class="o">..</span><span class="k">self</span><span class="py">.config.max_levels</span> <span class="p">{</span>
+            <span class="k">for</span> <span class="n">sstable</span> <span class="k">in</span> <span class="k">self</span><span class="py">.sstable_manager</span><span class="nf">.get_level_tables</span><span class="p">(</span><span class="n">level</span><span class="p">)</span> <span class="p">{</span>
+                <span class="c1">// Bloom filter check first</span>
+                <span class="k">if</span> <span class="o">!</span><span class="n">sstable</span><span class="py">.bloom_filter</span><span class="nf">.contains</span><span class="p">(</span><span class="n">key</span><span class="p">)</span> <span class="p">{</span>
+                    <span class="k">continue</span><span class="p">;</span>
+                <span class="p">}</span>
+                
+                <span class="k">if</span> <span class="k">let</span> <span class="nf">Some</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="o">=</span> <span class="n">sstable</span><span class="nf">.get</span><span class="p">(</span><span class="n">key</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span> <span class="p">{</span>
+                    <span class="k">return</span> <span class="nf">Ok</span><span class="p">(</span><span class="nf">Some</span><span class="p">(</span><span class="n">value</span><span class="p">));</span>
+                <span class="p">}</span>
+            <span class="p">}</span>
+        <span class="p">}</span>
+        
+        <span class="nf">Ok</span><span class="p">(</span><span class="nb">None</span><span class="p">)</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="phase-2-compaction--space-management-3-4-weeks">Phase 2: Compaction &amp; Space Management (3-4 weeks)</h3>
+
+<h4 id="week-1-2-level-based-compaction">Week 1-2: Level-Based Compaction</h4>
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// orbit-server/src/persistence/lsm/compaction.rs</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">CompactionScheduler</span> <span class="p">{</span>
+    <span class="n">strategy</span><span class="p">:</span> <span class="n">CompactionStrategy</span><span class="p">,</span>
+    <span class="n">running_compactions</span><span class="p">:</span> <span class="nb">Arc</span><span class="o">&lt;</span><span class="n">RwLock</span><span class="o">&lt;</span><span class="n">HashSet</span><span class="o">&lt;</span><span class="n">CompactionTask</span><span class="o">&gt;&gt;&gt;</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="k">pub</span> <span class="k">enum</span> <span class="n">CompactionStrategy</span> <span class="p">{</span>
+    <span class="n">Leveled</span> <span class="p">{</span> <span class="n">size_ratio</span><span class="p">:</span> <span class="nb">f64</span> <span class="p">},</span>
+    <span class="n">Tiered</span> <span class="p">{</span> <span class="n">max_tables_per_level</span><span class="p">:</span> <span class="nb">usize</span> <span class="p">},</span>
+    <span class="n">Universal</span> <span class="p">{</span> <span class="n">ratio_threshold</span><span class="p">:</span> <span class="nb">f64</span> <span class="p">},</span>
+<span class="p">}</span>
+
+<span class="k">impl</span> <span class="n">CompactionScheduler</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">schedule_compaction</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">sstable_manager</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">SSTableManager</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="n">CompactionTask</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="k">match</span> <span class="k">self</span><span class="py">.strategy</span> <span class="p">{</span>
+            <span class="nn">CompactionStrategy</span><span class="p">::</span><span class="n">Leveled</span> <span class="p">{</span> <span class="n">size_ratio</span> <span class="p">}</span> <span class="k">=&gt;</span> <span class="p">{</span>
+                <span class="k">self</span><span class="nf">.schedule_leveled_compaction</span><span class="p">(</span><span class="n">sstable_manager</span><span class="p">,</span> <span class="n">size_ratio</span><span class="p">)</span><span class="k">.await</span>
+            <span class="p">}</span>
+            <span class="n">_</span> <span class="k">=&gt;</span> <span class="nd">todo!</span><span class="p">(</span><span class="s">"Other compaction strategies"</span><span class="p">),</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+    
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">schedule_leveled_compaction</span><span class="p">(</span>
+        <span class="o">&amp;</span><span class="k">self</span><span class="p">,</span>
+        <span class="n">sstable_manager</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">SSTableManager</span><span class="p">,</span>
+        <span class="n">size_ratio</span><span class="p">:</span> <span class="nb">f64</span><span class="p">,</span>
+    <span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="n">CompactionTask</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="c1">// Find level that exceeds size threshold</span>
+        <span class="k">for</span> <span class="n">level</span> <span class="k">in</span> <span class="mi">0</span><span class="o">..</span><span class="k">self</span><span class="py">.config.max_levels</span> <span class="o">-</span> <span class="mi">1</span> <span class="p">{</span>
+            <span class="k">let</span> <span class="n">level_size</span> <span class="o">=</span> <span class="n">sstable_manager</span><span class="nf">.get_level_size</span><span class="p">(</span><span class="n">level</span><span class="p">);</span>
+            <span class="k">let</span> <span class="n">max_size</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.calculate_max_level_size</span><span class="p">(</span><span class="n">level</span><span class="p">);</span>
+            
+            <span class="k">if</span> <span class="n">level_size</span> <span class="k">as</span> <span class="nb">f64</span> <span class="o">&gt;</span> <span class="n">max_size</span> <span class="o">*</span> <span class="n">size_ratio</span> <span class="p">{</span>
+                <span class="k">let</span> <span class="n">source_tables</span> <span class="o">=</span> <span class="n">sstable_manager</span><span class="nf">.get_level_tables</span><span class="p">(</span><span class="n">level</span><span class="p">);</span>
+                <span class="k">let</span> <span class="n">target_level</span> <span class="o">=</span> <span class="n">level</span> <span class="o">+</span> <span class="mi">1</span><span class="p">;</span>
+                
+                <span class="k">return</span> <span class="nf">Some</span><span class="p">(</span><span class="n">CompactionTask</span> <span class="p">{</span>
+                    <span class="n">source_level</span><span class="p">:</span> <span class="n">level</span><span class="p">,</span>
+                    <span class="n">target_level</span><span class="p">,</span>
+                    <span class="n">source_tables</span><span class="p">,</span>
+                    <span class="n">priority</span><span class="p">:</span> <span class="nn">CompactionPriority</span><span class="p">::</span><span class="n">Normal</span><span class="p">,</span>
+                <span class="p">});</span>
+            <span class="p">}</span>
+        <span class="p">}</span>
+        <span class="nb">None</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h4 id="week-3-4-background-tasks--metrics">Week 3-4: Background Tasks &amp; Metrics</h4>
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">impl</span> <span class="n">OrbitLSMTree</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">start_background_tasks</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">)</span> <span class="p">{</span>
+        <span class="k">let</span> <span class="n">compaction_handle</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.start_compaction_thread</span><span class="p">();</span>
+        <span class="k">let</span> <span class="n">wal_sync_handle</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.start_wal_sync_thread</span><span class="p">();</span>  
+        <span class="k">let</span> <span class="n">metrics_handle</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.start_metrics_collection</span><span class="p">();</span>
+        
+        <span class="c1">// Store handles for clean shutdown</span>
+        <span class="c1">// ...</span>
+    <span class="p">}</span>
+    
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">start_compaction_thread</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">JoinHandle</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="k">let</span> <span class="n">scheduler</span> <span class="o">=</span> <span class="k">self</span><span class="py">.compaction_scheduler</span><span class="nf">.clone</span><span class="p">();</span>
+        <span class="k">let</span> <span class="n">sstable_manager</span> <span class="o">=</span> <span class="k">self</span><span class="py">.sstable_manager</span><span class="nf">.clone</span><span class="p">();</span>
+        
+        <span class="nn">tokio</span><span class="p">::</span><span class="nf">spawn</span><span class="p">(</span><span class="k">async</span> <span class="k">move</span> <span class="p">{</span>
+            <span class="k">let</span> <span class="k">mut</span> <span class="n">interval</span> <span class="o">=</span> <span class="nn">tokio</span><span class="p">::</span><span class="nn">time</span><span class="p">::</span><span class="nf">interval</span><span class="p">(</span><span class="nn">Duration</span><span class="p">::</span><span class="nf">from_secs</span><span class="p">(</span><span class="mi">30</span><span class="p">));</span>
+            
+            <span class="k">loop</span> <span class="p">{</span>
+                <span class="n">interval</span><span class="nf">.tick</span><span class="p">()</span><span class="k">.await</span><span class="p">;</span>
+                
+                <span class="k">if</span> <span class="k">let</span> <span class="nf">Some</span><span class="p">(</span><span class="n">task</span><span class="p">)</span> <span class="o">=</span> <span class="n">scheduler</span><span class="nf">.schedule_compaction</span><span class="p">(</span><span class="o">&amp;</span><span class="n">sstable_manager</span><span class="p">)</span><span class="k">.await</span> <span class="p">{</span>
+                    <span class="k">if</span> <span class="k">let</span> <span class="nf">Err</span><span class="p">(</span><span class="n">e</span><span class="p">)</span> <span class="o">=</span> <span class="k">Self</span><span class="p">::</span><span class="nf">execute_compaction</span><span class="p">(</span><span class="n">task</span><span class="p">)</span><span class="k">.await</span> <span class="p">{</span>
+                        <span class="nd">error!</span><span class="p">(</span><span class="s">"Compaction failed: {}"</span><span class="p">,</span> <span class="n">e</span><span class="p">);</span>
+                    <span class="p">}</span>
+                <span class="p">}</span>
+            <span class="p">}</span>
+        <span class="p">})</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="phase-3-advanced-features-2-3-weeks">Phase 3: Advanced Features (2-3 weeks)</h3>
+
+<h4 id="week-1-point-in-time-recovery">Week 1: Point-in-Time Recovery</h4>
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">pub</span> <span class="k">struct</span> <span class="n">SnapshotManager</span> <span class="p">{</span>
+    <span class="n">snapshot_dir</span><span class="p">:</span> <span class="n">PathBuf</span><span class="p">,</span>
+    <span class="n">retention_policy</span><span class="p">:</span> <span class="n">SnapshotRetentionPolicy</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="k">impl</span> <span class="n">SnapshotManager</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">create_snapshot</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">lsm_tree</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">OrbitLSMTree</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="n">SnapshotId</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="k">let</span> <span class="n">snapshot_id</span> <span class="o">=</span> <span class="nn">SnapshotId</span><span class="p">::</span><span class="nf">new</span><span class="p">();</span>
+        <span class="k">let</span> <span class="n">snapshot_path</span> <span class="o">=</span> <span class="k">self</span><span class="py">.snapshot_dir</span><span class="nf">.join</span><span class="p">(</span><span class="n">snapshot_id</span><span class="nf">.to_string</span><span class="p">());</span>
+        
+        <span class="c1">// 1. Flush memtable to SSTable</span>
+        <span class="n">lsm_tree</span><span class="nf">.force_flush</span><span class="p">()</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+        
+        <span class="c1">// 2. Create hard links to current SSTables (atomic snapshot)</span>
+        <span class="k">for</span> <span class="n">sstable</span> <span class="k">in</span> <span class="n">lsm_tree</span><span class="py">.sstable_manager</span><span class="nf">.get_all_tables</span><span class="p">()</span> <span class="p">{</span>
+            <span class="k">let</span> <span class="n">link_path</span> <span class="o">=</span> <span class="n">snapshot_path</span><span class="nf">.join</span><span class="p">(</span><span class="n">sstable</span><span class="nf">.file_name</span><span class="p">());</span>
+            <span class="nn">std</span><span class="p">::</span><span class="nn">fs</span><span class="p">::</span><span class="nf">hard_link</span><span class="p">(</span><span class="o">&amp;</span><span class="n">sstable</span><span class="py">.file_path</span><span class="p">,</span> <span class="n">link_path</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+        <span class="p">}</span>
+        
+        <span class="c1">// 3. Copy current WAL segment</span>
+        <span class="nn">std</span><span class="p">::</span><span class="nn">fs</span><span class="p">::</span><span class="nf">copy</span><span class="p">(</span><span class="o">&amp;</span><span class="n">lsm_tree</span><span class="py">.wal</span><span class="nf">.current_segment_path</span><span class="p">(),</span> 
+                     <span class="n">snapshot_path</span><span class="nf">.join</span><span class="p">(</span><span class="s">"wal.log"</span><span class="p">))</span><span class="o">?</span><span class="p">;</span>
+        
+        <span class="c1">// 4. Write snapshot metadata</span>
+        <span class="k">let</span> <span class="n">metadata</span> <span class="o">=</span> <span class="n">SnapshotMetadata</span> <span class="p">{</span>
+            <span class="n">id</span><span class="p">:</span> <span class="n">snapshot_id</span><span class="p">,</span>
+            <span class="n">created_at</span><span class="p">:</span> <span class="nn">SystemTime</span><span class="p">::</span><span class="nf">now</span><span class="p">(),</span>
+            <span class="n">sstable_count</span><span class="p">:</span> <span class="n">lsm_tree</span><span class="py">.sstable_manager</span><span class="nf">.table_count</span><span class="p">(),</span>
+            <span class="n">sequence_number</span><span class="p">:</span> <span class="n">lsm_tree</span><span class="py">.wal</span><span class="nf">.current_sequence</span><span class="p">(),</span>
+        <span class="p">};</span>
+        
+        <span class="k">self</span><span class="nf">.write_snapshot_metadata</span><span class="p">(</span><span class="o">&amp;</span><span class="n">snapshot_path</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">metadata</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+        <span class="nf">Ok</span><span class="p">(</span><span class="n">snapshot_id</span><span class="p">)</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h4 id="week-2-3-performance-optimization">Week 2-3: Performance Optimization</h4>
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Specialized optimizations for orbit-rs workloads</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">OrbitOptimizations</span> <span class="p">{</span>
+    <span class="c1">// Actor lease optimization - frequently updated small keys</span>
+    <span class="n">actor_lease_cache</span><span class="p">:</span> <span class="n">LruCache</span><span class="o">&lt;</span><span class="nb">String</span><span class="p">,</span> <span class="n">AddressableLease</span><span class="o">&gt;</span><span class="p">,</span>
+    
+    <span class="c1">// Cluster heartbeat batching - group frequent updates  </span>
+    <span class="n">heartbeat_batch_writer</span><span class="p">:</span> <span class="n">BatchWriter</span><span class="o">&lt;</span><span class="n">NodeHeartbeat</span><span class="o">&gt;</span><span class="p">,</span>
+    
+    <span class="c1">// OrbitQL result caching - optimize for read-heavy queries</span>
+    <span class="n">query_result_bloom_cache</span><span class="p">:</span> <span class="n">BloomCache</span><span class="o">&lt;</span><span class="nb">u64</span><span class="o">&gt;</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="k">impl</span> <span class="n">OrbitLSMTree</span> <span class="p">{</span>
+    <span class="c1">// Optimized write path for actor leases</span>
+    <span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">update_actor_lease</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">lease</span><span class="p">:</span> <span class="n">AddressableLease</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="c1">// Use specialized compaction for frequent lease updates</span>
+        <span class="k">let</span> <span class="n">key</span> <span class="o">=</span> <span class="nn">OrbitKey</span><span class="p">::</span><span class="n">ActorLease</span> <span class="p">{</span>
+            <span class="n">namespace</span><span class="p">:</span> <span class="n">lease</span><span class="py">.namespace</span><span class="nf">.clone</span><span class="p">(),</span>
+            <span class="n">actor_id</span><span class="p">:</span> <span class="n">lease</span><span class="py">.addressable_reference.key</span><span class="nf">.to_string</span><span class="p">(),</span>
+        <span class="p">};</span>
+        
+        <span class="c1">// Batch small frequent updates</span>
+        <span class="k">if</span> <span class="n">lease</span><span class="nf">.is_heartbeat_update</span><span class="p">()</span> <span class="p">{</span>
+            <span class="k">return</span> <span class="k">self</span><span class="py">.batch_writer</span><span class="nf">.add_lease_update</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">lease</span><span class="p">)</span><span class="k">.await</span><span class="p">;</span>
+        <span class="p">}</span>
+        
+        <span class="c1">// Regular write path for full updates</span>
+        <span class="k">self</span><span class="nf">.put</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="nn">OrbitValue</span><span class="p">::</span><span class="nf">ActorLease</span><span class="p">(</span><span class="n">lease</span><span class="p">))</span><span class="k">.await</span>
+    <span class="p">}</span>
+    
+    <span class="c1">// Optimized range scan for time series data</span>
+    <span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">scan_timeseries</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> 
+                                <span class="n">metric</span><span class="p">:</span> <span class="o">&amp;</span><span class="nb">str</span><span class="p">,</span> 
+                                <span class="n">time_range</span><span class="p">:</span> <span class="n">Range</span><span class="o">&lt;</span><span class="nb">u64</span><span class="o">&gt;</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="n">TimeSeriesPoint</span><span class="o">&gt;&gt;</span> <span class="p">{</span>
+        <span class="k">let</span> <span class="n">start_key</span> <span class="o">=</span> <span class="nn">OrbitKey</span><span class="p">::</span><span class="n">TimeSeries</span> <span class="p">{</span> 
+            <span class="n">metric</span><span class="p">:</span> <span class="n">metric</span><span class="nf">.to_string</span><span class="p">(),</span> 
+            <span class="n">timestamp</span><span class="p">:</span> <span class="n">time_range</span><span class="py">.start</span> 
+        <span class="p">};</span>
+        <span class="k">let</span> <span class="n">end_key</span> <span class="o">=</span> <span class="nn">OrbitKey</span><span class="p">::</span><span class="n">TimeSeries</span> <span class="p">{</span> 
+            <span class="n">metric</span><span class="p">:</span> <span class="n">metric</span><span class="nf">.to_string</span><span class="p">(),</span> 
+            <span class="n">timestamp</span><span class="p">:</span> <span class="n">time_range</span><span class="py">.end</span> 
+        <span class="p">};</span>
+        
+        <span class="c1">// Use specialized iterator for time series scans</span>
+        <span class="k">self</span><span class="nf">.range_scan</span><span class="p">(</span><span class="n">start_key</span><span class="o">..=</span><span class="n">end_key</span><span class="p">)</span>
+            <span class="nf">.map</span><span class="p">(|(</span><span class="n">_</span><span class="p">,</span> <span class="n">value</span><span class="p">)|</span> <span class="k">match</span> <span class="n">value</span> <span class="p">{</span>
+                <span class="nn">OrbitValue</span><span class="p">::</span><span class="nf">TimeSeriesPoint</span><span class="p">(</span><span class="n">point</span><span class="p">)</span> <span class="k">=&gt;</span> <span class="n">point</span><span class="p">,</span>
+                <span class="n">_</span> <span class="k">=&gt;</span> <span class="nd">unreachable!</span><span class="p">(),</span>
+            <span class="p">})</span>
+            <span class="nf">.collect</span><span class="p">()</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h2 id="integration-with-existing-persistence-layer">Integration with Existing Persistence Layer</h2>
+
+<h3 id="new-lsm-provider-configuration">New LSM Provider Configuration</h3>
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Add to orbit-server/src/persistence/mod.rs</span>
+
+<span class="nd">#[derive(Debug,</span> <span class="nd">Clone,</span> <span class="nd">Serialize,</span> <span class="nd">Deserialize)]</span>
+<span class="k">pub</span> <span class="k">enum</span> <span class="n">PersistenceConfig</span> <span class="p">{</span>
+    <span class="c1">// ... existing providers ...</span>
+    
+    <span class="cd">/// LSM Tree-based persistent storage</span>
+    <span class="nf">LSMTree</span><span class="p">(</span><span class="n">LSMTreeConfig</span><span class="p">),</span>
+<span class="p">}</span>
+
+<span class="nd">#[derive(Debug,</span> <span class="nd">Clone,</span> <span class="nd">Serialize,</span> <span class="nd">Deserialize)]</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">LSMTreeConfig</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="n">data_dir</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">memtable_size_mb</span><span class="p">:</span> <span class="nb">usize</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">compaction_strategy</span><span class="p">:</span> <span class="n">CompactionStrategy</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">wal_sync_mode</span><span class="p">:</span> <span class="n">WALSyncMode</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">enable_snapshots</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">snapshot_interval_secs</span><span class="p">:</span> <span class="nb">u64</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">max_levels</span><span class="p">:</span> <span class="nb">usize</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">bloom_filter_enabled</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">compression</span><span class="p">:</span> <span class="n">CompressionType</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="k">impl</span> <span class="nb">Default</span> <span class="k">for</span> <span class="n">LSMTreeConfig</span> <span class="p">{</span>
+    <span class="k">fn</span> <span class="nf">default</span><span class="p">()</span> <span class="k">-&gt;</span> <span class="k">Self</span> <span class="p">{</span>
+        <span class="k">Self</span> <span class="p">{</span>
+            <span class="n">data_dir</span><span class="p">:</span> <span class="s">"/var/lib/orbit/lsm"</span><span class="nf">.to_string</span><span class="p">(),</span>
+            <span class="n">memtable_size_mb</span><span class="p">:</span> <span class="mi">64</span><span class="p">,</span>
+            <span class="n">compaction_strategy</span><span class="p">:</span> <span class="nn">CompactionStrategy</span><span class="p">::</span><span class="n">Leveled</span> <span class="p">{</span> <span class="n">size_ratio</span><span class="p">:</span> <span class="mf">10.0</span> <span class="p">},</span>
+            <span class="n">wal_sync_mode</span><span class="p">:</span> <span class="nn">WALSyncMode</span><span class="p">::</span><span class="n">PerWrite</span><span class="p">,</span>
+            <span class="n">enable_snapshots</span><span class="p">:</span> <span class="k">true</span><span class="p">,</span>
+            <span class="n">snapshot_interval_secs</span><span class="p">:</span> <span class="mi">300</span><span class="p">,</span>
+            <span class="n">max_levels</span><span class="p">:</span> <span class="mi">7</span><span class="p">,</span>
+            <span class="n">bloom_filter_enabled</span><span class="p">:</span> <span class="k">true</span><span class="p">,</span>
+            <span class="n">compression</span><span class="p">:</span> <span class="nn">CompressionType</span><span class="p">::</span><span class="n">Lz4</span><span class="p">,</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="provider-implementation">Provider Implementation</h3>
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// orbit-server/src/persistence/lsm_provider.rs</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">LSMTreeProvider</span> <span class="p">{</span>
+    <span class="n">lsm_tree</span><span class="p">:</span> <span class="nb">Arc</span><span class="o">&lt;</span><span class="n">OrbitLSMTree</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="n">config</span><span class="p">:</span> <span class="n">LSMTreeConfig</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="nd">#[async_trait]</span>
+<span class="k">impl</span> <span class="n">PersistenceProvider</span> <span class="k">for</span> <span class="n">LSMTreeProvider</span> <span class="p">{</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">initialize</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span> <span class="k">self</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="k">self</span><span class="py">.lsm_tree</span><span class="nf">.open</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="py">.config.data_dir</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+        <span class="k">self</span><span class="py">.lsm_tree</span><span class="nf">.start_background_tasks</span><span class="p">()</span><span class="k">.await</span><span class="p">;</span>
+        <span class="nf">Ok</span><span class="p">(())</span>
+    <span class="p">}</span>
+    
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">health_check</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">ProviderHealth</span> <span class="p">{</span>
+        <span class="c1">// Check if LSM tree is accepting writes and compaction is healthy</span>
+        <span class="c1">// ...</span>
+    <span class="p">}</span>
+    
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">metrics</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">PersistenceMetrics</span> <span class="p">{</span>
+        <span class="k">let</span> <span class="n">lsm_metrics</span> <span class="o">=</span> <span class="k">self</span><span class="py">.lsm_tree</span><span class="nf">.get_metrics</span><span class="p">()</span><span class="k">.await</span><span class="p">;</span>
+        <span class="n">PersistenceMetrics</span> <span class="p">{</span>
+            <span class="n">read_operations</span><span class="p">:</span> <span class="n">lsm_metrics</span><span class="py">.reads</span><span class="p">,</span>
+            <span class="n">write_operations</span><span class="p">:</span> <span class="n">lsm_metrics</span><span class="py">.writes</span><span class="p">,</span> 
+            <span class="n">read_latency_avg</span><span class="p">:</span> <span class="n">lsm_metrics</span><span class="py">.read_latency_p50</span><span class="p">,</span>
+            <span class="n">write_latency_avg</span><span class="p">:</span> <span class="n">lsm_metrics</span><span class="py">.write_latency_p50</span><span class="p">,</span>
+            <span class="c1">// ... other metrics</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+
+<span class="nd">#[async_trait]</span>
+<span class="k">impl</span> <span class="n">AddressableDirectoryProvider</span> <span class="k">for</span> <span class="n">LSMTreeProvider</span> <span class="p">{</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">store_lease</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">lease</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">AddressableLease</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="k">self</span><span class="py">.lsm_tree</span><span class="nf">.update_actor_lease</span><span class="p">(</span><span class="n">lease</span><span class="nf">.clone</span><span class="p">())</span><span class="k">.await</span>
+    <span class="p">}</span>
+    
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">get_lease</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">namespace</span><span class="p">:</span> <span class="o">&amp;</span><span class="nb">str</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="o">&amp;</span><span class="nb">str</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="nb">Option</span><span class="o">&lt;</span><span class="n">AddressableLease</span><span class="o">&gt;&gt;</span> <span class="p">{</span>
+        <span class="k">let</span> <span class="n">orbit_key</span> <span class="o">=</span> <span class="nn">OrbitKey</span><span class="p">::</span><span class="n">ActorLease</span> <span class="p">{</span>
+            <span class="n">namespace</span><span class="p">:</span> <span class="n">namespace</span><span class="nf">.to_string</span><span class="p">(),</span>
+            <span class="n">actor_id</span><span class="p">:</span> <span class="n">key</span><span class="nf">.to_string</span><span class="p">(),</span>
+        <span class="p">};</span>
+        
+        <span class="k">match</span> <span class="k">self</span><span class="py">.lsm_tree</span><span class="nf">.get</span><span class="p">(</span><span class="o">&amp;</span><span class="n">orbit_key</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span> <span class="p">{</span>
+            <span class="nf">Some</span><span class="p">(</span><span class="nn">OrbitValue</span><span class="p">::</span><span class="nf">ActorLease</span><span class="p">(</span><span class="n">lease</span><span class="p">))</span> <span class="k">=&gt;</span> <span class="nf">Ok</span><span class="p">(</span><span class="nf">Some</span><span class="p">(</span><span class="n">lease</span><span class="p">)),</span>
+            <span class="n">_</span> <span class="k">=&gt;</span> <span class="nf">Ok</span><span class="p">(</span><span class="nb">None</span><span class="p">),</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+    
+    <span class="c1">// ... other provider methods</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h2 id="performance-characteristics">Performance Characteristics</h2>
+
+<h3 id="expected-performance-improvements">Expected Performance Improvements</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>Operation</th>
+      <th>Current (Memory)</th>
+      <th>Current (S3)</th>
+      <th>LSM Tree</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Actor lease write</td>
+      <td>1μs</td>
+      <td>100ms</td>
+      <td>10μs</td>
+    </tr>
+    <tr>
+      <td>Lease read</td>
+      <td>0.5μs</td>
+      <td>50ms</td>
+      <td>2μs</td>
+    </tr>
+    <tr>
+      <td>Range scan (1K items)</td>
+      <td>100μs</td>
+      <td>5s</td>
+      <td>1ms</td>
+    </tr>
+    <tr>
+      <td>Recovery time</td>
+      <td>N/A</td>
+      <td>30s+</td>
+      <td>5s</td>
+    </tr>
+    <tr>
+      <td>Storage efficiency</td>
+      <td>100%</td>
+      <td>100%</td>
+      <td>60-80%</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 id="memory-usage">Memory Usage</h3>
+<ul>
+  <li><strong>MemTable</strong>: 64MB default (configurable)</li>
+  <li><strong>Block Cache</strong>: 256MB default (configurable)</li>
+  <li><strong>Bloom Filters</strong>: ~10 bits per key</li>
+  <li><strong>Index</strong>: ~1% of data size</li>
+</ul>
+
+<h3 id="disk-usage">Disk Usage</h3>
+<ul>
+  <li><strong>WAL</strong>: ~2x write amplification during normal operation</li>
+  <li><strong>SSTables</strong>: 1.2-1.5x storage amplification after compaction</li>
+  <li><strong>Snapshots</strong>: Hard links (minimal extra space)</li>
+</ul>
+
+<h2 id="deployment-scenarios">Deployment Scenarios</h2>
+
+<h3 id="scenario-1-high-performance-development">Scenario 1: High-Performance Development</h3>
+<div class="language-toml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">[</span><span class="n">providers</span><span class="k">.</span><span class="n">lsm</span><span class="k">]</span>
+<span class="n">type</span> <span class="o">=</span><span class="w"> </span><span class="s">"LSMTree"</span>
+<span class="n">data_dir</span> <span class="o">=</span><span class="w"> </span><span class="s">"/tmp/orbit-lsm"</span>  
+<span class="n">memtable_size_mb</span> <span class="o">=</span><span class="w"> </span><span class="mi">32</span>
+<span class="n">wal_sync_mode</span> <span class="o">=</span><span class="w"> </span><span class="s">"Batch"</span>        <span class="c"># Better performance</span>
+<span class="n">enable_snapshots</span> <span class="o">=</span><span class="w"> </span><span class="kc">false</span>        <span class="c"># Skip snapshots for dev</span>
+</code></pre></div></div>
+
+<h3 id="scenario-2-production-with-high-durability">Scenario 2: Production with High Durability</h3>
+<div class="language-toml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">[</span><span class="n">providers</span><span class="k">.</span><span class="n">lsm</span><span class="k">]</span>
+<span class="n">type</span> <span class="o">=</span><span class="w"> </span><span class="s">"LSMTree"</span>  
+<span class="n">data_dir</span> <span class="o">=</span><span class="w"> </span><span class="s">"/var/lib/orbit/lsm"</span>
+<span class="n">memtable_size_mb</span> <span class="o">=</span><span class="w"> </span><span class="mi">128</span>
+<span class="n">wal_sync_mode</span> <span class="o">=</span><span class="w"> </span><span class="s">"PerWrite"</span>     <span class="c"># Maximum durability</span>
+<span class="n">enable_snapshots</span> <span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+<span class="n">snapshot_interval_secs</span> <span class="o">=</span><span class="w"> </span><span class="mi">300</span>   <span class="c"># 5-minute snapshots</span>
+<span class="n">compaction_strategy</span> <span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">type</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s">"Leveled"</span><span class="p">,</span><span class="w"> </span><span class="n">size_ratio</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="mf">10.0</span><span class="w"> </span><span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="scenario-3-write-heavy-actor-systems">Scenario 3: Write-Heavy Actor Systems</h3>
+<div class="language-toml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">[</span><span class="n">providers</span><span class="k">.</span><span class="n">lsm</span><span class="k">]</span>
+<span class="n">type</span> <span class="o">=</span><span class="w"> </span><span class="s">"LSMTree"</span>
+<span class="n">data_dir</span> <span class="o">=</span><span class="w"> </span><span class="s">"/nvme/orbit/lsm"</span>
+<span class="n">memtable_size_mb</span> <span class="o">=</span><span class="w"> </span><span class="mi">256</span>         <span class="c"># Larger memtables</span>
+<span class="n">max_levels</span> <span class="o">=</span><span class="w"> </span><span class="mi">5</span>                 <span class="c"># Fewer levels = less compaction </span>
+<span class="n">compaction_strategy</span> <span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">type</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s">"Universal"</span><span class="p">,</span><span class="w"> </span><span class="n">ratio_threshold</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="mf">4.0</span><span class="w"> </span><span class="p">}</span>
+<span class="n">compression</span> <span class="o">=</span><span class="w"> </span><span class="s">"Lz4"</span>            <span class="c"># Fast compression</span>
+</code></pre></div></div>
+
+<h2 id="migration-strategy">Migration Strategy</h2>
+
+<h3 id="phase-1-parallel-operation">Phase 1: Parallel Operation</h3>
+<ol>
+  <li>Deploy LSM provider alongside existing provider</li>
+  <li>Write to both providers (dual-write mode)</li>
+  <li>Compare results and performance metrics</li>
+  <li>Gradually shift read traffic to LSM provider</li>
+</ol>
+
+<h3 id="phase-2-data-migration">Phase 2: Data Migration</h3>
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Migration utility</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">LSMMigration</span> <span class="p">{</span>
+    <span class="n">source_provider</span><span class="p">:</span> <span class="nb">Arc</span><span class="o">&lt;</span><span class="k">dyn</span> <span class="n">PersistenceProvider</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="n">target_lsm</span><span class="p">:</span> <span class="nb">Arc</span><span class="o">&lt;</span><span class="n">OrbitLSMTree</span><span class="o">&gt;</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="k">impl</span> <span class="n">LSMMigration</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">migrate_all_data</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="n">MigrationStats</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="k">let</span> <span class="k">mut</span> <span class="n">stats</span> <span class="o">=</span> <span class="nn">MigrationStats</span><span class="p">::</span><span class="nf">default</span><span class="p">();</span>
+        
+        <span class="c1">// Migrate actor leases  </span>
+        <span class="k">let</span> <span class="n">leases</span> <span class="o">=</span> <span class="k">self</span><span class="py">.source_provider</span><span class="nf">.list_all_leases</span><span class="p">()</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+        <span class="k">for</span> <span class="n">lease</span> <span class="k">in</span> <span class="n">leases</span> <span class="p">{</span>
+            <span class="k">self</span><span class="py">.target_lsm</span><span class="nf">.update_actor_lease</span><span class="p">(</span><span class="n">lease</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+            <span class="n">stats</span><span class="py">.leases_migrated</span> <span class="o">+=</span> <span class="mi">1</span><span class="p">;</span>
+        <span class="p">}</span>
+        
+        <span class="c1">// Migrate cluster nodes</span>
+        <span class="k">let</span> <span class="n">nodes</span> <span class="o">=</span> <span class="k">self</span><span class="py">.source_provider</span><span class="nf">.list_all_nodes</span><span class="p">()</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>  
+        <span class="k">for</span> <span class="n">node</span> <span class="k">in</span> <span class="n">nodes</span> <span class="p">{</span>
+            <span class="k">let</span> <span class="n">key</span> <span class="o">=</span> <span class="nn">OrbitKey</span><span class="p">::</span><span class="n">ClusterNode</span> <span class="p">{</span> <span class="n">node_id</span><span class="p">:</span> <span class="n">node</span><span class="py">.id</span><span class="nf">.clone</span><span class="p">()</span> <span class="p">};</span>
+            <span class="k">self</span><span class="py">.target_lsm</span><span class="nf">.put</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="nn">OrbitValue</span><span class="p">::</span><span class="nf">ClusterNode</span><span class="p">(</span><span class="n">node</span><span class="p">))</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+            <span class="n">stats</span><span class="py">.nodes_migrated</span> <span class="o">+=</span> <span class="mi">1</span><span class="p">;</span>
+        <span class="p">}</span>
+        
+        <span class="nf">Ok</span><span class="p">(</span><span class="n">stats</span><span class="p">)</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h2 id="testing-strategy">Testing Strategy</h2>
+
+<h3 id="unit-tests">Unit Tests</h3>
+<ul>
+  <li>MemTable operations and overflow handling</li>
+  <li>WAL write/recovery scenarios</li>
+  <li>SSTable read/write/compaction</li>
+  <li>Bloom filter accuracy</li>
+  <li>Key serialization/deserialization</li>
+</ul>
+
+<h3 id="integration-tests">Integration Tests</h3>
+<ul>
+  <li>End-to-end write/read cycles</li>
+  <li>Compaction correctness</li>
+  <li>Crash recovery scenarios</li>
+  <li>Performance regression tests</li>
+  <li>Multi-threaded access patterns</li>
+</ul>
+
+<h3 id="load-testing">Load Testing</h3>
+<ul>
+  <li>Sustained write loads (actor lease updates)</li>
+  <li>Mixed read/write workloads</li>
+  <li>Memory pressure scenarios</li>
+  <li>Compaction during heavy load</li>
+  <li>Recovery time measurement</li>
+</ul>
+
+<h2 id="success-metrics">Success Metrics</h2>
+
+<h3 id="performance-targets">Performance Targets</h3>
+<ul>
+  <li><strong>Write latency</strong>: &lt;50μs p99 for actor lease updates</li>
+  <li><strong>Read latency</strong>: &lt;10μs p99 for single key lookups</li>
+  <li><strong>Write throughput</strong>: &gt;100K actor lease updates/sec</li>
+  <li><strong>Recovery time</strong>: &lt;10 seconds for 1GB of data</li>
+  <li><strong>Space amplification</strong>: &lt;2x after compaction</li>
+</ul>
+
+<h3 id="reliability-targets">Reliability Targets</h3>
+<ul>
+  <li><strong>Durability</strong>: Zero data loss with PerWrite sync mode</li>
+  <li><strong>Availability</strong>: 99.99% uptime during compaction</li>
+  <li><strong>Recovery</strong>: 100% data recovery from WAL+SSTables</li>
+  <li><strong>Consistency</strong>: All reads return latest committed writes</li>
+</ul>
+
+<h2 id="future-enhancements">Future Enhancements</h2>
+
+<h3 id="phase-4-advanced-features-future">Phase 4: Advanced Features (Future)</h3>
+<ol>
+  <li><strong>Multi-Version Concurrency Control (MVCC)</strong>
+    <ul>
+      <li>Snapshot isolation for consistent reads</li>
+      <li>Time-travel queries for audit trails</li>
+    </ul>
+  </li>
+  <li><strong>Distributed LSM Trees</strong>
+    <ul>
+      <li>Consistent hashing across multiple nodes</li>
+      <li>Cross-node compaction coordination</li>
+    </ul>
+  </li>
+  <li><strong>Adaptive Compaction</strong>
+    <ul>
+      <li>Machine learning-based compaction scheduling</li>
+      <li>Workload-aware level sizing</li>
+    </ul>
+  </li>
+  <li><strong>Specialized Data Types</strong>
+    <ul>
+      <li>Native time-series compression (Delta-of-Delta, Gorilla)</li>
+      <li>Graph-specific storage layouts</li>
+      <li>Vector embeddings optimization</li>
+    </ul>
+  </li>
+</ol>
+
+<h2 id="conclusion">Conclusion</h2>
+
+<p>Implementing LSM Trees for orbit-rs will transform it from a memory-centric system to a truly durable, high-performance actor platform. The write-optimized nature of LSM Trees perfectly matches orbit-rs’s actor lease management patterns, while providing the durability guarantees needed for production deployments.</p>
+
+<p><strong>Estimated Timeline</strong>: 10-12 weeks for full implementation
+<strong>Resource Requirements</strong>: 1-2 senior Rust developers<br />
+<strong>Expected ROI</strong>: 10x write performance improvement + guaranteed durability</p>
+
+<p>This implementation positions orbit-rs as a truly production-ready actor system capable of handling enterprise-scale workloads while maintaining the performance characteristics that make actor systems attractive.</p>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/orbit-rs/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Orbit-RS Documentation</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">TuringWorks</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

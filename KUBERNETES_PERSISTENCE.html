@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Kubernetes Persistence Guide for Orbit-RS | Orbit-RS Documentation</title>
+<meta name="generator" content="Jekyll v4.4.1" />
+<meta property="og:title" content="Kubernetes Persistence Guide for Orbit-RS" />
+<meta name="author" content="TuringWorks" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<meta property="og:description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<link rel="canonical" href="https://turingworks.github.io/orbit-rs/KUBERNETES_PERSISTENCE.html" />
+<meta property="og:url" content="https://turingworks.github.io/orbit-rs/KUBERNETES_PERSISTENCE.html" />
+<meta property="og:site_name" content="Orbit-RS Documentation" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Kubernetes Persistence Guide for Orbit-RS" />
+<meta name="twitter:site" content="@TuringWorksAI" />
+<meta name="twitter:creator" content="@TuringWorks" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","author":{"@type":"Person","name":"TuringWorks"},"description":"The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform","headline":"Kubernetes Persistence Guide for Orbit-RS","url":"https://turingworks.github.io/orbit-rs/KUBERNETES_PERSISTENCE.html"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/orbit-rs/assets/main.css">
+  <link rel="stylesheet" href="/orbit-rs/assets/css/custom.css"><link type="application/atom+xml" rel="alternate" href="https://turingworks.github.io/orbit-rs/feed.xml" title="Orbit-RS Documentation" /></head><body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/orbit-rs/">Orbit-RS Documentation</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/orbit-rs/">Orbit-RS Documentation</a><a class="page-link" href="/orbit-rs/project_overview.html">Orbit-RS: Comprehensive Project Overview</a><a class="page-link" href="/orbit-rs/quick_start.html">Quick Start Guide - Multi-Protocol Database Server</a><a class="page-link" href="/orbit-rs/roadmap/">Development Roadmap</a><a class="page-link" href="/orbit-rs/features/">Orbit-RS Feature Index</a><a class="page-link" href="/orbit-rs/compute-acceleration/">Hardware Acceleration Guide</a><a class="page-link" href="/orbit-rs/contributing.html">Contributing Guide</a><a class="page-link" href="/orbit-rs/overview.html">Architecture Overview</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <h1 id="kubernetes-persistence-guide-for-orbit-rs">Kubernetes Persistence Guide for Orbit-RS</h1>
+
+<p>This guide explains how to configure Orbit-RS persistence backends when deploying on Kubernetes, using either the raw manifests, the Helm chart, or the Operator (CRDs).</p>
+
+<h2 id="quick-summary">Quick Summary</h2>
+
+<ul>
+  <li>Local backends (LSM-Tree, RocksDB, COW B+Tree, Memory with disk backup) use StatefulSet with PVCs</li>
+  <li>Cloud backends (S3, Azure, GCP) can use Deployment (no PVCs), and mount secrets for credentials</li>
+  <li>You choose one backend per deployment via environment variable OR configuration</li>
+</ul>
+
+<h2 id="backend-selection">Backend Selection</h2>
+
+<p>Set the persistence backend using one of these methods:</p>
+
+<ul>
+  <li>Environment variable: ORBIT_PERSISTENCE_BACKEND</li>
+  <li>In TOML config: [server] persistence_backend = “lsm_tree”</li>
+</ul>
+
+<p>Supported values:</p>
+<ul>
+  <li>memory, cow_btree, lsm_tree, rocksdb, s3, azure, gcp</li>
+</ul>
+
+<h2 id="manifests-k8s">Manifests (k8s/)</h2>
+
+<p>Use the enhanced files:</p>
+<ul>
+  <li>01-configmap-enhanced.yaml: Adds persistence config sections and envsubst</li>
+  <li>03-statefulset-enhanced.yaml: Adds env vars and secrets for all backends</li>
+</ul>
+
+<p>Examples:</p>
+
+<ul>
+  <li>LSM-Tree (local SSD):
+    <ul>
+      <li>Set ORBIT_PERSISTENCE_BACKEND=lsm_tree</li>
+      <li>Ensure PVC with SSD StorageClass</li>
+      <li>Mount /app/data</li>
+    </ul>
+  </li>
+  <li>RocksDB (local SSD):
+    <ul>
+      <li>Set ORBIT_PERSISTENCE_BACKEND=rocksdb</li>
+      <li>Increase CPU/memory and SSD IOPS</li>
+    </ul>
+  </li>
+  <li>S3 (cloud):
+    <ul>
+      <li>Set ORBIT_PERSISTENCE_BACKEND=s3</li>
+      <li>Provide S3 secrets in orbit-server-secrets</li>
+      <li>You may use Deployment instead of StatefulSet</li>
+    </ul>
+  </li>
+</ul>
+
+<h2 id="helm-chart-helmorbit-rs">Helm Chart (helm/orbit-rs)</h2>
+
+<p>To add cloud/local backend support via values:</p>
+
+<p>values.yaml overrides example:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>orbitServer:
+  env:
+    - name: ORBIT_PERSISTENCE_BACKEND
+      value: "rocksdb"
+    - name: ORBIT_ROCKSDB_DATA_DIR
+      value: "/app/data/rocksdb"
+
+persistence:
+  enabled: true
+  storageClass: "gp3"
+  accessMode: ReadWriteOnce
+  size: 100Gi
+</code></pre></div></div>
+
+<p>For S3:</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>orbitServer:
+  env:
+    - name: ORBIT_PERSISTENCE_BACKEND
+      value: "s3"
+    - name: ORBIT_S3_ENDPOINT
+      value: "https://s3.amazonaws.com"
+    - name: ORBIT_S3_REGION
+      value: "us-west-2"
+    - name: ORBIT_S3_BUCKET
+      value: "my-orbit"
+    - name: ORBIT_S3_PREFIX
+      value: "orbit"
+    - name: ORBIT_S3_ENABLE_SSL
+      value: "true"
+</code></pre></div></div>
+<p>Also create a secret named orbit-server-secrets with keys s3-access-key-id and s3-secret-access-key.</p>
+
+<h2 id="operator-crds">Operator (CRDs)</h2>
+
+<p>The OrbitCluster CRD now supports a persistence section:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>apiVersion: orbit.turingworks.com/v1
+kind: OrbitCluster
+metadata:
+  name: demo
+spec:
+  replicas: 3
+  image:
+    repository: orbit-rs/orbit-server
+    tag: latest
+  persistence:
+    backend: lsm_tree        # memory | cow_btree | lsm_tree | rocksdb | s3 | azure | gcp
+    local:
+      backend_type: lsm_tree
+      data_dir: /app/data/lsm_tree
+      enable_compression: true
+      write_buffer_size: 134217728
+      cache_size: 268435456
+    # For cloud:
+    # cloud:
+    #   provider: s3
+    #   endpoint: https://s3.amazonaws.com
+    #   region: us-west-2
+    #   bucket: orbit-production-state
+    #   prefix: orbit
+    #   connection_timeout: 30
+    #   retry_count: 3
+    #   enable_ssl: true
+    #   credentials_secret: orbit-server-secrets
+</code></pre></div></div>
+
+<p>The operator should map this to env vars and volumes for the underlying StatefulSet/Deployment.</p>
+
+<h2 id="best-practices">Best Practices</h2>
+
+<ul>
+  <li>Local backends:
+    <ul>
+      <li>Use SSD-backed StorageClass</li>
+      <li>Pin pods across nodes (anti-affinity) and use ReadWriteOnce</li>
+      <li>Set appropriate resource limits, especially CPU for LSM compaction and RocksDB background jobs</li>
+    </ul>
+  </li>
+  <li>Cloud backends:
+    <ul>
+      <li>Use Deployment (no PVCs) for stateless pods</li>
+      <li>Store credentials in Secrets, mount or inject via env vars</li>
+      <li>Configure retries and timeouts conservatively</li>
+    </ul>
+  </li>
+  <li>Security:
+    <ul>
+      <li>Never inline secrets; use Kubernetes Secrets</li>
+      <li>Rotate credentials regularly</li>
+    </ul>
+  </li>
+  <li>Observability:
+    <ul>
+      <li>Enable Prometheus scraping (already present via annotations)</li>
+      <li>Watch persistence metrics to tune performance</li>
+    </ul>
+  </li>
+</ul>
+
+<h2 id="migration-notes">Migration Notes</h2>
+
+<ul>
+  <li>Existing Helm chart already supports persistence PVCs; just inject ORBIT_PERSISTENCE_BACKEND and backend-specific env vars via values.yaml.</li>
+  <li>For cloud, consider adding a boolean like persistence.enabled=false and deploy the cloud Deployment variant.</li>
+</ul>
+
+<h2 id="files-added">Files Added</h2>
+
+<ul>
+  <li>k8s/01-configmap-enhanced.yaml</li>
+  <li>k8s/03-statefulset-enhanced.yaml</li>
+</ul>
+
+<p>These provide ready-made templates to deploy with any supported backend.</p>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/orbit-rs/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Orbit-RS Documentation</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">TuringWorks</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

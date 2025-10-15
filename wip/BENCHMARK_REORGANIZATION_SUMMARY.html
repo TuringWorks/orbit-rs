@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>OrbitQL Benchmark Reorganization - Documentation Update Summary | Orbit-RS Documentation</title>
+<meta name="generator" content="Jekyll v4.4.1" />
+<meta property="og:title" content="OrbitQL Benchmark Reorganization - Documentation Update Summary" />
+<meta name="author" content="TuringWorks" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<meta property="og:description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<link rel="canonical" href="https://turingworks.github.io/orbit-rs/wip/BENCHMARK_REORGANIZATION_SUMMARY.html" />
+<meta property="og:url" content="https://turingworks.github.io/orbit-rs/wip/BENCHMARK_REORGANIZATION_SUMMARY.html" />
+<meta property="og:site_name" content="Orbit-RS Documentation" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="OrbitQL Benchmark Reorganization - Documentation Update Summary" />
+<meta name="twitter:site" content="@TuringWorksAI" />
+<meta name="twitter:creator" content="@TuringWorks" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","author":{"@type":"Person","name":"TuringWorks"},"description":"The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform","headline":"OrbitQL Benchmark Reorganization - Documentation Update Summary","url":"https://turingworks.github.io/orbit-rs/wip/BENCHMARK_REORGANIZATION_SUMMARY.html"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/orbit-rs/assets/main.css">
+  <link rel="stylesheet" href="/orbit-rs/assets/css/custom.css"><link type="application/atom+xml" rel="alternate" href="https://turingworks.github.io/orbit-rs/feed.xml" title="Orbit-RS Documentation" /></head><body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/orbit-rs/">Orbit-RS Documentation</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/orbit-rs/">Orbit-RS Documentation</a><a class="page-link" href="/orbit-rs/project_overview.html">Orbit-RS: Comprehensive Project Overview</a><a class="page-link" href="/orbit-rs/quick_start.html">Quick Start Guide - Multi-Protocol Database Server</a><a class="page-link" href="/orbit-rs/roadmap/">Development Roadmap</a><a class="page-link" href="/orbit-rs/features/">Orbit-RS Feature Index</a><a class="page-link" href="/orbit-rs/compute-acceleration/">Hardware Acceleration Guide</a><a class="page-link" href="/orbit-rs/contributing.html">Contributing Guide</a><a class="page-link" href="/orbit-rs/overview.html">Architecture Overview</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <h1 id="orbitql-benchmark-reorganization---documentation-update-summary">OrbitQL Benchmark Reorganization - Documentation Update Summary</h1>
+
+<p><strong>Date</strong>: October 11, 2025<br />
+<strong>Status</strong>: ✅ Complete<br />
+<strong>Impact</strong>: Major documentation update reflecting benchmark architecture changes</p>
+
+<h2 id="-overview">🎯 Overview</h2>
+
+<p>This update comprehensively refreshes all project documentation to reflect the recent relocation of OrbitQL benchmarks from <code class="language-plaintext highlighter-rouge">orbit-shared</code> to the dedicated <code class="language-plaintext highlighter-rouge">orbit-benchmarks</code> package. This reorganization improves separation of concerns and provides better isolation for performance testing.</p>
+
+<h2 id="-changes-made">📋 Changes Made</h2>
+
+<h3 id="1--main-project-documentation">1. ✅ Main Project Documentation</h3>
+
+<h4 id="readmemd"><strong>README.md</strong></h4>
+<ul>
+  <li><strong>Added</strong>: Performance benchmarks section highlighting OrbitQL benchmarks</li>
+  <li><strong>Enhanced</strong>: Description of TPC-H, TPC-C, TPC-DS benchmark availability</li>
+  <li><strong>Location</strong>: Added reference to <a href="../orbit-benchmarks/"><code class="language-plaintext highlighter-rouge">orbit-benchmarks</code></a> package</li>
+  <li><strong>Impact</strong>: Users now have clear visibility into benchmark capabilities</li>
+</ul>
+
+<h4 id="cargotoml-workspace-root"><strong>Cargo.toml</strong> (Workspace Root)</h4>
+<ul>
+  <li><strong>Enhanced</strong>: Comments explaining benchmark exclusion rationale</li>
+  <li><strong>Added</strong>: Detailed description of orbit-benchmarks contents:
+    <ul>
+      <li>OrbitQL query language benchmarks (TPC-H, TPC-C, TPC-DS)</li>
+      <li>Actor system performance benchmarks</li>
+      <li>Storage backend comparison benchmarks (with WAL issues noted)</li>
+      <li>Heterogeneous compute acceleration benchmarks</li>
+    </ul>
+  </li>
+  <li><strong>Impact</strong>: Clearer understanding of workspace structure</li>
+</ul>
+
+<h3 id="2--benchmark-package-documentation">2. ✅ Benchmark Package Documentation</h3>
+
+<h4 id="orbit-benchmarksreadmemd"><strong>orbit-benchmarks/README.md</strong></h4>
+<ul>
+  <li><strong>Enhanced</strong>: Package description to highlight OrbitQL benchmarks</li>
+  <li><strong>Added</strong>: Comprehensive OrbitQL benchmarks section:
+    <ul>
+      <li><strong>NEW</strong> badge indicating recent addition</li>
+      <li>TPC-H (22 queries), TPC-C (OLTP), TPC-DS (analytics) descriptions</li>
+      <li>Custom workloads and optimization testing features</li>
+      <li>Query optimization, vectorized execution, parallel processing highlights</li>
+    </ul>
+  </li>
+  <li><strong>Updated</strong>: Usage instructions for OrbitQL benchmarks</li>
+  <li><strong>Added</strong>: Rust code examples for accessing benchmark framework</li>
+  <li><strong>Impact</strong>: Complete guidance for using OrbitQL performance tests</li>
+</ul>
+
+<h3 id="3--development-documentation">3. ✅ Development Documentation</h3>
+
+<h4 id="docsdevelopmentbenchmarkingmd"><strong>docs/development/benchmarking.md</strong></h4>
+<ul>
+  <li><strong>Added</strong>: OrbitQL Query Language Benchmarks section (🆕)</li>
+  <li><strong>Detailed</strong>: File locations (<code class="language-plaintext highlighter-rouge">src/orbitql/benchmark.rs</code>, <code class="language-plaintext highlighter-rouge">src/orbitql/comprehensive_benchmark.rs</code>)</li>
+  <li><strong>Specified</strong>: Focus areas (query engine performance with industry-standard workloads)</li>
+  <li><strong>Listed</strong>: Metrics (query execution time, throughput, optimization effectiveness, vectorization performance)</li>
+  <li><strong>Described</strong>: Workloads (TPC-H, TPC-C, TPC-DS, custom query patterns)</li>
+  <li><strong>Status</strong>: Marked as ✅ Stable - Recently moved from orbit-shared</li>
+  <li><strong>Impact</strong>: Developers now have complete benchmark reference</li>
+</ul>
+
+<h4 id="docsproject_structuremd"><strong>docs/PROJECT_STRUCTURE.md</strong></h4>
+<ul>
+  <li><strong>Added</strong>: Comprehensive <code class="language-plaintext highlighter-rouge">orbit-benchmarks</code> section</li>
+  <li><strong>Detailed</strong>: Complete directory structure visualization</li>
+  <li><strong>Highlighted</strong>: OrbitQL benchmarks (NEW) with full feature list</li>
+  <li><strong>Described</strong>: All benchmark categories and their purposes</li>
+  <li><strong>Documented</strong>: Recent changes with status indicators</li>
+  <li><strong>Added</strong>: WAL replay issue documentation</li>
+  <li><strong>Enhanced</strong>: Key features and recent changes sections</li>
+  <li><strong>Impact</strong>: Complete architectural documentation for benchmark package</li>
+</ul>
+
+<h3 id="4--code-verification">4. ✅ Code Verification</h3>
+
+<h4 id="import-updates"><strong>Import Updates</strong></h4>
+<ul>
+  <li><strong>Verified</strong>: No remaining references to <code class="language-plaintext highlighter-rouge">orbit_shared::orbitql::benchmark</code></li>
+  <li><strong>Confirmed</strong>: All imports correctly use <code class="language-plaintext highlighter-rouge">orbit_shared::orbitql</code> for dependencies</li>
+  <li><strong>Status</strong>: No broken references found in examples or other code</li>
+</ul>
+
+<h4 id="build-verification"><strong>Build Verification</strong></h4>
+<ul>
+  <li><strong>✅ orbit-benchmarks</strong>: Compiles successfully with OrbitQL benchmarks</li>
+  <li><strong>✅ orbit-shared</strong>: Compiles successfully after benchmark module removal</li>
+  <li><strong>✅ Main workspace</strong>: All packages build correctly</li>
+  <li><strong>✅ Formatting</strong>: All code properly formatted per project standards</li>
+</ul>
+
+<h3 id="5--cicd-integration">5. ✅ CI/CD Integration</h3>
+
+<h4 id="github-workflows"><strong>GitHub Workflows</strong></h4>
+<ul>
+  <li><strong>Verified</strong>: <code class="language-plaintext highlighter-rouge">.github/workflows/benchmarks.yml</code> correctly references <code class="language-plaintext highlighter-rouge">orbit-benchmarks</code></li>
+  <li><strong>Confirmed</strong>: Benchmark workflow properly isolated from main CI/CD</li>
+  <li><strong>Validated</strong>: Manual execution workflow supports all benchmark types including OrbitQL</li>
+</ul>
+
+<h2 id="-impact-assessment">📊 Impact Assessment</h2>
+
+<h3 id="positive-impacts"><strong>Positive Impacts</strong></h3>
+<ul>
+  <li>✅ <strong>Clear Separation</strong>: OrbitQL benchmarks now properly isolated in dedicated package</li>
+  <li>✅ <strong>Better Documentation</strong>: Comprehensive coverage of benchmark capabilities</li>
+  <li>✅ <strong>User Guidance</strong>: Clear instructions for accessing and running performance tests</li>
+  <li>✅ <strong>Architecture Clarity</strong>: PROJECT_STRUCTURE.md now fully documents benchmark organization</li>
+  <li>✅ <strong>Development Flow</strong>: Benchmarks excluded from workspace prevent build interference</li>
+</ul>
+
+<h3 id="no-breaking-changes"><strong>No Breaking Changes</strong></h3>
+<ul>
+  <li>✅ <strong>API Compatibility</strong>: All public interfaces maintained</li>
+  <li>✅ <strong>Build Process</strong>: Main workspace builds unaffected</li>
+  <li>✅ <strong>Examples</strong>: No example code requires updates</li>
+  <li>✅ <strong>CI/CD</strong>: Existing workflows continue to work correctly</li>
+</ul>
+
+<h2 id="-related-changes">🔄 Related Changes</h2>
+
+<h3 id="previous-work"><strong>Previous Work</strong></h3>
+<ul>
+  <li><strong>Phase 1</strong>: OrbitQL benchmarks moved from <code class="language-plaintext highlighter-rouge">orbit-shared/src/orbitql/</code> to <code class="language-plaintext highlighter-rouge">orbit-benchmarks/src/orbitql/</code></li>
+  <li><strong>Phase 2</strong>: Import statements updated to reference <code class="language-plaintext highlighter-rouge">orbit_shared::orbitql</code></li>
+  <li><strong>Phase 3</strong>: Module exports corrected and library interface established</li>
+</ul>
+
+<h3 id="this-update"><strong>This Update</strong></h3>
+<ul>
+  <li><strong>Phase 4</strong>: Complete documentation refresh and verification ✅</li>
+</ul>
+
+<h2 id="-key-features-now-documented">🎯 Key Features Now Documented</h2>
+
+<h3 id="orbitql-benchmark-suite"><strong>OrbitQL Benchmark Suite</strong></h3>
+<ul>
+  <li><strong>TPC-H</strong>: 22 industry-standard decision support queries</li>
+  <li><strong>TPC-C</strong>: Online transaction processing benchmark</li>
+  <li><strong>TPC-DS</strong>: Complex analytics and data warehousing benchmark</li>
+  <li><strong>Custom Workloads</strong>: Specialized query patterns and optimization tests</li>
+  <li><strong>Performance Validation</strong>: Query optimization, vectorization, parallel processing</li>
+</ul>
+
+<h3 id="benchmark-framework"><strong>Benchmark Framework</strong></h3>
+<ul>
+  <li><strong>BenchmarkFramework</strong>: Main orchestration class</li>
+  <li><strong>BenchmarkConfig</strong>: Comprehensive configuration options</li>
+  <li><strong>ComprehensiveBenchmark</strong>: Full system validation</li>
+  <li><strong>TPC Implementations</strong>: Industry-standard benchmark implementations</li>
+</ul>
+
+<h3 id="integration-points"><strong>Integration Points</strong></h3>
+<ul>
+  <li><strong>Manual Execution</strong>: GitHub Actions workflow for performance validation</li>
+  <li><strong>Independent Building</strong>: Excluded from workspace for isolation</li>
+  <li><strong>Documentation</strong>: Complete usage and architecture guides</li>
+</ul>
+
+<h2 id="-documentation-structure">📚 Documentation Structure</h2>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Documentation Updates:
+├── README.md                              # 🆕 Performance benchmarks section
+├── Cargo.toml                            # 🔄 Enhanced exclusion comments
+├── orbit-benchmarks/
+│   └── README.md                         # 🔄 OrbitQL benchmarks documentation
+└── docs/
+    ├── development/
+    │   └── benchmarking.md               # 🆕 OrbitQL benchmark section
+    ├── PROJECT_STRUCTURE.md              # 🆕 orbit-benchmarks comprehensive section
+    └── wip/
+        └── BENCHMARK_REORGANIZATION_SUMMARY.md  # 🆕 This summary
+</code></pre></div></div>
+
+<h2 id="-verification-checklist">✅ Verification Checklist</h2>
+
+<ul class="task-list">
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />Main README.md updated with benchmark references</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />orbit-benchmarks README.md enhanced with OrbitQL documentation</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />benchmarking.md includes OrbitQL benchmark section</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />PROJECT_STRUCTURE.md has comprehensive orbit-benchmarks documentation</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />Workspace Cargo.toml comments enhanced</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />No broken imports or references</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />All packages build successfully</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />Code properly formatted</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />CI/CD workflows unchanged and functional</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />Example code requires no updates</li>
+</ul>
+
+<h2 id="-next-steps">🚀 Next Steps</h2>
+
+<ol>
+  <li><strong>Performance Testing</strong>: OrbitQL benchmarks ready for comprehensive performance validation</li>
+  <li><strong>TPC Compliance</strong>: Industry-standard benchmarks available for comparative analysis</li>
+  <li><strong>Optimization Validation</strong>: Query optimization features can now be thoroughly tested</li>
+  <li><strong>Documentation Maintenance</strong>: Keep benchmark documentation updated as features evolve</li>
+</ol>
+
+<hr />
+
+<p><strong>Summary</strong>: Complete documentation update successfully reflects the OrbitQL benchmark reorganization, providing users with comprehensive guidance for accessing and using the performance testing suite while maintaining full compatibility with existing workflows.</p>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/orbit-rs/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Orbit-RS Documentation</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">TuringWorks</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

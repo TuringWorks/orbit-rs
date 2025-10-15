@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>OrbitQL Language Server Protocol (LSP) Implementation | Orbit-RS Documentation</title>
+<meta name="generator" content="Jekyll v4.4.1" />
+<meta property="og:title" content="OrbitQL Language Server Protocol (LSP) Implementation" />
+<meta name="author" content="TuringWorks" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<meta property="og:description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<link rel="canonical" href="https://turingworks.github.io/orbit-rs/orbitql-lsp-implementation.html" />
+<meta property="og:url" content="https://turingworks.github.io/orbit-rs/orbitql-lsp-implementation.html" />
+<meta property="og:site_name" content="Orbit-RS Documentation" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="OrbitQL Language Server Protocol (LSP) Implementation" />
+<meta name="twitter:site" content="@TuringWorksAI" />
+<meta name="twitter:creator" content="@TuringWorks" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","author":{"@type":"Person","name":"TuringWorks"},"description":"The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform","headline":"OrbitQL Language Server Protocol (LSP) Implementation","url":"https://turingworks.github.io/orbit-rs/orbitql-lsp-implementation.html"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/orbit-rs/assets/main.css">
+  <link rel="stylesheet" href="/orbit-rs/assets/css/custom.css"><link type="application/atom+xml" rel="alternate" href="https://turingworks.github.io/orbit-rs/feed.xml" title="Orbit-RS Documentation" /></head><body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/orbit-rs/">Orbit-RS Documentation</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/orbit-rs/">Orbit-RS Documentation</a><a class="page-link" href="/orbit-rs/project_overview.html">Orbit-RS: Comprehensive Project Overview</a><a class="page-link" href="/orbit-rs/quick_start.html">Quick Start Guide - Multi-Protocol Database Server</a><a class="page-link" href="/orbit-rs/roadmap/">Development Roadmap</a><a class="page-link" href="/orbit-rs/features/">Orbit-RS Feature Index</a><a class="page-link" href="/orbit-rs/compute-acceleration/">Hardware Acceleration Guide</a><a class="page-link" href="/orbit-rs/contributing.html">Contributing Guide</a><a class="page-link" href="/orbit-rs/overview.html">Architecture Overview</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <h1 id="orbitql-language-server-protocol-lsp-implementation">OrbitQL Language Server Protocol (LSP) Implementation</h1>
+
+<h2 id="overview">Overview</h2>
+
+<p>The OrbitQL LSP implementation provides rich IDE support for OrbitQL developers, including:</p>
+
+<ul>
+  <li><strong>Syntax Highlighting</strong>: Rich syntax highlighting for multi-model queries</li>
+  <li><strong>Intelligent Autocomplete</strong>: Context-aware completion suggestions</li>
+  <li><strong>Real-time Error Detection</strong>: Immediate feedback on syntax and semantic errors</li>
+  <li><strong>Hover Documentation</strong>: Detailed information about tables, functions, and schemas</li>
+  <li><strong>Code Formatting</strong>: Automatic query formatting and beautification</li>
+  <li><strong>Schema Integration</strong>: Dynamic schema awareness for intelligent suggestions</li>
+</ul>
+
+<h2 id="architecture">Architecture</h2>
+
+<h3 id="core-components">Core Components</h3>
+
+<h4 id="1-orbitqllanguageserver-orbit-sharedsrcorbitqllsprs">1. OrbitQLLanguageServer (<code class="language-plaintext highlighter-rouge">orbit-shared/src/orbitql/lsp.rs</code>)</h4>
+
+<p>The main language server implementation that handles LSP protocol messages and maintains document state. Key features:</p>
+
+<ul>
+  <li><strong>Document Management</strong>: Tracks open OrbitQL files and their content</li>
+  <li><strong>Query Parsing</strong>: Parses queries using the existing OrbitQL lexer and parser</li>
+  <li><strong>Schema Integration</strong>: Maintains schema information for intelligent completions</li>
+  <li><strong>Diagnostic Generation</strong>: Provides real-time error and warning feedback</li>
+</ul>
+
+<h4 id="2-schema-information-system">2. Schema Information System</h4>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">pub</span> <span class="k">struct</span> <span class="n">SchemaInfo</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="n">tables</span><span class="p">:</span> <span class="n">HashMap</span><span class="o">&lt;</span><span class="nb">String</span><span class="p">,</span> <span class="n">TableInfo</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">functions</span><span class="p">:</span> <span class="n">HashMap</span><span class="o">&lt;</span><span class="nb">String</span><span class="p">,</span> <span class="n">FunctionInfo</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">keywords</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="nb">String</span><span class="o">&gt;</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">TableInfo</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="n">name</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">table_type</span><span class="p">:</span> <span class="n">TableType</span><span class="p">,</span> <span class="c1">// Document, Graph, TimeSeries, etc.</span>
+    <span class="k">pub</span> <span class="n">columns</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">ColumnInfo</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">indexes</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">IndexInfo</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">description</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="nb">String</span><span class="o">&gt;</span><span class="p">,</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h4 id="3-context-aware-completion-engine">3. Context-Aware Completion Engine</h4>
+
+<p>The completion system analyzes query context to provide relevant suggestions:</p>
+
+<ul>
+  <li><strong>Table Context</strong>: After <code class="language-plaintext highlighter-rouge">FROM</code>, <code class="language-plaintext highlighter-rouge">JOIN</code>, <code class="language-plaintext highlighter-rouge">UPDATE</code>, <code class="language-plaintext highlighter-rouge">INTO</code> clauses</li>
+  <li><strong>Column Context</strong>: Field suggestions based on referenced tables</li>
+  <li><strong>Function Context</strong>: Built-in and OrbitQL-specific functions</li>
+  <li><strong>Keyword Context</strong>: SQL and OrbitQL keywords based on current position</li>
+</ul>
+
+<h3 id="key-features">Key Features</h3>
+
+<h4 id="1-multi-model-query-support">1. Multi-Model Query Support</h4>
+
+<p>The LSP understands OrbitQL’s unique multi-model syntax:</p>
+
+<pre><code class="language-orbitql">-- Document queries with graph traversal
+SELECT 
+    user.name,
+    user.profile.* AS profile,
+    -&gt;follows-&gt;user.name AS friends,
+    metrics[cpu_usage WHERE timestamp &gt; time::now() - 1h] AS recent_cpu
+FROM users AS user
+WHERE user.active = true
+RELATE user-&gt;viewed-&gt;product SET timestamp = time::now()
+FETCH friends, recent_cpu;
+</code></pre>
+
+<p>Provides completion for:</p>
+<ul>
+  <li>Document field access (<code class="language-plaintext highlighter-rouge">user.profile.*</code>)</li>
+  <li>Graph traversal operators (<code class="language-plaintext highlighter-rouge">-&gt;follows-&gt;</code>)</li>
+  <li>Time-series access (<code class="language-plaintext highlighter-rouge">metrics[...]</code>)</li>
+  <li>OrbitQL-specific functions (<code class="language-plaintext highlighter-rouge">time::now()</code>)</li>
+</ul>
+
+<h4 id="2-intelligent-error-detection">2. Intelligent Error Detection</h4>
+
+<p>Real-time diagnostics for:</p>
+
+<p><strong>Syntax Errors</strong>:</p>
+<pre><code class="language-orbitql">SELECT * FORM users; -- "FORM" should be "FROM"
+</code></pre>
+
+<p><strong>Semantic Errors</strong>:</p>
+<pre><code class="language-orbitql">SELECT * FROM non_existent_table; -- Unknown table warning
+SELECT invalid_column FROM users; -- Unknown column warning
+</code></pre>
+
+<p><strong>Type Mismatches</strong>:</p>
+<pre><code class="language-orbitql">SELECT COUNT(*) + 'string'; -- Type incompatibility
+</code></pre>
+
+<h4 id="3-rich-hover-information">3. Rich Hover Information</h4>
+
+<p>Contextual information on hover:</p>
+
+<p><strong>Tables</strong>:</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>**users** (Document table)
+
+User accounts and profile information
+
+**Columns:**
+- `id`: uuid (Primary Key)
+- `name`: string (Not Null)
+- `email`: string (Unique)
+- `profile`: object (JSON document)
+- `created_at`: datetime
+
+**Indexes:**
+- `idx_users_email` (Unique)
+- `idx_users_created_at` (B-tree)
+</code></pre></div></div>
+
+<p><strong>Functions</strong>:</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>**time::now**() -&gt; datetime
+
+Returns the current timestamp in UTC
+
+**Examples:**
+- time::now()
+- WHERE created_at &gt; time::now() - 24h
+</code></pre></div></div>
+
+<h4 id="4-advanced-code-formatting">4. Advanced Code Formatting</h4>
+
+<p>Intelligent formatting that understands OrbitQL’s multi-model syntax:</p>
+
+<pre><code class="language-orbitql">-- Before formatting
+select user.name,-&gt;follows-&gt;user.name as friends from users user where user.active=true
+
+-- After formatting
+SELECT 
+    user.name,
+    -&gt;follows-&gt;user.name AS friends
+FROM users AS user
+WHERE user.active = true;
+</code></pre>
+
+<h2 id="ide-integration">IDE Integration</h2>
+
+<h3 id="vs-code-extension">VS Code Extension</h3>
+
+<p>The VS Code extension (<code class="language-plaintext highlighter-rouge">tools/vscode-orbitql/</code>) provides seamless integration:</p>
+
+<h4 id="features">Features</h4>
+<ul>
+  <li>File association for <code class="language-plaintext highlighter-rouge">.oql</code> and <code class="language-plaintext highlighter-rouge">.orbitql</code> files</li>
+  <li>Syntax highlighting with OrbitQL-specific grammar</li>
+  <li>LSP client integration for all language features</li>
+  <li>Configurable server settings</li>
+  <li>Command palette integration</li>
+</ul>
+
+<h4 id="installation">Installation</h4>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Build the language server</span>
+cargo build <span class="nt">--bin</span> orbitql-lsp
+
+<span class="c"># Package the VS Code extension</span>
+<span class="nb">cd </span>tools/vscode-orbitql
+npm <span class="nb">install
+</span>npm run compile
+vsce package
+
+<span class="c"># Install the extension</span>
+code <span class="nt">--install-extension</span> orbitql-0.1.0.vsix
+</code></pre></div></div>
+
+<h4 id="configuration">Configuration</h4>
+<div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span><span class="w">
+  </span><span class="nl">"orbitql.server.path"</span><span class="p">:</span><span class="w"> </span><span class="s2">"orbitql-lsp"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"orbitql.completion.enabled"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"orbitql.diagnostics.enabled"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"orbitql.hover.enabled"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"orbitql.formatting.enabled"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="w">
+</span><span class="p">}</span><span class="w">
+</span></code></pre></div></div>
+
+<h3 id="other-ide-support">Other IDE Support</h3>
+
+<p>The LSP implementation is IDE-agnostic and can be integrated with:</p>
+
+<h4 id="neovimvim">Neovim/Vim</h4>
+<div class="language-lua highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">require</span><span class="s1">'lspconfig'</span><span class="p">.</span><span class="n">orbitql</span><span class="p">.</span><span class="n">setup</span><span class="p">{</span>
+  <span class="n">cmd</span> <span class="o">=</span> <span class="p">{</span><span class="s2">"orbitql-lsp"</span><span class="p">},</span>
+  <span class="n">filetypes</span> <span class="o">=</span> <span class="p">{</span><span class="s2">"orbitql"</span><span class="p">},</span>
+  <span class="n">root_dir</span> <span class="o">=</span> <span class="k">function</span><span class="p">()</span> <span class="k">return</span> <span class="n">vim</span><span class="p">.</span><span class="n">loop</span><span class="p">.</span><span class="n">cwd</span><span class="p">()</span> <span class="k">end</span><span class="p">,</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h4 id="emacs">Emacs</h4>
+<div class="language-elisp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">(</span><span class="nv">add-to-list</span> <span class="ss">'lsp-language-id-configuration</span> <span class="o">'</span><span class="p">(</span><span class="nv">orbitql-mode</span> <span class="o">.</span> <span class="s">"orbitql"</span><span class="p">))</span>
+<span class="p">(</span><span class="nv">lsp-register-client</span>
+ <span class="p">(</span><span class="nv">make-lsp-client</span> <span class="ss">:new-connection</span> <span class="p">(</span><span class="nv">lsp-stdio-connection</span> <span class="s">"orbitql-lsp"</span><span class="p">)</span>
+                  <span class="ss">:major-modes</span> <span class="o">'</span><span class="p">(</span><span class="nv">orbitql-mode</span><span class="p">)</span>
+                  <span class="ss">:server-id</span> <span class="ss">'orbitql-lsp</span><span class="p">))</span>
+</code></pre></div></div>
+
+<h4 id="sublime-text">Sublime Text</h4>
+<div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span><span class="w">
+  </span><span class="nl">"clients"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">
+    </span><span class="nl">"orbitql"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">
+      </span><span class="nl">"enabled"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span><span class="w">
+      </span><span class="nl">"command"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"orbitql-lsp"</span><span class="p">],</span><span class="w">
+      </span><span class="nl">"selector"</span><span class="p">:</span><span class="w"> </span><span class="s2">"source.orbitql"</span><span class="p">,</span><span class="w">
+      </span><span class="nl">"schemes"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"file"</span><span class="p">]</span><span class="w">
+    </span><span class="p">}</span><span class="w">
+  </span><span class="p">}</span><span class="w">
+</span><span class="p">}</span><span class="w">
+</span></code></pre></div></div>
+
+<h2 id="technical-implementation">Technical Implementation</h2>
+
+<h3 id="lsp-protocol-compliance">LSP Protocol Compliance</h3>
+
+<p>The implementation supports the following LSP features:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Feature</th>
+      <th>Status</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">textDocument/didOpen</code></td>
+      <td>✅</td>
+      <td>Document opened notification</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">textDocument/didChange</code></td>
+      <td>✅</td>
+      <td>Document change notification</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">textDocument/completion</code></td>
+      <td>✅</td>
+      <td>Autocompletion requests</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">textDocument/hover</code></td>
+      <td>✅</td>
+      <td>Hover information</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">textDocument/formatting</code></td>
+      <td>✅</td>
+      <td>Document formatting</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">textDocument/publishDiagnostics</code></td>
+      <td>✅</td>
+      <td>Error/warning reporting</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">textDocument/signatureHelp</code></td>
+      <td>🚧</td>
+      <td>Function signature help</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">textDocument/definition</code></td>
+      <td>❌</td>
+      <td>Go to definition</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">textDocument/references</code></td>
+      <td>❌</td>
+      <td>Find references</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 id="performance-optimizations">Performance Optimizations</h3>
+
+<h4 id="query-parsing">Query Parsing</h4>
+<ul>
+  <li>Incremental parsing for changed documents</li>
+  <li>Cached AST trees with invalidation</li>
+  <li>Parallel processing for large files</li>
+</ul>
+
+<h4 id="completion-performance">Completion Performance</h4>
+<ul>
+  <li>Schema information cached in memory</li>
+  <li>Completion results limited to prevent UI lag</li>
+  <li>Context analysis optimized for responsiveness</li>
+</ul>
+
+<h4 id="memory-management">Memory Management</h4>
+<ul>
+  <li>Document content stored only for open files</li>
+  <li>Configurable cache limits</li>
+  <li>Garbage collection of unused schema data</li>
+</ul>
+
+<h3 id="error-handling">Error Handling</h3>
+
+<p>Robust error handling throughout the system:</p>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">pub</span> <span class="k">enum</span> <span class="n">LSPError</span> <span class="p">{</span>
+    <span class="nf">ParseError</span><span class="p">(</span><span class="n">ParseError</span><span class="p">),</span>
+    <span class="nf">SchemaError</span><span class="p">(</span><span class="nb">String</span><span class="p">),</span>
+    <span class="nf">IOError</span><span class="p">(</span><span class="nn">std</span><span class="p">::</span><span class="nn">io</span><span class="p">::</span><span class="n">Error</span><span class="p">),</span>
+    <span class="nf">ProtocolError</span><span class="p">(</span><span class="nb">String</span><span class="p">),</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>All errors are gracefully handled and reported through the LSP protocol without crashing the server.</p>
+
+<h2 id="configuration-and-customization">Configuration and Customization</h2>
+
+<h3 id="server-configuration">Server Configuration</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">pub</span> <span class="k">struct</span> <span class="n">LSPConfig</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="n">enable_completion</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">enable_diagnostics</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">enable_hover</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">enable_signature_help</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">enable_formatting</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">max_completion_items</span><span class="p">:</span> <span class="nb">usize</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">diagnostic_delay_ms</span><span class="p">:</span> <span class="nb">u64</span><span class="p">,</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="schema-configuration">Schema Configuration</h3>
+
+<p>Dynamic schema loading from multiple sources:</p>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Load from database metadata</span>
+<span class="k">let</span> <span class="n">schema</span> <span class="o">=</span> <span class="nn">SchemaInfo</span><span class="p">::</span><span class="nf">from_database_metadata</span><span class="p">(</span><span class="o">&amp;</span><span class="n">db_connection</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+
+<span class="c1">// Load from configuration files</span>
+<span class="k">let</span> <span class="n">schema</span> <span class="o">=</span> <span class="nn">SchemaInfo</span><span class="p">::</span><span class="nf">from_config_file</span><span class="p">(</span><span class="s">"schema.json"</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+
+<span class="c1">// Programmatic schema definition</span>
+<span class="k">let</span> <span class="k">mut</span> <span class="n">schema</span> <span class="o">=</span> <span class="nn">SchemaInfo</span><span class="p">::</span><span class="nf">default</span><span class="p">();</span>
+<span class="n">schema</span><span class="nf">.add_table</span><span class="p">(</span><span class="n">TableInfo</span> <span class="p">{</span>
+    <span class="n">name</span><span class="p">:</span> <span class="s">"users"</span><span class="nf">.to_string</span><span class="p">(),</span>
+    <span class="n">table_type</span><span class="p">:</span> <span class="nn">TableType</span><span class="p">::</span><span class="n">Document</span><span class="p">,</span>
+    <span class="n">columns</span><span class="p">:</span> <span class="nd">vec!</span><span class="p">[</span><span class="cm">/* ... */</span><span class="p">],</span>
+    <span class="c1">// ...</span>
+<span class="p">});</span>
+</code></pre></div></div>
+
+<h3 id="custom-functions-and-extensions">Custom Functions and Extensions</h3>
+
+<p>Support for domain-specific OrbitQL extensions:</p>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">schema</span><span class="py">.functions</span><span class="nf">.insert</span><span class="p">(</span><span class="s">"geo::distance"</span><span class="nf">.to_string</span><span class="p">(),</span> <span class="n">FunctionInfo</span> <span class="p">{</span>
+    <span class="n">name</span><span class="p">:</span> <span class="s">"geo::distance"</span><span class="nf">.to_string</span><span class="p">(),</span>
+    <span class="n">description</span><span class="p">:</span> <span class="s">"Calculate distance between geographic points"</span><span class="nf">.to_string</span><span class="p">(),</span>
+    <span class="n">parameters</span><span class="p">:</span> <span class="nd">vec!</span><span class="p">[</span>
+        <span class="n">ParameterInfo</span> <span class="p">{</span>
+            <span class="n">name</span><span class="p">:</span> <span class="s">"point1"</span><span class="nf">.to_string</span><span class="p">(),</span>
+            <span class="n">data_type</span><span class="p">:</span> <span class="s">"geopoint"</span><span class="nf">.to_string</span><span class="p">(),</span>
+            <span class="n">optional</span><span class="p">:</span> <span class="kc">false</span><span class="p">,</span>
+            <span class="n">description</span><span class="p">:</span> <span class="s">"First geographic point"</span><span class="nf">.to_string</span><span class="p">(),</span>
+        <span class="p">},</span>
+        <span class="n">ParameterInfo</span> <span class="p">{</span>
+            <span class="n">name</span><span class="p">:</span> <span class="s">"point2"</span><span class="nf">.to_string</span><span class="p">(),</span>
+            <span class="n">data_type</span><span class="p">:</span> <span class="s">"geopoint"</span><span class="nf">.to_string</span><span class="p">(),</span>
+            <span class="n">optional</span><span class="p">:</span> <span class="kc">false</span><span class="p">,</span>
+            <span class="n">description</span><span class="p">:</span> <span class="s">"Second geographic point"</span><span class="nf">.to_string</span><span class="p">(),</span>
+        <span class="p">},</span>
+    <span class="p">],</span>
+    <span class="n">return_type</span><span class="p">:</span> <span class="s">"float"</span><span class="nf">.to_string</span><span class="p">(),</span>
+    <span class="n">examples</span><span class="p">:</span> <span class="nd">vec!</span><span class="p">[</span>
+        <span class="s">"geo::distance([37.7749, -122.4194], [40.7128, -74.0060])"</span><span class="nf">.to_string</span><span class="p">()</span>
+    <span class="p">],</span>
+<span class="p">});</span>
+</code></pre></div></div>
+
+<h2 id="usage-examples">Usage Examples</h2>
+
+<h3 id="basic-setup">Basic Setup</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Start the LSP server (typically called by IDE)</span>
+orbitql-lsp
+
+<span class="c"># Test with manual LSP messages</span>
+<span class="nb">echo</span> <span class="s1">'{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"capabilities":{}}}'</span> | orbitql-lsp
+</code></pre></div></div>
+
+<h3 id="programmatic-usage">Programmatic Usage</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">orbit_shared</span><span class="p">::</span><span class="nn">orbitql</span><span class="p">::</span><span class="nn">lsp</span><span class="p">::</span><span class="o">*</span><span class="p">;</span>
+
+<span class="nd">#[tokio::main]</span>
+<span class="k">async</span> <span class="k">fn</span> <span class="nf">main</span><span class="p">()</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="p">(),</span> <span class="nb">Box</span><span class="o">&lt;</span><span class="k">dyn</span> <span class="nn">std</span><span class="p">::</span><span class="nn">error</span><span class="p">::</span><span class="n">Error</span><span class="o">&gt;&gt;</span> <span class="p">{</span>
+    <span class="k">let</span> <span class="p">(</span><span class="n">service</span><span class="p">,</span> <span class="n">socket</span><span class="p">)</span> <span class="o">=</span> <span class="nn">LspService</span><span class="p">::</span><span class="nf">build</span><span class="p">(|</span><span class="n">client</span><span class="p">|</span> <span class="p">{</span>
+        <span class="k">let</span> <span class="k">mut</span> <span class="n">server</span> <span class="o">=</span> <span class="nn">OrbitQLLanguageServer</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="n">client</span><span class="p">);</span>
+        <span class="c1">// Configure with custom schema</span>
+        <span class="nn">tokio</span><span class="p">::</span><span class="nf">spawn</span><span class="p">(</span><span class="k">async</span> <span class="k">move</span> <span class="p">{</span>
+            <span class="k">let</span> <span class="n">schema</span> <span class="o">=</span> <span class="nf">load_custom_schema</span><span class="p">()</span><span class="k">.await</span><span class="p">;</span>
+            <span class="n">server</span><span class="nf">.update_schema</span><span class="p">(</span><span class="n">schema</span><span class="p">)</span><span class="k">.await</span><span class="p">;</span>
+        <span class="p">});</span>
+        <span class="n">server</span>
+    <span class="p">})</span><span class="nf">.finish</span><span class="p">();</span>
+    
+    <span class="nn">Server</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="nn">tokio</span><span class="p">::</span><span class="nn">io</span><span class="p">::</span><span class="nf">stdin</span><span class="p">(),</span> <span class="nn">tokio</span><span class="p">::</span><span class="nn">io</span><span class="p">::</span><span class="nf">stdout</span><span class="p">(),</span> <span class="n">socket</span><span class="p">)</span>
+        <span class="nf">.serve</span><span class="p">(</span><span class="n">service</span><span class="p">)</span>
+        <span class="k">.await</span><span class="p">;</span>
+    
+    <span class="nf">Ok</span><span class="p">(())</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h2 id="future-enhancements">Future Enhancements</h2>
+
+<h3 id="planned-features">Planned Features</h3>
+
+<ol>
+  <li><strong>Go to Definition</strong>: Navigate to table and function definitions</li>
+  <li><strong>Find References</strong>: Locate all uses of tables/columns across files</li>
+  <li><strong>Refactoring Support</strong>: Rename tables/columns with cross-file updates</li>
+  <li><strong>Query Optimization Hints</strong>: Suggest performance improvements</li>
+  <li><strong>Schema Inference</strong>: Auto-detect schema from query patterns</li>
+  <li><strong>Multi-file Analysis</strong>: Cross-file dependency tracking</li>
+  <li><strong>Workspace Symbols</strong>: Global symbol search across projects</li>
+  <li><strong>Code Actions</strong>: Quick fixes and automated refactoring</li>
+  <li><strong>Semantic Highlighting</strong>: Advanced syntax highlighting based on semantics</li>
+  <li><strong>Query Execution Integration</strong>: Execute queries directly from IDE</li>
+</ol>
+
+<h3 id="advanced-features">Advanced Features</h3>
+
+<h4 id="live-schema-updates">Live Schema Updates</h4>
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Watch for schema changes and update LSP in real-time</span>
+<span class="k">let</span> <span class="n">schema_watcher</span> <span class="o">=</span> <span class="nn">SchemaWatcher</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="n">db_connection</span><span class="p">);</span>
+<span class="n">schema_watcher</span><span class="nf">.on_change</span><span class="p">(|</span><span class="n">new_schema</span><span class="p">|</span> <span class="p">{</span>
+    <span class="n">lsp_server</span><span class="nf">.update_schema</span><span class="p">(</span><span class="n">new_schema</span><span class="p">)</span><span class="k">.await</span><span class="p">;</span>
+<span class="p">});</span>
+</code></pre></div></div>
+
+<h4 id="query-performance-analysis">Query Performance Analysis</h4>
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Analyze query performance and suggest optimizations</span>
+<span class="k">let</span> <span class="n">performance_analyzer</span> <span class="o">=</span> <span class="nn">QueryPerformanceAnalyzer</span><span class="p">::</span><span class="nf">new</span><span class="p">();</span>
+<span class="k">let</span> <span class="n">suggestions</span> <span class="o">=</span> <span class="n">performance_analyzer</span><span class="nf">.analyze_query</span><span class="p">(</span><span class="n">query</span><span class="p">)</span><span class="k">.await</span><span class="p">;</span>
+<span class="n">lsp_server</span><span class="nf">.publish_hints</span><span class="p">(</span><span class="n">suggestions</span><span class="p">)</span><span class="k">.await</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h4 id="multi-database-support">Multi-Database Support</h4>
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Support multiple database connections with different schemas</span>
+<span class="k">let</span> <span class="n">multi_schema</span> <span class="o">=</span> <span class="nn">MultiSchemaManager</span><span class="p">::</span><span class="nf">new</span><span class="p">();</span>
+<span class="n">multi_schema</span><span class="nf">.add_database</span><span class="p">(</span><span class="s">"primary"</span><span class="p">,</span> <span class="n">primary_schema</span><span class="p">);</span>
+<span class="n">multi_schema</span><span class="nf">.add_database</span><span class="p">(</span><span class="s">"analytics"</span><span class="p">,</span> <span class="n">analytics_schema</span><span class="p">);</span>
+</code></pre></div></div>
+
+<h2 id="testing-and-quality-assurance">Testing and Quality Assurance</h2>
+
+<h3 id="unit-tests">Unit Tests</h3>
+<ul>
+  <li>Query parsing and validation</li>
+  <li>Completion generation</li>
+  <li>Hover information accuracy</li>
+  <li>Diagnostic reporting</li>
+</ul>
+
+<h3 id="integration-tests">Integration Tests</h3>
+<ul>
+  <li>LSP protocol compliance</li>
+  <li>IDE integration testing</li>
+  <li>Performance benchmarks</li>
+  <li>Memory usage analysis</li>
+</ul>
+
+<h3 id="performance-benchmarks">Performance Benchmarks</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>Operation</th>
+      <th>Target Time</th>
+      <th>Memory Usage</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Document parse</td>
+      <td>&lt; 50ms</td>
+      <td>&lt; 10MB</td>
+    </tr>
+    <tr>
+      <td>Completion generation</td>
+      <td>&lt; 100ms</td>
+      <td>&lt; 5MB</td>
+    </tr>
+    <tr>
+      <td>Hover information</td>
+      <td>&lt; 20ms</td>
+      <td>&lt; 1MB</td>
+    </tr>
+    <tr>
+      <td>Diagnostic generation</td>
+      <td>&lt; 200ms</td>
+      <td>&lt; 15MB</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="contributing">Contributing</h2>
+
+<h3 id="development-setup">Development Setup</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Clone repository</span>
+git clone https://github.com/your-org/orbit-rs.git
+<span class="nb">cd </span>orbit-rs
+
+<span class="c"># Build with LSP features</span>
+<span class="c"># Run tests</span>
+cargo <span class="nb">test </span>orbitql::lsp
+
+<span class="c"># Start development server</span>
+cargo run <span class="nt">--bin</span> orbitql-lsp
+</code></pre></div></div>
+
+<h3 id="adding-new-features">Adding New Features</h3>
+
+<ol>
+  <li>Implement LSP message handlers in <code class="language-plaintext highlighter-rouge">OrbitQLLanguageServer</code></li>
+  <li>Add corresponding protocol types in <code class="language-plaintext highlighter-rouge">lsp_types.rs</code></li>
+  <li>Update client capabilities in IDE extensions</li>
+  <li>Add comprehensive tests</li>
+  <li>Update documentation</li>
+</ol>
+
+<h3 id="code-style">Code Style</h3>
+
+<p>Follow Rust best practices and maintain consistency with the existing codebase:</p>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Good: Clear, documented function</span>
+<span class="cd">/// Generate completion items for a specific context</span>
+<span class="k">async</span> <span class="k">fn</span> <span class="nf">generate_completions</span><span class="p">(</span>
+    <span class="o">&amp;</span><span class="k">self</span><span class="p">,</span>
+    <span class="n">document</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">Document</span><span class="p">,</span>
+    <span class="n">position</span><span class="p">:</span> <span class="n">Position</span><span class="p">,</span>
+<span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">CompletionItem</span><span class="o">&gt;</span> <span class="p">{</span>
+    <span class="c1">// Implementation</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h2 id="license-and-support">License and Support</h2>
+
+<p>This LSP implementation is part of the Orbit project and follows the same licensing terms. For support and contributions, please refer to the main project repository.</p>
+
+<p>For bugs and feature requests specifically related to the LSP implementation, please file issues with the <code class="language-plaintext highlighter-rouge">lsp</code> label in the project’s issue tracker.</p>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/orbit-rs/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Orbit-RS Documentation</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">TuringWorks</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

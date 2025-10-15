@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["StorageBackendConfig"],"mod":["memory"],"struct":["StorageBackendFactory","StorageMetrics","StorageTransaction"],"trait":["StorageSerializable","TableStorage"]};

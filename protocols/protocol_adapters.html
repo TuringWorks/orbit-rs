@@ -1,0 +1,1645 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Protocol Adapters | Orbit-RS Documentation</title>
+<meta name="generator" content="Jekyll v4.4.1" />
+<meta property="og:title" content="Protocol Adapters" />
+<meta name="author" content="TuringWorks" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<meta property="og:description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<link rel="canonical" href="https://turingworks.github.io/orbit-rs/protocols/protocol_adapters.html" />
+<meta property="og:url" content="https://turingworks.github.io/orbit-rs/protocols/protocol_adapters.html" />
+<meta property="og:site_name" content="Orbit-RS Documentation" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Protocol Adapters" />
+<meta name="twitter:site" content="@TuringWorksAI" />
+<meta name="twitter:creator" content="@TuringWorks" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","author":{"@type":"Person","name":"TuringWorks"},"description":"The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform","headline":"Protocol Adapters","url":"https://turingworks.github.io/orbit-rs/protocols/protocol_adapters.html"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/orbit-rs/assets/main.css">
+  <link rel="stylesheet" href="/orbit-rs/assets/css/custom.css"><link type="application/atom+xml" rel="alternate" href="https://turingworks.github.io/orbit-rs/feed.xml" title="Orbit-RS Documentation" /></head><body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/orbit-rs/">Orbit-RS Documentation</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/orbit-rs/">Orbit-RS Documentation</a><a class="page-link" href="/orbit-rs/project_overview.html">Orbit-RS: Comprehensive Project Overview</a><a class="page-link" href="/orbit-rs/quick_start.html">Quick Start Guide - Multi-Protocol Database Server</a><a class="page-link" href="/orbit-rs/roadmap/">Development Roadmap</a><a class="page-link" href="/orbit-rs/features/">Orbit-RS Feature Index</a><a class="page-link" href="/orbit-rs/compute-acceleration/">Hardware Acceleration Guide</a><a class="page-link" href="/orbit-rs/contributing.html">Contributing Guide</a><a class="page-link" href="/orbit-rs/overview.html">Architecture Overview</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <h1 id="protocol-adapters">Protocol Adapters</h1>
+
+<p>Orbit-RS provides multiple protocol adapters enabling clients to interact with the actor system using familiar protocols. This allows existing applications to integrate with Orbit-RS without requiring significant code changes.</p>
+
+<h2 id="overview">Overview</h2>
+
+<p>Protocol adapters act as translation layers between external protocols and the Orbit actor system. They provide familiar interfaces while leveraging the distributed actor model underneath for scalability, fault tolerance, and consistency.</p>
+
+<h3 id="supported-protocols">Supported Protocols</h3>
+
+<ul>
+  <li>✅ <strong>Redis Protocol (RESP)</strong> - <strong>🎆 PRODUCTION-READY</strong> - 50+ commands, all core data types, redis-cli support</li>
+  <li>🧪 <strong>PostgreSQL Wire Protocol</strong> - <strong>EXPERIMENTAL</strong> - Basic SQL parsing for actor operations (30% complete)</li>
+  <li>🧪 <strong>Model Context Protocol (MCP)</strong> - <strong>EXPERIMENTAL</strong> - Basic AI agent integration (partial implementation)</li>
+  <li>📋 <strong>Redis Extensions</strong> - Vector operations (VECTOR.<em>), Time Series (TS.</em>), Graph DB (GRAPH.<em>), Search (FT.</em>) - <em>Planned</em></li>
+  <li>📋 <strong>PostgreSQL TimescaleDB</strong> - Advanced time-series analytics and hypertables - <em>Planned</em></li>
+  <li>📋 <strong>REST API</strong> - HTTP/JSON interface for web applications - <em>Planned</em></li>
+  <li>📋 <strong>Neo4j Bolt Protocol</strong> - Graph database compatibility - <em>Planned</em></li>
+</ul>
+
+<h2 id="redis-protocol-resp-support-">Redis Protocol (RESP) Support ✅</h2>
+
+<p>Connect to Orbit actors using any Redis client through the RESP (REdis Serialization Protocol) adapter.</p>
+
+<h3 id="-quick-start">🚀 Quick Start</h3>
+
+<p><strong>Get Redis running in 30 seconds:</strong></p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Method 1: One-command startup (recommended)</span>
+git clone https://github.com/TuringWorks/orbit-rs.git
+<span class="nb">cd </span>orbit-rs
+cargo build <span class="nt">--release</span>
+./start-orbit-redis.sh
+
+<span class="c"># Method 2: Manual startup</span>
+<span class="c"># Terminal 1: Start Orbit distributed actor runtime</span>
+./target/release/orbit-server <span class="nt">--grpc-port</span> 50056 <span class="nt">--dev-mode</span>
+
+<span class="c"># Terminal 2: Start Redis protocol server</span>
+./target/release/resp-server
+
+<span class="c"># Terminal 3: Connect with ANY Redis client</span>
+redis-cli <span class="nt">-h</span> 127.0.0.1 <span class="nt">-p</span> 6379  <span class="c"># Standard Redis port</span>
+</code></pre></div></div>
+
+<p><strong>✅ Everything works perfectly:</strong></p>
+
+<pre><code class="language-redis"># String operations
+127.0.0.1:6379&gt; SET mykey "hello world"
+OK
+127.0.0.1:6379&gt; GET mykey  
+"hello world"
+127.0.0.1:6379&gt; DEL mykey
+(integer) 1
+
+# Hash operations
+127.0.0.1:6379&gt; HSET user:1 name "Alice" age "25" city "NYC"
+(integer) 3
+127.0.0.1:6379&gt; HGETALL user:1
+1) "name"
+2) "Alice"
+3) "age"
+4) "25"
+5) "city"
+6) "NYC"
+
+# List operations
+127.0.0.1:6379&gt; LPUSH tasks "task1" "task2"
+(integer) 2
+127.0.0.1:6379&gt; LRANGE tasks 0 -1
+1) "task2"
+2) "task1"
+
+# Set operations
+127.0.0.1:6379&gt; SADD tags "redis" "orbit" "distributed"
+(integer) 3
+127.0.0.1:6379&gt; SMEMBERS tags
+1) "redis"
+2) "orbit"
+3) "distributed"
+
+# Sorted Set operations
+127.0.0.1:6379&gt; ZADD leaderboard 100 "player1" 85 "player2"
+(integer) 2
+127.0.0.1:6379&gt; ZRANGE leaderboard 0 -1 WITHSCORES
+1) "player2"
+2) "85"
+3) "player1"
+4) "100"
+</code></pre>
+
+<h3 id="supported-redis-commands">Supported Redis Commands</h3>
+
+<p><strong>📚 <a href="/orbit-rs/protocols/REDIS_COMMANDS_REFERENCE.html">Complete Command Reference</a></strong> - Detailed documentation for all 50+ commands</p>
+
+<h4 id="key-value-operations-15-commands">Key-Value Operations (15+ commands)</h4>
+<ul>
+  <li><strong>GET</strong> - Retrieve value by key</li>
+  <li><strong>SET</strong> - Set key to value (with optional expiration: <code class="language-plaintext highlighter-rouge">SET key value EX 3600</code>)</li>
+  <li><strong>DEL</strong> - Delete one or more keys</li>
+  <li><strong>EXISTS</strong> - Check if key exists</li>
+  <li><strong>TTL</strong> - Get time-to-live for key</li>
+  <li><strong>EXPIRE</strong> - Set expiration time for key</li>
+  <li><strong>PERSIST</strong> - Remove expiration from key</li>
+  <li><strong>APPEND</strong> - Append value to existing string</li>
+  <li><strong>GETRANGE</strong> - Get substring by byte range</li>
+  <li><strong>GETSET</strong> - Atomically set new value and return old value</li>
+  <li><strong>MGET</strong> - Get multiple keys at once</li>
+  <li><strong>MSET</strong> - Set multiple key-value pairs</li>
+  <li><strong>SETEX</strong> - Set key with expiration time</li>
+  <li><strong>SETRANGE</strong> - Overwrite string at specific offset</li>
+  <li><strong>STRLEN</strong> - Get string length</li>
+  <li><strong>PEXPIRE</strong> - Set expiration in milliseconds</li>
+  <li><strong>PTTL</strong> - Get TTL in milliseconds</li>
+  <li><strong>RANDOMKEY</strong> - Get random key</li>
+  <li><strong>RENAME</strong> - Rename key</li>
+  <li><strong>TYPE</strong> - Get type of key</li>
+  <li><strong>UNLINK</strong> - Asynchronous delete</li>
+</ul>
+
+<h4 id="hash-operations-10-commands">Hash Operations (10+ commands)</h4>
+<ul>
+  <li><strong>HGET</strong> - Get field value from hash</li>
+  <li><strong>HSET</strong> - Set field value in hash</li>
+  <li><strong>HGETALL</strong> - Get all field-value pairs from hash</li>
+  <li><strong>HDEL</strong> - Delete field from hash</li>
+  <li><strong>HEXISTS</strong> - Check if field exists in hash</li>
+  <li><strong>HKEYS</strong> - Get all field names from hash</li>
+  <li><strong>HVALS</strong> - Get all values from hash</li>
+  <li><strong>HLEN</strong> - Get number of fields in hash</li>
+  <li><strong>HMGET</strong> - Get multiple field values</li>
+  <li><strong>HMSET</strong> - Set multiple field values</li>
+  <li><strong>HINCRBY</strong> - Increment field by integer value</li>
+</ul>
+
+<h4 id="list-operations-12-commands">List Operations (12+ commands)</h4>
+<ul>
+  <li><strong>LPUSH</strong> - Push elements to left of list</li>
+  <li><strong>RPUSH</strong> - Push elements to right of list</li>
+  <li><strong>LPOP</strong> - Pop element from left of list</li>
+  <li><strong>RPOP</strong> - Pop element from right of list</li>
+  <li><strong>LRANGE</strong> - Get range of elements from list</li>
+  <li><strong>LLEN</strong> - Get length of list</li>
+  <li><strong>LINDEX</strong> - Get element at index</li>
+  <li><strong>LSET</strong> - Set element at index</li>
+  <li><strong>LREM</strong> - Remove elements equal to value</li>
+  <li><strong>LTRIM</strong> - Trim list to specified range</li>
+  <li><strong>LINSERT</strong> - Insert element before or after pivot</li>
+  <li><strong>BLPOP</strong> - Blocking left pop (non-blocking implementation)</li>
+  <li><strong>BRPOP</strong> - Blocking right pop (non-blocking implementation)</li>
+</ul>
+
+<h4 id="set-operations-7-commands">Set Operations (7+ commands)</h4>
+<ul>
+  <li><strong>SADD</strong> - Add members to set</li>
+  <li><strong>SREM</strong> - Remove members from set</li>
+  <li><strong>SMEMBERS</strong> - Get all members of set</li>
+  <li><strong>SCARD</strong> - Get cardinality (size) of set</li>
+  <li><strong>SISMEMBER</strong> - Check if member exists in set</li>
+  <li><strong>SUNION</strong> - Return union of sets</li>
+  <li><strong>SINTER</strong> - Return intersection of sets</li>
+  <li><strong>SDIFF</strong> - Return difference of sets</li>
+</ul>
+
+<h4 id="sorted-set-operations-8-commands">Sorted Set Operations (8+ commands)</h4>
+<ul>
+  <li><strong>ZADD</strong> - Add members with scores to sorted set</li>
+  <li><strong>ZREM</strong> - Remove members from sorted set</li>
+  <li><strong>ZCARD</strong> - Get cardinality of sorted set</li>
+  <li><strong>ZSCORE</strong> - Get score of member</li>
+  <li><strong>ZINCRBY</strong> - Increment score of member</li>
+  <li><strong>ZRANGE</strong> - Get members by rank range</li>
+  <li><strong>ZRANGEBYSCORE</strong> - Get members by score range</li>
+  <li><strong>ZCOUNT</strong> - Count members in score range</li>
+  <li><strong>ZRANK</strong> - Get rank of member</li>
+</ul>
+
+<h4 id="pubsub-operations-6-commands">Pub/Sub Operations (6+ commands)</h4>
+<ul>
+  <li><strong>PUBLISH</strong> - Publish message to channel</li>
+  <li><strong>SUBSCRIBE</strong> - Subscribe to channels</li>
+  <li><strong>UNSUBSCRIBE</strong> - Unsubscribe from channels</li>
+  <li><strong>PSUBSCRIBE</strong> - Subscribe to channel patterns</li>
+  <li><strong>PUNSUBSCRIBE</strong> - Unsubscribe from channel patterns</li>
+  <li><strong>PUBSUB</strong> - Introspect pub/sub system</li>
+</ul>
+
+<h4 id="connection-commands-5-commands">Connection Commands (5+ commands)</h4>
+<ul>
+  <li><strong>PING</strong> - Test connection</li>
+  <li><strong>ECHO</strong> - Echo message</li>
+  <li><strong>SELECT</strong> - Select database (logical separation)</li>
+  <li><strong>AUTH</strong> - Authenticate with server</li>
+  <li><strong>QUIT</strong> - Close connection</li>
+</ul>
+
+<h4 id="server-commands-5-commands">Server Commands (5+ commands)</h4>
+<ul>
+  <li><strong>INFO</strong> - Get server information with Orbit-specific details</li>
+  <li><strong>DBSIZE</strong> - Get number of keys</li>
+  <li><strong>FLUSHDB</strong> - Clear current database</li>
+  <li><strong>FLUSHALL</strong> - Clear all databases</li>
+  <li><strong>COMMAND</strong> - Get list of available commands</li>
+</ul>
+
+<h2 id="redis-extensions---advanced-features--planned">Redis Extensions - Advanced Features 📋 PLANNED</h2>
+
+<p>Orbit-RS will extend Redis with enterprise-grade features for AI/ML, time series, and graph database workloads in future releases.</p>
+
+<h3 id="vector-operations-vector-namespace--planned">Vector Operations (VECTOR.* namespace) 📋 PLANNED</h3>
+<p><strong>AI/ML vector search with multiple similarity metrics</strong> - <em>Coming Soon</em></p>
+
+<ul>
+  <li><strong>VECTOR.ADD</strong> index id vector [metadata…] - Add vector with optional metadata</li>
+  <li><strong>VECTOR.GET</strong> index id - Get vector and metadata by ID</li>
+  <li><strong>VECTOR.DEL</strong> index id - Delete vector from index</li>
+  <li><strong>VECTOR.STATS</strong> index - Get statistics for vector index</li>
+  <li><strong>VECTOR.LIST</strong> index - List all vector IDs in index</li>
+  <li><strong>VECTOR.COUNT</strong> index - Get count of vectors in index</li>
+  <li><strong>VECTOR.SEARCH</strong> index vector limit [options…] - Perform similarity search</li>
+  <li><strong>VECTOR.KNN</strong> index vector k [metric] - K-nearest neighbors search</li>
+</ul>
+
+<p><strong>Similarity Metrics</strong>: COSINE, EUCLIDEAN, DOT_PRODUCT, MANHATTAN</p>
+
+<pre><code class="language-redis">VECTOR.ADD embeddings doc1 "0.1,0.2,0.3,0.4" title "AI Document" category "tech"
+VECTOR.SEARCH embeddings "0.1,0.2,0.3,0.4" 5 METRIC COSINE THRESHOLD 0.8
+</code></pre>
+
+<h3 id="redissearch-compatible-ft-namespace--planned">RedisSearch Compatible (FT.* namespace) 📋 PLANNED</h3>
+<p><strong>Full-text and vector search engine compatibility</strong> - <em>Coming Soon</em></p>
+
+<ul>
+  <li><strong>FT.CREATE</strong> index DIM dimension [options] - Create vector search index</li>
+  <li><strong>FT.ADD</strong> index id vector [metadata…] - Add document to search index</li>
+  <li><strong>FT.DEL</strong> index id - Delete document from index</li>
+  <li><strong>FT.SEARCH</strong> index vector limit [options] - Search documents</li>
+  <li><strong>FT.INFO</strong> index - Get index information and statistics</li>
+</ul>
+
+<h3 id="time-series-ts-namespace--planned">Time Series (TS.* namespace) 📋 PLANNED</h3>
+<p><strong>Complete RedisTimeSeries compatibility for IoT and monitoring</strong> - <em>Coming Soon</em></p>
+
+<ul>
+  <li><strong>TS.CREATE</strong> key [options] - Create time series with retention policies</li>
+  <li><strong>TS.ALTER</strong> key [options] - Modify time series configuration</li>
+  <li><strong>TS.ADD</strong> key timestamp value - Add sample to time series</li>
+  <li><strong>TS.MADD</strong> key1 ts1 val1 [key2 ts2 val2…] - Add multiple samples</li>
+  <li><strong>TS.INCRBY</strong> / <strong>TS.DECRBY</strong> key value - Increment/decrement by value</li>
+  <li><strong>TS.DEL</strong> key fromTimestamp toTimestamp - Delete samples in range</li>
+  <li><strong>TS.GET</strong> key - Get latest sample</li>
+  <li><strong>TS.MGET</strong> key1 [key2…] - Get latest from multiple series</li>
+  <li><strong>TS.INFO</strong> key - Get time series information and statistics</li>
+  <li><strong>TS.RANGE</strong> / <strong>TS.REVRANGE</strong> key from to [AGGREGATION func duration] - Query ranges</li>
+  <li><strong>TS.MRANGE</strong> / <strong>TS.MREVRANGE</strong> - Query multiple time series</li>
+  <li><strong>TS.CREATERULE</strong> / <strong>TS.DELETERULE</strong> - Manage compaction rules</li>
+  <li><strong>TS.QUERYINDEX</strong> - Query time series by labels</li>
+</ul>
+
+<p><strong>Aggregation Functions</strong>: AVG, SUM, MIN, MAX, COUNT, FIRST, LAST, STDDEV, VAR</p>
+
+<pre><code class="language-redis">TS.CREATE temperature:sensor1 RETENTION 3600000 LABELS sensor_id "001" location "office"
+TS.ADD temperature:sensor1 * 23.5
+TS.RANGE temperature:sensor1 - + AGGREGATION AVG 60000
+</code></pre>
+
+<h3 id="graph-database-graph-namespace--planned">Graph Database (GRAPH.* namespace) 📋 PLANNED</h3>
+<p><strong>Cypher-like graph queries with execution planning</strong> - <em>Coming Soon</em></p>
+
+<ul>
+  <li><strong>GRAPH.QUERY</strong> graph_name query - Execute graph query with write operations</li>
+  <li><strong>GRAPH.RO_QUERY</strong> graph_name query - Execute read-only graph query</li>
+  <li><strong>GRAPH.DELETE</strong> graph_name - Delete entire graph</li>
+  <li><strong>GRAPH.LIST</strong> - List all graphs in system</li>
+  <li><strong>GRAPH.EXPLAIN</strong> graph_name query - Get query execution plan</li>
+  <li><strong>GRAPH.PROFILE</strong> graph_name query - Profile query with metrics</li>
+  <li><strong>GRAPH.SLOWLOG</strong> graph_name - Get slow query log</li>
+  <li>
+    <table>
+      <tbody>
+        <tr>
+          <td><strong>GRAPH.CONFIG</strong> GET</td>
+          <td>SET parameter [value] - Configure graph settings</td>
+        </tr>
+      </tbody>
+    </table>
+  </li>
+</ul>
+
+<pre><code class="language-redis">GRAPH.QUERY social "MATCH (p:Person {name: 'Alice'}) RETURN p"
+GRAPH.EXPLAIN social "MATCH (p:Person) WHERE p.age &gt; 25 RETURN p.name"
+</code></pre>
+
+<h3 id="actor-mapping">Actor Mapping</h3>
+
+<p>Each Redis command family maps to corresponding Orbit actor operations:</p>
+
+<h4 id="core-data-types">Core Data Types</h4>
+<ul>
+  <li><strong>String commands</strong> → <code class="language-plaintext highlighter-rouge">KeyValueActor</code> - TTL-aware key-value pairs with expiration</li>
+  <li><strong>Hash commands</strong> → <code class="language-plaintext highlighter-rouge">HashActor</code> - Hash maps with field-value operations</li>
+  <li><strong>List commands</strong> → <code class="language-plaintext highlighter-rouge">ListActor</code> - Ordered lists with push/pop/range operations</li>
+  <li><strong>Set commands</strong> → <code class="language-plaintext highlighter-rouge">SetActor</code> - Unique member sets with union/intersection</li>
+  <li><strong>Sorted Set commands</strong> → <code class="language-plaintext highlighter-rouge">SortedSetActor</code> - Score-ordered sets with ranking</li>
+  <li><strong>Pub/Sub commands</strong> → <code class="language-plaintext highlighter-rouge">PubSubActor</code> - Message channels with pattern matching</li>
+</ul>
+
+<h4 id="advanced-extensions">Advanced Extensions</h4>
+<ul>
+  <li><strong>Vector commands</strong> → <code class="language-plaintext highlighter-rouge">VectorActor</code> - AI/ML vector operations with similarity search</li>
+  <li><strong>Time Series commands</strong> → <code class="language-plaintext highlighter-rouge">TimeSeriesActor</code> - Time-series data with aggregation</li>
+  <li><strong>Graph commands</strong> → <code class="language-plaintext highlighter-rouge">GraphActor</code> - Graph database with Cypher-like queries</li>
+</ul>
+
+<h3 id="redis-configuration-example">Redis Configuration Example</h3>
+
+<div class="language-toml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">[</span><span class="n">redis</span><span class="k">]</span>
+<span class="n">enabled</span> <span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+<span class="n">host</span> <span class="o">=</span><span class="w"> </span><span class="s">"127.0.0.1"</span>
+<span class="n">port</span> <span class="o">=</span><span class="w"> </span><span class="mi">6380</span>
+<span class="n">max_connections</span> <span class="o">=</span><span class="w"> </span><span class="mi">1000</span>
+<span class="n">default_ttl</span> <span class="o">=</span><span class="w"> </span><span class="mi">3600</span>
+
+<span class="k">[</span><span class="n">redis</span><span class="k">.</span><span class="n">actors</span><span class="k">]</span>
+<span class="n">key_value_actor</span> <span class="o">=</span><span class="w"> </span><span class="s">"KeyValueActor"</span>
+<span class="n">hash_actor</span> <span class="o">=</span><span class="w"> </span><span class="s">"HashActor"</span>
+<span class="n">list_actor</span> <span class="o">=</span><span class="w"> </span><span class="s">"ListActor"</span>
+<span class="n">pubsub_actor</span> <span class="o">=</span><span class="w"> </span><span class="s">"PubSubActor"</span>
+</code></pre></div></div>
+
+<h2 id="postgresql-wire-protocol--experimental">PostgreSQL Wire Protocol 🧪 EXPERIMENTAL</h2>
+
+<p>Connect to Orbit actors using any PostgreSQL client. <strong>Note</strong>: This is an experimental implementation providing basic SQL parsing for actor operations.</p>
+
+<h3 id="quick-start">Quick Start</h3>
+
+<p>Start the PostgreSQL-compatible server and connect with psql:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Start the PostgreSQL-compatible server example</span>
+cargo run <span class="nt">--example</span> postgres-server
+
+<span class="c"># In another terminal, connect with psql</span>
+psql <span class="nt">-h</span> 127.0.0.1 <span class="nt">-p</span> 5433 <span class="nt">-U</span> orbit <span class="nt">-d</span> actors
+</code></pre></div></div>
+
+<h4 id="essential-sql-operations-for-actors">Essential SQL Operations for Actors</h4>
+
+<p>Once connected, you can immediately start working with actors using familiar SQL:</p>
+
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Create a new actor with JSON state</span>
+<span class="k">INSERT</span> <span class="k">INTO</span> <span class="n">actors</span> <span class="p">(</span><span class="n">actor_id</span><span class="p">,</span> <span class="n">actor_type</span><span class="p">,</span> <span class="k">state</span><span class="p">)</span> 
+<span class="k">VALUES</span> <span class="p">(</span><span class="s1">'user:alice'</span><span class="p">,</span> <span class="s1">'UserActor'</span><span class="p">,</span> <span class="s1">'{"name": "Alice", "email": "alice@example.com"}'</span><span class="p">);</span>
+
+<span class="c1">-- Query actors</span>
+<span class="k">SELECT</span> <span class="o">*</span> <span class="k">FROM</span> <span class="n">actors</span><span class="p">;</span>
+<span class="k">SELECT</span> <span class="n">actor_id</span><span class="p">,</span> <span class="n">actor_type</span> <span class="k">FROM</span> <span class="n">actors</span> <span class="k">WHERE</span> <span class="n">actor_type</span> <span class="o">=</span> <span class="s1">'UserActor'</span><span class="p">;</span>
+
+<span class="c1">-- Update actor state with complex JSON</span>
+<span class="k">UPDATE</span> <span class="n">actors</span> 
+<span class="k">SET</span> <span class="k">state</span> <span class="o">=</span> <span class="s1">'{"name": "Alice Johnson", "email": "alice.j@example.com", "verified": true}'</span> 
+<span class="k">WHERE</span> <span class="n">actor_id</span> <span class="o">=</span> <span class="s1">'user:alice'</span><span class="p">;</span>
+
+<span class="c1">-- Remove actors</span>
+<span class="k">DELETE</span> <span class="k">FROM</span> <span class="n">actors</span> <span class="k">WHERE</span> <span class="n">actor_id</span> <span class="o">=</span> <span class="s1">'user:alice'</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h4 id="currently-supported-sql-features">Currently Supported SQL Features</h4>
+
+<p>✅ <strong>Basic SQL statements</strong>: <code class="language-plaintext highlighter-rouge">SELECT</code>, <code class="language-plaintext highlighter-rouge">INSERT</code>, <code class="language-plaintext highlighter-rouge">UPDATE</code>, <code class="language-plaintext highlighter-rouge">DELETE</code> (actor operations only)
+✅ <strong>Basic SQL clauses</strong>: <code class="language-plaintext highlighter-rouge">FROM</code>, <code class="language-plaintext highlighter-rouge">WHERE</code>, <code class="language-plaintext highlighter-rouge">SET</code>, <code class="language-plaintext highlighter-rouge">INTO</code>, <code class="language-plaintext highlighter-rouge">VALUES</code>
+✅ <strong>WHERE operators</strong>: <code class="language-plaintext highlighter-rouge">=</code>, <code class="language-plaintext highlighter-rouge">!=</code>, <code class="language-plaintext highlighter-rouge">&lt;&gt;</code> (limited conditional logic)
+✅ <strong>JSON support</strong>: Basic JSON state storage and retrieval
+✅ <strong>Case insensitive</strong>: Keywords work in any case combination
+♾️ <strong>Note</strong>: This is a basic implementation focused on actor state management, not full PostgreSQL compatibility</p>
+
+<h3 id="vector-database-capabilities">Vector Database Capabilities</h3>
+
+<p><strong>Note</strong>: Vector database features with <code class="language-plaintext highlighter-rouge">CREATE TABLE</code> and vector extensions are planned for future releases. Currently, Orbit-RS PostgreSQL protocol provides full actor-based operations.</p>
+
+<p>The current implementation focuses on actor state management with JSON support:</p>
+
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Current: Actor-based approach for storing vector data</span>
+<span class="k">INSERT</span> <span class="k">INTO</span> <span class="n">actors</span> <span class="p">(</span><span class="n">actor_id</span><span class="p">,</span> <span class="n">actor_type</span><span class="p">,</span> <span class="k">state</span><span class="p">)</span> 
+<span class="k">VALUES</span> <span class="p">(</span><span class="s1">'document:ai-paper'</span><span class="p">,</span> <span class="s1">'DocumentActor'</span><span class="p">,</span> <span class="s1">'{
+    "title": "AI in Healthcare",
+    "content": "Article about AI applications in medical field...",
+    "embedding": [0.1, 0.2, 0.3, 0.4, 0.5],
+    "metadata": {"category": "healthcare", "published": "2024-01-15"}
+}'</span><span class="p">);</span>
+
+<span class="c1">-- Query documents by type</span>
+<span class="k">SELECT</span> <span class="o">*</span> <span class="k">FROM</span> <span class="n">actors</span> <span class="k">WHERE</span> <span class="n">actor_type</span> <span class="o">=</span> <span class="s1">'DocumentActor'</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h4 id="future-vector-support-planned">Future Vector Support (Planned)</h4>
+
+<p>Upcoming releases will include full vector database capabilities:</p>
+
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Planned: Traditional table-based approach</span>
+<span class="c1">-- Enable vector extension</span>
+<span class="k">CREATE</span> <span class="n">EXTENSION</span> <span class="n">IF</span> <span class="k">NOT</span> <span class="k">EXISTS</span> <span class="n">vector</span><span class="p">;</span>
+
+<span class="c1">-- Create table with vector embeddings</span>
+<span class="k">CREATE</span> <span class="k">TABLE</span> <span class="n">documents</span> <span class="p">(</span>
+    <span class="n">id</span> <span class="nb">SERIAL</span> <span class="k">PRIMARY</span> <span class="k">KEY</span><span class="p">,</span>
+    <span class="n">title</span> <span class="nb">VARCHAR</span><span class="p">(</span><span class="mi">255</span><span class="p">)</span> <span class="k">NOT</span> <span class="k">NULL</span><span class="p">,</span>
+    <span class="n">content</span> <span class="nb">TEXT</span><span class="p">,</span>
+    <span class="n">embedding</span> <span class="n">VECTOR</span><span class="p">(</span><span class="mi">768</span><span class="p">),</span>  <span class="c1">-- 768-dimensional vector</span>
+    <span class="n">metadata</span> <span class="n">JSONB</span><span class="p">,</span>
+    <span class="n">created_at</span> <span class="nb">TIMESTAMP</span> <span class="k">DEFAULT</span> <span class="n">NOW</span><span class="p">()</span>
+<span class="p">);</span>
+
+<span class="c1">-- Create vector indexes for similarity search</span>
+<span class="k">CREATE</span> <span class="k">INDEX</span> <span class="n">embedding_hnsw_idx</span> 
+<span class="k">ON</span> <span class="n">documents</span> <span class="k">USING</span> <span class="n">hnsw</span> <span class="p">(</span><span class="n">embedding</span><span class="p">)</span> 
+<span class="k">WITH</span> <span class="p">(</span><span class="n">m</span> <span class="o">=</span> <span class="mi">16</span><span class="p">,</span> <span class="n">ef_construction</span> <span class="o">=</span> <span class="mi">64</span><span class="p">);</span>
+
+<span class="c1">-- Create IVFFLAT index for large datasets</span>
+<span class="k">CREATE</span> <span class="k">INDEX</span> <span class="n">embedding_ivfflat_idx</span>
+<span class="k">ON</span> <span class="n">documents</span> <span class="k">USING</span> <span class="n">ivfflat</span> <span class="p">(</span><span class="n">embedding</span><span class="p">)</span>
+<span class="k">WITH</span> <span class="p">(</span><span class="n">lists</span> <span class="o">=</span> <span class="mi">100</span><span class="p">);</span>
+
+<span class="c1">-- Insert documents with embeddings</span>
+<span class="k">INSERT</span> <span class="k">INTO</span> <span class="n">documents</span> <span class="p">(</span><span class="n">title</span><span class="p">,</span> <span class="n">content</span><span class="p">,</span> <span class="n">embedding</span><span class="p">)</span> <span class="k">VALUES</span> 
+<span class="p">(</span><span class="s1">'AI in Healthcare'</span><span class="p">,</span> <span class="s1">'Article about AI applications...'</span><span class="p">,</span> <span class="s1">'[0.1, 0.2, 0.3, ...]'</span><span class="p">),</span>
+<span class="p">(</span><span class="s1">'Machine Learning Basics'</span><span class="p">,</span> <span class="s1">'Introduction to ML concepts...'</span><span class="p">,</span> <span class="s1">'[0.2, 0.1, 0.4, ...]'</span><span class="p">);</span>
+
+<span class="c1">-- Perform vector similarity searches</span>
+<span class="k">SELECT</span> <span class="n">title</span><span class="p">,</span> <span class="n">content</span><span class="p">,</span> <span class="n">embedding</span> <span class="o">&lt;-&gt;</span> <span class="s1">'[0.1, 0.2, 0.3, ...]'</span> <span class="k">AS</span> <span class="n">distance</span>
+<span class="k">FROM</span> <span class="n">documents</span> 
+<span class="k">ORDER</span> <span class="k">BY</span> <span class="n">distance</span> 
+<span class="k">LIMIT</span> <span class="mi">5</span><span class="p">;</span>
+
+<span class="c1">-- Hybrid search combining vector similarity and text filtering</span>
+<span class="k">SELECT</span> <span class="n">title</span><span class="p">,</span> <span class="n">content</span><span class="p">,</span> <span class="n">distance</span>
+<span class="k">FROM</span> <span class="p">(</span>
+    <span class="k">SELECT</span> <span class="n">title</span><span class="p">,</span> <span class="n">content</span><span class="p">,</span> <span class="n">embedding</span> <span class="o">&lt;-&gt;</span> <span class="s1">'[0.1, 0.2, ...]'</span> <span class="k">AS</span> <span class="n">distance</span>
+    <span class="k">FROM</span> <span class="n">documents</span> 
+    <span class="k">WHERE</span> <span class="n">content</span> <span class="k">LIKE</span> <span class="s1">'%machine learning%'</span>
+    <span class="k">ORDER</span> <span class="k">BY</span> <span class="n">distance</span>
+    <span class="k">LIMIT</span> <span class="mi">10</span>
+<span class="p">)</span> <span class="n">subq</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h3 id="complete-sql-keyword-reference-with-examples-">Complete SQL Keyword Reference with Examples ✨</h3>
+
+<p>Orbit-RS supports a comprehensive set of SQL keywords for actor operations. All examples below are tested and ready to use.</p>
+
+<h4 id="sql-statement-keywords">SQL Statement Keywords</h4>
+
+<h5 id="insert---create-new-actors">INSERT - Create New Actors</h5>
+<p>Add new actors to the system with JSON state data.</p>
+
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Basic actor creation</span>
+<span class="k">INSERT</span> <span class="k">INTO</span> <span class="n">actors</span> <span class="p">(</span><span class="n">actor_id</span><span class="p">,</span> <span class="n">actor_type</span><span class="p">,</span> <span class="k">state</span><span class="p">)</span> 
+<span class="k">VALUES</span> <span class="p">(</span><span class="s1">'user:alice'</span><span class="p">,</span> <span class="s1">'UserActor'</span><span class="p">,</span> <span class="s1">'{"name": "Alice", "email": "alice@example.com"}'</span><span class="p">);</span>
+
+<span class="c1">-- Complex JSON state with nested objects and arrays</span>
+<span class="k">INSERT</span> <span class="k">INTO</span> <span class="n">actors</span> <span class="p">(</span><span class="n">actor_id</span><span class="p">,</span> <span class="n">actor_type</span><span class="p">,</span> <span class="k">state</span><span class="p">)</span> 
+<span class="k">VALUES</span> <span class="p">(</span><span class="s1">'order:12345'</span><span class="p">,</span> <span class="s1">'OrderActor'</span><span class="p">,</span> <span class="s1">'{
+    "order_id": "12345",
+    "customer": {"name": "Bob", "address": "123 Main St"},
+    "items": [{"product": "laptop", "quantity": 1, "price": 999.99}],
+    "status": "pending",
+    "total": 999.99
+}'</span><span class="p">);</span>
+
+<span class="c1">-- Multiple actors in one statement</span>
+<span class="k">INSERT</span> <span class="k">INTO</span> <span class="n">actors</span> <span class="p">(</span><span class="n">actor_id</span><span class="p">,</span> <span class="n">actor_type</span><span class="p">,</span> <span class="k">state</span><span class="p">)</span> <span class="k">VALUES</span> 
+    <span class="p">(</span><span class="s1">'cache:sessions'</span><span class="p">,</span> <span class="s1">'CacheActor'</span><span class="p">,</span> <span class="s1">'{"type": "redis", "ttl": 3600}'</span><span class="p">),</span>
+    <span class="p">(</span><span class="s1">'cache:products'</span><span class="p">,</span> <span class="s1">'CacheActor'</span><span class="p">,</span> <span class="s1">'{"type": "memory", "max_size": 1000}'</span><span class="p">);</span>
+</code></pre></div></div>
+
+<h5 id="select---query-actor-data">SELECT - Query Actor Data</h5>
+<p>Retrieve actors and their state information.</p>
+
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Retrieve all actors</span>
+<span class="k">SELECT</span> <span class="o">*</span> <span class="k">FROM</span> <span class="n">actors</span><span class="p">;</span>
+
+<span class="c1">-- Select specific columns</span>
+<span class="k">SELECT</span> <span class="n">actor_id</span><span class="p">,</span> <span class="n">actor_type</span> <span class="k">FROM</span> <span class="n">actors</span><span class="p">;</span>
+
+<span class="c1">-- Filter by actor type</span>
+<span class="k">SELECT</span> <span class="o">*</span> <span class="k">FROM</span> <span class="n">actors</span> <span class="k">WHERE</span> <span class="n">actor_type</span> <span class="o">=</span> <span class="s1">'UserActor'</span><span class="p">;</span>
+
+<span class="c1">-- Pattern matching on actor IDs</span>
+<span class="k">SELECT</span> <span class="n">actor_id</span><span class="p">,</span> <span class="k">state</span> <span class="k">FROM</span> <span class="n">actors</span> <span class="k">WHERE</span> <span class="n">actor_id</span> <span class="k">LIKE</span> <span class="s1">'product:%'</span><span class="p">;</span>
+
+<span class="c1">-- Multiple conditions</span>
+<span class="k">SELECT</span> <span class="n">actor_id</span><span class="p">,</span> <span class="n">actor_type</span><span class="p">,</span> <span class="k">state</span> 
+<span class="k">FROM</span> <span class="n">actors</span> 
+<span class="k">WHERE</span> <span class="p">(</span><span class="n">actor_type</span> <span class="o">=</span> <span class="s1">'ProductActor'</span> <span class="k">OR</span> <span class="n">actor_type</span> <span class="o">=</span> <span class="s1">'UserActor'</span><span class="p">)</span> 
+  <span class="k">AND</span> <span class="n">actor_id</span> <span class="k">LIKE</span> <span class="s1">'%user%'</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h5 id="update---modify-actor-state">UPDATE - Modify Actor State</h5>
+<p>Update existing actors with new state data.</p>
+
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Simple state update</span>
+<span class="k">UPDATE</span> <span class="n">actors</span> 
+<span class="k">SET</span> <span class="k">state</span> <span class="o">=</span> <span class="s1">'{"name": "Alice Johnson", "email": "alice.johnson@example.com", "verified": true}'</span> 
+<span class="k">WHERE</span> <span class="n">actor_id</span> <span class="o">=</span> <span class="s1">'user:alice'</span><span class="p">;</span>
+
+<span class="c1">-- Complex nested JSON update</span>
+<span class="k">UPDATE</span> <span class="n">actors</span> 
+<span class="k">SET</span> <span class="k">state</span> <span class="o">=</span> <span class="s1">'{
+    "name": "Premium Gaming Laptop",
+    "price": 1599.99,
+    "category": "electronics",
+    "specs": {"cpu": "Intel i7", "ram": "32GB", "storage": "1TB SSD"},
+    "tags": ["gaming", "high-performance", "portable"]
+}'</span> 
+<span class="k">WHERE</span> <span class="n">actor_id</span> <span class="o">=</span> <span class="s1">'product:laptop'</span><span class="p">;</span>
+
+<span class="c1">-- Conditional updates</span>
+<span class="k">UPDATE</span> <span class="n">actors</span> 
+<span class="k">SET</span> <span class="k">state</span> <span class="o">=</span> <span class="s1">'{"status": "shipped", "tracking": "TRK123456"}'</span> 
+<span class="k">WHERE</span> <span class="n">actor_type</span> <span class="o">=</span> <span class="s1">'OrderActor'</span> <span class="k">AND</span> <span class="n">actor_id</span> <span class="o">=</span> <span class="s1">'order:12345'</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h5 id="delete---remove-actors">DELETE - Remove Actors</h5>
+<p>Remove actors from the system.</p>
+
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Delete specific actor</span>
+<span class="k">DELETE</span> <span class="k">FROM</span> <span class="n">actors</span> <span class="k">WHERE</span> <span class="n">actor_id</span> <span class="o">=</span> <span class="s1">'user:alice'</span><span class="p">;</span>
+
+<span class="c1">-- Delete by type</span>
+<span class="k">DELETE</span> <span class="k">FROM</span> <span class="n">actors</span> <span class="k">WHERE</span> <span class="n">actor_type</span> <span class="o">=</span> <span class="s1">'TempActor'</span><span class="p">;</span>
+
+<span class="c1">-- Delete with complex conditions</span>
+<span class="k">DELETE</span> <span class="k">FROM</span> <span class="n">actors</span> 
+<span class="k">WHERE</span> <span class="n">actor_type</span> <span class="o">=</span> <span class="s1">'CacheActor'</span> <span class="k">AND</span> <span class="n">actor_id</span> <span class="k">LIKE</span> <span class="s1">'temp:%'</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h4 id="sql-clause-keywords">SQL Clause Keywords</h4>
+
+<h5 id="from---specify-data-source">FROM - Specify Data Source</h5>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Basic table reference</span>
+<span class="k">SELECT</span> <span class="n">actor_id</span><span class="p">,</span> <span class="n">actor_type</span> <span class="k">FROM</span> <span class="n">actors</span><span class="p">;</span>
+
+<span class="c1">-- The 'actors' table is the primary data source for all operations</span>
+<span class="k">SELECT</span> <span class="k">COUNT</span><span class="p">(</span><span class="o">*</span><span class="p">)</span> <span class="k">as</span> <span class="n">total_actors</span> <span class="k">FROM</span> <span class="n">actors</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h5 id="where---filter-results">WHERE - Filter Results</h5>
+<p>Supports multiple operators for flexible filtering.</p>
+
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Equality filtering</span>
+<span class="k">SELECT</span> <span class="o">*</span> <span class="k">FROM</span> <span class="n">actors</span> <span class="k">WHERE</span> <span class="n">actor_type</span> <span class="o">=</span> <span class="s1">'UserActor'</span><span class="p">;</span>
+
+<span class="c1">-- Pattern matching</span>
+<span class="k">SELECT</span> <span class="o">*</span> <span class="k">FROM</span> <span class="n">actors</span> <span class="k">WHERE</span> <span class="n">actor_id</span> <span class="k">LIKE</span> <span class="s1">'service:%'</span><span class="p">;</span>
+
+<span class="c1">-- Multiple conditions with AND/OR</span>
+<span class="k">SELECT</span> <span class="o">*</span> <span class="k">FROM</span> <span class="n">actors</span> 
+<span class="k">WHERE</span> <span class="p">(</span><span class="n">actor_type</span> <span class="o">=</span> <span class="s1">'ProductActor'</span> <span class="k">OR</span> <span class="n">actor_type</span> <span class="o">=</span> <span class="s1">'ServiceActor'</span><span class="p">)</span>
+  <span class="k">AND</span> <span class="n">actor_id</span> <span class="k">NOT</span> <span class="k">LIKE</span> <span class="s1">'temp:%'</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h5 id="set---update-values">SET - Update Values</h5>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Simple value assignment</span>
+<span class="k">UPDATE</span> <span class="n">actors</span> <span class="k">SET</span> <span class="k">state</span> <span class="o">=</span> <span class="s1">'{"active": true}'</span> <span class="k">WHERE</span> <span class="n">actor_id</span> <span class="o">=</span> <span class="s1">'service:auth'</span><span class="p">;</span>
+
+<span class="c1">-- Complex JSON assignment</span>
+<span class="k">UPDATE</span> <span class="n">actors</span> <span class="k">SET</span> <span class="k">state</span> <span class="o">=</span> <span class="s1">'{
+    "configuration": {
+        "database": {"host": "localhost", "port": 5432},
+        "cache": {"enabled": true, "ttl": 300},
+        "features": ["auth", "logging", "metrics"]
+    },
+    "status": "configured"
+}'</span> <span class="k">WHERE</span> <span class="n">actor_id</span> <span class="o">=</span> <span class="s1">'config:app'</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h5 id="into---target-table-specification">INTO - Target Table Specification</h5>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Standard insertion syntax</span>
+<span class="k">INSERT</span> <span class="k">INTO</span> <span class="n">actors</span> <span class="p">(</span><span class="n">actor_id</span><span class="p">,</span> <span class="n">actor_type</span><span class="p">,</span> <span class="k">state</span><span class="p">)</span> 
+<span class="k">VALUES</span> <span class="p">(</span><span class="s1">'service:payment'</span><span class="p">,</span> <span class="s1">'PaymentServiceActor'</span><span class="p">,</span> <span class="s1">'{
+    "provider": "stripe",
+    "enabled": true,
+    "supported_currencies": ["USD", "EUR", "GBP"]
+}'</span><span class="p">);</span>
+</code></pre></div></div>
+
+<h5 id="values---data-specification">VALUES - Data Specification</h5>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Single row insertion</span>
+<span class="k">INSERT</span> <span class="k">INTO</span> <span class="n">actors</span> <span class="p">(</span><span class="n">actor_id</span><span class="p">,</span> <span class="n">actor_type</span><span class="p">,</span> <span class="k">state</span><span class="p">)</span> 
+<span class="k">VALUES</span> <span class="p">(</span><span class="s1">'config:app'</span><span class="p">,</span> <span class="s1">'ConfigActor'</span><span class="p">,</span> <span class="s1">'{"debug": true, "port": 8080}'</span><span class="p">);</span>
+
+<span class="c1">-- Multiple rows</span>
+<span class="k">INSERT</span> <span class="k">INTO</span> <span class="n">actors</span> <span class="p">(</span><span class="n">actor_id</span><span class="p">,</span> <span class="n">actor_type</span><span class="p">,</span> <span class="k">state</span><span class="p">)</span> <span class="k">VALUES</span> 
+    <span class="p">(</span><span class="s1">'metric:cpu'</span><span class="p">,</span> <span class="s1">'MetricActor'</span><span class="p">,</span> <span class="s1">'{"type": "gauge", "value": 45.2}'</span><span class="p">),</span>
+    <span class="p">(</span><span class="s1">'metric:memory'</span><span class="p">,</span> <span class="s1">'MetricActor'</span><span class="p">,</span> <span class="s1">'{"type": "gauge", "value": 78.5}'</span><span class="p">),</span>
+    <span class="p">(</span><span class="s1">'metric:requests'</span><span class="p">,</span> <span class="s1">'MetricActor'</span><span class="p">,</span> <span class="s1">'{"type": "counter", "value": 12450}'</span><span class="p">);</span>
+</code></pre></div></div>
+
+<h4 id="where-clause-operators">WHERE Clause Operators</h4>
+
+<h5 id="-equality">= (Equality)</h5>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Exact match</span>
+<span class="k">SELECT</span> <span class="o">*</span> <span class="k">FROM</span> <span class="n">actors</span> <span class="k">WHERE</span> <span class="n">actor_type</span> <span class="o">=</span> <span class="s1">'UserActor'</span><span class="p">;</span>
+<span class="k">SELECT</span> <span class="o">*</span> <span class="k">FROM</span> <span class="n">actors</span> <span class="k">WHERE</span> <span class="n">actor_id</span> <span class="o">=</span> <span class="s1">'user:alice'</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h5 id="-not-equal">!= (Not Equal)</h5>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Exclude specific types</span>
+<span class="k">SELECT</span> <span class="n">actor_id</span><span class="p">,</span> <span class="n">actor_type</span> <span class="k">FROM</span> <span class="n">actors</span> <span class="k">WHERE</span> <span class="n">actor_type</span> <span class="o">!=</span> <span class="s1">'TempActor'</span><span class="p">;</span>
+<span class="k">SELECT</span> <span class="o">*</span> <span class="k">FROM</span> <span class="n">actors</span> <span class="k">WHERE</span> <span class="n">actor_id</span> <span class="o">!=</span> <span class="s1">'system:internal'</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h5 id="-not-equal-alternative">&lt;&gt; (Not Equal Alternative)</h5>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Alternative not-equal syntax</span>
+<span class="k">SELECT</span> <span class="o">*</span> <span class="k">FROM</span> <span class="n">actors</span> <span class="k">WHERE</span> <span class="n">actor_type</span> <span class="o">&lt;&gt;</span> <span class="s1">'CacheActor'</span><span class="p">;</span>
+<span class="k">SELECT</span> <span class="n">actor_id</span> <span class="k">FROM</span> <span class="n">actors</span> <span class="k">WHERE</span> <span class="n">actor_type</span> <span class="o">&lt;&gt;</span> <span class="s1">'SystemActor'</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h4 id="table-support">Table Support</h4>
+
+<h5 id="actors---the-primary-table">actors - The Primary Table</h5>
+<p>All actor operations use the <code class="language-plaintext highlighter-rouge">actors</code> table.</p>
+
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Table structure (conceptual)</span>
+<span class="c1">-- actors(</span>
+<span class="c1">--     actor_id    TEXT PRIMARY KEY,    -- Unique actor identifier  </span>
+<span class="c1">--     actor_type  TEXT NOT NULL,        -- Type/class of the actor</span>
+<span class="c1">--     state       JSONB NOT NULL        -- JSON state data</span>
+<span class="c1">-- )</span>
+
+<span class="c1">-- Query table information</span>
+<span class="k">SELECT</span> <span class="k">COUNT</span><span class="p">(</span><span class="o">*</span><span class="p">)</span> <span class="k">as</span> <span class="n">total_actors</span> <span class="k">FROM</span> <span class="n">actors</span><span class="p">;</span>
+<span class="k">SELECT</span> <span class="k">DISTINCT</span> <span class="n">actor_type</span> <span class="k">FROM</span> <span class="n">actors</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h4 id="column-support">Column Support</h4>
+
+<h5 id="actor_id---primary-identifier">actor_id - Primary Identifier</h5>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Query by specific ID</span>
+<span class="k">SELECT</span> <span class="o">*</span> <span class="k">FROM</span> <span class="n">actors</span> <span class="k">WHERE</span> <span class="n">actor_id</span> <span class="o">=</span> <span class="s1">'user:alice'</span><span class="p">;</span>
+
+<span class="c1">-- Pattern matching on IDs</span>
+<span class="k">SELECT</span> <span class="n">actor_id</span> <span class="k">FROM</span> <span class="n">actors</span> <span class="k">WHERE</span> <span class="n">actor_id</span> <span class="k">LIKE</span> <span class="s1">'product:%'</span><span class="p">;</span>
+<span class="k">SELECT</span> <span class="n">actor_id</span> <span class="k">FROM</span> <span class="n">actors</span> <span class="k">WHERE</span> <span class="n">actor_id</span> <span class="k">LIKE</span> <span class="s1">'%@company.com'</span><span class="p">;</span>
+
+<span class="c1">-- ID-based operations</span>
+<span class="k">DELETE</span> <span class="k">FROM</span> <span class="n">actors</span> <span class="k">WHERE</span> <span class="n">actor_id</span> <span class="o">=</span> <span class="s1">'temp:session:12345'</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h5 id="actor_type---actor-classification">actor_type - Actor Classification</h5>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Filter by actor type</span>
+<span class="k">SELECT</span> <span class="o">*</span> <span class="k">FROM</span> <span class="n">actors</span> <span class="k">WHERE</span> <span class="n">actor_type</span> <span class="o">=</span> <span class="s1">'UserActor'</span><span class="p">;</span>
+
+<span class="c1">-- Group by type</span>
+<span class="k">SELECT</span> <span class="n">actor_type</span><span class="p">,</span> <span class="k">COUNT</span><span class="p">(</span><span class="o">*</span><span class="p">)</span> <span class="k">as</span> <span class="k">count</span> <span class="k">FROM</span> <span class="n">actors</span> <span class="k">GROUP</span> <span class="k">BY</span> <span class="n">actor_type</span><span class="p">;</span>
+
+<span class="c1">-- Multiple type filtering</span>
+<span class="k">SELECT</span> <span class="o">*</span> <span class="k">FROM</span> <span class="n">actors</span> 
+<span class="k">WHERE</span> <span class="n">actor_type</span> <span class="k">IN</span> <span class="p">(</span><span class="s1">'UserActor'</span><span class="p">,</span> <span class="s1">'ServiceActor'</span><span class="p">,</span> <span class="s1">'ProductActor'</span><span class="p">);</span>
+</code></pre></div></div>
+
+<h5 id="state---json-state-data">state - JSON State Data</h5>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Retrieve state information</span>
+<span class="k">SELECT</span> <span class="n">actor_id</span><span class="p">,</span> <span class="k">state</span> <span class="k">FROM</span> <span class="n">actors</span> <span class="k">WHERE</span> <span class="n">actor_type</span> <span class="o">=</span> <span class="s1">'UserActor'</span><span class="p">;</span>
+
+<span class="c1">-- State-based filtering (basic pattern matching)</span>
+<span class="k">SELECT</span> <span class="o">*</span> <span class="k">FROM</span> <span class="n">actors</span> <span class="k">WHERE</span> <span class="n">actor_id</span> <span class="k">LIKE</span> <span class="s1">'config:%'</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h5 id="-all-columns">* (All Columns)</h5>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Retrieve complete records</span>
+<span class="k">SELECT</span> <span class="o">*</span> <span class="k">FROM</span> <span class="n">actors</span><span class="p">;</span>
+<span class="k">SELECT</span> <span class="o">*</span> <span class="k">FROM</span> <span class="n">actors</span> <span class="k">WHERE</span> <span class="n">actor_type</span> <span class="o">=</span> <span class="s1">'ProductActor'</span><span class="p">;</span>
+<span class="k">SELECT</span> <span class="o">*</span> <span class="k">FROM</span> <span class="n">actors</span> <span class="k">WHERE</span> <span class="n">actor_id</span> <span class="k">LIKE</span> <span class="s1">'service:%'</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h5 id="multiple-column-selection">Multiple Column Selection</h5>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Specific column combinations</span>
+<span class="k">SELECT</span> <span class="n">actor_id</span><span class="p">,</span> <span class="n">actor_type</span> <span class="k">FROM</span> <span class="n">actors</span><span class="p">;</span>
+<span class="k">SELECT</span> <span class="n">actor_id</span><span class="p">,</span> <span class="n">actor_type</span><span class="p">,</span> <span class="k">state</span> <span class="k">FROM</span> <span class="n">actors</span> <span class="k">WHERE</span> <span class="n">actor_type</span> <span class="o">=</span> <span class="s1">'ConfigActor'</span><span class="p">;</span>
+
+<span class="c1">-- Ordered selection</span>
+<span class="k">SELECT</span> <span class="n">actor_type</span><span class="p">,</span> <span class="n">actor_id</span><span class="p">,</span> <span class="k">state</span> <span class="k">FROM</span> <span class="n">actors</span> <span class="k">ORDER</span> <span class="k">BY</span> <span class="n">actor_type</span><span class="p">,</span> <span class="n">actor_id</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h4 id="json-state-examples">JSON State Examples</h4>
+
+<p>Orbit-RS provides robust JSON support for complex actor state management.</p>
+
+<h5 id="simple-json">Simple JSON</h5>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Basic key-value pairs</span>
+<span class="k">INSERT</span> <span class="k">INTO</span> <span class="n">actors</span> <span class="p">(</span><span class="n">actor_id</span><span class="p">,</span> <span class="n">actor_type</span><span class="p">,</span> <span class="k">state</span><span class="p">)</span> 
+<span class="k">VALUES</span> <span class="p">(</span><span class="s1">'config:app'</span><span class="p">,</span> <span class="s1">'ConfigActor'</span><span class="p">,</span> <span class="s1">'{
+    "debug": true,
+    "port": 8080,
+    "environment": "development"
+}'</span><span class="p">);</span>
+</code></pre></div></div>
+
+<h5 id="nested-json-objects">Nested JSON Objects</h5>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Complex nested structures</span>
+<span class="k">INSERT</span> <span class="k">INTO</span> <span class="n">actors</span> <span class="p">(</span><span class="n">actor_id</span><span class="p">,</span> <span class="n">actor_type</span><span class="p">,</span> <span class="k">state</span><span class="p">)</span> 
+<span class="k">VALUES</span> <span class="p">(</span><span class="s1">'user:profile'</span><span class="p">,</span> <span class="s1">'UserProfileActor'</span><span class="p">,</span> <span class="s1">'{
+    "user_id": "12345",
+    "profile": {
+        "personal": {"name": "John Doe", "age": 30},
+        "preferences": {"theme": "dark", "notifications": true}
+    },
+    "metadata": {
+        "created_at": "2024-01-15T10:30:00Z",
+        "last_login": "2024-01-20T14:45:00Z"
+    }
+}'</span><span class="p">);</span>
+</code></pre></div></div>
+
+<h5 id="json-arrays">JSON Arrays</h5>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Arrays and collections</span>
+<span class="k">INSERT</span> <span class="k">INTO</span> <span class="n">actors</span> <span class="p">(</span><span class="n">actor_id</span><span class="p">,</span> <span class="n">actor_type</span><span class="p">,</span> <span class="k">state</span><span class="p">)</span> 
+<span class="k">VALUES</span> <span class="p">(</span><span class="s1">'playlist:favorites'</span><span class="p">,</span> <span class="s1">'PlaylistActor'</span><span class="p">,</span> <span class="s1">'{
+    "name": "My Favorites",
+    "songs": [
+        {"title": "Song 1", "artist": "Artist A", "duration": 180},
+        {"title": "Song 2", "artist": "Artist B", "duration": 240}
+    ],
+    "tags": ["pop", "rock", "favorites"],
+    "created_by": "user:12345"
+}'</span><span class="p">);</span>
+</code></pre></div></div>
+
+<h5 id="json-with-special-characters">JSON with Special Characters</h5>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Handling quotes and special characters</span>
+<span class="k">INSERT</span> <span class="k">INTO</span> <span class="n">actors</span> <span class="p">(</span><span class="n">actor_id</span><span class="p">,</span> <span class="n">actor_type</span><span class="p">,</span> <span class="k">state</span><span class="p">)</span> 
+<span class="k">VALUES</span> <span class="p">(</span><span class="s1">'message:welcome'</span><span class="p">,</span> <span class="s1">'MessageActor'</span><span class="p">,</span> <span class="s1">'{
+    "content": "Welcome to </span><span class="se">\"</span><span class="s1">Orbit-RS</span><span class="se">\"</span><span class="s1">! It'</span><span class="nv">"'"</span><span class="s1">'s great to have you here.",
+    "author": "System",
+    "type": "welcome"
+}'</span><span class="p">);</span>
+</code></pre></div></div>
+
+<h5 id="unicode-and-international-support">Unicode and International Support</h5>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- International characters and emoji</span>
+<span class="k">INSERT</span> <span class="k">INTO</span> <span class="n">actors</span> <span class="p">(</span><span class="n">actor_id</span><span class="p">,</span> <span class="n">actor_type</span><span class="p">,</span> <span class="k">state</span><span class="p">)</span> 
+<span class="k">VALUES</span> <span class="p">(</span><span class="s1">'greeting:international'</span><span class="p">,</span> <span class="s1">'GreetingActor'</span><span class="p">,</span> <span class="s1">'{
+    "messages": {
+        "english": "Hello! 👋",
+        "spanish": "¡Hola!",
+        "chinese": "你好",
+        "japanese": "こんにちは",
+        "emoji": "🌍🚀✨"
+    }
+}'</span><span class="p">);</span>
+</code></pre></div></div>
+
+<h5 id="empty-json-objects">Empty JSON Objects</h5>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Minimal state initialization</span>
+<span class="k">INSERT</span> <span class="k">INTO</span> <span class="n">actors</span> <span class="p">(</span><span class="n">actor_id</span><span class="p">,</span> <span class="n">actor_type</span><span class="p">,</span> <span class="k">state</span><span class="p">)</span> 
+<span class="k">VALUES</span> <span class="p">(</span><span class="s1">'temp:placeholder'</span><span class="p">,</span> <span class="s1">'PlaceholderActor'</span><span class="p">,</span> <span class="s1">'{}'</span><span class="p">);</span>
+</code></pre></div></div>
+
+<h4 id="case-sensitivity-support">Case Sensitivity Support</h4>
+
+<p>SQL keywords are case-insensitive, providing flexibility in coding styles.</p>
+
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- All lowercase</span>
+<span class="k">insert</span> <span class="k">into</span> <span class="n">actors</span> <span class="p">(</span><span class="n">actor_id</span><span class="p">,</span> <span class="n">actor_type</span><span class="p">,</span> <span class="k">state</span><span class="p">)</span> 
+<span class="k">values</span> <span class="p">(</span><span class="s1">'test:lowercase'</span><span class="p">,</span> <span class="s1">'TestActor'</span><span class="p">,</span> <span class="s1">'{"case": "lowercase"}'</span><span class="p">);</span>
+
+<span class="c1">-- All uppercase</span>
+<span class="k">SELECT</span> <span class="o">*</span> <span class="k">FROM</span> <span class="n">ACTORS</span> <span class="k">WHERE</span> <span class="n">ACTOR_ID</span> <span class="o">=</span> <span class="s1">'test:lowercase'</span><span class="p">;</span>
+
+<span class="c1">-- Mixed case (CamelCase)</span>
+<span class="k">UpDaTe</span> <span class="n">actors</span> <span class="k">SeT</span> <span class="k">state</span> <span class="o">=</span> <span class="s1">'{"case": "mixed", "updated": true}'</span> 
+<span class="k">WhErE</span> <span class="n">actor_id</span> <span class="o">=</span> <span class="s1">'test:lowercase'</span><span class="p">;</span>
+
+<span class="c1">-- Column names are also case-insensitive</span>
+<span class="k">SELECT</span> <span class="n">ACTOR_ID</span><span class="p">,</span> <span class="n">actor_type</span><span class="p">,</span> <span class="k">State</span> <span class="k">FROM</span> <span class="n">actors</span> 
+<span class="k">WHERE</span> <span class="n">actor_id</span> <span class="o">=</span> <span class="s1">'test:lowercase'</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h4 id="edge-cases-and-special-characters">Edge Cases and Special Characters</h4>
+
+<p>Orbit-RS handles various edge cases and special characters gracefully.</p>
+
+<h5 id="extra-whitespace">Extra Whitespace</h5>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Handles multiple spaces and formatting</span>
+   <span class="k">SELECT</span>   <span class="n">actor_id</span>   <span class="p">,</span>   <span class="n">actor_type</span>   
+   <span class="k">FROM</span>   <span class="n">actors</span>   
+   <span class="k">WHERE</span>   <span class="n">actor_type</span>   <span class="o">=</span>   <span class="s1">'TestActor'</span>   <span class="p">;</span>
+</code></pre></div></div>
+
+<h5 id="special-characters-in-identifiers">Special Characters in Identifiers</h5>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Email-like identifiers</span>
+<span class="k">INSERT</span> <span class="k">INTO</span> <span class="n">actors</span> <span class="p">(</span><span class="n">actor_id</span><span class="p">,</span> <span class="n">actor_type</span><span class="p">,</span> <span class="k">state</span><span class="p">)</span> 
+<span class="k">VALUES</span> <span class="p">(</span><span class="s1">'user:john.doe@company.com'</span><span class="p">,</span> <span class="s1">'UserActor'</span><span class="p">,</span> <span class="s1">'{
+    "email": "john.doe@company.com",
+    "domain": "company.com"
+}'</span><span class="p">);</span>
+
+<span class="c1">-- Complex path-like identifiers</span>
+<span class="k">INSERT</span> <span class="k">INTO</span> <span class="n">actors</span> <span class="p">(</span><span class="n">actor_id</span><span class="p">,</span> <span class="n">actor_type</span><span class="p">,</span> <span class="k">state</span><span class="p">)</span> 
+<span class="k">VALUES</span> <span class="p">(</span><span class="s1">'api:v1/users/:id/profile'</span><span class="p">,</span> <span class="s1">'ApiEndpointActor'</span><span class="p">,</span> <span class="s1">'{
+    "method": "GET",
+    "path": "/api/v1/users/:id/profile",
+    "protected": true
+}'</span><span class="p">);</span>
+</code></pre></div></div>
+
+<h5 id="semicolon-handling">Semicolon Handling</h5>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Proper query termination</span>
+<span class="k">SELECT</span> <span class="n">actor_id</span> <span class="k">FROM</span> <span class="n">actors</span> <span class="k">WHERE</span> <span class="n">actor_id</span> <span class="o">=</span> <span class="s1">'user:john.doe@company.com'</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h4 id="complete-workflow-examples">Complete Workflow Examples</h4>
+
+<p>Real-world usage patterns combining multiple SQL operations.</p>
+
+<h5 id="vector-database-workflow---complete-implementation">Vector Database Workflow - Complete Implementation</h5>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- 1. Enable pgvector extension</span>
+<span class="k">CREATE</span> <span class="n">EXTENSION</span> <span class="n">IF</span> <span class="k">NOT</span> <span class="k">EXISTS</span> <span class="n">vector</span><span class="p">;</span>
+
+<span class="c1">-- 2. Create documents table with vector embeddings</span>
+<span class="k">CREATE</span> <span class="k">TABLE</span> <span class="n">documents</span> <span class="p">(</span>
+    <span class="n">id</span> <span class="nb">SERIAL</span> <span class="k">PRIMARY</span> <span class="k">KEY</span><span class="p">,</span>
+    <span class="n">title</span> <span class="nb">TEXT</span> <span class="k">NOT</span> <span class="k">NULL</span><span class="p">,</span>
+    <span class="n">content</span> <span class="nb">TEXT</span><span class="p">,</span>
+    <span class="n">category</span> <span class="nb">TEXT</span><span class="p">,</span>
+    <span class="n">embedding</span> <span class="n">VECTOR</span><span class="p">(</span><span class="mi">1536</span><span class="p">),</span>  <span class="c1">-- OpenAI ada-002 dimensions</span>
+    <span class="n">metadata</span> <span class="n">JSONB</span><span class="p">,</span>
+    <span class="n">created_at</span> <span class="nb">TIMESTAMP</span> <span class="k">WITH</span> <span class="nb">TIME</span> <span class="k">ZONE</span> <span class="k">DEFAULT</span> <span class="n">NOW</span><span class="p">(),</span>
+    <span class="n">updated_at</span> <span class="nb">TIMESTAMP</span> <span class="k">WITH</span> <span class="nb">TIME</span> <span class="k">ZONE</span> <span class="k">DEFAULT</span> <span class="n">NOW</span><span class="p">()</span>
+<span class="p">);</span>
+
+<span class="c1">-- 3. Create vector indexes for efficient similarity search</span>
+<span class="k">CREATE</span> <span class="k">INDEX</span> <span class="n">documents_embedding_ivfflat_idx</span> 
+<span class="k">ON</span> <span class="n">documents</span> <span class="k">USING</span> <span class="n">ivfflat</span> <span class="p">(</span><span class="n">embedding</span> <span class="n">vector_cosine_ops</span><span class="p">)</span> 
+<span class="k">WITH</span> <span class="p">(</span><span class="n">lists</span> <span class="o">=</span> <span class="mi">1000</span><span class="p">);</span>
+
+<span class="k">CREATE</span> <span class="k">INDEX</span> <span class="n">documents_embedding_hnsw_idx</span> 
+<span class="k">ON</span> <span class="n">documents</span> <span class="k">USING</span> <span class="n">hnsw</span> <span class="p">(</span><span class="n">embedding</span> <span class="n">vector_cosine_ops</span><span class="p">)</span> 
+<span class="k">WITH</span> <span class="p">(</span><span class="n">m</span> <span class="o">=</span> <span class="mi">16</span><span class="p">,</span> <span class="n">ef_construction</span> <span class="o">=</span> <span class="mi">64</span><span class="p">);</span>
+
+<span class="c1">-- 4. Insert documents with vector embeddings</span>
+<span class="k">INSERT</span> <span class="k">INTO</span> <span class="n">documents</span> <span class="p">(</span><span class="n">title</span><span class="p">,</span> <span class="n">content</span><span class="p">,</span> <span class="n">category</span><span class="p">,</span> <span class="n">embedding</span><span class="p">,</span> <span class="n">metadata</span><span class="p">)</span> <span class="k">VALUES</span> 
+<span class="p">(</span>
+    <span class="s1">'Introduction to Machine Learning'</span><span class="p">,</span>
+    <span class="s1">'Machine learning is a subset of artificial intelligence...'</span><span class="p">,</span>
+    <span class="s1">'AI/ML'</span><span class="p">,</span>
+    <span class="s1">'[0.1, 0.2, 0.15, 0.3, 0.25, ...]'</span><span class="p">,</span>  <span class="c1">-- 1536-dimensional vector</span>
+    <span class="s1">'{"author": "Dr. Smith", "tags": ["machine-learning", "ai"]}'</span>
+<span class="p">);</span>
+
+<span class="c1">-- 5. Perform vector similarity search with analytics</span>
+<span class="k">WITH</span> <span class="n">similarity_search</span> <span class="k">AS</span> <span class="p">(</span>
+    <span class="k">SELECT</span> 
+        <span class="n">title</span><span class="p">,</span>
+        <span class="n">content</span><span class="p">,</span>
+        <span class="n">category</span><span class="p">,</span>
+        <span class="n">embedding</span> <span class="o">&lt;-&gt;</span> <span class="s1">'[0.1, 0.2, 0.15, 0.3, 0.25, ...]'</span> <span class="k">as</span> <span class="n">l2_distance</span><span class="p">,</span>
+        <span class="mi">1</span> <span class="o">-</span> <span class="p">(</span><span class="n">embedding</span> <span class="o">&lt;=&gt;</span> <span class="s1">'[0.1, 0.2, 0.15, 0.3, 0.25, ...]'</span><span class="p">)</span> <span class="k">as</span> <span class="n">cosine_similarity</span><span class="p">,</span>
+        <span class="n">metadata</span><span class="p">,</span>
+        <span class="n">ROW_NUMBER</span><span class="p">()</span> <span class="n">OVER</span> <span class="p">(</span><span class="k">ORDER</span> <span class="k">BY</span> <span class="n">embedding</span> <span class="o">&lt;-&gt;</span> <span class="s1">'[0.1, 0.2, 0.15, 0.3, 0.25, ...]'</span><span class="p">)</span> <span class="k">as</span> <span class="n">rank</span>
+    <span class="k">FROM</span> <span class="n">documents</span>
+    <span class="k">WHERE</span> <span class="n">category</span> <span class="o">=</span> <span class="s1">'AI/ML'</span>
+<span class="p">),</span>
+<span class="n">ranked_results</span> <span class="k">AS</span> <span class="p">(</span>
+    <span class="k">SELECT</span> <span class="o">*</span><span class="p">,</span>
+           <span class="n">NTILE</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span> <span class="n">OVER</span> <span class="p">(</span><span class="k">ORDER</span> <span class="k">BY</span> <span class="n">cosine_similarity</span> <span class="k">DESC</span><span class="p">)</span> <span class="k">as</span> <span class="n">similarity_tier</span>
+    <span class="k">FROM</span> <span class="n">similarity_search</span>
+<span class="p">)</span>
+<span class="k">SELECT</span> <span class="n">title</span><span class="p">,</span> <span class="n">cosine_similarity</span><span class="p">,</span> <span class="n">similarity_tier</span><span class="p">,</span> <span class="n">metadata</span><span class="o">-&gt;</span><span class="s1">'tags'</span> <span class="k">as</span> <span class="n">tags</span>
+<span class="k">FROM</span> <span class="n">ranked_results</span>
+<span class="k">WHERE</span> <span class="n">rank</span> <span class="o">&lt;=</span> <span class="mi">10</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h5 id="advanced-analytics-with-window-functions">Advanced Analytics with Window Functions</h5>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Complex time-series analysis with multiple window functions</span>
+<span class="k">WITH</span> <span class="n">sales_analytics</span> <span class="k">AS</span> <span class="p">(</span>
+    <span class="k">SELECT</span> 
+        <span class="n">sale_date</span><span class="p">,</span>
+        <span class="n">product_category</span><span class="p">,</span>
+        <span class="n">region</span><span class="p">,</span>
+        <span class="n">sales_amount</span><span class="p">,</span>
+        <span class="n">sales_person</span><span class="p">,</span>
+        <span class="c1">-- Running calculations</span>
+        <span class="k">SUM</span><span class="p">(</span><span class="n">sales_amount</span><span class="p">)</span> <span class="n">OVER</span> <span class="p">(</span>
+            <span class="k">ORDER</span> <span class="k">BY</span> <span class="n">sale_date</span> 
+            <span class="k">ROWS</span> <span class="n">UNBOUNDED</span> <span class="k">PRECEDING</span>
+        <span class="p">)</span> <span class="k">as</span> <span class="n">running_total</span><span class="p">,</span>
+        <span class="c1">-- Moving averages</span>
+        <span class="k">AVG</span><span class="p">(</span><span class="n">sales_amount</span><span class="p">)</span> <span class="n">OVER</span> <span class="p">(</span>
+            <span class="k">ORDER</span> <span class="k">BY</span> <span class="n">sale_date</span> 
+            <span class="k">ROWS</span> <span class="k">BETWEEN</span> <span class="mi">6</span> <span class="k">PRECEDING</span> <span class="k">AND</span> <span class="k">CURRENT</span> <span class="k">ROW</span>
+        <span class="p">)</span> <span class="k">as</span> <span class="n">moving_avg_7day</span><span class="p">,</span>
+        <span class="c1">-- Ranking and percentiles</span>
+        <span class="n">RANK</span><span class="p">()</span> <span class="n">OVER</span> <span class="p">(</span>
+            <span class="k">PARTITION</span> <span class="k">BY</span> <span class="n">product_category</span> 
+            <span class="k">ORDER</span> <span class="k">BY</span> <span class="n">sales_amount</span> <span class="k">DESC</span>
+        <span class="p">)</span> <span class="k">as</span> <span class="n">category_rank</span><span class="p">,</span>
+        <span class="n">PERCENT_RANK</span><span class="p">()</span> <span class="n">OVER</span> <span class="p">(</span>
+            <span class="k">ORDER</span> <span class="k">BY</span> <span class="n">sales_amount</span>
+        <span class="p">)</span> <span class="k">as</span> <span class="n">sales_percentile</span><span class="p">,</span>
+        <span class="c1">-- Time-based comparisons</span>
+        <span class="n">LAG</span><span class="p">(</span><span class="n">sales_amount</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span> <span class="n">OVER</span> <span class="p">(</span>
+            <span class="k">ORDER</span> <span class="k">BY</span> <span class="n">sale_date</span>
+        <span class="p">)</span> <span class="k">as</span> <span class="n">previous_day_sales</span><span class="p">,</span>
+        <span class="n">LEAD</span><span class="p">(</span><span class="n">sales_amount</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span> <span class="n">OVER</span> <span class="p">(</span>
+            <span class="k">ORDER</span> <span class="k">BY</span> <span class="n">sale_date</span>
+        <span class="p">)</span> <span class="k">as</span> <span class="n">next_day_sales</span><span class="p">,</span>
+        <span class="c1">-- First and last values in partitions</span>
+        <span class="n">FIRST_VALUE</span><span class="p">(</span><span class="n">sales_amount</span><span class="p">)</span> <span class="n">OVER</span> <span class="p">(</span>
+            <span class="k">PARTITION</span> <span class="k">BY</span> <span class="n">region</span> 
+            <span class="k">ORDER</span> <span class="k">BY</span> <span class="n">sale_date</span> 
+            <span class="k">ROWS</span> <span class="n">UNBOUNDED</span> <span class="k">PRECEDING</span>
+        <span class="p">)</span> <span class="k">as</span> <span class="n">first_sale_in_region</span><span class="p">,</span>
+        <span class="n">LAST_VALUE</span><span class="p">(</span><span class="n">sales_amount</span><span class="p">)</span> <span class="n">OVER</span> <span class="p">(</span>
+            <span class="k">PARTITION</span> <span class="k">BY</span> <span class="n">region</span> 
+            <span class="k">ORDER</span> <span class="k">BY</span> <span class="n">sale_date</span> 
+            <span class="k">ROWS</span> <span class="k">BETWEEN</span> <span class="n">UNBOUNDED</span> <span class="k">PRECEDING</span> <span class="k">AND</span> <span class="n">UNBOUNDED</span> <span class="k">FOLLOWING</span>
+        <span class="p">)</span> <span class="k">as</span> <span class="n">last_sale_in_region</span>
+    <span class="k">FROM</span> <span class="n">sales_data</span>
+<span class="p">)</span>
+<span class="k">SELECT</span> <span class="o">*</span><span class="p">,</span>
+       <span class="k">CASE</span> 
+           <span class="k">WHEN</span> <span class="n">sales_percentile</span> <span class="o">&gt;=</span> <span class="mi">0</span><span class="p">.</span><span class="mi">8</span> <span class="k">THEN</span> <span class="s1">'Top Performer'</span>
+           <span class="k">WHEN</span> <span class="n">sales_percentile</span> <span class="o">&gt;=</span> <span class="mi">0</span><span class="p">.</span><span class="mi">6</span> <span class="k">THEN</span> <span class="s1">'Above Average'</span>
+           <span class="k">WHEN</span> <span class="n">sales_percentile</span> <span class="o">&gt;=</span> <span class="mi">0</span><span class="p">.</span><span class="mi">4</span> <span class="k">THEN</span> <span class="s1">'Average'</span>
+           <span class="k">ELSE</span> <span class="s1">'Below Average'</span>
+       <span class="k">END</span> <span class="k">as</span> <span class="n">performance_tier</span>
+<span class="k">FROM</span> <span class="n">sales_analytics</span>
+<span class="k">ORDER</span> <span class="k">BY</span> <span class="n">sale_date</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h5 id="enterprise-schema-management-with-permissions">Enterprise Schema Management with Permissions</h5>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- 1. Create organizational schemas</span>
+<span class="k">BEGIN</span><span class="p">;</span>
+
+<span class="k">CREATE</span> <span class="k">SCHEMA</span> <span class="n">IF</span> <span class="k">NOT</span> <span class="k">EXISTS</span> <span class="n">hr</span> <span class="k">AUTHORIZATION</span> <span class="n">hr_admin</span><span class="p">;</span>
+<span class="k">CREATE</span> <span class="k">SCHEMA</span> <span class="n">IF</span> <span class="k">NOT</span> <span class="k">EXISTS</span> <span class="n">finance</span> <span class="k">AUTHORIZATION</span> <span class="n">finance_admin</span><span class="p">;</span>
+<span class="k">CREATE</span> <span class="k">SCHEMA</span> <span class="n">IF</span> <span class="k">NOT</span> <span class="k">EXISTS</span> <span class="n">analytics</span> <span class="k">AUTHORIZATION</span> <span class="n">data_team</span><span class="p">;</span>
+
+<span class="c1">-- 2. Create tables with proper constraints</span>
+<span class="k">CREATE</span> <span class="k">TABLE</span> <span class="n">hr</span><span class="p">.</span><span class="n">employees</span> <span class="p">(</span>
+    <span class="n">employee_id</span> <span class="nb">SERIAL</span> <span class="k">PRIMARY</span> <span class="k">KEY</span><span class="p">,</span>
+    <span class="n">employee_number</span> <span class="nb">VARCHAR</span><span class="p">(</span><span class="mi">10</span><span class="p">)</span> <span class="k">UNIQUE</span> <span class="k">NOT</span> <span class="k">NULL</span><span class="p">,</span>
+    <span class="n">first_name</span> <span class="nb">VARCHAR</span><span class="p">(</span><span class="mi">50</span><span class="p">)</span> <span class="k">NOT</span> <span class="k">NULL</span><span class="p">,</span>
+    <span class="n">last_name</span> <span class="nb">VARCHAR</span><span class="p">(</span><span class="mi">50</span><span class="p">)</span> <span class="k">NOT</span> <span class="k">NULL</span><span class="p">,</span>
+    <span class="n">email</span> <span class="nb">VARCHAR</span><span class="p">(</span><span class="mi">100</span><span class="p">)</span> <span class="k">UNIQUE</span> <span class="k">NOT</span> <span class="k">NULL</span><span class="p">,</span>
+    <span class="n">department</span> <span class="nb">VARCHAR</span><span class="p">(</span><span class="mi">50</span><span class="p">)</span> <span class="k">NOT</span> <span class="k">NULL</span><span class="p">,</span>
+    <span class="n">hire_date</span> <span class="nb">DATE</span> <span class="k">NOT</span> <span class="k">NULL</span> <span class="k">DEFAULT</span> <span class="k">CURRENT_DATE</span><span class="p">,</span>
+    <span class="n">salary</span> <span class="nb">DECIMAL</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span> <span class="k">CHECK</span> <span class="p">(</span><span class="n">salary</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">),</span>
+    <span class="n">manager_id</span> <span class="nb">INTEGER</span> <span class="k">REFERENCES</span> <span class="n">hr</span><span class="p">.</span><span class="n">employees</span><span class="p">(</span><span class="n">employee_id</span><span class="p">),</span>
+    <span class="n">employee_data</span> <span class="n">JSONB</span> <span class="k">DEFAULT</span> <span class="s1">'{}'</span><span class="p">,</span>
+    <span class="n">created_at</span> <span class="nb">TIMESTAMP</span> <span class="k">WITH</span> <span class="nb">TIME</span> <span class="k">ZONE</span> <span class="k">DEFAULT</span> <span class="n">NOW</span><span class="p">(),</span>
+    <span class="n">updated_at</span> <span class="nb">TIMESTAMP</span> <span class="k">WITH</span> <span class="nb">TIME</span> <span class="k">ZONE</span> <span class="k">DEFAULT</span> <span class="n">NOW</span><span class="p">()</span>
+<span class="p">);</span>
+
+<span class="c1">-- 3. Create indexes for performance</span>
+<span class="k">CREATE</span> <span class="k">INDEX</span> <span class="n">idx_employees_department</span> <span class="k">ON</span> <span class="n">hr</span><span class="p">.</span><span class="n">employees</span><span class="p">(</span><span class="n">department</span><span class="p">);</span>
+<span class="k">CREATE</span> <span class="k">INDEX</span> <span class="n">idx_employees_manager</span> <span class="k">ON</span> <span class="n">hr</span><span class="p">.</span><span class="n">employees</span><span class="p">(</span><span class="n">manager_id</span><span class="p">);</span>
+<span class="k">CREATE</span> <span class="k">INDEX</span> <span class="n">idx_employees_email</span> <span class="k">ON</span> <span class="n">hr</span><span class="p">.</span><span class="n">employees</span> <span class="k">USING</span> <span class="n">hash</span><span class="p">(</span><span class="n">email</span><span class="p">);</span>
+<span class="k">CREATE</span> <span class="k">INDEX</span> <span class="n">idx_employees_data</span> <span class="k">ON</span> <span class="n">hr</span><span class="p">.</span><span class="n">employees</span> <span class="k">USING</span> <span class="n">gin</span><span class="p">(</span><span class="n">employee_data</span><span class="p">);</span>
+
+<span class="c1">-- 4. Set up comprehensive permissions</span>
+<span class="c1">-- HR team permissions</span>
+<span class="k">GRANT</span> <span class="k">USAGE</span> <span class="k">ON</span> <span class="k">SCHEMA</span> <span class="n">hr</span> <span class="k">TO</span> <span class="n">hr_manager</span><span class="p">,</span> <span class="n">hr_admin</span><span class="p">;</span>
+<span class="k">GRANT</span> <span class="k">SELECT</span><span class="p">,</span> <span class="k">INSERT</span><span class="p">,</span> <span class="k">UPDATE</span> <span class="k">ON</span> <span class="k">TABLE</span> <span class="n">hr</span><span class="p">.</span><span class="n">employees</span> <span class="k">TO</span> <span class="n">hr_admin</span><span class="p">;</span>
+<span class="k">GRANT</span> <span class="k">SELECT</span> <span class="k">ON</span> <span class="k">TABLE</span> <span class="n">hr</span><span class="p">.</span><span class="n">employees</span> <span class="k">TO</span> <span class="n">hr_manager</span><span class="p">;</span>
+<span class="k">GRANT</span> <span class="k">USAGE</span> <span class="k">ON</span> <span class="n">SEQUENCE</span> <span class="n">hr</span><span class="p">.</span><span class="n">employees_employee_id_seq</span> <span class="k">TO</span> <span class="n">hr_admin</span><span class="p">;</span>
+
+<span class="c1">-- Analytics team - read-only access</span>
+<span class="k">GRANT</span> <span class="k">USAGE</span> <span class="k">ON</span> <span class="k">SCHEMA</span> <span class="n">hr</span> <span class="k">TO</span> <span class="n">analytics_team</span><span class="p">;</span>
+<span class="k">GRANT</span> <span class="k">SELECT</span> <span class="k">ON</span> <span class="k">TABLE</span> <span class="n">hr</span><span class="p">.</span><span class="n">employees</span> <span class="k">TO</span> <span class="n">analytics_team</span><span class="p">;</span>
+
+<span class="c1">-- Finance team - salary access only</span>
+<span class="k">CREATE</span> <span class="k">VIEW</span> <span class="n">finance</span><span class="p">.</span><span class="n">employee_compensation</span> <span class="k">AS</span>
+<span class="k">SELECT</span> 
+    <span class="n">employee_id</span><span class="p">,</span>
+    <span class="n">employee_number</span><span class="p">,</span>
+    <span class="n">first_name</span><span class="p">,</span>
+    <span class="n">last_name</span><span class="p">,</span>
+    <span class="n">department</span><span class="p">,</span>
+    <span class="n">salary</span><span class="p">,</span>
+    <span class="n">hire_date</span>
+<span class="k">FROM</span> <span class="n">hr</span><span class="p">.</span><span class="n">employees</span><span class="p">;</span>
+
+<span class="k">GRANT</span> <span class="k">SELECT</span> <span class="k">ON</span> <span class="n">finance</span><span class="p">.</span><span class="n">employee_compensation</span> <span class="k">TO</span> <span class="n">finance_team</span><span class="p">;</span>
+
+<span class="k">COMMIT</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h5 id="transaction-management-with-savepoints">Transaction Management with Savepoints</h5>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Complex transaction with multiple savepoints</span>
+<span class="k">BEGIN</span> <span class="k">ISOLATION</span> <span class="k">LEVEL</span> <span class="k">READ</span> <span class="k">COMMITTED</span><span class="p">;</span>
+
+<span class="c1">-- Initial operations</span>
+<span class="n">SAVEPOINT</span> <span class="n">initial_setup</span><span class="p">;</span>
+
+<span class="k">CREATE</span> <span class="k">TEMPORARY</span> <span class="k">TABLE</span> <span class="n">batch_operations</span> <span class="p">(</span>
+    <span class="n">operation_id</span> <span class="nb">SERIAL</span> <span class="k">PRIMARY</span> <span class="k">KEY</span><span class="p">,</span>
+    <span class="n">operation_type</span> <span class="nb">VARCHAR</span><span class="p">(</span><span class="mi">50</span><span class="p">),</span>
+    <span class="n">target_table</span> <span class="nb">VARCHAR</span><span class="p">(</span><span class="mi">100</span><span class="p">),</span>
+    <span class="n">operation_data</span> <span class="n">JSONB</span><span class="p">,</span>
+    <span class="n">status</span> <span class="nb">VARCHAR</span><span class="p">(</span><span class="mi">20</span><span class="p">)</span> <span class="k">DEFAULT</span> <span class="s1">'pending'</span><span class="p">,</span>
+    <span class="n">created_at</span> <span class="nb">TIMESTAMP</span> <span class="k">DEFAULT</span> <span class="n">NOW</span><span class="p">()</span>
+<span class="p">);</span>
+
+<span class="c1">-- Bulk data operations</span>
+<span class="n">SAVEPOINT</span> <span class="n">bulk_operations</span><span class="p">;</span>
+
+<span class="k">INSERT</span> <span class="k">INTO</span> <span class="n">hr</span><span class="p">.</span><span class="n">employees</span> <span class="p">(</span><span class="n">employee_number</span><span class="p">,</span> <span class="n">first_name</span><span class="p">,</span> <span class="n">last_name</span><span class="p">,</span> <span class="n">email</span><span class="p">,</span> <span class="n">department</span><span class="p">,</span> <span class="n">salary</span><span class="p">)</span>
+<span class="k">SELECT</span> 
+    <span class="s1">'EMP'</span> <span class="o">||</span> <span class="n">LPAD</span><span class="p">(</span><span class="n">generate_series</span><span class="p">(</span><span class="mi">1001</span><span class="p">,</span> <span class="mi">1100</span><span class="p">)::</span><span class="nb">text</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="s1">'0'</span><span class="p">),</span>
+    <span class="s1">'Employee'</span><span class="p">,</span>
+    <span class="s1">'Number '</span> <span class="o">||</span> <span class="n">generate_series</span><span class="p">(</span><span class="mi">1001</span><span class="p">,</span> <span class="mi">1100</span><span class="p">)::</span><span class="nb">text</span><span class="p">,</span>
+    <span class="s1">'emp'</span> <span class="o">||</span> <span class="n">generate_series</span><span class="p">(</span><span class="mi">1001</span><span class="p">,</span> <span class="mi">1100</span><span class="p">)</span> <span class="o">||</span> <span class="s1">'@company.com'</span><span class="p">,</span>
+    <span class="k">CASE</span> 
+        <span class="k">WHEN</span> <span class="n">generate_series</span><span class="p">(</span><span class="mi">1001</span><span class="p">,</span> <span class="mi">1100</span><span class="p">)</span> <span class="o">%</span> <span class="mi">4</span> <span class="o">=</span> <span class="mi">0</span> <span class="k">THEN</span> <span class="s1">'Engineering'</span>
+        <span class="k">WHEN</span> <span class="n">generate_series</span><span class="p">(</span><span class="mi">1001</span><span class="p">,</span> <span class="mi">1100</span><span class="p">)</span> <span class="o">%</span> <span class="mi">4</span> <span class="o">=</span> <span class="mi">1</span> <span class="k">THEN</span> <span class="s1">'Sales'</span>
+        <span class="k">WHEN</span> <span class="n">generate_series</span><span class="p">(</span><span class="mi">1001</span><span class="p">,</span> <span class="mi">1100</span><span class="p">)</span> <span class="o">%</span> <span class="mi">4</span> <span class="o">=</span> <span class="mi">2</span> <span class="k">THEN</span> <span class="s1">'Marketing'</span>
+        <span class="k">ELSE</span> <span class="s1">'Operations'</span>
+    <span class="k">END</span><span class="p">,</span>
+    <span class="mi">50000</span> <span class="o">+</span> <span class="p">(</span><span class="n">generate_series</span><span class="p">(</span><span class="mi">1001</span><span class="p">,</span> <span class="mi">1100</span><span class="p">)</span> <span class="o">*</span> <span class="mi">1000</span><span class="p">);</span>
+
+<span class="c1">-- Validation checkpoint</span>
+<span class="n">SAVEPOINT</span> <span class="n">validation_point</span><span class="p">;</span>
+
+<span class="c1">-- Check data integrity</span>
+<span class="k">DO</span> <span class="err">$$</span>
+<span class="k">BEGIN</span>
+    <span class="n">IF</span> <span class="p">(</span><span class="k">SELECT</span> <span class="k">COUNT</span><span class="p">(</span><span class="o">*</span><span class="p">)</span> <span class="k">FROM</span> <span class="n">hr</span><span class="p">.</span><span class="n">employees</span> <span class="k">WHERE</span> <span class="n">email</span> <span class="k">IS</span> <span class="k">NULL</span> <span class="k">OR</span> <span class="n">email</span> <span class="o">=</span> <span class="s1">''</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">THEN</span>
+        <span class="n">RAISE</span> <span class="n">EXCEPTION</span> <span class="s1">'Data validation failed: null or empty email addresses found'</span><span class="p">;</span>
+    <span class="k">END</span> <span class="n">IF</span><span class="p">;</span>
+    
+    <span class="n">IF</span> <span class="p">(</span><span class="k">SELECT</span> <span class="k">COUNT</span><span class="p">(</span><span class="k">DISTINCT</span> <span class="n">email</span><span class="p">)</span> <span class="k">FROM</span> <span class="n">hr</span><span class="p">.</span><span class="n">employees</span><span class="p">)</span> <span class="o">!=</span> <span class="p">(</span><span class="k">SELECT</span> <span class="k">COUNT</span><span class="p">(</span><span class="o">*</span><span class="p">)</span> <span class="k">FROM</span> <span class="n">hr</span><span class="p">.</span><span class="n">employees</span><span class="p">)</span> <span class="k">THEN</span>
+        <span class="n">RAISE</span> <span class="n">EXCEPTION</span> <span class="s1">'Data validation failed: duplicate email addresses found'</span><span class="p">;</span>
+    <span class="k">END</span> <span class="n">IF</span><span class="p">;</span>
+<span class="k">END</span> <span class="err">$$</span><span class="p">;</span>
+
+<span class="c1">-- If validation passes, commit all changes</span>
+<span class="k">COMMIT</span><span class="p">;</span>
+
+<span class="c1">-- Example of selective rollback (if needed):</span>
+<span class="c1">-- ROLLBACK TO SAVEPOINT bulk_operations;  -- Keep setup, undo bulk ops</span>
+<span class="c1">-- ROLLBACK TO SAVEPOINT initial_setup;    -- Undo everything except transaction start</span>
+<span class="c1">-- ROLLBACK;                               -- Undo entire transaction</span>
+</code></pre></div></div>
+
+<h5 id="e-commerce-order-processing">E-commerce Order Processing</h5>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Create customer</span>
+<span class="k">INSERT</span> <span class="k">INTO</span> <span class="n">actors</span> <span class="p">(</span><span class="n">actor_id</span><span class="p">,</span> <span class="n">actor_type</span><span class="p">,</span> <span class="k">state</span><span class="p">)</span> 
+<span class="k">VALUES</span> <span class="p">(</span><span class="s1">'customer:12345'</span><span class="p">,</span> <span class="s1">'CustomerActor'</span><span class="p">,</span> <span class="s1">'{
+    "customer_id": "12345",
+    "name": "Alice Johnson",
+    "email": "alice@example.com",
+    "tier": "premium"
+}'</span><span class="p">);</span>
+
+<span class="c1">-- Create order</span>
+<span class="k">INSERT</span> <span class="k">INTO</span> <span class="n">actors</span> <span class="p">(</span><span class="n">actor_id</span><span class="p">,</span> <span class="n">actor_type</span><span class="p">,</span> <span class="k">state</span><span class="p">)</span> 
+<span class="k">VALUES</span> <span class="p">(</span><span class="s1">'order:67890'</span><span class="p">,</span> <span class="s1">'OrderActor'</span><span class="p">,</span> <span class="s1">'{
+    "order_id": "67890",
+    "customer_id": "12345",
+    "items": [{"sku": "LAPTOP-001", "quantity": 1, "price": 1299.99}],
+    "status": "pending",
+    "total": 1299.99
+}'</span><span class="p">);</span>
+
+<span class="c1">-- Update order status</span>
+<span class="k">UPDATE</span> <span class="n">actors</span> 
+<span class="k">SET</span> <span class="k">state</span> <span class="o">=</span> <span class="s1">'{
+    "order_id": "67890",
+    "customer_id": "12345",
+    "items": [{"sku": "LAPTOP-001", "quantity": 1, "price": 1299.99}],
+    "status": "processing",
+    "total": 1299.99,
+    "processing_started": "2024-01-20T15:30:00Z"
+}'</span> 
+<span class="k">WHERE</span> <span class="n">actor_id</span> <span class="o">=</span> <span class="s1">'order:67890'</span><span class="p">;</span>
+
+<span class="c1">-- Query orders by customer</span>
+<span class="k">SELECT</span> <span class="o">*</span> <span class="k">FROM</span> <span class="n">actors</span> 
+<span class="k">WHERE</span> <span class="n">actor_type</span> <span class="o">=</span> <span class="s1">'OrderActor'</span> <span class="k">AND</span> <span class="n">actor_id</span> <span class="k">LIKE</span> <span class="s1">'order:%'</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h5 id="service-configuration-management">Service Configuration Management</h5>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Create service configurations</span>
+<span class="k">INSERT</span> <span class="k">INTO</span> <span class="n">actors</span> <span class="p">(</span><span class="n">actor_id</span><span class="p">,</span> <span class="n">actor_type</span><span class="p">,</span> <span class="k">state</span><span class="p">)</span> <span class="k">VALUES</span>
+    <span class="p">(</span><span class="s1">'config:database'</span><span class="p">,</span> <span class="s1">'ConfigActor'</span><span class="p">,</span> <span class="s1">'{
+        "type": "postgresql",
+        "host": "localhost",
+        "port": 5432,
+        "pool_size": 20
+    }'</span><span class="p">),</span>
+    <span class="p">(</span><span class="s1">'config:cache'</span><span class="p">,</span> <span class="s1">'ConfigActor'</span><span class="p">,</span> <span class="s1">'{
+        "type": "redis", 
+        "host": "localhost",
+        "port": 6379,
+        "ttl": 3600
+    }'</span><span class="p">),</span>
+    <span class="p">(</span><span class="s1">'config:logging'</span><span class="p">,</span> <span class="s1">'ConfigActor'</span><span class="p">,</span> <span class="s1">'{
+        "level": "info",
+        "format": "json",
+        "outputs": ["stdout", "file"]
+    }'</span><span class="p">);</span>
+
+<span class="c1">-- Query all configurations</span>
+<span class="k">SELECT</span> <span class="n">actor_id</span><span class="p">,</span> <span class="k">state</span> <span class="k">FROM</span> <span class="n">actors</span> <span class="k">WHERE</span> <span class="n">actor_type</span> <span class="o">=</span> <span class="s1">'ConfigActor'</span><span class="p">;</span>
+
+<span class="c1">-- Update specific configuration</span>
+<span class="k">UPDATE</span> <span class="n">actors</span> 
+<span class="k">SET</span> <span class="k">state</span> <span class="o">=</span> <span class="s1">'{
+    "level": "debug",
+    "format": "json", 
+    "outputs": ["stdout", "file"],
+    "debug_modules": ["http", "database", "auth"]
+}'</span> 
+<span class="k">WHERE</span> <span class="n">actor_id</span> <span class="o">=</span> <span class="s1">'config:logging'</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h3 id="planned-postgresql-features-">Planned PostgreSQL Features 📋</h3>
+
+<p>Future releases will expand PostgreSQL compatibility with advanced SQL features:</p>
+
+<h4 id="core-sql-operations-planned">Core SQL Operations (Planned)</h4>
+<ul>
+  <li><strong>SELECT</strong> - Complete query support with JOINs, subqueries, window functions, CTEs</li>
+  <li><strong>INSERT</strong> - Multi-row inserts, INSERT…SELECT, ON CONFLICT handling</li>
+  <li><strong>UPDATE</strong> - Complex updates with FROM clauses, correlated subqueries</li>
+  <li><strong>DELETE</strong> - Cascading deletes, EXISTS/NOT EXISTS conditions</li>
+</ul>
+
+<h4 id="ddl-operations-planned">DDL Operations (Planned)</h4>
+<ul>
+  <li><strong>CREATE/ALTER/DROP TABLE</strong> - Complete table lifecycle management</li>
+  <li><strong>CREATE/DROP INDEX</strong> - B-tree, Hash, GiST, GIN, IVFFLAT, HNSW indexes</li>
+  <li><strong>CREATE/DROP VIEW</strong> - Regular and materialized views</li>
+  <li><strong>CREATE/DROP SCHEMA</strong> - Database organization and namespacing</li>
+  <li><strong>CREATE/DROP EXTENSION</strong> - Extension management (including pgvector)</li>
+</ul>
+
+<h4 id="dcl-operations-planned">DCL Operations (Planned)</h4>
+<ul>
+  <li><strong>GRANT/REVOKE</strong> - Comprehensive permission management</li>
+  <li><strong>Role-based Access Control</strong> - User and role management</li>
+  <li><strong>Schema-level Permissions</strong> - Fine-grained access control</li>
+  <li><strong>Object-level Security</strong> - Table, view, function permissions</li>
+</ul>
+
+<h4 id="tcl-operations-planned">TCL Operations (Planned)</h4>
+<ul>
+  <li><strong>BEGIN/COMMIT/ROLLBACK</strong> - Full transaction support</li>
+  <li><strong>SAVEPOINT</strong> - Nested transaction points</li>
+  <li><strong>Isolation Levels</strong> - READ COMMITTED, REPEATABLE READ, SERIALIZABLE</li>
+  <li><strong>Access Modes</strong> - READ ONLY, READ WRITE transaction control</li>
+</ul>
+
+<h4 id="advanced-sql-features-planned">Advanced SQL Features (Planned)</h4>
+<ul>
+  <li><strong>Window Functions</strong> - ROW_NUMBER, RANK, DENSE_RANK, LAG, LEAD, FIRST_VALUE, LAST_VALUE, NTILE</li>
+  <li><strong>Common Table Expressions</strong> - WITH clauses including recursive CTEs</li>
+  <li><strong>Complex Expressions</strong> - Full operator precedence, CASE statements</li>
+  <li><strong>Aggregate Functions</strong> - COUNT, SUM, AVG, MIN, MAX with DISTINCT, FILTER, ORDER BY</li>
+  <li><strong>Subqueries</strong> - Correlated and non-correlated in SELECT, WHERE, FROM clauses</li>
+  <li><strong>JOIN Operations</strong> - INNER, LEFT, RIGHT, FULL OUTER, CROSS joins</li>
+</ul>
+
+<h4 id="vector-database-support-planned">Vector Database Support (Planned)</h4>
+<ul>
+  <li><strong>pgvector Extension</strong> - CREATE EXTENSION vector support</li>
+  <li><strong>Vector Data Types</strong> - VECTOR(n), HALFVEC(n), SPARSEVEC(n)</li>
+  <li><strong>Vector Indexes</strong> - IVFFLAT and HNSW for similarity search</li>
+  <li><strong>Distance Operators</strong> - <code class="language-plaintext highlighter-rouge">&lt;-&gt;</code> (L2), <code class="language-plaintext highlighter-rouge">&lt;#&gt;</code> (inner product), <code class="language-plaintext highlighter-rouge">&lt;=&gt;</code> (cosine)</li>
+  <li><strong>Vector Functions</strong> - VECTOR_DIMS, VECTOR_NORM, similarity scoring</li>
+</ul>
+
+<h3 id="future-enhancement-opportunities-">Future Enhancement Opportunities 🚧</h3>
+
+<p>Potential areas for further enhancement:</p>
+
+<h4 id="performance-optimizations">Performance Optimizations</h4>
+<ul>
+  <li><strong>Query Optimizer</strong> - Cost-based query planning and optimization</li>
+  <li><strong>Index Recommendations</strong> - Automatic index suggestion based on query patterns</li>
+  <li><strong>Parallel Query Execution</strong> - Multi-threaded query processing</li>
+  <li><strong>Connection Pooling</strong> - Advanced connection management and pooling</li>
+  <li><strong>Caching Layer</strong> - Query result and metadata caching</li>
+</ul>
+
+<h4 id="enterprise-features">Enterprise Features</h4>
+<ul>
+  <li><strong>Advanced Authentication</strong> - LDAP, Kerberos, OAuth integration</li>
+  <li><strong>Audit Logging</strong> - Comprehensive audit trail and compliance features</li>
+  <li><strong>Backup and Recovery</strong> - Point-in-time recovery and backup automation</li>
+  <li><strong>High Availability</strong> - Replication, failover, and clustering</li>
+  <li><strong>Monitoring and Metrics</strong> - Performance monitoring and alerting</li>
+</ul>
+
+<h4 id="advanced-vector-features">Advanced Vector Features</h4>
+<ul>
+  <li><strong>Approximate Nearest Neighbor</strong> - Advanced ANN algorithms</li>
+  <li><strong>Vector Quantization</strong> - Memory-efficient vector storage</li>
+  <li><strong>Multi-modal Embeddings</strong> - Support for text, image, audio vectors</li>
+  <li><strong>Vector Analytics</strong> - Statistical analysis and clustering of vectors</li>
+  <li><strong>Real-time Vector Updates</strong> - Streaming vector updates and search</li>
+</ul>
+
+<h4 id="extended-sql-compliance">Extended SQL Compliance</h4>
+<ul>
+  <li><strong>MERGE Statement</strong> - UPSERT operations with complex logic</li>
+  <li><strong>Recursive CTEs</strong> - Advanced hierarchical query support</li>
+  <li><strong>Table Functions</strong> - User-defined table-valued functions</li>
+  <li><strong>Stored Procedures</strong> - PL/pgSQL and custom language support</li>
+  <li><strong>Triggers</strong> - Row and statement-level trigger support</li>
+</ul>
+
+<h4 id="integration-features">Integration Features</h4>
+<ul>
+  <li><strong>Foreign Data Wrappers</strong> - External data source connectivity</li>
+  <li><strong>Logical Replication</strong> - Change data capture and streaming</li>
+  <li><strong>GraphQL Interface</strong> - Direct GraphQL query support</li>
+  <li><strong>REST API Gateway</strong> - HTTP/REST interface for SQL queries</li>
+  <li><strong>Streaming Analytics</strong> - Real-time data processing capabilities</li>
+</ul>
+
+<h3 id="complex-sql-examples">Complex SQL Examples</h3>
+
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Complex expressions with proper precedence</span>
+<span class="k">SELECT</span> <span class="o">*</span> <span class="k">FROM</span> <span class="n">documents</span> 
+<span class="k">WHERE</span> <span class="p">(</span><span class="n">score</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">.</span><span class="mi">8</span> <span class="k">AND</span> <span class="n">category</span> <span class="o">=</span> <span class="s1">'research'</span><span class="p">)</span> 
+   <span class="k">OR</span> <span class="p">(</span><span class="n">embedding</span> <span class="o">&lt;-&gt;</span> <span class="s1">'[0.1, 0.2, ...]'</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">.</span><span class="mi">5</span> <span class="k">AND</span> <span class="n">published_at</span> <span class="o">&gt;</span> <span class="s1">'2024-01-01'</span><span class="p">);</span>
+
+<span class="c1">-- Function calls and arithmetic operations</span>
+<span class="k">SELECT</span> 
+    <span class="n">title</span><span class="p">,</span>
+    <span class="n">COALESCE</span><span class="p">(</span><span class="n">score</span> <span class="o">*</span> <span class="mi">100</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span> <span class="o">+</span> <span class="n">bonus_points</span> <span class="k">AS</span> <span class="n">final_score</span><span class="p">,</span>
+    <span class="n">GREATEST</span><span class="p">(</span><span class="n">created_at</span><span class="p">,</span> <span class="n">updated_at</span><span class="p">)</span> <span class="k">AS</span> <span class="n">last_modified</span>
+<span class="k">FROM</span> <span class="n">documents</span>
+<span class="k">WHERE</span> <span class="k">NOT</span> <span class="n">deleted</span> <span class="k">AND</span> <span class="p">(</span><span class="n">category</span> <span class="k">IN</span> <span class="p">(</span><span class="s1">'ai'</span><span class="p">,</span> <span class="s1">'ml'</span><span class="p">,</span> <span class="s1">'research'</span><span class="p">));</span>
+
+<span class="c1">-- Window functions with vector similarity</span>
+<span class="k">SELECT</span> 
+    <span class="n">title</span><span class="p">,</span>
+    <span class="n">content</span><span class="p">,</span>
+    <span class="n">embedding</span> <span class="o">&lt;-&gt;</span> <span class="s1">'[0.1, 0.2, ...]'</span> <span class="k">AS</span> <span class="n">distance</span><span class="p">,</span>
+    <span class="n">ROW_NUMBER</span><span class="p">()</span> <span class="n">OVER</span> <span class="p">(</span><span class="k">ORDER</span> <span class="k">BY</span> <span class="n">embedding</span> <span class="o">&lt;-&gt;</span> <span class="s1">'[0.1, 0.2, ...]'</span><span class="p">)</span> <span class="k">AS</span> <span class="n">rank</span><span class="p">,</span>
+    <span class="n">PERCENT_RANK</span><span class="p">()</span> <span class="n">OVER</span> <span class="p">(</span><span class="k">ORDER</span> <span class="k">BY</span> <span class="n">score</span> <span class="k">DESC</span><span class="p">)</span> <span class="k">AS</span> <span class="n">score_percentile</span>
+<span class="k">FROM</span> <span class="n">documents</span>
+<span class="k">WHERE</span> <span class="n">category</span> <span class="o">=</span> <span class="s1">'research'</span><span class="p">;</span>
+
+<span class="c1">-- Common Table Expression with recursive queries</span>
+<span class="k">WITH</span> <span class="k">RECURSIVE</span> <span class="n">category_hierarchy</span> <span class="k">AS</span> <span class="p">(</span>
+    <span class="k">SELECT</span> <span class="n">id</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">parent_id</span><span class="p">,</span> <span class="mi">1</span> <span class="k">as</span> <span class="k">level</span>
+    <span class="k">FROM</span> <span class="n">categories</span> 
+    <span class="k">WHERE</span> <span class="n">parent_id</span> <span class="k">IS</span> <span class="k">NULL</span>
+    <span class="k">UNION</span> <span class="k">ALL</span>
+    <span class="k">SELECT</span> <span class="k">c</span><span class="p">.</span><span class="n">id</span><span class="p">,</span> <span class="k">c</span><span class="p">.</span><span class="n">name</span><span class="p">,</span> <span class="k">c</span><span class="p">.</span><span class="n">parent_id</span><span class="p">,</span> <span class="n">ch</span><span class="p">.</span><span class="k">level</span> <span class="o">+</span> <span class="mi">1</span>
+    <span class="k">FROM</span> <span class="n">categories</span> <span class="k">c</span>
+    <span class="k">JOIN</span> <span class="n">category_hierarchy</span> <span class="n">ch</span> <span class="k">ON</span> <span class="k">c</span><span class="p">.</span><span class="n">parent_id</span> <span class="o">=</span> <span class="n">ch</span><span class="p">.</span><span class="n">id</span>
+<span class="p">)</span>
+<span class="k">SELECT</span> <span class="o">*</span> <span class="k">FROM</span> <span class="n">category_hierarchy</span> <span class="k">ORDER</span> <span class="k">BY</span> <span class="k">level</span><span class="p">,</span> <span class="n">name</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h3 id="sql-expression-parser-engine">SQL Expression Parser Engine</h3>
+
+<p>The PostgreSQL wire protocol includes a comprehensive expression parser:</p>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">orbit_protocols</span><span class="p">::</span><span class="nn">postgres_wire</span><span class="p">::</span><span class="nn">sql</span><span class="p">::</span><span class="nn">parser</span><span class="p">::</span><span class="n">ExpressionParser</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">orbit_protocols</span><span class="p">::</span><span class="nn">postgres_wire</span><span class="p">::</span><span class="nn">sql</span><span class="p">::</span><span class="nn">lexer</span><span class="p">::</span><span class="n">Lexer</span><span class="p">;</span>
+
+<span class="c1">// Parse complex SQL expressions</span>
+<span class="k">let</span> <span class="k">mut</span> <span class="n">lexer</span> <span class="o">=</span> <span class="nn">Lexer</span><span class="p">::</span><span class="nf">new</span><span class="p">();</span>
+<span class="k">let</span> <span class="n">tokens</span> <span class="o">=</span> <span class="n">lexer</span><span class="nf">.tokenize</span><span class="p">(</span><span class="s">"score * 100 + bonus &gt; threshold AND NOT deleted"</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+<span class="k">let</span> <span class="k">mut</span> <span class="n">parser</span> <span class="o">=</span> <span class="nn">ExpressionParser</span><span class="p">::</span><span class="nf">new</span><span class="p">();</span>
+<span class="k">let</span> <span class="k">mut</span> <span class="n">pos</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+<span class="k">let</span> <span class="n">expression</span> <span class="o">=</span> <span class="n">parser</span><span class="nf">.parse_expression</span><span class="p">(</span><span class="o">&amp;</span><span class="n">tokens</span><span class="p">,</span> <span class="o">&amp;</span><span class="k">mut</span> <span class="n">pos</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h4 id="operator-precedence-lowest-to-highest">Operator Precedence (lowest to highest)</h4>
+<ol>
+  <li><strong>OR</strong> - Logical disjunction</li>
+  <li><strong>AND</strong> - Logical conjunction</li>
+  <li><strong>Equality</strong> - <code class="language-plaintext highlighter-rouge">=</code>, <code class="language-plaintext highlighter-rouge">!=</code>, <code class="language-plaintext highlighter-rouge">&lt;&gt;</code>, <code class="language-plaintext highlighter-rouge">IS</code>, <code class="language-plaintext highlighter-rouge">IS NOT</code></li>
+  <li><strong>Comparison</strong> - <code class="language-plaintext highlighter-rouge">&lt;</code>, <code class="language-plaintext highlighter-rouge">&lt;=</code>, <code class="language-plaintext highlighter-rouge">&gt;</code>, <code class="language-plaintext highlighter-rouge">&gt;=</code>, <code class="language-plaintext highlighter-rouge">LIKE</code>, <code class="language-plaintext highlighter-rouge">ILIKE</code>, <code class="language-plaintext highlighter-rouge">IN</code>, vector operators (<code class="language-plaintext highlighter-rouge">&lt;-&gt;</code>, <code class="language-plaintext highlighter-rouge">&lt;#&gt;</code>, <code class="language-plaintext highlighter-rouge">&lt;=&gt;</code>)</li>
+  <li><strong>Additive</strong> - <code class="language-plaintext highlighter-rouge">+</code>, <code class="language-plaintext highlighter-rouge">-</code>, <code class="language-plaintext highlighter-rouge">||</code> (concatenation)</li>
+  <li><strong>Multiplicative</strong> - <code class="language-plaintext highlighter-rouge">*</code>, <code class="language-plaintext highlighter-rouge">/</code>, <code class="language-plaintext highlighter-rouge">%</code></li>
+  <li><strong>Unary</strong> - <code class="language-plaintext highlighter-rouge">NOT</code>, unary <code class="language-plaintext highlighter-rouge">-</code>, unary <code class="language-plaintext highlighter-rouge">+</code></li>
+  <li><strong>Primary</strong> - Literals, identifiers, function calls, parenthesized expressions</li>
+</ol>
+
+<h4 id="supported-expression-types">Supported Expression Types</h4>
+<ul>
+  <li><strong>Literals</strong>: Strings, numbers, booleans, NULL</li>
+  <li><strong>Identifiers</strong>: Column references with optional table qualification</li>
+  <li><strong>Function Calls</strong>: <code class="language-plaintext highlighter-rouge">COALESCE(a, b)</code>, <code class="language-plaintext highlighter-rouge">GREATEST(x, y)</code>, <code class="language-plaintext highlighter-rouge">COUNT(*)</code> with argument parsing</li>
+  <li><strong>Binary Operations</strong>: All SQL operators including vector distance operations</li>
+  <li><strong>Unary Operations</strong>: Logical NOT, arithmetic negation/positive</li>
+  <li><strong>Parenthesized Expressions</strong>: Explicit precedence control with nested parsing</li>
+  <li><strong>Vector Operations</strong>: pgvector compatibility with distance operators</li>
+</ul>
+
+<h2 id="model-context-protocol-mcp--experimental">Model Context Protocol (MCP) 🧪 EXPERIMENTAL</h2>
+
+<p>AI agent integration through the standardized Model Context Protocol, enabling AI systems to interact with Orbit-RS. <strong>Note</strong>: This is an experimental implementation with basic functionality.</p>
+
+<h3 id="mcp-server-setup">MCP Server Setup</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">orbit_protocols</span><span class="p">::</span><span class="nn">mcp</span><span class="p">::{</span><span class="n">McpServer</span><span class="p">,</span> <span class="n">McpConfig</span><span class="p">};</span>
+
+<span class="c1">// Configure MCP server for AI agents</span>
+<span class="k">let</span> <span class="n">mcp_config</span> <span class="o">=</span> <span class="n">McpConfig</span> <span class="p">{</span>
+    <span class="n">name</span><span class="p">:</span> <span class="s">"orbit-mcp-server"</span><span class="nf">.to_string</span><span class="p">(),</span>
+    <span class="n">version</span><span class="p">:</span> <span class="s">"0.1.0"</span><span class="nf">.to_string</span><span class="p">(),</span>
+    <span class="n">capabilities</span><span class="p">:</span> <span class="nn">McpCapabilities</span><span class="p">::</span><span class="nf">default</span><span class="p">()</span>
+        <span class="nf">.with_tools</span><span class="p">()</span>
+        <span class="nf">.with_resources</span><span class="p">()</span>
+        <span class="nf">.with_prompts</span><span class="p">(),</span>
+<span class="p">};</span>
+
+<span class="k">let</span> <span class="n">mcp_server</span> <span class="o">=</span> <span class="nn">McpServer</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="n">mcp_config</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h3 id="ai-agent-capabilities">AI Agent Capabilities</h3>
+
+<p>Through MCP, AI agents can:</p>
+
+<ul>
+  <li><strong>Execute SQL Queries</strong>: Run complex SQL queries against the actor system</li>
+  <li><strong>Manage Actor Lifecycles</strong>: Create, configure, and monitor actor instances</li>
+  <li><strong>Access Vector Operations</strong>: Perform similarity searches and AI/ML workloads</li>
+  <li><strong>Query System Resources</strong>: Access metrics, logs, and system information</li>
+  <li><strong>Transaction Management</strong>: Execute distributed transactions with ACID compliance</li>
+  <li><strong>Real-time Monitoring</strong>: Subscribe to system events and performance metrics</li>
+</ul>
+
+<h3 id="mcp-tool-examples">MCP Tool Examples</h3>
+
+<div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span><span class="w">
+  </span><span class="nl">"tools"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="w">
+    </span><span class="p">{</span><span class="w">
+      </span><span class="nl">"name"</span><span class="p">:</span><span class="w"> </span><span class="s2">"execute_sql"</span><span class="p">,</span><span class="w">
+      </span><span class="nl">"description"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Execute SQL query against Orbit actor system"</span><span class="p">,</span><span class="w">
+      </span><span class="nl">"input_schema"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">
+        </span><span class="nl">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"object"</span><span class="p">,</span><span class="w">
+        </span><span class="nl">"properties"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">
+          </span><span class="nl">"query"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nl">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"string"</span><span class="p">},</span><span class="w">
+          </span><span class="nl">"parameters"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nl">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"array"</span><span class="p">}</span><span class="w">
+        </span><span class="p">}</span><span class="w">
+      </span><span class="p">}</span><span class="w">
+    </span><span class="p">},</span><span class="w">
+    </span><span class="p">{</span><span class="w">
+      </span><span class="nl">"name"</span><span class="p">:</span><span class="w"> </span><span class="s2">"vector_search"</span><span class="p">,</span><span class="w">
+      </span><span class="nl">"description"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Perform vector similarity search"</span><span class="p">,</span><span class="w">
+      </span><span class="nl">"input_schema"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">
+        </span><span class="nl">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"object"</span><span class="p">,</span><span class="w">
+        </span><span class="nl">"properties"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">
+          </span><span class="nl">"table"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nl">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"string"</span><span class="p">},</span><span class="w">
+          </span><span class="nl">"vector"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nl">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"array"</span><span class="p">},</span><span class="w">
+          </span><span class="nl">"limit"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nl">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"integer"</span><span class="p">},</span><span class="w">
+          </span><span class="nl">"threshold"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nl">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"number"</span><span class="p">}</span><span class="w">
+        </span><span class="p">}</span><span class="w">
+      </span><span class="p">}</span><span class="w">
+    </span><span class="p">}</span><span class="w">
+  </span><span class="p">]</span><span class="w">
+</span><span class="p">}</span><span class="w">
+</span></code></pre></div></div>
+
+<h2 id="architecture-highlights">Architecture Highlights</h2>
+
+<h3 id="modular-design">Modular Design</h3>
+<ul>
+  <li><strong>Pluggable Protocols</strong>: Easy to add new protocol adapters</li>
+  <li><strong>Consistent Actor Mapping</strong>: All protocols map to the same underlying actor system</li>
+  <li><strong>Performance Optimized</strong>: Each adapter optimized for its specific protocol</li>
+</ul>
+
+<h3 id="protocol-integration">Protocol Integration</h3>
+<ul>
+  <li><strong>Wire Protocol Compatibility</strong>: Full compatibility with existing clients</li>
+  <li><strong>Type Safety</strong>: Strong typing across protocol boundaries</li>
+  <li><strong>Error Handling</strong>: Consistent error handling and reporting</li>
+</ul>
+
+<h3 id="distributed-features">Distributed Features</h3>
+<ul>
+  <li><strong>Actor Distribution</strong>: Protocols can access actors across the cluster</li>
+  <li><strong>Load Balancing</strong>: Automatic load distribution for protocol endpoints</li>
+  <li><strong>High Availability</strong>: Fault tolerance at the protocol level</li>
+</ul>
+
+<h2 id="configuration">Configuration</h2>
+
+<h3 id="global-protocol-configuration">Global Protocol Configuration</h3>
+
+<div class="language-toml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">[</span><span class="n">protocols</span><span class="k">]</span>
+
+<span class="c"># Enable specific protocols</span>
+<span class="n">redis</span><span class="p">.</span><span class="n">enabled</span> <span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+<span class="n">postgres</span><span class="p">.</span><span class="n">enabled</span> <span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+<span class="n">mcp</span><span class="p">.</span><span class="n">enabled</span> <span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+
+<span class="c"># Global settings</span>
+<span class="n">max_connections_per_protocol</span> <span class="o">=</span><span class="w"> </span><span class="mi">1000</span>
+<span class="n">connection_timeout</span> <span class="o">=</span><span class="w"> </span><span class="s">"30s"</span>
+<span class="n">idle_timeout</span> <span class="o">=</span><span class="w"> </span><span class="s">"300s"</span>
+
+<span class="k">[</span><span class="n">protocols</span><span class="k">.</span><span class="n">redis</span><span class="k">]</span>
+<span class="n">host</span> <span class="o">=</span><span class="w"> </span><span class="s">"0.0.0.0"</span>
+<span class="n">port</span> <span class="o">=</span><span class="w"> </span><span class="mi">6380</span>
+<span class="n">default_database</span> <span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+
+<span class="k">[</span><span class="n">protocols</span><span class="k">.</span><span class="n">postgres</span><span class="k">]</span>
+<span class="n">host</span> <span class="o">=</span><span class="w"> </span><span class="s">"0.0.0.0"</span>
+<span class="n">port</span> <span class="o">=</span><span class="w"> </span><span class="mi">5433</span>
+<span class="n">database</span> <span class="o">=</span><span class="w"> </span><span class="s">"orbit"</span>
+<span class="n">ssl_mode</span> <span class="o">=</span><span class="w"> </span><span class="s">"prefer"</span>
+
+<span class="k">[</span><span class="n">protocols</span><span class="k">.</span><span class="n">mcp</span><span class="k">]</span>
+<span class="n">host</span> <span class="o">=</span><span class="w"> </span><span class="s">"127.0.0.1"</span>
+<span class="n">port</span> <span class="o">=</span><span class="w"> </span><span class="mi">8080</span>
+<span class="n">capabilities</span> <span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s">"tools"</span><span class="p">,</span> <span class="s">"resources"</span><span class="p">,</span> <span class="s">"prompts"</span><span class="p">]</span>
+</code></pre></div></div>
+
+<h2 id="upcoming-time-series-features-">Upcoming Time Series Features 🚀</h2>
+
+<p>Orbit-RS will add comprehensive time-series database capabilities in <strong>Phase 12 (Q1 2025)</strong>, providing compatibility with two major time-series ecosystems.</p>
+
+<h3 id="redis-time-series-compatibility">Redis Time Series Compatibility</h3>
+<p><strong>Full RedisTimeSeries module compatibility</strong> - <a href="/orbit-rs/protocols/REDIS_TIMESERIES.html">📖 Detailed Documentation</a></p>
+
+<h4 id="key-features">Key Features</h4>
+<ul>
+  <li><strong>TimeSeriesActor</strong>: Distributed time-series management with automatic partitioning</li>
+  <li><strong>Core Commands</strong>: TS.CREATE, TS.ADD, TS.GET, TS.RANGE, TS.REVRANGE</li>
+  <li><strong>Aggregation Rules</strong>: TS.CREATERULE, TS.DELETERULE with automated downsampling</li>
+  <li><strong>Multi-Series Operations</strong>: TS.MRANGE, TS.MREVRANGE, TS.MGET with label filtering</li>
+  <li><strong>Built-in Functions</strong>: AVG, SUM, MIN, MAX, COUNT, STDDEV, VAR</li>
+  <li><strong>Retention Policies</strong>: Automatic data expiration and compression</li>
+  <li><strong>Labeling System</strong>: Multi-dimensional time series organization</li>
+</ul>
+
+<h4 id="example-usage">Example Usage</h4>
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">import</span> <span class="n">redis</span>
+<span class="n">r</span> <span class="o">=</span> <span class="n">redis</span><span class="p">.</span><span class="nc">Redis</span><span class="p">(</span><span class="n">host</span><span class="o">=</span><span class="sh">'</span><span class="s">localhost</span><span class="sh">'</span><span class="p">,</span> <span class="n">port</span><span class="o">=</span><span class="mi">6380</span><span class="p">)</span>  <span class="c1"># Orbit-RS RESP server
+</span>
+<span class="c1"># Create time series with retention
+</span><span class="n">r</span><span class="p">.</span><span class="nf">execute_command</span><span class="p">(</span><span class="sh">'</span><span class="s">TS.CREATE</span><span class="sh">'</span><span class="p">,</span> <span class="sh">'</span><span class="s">sensor:temp:001</span><span class="sh">'</span><span class="p">,</span> 
+                 <span class="sh">'</span><span class="s">RETENTION</span><span class="sh">'</span><span class="p">,</span> <span class="mi">3600000</span><span class="p">,</span>
+                 <span class="sh">'</span><span class="s">LABELS</span><span class="sh">'</span><span class="p">,</span> <span class="sh">'</span><span class="s">sensor_id</span><span class="sh">'</span><span class="p">,</span> <span class="sh">'</span><span class="s">001</span><span class="sh">'</span><span class="p">,</span> <span class="sh">'</span><span class="s">type</span><span class="sh">'</span><span class="p">,</span> <span class="sh">'</span><span class="s">temperature</span><span class="sh">'</span><span class="p">)</span>
+
+<span class="c1"># Add readings
+</span><span class="kn">import</span> <span class="n">time</span>
+<span class="n">now</span> <span class="o">=</span> <span class="nf">int</span><span class="p">(</span><span class="n">time</span><span class="p">.</span><span class="nf">time</span><span class="p">()</span> <span class="o">*</span> <span class="mi">1000</span><span class="p">)</span>
+<span class="n">r</span><span class="p">.</span><span class="nf">execute_command</span><span class="p">(</span><span class="sh">'</span><span class="s">TS.ADD</span><span class="sh">'</span><span class="p">,</span> <span class="sh">'</span><span class="s">sensor:temp:001</span><span class="sh">'</span><span class="p">,</span> <span class="n">now</span><span class="p">,</span> <span class="mf">23.5</span><span class="p">)</span>
+<span class="n">r</span><span class="p">.</span><span class="nf">execute_command</span><span class="p">(</span><span class="sh">'</span><span class="s">TS.ADD</span><span class="sh">'</span><span class="p">,</span> <span class="sh">'</span><span class="s">sensor:temp:001</span><span class="sh">'</span><span class="p">,</span> <span class="n">now</span> <span class="o">+</span> <span class="mi">1000</span><span class="p">,</span> <span class="mf">24.1</span><span class="p">)</span>
+
+<span class="c1"># Query with aggregation
+</span><span class="n">results</span> <span class="o">=</span> <span class="n">r</span><span class="p">.</span><span class="nf">execute_command</span><span class="p">(</span><span class="sh">'</span><span class="s">TS.RANGE</span><span class="sh">'</span><span class="p">,</span> <span class="sh">'</span><span class="s">sensor:temp:001</span><span class="sh">'</span><span class="p">,</span>
+                           <span class="n">now</span> <span class="o">-</span> <span class="mi">300000</span><span class="p">,</span> <span class="n">now</span><span class="p">,</span>
+                           <span class="sh">'</span><span class="s">AGGREGATION</span><span class="sh">'</span><span class="p">,</span> <span class="sh">'</span><span class="s">AVG</span><span class="sh">'</span><span class="p">,</span> <span class="mi">60000</span><span class="p">)</span>
+<span class="nf">print</span><span class="p">(</span><span class="sa">f</span><span class="sh">"</span><span class="s">1-minute averages: </span><span class="si">{</span><span class="n">results</span><span class="si">}</span><span class="sh">"</span><span class="p">)</span>
+</code></pre></div></div>
+
+<h3 id="postgresql-timescaledb-compatibility">PostgreSQL TimescaleDB Compatibility</h3>
+<p><strong>Complete TimescaleDB extension compatibility</strong> - <a href="/orbit-rs/protocols/POSTGRESQL_TIMESCALE.html">📖 Detailed Documentation</a></p>
+
+<h4 id="key-features-1">Key Features</h4>
+<ul>
+  <li><strong>Hypertables</strong>: Distributed time-partitioned tables with automatic chunking</li>
+  <li><strong>Time Functions</strong>: time_bucket(), time_bucket_gapfill(), locf(), interpolate()</li>
+  <li><strong>Continuous Aggregates</strong>: Materialized views with automatic refresh policies</li>
+  <li><strong>Compression</strong>: Column-store compression for historical data</li>
+  <li><strong>Data Retention</strong>: Automatic chunk expiration with configurable policies</li>
+  <li><strong>Multi-dimensional Partitioning</strong>: Time and space partitioning</li>
+  <li><strong>Advanced Analytics</strong>: Hyperfunctions for time-series analysis</li>
+</ul>
+
+<h4 id="example-usage-1">Example Usage</h4>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Enable TimescaleDB extension</span>
+<span class="k">CREATE</span> <span class="n">EXTENSION</span> <span class="n">IF</span> <span class="k">NOT</span> <span class="k">EXISTS</span> <span class="n">timescaledb</span> <span class="k">CASCADE</span><span class="p">;</span>
+
+<span class="c1">-- Create hypertable</span>
+<span class="k">CREATE</span> <span class="k">TABLE</span> <span class="n">sensor_data</span> <span class="p">(</span>
+    <span class="nb">timestamp</span> <span class="n">TIMESTAMPTZ</span> <span class="k">NOT</span> <span class="k">NULL</span><span class="p">,</span>
+    <span class="n">sensor_id</span> <span class="nb">TEXT</span> <span class="k">NOT</span> <span class="k">NULL</span><span class="p">,</span>
+    <span class="n">temperature</span> <span class="nb">DOUBLE</span> <span class="nb">PRECISION</span><span class="p">,</span>
+    <span class="n">humidity</span> <span class="nb">DOUBLE</span> <span class="nb">PRECISION</span>
+<span class="p">);</span>
+
+<span class="k">SELECT</span> <span class="n">create_hypertable</span><span class="p">(</span><span class="s1">'sensor_data'</span><span class="p">,</span> <span class="s1">'timestamp'</span><span class="p">,</span>
+    <span class="n">chunk_time_interval</span> <span class="o">=&gt;</span> <span class="n">INTERVAL</span> <span class="s1">'1 hour'</span><span class="p">);</span>
+
+<span class="c1">-- Time bucket aggregation</span>
+<span class="k">SELECT</span> 
+    <span class="n">time_bucket</span><span class="p">(</span><span class="s1">'15 minutes'</span><span class="p">,</span> <span class="nb">timestamp</span><span class="p">)</span> <span class="k">AS</span> <span class="n">bucket</span><span class="p">,</span>
+    <span class="n">sensor_id</span><span class="p">,</span>
+    <span class="k">AVG</span><span class="p">(</span><span class="n">temperature</span><span class="p">)</span> <span class="k">as</span> <span class="n">avg_temp</span><span class="p">,</span>
+    <span class="k">MAX</span><span class="p">(</span><span class="n">temperature</span><span class="p">)</span> <span class="o">-</span> <span class="k">MIN</span><span class="p">(</span><span class="n">temperature</span><span class="p">)</span> <span class="k">as</span> <span class="n">temp_range</span>
+<span class="k">FROM</span> <span class="n">sensor_data</span>
+<span class="k">WHERE</span> <span class="nb">timestamp</span> <span class="o">&gt;=</span> <span class="n">NOW</span><span class="p">()</span> <span class="o">-</span> <span class="n">INTERVAL</span> <span class="s1">'4 hours'</span>
+<span class="k">GROUP</span> <span class="k">BY</span> <span class="n">bucket</span><span class="p">,</span> <span class="n">sensor_id</span>
+<span class="k">ORDER</span> <span class="k">BY</span> <span class="n">bucket</span> <span class="k">DESC</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h3 id="integration-benefits">Integration Benefits</h3>
+<ul>
+  <li><strong>Distributed Architecture</strong>: Time series data distributed across cluster nodes</li>
+  <li><strong>ACID Transactions</strong>: Full transaction support for time series operations</li>
+  <li><strong>Vector Integration</strong>: Combine time series with vector similarity search</li>
+  <li><strong>Real-time Analytics</strong>: Stream processing with Apache Kafka integration</li>
+  <li><strong>High Availability</strong>: Automatic failover and replication for time series</li>
+  <li><strong>Migration Tools</strong>: Seamless migration from RedisTimeSeries and TimescaleDB</li>
+</ul>
+
+<h2 id="future-protocols-">Future Protocols 🚧</h2>
+
+<h3 id="rest-api">REST API</h3>
+<p>HTTP/JSON interface for web applications with:</p>
+<ul>
+  <li>RESTful actor endpoints</li>
+  <li>OpenAPI/Swagger documentation</li>
+  <li>Authentication integration</li>
+  <li>Rate limiting and throttling</li>
+</ul>
+
+<h3 id="neo4j-bolt-protocol">Neo4j Bolt Protocol</h3>
+<p>Graph database compatibility featuring:</p>
+<ul>
+  <li>Cypher query language support</li>
+  <li>Graph traversal algorithms</li>
+  <li>Relationship mapping to actors</li>
+  <li>Property graph model</li>
+</ul>
+
+<h3 id="additional-protocols-under-consideration">Additional Protocols Under Consideration</h3>
+<ul>
+  <li><strong>Apache Kafka Protocol</strong> - Event streaming integration</li>
+  <li><strong>MQTT</strong> - IoT device communication</li>
+  <li><strong>WebSocket</strong> - Real-time web applications</li>
+  <li><strong>GraphQL</strong> - Modern API interface</li>
+  <li><strong>InfluxDB Line Protocol</strong> - Time series data ingestion</li>
+</ul>
+
+<h2 id="best-practices">Best Practices</h2>
+
+<h3 id="protocol-selection">Protocol Selection</h3>
+<ol>
+  <li><strong>Redis</strong>: Ideal for caching, session storage, and pub/sub messaging</li>
+  <li><strong>PostgreSQL</strong>: Best for complex queries, ACID transactions, and vector operations</li>
+  <li><strong>MCP</strong>: Perfect for AI agent integration and programmatic access</li>
+  <li><strong>REST</strong>: Great for web applications and microservices integration</li>
+</ol>
+
+<h3 id="performance-optimization">Performance Optimization</h3>
+<ol>
+  <li><strong>Connection Pooling</strong>: Use connection pools for high-throughput scenarios</li>
+  <li><strong>Batch Operations</strong>: Group operations when possible to reduce overhead</li>
+  <li><strong>Index Strategy</strong>: Create appropriate indexes for your query patterns</li>
+  <li><strong>Monitor Metrics</strong>: Use built-in metrics to identify performance bottlenecks</li>
+</ol>
+
+<h3 id="security-considerations">Security Considerations</h3>
+<ol>
+  <li><strong>Network Security</strong>: Use TLS for production deployments</li>
+  <li><strong>Authentication</strong>: Implement proper authentication for each protocol</li>
+  <li><strong>Authorization</strong>: Configure fine-grained access controls</li>
+  <li><strong>Audit Logging</strong>: Enable comprehensive audit trails</li>
+</ol>
+
+<h2 id="related-documentation">Related Documentation</h2>
+
+<ul>
+  <li><a href="../QUICK_START.md">Quick Start Guide</a> - Getting started with protocols</li>
+  <li><a href="../features/TRANSACTION_FEATURES.md">Transaction Features</a> - Distributed transaction support</li>
+  <li><a href="/orbit-rs/deployment/DEPLOYMENT.html">Deployment Guide</a> - Production deployment with protocols</li>
+  <li><a href="../development/DEVELOPMENT.md">Development Guide</a> - Contributing to protocol adapters</li>
+</ul>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/orbit-rs/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Orbit-RS Documentation</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">TuringWorks</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

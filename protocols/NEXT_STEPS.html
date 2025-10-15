@@ -1,0 +1,518 @@
+<h1 id="next-steps-orbit-protocol-adapters-integration">Next Steps: Orbit Protocol Adapters Integration</h1>
+
+<p>This document outlines the concrete steps needed to complete the protocol adapter implementation.</p>
+
+<h2 id="phase-1-complete-resp-redis-actor-integration">Phase 1: Complete RESP (Redis) Actor Integration</h2>
+
+<h3 id="11-implement-state-operations-in-commandhandler">1.1 Implement State Operations in CommandHandler</h3>
+
+<p><strong>File</strong>: <code class="language-plaintext highlighter-rouge">orbit-protocols/src/resp/commands.rs</code></p>
+
+<p><strong>Current State</strong>: Commands have TODO markers for actor integration</p>
+
+<p><strong>Action Items</strong>:</p>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// In cmd_get()</span>
+<span class="k">async</span> <span class="k">fn</span> <span class="nf">cmd_get</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">args</span><span class="p">:</span> <span class="o">&amp;</span><span class="p">[</span><span class="n">RespValue</span><span class="p">])</span> <span class="k">-&gt;</span> <span class="n">ProtocolResult</span><span class="o">&lt;</span><span class="n">RespValue</span><span class="o">&gt;</span> <span class="p">{</span>
+    <span class="k">let</span> <span class="n">key</span> <span class="o">=</span> <span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="nf">.as_string</span><span class="p">()</span><span class="o">?</span><span class="p">;</span>
+    
+    <span class="c1">// TODO: Implement actor state retrieval</span>
+    <span class="c1">// 1. Parse key to determine actor type and key</span>
+    <span class="c1">// 2. Get actor reference via self.orbit_client.actor_reference()</span>
+    <span class="c1">// 3. Call get_state() method on actor</span>
+    <span class="c1">// 4. Return state value or Null</span>
+    
+    <span class="c1">// Example implementation:</span>
+    <span class="k">let</span> <span class="n">actor_ref</span> <span class="o">=</span> <span class="k">self</span><span class="py">.orbit_client</span>
+        <span class="py">.actor_reference</span><span class="p">::</span><span class="o">&lt;</span><span class="k">dyn</span> <span class="n">KVActor</span><span class="o">&gt;</span><span class="p">(</span><span class="nn">Key</span><span class="p">::</span><span class="n">StringKey</span> <span class="p">{</span> <span class="n">key</span><span class="p">:</span> <span class="n">key</span><span class="nf">.clone</span><span class="p">()</span> <span class="p">})</span>
+        <span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+    
+    <span class="k">let</span> <span class="n">state</span> <span class="o">=</span> <span class="n">actor_ref</span><span class="nf">.get_value</span><span class="p">(</span><span class="o">&amp;</span><span class="n">key</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+    <span class="nf">Ok</span><span class="p">(</span><span class="n">state</span><span class="nf">.map</span><span class="p">(</span><span class="nn">RespValue</span><span class="p">::</span><span class="n">BulkString</span><span class="p">)</span><span class="nf">.unwrap_or</span><span class="p">(</span><span class="nn">RespValue</span><span class="p">::</span><span class="n">Null</span><span class="p">))</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p><strong>Required Changes</strong>:</p>
+<ol>
+  <li>Define <code class="language-plaintext highlighter-rouge">KVActor</code> trait in <code class="language-plaintext highlighter-rouge">orbit-shared</code> for key-value operations</li>
+  <li>Implement <code class="language-plaintext highlighter-rouge">get_value()</code> and <code class="language-plaintext highlighter-rouge">set_value()</code> methods</li>
+  <li>Update all 30+ commands to use actual actor operations</li>
+  <li>Add error handling for actor not found, timeout, etc.</li>
+</ol>
+
+<h3 id="12-create-kvactor-trait">1.2 Create KVActor Trait</h3>
+
+<p><strong>File</strong>: Create <code class="language-plaintext highlighter-rouge">orbit-shared/src/actors/kv_actor.rs</code></p>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">async_trait</span><span class="p">::</span><span class="n">async_trait</span><span class="p">;</span>
+<span class="k">use</span> <span class="k">crate</span><span class="p">::</span><span class="nn">addressable</span><span class="p">::</span><span class="n">Addressable</span><span class="p">;</span>
+<span class="k">use</span> <span class="k">crate</span><span class="p">::</span><span class="nn">exception</span><span class="p">::</span><span class="n">OrbitResult</span><span class="p">;</span>
+
+<span class="nd">#[async_trait]</span>
+<span class="k">pub</span> <span class="k">trait</span> <span class="n">KVActor</span><span class="p">:</span> <span class="n">Addressable</span> <span class="p">{</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">get_value</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="o">&amp;</span><span class="nb">str</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="nb">Option</span><span class="o">&lt;</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="nb">u8</span><span class="o">&gt;&gt;&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">set_value</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="o">&amp;</span><span class="nb">str</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="nb">u8</span><span class="o">&gt;</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">delete_value</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="o">&amp;</span><span class="nb">str</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="nb">bool</span><span class="o">&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">exists</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="o">&amp;</span><span class="nb">str</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="nb">bool</span><span class="o">&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">keys</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">pattern</span><span class="p">:</span> <span class="o">&amp;</span><span class="nb">str</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="nb">String</span><span class="o">&gt;&gt;</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="13-integration-tests">1.3 Integration Tests</h3>
+
+<p><strong>File</strong>: Create <code class="language-plaintext highlighter-rouge">orbit-protocols/tests/resp_integration_tests.rs</code></p>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">redis</span><span class="p">::</span><span class="n">Client</span><span class="p">;</span>
+
+<span class="nd">#[tokio::test]</span>
+<span class="k">async</span> <span class="k">fn</span> <span class="nf">test_redis_client_get_set</span><span class="p">()</span> <span class="p">{</span>
+    <span class="c1">// Start RESP server</span>
+    <span class="c1">// Connect with redis-rs client</span>
+    <span class="c1">// Test GET/SET operations</span>
+    <span class="c1">// Verify actor state is updated</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h2 id="phase-2-complete-rest-api-actor-integration">Phase 2: Complete REST API Actor Integration</h2>
+
+<h3 id="21-implement-actor-handlers">2.1 Implement Actor Handlers</h3>
+
+<p><strong>File</strong>: <code class="language-plaintext highlighter-rouge">orbit-protocols/src/rest/handlers.rs</code></p>
+
+<p><strong>Action Items</strong>:</p>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">get_actor</span><span class="p">(</span>
+    <span class="nf">State</span><span class="p">(</span><span class="n">state</span><span class="p">):</span> <span class="n">State</span><span class="o">&lt;</span><span class="n">ApiState</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="nf">Path</span><span class="p">((</span><span class="n">actor_type</span><span class="p">,</span> <span class="n">key</span><span class="p">)):</span> <span class="n">Path</span><span class="o">&lt;</span><span class="p">(</span><span class="nb">String</span><span class="p">,</span> <span class="nb">String</span><span class="p">)</span><span class="o">&gt;</span><span class="p">,</span>
+<span class="p">)</span> <span class="k">-&gt;</span> <span class="n">ProtocolResult</span><span class="o">&lt;</span><span class="k">impl</span> <span class="n">IntoResponse</span><span class="o">&gt;</span> <span class="p">{</span>
+    <span class="c1">// TODO: Implement actual actor state retrieval</span>
+    
+    <span class="c1">// Parse key to appropriate Key type</span>
+    <span class="k">let</span> <span class="n">actor_key</span> <span class="o">=</span> <span class="nf">parse_key</span><span class="p">(</span><span class="o">&amp;</span><span class="n">key</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+    
+    <span class="c1">// Get actor reference dynamically based on actor_type</span>
+    <span class="k">let</span> <span class="n">actor_ref</span> <span class="o">=</span> <span class="n">state</span><span class="py">.orbit_client</span>
+        <span class="nf">.actor_reference_dynamic</span><span class="p">(</span><span class="o">&amp;</span><span class="n">actor_type</span><span class="p">,</span> <span class="n">actor_key</span><span class="p">)</span>
+        <span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+    
+    <span class="c1">// Retrieve state via reflection or custom method</span>
+    <span class="k">let</span> <span class="n">state_json</span> <span class="o">=</span> <span class="n">actor_ref</span><span class="nf">.get_state_json</span><span class="p">()</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+    
+    <span class="k">let</span> <span class="n">actor_info</span> <span class="o">=</span> <span class="n">ActorInfo</span> <span class="p">{</span>
+        <span class="n">actor_type</span><span class="p">,</span>
+        <span class="n">key</span><span class="p">:</span> <span class="nn">serde_json</span><span class="p">::</span><span class="nd">json!</span><span class="p">({</span><span class="s">"StringKey"</span><span class="p">:</span> <span class="p">{</span><span class="s">"key"</span><span class="p">:</span> <span class="n">key</span><span class="p">}}),</span>
+        <span class="n">state</span><span class="p">:</span> <span class="n">state_json</span><span class="p">,</span>
+        <span class="n">node_id</span><span class="p">:</span> <span class="nf">Some</span><span class="p">(</span><span class="n">actor_ref</span><span class="nf">.node_id</span><span class="p">()</span><span class="nf">.to_string</span><span class="p">()),</span>
+        <span class="n">status</span><span class="p">:</span> <span class="s">"active"</span><span class="nf">.to_string</span><span class="p">(),</span>
+        <span class="n">last_activity</span><span class="p">:</span> <span class="nf">Some</span><span class="p">(</span><span class="nn">chrono</span><span class="p">::</span><span class="nn">Utc</span><span class="p">::</span><span class="nf">now</span><span class="p">()</span><span class="nf">.to_rfc3339</span><span class="p">()),</span>
+    <span class="p">};</span>
+    
+    <span class="nf">Ok</span><span class="p">((</span><span class="nn">StatusCode</span><span class="p">::</span><span class="n">OK</span><span class="p">,</span> <span class="nf">Json</span><span class="p">(</span><span class="nn">SuccessResponse</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="n">actor_info</span><span class="p">))))</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p><strong>Required Changes</strong>:</p>
+<ol>
+  <li>Add <code class="language-plaintext highlighter-rouge">actor_reference_dynamic()</code> method to <code class="language-plaintext highlighter-rouge">OrbitClient</code></li>
+  <li>Implement <code class="language-plaintext highlighter-rouge">get_state_json()</code> for state reflection</li>
+  <li>Add actor creation/deactivation support</li>
+  <li>Implement method invocation with serialization</li>
+</ol>
+
+<h3 id="22-transaction-integration">2.2 Transaction Integration</h3>
+
+<p><strong>File</strong>: <code class="language-plaintext highlighter-rouge">orbit-protocols/src/rest/handlers.rs</code></p>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">begin_transaction</span><span class="p">(</span>
+    <span class="nf">State</span><span class="p">(</span><span class="n">state</span><span class="p">):</span> <span class="n">State</span><span class="o">&lt;</span><span class="n">ApiState</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="nf">Json</span><span class="p">(</span><span class="n">request</span><span class="p">):</span> <span class="n">Json</span><span class="o">&lt;</span><span class="n">BeginTransactionRequest</span><span class="o">&gt;</span><span class="p">,</span>
+<span class="p">)</span> <span class="k">-&gt;</span> <span class="n">ProtocolResult</span><span class="o">&lt;</span><span class="k">impl</span> <span class="n">IntoResponse</span><span class="o">&gt;</span> <span class="p">{</span>
+    <span class="c1">// Get TransactionCoordinator from orbit_client</span>
+    <span class="k">let</span> <span class="n">coordinator</span> <span class="o">=</span> <span class="n">state</span><span class="py">.orbit_client</span><span class="nf">.transaction_coordinator</span><span class="p">()</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+    
+    <span class="c1">// Begin transaction with timeout</span>
+    <span class="k">let</span> <span class="n">timeout</span> <span class="o">=</span> <span class="n">request</span><span class="py">.timeout_ms</span>
+        <span class="nf">.map</span><span class="p">(|</span><span class="n">ms</span><span class="p">|</span> <span class="nn">Duration</span><span class="p">::</span><span class="nf">from_millis</span><span class="p">(</span><span class="n">ms</span><span class="p">));</span>
+    <span class="k">let</span> <span class="n">tx_id</span> <span class="o">=</span> <span class="n">coordinator</span><span class="nf">.begin_transaction</span><span class="p">(</span><span class="n">timeout</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+    
+    <span class="k">let</span> <span class="n">tx_info</span> <span class="o">=</span> <span class="n">TransactionInfo</span> <span class="p">{</span>
+        <span class="n">transaction_id</span><span class="p">:</span> <span class="n">tx_id</span><span class="nf">.to_string</span><span class="p">(),</span>
+        <span class="n">status</span><span class="p">:</span> <span class="s">"preparing"</span><span class="nf">.to_string</span><span class="p">(),</span>
+        <span class="n">operations</span><span class="p">:</span> <span class="nd">vec!</span><span class="p">[],</span>
+        <span class="n">created_at</span><span class="p">:</span> <span class="nn">chrono</span><span class="p">::</span><span class="nn">Utc</span><span class="p">::</span><span class="nf">now</span><span class="p">()</span><span class="nf">.to_rfc3339</span><span class="p">(),</span>
+        <span class="n">completed_at</span><span class="p">:</span> <span class="nb">None</span><span class="p">,</span>
+    <span class="p">};</span>
+    
+    <span class="nf">Ok</span><span class="p">((</span><span class="nn">StatusCode</span><span class="p">::</span><span class="n">CREATED</span><span class="p">,</span> <span class="nf">Json</span><span class="p">(</span><span class="nn">SuccessResponse</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="n">tx_info</span><span class="p">))))</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="23-websocket-event-integration">2.3 WebSocket Event Integration</h3>
+
+<p><strong>File</strong>: <code class="language-plaintext highlighter-rouge">orbit-protocols/src/rest/websocket.rs</code></p>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">async</span> <span class="k">fn</span> <span class="nf">events_websocket</span><span class="p">(</span><span class="n">socket</span><span class="p">:</span> <span class="n">WebSocket</span><span class="p">,</span> <span class="n">state</span><span class="p">:</span> <span class="n">ApiState</span><span class="p">)</span> <span class="p">{</span>
+    <span class="c1">// Subscribe to actor events from OrbitClient</span>
+    <span class="k">let</span> <span class="k">mut</span> <span class="n">event_stream</span> <span class="o">=</span> <span class="n">state</span><span class="py">.orbit_client</span><span class="nf">.subscribe_to_events</span><span class="p">()</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+    
+    <span class="nn">tokio</span><span class="p">::</span><span class="nf">spawn</span><span class="p">(</span><span class="k">async</span> <span class="k">move</span> <span class="p">{</span>
+        <span class="k">while</span> <span class="k">let</span> <span class="nf">Some</span><span class="p">(</span><span class="n">event</span><span class="p">)</span> <span class="o">=</span> <span class="n">event_stream</span><span class="nf">.next</span><span class="p">()</span><span class="k">.await</span> <span class="p">{</span>
+            <span class="c1">// Transform orbit event to WebSocketMessage</span>
+            <span class="k">let</span> <span class="n">ws_message</span> <span class="o">=</span> <span class="k">match</span> <span class="n">event</span> <span class="p">{</span>
+                <span class="nn">OrbitEvent</span><span class="p">::</span><span class="n">ActorActivated</span> <span class="p">{</span> <span class="n">actor_ref</span><span class="p">,</span> <span class="n">node_id</span> <span class="p">}</span> <span class="k">=&gt;</span> <span class="p">{</span>
+                    <span class="nn">WebSocketMessage</span><span class="p">::</span><span class="n">ActorActivated</span> <span class="p">{</span>
+                        <span class="n">actor_type</span><span class="p">:</span> <span class="n">actor_ref</span><span class="nf">.actor_type</span><span class="p">()</span><span class="nf">.to_string</span><span class="p">(),</span>
+                        <span class="n">key</span><span class="p">:</span> <span class="n">actor_ref</span><span class="nf">.key_json</span><span class="p">(),</span>
+                        <span class="n">node_id</span><span class="p">:</span> <span class="n">node_id</span><span class="nf">.to_string</span><span class="p">(),</span>
+                    <span class="p">}</span>
+                <span class="p">}</span>
+                <span class="c1">// Handle other event types</span>
+            <span class="p">};</span>
+            
+            <span class="c1">// Send to WebSocket</span>
+            <span class="k">let</span> <span class="n">json</span> <span class="o">=</span> <span class="nn">serde_json</span><span class="p">::</span><span class="nf">to_string</span><span class="p">(</span><span class="o">&amp;</span><span class="n">ws_message</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+            <span class="n">sender</span><span class="nf">.send</span><span class="p">(</span><span class="nn">Message</span><span class="p">::</span><span class="nf">Text</span><span class="p">(</span><span class="n">json</span><span class="p">))</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+        <span class="p">}</span>
+    <span class="p">});</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h2 id="phase-3-postgresql-wire-protocol-implementation">Phase 3: PostgreSQL Wire Protocol Implementation</h2>
+
+<h3 id="31-implement-startup-handshake">3.1 Implement Startup Handshake</h3>
+
+<p><strong>File</strong>: <code class="language-plaintext highlighter-rouge">orbit-protocols/src/postgres_wire/protocol.rs</code></p>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">handle_startup</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span> <span class="k">self</span><span class="p">,</span> <span class="n">params</span><span class="p">:</span> <span class="n">HashMap</span><span class="o">&lt;</span><span class="nb">String</span><span class="p">,</span> <span class="nb">String</span><span class="o">&gt;</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">ProtocolResult</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span> <span class="p">{</span>
+    <span class="c1">// Extract database, user from params</span>
+    <span class="c1">// Send AuthenticationMD5Password or AuthenticationOk</span>
+    <span class="c1">// Send ParameterStatus messages</span>
+    <span class="c1">// Send ReadyForQuery</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="32-implement-authentication">3.2 Implement Authentication</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">authenticate</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span> <span class="k">self</span><span class="p">,</span> <span class="n">password</span><span class="p">:</span> <span class="o">&amp;</span><span class="p">[</span><span class="nb">u8</span><span class="p">])</span> <span class="k">-&gt;</span> <span class="n">ProtocolResult</span><span class="o">&lt;</span><span class="nb">bool</span><span class="o">&gt;</span> <span class="p">{</span>
+    <span class="c1">// Implement MD5 authentication</span>
+    <span class="c1">// Compare hash with stored hash</span>
+    <span class="c1">// Return success/failure</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="33-build-sql-query-parser">3.3 Build SQL Query Parser</h3>
+
+<p><strong>File</strong>: <code class="language-plaintext highlighter-rouge">orbit-protocols/src/postgres_wire/query_engine.rs</code></p>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">sqlparser</span><span class="p">::{</span><span class="nn">ast</span><span class="p">::</span><span class="n">Statement</span><span class="p">,</span> <span class="nn">dialect</span><span class="p">::</span><span class="n">PostgreSqlDialect</span><span class="p">,</span> <span class="nn">parser</span><span class="p">::</span><span class="n">Parser</span><span class="p">};</span>
+
+<span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">execute</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">query</span><span class="p">:</span> <span class="o">&amp;</span><span class="nb">str</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">ProtocolResult</span><span class="o">&lt;</span><span class="n">QueryResult</span><span class="o">&gt;</span> <span class="p">{</span>
+    <span class="k">let</span> <span class="n">dialect</span> <span class="o">=</span> <span class="n">PostgreSqlDialect</span> <span class="p">{};</span>
+    <span class="k">let</span> <span class="n">ast</span> <span class="o">=</span> <span class="nn">Parser</span><span class="p">::</span><span class="nf">parse_sql</span><span class="p">(</span><span class="o">&amp;</span><span class="n">dialect</span><span class="p">,</span> <span class="n">query</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+    
+    <span class="k">match</span> <span class="o">&amp;</span><span class="n">ast</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="p">{</span>
+        <span class="nn">Statement</span><span class="p">::</span><span class="nf">Query</span><span class="p">(</span><span class="n">query</span><span class="p">)</span> <span class="k">=&gt;</span> <span class="k">self</span><span class="nf">.execute_query</span><span class="p">(</span><span class="n">query</span><span class="p">)</span><span class="k">.await</span><span class="p">,</span>
+        <span class="nn">Statement</span><span class="p">::</span><span class="nf">Insert</span><span class="p">(</span><span class="n">insert</span><span class="p">)</span> <span class="k">=&gt;</span> <span class="k">self</span><span class="nf">.execute_insert</span><span class="p">(</span><span class="n">insert</span><span class="p">)</span><span class="k">.await</span><span class="p">,</span>
+        <span class="nn">Statement</span><span class="p">::</span><span class="nf">Update</span><span class="p">(</span><span class="n">update</span><span class="p">)</span> <span class="k">=&gt;</span> <span class="k">self</span><span class="nf">.execute_update</span><span class="p">(</span><span class="n">update</span><span class="p">)</span><span class="k">.await</span><span class="p">,</span>
+        <span class="nn">Statement</span><span class="p">::</span><span class="nf">Delete</span><span class="p">(</span><span class="n">delete</span><span class="p">)</span> <span class="k">=&gt;</span> <span class="k">self</span><span class="nf">.execute_delete</span><span class="p">(</span><span class="n">delete</span><span class="p">)</span><span class="k">.await</span><span class="p">,</span>
+        <span class="n">_</span> <span class="k">=&gt;</span> <span class="nf">Err</span><span class="p">(</span><span class="nn">ProtocolError</span><span class="p">::</span><span class="n">NotImplemented</span><span class="p">),</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p><strong>Add Dependency</strong>: <code class="language-plaintext highlighter-rouge">sqlparser = "0.49"</code> to Cargo.toml</p>
+
+<h3 id="34-implement-query-execution">3.4 Implement Query Execution</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">async</span> <span class="k">fn</span> <span class="nf">execute_query</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">query</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">Query</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">ProtocolResult</span><span class="o">&lt;</span><span class="n">QueryResult</span><span class="o">&gt;</span> <span class="p">{</span>
+    <span class="c1">// Parse SELECT statement</span>
+    <span class="c1">// Map table name to actor type</span>
+    <span class="c1">// Map WHERE clause to actor key filter</span>
+    <span class="c1">// Execute actor queries</span>
+    <span class="c1">// Format result as PostgreSQL RowDescription + DataRow</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h2 id="phase-4-cypherbolt-protocol-implementation">Phase 4: Cypher/Bolt Protocol Implementation</h2>
+
+<h3 id="41-implement-bolt-handshake">4.1 Implement Bolt Handshake</h3>
+
+<p><strong>File</strong>: <code class="language-plaintext highlighter-rouge">orbit-protocols/src/cypher/bolt.rs</code></p>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">handshake</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span> <span class="k">self</span><span class="p">,</span> <span class="n">versions</span><span class="p">:</span> <span class="o">&amp;</span><span class="p">[</span><span class="nb">u8</span><span class="p">;</span> <span class="mi">16</span><span class="p">])</span> <span class="k">-&gt;</span> <span class="n">ProtocolResult</span><span class="o">&lt;</span><span class="nb">u32</span><span class="o">&gt;</span> <span class="p">{</span>
+    <span class="c1">// Parse version proposals</span>
+    <span class="c1">// Select highest supported version (v4 or v5)</span>
+    <span class="c1">// Return selected version</span>
+    <span class="k">self</span><span class="py">.version</span> <span class="o">=</span> <span class="mi">4</span><span class="p">;</span> <span class="c1">// Bolt v4</span>
+    <span class="nf">Ok</span><span class="p">(</span><span class="mi">4</span><span class="p">)</span>
+<span class="p">}</span>
+
+<span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">handle_hello</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span> <span class="k">self</span><span class="p">,</span> <span class="n">extra</span><span class="p">:</span> <span class="n">HashMap</span><span class="o">&lt;</span><span class="nb">String</span><span class="p">,</span> <span class="n">Value</span><span class="o">&gt;</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">ProtocolResult</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span> <span class="p">{</span>
+    <span class="c1">// Extract user_agent, scheme, principal, credentials</span>
+    <span class="c1">// Authenticate user</span>
+    <span class="c1">// Send SUCCESS message with server info</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="42-build-cypher-parser">4.2 Build Cypher Parser</h3>
+
+<p><strong>File</strong>: <code class="language-plaintext highlighter-rouge">orbit-protocols/src/cypher/cypher_parser.rs</code></p>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">nom</span><span class="p">::{</span>
+    <span class="nn">branch</span><span class="p">::</span><span class="n">alt</span><span class="p">,</span>
+    <span class="nn">bytes</span><span class="p">::</span><span class="nn">complete</span><span class="p">::{</span><span class="n">tag</span><span class="p">,</span> <span class="n">tag_no_case</span><span class="p">},</span>
+    <span class="n">IResult</span><span class="p">,</span>
+<span class="p">};</span>
+
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">CypherParser</span><span class="p">;</span>
+
+<span class="k">impl</span> <span class="n">CypherParser</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="k">fn</span> <span class="nf">parse</span><span class="p">(</span><span class="n">query</span><span class="p">:</span> <span class="o">&amp;</span><span class="nb">str</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">ProtocolResult</span><span class="o">&lt;</span><span class="n">CypherQuery</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="c1">// Parse MATCH, CREATE, MERGE, DELETE, RETURN clauses</span>
+        <span class="c1">// Build AST</span>
+    <span class="p">}</span>
+    
+    <span class="k">fn</span> <span class="nf">parse_match_clause</span><span class="p">(</span><span class="n">input</span><span class="p">:</span> <span class="o">&amp;</span><span class="nb">str</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">IResult</span><span class="o">&lt;&amp;</span><span class="nb">str</span><span class="p">,</span> <span class="n">MatchClause</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="c1">// Parse: MATCH (n:Label {prop: value})-[r:REL_TYPE]-&gt;(m)</span>
+    <span class="p">}</span>
+    
+    <span class="k">fn</span> <span class="nf">parse_where_clause</span><span class="p">(</span><span class="n">input</span><span class="p">:</span> <span class="o">&amp;</span><span class="nb">str</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">IResult</span><span class="o">&lt;&amp;</span><span class="nb">str</span><span class="p">,</span> <span class="n">WhereClause</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="c1">// Parse: WHERE n.prop = value AND m.prop &gt; 10</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="43-implement-graph-engine">4.3 Implement Graph Engine</h3>
+
+<p><strong>File</strong>: <code class="language-plaintext highlighter-rouge">orbit-protocols/src/cypher/graph_engine.rs</code></p>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">impl</span> <span class="n">GraphEngine</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">execute_query</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">query</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">CypherQuery</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">ProtocolResult</span><span class="o">&lt;</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="n">Record</span><span class="o">&gt;&gt;</span> <span class="p">{</span>
+        <span class="k">match</span> <span class="n">query</span> <span class="p">{</span>
+            <span class="nn">CypherQuery</span><span class="p">::</span><span class="n">Match</span> <span class="p">{</span> <span class="n">pattern</span><span class="p">,</span> <span class="n">where_clause</span><span class="p">,</span> <span class="n">return_clause</span> <span class="p">}</span> <span class="k">=&gt;</span> <span class="p">{</span>
+                <span class="c1">// Execute graph traversal</span>
+                <span class="k">let</span> <span class="n">nodes</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.find_nodes</span><span class="p">(</span><span class="n">pattern</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+                <span class="k">let</span> <span class="n">relationships</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.traverse_relationships</span><span class="p">(</span><span class="n">nodes</span><span class="p">,</span> <span class="n">pattern</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+                <span class="k">let</span> <span class="n">filtered</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.apply_filters</span><span class="p">(</span><span class="n">nodes</span><span class="p">,</span> <span class="n">where_clause</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+                <span class="k">self</span><span class="nf">.project_results</span><span class="p">(</span><span class="n">filtered</span><span class="p">,</span> <span class="n">return_clause</span><span class="p">)</span><span class="k">.await</span>
+            <span class="p">}</span>
+            <span class="nn">CypherQuery</span><span class="p">::</span><span class="n">Create</span> <span class="p">{</span> <span class="n">pattern</span> <span class="p">}</span> <span class="k">=&gt;</span> <span class="p">{</span>
+                <span class="k">self</span><span class="nf">.create_nodes</span><span class="p">(</span><span class="n">pattern</span><span class="p">)</span><span class="k">.await</span>
+            <span class="p">}</span>
+            <span class="c1">// Handle other query types</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+    
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">find_nodes</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">pattern</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">Pattern</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">ProtocolResult</span><span class="o">&lt;</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="n">GraphNode</span><span class="o">&gt;&gt;</span> <span class="p">{</span>
+        <span class="c1">// Map node labels to actor types</span>
+        <span class="c1">// Query actors matching pattern</span>
+        <span class="c1">// Return as GraphNode instances</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h2 id="phase-5-integration-testing">Phase 5: Integration Testing</h2>
+
+<h3 id="51-create-multi-protocol-test-suite">5.1 Create Multi-Protocol Test Suite</h3>
+
+<p><strong>File</strong>: <code class="language-plaintext highlighter-rouge">orbit-protocols/tests/integration_tests.rs</code></p>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="nd">#[tokio::test]</span>
+<span class="k">async</span> <span class="k">fn</span> <span class="nf">test_redis_protocol</span><span class="p">()</span> <span class="p">{</span>
+    <span class="k">let</span> <span class="n">client</span> <span class="o">=</span> <span class="nn">redis</span><span class="p">::</span><span class="nn">Client</span><span class="p">::</span><span class="nf">open</span><span class="p">(</span><span class="s">"redis://localhost:6379"</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+    <span class="k">let</span> <span class="k">mut</span> <span class="n">con</span> <span class="o">=</span> <span class="n">client</span><span class="nf">.get_connection</span><span class="p">()</span><span class="o">?</span><span class="p">;</span>
+    
+    <span class="nn">redis</span><span class="p">::</span><span class="nf">cmd</span><span class="p">(</span><span class="s">"SET"</span><span class="p">)</span><span class="nf">.arg</span><span class="p">(</span><span class="s">"key1"</span><span class="p">)</span><span class="nf">.arg</span><span class="p">(</span><span class="s">"value1"</span><span class="p">)</span><span class="nf">.execute</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span> <span class="n">con</span><span class="p">);</span>
+    <span class="k">let</span> <span class="n">value</span><span class="p">:</span> <span class="nb">String</span> <span class="o">=</span> <span class="nn">redis</span><span class="p">::</span><span class="nf">cmd</span><span class="p">(</span><span class="s">"GET"</span><span class="p">)</span><span class="nf">.arg</span><span class="p">(</span><span class="s">"key1"</span><span class="p">)</span><span class="nf">.query</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span> <span class="n">con</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+    <span class="nd">assert_eq!</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="s">"value1"</span><span class="p">);</span>
+<span class="p">}</span>
+
+<span class="nd">#[tokio::test]</span>
+<span class="k">async</span> <span class="k">fn</span> <span class="nf">test_rest_api</span><span class="p">()</span> <span class="p">{</span>
+    <span class="k">let</span> <span class="n">client</span> <span class="o">=</span> <span class="nn">reqwest</span><span class="p">::</span><span class="nn">Client</span><span class="p">::</span><span class="nf">new</span><span class="p">();</span>
+    
+    <span class="k">let</span> <span class="n">response</span> <span class="o">=</span> <span class="n">client</span>
+        <span class="nf">.post</span><span class="p">(</span><span class="s">"http://localhost:8080/api/v1/actors"</span><span class="p">)</span>
+        <span class="nf">.json</span><span class="p">(</span><span class="o">&amp;</span><span class="n">CreateActorRequest</span> <span class="p">{</span> <span class="cm">/* ... */</span> <span class="p">})</span>
+        <span class="nf">.send</span><span class="p">()</span>
+        <span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+    
+    <span class="nd">assert_eq!</span><span class="p">(</span><span class="n">response</span><span class="nf">.status</span><span class="p">(),</span> <span class="nn">StatusCode</span><span class="p">::</span><span class="n">CREATED</span><span class="p">);</span>
+<span class="p">}</span>
+
+<span class="nd">#[tokio::test]</span>
+<span class="k">async</span> <span class="k">fn</span> <span class="nf">test_postgres_protocol</span><span class="p">()</span> <span class="p">{</span>
+    <span class="k">let</span> <span class="p">(</span><span class="n">client</span><span class="p">,</span> <span class="n">connection</span><span class="p">)</span> <span class="o">=</span> <span class="nn">tokio_postgres</span><span class="p">::</span><span class="nf">connect</span><span class="p">(</span>
+        <span class="s">"host=localhost port=5432 user=orbit"</span><span class="p">,</span>
+        <span class="n">NoTls</span><span class="p">,</span>
+    <span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+    
+    <span class="k">let</span> <span class="n">rows</span> <span class="o">=</span> <span class="n">client</span><span class="nf">.query</span><span class="p">(</span><span class="s">"SELECT * FROM actors WHERE type = $1"</span><span class="p">,</span> <span class="o">&amp;</span><span class="p">[</span><span class="o">&amp;</span><span class="s">"GreeterActor"</span><span class="p">])</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+    <span class="nd">assert!</span><span class="p">(</span><span class="o">!</span><span class="n">rows</span><span class="nf">.is_empty</span><span class="p">());</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="52-create-end-to-end-examples">5.2 Create End-to-End Examples</h3>
+
+<p><strong>Files</strong>: Create examples for each protocol showing real-world usage</p>
+
+<h2 id="phase-6-performance--production-readiness">Phase 6: Performance &amp; Production Readiness</h2>
+
+<h3 id="61-add-connection-pooling">6.1 Add Connection Pooling</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// In RESP server</span>
+<span class="k">use</span> <span class="nn">deadpool</span><span class="p">::</span><span class="nn">managed</span><span class="p">::</span><span class="n">Pool</span><span class="p">;</span>
+
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">RespServer</span> <span class="p">{</span>
+    <span class="n">pool</span><span class="p">:</span> <span class="n">Pool</span><span class="o">&lt;</span><span class="n">OrbitConnection</span><span class="o">&gt;</span><span class="p">,</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="62-add-metrics">6.2 Add Metrics</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">metrics</span><span class="p">::{</span><span class="n">counter</span><span class="p">,</span> <span class="n">histogram</span><span class="p">};</span>
+
+<span class="k">impl</span> <span class="n">CommandHandler</span> <span class="p">{</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">handle_command</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">cmd</span><span class="p">:</span> <span class="n">RespValue</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">ProtocolResult</span><span class="o">&lt;</span><span class="n">RespValue</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="nd">counter!</span><span class="p">(</span><span class="s">"orbit.resp.commands.total"</span><span class="p">)</span><span class="nf">.increment</span><span class="p">(</span><span class="mi">1</span><span class="p">);</span>
+        <span class="k">let</span> <span class="n">start</span> <span class="o">=</span> <span class="nn">Instant</span><span class="p">::</span><span class="nf">now</span><span class="p">();</span>
+        
+        <span class="k">let</span> <span class="n">result</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.execute_command</span><span class="p">(</span><span class="n">cmd</span><span class="p">)</span><span class="k">.await</span><span class="p">;</span>
+        
+        <span class="nd">histogram!</span><span class="p">(</span><span class="s">"orbit.resp.command.duration"</span><span class="p">)</span><span class="nf">.record</span><span class="p">(</span><span class="n">start</span><span class="nf">.elapsed</span><span class="p">());</span>
+        <span class="n">result</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="63-add-rate-limiting">6.3 Add Rate Limiting</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">tower</span><span class="p">::</span><span class="nn">limit</span><span class="p">::</span><span class="n">RateLimitLayer</span><span class="p">;</span>
+
+<span class="k">let</span> <span class="n">app</span> <span class="o">=</span> <span class="nn">Router</span><span class="p">::</span><span class="nf">new</span><span class="p">()</span>
+    <span class="nf">.route</span><span class="p">(</span><span class="s">"/api/v1/actors"</span><span class="p">,</span> <span class="nf">post</span><span class="p">(</span><span class="n">create_actor</span><span class="p">))</span>
+    <span class="nf">.layer</span><span class="p">(</span><span class="nn">RateLimitLayer</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="mi">100</span><span class="p">,</span> <span class="nn">Duration</span><span class="p">::</span><span class="nf">from_secs</span><span class="p">(</span><span class="mi">1</span><span class="p">)));</span>
+</code></pre></div></div>
+
+<h2 id="estimated-timeline">Estimated Timeline</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>Phase</th>
+      <th>Estimated Time</th>
+      <th>Priority</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Phase 1: RESP Integration</td>
+      <td>2-3 days</td>
+      <td>HIGH</td>
+    </tr>
+    <tr>
+      <td>Phase 2: REST Integration</td>
+      <td>2-3 days</td>
+      <td>HIGH</td>
+    </tr>
+    <tr>
+      <td>Phase 3: PostgreSQL</td>
+      <td>5-7 days</td>
+      <td>MEDIUM</td>
+    </tr>
+    <tr>
+      <td>Phase 4: Cypher/Bolt</td>
+      <td>5-7 days</td>
+      <td>MEDIUM</td>
+    </tr>
+    <tr>
+      <td>Phase 5: Testing</td>
+      <td>3-5 days</td>
+      <td>HIGH</td>
+    </tr>
+    <tr>
+      <td>Phase 6: Production</td>
+      <td>2-3 days</td>
+      <td>LOW</td>
+    </tr>
+  </tbody>
+</table>
+
+<p><strong>Total</strong>: 19-28 days</p>
+
+<h2 id="dependencies-needed">Dependencies Needed</h2>
+
+<p>Add to <code class="language-plaintext highlighter-rouge">orbit-shared/Cargo.toml</code>:</p>
+<div class="language-toml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">async-trait</span> <span class="o">=</span><span class="w"> </span><span class="s">"0.1"</span>
+</code></pre></div></div>
+
+<p>Add to <code class="language-plaintext highlighter-rouge">orbit-client/Cargo.toml</code>:</p>
+<div class="language-toml highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># For dynamic actor references</span>
+<span class="n">downcast-rs</span> <span class="o">=</span><span class="w"> </span><span class="s">"1.2"</span>
+</code></pre></div></div>
+
+<p>Add to <code class="language-plaintext highlighter-rouge">orbit-protocols/Cargo.toml</code>:</p>
+<div class="language-toml highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># For SQL parsing</span>
+<span class="n">sqlparser</span> <span class="o">=</span><span class="w"> </span><span class="s">"0.49"</span>
+
+<span class="c"># For connection pooling</span>
+<span class="n">deadpool</span> <span class="o">=</span><span class="w"> </span><span class="s">"0.12"</span>
+
+<span class="c"># For rate limiting (already have tower)</span>
+</code></pre></div></div>
+
+<h2 id="required-orbitclient-enhancements">Required OrbitClient Enhancements</h2>
+
+<ol>
+  <li><strong>Dynamic Actor References</strong>:
+    <div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">actor_reference_dynamic</span><span class="p">(</span>
+    <span class="o">&amp;</span><span class="k">self</span><span class="p">,</span>
+    <span class="n">actor_type</span><span class="p">:</span> <span class="o">&amp;</span><span class="nb">str</span><span class="p">,</span>
+    <span class="n">key</span><span class="p">:</span> <span class="n">Key</span><span class="p">,</span>
+<span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="nb">Box</span><span class="o">&lt;</span><span class="k">dyn</span> <span class="n">Any</span><span class="o">&gt;&gt;</span>
+</code></pre></div>    </div>
+  </li>
+  <li><strong>State Reflection</strong>:
+    <div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">get_actor_state_json</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">actor_ref</span><span class="p">:</span> <span class="o">&amp;</span><span class="k">dyn</span> <span class="n">Addressable</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="nn">serde_json</span><span class="p">::</span><span class="n">Value</span><span class="o">&gt;</span>
+</code></pre></div>    </div>
+  </li>
+  <li><strong>Event Subscriptions</strong>:
+    <div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">subscribe_to_events</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">EventStream</span><span class="o">&gt;</span>
+</code></pre></div>    </div>
+  </li>
+  <li><strong>Transaction Coordinator Access</strong>:
+    <div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">transaction_coordinator</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="nb">Arc</span><span class="o">&lt;</span><span class="n">TransactionCoordinator</span><span class="o">&gt;&gt;</span>
+</code></pre></div>    </div>
+  </li>
+</ol>
+
+<h2 id="success-criteria">Success Criteria</h2>
+
+<ul class="task-list">
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Redis client can connect and execute commands</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />REST API endpoints return 200 for all operations</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />WebSocket connections remain stable</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />PostgreSQL client can connect and query</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Neo4j driver can connect via Bolt</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />All integration tests pass</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Performance meets requirements (&gt;1000 req/s)</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Monitoring and metrics are functional</li>
+</ul>
+
+<h2 id="getting-started">Getting Started</h2>
+
+<p>Start with <strong>Phase 1.1</strong> - implementing GET/SET commands in RESP protocol. This is the smallest, most well-defined task that will validate the entire integration pattern.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># 1. Create KVActor trait</span>
+vim orbit-shared/src/actors/kv_actor.rs
+
+<span class="c"># 2. Implement actor integration in RESP commands</span>
+vim orbit-protocols/src/resp/commands.rs
+
+<span class="c"># 3. Test with Redis client</span>
+cargo <span class="nb">test</span> <span class="nt">--package</span> orbit-protocols <span class="nt">--test</span> resp_integration
+</code></pre></div></div>

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["TriggerEvent","TriggerLevel","TriggerTiming"],"struct":["TriggerContext","TriggerCoordinator","TriggerDefinition","TriggerExecutor","TriggerResult","TriggerStats"],"trait":["TriggerFunction"]};

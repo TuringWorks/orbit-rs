@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["IndexType","VectorIndexAlgorithm"],"struct":["IndexChoice","IndexCostEstimator","IndexMetadata","IndexPerformanceMetrics","IndexSelector","IndexUsageStats","IndexUsageTracker"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["execute_tool","get_available_tools"]};

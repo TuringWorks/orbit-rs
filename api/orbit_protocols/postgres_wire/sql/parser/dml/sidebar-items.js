@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["parse_delete","parse_expression_with_parser","parse_from_clause","parse_insert","parse_on_conflict_clause","parse_order_by_clause","parse_returning_clause","parse_select","parse_update","parse_where_expression"]};

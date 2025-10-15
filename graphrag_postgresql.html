@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>GraphRAG PostgreSQL Integration | Orbit-RS Documentation</title>
+<meta name="generator" content="Jekyll v4.4.1" />
+<meta property="og:title" content="GraphRAG PostgreSQL Integration" />
+<meta name="author" content="TuringWorks" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<meta property="og:description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<link rel="canonical" href="https://turingworks.github.io/orbit-rs/graphrag_postgresql.html" />
+<meta property="og:url" content="https://turingworks.github.io/orbit-rs/graphrag_postgresql.html" />
+<meta property="og:site_name" content="Orbit-RS Documentation" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="GraphRAG PostgreSQL Integration" />
+<meta name="twitter:site" content="@TuringWorksAI" />
+<meta name="twitter:creator" content="@TuringWorks" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","author":{"@type":"Person","name":"TuringWorks"},"description":"The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform","headline":"GraphRAG PostgreSQL Integration","url":"https://turingworks.github.io/orbit-rs/graphrag_postgresql.html"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/orbit-rs/assets/main.css">
+  <link rel="stylesheet" href="/orbit-rs/assets/css/custom.css"><link type="application/atom+xml" rel="alternate" href="https://turingworks.github.io/orbit-rs/feed.xml" title="Orbit-RS Documentation" /></head><body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/orbit-rs/">Orbit-RS Documentation</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/orbit-rs/">Orbit-RS Documentation</a><a class="page-link" href="/orbit-rs/project_overview.html">Orbit-RS: Comprehensive Project Overview</a><a class="page-link" href="/orbit-rs/quick_start.html">Quick Start Guide - Multi-Protocol Database Server</a><a class="page-link" href="/orbit-rs/roadmap/">Development Roadmap</a><a class="page-link" href="/orbit-rs/features/">Orbit-RS Feature Index</a><a class="page-link" href="/orbit-rs/compute-acceleration/">Hardware Acceleration Guide</a><a class="page-link" href="/orbit-rs/contributing.html">Contributing Guide</a><a class="page-link" href="/orbit-rs/overview.html">Architecture Overview</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <h1 id="graphrag-postgresql-integration">GraphRAG PostgreSQL Integration</h1>
+
+<p>This document describes how to use GraphRAG functionality through PostgreSQL-compatible SQL function calls in Orbit-RS.</p>
+
+<h2 id="overview">Overview</h2>
+
+<p>The PostgreSQL wire protocol in Orbit-RS includes support for GraphRAG operations through SQL function calls. This allows you to build and query knowledge graphs using familiar PostgreSQL syntax and any PostgreSQL-compatible client (psql, pgAdmin, applications using pg drivers, etc.).</p>
+
+<h2 id="setup">Setup</h2>
+
+<p>To enable GraphRAG support in your PostgreSQL server:</p>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">orbit_protocols</span><span class="p">::</span><span class="nn">postgres_wire</span><span class="p">::{</span><span class="n">PostgresServer</span><span class="p">,</span> <span class="n">QueryEngine</span><span class="p">};</span>
+<span class="k">use</span> <span class="nn">orbit_client</span><span class="p">::</span><span class="n">OrbitClient</span><span class="p">;</span>
+
+<span class="c1">// Create query engine with GraphRAG support</span>
+<span class="k">let</span> <span class="n">orbit_client</span> <span class="o">=</span> <span class="nn">OrbitClient</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="cm">/* config */</span><span class="p">);</span>
+<span class="k">let</span> <span class="n">query_engine</span> <span class="o">=</span> <span class="nn">QueryEngine</span><span class="p">::</span><span class="nf">new_with_vector_support</span><span class="p">(</span><span class="n">orbit_client</span><span class="p">);</span>
+<span class="k">let</span> <span class="n">server</span> <span class="o">=</span> <span class="nn">PostgresServer</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="s">"127.0.0.1:5433"</span><span class="p">,</span> <span class="n">query_engine</span><span class="p">);</span>
+</code></pre></div></div>
+
+<h2 id="graphrag-sql-functions">GraphRAG SQL Functions</h2>
+
+<h3 id="1-graphrag_build---build-knowledge-graph">1. GRAPHRAG_BUILD - Build Knowledge Graph</h3>
+
+<p>Processes a document and builds knowledge graph entities and relationships.</p>
+
+<p><strong>Syntax:</strong></p>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">SELECT</span> <span class="o">*</span> <span class="k">FROM</span> <span class="n">GRAPHRAG_BUILD</span><span class="p">(</span>
+    <span class="n">kg_name</span> <span class="nb">TEXT</span><span class="p">,</span>           <span class="c1">-- Knowledge graph name/identifier</span>
+    <span class="n">document_id</span> <span class="nb">TEXT</span><span class="p">,</span>       <span class="c1">-- Unique document identifier</span>
+    <span class="n">document_text</span> <span class="nb">TEXT</span><span class="p">,</span>     <span class="c1">-- Document content to process</span>
+    <span class="n">metadata</span> <span class="n">JSON</span>           <span class="c1">-- Optional: document metadata as JSON</span>
+<span class="p">);</span>
+</code></pre></div></div>
+
+<p><strong>Example:</strong></p>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Build knowledge graph from a research paper</span>
+<span class="k">SELECT</span> <span class="o">*</span> <span class="k">FROM</span> <span class="n">GRAPHRAG_BUILD</span><span class="p">(</span>
+    <span class="s1">'research_papers'</span><span class="p">,</span>
+    <span class="s1">'paper_001'</span><span class="p">,</span>
+    <span class="s1">'Machine learning is a subset of artificial intelligence that focuses on algorithms...'</span><span class="p">,</span>
+    <span class="s1">'{"author": "John Doe", "year": 2023, "journal": "AI Review"}'</span><span class="p">::</span><span class="n">json</span>
+<span class="p">);</span>
+</code></pre></div></div>
+
+<p><strong>Returns:</strong></p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">kg_name</code>: Knowledge graph name</li>
+  <li><code class="language-plaintext highlighter-rouge">document_id</code>: Document identifier</li>
+  <li><code class="language-plaintext highlighter-rouge">entities_extracted</code>: Number of entities found</li>
+  <li><code class="language-plaintext highlighter-rouge">relationships_extracted</code>: Number of relationships found</li>
+  <li><code class="language-plaintext highlighter-rouge">extractors_used</code>: Number of extractors applied</li>
+  <li><code class="language-plaintext highlighter-rouge">processing_time_ms</code>: Processing duration</li>
+</ul>
+
+<h3 id="2-graphrag_query---rag-query">2. GRAPHRAG_QUERY - RAG Query</h3>
+
+<p>Performs Retrieval-Augmented Generation queries against the knowledge graph.</p>
+
+<p><strong>Syntax:</strong></p>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">SELECT</span> <span class="o">*</span> <span class="k">FROM</span> <span class="n">GRAPHRAG_QUERY</span><span class="p">(</span>
+    <span class="n">kg_name</span> <span class="nb">TEXT</span><span class="p">,</span>                <span class="c1">-- Knowledge graph name</span>
+    <span class="n">query_text</span> <span class="nb">TEXT</span><span class="p">,</span>             <span class="c1">-- Query/question to answer</span>
+    <span class="n">max_hops</span> <span class="nb">INTEGER</span><span class="p">,</span>            <span class="c1">-- Optional: max relationship hops (default: 3)</span>
+    <span class="n">context_size</span> <span class="nb">INTEGER</span><span class="p">,</span>        <span class="c1">-- Optional: context window size (default: 2048)</span>
+    <span class="n">llm_provider</span> <span class="nb">TEXT</span><span class="p">,</span>           <span class="c1">-- Optional: LLM provider ('ollama', 'openai', etc.)</span>
+    <span class="n">include_explanation</span> <span class="nb">BOOLEAN</span>  <span class="c1">-- Optional: include reasoning explanation</span>
+<span class="p">);</span>
+</code></pre></div></div>
+
+<p><strong>Example:</strong></p>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Query knowledge graph about machine learning</span>
+<span class="k">SELECT</span> <span class="o">*</span> <span class="k">FROM</span> <span class="n">GRAPHRAG_QUERY</span><span class="p">(</span>
+    <span class="s1">'research_papers'</span><span class="p">,</span>
+    <span class="s1">'What are the main applications of machine learning?'</span><span class="p">,</span>
+    <span class="mi">3</span><span class="p">,</span>
+    <span class="mi">2048</span><span class="p">,</span>
+    <span class="s1">'ollama'</span><span class="p">,</span>
+    <span class="k">true</span>
+<span class="p">);</span>
+</code></pre></div></div>
+
+<p><strong>Returns:</strong></p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">kg_name</code>: Knowledge graph name</li>
+  <li><code class="language-plaintext highlighter-rouge">query_text</code>: Original query</li>
+  <li><code class="language-plaintext highlighter-rouge">response</code>: Generated answer</li>
+  <li><code class="language-plaintext highlighter-rouge">confidence</code>: Confidence score (0.0 to 1.0)</li>
+  <li><code class="language-plaintext highlighter-rouge">processing_time_ms</code>: Query processing time</li>
+  <li><code class="language-plaintext highlighter-rouge">entities_involved</code>: JSON array of entities used</li>
+  <li><code class="language-plaintext highlighter-rouge">citations</code>: JSON array of source citations</li>
+</ul>
+
+<h3 id="3-graphrag_extract---entity-extraction">3. GRAPHRAG_EXTRACT - Entity Extraction</h3>
+
+<p>Extracts entities and relationships from text without building the full knowledge graph.</p>
+
+<p><strong>Syntax:</strong></p>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">SELECT</span> <span class="o">*</span> <span class="k">FROM</span> <span class="n">GRAPHRAG_EXTRACT</span><span class="p">(</span>
+    <span class="n">kg_name</span> <span class="nb">TEXT</span><span class="p">,</span>        <span class="c1">-- Knowledge graph context</span>
+    <span class="n">document_id</span> <span class="nb">TEXT</span><span class="p">,</span>    <span class="c1">-- Document identifier</span>
+    <span class="nb">text</span> <span class="nb">TEXT</span>           <span class="c1">-- Text to extract from</span>
+<span class="p">);</span>
+</code></pre></div></div>
+
+<p><strong>Example:</strong></p>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Extract entities from a news article</span>
+<span class="k">SELECT</span> <span class="o">*</span> <span class="k">FROM</span> <span class="n">GRAPHRAG_EXTRACT</span><span class="p">(</span>
+    <span class="s1">'news_kg'</span><span class="p">,</span>
+    <span class="s1">'article_2023_001'</span><span class="p">,</span>
+    <span class="s1">'Apple Inc. announced new iPhone models at their Cupertino headquarters yesterday...'</span>
+<span class="p">);</span>
+</code></pre></div></div>
+
+<p><strong>Returns:</strong></p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">kg_name</code>: Knowledge graph name</li>
+  <li><code class="language-plaintext highlighter-rouge">document_id</code>: Document identifier</li>
+  <li><code class="language-plaintext highlighter-rouge">entities_extracted</code>: Number of entities found</li>
+  <li><code class="language-plaintext highlighter-rouge">relationships_extracted</code>: Number of relationships found</li>
+  <li><code class="language-plaintext highlighter-rouge">processing_time_ms</code>: Extraction duration</li>
+</ul>
+
+<h3 id="4-graphrag_reason---multi-hop-reasoning">4. GRAPHRAG_REASON - Multi-hop Reasoning</h3>
+
+<p>Finds reasoning paths between two entities in the knowledge graph.</p>
+
+<p><strong>Syntax:</strong></p>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">SELECT</span> <span class="o">*</span> <span class="k">FROM</span> <span class="n">GRAPHRAG_REASON</span><span class="p">(</span>
+    <span class="n">kg_name</span> <span class="nb">TEXT</span><span class="p">,</span>                <span class="c1">-- Knowledge graph name</span>
+    <span class="n">from_entity</span> <span class="nb">TEXT</span><span class="p">,</span>            <span class="c1">-- Starting entity</span>
+    <span class="n">to_entity</span> <span class="nb">TEXT</span><span class="p">,</span>              <span class="c1">-- Target entity</span>
+    <span class="n">max_hops</span> <span class="nb">INTEGER</span><span class="p">,</span>            <span class="c1">-- Optional: maximum hops to search</span>
+    <span class="n">include_explanation</span> <span class="nb">BOOLEAN</span>  <span class="c1">-- Optional: include reasoning explanation</span>
+<span class="p">);</span>
+</code></pre></div></div>
+
+<p><strong>Example:</strong></p>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Find connection between Apple and iPhone</span>
+<span class="k">SELECT</span> <span class="o">*</span> <span class="k">FROM</span> <span class="n">GRAPHRAG_REASON</span><span class="p">(</span>
+    <span class="s1">'tech_companies'</span><span class="p">,</span>
+    <span class="s1">'Apple Inc.'</span><span class="p">,</span>
+    <span class="s1">'iPhone'</span><span class="p">,</span>
+    <span class="mi">4</span><span class="p">,</span>
+    <span class="k">true</span>
+<span class="p">);</span>
+</code></pre></div></div>
+
+<p><strong>Returns (one row per path found):</strong></p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">kg_name</code>: Knowledge graph name</li>
+  <li><code class="language-plaintext highlighter-rouge">from_entity</code>: Starting entity</li>
+  <li><code class="language-plaintext highlighter-rouge">to_entity</code>: Target entity</li>
+  <li><code class="language-plaintext highlighter-rouge">path_nodes</code>: JSON array of entities in the path</li>
+  <li><code class="language-plaintext highlighter-rouge">path_relationships</code>: JSON array of relationships in the path</li>
+  <li><code class="language-plaintext highlighter-rouge">score</code>: Path relevance score</li>
+  <li><code class="language-plaintext highlighter-rouge">length</code>: Number of hops in the path</li>
+  <li><code class="language-plaintext highlighter-rouge">explanation</code>: Human-readable path explanation</li>
+</ul>
+
+<h3 id="5-graphrag_stats---knowledge-graph-statistics">5. GRAPHRAG_STATS - Knowledge Graph Statistics</h3>
+
+<p>Retrieves statistics and metrics for a knowledge graph.</p>
+
+<p><strong>Syntax:</strong></p>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">SELECT</span> <span class="o">*</span> <span class="k">FROM</span> <span class="n">GRAPHRAG_STATS</span><span class="p">(</span><span class="n">kg_name</span> <span class="nb">TEXT</span><span class="p">);</span>
+</code></pre></div></div>
+
+<p><strong>Example:</strong></p>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Get statistics for research papers knowledge graph</span>
+<span class="k">SELECT</span> <span class="o">*</span> <span class="k">FROM</span> <span class="n">GRAPHRAG_STATS</span><span class="p">(</span><span class="s1">'research_papers'</span><span class="p">);</span>
+</code></pre></div></div>
+
+<p><strong>Returns:</strong></p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">kg_name</code>: Knowledge graph name</li>
+  <li><code class="language-plaintext highlighter-rouge">documents_processed</code>: Total documents processed</li>
+  <li><code class="language-plaintext highlighter-rouge">rag_queries_executed</code>: Number of RAG queries performed</li>
+  <li><code class="language-plaintext highlighter-rouge">reasoning_queries_executed</code>: Number of reasoning queries performed</li>
+  <li><code class="language-plaintext highlighter-rouge">entities_extracted</code>: Total entities extracted</li>
+  <li><code class="language-plaintext highlighter-rouge">relationships_extracted</code>: Total relationships extracted</li>
+  <li><code class="language-plaintext highlighter-rouge">avg_document_processing_time_ms</code>: Average document processing time</li>
+  <li><code class="language-plaintext highlighter-rouge">avg_rag_query_time_ms</code>: Average RAG query time</li>
+  <li><code class="language-plaintext highlighter-rouge">rag_success_rate</code>: Success rate for RAG queries (0.0 to 1.0)</li>
+</ul>
+
+<h3 id="6-graphrag_entities---list-entities">6. GRAPHRAG_ENTITIES - List Entities</h3>
+
+<p>Lists entities in the knowledge graph with optional filtering.</p>
+
+<p><strong>Syntax:</strong></p>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">SELECT</span> <span class="o">*</span> <span class="k">FROM</span> <span class="n">GRAPHRAG_ENTITIES</span><span class="p">(</span>
+    <span class="n">kg_name</span> <span class="nb">TEXT</span><span class="p">,</span>        <span class="c1">-- Knowledge graph name</span>
+    <span class="n">entity_type</span> <span class="nb">TEXT</span><span class="p">,</span>    <span class="c1">-- Optional: filter by entity type</span>
+    <span class="k">limit</span> <span class="nb">INTEGER</span>        <span class="c1">-- Optional: maximum results to return</span>
+<span class="p">);</span>
+</code></pre></div></div>
+
+<p><strong>Example:</strong></p>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Get all person entities, limit to 10</span>
+<span class="k">SELECT</span> <span class="o">*</span> <span class="k">FROM</span> <span class="n">GRAPHRAG_ENTITIES</span><span class="p">(</span><span class="s1">'news_kg'</span><span class="p">,</span> <span class="s1">'Person'</span><span class="p">,</span> <span class="mi">10</span><span class="p">);</span>
+</code></pre></div></div>
+
+<p><strong>Returns:</strong></p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">kg_name</code>: Knowledge graph name</li>
+  <li><code class="language-plaintext highlighter-rouge">entity_type</code>: Requested entity type filter</li>
+  <li><code class="language-plaintext highlighter-rouge">limit_requested</code>: Requested result limit</li>
+  <li><code class="language-plaintext highlighter-rouge">total_count</code>: Total matching entities</li>
+</ul>
+
+<h3 id="7-graphrag_similar---find-similar-entities">7. GRAPHRAG_SIMILAR - Find Similar Entities</h3>
+
+<p>Finds entities similar to a given entity using vector similarity.</p>
+
+<p><strong>Syntax:</strong></p>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">SELECT</span> <span class="o">*</span> <span class="k">FROM</span> <span class="n">GRAPHRAG_SIMILAR</span><span class="p">(</span>
+    <span class="n">kg_name</span> <span class="nb">TEXT</span><span class="p">,</span>        <span class="c1">-- Knowledge graph name</span>
+    <span class="n">entity_name</span> <span class="nb">TEXT</span><span class="p">,</span>    <span class="c1">-- Reference entity</span>
+    <span class="k">limit</span> <span class="nb">INTEGER</span><span class="p">,</span>       <span class="c1">-- Optional: maximum results</span>
+    <span class="n">threshold</span> <span class="nb">FLOAT</span>      <span class="c1">-- Optional: similarity threshold (0.0 to 1.0)</span>
+<span class="p">);</span>
+</code></pre></div></div>
+
+<p><strong>Example:</strong></p>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Find entities similar to "Apple Inc."</span>
+<span class="k">SELECT</span> <span class="o">*</span> <span class="k">FROM</span> <span class="n">GRAPHRAG_SIMILAR</span><span class="p">(</span><span class="s1">'tech_companies'</span><span class="p">,</span> <span class="s1">'Apple Inc.'</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">0</span><span class="p">.</span><span class="mi">8</span><span class="p">);</span>
+</code></pre></div></div>
+
+<p><strong>Returns:</strong></p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">kg_name</code>: Knowledge graph name</li>
+  <li><code class="language-plaintext highlighter-rouge">entity_name</code>: Reference entity</li>
+  <li><code class="language-plaintext highlighter-rouge">limit_requested</code>: Requested result limit</li>
+  <li><code class="language-plaintext highlighter-rouge">threshold_used</code>: Similarity threshold used</li>
+  <li><code class="language-plaintext highlighter-rouge">similar_count</code>: Number of similar entities found</li>
+</ul>
+
+<h2 id="usage-patterns">Usage Patterns</h2>
+
+<h3 id="1-document-processing-pipeline">1. Document Processing Pipeline</h3>
+
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Step 1: Build knowledge graph from documents</span>
+<span class="k">SELECT</span> <span class="o">*</span> <span class="k">FROM</span> <span class="n">GRAPHRAG_BUILD</span><span class="p">(</span><span class="s1">'scientific_papers'</span><span class="p">,</span> <span class="s1">'paper_001'</span><span class="p">,</span> <span class="err">$</span><span class="n">document_text</span><span class="p">,</span> <span class="err">$</span><span class="n">metadata</span><span class="p">);</span>
+
+<span class="c1">-- Step 2: Query the knowledge graph</span>
+<span class="k">SELECT</span> <span class="n">response</span><span class="p">,</span> <span class="n">confidence</span> <span class="k">FROM</span> <span class="n">GRAPHRAG_QUERY</span><span class="p">(</span><span class="s1">'scientific_papers'</span><span class="p">,</span> <span class="s1">'What are the key findings?'</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">2048</span><span class="p">,</span> <span class="s1">'ollama'</span><span class="p">,</span> <span class="k">true</span><span class="p">);</span>
+
+<span class="c1">-- Step 3: Get statistics</span>
+<span class="k">SELECT</span> <span class="o">*</span> <span class="k">FROM</span> <span class="n">GRAPHRAG_STATS</span><span class="p">(</span><span class="s1">'scientific_papers'</span><span class="p">);</span>
+</code></pre></div></div>
+
+<h3 id="2-entity-relationship-analysis">2. Entity Relationship Analysis</h3>
+
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Extract entities from text</span>
+<span class="k">SELECT</span> <span class="o">*</span> <span class="k">FROM</span> <span class="n">GRAPHRAG_EXTRACT</span><span class="p">(</span><span class="s1">'company_news'</span><span class="p">,</span> <span class="s1">'news_001'</span><span class="p">,</span> <span class="err">$</span><span class="n">article_text</span><span class="p">);</span>
+
+<span class="c1">-- Find relationships between companies</span>
+<span class="k">SELECT</span> <span class="o">*</span> <span class="k">FROM</span> <span class="n">GRAPHRAG_REASON</span><span class="p">(</span><span class="s1">'company_news'</span><span class="p">,</span> <span class="s1">'Apple Inc.'</span><span class="p">,</span> <span class="s1">'Samsung Electronics'</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="k">true</span><span class="p">);</span>
+
+<span class="c1">-- Find similar companies</span>
+<span class="k">SELECT</span> <span class="o">*</span> <span class="k">FROM</span> <span class="n">GRAPHRAG_SIMILAR</span><span class="p">(</span><span class="s1">'company_news'</span><span class="p">,</span> <span class="s1">'Apple Inc.'</span><span class="p">,</span> <span class="mi">10</span><span class="p">,</span> <span class="mi">0</span><span class="p">.</span><span class="mi">7</span><span class="p">);</span>
+</code></pre></div></div>
+
+<h3 id="3-knowledge-base-queries">3. Knowledge Base Queries</h3>
+
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Build comprehensive knowledge base</span>
+<span class="k">INSERT</span> <span class="k">INTO</span> <span class="n">processed_docs</span> 
+<span class="k">SELECT</span> <span class="n">kg_name</span><span class="p">,</span> <span class="n">document_id</span><span class="p">,</span> <span class="n">entities_extracted</span><span class="p">,</span> <span class="n">relationships_extracted</span> 
+<span class="k">FROM</span> <span class="n">GRAPHRAG_BUILD</span><span class="p">(</span><span class="s1">'kb_main'</span><span class="p">,</span> <span class="s1">'doc_'</span> <span class="o">||</span> <span class="n">generate_series</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">1000</span><span class="p">),</span> <span class="n">document_content</span><span class="p">,</span> <span class="n">metadata</span><span class="p">)</span>
+<span class="k">WHERE</span> <span class="n">document_content</span> <span class="k">IS</span> <span class="k">NOT</span> <span class="k">NULL</span><span class="p">;</span>
+
+<span class="c1">-- Query with high confidence threshold</span>
+<span class="k">SELECT</span> <span class="n">query_text</span><span class="p">,</span> <span class="n">response</span><span class="p">,</span> <span class="n">confidence</span> 
+<span class="k">FROM</span> <span class="n">GRAPHRAG_QUERY</span><span class="p">(</span><span class="s1">'kb_main'</span><span class="p">,</span> <span class="err">$</span><span class="n">user_question</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">4096</span><span class="p">,</span> <span class="s1">'ollama'</span><span class="p">,</span> <span class="k">true</span><span class="p">)</span>
+<span class="k">WHERE</span> <span class="n">confidence</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">.</span><span class="mi">8</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h2 id="client-examples">Client Examples</h2>
+
+<h3 id="using-psql">Using psql</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Connect to Orbit PostgreSQL server</span>
+psql <span class="nt">-h</span> localhost <span class="nt">-p</span> 5433 <span class="nt">-U</span> orbit <span class="nt">-d</span> orbit
+
+<span class="c"># Build knowledge graph</span>
+<span class="nv">orbit</span><span class="o">=</span><span class="c"># SELECT * FROM GRAPHRAG_BUILD('docs', 'readme', 'Orbit is an actor framework...', '{}'::json);</span>
+
+<span class="c"># Query the knowledge graph</span>
+<span class="nv">orbit</span><span class="o">=</span><span class="c"># SELECT response FROM GRAPHRAG_QUERY('docs', 'What is Orbit?', 3, 1024, 'ollama', false);</span>
+</code></pre></div></div>
+
+<h3 id="using-python-psycopg2">Using Python (psycopg2)</h3>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">import</span> <span class="n">psycopg2</span>
+<span class="kn">import</span> <span class="n">json</span>
+
+<span class="c1"># Connect to Orbit
+</span><span class="n">conn</span> <span class="o">=</span> <span class="n">psycopg2</span><span class="p">.</span><span class="nf">connect</span><span class="p">(</span>
+    <span class="n">host</span><span class="o">=</span><span class="sh">"</span><span class="s">localhost</span><span class="sh">"</span><span class="p">,</span>
+    <span class="n">port</span><span class="o">=</span><span class="mi">5433</span><span class="p">,</span>
+    <span class="n">database</span><span class="o">=</span><span class="sh">"</span><span class="s">orbit</span><span class="sh">"</span><span class="p">,</span>
+    <span class="n">user</span><span class="o">=</span><span class="sh">"</span><span class="s">orbit</span><span class="sh">"</span>
+<span class="p">)</span>
+<span class="n">cur</span> <span class="o">=</span> <span class="n">conn</span><span class="p">.</span><span class="nf">cursor</span><span class="p">()</span>
+
+<span class="c1"># Build knowledge graph
+</span><span class="n">doc_text</span> <span class="o">=</span> <span class="sh">"</span><span class="s">Your document content here...</span><span class="sh">"</span>
+<span class="n">metadata</span> <span class="o">=</span> <span class="n">json</span><span class="p">.</span><span class="nf">dumps</span><span class="p">({</span><span class="sh">"</span><span class="s">source</span><span class="sh">"</span><span class="p">:</span> <span class="sh">"</span><span class="s">web</span><span class="sh">"</span><span class="p">,</span> <span class="sh">"</span><span class="s">date</span><span class="sh">"</span><span class="p">:</span> <span class="sh">"</span><span class="s">2023-12-01</span><span class="sh">"</span><span class="p">})</span>
+
+<span class="n">cur</span><span class="p">.</span><span class="nf">execute</span><span class="p">(</span><span class="sh">"""</span><span class="s">
+    SELECT * FROM GRAPHRAG_BUILD(%s, %s, %s, %s::json)
+</span><span class="sh">"""</span><span class="p">,</span> <span class="p">(</span><span class="sh">"</span><span class="s">my_kg</span><span class="sh">"</span><span class="p">,</span> <span class="sh">"</span><span class="s">doc_1</span><span class="sh">"</span><span class="p">,</span> <span class="n">doc_text</span><span class="p">,</span> <span class="n">metadata</span><span class="p">))</span>
+
+<span class="n">result</span> <span class="o">=</span> <span class="n">cur</span><span class="p">.</span><span class="nf">fetchone</span><span class="p">()</span>
+<span class="nf">print</span><span class="p">(</span><span class="sa">f</span><span class="sh">"</span><span class="s">Processed: </span><span class="si">{</span><span class="n">result</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="si">}</span><span class="s"> entities, </span><span class="si">{</span><span class="n">result</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span><span class="si">}</span><span class="s"> relationships</span><span class="sh">"</span><span class="p">)</span>
+
+<span class="c1"># Query knowledge graph
+</span><span class="n">cur</span><span class="p">.</span><span class="nf">execute</span><span class="p">(</span><span class="sh">"""</span><span class="s">
+    SELECT response, confidence FROM GRAPHRAG_QUERY(%s, %s, 3, 2048, </span><span class="sh">'</span><span class="s">ollama</span><span class="sh">'</span><span class="s">, true)
+</span><span class="sh">"""</span><span class="p">,</span> <span class="p">(</span><span class="sh">"</span><span class="s">my_kg</span><span class="sh">"</span><span class="p">,</span> <span class="sh">"</span><span class="s">What are the main topics discussed?</span><span class="sh">"</span><span class="p">))</span>
+
+<span class="n">response</span><span class="p">,</span> <span class="n">confidence</span> <span class="o">=</span> <span class="n">cur</span><span class="p">.</span><span class="nf">fetchone</span><span class="p">()</span>
+<span class="nf">print</span><span class="p">(</span><span class="sa">f</span><span class="sh">"</span><span class="s">Answer: </span><span class="si">{</span><span class="n">response</span><span class="si">}</span><span class="s"> (confidence: </span><span class="si">{</span><span class="n">confidence</span><span class="si">}</span><span class="s">)</span><span class="sh">"</span><span class="p">)</span>
+
+<span class="n">conn</span><span class="p">.</span><span class="nf">close</span><span class="p">()</span>
+</code></pre></div></div>
+
+<h3 id="using-nodejs-pg">Using Node.js (pg)</h3>
+
+<div class="language-javascript highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="p">{</span> <span class="nx">Client</span> <span class="p">}</span> <span class="o">=</span> <span class="nf">require</span><span class="p">(</span><span class="dl">'</span><span class="s1">pg</span><span class="dl">'</span><span class="p">);</span>
+
+<span class="kd">const</span> <span class="nx">client</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">Client</span><span class="p">({</span>
+    <span class="na">host</span><span class="p">:</span> <span class="dl">'</span><span class="s1">localhost</span><span class="dl">'</span><span class="p">,</span>
+    <span class="na">port</span><span class="p">:</span> <span class="mi">5433</span><span class="p">,</span>
+    <span class="na">database</span><span class="p">:</span> <span class="dl">'</span><span class="s1">orbit</span><span class="dl">'</span><span class="p">,</span>
+    <span class="na">user</span><span class="p">:</span> <span class="dl">'</span><span class="s1">orbit</span><span class="dl">'</span>
+<span class="p">});</span>
+
+<span class="k">async</span> <span class="kd">function</span> <span class="nf">queryKnowledgeGraph</span><span class="p">()</span> <span class="p">{</span>
+    <span class="k">await</span> <span class="nx">client</span><span class="p">.</span><span class="nf">connect</span><span class="p">();</span>
+    
+    <span class="c1">// Build knowledge graph</span>
+    <span class="kd">const</span> <span class="nx">buildResult</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">client</span><span class="p">.</span><span class="nf">query</span><span class="p">(</span>
+        <span class="s2">`SELECT * FROM GRAPHRAG_BUILD($1, $2, $3, $4::json)`</span><span class="p">,</span>
+        <span class="p">[</span><span class="dl">'</span><span class="s1">articles</span><span class="dl">'</span><span class="p">,</span> <span class="dl">'</span><span class="s1">article_1</span><span class="dl">'</span><span class="p">,</span> <span class="nx">documentText</span><span class="p">,</span> <span class="nx">JSON</span><span class="p">.</span><span class="nf">stringify</span><span class="p">(</span><span class="nx">metadata</span><span class="p">)]</span>
+    <span class="p">);</span>
+    
+    <span class="nx">console</span><span class="p">.</span><span class="nf">log</span><span class="p">(</span><span class="dl">'</span><span class="s1">Build result:</span><span class="dl">'</span><span class="p">,</span> <span class="nx">buildResult</span><span class="p">.</span><span class="nx">rows</span><span class="p">[</span><span class="mi">0</span><span class="p">]);</span>
+    
+    <span class="c1">// Query knowledge graph</span>
+    <span class="kd">const</span> <span class="nx">queryResult</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">client</span><span class="p">.</span><span class="nf">query</span><span class="p">(</span>
+        <span class="s2">`SELECT response, confidence FROM GRAPHRAG_QUERY($1, $2, 3, 2048, 'ollama', true)`</span><span class="p">,</span>
+        <span class="p">[</span><span class="dl">'</span><span class="s1">articles</span><span class="dl">'</span><span class="p">,</span> <span class="dl">'</span><span class="s1">Summarize the main points</span><span class="dl">'</span><span class="p">]</span>
+    <span class="p">);</span>
+    
+    <span class="nx">console</span><span class="p">.</span><span class="nf">log</span><span class="p">(</span><span class="dl">'</span><span class="s1">Query result:</span><span class="dl">'</span><span class="p">,</span> <span class="nx">queryResult</span><span class="p">.</span><span class="nx">rows</span><span class="p">[</span><span class="mi">0</span><span class="p">]);</span>
+    
+    <span class="k">await</span> <span class="nx">client</span><span class="p">.</span><span class="nf">end</span><span class="p">();</span>
+<span class="p">}</span>
+
+<span class="nf">queryKnowledgeGraph</span><span class="p">().</span><span class="k">catch</span><span class="p">(</span><span class="nx">console</span><span class="p">.</span><span class="nx">error</span><span class="p">);</span>
+</code></pre></div></div>
+
+<h2 id="error-handling">Error Handling</h2>
+
+<p>GraphRAG functions return PostgreSQL-compatible errors:</p>
+
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Invalid knowledge graph name</span>
+<span class="n">orbit</span><span class="o">=#</span> <span class="k">SELECT</span> <span class="o">*</span> <span class="k">FROM</span> <span class="n">GRAPHRAG_QUERY</span><span class="p">(</span><span class="s1">'nonexistent_kg'</span><span class="p">,</span> <span class="s1">'test query'</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">1024</span><span class="p">,</span> <span class="s1">'ollama'</span><span class="p">,</span> <span class="k">false</span><span class="p">);</span>
+<span class="n">ERROR</span><span class="p">:</span>  <span class="n">Actor</span> <span class="n">error</span><span class="p">:</span> <span class="n">Knowledge</span> <span class="n">graph</span> <span class="s1">'nonexistent_kg'</span> <span class="k">not</span> <span class="k">found</span>
+
+<span class="c1">-- Invalid function syntax</span>
+<span class="n">orbit</span><span class="o">=#</span> <span class="k">SELECT</span> <span class="o">*</span> <span class="k">FROM</span> <span class="n">GRAPHRAG_BUILD</span><span class="p">(</span><span class="s1">'kg'</span><span class="p">);</span>  <span class="c1">-- Missing required parameters</span>
+<span class="n">ERROR</span><span class="p">:</span>  <span class="n">Invalid</span> <span class="n">GRAPHRAG_BUILD</span> <span class="k">function</span> <span class="n">syntax</span>
+</code></pre></div></div>
+
+<h2 id="performance-considerations">Performance Considerations</h2>
+
+<ol>
+  <li>
+    <p><strong>Document Processing</strong>: Large documents may take significant time to process. Consider breaking them into smaller chunks.</p>
+  </li>
+  <li>
+    <p><strong>Query Context Size</strong>: Larger context sizes provide better answers but increase processing time and memory usage.</p>
+  </li>
+  <li>
+    <p><strong>Max Hops</strong>: Higher hop counts in reasoning queries increase computation time exponentially.</p>
+  </li>
+  <li>
+    <p><strong>Caching</strong>: The GraphRAG actor system includes intelligent caching for repeated queries.</p>
+  </li>
+  <li>
+    <p><strong>Parallel Processing</strong>: Multiple GraphRAG functions can run concurrently on different knowledge graphs.</p>
+  </li>
+</ol>
+
+<h2 id="integration-with-bi-tools">Integration with BI Tools</h2>
+
+<p>Since GraphRAG functions return standard PostgreSQL result sets, they can be used with any PostgreSQL-compatible BI tool:</p>
+
+<ul>
+  <li><strong>Grafana</strong>: Create dashboards showing knowledge graph statistics</li>
+  <li><strong>Tableau</strong>: Visualize entity relationships and query results</li>
+  <li><strong>Power BI</strong>: Build reports on document processing metrics</li>
+  <li><strong>Metabase</strong>: Create interactive knowledge base queries</li>
+</ul>
+
+<p>Example Grafana query:</p>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">SELECT</span> 
+    <span class="n">kg_name</span><span class="p">,</span>
+    <span class="n">documents_processed</span><span class="p">,</span>
+    <span class="n">entities_extracted</span><span class="p">,</span>
+    <span class="n">avg_rag_query_time_ms</span>
+<span class="k">FROM</span> <span class="n">GRAPHRAG_STATS</span><span class="p">(</span><span class="s1">'$kg_name'</span><span class="p">)</span> 
+<span class="k">WHERE</span> <span class="err">$</span><span class="n">__timeFilter</span><span class="p">(</span><span class="n">created_at</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>This integration makes GraphRAG functionality accessible through the familiar SQL interface while maintaining the power and flexibility of the underlying actor-based system.</p>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/orbit-rs/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Orbit-RS Documentation</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">TuringWorks</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["AuthenticationResponse","BackendMessage","BackendMessageType","CloseTarget","DescribeTarget","FrontendMessage","FrontendMessageType","TransactionStatus"],"fn":["read_cstring","write_cstring"],"mod":["type_oids"],"struct":["FieldDescription"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["AggregateFunctionType","ExecutionPlan","JoinType"],"struct":["AggregateFunction","ExecutionPlanner"]};

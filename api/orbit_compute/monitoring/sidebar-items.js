@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["SystemInfo","SystemMonitor"],"mod":["linux"],"struct":["MockSystemInfo","MockSystemMonitor","MockSystemMonitorState"]};

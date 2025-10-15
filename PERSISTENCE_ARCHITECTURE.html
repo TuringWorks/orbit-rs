@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Orbit Server Provider-Based Persistence Architecture | Orbit-RS Documentation</title>
+<meta name="generator" content="Jekyll v4.4.1" />
+<meta property="og:title" content="Orbit Server Provider-Based Persistence Architecture" />
+<meta name="author" content="TuringWorks" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="Comprehensive provider-based persistence system supporting multiple storage backends" />
+<meta property="og:description" content="Comprehensive provider-based persistence system supporting multiple storage backends" />
+<link rel="canonical" href="https://turingworks.github.io/orbit-rs/PERSISTENCE_ARCHITECTURE.html" />
+<meta property="og:url" content="https://turingworks.github.io/orbit-rs/PERSISTENCE_ARCHITECTURE.html" />
+<meta property="og:site_name" content="Orbit-RS Documentation" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Orbit Server Provider-Based Persistence Architecture" />
+<meta name="twitter:site" content="@TuringWorksAI" />
+<meta name="twitter:creator" content="@TuringWorks" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","author":{"@type":"Person","name":"TuringWorks"},"description":"Comprehensive provider-based persistence system supporting multiple storage backends","headline":"Orbit Server Provider-Based Persistence Architecture","url":"https://turingworks.github.io/orbit-rs/PERSISTENCE_ARCHITECTURE.html"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/orbit-rs/assets/main.css">
+  <link rel="stylesheet" href="/orbit-rs/assets/css/custom.css"><link type="application/atom+xml" rel="alternate" href="https://turingworks.github.io/orbit-rs/feed.xml" title="Orbit-RS Documentation" /></head><body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/orbit-rs/">Orbit-RS Documentation</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/orbit-rs/">Orbit-RS Documentation</a><a class="page-link" href="/orbit-rs/project_overview.html">Orbit-RS: Comprehensive Project Overview</a><a class="page-link" href="/orbit-rs/quick_start.html">Quick Start Guide - Multi-Protocol Database Server</a><a class="page-link" href="/orbit-rs/roadmap/">Development Roadmap</a><a class="page-link" href="/orbit-rs/features/">Orbit-RS Feature Index</a><a class="page-link" href="/orbit-rs/compute-acceleration/">Hardware Acceleration Guide</a><a class="page-link" href="/orbit-rs/contributing.html">Contributing Guide</a><a class="page-link" href="/orbit-rs/overview.html">Architecture Overview</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <h1 id="orbit-server-provider-based-persistence-architecture">Orbit Server Provider-Based Persistence Architecture</h1>
+
+<h2 id="overview">Overview</h2>
+
+<p>The Orbit server has been upgraded with a comprehensive provider-based persistence system that supports multiple storage backends. This architecture allows you to choose the most appropriate storage solution for your deployment scenario, from simple in-memory storage to cloud-scale object storage systems.</p>
+
+<h2 id="architecture-components">Architecture Components</h2>
+
+<h3 id="core-traits">Core Traits</h3>
+
+<p>The persistence system is built around several key traits:</p>
+
+<h4 id="persistenceprovider"><code class="language-plaintext highlighter-rouge">PersistenceProvider</code></h4>
+<p>Base trait for all providers with common functionality:</p>
+<ul>
+  <li><strong>Lifecycle Management</strong>: <code class="language-plaintext highlighter-rouge">initialize()</code>, <code class="language-plaintext highlighter-rouge">shutdown()</code></li>
+  <li><strong>Health Monitoring</strong>: <code class="language-plaintext highlighter-rouge">health_check()</code>, <code class="language-plaintext highlighter-rouge">metrics()</code></li>
+  <li><strong>Transaction Support</strong>: <code class="language-plaintext highlighter-rouge">begin_transaction()</code>, <code class="language-plaintext highlighter-rouge">commit_transaction()</code>, <code class="language-plaintext highlighter-rouge">rollback_transaction()</code></li>
+</ul>
+
+<h4 id="addressabledirectoryprovider"><code class="language-plaintext highlighter-rouge">AddressableDirectoryProvider</code></h4>
+<p>Specialized trait for storing addressable (actor) lease information:</p>
+<ul>
+  <li>Store, retrieve, update, and remove leases</li>
+  <li>List leases by node or globally</li>
+  <li>Cleanup expired leases</li>
+  <li>Bulk operations for efficiency</li>
+</ul>
+
+<h4 id="clusternodeprovider"><code class="language-plaintext highlighter-rouge">ClusterNodeProvider</code></h4>
+<p>Specialized trait for storing cluster node information:</p>
+<ul>
+  <li>Store, retrieve, update, and remove node information</li>
+  <li>List active and all nodes</li>
+  <li>Cleanup expired nodes</li>
+  <li>Node lease renewal</li>
+</ul>
+
+<h3 id="provider-registry">Provider Registry</h3>
+
+<p>The <code class="language-plaintext highlighter-rouge">PersistenceProviderRegistry</code> manages multiple providers and provides:</p>
+<ul>
+  <li>Registration of providers with names</li>
+  <li>Default provider management</li>
+  <li>Provider lookup by name</li>
+  <li>Support for different providers for addressable vs. cluster data</li>
+</ul>
+
+<h2 id="available-providers">Available Providers</h2>
+
+<h3 id="1-memory-provider-memoryconfig">1. Memory Provider (<code class="language-plaintext highlighter-rouge">MemoryConfig</code>)</h3>
+
+<p><strong>Best for</strong>: Development, testing, high-performance scenarios with limited data</p>
+
+<p><strong>Features</strong>:</p>
+<ul>
+  <li>Ultra-fast in-memory storage using concurrent data structures (<code class="language-plaintext highlighter-rouge">DashMap</code>)</li>
+  <li>Optional disk backup with compression support (Gzip, LZ4, Zstd)</li>
+  <li>Automatic periodic backup and restore on startup</li>
+  <li>Memory usage limits with health monitoring</li>
+  <li>Full metrics and transaction support</li>
+</ul>
+
+<p><strong>Configuration</strong>:</p>
+<div class="language-toml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">[</span><span class="n">providers</span><span class="k">.</span><span class="n">memory</span><span class="k">]</span>
+<span class="n">type</span> <span class="o">=</span><span class="w"> </span><span class="s">"Memory"</span>
+<span class="n">max_entries</span> <span class="o">=</span><span class="w"> </span><span class="mi">100000</span>
+<span class="n">disk_backup</span> <span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">path</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s">"/data/orbit-backup.json"</span><span class="p">,</span><span class="w"> </span><span class="n">sync_interval</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="mi">300</span><span class="p">,</span><span class="w"> </span><span class="n">compression</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s">"Gzip"</span><span class="w"> </span><span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="2-s3-compatible-providers-s3config">2. S3-Compatible Providers (<code class="language-plaintext highlighter-rouge">S3Config</code>)</h3>
+
+<p><strong>Best for</strong>: AWS environments, MinIO deployments, high durability requirements</p>
+
+<p><strong>Features</strong>:</p>
+<ul>
+  <li>Compatible with AWS S3, MinIO, and other S3-compatible services</li>
+  <li>Configurable endpoints and regions</li>
+  <li>SSL/TLS support</li>
+  <li>Retry mechanisms and timeout controls</li>
+  <li>Automatic health checks</li>
+  <li>Object versioning and metadata</li>
+</ul>
+
+<p><strong>Configuration</strong>:</p>
+<div class="language-toml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">[</span><span class="n">providers</span><span class="k">.</span><span class="n">s3</span><span class="k">]</span>
+<span class="n">type</span> <span class="o">=</span><span class="w"> </span><span class="s">"S3"</span>
+<span class="n">endpoint</span> <span class="o">=</span><span class="w"> </span><span class="s">"https://s3.amazonaws.com"</span>
+<span class="n">region</span> <span class="o">=</span><span class="w"> </span><span class="s">"us-west-2"</span>
+<span class="n">bucket</span> <span class="o">=</span><span class="w"> </span><span class="s">"orbit-data"</span>
+<span class="n">access_key_id</span> <span class="o">=</span><span class="w"> </span><span class="s">"YOUR_ACCESS_KEY"</span>
+<span class="n">secret_access_key</span> <span class="o">=</span><span class="w"> </span><span class="s">"YOUR_SECRET_KEY"</span>
+<span class="n">prefix</span> <span class="o">=</span><span class="w"> </span><span class="s">"orbit"</span>
+<span class="n">enable_ssl</span> <span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+<span class="n">connection_timeout</span> <span class="o">=</span><span class="w"> </span><span class="mi">30</span>
+<span class="n">retry_count</span> <span class="o">=</span><span class="w"> </span><span class="mi">3</span>
+</code></pre></div></div>
+
+<h3 id="3-azure-blob-storage-azureconfig">3. Azure Blob Storage (<code class="language-plaintext highlighter-rouge">AzureConfig</code>)</h3>
+
+<p><strong>Best for</strong>: Microsoft Azure environments</p>
+
+<p><strong>Features</strong>:</p>
+<ul>
+  <li>Native Azure Blob Storage integration</li>
+  <li>Container-based organization</li>
+  <li>Configurable endpoints and retry policies</li>
+  <li>Built-in health monitoring</li>
+</ul>
+
+<p><strong>Configuration</strong>:</p>
+<div class="language-toml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">[</span><span class="n">providers</span><span class="k">.</span><span class="n">azure</span><span class="k">]</span>
+<span class="n">type</span> <span class="o">=</span><span class="w"> </span><span class="s">"Azure"</span>
+<span class="n">account_name</span> <span class="o">=</span><span class="w"> </span><span class="s">"orbitdata"</span>
+<span class="n">account_key</span> <span class="o">=</span><span class="w"> </span><span class="s">"YOUR_ACCOUNT_KEY"</span>
+<span class="n">container_name</span> <span class="o">=</span><span class="w"> </span><span class="s">"orbit"</span>
+<span class="n">prefix</span> <span class="o">=</span><span class="w"> </span><span class="s">"orbit"</span>
+<span class="n">connection_timeout</span> <span class="o">=</span><span class="w"> </span><span class="mi">30</span>
+<span class="n">retry_count</span> <span class="o">=</span><span class="w"> </span><span class="mi">3</span>
+</code></pre></div></div>
+
+<h3 id="4-google-cloud-storage-googlecloudconfig">4. Google Cloud Storage (<code class="language-plaintext highlighter-rouge">GoogleCloudConfig</code>)</h3>
+
+<p><strong>Best for</strong>: Google Cloud Platform environments</p>
+
+<p><strong>Features</strong>:</p>
+<ul>
+  <li>Native GCS integration</li>
+  <li>Service account authentication</li>
+  <li>Project-based organization</li>
+  <li>Configurable retry policies</li>
+</ul>
+
+<p><strong>Configuration</strong>:</p>
+<div class="language-toml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">[</span><span class="n">providers</span><span class="k">.</span><span class="n">gcp</span><span class="k">]</span>
+<span class="n">type</span> <span class="o">=</span><span class="w"> </span><span class="s">"GoogleCloud"</span>
+<span class="n">project_id</span> <span class="o">=</span><span class="w"> </span><span class="s">"your-project-id"</span>
+<span class="n">bucket_name</span> <span class="o">=</span><span class="w"> </span><span class="s">"orbit-data"</span>
+<span class="n">credentials_path</span> <span class="o">=</span><span class="w"> </span><span class="s">"/path/to/service-account.json"</span>
+<span class="n">prefix</span> <span class="o">=</span><span class="w"> </span><span class="s">"orbit"</span>
+<span class="n">connection_timeout</span> <span class="o">=</span><span class="w"> </span><span class="mi">30</span>
+<span class="n">retry_count</span> <span class="o">=</span><span class="w"> </span><span class="mi">3</span>
+</code></pre></div></div>
+
+<h3 id="5-etcd-provider-etcdconfig">5. etcd Provider (<code class="language-plaintext highlighter-rouge">EtcdConfig</code>)</h3>
+
+<p><strong>Best for</strong>: Kubernetes environments, distributed systems requiring consistency</p>
+
+<p><strong>Features</strong>:</p>
+<ul>
+  <li>Distributed key-value storage</li>
+  <li>Strong consistency guarantees</li>
+  <li>Native lease support with TTL</li>
+  <li>Watch capabilities for real-time updates</li>
+  <li>TLS/mTLS authentication support</li>
+</ul>
+
+<p><strong>Configuration</strong>:</p>
+<div class="language-toml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">[</span><span class="n">providers</span><span class="k">.</span><span class="n">etcd</span><span class="k">]</span>
+<span class="n">type</span> <span class="o">=</span><span class="w"> </span><span class="s">"Etcd"</span>
+<span class="n">endpoints</span> <span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s">"http://localhost:2379"</span><span class="p">,</span> <span class="s">"http://localhost:22379"</span><span class="p">,</span> <span class="s">"http://localhost:32379"</span><span class="p">]</span>
+<span class="n">prefix</span> <span class="o">=</span><span class="w"> </span><span class="s">"orbit"</span>
+<span class="n">lease_ttl</span> <span class="o">=</span><span class="w"> </span><span class="mi">300</span>
+<span class="n">username</span> <span class="o">=</span><span class="w"> </span><span class="s">"orbit"</span>
+<span class="n">password</span> <span class="o">=</span><span class="w"> </span><span class="s">"secret"</span>
+<span class="n">ca_cert</span> <span class="o">=</span><span class="w"> </span><span class="s">"/path/to/ca.crt"</span>
+<span class="n">client_cert</span> <span class="o">=</span><span class="w"> </span><span class="s">"/path/to/client.crt"</span>
+<span class="n">client_key</span> <span class="o">=</span><span class="w"> </span><span class="s">"/path/to/client.key"</span>
+</code></pre></div></div>
+
+<h3 id="6-redis-provider-redisconfig">6. Redis Provider (<code class="language-plaintext highlighter-rouge">RedisConfig</code>)</h3>
+
+<p><strong>Best for</strong>: High-performance caching, pub/sub scenarios</p>
+
+<p><strong>Features</strong>:</p>
+<ul>
+  <li>In-memory data structure store</li>
+  <li>Cluster mode support</li>
+  <li>Connection pooling</li>
+  <li>Multiple database support</li>
+  <li>TTL-based expiration</li>
+</ul>
+
+<p><strong>Configuration</strong>:</p>
+<div class="language-toml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">[</span><span class="n">providers</span><span class="k">.</span><span class="n">redis</span><span class="k">]</span>
+<span class="n">type</span> <span class="o">=</span><span class="w"> </span><span class="s">"Redis"</span>
+<span class="n">url</span> <span class="o">=</span><span class="w"> </span><span class="s">"redis://localhost:6379"</span>
+<span class="n">cluster_mode</span> <span class="o">=</span><span class="w"> </span><span class="kc">false</span>
+<span class="n">database</span> <span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<span class="n">password</span> <span class="o">=</span><span class="w"> </span><span class="s">"secret"</span>
+<span class="n">prefix</span> <span class="o">=</span><span class="w"> </span><span class="s">"orbit"</span>
+<span class="n">pool_size</span> <span class="o">=</span><span class="w"> </span><span class="mi">10</span>
+<span class="n">retry_count</span> <span class="o">=</span><span class="w"> </span><span class="mi">3</span>
+</code></pre></div></div>
+
+<h3 id="7-kubernetes-provider-kubernetesconfig">7. Kubernetes Provider (<code class="language-plaintext highlighter-rouge">KubernetesConfig</code>)</h3>
+
+<p><strong>Best for</strong>: Cloud-native Kubernetes deployments</p>
+
+<p><strong>Features</strong>:</p>
+<ul>
+  <li>ConfigMap and Secret storage</li>
+  <li>Namespace isolation</li>
+  <li>Native Kubernetes integration</li>
+  <li>RBAC support</li>
+</ul>
+
+<p><strong>Configuration</strong>:</p>
+<div class="language-toml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">[</span><span class="n">providers</span><span class="k">.</span><span class="n">kubernetes</span><span class="k">]</span>
+<span class="n">type</span> <span class="o">=</span><span class="w"> </span><span class="s">"Kubernetes"</span>
+<span class="n">namespace</span> <span class="o">=</span><span class="w"> </span><span class="s">"orbit"</span>
+<span class="n">config_map_name</span> <span class="o">=</span><span class="w"> </span><span class="s">"orbit-data"</span>
+<span class="n">secret_name</span> <span class="o">=</span><span class="w"> </span><span class="s">"orbit-secrets"</span>
+<span class="n">in_cluster</span> <span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+</code></pre></div></div>
+
+<h3 id="8-minio-provider-minioconfig">8. MinIO Provider (<code class="language-plaintext highlighter-rouge">MinIOConfig</code>)</h3>
+
+<p><strong>Best for</strong>: Self-hosted object storage, hybrid cloud scenarios</p>
+
+<p><strong>Features</strong>:</p>
+<ul>
+  <li>S3-compatible self-hosted storage</li>
+  <li>High performance and scalability</li>
+  <li>Multi-tenant support</li>
+  <li>Distributed deployment support</li>
+</ul>
+
+<p><strong>Configuration</strong>:</p>
+<div class="language-toml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">[</span><span class="n">providers</span><span class="k">.</span><span class="n">minio</span><span class="k">]</span>
+<span class="n">type</span> <span class="o">=</span><span class="w"> </span><span class="s">"MinIO"</span>
+<span class="n">endpoint</span> <span class="o">=</span><span class="w"> </span><span class="s">"http://minio.example.com:9000"</span>
+<span class="n">access_key</span> <span class="o">=</span><span class="w"> </span><span class="s">"minioadmin"</span>
+<span class="n">secret_key</span> <span class="o">=</span><span class="w"> </span><span class="s">"minioadmin"</span>
+<span class="n">bucket_name</span> <span class="o">=</span><span class="w"> </span><span class="s">"orbit"</span>
+<span class="n">region</span> <span class="o">=</span><span class="w"> </span><span class="s">"us-east-1"</span>
+<span class="n">secure</span> <span class="o">=</span><span class="w"> </span><span class="kc">false</span>
+<span class="n">prefix</span> <span class="o">=</span><span class="w"> </span><span class="s">"orbit"</span>
+</code></pre></div></div>
+
+<h3 id="9-flash-optimized-provider-flashconfig">9. Flash-Optimized Provider (<code class="language-plaintext highlighter-rouge">FlashConfig</code>)</h3>
+
+<p><strong>Best for</strong>: High-performance scenarios with NVMe storage, multipathing requirements</p>
+
+<p><strong>Features</strong>:</p>
+<ul>
+  <li>Optimized for flash storage devices</li>
+  <li>Multipathing support for redundancy</li>
+  <li>Configurable I/O depth and block sizes</li>
+  <li>Compression support</li>
+  <li>Direct I/O operations</li>
+</ul>
+
+<p><strong>Configuration</strong>:</p>
+<div class="language-toml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">[</span><span class="n">providers</span><span class="k">.</span><span class="n">flash</span><span class="k">]</span>
+<span class="n">type</span> <span class="o">=</span><span class="w"> </span><span class="s">"Flash"</span>
+<span class="n">data_dir</span> <span class="o">=</span><span class="w"> </span><span class="s">"/nvme/orbit"</span>
+<span class="n">enable_multipathing</span> <span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+<span class="n">io_depth</span> <span class="o">=</span><span class="w"> </span><span class="mi">32</span>
+<span class="n">block_size</span> <span class="o">=</span><span class="w"> </span><span class="mi">4096</span>
+<span class="n">cache_size</span> <span class="o">=</span><span class="w"> </span><span class="mi">1073741824</span>  <span class="c"># 1GB</span>
+<span class="n">compression</span> <span class="o">=</span><span class="w"> </span><span class="s">"Lz4"</span>
+<span class="n">paths</span> <span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s">"/nvme0/orbit"</span><span class="p">,</span> <span class="s">"/nvme1/orbit"</span><span class="p">,</span> <span class="s">"/nvme2/orbit"</span><span class="p">]</span>
+</code></pre></div></div>
+
+<h3 id="10-composite-provider-compositeconfig">10. Composite Provider (<code class="language-plaintext highlighter-rouge">CompositeConfig</code>)</h3>
+
+<p><strong>Best for</strong>: High availability scenarios requiring failover</p>
+
+<p><strong>Features</strong>:</p>
+<ul>
+  <li>Primary/backup provider configuration</li>
+  <li>Automatic health monitoring</li>
+  <li>Configurable failover thresholds</li>
+  <li>Data synchronization between providers</li>
+  <li>Transparent failover</li>
+</ul>
+
+<p><strong>Configuration</strong>:</p>
+<div class="language-toml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">[</span><span class="n">providers</span><span class="k">.</span><span class="n">composite</span><span class="k">]</span>
+<span class="n">type</span> <span class="o">=</span><span class="w"> </span><span class="s">"Composite"</span>
+<span class="n">sync_interval</span> <span class="o">=</span><span class="w"> </span><span class="mi">60</span>
+<span class="n">health_check_interval</span> <span class="o">=</span><span class="w"> </span><span class="mi">30</span>
+<span class="n">failover_threshold</span> <span class="o">=</span><span class="w"> </span><span class="mi">3</span>
+
+<span class="k">[</span><span class="n">providers</span><span class="k">.</span><span class="n">composite</span><span class="k">.</span><span class="n">primary</span><span class="k">]</span>
+<span class="n">type</span> <span class="o">=</span><span class="w"> </span><span class="s">"Memory"</span>
+<span class="n">max_entries</span> <span class="o">=</span><span class="w"> </span><span class="mi">50000</span>
+
+<span class="k">[</span><span class="n">providers</span><span class="k">.</span><span class="n">composite</span><span class="k">.</span><span class="n">backup</span><span class="k">]</span>
+<span class="n">type</span> <span class="o">=</span><span class="w"> </span><span class="s">"S3"</span>
+<span class="n">endpoint</span> <span class="o">=</span><span class="w"> </span><span class="s">"http://localhost:9000"</span>
+<span class="n">region</span> <span class="o">=</span><span class="w"> </span><span class="s">"us-east-1"</span>
+<span class="n">bucket</span> <span class="o">=</span><span class="w"> </span><span class="s">"orbit-backup"</span>
+<span class="n">access_key_id</span> <span class="o">=</span><span class="w"> </span><span class="s">"minioadmin"</span>
+<span class="n">secret_access_key</span> <span class="o">=</span><span class="w"> </span><span class="s">"minioadmin"</span>
+<span class="n">enable_ssl</span> <span class="o">=</span><span class="w"> </span><span class="kc">false</span>
+</code></pre></div></div>
+
+<h2 id="configuration-methods">Configuration Methods</h2>
+
+<h3 id="1-programmatic-configuration">1. Programmatic Configuration</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">orbit_server</span><span class="p">::</span><span class="nn">persistence</span><span class="p">::</span><span class="o">*</span><span class="p">;</span>
+
+<span class="k">let</span> <span class="n">config</span> <span class="o">=</span> <span class="nn">PersistenceProviderConfig</span><span class="p">::</span><span class="nf">builder</span><span class="p">()</span>
+    <span class="nf">.with_memory</span><span class="p">(</span><span class="err">\</span><span class="s">"memory</span><span class="se">\"</span><span class="s">, MemoryConfig::default(), false)
+    .with_s3(</span><span class="se">\"</span><span class="s">s3</span><span class="se">\"</span><span class="s">, s3_config, true)  // Default provider
+    .build()?;
+</span></code></pre></div></div>
+
+<h3 id="2-configuration-files">2. Configuration Files</h3>
+
+<h4 id="toml-format">TOML Format</h4>
+<div class="language-toml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">[</span><span class="n">defaults</span><span class="k">]</span>
+<span class="n">addressable</span> <span class="o">=</span><span class="w"> </span><span class="err">\</span><span class="s">"s3</span><span class="se">\"</span><span class="err">
+</span><span class="n">cluster</span> <span class="o">=</span><span class="w"> </span><span class="err">\</span><span class="s">"etcd</span><span class="se">\"</span><span class="err">
+</span>
+<span class="k">[</span><span class="n">providers</span><span class="k">.</span><span class="n">memory</span><span class="k">]</span>
+<span class="n">type</span> <span class="o">=</span><span class="w"> </span><span class="err">\</span><span class="s">"Memory</span><span class="se">\"</span><span class="err">
+</span><span class="n">max_entries</span> <span class="o">=</span><span class="w"> </span><span class="mi">100000</span>
+
+<span class="k">[</span><span class="n">providers</span><span class="k">.</span><span class="n">s3</span><span class="k">]</span>
+<span class="n">type</span> <span class="o">=</span><span class="w"> </span><span class="err">\</span><span class="s">"S3</span><span class="se">\"</span><span class="err">
+</span><span class="n">endpoint</span> <span class="o">=</span><span class="w"> </span><span class="err">\</span><span class="s">"https://s3.amazonaws.com</span><span class="se">\"</span><span class="err">
+</span><span class="n">region</span> <span class="o">=</span><span class="w"> </span><span class="err">\</span><span class="s">"us-west-2</span><span class="se">\"</span><span class="err">
+</span><span class="n">bucket</span> <span class="o">=</span><span class="w"> </span><span class="err">\</span><span class="s">"orbit-data</span><span class="se">\"</span><span class="err">
+</span>
+<span class="c"># ... other S3 config</span>
+</code></pre></div></div>
+
+<h4 id="json-format">JSON Format</h4>
+<div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span><span class="w">
+  </span><span class="err">\</span><span class="s2">"defaults</span><span class="se">\"</span><span class="s2">: {
+    </span><span class="se">\"</span><span class="s2">addressable</span><span class="se">\"</span><span class="s2">: </span><span class="se">\"</span><span class="s2">s3</span><span class="se">\"</span><span class="s2">,
+    </span><span class="se">\"</span><span class="s2">cluster</span><span class="se">\"</span><span class="s2">: </span><span class="se">\"</span><span class="s2">etcd</span><span class="se">\"</span><span class="s2">
+  },
+  </span><span class="se">\"</span><span class="s2">providers</span><span class="se">\"</span><span class="s2">: {
+    </span><span class="se">\"</span><span class="s2">memory</span><span class="se">\"</span><span class="s2">: {
+      </span><span class="se">\"</span><span class="s2">type</span><span class="se">\"</span><span class="s2">: </span><span class="se">\"</span><span class="s2">Memory</span><span class="se">\"</span><span class="s2">,
+      </span><span class="se">\"</span><span class="s2">max_entries</span><span class="se">\"</span><span class="s2">: 100000
+    },
+    </span><span class="se">\"</span><span class="s2">s3</span><span class="se">\"</span><span class="s2">: {
+      </span><span class="se">\"</span><span class="s2">type</span><span class="se">\"</span><span class="s2">: </span><span class="se">\"</span><span class="s2">S3</span><span class="se">\"</span><span class="s2">,
+      </span><span class="se">\"</span><span class="s2">endpoint</span><span class="se">\"</span><span class="s2">: </span><span class="se">\"</span><span class="s2">https://s3.amazonaws.com</span><span class="se">\"</span><span class="s2">,
+      </span><span class="se">\"</span><span class="s2">region</span><span class="se">\"</span><span class="s2">: </span><span class="se">\"</span><span class="s2">us-west-2</span><span class="se">\"</span><span class="s2">,
+      </span><span class="se">\"</span><span class="s2">bucket</span><span class="se">\"</span><span class="s2">: </span><span class="se">\"</span><span class="s2">orbit-data</span><span class="se">\"</span><span class="s2">
+    }
+  }
+}
+</span></code></pre></div></div>
+
+<h3 id="3-environment-variables">3. Environment Variables</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// S3 configuration from environment</span>
+<span class="k">let</span> <span class="n">s3_config</span> <span class="o">=</span> <span class="nn">EnvironmentConfig</span><span class="p">::</span><span class="nf">s3_from_env</span><span class="p">(</span><span class="err">\</span><span class="s">"ORBIT_S3</span><span class="se">\"</span><span class="s">)?;
+</span></code></pre></div></div>
+
+<p>Environment variables:</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">ORBIT_S3_ENDPOINT</span><span class="o">=</span>https://s3.amazonaws.com
+<span class="nv">ORBIT_S3_REGION</span><span class="o">=</span>us-west-2
+<span class="nv">ORBIT_S3_BUCKET</span><span class="o">=</span>orbit-data
+<span class="nv">ORBIT_S3_ACCESS_KEY_ID</span><span class="o">=</span>your_access_key
+<span class="nv">ORBIT_S3_SECRET_ACCESS_KEY</span><span class="o">=</span>your_secret_key
+</code></pre></div></div>
+
+<h2 id="integration-with-orbit-server">Integration with Orbit Server</h2>
+
+<h3 id="server-configuration">Server Configuration</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">orbit_server</span><span class="p">::</span><span class="o">*</span><span class="p">;</span>
+
+<span class="k">let</span> <span class="n">persistence_config</span> <span class="o">=</span> <span class="nn">PersistenceProviderConfig</span><span class="p">::</span><span class="nf">from_file</span><span class="p">(</span><span class="err">\</span><span class="s">"config.toml</span><span class="se">\"</span><span class="s">).await?;
+
+let server = OrbitServer::builder()
+    .with_namespace(</span><span class="se">\"</span><span class="s">production</span><span class="se">\"</span><span class="s">)
+    .with_port(50051)
+    .with_persistence(persistence_config)
+    .build()
+    .await?;
+
+server.start().await?;
+</span></code></pre></div></div>
+
+<h3 id="usage-examples">Usage Examples</h3>
+
+<h4 id="basic-usage">Basic Usage</h4>
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Get the registry from server</span>
+<span class="k">let</span> <span class="n">registry</span> <span class="o">=</span> <span class="n">server</span><span class="nf">.persistence_registry</span><span class="p">();</span>
+
+<span class="c1">// Use default providers</span>
+<span class="k">let</span> <span class="n">addressable_provider</span> <span class="o">=</span> <span class="n">registry</span><span class="nf">.get_default_addressable_provider</span><span class="p">()</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+<span class="k">let</span> <span class="n">cluster_provider</span> <span class="o">=</span> <span class="n">registry</span><span class="nf">.get_default_cluster_provider</span><span class="p">()</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+
+<span class="c1">// Store an addressable lease</span>
+<span class="k">let</span> <span class="n">lease</span> <span class="o">=</span> <span class="n">AddressableLease</span> <span class="p">{</span> <span class="cm">/* ... */</span> <span class="p">};</span>
+<span class="n">addressable_provider</span><span class="nf">.store_lease</span><span class="p">(</span><span class="o">&amp;</span><span class="n">lease</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+
+<span class="c1">// Store node information</span>
+<span class="k">let</span> <span class="n">node</span> <span class="o">=</span> <span class="n">NodeInfo</span> <span class="p">{</span> <span class="cm">/* ... */</span> <span class="p">};</span>
+<span class="n">cluster_provider</span><span class="nf">.store_node</span><span class="p">(</span><span class="o">&amp;</span><span class="n">node</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h4 id="advanced-usage">Advanced Usage</h4>
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Use specific providers</span>
+<span class="k">let</span> <span class="n">s3_provider</span> <span class="o">=</span> <span class="n">registry</span><span class="nf">.get_addressable_provider</span><span class="p">(</span><span class="err">\</span><span class="s">"s3_addressable</span><span class="se">\"</span><span class="s">).await?;
+let etcd_provider = registry.get_cluster_provider(</span><span class="se">\"</span><span class="s">etcd_cluster</span><span class="se">\"</span><span class="s">).await?;
+
+// Bulk operations
+let leases = vec![lease1, lease2, lease3];
+s3_provider.store_leases_bulk(&amp;leases).await?;
+
+// Health monitoring
+let health = s3_provider.health_check().await;
+let metrics = s3_provider.metrics().await;
+</span></code></pre></div></div>
+
+<h2 id="deployment-scenarios">Deployment Scenarios</h2>
+
+<h3 id="scenario-1-development-environment">Scenario 1: Development Environment</h3>
+<p><strong>Configuration</strong>: Memory provider with disk backup</p>
+<ul>
+  <li>Fast development cycles</li>
+  <li>Data persistence across restarts</li>
+  <li>No external dependencies</li>
+</ul>
+
+<h3 id="scenario-2-production-on-aws">Scenario 2: Production on AWS</h3>
+<p><strong>Configuration</strong>: S3 for persistence, ElastiCache Redis for caching</p>
+<ul>
+  <li>High durability and availability</li>
+  <li>Scalable storage</li>
+  <li>Cross-region replication</li>
+</ul>
+
+<h3 id="scenario-3-kubernetes-deployment">Scenario 3: Kubernetes Deployment</h3>
+<p><strong>Configuration</strong>: etcd for cluster state, ConfigMaps for configuration</p>
+<ul>
+  <li>Cloud-native integration</li>
+  <li>Automatic service discovery</li>
+  <li>RBAC integration</li>
+</ul>
+
+<h3 id="scenario-4-hybrid-cloud">Scenario 4: Hybrid Cloud</h3>
+<p><strong>Configuration</strong>: Composite provider with on-premises primary and cloud backup</p>
+<ul>
+  <li>Data sovereignty requirements</li>
+  <li>Disaster recovery</li>
+  <li>Cost optimization</li>
+</ul>
+
+<h3 id="scenario-5-high-performance-computing">Scenario 5: High-Performance Computing</h3>
+<p><strong>Configuration</strong>: Flash-optimized storage with multipathing</p>
+<ul>
+  <li>Ultra-low latency</li>
+  <li>High throughput</li>
+  <li>Hardware optimization</li>
+</ul>
+
+<h2 id="migration-between-providers">Migration Between Providers</h2>
+
+<p>The system includes migration utilities for moving data between providers:</p>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">orbit_server</span><span class="p">::</span><span class="nn">persistence</span><span class="p">::</span><span class="nn">migration</span><span class="p">::</span><span class="o">*</span><span class="p">;</span>
+
+<span class="k">let</span> <span class="n">migration</span> <span class="o">=</span> <span class="nn">DataMigration</span><span class="p">::</span><span class="nf">new</span><span class="p">()</span>
+    <span class="nf">.from_provider</span><span class="p">(</span><span class="n">old_provider</span><span class="p">)</span>
+    <span class="nf">.to_provider</span><span class="p">(</span><span class="n">new_provider</span><span class="p">)</span>
+    <span class="nf">.with_batch_size</span><span class="p">(</span><span class="mi">1000</span><span class="p">)</span>
+    <span class="nf">.with_validation</span><span class="p">(</span><span class="k">true</span><span class="p">);</span>
+
+<span class="k">let</span> <span class="n">result</span> <span class="o">=</span> <span class="n">migration</span><span class="nf">.execute</span><span class="p">()</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+<span class="nd">println!</span><span class="p">(</span>\<span class="s">"Migrated {} leases and {} nodes</span><span class="se">\"</span><span class="s">, result.leases_migrated, result.nodes_migrated);
+</span></code></pre></div></div>
+
+<h2 id="monitoring-and-metrics">Monitoring and Metrics</h2>
+
+<p>All providers expose standard metrics:</p>
+
+<ul>
+  <li><strong>Operation Counts</strong>: read_operations, write_operations, delete_operations</li>
+  <li><strong>Latency</strong>: read_latency_avg, write_latency_avg, delete_latency_avg</li>
+  <li><strong>Error Tracking</strong>: error_count</li>
+  <li><strong>Cache Statistics</strong>: cache_hits, cache_misses (where applicable)</li>
+</ul>
+
+<p>Health checks provide three states:</p>
+<ul>
+  <li><strong>Healthy</strong>: Provider is operating normally</li>
+  <li><strong>Degraded</strong>: Provider is operational but with reduced performance</li>
+  <li><strong>Unhealthy</strong>: Provider is not operational</li>
+</ul>
+
+<h2 id="security-considerations">Security Considerations</h2>
+
+<h3 id="authentication">Authentication</h3>
+<ul>
+  <li><strong>Cloud Providers</strong>: Use native authentication (IAM roles, service accounts)</li>
+  <li><strong>etcd</strong>: Support for username/password and mTLS</li>
+  <li><strong>Redis</strong>: Password authentication and SSL/TLS</li>
+  <li><strong>Kubernetes</strong>: RBAC and service account tokens</li>
+</ul>
+
+<h3 id="encryption">Encryption</h3>
+<ul>
+  <li><strong>At Rest</strong>: Leverage provider-native encryption (S3 SSE, Azure encryption, etc.)</li>
+  <li><strong>In Transit</strong>: TLS/SSL support for all network communications</li>
+  <li><strong>Key Management</strong>: Integration with cloud KMS services</li>
+</ul>
+
+<h3 id="access-control">Access Control</h3>
+<ul>
+  <li><strong>Least Privilege</strong>: Configure minimal required permissions</li>
+  <li><strong>Network Security</strong>: Use VPCs, security groups, network policies</li>
+  <li><strong>Audit Logging</strong>: All operations are logged with appropriate detail</li>
+</ul>
+
+<h2 id="performance-tuning">Performance Tuning</h2>
+
+<h3 id="general-guidelines">General Guidelines</h3>
+<ol>
+  <li><strong>Choose the Right Provider</strong>: Match provider capabilities to your use case</li>
+  <li><strong>Configure Timeouts</strong>: Set appropriate connection and operation timeouts</li>
+  <li><strong>Enable Compression</strong>: Use compression for large objects (configurable algorithms)</li>
+  <li><strong>Batch Operations</strong>: Use bulk operations when possible</li>
+  <li><strong>Monitor Metrics</strong>: Track latency and error rates</li>
+</ol>
+
+<h3 id="provider-specific-tuning">Provider-Specific Tuning</h3>
+<ul>
+  <li><strong>Memory</strong>: Adjust max_entries and backup intervals</li>
+  <li><strong>S3</strong>: Configure retry counts and timeout values</li>
+  <li><strong>etcd</strong>: Tune lease TTL and watch timeout</li>
+  <li><strong>Redis</strong>: Optimize connection pool size and pipeline operations</li>
+</ul>
+
+<h2 id="future-enhancements">Future Enhancements</h2>
+
+<p>The provider-based architecture is designed for extensibility. Future providers might include:</p>
+
+<ul>
+  <li><strong>Apache Cassandra</strong>: For large-scale distributed scenarios</li>
+  <li><strong>CockroachDB</strong>: For global, consistent storage</li>
+  <li><strong>TiKV</strong>: For cloud-native distributed storage</li>
+  <li><strong>Custom Providers</strong>: Plugin system for proprietary storage systems</li>
+</ul>
+
+<h2 id="conclusion">Conclusion</h2>
+
+<p>The provider-based persistence architecture transforms Orbit server from a simple in-memory system to a production-ready platform that can adapt to any deployment scenario. Whether you’re running a single development instance or a global distributed system, there’s a provider configuration that meets your needs.</p>
+
+<p>The system’s flexibility, combined with comprehensive monitoring, security features, and migration capabilities, ensures that your Orbit deployment can evolve with your requirements without architectural changes.</p>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/orbit-rs/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Orbit-RS Documentation</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">TuringWorks</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

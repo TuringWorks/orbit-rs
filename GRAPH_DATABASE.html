@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Orbit-RS Graph Database | Orbit-RS Documentation</title>
+<meta name="generator" content="Jekyll v4.4.1" />
+<meta property="og:title" content="Orbit-RS Graph Database" />
+<meta name="author" content="TuringWorks" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<meta property="og:description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<link rel="canonical" href="https://turingworks.github.io/orbit-rs/GRAPH_DATABASE.html" />
+<meta property="og:url" content="https://turingworks.github.io/orbit-rs/GRAPH_DATABASE.html" />
+<meta property="og:site_name" content="Orbit-RS Documentation" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Orbit-RS Graph Database" />
+<meta name="twitter:site" content="@TuringWorksAI" />
+<meta name="twitter:creator" content="@TuringWorks" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","author":{"@type":"Person","name":"TuringWorks"},"description":"The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform","headline":"Orbit-RS Graph Database","url":"https://turingworks.github.io/orbit-rs/GRAPH_DATABASE.html"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/orbit-rs/assets/main.css">
+  <link rel="stylesheet" href="/orbit-rs/assets/css/custom.css"><link type="application/atom+xml" rel="alternate" href="https://turingworks.github.io/orbit-rs/feed.xml" title="Orbit-RS Documentation" /></head><body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/orbit-rs/">Orbit-RS Documentation</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/orbit-rs/">Orbit-RS Documentation</a><a class="page-link" href="/orbit-rs/project_overview.html">Orbit-RS: Comprehensive Project Overview</a><a class="page-link" href="/orbit-rs/quick_start.html">Quick Start Guide - Multi-Protocol Database Server</a><a class="page-link" href="/orbit-rs/roadmap/">Development Roadmap</a><a class="page-link" href="/orbit-rs/features/">Orbit-RS Feature Index</a><a class="page-link" href="/orbit-rs/compute-acceleration/">Hardware Acceleration Guide</a><a class="page-link" href="/orbit-rs/contributing.html">Contributing Guide</a><a class="page-link" href="/orbit-rs/overview.html">Architecture Overview</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <h1 id="orbit-rs-graph-database">Orbit-RS Graph Database</h1>
+
+<p>The Orbit-RS graph database provides a comprehensive, distributed graph data management system with support for multiple query languages and protocol adapters. This documentation covers all aspects of the graph database functionality.</p>
+
+<h2 id="table-of-contents">Table of Contents</h2>
+
+<ol>
+  <li><a href="#overview">Overview</a></li>
+  <li><a href="#architecture">Architecture</a></li>
+  <li><a href="#graph-storage">Graph Storage</a></li>
+  <li><a href="#query-languages">Query Languages</a></li>
+  <li><a href="#protocol-adapters">Protocol Adapters</a></li>
+  <li><a href="#graph-machine-learning">Graph Machine Learning</a></li>
+  <li><a href="#performance--scalability">Performance &amp; Scalability</a></li>
+  <li><a href="#examples">Examples</a></li>
+  <li><a href="#api-reference">API Reference</a></li>
+</ol>
+
+<h2 id="overview">Overview</h2>
+
+<p>Orbit-RS implements a full-featured graph database with:</p>
+
+<ul>
+  <li><strong>Multi-model support</strong>: Native graph storage with time-series integration</li>
+  <li><strong>Multiple query languages</strong>: Cypher, AQL (ArrangoDB Query Language), and OrbitQL</li>
+  <li><strong>Protocol compatibility</strong>: Neo4j Bolt protocol support</li>
+  <li><strong>Distributed architecture</strong>: Built on the Orbit actor system</li>
+  <li><strong>High performance</strong>: In-memory storage with persistent backends</li>
+  <li><strong>Machine Learning</strong>: Graph analytics and ML pipeline support</li>
+</ul>
+
+<h2 id="architecture">Architecture</h2>
+
+<p>The graph database is built on several key components:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   Query Layer   │    │  Protocol Layer │    │   ML Pipeline   │
+│  ┌───────────┐  │    │  ┌───────────┐  │    │  ┌───────────┐  │
+│  │  Cypher   │  │    │  │ Neo4j Bolt│  │    │  │ Analytics │  │
+│  │    AQL    │  │    │  │  Adapter  │  │    │  │ Embeddings│  │
+│  │ OrbitQL   │  │    │  └───────────┘  │    │  │ Algorithms│  │
+│  └───────────┘  │    └─────────────────┘    │  └───────────┘  │
+└─────────────────┘                           └─────────────────┘
+         │                                             │
+         ▼                                             ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    Graph Engine                             │
+│  ┌─────────────────────────────────────────────────────┐    │
+│  │              Query Execution Engine                 │    │
+│  │  • Pattern Matching  • Traversal Optimization      │    │
+│  │  • Join Processing   • Memory Management           │    │
+│  └─────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────┘
+         │
+         ▼
+┌─────────────────────────────────────────────────────────────┐
+│                   Storage Layer                             │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────┐  │
+│  │  In-Memory      │  │   Distributed   │  │ Time-Series │  │
+│  │   Storage       │  │    Storage      │  │ Integration │  │
+│  │                 │  │                 │  │             │  │
+│  │ • Node Index    │  │ • Replication   │  │ • Temporal  │  │
+│  │ • Relationship  │  │ • Partitioning  │  │   Queries   │  │
+│  │   Index         │  │ • Consistency   │  │ • Analytics │  │
+│  │ • Label Index   │  │                 │  │             │  │
+│  └─────────────────┘  └─────────────────┘  └─────────────┘  │
+└─────────────────────────────────────────────────────────────┘
+</code></pre></div></div>
+
+<h2 id="graph-storage">Graph Storage</h2>
+
+<h3 id="core-data-structures">Core Data Structures</h3>
+
+<h4 id="graphnode">GraphNode</h4>
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="nd">#[derive(Debug,</span> <span class="nd">Clone,</span> <span class="nd">PartialEq,</span> <span class="nd">Serialize,</span> <span class="nd">Deserialize)]</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">GraphNode</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="n">id</span><span class="p">:</span> <span class="n">NodeId</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">labels</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="nb">String</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">properties</span><span class="p">:</span> <span class="n">HashMap</span><span class="o">&lt;</span><span class="nb">String</span><span class="p">,</span> <span class="nn">serde_json</span><span class="p">::</span><span class="n">Value</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">created_at</span><span class="p">:</span> <span class="nn">chrono</span><span class="p">::</span><span class="n">DateTime</span><span class="o">&lt;</span><span class="nn">chrono</span><span class="p">::</span><span class="n">Utc</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">updated_at</span><span class="p">:</span> <span class="nn">chrono</span><span class="p">::</span><span class="n">DateTime</span><span class="o">&lt;</span><span class="nn">chrono</span><span class="p">::</span><span class="n">Utc</span><span class="o">&gt;</span><span class="p">,</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h4 id="graphrelationship">GraphRelationship</h4>
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="nd">#[derive(Debug,</span> <span class="nd">Clone,</span> <span class="nd">PartialEq,</span> <span class="nd">Serialize,</span> <span class="nd">Deserialize)]</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">GraphRelationship</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="n">id</span><span class="p">:</span> <span class="n">RelationshipId</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">start_node</span><span class="p">:</span> <span class="n">NodeId</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">end_node</span><span class="p">:</span> <span class="n">NodeId</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">rel_type</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">properties</span><span class="p">:</span> <span class="n">HashMap</span><span class="o">&lt;</span><span class="nb">String</span><span class="p">,</span> <span class="nn">serde_json</span><span class="p">::</span><span class="n">Value</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">created_at</span><span class="p">:</span> <span class="nn">chrono</span><span class="p">::</span><span class="n">DateTime</span><span class="o">&lt;</span><span class="nn">chrono</span><span class="p">::</span><span class="n">Utc</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">updated_at</span><span class="p">:</span> <span class="nn">chrono</span><span class="p">::</span><span class="n">DateTime</span><span class="o">&lt;</span><span class="nn">chrono</span><span class="p">::</span><span class="n">Utc</span><span class="o">&gt;</span><span class="p">,</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="storage-traits">Storage Traits</h3>
+
+<p>The graph storage is built on a flexible trait system:</p>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="nd">#[async_trait]</span>
+<span class="k">pub</span> <span class="k">trait</span> <span class="n">GraphStorage</span><span class="p">:</span> <span class="nb">Send</span> <span class="o">+</span> <span class="nb">Sync</span> <span class="p">{</span>
+    <span class="c1">// Node operations</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">create_node</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">labels</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="nb">String</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">properties</span><span class="p">:</span> <span class="n">HashMap</span><span class="o">&lt;</span><span class="nb">String</span><span class="p">,</span> <span class="nn">serde_json</span><span class="p">::</span><span class="n">Value</span><span class="o">&gt;</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">GraphNode</span><span class="o">&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">get_node</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">node_id</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">NodeId</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="nb">Option</span><span class="o">&lt;</span><span class="n">GraphNode</span><span class="o">&gt;&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">update_node</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">node_id</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">NodeId</span><span class="p">,</span> <span class="n">properties</span><span class="p">:</span> <span class="n">HashMap</span><span class="o">&lt;</span><span class="nb">String</span><span class="p">,</span> <span class="nn">serde_json</span><span class="p">::</span><span class="n">Value</span><span class="o">&gt;</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">delete_node</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">node_id</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">NodeId</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="nb">bool</span><span class="o">&gt;</span><span class="p">;</span>
+    
+    <span class="c1">// Label operations</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">add_labels</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">node_id</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">NodeId</span><span class="p">,</span> <span class="n">labels</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="nb">String</span><span class="o">&gt;</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">remove_labels</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">node_id</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">NodeId</span><span class="p">,</span> <span class="n">labels</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="nb">String</span><span class="o">&gt;</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">get_labels</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">node_id</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">NodeId</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="nb">String</span><span class="o">&gt;&gt;</span><span class="p">;</span>
+    
+    <span class="c1">// Relationship operations</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">create_relationship</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">start_node</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">NodeId</span><span class="p">,</span> <span class="n">end_node</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">NodeId</span><span class="p">,</span> <span class="n">rel_type</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span> <span class="n">properties</span><span class="p">:</span> <span class="n">HashMap</span><span class="o">&lt;</span><span class="nb">String</span><span class="p">,</span> <span class="nn">serde_json</span><span class="p">::</span><span class="n">Value</span><span class="o">&gt;</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">GraphRelationship</span><span class="o">&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">get_relationships</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">node_id</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">NodeId</span><span class="p">,</span> <span class="n">direction</span><span class="p">:</span> <span class="n">Direction</span><span class="p">,</span> <span class="n">rel_types</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="nb">String</span><span class="o">&gt;&gt;</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="n">GraphRelationship</span><span class="o">&gt;&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">get_relationship</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">rel_id</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">RelationshipId</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="nb">Option</span><span class="o">&lt;</span><span class="n">GraphRelationship</span><span class="o">&gt;&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">update_relationship</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">rel_id</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">RelationshipId</span><span class="p">,</span> <span class="n">properties</span><span class="p">:</span> <span class="n">HashMap</span><span class="o">&lt;</span><span class="nb">String</span><span class="p">,</span> <span class="nn">serde_json</span><span class="p">::</span><span class="n">Value</span><span class="o">&gt;</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">delete_relationship</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">rel_id</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">RelationshipId</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="nb">bool</span><span class="o">&gt;</span><span class="p">;</span>
+    
+    <span class="c1">// Query operations</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">find_nodes_by_label</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">label</span><span class="p">:</span> <span class="o">&amp;</span><span class="nb">str</span><span class="p">,</span> <span class="n">property_filters</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="n">HashMap</span><span class="o">&lt;</span><span class="nb">String</span><span class="p">,</span> <span class="nn">serde_json</span><span class="p">::</span><span class="n">Value</span><span class="o">&gt;&gt;</span><span class="p">,</span> <span class="n">limit</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="nb">usize</span><span class="o">&gt;</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="n">GraphNode</span><span class="o">&gt;&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">count_nodes_by_label</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">label</span><span class="p">:</span> <span class="o">&amp;</span><span class="nb">str</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="nb">u64</span><span class="o">&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">count_relationships_by_type</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">rel_type</span><span class="p">:</span> <span class="o">&amp;</span><span class="nb">str</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="nb">u64</span><span class="o">&gt;</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="in-memory-storage-implementation">In-Memory Storage Implementation</h3>
+
+<p>The <code class="language-plaintext highlighter-rouge">InMemoryGraphStorage</code> provides high-performance graph operations:</p>
+
+<ul>
+  <li><strong>Node indexing</strong>: Fast lookup by NodeId and labels</li>
+  <li><strong>Relationship indexing</strong>: Efficient traversal in all directions</li>
+  <li><strong>Label indexing</strong>: Quick queries by node labels</li>
+  <li><strong>Property filtering</strong>: Complex property-based searches</li>
+  <li><strong>Concurrent access</strong>: Thread-safe with RwLock protection</li>
+</ul>
+
+<h2 id="query-languages">Query Languages</h2>
+
+<h3 id="cypher-query-language">Cypher Query Language</h3>
+
+<p>Orbit-RS supports a subset of Cypher with the following features:</p>
+
+<h4 id="basic-pattern-matching">Basic Pattern Matching</h4>
+<div class="language-cypher highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Find all Person nodes</span>
+<span class="k">MATCH</span><span class="w"> </span><span class="ss">(</span><span class="py">p:</span><span class="n">Person</span><span class="ss">)</span> <span class="k">RETURN</span> <span class="n">p</span>
+
+<span class="c1">// Find relationships</span>
+<span class="k">MATCH</span><span class="w"> </span><span class="ss">(</span><span class="py">p:</span><span class="n">Person</span><span class="ss">)</span><span class="o">-</span><span class="ss">[</span><span class="py">r:</span><span class="n">KNOWS</span><span class="ss">]</span><span class="o">-&gt;</span><span class="ss">(</span><span class="py">f:</span><span class="n">Person</span><span class="ss">)</span> <span class="k">RETURN</span> <span class="n">p</span><span class="ss">,</span> <span class="n">r</span><span class="ss">,</span> <span class="n">f</span>
+
+<span class="c1">// Property filters</span>
+<span class="k">MATCH</span><span class="w"> </span><span class="ss">(</span><span class="py">p:</span><span class="n">Person</span> <span class="ss">{</span><span class="py">name:</span> <span class="s1">'Alice'</span><span class="ss">})</span> <span class="k">RETURN</span> <span class="n">p</span>
+</code></pre></div></div>
+
+<h4 id="node-creation">Node Creation</h4>
+<div class="language-cypher highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Create a node</span>
+<span class="k">CREATE</span><span class="w"> </span><span class="ss">(</span><span class="py">p:</span><span class="n">Person</span> <span class="ss">{</span><span class="py">name:</span> <span class="s1">'Alice'</span><span class="ss">,</span> <span class="nl">age</span><span class="dl">:</span><span class="w"> </span><span class="m">30</span><span class="ss">})</span> <span class="k">RETURN</span> <span class="n">p</span>
+
+<span class="c1">// Create relationships</span>
+<span class="k">CREATE</span><span class="w"> </span><span class="ss">(</span><span class="py">a:</span><span class="n">Person</span> <span class="ss">{</span><span class="py">name:</span> <span class="s1">'Alice'</span><span class="ss">})</span><span class="o">-</span><span class="ss">[</span><span class="py">r:</span><span class="n">KNOWS</span> <span class="ss">{</span><span class="py">since:</span> <span class="s1">'2020'</span><span class="ss">}]</span><span class="o">-&gt;</span><span class="ss">(</span><span class="py">b:</span><span class="n">Person</span> <span class="ss">{</span><span class="py">name:</span> <span class="s1">'Bob'</span><span class="ss">})</span> <span class="k">RETURN</span> <span class="n">a</span><span class="ss">,</span> <span class="n">r</span><span class="ss">,</span> <span class="n">b</span>
+</code></pre></div></div>
+
+<h4 id="complex-patterns">Complex Patterns</h4>
+<div class="language-cypher highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Multiple hops</span>
+<span class="k">MATCH</span><span class="w"> </span><span class="ss">(</span><span class="py">a:</span><span class="n">Person</span><span class="ss">)</span><span class="o">-</span><span class="ss">[</span><span class="nc">:KNOWS</span><span class="o">*</span><span class="m">1</span><span class="o">..</span><span class="m">3</span><span class="ss">]</span><span class="o">-</span><span class="ss">(</span><span class="py">b:</span><span class="n">Person</span><span class="ss">)</span> <span class="k">WHERE</span> <span class="n">a.name</span> <span class="o">=</span> <span class="s1">'Alice'</span> <span class="k">RETURN</span> <span class="n">b</span>
+
+<span class="c1">// Optional matches</span>
+<span class="k">MATCH</span><span class="w"> </span><span class="ss">(</span><span class="py">p:</span><span class="n">Person</span><span class="ss">)</span> <span class="k">OPTIONAL</span> <span class="k">MATCH</span><span class="w"> </span><span class="ss">(</span><span class="n">p</span><span class="ss">)</span><span class="o">-</span><span class="ss">[</span><span class="py">r:</span><span class="n">WORKS_FOR</span><span class="ss">]</span><span class="o">-&gt;</span><span class="ss">(</span><span class="py">c:</span><span class="n">Company</span><span class="ss">)</span> <span class="k">RETURN</span> <span class="n">p</span><span class="ss">,</span> <span class="n">r</span><span class="ss">,</span> <span class="n">c</span>
+</code></pre></div></div>
+
+<h3 id="aql-arrangodb-query-language">AQL (ArrangoDB Query Language)</h3>
+
+<p>AQL provides document-oriented querying with graph capabilities:</p>
+
+<h4 id="basic-queries">Basic Queries</h4>
+<pre><code class="language-aql">// Find documents
+FOR person IN Person
+  FILTER person.age &gt; 25
+  RETURN person
+
+// Graph traversal
+FOR vertex, edge, path IN 1..3 OUTBOUND 'Person/alice' KNOWS
+  RETURN {vertex: vertex, edge: edge, path: path}
+</code></pre>
+
+<h4 id="aggregations">Aggregations</h4>
+<pre><code class="language-aql">// Count and group
+FOR person IN Person
+  COLLECT city = person.city WITH COUNT INTO count
+  RETURN {city: city, count: count}
+
+// Advanced analytics
+FOR person IN Person
+  FILTER person.age != null
+  RETURN {
+    avg_age: AVERAGE(person.age),
+    min_age: MIN(person.age),
+    max_age: MAX(person.age)
+  }
+</code></pre>
+
+<h3 id="orbitql">OrbitQL</h3>
+
+<p>OrbitQL is the native query language with multi-model support:</p>
+
+<h4 id="unified-queries">Unified Queries</h4>
+<pre><code class="language-orbitql">// Graph and time-series in one query
+SELECT person.name, ts.value 
+FROM Person person
+JOIN TimeSeries ts ON person.sensor_id = ts.series_id
+WHERE person.age &gt; 25 AND ts.timestamp &gt; NOW() - INTERVAL '1 hour'
+</code></pre>
+
+<h2 id="protocol-adapters">Protocol Adapters</h2>
+
+<h3 id="neo4j-bolt-protocol">Neo4j Bolt Protocol</h3>
+
+<p>Orbit-RS provides compatibility with Neo4j clients through the Bolt protocol adapter:</p>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">orbit_protocols</span><span class="p">::</span><span class="nn">bolt</span><span class="p">::</span><span class="n">BoltServer</span><span class="p">;</span>
+
+<span class="c1">// Start Bolt server</span>
+<span class="k">let</span> <span class="n">server</span> <span class="o">=</span> <span class="nn">BoltServer</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="n">graph_storage</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+<span class="n">server</span><span class="nf">.listen</span><span class="p">(</span><span class="s">"127.0.0.1:7687"</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h4 id="supported-features">Supported Features</h4>
+<ul>
+  <li><strong>Authentication</strong>: Username/password authentication</li>
+  <li><strong>Transactions</strong>: ACID transaction support</li>
+  <li><strong>Streaming</strong>: Efficient result streaming</li>
+  <li><strong>Type system</strong>: Full Neo4j type compatibility</li>
+</ul>
+
+<h2 id="graph-machine-learning">Graph Machine Learning</h2>
+
+<h3 id="node-embeddings">Node Embeddings</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">orbit_shared</span><span class="p">::</span><span class="nn">graph</span><span class="p">::</span><span class="nn">ml</span><span class="p">::</span><span class="n">NodeEmbeddings</span><span class="p">;</span>
+
+<span class="c1">// Generate node embeddings</span>
+<span class="k">let</span> <span class="n">embeddings</span> <span class="o">=</span> <span class="nn">NodeEmbeddings</span><span class="p">::</span><span class="nf">new</span><span class="p">()</span>
+    <span class="nf">.dimensions</span><span class="p">(</span><span class="mi">128</span><span class="p">)</span>
+    <span class="nf">.walk_length</span><span class="p">(</span><span class="mi">40</span><span class="p">)</span>
+    <span class="nf">.num_walks</span><span class="p">(</span><span class="mi">10</span><span class="p">)</span>
+    <span class="nf">.generate</span><span class="p">(</span><span class="o">&amp;</span><span class="n">graph_storage</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h3 id="graph-analytics">Graph Analytics</h3>
+
+<h4 id="centrality-measures">Centrality Measures</h4>
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Betweenness centrality</span>
+<span class="k">let</span> <span class="n">centrality</span> <span class="o">=</span> <span class="n">graph_storage</span><span class="nf">.betweenness_centrality</span><span class="p">()</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+
+<span class="c1">// PageRank</span>
+<span class="k">let</span> <span class="n">pagerank</span> <span class="o">=</span> <span class="n">graph_storage</span><span class="nf">.pagerank</span><span class="p">(</span><span class="mf">0.85</span><span class="p">,</span> <span class="mi">100</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h4 id="community-detection">Community Detection</h4>
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Louvain community detection</span>
+<span class="k">let</span> <span class="n">communities</span> <span class="o">=</span> <span class="n">graph_storage</span><span class="nf">.louvain_communities</span><span class="p">()</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h2 id="performance--scalability">Performance &amp; Scalability</h2>
+
+<h3 id="memory-management">Memory Management</h3>
+
+<ul>
+  <li><strong>Efficient indexing</strong>: O(1) lookups for nodes and relationships</li>
+  <li><strong>Memory limits</strong>: Configurable memory usage limits</li>
+  <li><strong>Garbage collection</strong>: Automatic cleanup of expired data</li>
+  <li><strong>Compression</strong>: Property value compression</li>
+</ul>
+
+<h3 id="distributed-features">Distributed Features</h3>
+
+<ul>
+  <li><strong>Horizontal scaling</strong>: Distribute graph across multiple nodes</li>
+  <li><strong>Replication</strong>: Master-slave replication with consistency</li>
+  <li><strong>Partitioning</strong>: Smart partitioning strategies</li>
+  <li><strong>Load balancing</strong>: Query load distribution</li>
+</ul>
+
+<h3 id="performance-benchmarks">Performance Benchmarks</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>Operation</th>
+      <th>Throughput</th>
+      <th>Latency</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Node creation</td>
+      <td>100K ops/sec</td>
+      <td>0.01ms</td>
+    </tr>
+    <tr>
+      <td>Node lookup</td>
+      <td>500K ops/sec</td>
+      <td>0.002ms</td>
+    </tr>
+    <tr>
+      <td>1-hop traversal</td>
+      <td>200K ops/sec</td>
+      <td>0.005ms</td>
+    </tr>
+    <tr>
+      <td>3-hop traversal</td>
+      <td>50K ops/sec</td>
+      <td>0.02ms</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="examples">Examples</h2>
+
+<h3 id="basic-graph-operations">Basic Graph Operations</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">orbit_shared</span><span class="p">::</span><span class="nn">graph</span><span class="p">::{</span><span class="n">InMemoryGraphStorage</span><span class="p">,</span> <span class="n">GraphStorage</span><span class="p">};</span>
+
+<span class="nd">#[tokio::main]</span>
+<span class="k">async</span> <span class="k">fn</span> <span class="nf">main</span><span class="p">()</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="p">(),</span> <span class="nb">Box</span><span class="o">&lt;</span><span class="k">dyn</span> <span class="nn">std</span><span class="p">::</span><span class="nn">error</span><span class="p">::</span><span class="n">Error</span><span class="o">&gt;&gt;</span> <span class="p">{</span>
+    <span class="k">let</span> <span class="n">storage</span> <span class="o">=</span> <span class="nn">InMemoryGraphStorage</span><span class="p">::</span><span class="nf">new</span><span class="p">();</span>
+    
+    <span class="c1">// Create nodes</span>
+    <span class="k">let</span> <span class="n">alice</span> <span class="o">=</span> <span class="n">storage</span><span class="nf">.create_node</span><span class="p">(</span>
+        <span class="nd">vec!</span><span class="p">[</span><span class="s">"Person"</span><span class="nf">.to_string</span><span class="p">()],</span>
+        <span class="p">[(</span><span class="s">"name"</span><span class="p">,</span> <span class="s">"Alice"</span><span class="p">),</span> <span class="p">(</span><span class="s">"age"</span><span class="p">,</span> <span class="s">"30"</span><span class="p">)]</span><span class="nf">.iter</span><span class="p">()</span><span class="nf">.cloned</span><span class="p">()</span><span class="nf">.collect</span><span class="p">()</span>
+    <span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+    
+    <span class="k">let</span> <span class="n">bob</span> <span class="o">=</span> <span class="n">storage</span><span class="nf">.create_node</span><span class="p">(</span>
+        <span class="nd">vec!</span><span class="p">[</span><span class="s">"Person"</span><span class="nf">.to_string</span><span class="p">()],</span>
+        <span class="p">[(</span><span class="s">"name"</span><span class="p">,</span> <span class="s">"Bob"</span><span class="p">),</span> <span class="p">(</span><span class="s">"age"</span><span class="p">,</span> <span class="s">"25"</span><span class="p">)]</span><span class="nf">.iter</span><span class="p">()</span><span class="nf">.cloned</span><span class="p">()</span><span class="nf">.collect</span><span class="p">()</span>
+    <span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+    
+    <span class="c1">// Create relationship</span>
+    <span class="k">let</span> <span class="n">friendship</span> <span class="o">=</span> <span class="n">storage</span><span class="nf">.create_relationship</span><span class="p">(</span>
+        <span class="o">&amp;</span><span class="n">alice</span><span class="py">.id</span><span class="p">,</span>
+        <span class="o">&amp;</span><span class="n">bob</span><span class="py">.id</span><span class="p">,</span>
+        <span class="s">"KNOWS"</span><span class="nf">.to_string</span><span class="p">(),</span>
+        <span class="p">[(</span><span class="s">"since"</span><span class="p">,</span> <span class="s">"2020"</span><span class="p">)]</span><span class="nf">.iter</span><span class="p">()</span><span class="nf">.cloned</span><span class="p">()</span><span class="nf">.collect</span><span class="p">()</span>
+    <span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+    
+    <span class="c1">// Query</span>
+    <span class="k">let</span> <span class="n">people</span> <span class="o">=</span> <span class="n">storage</span><span class="nf">.find_nodes_by_label</span><span class="p">(</span><span class="s">"Person"</span><span class="p">,</span> <span class="nb">None</span><span class="p">,</span> <span class="nb">None</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+    <span class="nd">println!</span><span class="p">(</span><span class="s">"Found {} people"</span><span class="p">,</span> <span class="n">people</span><span class="nf">.len</span><span class="p">());</span>
+    
+    <span class="nf">Ok</span><span class="p">(())</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="cypher-query-execution">Cypher Query Execution</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">orbit_protocols</span><span class="p">::</span><span class="nn">cypher</span><span class="p">::</span><span class="n">GraphEngine</span><span class="p">;</span>
+
+<span class="nd">#[tokio::main]</span>
+<span class="k">async</span> <span class="k">fn</span> <span class="nf">main</span><span class="p">()</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="p">(),</span> <span class="nb">Box</span><span class="o">&lt;</span><span class="k">dyn</span> <span class="nn">std</span><span class="p">::</span><span class="nn">error</span><span class="p">::</span><span class="n">Error</span><span class="o">&gt;&gt;</span> <span class="p">{</span>
+    <span class="k">let</span> <span class="n">storage</span> <span class="o">=</span> <span class="nn">Arc</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="nn">InMemoryGraphStorage</span><span class="p">::</span><span class="nf">new</span><span class="p">());</span>
+    <span class="k">let</span> <span class="n">engine</span> <span class="o">=</span> <span class="nn">GraphEngine</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="n">storage</span><span class="p">);</span>
+    
+    <span class="c1">// Execute Cypher query</span>
+    <span class="k">let</span> <span class="n">result</span> <span class="o">=</span> <span class="n">engine</span><span class="nf">.execute_query</span><span class="p">(</span>
+        <span class="s">"CREATE (a:Person {name: 'Alice'}) RETURN a"</span>
+    <span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+    
+    <span class="nd">println!</span><span class="p">(</span><span class="s">"Created {} nodes"</span><span class="p">,</span> <span class="n">result</span><span class="py">.nodes</span><span class="nf">.len</span><span class="p">());</span>
+    
+    <span class="c1">// Pattern matching</span>
+    <span class="k">let</span> <span class="n">result</span> <span class="o">=</span> <span class="n">engine</span><span class="nf">.execute_query</span><span class="p">(</span>
+        <span class="s">"MATCH (p:Person) WHERE p.name = 'Alice' RETURN p"</span>
+    <span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+    
+    <span class="k">for</span> <span class="n">node</span> <span class="k">in</span> <span class="n">result</span><span class="py">.nodes</span> <span class="p">{</span>
+        <span class="nd">println!</span><span class="p">(</span><span class="s">"Found: {:?}"</span><span class="p">,</span> <span class="n">node</span><span class="p">);</span>
+    <span class="p">}</span>
+    
+    <span class="nf">Ok</span><span class="p">(())</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="integration-with-time-series">Integration with Time Series</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">orbit_shared</span><span class="p">::</span><span class="nn">graph</span><span class="p">::</span><span class="n">InMemoryGraphStorage</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">orbit_shared</span><span class="p">::</span><span class="nn">timeseries</span><span class="p">::</span><span class="n">TimeSeriesEngine</span><span class="p">;</span>
+
+<span class="nd">#[tokio::main]</span>
+<span class="k">async</span> <span class="k">fn</span> <span class="nf">main</span><span class="p">()</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="p">(),</span> <span class="nb">Box</span><span class="o">&lt;</span><span class="k">dyn</span> <span class="nn">std</span><span class="p">::</span><span class="nn">error</span><span class="p">::</span><span class="n">Error</span><span class="o">&gt;&gt;</span> <span class="p">{</span>
+    <span class="k">let</span> <span class="n">graph</span> <span class="o">=</span> <span class="nn">InMemoryGraphStorage</span><span class="p">::</span><span class="nf">new</span><span class="p">();</span>
+    <span class="k">let</span> <span class="n">ts_engine</span> <span class="o">=</span> <span class="nn">TimeSeriesEngine</span><span class="p">::</span><span class="nf">new</span><span class="p">();</span>
+    
+    <span class="c1">// Create sensor node</span>
+    <span class="k">let</span> <span class="n">sensor</span> <span class="o">=</span> <span class="n">graph</span><span class="nf">.create_node</span><span class="p">(</span>
+        <span class="nd">vec!</span><span class="p">[</span><span class="s">"Sensor"</span><span class="nf">.to_string</span><span class="p">()],</span>
+        <span class="p">[(</span><span class="s">"name"</span><span class="p">,</span> <span class="s">"temperature_01"</span><span class="p">),</span> <span class="p">(</span><span class="s">"location"</span><span class="p">,</span> <span class="s">"room_1"</span><span class="p">)]</span><span class="nf">.iter</span><span class="p">()</span><span class="nf">.cloned</span><span class="p">()</span><span class="nf">.collect</span><span class="p">()</span>
+    <span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+    
+    <span class="c1">// Link to time series</span>
+    <span class="n">ts_engine</span><span class="nf">.create_series</span><span class="p">(</span><span class="o">&amp;</span><span class="n">sensor</span><span class="py">.id</span><span class="nf">.to_string</span><span class="p">(),</span> <span class="nn">Default</span><span class="p">::</span><span class="nf">default</span><span class="p">())</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+    
+    <span class="c1">// Insert data</span>
+    <span class="n">ts_engine</span><span class="nf">.insert_point</span><span class="p">(</span>
+        <span class="o">&amp;</span><span class="n">sensor</span><span class="py">.id</span><span class="nf">.to_string</span><span class="p">(),</span>
+        <span class="nn">chrono</span><span class="p">::</span><span class="nn">Utc</span><span class="p">::</span><span class="nf">now</span><span class="p">(),</span>
+        <span class="mf">25.5</span>
+    <span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+    
+    <span class="c1">// Query combined data</span>
+    <span class="k">let</span> <span class="n">sensors</span> <span class="o">=</span> <span class="n">graph</span><span class="nf">.find_nodes_by_label</span><span class="p">(</span><span class="s">"Sensor"</span><span class="p">,</span> <span class="nb">None</span><span class="p">,</span> <span class="nb">None</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+    <span class="k">for</span> <span class="n">sensor</span> <span class="k">in</span> <span class="n">sensors</span> <span class="p">{</span>
+        <span class="k">let</span> <span class="n">data</span> <span class="o">=</span> <span class="n">ts_engine</span><span class="nf">.query_range</span><span class="p">(</span>
+            <span class="o">&amp;</span><span class="n">sensor</span><span class="py">.id</span><span class="nf">.to_string</span><span class="p">(),</span>
+            <span class="nn">chrono</span><span class="p">::</span><span class="nn">Utc</span><span class="p">::</span><span class="nf">now</span><span class="p">()</span> <span class="o">-</span> <span class="nn">chrono</span><span class="p">::</span><span class="nn">Duration</span><span class="p">::</span><span class="nf">hours</span><span class="p">(</span><span class="mi">1</span><span class="p">),</span>
+            <span class="nn">chrono</span><span class="p">::</span><span class="nn">Utc</span><span class="p">::</span><span class="nf">now</span><span class="p">()</span>
+        <span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+        <span class="nd">println!</span><span class="p">(</span><span class="s">"Sensor {}: {} data points"</span><span class="p">,</span> <span class="n">sensor</span><span class="py">.id</span><span class="p">,</span> <span class="n">data</span><span class="nf">.len</span><span class="p">());</span>
+    <span class="p">}</span>
+    
+    <span class="nf">Ok</span><span class="p">(())</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h2 id="api-reference">API Reference</h2>
+
+<h3 id="node-operations">Node Operations</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Create node</span>
+<span class="k">async</span> <span class="k">fn</span> <span class="nf">create_node</span><span class="p">(</span><span class="n">labels</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="nb">String</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">properties</span><span class="p">:</span> <span class="n">Properties</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="n">GraphNode</span><span class="o">&gt;</span>
+
+<span class="c1">// Get node by ID</span>
+<span class="k">async</span> <span class="k">fn</span> <span class="nf">get_node</span><span class="p">(</span><span class="n">node_id</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">NodeId</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="nb">Option</span><span class="o">&lt;</span><span class="n">GraphNode</span><span class="o">&gt;&gt;</span>
+
+<span class="c1">// Update node properties</span>
+<span class="k">async</span> <span class="k">fn</span> <span class="nf">update_node</span><span class="p">(</span><span class="n">node_id</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">NodeId</span><span class="p">,</span> <span class="n">properties</span><span class="p">:</span> <span class="n">Properties</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span>
+
+<span class="c1">// Delete node (and relationships)</span>
+<span class="k">async</span> <span class="k">fn</span> <span class="nf">delete_node</span><span class="p">(</span><span class="n">node_id</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">NodeId</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="nb">bool</span><span class="o">&gt;</span>
+
+<span class="c1">// Label management</span>
+<span class="k">async</span> <span class="k">fn</span> <span class="nf">add_labels</span><span class="p">(</span><span class="n">node_id</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">NodeId</span><span class="p">,</span> <span class="n">labels</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="nb">String</span><span class="o">&gt;</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span>
+<span class="k">async</span> <span class="k">fn</span> <span class="nf">remove_labels</span><span class="p">(</span><span class="n">node_id</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">NodeId</span><span class="p">,</span> <span class="n">labels</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="nb">String</span><span class="o">&gt;</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span>
+<span class="k">async</span> <span class="k">fn</span> <span class="nf">get_labels</span><span class="p">(</span><span class="n">node_id</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">NodeId</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="nb">String</span><span class="o">&gt;&gt;</span>
+</code></pre></div></div>
+
+<h3 id="relationship-operations">Relationship Operations</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Create relationship</span>
+<span class="k">async</span> <span class="k">fn</span> <span class="nf">create_relationship</span><span class="p">(</span>
+    <span class="n">start</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">NodeId</span><span class="p">,</span> 
+    <span class="n">end</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">NodeId</span><span class="p">,</span> 
+    <span class="n">rel_type</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span> 
+    <span class="n">properties</span><span class="p">:</span> <span class="n">Properties</span>
+<span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="n">GraphRelationship</span><span class="o">&gt;</span>
+
+<span class="c1">// Get relationships</span>
+<span class="k">async</span> <span class="k">fn</span> <span class="nf">get_relationships</span><span class="p">(</span>
+    <span class="n">node_id</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">NodeId</span><span class="p">,</span>
+    <span class="n">direction</span><span class="p">:</span> <span class="n">Direction</span><span class="p">,</span>
+    <span class="n">rel_types</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="nb">String</span><span class="o">&gt;&gt;</span>
+<span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="n">GraphRelationship</span><span class="o">&gt;&gt;</span>
+
+<span class="c1">// Update relationship</span>
+<span class="k">async</span> <span class="k">fn</span> <span class="nf">update_relationship</span><span class="p">(</span>
+    <span class="n">rel_id</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">RelationshipId</span><span class="p">,</span> 
+    <span class="n">properties</span><span class="p">:</span> <span class="n">Properties</span>
+<span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span>
+
+<span class="c1">// Delete relationship</span>
+<span class="k">async</span> <span class="k">fn</span> <span class="nf">delete_relationship</span><span class="p">(</span><span class="n">rel_id</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">RelationshipId</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="nb">bool</span><span class="o">&gt;</span>
+</code></pre></div></div>
+
+<h3 id="query-operations">Query Operations</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Find nodes by label</span>
+<span class="k">async</span> <span class="k">fn</span> <span class="nf">find_nodes_by_label</span><span class="p">(</span>
+    <span class="n">label</span><span class="p">:</span> <span class="o">&amp;</span><span class="nb">str</span><span class="p">,</span>
+    <span class="n">property_filters</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="n">Properties</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="n">limit</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="nb">usize</span><span class="o">&gt;</span>
+<span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="n">GraphNode</span><span class="o">&gt;&gt;</span>
+
+<span class="c1">// Count operations</span>
+<span class="k">async</span> <span class="k">fn</span> <span class="nf">count_nodes_by_label</span><span class="p">(</span><span class="n">label</span><span class="p">:</span> <span class="o">&amp;</span><span class="nb">str</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="nb">u64</span><span class="o">&gt;</span>
+<span class="k">async</span> <span class="k">fn</span> <span class="nf">count_relationships_by_type</span><span class="p">(</span><span class="n">rel_type</span><span class="p">:</span> <span class="o">&amp;</span><span class="nb">str</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="nb">u64</span><span class="o">&gt;</span>
+</code></pre></div></div>
+
+<p>This comprehensive graph database system provides the foundation for complex graph applications, from social networks to knowledge graphs, with high performance and scalability built on the Orbit actor system.</p>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/orbit-rs/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Orbit-RS Documentation</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">TuringWorks</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

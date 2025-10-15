@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Rust Coding Standards | Orbit-RS Documentation</title>
+<meta name="generator" content="Jekyll v4.4.1" />
+<meta property="og:title" content="Rust Coding Standards" />
+<meta name="author" content="TuringWorks" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<meta property="og:description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<link rel="canonical" href="https://turingworks.github.io/orbit-rs/guidelines/rust_coding_standards.html" />
+<meta property="og:url" content="https://turingworks.github.io/orbit-rs/guidelines/rust_coding_standards.html" />
+<meta property="og:site_name" content="Orbit-RS Documentation" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Rust Coding Standards" />
+<meta name="twitter:site" content="@TuringWorksAI" />
+<meta name="twitter:creator" content="@TuringWorks" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","author":{"@type":"Person","name":"TuringWorks"},"description":"The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform","headline":"Rust Coding Standards","url":"https://turingworks.github.io/orbit-rs/guidelines/rust_coding_standards.html"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/orbit-rs/assets/main.css">
+  <link rel="stylesheet" href="/orbit-rs/assets/css/custom.css"><link type="application/atom+xml" rel="alternate" href="https://turingworks.github.io/orbit-rs/feed.xml" title="Orbit-RS Documentation" /></head><body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/orbit-rs/">Orbit-RS Documentation</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/orbit-rs/">Orbit-RS Documentation</a><a class="page-link" href="/orbit-rs/project_overview.html">Orbit-RS: Comprehensive Project Overview</a><a class="page-link" href="/orbit-rs/quick_start.html">Quick Start Guide - Multi-Protocol Database Server</a><a class="page-link" href="/orbit-rs/roadmap/">Development Roadmap</a><a class="page-link" href="/orbit-rs/features/">Orbit-RS Feature Index</a><a class="page-link" href="/orbit-rs/compute-acceleration/">Hardware Acceleration Guide</a><a class="page-link" href="/orbit-rs/contributing.html">Contributing Guide</a><a class="page-link" href="/orbit-rs/overview.html">Architecture Overview</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <h1 id="rust-coding-standards">Rust Coding Standards</h1>
+
+<h2 id="0-tooling-baseline">0) Tooling Baseline</h2>
+<ul>
+  <li><strong>Edition</strong>: <code class="language-plaintext highlighter-rouge">2021</code> (or <code class="language-plaintext highlighter-rouge">2024</code> when stable across toolchain).</li>
+  <li><strong>Format</strong>: <code class="language-plaintext highlighter-rouge">rustfmt</code> (enforced in CI).</li>
+  <li><strong>Lints</strong>: <code class="language-plaintext highlighter-rouge">clippy -D warnings</code> (deny warnings).</li>
+  <li><strong>Docs</strong>: <code class="language-plaintext highlighter-rouge">cargo doc --no-deps</code> must pass; public items documented.</li>
+  <li><strong>MSRV</strong>: Pin a <strong>Minimum Supported Rust Version</strong> in CI (e.g., 1.79).</li>
+</ul>
+
+<div class="language-toml highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># rust-toolchain.toml</span>
+<span class="k">[</span><span class="n">toolchain</span><span class="k">]</span>
+<span class="n">channel</span> <span class="o">=</span><span class="w"> </span><span class="s">"1.79.0"</span>
+<span class="n">components</span> <span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s">"clippy"</span><span class="p">,</span> <span class="s">"rustfmt"</span><span class="p">]</span>
+<span class="n">profile</span> <span class="o">=</span><span class="w"> </span><span class="s">"minimal"</span>
+</code></pre></div></div>
+
+<div class="language-toml highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># .rustfmt.toml</span>
+<span class="n">edition</span> <span class="o">=</span><span class="w"> </span><span class="s">"2021"</span>
+<span class="n">use_small_heuristics</span> <span class="o">=</span><span class="w"> </span><span class="s">"Max"</span>
+<span class="n">normalize_doc_attributes</span> <span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+<span class="n">newline_style</span> <span class="o">=</span><span class="w"> </span><span class="s">"Unix"</span>
+<span class="n">group_imports</span> <span class="o">=</span><span class="w"> </span><span class="s">"StdExternalCrate"</span>
+<span class="n">imports_granularity</span> <span class="o">=</span><span class="w"> </span><span class="s">"Crate"</span>
+</code></pre></div></div>
+
+<div class="language-toml highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># clippy.toml</span>
+<span class="n">warns</span> <span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s">"clippy::pedantic"</span><span class="p">,</span> <span class="s">"clippy::nursery"</span><span class="p">]</span>
+<span class="n">allow-unwrap-in-tests</span> <span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+<span class="n">msrv</span> <span class="o">=</span><span class="w"> </span><span class="s">"1.79"</span>
+</code></pre></div></div>
+
+<p>In CI:</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>cargo <span class="nb">fmt</span> <span class="nt">--all</span> <span class="nt">--</span> <span class="nt">--check</span>
+cargo clippy <span class="nt">--all-targets</span> <span class="nt">--all-features</span> <span class="nt">--</span> <span class="nt">-D</span> warnings
+cargo <span class="nb">test</span> <span class="nt">--all-features</span>
+cargo doc <span class="nt">--no-deps</span>
+</code></pre></div></div>
+
+<hr />
+
+<h2 id="1-project-structure">1) Project Structure</h2>
+<ul>
+  <li><strong>Workspaces</strong>: Prefer workspace with clear <code class="language-plaintext highlighter-rouge">crates/</code> layout.</li>
+  <li><strong>Binary vs Library</strong>:
+    <ul>
+      <li><strong>Library crates</strong>: Never panic for recoverable errors; stable API.</li>
+      <li><strong>Binary crates</strong>: Can use <code class="language-plaintext highlighter-rouge">anyhow</code> for top-level error aggregation.</li>
+    </ul>
+  </li>
+  <li><strong>Modules</strong>: Keep files &lt; ~400 lines; split by domain not by layer.</li>
+</ul>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>repo/
+  Cargo.toml
+  crates/
+    app/        # bin: CLI/service entrypoint
+    core/       # lib: domain logic, pure Rust
+    infra/      # lib: IO adapters (DB, FS, HTTP)
+    macros/     # optional proc-macro crate
+</code></pre></div></div>
+
+<hr />
+
+<h2 id="2-naming--style">2) Naming &amp; Style</h2>
+<ul>
+  <li><strong>Crates</strong>: <code class="language-plaintext highlighter-rouge">kebab-case</code>.</li>
+  <li><strong>Modules/files</strong>: <code class="language-plaintext highlighter-rouge">snake_case</code>.</li>
+  <li><strong>Types &amp; Traits</strong>: <code class="language-plaintext highlighter-rouge">UpperCamelCase</code>.</li>
+  <li><strong>Functions/vars</strong>: <code class="language-plaintext highlighter-rouge">snake_case</code>.</li>
+  <li><strong>Constants</strong>: <code class="language-plaintext highlighter-rouge">SCREAMING_SNAKE_CASE</code>.</li>
+  <li><strong>Enum variants</strong>: <code class="language-plaintext highlighter-rouge">UpperCamelCase</code>.</li>
+  <li>Prefer <em>expressive</em> names over comments: <code class="language-plaintext highlighter-rouge">retry_backoff_ms</code> over <code class="language-plaintext highlighter-rouge">rb</code>.</li>
+</ul>
+
+<hr />
+
+<h2 id="3-error-handling">3) Error Handling</h2>
+<ul>
+  <li><strong>Library crates</strong>:
+    <ul>
+      <li>Create a typed error with <code class="language-plaintext highlighter-rouge">thiserror</code>.</li>
+      <li>Avoid <code class="language-plaintext highlighter-rouge">unwrap</code>, <code class="language-plaintext highlighter-rouge">expect</code>, and <code class="language-plaintext highlighter-rouge">panic!</code> in non-test code.</li>
+      <li>Return <code class="language-plaintext highlighter-rouge">Result&lt;T, Error&gt;</code>; attach context at boundaries.</li>
+    </ul>
+  </li>
+</ul>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">thiserror</span><span class="p">::</span><span class="n">Error</span><span class="p">;</span>
+
+<span class="nd">#[derive(Error,</span> <span class="nd">Debug)]</span>
+<span class="k">pub</span> <span class="k">enum</span> <span class="n">CoreError</span> <span class="p">{</span>
+    <span class="nd">#[error(</span><span class="s">"config missing key: {0}"</span><span class="nd">)]</span>
+    <span class="nf">MissingConfig</span><span class="p">(</span><span class="nb">String</span><span class="p">),</span>
+    <span class="nd">#[error(transparent)]</span>
+    <span class="nf">Io</span><span class="p">(</span><span class="nd">#[from]</span> <span class="nn">std</span><span class="p">::</span><span class="nn">io</span><span class="p">::</span><span class="n">Error</span><span class="p">),</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<ul>
+  <li><strong>Binary crates</strong>:
+    <ul>
+      <li><code class="language-plaintext highlighter-rouge">anyhow::Result</code> at <code class="language-plaintext highlighter-rouge">main()</code> boundary; use <code class="language-plaintext highlighter-rouge">.context("...")</code>.</li>
+    </ul>
+  </li>
+</ul>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">fn</span> <span class="nf">main</span><span class="p">()</span> <span class="k">-&gt;</span> <span class="nn">anyhow</span><span class="p">::</span><span class="nb">Result</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span> <span class="p">{</span>
+    <span class="k">let</span> <span class="n">cfg</span> <span class="o">=</span> <span class="nf">load_config</span><span class="p">()</span><span class="nf">.context</span><span class="p">(</span><span class="s">"loading config"</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+    <span class="nf">run</span><span class="p">(</span><span class="n">cfg</span><span class="p">)</span><span class="nf">.context</span><span class="p">(</span><span class="s">"running service"</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+    <span class="nf">Ok</span><span class="p">(())</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<ul>
+  <li><strong>Mapping</strong>: Convert external errors at the <strong>infrastructure boundary</strong>; keep core errors domain-specific.</li>
+</ul>
+
+<hr />
+
+<h2 id="4-panics--unwraps">4) Panics &amp; Unwraps</h2>
+<ul>
+  <li><strong>Allowed</strong>:
+    <ul>
+      <li>In tests and examples.</li>
+      <li>For <strong>truly unrecoverable invariants</strong> (document why).</li>
+    </ul>
+  </li>
+  <li><strong>Not allowed</strong>:
+    <ul>
+      <li>In library public surfaces for recoverable situations.</li>
+    </ul>
+  </li>
+  <li>Prefer <code class="language-plaintext highlighter-rouge">expect("why this cannot fail")</code> with a <em>clear</em> message if necessary.</li>
+</ul>
+
+<hr />
+
+<h2 id="5-concurrency--async">5) Concurrency &amp; Async</h2>
+<ul>
+  <li><strong>Runtime</strong>: Prefer <code class="language-plaintext highlighter-rouge">tokio</code> for async; one runtime per process.</li>
+  <li><strong>Traits</strong>: Avoid blocking calls in async contexts; use <code class="language-plaintext highlighter-rouge">spawn_blocking</code> where needed.</li>
+  <li><strong>Synchronization</strong>: Prefer channels over shared locks.</li>
+  <li><strong>Send/Sync</strong>: Mark trait objects <code class="language-plaintext highlighter-rouge">dyn Trait + Send + Sync</code> where cross-thread.</li>
+</ul>
+
+<hr />
+
+<h2 id="6-api-design">6) API Design</h2>
+<ul>
+  <li><strong>Traits</strong>: Define by capability. Keep small, cohesive method sets.</li>
+  <li><strong>Generics</strong>: Constrain with trait bounds in the where-clause for readability.</li>
+  <li><strong>Newtypes</strong>: Use newtypes for units/IDs to avoid parameter mixups.</li>
+  <li><strong>Builders</strong>: For structs with many optional fields, prefer the builder pattern.</li>
+  <li><strong>Feature Flags</strong>: Keep additive and orthogonal; avoid feature coupling.</li>
+</ul>
+
+<hr />
+
+<h2 id="7-logging-tracing--metrics">7) Logging, Tracing &amp; Metrics</h2>
+<ul>
+  <li><strong>Logging</strong>: Use <code class="language-plaintext highlighter-rouge">tracing</code> with <code class="language-plaintext highlighter-rouge">tracing-subscriber</code>.</li>
+  <li><strong>Structure</strong>: Prefer structured fields over string interpolation.</li>
+  <li><strong>Levels</strong>: <code class="language-plaintext highlighter-rouge">error</code>, <code class="language-plaintext highlighter-rouge">warn</code>, <code class="language-plaintext highlighter-rouge">info</code> for ops; <code class="language-plaintext highlighter-rouge">debug</code>, <code class="language-plaintext highlighter-rouge">trace</code> for dev.</li>
+  <li><strong>Spans</strong>: Wrap request/Job lifecycles in spans.</li>
+</ul>
+
+<hr />
+
+<h2 id="8-data--serialization">8) Data &amp; Serialization</h2>
+<ul>
+  <li><strong>Serde</strong>: Derive in DTO crates only; domain types should be IO-agnostic.</li>
+  <li><strong>Time</strong>: Use UTC; consistent library (<code class="language-plaintext highlighter-rouge">time</code> or <code class="language-plaintext highlighter-rouge">chrono</code>).</li>
+  <li><strong>IDs</strong>: Use <code class="language-plaintext highlighter-rouge">uuid</code> or <code class="language-plaintext highlighter-rouge">ulid</code>; validate externally.</li>
+</ul>
+
+<hr />
+
+<h2 id="9-unsafe--performance">9) Unsafe &amp; Performance</h2>
+<ul>
+  <li><strong>Unsafe</strong>: Disallow by default; if required, isolate in <code class="language-plaintext highlighter-rouge">unsafe_</code> module with comments and tests.</li>
+  <li><strong>Allocations</strong>: Prefer borrowing (<code class="language-plaintext highlighter-rouge">&amp;str</code>) over owned (<code class="language-plaintext highlighter-rouge">String</code>) when possible.</li>
+  <li><strong>Benchmark</strong>: Use <code class="language-plaintext highlighter-rouge">criterion</code> before micro-optimizations.</li>
+</ul>
+
+<hr />
+
+<h2 id="10-testing-strategy">10) Testing Strategy</h2>
+<ul>
+  <li><strong>Unit tests</strong> colocated with modules.</li>
+  <li><strong>Integration tests</strong> in <code class="language-plaintext highlighter-rouge">tests/</code> using public APIs.</li>
+  <li><strong>Property tests</strong> with <code class="language-plaintext highlighter-rouge">proptest</code> for core logic.</li>
+  <li><strong>Fixtures</strong>: Builder patterns for test data.</li>
+</ul>
+
+<hr />
+
+<h2 id="11-security--secrets">11) Security &amp; Secrets</h2>
+<ul>
+  <li>No secrets in code. Use env vars or secret managers.</li>
+  <li>Validate all external inputs.</li>
+  <li>Use <code class="language-plaintext highlighter-rouge">Zeroize</code> for sensitive in-memory data.</li>
+</ul>
+
+<hr />
+
+<h2 id="12-dependencies--versions">12) Dependencies &amp; Versions</h2>
+<ul>
+  <li>Prefer well-maintained crates.</li>
+  <li>Pin direct dependencies carefully; no wildcards.</li>
+  <li>Audit regularly with <code class="language-plaintext highlighter-rouge">cargo audit</code> and <code class="language-plaintext highlighter-rouge">cargo deny</code>.</li>
+</ul>
+
+<hr />
+
+<h2 id="13-documentation">13) Documentation</h2>
+<ul>
+  <li>Crate-level <code class="language-plaintext highlighter-rouge">//!</code> docs with purpose and examples.</li>
+  <li>Public items must have <code class="language-plaintext highlighter-rouge">///</code> comments.</li>
+  <li>Runnable examples in <code class="language-plaintext highlighter-rouge">examples/</code>.</li>
+</ul>
+
+<hr />
+
+<h2 id="14-cli--services-conventions">14) CLI &amp; Services Conventions</h2>
+<ul>
+  <li><strong>CLI</strong>: Use <code class="language-plaintext highlighter-rouge">clap</code> derive.</li>
+  <li><strong>Services</strong>:
+    <ul>
+      <li>Graceful shutdown.</li>
+      <li>Health/ready endpoints.</li>
+      <li>Config layering (env + file + defaults).</li>
+    </ul>
+  </li>
+</ul>
+
+<hr />
+
+<h2 id="15-code-review-checklist">15) Code Review Checklist</h2>
+<ul>
+  <li>No unnecessary clones, unwraps, or panics.</li>
+  <li>Errors contextualized and typed.</li>
+  <li>Tracing added at boundaries/hot paths.</li>
+  <li>Tests cover happy path and edge cases.</li>
+  <li>Docs and examples updated.</li>
+</ul>
+
+<hr />
+
+<h2 id="16-starter-cargotoml">16) Starter Cargo.toml</h2>
+<ul>
+  <li>Library crates use <code class="language-plaintext highlighter-rouge">thiserror</code>; binaries may use <code class="language-plaintext highlighter-rouge">anyhow</code> and <code class="language-plaintext highlighter-rouge">clap</code>.</li>
+</ul>
+
+<hr />
+
+<h2 id="17-example-patterns">17) Example Patterns</h2>
+<ul>
+  <li>DTO ↔ domain adapters with <code class="language-plaintext highlighter-rouge">TryFrom</code>.</li>
+  <li>Builder patterns for configs.</li>
+</ul>
+
+<hr />
+
+<h2 id="18-migration-to-2024-edition">18) Migration to 2024 Edition</h2>
+<ul>
+  <li>Run <code class="language-plaintext highlighter-rouge">cargo fix --edition</code>.</li>
+  <li>Audit async trait patterns.</li>
+</ul>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/orbit-rs/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Orbit-RS Documentation</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">TuringWorks</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

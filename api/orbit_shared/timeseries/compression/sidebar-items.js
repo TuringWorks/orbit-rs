@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["create_compressor"],"struct":["DeltaCompressor","DoubleDeltaCompressor","GorillaCompressor"],"trait":["TimeSeriesCompressor"]};

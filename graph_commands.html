@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Orbit Graph Database Commands | Orbit-RS Documentation</title>
+<meta name="generator" content="Jekyll v4.4.1" />
+<meta property="og:title" content="Orbit Graph Database Commands" />
+<meta name="author" content="TuringWorks" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<meta property="og:description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<link rel="canonical" href="https://turingworks.github.io/orbit-rs/graph_commands.html" />
+<meta property="og:url" content="https://turingworks.github.io/orbit-rs/graph_commands.html" />
+<meta property="og:site_name" content="Orbit-RS Documentation" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Orbit Graph Database Commands" />
+<meta name="twitter:site" content="@TuringWorksAI" />
+<meta name="twitter:creator" content="@TuringWorks" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","author":{"@type":"Person","name":"TuringWorks"},"description":"The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform","headline":"Orbit Graph Database Commands","url":"https://turingworks.github.io/orbit-rs/graph_commands.html"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/orbit-rs/assets/main.css">
+  <link rel="stylesheet" href="/orbit-rs/assets/css/custom.css"><link type="application/atom+xml" rel="alternate" href="https://turingworks.github.io/orbit-rs/feed.xml" title="Orbit-RS Documentation" /></head><body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/orbit-rs/">Orbit-RS Documentation</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/orbit-rs/">Orbit-RS Documentation</a><a class="page-link" href="/orbit-rs/project_overview.html">Orbit-RS: Comprehensive Project Overview</a><a class="page-link" href="/orbit-rs/quick_start.html">Quick Start Guide - Multi-Protocol Database Server</a><a class="page-link" href="/orbit-rs/roadmap/">Development Roadmap</a><a class="page-link" href="/orbit-rs/features/">Orbit-RS Feature Index</a><a class="page-link" href="/orbit-rs/compute-acceleration/">Hardware Acceleration Guide</a><a class="page-link" href="/orbit-rs/contributing.html">Contributing Guide</a><a class="page-link" href="/orbit-rs/overview.html">Architecture Overview</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <h1 id="orbit-graph-database-commands">Orbit Graph Database Commands</h1>
+
+<h2 id="table-of-contents">Table of Contents</h2>
+
+<ul>
+  <li><a href="#overview">Overview</a></li>
+  <li><a href="#primary-graph-commands">Primary Graph Commands</a></li>
+  <li><a href="#diagnostics-and-profiling">Diagnostics and Profiling</a></li>
+  <li><a href="#configuration-management">Configuration Management</a></li>
+  <li><a href="#cypher-query-language">Cypher Query Language</a></li>
+  <li><a href="#graph-data-model">Graph Data Model</a></li>
+  <li><a href="#examples-and-use-cases">Examples and Use Cases</a></li>
+  <li><a href="#performance-considerations">Performance Considerations</a></li>
+  <li><a href="#migration-from-redisgraph">Migration from RedisGraph</a></li>
+</ul>
+
+<h2 id="overview">Overview</h2>
+
+<p>Orbit’s graph database implementation provides:</p>
+
+<ul>
+  <li><strong>RedisGraph Compatibility</strong>: Drop-in replacement for RedisGraph commands</li>
+  <li><strong>Cypher Query Language</strong>: Full support for Cypher syntax and semantics</li>
+  <li><strong>High Performance</strong>: Built on Orbit’s distributed actor system</li>
+  <li><strong>Horizontal Scalability</strong>: Distributed graph processing across cluster nodes</li>
+  <li><strong>Advanced Analytics</strong>: Query profiling, execution plans, and performance metrics</li>
+  <li><strong>Flexible Schema</strong>: Schema-free graph model with dynamic properties</li>
+  <li><strong>ACID Transactions</strong>: Transactional consistency for graph operations</li>
+</ul>
+
+<h2 id="primary-graph-commands">Primary Graph Commands</h2>
+
+<h3 id="graphquery">GRAPH.QUERY</h3>
+
+<p>Executes a read/write Cypher query against a named graph.</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>GRAPH.QUERY &lt;graph_name&gt; &lt;query&gt;
+</code></pre></div></div>
+
+<p><strong>Parameters:</strong></p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">graph_name</code>: Name of the graph to query</li>
+  <li><code class="language-plaintext highlighter-rouge">query</code>: Cypher query string</li>
+</ul>
+
+<p><strong>Returns:</strong> Array containing:</p>
+<ol>
+  <li>Column headers</li>
+  <li>Result rows</li>
+  <li>Query statistics</li>
+</ol>
+
+<p><strong>Examples:</strong></p>
+
+<pre><code class="language-redis">
+# Create nodes
+GRAPH.QUERY social "CREATE (alice:Person {name: 'Alice', age: 30})"
+
+# Create relationships
+GRAPH.QUERY social "MATCH (a:Person {name: 'Alice'}) CREATE (a)-[:KNOWS]-&gt;(b:Person {name: 'Bob'})"
+
+# Query with results
+GRAPH.QUERY social "MATCH (p:Person) RETURN p.name, p.age"
+</code></pre>
+
+<h3 id="graphro_query">GRAPH.RO_QUERY</h3>
+
+<p>Executes a read-only Cypher query against a named graph.</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>GRAPH.RO_QUERY &lt;graph_name&gt; &lt;query&gt;
+</code></pre></div></div>
+
+<p><strong>Parameters:</strong></p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">graph_name</code>: Name of the graph to query</li>
+  <li><code class="language-plaintext highlighter-rouge">query</code>: Read-only Cypher query string</li>
+</ul>
+
+<p><strong>Returns:</strong> Same format as GRAPH.QUERY</p>
+
+<p><strong>Examples:</strong></p>
+
+<pre><code class="language-redis">
+# Read-only node matching
+GRAPH.RO_QUERY social "MATCH (p:Person) RETURN p.name ORDER BY p.age"
+
+# Read-only aggregation
+GRAPH.RO_QUERY social "MATCH (p:Person) RETURN avg(p.age) AS average_age"
+
+# This will fail - write operations not allowed
+GRAPH.RO_QUERY social "CREATE (n:Person {name: 'Charlie'})"
+</code></pre>
+
+<h3 id="graphdelete">GRAPH.DELETE</h3>
+
+<p>Deletes the specified graph and all its entities (nodes and edges).</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>GRAPH.DELETE &lt;graph_name&gt;
+</code></pre></div></div>
+
+<p><strong>Parameters:</strong></p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">graph_name</code>: Name of the graph to delete</li>
+</ul>
+
+<p><strong>Returns:</strong> “OK” on success</p>
+
+<p><strong>Example:</strong></p>
+
+<pre><code class="language-redis">GRAPH.DELETE social
+</code></pre>
+
+<h3 id="graphlist">GRAPH.LIST</h3>
+
+<p>Returns a list of all the graph keys managed by the graph database.</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>GRAPH.LIST
+</code></pre></div></div>
+
+<p><strong>Returns:</strong> Array of graph names</p>
+
+<p><strong>Example:</strong></p>
+
+<pre><code class="language-redis">GRAPH.LIST
+
+# Returns: ["social", "recommendation", "fraud_detection"]
+</code></pre>
+
+<h2 id="diagnostics-and-profiling">Diagnostics and Profiling</h2>
+
+<h3 id="graphexplain">GRAPH.EXPLAIN</h3>
+
+<p>Displays the query execution plan for a Cypher query without actually running it.</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>GRAPH.EXPLAIN &lt;graph_name&gt; &lt;query&gt;
+</code></pre></div></div>
+
+<p><strong>Parameters:</strong></p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">graph_name</code>: Name of the graph</li>
+  <li><code class="language-plaintext highlighter-rouge">query</code>: Cypher query to explain</li>
+</ul>
+
+<p><strong>Returns:</strong> Array of execution plan steps with cost estimates</p>
+
+<p><strong>Example:</strong></p>
+
+<pre><code class="language-redis">GRAPH.EXPLAIN social "MATCH (p:Person)-[:KNOWS]-&gt;(f:Person) WHERE p.age &gt; 25 RETURN f.name"
+
+# Returns execution plan:
+# 1: NodeScan - Scan nodes matching pattern
+# 2: Filter - Apply WHERE clause filter  
+# 3: Projection - Return f.name
+# Total estimated cost: 15.00
+</code></pre>
+
+<h3 id="graphprofile">GRAPH.PROFILE</h3>
+
+<p>Runs a query and returns the execution plan, augmented with detailed performance metrics for each operation.</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>GRAPH.PROFILE &lt;graph_name&gt; &lt;query&gt;
+</code></pre></div></div>
+
+<p><strong>Parameters:</strong></p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">graph_name</code>: Name of the graph</li>
+  <li><code class="language-plaintext highlighter-rouge">query</code>: Cypher query to profile</li>
+</ul>
+
+<p><strong>Returns:</strong> Array containing:</p>
+<ol>
+  <li>Query results (header)</li>
+  <li>Query results (rows)</li>
+  <li>Execution plan with actual performance metrics</li>
+</ol>
+
+<p><strong>Example:</strong></p>
+
+<pre><code class="language-redis">GRAPH.PROFILE social "MATCH (p:Person) WHERE p.age &gt; 30 RETURN p.name"
+
+# Returns:
+# [header], [rows], [
+#   "1: NodeScan - Records produced: 150, Execution time: 2 ms",
+#   "2: Filter - Records produced: 45, Execution time: 1 ms", 
+#   "3: Projection - Records produced: 45, Execution time: 0 ms",
+#   "Total execution time: 3 ms"
+# ]
+</code></pre>
+
+<h3 id="graphslowlog">GRAPH.SLOWLOG</h3>
+
+<p>Returns the 10 slowest queries that have been executed against a specific graph.</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>GRAPH.SLOWLOG &lt;graph_name&gt;
+</code></pre></div></div>
+
+<p><strong>Parameters:</strong></p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">graph_name</code>: Name of the graph</li>
+</ul>
+
+<p><strong>Returns:</strong> Array of slow query entries, each containing:</p>
+<ul>
+  <li>Entry number</li>
+  <li>Timestamp</li>
+  <li>Execution time (milliseconds)</li>
+  <li>Query string</li>
+</ul>
+
+<p><strong>Example:</strong></p>
+
+<pre><code class="language-redis">GRAPH.SLOWLOG social
+
+# Returns:
+# [1, 1609459200000, 1500, "MATCH (p:Person)-[:KNOWS*1..5]-&gt;(f) RETURN count(f)"]
+# [2, 1609459180000, 850, "MATCH (p:Person) WHERE p.name =~ '.*Smith.*' RETURN p"]
+</code></pre>
+
+<h2 id="configuration-management">Configuration Management</h2>
+
+<h3 id="graphconfig-get">GRAPH.CONFIG GET</h3>
+
+<p>Retrieves the value of a specific graph database configuration parameter.</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>GRAPH.CONFIG GET &lt;parameter&gt;
+</code></pre></div></div>
+
+<p><strong>Parameters:</strong></p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">parameter</code>: Configuration parameter name</li>
+</ul>
+
+<p><strong>Supported Parameters:</strong></p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">QUERY_TIMEOUT</code>: Query execution timeout in milliseconds</li>
+  <li><code class="language-plaintext highlighter-rouge">MAX_NODES</code>: Maximum number of nodes per graph</li>
+  <li><code class="language-plaintext highlighter-rouge">MAX_RELATIONSHIPS</code>: Maximum number of relationships per graph</li>
+  <li><code class="language-plaintext highlighter-rouge">PROFILING_ENABLED</code>: Whether query profiling is enabled</li>
+  <li><code class="language-plaintext highlighter-rouge">SLOW_QUERY_THRESHOLD</code>: Slow query threshold in milliseconds</li>
+  <li><code class="language-plaintext highlighter-rouge">MEMORY_LIMIT</code>: Memory limit for graph operations in bytes</li>
+</ul>
+
+<p><strong>Example:</strong></p>
+
+<pre><code class="language-redis">GRAPH.CONFIG GET QUERY_TIMEOUT
+
+# Returns: "30000"
+
+GRAPH.CONFIG GET PROFILING_ENABLED  
+
+# Returns: "false"
+</code></pre>
+
+<h3 id="graphconfig-set">GRAPH.CONFIG SET</h3>
+
+<p>Changes the value of a graph database configuration parameter.</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>GRAPH.CONFIG SET &lt;parameter&gt; &lt;value&gt;
+</code></pre></div></div>
+
+<p><strong>Parameters:</strong></p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">parameter</code>: Configuration parameter name</li>
+  <li><code class="language-plaintext highlighter-rouge">value</code>: New parameter value</li>
+</ul>
+
+<p><strong>Example:</strong></p>
+
+<pre><code class="language-redis">GRAPH.CONFIG SET QUERY_TIMEOUT 60000
+
+# Returns: "OK"
+
+GRAPH.CONFIG SET PROFILING_ENABLED true
+
+# Returns: "OK"
+</code></pre>
+
+<h2 id="cypher-query-language">Cypher Query Language</h2>
+
+<p>Orbit’s graph database supports a comprehensive subset of the Cypher query language:</p>
+
+<h3 id="node-patterns">Node Patterns</h3>
+
+<div class="language-cypher highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="o">--</span> <span class="n">Simple</span> <span class="nf">node</span><span class="w">
+</span><span class="ss">(</span><span class="n">n</span><span class="ss">)</span>
+
+<span class="o">--</span> <span class="n">Node</span> <span class="k">with</span> <span class="n">label</span><span class="w">
+</span><span class="ss">(</span><span class="py">n:</span><span class="n">Person</span><span class="ss">)</span>
+
+<span class="o">--</span> <span class="n">Node</span> <span class="k">with</span> <span class="n">properties</span><span class="w">
+</span><span class="ss">(</span><span class="py">n:</span><span class="n">Person</span> <span class="ss">{</span><span class="py">name:</span> <span class="s1">'Alice'</span><span class="ss">,</span> <span class="nl">age</span><span class="dl">:</span><span class="w"> </span><span class="m">30</span><span class="ss">})</span>
+
+<span class="o">--</span> <span class="n">Node</span> <span class="k">with</span> <span class="n">variable</span><span class="ss">,</span> <span class="n">label</span><span class="ss">,</span> <span class="ow">and</span> <span class="n">properties</span><span class="w">
+</span><span class="ss">(</span><span class="py">alice:</span><span class="n">Person</span> <span class="ss">{</span><span class="py">name:</span> <span class="s1">'Alice'</span><span class="ss">})</span>
+</code></pre></div></div>
+
+<h3 id="relationship-patterns">Relationship Patterns</h3>
+
+<div class="language-cypher highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="o">--</span> <span class="n">Undirected</span> <span class="nf">relationship</span><span class="w">
+</span><span class="ss">(</span><span class="n">a</span><span class="ss">)</span><span class="o">-</span><span class="ss">[</span><span class="n">r</span><span class="ss">]</span><span class="o">-</span><span class="ss">(</span><span class="n">b</span><span class="ss">)</span>
+
+<span class="o">--</span> <span class="n">Directed</span> <span class="nf">relationship</span><span class="w">
+</span><span class="ss">(</span><span class="n">a</span><span class="ss">)</span><span class="o">-</span><span class="ss">[</span><span class="n">r</span><span class="ss">]</span><span class="o">-&gt;</span><span class="ss">(</span><span class="n">b</span><span class="ss">)</span>
+
+<span class="o">--</span> <span class="n">Relationship</span> <span class="k">with</span> <span class="nf">type</span><span class="w">
+</span><span class="ss">(</span><span class="n">a</span><span class="ss">)</span><span class="o">-</span><span class="ss">[</span><span class="py">r:</span><span class="n">KNOWS</span><span class="ss">]</span><span class="o">-&gt;</span><span class="ss">(</span><span class="n">b</span><span class="ss">)</span>
+
+<span class="o">--</span> <span class="n">Relationship</span> <span class="k">with</span> <span class="n">properties</span><span class="w">
+</span><span class="ss">(</span><span class="n">a</span><span class="ss">)</span><span class="o">-</span><span class="ss">[</span><span class="py">r:</span><span class="n">KNOWS</span> <span class="ss">{</span><span class="nl">since</span><span class="dl">:</span><span class="w"> </span><span class="m">2020</span><span class="ss">}]</span><span class="o">-&gt;</span><span class="ss">(</span><span class="n">b</span><span class="ss">)</span>
+</code></pre></div></div>
+
+<h3 id="supported-clauses">Supported Clauses</h3>
+
+<ul>
+  <li><strong>CREATE</strong>: Create nodes and relationships</li>
+  <li><strong>MATCH</strong>: Pattern matching</li>
+  <li><strong>WHERE</strong>: Filtering conditions</li>
+  <li><strong>RETURN</strong>: Result projection</li>
+  <li><strong>SET</strong>: Update properties</li>
+  <li><strong>DELETE</strong>: Remove nodes/relationships</li>
+  <li><strong>MERGE</strong>: Create or match</li>
+</ul>
+
+<h3 id="supported-functions">Supported Functions</h3>
+
+<ul>
+  <li><strong>count()</strong>: Count aggregation</li>
+  <li><strong>avg()</strong>: Average aggregation</li>
+  <li><strong>sum()</strong>: Sum aggregation</li>
+  <li><strong>min()</strong>: Minimum value</li>
+  <li><strong>max()</strong>: Maximum value</li>
+</ul>
+
+<h2 id="graph-data-model">Graph Data Model</h2>
+
+<h3 id="nodes">Nodes</h3>
+
+<p>Nodes represent entities in the graph:</p>
+
+<div class="language-cypher highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="o">--</span> <span class="k">Create</span> <span class="n">a</span> <span class="n">person</span> <span class="n">node</span>
+<span class="k">CREATE</span><span class="w"> </span><span class="ss">(</span><span class="py">p:</span><span class="n">Person</span> <span class="ss">{</span>
+  <span class="py">name:</span> <span class="s1">'Alice Smith'</span><span class="ss">,</span>
+  <span class="nl">age</span><span class="dl">:</span><span class="w"> </span><span class="m">30</span><span class="ss">,</span>
+  <span class="py">email:</span> <span class="s1">'alice@example.com'</span><span class="ss">,</span>
+  <span class="py">active:</span> <span class="k">true</span>
+<span class="ss">})</span>
+</code></pre></div></div>
+
+<p><strong>Properties:</strong></p>
+<ul>
+  <li>Nodes can have multiple labels</li>
+  <li>Properties are key-value pairs</li>
+  <li>Supported types: string, integer, float, boolean</li>
+  <li>Properties are dynamically typed</li>
+</ul>
+
+<h3 id="relationships">Relationships</h3>
+
+<p>Relationships connect nodes:</p>
+
+<div class="language-cypher highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="o">--</span> <span class="k">Create</span> <span class="n">a</span> <span class="n">relationship</span>
+<span class="k">MATCH</span><span class="w"> </span><span class="ss">(</span><span class="py">a:</span><span class="n">Person</span> <span class="ss">{</span><span class="py">name:</span> <span class="s1">'Alice'</span><span class="ss">}),</span> <span class="ss">(</span><span class="py">b:</span><span class="n">Person</span> <span class="ss">{</span><span class="py">name:</span> <span class="s1">'Bob'</span><span class="ss">})</span>
+<span class="k">CREATE</span><span class="w"> </span><span class="ss">(</span><span class="n">a</span><span class="ss">)</span><span class="o">-</span><span class="ss">[</span><span class="nc">:FRIENDS</span> <span class="ss">{</span><span class="nl">since</span><span class="dl">:</span><span class="w"> </span><span class="m">2018</span><span class="ss">,</span> <span class="nl">strength</span><span class="dl">:</span><span class="w"> </span><span class="m">0.8</span><span class="ss">}]</span><span class="o">-&gt;</span><span class="ss">(</span><span class="n">b</span><span class="ss">)</span>
+</code></pre></div></div>
+
+<p><strong>Properties:</strong></p>
+<ul>
+  <li>Relationships have a type (e.g., FRIENDS, WORKS_FOR)</li>
+  <li>Relationships are directed</li>
+  <li>Can have properties like nodes</li>
+  <li>Connect exactly two nodes</li>
+</ul>
+
+<h3 id="labels-and-types">Labels and Types</h3>
+
+<div class="language-cypher highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="o">--</span> <span class="n">Multiple</span> <span class="n">labels</span> <span class="k">on</span> <span class="n">nodes</span>
+<span class="k">CREATE</span><span class="w"> </span><span class="ss">(</span><span class="py">p:Person:Employee:</span><span class="n">Manager</span> <span class="ss">{</span><span class="py">name:</span> <span class="s1">'Alice'</span><span class="ss">})</span>
+
+<span class="o">--</span> <span class="n">Relationship</span> <span class="n">types</span> <span class="n">are</span> <span class="n">always</span> <span class="n">singular</span>
+<span class="k">CREATE</span><span class="w"> </span><span class="ss">(</span><span class="n">a</span><span class="ss">)</span><span class="o">-</span><span class="ss">[</span><span class="nc">:WORKS_FOR</span><span class="ss">]</span><span class="o">-&gt;</span><span class="ss">(</span><span class="n">company</span><span class="ss">)</span>
+<span class="k">CREATE</span><span class="w"> </span><span class="ss">(</span><span class="n">a</span><span class="ss">)</span><span class="o">-</span><span class="ss">[</span><span class="nc">:MANAGES</span><span class="ss">]</span><span class="o">-&gt;</span><span class="ss">(</span><span class="n">team</span><span class="ss">)</span>
+</code></pre></div></div>
+
+<h2 id="examples-and-use-cases">Examples and Use Cases</h2>
+
+<h3 id="social-network">Social Network</h3>
+
+<div class="language-cypher highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="o">--</span> <span class="k">Create</span> <span class="n">social</span> <span class="n">network</span>
+<span class="k">CREATE</span><span class="w"> </span><span class="ss">(</span><span class="py">alice:</span><span class="n">Person</span> <span class="ss">{</span><span class="py">name:</span> <span class="s1">'Alice'</span><span class="ss">,</span> <span class="nl">age</span><span class="dl">:</span><span class="w"> </span><span class="m">28</span><span class="ss">,</span> <span class="py">location:</span> <span class="s1">'NYC'</span><span class="ss">})</span>
+<span class="k">CREATE</span><span class="w"> </span><span class="ss">(</span><span class="py">bob:</span><span class="n">Person</span> <span class="ss">{</span><span class="py">name:</span> <span class="s1">'Bob'</span><span class="ss">,</span> <span class="nl">age</span><span class="dl">:</span><span class="w"> </span><span class="m">32</span><span class="ss">,</span> <span class="py">location:</span> <span class="s1">'LA'</span><span class="ss">})</span>
+<span class="k">CREATE</span><span class="w"> </span><span class="ss">(</span><span class="py">carol:</span><span class="n">Person</span> <span class="ss">{</span><span class="py">name:</span> <span class="s1">'Carol'</span><span class="ss">,</span> <span class="nl">age</span><span class="dl">:</span><span class="w"> </span><span class="m">25</span><span class="ss">,</span> <span class="py">location:</span> <span class="s1">'NYC'</span><span class="ss">})</span>
+
+<span class="o">--</span> <span class="k">Create</span> <span class="n">friendships</span>
+<span class="k">CREATE</span><span class="w"> </span><span class="ss">(</span><span class="n">alice</span><span class="ss">)</span><span class="o">-</span><span class="ss">[</span><span class="nc">:FRIENDS</span> <span class="ss">{</span><span class="nl">since</span><span class="dl">:</span><span class="w"> </span><span class="m">2020</span><span class="ss">}]</span><span class="o">-&gt;</span><span class="ss">(</span><span class="n">bob</span><span class="ss">)</span>
+<span class="k">CREATE</span><span class="w"> </span><span class="ss">(</span><span class="n">alice</span><span class="ss">)</span><span class="o">-</span><span class="ss">[</span><span class="nc">:FRIENDS</span> <span class="ss">{</span><span class="nl">since</span><span class="dl">:</span><span class="w"> </span><span class="m">2019</span><span class="ss">}]</span><span class="o">-&gt;</span><span class="ss">(</span><span class="n">carol</span><span class="ss">)</span>
+<span class="k">CREATE</span><span class="w"> </span><span class="ss">(</span><span class="n">bob</span><span class="ss">)</span><span class="o">-</span><span class="ss">[</span><span class="nc">:FRIENDS</span> <span class="ss">{</span><span class="nl">since</span><span class="dl">:</span><span class="w"> </span><span class="m">2021</span><span class="ss">}]</span><span class="o">-&gt;</span><span class="ss">(</span><span class="n">carol</span><span class="ss">)</span>
+
+<span class="o">--</span> <span class="n">Find</span> <span class="n">mutual</span> <span class="n">friends</span>
+<span class="k">MATCH</span><span class="w"> </span><span class="ss">(</span><span class="py">a:</span><span class="n">Person</span> <span class="ss">{</span><span class="py">name:</span> <span class="s1">'Alice'</span><span class="ss">})</span><span class="o">-</span><span class="ss">[</span><span class="nc">:FRIENDS</span><span class="ss">]</span><span class="o">-&gt;</span><span class="ss">(</span><span class="n">mutual</span><span class="ss">)</span><span class="o">&lt;-</span><span class="ss">[</span><span class="nc">:FRIENDS</span><span class="ss">]</span><span class="o">-</span><span class="ss">(</span><span class="py">other:</span><span class="n">Person</span><span class="ss">)</span>
+<span class="k">WHERE</span> <span class="n">other.name</span> <span class="o">&lt;&gt;</span> <span class="s1">'Alice'</span>
+<span class="k">RETURN</span> <span class="n">other.name</span> <span class="k">AS</span> <span class="n">mutual_friend</span><span class="ss">,</span> <span class="n">mutual.name</span> <span class="k">AS</span> <span class="n">through</span>
+
+<span class="o">--</span> <span class="n">Find</span> <span class="n">people</span> <span class="ow">in</span> <span class="n">the</span> <span class="n">same</span> <span class="n">city</span>
+<span class="k">MATCH</span><span class="w"> </span><span class="ss">(</span><span class="py">p1:</span><span class="n">Person</span><span class="ss">)</span><span class="o">-</span><span class="ss">[</span><span class="nc">:FRIENDS</span><span class="ss">]</span><span class="o">-</span><span class="ss">(</span><span class="py">p2:</span><span class="n">Person</span><span class="ss">)</span>
+<span class="k">WHERE</span> <span class="n">p1.location</span> <span class="o">=</span> <span class="n">p2.location</span>
+<span class="k">RETURN</span> <span class="n">p1.name</span><span class="ss">,</span> <span class="n">p2.name</span><span class="ss">,</span> <span class="n">p1.location</span>
+</code></pre></div></div>
+
+<h3 id="recommendation-engine">Recommendation Engine</h3>
+
+<div class="language-cypher highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="o">--</span> <span class="k">Create</span> <span class="n">product</span> <span class="n">catalog</span>
+<span class="k">CREATE</span><span class="w"> </span><span class="ss">(</span><span class="py">laptop:</span><span class="n">Product</span> <span class="ss">{</span><span class="py">name:</span> <span class="s1">'Laptop Pro'</span><span class="ss">,</span> <span class="py">category:</span> <span class="s1">'Electronics'</span><span class="ss">,</span> <span class="nl">price</span><span class="dl">:</span><span class="w"> </span><span class="m">1299</span><span class="ss">})</span>
+<span class="k">CREATE</span><span class="w"> </span><span class="ss">(</span><span class="py">mouse:</span><span class="n">Product</span> <span class="ss">{</span><span class="py">name:</span> <span class="s1">'Wireless Mouse'</span><span class="ss">,</span> <span class="py">category:</span> <span class="s1">'Electronics'</span><span class="ss">,</span> <span class="nl">price</span><span class="dl">:</span><span class="w"> </span><span class="m">49</span><span class="ss">})</span>
+<span class="k">CREATE</span><span class="w"> </span><span class="ss">(</span><span class="py">book:</span><span class="n">Product</span> <span class="ss">{</span><span class="py">name:</span> <span class="s1">'Graph Databases'</span><span class="ss">,</span> <span class="py">category:</span> <span class="s1">'Books'</span><span class="ss">,</span> <span class="nl">price</span><span class="dl">:</span><span class="w"> </span><span class="m">39</span><span class="ss">})</span>
+
+<span class="o">--</span> <span class="k">Create</span> <span class="n">user</span> <span class="n">purchases</span>
+<span class="k">CREATE</span><span class="w"> </span><span class="ss">(</span><span class="py">user:</span><span class="n">User</span> <span class="ss">{</span><span class="py">name:</span> <span class="s1">'Alice'</span><span class="ss">})</span>
+<span class="k">CREATE</span><span class="w"> </span><span class="ss">(</span><span class="n">user</span><span class="ss">)</span><span class="o">-</span><span class="ss">[</span><span class="nc">:PURCHASED</span> <span class="ss">{</span><span class="py">date:</span> <span class="s1">'2023-01-15'</span><span class="ss">,</span> <span class="nl">rating</span><span class="dl">:</span><span class="w"> </span><span class="m">5</span><span class="ss">}]</span><span class="o">-&gt;</span><span class="ss">(</span><span class="n">laptop</span><span class="ss">)</span>
+<span class="k">CREATE</span><span class="w"> </span><span class="ss">(</span><span class="n">user</span><span class="ss">)</span><span class="o">-</span><span class="ss">[</span><span class="nc">:PURCHASED</span> <span class="ss">{</span><span class="py">date:</span> <span class="s1">'2023-01-20'</span><span class="ss">,</span> <span class="nl">rating</span><span class="dl">:</span><span class="w"> </span><span class="m">4</span><span class="ss">}]</span><span class="o">-&gt;</span><span class="ss">(</span><span class="n">book</span><span class="ss">)</span>
+
+<span class="o">--</span> <span class="n">Find</span> <span class="n">product</span> <span class="n">recommendations</span>
+<span class="k">MATCH</span><span class="w"> </span><span class="ss">(</span><span class="py">u:</span><span class="n">User</span> <span class="ss">{</span><span class="py">name:</span> <span class="s1">'Alice'</span><span class="ss">})</span><span class="o">-</span><span class="ss">[</span><span class="nc">:PURCHASED</span><span class="ss">]</span><span class="o">-&gt;</span><span class="ss">(</span><span class="py">p:</span><span class="n">Product</span><span class="ss">)</span>
+<span class="k">MATCH</span><span class="w"> </span><span class="ss">(</span><span class="n">p</span><span class="ss">)</span><span class="o">&lt;-</span><span class="ss">[</span><span class="nc">:PURCHASED</span><span class="ss">]</span><span class="o">-</span><span class="ss">(</span><span class="py">other:</span><span class="n">User</span><span class="ss">)</span><span class="o">-</span><span class="ss">[</span><span class="nc">:PURCHASED</span><span class="ss">]</span><span class="o">-&gt;</span><span class="ss">(</span><span class="py">rec:</span><span class="n">Product</span><span class="ss">)</span>
+<span class="k">WHERE</span> <span class="n">NOT</span><span class="w"> </span><span class="ss">(</span><span class="n">u</span><span class="ss">)</span><span class="o">-</span><span class="ss">[</span><span class="nc">:PURCHASED</span><span class="ss">]</span><span class="o">-&gt;</span><span class="ss">(</span><span class="n">rec</span><span class="ss">)</span>
+<span class="k">RETURN</span> <span class="n">rec.name</span><span class="ss">,</span> <span class="n">rec.category</span><span class="ss">,</span> <span class="nf">count</span><span class="ss">(</span><span class="o">*</span><span class="ss">)</span> <span class="k">AS</span> <span class="n">recommendation_score</span>
+<span class="k">ORDER</span> <span class="k">BY</span> <span class="n">recommendation_score</span> <span class="k">DESC</span>
+</code></pre></div></div>
+
+<h3 id="fraud-detection">Fraud Detection</h3>
+
+<div class="language-cypher highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="o">--</span> <span class="k">Create</span> <span class="n">transaction</span> <span class="n">network</span>
+<span class="k">CREATE</span><span class="w"> </span><span class="ss">(</span><span class="py">acc1:</span><span class="n">Account</span> <span class="ss">{</span><span class="py">id:</span> <span class="s1">'ACC001'</span><span class="ss">,</span> <span class="py">type:</span> <span class="s1">'checking'</span><span class="ss">})</span>
+<span class="k">CREATE</span><span class="w"> </span><span class="ss">(</span><span class="py">acc2:</span><span class="n">Account</span> <span class="ss">{</span><span class="py">id:</span> <span class="s1">'ACC002'</span><span class="ss">,</span> <span class="py">type:</span> <span class="s1">'savings'</span><span class="ss">})</span> 
+<span class="k">CREATE</span><span class="w"> </span><span class="ss">(</span><span class="py">acc3:</span><span class="n">Account</span> <span class="ss">{</span><span class="py">id:</span> <span class="s1">'ACC003'</span><span class="ss">,</span> <span class="py">type:</span> <span class="s1">'checking'</span><span class="ss">})</span>
+
+<span class="o">--</span> <span class="k">Create</span> <span class="n">transactions</span>
+<span class="k">CREATE</span><span class="w"> </span><span class="ss">(</span><span class="n">acc1</span><span class="ss">)</span><span class="o">-</span><span class="ss">[</span><span class="nc">:TRANSFER</span> <span class="ss">{</span><span class="nl">amount</span><span class="dl">:</span><span class="w"> </span><span class="m">5000</span><span class="ss">,</span> <span class="nl">timestamp</span><span class="dl">:</span><span class="w"> </span><span class="m">1609459200</span><span class="ss">}]</span><span class="o">-&gt;</span><span class="ss">(</span><span class="n">acc2</span><span class="ss">)</span>
+<span class="k">CREATE</span><span class="w"> </span><span class="ss">(</span><span class="n">acc2</span><span class="ss">)</span><span class="o">-</span><span class="ss">[</span><span class="nc">:TRANSFER</span> <span class="ss">{</span><span class="nl">amount</span><span class="dl">:</span><span class="w"> </span><span class="m">4900</span><span class="ss">,</span> <span class="nl">timestamp</span><span class="dl">:</span><span class="w"> </span><span class="m">1609459260</span><span class="ss">}]</span><span class="o">-&gt;</span><span class="ss">(</span><span class="n">acc3</span><span class="ss">)</span>
+<span class="k">CREATE</span><span class="w"> </span><span class="ss">(</span><span class="n">acc3</span><span class="ss">)</span><span class="o">-</span><span class="ss">[</span><span class="nc">:TRANSFER</span> <span class="ss">{</span><span class="nl">amount</span><span class="dl">:</span><span class="w"> </span><span class="m">4800</span><span class="ss">,</span> <span class="nl">timestamp</span><span class="dl">:</span><span class="w"> </span><span class="m">1609459320</span><span class="ss">}]</span><span class="o">-&gt;</span><span class="ss">(</span><span class="n">acc1</span><span class="ss">)</span>
+
+<span class="o">--</span> <span class="n">Detect</span> <span class="n">circular</span> <span class="n">money</span> <span class="n">flow</span><span class="w"> </span><span class="ss">(</span><span class="n">potential</span> <span class="n">fraud</span><span class="ss">)</span>
+<span class="k">MATCH</span> <span class="n">path</span> <span class="o">=</span> <span class="ss">(</span><span class="py">a1:</span><span class="n">Account</span><span class="ss">)</span><span class="o">-</span><span class="ss">[</span><span class="nc">:TRANSFER</span><span class="o">*</span><span class="m">3</span><span class="o">..</span><span class="m">5</span><span class="ss">]</span><span class="o">-&gt;</span><span class="ss">(</span><span class="n">a1</span><span class="ss">)</span>
+<span class="k">WHERE</span> <span class="n">all</span><span class="ss">(</span><span class="n">r</span> <span class="ow">IN</span> <span class="nf">relationships</span><span class="ss">(</span><span class="n">path</span><span class="ss">)</span> <span class="k">WHERE</span> <span class="n">r.amount</span> <span class="o">&gt;</span> <span class="mi">1000</span><span class="ss">)</span>
+<span class="k">RETURN</span> <span class="n">path</span><span class="ss">,</span> <span class="nf">length</span><span class="ss">(</span><span class="n">path</span><span class="ss">)</span> <span class="k">AS</span> <span class="n">hops</span>
+</code></pre></div></div>
+
+<h3 id="knowledge-graph">Knowledge Graph</h3>
+
+<div class="language-cypher highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="o">--</span> <span class="k">Create</span> <span class="n">knowledge</span> <span class="n">entities</span>
+<span class="k">CREATE</span><span class="w"> </span><span class="ss">(</span><span class="py">python:</span><span class="n">Language</span> <span class="ss">{</span><span class="py">name:</span> <span class="s1">'Python'</span><span class="ss">,</span> <span class="py">type:</span> <span class="s1">'programming'</span><span class="ss">})</span>
+<span class="k">CREATE</span><span class="w"> </span><span class="ss">(</span><span class="py">django:</span><span class="n">Framework</span> <span class="ss">{</span><span class="py">name:</span> <span class="s1">'Django'</span><span class="ss">,</span> <span class="py">type:</span> <span class="s1">'web'</span><span class="ss">})</span>
+<span class="k">CREATE</span><span class="w"> </span><span class="ss">(</span><span class="py">alice:</span><span class="n">Developer</span> <span class="ss">{</span><span class="py">name:</span> <span class="s1">'Alice'</span><span class="ss">,</span> <span class="nl">experience</span><span class="dl">:</span><span class="w"> </span><span class="m">5</span><span class="ss">})</span>
+<span class="k">CREATE</span><span class="w"> </span><span class="ss">(</span><span class="py">webapp:</span><span class="n">Project</span> <span class="ss">{</span><span class="py">name:</span> <span class="s1">'WebApp'</span><span class="ss">,</span> <span class="py">status:</span> <span class="s1">'active'</span><span class="ss">})</span>
+
+<span class="o">--</span> <span class="k">Create</span> <span class="n">relationships</span>
+<span class="k">CREATE</span><span class="w"> </span><span class="ss">(</span><span class="n">alice</span><span class="ss">)</span><span class="o">-</span><span class="ss">[</span><span class="nc">:KNOWS</span> <span class="ss">{</span><span class="py">proficiency:</span> <span class="s1">'expert'</span><span class="ss">}]</span><span class="o">-&gt;</span><span class="ss">(</span><span class="n">python</span><span class="ss">)</span>
+<span class="k">CREATE</span><span class="w"> </span><span class="ss">(</span><span class="n">alice</span><span class="ss">)</span><span class="o">-</span><span class="ss">[</span><span class="nc">:USES</span> <span class="ss">{</span><span class="py">proficiency:</span> <span class="s1">'intermediate'</span><span class="ss">}]</span><span class="o">-&gt;</span><span class="ss">(</span><span class="n">django</span><span class="ss">)</span>
+<span class="k">CREATE</span><span class="w"> </span><span class="ss">(</span><span class="n">django</span><span class="ss">)</span><span class="o">-</span><span class="ss">[</span><span class="nc">:BUILT_WITH</span><span class="ss">]</span><span class="o">-&gt;</span><span class="ss">(</span><span class="n">python</span><span class="ss">)</span>
+<span class="k">CREATE</span><span class="w"> </span><span class="ss">(</span><span class="n">webapp</span><span class="ss">)</span><span class="o">-</span><span class="ss">[</span><span class="nc">:IMPLEMENTED_IN</span><span class="ss">]</span><span class="o">-&gt;</span><span class="ss">(</span><span class="n">django</span><span class="ss">)</span>
+<span class="k">CREATE</span><span class="w"> </span><span class="ss">(</span><span class="n">alice</span><span class="ss">)</span><span class="o">-</span><span class="ss">[</span><span class="nc">:WORKS_ON</span><span class="ss">]</span><span class="o">-&gt;</span><span class="ss">(</span><span class="n">webapp</span><span class="ss">)</span>
+
+<span class="o">--</span> <span class="n">Find</span> <span class="n">technology</span> <span class="n">stack</span> <span class="n">for</span> <span class="n">a</span> <span class="n">project</span>
+<span class="k">MATCH</span><span class="w"> </span><span class="ss">(</span><span class="py">p:</span><span class="n">Project</span> <span class="ss">{</span><span class="py">name:</span> <span class="s1">'WebApp'</span><span class="ss">})</span><span class="o">-</span><span class="ss">[</span><span class="nc">:IMPLEMENTED_IN</span><span class="o">*</span><span class="ss">]</span><span class="o">-&gt;</span><span class="ss">(</span><span class="n">tech</span><span class="ss">)</span>
+<span class="k">RETURN</span> <span class="n">p.name</span><span class="ss">,</span> <span class="nf">collect</span><span class="ss">(</span><span class="n">tech.name</span><span class="ss">)</span> <span class="k">AS</span> <span class="n">tech_stack</span>
+
+<span class="o">--</span> <span class="n">Find</span> <span class="n">developers</span> <span class="k">with</span> <span class="n">specific</span> <span class="n">skills</span>
+<span class="k">MATCH</span><span class="w"> </span><span class="ss">(</span><span class="py">d:</span><span class="n">Developer</span><span class="ss">)</span><span class="o">-</span><span class="ss">[</span><span class="py">k:</span><span class="n">KNOWS</span><span class="ss">]</span><span class="o">-&gt;</span><span class="ss">(</span><span class="py">lang:</span><span class="n">Language</span> <span class="ss">{</span><span class="py">name:</span> <span class="s1">'Python'</span><span class="ss">})</span>
+<span class="k">WHERE</span> <span class="n">k.proficiency</span> <span class="ow">IN</span> <span class="ss">[</span><span class="s1">'expert'</span><span class="ss">,</span> <span class="s1">'advanced'</span><span class="ss">]</span>
+<span class="k">RETURN</span> <span class="n">d.name</span><span class="ss">,</span> <span class="n">d.experience</span><span class="ss">,</span> <span class="n">k.proficiency</span>
+</code></pre></div></div>
+
+<h2 id="performance-considerations">Performance Considerations</h2>
+
+<h3 id="query-optimization">Query Optimization</h3>
+
+<div class="language-cypher highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="o">--</span> <span class="n">Use</span> <span class="n">specific</span> <span class="n">labels</span> <span class="ow">and</span> <span class="n">properties</span> <span class="n">for</span> <span class="n">efficient</span> <span class="n">filtering</span>
+<span class="k">MATCH</span><span class="w"> </span><span class="ss">(</span><span class="py">p:</span><span class="n">Person</span> <span class="ss">{</span><span class="py">email:</span> <span class="s1">'alice@example.com'</span><span class="ss">})</span> <span class="k">RETURN</span> <span class="n">p</span>
+<span class="o">--</span> <span class="n">Better</span> <span class="py">than:</span> <span class="k">MATCH</span><span class="w"> </span><span class="ss">(</span><span class="n">p</span><span class="ss">)</span> <span class="k">WHERE</span> <span class="n">p.email</span> <span class="o">=</span> <span class="s1">'alice@example.com'</span>
+
+<span class="o">--</span> <span class="n">Use</span> <span class="k">LIMIT</span> <span class="n">for</span> <span class="n">large</span> <span class="n">result</span> <span class="n">sets</span>
+<span class="k">MATCH</span><span class="w"> </span><span class="ss">(</span><span class="py">p:</span><span class="n">Person</span><span class="ss">)</span> <span class="k">RETURN</span> <span class="n">p.name</span> <span class="k">LIMIT</span> <span class="mi">100</span>
+
+<span class="o">--</span> <span class="k">Index</span> <span class="n">frequently</span> <span class="n">queried</span> <span class="n">properties</span><span class="w"> </span><span class="ss">(</span><span class="n">conceptual</span> <span class="o">-</span> <span class="n">implementation</span> <span class="n">dependent</span><span class="ss">)</span>
+<span class="o">--</span> <span class="k">CREATE</span> <span class="k">INDEX</span> <span class="k">ON</span> <span class="nc">:Person</span><span class="ss">(</span><span class="n">email</span><span class="ss">)</span>
+</code></pre></div></div>
+
+<h3 id="memory-management">Memory Management</h3>
+
+<ul>
+  <li>Use appropriate data types for properties</li>
+  <li>Avoid storing large text/binary data as node properties</li>
+  <li>Consider relationship direction for traversal efficiency</li>
+  <li>Monitor memory usage with GRAPH.CONFIG GET MEMORY_LIMIT</li>
+</ul>
+
+<h3 id="scaling">Scaling</h3>
+
+<ul>
+  <li>Distribute graphs across multiple Orbit nodes</li>
+  <li>Use consistent graph naming for cross-node operations</li>
+  <li>Consider data locality for related subgraphs</li>
+  <li>Monitor slow queries with GRAPH.SLOWLOG</li>
+</ul>
+
+<h2 id="migration-from-redisgraph">Migration from RedisGraph</h2>
+
+<p>Orbit’s graph database is designed to be a drop-in replacement for RedisGraph:</p>
+
+<h3 id="command-compatibility">Command Compatibility</h3>
+
+<ul>
+  <li>✅ All core GRAPH.* commands supported</li>
+  <li>✅ Same Cypher syntax and semantics</li>
+  <li>✅ Compatible result formats</li>
+  <li>✅ Same configuration parameters</li>
+</ul>
+
+<h3 id="key-differences">Key Differences</h3>
+
+<ul>
+  <li><strong>Distributed Architecture</strong>: Built on Orbit’s actor system for horizontal scaling</li>
+  <li><strong>Enhanced Performance</strong>: Consistent performance under high load</li>
+  <li><strong>Advanced Profiling</strong>: More detailed execution metrics</li>
+  <li><strong>Actor Integration</strong>: Native integration with other Orbit data types</li>
+</ul>
+
+<h3 id="migration-steps">Migration Steps</h3>
+
+<ol>
+  <li><strong>Backup RedisGraph Data</strong>: Export existing graphs to Cypher scripts</li>
+  <li><strong>Update Connection</strong>: Point applications to Orbit RESP endpoint</li>
+  <li><strong>Test Queries</strong>: Verify query compatibility and performance</li>
+  <li><strong>Import Data</strong>: Execute Cypher scripts to recreate graphs</li>
+  <li><strong>Monitor Performance</strong>: Use GRAPH.PROFILE and GRAPH.SLOWLOG</li>
+</ol>
+
+<h3 id="example-migration-script">Example Migration Script</h3>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">import</span> <span class="n">redis</span>
+
+<span class="c1"># Connect to Orbit
+</span><span class="n">orbit_client</span> <span class="o">=</span> <span class="n">redis</span><span class="p">.</span><span class="nc">Redis</span><span class="p">(</span><span class="n">host</span><span class="o">=</span><span class="sh">'</span><span class="s">orbit-server</span><span class="sh">'</span><span class="p">,</span> <span class="n">port</span><span class="o">=</span><span class="mi">6379</span><span class="p">)</span>
+
+<span class="c1"># Migrate a graph
+</span><span class="n">migration_queries</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="sh">"</span><span class="s">CREATE (alice:Person {name: </span><span class="sh">'</span><span class="s">Alice</span><span class="sh">'</span><span class="s">, age: 30})</span><span class="sh">"</span><span class="p">,</span>
+    <span class="sh">"</span><span class="s">CREATE (bob:Person {name: </span><span class="sh">'</span><span class="s">Bob</span><span class="sh">'</span><span class="s">, age: 25})</span><span class="sh">"</span><span class="p">,</span>
+    <span class="sh">"</span><span class="s">MATCH (a:Person {name: </span><span class="sh">'</span><span class="s">Alice</span><span class="sh">'</span><span class="s">}), (b:Person {name: </span><span class="sh">'</span><span class="s">Bob</span><span class="sh">'</span><span class="s">}) CREATE (a)-[:KNOWS]-&gt;(b)</span><span class="sh">"</span>
+<span class="p">]</span>
+
+<span class="k">for</span> <span class="n">query</span> <span class="ow">in</span> <span class="n">migration_queries</span><span class="p">:</span>
+    <span class="n">result</span> <span class="o">=</span> <span class="n">orbit_client</span><span class="p">.</span><span class="nf">execute_command</span><span class="p">(</span><span class="sh">'</span><span class="s">GRAPH.QUERY</span><span class="sh">'</span><span class="p">,</span> <span class="sh">'</span><span class="s">migrated_graph</span><span class="sh">'</span><span class="p">,</span> <span class="n">query</span><span class="p">)</span>
+    <span class="nf">print</span><span class="p">(</span><span class="sa">f</span><span class="sh">"</span><span class="s">Executed: </span><span class="si">{</span><span class="n">query</span><span class="p">[</span><span class="si">:</span><span class="mi">50</span><span class="p">]</span><span class="si">}</span><span class="s">... -&gt; </span><span class="si">{</span><span class="n">result</span><span class="si">}</span><span class="sh">"</span><span class="p">)</span>
+</code></pre></div></div>
+
+<h2 id="integration-examples">Integration Examples</h2>
+
+<h3 id="python-with-redis-py">Python with redis-py</h3>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">import</span> <span class="n">redis</span>
+
+<span class="c1"># Connect to Orbit
+</span><span class="n">r</span> <span class="o">=</span> <span class="n">redis</span><span class="p">.</span><span class="nc">Redis</span><span class="p">(</span><span class="n">host</span><span class="o">=</span><span class="sh">'</span><span class="s">localhost</span><span class="sh">'</span><span class="p">,</span> <span class="n">port</span><span class="o">=</span><span class="mi">6379</span><span class="p">)</span>
+
+<span class="c1"># Create graph data
+</span><span class="n">r</span><span class="p">.</span><span class="nf">execute_command</span><span class="p">(</span><span class="sh">'</span><span class="s">GRAPH.QUERY</span><span class="sh">'</span><span class="p">,</span> <span class="sh">'</span><span class="s">social</span><span class="sh">'</span><span class="p">,</span> 
+    <span class="sh">"</span><span class="s">CREATE (alice:Person {name: </span><span class="sh">'</span><span class="s">Alice</span><span class="sh">'</span><span class="s">, age: 30}) RETURN alice</span><span class="sh">"</span><span class="p">)</span>
+
+<span class="c1"># Query graph
+</span><span class="n">result</span> <span class="o">=</span> <span class="n">r</span><span class="p">.</span><span class="nf">execute_command</span><span class="p">(</span><span class="sh">'</span><span class="s">GRAPH.QUERY</span><span class="sh">'</span><span class="p">,</span> <span class="sh">'</span><span class="s">social</span><span class="sh">'</span><span class="p">,</span>
+    <span class="sh">"</span><span class="s">MATCH (p:Person) RETURN p.name, p.age</span><span class="sh">"</span><span class="p">)</span>
+
+<span class="nf">print</span><span class="p">(</span><span class="sh">"</span><span class="s">Query result:</span><span class="sh">"</span><span class="p">,</span> <span class="n">result</span><span class="p">)</span>
+</code></pre></div></div>
+
+<h3 id="nodejs-with-ioredis">Node.js with ioredis</h3>
+
+<div class="language-javascript highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">Redis</span> <span class="o">=</span> <span class="nf">require</span><span class="p">(</span><span class="dl">'</span><span class="s1">ioredis</span><span class="dl">'</span><span class="p">);</span>
+<span class="kd">const</span> <span class="nx">redis</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">Redis</span><span class="p">(</span><span class="dl">'</span><span class="s1">redis://localhost:6379</span><span class="dl">'</span><span class="p">);</span>
+
+<span class="k">async</span> <span class="kd">function</span> <span class="nf">graphExample</span><span class="p">()</span> <span class="p">{</span>
+  <span class="c1">// Create nodes and relationships</span>
+  <span class="k">await</span> <span class="nx">redis</span><span class="p">.</span><span class="nf">call</span><span class="p">(</span><span class="dl">'</span><span class="s1">GRAPH.QUERY</span><span class="dl">'</span><span class="p">,</span> <span class="dl">'</span><span class="s1">social</span><span class="dl">'</span><span class="p">,</span>
+    <span class="dl">"</span><span class="s2">CREATE (a:Person {name: 'Alice'})-[:KNOWS]-&gt;(b:Person {name: 'Bob'}) RETURN a, b</span><span class="dl">"</span><span class="p">);</span>
+  
+  <span class="c1">// Query the graph</span>
+  <span class="kd">const</span> <span class="nx">result</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">redis</span><span class="p">.</span><span class="nf">call</span><span class="p">(</span><span class="dl">'</span><span class="s1">GRAPH.QUERY</span><span class="dl">'</span><span class="p">,</span> <span class="dl">'</span><span class="s1">social</span><span class="dl">'</span><span class="p">,</span>
+    <span class="dl">"</span><span class="s2">MATCH (p:Person) RETURN p.name ORDER BY p.name</span><span class="dl">"</span><span class="p">);</span>
+  
+  <span class="nx">console</span><span class="p">.</span><span class="nf">log</span><span class="p">(</span><span class="dl">'</span><span class="s1">Graph query result:</span><span class="dl">'</span><span class="p">,</span> <span class="nx">result</span><span class="p">);</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="java-with-jedis">Java with Jedis</h3>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">import</span> <span class="nn">redis.clients.jedis.Jedis</span><span class="o">;</span>
+
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">GraphExample</span> <span class="o">{</span>
+    <span class="kd">public</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">main</span><span class="o">(</span><span class="nc">String</span><span class="o">[]</span> <span class="n">args</span><span class="o">)</span> <span class="o">{</span>
+        <span class="nc">Jedis</span> <span class="n">jedis</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">Jedis</span><span class="o">(</span><span class="s">"localhost"</span><span class="o">,</span> <span class="mi">6379</span><span class="o">);</span>
+        
+        <span class="c1">// Create graph data</span>
+        <span class="n">jedis</span><span class="o">.</span><span class="na">sendCommand</span><span class="o">(()</span> <span class="o">-&gt;</span> <span class="s">"GRAPH.QUERY"</span><span class="o">.</span><span class="na">getBytes</span><span class="o">(),</span> 
+            <span class="s">"social"</span><span class="o">.</span><span class="na">getBytes</span><span class="o">(),</span>
+            <span class="s">"CREATE (p:Person {name: 'Alice', profession: 'Engineer'}) RETURN p"</span><span class="o">.</span><span class="na">getBytes</span><span class="o">());</span>
+        
+        <span class="c1">// Query graph</span>
+        <span class="nc">Object</span> <span class="n">result</span> <span class="o">=</span> <span class="n">jedis</span><span class="o">.</span><span class="na">sendCommand</span><span class="o">(()</span> <span class="o">-&gt;</span> <span class="s">"GRAPH.QUERY"</span><span class="o">.</span><span class="na">getBytes</span><span class="o">(),</span>
+            <span class="s">"social"</span><span class="o">.</span><span class="na">getBytes</span><span class="o">(),</span> 
+            <span class="s">"MATCH (p:Person) RETURN p.name, p.profession"</span><span class="o">.</span><span class="na">getBytes</span><span class="o">());</span>
+        
+        <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">"Result: "</span> <span class="o">+</span> <span class="n">result</span><span class="o">);</span>
+    <span class="o">}</span>
+<span class="o">}</span>
+</code></pre></div></div>
+
+<h2 id="advanced-features">Advanced Features</h2>
+
+<h3 id="graph-analytics">Graph Analytics</h3>
+
+<div class="language-cypher highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="o">--</span> <span class="n">Centrality</span> <span class="n">analysis</span><span class="w"> </span><span class="ss">(</span><span class="n">conceptual</span><span class="ss">)</span>
+<span class="k">MATCH</span><span class="w"> </span><span class="ss">(</span><span class="py">p:</span><span class="n">Person</span><span class="ss">)</span><span class="o">-</span><span class="ss">[</span><span class="nc">:KNOWS</span><span class="ss">]</span><span class="o">-</span><span class="ss">(</span><span class="n">connected</span><span class="ss">)</span>
+<span class="k">RETURN</span> <span class="n">p.name</span><span class="ss">,</span> <span class="nf">count</span><span class="ss">(</span><span class="n">connected</span><span class="ss">)</span> <span class="k">AS</span> <span class="n">degree_centrality</span>
+<span class="k">ORDER</span> <span class="k">BY</span> <span class="n">degree_centrality</span> <span class="k">DESC</span>
+
+<span class="o">--</span> <span class="n">Path</span> <span class="n">finding</span>
+<span class="k">MATCH</span> <span class="n">path</span> <span class="o">=</span> <span class="nf">shortestPath</span><span class="ss">((</span><span class="py">a:</span><span class="n">Person</span> <span class="ss">{</span><span class="py">name:</span> <span class="s1">'Alice'</span><span class="ss">})</span><span class="o">-</span><span class="ss">[</span><span class="nc">:KNOWS</span><span class="o">*</span><span class="ss">]</span><span class="o">-</span><span class="ss">(</span><span class="py">b:</span><span class="n">Person</span> <span class="ss">{</span><span class="py">name:</span> <span class="s1">'Charlie'</span><span class="ss">}))</span>
+<span class="k">RETURN</span> <span class="n">path</span><span class="ss">,</span> <span class="nf">length</span><span class="ss">(</span><span class="n">path</span><span class="ss">)</span> <span class="k">AS</span> <span class="n">distance</span>
+
+<span class="o">--</span> <span class="n">Community</span> <span class="n">detection</span><span class="w"> </span><span class="ss">(</span><span class="n">simplified</span><span class="ss">)</span>
+<span class="k">MATCH</span><span class="w"> </span><span class="ss">(</span><span class="py">p:</span><span class="n">Person</span><span class="ss">)</span><span class="o">-</span><span class="ss">[</span><span class="nc">:KNOWS</span><span class="ss">]</span><span class="o">-</span><span class="ss">(</span><span class="n">friends</span><span class="ss">)</span>
+<span class="k">WITH</span> <span class="n">p</span><span class="ss">,</span> <span class="nf">collect</span><span class="ss">(</span><span class="n">friends</span><span class="ss">)</span> <span class="k">AS</span> <span class="n">friend_list</span>
+<span class="k">RETURN</span> <span class="n">p.name</span><span class="ss">,</span> <span class="nf">size</span><span class="ss">(</span><span class="n">friend_list</span><span class="ss">)</span> <span class="k">AS</span> <span class="n">friend_count</span>
+<span class="k">ORDER</span> <span class="k">BY</span> <span class="n">friend_count</span> <span class="k">DESC</span>
+</code></pre></div></div>
+
+<h3 id="performance-monitoring">Performance Monitoring</h3>
+
+<div class="language-cypher highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="o">--</span> <span class="n">Monitor</span> <span class="n">query</span> <span class="n">performance</span>
+<span class="n">GRAPH.PROFILE</span> <span class="n">social</span> <span class="s2">"MATCH (p:Person)-[:WORKS_FOR]-&gt;(c:Company) RETURN p.name, c.name"</span>
+
+<span class="o">--</span> <span class="n">Check</span> <span class="n">slow</span> <span class="n">queries</span>
+<span class="n">GRAPH.SLOWLOG</span> <span class="n">social</span>
+
+<span class="o">--</span> <span class="n">Get</span> <span class="n">execution</span> <span class="n">plan</span>
+<span class="n">GRAPH.EXPLAIN</span> <span class="n">social</span> <span class="s2">"MATCH (p:Person) WHERE p.age &gt; 30 RETURN count(p)"</span>
+</code></pre></div></div>
+
+<hr />
+
+<p>For more information about Orbit’s graph database capabilities, see the <a href="/orbit-rs/README.md">Orbit documentation</a> or explore the <a href="./examples/">examples</a> directory.</p>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/orbit-rs/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Orbit-RS Documentation</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">TuringWorks</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

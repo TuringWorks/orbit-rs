@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Orbit Time Series Commands | Orbit-RS Documentation</title>
+<meta name="generator" content="Jekyll v4.4.1" />
+<meta property="og:title" content="Orbit Time Series Commands" />
+<meta name="author" content="TuringWorks" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<meta property="og:description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<link rel="canonical" href="https://turingworks.github.io/orbit-rs/timeseries_commands.html" />
+<meta property="og:url" content="https://turingworks.github.io/orbit-rs/timeseries_commands.html" />
+<meta property="og:site_name" content="Orbit-RS Documentation" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Orbit Time Series Commands" />
+<meta name="twitter:site" content="@TuringWorksAI" />
+<meta name="twitter:creator" content="@TuringWorks" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","author":{"@type":"Person","name":"TuringWorks"},"description":"The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform","headline":"Orbit Time Series Commands","url":"https://turingworks.github.io/orbit-rs/timeseries_commands.html"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/orbit-rs/assets/main.css">
+  <link rel="stylesheet" href="/orbit-rs/assets/css/custom.css"><link type="application/atom+xml" rel="alternate" href="https://turingworks.github.io/orbit-rs/feed.xml" title="Orbit-RS Documentation" /></head><body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/orbit-rs/">Orbit-RS Documentation</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/orbit-rs/">Orbit-RS Documentation</a><a class="page-link" href="/orbit-rs/project_overview.html">Orbit-RS: Comprehensive Project Overview</a><a class="page-link" href="/orbit-rs/quick_start.html">Quick Start Guide - Multi-Protocol Database Server</a><a class="page-link" href="/orbit-rs/roadmap/">Development Roadmap</a><a class="page-link" href="/orbit-rs/features/">Orbit-RS Feature Index</a><a class="page-link" href="/orbit-rs/compute-acceleration/">Hardware Acceleration Guide</a><a class="page-link" href="/orbit-rs/contributing.html">Contributing Guide</a><a class="page-link" href="/orbit-rs/overview.html">Architecture Overview</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <h1 id="orbit-time-series-commands">Orbit Time Series Commands</h1>
+
+<h2 id="table-of-contents">Table of Contents</h2>
+
+<ul>
+  <li><a href="#overview">Overview</a></li>
+  <li><a href="#time-series-creation">Time Series Creation</a></li>
+  <li><a href="#data-ingestion">Data Ingestion</a></li>
+  <li><a href="#data-retrieval">Data Retrieval</a></li>
+  <li><a href="#data-management">Data Management</a></li>
+  <li><a href="#aggregation-and-analytics">Aggregation and Analytics</a></li>
+  <li><a href="#compaction-rules">Compaction Rules</a></li>
+  <li><a href="#labels-and-metadata">Labels and Metadata</a></li>
+  <li><a href="#error-handling">Error Handling</a></li>
+  <li><a href="#examples-and-use-cases">Examples and Use Cases</a></li>
+  <li><a href="#performance-considerations">Performance Considerations</a></li>
+</ul>
+
+<h2 id="overview">Overview</h2>
+
+<p>Orbit’s time series implementation provides:</p>
+
+<ul>
+  <li><strong>High-performance ingestion</strong>: Optimized for high-frequency data writes</li>
+  <li><strong>Flexible retention policies</strong>: Automatic data expiration based on time or size</li>
+  <li><strong>Advanced aggregation</strong>: Built-in support for statistical functions</li>
+  <li><strong>Label-based filtering</strong>: Multi-dimensional time series with metadata</li>
+  <li><strong>Automatic downsampling</strong>: Compaction rules for data reduction</li>
+  <li><strong>Redis compatibility</strong>: Drop-in replacement for Redis TimeSeries</li>
+</ul>
+
+<h2 id="time-series-creation">Time Series Creation</h2>
+
+<h3 id="tscreate">TS.CREATE</h3>
+
+<p>Creates a new time series with optional configuration.</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>TS.CREATE key [RETENTION retentionTime] [CHUNK_SIZE size] [DUPLICATE_POLICY policy] [LABELS label value ...]
+</code></pre></div></div>
+
+<p><strong>Parameters:</strong></p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">key</code>: Time series identifier</li>
+  <li><code class="language-plaintext highlighter-rouge">RETENTION</code>: Data retention time in milliseconds (optional)</li>
+  <li><code class="language-plaintext highlighter-rouge">CHUNK_SIZE</code>: Maximum samples per chunk (optional, default: 4096)</li>
+  <li><code class="language-plaintext highlighter-rouge">DUPLICATE_POLICY</code>: How to handle duplicate timestamps (optional, default: BLOCK)
+    <ul>
+      <li><code class="language-plaintext highlighter-rouge">BLOCK</code>: Reject duplicate timestamps</li>
+      <li><code class="language-plaintext highlighter-rouge">FIRST</code>: Keep first value</li>
+      <li><code class="language-plaintext highlighter-rouge">LAST</code>: Keep last value</li>
+      <li><code class="language-plaintext highlighter-rouge">MIN</code>: Keep minimum value</li>
+      <li><code class="language-plaintext highlighter-rouge">MAX</code>: Keep maximum value</li>
+      <li><code class="language-plaintext highlighter-rouge">SUM</code>: Sum values</li>
+    </ul>
+  </li>
+  <li><code class="language-plaintext highlighter-rouge">LABELS</code>: Key-value pairs for metadata (optional)</li>
+</ul>
+
+<p><strong>Examples:</strong></p>
+<pre><code class="language-redis">
+# Basic time series
+TS.CREATE temperature:sensor1
+
+# With retention (24 hours)
+TS.CREATE temperature:sensor2 RETENTION 86400000
+
+# With labels and configuration
+TS.CREATE cpu:usage RETENTION 3600000 CHUNK_SIZE 2048 DUPLICATE_POLICY LAST LABELS location server1 metric cpu
+</code></pre>
+
+<h3 id="tsalter">TS.ALTER</h3>
+
+<p>Modifies an existing time series configuration.</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>TS.ALTER key [RETENTION retentionTime] [CHUNK_SIZE size] [DUPLICATE_POLICY policy] [LABELS label value ...]
+</code></pre></div></div>
+
+<p><strong>Example:</strong></p>
+<pre><code class="language-redis">TS.ALTER temperature:sensor1 RETENTION 7200000 LABELS environment production
+</code></pre>
+
+<h2 id="data-ingestion">Data Ingestion</h2>
+
+<h3 id="tsadd">TS.ADD</h3>
+
+<p>Adds a single sample to a time series.</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>TS.ADD key timestamp value [RETENTION retentionTime] [CHUNK_SIZE size] [DUPLICATE_POLICY policy] [LABELS label value ...]
+</code></pre></div></div>
+
+<p><strong>Parameters:</strong></p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">timestamp</code>: Unix timestamp in milliseconds, or <code class="language-plaintext highlighter-rouge">*</code> for current time</li>
+  <li><code class="language-plaintext highlighter-rouge">value</code>: Numeric value to store</li>
+</ul>
+
+<p><strong>Examples:</strong></p>
+<pre><code class="language-redis">
+# Add sample with specific timestamp
+TS.ADD temperature:sensor1 1609459200000 23.5
+
+# Add sample with current timestamp
+TS.ADD temperature:sensor1 * 24.1
+
+# Add with configuration (creates series if doesn't exist)
+TS.ADD cpu:usage * 75.2 RETENTION 3600000 LABELS server web01
+</code></pre>
+
+<h3 id="tsmadd">TS.MADD</h3>
+
+<p>Adds multiple samples to multiple time series in a single command.</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>TS.MADD key1 timestamp1 value1 [key2 timestamp2 value2 ...]
+</code></pre></div></div>
+
+<p><strong>Example:</strong></p>
+<pre><code class="language-redis">TS.MADD temperature:sensor1 1609459200000 23.5 temperature:sensor2 1609459200000 22.8 cpu:usage 1609459200000 45.2
+</code></pre>
+
+<h3 id="tsincrby--tsdecrby">TS.INCRBY / TS.DECRBY</h3>
+
+<p>Increments or decrements the value at a timestamp.</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>TS.INCRBY key value [TIMESTAMP timestamp] [RETENTION retentionTime] [CHUNK_SIZE size] [DUPLICATE_POLICY policy] [LABELS label value ...]
+TS.DECRBY key value [TIMESTAMP timestamp] [RETENTION retentionTime] [CHUNK_SIZE size] [DUPLICATE_POLICY policy] [LABELS label value ...]
+</code></pre></div></div>
+
+<p><strong>Examples:</strong></p>
+<pre><code class="language-redis">
+# Increment counter
+TS.INCRBY requests:count 1
+
+# Increment with specific timestamp  
+TS.INCRBY requests:count 5 TIMESTAMP 1609459200000
+
+# Decrement
+TS.DECRBY active:connections 1
+</code></pre>
+
+<h2 id="data-retrieval">Data Retrieval</h2>
+
+<h3 id="tsget">TS.GET</h3>
+
+<p>Retrieves the latest sample from a time series.</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>TS.GET key
+</code></pre></div></div>
+
+<p><strong>Example:</strong></p>
+<pre><code class="language-redis">TS.GET temperature:sensor1
+
+# Returns: [timestamp, value]
+</code></pre>
+
+<h3 id="tsmget">TS.MGET</h3>
+
+<p>Retrieves the latest samples from multiple time series.</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>TS.MGET [FILTER label=value ...] key1 [key2 ...]
+</code></pre></div></div>
+
+<p><strong>Example:</strong></p>
+<pre><code class="language-redis">
+# Get latest from specific series
+TS.MGET temperature:sensor1 temperature:sensor2
+
+# With label filtering (simplified implementation)
+TS.MGET temperature:sensor1 temperature:sensor2
+</code></pre>
+
+<h3 id="tsrange--tsrevrange">TS.RANGE / TS.REVRANGE</h3>
+
+<p>Retrieves samples within a time range.</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>TS.RANGE key fromTimestamp toTimestamp [AGGREGATION aggregation bucketDuration]
+TS.REVRANGE key fromTimestamp toTimestamp [AGGREGATION aggregation bucketDuration]
+</code></pre></div></div>
+
+<p><strong>Aggregation types:</strong></p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">AVG</code>: Average value</li>
+  <li><code class="language-plaintext highlighter-rouge">SUM</code>: Sum of values</li>
+  <li><code class="language-plaintext highlighter-rouge">MIN</code>: Minimum value</li>
+  <li><code class="language-plaintext highlighter-rouge">MAX</code>: Maximum value</li>
+  <li><code class="language-plaintext highlighter-rouge">COUNT</code>: Count of samples</li>
+  <li><code class="language-plaintext highlighter-rouge">FIRST</code>: First value in bucket</li>
+  <li><code class="language-plaintext highlighter-rouge">LAST</code>: Last value in bucket</li>
+  <li><code class="language-plaintext highlighter-rouge">RANGE</code>: Max - Min</li>
+  <li><code class="language-plaintext highlighter-rouge">STD</code>: Standard deviation</li>
+</ul>
+
+<p><strong>Examples:</strong></p>
+<pre><code class="language-redis">
+# Get all samples in range
+TS.RANGE temperature:sensor1 1609459200000 1609462800000
+
+# Get hourly averages
+TS.RANGE temperature:sensor1 1609459200000 1609462800000 AGGREGATION AVG 3600000
+
+# Reverse chronological order
+TS.REVRANGE temperature:sensor1 1609459200000 1609462800000
+</code></pre>
+
+<h3 id="tsmrange--tsmrevrange">TS.MRANGE / TS.MREVRANGE</h3>
+
+<p>Retrieves samples from multiple time series within a time range.</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>TS.MRANGE fromTimestamp toTimestamp [AGGREGATION aggregation bucketDuration] [FILTER label=value ...] key1 [key2 ...]
+TS.MREVRANGE fromTimestamp toTimestamp [AGGREGATION aggregation bucketDuration] [FILTER label=value ...] key1 [key2 ...]
+</code></pre></div></div>
+
+<p><strong>Example:</strong></p>
+<pre><code class="language-redis">TS.MRANGE 1609459200000 1609462800000 temperature:sensor1 temperature:sensor2
+</code></pre>
+
+<h2 id="data-management">Data Management</h2>
+
+<h3 id="tsdel">TS.DEL</h3>
+
+<p>Deletes samples within a time range.</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>TS.DEL key fromTimestamp toTimestamp
+</code></pre></div></div>
+
+<p><strong>Example:</strong></p>
+<pre><code class="language-redis">
+# Delete samples from last hour
+TS.DEL temperature:sensor1 1609459200000 1609462800000
+</code></pre>
+
+<h3 id="tsinfo">TS.INFO</h3>
+
+<p>Returns information about a time series.</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>TS.INFO key
+</code></pre></div></div>
+
+<p><strong>Returns:</strong></p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">totalSamples</code>: Number of samples</li>
+  <li><code class="language-plaintext highlighter-rouge">memoryUsage</code>: Memory consumption in bytes</li>
+  <li><code class="language-plaintext highlighter-rouge">firstTimestamp</code>: Timestamp of first sample</li>
+  <li><code class="language-plaintext highlighter-rouge">lastTimestamp</code>: Timestamp of last sample</li>
+  <li><code class="language-plaintext highlighter-rouge">retentionTime</code>: Retention policy</li>
+  <li><code class="language-plaintext highlighter-rouge">chunkSize</code>: Chunk size configuration</li>
+  <li><code class="language-plaintext highlighter-rouge">duplicatePolicy</code>: Duplicate handling policy</li>
+  <li><code class="language-plaintext highlighter-rouge">labels</code>: Associated labels</li>
+</ul>
+
+<p><strong>Example:</strong></p>
+<pre><code class="language-redis">TS.INFO temperature:sensor1
+</code></pre>
+
+<h2 id="aggregation-and-analytics">Aggregation and Analytics</h2>
+
+<h3 id="built-in-aggregation-functions">Built-in Aggregation Functions</h3>
+
+<p>Orbit supports comprehensive aggregation functions:</p>
+
+<ol>
+  <li><strong>AVG</strong> - Arithmetic mean</li>
+  <li><strong>SUM</strong> - Sum of all values</li>
+  <li><strong>MIN</strong> - Minimum value</li>
+  <li><strong>MAX</strong> - Maximum value</li>
+  <li><strong>COUNT</strong> - Number of samples</li>
+  <li><strong>FIRST</strong> - First value chronologically</li>
+  <li><strong>LAST</strong> - Last value chronologically</li>
+  <li><strong>RANGE</strong> - Difference between max and min</li>
+  <li><strong>STD</strong> - Standard deviation</li>
+</ol>
+
+<h3 id="time-based-bucketing">Time-based Bucketing</h3>
+
+<p>Aggregations are performed over time buckets specified in milliseconds:</p>
+
+<pre><code class="language-redis">
+# 5-minute averages
+TS.RANGE metrics:cpu 1609459200000 1609462800000 AGGREGATION AVG 300000
+
+# Hourly maximums
+TS.RANGE metrics:temperature 1609459200000 1609545600000 AGGREGATION MAX 3600000
+</code></pre>
+
+<h2 id="compaction-rules">Compaction Rules</h2>
+
+<p>Compaction rules automatically downsample high-resolution data to lower-resolution aggregated series.</p>
+
+<h3 id="tscreaterule">TS.CREATERULE</h3>
+
+<p>Creates an automatic compaction rule.</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>TS.CREATERULE sourceKey destKey AGGREGATION aggregation bucketDuration [retention]
+</code></pre></div></div>
+
+<p><strong>Example:</strong></p>
+<pre><code class="language-redis">
+# Create hourly averages from minute data
+TS.CREATERULE metrics:cpu:1min metrics:cpu:1hour AGGREGATION AVG 3600000
+
+# With retention for destination
+TS.CREATERULE temperature:raw temperature:hourly AGGREGATION AVG 3600000 2592000000
+</code></pre>
+
+<h3 id="tsdeleterule">TS.DELETERULE</h3>
+
+<p>Removes a compaction rule.</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>TS.DELETERULE sourceKey destKey
+</code></pre></div></div>
+
+<p><strong>Example:</strong></p>
+<pre><code class="language-redis">TS.DELETERULE metrics:cpu:1min metrics:cpu:1hour
+</code></pre>
+
+<h2 id="labels-and-metadata">Labels and Metadata</h2>
+
+<p>Time series can be tagged with labels for organization and filtering:</p>
+
+<pre><code class="language-redis">
+# Create series with labels
+TS.CREATE metrics:cpu LABELS server web01 datacenter us-east region production
+
+# Query by labels (using MGET/MRANGE)
+TS.MGET FILTER server=web01
+</code></pre>
+
+<p>Labels are key-value pairs that help:</p>
+<ul>
+  <li>Organize related time series</li>
+  <li>Enable multi-dimensional queries</li>
+  <li>Support monitoring and alerting systems</li>
+  <li>Facilitate data discovery</li>
+</ul>
+
+<h2 id="error-handling">Error Handling</h2>
+
+<h3 id="common-error-scenarios">Common Error Scenarios</h3>
+
+<ol>
+  <li><strong>Non-existent series</strong>: Operations on undefined time series return errors</li>
+  <li><strong>Invalid timestamps</strong>: Non-numeric or negative timestamps are rejected</li>
+  <li><strong>Duplicate timestamps</strong>: Handled according to the duplicate policy</li>
+  <li><strong>Invalid values</strong>: Non-numeric values are rejected</li>
+  <li><strong>Range errors</strong>: Invalid time ranges (end before start) are rejected</li>
+</ol>
+
+<h3 id="error-messages">Error Messages</h3>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>ERR wrong number of arguments for 'TS.ADD' command
+ERR invalid timestamp format  
+ERR actor error: [specific error]
+ERR failed to add sample: [reason]
+</code></pre></div></div>
+
+<h2 id="examples-and-use-cases">Examples and Use Cases</h2>
+
+<h3 id="iot-sensor-monitoring">IoT Sensor Monitoring</h3>
+
+<pre><code class="language-redis">
+# Create temperature sensors with metadata
+TS.CREATE temp:living_room LABELS room living location home sensor ds18b20
+TS.CREATE temp:kitchen LABELS room kitchen location home sensor ds18b20
+
+# Ingest sensor data
+TS.ADD temp:living_room * 22.5
+TS.ADD temp:kitchen * 24.1
+
+# Query recent temperatures
+TS.MGET temp:living_room temp:kitchen
+
+# Get daily averages
+TS.RANGE temp:living_room 1609459200000 1609545600000 AGGREGATION AVG 86400000
+</code></pre>
+
+<h3 id="application-performance-monitoring">Application Performance Monitoring</h3>
+
+<pre><code class="language-redis">
+# Create performance metrics
+TS.CREATE app:response_time LABELS service api version v2
+TS.CREATE app:request_count LABELS service api version v2
+TS.CREATE app:error_rate LABELS service api version v2
+
+# Track request metrics
+TS.ADD app:response_time * 120.5
+TS.INCRBY app:request_count 1
+TS.ADD app:error_rate * 0.02
+
+# Create compaction rules for long-term storage
+TS.CREATERULE app:response_time app:response_time:hourly AGGREGATION AVG 3600000
+TS.CREATERULE app:request_count app:request_count:hourly AGGREGATION SUM 3600000
+</code></pre>
+
+<h3 id="system-metrics-collection">System Metrics Collection</h3>
+
+<pre><code class="language-redis">
+# CPU usage tracking
+TS.CREATE system:cpu RETENTION 604800000 LABELS host server01 metric cpu
+TS.CREATE system:memory RETENTION 604800000 LABELS host server01 metric memory
+TS.CREATE system:disk RETENTION 604800000 LABELS host server01 metric disk
+
+# Batch insert multiple metrics
+TS.MADD system:cpu 1609459200000 75.2 system:memory 1609459200000 68.5 system:disk 1609459200000 42.1
+
+# Get system overview
+TS.MRANGE 1609459200000 1609462800000 system:cpu system:memory system:disk
+</code></pre>
+
+<h3 id="financial-time-series">Financial Time Series</h3>
+
+<pre><code class="language-redis">
+# Stock price tracking
+TS.CREATE stock:AAPL:price LABELS symbol AAPL exchange NASDAQ type price
+TS.CREATE stock:AAPL:volume LABELS symbol AAPL exchange NASDAQ type volume
+
+# Add price and volume data
+TS.ADD stock:AAPL:price 1609459200000 150.25
+TS.ADD stock:AAPL:volume 1609459200000 1250000
+
+# Calculate daily statistics
+TS.RANGE stock:AAPL:price 1609459200000 1609545600000 AGGREGATION MAX 86400000
+TS.RANGE stock:AAPL:price 1609459200000 1609545600000 AGGREGATION MIN 86400000
+</code></pre>
+
+<h2 id="performance-considerations">Performance Considerations</h2>
+
+<h3 id="write-performance">Write Performance</h3>
+<ul>
+  <li>Batch operations with <code class="language-plaintext highlighter-rouge">TS.MADD</code> for better throughput</li>
+  <li>Use appropriate chunk sizes (default 4096 is usually optimal)</li>
+  <li>Consider retention policies to limit memory usage</li>
+</ul>
+
+<h3 id="read-performance">Read Performance</h3>
+<ul>
+  <li>Use aggregation for large time ranges</li>
+  <li>Leverage compaction rules for pre-computed aggregates</li>
+  <li>Index series with meaningful labels</li>
+</ul>
+
+<h3 id="memory-management">Memory Management</h3>
+<ul>
+  <li>Set appropriate retention periods</li>
+  <li>Use compaction to reduce raw data storage</li>
+  <li>Monitor memory usage with <code class="language-plaintext highlighter-rouge">TS.INFO</code></li>
+</ul>
+
+<h3 id="scaling">Scaling</h3>
+<ul>
+  <li>Distribute time series across multiple Orbit nodes</li>
+  <li>Use consistent labeling for cross-node queries</li>
+  <li>Consider data locality for related time series</li>
+</ul>
+
+<h2 id="integration-examples">Integration Examples</h2>
+
+<h3 id="python-client">Python Client</h3>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">import</span> <span class="n">redis</span>
+<span class="kn">import</span> <span class="n">time</span>
+
+<span class="c1"># Connect to Orbit
+</span><span class="n">r</span> <span class="o">=</span> <span class="n">redis</span><span class="p">.</span><span class="nc">Redis</span><span class="p">(</span><span class="n">host</span><span class="o">=</span><span class="sh">'</span><span class="s">localhost</span><span class="sh">'</span><span class="p">,</span> <span class="n">port</span><span class="o">=</span><span class="mi">6379</span><span class="p">)</span>
+
+<span class="c1"># Create time series
+</span><span class="n">r</span><span class="p">.</span><span class="nf">execute_command</span><span class="p">(</span><span class="sh">'</span><span class="s">TS.CREATE</span><span class="sh">'</span><span class="p">,</span> <span class="sh">'</span><span class="s">temperature:sensor1</span><span class="sh">'</span><span class="p">,</span> <span class="sh">'</span><span class="s">LABELS</span><span class="sh">'</span><span class="p">,</span> <span class="sh">'</span><span class="s">location</span><span class="sh">'</span><span class="p">,</span> <span class="sh">'</span><span class="s">office</span><span class="sh">'</span><span class="p">)</span>
+
+<span class="c1"># Add data
+</span><span class="n">timestamp</span> <span class="o">=</span> <span class="nf">int</span><span class="p">(</span><span class="n">time</span><span class="p">.</span><span class="nf">time</span><span class="p">()</span> <span class="o">*</span> <span class="mi">1000</span><span class="p">)</span>
+<span class="n">r</span><span class="p">.</span><span class="nf">execute_command</span><span class="p">(</span><span class="sh">'</span><span class="s">TS.ADD</span><span class="sh">'</span><span class="p">,</span> <span class="sh">'</span><span class="s">temperature:sensor1</span><span class="sh">'</span><span class="p">,</span> <span class="n">timestamp</span><span class="p">,</span> <span class="mf">23.5</span><span class="p">)</span>
+
+<span class="c1"># Query data  
+</span><span class="n">result</span> <span class="o">=</span> <span class="n">r</span><span class="p">.</span><span class="nf">execute_command</span><span class="p">(</span><span class="sh">'</span><span class="s">TS.GET</span><span class="sh">'</span><span class="p">,</span> <span class="sh">'</span><span class="s">temperature:sensor1</span><span class="sh">'</span><span class="p">)</span>
+<span class="nf">print</span><span class="p">(</span><span class="sa">f</span><span class="sh">"</span><span class="s">Latest temperature: </span><span class="si">{</span><span class="n">result</span><span class="si">}</span><span class="sh">"</span><span class="p">)</span>
+</code></pre></div></div>
+
+<h3 id="nodejs-client">Node.js Client</h3>
+
+<div class="language-javascript highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">redis</span> <span class="o">=</span> <span class="nf">require</span><span class="p">(</span><span class="dl">'</span><span class="s1">redis</span><span class="dl">'</span><span class="p">);</span>
+<span class="kd">const</span> <span class="nx">client</span> <span class="o">=</span> <span class="nx">redis</span><span class="p">.</span><span class="nf">createClient</span><span class="p">();</span>
+
+<span class="c1">// Create and populate time series</span>
+<span class="k">async</span> <span class="kd">function</span> <span class="nf">example</span><span class="p">()</span> <span class="p">{</span>
+  <span class="k">await</span> <span class="nx">client</span><span class="p">.</span><span class="nf">sendCommand</span><span class="p">([</span><span class="dl">'</span><span class="s1">TS.CREATE</span><span class="dl">'</span><span class="p">,</span> <span class="dl">'</span><span class="s1">metrics:cpu</span><span class="dl">'</span><span class="p">]);</span>
+  
+  <span class="kd">const</span> <span class="nx">timestamp</span> <span class="o">=</span> <span class="nb">Date</span><span class="p">.</span><span class="nf">now</span><span class="p">();</span>
+  <span class="k">await</span> <span class="nx">client</span><span class="p">.</span><span class="nf">sendCommand</span><span class="p">([</span><span class="dl">'</span><span class="s1">TS.ADD</span><span class="dl">'</span><span class="p">,</span> <span class="dl">'</span><span class="s1">metrics:cpu</span><span class="dl">'</span><span class="p">,</span> <span class="nx">timestamp</span><span class="p">.</span><span class="nf">toString</span><span class="p">(),</span> <span class="dl">'</span><span class="s1">75.5</span><span class="dl">'</span><span class="p">]);</span>
+  
+  <span class="kd">const</span> <span class="nx">result</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">client</span><span class="p">.</span><span class="nf">sendCommand</span><span class="p">([</span><span class="dl">'</span><span class="s1">TS.GET</span><span class="dl">'</span><span class="p">,</span> <span class="dl">'</span><span class="s1">metrics:cpu</span><span class="dl">'</span><span class="p">]);</span>
+  <span class="nx">console</span><span class="p">.</span><span class="nf">log</span><span class="p">(</span><span class="dl">'</span><span class="s1">Latest CPU usage:</span><span class="dl">'</span><span class="p">,</span> <span class="nx">result</span><span class="p">);</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="go-client">Go Client</h3>
+
+<div class="language-go highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">package</span> <span class="n">main</span>
+
+<span class="k">import</span> <span class="p">(</span>
+    <span class="s">"time"</span>
+    <span class="s">"github.com/go-redis/redis/v8"</span>
+<span class="p">)</span>
+
+<span class="k">func</span> <span class="n">main</span><span class="p">()</span> <span class="p">{</span>
+    <span class="n">rdb</span> <span class="o">:=</span> <span class="n">redis</span><span class="o">.</span><span class="n">NewClient</span><span class="p">(</span><span class="o">&amp;</span><span class="n">redis</span><span class="o">.</span><span class="n">Options</span><span class="p">{</span>
+        <span class="n">Addr</span><span class="o">:</span> <span class="s">"localhost:6379"</span><span class="p">,</span>
+    <span class="p">})</span>
+    
+    <span class="c">// Create time series</span>
+    <span class="n">rdb</span><span class="o">.</span><span class="n">Do</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="s">"TS.CREATE"</span><span class="p">,</span> <span class="s">"temperature:sensor1"</span><span class="p">)</span><span class="o">.</span><span class="n">Result</span><span class="p">()</span>
+    
+    <span class="c">// Add sample</span>
+    <span class="n">timestamp</span> <span class="o">:=</span> <span class="n">time</span><span class="o">.</span><span class="n">Now</span><span class="p">()</span><span class="o">.</span><span class="n">UnixNano</span><span class="p">()</span> <span class="o">/</span> <span class="m">1e6</span>
+    <span class="n">rdb</span><span class="o">.</span><span class="n">Do</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="s">"TS.ADD"</span><span class="p">,</span> <span class="s">"temperature:sensor1"</span><span class="p">,</span> <span class="n">timestamp</span><span class="p">,</span> <span class="m">23.5</span><span class="p">)</span><span class="o">.</span><span class="n">Result</span><span class="p">()</span>
+    
+    <span class="c">// Get latest</span>
+    <span class="n">result</span> <span class="o">:=</span> <span class="n">rdb</span><span class="o">.</span><span class="n">Do</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="s">"TS.GET"</span><span class="p">,</span> <span class="s">"temperature:sensor1"</span><span class="p">)</span><span class="o">.</span><span class="n">Result</span><span class="p">()</span>
+    <span class="n">fmt</span><span class="o">.</span><span class="n">Println</span><span class="p">(</span><span class="s">"Latest temperature:"</span><span class="p">,</span> <span class="n">result</span><span class="p">)</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h2 id="migration-from-redis-timeseries">Migration from Redis TimeSeries</h2>
+
+<p>Orbit’s time series implementation is designed to be a drop-in replacement for Redis TimeSeries. Most existing applications using Redis TimeSeries commands will work without modification.</p>
+
+<h3 id="command-compatibility">Command Compatibility</h3>
+
+<ul>
+  <li>✅ All core TS.* commands supported</li>
+  <li>✅ Same parameter syntax and semantics</li>
+  <li>✅ Compatible data formats and return values</li>
+  <li>✅ Same aggregation functions and behavior</li>
+</ul>
+
+<h3 id="differences">Differences</h3>
+
+<ul>
+  <li>Built on Orbit’s distributed actor system</li>
+  <li>Enhanced scalability and fault tolerance</li>
+  <li>Consistent performance under high load</li>
+  <li>Native integration with Orbit’s other data types</li>
+</ul>
+
+<hr />
+
+<p>For more information about Orbit’s time series capabilities, see the <a href="/orbit-rs/README.md">Orbit documentation</a> or explore the <a href="./examples/">examples</a> directory.</p>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/orbit-rs/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Orbit-RS Documentation</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">TuringWorks</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

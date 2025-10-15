@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["CompressionType","StorageError"],"struct":["ColumnStatistics","CsvConfig","CsvHandler","LocalStorageProvider","ParquetConfig","ParquetHandler","PartitionInfo","S3Client","S3Config","S3StorageProvider","StorageConfig","StorageEngine","StorageMetadata","StorageStats"],"trait":["FileFormatHandler","StorageProvider"]};

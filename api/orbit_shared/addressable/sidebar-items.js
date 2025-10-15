@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Key"],"struct":["AddressableInvocation","AddressableInvocationArgument","AddressableLease","AddressableReference","NamespacedAddressableReference"],"trait":["ActorWithInt32Key","ActorWithInt64Key","ActorWithNoKey","ActorWithStringKey","Addressable"],"type":["AddressableInvocationArguments","AddressableType"]};

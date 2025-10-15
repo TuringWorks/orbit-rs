@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Quick Start Guide - Multi-Protocol Database Server | Orbit-RS Documentation</title>
+<meta name="generator" content="Jekyll v4.4.1" />
+<meta property="og:title" content="Quick Start Guide - Multi-Protocol Database Server" />
+<meta name="author" content="TuringWorks" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<meta property="og:description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<link rel="canonical" href="https://turingworks.github.io/orbit-rs/quick_start.html" />
+<meta property="og:url" content="https://turingworks.github.io/orbit-rs/quick_start.html" />
+<meta property="og:site_name" content="Orbit-RS Documentation" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Quick Start Guide - Multi-Protocol Database Server" />
+<meta name="twitter:site" content="@TuringWorksAI" />
+<meta name="twitter:creator" content="@TuringWorks" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","author":{"@type":"Person","name":"TuringWorks"},"description":"The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform","headline":"Quick Start Guide - Multi-Protocol Database Server","url":"https://turingworks.github.io/orbit-rs/quick_start.html"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/orbit-rs/assets/main.css">
+  <link rel="stylesheet" href="/orbit-rs/assets/css/custom.css"><link type="application/atom+xml" rel="alternate" href="https://turingworks.github.io/orbit-rs/feed.xml" title="Orbit-RS Documentation" /></head><body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/orbit-rs/">Orbit-RS Documentation</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/orbit-rs/">Orbit-RS Documentation</a><a class="page-link" href="/orbit-rs/project_overview.html">Orbit-RS: Comprehensive Project Overview</a><a class="page-link" href="/orbit-rs/quick_start.html">Quick Start Guide - Multi-Protocol Database Server</a><a class="page-link" href="/orbit-rs/roadmap/">Development Roadmap</a><a class="page-link" href="/orbit-rs/features/">Orbit-RS Feature Index</a><a class="page-link" href="/orbit-rs/compute-acceleration/">Hardware Acceleration Guide</a><a class="page-link" href="/orbit-rs/contributing.html">Contributing Guide</a><a class="page-link" href="/orbit-rs/overview.html">Architecture Overview</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <h1 id="orbit-rs-quick-start-guide">Orbit-RS Quick Start Guide</h1>
+
+<p><strong>One Server, All Protocols, Persistent Storage</strong> - Get a production-ready PostgreSQL + Redis + REST API + gRPC server with RocksDB persistence running in 30 seconds.</p>
+
+<h2 id="-what-youll-get">🎯 What You’ll Get</h2>
+
+<p><strong>Single <code class="language-plaintext highlighter-rouge">orbit-server</code> command gives you:</strong></p>
+<ul>
+  <li>🐘 <strong>PostgreSQL server</strong> (port 15432) - Full SQL with pgvector support + <strong>RocksDB persistence</strong></li>
+  <li>🔴 <strong>Redis server</strong> (port 6379) - Key-value + TTL operations + <strong>RocksDB persistence</strong></li>
+  <li>🌍 <strong>HTTP REST API</strong> (port 8080) - Web-friendly JSON interface</li>
+  <li>📡 <strong>gRPC API</strong> (port 50051) - High-performance actor management</li>
+  <li>🗄️ <strong>RocksDB Storage</strong> - LSM-tree persistent storage for all data</li>
+  <li>🔄 <strong>Data Persistence</strong> - All data survives server restarts with TTL support</li>
+</ul>
+
+<p><strong>✨ Key Innovation</strong>: Same data accessible through any protocol with instant consistency <strong>and full persistence</strong>!</p>
+
+<h2 id="prerequisites">Prerequisites</h2>
+
+<p>Before you begin, ensure you have the following installed:</p>
+
+<ul>
+  <li><strong>Rust 1.70+</strong> - <a href="https://rustup.rs/">Install Rust</a></li>
+  <li><strong>Protocol Buffers compiler (<code class="language-plaintext highlighter-rouge">protoc</code>)</strong> - <a href="https://grpc.io/docs/protoc-installation/">Install Protocol Buffers</a></li>
+  <li>(Optional) <strong>Docker</strong> - For containerized deployment</li>
+  <li>(Optional) <strong>Kubernetes cluster</strong> - For operator deployment</li>
+</ul>
+
+<h3 id="installing-protocol-buffers">Installing Protocol Buffers</h3>
+
+<h4 id="macos">macOS</h4>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>brew <span class="nb">install </span>protobuf
+</code></pre></div></div>
+
+<h4 id="ubuntudebian">Ubuntu/Debian</h4>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">sudo </span>apt update
+<span class="nb">sudo </span>apt <span class="nb">install </span>protobuf-compiler
+</code></pre></div></div>
+
+<h4 id="windows">Windows</h4>
+<p>Download from <a href="https://github.com/protocolbuffers/protobuf/releases">Protocol Buffers releases</a> or use:</p>
+<div class="language-powershell highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">choco</span><span class="w"> </span><span class="nx">install</span><span class="w"> </span><span class="nx">protoc</span><span class="w">
+</span></code></pre></div></div>
+
+<h2 id="-30-second-quick-start">🎆 30-Second Quick Start</h2>
+
+<h3 id="1-clone-and-build">1. Clone and Build</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>git clone https://github.com/TuringWorks/orbit-rs.git
+<span class="nb">cd </span>orbit-rs
+cargo build <span class="nt">--release</span>
+</code></pre></div></div>
+
+<h3 id="2-start-integrated-multi-protocol-server-with-rocksdb-persistence">2. Start Integrated Multi-Protocol Server with RocksDB Persistence</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Run the integrated server with all protocols enabled and RocksDB persistence</span>
+cargo run <span class="nt">--package</span> orbit-server <span class="nt">--example</span> integrated-server
+
+<span class="c"># 🎉 Server starting with all protocols and persistent storage:</span>
+<span class="c"># gRPC: localhost:50051 (Orbit clients)</span>
+<span class="c"># Redis: localhost:6379 (redis-cli, Redis clients) - PERSISTED with RocksDB</span>
+<span class="c"># PostgreSQL: localhost:15432 (psql, PostgreSQL clients) - PERSISTED with RocksDB</span>
+<span class="c"># Data Directory: ./orbit_integrated_data (LSM-tree files)</span>
+</code></pre></div></div>
+
+<h3 id="alternative-simple-examples">Alternative: Simple Examples</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Simple server without protocols (basic actor system only)</span>
+cargo run <span class="nt">--example</span> hello-world
+
+<span class="c"># PostgreSQL server only</span>
+cargo run <span class="nt">--package</span> orbit-server <span class="nt">--example</span> postgres-server
+
+<span class="c"># Redis server only</span>
+cargo run <span class="nt">--example</span> resp-server
+</code></pre></div></div>
+
+<h3 id="3-connect-with-standard-clients">3. Connect with Standard Clients</h3>
+
+<p><strong>PostgreSQL</strong> - Use any PostgreSQL client:</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>psql <span class="nt">-h</span> localhost <span class="nt">-p</span> 15432 <span class="nt">-U</span> orbit <span class="nt">-d</span> actors
+</code></pre></div></div>
+
+<p><strong>Redis</strong> - Use redis-cli or any Redis client:</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>redis-cli <span class="nt">-h</span> localhost <span class="nt">-p</span> 6379
+</code></pre></div></div>
+
+<p><strong>gRPC</strong> - Use OrbitClient or grpcurl:</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># List gRPC services</span>
+grpcurl <span class="nt">-plaintext</span> localhost:50051 list
+</code></pre></div></div>
+
+<h3 id="4-verify-multi-protocol-access">4. Verify Multi-Protocol Access</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Test all protocols are working</span>
+psql <span class="nt">-h</span> localhost <span class="nt">-p</span> 15432 <span class="nt">-U</span> orbit <span class="nt">-d</span> actors <span class="nt">-c</span> <span class="s2">"SELECT 'PostgreSQL Connected!';"</span>
+redis-cli <span class="nt">-h</span> localhost <span class="nt">-p</span> 6379 ping
+grpcurl <span class="nt">-plaintext</span> localhost:50051 orbit.HealthService/Check
+</code></pre></div></div>
+
+<h2 id="-multi-protocol-data-demo">🔄 Multi-Protocol Data Demo</h2>
+
+<p><strong>The same data is accessible through all protocols</strong> - here’s how:</p>
+
+<h3 id="cross-protocol-data-consistency-demo">Cross-Protocol Data Consistency Demo</h3>
+
+<p><strong>The key innovation: Same data, different protocols!</strong></p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Terminal 1: Write data via Redis</span>
+redis-cli <span class="nt">-h</span> localhost <span class="nt">-p</span> 6379
+127.0.0.1:6379&gt; SET greeting <span class="s2">"Hello from Redis!"</span>
+OK
+127.0.0.1:6379&gt; HSET user:alice name <span class="s2">"Alice"</span> email <span class="s2">"alice@orbit.com"</span> role <span class="s2">"admin"</span>
+<span class="o">(</span>integer<span class="o">)</span> 3
+
+<span class="c"># Terminal 2: Create table and insert via PostgreSQL</span>
+psql <span class="nt">-h</span> localhost <span class="nt">-p</span> 15432 <span class="nt">-U</span> orbit <span class="nt">-d</span> actors
+<span class="nv">actors</span><span class="o">=</span><span class="c"># CREATE TABLE users (id SERIAL PRIMARY KEY, name TEXT, email TEXT, role TEXT);</span>
+CREATE TABLE
+<span class="nv">actors</span><span class="o">=</span><span class="c"># INSERT INTO users (name, email, role) VALUES ('Bob', 'bob@orbit.com', 'user');</span>
+INSERT 0 1
+
+<span class="c"># Terminal 3: Verify cross-protocol access</span>
+<span class="c"># Read Redis data via SQL</span>
+<span class="nv">actors</span><span class="o">=</span><span class="c"># SELECT * FROM orbit_keys WHERE key = 'greeting';</span>
+<span class="c"># Read SQL data via Redis  </span>
+127.0.0.1:6379&gt; HGETALL user:bob
+1<span class="o">)</span> <span class="s2">"name"</span>
+2<span class="o">)</span> <span class="s2">"Bob"</span>
+3<span class="o">)</span> <span class="s2">"email"</span>
+4<span class="o">)</span> <span class="s2">"bob@orbit.com"</span>
+5<span class="o">)</span> <span class="s2">"role"</span>
+6<span class="o">)</span> <span class="s2">"user"</span>
+</code></pre></div></div>
+
+<p>✨ <strong>Same underlying data store, multiple protocol interfaces!</strong></p>
+
+<h3 id="vector-operations-across-protocols">Vector Operations Across Protocols</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># PostgreSQL with pgvector</span>
+psql <span class="nt">-h</span> localhost <span class="nt">-p</span> 5432 <span class="nt">-U</span> postgres
+<span class="nv">postgres</span><span class="o">=</span><span class="c"># CREATE EXTENSION vector;</span>
+<span class="nv">postgres</span><span class="o">=</span><span class="c"># CREATE TABLE documents (</span>
+    <span class="nb">id </span>SERIAL PRIMARY KEY,
+    content TEXT,
+    embedding VECTOR<span class="o">(</span>3<span class="o">)</span>  <span class="nt">--</span> Using 3D vectors <span class="k">for </span>demo
+<span class="o">)</span><span class="p">;</span>
+<span class="nv">postgres</span><span class="o">=</span><span class="c"># INSERT INTO documents (content, embedding) VALUES </span>
+    <span class="o">(</span><span class="s1">'Machine learning'</span>, <span class="s1">'[0.1, 0.2, 0.3]'</span><span class="o">)</span>,
+    <span class="o">(</span><span class="s1">'Deep learning'</span>, <span class="s1">'[0.15, 0.25, 0.35]'</span><span class="o">)</span>,
+    <span class="o">(</span><span class="s1">'Data science'</span>, <span class="s1">'[0.2, 0.3, 0.4]'</span><span class="o">)</span><span class="p">;</span>
+
+<span class="c"># Vector similarity search via SQL</span>
+<span class="nv">postgres</span><span class="o">=</span><span class="c"># SELECT content, embedding &lt;-&gt; '[0.1, 0.2, 0.3]' AS distance </span>
+           FROM documents 
+           ORDER BY embedding &lt;-&gt; <span class="s1">'[0.1, 0.2, 0.3]'</span> 
+           LIMIT 2<span class="p">;</span>
+</code></pre></div></div>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Same vector operations via Redis</span>
+redis-cli <span class="nt">-h</span> localhost <span class="nt">-p</span> 6379
+
+<span class="c"># Add vectors with metadata</span>
+127.0.0.1:6379&gt; VECTOR.ADD doc-embeddings doc1 <span class="s2">"0.1,0.2,0.3"</span> content <span class="s2">"Machine learning"</span>
+127.0.0.1:6379&gt; VECTOR.ADD doc-embeddings doc2 <span class="s2">"0.15,0.25,0.35"</span> content <span class="s2">"Deep learning"</span>
+127.0.0.1:6379&gt; VECTOR.ADD doc-embeddings doc3 <span class="s2">"0.2,0.3,0.4"</span> content <span class="s2">"Data science"</span>
+
+<span class="c"># Vector similarity search</span>
+127.0.0.1:6379&gt; VECTOR.SEARCH doc-embeddings <span class="s2">"0.1,0.2,0.3"</span> 2 METRIC COSINE
+1<span class="o">)</span> 1<span class="o">)</span> <span class="s2">"doc1"</span>
+   2<span class="o">)</span> <span class="s2">"1.000000"</span>
+2<span class="o">)</span> 1<span class="o">)</span> <span class="s2">"doc2"</span>
+   2<span class="o">)</span> <span class="s2">"0.998"</span>
+</code></pre></div></div>
+
+<h3 id="rest-api-access">REST API Access</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Query data via HTTP REST API</span>
+curl <span class="s2">"http://localhost:8080/api/users"</span>
+curl <span class="s2">"http://localhost:8080/api/users/1"</span>
+
+<span class="c"># Vector search via REST</span>
+curl <span class="nt">-X</span> POST <span class="s2">"http://localhost:8080/api/vectors/search"</span> <span class="se">\</span>
+  <span class="nt">-H</span> <span class="s2">"Content-Type: application/json"</span> <span class="se">\</span>
+  <span class="nt">-d</span> <span class="s1">'{
+    "collection": "doc-embeddings",
+    "vector": [0.1, 0.2, 0.3],
+    "limit": 5,
+    "metric": "cosine"
+  }'</span>
+
+<span class="c"># Health and status endpoints</span>
+curl http://localhost:8080/health
+curl http://localhost:8080/metrics
+</code></pre></div></div>
+
+<h2 id="basic-usage">Basic Usage</h2>
+
+<h3 id="simple-actor-example">Simple Actor Example</h3>
+
+<p>Here’s a minimal example to get you started with Orbit-RS:</p>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">orbit_client</span><span class="p">::</span><span class="n">OrbitClient</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">orbit_shared</span><span class="p">::{</span><span class="n">ActorWithStringKey</span><span class="p">,</span> <span class="n">Key</span><span class="p">};</span>
+<span class="k">use</span> <span class="nn">async_trait</span><span class="p">::</span><span class="n">async_trait</span><span class="p">;</span>
+
+<span class="c1">// Define an actor trait</span>
+
+<span class="nd">#[async_trait]</span>
+<span class="k">trait</span> <span class="n">GreeterActor</span><span class="p">:</span> <span class="n">ActorWithStringKey</span> <span class="p">{</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">greet</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">String</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="nb">String</span><span class="p">,</span> <span class="nn">orbit_shared</span><span class="p">::</span><span class="n">OrbitError</span><span class="o">&gt;</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="c1">// Implement the actor</span>
+<span class="k">struct</span> <span class="n">GreeterActorImpl</span><span class="p">;</span>
+
+<span class="nd">#[async_trait]</span>
+<span class="k">impl</span> <span class="n">GreeterActor</span> <span class="k">for</span> <span class="n">GreeterActorImpl</span> <span class="p">{</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">greet</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">String</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="nb">String</span><span class="p">,</span> <span class="nn">orbit_shared</span><span class="p">::</span><span class="n">OrbitError</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="nf">Ok</span><span class="p">(</span><span class="nd">format!</span><span class="p">(</span><span class="s">"Hello, {}!"</span><span class="p">,</span> <span class="n">name</span><span class="p">))</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+
+<span class="nd">#[tokio::main]</span>
+<span class="k">async</span> <span class="k">fn</span> <span class="nf">main</span><span class="p">()</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="p">(),</span> <span class="nb">Box</span><span class="o">&lt;</span><span class="k">dyn</span> <span class="nn">std</span><span class="p">::</span><span class="nn">error</span><span class="p">::</span><span class="n">Error</span><span class="o">&gt;&gt;</span> <span class="p">{</span>
+    <span class="c1">// Create a client</span>
+    <span class="k">let</span> <span class="n">client</span> <span class="o">=</span> <span class="nn">OrbitClient</span><span class="p">::</span><span class="nf">builder</span><span class="p">()</span>
+        <span class="nf">.with_namespace</span><span class="p">(</span><span class="s">"demo"</span><span class="p">)</span>
+        <span class="nf">.build</span><span class="p">()</span>
+        <span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+    
+    <span class="c1">// Get an actor reference</span>
+    <span class="k">let</span> <span class="n">greeter</span> <span class="o">=</span> <span class="n">client</span><span class="py">.actor_reference</span><span class="p">::</span><span class="o">&lt;</span><span class="k">dyn</span> <span class="n">GreeterActor</span><span class="o">&gt;</span><span class="p">(</span>
+        <span class="nn">Key</span><span class="p">::</span><span class="n">StringKey</span> <span class="p">{</span> <span class="n">key</span><span class="p">:</span> <span class="s">"my-greeter"</span><span class="nf">.to_string</span><span class="p">()</span> <span class="p">}</span>
+    <span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+    
+    <span class="c1">// Invoke the actor</span>
+    <span class="k">let</span> <span class="n">greeting</span> <span class="o">=</span> <span class="n">greeter</span><span class="nf">.greet</span><span class="p">(</span><span class="s">"World"</span><span class="nf">.to_string</span><span class="p">())</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+    <span class="nd">println!</span><span class="p">(</span><span class="s">"{}"</span><span class="p">,</span> <span class="n">greeting</span><span class="p">);</span> <span class="c1">// "Hello, World!"</span>
+    
+    <span class="nf">Ok</span><span class="p">(())</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="distributed-transactions-example">Distributed Transactions Example</h3>
+
+<p>For more advanced usage with distributed transactions:</p>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">orbit_shared</span><span class="p">::{</span>
+    <span class="nn">transactions</span><span class="p">::</span><span class="o">*</span><span class="p">,</span>
+    <span class="nn">transport</span><span class="p">::</span><span class="o">*</span><span class="p">,</span>
+    <span class="n">AddressableReference</span><span class="p">,</span> <span class="n">Key</span><span class="p">,</span> <span class="n">NodeId</span><span class="p">,</span>
+<span class="p">};</span>
+<span class="k">use</span> <span class="nn">std</span><span class="p">::{</span><span class="nn">sync</span><span class="p">::</span><span class="nb">Arc</span><span class="p">,</span> <span class="nn">time</span><span class="p">::</span><span class="n">Duration</span><span class="p">};</span>
+
+<span class="nd">#[tokio::main]</span>
+<span class="k">async</span> <span class="k">fn</span> <span class="nf">main</span><span class="p">()</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="p">(),</span> <span class="nb">Box</span><span class="o">&lt;</span><span class="k">dyn</span> <span class="nn">std</span><span class="p">::</span><span class="nn">error</span><span class="p">::</span><span class="n">Error</span><span class="o">&gt;&gt;</span> <span class="p">{</span>
+    <span class="c1">// Create transaction coordinator</span>
+    <span class="k">let</span> <span class="n">node_id</span> <span class="o">=</span> <span class="nn">NodeId</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="s">"coordinator"</span><span class="nf">.to_string</span><span class="p">(),</span> <span class="s">"cluster"</span><span class="nf">.to_string</span><span class="p">());</span>
+    <span class="k">let</span> <span class="n">config</span> <span class="o">=</span> <span class="nn">TransactionConfig</span><span class="p">::</span><span class="nf">default</span><span class="p">();</span>
+    <span class="k">let</span> <span class="n">transport</span> <span class="o">=</span> <span class="nn">Arc</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="nn">GrpcTransactionMessageSender</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="cm">/* ... */</span><span class="p">));</span>
+    
+    <span class="k">let</span> <span class="n">coordinator</span> <span class="o">=</span> <span class="nn">TransactionCoordinator</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="n">node_id</span><span class="p">,</span> <span class="n">config</span><span class="p">,</span> <span class="n">transport</span><span class="p">);</span>
+    
+    <span class="c1">// Begin distributed transaction</span>
+    <span class="k">let</span> <span class="n">tx_id</span> <span class="o">=</span> <span class="n">coordinator</span><span class="nf">.begin_transaction</span><span class="p">(</span><span class="nf">Some</span><span class="p">(</span><span class="nn">Duration</span><span class="p">::</span><span class="nf">from_secs</span><span class="p">(</span><span class="mi">30</span><span class="p">)))</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+    
+    <span class="c1">// Add banking operations</span>
+    <span class="k">let</span> <span class="n">debit_operation</span> <span class="o">=</span> <span class="nn">TransactionOperation</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span>
+        <span class="n">AddressableReference</span> <span class="p">{</span>
+            <span class="n">addressable_type</span><span class="p">:</span> <span class="s">"BankAccount"</span><span class="nf">.to_string</span><span class="p">(),</span>
+            <span class="n">key</span><span class="p">:</span> <span class="nn">Key</span><span class="p">::</span><span class="n">StringKey</span> <span class="p">{</span> <span class="n">key</span><span class="p">:</span> <span class="s">"alice"</span><span class="nf">.to_string</span><span class="p">()</span> <span class="p">},</span>
+        <span class="p">},</span>
+        <span class="s">"debit"</span><span class="nf">.to_string</span><span class="p">(),</span>
+        <span class="nn">serde_json</span><span class="p">::</span><span class="nd">json!</span><span class="p">({</span><span class="s">"amount"</span><span class="p">:</span> <span class="mi">100</span><span class="p">}),</span>
+    <span class="p">)</span><span class="nf">.with_compensation</span><span class="p">(</span><span class="nn">serde_json</span><span class="p">::</span><span class="nd">json!</span><span class="p">({</span><span class="s">"amount"</span><span class="p">:</span> <span class="mi">100</span><span class="p">,</span> <span class="s">"action"</span><span class="p">:</span> <span class="s">"credit"</span><span class="p">}));</span>
+    
+    <span class="k">let</span> <span class="n">credit_operation</span> <span class="o">=</span> <span class="nn">TransactionOperation</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span>
+        <span class="n">AddressableReference</span> <span class="p">{</span>
+            <span class="n">addressable_type</span><span class="p">:</span> <span class="s">"BankAccount"</span><span class="nf">.to_string</span><span class="p">(),</span>
+            <span class="n">key</span><span class="p">:</span> <span class="nn">Key</span><span class="p">::</span><span class="n">StringKey</span> <span class="p">{</span> <span class="n">key</span><span class="p">:</span> <span class="s">"bob"</span><span class="nf">.to_string</span><span class="p">()</span> <span class="p">},</span>
+        <span class="p">},</span>
+        <span class="s">"credit"</span><span class="nf">.to_string</span><span class="p">(),</span>
+        <span class="nn">serde_json</span><span class="p">::</span><span class="nd">json!</span><span class="p">({</span><span class="s">"amount"</span><span class="p">:</span> <span class="mi">100</span><span class="p">}),</span>
+    <span class="p">)</span><span class="nf">.with_compensation</span><span class="p">(</span><span class="nn">serde_json</span><span class="p">::</span><span class="nd">json!</span><span class="p">({</span><span class="s">"amount"</span><span class="p">:</span> <span class="mi">100</span><span class="p">,</span> <span class="s">"action"</span><span class="p">:</span> <span class="s">"debit"</span><span class="p">}));</span>
+    
+    <span class="n">coordinator</span><span class="nf">.add_operation</span><span class="p">(</span><span class="o">&amp;</span><span class="n">tx_id</span><span class="p">,</span> <span class="n">debit_operation</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+    <span class="n">coordinator</span><span class="nf">.add_operation</span><span class="p">(</span><span class="o">&amp;</span><span class="n">tx_id</span><span class="p">,</span> <span class="n">credit_operation</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+    
+    <span class="c1">// Execute 2-phase commit</span>
+    <span class="n">coordinator</span><span class="nf">.commit_transaction</span><span class="p">(</span><span class="o">&amp;</span><span class="n">tx_id</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+    
+    <span class="nd">println!</span><span class="p">(</span><span class="s">"🎉 Transaction {} committed successfully!"</span><span class="p">,</span> <span class="n">tx_id</span><span class="p">);</span>
+    <span class="nf">Ok</span><span class="p">(())</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h2 id="running-examples">Running Examples</h2>
+
+<p>Orbit-RS includes several working examples to demonstrate different features:</p>
+
+<h3 id="integrated-multi-protocol-server-recommended">Integrated Multi-Protocol Server (RECOMMENDED)</h3>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Run the full integrated server with all protocols</span>
+cargo run <span class="nt">--package</span> orbit-server <span class="nt">--example</span> integrated-server
+
+<span class="c"># Connect with any client:</span>
+<span class="c"># PostgreSQL: psql -h localhost -p 15432 -U orbit -d actors</span>
+<span class="c"># Redis: redis-cli -h localhost -p 6379</span>
+<span class="c"># gRPC: grpcurl -plaintext localhost:50051 list</span>
+</code></pre></div></div>
+
+<h3 id="individual-protocol-examples">Individual Protocol Examples</h3>
+
+<p><strong>Hello World (Basic Actor System)</strong></p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>cargo run <span class="nt">--example</span> hello-world
+</code></pre></div></div>
+
+<p><strong>PostgreSQL Server Only</strong></p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>cargo run <span class="nt">--package</span> orbit-server <span class="nt">--example</span> postgres-server
+<span class="c"># Connect: psql -h localhost -p 5433 -U orbit -d actors</span>
+</code></pre></div></div>
+
+<p><strong>Redis Server Only</strong></p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>cargo run <span class="nt">--example</span> resp-server
+<span class="c"># Connect: redis-cli -h localhost -p 6379</span>
+</code></pre></div></div>
+
+<p><strong>Other Demos</strong></p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Storage architecture demo</span>
+cargo run <span class="nt">--example</span> postgres_storage_demo
+
+<span class="c"># Query language parsing</span>
+cargo run <span class="nt">--example</span> aql_parser_test
+
+<span class="c"># Distributed counter</span>
+cargo run <span class="nt">--example</span> distributed_counter
+</code></pre></div></div>
+
+<h2 id="️-configuration">⚙️ Configuration</h2>
+
+<h3 id="development-vs-production-modes">Development vs Production Modes</h3>
+
+<p><strong>Development Mode</strong> (<code class="language-plaintext highlighter-rouge">--dev-mode</code>):</p>
+<ul>
+  <li>All protocols enabled automatically</li>
+  <li>Verbose debug logging</li>
+  <li>Development-friendly defaults</li>
+  <li>Use for local testing only</li>
+</ul>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Development - all protocols active</span>
+orbit-server <span class="nt">--dev-mode</span>
+</code></pre></div></div>
+
+<p><strong>Production Mode</strong>:</p>
+<ul>
+  <li>Uses configuration file</li>
+  <li>Controlled protocol activation</li>
+  <li>Production logging levels</li>
+  <li>Security settings enabled</li>
+</ul>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Production with configuration file</span>
+orbit-server <span class="nt">--config</span> /etc/orbit/production.toml
+</code></pre></div></div>
+
+<h3 id="production-configuration">Production Configuration</h3>
+
+<p>Create <code class="language-plaintext highlighter-rouge">/etc/orbit/production.toml</code>:</p>
+
+<div class="language-toml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">[</span><span class="n">server</span><span class="k">]</span>
+<span class="n">bind_address</span> <span class="o">=</span><span class="w"> </span><span class="s">"0.0.0.0"</span>
+<span class="n">environment</span> <span class="o">=</span><span class="w"> </span><span class="s">"Production"</span>
+<span class="n">node_id</span> <span class="o">=</span><span class="w"> </span><span class="s">"orbit-prod-01"</span>
+
+<span class="c"># Enable only needed protocols</span>
+<span class="k">[</span><span class="n">protocols</span><span class="k">.</span><span class="n">postgresql</span><span class="k">]</span>
+<span class="n">enabled</span> <span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+<span class="n">port</span> <span class="o">=</span><span class="w"> </span><span class="mi">5432</span>
+<span class="n">max_connections</span> <span class="o">=</span><span class="w"> </span><span class="mi">5000</span>
+
+<span class="k">[</span><span class="n">protocols</span><span class="k">.</span><span class="n">redis</span><span class="k">]</span>  
+<span class="n">enabled</span> <span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+<span class="n">port</span> <span class="o">=</span><span class="w"> </span><span class="mi">6379</span>
+<span class="n">max_connections</span> <span class="o">=</span><span class="w"> </span><span class="mi">5000</span>
+
+<span class="k">[</span><span class="n">protocols</span><span class="k">.</span><span class="n">rest</span><span class="k">]</span>
+<span class="n">enabled</span> <span class="o">=</span><span class="w"> </span><span class="kc">false</span>  <span class="c"># Disable if not needed</span>
+
+<span class="k">[</span><span class="n">protocols</span><span class="k">.</span><span class="n">grpc</span><span class="k">]</span>
+<span class="n">enabled</span> <span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+<span class="n">port</span> <span class="o">=</span><span class="w"> </span><span class="mi">50051</span>
+
+<span class="c"># Vector operations</span>
+<span class="k">[</span><span class="n">protocols</span><span class="k">.</span><span class="n">postgresql</span><span class="k">.</span><span class="n">vector_ops</span><span class="k">]</span>
+<span class="n">default_metric</span> <span class="o">=</span><span class="w"> </span><span class="s">"cosine"</span>
+<span class="n">max_dimensions</span> <span class="o">=</span><span class="w"> </span><span class="mi">1536</span>
+<span class="n">batch_size</span> <span class="o">=</span><span class="w"> </span><span class="mi">1000</span>
+<span class="n">enable_simd</span> <span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+
+<span class="c"># Production security</span>
+<span class="k">[</span><span class="n">security</span><span class="k">.</span><span class="n">authentication</span><span class="k">]</span>
+<span class="n">enabled</span> <span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+<span class="n">methods</span> <span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s">"JWT"</span><span class="p">]</span>
+
+<span class="k">[</span><span class="n">security</span><span class="k">.</span><span class="n">authentication</span><span class="k">.</span><span class="n">jwt</span><span class="k">]</span>
+<span class="n">secret_key</span> <span class="o">=</span><span class="w"> </span><span class="s">"${JWT_SECRET}"</span>  <span class="c"># From environment</span>
+<span class="n">expiration_secs</span> <span class="o">=</span><span class="w"> </span><span class="mi">3600</span>
+
+<span class="c"># Performance tuning</span>
+<span class="k">[</span><span class="n">performance</span><span class="k">.</span><span class="n">memory</span><span class="k">]</span>
+<span class="n">max_memory_mb</span> <span class="o">=</span><span class="w"> </span><span class="mi">16384</span>  <span class="c"># 16GB</span>
+
+<span class="k">[</span><span class="n">performance</span><span class="k">.</span><span class="n">cpu</span><span class="k">]</span>
+<span class="n">worker_threads</span> <span class="o">=</span><span class="w"> </span><span class="mi">32</span>
+<span class="n">enable_simd</span> <span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+
+<span class="c"># Production logging</span>
+<span class="k">[</span><span class="n">logging</span><span class="k">]</span>
+<span class="n">level</span> <span class="o">=</span><span class="w"> </span><span class="s">"warn"</span>
+<span class="n">format</span> <span class="o">=</span><span class="w"> </span><span class="s">"json"</span>
+
+<span class="k">[[</span><span class="n">logging</span><span class="k">.</span><span class="n">outputs</span><span class="k">]]</span>
+<span class="n">output_type</span> <span class="o">=</span><span class="w"> </span><span class="s">"file"</span>
+<span class="n">file_path</span> <span class="o">=</span><span class="w"> </span><span class="s">"/var/log/orbit/orbit-server.log"</span>
+
+<span class="c"># Monitoring</span>
+<span class="k">[</span><span class="n">monitoring</span><span class="k">.</span><span class="n">metrics</span><span class="k">]</span>
+<span class="n">enabled</span> <span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+<span class="n">port</span> <span class="o">=</span><span class="w"> </span><span class="mi">9090</span>
+
+<span class="k">[</span><span class="n">monitoring</span><span class="k">.</span><span class="n">health_checks</span><span class="k">]</span>
+<span class="n">enabled</span> <span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+<span class="n">port</span> <span class="o">=</span><span class="w"> </span><span class="mi">8081</span>
+</code></pre></div></div>
+
+<h3 id="generate-configuration-template">Generate Configuration Template</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Generate example configuration</span>
+orbit-server <span class="nt">--generate-config</span> <span class="o">&gt;</span> orbit-server.toml
+
+<span class="c"># Edit for your needs</span>
+vim orbit-server.toml
+
+<span class="c"># Run with configuration</span>
+orbit-server <span class="nt">--config</span> orbit-server.toml
+</code></pre></div></div>
+
+<h3 id="command-line-options">Command Line Options</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Enable specific protocols</span>
+orbit-server <span class="se">\</span>
+  <span class="nt">--enable-postgresql</span> <span class="se">\</span>
+  <span class="nt">--enable-redis</span> <span class="se">\</span>
+  <span class="nt">--postgres-port</span> 5432 <span class="se">\</span>
+  <span class="nt">--redis-port</span> 6379
+
+<span class="c"># With clustering</span>
+orbit-server <span class="se">\</span>
+  <span class="nt">--config</span> production.toml <span class="se">\</span>
+  <span class="nt">--seed-nodes</span> node1:7946,node2:7946
+</code></pre></div></div>
+
+<h2 id="development-setup">Development Setup</h2>
+
+<h3 id="ide-setup">IDE Setup</h3>
+
+<h4 id="vs-code">VS Code</h4>
+<p>Recommended extensions:</p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">rust-analyzer</code> - Rust language server</li>
+  <li><code class="language-plaintext highlighter-rouge">CodeLLDB</code> - Debugger for Rust</li>
+  <li><code class="language-plaintext highlighter-rouge">crates</code> - Cargo dependency management</li>
+</ul>
+
+<h4 id="intellij-idea">IntelliJ IDEA</h4>
+<ul>
+  <li>Install the Rust plugin</li>
+  <li>Configure the Rust toolchain in settings</li>
+</ul>
+
+<h3 id="development-commands">Development Commands</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Fast compile check</span>
+cargo check
+
+<span class="c"># Lint with Clippy</span>
+cargo clippy
+
+<span class="c"># Format code</span>
+cargo <span class="nb">fmt</span>
+
+<span class="c"># Security audit</span>
+cargo audit
+
+<span class="c"># Run benchmarks</span>
+cargo bench
+</code></pre></div></div>
+
+<h3 id="testing">Testing</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Run unit tests</span>
+cargo <span class="nb">test</span> <span class="nt">--workspace</span> <span class="nt">--lib</span>
+
+<span class="c"># Run integration tests  </span>
+cargo <span class="nb">test</span> <span class="nt">--workspace</span> <span class="nt">--test</span> integration
+
+<span class="c"># Run BDD scenarios</span>
+cargo <span class="nb">test</span> <span class="nt">--workspace</span> <span class="nt">--test</span> bdd
+
+<span class="c"># Run with coverage</span>
+cargo tarpaulin <span class="nt">--out</span> Html
+</code></pre></div></div>
+
+<h2 id="troubleshooting">Troubleshooting</h2>
+
+<h3 id="common-issues">Common Issues</h3>
+
+<h4 id="protocol-buffers-not-found">Protocol Buffers Not Found</h4>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>error: Could not find `protoc` installation
+</code></pre></div></div>
+<p><strong>Solution</strong>: Install Protocol Buffers compiler as described in prerequisites.</p>
+
+<h4 id="rust-version-too-old">Rust Version Too Old</h4>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>error: package requires Rust 1.70 or newer
+</code></pre></div></div>
+<p><strong>Solution</strong>: Update Rust using <code class="language-plaintext highlighter-rouge">rustup update</code></p>
+
+<h4 id="port-already-in-use">Port Already in Use</h4>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>error: Address already in use (os error 48)
+</code></pre></div></div>
+<p><strong>Solution</strong>: Use a different port or stop the conflicting service.</p>
+
+<h3 id="getting-help">Getting Help</h3>
+
+<ul>
+  <li>📖 <a href="/orbit-rs/README.md">Full Documentation</a></li>
+  <li>🐛 <a href="https://github.com/TuringWorks/orbit-rs/issues">Issue Tracker</a></li>
+  <li>💬 <a href="https://github.com/TuringWorks/orbit-rs/discussions">Discussions</a></li>
+</ul>
+
+<h2 id="-next-steps">🚀 Next Steps</h2>
+
+<p>Now that you have Orbit-RS multi-protocol server running, explore these guides:</p>
+
+<h3 id="multi-protocol-features"><strong>Multi-Protocol Features</strong></h3>
+<ul>
+  <li>🌟 <strong><a href="/orbit-rs/NATIVE_MULTIPROTOCOL.md">Native Multi-Protocol Guide</a></strong> - Complete multi-protocol documentation</li>
+  <li>🔄 <strong><a href="../examples/multiprotocol-demo/">Multi-Protocol Demo</a></strong> - Interactive demonstration</li>
+  <li>⚙️ <strong><a href="CONFIGURATION.md">Configuration Reference</a></strong> - Complete configuration guide</li>
+  <li>📊 <strong><a href="PERFORMANCE_TUNING.md">Performance Tuning</a></strong> - Optimize for your workload</li>
+</ul>
+
+<h3 id="protocol-specific-guides"><strong>Protocol-Specific Guides</strong></h3>
+<ul>
+  <li>🐘 <strong><a href="postgres/POSTGRESQL_GUIDE.md">PostgreSQL Compatibility</a></strong> - SQL features and pgvector</li>
+  <li>🔴 <strong><a href="redis/REDIS_GUIDE.md">Redis Compatibility</a></strong> - Key-value and vector operations</li>
+  <li>🌍 <strong><a href="rest/REST_API.md">REST API Reference</a></strong> - HTTP endpoints and usage</li>
+  <li>🔢 <strong><a href="VECTOR_OPERATIONS.md">Vector Operations Guide</a></strong> - Cross-protocol vector search</li>
+</ul>
+
+<h3 id="advanced-features"><strong>Advanced Features</strong></h3>
+<ul>
+  <li>💎 <strong><a href="/orbit-rs/features/transaction_features.html">Transaction Features</a></strong> - Distributed ACID transactions</li>
+  <li>📊 <strong><a href="streaming/STREAMING_GUIDE.md">Real-time Streaming</a></strong> - CDC and event sourcing</li>
+  <li>☘️ <strong><a href="/orbit-rs/kubernetes_deployment.html">Kubernetes Deployment</a></strong> - Production deployment</li>
+  <li>🚀 <strong><a href="actors/ACTOR_GUIDE.md">Actor System Guide</a></strong> - Virtual actors and distribution</li>
+</ul>
+
+<h3 id="development--operations"><strong>Development &amp; Operations</strong></h3>
+<ul>
+  <li>👩‍💻 <strong><a href="../DEVELOPMENT.md">Development Guide</a></strong> - Contributing to Orbit-RS</li>
+  <li>🛡️ <strong><a href="security/SECURITY_GUIDE.md">Security Guide</a></strong> - Authentication and authorization</li>
+  <li>📊 <strong><a href="monitoring/MONITORING_GUIDE.md">Monitoring Guide</a></strong> - Metrics and observability</li>
+  <li>🐛 <strong><a href="troubleshooting/TROUBLESHOOTING.md">Troubleshooting</a></strong> - Common issues and solutions</li>
+</ul>
+
+<h3 id="migration-guides"><strong>Migration Guides</strong></h3>
+<ul>
+  <li>🔄 <strong><a href="migration/FROM_POSTGRESQL.md">PostgreSQL Migration</a></strong> - Migrate from PostgreSQL</li>
+  <li>🔄 <strong><a href="migration/FROM_REDIS.md">Redis Migration</a></strong> - Migrate from Redis</li>
+  <li>🔄 <strong><a href="migration/MULTI_DATABASE.md">Multi-Database Migration</a></strong> - Consolidate multiple databases</li>
+</ul>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/orbit-rs/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Orbit-RS Documentation</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">TuringWorks</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["AuthToken","AuthenticationManager","LdapAuthProvider","OAuth2AuthProvider","SamlAuthProvider"],"trait":["AuthenticationProvider"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["AzureAddressableDirectoryProvider","AzureClusterNodeProvider","DigitalOceanSpacesAddressableDirectoryProvider","DigitalOceanSpacesClusterNodeProvider","GoogleCloudAddressableDirectoryProvider","GoogleCloudClusterNodeProvider","ObjectMetadata","S3AddressableDirectoryProvider","S3ClusterNodeProvider","StoredLease","StoredNode"]};

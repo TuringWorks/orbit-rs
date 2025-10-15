@@ -1,0 +1,979 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Development Guide | Orbit-RS Documentation</title>
+<meta name="generator" content="Jekyll v4.4.1" />
+<meta property="og:title" content="Development Guide" />
+<meta name="author" content="TuringWorks" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<meta property="og:description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<link rel="canonical" href="https://turingworks.github.io/orbit-rs/development/development.html" />
+<meta property="og:url" content="https://turingworks.github.io/orbit-rs/development/development.html" />
+<meta property="og:site_name" content="Orbit-RS Documentation" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Development Guide" />
+<meta name="twitter:site" content="@TuringWorksAI" />
+<meta name="twitter:creator" content="@TuringWorks" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","author":{"@type":"Person","name":"TuringWorks"},"description":"The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform","headline":"Development Guide","url":"https://turingworks.github.io/orbit-rs/development/development.html"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/orbit-rs/assets/main.css">
+  <link rel="stylesheet" href="/orbit-rs/assets/css/custom.css"><link type="application/atom+xml" rel="alternate" href="https://turingworks.github.io/orbit-rs/feed.xml" title="Orbit-RS Documentation" /></head><body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/orbit-rs/">Orbit-RS Documentation</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/orbit-rs/">Orbit-RS Documentation</a><a class="page-link" href="/orbit-rs/project_overview.html">Orbit-RS: Comprehensive Project Overview</a><a class="page-link" href="/orbit-rs/quick_start.html">Quick Start Guide - Multi-Protocol Database Server</a><a class="page-link" href="/orbit-rs/roadmap/">Development Roadmap</a><a class="page-link" href="/orbit-rs/features/">Orbit-RS Feature Index</a><a class="page-link" href="/orbit-rs/compute-acceleration/">Hardware Acceleration Guide</a><a class="page-link" href="/orbit-rs/contributing.html">Contributing Guide</a><a class="page-link" href="/orbit-rs/overview.html">Architecture Overview</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <h1 id="development-guide">Development Guide</h1>
+
+<p>This guide covers development setup, contributing guidelines, testing procedures, and architectural considerations for Orbit-RS development.</p>
+
+<h2 id="development-environment-setup">Development Environment Setup</h2>
+
+<h3 id="prerequisites">Prerequisites</h3>
+
+<ul>
+  <li><strong>Rust 1.70+</strong> - <a href="https://rustup.rs/">Install via rustup</a></li>
+  <li><strong>Protocol Buffers compiler (<code class="language-plaintext highlighter-rouge">protoc</code>)</strong> - Required for gRPC code generation</li>
+  <li><strong>Git</strong> - Version control system</li>
+  <li><strong>IDE/Editor</strong> with Rust support (VS Code, IntelliJ IDEA, or Neovim)</li>
+  <li><strong>CMake</strong> - Required for building RocksDB native dependencies</li>
+  <li><strong>Clang/LLVM</strong> - C++ compiler for native dependencies</li>
+</ul>
+
+<h3 id="setting-up-the-development-environment">Setting Up the Development Environment</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Clone the repository</span>
+git clone https://github.com/TuringWorks/orbit-rs.git
+<span class="nb">cd </span>orbit-rs
+
+<span class="c"># Install system dependencies (macOS)</span>
+brew <span class="nb">install </span>protobuf cmake llvm
+
+<span class="c"># Install system dependencies (Ubuntu/Debian)</span>
+<span class="nb">sudo </span>apt-get update
+<span class="nb">sudo </span>apt-get <span class="nb">install</span> <span class="nt">-y</span> protobuf-compiler cmake clang
+
+<span class="c"># Install Rust toolchain components</span>
+rustup component add clippy rustfmt
+
+<span class="c"># Install development tools</span>
+cargo <span class="nb">install </span>cargo-audit
+cargo <span class="nb">install </span>cargo-deny
+cargo <span class="nb">install </span>cargo-tarpaulin  <span class="c"># For code coverage</span>
+
+<span class="c"># Build all modules (including persistence backends)</span>
+cargo build <span class="nt">--workspace</span>
+
+<span class="c"># Run tests to verify setup</span>
+cargo <span class="nb">test</span> <span class="nt">--workspace</span>
+
+<span class="c"># Verify persistence modules specifically</span>
+cargo <span class="nb">test</span> <span class="nt">--lib</span> <span class="nt">--package</span> orbit-server
+</code></pre></div></div>
+
+<h3 id="ide-configuration">IDE Configuration</h3>
+
+<h4 id="visual-studio-code">Visual Studio Code</h4>
+
+<p>Recommended extensions:</p>
+<ul>
+  <li><strong>rust-analyzer</strong> - Rust language server with excellent IntelliSense</li>
+  <li><strong>CodeLLDB</strong> - Debugger support for Rust</li>
+  <li><strong>crates</strong> - Cargo dependency management</li>
+  <li><strong>Better TOML</strong> - TOML file syntax highlighting</li>
+  <li><strong>GitLens</strong> - Enhanced Git capabilities</li>
+</ul>
+
+<p>VS Code settings (<code class="language-plaintext highlighter-rouge">.vscode/settings.json</code>):</p>
+<div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span><span class="w">
+    </span><span class="nl">"rust-analyzer.cargo.features"</span><span class="p">:</span><span class="w"> </span><span class="s2">"all"</span><span class="p">,</span><span class="w">
+    </span><span class="nl">"rust-analyzer.checkOnSave.command"</span><span class="p">:</span><span class="w"> </span><span class="s2">"clippy"</span><span class="p">,</span><span class="w">
+    </span><span class="nl">"rust-analyzer.checkOnSave.extraArgs"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"--"</span><span class="p">,</span><span class="w"> </span><span class="s2">"-D"</span><span class="p">,</span><span class="w"> </span><span class="s2">"warnings"</span><span class="p">],</span><span class="w">
+    </span><span class="nl">"rust-analyzer.cargo.buildScripts.enable"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span><span class="w">
+    </span><span class="nl">"files.watcherExclude"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">
+        </span><span class="nl">"**/target/**"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="w">
+    </span><span class="p">}</span><span class="w">
+</span><span class="p">}</span><span class="w">
+</span></code></pre></div></div>
+
+<h4 id="intellij-idea">IntelliJ IDEA</h4>
+
+<ol>
+  <li>Install the <strong>Rust</strong> plugin</li>
+  <li>Configure the Rust toolchain in <strong>Settings → Languages &amp; Frameworks → Rust</strong></li>
+  <li>Enable <strong>Use Clippy instead of Cargo Check</strong></li>
+  <li>Configure <strong>Code Style → Rust</strong> to use rustfmt</li>
+</ol>
+
+<h3 id="development-commands">Development Commands</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Fast compilation check (no codegen) - includes persistence backends</span>
+cargo check <span class="nt">--workspace</span>
+
+<span class="c"># Full compilation with all features</span>
+cargo build <span class="nt">--workspace</span> <span class="nt">--all-features</span>
+
+<span class="c"># Release build with optimizations</span>
+cargo build <span class="nt">--workspace</span> <span class="nt">--release</span>
+
+<span class="c"># Run all tests including persistence layer</span>
+cargo <span class="nb">test</span> <span class="nt">--workspace</span>
+
+<span class="c"># Test specific modules</span>
+cargo <span class="nb">test</span> <span class="nt">--lib</span> <span class="nt">--package</span> orbit-server  <span class="c"># Persistence modules</span>
+cargo <span class="nb">test</span> <span class="nt">--lib</span> <span class="nt">--package</span> orbit-shared  <span class="c"># Core types</span>
+
+<span class="c"># Code formatting</span>
+cargo <span class="nb">fmt</span> <span class="nt">--all</span>
+
+<span class="c"># Linting (persistence modules now pass)</span>
+cargo clippy <span class="nt">--workspace</span> <span class="nt">--all-targets</span>
+
+<span class="c"># Security audit</span>
+cargo audit
+
+<span class="c"># License and dependency checking</span>
+cargo deny check
+
+<span class="c"># Generate documentation</span>
+cargo doc <span class="nt">--workspace</span> <span class="nt">--open</span>
+
+<span class="c"># Run persistence benchmarks</span>
+cargo run <span class="nt">--package</span> orbit-benchmarks
+
+<span class="c"># Run protocol-specific benchmarks</span>
+cargo bench <span class="nt">--workspace</span>
+</code></pre></div></div>
+
+<h2 id="project-structure">Project Structure</h2>
+
+<h3 id="workspace-layout">Workspace Layout</h3>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>orbit-rs/
+├── Cargo.toml              # Workspace configuration
+├── README.md               # Project overview
+├── LICENSE-MIT             # MIT license
+├── LICENSE-BSD             # BSD license
+│
+├── orbit-util/             # Utilities and base functionality
+│   ├── Cargo.toml
+│   └── src/
+│       ├── lib.rs
+│       ├── config.rs       # Configuration management
+│       ├── logging.rs      # Logging utilities
+│       └── metrics.rs      # Metrics utilities
+│
+├── orbit-shared/           # Shared data structures and types
+│   ├── Cargo.toml
+│   └── src/
+│       ├── lib.rs
+│       ├── actor.rs        # Actor trait definitions
+│       ├── error.rs        # Error types
+│       ├── key.rs          # Actor key types
+│       └── transactions/   # Transaction system
+│           ├── mod.rs
+│           ├── coordinator.rs
+│           ├── participant.rs
+│           └── saga.rs
+│
+├── orbit-proto/            # Protocol Buffer definitions
+│   ├── Cargo.toml
+│   ├── build.rs           # Proto compilation
+│   ├── proto/
+│   │   ├── actor.proto    # Actor service definitions
+│   │   ├── cluster.proto  # Cluster management
+│   │   └── transaction.proto
+│   └── src/
+│       ├── lib.rs
+│       └── generated/     # Generated gRPC code
+│
+├── orbit-client/           # Client-side actor system
+│   ├── Cargo.toml
+│   └── src/
+│       ├── lib.rs
+│       ├── client.rs      # Main client implementation
+│       ├── proxy.rs       # Actor proxy generation
+│       └── lease.rs       # Lease management
+│
+├── orbit-server/           # Server-side cluster management
+│   ├── Cargo.toml
+│   └── src/
+│       ├── lib.rs
+│       ├── server.rs      # Main server implementation
+│       ├── cluster.rs     # Cluster management
+│       ├── load_balancer.rs
+│       └── persistence/   # Multiple storage backends
+│           ├── mod.rs     # Persistence traits and config
+│           ├── memory.rs  # In-memory provider
+│           ├── cow_btree.rs  # COW B+Tree provider
+│           ├── lsm_tree.rs   # LSM-Tree provider
+│           └── rocksdb.rs    # RocksDB provider
+│
+├── orbit-protocols/        # Protocol adapters
+│   ├── Cargo.toml
+│   └── src/
+│       ├── lib.rs
+│       ├── redis/         # Redis RESP protocol
+│       ├── postgres_wire/ # PostgreSQL wire protocol
+│       └── mcp/          # Model Context Protocol
+│
+├── orbit-operator/         # Kubernetes operator
+│   ├── Cargo.toml
+│   ├── deploy/            # Kubernetes manifests
+│   └── src/
+│       ├── main.rs
+│       ├── controller.rs
+│       └── resources/
+│
+├── examples/               # Example applications
+│   ├── hello-world/       # Basic actor example
+│   ├── distributed-counter/  # Multi-actor coordination
+│   └── tests/
+│       ├── features/      # BDD scenarios
+│       └── tests/         # Integration tests
+│
+├── docs/                   # Documentation
+│   ├── README.md          # Documentation index
+│   ├── OVERVIEW.md        # Project overview
+│   ├── QUICK_START.md     # Quick start guide
+│   ├── features/          # Feature documentation
+│   ├── protocols/         # Protocol documentation
+│   ├── deployment/        # Deployment guides
+│   └── development/       # Development guides
+│
+└── scripts/                # Development scripts
+    ├── prepare-secrets.sh  # CI/CD secret preparation
+    ├── build-docker.sh     # Docker image building
+    └── run-benchmarks.sh   # Benchmark execution
+</code></pre></div></div>
+
+<h3 id="architectural-layers">Architectural Layers</h3>
+
+<h4 id="core-layer-orbit-shared-orbit-util">Core Layer (<code class="language-plaintext highlighter-rouge">orbit-shared</code>, <code class="language-plaintext highlighter-rouge">orbit-util</code>)</h4>
+<ul>
+  <li>Fundamental types and utilities</li>
+  <li>Actor trait definitions</li>
+  <li>Error handling</li>
+  <li>Configuration management</li>
+  <li>Logging and metrics utilities</li>
+</ul>
+
+<h4 id="network-layer-orbit-proto">Network Layer (<code class="language-plaintext highlighter-rouge">orbit-proto</code>)</h4>
+<ul>
+  <li>Protocol Buffer definitions</li>
+  <li>gRPC service specifications</li>
+  <li>Message serialization/deserialization</li>
+  <li>Cross-language type definitions</li>
+</ul>
+
+<h4 id="client-layer-orbit-client">Client Layer (<code class="language-plaintext highlighter-rouge">orbit-client</code>)</h4>
+<ul>
+  <li>Actor proxy generation</li>
+  <li>Remote invocation handling</li>
+  <li>Lease management</li>
+  <li>Connection pooling</li>
+</ul>
+
+<h4 id="server-layer-orbit-server">Server Layer (<code class="language-plaintext highlighter-rouge">orbit-server</code>)</h4>
+<ul>
+  <li>Cluster node management</li>
+  <li>Actor lifecycle management</li>
+  <li>Load balancing</li>
+  <li>Health monitoring</li>
+</ul>
+
+<h4 id="protocol-layer-orbit-protocols">Protocol Layer (<code class="language-plaintext highlighter-rouge">orbit-protocols</code>)</h4>
+<ul>
+  <li>Redis RESP protocol adapter</li>
+  <li>PostgreSQL wire protocol adapter</li>
+  <li>SQL parser and executor</li>
+  <li>MCP server implementation</li>
+</ul>
+
+<h4 id="orchestration-layer-orbit-operator">Orchestration Layer (<code class="language-plaintext highlighter-rouge">orbit-operator</code>)</h4>
+<ul>
+  <li>Kubernetes Custom Resource Definitions</li>
+  <li>Operator controller logic</li>
+  <li>Resource management</li>
+  <li>Deployment automation</li>
+</ul>
+
+<h2 id="persistence-development">Persistence Development</h2>
+
+<h3 id="storage-backends">Storage Backends</h3>
+
+<p>Orbit-RS supports multiple pluggable storage backends:</p>
+
+<h4 id="in-memory-provider-memoryrs">In-Memory Provider (<code class="language-plaintext highlighter-rouge">memory.rs</code>)</h4>
+<ul>
+  <li>Hash-map based storage for development and testing</li>
+  <li>No persistence across restarts</li>
+  <li>Fastest performance for temporary data</li>
+</ul>
+
+<h4 id="cow-btree-provider-cow_btreers">COW B+Tree Provider (<code class="language-plaintext highlighter-rouge">cow_btree.rs</code>)</h4>
+<ul>
+  <li>Copy-on-Write B+ Tree with Write-Ahead Logging</li>
+  <li>Optimized for read-heavy workloads</li>
+  <li>Snapshots and versioning support</li>
+</ul>
+
+<h4 id="lsm-tree-provider-lsm_treers">LSM-Tree Provider (<code class="language-plaintext highlighter-rouge">lsm_tree.rs</code>)</h4>
+<ul>
+  <li>Log-Structured Merge Tree implementation</li>
+  <li>Optimized for write-heavy workloads</li>
+  <li>Background compaction and bloom filters</li>
+</ul>
+
+<h4 id="rocksdb-provider-rocksdbrs">RocksDB Provider (<code class="language-plaintext highlighter-rouge">rocksdb.rs</code>)</h4>
+<ul>
+  <li>Production-grade key-value store</li>
+  <li>ACID transactions and crash recovery</li>
+  <li>High-performance with tunable parameters</li>
+</ul>
+
+<h3 id="persistence-configuration">Persistence Configuration</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">orbit_server</span><span class="p">::</span><span class="nn">persistence</span><span class="p">::</span><span class="o">*</span><span class="p">;</span>
+
+<span class="c1">// Configure persistence backend</span>
+<span class="k">let</span> <span class="n">config</span> <span class="o">=</span> <span class="n">PersistenceConfig</span> <span class="p">{</span>
+    <span class="n">backend</span><span class="p">:</span> <span class="nn">BackendType</span><span class="p">::</span><span class="n">RocksDB</span><span class="p">,</span>
+    <span class="n">rocksdb</span><span class="p">:</span> <span class="nf">Some</span><span class="p">(</span><span class="n">RocksDbConfig</span> <span class="p">{</span>
+        <span class="n">data_dir</span><span class="p">:</span> <span class="s">"./orbit_data"</span><span class="nf">.to_string</span><span class="p">(),</span>
+        <span class="n">enable_wal</span><span class="p">:</span> <span class="k">true</span><span class="p">,</span>
+        <span class="n">block_cache_size</span><span class="p">:</span> <span class="mi">256</span> <span class="o">*</span> <span class="mi">1024</span> <span class="o">*</span> <span class="mi">1024</span><span class="p">,</span> <span class="c1">// 256MB</span>
+        <span class="o">..</span><span class="nn">Default</span><span class="p">::</span><span class="nf">default</span><span class="p">()</span>
+    <span class="p">}),</span>
+    <span class="o">..</span><span class="nn">Default</span><span class="p">::</span><span class="nf">default</span><span class="p">()</span>
+<span class="p">};</span>
+
+<span class="k">let</span> <span class="n">provider</span> <span class="o">=</span> <span class="nn">DynamicPersistenceProvider</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="n">config</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h3 id="adding-new-storage-backends">Adding New Storage Backends</h3>
+
+<ol>
+  <li><strong>Implement Required Traits</strong>:
+    <div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">impl</span> <span class="n">PersistenceProvider</span> <span class="k">for</span> <span class="n">MyCustomProvider</span> <span class="p">{</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">initialize</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span> <span class="p">{</span> <span class="cm">/* ... */</span> <span class="p">}</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">shutdown</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span> <span class="p">{</span> <span class="cm">/* ... */</span> <span class="p">}</span>
+    <span class="c1">// ... other methods</span>
+<span class="p">}</span>
+   
+<span class="k">impl</span> <span class="n">AddressableDirectoryProvider</span> <span class="k">for</span> <span class="n">MyCustomProvider</span> <span class="p">{</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">store_lease</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">lease</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">AddressableLease</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span> <span class="p">{</span> <span class="cm">/* ... */</span> <span class="p">}</span>
+    <span class="c1">// ... other methods</span>
+<span class="p">}</span>
+</code></pre></div>    </div>
+  </li>
+  <li><strong>Add Configuration Support</strong>:
+    <div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nd">#[derive(Debug,</span> <span class="nd">Clone,</span> <span class="nd">Serialize,</span> <span class="nd">Deserialize)]</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">MyCustomConfig</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="n">connection_string</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">pool_size</span><span class="p">:</span> <span class="nb">usize</span><span class="p">,</span>
+<span class="p">}</span>
+</code></pre></div>    </div>
+  </li>
+  <li><strong>Register Backend</strong>:
+    <div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// In persistence/mod.rs</span>
+<span class="k">pub</span> <span class="k">enum</span> <span class="n">BackendType</span> <span class="p">{</span>
+    <span class="n">Memory</span><span class="p">,</span>
+    <span class="n">CowBTree</span><span class="p">,</span>
+    <span class="n">LsmTree</span><span class="p">,</span>
+    <span class="n">RocksDB</span><span class="p">,</span>
+    <span class="n">MyCustom</span><span class="p">,</span> <span class="c1">// Add here</span>
+<span class="p">}</span>
+</code></pre></div>    </div>
+  </li>
+  <li><strong>Write Tests</strong>:
+    <div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nd">#[tokio::test]</span>
+<span class="k">async</span> <span class="k">fn</span> <span class="nf">test_my_custom_provider</span><span class="p">()</span> <span class="p">{</span>
+    <span class="k">let</span> <span class="n">config</span> <span class="o">=</span> <span class="n">MyCustomConfig</span> <span class="p">{</span> <span class="cm">/* ... */</span> <span class="p">};</span>
+    <span class="k">let</span> <span class="n">provider</span> <span class="o">=</span> <span class="nn">MyCustomProvider</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="n">config</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+       
+    <span class="n">provider</span><span class="nf">.initialize</span><span class="p">()</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+       
+    <span class="c1">// Test CRUD operations</span>
+    <span class="k">let</span> <span class="n">lease</span> <span class="o">=</span> <span class="n">AddressableLease</span> <span class="p">{</span> <span class="cm">/* ... */</span> <span class="p">};</span>
+    <span class="n">provider</span><span class="nf">.store_lease</span><span class="p">(</span><span class="o">&amp;</span><span class="n">lease</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+       
+    <span class="k">let</span> <span class="n">retrieved</span> <span class="o">=</span> <span class="n">provider</span><span class="nf">.get_lease</span><span class="p">(</span><span class="o">&amp;</span><span class="n">lease</span><span class="py">.reference</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+    <span class="nd">assert_eq!</span><span class="p">(</span><span class="n">retrieved</span><span class="nf">.unwrap</span><span class="p">(),</span> <span class="n">lease</span><span class="p">);</span>
+<span class="p">}</span>
+</code></pre></div>    </div>
+  </li>
+</ol>
+
+<h3 id="persistence-testing">Persistence Testing</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Test all persistence backends</span>
+cargo <span class="nb">test</span> <span class="nt">--lib</span> <span class="nt">--package</span> orbit-server persistence
+
+<span class="c"># Test specific backend</span>
+cargo <span class="nb">test</span> <span class="nt">--lib</span> <span class="nt">--package</span> orbit-server persistence::rocksdb
+
+<span class="c"># Benchmark persistence performance</span>
+cargo run <span class="nt">--package</span> orbit-benchmarks
+
+<span class="c"># Test with different configurations</span>
+<span class="nv">ORBIT_PERSISTENCE_BACKEND</span><span class="o">=</span>rocksdb cargo <span class="nb">test </span>persistence_integration
+</code></pre></div></div>
+
+<h2 id="testing-framework">Testing Framework</h2>
+
+<h3 id="test-structure">Test Structure</h3>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>tests/
+├── unit/                  # Unit tests (in src/ directories)
+├── integration/           # Integration tests
+│   ├── actor_lifecycle.rs
+│   ├── cluster_management.rs
+│   └── transaction_tests.rs
+├── bdd/                   # Behavior-driven tests
+│   ├── features/
+│   │   ├── actor_lifecycle.feature
+│   │   └── messaging.feature
+│   └── step_definitions/
+└── benchmarks/            # Performance benchmarks
+    ├── actor_throughput.rs
+    └── transaction_latency.rs
+</code></pre></div></div>
+
+<h3 id="running-tests">Running Tests</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># All tests</span>
+cargo <span class="nb">test</span> <span class="nt">--workspace</span>
+
+<span class="c"># Unit tests only</span>
+cargo <span class="nb">test</span> <span class="nt">--workspace</span> <span class="nt">--lib</span>
+
+<span class="c"># Integration tests</span>
+cargo <span class="nb">test</span> <span class="nt">--workspace</span> <span class="nt">--test</span> integration
+
+<span class="c"># BDD scenarios</span>
+cargo <span class="nb">test</span> <span class="nt">--workspace</span> <span class="nt">--test</span> bdd
+
+<span class="c"># Specific test module</span>
+cargo <span class="nb">test</span> <span class="nt">--package</span> orbit-client <span class="nt">--test</span> client_tests
+
+<span class="c"># Tests with output</span>
+cargo <span class="nb">test</span> <span class="nt">--workspace</span> <span class="nt">--</span> <span class="nt">--nocapture</span>
+
+<span class="c"># Parallel test execution</span>
+cargo <span class="nb">test</span> <span class="nt">--workspace</span> <span class="nt">--jobs</span> 4
+</code></pre></div></div>
+
+<h3 id="test-configuration">Test Configuration</h3>
+
+<p>Test configuration in <code class="language-plaintext highlighter-rouge">Cargo.toml</code>:</p>
+
+<div class="language-toml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">[</span><span class="n">dev-dependencies</span><span class="k">]</span>
+<span class="n">tokio-test</span> <span class="o">=</span><span class="w"> </span><span class="s">"0.4"</span>
+<span class="n">mockall</span> <span class="o">=</span><span class="w"> </span><span class="s">"0.11"</span>
+<span class="n">cucumber</span> <span class="o">=</span><span class="w"> </span><span class="s">"0.19"</span>
+<span class="n">criterion</span> <span class="o">=</span><span class="w"> </span><span class="s">"0.5"</span>
+
+<span class="k">[[</span><span class="n">test</span><span class="k">]]</span>
+<span class="n">name</span> <span class="o">=</span><span class="w"> </span><span class="s">"integration"</span>
+<span class="n">path</span> <span class="o">=</span><span class="w"> </span><span class="s">"tests/integration/mod.rs"</span>
+<span class="n">required-features</span> <span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s">"integration-tests"</span><span class="p">]</span>
+
+<span class="k">[[</span><span class="n">bench</span><span class="k">]]</span>
+<span class="n">name</span> <span class="o">=</span><span class="w"> </span><span class="s">"actor_throughput"</span>
+<span class="n">harness</span> <span class="o">=</span><span class="w"> </span><span class="kc">false</span>
+</code></pre></div></div>
+
+<h3 id="writing-tests">Writing Tests</h3>
+
+<h4 id="unit-test-example">Unit Test Example</h4>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="nd">#[cfg(test)]</span>
+<span class="k">mod</span> <span class="n">tests</span> <span class="p">{</span>
+    <span class="k">use</span> <span class="k">super</span><span class="p">::</span><span class="o">*</span><span class="p">;</span>
+    <span class="k">use</span> <span class="n">tokio_test</span><span class="p">;</span>
+
+    <span class="nd">#[tokio::test]</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">test_actor_invocation</span><span class="p">()</span> <span class="p">{</span>
+        <span class="k">let</span> <span class="n">client</span> <span class="o">=</span> <span class="nn">OrbitClient</span><span class="p">::</span><span class="nf">builder</span><span class="p">()</span>
+            <span class="nf">.with_namespace</span><span class="p">(</span><span class="s">"test"</span><span class="p">)</span>
+            <span class="nf">.build</span><span class="p">()</span>
+            <span class="k">.await</span>
+            <span class="nf">.unwrap</span><span class="p">();</span>
+
+        <span class="k">let</span> <span class="n">actor</span> <span class="o">=</span> <span class="n">client</span><span class="py">.actor_reference</span><span class="p">::</span><span class="o">&lt;</span><span class="k">dyn</span> <span class="n">TestActor</span><span class="o">&gt;</span><span class="p">(</span>
+            <span class="nn">Key</span><span class="p">::</span><span class="n">StringKey</span> <span class="p">{</span> <span class="n">key</span><span class="p">:</span> <span class="s">"test-actor"</span><span class="nf">.to_string</span><span class="p">()</span> <span class="p">}</span>
+        <span class="p">)</span><span class="k">.await</span><span class="nf">.unwrap</span><span class="p">();</span>
+
+        <span class="k">let</span> <span class="n">result</span> <span class="o">=</span> <span class="n">actor</span><span class="nf">.test_method</span><span class="p">(</span><span class="s">"input"</span><span class="p">)</span><span class="k">.await</span><span class="nf">.unwrap</span><span class="p">();</span>
+        <span class="nd">assert_eq!</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="s">"expected_output"</span><span class="p">);</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h4 id="integration-test-example">Integration Test Example</h4>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">orbit_client</span><span class="p">::</span><span class="n">OrbitClient</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">orbit_server</span><span class="p">::</span><span class="n">OrbitServer</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">std</span><span class="p">::</span><span class="nn">time</span><span class="p">::</span><span class="n">Duration</span><span class="p">;</span>
+
+<span class="nd">#[tokio::test]</span>
+<span class="k">async</span> <span class="k">fn</span> <span class="nf">test_cluster_communication</span><span class="p">()</span> <span class="p">{</span>
+    <span class="c1">// Start server</span>
+    <span class="k">let</span> <span class="n">server</span> <span class="o">=</span> <span class="nn">OrbitServer</span><span class="p">::</span><span class="nf">builder</span><span class="p">()</span>
+        <span class="nf">.with_port</span><span class="p">(</span><span class="mi">8080</span><span class="p">)</span>
+        <span class="nf">.build</span><span class="p">()</span>
+        <span class="k">.await</span>
+        <span class="nf">.unwrap</span><span class="p">();</span>
+
+    <span class="c1">// Start client</span>
+    <span class="k">let</span> <span class="n">client</span> <span class="o">=</span> <span class="nn">OrbitClient</span><span class="p">::</span><span class="nf">builder</span><span class="p">()</span>
+        <span class="nf">.with_endpoint</span><span class="p">(</span><span class="s">"http://localhost:8080"</span><span class="p">)</span>
+        <span class="nf">.build</span><span class="p">()</span>
+        <span class="k">.await</span>
+        <span class="nf">.unwrap</span><span class="p">();</span>
+
+    <span class="c1">// Test communication</span>
+    <span class="c1">// ... test logic</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h4 id="bdd-test-example">BDD Test Example</h4>
+
+<p>Feature file (<code class="language-plaintext highlighter-rouge">tests/features/actor_lifecycle.feature</code>):</p>
+<div class="language-gherkin highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">Feature</span><span class="p">:</span> Actor Lifecycle Management
+  
+  <span class="kn">Scenario</span><span class="p">:</span> Actor activation and deactivation
+    <span class="nf">Given </span>a cluster with 3 nodes
+    <span class="nf">When </span>I request an actor <span class="s">"test-actor"</span>
+    <span class="nf">Then </span>the actor should be activated on one node
+    <span class="nf">And </span>the actor should respond to messages
+    <span class="nf">When </span>the actor is idle for 5 minutes
+    <span class="nf">Then </span>the actor should be deactivated
+</code></pre></div></div>
+
+<p>Step definitions:</p>
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">cucumber</span><span class="p">::{</span><span class="n">given</span><span class="p">,</span> <span class="n">when</span><span class="p">,</span> <span class="n">then</span><span class="p">,</span> <span class="n">World</span><span class="p">};</span>
+
+<span class="nd">#[derive(Debug,</span> <span class="nd">Default,</span> <span class="nd">World)]</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">ActorWorld</span> <span class="p">{</span>
+    <span class="n">cluster</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="n">TestCluster</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="n">actor</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="n">ActorReference</span><span class="o">&gt;</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="nd">#[given(</span><span class="s">"a cluster with {int} nodes"</span><span class="nd">)]</span>
+<span class="k">async</span> <span class="k">fn</span> <span class="nf">given_cluster</span><span class="p">(</span><span class="n">world</span><span class="p">:</span> <span class="o">&amp;</span><span class="k">mut</span> <span class="n">ActorWorld</span><span class="p">,</span> <span class="n">node_count</span><span class="p">:</span> <span class="nb">i32</span><span class="p">)</span> <span class="p">{</span>
+    <span class="n">world</span><span class="py">.cluster</span> <span class="o">=</span> <span class="nf">Some</span><span class="p">(</span><span class="nn">TestCluster</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="n">node_count</span> <span class="k">as</span> <span class="nb">usize</span><span class="p">)</span><span class="k">.await</span><span class="p">);</span>
+<span class="p">}</span>
+
+<span class="nd">#[when(</span><span class="s">"I request an actor {string}"</span><span class="nd">)]</span>
+<span class="k">async</span> <span class="k">fn</span> <span class="nf">when_request_actor</span><span class="p">(</span><span class="n">world</span><span class="p">:</span> <span class="o">&amp;</span><span class="k">mut</span> <span class="n">ActorWorld</span><span class="p">,</span> <span class="n">actor_id</span><span class="p">:</span> <span class="nb">String</span><span class="p">)</span> <span class="p">{</span>
+    <span class="k">let</span> <span class="n">client</span> <span class="o">=</span> <span class="n">world</span><span class="py">.cluster</span><span class="nf">.as_ref</span><span class="p">()</span><span class="nf">.unwrap</span><span class="p">()</span><span class="nf">.client</span><span class="p">();</span>
+    <span class="n">world</span><span class="py">.actor</span> <span class="o">=</span> <span class="nf">Some</span><span class="p">(</span><span class="n">client</span><span class="nf">.actor_reference</span><span class="p">(</span><span class="o">&amp;</span><span class="n">actor_id</span><span class="p">)</span><span class="k">.await</span><span class="nf">.unwrap</span><span class="p">());</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="benchmarking">Benchmarking</h3>
+
+<h4 id="performance-benchmarks">Performance Benchmarks</h4>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">criterion</span><span class="p">::{</span><span class="n">criterion_group</span><span class="p">,</span> <span class="n">criterion_main</span><span class="p">,</span> <span class="n">Criterion</span><span class="p">,</span> <span class="n">BenchmarkId</span><span class="p">};</span>
+<span class="k">use</span> <span class="nn">tokio</span><span class="p">::</span><span class="nn">runtime</span><span class="p">::</span><span class="n">Runtime</span><span class="p">;</span>
+
+<span class="k">fn</span> <span class="nf">actor_throughput_benchmark</span><span class="p">(</span><span class="n">c</span><span class="p">:</span> <span class="o">&amp;</span><span class="k">mut</span> <span class="n">Criterion</span><span class="p">)</span> <span class="p">{</span>
+    <span class="k">let</span> <span class="n">rt</span> <span class="o">=</span> <span class="nn">Runtime</span><span class="p">::</span><span class="nf">new</span><span class="p">()</span><span class="nf">.unwrap</span><span class="p">();</span>
+    
+    <span class="n">c</span><span class="nf">.bench_with_input</span><span class="p">(</span>
+        <span class="nn">BenchmarkId</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="s">"actor_invocation"</span><span class="p">,</span> <span class="s">"1000_messages"</span><span class="p">),</span>
+        <span class="o">&amp;</span><span class="mi">1000</span><span class="p">,</span>
+        <span class="p">|</span><span class="n">b</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">size</span><span class="p">|</span> <span class="p">{</span>
+            <span class="n">b</span><span class="nf">.to_async</span><span class="p">(</span><span class="o">&amp;</span><span class="n">rt</span><span class="p">)</span><span class="nf">.iter</span><span class="p">(||</span> <span class="k">async</span> <span class="p">{</span>
+                <span class="c1">// Benchmark actor invocation throughput</span>
+                <span class="k">for</span> <span class="n">_</span> <span class="k">in</span> <span class="mi">0</span><span class="o">..</span><span class="n">size</span> <span class="p">{</span>
+                    <span class="c1">// Invoke actor method</span>
+                <span class="p">}</span>
+            <span class="p">});</span>
+        <span class="p">},</span>
+    <span class="p">);</span>
+<span class="p">}</span>
+
+<span class="nd">criterion_group!</span><span class="p">(</span><span class="n">benches</span><span class="p">,</span> <span class="n">actor_throughput_benchmark</span><span class="p">);</span>
+<span class="nd">criterion_main!</span><span class="p">(</span><span class="n">benches</span><span class="p">);</span>
+</code></pre></div></div>
+
+<h2 id="code-quality-standards">Code Quality Standards</h2>
+
+<h3 id="code-formatting">Code Formatting</h3>
+
+<p>Use rustfmt for consistent code formatting:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Format all code</span>
+cargo <span class="nb">fmt</span> <span class="nt">--all</span>
+
+<span class="c"># Check formatting without changing files</span>
+cargo <span class="nb">fmt</span> <span class="nt">--all</span> <span class="nt">--</span> <span class="nt">--check</span>
+</code></pre></div></div>
+
+<p>Rustfmt configuration (<code class="language-plaintext highlighter-rouge">.rustfmt.toml</code>):</p>
+<div class="language-toml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">edition</span> <span class="o">=</span><span class="w"> </span><span class="s">"2021"</span>
+<span class="n">max_width</span> <span class="o">=</span><span class="w"> </span><span class="mi">100</span>
+<span class="n">tab_spaces</span> <span class="o">=</span><span class="w"> </span><span class="mi">4</span>
+<span class="n">newline_style</span> <span class="o">=</span><span class="w"> </span><span class="s">"Unix"</span>
+<span class="n">use_small_heuristics</span> <span class="o">=</span><span class="w"> </span><span class="s">"Default"</span>
+<span class="n">reorder_imports</span> <span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+<span class="n">reorder_modules</span> <span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+<span class="n">remove_nested_parens</span> <span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+</code></pre></div></div>
+
+<h3 id="linting">Linting</h3>
+
+<p>Use Clippy for comprehensive linting:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Run all lints</span>
+cargo clippy <span class="nt">--workspace</span> <span class="nt">--all-targets</span> <span class="nt">--</span> <span class="nt">-D</span> warnings
+
+<span class="c"># Fix automatically fixable lints</span>
+cargo clippy <span class="nt">--workspace</span> <span class="nt">--all-targets</span> <span class="nt">--fix</span>
+</code></pre></div></div>
+
+<p>Clippy configuration in <code class="language-plaintext highlighter-rouge">Cargo.toml</code>:</p>
+<div class="language-toml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">[</span><span class="n">workspace</span><span class="k">.</span><span class="n">lints</span><span class="k">.</span><span class="n">clippy</span><span class="k">]</span>
+<span class="n">pedantic</span> <span class="o">=</span><span class="w"> </span><span class="s">"warn"</span>
+<span class="n">nursery</span> <span class="o">=</span><span class="w"> </span><span class="s">"warn"</span>
+<span class="n">cargo</span> <span class="o">=</span><span class="w"> </span><span class="s">"warn"</span>
+<span class="n">missing_docs_in_private_items</span> <span class="o">=</span><span class="w"> </span><span class="s">"allow"</span>
+<span class="n">module_name_repetitions</span> <span class="o">=</span><span class="w"> </span><span class="s">"allow"</span>
+</code></pre></div></div>
+
+<h3 id="documentation-standards">Documentation Standards</h3>
+
+<ul>
+  <li><strong>Public APIs</strong>: All public functions, structs, enums, and modules must have documentation</li>
+  <li><strong>Examples</strong>: Include usage examples in documentation</li>
+  <li><strong>Error Handling</strong>: Document error conditions and return types</li>
+  <li><strong>Safety</strong>: Document unsafe code with safety requirements</li>
+</ul>
+
+<p>Documentation example:</p>
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="cd">/// Manages the lifecycle of actors in the Orbit cluster.</span>
+<span class="cd">///</span>
+<span class="cd">/// The `ActorManager` coordinates actor activation, deactivation, and</span>
+<span class="cd">/// message routing across cluster nodes. It implements load balancing</span>
+<span class="cd">/// and health monitoring for optimal performance.</span>
+<span class="cd">///</span>
+<span class="cd">/// # Examples</span>
+<span class="cd">///</span>
+<span class="cd">/// ```</span>
+<span class="cd">/// use orbit_server::ActorManager;</span>
+<span class="cd">/// </span>
+<span class="cd">/// let manager = ActorManager::new(config).await?;</span>
+<span class="cd">/// let actor = manager.get_or_create_actor("my-actor").await?;</span>
+<span class="cd">/// ```</span>
+<span class="cd">///</span>
+<span class="cd">/// # Errors</span>
+<span class="cd">///</span>
+<span class="cd">/// Returns [`ActorError::CreationFailed`] if actor creation fails due to</span>
+<span class="cd">/// resource constraints or configuration issues.</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">ActorManager</span> <span class="p">{</span>
+    <span class="c1">// Implementation details</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="error-handling">Error Handling</h3>
+
+<ul>
+  <li>Use <code class="language-plaintext highlighter-rouge">Result&lt;T, E&gt;</code> for fallible operations</li>
+  <li>Create specific error types for different failure modes</li>
+  <li>Provide context in error messages</li>
+  <li>Use <code class="language-plaintext highlighter-rouge">anyhow</code> for application errors, custom error types for library APIs</li>
+</ul>
+
+<p>Error type example:</p>
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">thiserror</span><span class="p">::</span><span class="n">Error</span><span class="p">;</span>
+
+<span class="nd">#[derive(Error,</span> <span class="nd">Debug)]</span>
+<span class="k">pub</span> <span class="k">enum</span> <span class="n">ActorError</span> <span class="p">{</span>
+    <span class="nd">#[error(</span><span class="s">"Actor not found: {actor_id}"</span><span class="nd">)]</span>
+    <span class="n">NotFound</span> <span class="p">{</span> <span class="n">actor_id</span><span class="p">:</span> <span class="nb">String</span> <span class="p">},</span>
+    
+    <span class="nd">#[error(</span><span class="s">"Actor creation failed: {reason}"</span><span class="nd">)]</span>
+    <span class="n">CreationFailed</span> <span class="p">{</span> <span class="n">reason</span><span class="p">:</span> <span class="nb">String</span> <span class="p">},</span>
+    
+    <span class="nd">#[error(</span><span class="s">"Network error: {0}"</span><span class="nd">)]</span>
+    <span class="nf">NetworkError</span><span class="p">(</span><span class="nd">#[from]</span> <span class="nn">std</span><span class="p">::</span><span class="nn">io</span><span class="p">::</span><span class="n">Error</span><span class="p">),</span>
+    
+    <span class="nd">#[error(</span><span class="s">"Serialization error: {0}"</span><span class="nd">)]</span>
+    <span class="nf">SerializationError</span><span class="p">(</span><span class="nd">#[from]</span> <span class="nn">serde_json</span><span class="p">::</span><span class="n">Error</span><span class="p">),</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h2 id="contributing-guidelines">Contributing Guidelines</h2>
+
+<h3 id="development-workflow">Development Workflow</h3>
+
+<ol>
+  <li><strong>Fork and Clone</strong>
+    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>git clone https://github.com/your-username/orbit-rs.git
+<span class="nb">cd </span>orbit-rs
+git remote add upstream https://github.com/TuringWorks/orbit-rs.git
+</code></pre></div>    </div>
+  </li>
+  <li><strong>Create Feature Branch</strong>
+    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>git checkout <span class="nt">-b</span> feature/amazing-new-feature
+</code></pre></div>    </div>
+  </li>
+  <li><strong>Make Changes</strong>
+    <ul>
+      <li>Write code following the style guide</li>
+      <li>Add tests for new functionality</li>
+      <li>Update documentation</li>
+      <li>Run tests and ensure they pass</li>
+    </ul>
+  </li>
+  <li><strong>Commit Changes</strong>
+    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>git add <span class="nb">.</span>
+git commit <span class="nt">-m</span> <span class="s2">"feat: add amazing new feature"</span>
+</code></pre></div>    </div>
+  </li>
+  <li><strong>Push and Create PR</strong>
+    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>git push origin feature/amazing-new-feature
+<span class="c"># Create pull request through GitHub UI</span>
+</code></pre></div>    </div>
+  </li>
+</ol>
+
+<h3 id="commit-message-format">Commit Message Format</h3>
+
+<p>Follow conventional commit format:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>&lt;type&gt;(&lt;scope&gt;): &lt;description&gt;
+
+[optional body]
+
+[optional footer(s)]
+</code></pre></div></div>
+
+<p>Types:</p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">feat</code>: New feature</li>
+  <li><code class="language-plaintext highlighter-rouge">fix</code>: Bug fix</li>
+  <li><code class="language-plaintext highlighter-rouge">docs</code>: Documentation changes</li>
+  <li><code class="language-plaintext highlighter-rouge">style</code>: Formatting changes</li>
+  <li><code class="language-plaintext highlighter-rouge">refactor</code>: Code refactoring</li>
+  <li><code class="language-plaintext highlighter-rouge">test</code>: Adding tests</li>
+  <li><code class="language-plaintext highlighter-rouge">chore</code>: Maintenance tasks</li>
+</ul>
+
+<p>Examples:</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>feat(client): add connection pooling support
+fix(server): resolve actor lifecycle race condition
+docs(readme): update installation instructions
+</code></pre></div></div>
+
+<h3 id="pull-request-process">Pull Request Process</h3>
+
+<ol>
+  <li><strong>Pre-submission Checklist</strong>
+    <ul class="task-list">
+      <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Tests pass locally</li>
+      <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Code is formatted (<code class="language-plaintext highlighter-rouge">cargo fmt</code>)</li>
+      <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />No linting errors (<code class="language-plaintext highlighter-rouge">cargo clippy</code>)</li>
+      <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Documentation updated</li>
+      <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />CHANGELOG.md updated (for significant changes)</li>
+    </ul>
+  </li>
+  <li><strong>PR Description</strong>
+    <ul>
+      <li>Clear description of changes</li>
+      <li>Link to related issues</li>
+      <li>Screenshots/examples if applicable</li>
+      <li>Breaking changes noted</li>
+    </ul>
+  </li>
+  <li><strong>Review Process</strong>
+    <ul>
+      <li>Automated CI checks must pass</li>
+      <li>At least one maintainer approval required</li>
+      <li>Address review feedback</li>
+      <li>Squash commits before merge (if requested)</li>
+    </ul>
+  </li>
+</ol>
+
+<h3 id="code-review-guidelines">Code Review Guidelines</h3>
+
+<h4 id="for-authors">For Authors</h4>
+<ul>
+  <li>Keep PRs focused and reasonably sized</li>
+  <li>Provide clear description and context</li>
+  <li>Respond to feedback promptly</li>
+  <li>Test edge cases and error conditions</li>
+</ul>
+
+<h4 id="for-reviewers">For Reviewers</h4>
+<ul>
+  <li>Check for correctness and clarity</li>
+  <li>Verify test coverage</li>
+  <li>Consider performance implications</li>
+  <li>Review documentation updates</li>
+  <li>Be constructive in feedback</li>
+</ul>
+
+<h2 id="architecture-guidelines">Architecture Guidelines</h2>
+
+<h3 id="design-principles">Design Principles</h3>
+
+<ol>
+  <li><strong>Separation of Concerns</strong>: Each module has a clear, well-defined responsibility</li>
+  <li><strong>Modularity</strong>: Components can be developed and tested independently</li>
+  <li><strong>Extensibility</strong>: Easy to add new features without breaking existing functionality</li>
+  <li><strong>Performance</strong>: Optimize for common use cases while maintaining flexibility</li>
+  <li><strong>Safety</strong>: Leverage Rust’s type system for memory safety and thread safety</li>
+</ol>
+
+<h3 id="async-programming">Async Programming</h3>
+
+<ul>
+  <li>Use <code class="language-plaintext highlighter-rouge">tokio</code> for async runtime</li>
+  <li>Prefer <code class="language-plaintext highlighter-rouge">async</code>/<code class="language-plaintext highlighter-rouge">await</code> over manual <code class="language-plaintext highlighter-rouge">Future</code> implementations</li>
+  <li>Use structured concurrency patterns</li>
+  <li>Handle cancellation gracefully</li>
+</ul>
+
+<p>Example:</p>
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">tokio</span><span class="p">::</span><span class="nn">time</span><span class="p">::{</span><span class="n">timeout</span><span class="p">,</span> <span class="n">Duration</span><span class="p">};</span>
+
+<span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="n">process_with_timeout</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span><span class="p">(</span>
+    <span class="n">future</span><span class="p">:</span> <span class="k">impl</span> <span class="n">Future</span><span class="o">&lt;</span><span class="n">Output</span> <span class="o">=</span> <span class="n">T</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="n">timeout_duration</span><span class="p">:</span> <span class="n">Duration</span><span class="p">,</span>
+<span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="n">T</span><span class="p">,</span> <span class="n">TimeoutError</span><span class="o">&gt;</span> <span class="p">{</span>
+    <span class="nf">timeout</span><span class="p">(</span><span class="n">timeout_duration</span><span class="p">,</span> <span class="n">future</span><span class="p">)</span>
+        <span class="k">.await</span>
+        <span class="nf">.map_err</span><span class="p">(|</span><span class="n">_</span><span class="p">|</span> <span class="nn">TimeoutError</span><span class="p">::</span><span class="n">Elapsed</span><span class="p">)</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="error-handling-strategy">Error Handling Strategy</h3>
+
+<ul>
+  <li>Use specific error types for different modules</li>
+  <li>Implement <code class="language-plaintext highlighter-rouge">From</code> traits for error conversion</li>
+  <li>Provide helpful error messages with context</li>
+  <li>Log errors at appropriate levels</li>
+</ul>
+
+<h3 id="performance-considerations">Performance Considerations</h3>
+
+<ul>
+  <li>Minimize allocations in hot paths</li>
+  <li>Use zero-copy techniques where possible</li>
+  <li>Profile performance-critical code</li>
+  <li>Document performance characteristics</li>
+</ul>
+
+<h2 id="debugging-and-profiling">Debugging and Profiling</h2>
+
+<h3 id="logging-configuration">Logging Configuration</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">tracing</span><span class="p">::{</span><span class="n">info</span><span class="p">,</span> <span class="n">warn</span><span class="p">,</span> <span class="n">error</span><span class="p">,</span> <span class="n">debug</span><span class="p">,</span> <span class="n">trace</span><span class="p">};</span>
+<span class="k">use</span> <span class="nn">tracing_subscriber</span><span class="p">::{</span><span class="n">fmt</span><span class="p">,</span> <span class="nn">prelude</span><span class="p">::</span><span class="o">*</span><span class="p">,</span> <span class="n">EnvFilter</span><span class="p">};</span>
+
+<span class="k">fn</span> <span class="nf">init_logging</span><span class="p">()</span> <span class="p">{</span>
+    <span class="nn">tracing_subscriber</span><span class="p">::</span><span class="nf">registry</span><span class="p">()</span>
+        <span class="nf">.with</span><span class="p">(</span><span class="nn">fmt</span><span class="p">::</span><span class="nf">layer</span><span class="p">())</span>
+        <span class="nf">.with</span><span class="p">(</span><span class="nn">EnvFilter</span><span class="p">::</span><span class="nf">from_default_env</span><span class="p">())</span>
+        <span class="nf">.init</span><span class="p">();</span>
+<span class="p">}</span>
+
+<span class="c1">// Usage</span>
+<span class="nd">info!</span><span class="p">(</span><span class="s">"Actor {} activated"</span><span class="p">,</span> <span class="n">actor_id</span><span class="p">);</span>
+<span class="nd">warn!</span><span class="p">(</span><span class="s">"High memory usage detected: {}MB"</span><span class="p">,</span> <span class="n">memory_usage</span><span class="p">);</span>
+<span class="nd">error!</span><span class="p">(</span><span class="s">"Failed to connect to database: {}"</span><span class="p">,</span> <span class="n">error</span><span class="p">);</span>
+</code></pre></div></div>
+
+<h3 id="performance-profiling">Performance Profiling</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># CPU profiling with perf</span>
+cargo build <span class="nt">--release</span>
+perf record <span class="nt">--call-graph</span><span class="o">=</span>dwarf ./target/release/orbit-server
+perf report
+
+<span class="c"># Memory profiling with valgrind</span>
+cargo build
+valgrind <span class="nt">--tool</span><span class="o">=</span>memcheck <span class="nt">--leak-check</span><span class="o">=</span>full ./target/debug/orbit-server
+
+<span class="c"># Benchmarking</span>
+cargo bench
+</code></pre></div></div>
+
+<h3 id="debugging-tools">Debugging Tools</h3>
+
+<ul>
+  <li><strong>gdb/lldb</strong>: Traditional debuggers</li>
+  <li><strong>rust-analyzer</strong>: IDE integration for debugging</li>
+  <li><strong>tokio-console</strong>: Async runtime debugging</li>
+  <li><strong>tracing</strong>: Structured logging and instrumentation</li>
+</ul>
+
+<h2 id="related-documentation">Related Documentation</h2>
+
+<ul>
+  <li><a href="../QUICK_START.md">Quick Start Guide</a> - Getting started with Orbit-RS</li>
+  <li><a href="../OVERVIEW.md">Overview</a> - Architecture and features overview</li>
+  <li><a href="../features/TRANSACTION_FEATURES.md">Transaction Features</a> - Advanced transaction development</li>
+  <li><a href="../protocols/PROTOCOL_ADAPTERS.md">Protocol Adapters</a> - Protocol development</li>
+  <li><a href="/orbit-rs/deployment/DEPLOYMENT.html">Deployment Guide</a> - Production deployment</li>
+</ul>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/orbit-rs/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Orbit-RS Documentation</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">TuringWorks</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

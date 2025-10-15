@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["get_env_or_default"],"struct":["ResourceConfig","RetryConfig","TimeoutConfig"],"trait":["ConfigDefaults"]};

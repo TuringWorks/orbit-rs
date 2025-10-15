@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["TransactionEvent","TransactionMessage","TransactionState","TransactionVote"],"struct":["DistributedTransaction","TransactionConfig","TransactionCoordinator","TransactionId","TransactionLogEntry","TransactionOperation","TransactionStats"],"trait":["TransactionMessageSender","TransactionParticipant"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ConditionOperator","EnvironmentalConditionType","PolicyAction","PolicyRuleType"],"struct":["ActionCondition","EnvironmentalCondition","PolicyCondition","PolicyEngine","PolicyEvaluationResult","PolicyRule","ResourceCondition","SecurityPolicy","SubjectCondition"],"trait":["PolicyEvaluator"]};

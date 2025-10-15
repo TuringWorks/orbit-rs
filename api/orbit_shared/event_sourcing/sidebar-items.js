@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["DomainEvent","EventStore","EventStoreConfig","EventStoreStats","Snapshot"],"trait":["EventSourcedAggregate"]};

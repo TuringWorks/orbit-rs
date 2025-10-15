@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["SpatialType"],"struct":["ColumnDef","ExecutionContext","ExecutionResult","FilterResult","InsertResult","OrbitQLExecutor","Row","SpatialIndexInstance","StatementExecutor","StreamProcessor","Table","UpdateRowResult"]};

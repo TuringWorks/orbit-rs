@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["PoolTier"],"struct":["AdvancedConnectionPool","AdvancedPoolConfig","ConnectionPoolMetrics","PooledConnection","PooledConnectionGuard"]};

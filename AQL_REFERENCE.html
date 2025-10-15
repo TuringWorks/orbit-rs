@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>AQL (ArrangoDB Query Language) Reference | Orbit-RS Documentation</title>
+<meta name="generator" content="Jekyll v4.4.1" />
+<meta property="og:title" content="AQL (ArrangoDB Query Language) Reference" />
+<meta name="author" content="TuringWorks" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<meta property="og:description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<link rel="canonical" href="https://turingworks.github.io/orbit-rs/AQL_REFERENCE.html" />
+<meta property="og:url" content="https://turingworks.github.io/orbit-rs/AQL_REFERENCE.html" />
+<meta property="og:site_name" content="Orbit-RS Documentation" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="AQL (ArrangoDB Query Language) Reference" />
+<meta name="twitter:site" content="@TuringWorksAI" />
+<meta name="twitter:creator" content="@TuringWorks" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","author":{"@type":"Person","name":"TuringWorks"},"description":"The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform","headline":"AQL (ArrangoDB Query Language) Reference","url":"https://turingworks.github.io/orbit-rs/AQL_REFERENCE.html"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/orbit-rs/assets/main.css">
+  <link rel="stylesheet" href="/orbit-rs/assets/css/custom.css"><link type="application/atom+xml" rel="alternate" href="https://turingworks.github.io/orbit-rs/feed.xml" title="Orbit-RS Documentation" /></head><body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/orbit-rs/">Orbit-RS Documentation</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/orbit-rs/">Orbit-RS Documentation</a><a class="page-link" href="/orbit-rs/project_overview.html">Orbit-RS: Comprehensive Project Overview</a><a class="page-link" href="/orbit-rs/quick_start.html">Quick Start Guide - Multi-Protocol Database Server</a><a class="page-link" href="/orbit-rs/roadmap/">Development Roadmap</a><a class="page-link" href="/orbit-rs/features/">Orbit-RS Feature Index</a><a class="page-link" href="/orbit-rs/compute-acceleration/">Hardware Acceleration Guide</a><a class="page-link" href="/orbit-rs/contributing.html">Contributing Guide</a><a class="page-link" href="/orbit-rs/overview.html">Architecture Overview</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <h1 id="aql-arrangodb-query-language-reference">AQL (ArrangoDB Query Language) Reference</h1>
+
+<p>AQL (ArrangoDB Query Language) is a declarative query language for multi-model databases that combines the power of SQL-like syntax with native support for graph traversals and document operations. Orbit-RS provides a comprehensive AQL implementation optimized for distributed graph and time series data.</p>
+
+<h2 id="table-of-contents">Table of Contents</h2>
+
+<ol>
+  <li><a href="#overview">Overview</a></li>
+  <li><a href="#syntax-fundamentals">Syntax Fundamentals</a></li>
+  <li><a href="#data-types">Data Types</a></li>
+  <li><a href="#operations">Operations</a></li>
+  <li><a href="#graph-traversals">Graph Traversals</a></li>
+  <li><a href="#aggregations">Aggregations</a></li>
+  <li><a href="#functions">Functions</a></li>
+  <li><a href="#time-series-integration">Time Series Integration</a></li>
+  <li><a href="#performance-optimization">Performance Optimization</a></li>
+  <li><a href="#examples">Examples</a></li>
+  <li><a href="#api-reference">API Reference</a></li>
+</ol>
+
+<h2 id="overview">Overview</h2>
+
+<p>AQL in Orbit-RS provides:</p>
+
+<ul>
+  <li><strong>Multi-model support</strong>: Query graphs, documents, and time series data</li>
+  <li><strong>ACID transactions</strong>: Full transaction support with consistency guarantees</li>
+  <li><strong>Graph traversals</strong>: Native graph pattern matching and path finding</li>
+  <li><strong>High performance</strong>: Optimized query execution with smart indexing</li>
+  <li><strong>Distributed execution</strong>: Scale queries across cluster nodes</li>
+  <li><strong>Type safety</strong>: Strong typing with compile-time query validation</li>
+</ul>
+
+<h3 id="key-features">Key Features</h3>
+
+<ul>
+  <li><strong>Declarative syntax</strong>: Focus on what you want, not how to get it</li>
+  <li><strong>Flexible joins</strong>: Join across different data models</li>
+  <li><strong>Advanced analytics</strong>: Built-in statistical and mathematical functions</li>
+  <li><strong>Streaming results</strong>: Process large result sets efficiently</li>
+  <li><strong>Query optimization</strong>: Automatic query plan optimization</li>
+</ul>
+
+<h2 id="syntax-fundamentals">Syntax Fundamentals</h2>
+
+<h3 id="basic-query-structure">Basic Query Structure</h3>
+
+<pre><code class="language-aql">FOR variable IN collection
+  [FILTER condition]
+  [SORT expression]
+  [LIMIT count]
+  RETURN expression
+</code></pre>
+
+<h3 id="variables-and-expressions">Variables and Expressions</h3>
+
+<pre><code class="language-aql">// Variable binding
+FOR doc IN users
+  RETURN doc.name
+
+// Expression evaluation
+FOR doc IN users
+  RETURN {
+    fullName: CONCAT(doc.firstName, " ", doc.lastName),
+    age: doc.age,
+    isAdult: doc.age &gt;= 18
+  }
+</code></pre>
+
+<h3 id="comments">Comments</h3>
+
+<pre><code class="language-aql">// Single line comment
+FOR doc IN users // Another comment
+  /* Multi-line
+     comment */
+  RETURN doc
+</code></pre>
+
+<h2 id="data-types">Data Types</h2>
+
+<h3 id="primitive-types">Primitive Types</h3>
+
+<pre><code class="language-aql">// Numbers
+FOR doc IN collection
+  RETURN {
+    integer: 42,
+    float: 3.14159,
+    scientific: 1.23e-4
+  }
+
+// Strings
+FOR doc IN collection
+  RETURN {
+    simple: "Hello World",
+    escaped: "Line 1\nLine 2",
+    unicode: "Unicode: 🚀"
+  }
+
+// Booleans
+FOR doc IN collection
+  RETURN {
+    isTrue: true,
+    isFalse: false,
+    isNull: null
+  }
+</code></pre>
+
+<h3 id="complex-types">Complex Types</h3>
+
+<pre><code class="language-aql">// Arrays
+FOR doc IN collection
+  RETURN {
+    numbers: [1, 2, 3, 4, 5],
+    mixed: [1, "hello", true, null],
+    nested: [[1, 2], [3, 4]]
+  }
+
+// Objects
+FOR doc IN collection
+  RETURN {
+    user: {
+      name: "Alice",
+      age: 30,
+      preferences: {
+        theme: "dark",
+        language: "en"
+      }
+    }
+  }
+</code></pre>
+
+<h2 id="operations">Operations</h2>
+
+<h3 id="for-loops">FOR Loops</h3>
+
+<pre><code class="language-aql">// Simple iteration
+FOR user IN users
+  RETURN user
+
+// Multiple collections
+FOR user IN users
+  FOR post IN posts
+    FILTER post.authorId == user._id
+    RETURN {user: user.name, post: post.title}
+
+// Array iteration
+FOR item IN [1, 2, 3, 4, 5]
+  RETURN item * 2
+
+// Object iteration
+FOR key IN ATTRIBUTES({name: "Alice", age: 30})
+  RETURN key
+</code></pre>
+
+<h3 id="filter-operations">FILTER Operations</h3>
+
+<pre><code class="language-aql">// Basic filters
+FOR user IN users
+  FILTER user.age &gt; 18
+  RETURN user
+
+// Complex conditions
+FOR user IN users
+  FILTER user.age BETWEEN 25 AND 65
+    AND user.status == "active"
+    AND user.email LIKE "%@company.com"
+  RETURN user
+
+// Array filters
+FOR user IN users
+  FILTER "javascript" IN user.skills
+  RETURN user
+
+// Null checks
+FOR user IN users
+  FILTER user.lastLogin != null
+  RETURN user
+</code></pre>
+
+<h3 id="sort-operations">SORT Operations</h3>
+
+<pre><code class="language-aql">// Simple sorting
+FOR user IN users
+  SORT user.name
+  RETURN user
+
+// Multiple sort criteria
+FOR user IN users
+  SORT user.department, user.salary DESC, user.name
+  RETURN user
+
+// Expression sorting
+FOR user IN users
+  SORT CONCAT(user.lastName, user.firstName)
+  RETURN user
+</code></pre>
+
+<h3 id="limit-operations">LIMIT Operations</h3>
+
+<pre><code class="language-aql">// Simple limit
+FOR user IN users
+  LIMIT 10
+  RETURN user
+
+// Offset and limit
+FOR user IN users
+  LIMIT 20, 10  // Skip 20, take 10
+  RETURN user
+
+// Dynamic limits
+FOR user IN users
+  LIMIT @offset, @count
+  RETURN user
+</code></pre>
+
+<h2 id="graph-traversals">Graph Traversals</h2>
+
+<h3 id="basic-traversals">Basic Traversals</h3>
+
+<pre><code class="language-aql">// Outbound traversal
+FOR vertex, edge, path IN 1..3 OUTBOUND 'users/alice' follows
+  RETURN {vertex, edge, path}
+
+// Inbound traversal
+FOR vertex, edge IN 1..2 INBOUND 'posts/123' authored
+  RETURN vertex
+
+// Any direction
+FOR vertex IN 1..5 ANY 'users/alice' GRAPH 'social'
+  RETURN vertex
+</code></pre>
+
+<h3 id="advanced-traversals">Advanced Traversals</h3>
+
+<pre><code class="language-aql">// Multiple edge collections
+FOR vertex, edge IN 1..3 OUTBOUND 'users/alice' follows, likes
+  RETURN {vertex, edge}
+
+// Path filtering
+FOR vertex, edge, path IN 1..4 OUTBOUND 'users/alice' follows
+  FILTER path.edges[*].weight &gt; 0.5
+  RETURN vertex
+
+// Shortest path
+FOR path IN OUTBOUND SHORTEST_PATH 'users/alice' TO 'users/bob' follows
+  RETURN path
+</code></pre>
+
+<h3 id="named-graphs">Named Graphs</h3>
+
+<pre><code class="language-aql">// Define and use named graphs
+FOR vertex, edge IN 1..3 OUTBOUND 'users/alice' GRAPH 'social_network'
+  RETURN {
+    person: vertex.name,
+    relationship: edge.type,
+    since: edge.created_at
+  }
+
+// Multiple graphs
+FOR vertex IN 1..2 OUTBOUND 'users/alice' 
+  GRAPH ['professional', 'social']
+  RETURN vertex
+</code></pre>
+
+<h2 id="aggregations">Aggregations</h2>
+
+<h3 id="basic-aggregations">Basic Aggregations</h3>
+
+<pre><code class="language-aql">// COUNT
+FOR user IN users
+  COLLECT status = user.status WITH COUNT INTO count
+  RETURN {status, count}
+
+// SUM, AVERAGE
+FOR sale IN sales
+  COLLECT year = DATE_YEAR(sale.date) 
+  AGGREGATE total = SUM(sale.amount), avg = AVERAGE(sale.amount)
+  RETURN {year, total, avg}
+
+// MIN, MAX
+FOR product IN products
+  COLLECT category = product.category
+  AGGREGATE 
+    minPrice = MIN(product.price),
+    maxPrice = MAX(product.price)
+  RETURN {category, minPrice, maxPrice}
+</code></pre>
+
+<h3 id="advanced-aggregations">Advanced Aggregations</h3>
+
+<pre><code class="language-aql">// Multiple grouping levels
+FOR sale IN sales
+  COLLECT 
+    year = DATE_YEAR(sale.date),
+    month = DATE_MONTH(sale.date),
+    region = sale.region
+  AGGREGATE total = SUM(sale.amount)
+  RETURN {year, month, region, total}
+
+// COLLECT with arrays
+FOR user IN users
+  COLLECT department = user.department INTO departmentUsers
+  RETURN {
+    department,
+    users: departmentUsers[*].user.name,
+    count: LENGTH(departmentUsers)
+  }
+</code></pre>
+
+<h3 id="statistical-functions">Statistical Functions</h3>
+
+<pre><code class="language-aql">// Advanced statistics
+FOR metric IN metrics
+  COLLECT hour = DATE_HOUR(metric.timestamp)
+  AGGREGATE 
+    count = COUNT(),
+    avg = AVERAGE(metric.value),
+    stddev = STDDEV(metric.value),
+    variance = VARIANCE(metric.value),
+    percentile_95 = PERCENTILE(metric.value, 95)
+  RETURN {hour, count, avg, stddev, variance, percentile_95}
+</code></pre>
+
+<h2 id="functions">Functions</h2>
+
+<h3 id="string-functions">String Functions</h3>
+
+<pre><code class="language-aql">FOR user IN users
+  RETURN {
+    name: user.name,
+    upper: UPPER(user.name),
+    lower: LOWER(user.name),
+    length: LENGTH(user.name),
+    substring: SUBSTRING(user.name, 0, 3),
+    concat: CONCAT(user.firstName, " ", user.lastName),
+    split: SPLIT(user.email, "@"),
+    replace: SUBSTITUTE(user.phone, "-", ""),
+    regex: REGEX_MATCHES(user.email, "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$")
+  }
+</code></pre>
+
+<h3 id="numeric-functions">Numeric Functions</h3>
+
+<pre><code class="language-aql">FOR data IN dataset
+  RETURN {
+    value: data.value,
+    abs: ABS(data.value),
+    floor: FLOOR(data.value),
+    ceil: CEIL(data.value),
+    round: ROUND(data.value, 2),
+    sqrt: SQRT(ABS(data.value)),
+    power: POW(data.value, 2),
+    log: LOG(ABS(data.value)),
+    sin: SIN(data.angle),
+    cos: COS(data.angle),
+    random: RAND()
+  }
+</code></pre>
+
+<h3 id="datetime-functions">Date/Time Functions</h3>
+
+<pre><code class="language-aql">FOR event IN events
+  RETURN {
+    timestamp: event.timestamp,
+    year: DATE_YEAR(event.timestamp),
+    month: DATE_MONTH(event.timestamp),
+    day: DATE_DAY(event.timestamp),
+    hour: DATE_HOUR(event.timestamp),
+    formatted: DATE_FORMAT(event.timestamp, "%Y-%m-%d %H:%M:%S"),
+    unix: DATE_TIMESTAMP(event.timestamp),
+    from_unix: DATE_ISO8601(event.unix_timestamp),
+    diff: DATE_DIFF(event.end_time, event.start_time, "minutes"),
+    add: DATE_ADD(event.timestamp, 1, "day")
+  }
+</code></pre>
+
+<h3 id="array-functions">Array Functions</h3>
+
+<pre><code class="language-aql">FOR user IN users
+  RETURN {
+    skills: user.skills,
+    first: FIRST(user.skills),
+    last: LAST(user.skills),
+    length: LENGTH(user.skills),
+    sorted: SORTED(user.skills),
+    unique: UNIQUE(user.skills),
+    reversed: REVERSE(user.skills),
+    slice: SLICE(user.skills, 1, 2),
+    contains: "javascript" IN user.skills,
+    intersection: INTERSECTION(user.skills, ["javascript", "python", "rust"]),
+    union: UNION(user.skills, ["go", "typescript"]),
+    flatten: FLATTEN([user.skills, user.certifications])
+  }
+</code></pre>
+
+<h2 id="time-series-integration">Time Series Integration</h2>
+
+<h3 id="time-series-queries">Time Series Queries</h3>
+
+<pre><code class="language-aql">// Query time series data
+FOR point IN timeseries
+  FILTER point.series_id == "temperature_sensor_01"
+    AND point.timestamp &gt;= DATE_SUBTRACT(DATE_NOW(), 1, "hour")
+  SORT point.timestamp
+  RETURN {
+    time: point.timestamp,
+    value: point.value,
+    labels: point.labels
+  }
+
+// Aggregate time series data
+FOR point IN timeseries
+  FILTER point.series_id LIKE "cpu_usage_%"
+    AND point.timestamp &gt;= DATE_SUBTRACT(DATE_NOW(), 24, "hour")
+  COLLECT 
+    hour = DATE_HOUR(point.timestamp),
+    server = point.labels.server
+  AGGREGATE 
+    avg_cpu = AVERAGE(point.value),
+    max_cpu = MAX(point.value),
+    count = COUNT()
+  RETURN {hour, server, avg_cpu, max_cpu, count}
+</code></pre>
+
+<h3 id="combined-graph-and-time-series">Combined Graph and Time Series</h3>
+
+<pre><code class="language-aql">// Join graph and time series data
+FOR sensor IN sensors
+  FOR point IN timeseries
+    FILTER point.series_id == sensor._id
+      AND point.timestamp &gt;= DATE_SUBTRACT(DATE_NOW(), 1, "hour")
+    COLLECT 
+      sensor_name = sensor.name,
+      location = sensor.location
+    AGGREGATE 
+      avg_value = AVERAGE(point.value),
+      sample_count = COUNT()
+    RETURN {sensor_name, location, avg_value, sample_count}
+
+// Graph traversal with time series
+FOR vertex, edge IN 1..2 OUTBOUND 'sensors/temp_01' connected_to
+  FOR point IN timeseries
+    FILTER point.series_id == vertex._id
+      AND point.timestamp &gt;= @start_time
+    COLLECT sensor = vertex
+    AGGREGATE latest_value = LAST(point.value)
+    RETURN {
+      sensor: sensor.name,
+      type: sensor.type,
+      latest_reading: latest_value,
+      location: sensor.location
+    }
+</code></pre>
+
+<h2 id="performance-optimization">Performance Optimization</h2>
+
+<h3 id="index-usage">Index Usage</h3>
+
+<pre><code class="language-aql">// Efficient filtering with indexes
+FOR user IN users
+  FILTER user.email == @email  // Uses hash index
+  RETURN user
+
+FOR post IN posts
+  FILTER post.created_at &gt;= @start_date  // Uses skiplist index
+  SORT post.created_at DESC
+  RETURN post
+
+// Compound index usage
+FOR order IN orders
+  FILTER order.customer_id == @customer_id
+    AND order.status == "completed"
+    AND order.total &gt;= @min_total
+  RETURN order
+</code></pre>
+
+<h3 id="query-optimization">Query Optimization</h3>
+
+<pre><code class="language-aql">// Early filtering
+FOR user IN users
+  FILTER user.active == true  // Filter early
+  FOR order IN orders
+    FILTER order.user_id == user._id
+      AND order.status == "completed"
+    RETURN {user, order}
+
+// Efficient joins
+FOR user IN users
+  FILTER user.department == @department
+  FOR order IN orders
+    FILTER order.user_id == user._id
+    COLLECT user_info = user INTO orders_group = order
+    RETURN {
+      user: user_info,
+      order_count: LENGTH(orders_group),
+      total_amount: SUM(orders_group[*].amount)
+    }
+</code></pre>
+
+<h3 id="batch-operations">Batch Operations</h3>
+
+<pre><code class="language-aql">// Efficient batch processing
+FOR batch IN 1..100
+  FOR user IN users
+    LIMIT (batch - 1) * 1000, 1000  // Process in batches
+    // Process each batch
+    RETURN user
+</code></pre>
+
+<h2 id="examples">Examples</h2>
+
+<h3 id="social-network-analysis">Social Network Analysis</h3>
+
+<pre><code class="language-aql">// Find mutual friends
+FOR user IN users
+  FILTER user._id == @user_id
+  FOR friend1 IN 1..1 OUTBOUND user follows
+    FOR friend2 IN 1..1 OUTBOUND @other_user_id follows
+      FILTER friend1._id == friend2._id
+      RETURN DISTINCT friend1
+
+// Friend recommendations
+FOR user IN users
+  FILTER user._id == @user_id
+  FOR friend IN 1..1 OUTBOUND user follows
+    FOR friend_of_friend IN 1..1 OUTBOUND friend follows
+      FILTER friend_of_friend._id != @user_id
+        AND friend_of_friend._id NOT IN (
+          FOR direct_friend IN 1..1 OUTBOUND user follows
+            RETURN direct_friend._id
+        )
+      COLLECT recommended_user = friend_of_friend WITH COUNT INTO mutual_count
+      SORT mutual_count DESC
+      LIMIT 10
+      RETURN {user: recommended_user, mutual_friends: mutual_count}
+</code></pre>
+
+<h3 id="e-commerce-analytics">E-commerce Analytics</h3>
+
+<pre><code class="language-aql">// Customer lifetime value
+FOR customer IN customers
+  FOR order IN orders
+    FILTER order.customer_id == customer._id
+    COLLECT customer_info = customer
+    AGGREGATE 
+      total_spent = SUM(order.total),
+      order_count = COUNT(),
+      avg_order_value = AVERAGE(order.total),
+      first_order = MIN(order.created_at),
+      last_order = MAX(order.created_at)
+    LET days_active = DATE_DIFF(last_order, first_order, "day")
+    RETURN {
+      customer: customer_info.name,
+      lifetime_value: total_spent,
+      orders: order_count,
+      avg_order: avg_order_value,
+      days_active: days_active,
+      value_per_day: total_spent / MAX(days_active, 1)
+    }
+
+// Product recommendation based on purchase history
+FOR customer IN customers
+  FILTER customer._id == @customer_id
+  FOR order IN orders
+    FILTER order.customer_id == customer._id
+    FOR item IN order.items
+      FOR similar_item IN products
+        FILTER similar_item.category == item.category
+          AND similar_item._id != item._id
+          AND similar_item._id NOT IN (
+            FOR past_order IN orders
+              FILTER past_order.customer_id == @customer_id
+              FOR past_item IN past_order.items
+                RETURN past_item._id
+          )
+        COLLECT recommended_product = similar_item WITH COUNT INTO relevance_score
+        SORT relevance_score DESC
+        LIMIT 5
+        RETURN {product: recommended_product, score: relevance_score}
+</code></pre>
+
+<h3 id="iot-data-analysis">IoT Data Analysis</h3>
+
+<pre><code class="language-aql">// Sensor anomaly detection
+FOR sensor IN sensors
+  FOR point IN timeseries
+    FILTER point.series_id == sensor._id
+      AND point.timestamp &gt;= DATE_SUBTRACT(DATE_NOW(), 1, "hour")
+    COLLECT sensor_info = sensor
+    AGGREGATE 
+      avg_value = AVERAGE(point.value),
+      stddev_value = STDDEV(point.value),
+      points = point[*]
+    LET threshold = avg_value + (2 * stddev_value)
+    LET anomalies = (
+      FOR p IN points
+        FILTER p.value &gt; threshold
+        RETURN p
+    )
+    FILTER LENGTH(anomalies) &gt; 0
+    RETURN {
+      sensor: sensor_info.name,
+      location: sensor_info.location,
+      avg_value: avg_value,
+      threshold: threshold,
+      anomaly_count: LENGTH(anomalies),
+      anomalies: anomalies
+    }
+
+// Equipment maintenance prediction
+FOR equipment IN equipment
+  FOR metric IN timeseries
+    FILTER metric.series_id == equipment.sensor_id
+      AND metric.timestamp &gt;= DATE_SUBTRACT(DATE_NOW(), 30, "day")
+    COLLECT 
+      equipment_info = equipment,
+      day = DATE_DAY(metric.timestamp)
+    AGGREGATE daily_avg = AVERAGE(metric.value)
+    COLLECT equipment_final = equipment_info INTO daily_values = daily_avg
+    LET trend = SLOPE(daily_values)  // Custom function for trend analysis
+    LET maintenance_needed = ABS(trend) &gt; 0.1  // Degradation threshold
+    FILTER maintenance_needed
+    RETURN {
+      equipment: equipment_final.name,
+      location: equipment_final.location,
+      trend: trend,
+      priority: ABS(trend) &gt; 0.2 ? "high" : "medium",
+      next_maintenance: DATE_ADD(DATE_NOW(), CEIL(30 / ABS(trend)), "day")
+    }
+</code></pre>
+
+<h2 id="api-reference">API Reference</h2>
+
+<h3 id="query-execution">Query Execution</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">orbit_protocols</span><span class="p">::</span><span class="nn">aql</span><span class="p">::{</span><span class="n">AQLEngine</span><span class="p">,</span> <span class="n">QueryOptions</span><span class="p">};</span>
+
+<span class="c1">// Execute AQL query</span>
+<span class="k">let</span> <span class="n">result</span> <span class="o">=</span> <span class="n">aql_engine</span><span class="nf">.execute</span><span class="p">(</span>
+    <span class="s">"FOR user IN users FILTER user.age &gt; @min_age RETURN user"</span><span class="p">,</span>
+    <span class="p">[(</span><span class="s">"min_age"</span><span class="p">,</span> <span class="mi">18</span><span class="p">)]</span><span class="nf">.iter</span><span class="p">()</span><span class="nf">.cloned</span><span class="p">()</span><span class="nf">.collect</span><span class="p">()</span>
+<span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+
+<span class="c1">// Execute with options</span>
+<span class="k">let</span> <span class="n">options</span> <span class="o">=</span> <span class="n">QueryOptions</span> <span class="p">{</span>
+    <span class="n">max_runtime</span><span class="p">:</span> <span class="nn">Duration</span><span class="p">::</span><span class="nf">from_secs</span><span class="p">(</span><span class="mi">30</span><span class="p">),</span>
+    <span class="n">memory_limit</span><span class="p">:</span> <span class="mi">1024</span> <span class="o">*</span> <span class="mi">1024</span> <span class="o">*</span> <span class="mi">100</span><span class="p">,</span> <span class="c1">// 100MB</span>
+    <span class="n">intermediate_commit_size</span><span class="p">:</span> <span class="mi">10000</span><span class="p">,</span>
+    <span class="o">..</span><span class="nn">Default</span><span class="p">::</span><span class="nf">default</span><span class="p">()</span>
+<span class="p">};</span>
+
+<span class="k">let</span> <span class="n">result</span> <span class="o">=</span> <span class="n">aql_engine</span><span class="nf">.execute_with_options</span><span class="p">(</span><span class="n">query</span><span class="p">,</span> <span class="n">params</span><span class="p">,</span> <span class="n">options</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h3 id="streaming-results">Streaming Results</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">futures_util</span><span class="p">::</span><span class="nn">stream</span><span class="p">::</span><span class="n">StreamExt</span><span class="p">;</span>
+
+<span class="c1">// Stream large result sets</span>
+<span class="k">let</span> <span class="k">mut</span> <span class="n">stream</span> <span class="o">=</span> <span class="n">aql_engine</span><span class="nf">.execute_stream</span><span class="p">(</span>
+    <span class="s">"FOR doc IN large_collection RETURN doc"</span>
+<span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+
+<span class="k">while</span> <span class="k">let</span> <span class="nf">Some</span><span class="p">(</span><span class="n">batch</span><span class="p">)</span> <span class="o">=</span> <span class="n">stream</span><span class="nf">.next</span><span class="p">()</span><span class="k">.await</span> <span class="p">{</span>
+    <span class="k">for</span> <span class="n">document</span> <span class="k">in</span> <span class="n">batch</span><span class="o">?</span> <span class="p">{</span>
+        <span class="c1">// Process each document</span>
+        <span class="nd">println!</span><span class="p">(</span><span class="s">"{:?}"</span><span class="p">,</span> <span class="n">document</span><span class="p">);</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="prepared-statements">Prepared Statements</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Prepare query for multiple executions</span>
+<span class="k">let</span> <span class="n">prepared</span> <span class="o">=</span> <span class="n">aql_engine</span><span class="nf">.prepare</span><span class="p">(</span>
+    <span class="s">"FOR user IN users FILTER user.department == @dept RETURN user"</span>
+<span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+
+<span class="c1">// Execute with different parameters</span>
+<span class="k">let</span> <span class="n">results1</span> <span class="o">=</span> <span class="n">prepared</span><span class="nf">.execute</span><span class="p">([(</span><span class="s">"dept"</span><span class="p">,</span> <span class="s">"engineering"</span><span class="p">)])</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+<span class="k">let</span> <span class="n">results2</span> <span class="o">=</span> <span class="n">prepared</span><span class="nf">.execute</span><span class="p">([(</span><span class="s">"dept"</span><span class="p">,</span> <span class="s">"marketing"</span><span class="p">)])</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h3 id="transaction-support">Transaction Support</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Execute within transaction</span>
+<span class="k">let</span> <span class="n">transaction</span> <span class="o">=</span> <span class="n">aql_engine</span><span class="nf">.begin_transaction</span><span class="p">()</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+
+<span class="k">let</span> <span class="n">result1</span> <span class="o">=</span> <span class="n">transaction</span><span class="nf">.execute</span><span class="p">(</span>
+    <span class="s">"FOR user IN users FILTER user._id == @id UPDATE user WITH {last_login: DATE_NOW()} IN users"</span><span class="p">,</span>
+    <span class="p">[(</span><span class="s">"id"</span><span class="p">,</span> <span class="s">"users/123"</span><span class="p">)]</span>
+<span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+
+<span class="k">let</span> <span class="n">result2</span> <span class="o">=</span> <span class="n">transaction</span><span class="nf">.execute</span><span class="p">(</span>
+    <span class="s">"INSERT {user_id: @id, action: 'login', timestamp: DATE_NOW()} IN audit_log"</span><span class="p">,</span>
+    <span class="p">[(</span><span class="s">"id"</span><span class="p">,</span> <span class="s">"users/123"</span><span class="p">)]</span>
+<span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+
+<span class="n">transaction</span><span class="nf">.commit</span><span class="p">()</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+</code></pre></div></div>
+
+<p>AQL in Orbit-RS provides a powerful, flexible query language that seamlessly integrates graph traversals, document operations, and time series analytics in a single, optimized execution engine.</p>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/orbit-rs/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Orbit-RS Documentation</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">TuringWorks</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

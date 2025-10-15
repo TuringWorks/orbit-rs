@@ -1,0 +1,740 @@
+<h1 id="rfc-001-columnar-analytics-engine-for-orbit-rs">RFC-001: Columnar Analytics Engine for Orbit-RS</h1>
+
+<p><strong>Date</strong>: October 9, 2025<br />
+<strong>Author</strong>: AI Assistant<br />
+<strong>Status</strong>: Draft<br />
+<strong>Tracking Issue</strong>: TBD</p>
+
+<h2 id="summary">Summary</h2>
+
+<p>This RFC proposes implementing a high-performance columnar analytics engine for Orbit-RS to achieve ClickHouse and DuckDB level analytical query performance while maintaining the unique actor-based distribution model and multi-modal data capabilities.</p>
+
+<h2 id="motivation">Motivation</h2>
+
+<p>Current Orbit-RS architecture uses row-based storage which limits analytical query performance compared to specialized OLAP systems:</p>
+
+<ul>
+  <li><strong>Performance Gap</strong>: 10-100x slower than ClickHouse/DuckDB for analytical queries</li>
+  <li><strong>Memory Inefficiency</strong>: Row-based scans waste memory on unused columns</li>
+  <li><strong>Limited Compression</strong>: Row format prevents effective columnar compression</li>
+  <li><strong>Market Position</strong>: Cannot compete effectively in analytics market without columnar performance</li>
+</ul>
+
+<p><strong>Market Opportunity</strong>: Columnar analytics with actor-based distribution and multi-modal capabilities would be unique in the market.</p>
+
+<h2 id="design-goals">Design Goals</h2>
+
+<h3 id="primary-goals">Primary Goals</h3>
+<ol>
+  <li><strong>Performance</strong>: Match ClickHouse analytical performance (sub-second complex queries on billions of rows)</li>
+  <li><strong>Compatibility</strong>: Seamless integration with existing actor system and multi-modal data</li>
+  <li><strong>Resource Efficiency</strong>: Memory-efficient columnar processing suitable for edge deployment</li>
+  <li><strong>Developer Experience</strong>: Transparent columnar optimization without breaking existing APIs</li>
+</ol>
+
+<h3 id="secondary-goals">Secondary Goals</h3>
+<ol>
+  <li><strong>Compression</strong>: Achieve 5-20x compression ratios with specialized columnar algorithms</li>
+  <li><strong>Vectorization</strong>: SIMD-accelerated processing for numerical operations</li>
+  <li><strong>Scalability</strong>: Distributed columnar processing across actor cluster</li>
+  <li><strong>Flexibility</strong>: Support both row-based OLTP and columnar OLAP in unified system</li>
+</ol>
+
+<h2 id="detailed-design">Detailed Design</h2>
+
+<h3 id="architecture-overview">Architecture Overview</h3>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>┌─────────────────────────────────────────────────────────────────┐
+│                    Query Planning Layer                        │
+│  ┌─────────────────┐    ┌─────────────────────────────────────┐ │
+│  │ OrbitQL Parser  │    │     Query Optimizer                │ │
+│  │                 │───▶│ • Cost-based optimization          │ │
+│  │ • SQL           │    │ • Columnar pushdown                │ │  
+│  │ • Multi-modal   │    │ • Vectorization planning          │ │
+│  └─────────────────┘    └─────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────┘
+                                     │
+                                     ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                   Execution Engine                             │
+│  ┌─────────────────┐    ┌─────────────────────────────────────┐ │
+│  │ Vectorized      │    │      Actor Integration             │ │
+│  │ Operators       │    │                                     │ │
+│  │                 │    │ • Actor-aware partitioning         │ │
+│  │ • SIMD Scan     │───▶│ • Distributed execution            │ │
+│  │ • Vectorized    │    │ • Load balancing                   │ │
+│  │   Aggregation   │    │ • Fault tolerance                  │ │
+│  │ • Join          │    │                                     │ │
+│  └─────────────────┘    └─────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────┘
+                                     │
+                                     ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                   Storage Layer                                │
+│  ┌─────────────────┐    ┌─────────────────────────────────────┐ │
+│  │ Columnar Store  │    │      Hybrid Row/Column             │ │
+│  │                 │    │                                     │ │
+│  │ • Arrow format  │───▶│ • Hot data (row-based)             │ │
+│  │ • Compression   │    │ • Cold data (columnar)             │ │
+│  │ • Partitioning  │    │ • Automatic tiering                │ │
+│  │ • Indexing      │    │ • Actor lease integration          │ │
+│  └─────────────────┘    └─────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────┘
+</code></pre></div></div>
+
+<h3 id="core-components">Core Components</h3>
+
+<h4 id="1-columnar-storage-engine">1. Columnar Storage Engine</h4>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="cd">/// Columnar storage backend for analytical workloads</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">ColumnarStorageEngine</span> <span class="p">{</span>
+    <span class="cd">/// Memory-mapped columnar data files</span>
+    <span class="n">column_files</span><span class="p">:</span> <span class="n">HashMap</span><span class="o">&lt;</span><span class="nb">String</span><span class="p">,</span> <span class="n">MemoryMappedColumn</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="cd">/// Column statistics for query optimization</span>
+    <span class="n">statistics</span><span class="p">:</span> <span class="n">ColumnStatistics</span><span class="p">,</span>
+    <span class="cd">/// Compression codecs per column</span>
+    <span class="n">codecs</span><span class="p">:</span> <span class="n">HashMap</span><span class="o">&lt;</span><span class="nb">String</span><span class="p">,</span> <span class="n">CompressionCodec</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="cd">/// Actor lease integration</span>
+    <span class="n">actor_manager</span><span class="p">:</span> <span class="nb">Arc</span><span class="o">&lt;</span><span class="n">ActorManager</span><span class="o">&gt;</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="cd">/// Memory-mapped columnar data with SIMD-friendly layout</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">MemoryMappedColumn</span> <span class="p">{</span>
+    <span class="cd">/// Raw column data (compressed)</span>
+    <span class="n">data</span><span class="p">:</span> <span class="n">Mmap</span><span class="p">,</span>
+    <span class="cd">/// Column metadata (type, encoding, statistics)</span>
+    <span class="n">metadata</span><span class="p">:</span> <span class="n">ColumnMetadata</span><span class="p">,</span>
+    <span class="cd">/// Bloom filter for fast filtering</span>
+    <span class="n">bloom_filter</span><span class="p">:</span> <span class="n">BloomFilter</span><span class="p">,</span>
+    <span class="cd">/// Dictionary encoding (for string columns)</span>
+    <span class="n">dictionary</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="n">Dictionary</span><span class="o">&gt;</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="cd">/// Column compression strategies</span>
+<span class="k">pub</span> <span class="k">enum</span> <span class="n">CompressionCodec</span> <span class="p">{</span>
+    <span class="cd">/// Integer compression</span>
+    <span class="n">Delta</span> <span class="p">{</span> <span class="n">base_value</span><span class="p">:</span> <span class="nb">i64</span> <span class="p">},</span>
+    <span class="n">DoubleDelta</span> <span class="p">{</span> <span class="n">base_value</span><span class="p">:</span> <span class="nb">i64</span><span class="p">,</span> <span class="n">base_delta</span><span class="p">:</span> <span class="nb">i64</span> <span class="p">},</span>
+    <span class="n">RLE</span> <span class="p">{</span> <span class="n">run_lengths</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="nb">u32</span><span class="o">&gt;</span> <span class="p">},</span>
+    <span class="n">BitPacking</span> <span class="p">{</span> <span class="n">bit_width</span><span class="p">:</span> <span class="nb">u8</span> <span class="p">},</span>
+    
+    <span class="cd">/// Float compression  </span>
+    <span class="n">Gorilla</span> <span class="p">{</span> <span class="n">precision</span><span class="p">:</span> <span class="nb">f64</span> <span class="p">},</span>
+    
+    <span class="cd">/// String compression</span>
+    <span class="n">Dictionary</span> <span class="p">{</span> <span class="n">dictionary</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="nb">String</span><span class="o">&gt;</span> <span class="p">},</span>
+    <span class="n">LZ4</span><span class="p">,</span>
+    <span class="n">Zstd</span> <span class="p">{</span> <span class="n">level</span><span class="p">:</span> <span class="nb">i32</span> <span class="p">},</span>
+    
+    <span class="cd">/// General purpose</span>
+    <span class="n">Snappy</span><span class="p">,</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h4 id="2-vectorized-query-execution">2. Vectorized Query Execution</h4>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="cd">/// Vectorized query operators using SIMD</span>
+<span class="k">pub</span> <span class="k">trait</span> <span class="n">VectorizedOperator</span> <span class="p">{</span>
+    <span class="k">type</span> <span class="n">Input</span><span class="p">:</span> <span class="n">VectorBatch</span><span class="p">;</span>
+    <span class="k">type</span> <span class="n">Output</span><span class="p">:</span> <span class="n">VectorBatch</span><span class="p">;</span>
+    
+    <span class="cd">/// Process a batch of vectors with SIMD</span>
+    <span class="k">fn</span> <span class="nf">execute_vectorized</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">input</span><span class="p">:</span> <span class="k">Self</span><span class="p">::</span><span class="n">Input</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="k">Self</span><span class="p">::</span><span class="n">Output</span><span class="o">&gt;</span><span class="p">;</span>
+    
+    <span class="cd">/// Estimate selectivity for optimization</span>
+    <span class="k">fn</span> <span class="nf">estimate_selectivity</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">statistics</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">Statistics</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">f64</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="cd">/// SIMD-accelerated column scan</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">VectorizedScan</span> <span class="p">{</span>
+    <span class="cd">/// Columns to scan</span>
+    <span class="n">columns</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">ColumnRef</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="cd">/// Predicate for filtering</span>
+    <span class="n">predicate</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="n">VectorizedPredicate</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="cd">/// Batch size for processing</span>
+    <span class="n">batch_size</span><span class="p">:</span> <span class="nb">usize</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="k">impl</span> <span class="n">VectorizedOperator</span> <span class="k">for</span> <span class="n">VectorizedScan</span> <span class="p">{</span>
+    <span class="k">type</span> <span class="n">Input</span> <span class="o">=</span> <span class="p">();</span>
+    <span class="k">type</span> <span class="n">Output</span> <span class="o">=</span> <span class="n">RecordBatch</span><span class="p">;</span>
+    
+    <span class="k">fn</span> <span class="nf">execute_vectorized</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">_</span><span class="p">:</span> <span class="p">())</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">RecordBatch</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="k">let</span> <span class="k">mut</span> <span class="n">batch</span> <span class="o">=</span> <span class="nn">RecordBatch</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="k">self</span><span class="py">.batch_size</span><span class="p">);</span>
+        
+        <span class="c1">// SIMD-accelerated column reading</span>
+        <span class="k">for</span> <span class="n">column</span> <span class="k">in</span> <span class="o">&amp;</span><span class="k">self</span><span class="py">.columns</span> <span class="p">{</span>
+            <span class="k">let</span> <span class="n">vector</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.read_column_simd</span><span class="p">(</span><span class="n">column</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+            <span class="n">batch</span><span class="nf">.add_column</span><span class="p">(</span><span class="n">column</span><span class="py">.name</span><span class="nf">.clone</span><span class="p">(),</span> <span class="n">vector</span><span class="p">);</span>
+        <span class="p">}</span>
+        
+        <span class="c1">// Apply vectorized predicates</span>
+        <span class="k">if</span> <span class="k">let</span> <span class="nf">Some</span><span class="p">(</span><span class="n">pred</span><span class="p">)</span> <span class="o">=</span> <span class="o">&amp;</span><span class="k">self</span><span class="py">.predicate</span> <span class="p">{</span>
+            <span class="n">batch</span> <span class="o">=</span> <span class="n">pred</span><span class="nf">.filter_simd</span><span class="p">(</span><span class="n">batch</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+        <span class="p">}</span>
+        
+        <span class="nf">Ok</span><span class="p">(</span><span class="n">batch</span><span class="p">)</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+
+<span class="cd">/// SIMD-accelerated aggregation</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">VectorizedAggregation</span> <span class="p">{</span>
+    <span class="cd">/// Aggregation functions</span>
+    <span class="n">aggregates</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">AggregateFunction</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="cd">/// Group by columns</span>
+    <span class="n">group_by</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">ColumnRef</span><span class="o">&gt;</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="k">impl</span> <span class="n">VectorizedOperator</span> <span class="k">for</span> <span class="n">VectorizedAggregation</span> <span class="p">{</span>
+    <span class="k">type</span> <span class="n">Input</span> <span class="o">=</span> <span class="n">RecordBatch</span><span class="p">;</span>
+    <span class="k">type</span> <span class="n">Output</span> <span class="o">=</span> <span class="n">RecordBatch</span><span class="p">;</span>
+    
+    <span class="k">fn</span> <span class="nf">execute_vectorized</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">input</span><span class="p">:</span> <span class="n">RecordBatch</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">RecordBatch</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="c1">// Use SIMD for group-by hashing</span>
+        <span class="k">let</span> <span class="n">groups</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.compute_groups_simd</span><span class="p">(</span><span class="o">&amp;</span><span class="n">input</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+        
+        <span class="c1">// SIMD aggregation within groups</span>
+        <span class="k">let</span> <span class="k">mut</span> <span class="n">result</span> <span class="o">=</span> <span class="nn">RecordBatch</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="n">groups</span><span class="nf">.len</span><span class="p">());</span>
+        <span class="k">for</span> <span class="n">agg</span> <span class="k">in</span> <span class="o">&amp;</span><span class="k">self</span><span class="py">.aggregates</span> <span class="p">{</span>
+            <span class="k">let</span> <span class="n">values</span> <span class="o">=</span> <span class="n">agg</span><span class="nf">.compute_simd</span><span class="p">(</span><span class="o">&amp;</span><span class="n">input</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">groups</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+            <span class="n">result</span><span class="nf">.add_column</span><span class="p">(</span><span class="n">agg</span><span class="nf">.output_name</span><span class="p">(),</span> <span class="n">values</span><span class="p">);</span>
+        <span class="p">}</span>
+        
+        <span class="nf">Ok</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h4 id="3-hybrid-rowcolumn-storage">3. Hybrid Row/Column Storage</h4>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="cd">/// Hybrid storage supporting both OLTP and OLAP workloads</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">HybridStorage</span> <span class="p">{</span>
+    <span class="cd">/// Row-based storage for hot data and actor state</span>
+    <span class="n">row_store</span><span class="p">:</span> <span class="nb">Arc</span><span class="o">&lt;</span><span class="k">dyn</span> <span class="n">PersistenceProvider</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="cd">/// Columnar storage for analytical queries</span>
+    <span class="n">column_store</span><span class="p">:</span> <span class="nb">Arc</span><span class="o">&lt;</span><span class="n">ColumnarStorageEngine</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="cd">/// Tiering policy for data movement</span>
+    <span class="n">tiering_policy</span><span class="p">:</span> <span class="n">DataTieringPolicy</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="cd">/// Data tiering policy configuration</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">DataTieringPolicy</span> <span class="p">{</span>
+    <span class="cd">/// Age threshold for columnar conversion</span>
+    <span class="n">cold_data_threshold</span><span class="p">:</span> <span class="n">Duration</span><span class="p">,</span>
+    <span class="cd">/// Access pattern analysis window</span>
+    <span class="n">analysis_window</span><span class="p">:</span> <span class="n">Duration</span><span class="p">,</span>
+    <span class="cd">/// Minimum batch size for columnar conversion  </span>
+    <span class="n">min_batch_size</span><span class="p">:</span> <span class="nb">usize</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="k">impl</span> <span class="n">HybridStorage</span> <span class="p">{</span>
+    <span class="cd">/// Automatic data tiering based on access patterns</span>
+    <span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">tier_data</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="c1">// Analyze access patterns</span>
+        <span class="k">let</span> <span class="n">hot_data</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.analyze_access_patterns</span><span class="p">()</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+        
+        <span class="c1">// Identify cold data candidates</span>
+        <span class="k">let</span> <span class="n">cold_candidates</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.identify_cold_data</span><span class="p">(</span><span class="o">&amp;</span><span class="n">hot_data</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+        
+        <span class="c1">// Convert to columnar format</span>
+        <span class="k">for</span> <span class="n">candidate</span> <span class="k">in</span> <span class="n">cold_candidates</span> <span class="p">{</span>
+            <span class="k">self</span><span class="nf">.convert_to_columnar</span><span class="p">(</span><span class="n">candidate</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+        <span class="p">}</span>
+        
+        <span class="nf">Ok</span><span class="p">(())</span>
+    <span class="p">}</span>
+    
+    <span class="cd">/// Convert row data to columnar format</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">convert_to_columnar</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">DataBatch</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="c1">// Extract columns from row data</span>
+        <span class="k">let</span> <span class="n">columns</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.extract_columns</span><span class="p">(</span><span class="o">&amp;</span><span class="n">data</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+        
+        <span class="c1">// Compress each column with optimal codec</span>
+        <span class="k">let</span> <span class="n">compressed_columns</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.compress_columns</span><span class="p">(</span><span class="n">columns</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+        
+        <span class="c1">// Write to columnar storage</span>
+        <span class="k">self</span><span class="py">.column_store</span><span class="nf">.write_columns</span><span class="p">(</span><span class="n">compressed_columns</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+        
+        <span class="c1">// Update metadata and statistics</span>
+        <span class="k">self</span><span class="nf">.update_statistics</span><span class="p">(</span><span class="o">&amp;</span><span class="n">data</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+        
+        <span class="nf">Ok</span><span class="p">(())</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h4 id="4-actor-aware-query-distribution">4. Actor-Aware Query Distribution</h4>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="cd">/// Distributed columnar query execution across actors</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">DistributedColumnarEngine</span> <span class="p">{</span>
+    <span class="cd">/// Local columnar engine</span>
+    <span class="n">local_engine</span><span class="p">:</span> <span class="nb">Arc</span><span class="o">&lt;</span><span class="n">ColumnarStorageEngine</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="cd">/// Actor cluster for distributed execution</span>
+    <span class="n">cluster</span><span class="p">:</span> <span class="nb">Arc</span><span class="o">&lt;</span><span class="n">ClusterManager</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="cd">/// Query coordinator</span>
+    <span class="n">coordinator</span><span class="p">:</span> <span class="nb">Arc</span><span class="o">&lt;</span><span class="n">QueryCoordinator</span><span class="o">&gt;</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="k">impl</span> <span class="n">DistributedColumnarEngine</span> <span class="p">{</span>
+    <span class="cd">/// Execute distributed columnar query</span>
+    <span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">execute_distributed_query</span><span class="p">(</span>
+        <span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> 
+        <span class="n">query</span><span class="p">:</span> <span class="n">ColumnarQuery</span>
+    <span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">QueryResult</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="c1">// Plan distribution strategy</span>
+        <span class="k">let</span> <span class="n">plan</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.plan_distribution</span><span class="p">(</span><span class="n">query</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+        
+        <span class="c1">// Execute on each node</span>
+        <span class="k">let</span> <span class="k">mut</span> <span class="n">tasks</span> <span class="o">=</span> <span class="nn">Vec</span><span class="p">::</span><span class="nf">new</span><span class="p">();</span>
+        <span class="k">for</span> <span class="n">node_plan</span> <span class="k">in</span> <span class="n">plan</span><span class="py">.node_plans</span> <span class="p">{</span>
+            <span class="k">let</span> <span class="n">task</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.execute_on_node</span><span class="p">(</span><span class="n">node_plan</span><span class="p">);</span>
+            <span class="n">tasks</span><span class="nf">.push</span><span class="p">(</span><span class="n">task</span><span class="p">);</span>
+        <span class="p">}</span>
+        
+        <span class="c1">// Collect results</span>
+        <span class="k">let</span> <span class="n">partial_results</span> <span class="o">=</span> <span class="nn">futures</span><span class="p">::</span><span class="nn">future</span><span class="p">::</span><span class="nf">try_join_all</span><span class="p">(</span><span class="n">tasks</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+        
+        <span class="c1">// Merge partial results</span>
+        <span class="k">let</span> <span class="n">final_result</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.merge_results</span><span class="p">(</span><span class="n">partial_results</span><span class="p">,</span> <span class="n">plan</span><span class="py">.merge_strategy</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+        
+        <span class="nf">Ok</span><span class="p">(</span><span class="n">final_result</span><span class="p">)</span>
+    <span class="p">}</span>
+    
+    <span class="cd">/// Plan query distribution across actors</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">plan_distribution</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">query</span><span class="p">:</span> <span class="n">ColumnarQuery</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">DistributionPlan</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="k">let</span> <span class="k">mut</span> <span class="n">plan</span> <span class="o">=</span> <span class="nn">DistributionPlan</span><span class="p">::</span><span class="nf">new</span><span class="p">();</span>
+        
+        <span class="c1">// Analyze data locality with actor placement</span>
+        <span class="k">let</span> <span class="n">data_locality</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.analyze_actor_data_locality</span><span class="p">(</span><span class="o">&amp;</span><span class="n">query</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+        
+        <span class="c1">// Partition query based on actor boundaries</span>
+        <span class="k">for</span> <span class="p">(</span><span class="n">actor_id</span><span class="p">,</span> <span class="n">data_partition</span><span class="p">)</span> <span class="k">in</span> <span class="n">data_locality</span> <span class="p">{</span>
+            <span class="k">let</span> <span class="n">node_id</span> <span class="o">=</span> <span class="k">self</span><span class="py">.cluster</span><span class="nf">.get_actor_node</span><span class="p">(</span><span class="n">actor_id</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+            <span class="k">let</span> <span class="n">node_plan</span> <span class="o">=</span> <span class="n">QueryPlan</span> <span class="p">{</span>
+                <span class="n">node_id</span><span class="p">,</span>
+                <span class="n">actor_partitions</span><span class="p">:</span> <span class="nd">vec!</span><span class="p">[</span><span class="n">data_partition</span><span class="p">],</span>
+                <span class="n">operations</span><span class="p">:</span> <span class="k">self</span><span class="nf">.optimize_for_node</span><span class="p">(</span><span class="o">&amp;</span><span class="n">query</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">data_partition</span><span class="p">)</span><span class="o">?</span><span class="p">,</span>
+            <span class="p">};</span>
+            <span class="n">plan</span><span class="nf">.add_node_plan</span><span class="p">(</span><span class="n">node_plan</span><span class="p">);</span>
+        <span class="p">}</span>
+        
+        <span class="nf">Ok</span><span class="p">(</span><span class="n">plan</span><span class="p">)</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="performance-optimizations">Performance Optimizations</h3>
+
+<h4 id="1-simd-vectorization">1. SIMD Vectorization</h4>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="cd">/// SIMD-accelerated column operations</span>
+<span class="k">mod</span> <span class="n">simd_ops</span> <span class="p">{</span>
+    <span class="k">use</span> <span class="nn">std</span><span class="p">::</span><span class="nn">arch</span><span class="p">::</span><span class="nn">x86_64</span><span class="p">::</span><span class="o">*</span><span class="p">;</span>
+    
+    <span class="cd">/// SIMD sum for f64 columns  </span>
+    <span class="k">pub</span> <span class="k">unsafe</span> <span class="k">fn</span> <span class="nf">sum_f64_simd</span><span class="p">(</span><span class="n">data</span><span class="p">:</span> <span class="o">&amp;</span><span class="p">[</span><span class="nb">f64</span><span class="p">])</span> <span class="k">-&gt;</span> <span class="nb">f64</span> <span class="p">{</span>
+        <span class="k">let</span> <span class="k">mut</span> <span class="n">sum</span> <span class="o">=</span> <span class="nf">_mm256_setzero_pd</span><span class="p">();</span>
+        <span class="k">let</span> <span class="n">chunks</span> <span class="o">=</span> <span class="n">data</span><span class="nf">.chunks_exact</span><span class="p">(</span><span class="mi">4</span><span class="p">);</span>
+        
+        <span class="k">for</span> <span class="n">chunk</span> <span class="k">in</span> <span class="n">chunks</span> <span class="p">{</span>
+            <span class="k">let</span> <span class="n">values</span> <span class="o">=</span> <span class="nf">_mm256_loadu_pd</span><span class="p">(</span><span class="n">chunk</span><span class="nf">.as_ptr</span><span class="p">());</span>
+            <span class="n">sum</span> <span class="o">=</span> <span class="nf">_mm256_add_pd</span><span class="p">(</span><span class="n">sum</span><span class="p">,</span> <span class="n">values</span><span class="p">);</span>
+        <span class="p">}</span>
+        
+        <span class="c1">// Horizontal sum</span>
+        <span class="k">let</span> <span class="n">high</span> <span class="o">=</span> <span class="nf">_mm256_extractf128_pd</span><span class="p">(</span><span class="n">sum</span><span class="p">,</span> <span class="mi">1</span><span class="p">);</span>
+        <span class="k">let</span> <span class="n">low</span> <span class="o">=</span> <span class="nf">_mm256_castpd256_pd128</span><span class="p">(</span><span class="n">sum</span><span class="p">);</span>
+        <span class="k">let</span> <span class="n">sum128</span> <span class="o">=</span> <span class="nf">_mm_add_pd</span><span class="p">(</span><span class="n">high</span><span class="p">,</span> <span class="n">low</span><span class="p">);</span>
+        <span class="k">let</span> <span class="n">sum_high</span> <span class="o">=</span> <span class="nf">_mm_unpackhi_pd</span><span class="p">(</span><span class="n">sum128</span><span class="p">,</span> <span class="n">sum128</span><span class="p">);</span>
+        <span class="k">let</span> <span class="n">result</span> <span class="o">=</span> <span class="nf">_mm_add_sd</span><span class="p">(</span><span class="n">sum128</span><span class="p">,</span> <span class="n">sum_high</span><span class="p">);</span>
+        
+        <span class="nf">_mm_cvtsd_f64</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+    <span class="p">}</span>
+    
+    <span class="cd">/// SIMD filter for integer columns</span>
+    <span class="k">pub</span> <span class="k">unsafe</span> <span class="k">fn</span> <span class="nf">filter_i64_simd</span><span class="p">(</span><span class="n">data</span><span class="p">:</span> <span class="o">&amp;</span><span class="p">[</span><span class="nb">i64</span><span class="p">],</span> <span class="n">predicate</span><span class="p">:</span> <span class="nb">i64</span><span class="p">,</span> <span class="n">mask</span><span class="p">:</span> <span class="o">&amp;</span><span class="k">mut</span> <span class="p">[</span><span class="nb">bool</span><span class="p">])</span> <span class="p">{</span>
+        <span class="k">let</span> <span class="n">pred_vec</span> <span class="o">=</span> <span class="nf">_mm256_set1_epi64x</span><span class="p">(</span><span class="n">predicate</span><span class="p">);</span>
+        
+        <span class="k">for</span> <span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">chunk</span><span class="p">)</span> <span class="k">in</span> <span class="n">data</span><span class="nf">.chunks_exact</span><span class="p">(</span><span class="mi">4</span><span class="p">)</span><span class="nf">.enumerate</span><span class="p">()</span> <span class="p">{</span>
+            <span class="k">let</span> <span class="n">values</span> <span class="o">=</span> <span class="nf">_mm256_loadu_si256</span><span class="p">(</span><span class="n">chunk</span><span class="nf">.as_ptr</span><span class="p">()</span> <span class="k">as</span> <span class="o">*</span><span class="k">const</span> <span class="n">__m256i</span><span class="p">);</span>
+            <span class="k">let</span> <span class="n">cmp</span> <span class="o">=</span> <span class="nf">_mm256_cmpgt_epi64</span><span class="p">(</span><span class="n">values</span><span class="p">,</span> <span class="n">pred_vec</span><span class="p">);</span>
+            
+            <span class="c1">// Convert comparison result to boolean mask</span>
+            <span class="k">let</span> <span class="n">mask_value</span> <span class="o">=</span> <span class="nf">_mm256_movemask_pd</span><span class="p">(</span><span class="nf">_mm256_castsi256_pd</span><span class="p">(</span><span class="n">cmp</span><span class="p">));</span>
+            <span class="k">for</span> <span class="n">j</span> <span class="k">in</span> <span class="mi">0</span><span class="o">..</span><span class="mi">4</span> <span class="p">{</span>
+                <span class="n">mask</span><span class="p">[</span><span class="n">i</span> <span class="o">*</span> <span class="mi">4</span> <span class="o">+</span> <span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">mask_value</span> <span class="o">&amp;</span> <span class="p">(</span><span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="n">j</span><span class="p">))</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">;</span>
+            <span class="p">}</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h4 id="2-compression-algorithms">2. Compression Algorithms</h4>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="cd">/// Specialized columnar compression</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">ColumnCompression</span><span class="p">;</span>
+
+<span class="k">impl</span> <span class="n">ColumnCompression</span> <span class="p">{</span>
+    <span class="cd">/// Delta compression for integer sequences</span>
+    <span class="k">pub</span> <span class="k">fn</span> <span class="nf">compress_delta</span><span class="p">(</span><span class="n">values</span><span class="p">:</span> <span class="o">&amp;</span><span class="p">[</span><span class="nb">i64</span><span class="p">])</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">CompressedColumn</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="k">if</span> <span class="n">values</span><span class="nf">.is_empty</span><span class="p">()</span> <span class="p">{</span>
+            <span class="k">return</span> <span class="nf">Ok</span><span class="p">(</span><span class="nn">CompressedColumn</span><span class="p">::</span><span class="nf">empty</span><span class="p">());</span>
+        <span class="p">}</span>
+        
+        <span class="k">let</span> <span class="n">base</span> <span class="o">=</span> <span class="n">values</span><span class="p">[</span><span class="mi">0</span><span class="p">];</span>
+        <span class="k">let</span> <span class="k">mut</span> <span class="n">deltas</span> <span class="o">=</span> <span class="nn">Vec</span><span class="p">::</span><span class="nf">with_capacity</span><span class="p">(</span><span class="n">values</span><span class="nf">.len</span><span class="p">()</span> <span class="o">-</span> <span class="mi">1</span><span class="p">);</span>
+        
+        <span class="k">for</span> <span class="n">i</span> <span class="k">in</span> <span class="mi">1</span><span class="o">..</span><span class="n">values</span><span class="nf">.len</span><span class="p">()</span> <span class="p">{</span>
+            <span class="n">deltas</span><span class="nf">.push</span><span class="p">(</span><span class="n">values</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">-</span> <span class="n">values</span><span class="p">[</span><span class="n">i</span> <span class="o">-</span> <span class="mi">1</span><span class="p">]);</span>
+        <span class="p">}</span>
+        
+        <span class="c1">// Further compress deltas with variable-length encoding</span>
+        <span class="k">let</span> <span class="n">compressed_deltas</span> <span class="o">=</span> <span class="k">Self</span><span class="p">::</span><span class="nf">varint_encode</span><span class="p">(</span><span class="o">&amp;</span><span class="n">deltas</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+        
+        <span class="nf">Ok</span><span class="p">(</span><span class="nn">CompressedColumn</span><span class="p">::</span><span class="n">Delta</span> <span class="p">{</span>
+            <span class="n">base_value</span><span class="p">:</span> <span class="n">base</span><span class="p">,</span>
+            <span class="n">compressed_deltas</span><span class="p">,</span>
+        <span class="p">})</span>
+    <span class="p">}</span>
+    
+    <span class="cd">/// Gorilla compression for floating-point time series</span>
+    <span class="k">pub</span> <span class="k">fn</span> <span class="nf">compress_gorilla</span><span class="p">(</span><span class="n">values</span><span class="p">:</span> <span class="o">&amp;</span><span class="p">[</span><span class="nb">f64</span><span class="p">],</span> <span class="n">precision</span><span class="p">:</span> <span class="nb">f64</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">CompressedColumn</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="k">let</span> <span class="k">mut</span> <span class="n">compressed</span> <span class="o">=</span> <span class="nn">Vec</span><span class="p">::</span><span class="nf">new</span><span class="p">();</span>
+        <span class="k">let</span> <span class="k">mut</span> <span class="n">prev_value</span> <span class="o">=</span> <span class="mi">0u64</span><span class="p">;</span>
+        <span class="k">let</span> <span class="k">mut</span> <span class="n">prev_xor</span> <span class="o">=</span> <span class="mi">0u64</span><span class="p">;</span>
+        
+        <span class="k">for</span> <span class="o">&amp;</span><span class="n">value</span> <span class="k">in</span> <span class="n">values</span> <span class="p">{</span>
+            <span class="k">let</span> <span class="n">current</span> <span class="o">=</span> <span class="n">value</span><span class="nf">.to_bits</span><span class="p">();</span>
+            <span class="k">let</span> <span class="n">xor</span> <span class="o">=</span> <span class="n">current</span> <span class="o">^</span> <span class="n">prev_value</span><span class="p">;</span>
+            
+            <span class="k">if</span> <span class="n">xor</span> <span class="o">==</span> <span class="mi">0</span> <span class="p">{</span>
+                <span class="c1">// Value unchanged, write single bit</span>
+                <span class="n">compressed</span><span class="nf">.push</span><span class="p">(</span><span class="mi">0</span><span class="p">);</span>
+            <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+                <span class="c1">// Write XOR with variable-length encoding</span>
+                <span class="k">Self</span><span class="p">::</span><span class="nf">write_xor_gorilla</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span> <span class="n">compressed</span><span class="p">,</span> <span class="n">xor</span><span class="p">,</span> <span class="n">prev_xor</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+            <span class="p">}</span>
+            
+            <span class="n">prev_value</span> <span class="o">=</span> <span class="n">current</span><span class="p">;</span>
+            <span class="n">prev_xor</span> <span class="o">=</span> <span class="n">xor</span><span class="p">;</span>
+        <span class="p">}</span>
+        
+        <span class="nf">Ok</span><span class="p">(</span><span class="nn">CompressedColumn</span><span class="p">::</span><span class="n">Gorilla</span> <span class="p">{</span> 
+            <span class="n">precision</span><span class="p">,</span> 
+            <span class="n">compressed_data</span><span class="p">:</span> <span class="n">compressed</span> 
+        <span class="p">})</span>
+    <span class="p">}</span>
+    
+    <span class="cd">/// Dictionary compression for string columns</span>
+    <span class="k">pub</span> <span class="k">fn</span> <span class="nf">compress_dictionary</span><span class="p">(</span><span class="n">values</span><span class="p">:</span> <span class="o">&amp;</span><span class="p">[</span><span class="nb">String</span><span class="p">])</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">CompressedColumn</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="k">let</span> <span class="k">mut</span> <span class="n">dictionary</span> <span class="o">=</span> <span class="nn">Vec</span><span class="p">::</span><span class="nf">new</span><span class="p">();</span>
+        <span class="k">let</span> <span class="k">mut</span> <span class="n">dict_map</span> <span class="o">=</span> <span class="nn">HashMap</span><span class="p">::</span><span class="nf">new</span><span class="p">();</span>
+        <span class="k">let</span> <span class="k">mut</span> <span class="n">indices</span> <span class="o">=</span> <span class="nn">Vec</span><span class="p">::</span><span class="nf">with_capacity</span><span class="p">(</span><span class="n">values</span><span class="nf">.len</span><span class="p">());</span>
+        
+        <span class="k">for</span> <span class="n">value</span> <span class="k">in</span> <span class="n">values</span> <span class="p">{</span>
+            <span class="k">let</span> <span class="n">index</span> <span class="o">=</span> <span class="k">match</span> <span class="n">dict_map</span><span class="nf">.get</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="p">{</span>
+                <span class="nf">Some</span><span class="p">(</span><span class="o">&amp;</span><span class="n">idx</span><span class="p">)</span> <span class="k">=&gt;</span> <span class="n">idx</span><span class="p">,</span>
+                <span class="nb">None</span> <span class="k">=&gt;</span> <span class="p">{</span>
+                    <span class="k">let</span> <span class="n">idx</span> <span class="o">=</span> <span class="n">dictionary</span><span class="nf">.len</span><span class="p">();</span>
+                    <span class="n">dictionary</span><span class="nf">.push</span><span class="p">(</span><span class="n">value</span><span class="nf">.clone</span><span class="p">());</span>
+                    <span class="n">dict_map</span><span class="nf">.insert</span><span class="p">(</span><span class="n">value</span><span class="nf">.clone</span><span class="p">(),</span> <span class="n">idx</span><span class="p">);</span>
+                    <span class="n">idx</span>
+                <span class="p">}</span>
+            <span class="p">};</span>
+            <span class="n">indices</span><span class="nf">.push</span><span class="p">(</span><span class="n">index</span><span class="p">);</span>
+        <span class="p">}</span>
+        
+        <span class="c1">// Compress indices based on dictionary size</span>
+        <span class="k">let</span> <span class="n">compressed_indices</span> <span class="o">=</span> <span class="k">if</span> <span class="n">dictionary</span><span class="nf">.len</span><span class="p">()</span> <span class="o">&lt;=</span> <span class="mi">256</span> <span class="p">{</span>
+            <span class="n">indices</span><span class="nf">.into_iter</span><span class="p">()</span><span class="nf">.map</span><span class="p">(|</span><span class="n">i</span><span class="p">|</span> <span class="n">i</span> <span class="k">as</span> <span class="nb">u8</span><span class="p">)</span><span class="nf">.collect</span><span class="p">()</span>
+        <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+            <span class="k">Self</span><span class="p">::</span><span class="nf">varint_encode_usize</span><span class="p">(</span><span class="o">&amp;</span><span class="n">indices</span><span class="p">)</span><span class="o">?</span>
+        <span class="p">};</span>
+        
+        <span class="nf">Ok</span><span class="p">(</span><span class="nn">CompressedColumn</span><span class="p">::</span><span class="n">Dictionary</span> <span class="p">{</span>
+            <span class="n">dictionary</span><span class="p">,</span>
+            <span class="n">compressed_indices</span><span class="p">,</span>
+        <span class="p">})</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="integration-with-existing-systems">Integration with Existing Systems</h3>
+
+<h4 id="1-actor-system-integration">1. Actor System Integration</h4>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="cd">/// Columnar-aware actor for analytical workloads</span>
+<span class="nd">#[derive(Addressable)]</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">AnalyticsActor</span> <span class="p">{</span>
+    <span class="cd">/// Actor key for partitioning</span>
+    <span class="n">key</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span>
+    <span class="cd">/// Local columnar data</span>
+    <span class="n">columnar_data</span><span class="p">:</span> <span class="nb">Arc</span><span class="o">&lt;</span><span class="n">ColumnarStorageEngine</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="cd">/// Row-based state for OLTP</span>
+    <span class="n">transactional_state</span><span class="p">:</span> <span class="n">HashMap</span><span class="o">&lt;</span><span class="nb">String</span><span class="p">,</span> <span class="n">Value</span><span class="o">&gt;</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="nd">#[async_trait]</span>
+<span class="k">impl</span> <span class="n">Actor</span> <span class="k">for</span> <span class="n">AnalyticsActor</span> <span class="p">{</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">on_activate</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="c1">// Load columnar data for this actor's partition</span>
+        <span class="k">let</span> <span class="n">partition_key</span> <span class="o">=</span> <span class="k">self</span><span class="py">.key</span><span class="nf">.clone</span><span class="p">();</span>
+        <span class="k">self</span><span class="py">.columnar_data</span><span class="nf">.load_partition</span><span class="p">(</span><span class="n">partition_key</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+        <span class="nf">Ok</span><span class="p">(())</span>
+    <span class="p">}</span>
+    
+    <span class="cd">/// Execute analytical query on actor's data partition</span>
+    <span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">execute_analytical_query</span><span class="p">(</span>
+        <span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> 
+        <span class="n">query</span><span class="p">:</span> <span class="n">AnalyticalQuery</span>
+    <span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">QueryResult</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="c1">// Use columnar engine for analytical queries</span>
+        <span class="k">let</span> <span class="n">result</span> <span class="o">=</span> <span class="k">self</span><span class="py">.columnar_data</span>
+            <span class="nf">.execute_query</span><span class="p">(</span><span class="n">query</span><span class="p">)</span>
+            <span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+            
+        <span class="nf">Ok</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+    <span class="p">}</span>
+    
+    <span class="cd">/// Handle transactional updates (row-based)</span>
+    <span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">update_record</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span> <span class="k">self</span><span class="p">,</span> <span class="n">record</span><span class="p">:</span> <span class="n">Record</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="c1">// Update transactional state</span>
+        <span class="k">self</span><span class="py">.transactional_state</span><span class="nf">.insert</span><span class="p">(</span><span class="n">record</span><span class="py">.key</span><span class="p">,</span> <span class="n">record</span><span class="py">.value</span><span class="p">);</span>
+        
+        <span class="c1">// Schedule columnar conversion for background tiering</span>
+        <span class="k">self</span><span class="nf">.schedule_columnar_conversion</span><span class="p">(</span><span class="n">record</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+        
+        <span class="nf">Ok</span><span class="p">(())</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h4 id="2-multi-modal-query-support">2. Multi-Modal Query Support</h4>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="cd">/// Multi-modal query execution combining different data types</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">MultiModalQueryEngine</span> <span class="p">{</span>
+    <span class="cd">/// Columnar engine for analytical queries</span>
+    <span class="n">columnar_engine</span><span class="p">:</span> <span class="nb">Arc</span><span class="o">&lt;</span><span class="n">ColumnarStorageEngine</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="cd">/// Graph engine for graph queries  </span>
+    <span class="n">graph_engine</span><span class="p">:</span> <span class="nb">Arc</span><span class="o">&lt;</span><span class="n">GraphEngine</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="cd">/// Vector engine for similarity search</span>
+    <span class="n">vector_engine</span><span class="p">:</span> <span class="nb">Arc</span><span class="o">&lt;</span><span class="n">VectorEngine</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="cd">/// Time series engine</span>
+    <span class="n">timeseries_engine</span><span class="p">:</span> <span class="nb">Arc</span><span class="o">&lt;</span><span class="n">TimeSeriesEngine</span><span class="o">&gt;</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="k">impl</span> <span class="n">MultiModalQueryEngine</span> <span class="p">{</span>
+    <span class="cd">/// Execute unified query across multiple data models</span>
+    <span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">execute_unified_query</span><span class="p">(</span>
+        <span class="o">&amp;</span><span class="k">self</span><span class="p">,</span>
+        <span class="n">query</span><span class="p">:</span> <span class="n">UnifiedQuery</span>
+    <span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">QueryResult</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="c1">// Parse query components</span>
+        <span class="k">let</span> <span class="n">components</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.parse_query_components</span><span class="p">(</span><span class="n">query</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+        
+        <span class="c1">// Execute each component optimally</span>
+        <span class="k">let</span> <span class="k">mut</span> <span class="n">partial_results</span> <span class="o">=</span> <span class="nn">Vec</span><span class="p">::</span><span class="nf">new</span><span class="p">();</span>
+        
+        <span class="k">for</span> <span class="n">component</span> <span class="k">in</span> <span class="n">components</span> <span class="p">{</span>
+            <span class="k">let</span> <span class="n">result</span> <span class="o">=</span> <span class="k">match</span> <span class="n">component</span> <span class="p">{</span>
+                <span class="nn">QueryComponent</span><span class="p">::</span><span class="nf">Analytical</span><span class="p">(</span><span class="n">aq</span><span class="p">)</span> <span class="k">=&gt;</span> <span class="p">{</span>
+                    <span class="k">self</span><span class="py">.columnar_engine</span><span class="nf">.execute_query</span><span class="p">(</span><span class="n">aq</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span>
+                <span class="p">},</span>
+                <span class="nn">QueryComponent</span><span class="p">::</span><span class="nf">Graph</span><span class="p">(</span><span class="n">gq</span><span class="p">)</span> <span class="k">=&gt;</span> <span class="p">{</span>
+                    <span class="k">self</span><span class="py">.graph_engine</span><span class="nf">.execute_query</span><span class="p">(</span><span class="n">gq</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span>
+                <span class="p">},</span>
+                <span class="nn">QueryComponent</span><span class="p">::</span><span class="nf">Vector</span><span class="p">(</span><span class="n">vq</span><span class="p">)</span> <span class="k">=&gt;</span> <span class="p">{</span>
+                    <span class="k">self</span><span class="py">.vector_engine</span><span class="nf">.execute_query</span><span class="p">(</span><span class="n">vq</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span>
+                <span class="p">},</span>
+                <span class="nn">QueryComponent</span><span class="p">::</span><span class="nf">TimeSeries</span><span class="p">(</span><span class="n">tq</span><span class="p">)</span> <span class="k">=&gt;</span> <span class="p">{</span>
+                    <span class="k">self</span><span class="py">.timeseries_engine</span><span class="nf">.execute_query</span><span class="p">(</span><span class="n">tq</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span>
+                <span class="p">}</span>
+            <span class="p">};</span>
+            <span class="n">partial_results</span><span class="nf">.push</span><span class="p">(</span><span class="n">result</span><span class="p">);</span>
+        <span class="p">}</span>
+        
+        <span class="c1">// Join/merge results based on query semantics</span>
+        <span class="k">let</span> <span class="n">final_result</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.merge_multi_modal_results</span><span class="p">(</span><span class="n">partial_results</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+        
+        <span class="nf">Ok</span><span class="p">(</span><span class="n">final_result</span><span class="p">)</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h2 id="implementation-plan">Implementation Plan</h2>
+
+<h3 id="phase-1-foundation-8-10-weeks">Phase 1: Foundation (8-10 weeks)</h3>
+<ol>
+  <li><strong>Week 1-2</strong>: Columnar storage format design and basic column reading</li>
+  <li><strong>Week 3-4</strong>: Compression algorithms implementation (Delta, RLE, Dictionary)</li>
+  <li><strong>Week 5-6</strong>: SIMD-accelerated scan operators</li>
+  <li><strong>Week 7-8</strong>: Basic vectorized aggregation (SUM, COUNT, AVG)</li>
+  <li><strong>Week 9-10</strong>: Actor system integration and testing</li>
+</ol>
+
+<h3 id="phase-2-advanced-features-10-12-weeks">Phase 2: Advanced Features (10-12 weeks)</h3>
+<ol>
+  <li><strong>Week 11-13</strong>: Advanced compression (Gorilla, DoubleDelta, LZ4/Zstd)</li>
+  <li><strong>Week 14-16</strong>: Vectorized joins and complex operators</li>
+  <li><strong>Week 17-19</strong>: Query optimization and cost-based planning</li>
+  <li><strong>Week 20-22</strong>: Hybrid row/column storage and automatic tiering</li>
+</ol>
+
+<h3 id="phase-3-distributed-processing-8-10-weeks">Phase 3: Distributed Processing (8-10 weeks)</h3>
+<ol>
+  <li><strong>Week 23-25</strong>: Distributed query planning and execution</li>
+  <li><strong>Week 26-28</strong>: Load balancing and fault tolerance</li>
+  <li><strong>Week 29-30</strong>: Performance optimization and tuning</li>
+  <li><strong>Week 31-32</strong>: Multi-modal query integration</li>
+</ol>
+
+<h3 id="phase-4-production-ready-6-8-weeks">Phase 4: Production Ready (6-8 weeks)</h3>
+<ol>
+  <li><strong>Week 33-35</strong>: Enterprise features (security, governance, monitoring)</li>
+  <li><strong>Week 36-37</strong>: Benchmarking and performance validation</li>
+  <li><strong>Week 38-40</strong>: Documentation, examples, and ecosystem integration</li>
+</ol>
+
+<h2 id="performance-targets">Performance Targets</h2>
+
+<h3 id="analytical-query-performance">Analytical Query Performance</h3>
+<ul>
+  <li><strong>TPC-H Q1 (1GB)</strong>: &lt; 100ms (target: match DuckDB performance)</li>
+  <li><strong>TPC-H Q1 (100GB)</strong>: &lt; 10s (target: match ClickHouse performance)</li>
+  <li><strong>Complex aggregations</strong>: 10-100x improvement over current row-based queries</li>
+  <li><strong>Memory usage</strong>: &lt; 2x data size for typical analytical workloads</li>
+</ul>
+
+<h3 id="compression-ratios">Compression Ratios</h3>
+<ul>
+  <li><strong>Integer columns</strong>: 5-10x compression with Delta/RLE</li>
+  <li><strong>Float columns</strong>: 10-20x compression with Gorilla</li>
+  <li><strong>String columns</strong>: 3-8x compression with Dictionary encoding</li>
+  <li><strong>Time series</strong>: 20-50x compression with specialized algorithms</li>
+</ul>
+
+<h3 id="resource-usage">Resource Usage</h3>
+<ul>
+  <li><strong>Memory overhead</strong>: &lt; 20% for columnar metadata and statistics</li>
+  <li><strong>CPU utilization</strong>: 80%+ utilization with SIMD vectorization</li>
+  <li><strong>Storage overhead</strong>: &lt; 10% for indexes and metadata</li>
+</ul>
+
+<h2 id="testing-strategy">Testing Strategy</h2>
+
+<h3 id="unit-tests">Unit Tests</h3>
+<ul>
+  <li>Compression/decompression correctness for all algorithms</li>
+  <li>SIMD operations accuracy and performance</li>
+  <li>Column statistics computation</li>
+  <li>Memory management and leak detection</li>
+</ul>
+
+<h3 id="integration-tests">Integration Tests</h3>
+<ul>
+  <li>Actor system integration with columnar storage</li>
+  <li>Multi-modal query execution</li>
+  <li>Distributed query processing</li>
+  <li>Data tiering and hybrid storage</li>
+</ul>
+
+<h3 id="performance-tests">Performance Tests</h3>
+<ul>
+  <li>TPC-H benchmark suite</li>
+  <li>Custom analytical workload benchmarks</li>
+  <li>Memory usage and leak testing</li>
+  <li>Scalability testing with varying cluster sizes</li>
+</ul>
+
+<h3 id="compatibility-tests">Compatibility Tests</h3>
+<ul>
+  <li>Existing OrbitQL query compatibility</li>
+  <li>Actor lifecycle integration</li>
+  <li>Protocol adapter integration (Redis, PostgreSQL)</li>
+</ul>
+
+<h2 id="risks-and-mitigations">Risks and Mitigations</h2>
+
+<h3 id="technical-risks">Technical Risks</h3>
+<ol>
+  <li><strong>SIMD Portability</strong>: Different CPU architectures require different SIMD implementations
+    <ul>
+      <li><em>Mitigation</em>: Use portable SIMD libraries (like <code class="language-plaintext highlighter-rouge">packed_simd</code>) with fallbacks</li>
+    </ul>
+  </li>
+  <li><strong>Memory Management</strong>: Columnar data requires careful memory management
+    <ul>
+      <li><em>Mitigation</em>: Use memory-mapped files and careful lifecycle management</li>
+    </ul>
+  </li>
+  <li><strong>Query Optimization Complexity</strong>: Cost-based optimization is complex
+    <ul>
+      <li><em>Mitigation</em>: Start with heuristic optimization, evolve to cost-based</li>
+    </ul>
+  </li>
+</ol>
+
+<h3 id="performance-risks">Performance Risks</h3>
+<ol>
+  <li><strong>Actor Overhead</strong>: Actor boundaries may limit columnar query performance
+    <ul>
+      <li><em>Mitigation</em>: Implement actor-aware partitioning and batch processing</li>
+    </ul>
+  </li>
+  <li><strong>Data Movement</strong>: Converting between row and columnar formats has overhead
+    <ul>
+      <li><em>Mitigation</em>: Asynchronous conversion and intelligent tiering policies</li>
+    </ul>
+  </li>
+</ol>
+
+<h3 id="integration-risks">Integration Risks</h3>
+<ol>
+  <li><strong>Existing API Compatibility</strong>: Changes might break existing applications
+    <ul>
+      <li><em>Mitigation</em>: Maintain backward compatibility with automatic format detection</li>
+    </ul>
+  </li>
+  <li><strong>Complexity</strong>: Additional storage formats increase system complexity
+    <ul>
+      <li><em>Mitigation</em>: Clear abstractions and extensive testing</li>
+    </ul>
+  </li>
+</ol>
+
+<h2 id="future-extensions">Future Extensions</h2>
+
+<h3 id="advanced-analytics">Advanced Analytics</h3>
+<ul>
+  <li><strong>Machine Learning Integration</strong>: Native ML training on columnar data</li>
+  <li><strong>Window Functions</strong>: Advanced analytical SQL functions</li>
+  <li><strong>Approximate Queries</strong>: Probabilistic data structures for fast approximate results</li>
+</ul>
+
+<h3 id="specialized-encodings">Specialized Encodings</h3>
+<ul>
+  <li><strong>Geospatial Compression</strong>: Specialized compression for geographic data</li>
+  <li><strong>Graph Compression</strong>: Compressed graph adjacency matrices</li>
+  <li><strong>Time Series Forecasting</strong>: Predictive compression based on time series patterns</li>
+</ul>
+
+<h3 id="hardware-acceleration">Hardware Acceleration</h3>
+<ul>
+  <li><strong>GPU Processing</strong>: CUDA/OpenCL for massive parallel processing</li>
+  <li><strong>Vector Extensions</strong>: Support for ARM SVE and newer x86 vector instructions</li>
+  <li><strong>Storage Acceleration</strong>: NVMe and persistent memory optimizations</li>
+</ul>
+
+<h2 id="conclusion">Conclusion</h2>
+
+<p>The Columnar Analytics Engine will position Orbit-RS as a credible competitor to ClickHouse and DuckDB while maintaining its unique multi-modal and actor-based advantages. This represents a significant architectural evolution that could establish Orbit-RS as a leader in the next generation of analytical databases.</p>
+
+<p>The implementation focuses on:</p>
+<ol>
+  <li><strong>Performance</strong>: Matching best-in-class analytical query performance</li>
+  <li><strong>Integration</strong>: Seamless integration with existing actor system</li>
+  <li><strong>Differentiation</strong>: Unique multi-modal and distributed capabilities</li>
+  <li><strong>Evolution</strong>: Foundation for advanced AI-native features</li>
+</ol>
+
+<p>Success of this RFC would enable Orbit-RS to compete directly with specialized analytical databases while offering additional capabilities they cannot match.</p>

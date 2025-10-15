@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Project Organization Rules | Orbit-RS Documentation</title>
+<meta name="generator" content="Jekyll v4.4.1" />
+<meta property="og:title" content="Project Organization Rules" />
+<meta name="author" content="TuringWorks" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<meta property="og:description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<link rel="canonical" href="https://turingworks.github.io/orbit-rs/PROJECT_ORGANIZATION_RULES.html" />
+<meta property="og:url" content="https://turingworks.github.io/orbit-rs/PROJECT_ORGANIZATION_RULES.html" />
+<meta property="og:site_name" content="Orbit-RS Documentation" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Project Organization Rules" />
+<meta name="twitter:site" content="@TuringWorksAI" />
+<meta name="twitter:creator" content="@TuringWorks" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","author":{"@type":"Person","name":"TuringWorks"},"description":"The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform","headline":"Project Organization Rules","url":"https://turingworks.github.io/orbit-rs/PROJECT_ORGANIZATION_RULES.html"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/orbit-rs/assets/main.css">
+  <link rel="stylesheet" href="/orbit-rs/assets/css/custom.css"><link type="application/atom+xml" rel="alternate" href="https://turingworks.github.io/orbit-rs/feed.xml" title="Orbit-RS Documentation" /></head><body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/orbit-rs/">Orbit-RS Documentation</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/orbit-rs/">Orbit-RS Documentation</a><a class="page-link" href="/orbit-rs/project_overview.html">Orbit-RS: Comprehensive Project Overview</a><a class="page-link" href="/orbit-rs/quick_start.html">Quick Start Guide - Multi-Protocol Database Server</a><a class="page-link" href="/orbit-rs/roadmap/">Development Roadmap</a><a class="page-link" href="/orbit-rs/features/">Orbit-RS Feature Index</a><a class="page-link" href="/orbit-rs/compute-acceleration/">Hardware Acceleration Guide</a><a class="page-link" href="/orbit-rs/contributing.html">Contributing Guide</a><a class="page-link" href="/orbit-rs/overview.html">Architecture Overview</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <h1 id="project-organization-rules">Project Organization Rules</h1>
+
+<p>This document establishes clear guidelines for where different types of files should be placed within the Orbit-RS project to maintain consistency and organization.</p>
+
+<h2 id="-file-placement-rules">📋 File Placement Rules</h2>
+
+<h3 id="-documentation-files">📚 Documentation Files</h3>
+
+<p><strong>Rule</strong>: All documentation files MUST be placed in the <code class="language-plaintext highlighter-rouge">docs/</code> directory or its subdirectories.</p>
+
+<p><strong>Applies to</strong>:</p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">*.md</code> files (except README.md in package roots)</li>
+  <li>Architecture documents</li>
+  <li>API documentation</li>
+  <li>Design documents</li>
+  <li>User guides</li>
+  <li>Development guides</li>
+  <li>RFCs (Request for Comments)</li>
+</ul>
+
+<p><strong>Directory Structure</strong>:</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>docs/
+├── README.md                    # Documentation index
+├── DEVELOPMENT.md              # Development guide (moved from root)
+├── PROJECT_STRUCTURE.md        # Project architecture
+├── architecture/               # Architecture documentation
+├── development/                # Development guides and processes
+├── deployment/                 # Deployment documentation
+├── protocols/                  # Protocol specifications
+├── rfcs/                       # Request for Comments documents  
+├── wip/                        # Work-in-progress documents
+└── features/                   # Feature-specific documentation
+</code></pre></div></div>
+
+<p><strong>Examples</strong>:</p>
+<ul>
+  <li>✅ <code class="language-plaintext highlighter-rouge">docs/DEVELOPMENT.md</code></li>
+  <li>✅ <code class="language-plaintext highlighter-rouge">docs/architecture/SYSTEM_DESIGN.md</code></li>
+  <li>✅ <code class="language-plaintext highlighter-rouge">docs/rfcs/RFC-001-NEW_FEATURE.md</code></li>
+  <li>❌ <code class="language-plaintext highlighter-rouge">DEVELOPMENT.md</code> (root level - should be in docs/)</li>
+  <li>❌ <code class="language-plaintext highlighter-rouge">orbit-shared/DESIGN.md</code> (package level - should be in docs/)</li>
+</ul>
+
+<h3 id="️-benchmark-files">🏃‍♂️ Benchmark Files</h3>
+
+<p><strong>Rule</strong>: All benchmark-related files MUST be placed in the <code class="language-plaintext highlighter-rouge">orbit-benchmarks/</code> package directory structure.</p>
+
+<p><strong>Applies to</strong>:</p>
+<ul>
+  <li>Performance benchmarks</li>
+  <li>Load testing code</li>
+  <li>Benchmark configurations</li>
+  <li>Performance measurement utilities</li>
+  <li>Industry-standard benchmark implementations (TPC-H, TPC-C, TPC-DS)</li>
+</ul>
+
+<p><strong>Directory Structure</strong>:</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>orbit-benchmarks/
+├── Cargo.toml                  # Benchmark package configuration
+├── README.md                   # Benchmark documentation
+├── benches/                    # Criterion benchmarks
+│   ├── actor_benchmarks.rs
+│   ├── leader_election_benchmarks.rs
+│   └── persistence_comparison.rs
+├── src/                        # Benchmark library code
+│   ├── lib.rs                  # Main benchmark exports
+│   ├── orbitql/                # OrbitQL query benchmarks
+│   │   ├── mod.rs
+│   │   ├── benchmark.rs        # Query performance framework
+│   │   └── comprehensive_benchmark.rs # TPC implementations
+│   ├── persistence/            # Storage benchmarks
+│   ├── compute/                # Compute acceleration benchmarks
+│   └── performance/            # General performance utilities
+├── scripts/                    # Benchmark utilities
+│   ├── run_benchmarks.sh       # Benchmark runner
+│   └── analyze_results.py      # Result analysis
+└── examples/                   # Benchmark usage examples
+</code></pre></div></div>
+
+<p><strong>Examples</strong>:</p>
+<ul>
+  <li>✅ <code class="language-plaintext highlighter-rouge">orbit-benchmarks/src/orbitql/benchmark.rs</code></li>
+  <li>✅ <code class="language-plaintext highlighter-rouge">orbit-benchmarks/benches/new_benchmark.rs</code></li>
+  <li>✅ <code class="language-plaintext highlighter-rouge">orbit-benchmarks/scripts/performance_test.sh</code></li>
+  <li>❌ <code class="language-plaintext highlighter-rouge">orbit-shared/src/benchmarks/</code> (should be in orbit-benchmarks)</li>
+  <li>❌ <code class="language-plaintext highlighter-rouge">benchmarks/</code> (root level - should be in orbit-benchmarks package)</li>
+</ul>
+
+<h3 id="-test-files">🧪 Test Files</h3>
+
+<p><strong>Rule</strong>: Test files should follow Rust conventions and be co-located with the code they test.</p>
+
+<p><strong>Examples</strong>:</p>
+<ul>
+  <li>✅ <code class="language-plaintext highlighter-rouge">orbit-shared/src/lib.rs</code> with <code class="language-plaintext highlighter-rouge">#[cfg(test)]</code> modules</li>
+  <li>✅ <code class="language-plaintext highlighter-rouge">orbit-shared/tests/integration_tests.rs</code></li>
+  <li>✅ <code class="language-plaintext highlighter-rouge">tests/</code> (workspace-level integration tests)</li>
+</ul>
+
+<h3 id="-configuration-files">🔧 Configuration Files</h3>
+
+<p><strong>Rule</strong>: Configuration files should be at the appropriate scope level.</p>
+
+<p><strong>Examples</strong>:</p>
+<ul>
+  <li>✅ <code class="language-plaintext highlighter-rouge">Cargo.toml</code> (workspace root)</li>
+  <li>✅ <code class="language-plaintext highlighter-rouge">orbit-shared/Cargo.toml</code> (package level)</li>
+  <li>✅ <code class="language-plaintext highlighter-rouge">.github/workflows/</code> (CI/CD configurations)</li>
+</ul>
+
+<h3 id="-scripts-and-utilities">📜 Scripts and Utilities</h3>
+
+<p><strong>Rule</strong>: Scripts should be organized by purpose and scope.</p>
+
+<p><strong>Directory Structure</strong>:</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>├── scripts/                    # Workspace-level scripts
+├── orbit-benchmarks/scripts/   # Benchmark-specific scripts  
+└── .github/workflows/          # CI/CD workflow scripts
+</code></pre></div></div>
+
+<h2 id="-anti-patterns-to-avoid">🚫 Anti-Patterns to Avoid</h2>
+
+<h3 id="documentation-anti-patterns">Documentation Anti-Patterns</h3>
+<ul>
+  <li>❌ Placing <code class="language-plaintext highlighter-rouge">.md</code> files in package root directories (except package README.md)</li>
+  <li>❌ Creating documentation in random locations</li>
+  <li>❌ Mixing documentation with source code in inappropriate places</li>
+</ul>
+
+<h3 id="benchmark-anti-patterns">Benchmark Anti-Patterns</h3>
+<ul>
+  <li>❌ Placing benchmark code in regular source packages</li>
+  <li>❌ Creating benchmark files outside the orbit-benchmarks package</li>
+  <li>❌ Including performance tests in unit test directories</li>
+</ul>
+
+<h3 id="general-anti-patterns">General Anti-Patterns</h3>
+<ul>
+  <li>❌ Creating files at project root that should be organized in subdirectories</li>
+  <li>❌ Mixing different types of files in inappropriate locations</li>
+  <li>❌ Not following established directory hierarchies</li>
+</ul>
+
+<h2 id="-migration-guidelines">🔄 Migration Guidelines</h2>
+
+<h3 id="when-moving-files">When Moving Files</h3>
+<ol>
+  <li>Use <code class="language-plaintext highlighter-rouge">git mv</code> to preserve file history</li>
+  <li>Update all references and imports</li>
+  <li>Update documentation links</li>
+  <li>Test that all builds still work</li>
+  <li>Update CI/CD pipelines if necessary</li>
+</ol>
+
+<h3 id="for-new-files">For New Files</h3>
+<ol>
+  <li>Determine the correct location based on these rules</li>
+  <li>Create files in the appropriate directory from the start</li>
+  <li>Follow naming conventions for the target directory</li>
+</ol>
+
+<h2 id="-enforcement">✅ Enforcement</h2>
+
+<h3 id="pre-commit-hooks">Pre-commit Hooks</h3>
+<p>Consider implementing pre-commit hooks to enforce these rules:</p>
+<ul>
+  <li>Check that new <code class="language-plaintext highlighter-rouge">.md</code> files are in <code class="language-plaintext highlighter-rouge">docs/</code></li>
+  <li>Check that benchmark files are in <code class="language-plaintext highlighter-rouge">orbit-benchmarks/</code></li>
+  <li>Warn about files in inappropriate locations</li>
+</ul>
+
+<h3 id="code-review-guidelines">Code Review Guidelines</h3>
+<p>Reviewers should verify:</p>
+<ul>
+  <li>New files are placed according to these rules</li>
+  <li>File moves preserve git history using <code class="language-plaintext highlighter-rouge">git mv</code></li>
+  <li>Documentation links are updated after moves</li>
+  <li>No broken references after reorganization</li>
+</ul>
+
+<h2 id="-examples-of-correct-organization">📝 Examples of Correct Organization</h2>
+
+<h3 id="documentation-example">Documentation Example</h3>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>✅ Correct:
+docs/
+├── development/
+│   ├── CODING_STANDARDS.md
+│   ├── TESTING_GUIDE.md
+│   └── BENCHMARKING.md
+└── architecture/
+    ├── SYSTEM_OVERVIEW.md
+    └── DATABASE_DESIGN.md
+</code></pre></div></div>
+
+<h3 id="benchmark-example">Benchmark Example</h3>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>✅ Correct:
+orbit-benchmarks/
+├── src/
+│   ├── database/
+│   │   ├── query_benchmarks.rs
+│   │   └── transaction_benchmarks.rs
+│   └── network/
+│       └── latency_benchmarks.rs
+└── benches/
+    ├── end_to_end_benchmarks.rs
+    └── load_testing.rs
+</code></pre></div></div>
+
+<h2 id="-benefits-of-following-these-rules">🎯 Benefits of Following These Rules</h2>
+
+<ol>
+  <li><strong>Consistency</strong>: All team members know where to find and place files</li>
+  <li><strong>Maintainability</strong>: Clear organization makes the project easier to maintain</li>
+  <li><strong>Discoverability</strong>: New contributors can easily understand the project structure</li>
+  <li><strong>Tooling</strong>: Build tools, IDEs, and CI/CD can rely on predictable file locations</li>
+  <li><strong>Separation of Concerns</strong>: Different types of files are properly isolated</li>
+</ol>
+
+<hr />
+
+<p><strong>Note</strong>: These rules should be followed for all new files and enforced during code reviews. Existing files that violate these rules should be gradually migrated to the correct locations.</p>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/orbit-rs/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Orbit-RS Documentation</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">TuringWorks</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

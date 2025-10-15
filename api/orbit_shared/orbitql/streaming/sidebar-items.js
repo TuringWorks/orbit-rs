@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ChangeType","OrbitError"],"struct":["ChangeNotification","LiveQueryConfig","LiveQuerySubscription","RowMetadata","StreamingConfig","StreamingQueryBuilder","StreamingQueryExecutor","StreamingRow","StreamingStats"],"type":["OrbitResult","QueryResultStream"]};

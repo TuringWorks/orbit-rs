@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["CF_DATA","CF_INDEXES","CF_METADATA","CF_TABLES"],"enum":["ColumnType"],"struct":["ColumnDefinition","QueryCondition","RocksDbTableStorage","TableRow","TableSchema"],"trait":["PersistentTableStorage"]};

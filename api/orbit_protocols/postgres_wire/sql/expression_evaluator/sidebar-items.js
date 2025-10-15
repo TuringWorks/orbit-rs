@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["AggregateState"],"struct":["EvaluationContext","ExpressionEvaluator","WindowFrameContext"]};

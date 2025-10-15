@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Orbit-RS Copilot Instructions | Orbit-RS Documentation</title>
+<meta name="generator" content="Jekyll v4.4.1" />
+<meta property="og:title" content="Orbit-RS Copilot Instructions" />
+<meta name="author" content="TuringWorks" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<meta property="og:description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<link rel="canonical" href="https://turingworks.github.io/orbit-rs/development/copilot-instructions.html" />
+<meta property="og:url" content="https://turingworks.github.io/orbit-rs/development/copilot-instructions.html" />
+<meta property="og:site_name" content="Orbit-RS Documentation" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Orbit-RS Copilot Instructions" />
+<meta name="twitter:site" content="@TuringWorksAI" />
+<meta name="twitter:creator" content="@TuringWorks" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","author":{"@type":"Person","name":"TuringWorks"},"description":"The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform","headline":"Orbit-RS Copilot Instructions","url":"https://turingworks.github.io/orbit-rs/development/copilot-instructions.html"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/orbit-rs/assets/main.css">
+  <link rel="stylesheet" href="/orbit-rs/assets/css/custom.css"><link type="application/atom+xml" rel="alternate" href="https://turingworks.github.io/orbit-rs/feed.xml" title="Orbit-RS Documentation" /></head><body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/orbit-rs/">Orbit-RS Documentation</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/orbit-rs/">Orbit-RS Documentation</a><a class="page-link" href="/orbit-rs/project_overview.html">Orbit-RS: Comprehensive Project Overview</a><a class="page-link" href="/orbit-rs/quick_start.html">Quick Start Guide - Multi-Protocol Database Server</a><a class="page-link" href="/orbit-rs/roadmap/">Development Roadmap</a><a class="page-link" href="/orbit-rs/features/">Orbit-RS Feature Index</a><a class="page-link" href="/orbit-rs/compute-acceleration/">Hardware Acceleration Guide</a><a class="page-link" href="/orbit-rs/contributing.html">Contributing Guide</a><a class="page-link" href="/orbit-rs/overview.html">Architecture Overview</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <h1 id="orbit-rs-copilot-instructions">Orbit-RS Copilot Instructions</h1>
+
+<h2 id="project-overview">Project Overview</h2>
+<p>Orbit-RS is a distributed virtual actor system framework in Rust, inspired by Microsoft Orleans. The system enables building scalable distributed applications using virtual actors that can be active/inactive with automatic lifecycle management, clustering, and distributed transactions.</p>
+
+<h2 id="architecture--module-boundaries">Architecture &amp; Module Boundaries</h2>
+
+<h3 id="core-modules-structure">Core Modules Structure</h3>
+<ul>
+  <li><strong><code class="language-plaintext highlighter-rouge">orbit-shared</code></strong>: Common types, addressable traits, transactions, clustering, error types (<code class="language-plaintext highlighter-rouge">OrbitResult&lt;T&gt;</code>, <code class="language-plaintext highlighter-rouge">OrbitError</code>)</li>
+  <li><strong><code class="language-plaintext highlighter-rouge">orbit-proto</code></strong>: gRPC Protocol Buffer definitions via <code class="language-plaintext highlighter-rouge">tonic::include_proto!("orbit.shared")</code></li>
+  <li><strong><code class="language-plaintext highlighter-rouge">orbit-client</code></strong>: Client-side actor proxies, invocation management, lease handling</li>
+  <li><strong><code class="language-plaintext highlighter-rouge">orbit-server</code></strong>: Server-side cluster management, load balancing, actor hosting</li>
+  <li><strong><code class="language-plaintext highlighter-rouge">orbit-util</code></strong>: Utilities and base functionality</li>
+  <li><strong>Extensions</strong>: <code class="language-plaintext highlighter-rouge">orbit-server-etcd</code> (distributed directory), <code class="language-plaintext highlighter-rouge">orbit-server-prometheus</code> (metrics)</li>
+</ul>
+
+<h3 id="actor-system-pattern">Actor System Pattern</h3>
+<p>Actors implement the <code class="language-plaintext highlighter-rouge">Addressable</code> trait with these key components:</p>
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Actor identification using typed keys</span>
+<span class="nn">Key</span><span class="p">::{</span><span class="n">StringKey</span><span class="p">{</span><span class="n">key</span><span class="p">},</span> <span class="n">Int32Key</span><span class="p">{</span><span class="n">key</span><span class="p">},</span> <span class="n">Int64Key</span><span class="p">{</span><span class="n">key</span><span class="p">},</span> <span class="n">NoKey</span><span class="p">}</span>
+<span class="n">AddressableReference</span> <span class="p">{</span> <span class="n">addressable_type</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="n">Key</span> <span class="p">}</span>
+
+<span class="c1">// Actor lifecycle methods</span>
+<span class="k">async</span> <span class="k">fn</span> <span class="nf">on_activate</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span> <span class="k">self</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span>
+<span class="k">async</span> <span class="k">fn</span> <span class="nf">on_deactivate</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span> <span class="k">self</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span>
+</code></pre></div></div>
+
+<h3 id="distributed-transaction-architecture">Distributed Transaction Architecture</h3>
+<p>The system implements 2-phase commit with:</p>
+<ul>
+  <li><strong>TransactionCoordinator</strong>: Manages distributed transaction lifecycle</li>
+  <li><strong>TransactionParticipant</strong>: Trait for services to participate (prepare, commit, abort)</li>
+  <li><strong>TransactionOperation</strong>: Individual operations with compensation data</li>
+  <li>States: <code class="language-plaintext highlighter-rouge">Preparing → Prepared → Committing → Committed</code> (or <code class="language-plaintext highlighter-rouge">Aborting → Aborted</code>)</li>
+</ul>
+
+<h2 id="development-workflows">Development Workflows</h2>
+
+<h3 id="workspace-commands">Workspace Commands</h3>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Build all modules</span>
+cargo build <span class="nt">--workspace</span>
+
+<span class="c"># Test all modules (unit + integration + BDD)</span>
+cargo <span class="nb">test</span> <span class="nt">--workspace</span>
+
+<span class="c"># Run specific test suites</span>
+cargo <span class="nb">test</span> <span class="nt">--workspace</span> <span class="nt">--lib</span>          <span class="c"># Unit tests only</span>
+cargo <span class="nb">test</span> <span class="nt">--workspace</span> <span class="nt">--test</span> integration  <span class="c"># Integration tests</span>
+cargo <span class="nb">test</span> <span class="nt">--workspace</span> <span class="nt">--test</span> bdd     <span class="c"># BDD scenarios</span>
+
+<span class="c"># Run benchmarks</span>
+cargo bench
+
+<span class="c"># Examples</span>
+cargo run <span class="nt">--package</span> hello-world
+cargo run <span class="nt">--package</span> distributed-counter
+cargo run <span class="nt">--package</span> distributed-transactions
+</code></pre></div></div>
+
+<h3 id="container-development">Container Development</h3>
+<p>The project supports multi-environment deployment:</p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">docker-compose.yml</code> with development/production overlays</li>
+  <li>Environment-based configuration via <code class="language-plaintext highlighter-rouge">ORBIT_*</code> variables</li>
+  <li>Raft consensus for leader election: <code class="language-plaintext highlighter-rouge">ORBIT_ELECTION_METHOD=raft</code></li>
+  <li>DNS-based service discovery: <code class="language-plaintext highlighter-rouge">ORBIT_DISCOVERY_DNS=orbit-server</code></li>
+</ul>
+
+<h2 id="project-specific-patterns">Project-Specific Patterns</h2>
+
+<h3 id="error-handling-convention">Error Handling Convention</h3>
+<p>Use <code class="language-plaintext highlighter-rouge">OrbitResult&lt;T&gt;</code> (alias for <code class="language-plaintext highlighter-rouge">Result&lt;T, OrbitError&gt;</code>) consistently across all modules. Import from <code class="language-plaintext highlighter-rouge">orbit_shared::exception</code>.</p>
+
+<h3 id="async-patterns">Async Patterns</h3>
+<ul>
+  <li>All actor methods and transaction operations are <code class="language-plaintext highlighter-rouge">async</code></li>
+  <li>Use <code class="language-plaintext highlighter-rouge">#[async_trait]</code> for trait definitions with async methods</li>
+  <li>Prefer <code class="language-plaintext highlighter-rouge">tokio::sync::{Mutex, RwLock}</code> for shared state in async contexts</li>
+</ul>
+
+<h3 id="serialization-standards">Serialization Standards</h3>
+<ul>
+  <li>Actors and messages: <code class="language-plaintext highlighter-rouge">serde</code> with <code class="language-plaintext highlighter-rouge">#[derive(Serialize, Deserialize)]</code></li>
+  <li>Cross-service communication: Protocol Buffers via <code class="language-plaintext highlighter-rouge">tonic</code></li>
+  <li>Transaction operations: JSON-based (<code class="language-plaintext highlighter-rouge">serde_json::Value</code>) for flexibility</li>
+</ul>
+
+<h3 id="testing-architecture">Testing Architecture</h3>
+<ul>
+  <li><strong>Unit tests</strong>: In <code class="language-plaintext highlighter-rouge">src/</code> modules using standard <code class="language-plaintext highlighter-rouge">#[cfg(test)]</code></li>
+  <li><strong>Integration tests</strong>: In <code class="language-plaintext highlighter-rouge">tests/tests/integration.rs</code> with full actor lifecycle</li>
+  <li><strong>BDD scenarios</strong>: Cucumber tests in <code class="language-plaintext highlighter-rouge">tests/features/</code> with step definitions</li>
+  <li><strong>Examples</strong>: Working demos in <code class="language-plaintext highlighter-rouge">examples/</code> that serve as integration tests</li>
+</ul>
+
+<h3 id="observability-integration">Observability Integration</h3>
+<ul>
+  <li>Structured logging: <code class="language-plaintext highlighter-rouge">tracing</code> crate with <code class="language-plaintext highlighter-rouge">info!</code>, <code class="language-plaintext highlighter-rouge">warn!</code>, <code class="language-plaintext highlighter-rouge">error!</code> macros</li>
+  <li>Metrics: <code class="language-plaintext highlighter-rouge">metrics</code> crate with Prometheus exporter support</li>
+  <li>Use <code class="language-plaintext highlighter-rouge">NodeId</code> for cluster node identification across components</li>
+</ul>
+
+<h3 id="module-dependencies">Module Dependencies</h3>
+<p>When working across modules:</p>
+<ul>
+  <li><strong>Client → Shared</strong>: For actor traits and error types</li>
+  <li><strong>Server → Shared</strong>: For cluster management and routing</li>
+  <li><strong>Proto</strong>: Shared by all for gRPC communication</li>
+  <li>Avoid circular dependencies: extensions depend on core, not vice versa</li>
+</ul>
+
+<h2 id="key-integration-points">Key Integration Points</h2>
+
+<h3 id="actor-registration-pattern">Actor Registration Pattern</h3>
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// In orbit-client</span>
+<span class="k">let</span> <span class="n">client</span> <span class="o">=</span> <span class="nn">OrbitClient</span><span class="p">::</span><span class="nf">builder</span><span class="p">()</span>
+    <span class="nf">.with_namespace</span><span class="p">(</span><span class="s">"demo"</span><span class="p">)</span>
+    <span class="nf">.build</span><span class="p">()</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+
+<span class="k">let</span> <span class="n">actor_ref</span> <span class="o">=</span> <span class="n">client</span><span class="py">.actor_reference</span><span class="p">::</span><span class="o">&lt;</span><span class="k">dyn</span> <span class="n">GreeterActor</span><span class="o">&gt;</span><span class="p">(</span>
+    <span class="nn">Key</span><span class="p">::</span><span class="n">StringKey</span> <span class="p">{</span> <span class="n">key</span><span class="p">:</span> <span class="s">"my-actor"</span><span class="nf">.to_string</span><span class="p">()</span> <span class="p">}</span>
+<span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h3 id="transaction-coordination-pattern">Transaction Coordination Pattern</h3>
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Begin transaction with timeout</span>
+<span class="k">let</span> <span class="n">tx_id</span> <span class="o">=</span> <span class="n">coordinator</span><span class="nf">.begin_transaction</span><span class="p">(</span><span class="nf">Some</span><span class="p">(</span><span class="nn">Duration</span><span class="p">::</span><span class="nf">from_secs</span><span class="p">(</span><span class="mi">30</span><span class="p">)))</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+
+<span class="c1">// Add operations with compensation</span>
+<span class="k">let</span> <span class="n">operation</span> <span class="o">=</span> <span class="nn">TransactionOperation</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="n">target_actor</span><span class="p">,</span> <span class="s">"debit"</span><span class="p">,</span> <span class="n">amount</span><span class="p">)</span>
+    <span class="nf">.with_compensation</span><span class="p">(</span><span class="nn">serde_json</span><span class="p">::</span><span class="nd">json!</span><span class="p">({</span><span class="s">"action"</span><span class="p">:</span> <span class="s">"credit"</span><span class="p">,</span> <span class="s">"amount"</span><span class="p">:</span> <span class="mi">100</span><span class="p">}));</span>
+
+<span class="n">coordinator</span><span class="nf">.add_operation</span><span class="p">(</span><span class="o">&amp;</span><span class="n">tx_id</span><span class="p">,</span> <span class="n">operation</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+<span class="n">coordinator</span><span class="nf">.commit_transaction</span><span class="p">(</span><span class="o">&amp;</span><span class="n">tx_id</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h3 id="cluster-node-communication">Cluster Node Communication</h3>
+<p>Use <code class="language-plaintext highlighter-rouge">AddressableReference</code> for routing and <code class="language-plaintext highlighter-rouge">NodeId</code> for cluster membership. All inter-node communication goes through gRPC services defined in <code class="language-plaintext highlighter-rouge">orbit-proto</code>.</p>
+
+<h2 id="kubernetes-operator-support">Kubernetes Operator Support</h2>
+
+<h3 id="operator-architecture">Operator Architecture</h3>
+<p>The <code class="language-plaintext highlighter-rouge">orbit-operator</code> provides native Kubernetes support with three Custom Resource Definitions:</p>
+<ul>
+  <li><strong>OrbitCluster</strong>: Manages complete cluster deployments (StatefulSets, Services, ConfigMaps)</li>
+  <li><strong>OrbitActor</strong>: Manages actor-specific configurations and scaling policies</li>
+  <li><strong>OrbitTransaction</strong>: Configures distributed transaction coordination and persistence</li>
+</ul>
+
+<h3 id="operator-development-patterns">Operator Development Patterns</h3>
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Custom Resource Definition structure</span>
+
+<span class="nd">#[derive(CustomResource,</span> <span class="nd">Deserialize,</span> <span class="nd">Serialize,</span> <span class="nd">Clone,</span> <span class="nd">Debug,</span> <span class="nd">JsonSchema)]</span>
+<span class="nd">#[kube(group</span> <span class="nd">=</span> <span class="s">"orbit.turingworks.com"</span><span class="nd">,</span> <span class="nd">version</span> <span class="nd">=</span> <span class="s">"v1"</span><span class="nd">,</span> <span class="nd">kind</span> <span class="nd">=</span> <span class="s">"OrbitCluster"</span><span class="nd">)]</span>
+<span class="nd">#[kube(status</span> <span class="nd">=</span> <span class="s">"OrbitClusterStatus"</span><span class="nd">)]</span>
+
+<span class="c1">// Controller reconciliation loop</span>
+<span class="k">async</span> <span class="k">fn</span> <span class="nf">reconcile_cluster</span><span class="p">(</span><span class="n">cluster</span><span class="p">:</span> <span class="nb">Arc</span><span class="o">&lt;</span><span class="n">OrbitCluster</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">ctx</span><span class="p">:</span> <span class="nb">Arc</span><span class="o">&lt;</span><span class="n">ControllerContext</span><span class="o">&gt;</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="n">Action</span><span class="o">&gt;</span>
+</code></pre></div></div>
+
+<h3 id="kubernetes-deployment-workflow">Kubernetes Deployment Workflow</h3>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Deploy operator</span>
+kubectl apply <span class="nt">-f</span> orbit-operator/deploy/crds.yaml
+kubectl apply <span class="nt">-f</span> orbit-operator/deploy/rbac.yaml
+kubectl apply <span class="nt">-f</span> orbit-operator/deploy/operator.yaml
+
+<span class="c"># Deploy Orbit cluster</span>
+kubectl apply <span class="nt">-f</span> orbit-operator/deploy/examples.yaml
+</code></pre></div></div>
+
+<h3 id="integration-with-existing-k8s-resources">Integration with Existing K8s Resources</h3>
+<p>The operator leverages existing Kubernetes patterns:</p>
+<ul>
+  <li>StatefulSets for Orbit server pods with persistent storage</li>
+  <li>Services for load balancing and service discovery</li>
+  <li>ConfigMaps for configuration management</li>
+  <li>RBAC for security and leader election</li>
+</ul>
+
+<p>When implementing new features, follow the transaction system as a reference for proper async patterns, error handling, and multi-module coordination.</p>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/orbit-rs/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Orbit-RS Documentation</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">TuringWorks</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

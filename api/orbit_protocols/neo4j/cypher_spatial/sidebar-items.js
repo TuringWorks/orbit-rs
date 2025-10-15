@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["CypherSpatialResult"],"struct":["CypherSpatialExecutor","CypherSpatialParser","Node","Path","Relationship","SpatialIndex"],"type":["NodeId","RelationshipId"]};

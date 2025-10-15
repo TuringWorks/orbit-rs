@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["DmlOperation"],"struct":["CdcCoordinator","CdcEvent","CdcFilter","CdcStats","CdcStream","CdcSubscription"],"trait":["CdcConsumer"]};

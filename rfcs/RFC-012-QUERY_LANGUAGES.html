@@ -1,0 +1,849 @@
+<h1 id="rfc-012-query-languages-analysis-orbitql--sql">RFC-012: Query Languages Analysis (OrbitQL &amp; SQL)</h1>
+
+<p><strong>Date</strong>: October 9, 2025<br />
+<strong>Author</strong>: AI Assistant<br />
+<strong>Status</strong>: Draft<br />
+<strong>Tracking Issue</strong>: TBD</p>
+
+<h2 id="summary">Summary</h2>
+
+<p>This RFC analyzes Orbit-RS’s query language capabilities, comparing OrbitQL and SQL support against established SQL standards (ANSI SQL, PostgreSQL), graph query languages (Cypher, Gremlin), and emerging multi-model query languages. The analysis identifies competitive advantages, feature gaps, and strategic opportunities for Orbit-RS’s unified query approach.</p>
+
+<h2 id="motivation">Motivation</h2>
+
+<p>Query languages are the primary interface between developers and databases, significantly impacting developer productivity and adoption. Understanding how Orbit-RS’s query capabilities compare to established standards is essential for:</p>
+
+<ul>
+  <li><strong>Developer Adoption</strong>: Providing familiar and powerful query interfaces</li>
+  <li><strong>Feature Completeness</strong>: Meeting expectations from SQL and graph query standards</li>
+  <li><strong>Unique Value Proposition</strong>: Leveraging multi-model integration for advanced queries</li>
+  <li><strong>Migration Path</strong>: Enabling smooth migration from existing database systems</li>
+</ul>
+
+<h2 id="query-language-landscape-analysis">Query Language Landscape Analysis</h2>
+
+<h3 id="1-sql-standards--postgresql">1. SQL Standards &amp; PostgreSQL</h3>
+
+<p><strong>Market Position</strong>: SQL is the dominant database query language with billions of developers worldwide</p>
+
+<h4 id="sql-standard-strengths">SQL Standard Strengths</h4>
+<ul>
+  <li><strong>Universal Adoption</strong>: Understood by virtually all database developers</li>
+  <li><strong>Mature Ecosystem</strong>: Extensive tooling, ORMs, and integrations</li>
+  <li><strong>Standardization</strong>: ANSI SQL provides cross-database compatibility</li>
+  <li><strong>Rich Features</strong>: Complex queries, joins, aggregations, window functions</li>
+  <li><strong>Analytics</strong>: Advanced analytical functions and statistical operations</li>
+  <li><strong>Stored Procedures</strong>: Programmatic logic within database</li>
+  <li><strong>Views</strong>: Abstraction layer for complex queries</li>
+</ul>
+
+<h4 id="sql-standard-limitations">SQL Standard Limitations</h4>
+<ul>
+  <li><strong>Single Model</strong>: Designed for relational data, poor support for other models</li>
+  <li><strong>Graph Operations</strong>: Limited graph traversal and relationship queries</li>
+  <li><strong>Vector Operations</strong>: No native vector similarity or ML operations</li>
+  <li><strong>Time Series</strong>: Basic time series support, lacks specialized functions</li>
+  <li><strong>Schema Rigidity</strong>: Requires predefined schema for optimal performance</li>
+  <li><strong>Impedance Mismatch</strong>: Object-relational mapping complexity</li>
+</ul>
+
+<h4 id="postgresql-extensions">PostgreSQL Extensions</h4>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- PostgreSQL: Advanced SQL features</span>
+<span class="c1">-- JSON/JSONB support</span>
+<span class="k">SELECT</span> <span class="k">data</span><span class="o">-&gt;&gt;</span><span class="s1">'name'</span> <span class="k">as</span> <span class="n">name</span><span class="p">,</span> <span class="k">data</span><span class="o">-&gt;</span><span class="s1">'age'</span> <span class="k">as</span> <span class="n">age</span>
+<span class="k">FROM</span> <span class="n">users</span> 
+<span class="k">WHERE</span> <span class="k">data</span> <span class="o">@&gt;</span> <span class="s1">'{"city": "Seattle"}'</span><span class="p">;</span>
+
+<span class="c1">-- Array operations</span>
+<span class="k">SELECT</span> <span class="n">array_agg</span><span class="p">(</span><span class="n">name</span><span class="p">)</span> <span class="k">as</span> <span class="k">names</span>
+<span class="k">FROM</span> <span class="n">users</span>
+<span class="k">WHERE</span> <span class="n">interests</span> <span class="o">&amp;&amp;</span> <span class="n">ARRAY</span><span class="p">[</span><span class="s1">'rust'</span><span class="p">,</span> <span class="s1">'databases'</span><span class="p">];</span>
+
+<span class="c1">-- Window functions</span>
+<span class="k">SELECT</span> <span class="n">name</span><span class="p">,</span> <span class="n">salary</span><span class="p">,</span> 
+       <span class="n">rank</span><span class="p">()</span> <span class="n">OVER</span> <span class="p">(</span><span class="k">PARTITION</span> <span class="k">BY</span> <span class="n">department</span> <span class="k">ORDER</span> <span class="k">BY</span> <span class="n">salary</span> <span class="k">DESC</span><span class="p">)</span> <span class="k">as</span> <span class="n">dept_rank</span>
+<span class="k">FROM</span> <span class="n">employees</span><span class="p">;</span>
+
+<span class="c1">-- Common Table Expressions (CTEs)</span>
+<span class="k">WITH</span> <span class="k">RECURSIVE</span> <span class="n">subordinates</span> <span class="k">AS</span> <span class="p">(</span>
+    <span class="k">SELECT</span> <span class="n">employee_id</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">manager_id</span>
+    <span class="k">FROM</span> <span class="n">employees</span>
+    <span class="k">WHERE</span> <span class="n">manager_id</span> <span class="o">=</span> <span class="mi">1</span>
+    <span class="k">UNION</span> <span class="k">ALL</span>
+    <span class="k">SELECT</span> <span class="n">e</span><span class="p">.</span><span class="n">employee_id</span><span class="p">,</span> <span class="n">e</span><span class="p">.</span><span class="n">name</span><span class="p">,</span> <span class="n">e</span><span class="p">.</span><span class="n">manager_id</span>
+    <span class="k">FROM</span> <span class="n">employees</span> <span class="n">e</span>
+    <span class="k">INNER</span> <span class="k">JOIN</span> <span class="n">subordinates</span> <span class="n">s</span> <span class="k">ON</span> <span class="n">s</span><span class="p">.</span><span class="n">employee_id</span> <span class="o">=</span> <span class="n">e</span><span class="p">.</span><span class="n">manager_id</span>
+<span class="p">)</span>
+<span class="k">SELECT</span> <span class="o">*</span> <span class="k">FROM</span> <span class="n">subordinates</span><span class="p">;</span>
+
+<span class="c1">-- Extensions like pgvector</span>
+<span class="k">SELECT</span> <span class="n">name</span><span class="p">,</span> <span class="n">embedding</span> <span class="o">&lt;-&gt;</span> <span class="s1">'[0.1,0.2,0.3]'</span> <span class="k">as</span> <span class="n">distance</span>
+<span class="k">FROM</span> <span class="n">documents</span>
+<span class="k">ORDER</span> <span class="k">BY</span> <span class="n">embedding</span> <span class="o">&lt;-&gt;</span> <span class="s1">'[0.1,0.2,0.3]'</span>
+<span class="k">LIMIT</span> <span class="mi">10</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h3 id="2-cypher---neo4j-graph-query-language">2. Cypher - Neo4j Graph Query Language</h3>
+
+<p><strong>Market Position</strong>: Dominant graph query language, becoming open standard (openCypher)</p>
+
+<h4 id="cypher-strengths">Cypher Strengths</h4>
+<ul>
+  <li><strong>Graph Native</strong>: Designed specifically for graph pattern matching</li>
+  <li><strong>Declarative</strong>: Expresses what to find, not how to find it</li>
+  <li><strong>Pattern Matching</strong>: Intuitive ASCII-art syntax for graph patterns</li>
+  <li><strong>Composability</strong>: Complex patterns built from simple components</li>
+  <li><strong>Aggregation</strong>: Rich aggregation functions for graph analytics</li>
+  <li><strong>Path Finding</strong>: Built-in path finding and shortest path algorithms</li>
+  <li><strong>Variable Length</strong>: Variable-length path matching with constraints</li>
+</ul>
+
+<h4 id="cypher-limitations">Cypher Limitations</h4>
+<ul>
+  <li><strong>Graph Only</strong>: Limited support for non-graph data models</li>
+  <li><strong>Performance</strong>: Can be inefficient for complex queries without optimization</li>
+  <li><strong>Learning Curve</strong>: New syntax for SQL-familiar developers</li>
+  <li><strong>Limited Analytics</strong>: Fewer analytical functions compared to SQL</li>
+  <li><strong>Vendor Specific</strong>: Originally Neo4j specific, openCypher still evolving</li>
+</ul>
+
+<h4 id="cypher-examples">Cypher Examples</h4>
+<div class="language-cypher highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="o">--</span> <span class="n">Basic</span> <span class="n">pattern</span> <span class="n">matching</span>
+<span class="k">MATCH</span><span class="w"> </span><span class="ss">(</span><span class="py">person:</span><span class="n">Person</span><span class="ss">)</span><span class="o">-</span><span class="ss">[</span><span class="nc">:FRIENDS_WITH</span><span class="ss">]</span><span class="o">-</span><span class="ss">(</span><span class="py">friend:</span><span class="n">Person</span><span class="ss">)</span>
+<span class="k">WHERE</span> <span class="n">person.name</span> <span class="o">=</span> <span class="s1">'Alice'</span>
+<span class="k">RETURN</span> <span class="n">friend.name</span><span class="ss">;</span>
+
+<span class="o">--</span> <span class="n">Variable</span> <span class="n">length</span> <span class="n">paths</span>
+<span class="k">MATCH</span><span class="w"> </span><span class="ss">(</span><span class="py">start:</span><span class="n">Person</span><span class="ss">)</span><span class="o">-</span><span class="ss">[</span><span class="nc">:KNOWS</span><span class="o">*</span><span class="m">1</span><span class="o">..</span><span class="m">3</span><span class="ss">]</span><span class="o">-</span><span class="ss">(</span><span class="py">end:</span><span class="n">Person</span><span class="ss">)</span>
+<span class="k">WHERE</span> <span class="n">start.name</span> <span class="o">=</span> <span class="s1">'Alice'</span> <span class="ow">AND</span> <span class="n">end.name</span> <span class="o">=</span> <span class="s1">'Bob'</span>
+<span class="k">RETURN</span> <span class="nf">length</span><span class="ss">(</span><span class="n">path</span><span class="ss">)</span> <span class="k">as</span> <span class="n">degrees_of_separation</span><span class="ss">;</span>
+
+<span class="o">--</span> <span class="n">Complex</span> <span class="n">pattern</span> <span class="k">with</span> <span class="n">filtering</span>
+<span class="k">MATCH</span><span class="w"> </span><span class="ss">(</span><span class="py">user:</span><span class="n">User</span><span class="ss">)</span><span class="o">-</span><span class="ss">[</span><span class="nc">:PURCHASED</span><span class="ss">]</span><span class="o">-&gt;</span><span class="ss">(</span><span class="py">product:</span><span class="n">Product</span><span class="ss">)</span><span class="o">&lt;-</span><span class="ss">[</span><span class="nc">:PURCHASED</span><span class="ss">]</span><span class="o">-</span><span class="ss">(</span><span class="py">other:</span><span class="n">User</span><span class="ss">)</span>
+<span class="k">WHERE</span> <span class="n">user.id</span> <span class="o">=</span> <span class="s1">'user123'</span> 
+  <span class="ow">AND</span> <span class="n">product.category</span> <span class="o">=</span> <span class="s1">'electronics'</span>
+  <span class="ow">AND</span> <span class="n">other.age</span> <span class="o">&gt;</span> <span class="mi">25</span>
+<span class="k">WITH</span> <span class="n">other</span><span class="ss">,</span> <span class="nf">count</span><span class="ss">(</span><span class="n">product</span><span class="ss">)</span> <span class="k">as</span> <span class="n">shared_purchases</span>
+<span class="k">WHERE</span> <span class="n">shared_purchases</span> <span class="o">&gt;</span> <span class="mi">3</span>
+<span class="k">RETURN</span> <span class="n">other.name</span><span class="ss">,</span> <span class="n">shared_purchases</span><span class="ss">;</span>
+
+<span class="o">--</span> <span class="n">Graph</span> <span class="n">algorithms</span>
+<span class="k">CALL</span> <span class="n">algo.pageRank</span><span class="ss">(</span><span class="s1">'User'</span><span class="ss">,</span> <span class="s1">'FOLLOWS'</span><span class="ss">,</span> 
+  <span class="ss">{</span><span class="nl">iterations</span><span class="dl">:</span><span class="m">20</span><span class="ss">,</span> <span class="nl">dampingFactor</span><span class="dl">:</span><span class="m">0.85</span><span class="ss">})</span>
+<span class="k">YIELD</span> <span class="n">nodeId</span><span class="ss">,</span> <span class="n">score</span>
+<span class="k">RETURN</span> <span class="n">algo.asNode</span><span class="ss">(</span><span class="n">nodeId</span><span class="ss">)</span><span class="n">.name</span> <span class="k">as</span> <span class="n">name</span><span class="ss">,</span> <span class="n">score</span>
+<span class="k">ORDER</span> <span class="k">BY</span> <span class="n">score</span> <span class="k">DESC</span><span class="ss">;</span>
+</code></pre></div></div>
+
+<h3 id="3-gremlin---apache-tinkerpop-graph-traversal-language">3. Gremlin - Apache TinkerPop Graph Traversal Language</h3>
+
+<p><strong>Market Position</strong>: Standard graph traversal language supported by many graph databases</p>
+
+<h4 id="gremlin-strengths">Gremlin Strengths</h4>
+<ul>
+  <li><strong>Functional Style</strong>: Composable functional programming approach</li>
+  <li><strong>Step-based</strong>: Chain of transformation steps for graph traversal</li>
+  <li><strong>Cross-Platform</strong>: Supported by multiple graph database vendors</li>
+  <li><strong>Programmatic</strong>: Can be embedded in application code naturally</li>
+  <li><strong>Flexible</strong>: Highly flexible traversal patterns and transformations</li>
+  <li><strong>Analytics</strong>: Rich set of graph analytics and algorithms</li>
+</ul>
+
+<h4 id="gremlin-limitations">Gremlin Limitations</h4>
+<ul>
+  <li><strong>Complexity</strong>: Steep learning curve, can become very complex</li>
+  <li><strong>Readability</strong>: Complex traversals can be hard to read and maintain</li>
+  <li><strong>Performance</strong>: Can be inefficient without careful optimization</li>
+  <li><strong>Graph Only</strong>: Limited support for non-graph data</li>
+  <li><strong>Debugging</strong>: Difficult to debug complex traversal chains</li>
+</ul>
+
+<h4 id="gremlin-examples">Gremlin Examples</h4>
+<div class="language-groovy highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Basic traversal</span>
+<span class="n">g</span><span class="o">.</span><span class="na">V</span><span class="o">().</span><span class="na">hasLabel</span><span class="o">(</span><span class="s1">'person'</span><span class="o">).</span><span class="na">has</span><span class="o">(</span><span class="s1">'name'</span><span class="o">,</span> <span class="s1">'Alice'</span><span class="o">)</span>
+  <span class="o">.</span><span class="na">out</span><span class="o">(</span><span class="s1">'friends'</span><span class="o">).</span><span class="na">values</span><span class="o">(</span><span class="s1">'name'</span><span class="o">);</span>
+
+<span class="c1">// Complex multi-step traversal</span>
+<span class="n">g</span><span class="o">.</span><span class="na">V</span><span class="o">().</span><span class="na">hasLabel</span><span class="o">(</span><span class="s1">'user'</span><span class="o">).</span><span class="na">has</span><span class="o">(</span><span class="s1">'id'</span><span class="o">,</span> <span class="s1">'user123'</span><span class="o">)</span>
+  <span class="o">.</span><span class="na">out</span><span class="o">(</span><span class="s1">'purchased'</span><span class="o">).</span><span class="na">hasLabel</span><span class="o">(</span><span class="s1">'product'</span><span class="o">).</span><span class="na">has</span><span class="o">(</span><span class="s1">'category'</span><span class="o">,</span> <span class="s1">'electronics'</span><span class="o">)</span>
+  <span class="o">.</span><span class="na">in</span><span class="o">(</span><span class="s1">'purchased'</span><span class="o">).</span><span class="na">hasLabel</span><span class="o">(</span><span class="s1">'user'</span><span class="o">).</span><span class="na">has</span><span class="o">(</span><span class="s1">'age'</span><span class="o">,</span> <span class="n">gt</span><span class="o">(</span><span class="mi">25</span><span class="o">))</span>
+  <span class="o">.</span><span class="na">groupCount</span><span class="o">().</span><span class="na">by</span><span class="o">(</span><span class="s1">'name'</span><span class="o">)</span>
+  <span class="o">.</span><span class="na">unfold</span><span class="o">().</span><span class="na">where</span><span class="o">(</span><span class="n">select</span><span class="o">(</span><span class="n">values</span><span class="o">).</span><span class="na">is</span><span class="o">(</span><span class="n">gt</span><span class="o">(</span><span class="mi">3</span><span class="o">)))</span>
+  <span class="o">.</span><span class="na">select</span><span class="o">(</span><span class="n">keys</span><span class="o">);</span>
+
+<span class="c1">// Graph analytics</span>
+<span class="n">g</span><span class="o">.</span><span class="na">V</span><span class="o">().</span><span class="na">hasLabel</span><span class="o">(</span><span class="s1">'user'</span><span class="o">)</span>
+  <span class="o">.</span><span class="na">repeat</span><span class="o">(</span><span class="n">both</span><span class="o">(</span><span class="s1">'follows'</span><span class="o">).</span><span class="na">simplePath</span><span class="o">()).</span><span class="na">times</span><span class="o">(</span><span class="mi">3</span><span class="o">)</span>
+  <span class="o">.</span><span class="na">groupCount</span><span class="o">().</span><span class="na">by</span><span class="o">(</span><span class="n">label</span><span class="o">)</span>
+  <span class="o">.</span><span class="na">order</span><span class="o">(</span><span class="n">local</span><span class="o">).</span><span class="na">by</span><span class="o">(</span><span class="n">values</span><span class="o">,</span> <span class="n">decr</span><span class="o">);</span>
+</code></pre></div></div>
+
+<h3 id="4-graphql---application-layer-query-language">4. GraphQL - Application Layer Query Language</h3>
+
+<p><strong>Market Position</strong>: Popular API query language for application data fetching</p>
+
+<h4 id="graphql-strengths">GraphQL Strengths</h4>
+<ul>
+  <li><strong>Flexible Fetching</strong>: Request exactly the data needed</li>
+  <li><strong>Type System</strong>: Strong type system with schema introspection</li>
+  <li><strong>Single Endpoint</strong>: One endpoint for all data operations</li>
+  <li><strong>Real-time</strong>: Subscriptions for real-time data updates</li>
+  <li><strong>Developer Experience</strong>: Excellent tooling and developer experience</li>
+  <li><strong>Composable</strong>: Can aggregate data from multiple sources</li>
+</ul>
+
+<h4 id="graphql-limitations">GraphQL Limitations</h4>
+<ul>
+  <li><strong>Not Database Native</strong>: Application layer, not database query language</li>
+  <li><strong>N+1 Problem</strong>: Can cause inefficient database queries</li>
+  <li><strong>Caching Complexity</strong>: Complex caching due to query flexibility</li>
+  <li><strong>Learning Curve</strong>: Requires understanding of resolver patterns</li>
+  <li><strong>Limited Analytics</strong>: No built-in analytical query capabilities</li>
+</ul>
+
+<h3 id="5-multi-model-query-languages">5. Multi-Model Query Languages</h3>
+
+<h4 id="arangodb-aql-aql">ArangoDB AQL (AQL)</h4>
+<p><strong>Strengths</strong>: Unified query language for document, graph, and key-value
+<strong>Weaknesses</strong>: Limited adoption outside ArangoDB ecosystem</p>
+
+<h4 id="orientdb-sql">OrientDB SQL</h4>
+<p><strong>Strengths</strong>: Extended SQL with graph traversal capabilities
+<strong>Weaknesses</strong>: Non-standard SQL extensions, limited vector support</p>
+
+<h2 id="orbit-rs-query-languages-analysis">Orbit-RS Query Languages Analysis</h2>
+
+<h3 id="orbitql---unified-multi-model-query-language">OrbitQL - Unified Multi-Model Query Language</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// OrbitQL: Unified query language for multi-model operations</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">OrbitQLQuery</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="n">select</span><span class="p">:</span> <span class="n">SelectClause</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">from</span><span class="p">:</span> <span class="n">FromClause</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">r</span><span class="err">#</span><span class="k">match</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="n">MatchClause</span><span class="o">&gt;</span><span class="p">,</span>      <span class="c1">// Graph pattern matching</span>
+    <span class="k">pub</span> <span class="n">where_clause</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="n">WhereClause</span><span class="o">&gt;</span><span class="p">,</span> <span class="c1">// Filtering conditions</span>
+    <span class="k">pub</span> <span class="n">with_clause</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="n">WithClause</span><span class="o">&gt;</span><span class="p">,</span>   <span class="c1">// Computed columns</span>
+    <span class="k">pub</span> <span class="n">order_by</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="n">OrderByClause</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">limit</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="n">LimitClause</span><span class="o">&gt;</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="k">impl</span> <span class="n">OrbitQLQuery</span> <span class="p">{</span>
+    <span class="c1">// Multi-model query compilation</span>
+    <span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">compile</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">ExecutionPlan</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="k">let</span> <span class="k">mut</span> <span class="n">plan</span> <span class="o">=</span> <span class="nn">ExecutionPlan</span><span class="p">::</span><span class="nf">new</span><span class="p">();</span>
+        
+        <span class="c1">// Analyze query to determine optimal execution strategy</span>
+        <span class="k">if</span> <span class="k">self</span><span class="nf">.has_graph_patterns</span><span class="p">()</span> <span class="p">{</span>
+            <span class="n">plan</span><span class="nf">.add_stage</span><span class="p">(</span><span class="nn">ExecutionStage</span><span class="p">::</span><span class="nf">GraphTraversal</span><span class="p">(</span>
+                <span class="k">self</span><span class="nf">.compile_graph_patterns</span><span class="p">()</span><span class="k">.await</span><span class="o">?</span>
+            <span class="p">));</span>
+        <span class="p">}</span>
+        
+        <span class="k">if</span> <span class="k">self</span><span class="nf">.has_vector_operations</span><span class="p">()</span> <span class="p">{</span>
+            <span class="n">plan</span><span class="nf">.add_stage</span><span class="p">(</span><span class="nn">ExecutionStage</span><span class="p">::</span><span class="nf">VectorSearch</span><span class="p">(</span>
+                <span class="k">self</span><span class="nf">.compile_vector_operations</span><span class="p">()</span><span class="k">.await</span><span class="o">?</span>
+            <span class="p">));</span>
+        <span class="p">}</span>
+        
+        <span class="k">if</span> <span class="k">self</span><span class="nf">.has_time_series_operations</span><span class="p">()</span> <span class="p">{</span>
+            <span class="n">plan</span><span class="nf">.add_stage</span><span class="p">(</span><span class="nn">ExecutionStage</span><span class="p">::</span><span class="nf">TimeSeriesAnalysis</span><span class="p">(</span>
+                <span class="k">self</span><span class="nf">.compile_time_series_operations</span><span class="p">()</span><span class="k">.await</span><span class="o">?</span>
+            <span class="p">));</span>
+        <span class="p">}</span>
+        
+        <span class="k">if</span> <span class="k">self</span><span class="nf">.has_relational_operations</span><span class="p">()</span> <span class="p">{</span>
+            <span class="n">plan</span><span class="nf">.add_stage</span><span class="p">(</span><span class="nn">ExecutionStage</span><span class="p">::</span><span class="nf">RelationalQuery</span><span class="p">(</span>
+                <span class="k">self</span><span class="nf">.compile_sql</span><span class="p">()</span><span class="k">.await</span><span class="o">?</span>
+            <span class="p">));</span>
+        <span class="p">}</span>
+        
+        <span class="c1">// Optimize cross-model joins and data flow</span>
+        <span class="n">plan</span><span class="nf">.optimize_cross_model_operations</span><span class="p">()</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+        
+        <span class="nf">Ok</span><span class="p">(</span><span class="n">plan</span><span class="p">)</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="multi-model-query-examples">Multi-Model Query Examples</h3>
+
+<h4 id="1-graph--vector--time-series-query">1. <strong>Graph + Vector + Time Series Query</strong></h4>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- OrbitQL: Multi-model query combining graph, vector, and time series</span>
+<span class="k">WITH</span> <span class="n">player_influence</span> <span class="k">AS</span> <span class="p">(</span>
+    <span class="c1">-- Graph analysis: social influence calculation</span>
+    <span class="k">MATCH</span> <span class="p">(</span><span class="n">player</span><span class="p">:</span><span class="n">Player</span> <span class="p">{</span><span class="n">id</span><span class="p">:</span> <span class="err">$</span><span class="n">player_id</span><span class="p">})</span><span class="o">-</span><span class="p">[:</span><span class="n">FRIENDS_WITH</span><span class="o">*</span><span class="mi">1</span><span class="p">..</span><span class="mi">3</span><span class="p">]</span><span class="o">-</span><span class="p">(</span><span class="n">connected</span><span class="p">:</span><span class="n">Player</span><span class="p">)</span>
+    <span class="k">RETURN</span> <span class="n">connected</span><span class="p">.</span><span class="n">id</span> <span class="k">as</span> <span class="n">connected_player</span><span class="p">,</span>
+           <span class="n">graph_centrality</span><span class="p">(</span><span class="n">connected</span><span class="p">.</span><span class="n">id</span><span class="p">,</span> <span class="s1">'social_network'</span><span class="p">)</span> <span class="k">as</span> <span class="n">centrality_score</span><span class="p">,</span>
+           <span class="n">graph_pagerank</span><span class="p">(</span><span class="n">connected</span><span class="p">.</span><span class="n">id</span><span class="p">,</span> <span class="s1">'social_network'</span><span class="p">)</span> <span class="k">as</span> <span class="n">pagerank_score</span>
+<span class="p">),</span>
+<span class="n">similar_players</span> <span class="k">AS</span> <span class="p">(</span>
+    <span class="c1">-- Vector similarity: find players with similar behavior</span>
+    <span class="k">SELECT</span> <span class="n">player_id</span><span class="p">,</span> 
+           <span class="n">vector_similarity</span><span class="p">(</span><span class="n">play_style_embedding</span><span class="p">,</span> <span class="err">$</span><span class="n">target_embedding</span><span class="p">)</span> <span class="k">as</span> <span class="n">similarity_score</span>
+    <span class="k">FROM</span> <span class="n">player_embeddings</span> 
+    <span class="k">WHERE</span> <span class="n">vector_similarity</span><span class="p">(</span><span class="n">play_style_embedding</span><span class="p">,</span> <span class="err">$</span><span class="n">target_embedding</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">.</span><span class="mi">7</span>
+    <span class="k">ORDER</span> <span class="k">BY</span> <span class="n">similarity_score</span> <span class="k">DESC</span>
+    <span class="k">LIMIT</span> <span class="mi">50</span>
+<span class="p">),</span>
+<span class="n">performance_trends</span> <span class="k">AS</span> <span class="p">(</span>
+    <span class="c1">-- Time series analysis: performance evolution</span>
+    <span class="k">SELECT</span> <span class="n">player_id</span><span class="p">,</span>
+           <span class="n">ts_trend</span><span class="p">(</span><span class="n">performance_score</span><span class="p">,</span> <span class="s1">'30 days'</span><span class="p">)</span> <span class="k">as</span> <span class="n">trend</span><span class="p">,</span>
+           <span class="n">ts_seasonal_decomposition</span><span class="p">(</span><span class="n">performance_score</span><span class="p">,</span> <span class="s1">'7 days'</span><span class="p">)</span> <span class="k">as</span> <span class="n">weekly_pattern</span><span class="p">,</span>
+           <span class="n">ts_anomaly_detection</span><span class="p">(</span><span class="n">performance_score</span><span class="p">,</span> <span class="mi">2</span><span class="p">.</span><span class="mi">0</span><span class="p">)</span> <span class="k">as</span> <span class="n">anomalies</span>
+    <span class="k">FROM</span> <span class="n">player_metrics</span>
+    <span class="k">WHERE</span> <span class="nb">timestamp</span> <span class="o">&gt;=</span> <span class="n">NOW</span><span class="p">()</span> <span class="o">-</span> <span class="n">INTERVAL</span> <span class="s1">'30 days'</span>
+    <span class="k">GROUP</span> <span class="k">BY</span> <span class="n">player_id</span>
+<span class="p">)</span>
+<span class="c1">-- Combine all models in final result</span>
+<span class="k">SELECT</span> <span class="n">p</span><span class="p">.</span><span class="n">player_id</span><span class="p">,</span>
+       <span class="n">p</span><span class="p">.</span><span class="n">name</span><span class="p">,</span>
+       <span class="n">pi</span><span class="p">.</span><span class="n">centrality_score</span><span class="p">,</span>
+       <span class="n">pi</span><span class="p">.</span><span class="n">pagerank_score</span><span class="p">,</span>
+       <span class="n">sp</span><span class="p">.</span><span class="n">similarity_score</span><span class="p">,</span>
+       <span class="n">pt</span><span class="p">.</span><span class="n">trend</span><span class="p">,</span>
+       <span class="n">pt</span><span class="p">.</span><span class="n">weekly_pattern</span><span class="p">,</span>
+       <span class="n">pt</span><span class="p">.</span><span class="n">anomalies</span><span class="p">,</span>
+       <span class="c1">-- Composite scoring combining all models</span>
+       <span class="p">(</span><span class="n">pi</span><span class="p">.</span><span class="n">centrality_score</span> <span class="o">*</span> <span class="mi">0</span><span class="p">.</span><span class="mi">3</span> <span class="o">+</span> 
+        <span class="n">sp</span><span class="p">.</span><span class="n">similarity_score</span> <span class="o">*</span> <span class="mi">0</span><span class="p">.</span><span class="mi">4</span> <span class="o">+</span> 
+        <span class="n">pt</span><span class="p">.</span><span class="n">trend</span> <span class="o">*</span> <span class="mi">0</span><span class="p">.</span><span class="mi">3</span><span class="p">)</span> <span class="k">as</span> <span class="n">composite_influence_score</span>
+<span class="k">FROM</span> <span class="n">players</span> <span class="n">p</span>
+<span class="k">JOIN</span> <span class="n">player_influence</span> <span class="n">pi</span> <span class="k">ON</span> <span class="n">p</span><span class="p">.</span><span class="n">id</span> <span class="o">=</span> <span class="n">pi</span><span class="p">.</span><span class="n">connected_player</span>
+<span class="k">JOIN</span> <span class="n">similar_players</span> <span class="n">sp</span> <span class="k">ON</span> <span class="n">p</span><span class="p">.</span><span class="n">id</span> <span class="o">=</span> <span class="n">sp</span><span class="p">.</span><span class="n">player_id</span>  
+<span class="k">JOIN</span> <span class="n">performance_trends</span> <span class="n">pt</span> <span class="k">ON</span> <span class="n">p</span><span class="p">.</span><span class="n">id</span> <span class="o">=</span> <span class="n">pt</span><span class="p">.</span><span class="n">player_id</span>
+<span class="k">WHERE</span> <span class="n">composite_influence_score</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">.</span><span class="mi">8</span>
+<span class="k">ORDER</span> <span class="k">BY</span> <span class="n">composite_influence_score</span> <span class="k">DESC</span>
+<span class="k">LIMIT</span> <span class="mi">20</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h4 id="2-cross-model-recommendation-query">2. <strong>Cross-Model Recommendation Query</strong></h4>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- OrbitQL: Recommendation query spanning multiple data models</span>
+<span class="k">WITH</span> <span class="n">user_context</span> <span class="k">AS</span> <span class="p">(</span>
+    <span class="c1">-- Relational data: user profile and preferences</span>
+    <span class="k">SELECT</span> <span class="n">user_id</span><span class="p">,</span> <span class="n">age</span><span class="p">,</span> <span class="k">location</span><span class="p">,</span> <span class="n">premium_tier</span><span class="p">,</span> <span class="n">preferences</span>
+    <span class="k">FROM</span> <span class="n">users</span>
+    <span class="k">WHERE</span> <span class="n">user_id</span> <span class="o">=</span> <span class="err">$</span><span class="n">user_id</span>
+<span class="p">),</span>
+<span class="n">social_influence</span> <span class="k">AS</span> <span class="p">(</span>
+    <span class="c1">-- Graph traversal: social network influence</span>
+    <span class="k">MATCH</span> <span class="p">(</span><span class="k">user</span><span class="p">:</span><span class="k">User</span> <span class="p">{</span><span class="n">id</span><span class="p">:</span> <span class="err">$</span><span class="n">user_id</span><span class="p">})</span><span class="o">-</span><span class="p">[:</span><span class="n">FOLLOWS</span><span class="o">*</span><span class="mi">1</span><span class="p">..</span><span class="mi">2</span><span class="p">]</span><span class="o">-</span><span class="p">(</span><span class="n">influencer</span><span class="p">:</span><span class="k">User</span><span class="p">)</span>
+    <span class="k">WHERE</span> <span class="n">influencer</span><span class="p">.</span><span class="n">influence_score</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">.</span><span class="mi">8</span>
+    <span class="k">RETURN</span> <span class="n">influencer</span><span class="p">.</span><span class="n">id</span> <span class="k">as</span> <span class="n">influencer_id</span><span class="p">,</span>
+           <span class="n">graph_influence_weight</span><span class="p">(</span><span class="k">user</span><span class="p">.</span><span class="n">id</span><span class="p">,</span> <span class="n">influencer</span><span class="p">.</span><span class="n">id</span><span class="p">)</span> <span class="k">as</span> <span class="n">influence_weight</span><span class="p">,</span>
+           <span class="n">collect</span><span class="p">(</span><span class="n">influencer</span><span class="p">.</span><span class="n">recent_purchases</span><span class="p">)</span> <span class="k">as</span> <span class="n">influenced_products</span>
+<span class="p">),</span>
+<span class="n">content_similarity</span> <span class="k">AS</span> <span class="p">(</span>
+    <span class="c1">-- Vector search: content-based recommendations  </span>
+    <span class="k">SELECT</span> <span class="n">product_id</span><span class="p">,</span>
+           <span class="n">product_name</span><span class="p">,</span>
+           <span class="n">vector_similarity</span><span class="p">(</span><span class="n">product_embedding</span><span class="p">,</span> <span class="err">$</span><span class="n">user_preference_vector</span><span class="p">)</span> <span class="k">as</span> <span class="n">content_score</span>
+    <span class="k">FROM</span> <span class="n">product_embeddings</span>
+    <span class="k">WHERE</span> <span class="n">vector_similarity</span><span class="p">(</span><span class="n">product_embedding</span><span class="p">,</span> <span class="err">$</span><span class="n">user_preference_vector</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">.</span><span class="mi">6</span>
+    <span class="k">ORDER</span> <span class="k">BY</span> <span class="n">content_score</span> <span class="k">DESC</span>
+    <span class="k">LIMIT</span> <span class="mi">100</span>
+<span class="p">),</span>
+<span class="n">trending_analysis</span> <span class="k">AS</span> <span class="p">(</span>
+    <span class="c1">-- Time series: trending products analysis</span>
+    <span class="k">SELECT</span> <span class="n">product_id</span><span class="p">,</span>
+           <span class="n">ts_trend</span><span class="p">(</span><span class="n">purchase_count</span><span class="p">,</span> <span class="s1">'7 days'</span><span class="p">)</span> <span class="k">as</span> <span class="n">trend_score</span><span class="p">,</span>
+           <span class="n">ts_moving_average</span><span class="p">(</span><span class="n">rating</span><span class="p">,</span> <span class="s1">'30 days'</span><span class="p">)</span> <span class="k">as</span> <span class="n">avg_rating</span><span class="p">,</span>
+           <span class="n">ts_velocity</span><span class="p">(</span><span class="n">popularity</span><span class="p">,</span> <span class="s1">'24 hours'</span><span class="p">)</span> <span class="k">as</span> <span class="n">popularity_velocity</span>
+    <span class="k">FROM</span> <span class="n">product_metrics</span>
+    <span class="k">WHERE</span> <span class="n">ts_trend</span><span class="p">(</span><span class="n">purchase_count</span><span class="p">,</span> <span class="s1">'7 days'</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">.</span><span class="mi">5</span>  <span class="c1">-- Growing trend</span>
+    <span class="k">GROUP</span> <span class="k">BY</span> <span class="n">product_id</span>
+<span class="p">)</span>
+<span class="c1">-- Generate personalized recommendations</span>
+<span class="k">SELECT</span> <span class="n">p</span><span class="p">.</span><span class="n">product_id</span><span class="p">,</span>
+       <span class="n">p</span><span class="p">.</span><span class="n">product_name</span><span class="p">,</span>
+       <span class="n">p</span><span class="p">.</span><span class="n">category</span><span class="p">,</span>
+       <span class="n">cs</span><span class="p">.</span><span class="n">content_score</span><span class="p">,</span>
+       <span class="n">ta</span><span class="p">.</span><span class="n">trend_score</span><span class="p">,</span>
+       <span class="n">ta</span><span class="p">.</span><span class="n">avg_rating</span><span class="p">,</span>
+       <span class="n">ta</span><span class="p">.</span><span class="n">popularity_velocity</span><span class="p">,</span>
+       <span class="c1">-- Social influence factor</span>
+       <span class="n">COALESCE</span><span class="p">(</span><span class="n">si</span><span class="p">.</span><span class="n">influence_weight</span><span class="p">,</span> <span class="mi">0</span><span class="p">.</span><span class="mi">0</span><span class="p">)</span> <span class="k">as</span> <span class="n">social_influence</span><span class="p">,</span>
+       <span class="c1">-- Composite recommendation score</span>
+       <span class="p">(</span><span class="n">cs</span><span class="p">.</span><span class="n">content_score</span> <span class="o">*</span> <span class="mi">0</span><span class="p">.</span><span class="mi">4</span> <span class="o">+</span>
+        <span class="n">ta</span><span class="p">.</span><span class="n">trend_score</span> <span class="o">*</span> <span class="mi">0</span><span class="p">.</span><span class="mi">2</span> <span class="o">+</span>
+        <span class="n">ta</span><span class="p">.</span><span class="n">avg_rating</span> <span class="o">*</span> <span class="mi">0</span><span class="p">.</span><span class="mi">2</span> <span class="o">+</span>
+        <span class="n">ta</span><span class="p">.</span><span class="n">popularity_velocity</span> <span class="o">*</span> <span class="mi">0</span><span class="p">.</span><span class="mi">1</span> <span class="o">+</span>
+        <span class="n">COALESCE</span><span class="p">(</span><span class="n">si</span><span class="p">.</span><span class="n">influence_weight</span><span class="p">,</span> <span class="mi">0</span><span class="p">.</span><span class="mi">0</span><span class="p">)</span> <span class="o">*</span> <span class="mi">0</span><span class="p">.</span><span class="mi">1</span><span class="p">)</span> <span class="k">as</span> <span class="n">recommendation_score</span><span class="p">,</span>
+       <span class="c1">-- Explanation for AI transparency</span>
+       <span class="n">json_build_object</span><span class="p">(</span>
+           <span class="s1">'content_match'</span><span class="p">,</span> <span class="n">cs</span><span class="p">.</span><span class="n">content_score</span><span class="p">,</span>
+           <span class="s1">'trending_factor'</span><span class="p">,</span> <span class="n">ta</span><span class="p">.</span><span class="n">trend_score</span><span class="p">,</span>
+           <span class="s1">'social_influence'</span><span class="p">,</span> <span class="n">COALESCE</span><span class="p">(</span><span class="n">si</span><span class="p">.</span><span class="n">influence_weight</span><span class="p">,</span> <span class="mi">0</span><span class="p">.</span><span class="mi">0</span><span class="p">),</span>
+           <span class="s1">'avg_rating'</span><span class="p">,</span> <span class="n">ta</span><span class="p">.</span><span class="n">avg_rating</span>
+       <span class="p">)</span> <span class="k">as</span> <span class="n">recommendation_explanation</span>
+<span class="k">FROM</span> <span class="n">products</span> <span class="n">p</span>
+<span class="k">JOIN</span> <span class="n">content_similarity</span> <span class="n">cs</span> <span class="k">ON</span> <span class="n">p</span><span class="p">.</span><span class="n">id</span> <span class="o">=</span> <span class="n">cs</span><span class="p">.</span><span class="n">product_id</span>
+<span class="k">JOIN</span> <span class="n">trending_analysis</span> <span class="n">ta</span> <span class="k">ON</span> <span class="n">p</span><span class="p">.</span><span class="n">id</span> <span class="o">=</span> <span class="n">ta</span><span class="p">.</span><span class="n">product_id</span>
+<span class="k">LEFT</span> <span class="k">JOIN</span> <span class="n">social_influence</span> <span class="n">si</span> <span class="k">ON</span> <span class="n">p</span><span class="p">.</span><span class="n">id</span> <span class="o">=</span> <span class="k">ANY</span><span class="p">(</span><span class="n">si</span><span class="p">.</span><span class="n">influenced_products</span><span class="p">)</span>
+<span class="k">CROSS</span> <span class="k">JOIN</span> <span class="n">user_context</span> <span class="n">uc</span>
+<span class="k">WHERE</span> <span class="n">p</span><span class="p">.</span><span class="n">category</span> <span class="o">=</span> <span class="k">ANY</span><span class="p">(</span><span class="n">uc</span><span class="p">.</span><span class="n">preferences</span><span class="p">)</span>
+  <span class="k">AND</span> <span class="p">(</span><span class="n">uc</span><span class="p">.</span><span class="n">premium_tier</span> <span class="o">=</span> <span class="s1">'premium'</span> <span class="k">OR</span> <span class="n">p</span><span class="p">.</span><span class="n">price</span> <span class="o">&lt;=</span> <span class="mi">100</span><span class="p">)</span>  <span class="c1">-- Price filtering</span>
+  <span class="k">AND</span> <span class="n">recommendation_score</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">.</span><span class="mi">7</span>
+<span class="k">ORDER</span> <span class="k">BY</span> <span class="n">recommendation_score</span> <span class="k">DESC</span>
+<span class="k">LIMIT</span> <span class="mi">20</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h3 id="sql-compatibility-layer">SQL Compatibility Layer</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// SQL compatibility for existing applications</span>
+<span class="k">impl</span> <span class="n">SqlCompatibilityLayer</span> <span class="p">{</span>
+    <span class="c1">// Standard SQL query execution with multi-model extensions</span>
+    <span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">execute_sql</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">query</span><span class="p">:</span> <span class="o">&amp;</span><span class="nb">str</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">SqlResult</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="k">let</span> <span class="n">parsed</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.parse_sql_with_extensions</span><span class="p">(</span><span class="n">query</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+        
+        <span class="c1">// Detect and handle multi-model extensions</span>
+        <span class="k">if</span> <span class="n">parsed</span><span class="nf">.has_graph_functions</span><span class="p">()</span> <span class="p">{</span>
+            <span class="k">return</span> <span class="k">self</span><span class="nf">.execute_multi_model_sql</span><span class="p">(</span><span class="n">parsed</span><span class="p">)</span><span class="k">.await</span><span class="p">;</span>
+        <span class="p">}</span>
+        
+        <span class="k">if</span> <span class="n">parsed</span><span class="nf">.has_vector_functions</span><span class="p">()</span> <span class="p">{</span>
+            <span class="k">return</span> <span class="k">self</span><span class="nf">.execute_vector_enhanced_sql</span><span class="p">(</span><span class="n">parsed</span><span class="p">)</span><span class="k">.await</span><span class="p">;</span>
+        <span class="p">}</span>
+        
+        <span class="k">if</span> <span class="n">parsed</span><span class="nf">.has_time_series_functions</span><span class="p">()</span> <span class="p">{</span>
+            <span class="k">return</span> <span class="k">self</span><span class="nf">.execute_time_series_sql</span><span class="p">(</span><span class="n">parsed</span><span class="p">)</span><span class="k">.await</span><span class="p">;</span>
+        <span class="p">}</span>
+        
+        <span class="c1">// Standard SQL execution</span>
+        <span class="k">self</span><span class="nf">.execute_standard_sql</span><span class="p">(</span><span class="n">parsed</span><span class="p">)</span><span class="k">.await</span>
+    <span class="p">}</span>
+    
+    <span class="c1">// PostgreSQL-compatible functions with multi-model extensions</span>
+    <span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">register_extended_functions</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="k">self</span><span class="py">.function_registry</span><span class="nf">.register_all</span><span class="p">(</span><span class="nd">vec!</span><span class="p">[</span>
+            <span class="c1">// Graph functions (compatible with AGE extension)</span>
+            <span class="p">(</span><span class="s">"graph_traverse"</span><span class="p">,</span> <span class="nn">GraphTraverseFunction</span><span class="p">::</span><span class="nf">new</span><span class="p">()),</span>
+            <span class="p">(</span><span class="s">"graph_shortest_path"</span><span class="p">,</span> <span class="nn">ShortestPathFunction</span><span class="p">::</span><span class="nf">new</span><span class="p">()),</span>
+            <span class="p">(</span><span class="s">"graph_centrality"</span><span class="p">,</span> <span class="nn">CentralityFunction</span><span class="p">::</span><span class="nf">new</span><span class="p">()),</span>
+            <span class="p">(</span><span class="s">"graph_pagerank"</span><span class="p">,</span> <span class="nn">PageRankFunction</span><span class="p">::</span><span class="nf">new</span><span class="p">()),</span>
+            
+            <span class="c1">// Vector functions (compatible with pgvector)</span>
+            <span class="p">(</span><span class="s">"vector_similarity"</span><span class="p">,</span> <span class="nn">VectorSimilarityFunction</span><span class="p">::</span><span class="nf">new</span><span class="p">()),</span>
+            <span class="p">(</span><span class="s">"vector_cosine_distance"</span><span class="p">,</span> <span class="nn">CosineDistanceFunction</span><span class="p">::</span><span class="nf">new</span><span class="p">()),</span>
+            <span class="p">(</span><span class="s">"vector_l2_distance"</span><span class="p">,</span> <span class="nn">L2DistanceFunction</span><span class="p">::</span><span class="nf">new</span><span class="p">()),</span>
+            
+            <span class="c1">// Time series functions (compatible with TimescaleDB)</span>
+            <span class="p">(</span><span class="s">"time_bucket"</span><span class="p">,</span> <span class="nn">TimeBucketFunction</span><span class="p">::</span><span class="nf">new</span><span class="p">()),</span>
+            <span class="p">(</span><span class="s">"ts_trend"</span><span class="p">,</span> <span class="nn">TrendAnalysisFunction</span><span class="p">::</span><span class="nf">new</span><span class="p">()),</span>
+            <span class="p">(</span><span class="s">"ts_seasonal_decomposition"</span><span class="p">,</span> <span class="nn">SeasonalDecompFunction</span><span class="p">::</span><span class="nf">new</span><span class="p">()),</span>
+            <span class="p">(</span><span class="s">"ts_anomaly_detection"</span><span class="p">,</span> <span class="nn">AnomalyDetectionFunction</span><span class="p">::</span><span class="nf">new</span><span class="p">()),</span>
+            
+            <span class="c1">// Multi-model aggregation functions</span>
+            <span class="p">(</span><span class="s">"cross_model_join"</span><span class="p">,</span> <span class="nn">CrossModelJoinFunction</span><span class="p">::</span><span class="nf">new</span><span class="p">()),</span>
+            <span class="p">(</span><span class="s">"multi_model_aggregate"</span><span class="p">,</span> <span class="nn">MultiModelAggregateFunction</span><span class="p">::</span><span class="nf">new</span><span class="p">()),</span>
+        <span class="p">])</span><span class="o">?</span><span class="p">;</span>
+        
+        <span class="nf">Ok</span><span class="p">(())</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="query-optimization-engine">Query Optimization Engine</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Advanced query optimization for multi-model queries</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">MultiModelQueryOptimizer</span> <span class="p">{</span>
+    <span class="n">cost_estimator</span><span class="p">:</span> <span class="n">CostEstimator</span><span class="p">,</span>
+    <span class="n">statistics_collector</span><span class="p">:</span> <span class="n">StatisticsCollector</span><span class="p">,</span>
+    <span class="n">plan_generator</span><span class="p">:</span> <span class="n">PlanGenerator</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="k">impl</span> <span class="n">MultiModelQueryOptimizer</span> <span class="p">{</span>
+    <span class="c1">// Optimize cross-model query execution</span>
+    <span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">optimize_query</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">query</span><span class="p">:</span> <span class="n">OrbitQLQuery</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">OptimizedPlan</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="c1">// Analyze query patterns</span>
+        <span class="k">let</span> <span class="n">analysis</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.analyze_query_patterns</span><span class="p">(</span><span class="o">&amp;</span><span class="n">query</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+        
+        <span class="c1">// Generate alternative execution plans</span>
+        <span class="k">let</span> <span class="n">candidate_plans</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.generate_execution_plans</span><span class="p">(</span><span class="o">&amp;</span><span class="n">query</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">analysis</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+        
+        <span class="c1">// Cost-based optimization</span>
+        <span class="k">let</span> <span class="n">optimized_plan</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.select_optimal_plan</span><span class="p">(</span><span class="n">candidate_plans</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+        
+        <span class="c1">// Apply multi-model specific optimizations</span>
+        <span class="k">self</span><span class="nf">.apply_multi_model_optimizations</span><span class="p">(</span><span class="n">optimized_plan</span><span class="p">)</span><span class="k">.await</span>
+    <span class="p">}</span>
+    
+    <span class="c1">// Multi-model join optimization</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">optimize_cross_model_joins</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">joins</span><span class="p">:</span> <span class="o">&amp;</span><span class="p">[</span><span class="n">CrossModelJoin</span><span class="p">])</span> <span class="k">-&gt;</span> <span class="n">JoinStrategy</span> <span class="p">{</span>
+        <span class="c1">// Analyze data distribution and sizes</span>
+        <span class="k">let</span> <span class="n">statistics</span> <span class="o">=</span> <span class="k">self</span><span class="py">.statistics_collector</span>
+            <span class="nf">.collect_cross_model_statistics</span><span class="p">(</span><span class="n">joins</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+        
+        <span class="c1">// Determine optimal join strategy</span>
+        <span class="k">match</span> <span class="n">statistics</span><span class="py">.dominant_model</span> <span class="p">{</span>
+            <span class="nn">DataModel</span><span class="p">::</span><span class="n">Relational</span> <span class="k">=&gt;</span> <span class="nn">JoinStrategy</span><span class="p">::</span><span class="n">SqlDriven</span> <span class="p">{</span>
+                <span class="c1">// Start with SQL, add graph/vector data</span>
+                <span class="n">primary_table</span><span class="p">:</span> <span class="n">statistics</span><span class="py">.largest_table</span><span class="p">,</span>
+                <span class="n">secondary_lookups</span><span class="p">:</span> <span class="k">self</span><span class="nf">.plan_secondary_lookups</span><span class="p">(</span><span class="o">&amp;</span><span class="n">statistics</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">,</span>
+            <span class="p">},</span>
+            <span class="nn">DataModel</span><span class="p">::</span><span class="n">Graph</span> <span class="k">=&gt;</span> <span class="nn">JoinStrategy</span><span class="p">::</span><span class="n">GraphDriven</span> <span class="p">{</span>
+                <span class="c1">// Start with graph traversal, enrich with other data</span>
+                <span class="n">traversal_pattern</span><span class="p">:</span> <span class="n">statistics</span><span class="py">.most_selective_pattern</span><span class="p">,</span>
+                <span class="n">enrichment_steps</span><span class="p">:</span> <span class="k">self</span><span class="nf">.plan_data_enrichment</span><span class="p">(</span><span class="o">&amp;</span><span class="n">statistics</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">,</span>
+            <span class="p">},</span>
+            <span class="nn">DataModel</span><span class="p">::</span><span class="n">Vector</span> <span class="k">=&gt;</span> <span class="nn">JoinStrategy</span><span class="p">::</span><span class="n">VectorDriven</span> <span class="p">{</span>
+                <span class="c1">// Start with vector similarity, filter with other criteria</span>
+                <span class="n">similarity_search</span><span class="p">:</span> <span class="n">statistics</span><span class="py">.vector_search_params</span><span class="p">,</span>
+                <span class="n">post_filters</span><span class="p">:</span> <span class="k">self</span><span class="nf">.plan_post_filtering</span><span class="p">(</span><span class="o">&amp;</span><span class="n">statistics</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">,</span>
+            <span class="p">},</span>
+            <span class="nn">DataModel</span><span class="p">::</span><span class="n">TimeSeries</span> <span class="k">=&gt;</span> <span class="nn">JoinStrategy</span><span class="p">::</span><span class="n">TimeSeriesDriven</span> <span class="p">{</span>
+                <span class="c1">// Start with time series aggregation, join with other data</span>
+                <span class="n">time_range</span><span class="p">:</span> <span class="n">statistics</span><span class="py">.time_range</span><span class="p">,</span>
+                <span class="n">aggregation_level</span><span class="p">:</span> <span class="n">statistics</span><span class="py">.optimal_bucket_size</span><span class="p">,</span>
+            <span class="p">},</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+    
+    <span class="c1">// Index recommendation for multi-model queries</span>
+    <span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">recommend_indexes</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">query_workload</span><span class="p">:</span> <span class="o">&amp;</span><span class="p">[</span><span class="n">OrbitQLQuery</span><span class="p">])</span> <span class="k">-&gt;</span> <span class="n">IndexRecommendations</span> <span class="p">{</span>
+        <span class="k">let</span> <span class="k">mut</span> <span class="n">recommendations</span> <span class="o">=</span> <span class="nn">IndexRecommendations</span><span class="p">::</span><span class="nf">new</span><span class="p">();</span>
+        
+        <span class="k">for</span> <span class="n">query</span> <span class="k">in</span> <span class="n">query_workload</span> <span class="p">{</span>
+            <span class="c1">// Analyze query patterns for each data model</span>
+            <span class="k">let</span> <span class="n">graph_patterns</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.extract_graph_patterns</span><span class="p">(</span><span class="n">query</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+            <span class="k">let</span> <span class="n">vector_operations</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.extract_vector_operations</span><span class="p">(</span><span class="n">query</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+            <span class="k">let</span> <span class="n">time_series_operations</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.extract_time_series_operations</span><span class="p">(</span><span class="n">query</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+            
+            <span class="c1">// Recommend specialized indexes</span>
+            <span class="k">if</span> <span class="o">!</span><span class="n">graph_patterns</span><span class="nf">.is_empty</span><span class="p">()</span> <span class="p">{</span>
+                <span class="n">recommendations</span><span class="nf">.add_graph_indexes</span><span class="p">(</span>
+                    <span class="k">self</span><span class="nf">.recommend_graph_indexes</span><span class="p">(</span><span class="o">&amp;</span><span class="n">graph_patterns</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span>
+                <span class="p">);</span>
+            <span class="p">}</span>
+            
+            <span class="k">if</span> <span class="o">!</span><span class="n">vector_operations</span><span class="nf">.is_empty</span><span class="p">()</span> <span class="p">{</span>
+                <span class="n">recommendations</span><span class="nf">.add_vector_indexes</span><span class="p">(</span>
+                    <span class="k">self</span><span class="nf">.recommend_vector_indexes</span><span class="p">(</span><span class="o">&amp;</span><span class="n">vector_operations</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span>
+                <span class="p">);</span>
+            <span class="p">}</span>
+            
+            <span class="k">if</span> <span class="o">!</span><span class="n">time_series_operations</span><span class="nf">.is_empty</span><span class="p">()</span> <span class="p">{</span>
+                <span class="n">recommendations</span><span class="nf">.add_time_series_indexes</span><span class="p">(</span>
+                    <span class="k">self</span><span class="nf">.recommend_time_series_indexes</span><span class="p">(</span><span class="o">&amp;</span><span class="n">time_series_operations</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span>
+                <span class="p">);</span>
+            <span class="p">}</span>
+        <span class="p">}</span>
+        
+        <span class="n">recommendations</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h2 id="orbit-rs-vs-established-query-languages">Orbit-RS vs. Established Query Languages</h2>
+
+<h3 id="feature-comparison">Feature Comparison</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>Feature</th>
+      <th>SQL</th>
+      <th>Cypher</th>
+      <th>Gremlin</th>
+      <th>AQL</th>
+      <th>OrbitQL</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Relational Queries</strong></td>
+      <td>✅ Native</td>
+      <td>❌ Limited</td>
+      <td>❌ No</td>
+      <td>✅ Good</td>
+      <td>✅ Native</td>
+    </tr>
+    <tr>
+      <td><strong>Graph Traversal</strong></td>
+      <td>❌ Poor</td>
+      <td>✅ Excellent</td>
+      <td>✅ Excellent</td>
+      <td>✅ Good</td>
+      <td>✅ Native</td>
+    </tr>
+    <tr>
+      <td><strong>Vector Operations</strong></td>
+      <td>⚠️ Extensions</td>
+      <td>❌ No</td>
+      <td>❌ No</td>
+      <td>❌ No</td>
+      <td>✅ Native</td>
+    </tr>
+    <tr>
+      <td><strong>Time Series</strong></td>
+      <td>⚠️ Basic</td>
+      <td>❌ No</td>
+      <td>❌ No</td>
+      <td>❌ No</td>
+      <td>✅ Native</td>
+    </tr>
+    <tr>
+      <td><strong>Multi-Model Joins</strong></td>
+      <td>❌ No</td>
+      <td>❌ No</td>
+      <td>❌ No</td>
+      <td>✅ Limited</td>
+      <td>✅ Advanced</td>
+    </tr>
+    <tr>
+      <td><strong>ACID Transactions</strong></td>
+      <td>✅ Yes</td>
+      <td>✅ Yes</td>
+      <td>✅ Yes</td>
+      <td>✅ Yes</td>
+      <td>✅ Cross-Model</td>
+    </tr>
+    <tr>
+      <td><strong>Performance</strong></td>
+      <td>✅ Excellent</td>
+      <td>✅ Good</td>
+      <td>⚠️ Variable</td>
+      <td>✅ Good</td>
+      <td>✅ Good</td>
+    </tr>
+    <tr>
+      <td><strong>Learning Curve</strong></td>
+      <td>✅ Familiar</td>
+      <td>⚠️ Moderate</td>
+      <td>❌ Steep</td>
+      <td>⚠️ Moderate</td>
+      <td>⚠️ Moderate</td>
+    </tr>
+    <tr>
+      <td><strong>Tooling Support</strong></td>
+      <td>✅ Extensive</td>
+      <td>✅ Good</td>
+      <td>⚠️ Limited</td>
+      <td>⚠️ Limited</td>
+      <td>⚠️ Growing</td>
+    </tr>
+    <tr>
+      <td><strong>Standardization</strong></td>
+      <td>✅ ANSI SQL</td>
+      <td>✅ openCypher</td>
+      <td>✅ TinkerPop</td>
+      <td>❌ ArangoDB</td>
+      <td>❌ Orbit-RS</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 id="unique-advantages-of-orbitql">Unique Advantages of OrbitQL</h3>
+
+<h4 id="1-native-multi-model-integration">1. <strong>Native Multi-Model Integration</strong></h4>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Single query spanning all data models - impossible in other languages</span>
+<span class="k">SELECT</span> <span class="k">user</span><span class="p">.</span><span class="n">name</span><span class="p">,</span>
+       <span class="c1">-- Graph: social network analysis</span>
+       <span class="n">graph_centrality</span><span class="p">(</span><span class="k">user</span><span class="p">.</span><span class="n">id</span><span class="p">,</span> <span class="s1">'friendship_network'</span><span class="p">)</span> <span class="k">as</span> <span class="n">influence</span><span class="p">,</span>
+       <span class="c1">-- Vector: content similarity</span>
+       <span class="n">vector_similarity</span><span class="p">(</span><span class="k">user</span><span class="p">.</span><span class="n">preferences</span><span class="p">,</span> <span class="err">$</span><span class="n">target_content</span><span class="p">)</span> <span class="k">as</span> <span class="n">content_match</span><span class="p">,</span>
+       <span class="c1">-- Time series: behavior patterns</span>
+       <span class="n">ts_seasonal_pattern</span><span class="p">(</span><span class="k">user</span><span class="p">.</span><span class="n">activity</span><span class="p">,</span> <span class="s1">'7 days'</span><span class="p">)</span> <span class="k">as</span> <span class="n">weekly_behavior</span><span class="p">,</span>
+       <span class="c1">-- Relational: demographics and metadata</span>
+       <span class="k">user</span><span class="p">.</span><span class="n">age</span><span class="p">,</span> <span class="k">user</span><span class="p">.</span><span class="k">location</span><span class="p">,</span> <span class="k">user</span><span class="p">.</span><span class="n">tier</span>
+<span class="k">FROM</span> <span class="n">users</span> <span class="k">user</span>
+<span class="k">WHERE</span> 
+    <span class="c1">-- Graph condition: highly connected users</span>
+    <span class="n">graph_degree</span><span class="p">(</span><span class="k">user</span><span class="p">.</span><span class="n">id</span><span class="p">,</span> <span class="s1">'friendship_network'</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">100</span>
+    <span class="c1">-- Vector condition: similar preferences</span>
+    <span class="k">AND</span> <span class="n">vector_similarity</span><span class="p">(</span><span class="k">user</span><span class="p">.</span><span class="n">preferences</span><span class="p">,</span> <span class="err">$</span><span class="n">target_content</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">.</span><span class="mi">7</span>
+    <span class="c1">-- Time series condition: active users</span>
+    <span class="k">AND</span> <span class="n">ts_activity_score</span><span class="p">(</span><span class="k">user</span><span class="p">.</span><span class="n">activity</span><span class="p">,</span> <span class="s1">'30 days'</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">.</span><span class="mi">8</span>
+    <span class="c1">-- SQL condition: demographics</span>
+    <span class="k">AND</span> <span class="k">user</span><span class="p">.</span><span class="n">age</span> <span class="k">BETWEEN</span> <span class="mi">25</span> <span class="k">AND</span> <span class="mi">45</span>
+<span class="k">ORDER</span> <span class="k">BY</span> <span class="n">influence</span> <span class="k">DESC</span><span class="p">,</span> <span class="n">content_match</span> <span class="k">DESC</span><span class="p">;</span>
+</code></pre></div></div>
+
+<p><strong>Competitive Advantage</strong>: No other query language can naturally express multi-model operations in a single query</p>
+
+<h4 id="2-cross-model-transaction-support">2. <strong>Cross-Model Transaction Support</strong></h4>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Atomic multi-model transaction - unique to OrbitQL</span>
+<span class="k">BEGIN</span> <span class="n">TRANSACTION</span><span class="p">;</span>
+
+<span class="c1">-- Update relational data</span>
+<span class="k">UPDATE</span> <span class="n">users</span> <span class="k">SET</span> <span class="n">tier</span> <span class="o">=</span> <span class="s1">'premium'</span> <span class="k">WHERE</span> <span class="n">id</span> <span class="o">=</span> <span class="err">$</span><span class="n">user_id</span><span class="p">;</span>
+
+<span class="c1">-- Update graph relationships</span>
+<span class="k">MATCH</span> <span class="p">(</span><span class="k">user</span><span class="p">:</span><span class="k">User</span> <span class="p">{</span><span class="n">id</span><span class="p">:</span> <span class="err">$</span><span class="n">user_id</span><span class="p">})</span>
+<span class="k">CREATE</span> <span class="p">(</span><span class="k">user</span><span class="p">)</span><span class="o">-</span><span class="p">[:</span><span class="n">UPGRADED_TO</span><span class="p">]</span><span class="o">-&gt;</span><span class="p">(</span><span class="n">tier</span><span class="p">:</span><span class="n">Tier</span> <span class="p">{</span><span class="n">name</span><span class="p">:</span> <span class="s1">'premium'</span><span class="p">,</span> <span class="nb">date</span><span class="p">:</span> <span class="n">NOW</span><span class="p">()});</span>
+
+<span class="c1">-- Update vector embeddings</span>
+<span class="k">UPDATE</span> <span class="n">user_embeddings</span> 
+<span class="k">SET</span> <span class="n">embedding</span> <span class="o">=</span> <span class="n">vector_add</span><span class="p">(</span><span class="n">embedding</span><span class="p">,</span> <span class="err">$</span><span class="n">premium_boost_vector</span><span class="p">)</span>
+<span class="k">WHERE</span> <span class="n">user_id</span> <span class="o">=</span> <span class="err">$</span><span class="n">user_id</span><span class="p">;</span>
+
+<span class="c1">-- Log time series event</span>
+<span class="k">INSERT</span> <span class="k">INTO</span> <span class="n">user_events</span> <span class="p">(</span><span class="n">user_id</span><span class="p">,</span> <span class="nb">timestamp</span><span class="p">,</span> <span class="n">event_type</span><span class="p">,</span> <span class="n">metadata</span><span class="p">)</span>
+<span class="k">VALUES</span> <span class="p">(</span><span class="err">$</span><span class="n">user_id</span><span class="p">,</span> <span class="n">NOW</span><span class="p">(),</span> <span class="s1">'tier_upgrade'</span><span class="p">,</span> <span class="s1">'{"from": "basic", "to": "premium"}'</span><span class="p">);</span>
+
+<span class="k">COMMIT</span><span class="p">;</span>
+</code></pre></div></div>
+
+<p><strong>Competitive Advantage</strong>: Atomic transactions across all data models in single query language</p>
+
+<h4 id="3-ai-native-query-capabilities">3. <strong>AI-Native Query Capabilities</strong></h4>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- AI-enhanced query with ML operations embedded in SQL</span>
+<span class="k">WITH</span> <span class="n">ml_predictions</span> <span class="k">AS</span> <span class="p">(</span>
+    <span class="k">SELECT</span> <span class="n">user_id</span><span class="p">,</span>
+           <span class="n">ml_predict</span><span class="p">(</span><span class="s1">'churn_model'</span><span class="p">,</span> <span class="n">user_features</span><span class="p">)</span> <span class="k">as</span> <span class="n">churn_probability</span><span class="p">,</span>
+           <span class="n">ml_explain</span><span class="p">(</span><span class="s1">'churn_model'</span><span class="p">,</span> <span class="n">user_features</span><span class="p">)</span> <span class="k">as</span> <span class="n">explanation</span>
+    <span class="k">FROM</span> <span class="n">user_feature_vectors</span>
+    <span class="k">WHERE</span> <span class="n">last_activity</span> <span class="o">&lt;</span> <span class="n">NOW</span><span class="p">()</span> <span class="o">-</span> <span class="n">INTERVAL</span> <span class="s1">'30 days'</span>
+<span class="p">),</span>
+<span class="n">anomaly_detection</span> <span class="k">AS</span> <span class="p">(</span>
+    <span class="k">SELECT</span> <span class="n">user_id</span><span class="p">,</span>
+           <span class="n">ts_anomaly_detection</span><span class="p">(</span><span class="n">spending_pattern</span><span class="p">,</span> <span class="mi">2</span><span class="p">.</span><span class="mi">0</span><span class="p">)</span> <span class="k">as</span> <span class="n">spending_anomalies</span><span class="p">,</span>
+           <span class="n">vector_outlier_score</span><span class="p">(</span><span class="n">behavior_embedding</span><span class="p">)</span> <span class="k">as</span> <span class="n">behavior_anomaly_score</span>
+    <span class="k">FROM</span> <span class="n">user_behavior_data</span>
+    <span class="k">WHERE</span> <span class="nb">timestamp</span> <span class="o">&gt;=</span> <span class="n">NOW</span><span class="p">()</span> <span class="o">-</span> <span class="n">INTERVAL</span> <span class="s1">'90 days'</span>
+<span class="p">)</span>
+<span class="k">SELECT</span> <span class="n">u</span><span class="p">.</span><span class="n">user_id</span><span class="p">,</span>
+       <span class="n">u</span><span class="p">.</span><span class="n">name</span><span class="p">,</span>
+       <span class="n">ml</span><span class="p">.</span><span class="n">churn_probability</span><span class="p">,</span>
+       <span class="n">ml</span><span class="p">.</span><span class="n">explanation</span><span class="p">,</span>
+       <span class="n">ad</span><span class="p">.</span><span class="n">spending_anomalies</span><span class="p">,</span>
+       <span class="n">ad</span><span class="p">.</span><span class="n">behavior_anomaly_score</span><span class="p">,</span>
+       <span class="c1">-- AI-generated intervention recommendations</span>
+       <span class="n">ai_recommend_intervention</span><span class="p">(</span>
+           <span class="n">ml</span><span class="p">.</span><span class="n">churn_probability</span><span class="p">,</span>
+           <span class="n">ad</span><span class="p">.</span><span class="n">spending_anomalies</span><span class="p">,</span>
+           <span class="n">ad</span><span class="p">.</span><span class="n">behavior_anomaly_score</span><span class="p">,</span>
+           <span class="n">u</span><span class="p">.</span><span class="n">tier</span><span class="p">,</span>
+           <span class="n">u</span><span class="p">.</span><span class="n">preferences</span>
+       <span class="p">)</span> <span class="k">as</span> <span class="n">recommended_actions</span>
+<span class="k">FROM</span> <span class="n">users</span> <span class="n">u</span>
+<span class="k">JOIN</span> <span class="n">ml_predictions</span> <span class="n">ml</span> <span class="k">ON</span> <span class="n">u</span><span class="p">.</span><span class="n">id</span> <span class="o">=</span> <span class="n">ml</span><span class="p">.</span><span class="n">user_id</span>
+<span class="k">JOIN</span> <span class="n">anomaly_detection</span> <span class="n">ad</span> <span class="k">ON</span> <span class="n">u</span><span class="p">.</span><span class="n">id</span> <span class="o">=</span> <span class="n">ad</span><span class="p">.</span><span class="n">user_id</span>
+<span class="k">WHERE</span> <span class="n">ml</span><span class="p">.</span><span class="n">churn_probability</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">.</span><span class="mi">7</span> <span class="k">OR</span> <span class="n">ad</span><span class="p">.</span><span class="n">behavior_anomaly_score</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">.</span><span class="mi">8</span><span class="p">;</span>
+</code></pre></div></div>
+
+<p><strong>Competitive Advantage</strong>: Native AI/ML operations integrated into query language</p>
+
+<h3 id="current-limitations--gaps">Current Limitations &amp; Gaps</h3>
+
+<h4 id="language-features">Language Features</h4>
+<ol>
+  <li><strong>SQL Compatibility</strong>: 85% SQL standard compatibility vs. 95%+ for PostgreSQL</li>
+  <li><strong>Graph Syntax</strong>: Different from Cypher, requiring developer learning</li>
+  <li><strong>Performance</strong>: Less optimized than specialized query engines</li>
+  <li><strong>Error Messages</strong>: Less mature error reporting and query debugging</li>
+</ol>
+
+<h4 id="ecosystem-gaps">Ecosystem Gaps</h4>
+<ol>
+  <li><strong>Tool Support</strong>: Limited IDE support, syntax highlighting, and query builders</li>
+  <li><strong>ORM Integration</strong>: No mature ORM libraries for OrbitQL</li>
+  <li><strong>Migration Tools</strong>: Limited tools for translating existing queries</li>
+  <li><strong>Documentation</strong>: Smaller knowledge base compared to SQL/Cypher</li>
+</ol>
+
+<h4 id="advanced-features">Advanced Features</h4>
+<ol>
+  <li><strong>Stored Procedures</strong>: No equivalent to SQL stored procedures/functions</li>
+  <li><strong>Triggers</strong>: No trigger system for reactive queries</li>
+  <li><strong>Views</strong>: No materialized view system</li>
+  <li><strong>User-Defined Functions</strong>: Limited user-defined function capabilities</li>
+</ol>
+
+<h2 id="strategic-roadmap">Strategic Roadmap</h2>
+
+<h3 id="phase-1-sql-compatibility--performance-months-1-4">Phase 1: SQL Compatibility &amp; Performance (Months 1-4)</h3>
+<ul>
+  <li><strong>SQL Standard Compliance</strong>: Achieve 95% ANSI SQL compatibility</li>
+  <li><strong>PostgreSQL Compatibility</strong>: Support major PostgreSQL extensions and functions</li>
+  <li><strong>Query Optimization</strong>: Advanced cost-based optimization for multi-model queries</li>
+  <li><strong>Performance Benchmarking</strong>: Comprehensive performance analysis vs. established systems</li>
+</ul>
+
+<h3 id="phase-2-developer-experience-months-5-8">Phase 2: Developer Experience (Months 5-8)</h3>
+<ul>
+  <li><strong>IDE Integration</strong>: VS Code, IntelliJ plugins with syntax highlighting and completion</li>
+  <li><strong>Query Builder Tools</strong>: Visual query builders for complex multi-model queries</li>
+  <li><strong>Error Handling</strong>: Improved error messages and query debugging tools</li>
+  <li><strong>Documentation</strong>: Comprehensive query language documentation and tutorials</li>
+</ul>
+
+<h3 id="phase-3-advanced-features-months-9-12">Phase 3: Advanced Features (Months 9-12)</h3>
+<ul>
+  <li><strong>Stored Procedures</strong>: OrbitQL stored procedures with multi-model capabilities</li>
+  <li><strong>Materialized Views</strong>: Cross-model materialized views and automatic refresh</li>
+  <li><strong>Triggers</strong>: Event-driven reactive queries across data models</li>
+  <li><strong>User-Defined Functions</strong>: Plugin system for custom query functions</li>
+</ul>
+
+<h3 id="phase-4-ecosystem--standards-months-13-16">Phase 4: Ecosystem &amp; Standards (Months 13-16)</h3>
+<ul>
+  <li><strong>ORM Development</strong>: Native ORM libraries for major programming languages</li>
+  <li><strong>Query Standards</strong>: Contribute to emerging multi-model query standards</li>
+  <li><strong>Migration Tools</strong>: Automated migration from SQL, Cypher, and other query languages</li>
+  <li><strong>Performance Optimization</strong>: ML-powered automatic query optimization</li>
+</ul>
+
+<h2 id="success-metrics">Success Metrics</h2>
+
+<h3 id="adoption-metrics">Adoption Metrics</h3>
+<ul>
+  <li><strong>Developer Adoption</strong>: 10,000+ developers using OrbitQL in production</li>
+  <li><strong>Query Migration</strong>: 1,000+ successful migrations from SQL/Cypher to OrbitQL</li>
+  <li><strong>Tool Integration</strong>: 50+ tools and libraries supporting OrbitQL</li>
+  <li><strong>Community</strong>: Active community contributing query optimizations and extensions</li>
+</ul>
+
+<h3 id="performance-targets">Performance Targets</h3>
+<ul>
+  <li><strong>SQL Compatibility</strong>: 95% ANSI SQL standard compliance</li>
+  <li><strong>Query Performance</strong>: Within 15% of specialized query engines for single-model queries</li>
+  <li><strong>Multi-Model Performance</strong>: 10x better than separate database queries for cross-model operations</li>
+  <li><strong>Optimization</strong>: Sub-second query planning for complex multi-model queries</li>
+</ul>
+
+<h3 id="developer-experience">Developer Experience</h3>
+<ul>
+  <li><strong>Learning Curve</strong>: 80% of SQL developers productive in OrbitQL within 1 week</li>
+  <li><strong>Error Rate</strong>: &lt;5% query syntax errors with good IDE tooling</li>
+  <li><strong>Query Complexity</strong>: Support for queries spanning 4+ data models efficiently</li>
+  <li><strong>Migration Success</strong>: 90%+ automated migration success rate from existing query languages</li>
+</ul>
+
+<h2 id="conclusion">Conclusion</h2>
+
+<p>Orbit-RS’s query language approach offers unique advantages over established query languages:</p>
+
+<p><strong>Revolutionary Capabilities</strong>:</p>
+<ul>
+  <li>Native multi-model query support in single language eliminating need for multiple query languages</li>
+  <li>Cross-model ACID transactions with unified syntax</li>
+  <li>AI-native operations embedded directly in query language</li>
+  <li>Automatic query optimization across different data models</li>
+</ul>
+
+<p><strong>Competitive Positioning</strong>:</p>
+<ul>
+  <li><strong>vs. SQL</strong>: Multi-model support, graph and vector operations, time series analytics</li>
+  <li><strong>vs. Cypher</strong>: Relational and analytical capabilities, vector and time series support</li>
+  <li><strong>vs. Gremlin</strong>: SQL familiarity, multi-model integration, better readability</li>
+  <li><strong>vs. AQL</strong>: Better SQL compatibility, more advanced multi-model operations, larger ecosystem potential</li>
+</ul>
+
+<p><strong>Success Strategy</strong>:</p>
+<ol>
+  <li><strong>SQL Compatibility</strong>: Achieve high SQL compatibility for easy migration</li>
+  <li><strong>Developer Experience</strong>: Provide excellent tooling and documentation</li>
+  <li><strong>Performance</strong>: Optimize query execution across all data models</li>
+  <li><strong>Ecosystem</strong>: Build comprehensive ecosystem of tools and integrations</li>
+</ol>
+
+<p>The unified query language approach positions Orbit-RS as the first database to offer a truly integrated multi-model query experience, enabling developers to work with complex data relationships using familiar SQL syntax extended with powerful multi-model capabilities.</p>
+
+<citations>
+<document>
+<document_type>RULE</document_type>
+<document_id>TnABpZTTQTcRhFqswGQIPL</document_id>
+</document>
+<document_type>RULE</document_type>
+<document_id>p9KJPeum2fC5wsm4EPiv6V</document_id>
+</citations>

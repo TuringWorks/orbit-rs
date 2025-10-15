@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["JSONB_MAGIC","JSONB_VERSION"],"struct":["JsonbBinary","MemoryJsonbStorage"],"trait":["JsonbStorage"]};

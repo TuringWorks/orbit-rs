@@ -1,0 +1,1051 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Orbit-RS Master Documentation | Orbit-RS Documentation</title>
+<meta name="generator" content="Jekyll v4.4.1" />
+<meta property="og:title" content="Orbit-RS Master Documentation" />
+<meta name="author" content="TuringWorks" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<meta property="og:description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<link rel="canonical" href="https://turingworks.github.io/orbit-rs/ORBIT_MASTER_DOCUMENTATION.html" />
+<meta property="og:url" content="https://turingworks.github.io/orbit-rs/ORBIT_MASTER_DOCUMENTATION.html" />
+<meta property="og:site_name" content="Orbit-RS Documentation" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Orbit-RS Master Documentation" />
+<meta name="twitter:site" content="@TuringWorksAI" />
+<meta name="twitter:creator" content="@TuringWorks" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","author":{"@type":"Person","name":"TuringWorks"},"description":"The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform","headline":"Orbit-RS Master Documentation","url":"https://turingworks.github.io/orbit-rs/ORBIT_MASTER_DOCUMENTATION.html"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/orbit-rs/assets/main.css">
+  <link rel="stylesheet" href="/orbit-rs/assets/css/custom.css"><link type="application/atom+xml" rel="alternate" href="https://turingworks.github.io/orbit-rs/feed.xml" title="Orbit-RS Documentation" /></head><body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/orbit-rs/">Orbit-RS Documentation</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/orbit-rs/">Orbit-RS Documentation</a><a class="page-link" href="/orbit-rs/project_overview.html">Orbit-RS: Comprehensive Project Overview</a><a class="page-link" href="/orbit-rs/quick_start.html">Quick Start Guide - Multi-Protocol Database Server</a><a class="page-link" href="/orbit-rs/roadmap/">Development Roadmap</a><a class="page-link" href="/orbit-rs/features/">Orbit-RS Feature Index</a><a class="page-link" href="/orbit-rs/compute-acceleration/">Hardware Acceleration Guide</a><a class="page-link" href="/orbit-rs/contributing.html">Contributing Guide</a><a class="page-link" href="/orbit-rs/overview.html">Architecture Overview</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <h1 id="orbit-rs-master-documentation">Orbit-RS Master Documentation</h1>
+<p><strong>Single Source of Truth for Current State and Planned Development</strong></p>
+
+<p><em>Last Updated: January 5, 2025</em></p>
+
+<hr />
+
+<h2 id="-table-of-contents">📋 Table of Contents</h2>
+
+<ol>
+  <li><a href="#current-status-overview">Current Status Overview</a></li>
+  <li><a href="#project-architecture">Project Architecture</a></li>
+  <li><a href="#completed-features">Completed Features</a></li>
+  <li><a href="#development-roadmap">Development Roadmap</a></li>
+  <li><a href="#protocol-implementations">Protocol Implementations</a></li>
+  <li><a href="#testing-strategy">Testing Strategy</a></li>
+  <li><a href="#github-issues-tracking">GitHub Issues Tracking</a></li>
+  <li><a href="#development-workflow">Development Workflow</a></li>
+  <li><a href="#deployment-guide">Deployment Guide</a></li>
+  <li><a href="#contributing-guidelines">Contributing Guidelines</a></li>
+</ol>
+
+<hr />
+
+<h2 id="-current-status-overview">📊 Current Status Overview</h2>
+
+<h3 id="project-state-phase-8-complete-">Project State: Phase 8 Complete ✅</h3>
+<p><strong>Orbit-RS</strong> is a distributed actor system with advanced database capabilities, currently at <strong>Phase 8</strong> completion with comprehensive SQL engine and PostgreSQL compatibility.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Component</th>
+      <th>Status</th>
+      <th>Version</th>
+      <th>Notes</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Core Actor System</strong></td>
+      <td>✅ Complete</td>
+      <td>v0.1.0</td>
+      <td>Full actor lifecycle, proxy generation, message routing</td>
+    </tr>
+    <tr>
+      <td><strong>Network Layer</strong></td>
+      <td>✅ Complete</td>
+      <td>v0.1.0</td>
+      <td>gRPC services, Protocol Buffers, connection pooling</td>
+    </tr>
+    <tr>
+      <td><strong>Cluster Management</strong></td>
+      <td>✅ Complete</td>
+      <td>v0.1.0</td>
+      <td>Node discovery, health checking, load balancing</td>
+    </tr>
+    <tr>
+      <td><strong>Transaction System</strong></td>
+      <td>✅ Complete</td>
+      <td>v0.1.0</td>
+      <td>2-Phase commit, Saga pattern, distributed locks</td>
+    </tr>
+    <tr>
+      <td><strong>Protocol Adapters</strong></td>
+      <td>✅ Complete</td>
+      <td>v0.1.0</td>
+      <td>Redis RESP, PostgreSQL wire protocol, SQL parser</td>
+    </tr>
+    <tr>
+      <td><strong>Kubernetes Integration</strong></td>
+      <td>✅ Complete</td>
+      <td>v0.1.0</td>
+      <td>Operator, Helm charts, RBAC</td>
+    </tr>
+    <tr>
+      <td><strong>AI Integration (MCP)</strong></td>
+      <td>✅ Complete</td>
+      <td>v0.1.0</td>
+      <td>Model Context Protocol server</td>
+    </tr>
+    <tr>
+      <td><strong>SQL Query Engine</strong></td>
+      <td>✅ Complete</td>
+      <td>v0.1.0</td>
+      <td>DDL/DML/DCL/TCL, JOINs, aggregates, vector ops</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 id="performance-metrics-phase-8">Performance Metrics (Phase 8)</h3>
+<ul>
+  <li><strong>Lines of Code</strong>: 150,000+ lines of production-ready Rust code</li>
+  <li><strong>Test Coverage</strong>: 79 passing tests with comprehensive coverage</li>
+  <li><strong>Throughput</strong>: Up to 500k+ messages/second per core</li>
+  <li><strong>Protocol Support</strong>: Redis, PostgreSQL, MCP, vector operations</li>
+  <li><strong>SQL Compatibility</strong>: Full ANSI SQL compliance with PostgreSQL extensions</li>
+</ul>
+
+<hr />
+
+<h2 id="️-project-architecture">🏗️ Project Architecture</h2>
+
+<h3 id="high-level-architecture">High-Level Architecture</h3>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>┌─────────────────────────────────────────────────────────────────┐
+│                    Orbit-RS Distributed System                  │
+├─────────────────────────────────────────────────────────────────┤
+│                      Protocol Layer                            │
+│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌──────────┐  │
+│  │   Redis     │ │PostgreSQL   │ │    Neo4j    │ │ ArangoDB │  │
+│  │    RESP     │ │Wire Protocol│ │    Bolt     │ │   HTTP   │  │
+│  └─────────────┘ └─────────────┘ └─────────────┘ └──────────┘  │
+├─────────────────────────────────────────────────────────────────┤
+│                      Query Engines                             │
+│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌──────────┐  │
+│  │     SQL     │ │   Cypher    │ │     AQL     │ │GraphRAG  │  │
+│  │   Engine    │ │   Parser    │ │   Parser    │ │  Engine  │  │
+│  └─────────────┘ └─────────────┘ └─────────────┘ └──────────┘  │
+├─────────────────────────────────────────────────────────────────┤
+│                     Actor System Core                          │
+│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌──────────┐  │
+│  │ SQL Actors  │ │Graph Actors │ │Document     │ │   AI     │  │
+│  │             │ │             │ │ Actors      │ │ Actors   │  │
+│  └─────────────┘ └─────────────┘ └─────────────┘ └──────────┘  │
+├─────────────────────────────────────────────────────────────────┤
+│                   Distributed Runtime                          │
+│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌──────────┐  │
+│  │Transaction  │ │   Cluster   │ │   Message   │ │ Storage  │  │
+│  │Coordinator  │ │ Management  │ │   Routing   │ │ Layer    │  │
+│  └─────────────┘ └─────────────┘ └─────────────┘ └──────────┘  │
+└─────────────────────────────────────────────────────────────────┘
+</code></pre></div></div>
+
+<h3 id="core-components">Core Components</h3>
+
+<h4 id="1-actor-system-foundation">1. Actor System Foundation</h4>
+<ul>
+  <li><strong>ActorWithStringKey/UuidKey</strong>: Base traits for addressable actors</li>
+  <li><strong>Actor Lifecycle</strong>: Registration, activation, deactivation, cleanup</li>
+  <li><strong>Proxy Generation</strong>: Client-side actor references and invocation</li>
+  <li><strong>Message Routing</strong>: Transparent routing to distributed actor instances</li>
+  <li><strong>Lease Management</strong>: Time-based actor lease system for resource management</li>
+</ul>
+
+<h4 id="2-network--cluster-layer">2. Network &amp; Cluster Layer</h4>
+<ul>
+  <li><strong>gRPC Services</strong>: Actor invocation and cluster management services</li>
+  <li><strong>Protocol Buffers</strong>: Efficient binary serialization for all messages</li>
+  <li><strong>Service Discovery</strong>: DNS-based and etcd-based node discovery</li>
+  <li><strong>Health Checking</strong>: Comprehensive monitoring with failure detection</li>
+  <li><strong>Load Balancing</strong>: Multiple strategies (round-robin, least connections, resource-aware)</li>
+</ul>
+
+<h4 id="3-transaction-system">3. Transaction System</h4>
+<ul>
+  <li><strong>2-Phase Commit</strong>: ACID-compliant distributed transactions</li>
+  <li><strong>Saga Pattern</strong>: Long-running workflows with compensating actions</li>
+  <li><strong>Distributed Locks</strong>: Deadlock detection and prevention</li>
+  <li><strong>Transaction Recovery</strong>: Coordinator failover and recovery mechanisms</li>
+  <li><strong>Audit Logging</strong>: Persistent SQLite-based transaction trails</li>
+</ul>
+
+<hr />
+
+<h2 id="-completed-features">✅ Completed Features</h2>
+
+<h3 id="phase-1-foundation-complete">Phase 1: Foundation (Complete)</h3>
+<ul class="task-list">
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />Multi-crate workspace with proper module organization</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />Cargo workspace configuration with cross-platform support</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />Shared data structures, error handling, and utilities</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />Comprehensive testing framework with BDD scenarios</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />Complete documentation and inline API docs</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />CI/CD pipeline with automated testing and security scanning</li>
+</ul>
+
+<h3 id="phase-2-core-actor-system-complete">Phase 2: Core Actor System (Complete)</h3>
+<ul class="task-list">
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />Actor traits with string and UUID key addressing</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />Complete actor lifecycle management</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />Client-side proxy generation and invocation</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />Time-based lease system for resource management</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />Transparent message routing across cluster</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />Comprehensive error types and propagation</li>
+</ul>
+
+<h3 id="phase-3-network-layer-complete">Phase 3: Network Layer (Complete)</h3>
+<ul class="task-list">
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />gRPC service definitions and message types</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />Actor invocation and cluster management services</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />Efficient Protocol Buffer serialization</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />Connection pooling with automatic management</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />Reliable transport with retry logic and circuit breakers</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />DNS and etcd-based service discovery</li>
+</ul>
+
+<h3 id="phase-4-cluster-management-complete">Phase 4: Cluster Management (Complete)</h3>
+<ul class="task-list">
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />Automatic cluster node registration and discovery</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />Dynamic cluster membership management</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />Health monitoring with configurable failure detection</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />Multiple load balancing strategies</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />Raft-based leader election for coordination</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />Automatic failover and recovery mechanisms</li>
+</ul>
+
+<h3 id="phase-5-advanced-transaction-system-complete">Phase 5: Advanced Transaction System (Complete)</h3>
+<ul class="task-list">
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />ACID-compliant 2-Phase commit protocol</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />Multi-participant transaction coordination</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />Persistent SQLite-based audit trail</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />Coordinator failover and transaction recovery</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />Saga pattern for long-running workflows</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />Distributed lock management with deadlock prevention</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />Authentication, authorization, and audit logging</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />Comprehensive Prometheus metrics integration</li>
+</ul>
+
+<h3 id="phase-6-protocol-adapters-complete">Phase 6: Protocol Adapters (Complete)</h3>
+<ul class="task-list">
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" /><strong>Redis RESP Protocol</strong>: 50+ commands with full compatibility</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" /><strong>PostgreSQL Wire Protocol</strong>: Complete DDL support with ANSI SQL</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" /><strong>SQL Parser Infrastructure</strong>: Lexer, AST, and expression parsing</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" /><strong>Vector Operations</strong>: pgvector compatibility with distance operators</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" /><strong>SQL Type System</strong>: All PostgreSQL types including vectors and arrays</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" /><strong>Vector Indexing</strong>: IVFFLAT and HNSW index implementations</li>
+</ul>
+
+<h3 id="phase-7-kubernetes-integration-complete">Phase 7: Kubernetes Integration (Complete)</h3>
+<ul class="task-list">
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />Custom Kubernetes operator with CRDs</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />Production-ready Helm charts for deployment</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />Multi-platform Docker images (linux/amd64, linux/arm64)</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />RBAC configuration and security policies</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />Istio and Linkerd service mesh integration</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />Complete monitoring stack with Prometheus and Grafana</li>
+</ul>
+
+<h3 id="phase-75-ai-integration-complete">Phase 7.5: AI Integration (Complete)</h3>
+<ul class="task-list">
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />Model Context Protocol (MCP) server implementation</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />Complete MCP protocol types and message handling</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />Request routing and response formatting for AI agents</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />Framework for exposing Orbit capabilities to AI agents</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />SQL integration allowing AI agents to execute queries</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" />Actor management through MCP for AI-driven operations</li>
+</ul>
+
+<h3 id="phase-8-sql-query-engine-complete-">Phase 8: SQL Query Engine (Complete) 🎉</h3>
+<ul class="task-list">
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" /><strong>DDL Operations</strong>: CREATE/ALTER/DROP TABLE, INDEX, VIEW, SCHEMA, EXTENSION</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" /><strong>DCL Operations</strong>: GRANT/REVOKE with comprehensive privilege management</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" /><strong>TCL Operations</strong>: BEGIN/COMMIT/ROLLBACK with isolation levels and savepoints</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" /><strong>Expression Parser</strong>: Full operator precedence with vector operations</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" /><strong>SELECT Statements</strong>: Complete SELECT with JOINs, subqueries, CTEs, window functions</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" /><strong>INSERT Operations</strong>: Single/batch insert with RETURNING and ON CONFLICT</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" /><strong>UPDATE Operations</strong>: Row-level updates with JOINs and RETURNING clauses</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" /><strong>DELETE Operations</strong>: Row-level deletes with USING and RETURNING</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" /><strong>JOIN Operations</strong>: All JOIN types (INNER, LEFT, RIGHT, FULL, CROSS, NATURAL)</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" /><strong>Aggregate Functions</strong>: COUNT, SUM, AVG, MIN, MAX with GROUP BY and HAVING</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" /><strong>Advanced SQL</strong>: Subqueries, CTEs, window functions, complex expressions</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" checked="checked" /><strong>Vector Database</strong>: Complete pgvector compatibility with similarity search</li>
+</ul>
+
+<hr />
+
+<h2 id="-development-roadmap">🚀 Development Roadmap</h2>
+
+<h3 id="phase-9-query-optimization--performance-q2-2024">Phase 9: Query Optimization &amp; Performance (Q2 2024)</h3>
+<p><strong>Estimated Effort</strong>: 19-25 weeks | <strong>Status</strong>: Planned</p>
+
+<h4 id="major-features">Major Features</h4>
+<ul>
+  <li><strong>Query Planner</strong>: Cost-based query optimization with statistics</li>
+  <li><strong>Index Usage</strong>: Automatic index selection and recommendation system</li>
+  <li><strong>Vectorized Execution</strong>: SIMD optimizations for vector operations</li>
+  <li><strong>Parallel Processing</strong>: Multi-threaded query execution engine</li>
+  <li><strong>Query Caching</strong>: Prepared statements and intelligent result caching</li>
+</ul>
+
+<h4 id="github-issues-5-issues-tracked">GitHub Issues: 5 issues tracked</h4>
+
+<h3 id="phase-10-production-readiness-q3-2024">Phase 10: Production Readiness (Q3 2024)</h3>
+<p><strong>Estimated Effort</strong>: 21-29 weeks | <strong>Status</strong>: Planned</p>
+
+<h4 id="major-features-1">Major Features</h4>
+<ul>
+  <li><strong>Advanced Connection Pooling</strong>: Multi-tier pooling with health monitoring</li>
+  <li><strong>Monitoring &amp; Metrics</strong>: Production observability with comprehensive dashboards</li>
+  <li><strong>Backup &amp; Recovery</strong>: Point-in-time recovery with cross-region replication</li>
+  <li><strong>High Availability</strong>: Master-slave replication with automatic failover</li>
+  <li><strong>Advanced Security</strong>: LDAP/SAML/OAuth2 integration with fine-grained RBAC</li>
+</ul>
+
+<h4 id="github-issues-5-issues-tracked-1">GitHub Issues: 5 issues tracked</h4>
+
+<h3 id="phase-11-advanced-features-q4-2024">Phase 11: Advanced Features (Q4 2024)</h3>
+<p><strong>Estimated Effort</strong>: 25-31 weeks | <strong>Status</strong>: Planned</p>
+
+<h4 id="major-features-2">Major Features</h4>
+<ul>
+  <li><strong>Stored Procedures</strong>: PL/pgSQL procedural language support</li>
+  <li><strong>Database Triggers</strong>: Event-driven actions with cascading support</li>
+  <li><strong>Full-Text Search</strong>: Advanced text search with multiple languages</li>
+  <li><strong>Enhanced JSON/JSONB</strong>: Binary storage with path expressions</li>
+  <li><strong>Streaming &amp; CDC</strong>: Real-time data streaming with change data capture</li>
+</ul>
+
+<h4 id="github-issues-5-issues-tracked-2">GitHub Issues: 5 issues tracked</h4>
+
+<h3 id="phase-12-time-series-database-features-q1-2025">Phase 12: Time Series Database Features (Q1 2025)</h3>
+<p><strong>Estimated Effort</strong>: 22-34 weeks | <strong>Status</strong>: Documented</p>
+
+<h4 id="redis-timeseries-compatibility">Redis TimeSeries Compatibility</h4>
+<ul>
+  <li><strong>TimeSeriesActor</strong>: Distributed time-series data management</li>
+  <li><strong>Core Commands</strong>: TS.CREATE, TS.ADD, TS.GET, TS.RANGE, TS.REVRANGE</li>
+  <li><strong>Aggregation Rules</strong>: TS.CREATERULE, TS.DELETERULE with downsampling</li>
+  <li><strong>Multi-series Operations</strong>: TS.MRANGE, TS.MREVRANGE, TS.MGET</li>
+  <li><strong>Statistical Functions</strong>: Built-in aggregators (AVG, SUM, MIN, MAX, STDDEV)</li>
+</ul>
+
+<h4 id="postgresql-timescaledb-compatibility">PostgreSQL TimescaleDB Compatibility</h4>
+<ul>
+  <li><strong>Hypertables</strong>: Distributed time-partitioned tables</li>
+  <li><strong>Time Functions</strong>: time_bucket(), time_bucket_gapfill(), locf(), interpolate()</li>
+  <li><strong>Continuous Aggregates</strong>: Materialized views with refresh policies</li>
+  <li><strong>Compression</strong>: Column-store compression for historical data</li>
+  <li><strong>Advanced Analytics</strong>: Hyperfunctions for time-series analysis</li>
+</ul>
+
+<h4 id="github-issues-5-issues-tracked-3">GitHub Issues: 5 issues tracked</h4>
+
+<h3 id="phase-13-neo4j-bolt-protocol-compatibility-q2-2025">Phase 13: Neo4j Bolt Protocol Compatibility (Q2 2025)</h3>
+<p><strong>Estimated Effort</strong>: 30-36 weeks | <strong>Status</strong>: Fully Documented</p>
+
+<h4 id="neo4j-foundation-12-14-weeks">Neo4j Foundation (12-14 weeks)</h4>
+<ul>
+  <li><strong>Core Graph Actors</strong>: GraphNodeActor, RelationshipActor, GraphClusterActor, CypherQueryActor</li>
+  <li><strong>Bolt Protocol v4.4</strong>: Full protocol compatibility with handshake and authentication</li>
+  <li><strong>Connection Management</strong>: Pooling, session management, transaction handling</li>
+  <li><strong>Basic Cypher Support</strong>: CREATE, MATCH, MERGE, DELETE operations</li>
+</ul>
+
+<h4 id="advanced-graph-operations-10-12-weeks">Advanced Graph Operations (10-12 weeks)</h4>
+<ul>
+  <li><strong>Complete Cypher Language</strong>: All constructs with advanced pattern matching</li>
+  <li><strong>Graph Algorithms</strong>: Built-in algorithms (PageRank, Community Detection, Centrality)</li>
+  <li><strong>Graph Storage</strong>: Native graph storage optimized for traversals</li>
+  <li><strong>Schema Management</strong>: Node labels, relationship types, constraints</li>
+</ul>
+
+<h4 id="enterprise-graph-features-8-10-weeks">Enterprise Graph Features (8-10 weeks)</h4>
+<ul>
+  <li><strong>Graph Data Science</strong>: Machine learning on graphs, embeddings, predictions</li>
+  <li><strong>Advanced Analytics</strong>: Centrality algorithms, community detection, path finding</li>
+  <li><strong>Performance &amp; Scalability</strong>: Distributed storage, query optimization, parallel processing</li>
+  <li><strong>Neo4j Ecosystem</strong>: Compatible with Neo4j Desktop, Browser, client libraries</li>
+</ul>
+
+<h4 id="github-issues-6-issues-tracked">GitHub Issues: 6 issues tracked</h4>
+
+<h3 id="phase-14-distributed-query-processing-q3-2025">Phase 14: Distributed Query Processing (Q3 2025)</h3>
+<p><strong>Estimated Effort</strong>: 18-24 weeks | <strong>Status</strong>: Planned</p>
+
+<h4 id="major-features-3">Major Features</h4>
+<ul>
+  <li><strong>Distributed Query Engine</strong>: Cost-based optimization with cross-node execution</li>
+  <li><strong>Advanced Time Series Analytics</strong>: Real-time processing with ML integration</li>
+  <li><strong>Master-Slave Replication</strong>: Time-series aware replication with chunk synchronization</li>
+  <li><strong>Data Sharding</strong>: Intelligent partitioning and rebalancing</li>
+  <li><strong>Performance Optimization</strong>: SIMD-optimized aggregations and caching</li>
+</ul>
+
+<h4 id="github-issues-5-issues-tracked-4">GitHub Issues: 5 issues tracked</h4>
+
+<h3 id="phase-15-arangodb-multi-model-database-q3-2025">Phase 15: ArangoDB Multi-Model Database (Q3 2025)</h3>
+<p><strong>Estimated Effort</strong>: 36-42 weeks | <strong>Status</strong>: Fully Documented</p>
+
+<h4 id="arangodb-foundation-14-16-weeks">ArangoDB Foundation (14-16 weeks)</h4>
+<ul>
+  <li><strong>Multi-Model Core Actors</strong>: DocumentCollectionActor, GraphActor, KeyValueActor, SearchIndexActor, GeospatialActor</li>
+  <li><strong>AQL Query Engine</strong>: Complete ArangoDB Query Language parsing and optimization</li>
+  <li><strong>Result Streaming</strong>: Efficient cursor-based result pagination</li>
+  <li><strong>Transaction Support</strong>: ACID transactions across multiple data models</li>
+</ul>
+
+<h4 id="advanced-multi-model-operations-12-14-weeks">Advanced Multi-Model Operations (12-14 weeks)</h4>
+<ul>
+  <li><strong>Document Database</strong>: Schema-less documents, validation, nested indexing, versioning</li>
+  <li><strong>Graph Database</strong>: Property graphs, traversals, path finding, analytics, smart graphs</li>
+  <li><strong>Full-Text Search</strong>: Multi-language analyzers, search views, ranking, faceted search</li>
+  <li><strong>Advanced AQL</strong>: Complex queries, subqueries, aggregations, joins</li>
+</ul>
+
+<h4 id="enterprise-multi-model-features-10-12-weeks">Enterprise Multi-Model Features (10-12 weeks)</h4>
+<ul>
+  <li><strong>Geospatial</strong>: Complete GeoJSON support, spatial indexes, routing, geofencing</li>
+  <li><strong>Advanced Analytics</strong>: User functions, streaming analytics, ML, time series</li>
+  <li><strong>Performance</strong>: Smart graphs, OneShard optimization, satellite collections</li>
+  <li><strong>ArangoDB Ecosystem</strong>: Full driver compatibility and REST API support</li>
+</ul>
+
+<h4 id="github-issues-7-issues-tracked">GitHub Issues: 7 issues tracked</h4>
+
+<h3 id="phase-16-graphml-graphrag-and-advanced-graph-analytics-q4-2025---q1-2026">Phase 16: GraphML, GraphRAG, and Advanced Graph Analytics (Q4 2025 - Q1 2026)</h3>
+<p><strong>Estimated Effort</strong>: 28-34 weeks | <strong>Status</strong>: Fully Documented</p>
+
+<h4 id="graphml--advanced-analytics-14-16-weeks">GraphML &amp; Advanced Analytics (14-16 weeks)</h4>
+<ul>
+  <li><strong>Node Embeddings</strong>: Node2Vec, GraphSAGE, FastRP algorithms with distributed training</li>
+  <li><strong>Graph Neural Networks</strong>: GCN, GAT, Graph Transformer implementations</li>
+  <li><strong>Link Prediction</strong>: Advanced ML-based algorithms for relationship prediction</li>
+  <li><strong>Community Detection</strong>: Louvain, Leiden, Infomap clustering algorithms</li>
+  <li><strong>Anomaly Detection</strong>: Statistical and ML-based graph anomaly detection</li>
+</ul>
+
+<h4 id="graphrag--knowledge-reasoning-14-18-weeks">GraphRAG &amp; Knowledge Reasoning (14-18 weeks)</h4>
+<ul>
+  <li><strong>Knowledge Graph Construction</strong>: Entity/relation extraction from text documents</li>
+  <li><strong>Semantic Search</strong>: Vector-based and hybrid search with graph context</li>
+  <li><strong>Graph-Augmented Generation</strong>: Context-aware AI response generation</li>
+  <li><strong>Multi-hop Reasoning</strong>: Complex reasoning chains over knowledge graphs</li>
+  <li><strong>Rule-based Reasoning</strong>: Forward/backward chaining inference engines</li>
+  <li><strong>Entity Resolution</strong>: Disambiguation and linking in knowledge graphs</li>
+</ul>
+
+<h4 id="github-issues-9-issues-tracked">GitHub Issues: 9 issues tracked</h4>
+
+<h3 id="phase-17-additional-protocol-support-q1-2026">Phase 17: Additional Protocol Support (Q1 2026)</h3>
+<p><strong>Estimated Effort</strong>: 16-20 weeks | <strong>Status</strong>: Planned</p>
+
+<h4 id="protocol-implementations">Protocol Implementations</h4>
+<ul>
+  <li><strong>REST API</strong>: OpenAPI/Swagger documentation with comprehensive endpoints</li>
+  <li><strong>GraphQL API</strong>: Schema introspection with real-time subscriptions</li>
+  <li><strong>WebSocket Support</strong>: Real-time bidirectional communication</li>
+  <li><strong>Apache Kafka Integration</strong>: Event streaming and change data capture</li>
+  <li><strong>InfluxDB Line Protocol</strong>: Time-series data ingestion compatibility</li>
+  <li><strong>MongoDB Wire Protocol</strong>: Document database compatibility layer</li>
+</ul>
+
+<h4 id="github-issues-6-issues-tracked-1">GitHub Issues: 6 issues tracked</h4>
+
+<h3 id="phase-18-cloud-native-features-q2-2026">Phase 18: Cloud-Native Features (Q2 2026)</h3>
+<p><strong>Estimated Effort</strong>: 14-18 weeks | <strong>Status</strong>: Planned</p>
+
+<h4 id="cloud-platform-integrations">Cloud Platform Integrations</h4>
+<ul>
+  <li><strong>Multi-Cloud Support</strong>: AWS, Azure, Google Cloud deployment templates</li>
+  <li><strong>Auto-scaling</strong>: Dynamic cluster scaling based on workload metrics</li>
+  <li><strong>Serverless Integration</strong>: AWS Lambda, Azure Functions compatibility</li>
+  <li><strong>Edge Computing</strong>: Edge node deployment with data synchronization</li>
+  <li><strong>Cost Optimization</strong>: Resource usage monitoring and cost management</li>
+</ul>
+
+<h4 id="github-issues-5-issues-tracked-5">GitHub Issues: 5 issues tracked</h4>
+
+<h3 id="phase-19-enterprise-features-q3-2026">Phase 19: Enterprise Features (Q3 2026)</h3>
+<p><strong>Estimated Effort</strong>: 12-16 weeks | <strong>Status</strong>: Planned</p>
+
+<h4 id="enterprise-integrations">Enterprise Integrations</h4>
+<ul>
+  <li><strong>Advanced Security</strong>: Enterprise-grade security with compliance features</li>
+  <li><strong>Identity Integration</strong>: LDAP, SAML, OAuth2, Active Directory support</li>
+  <li><strong>Compliance</strong>: SOC2, GDPR, HIPAA compliance frameworks</li>
+  <li><strong>Commercial Support</strong>: Support infrastructure and professional services</li>
+  <li><strong>Migration Tools</strong>: Enterprise migration utilities and consulting</li>
+</ul>
+
+<h4 id="github-issues-5-issues-tracked-6">GitHub Issues: 5 issues tracked</h4>
+
+<h3 id="-total-project-scope">📊 Total Project Scope</h3>
+<ul>
+  <li><strong>Total GitHub Issues</strong>: 68+ issues across 11 development phases</li>
+  <li><strong>Total Development Time</strong>: 239-309 weeks (~4.6-5.9 years)</li>
+  <li><strong>Current Progress</strong>: Phase 8 complete (8/19 phases = 42% complete)</li>
+</ul>
+
+<hr />
+
+<h2 id="-protocol-implementations">🔌 Protocol Implementations</h2>
+
+<h3 id="current-implemented-">Current (Implemented) ✅</h3>
+
+<h4 id="redis-resp-protocol">Redis RESP Protocol</h4>
+<ul>
+  <li><strong>Status</strong>: ✅ Complete with 50+ commands</li>
+  <li><strong>Commands</strong>: GET, SET, HGET, HSET, LPUSH, RPOP, SADD, ZADD, etc.</li>
+  <li><strong>Features</strong>: Connection pooling, pipelining, pub/sub support</li>
+  <li><strong>Performance</strong>: 500k+ operations/second per core</li>
+  <li><strong>Compatibility</strong>: Full Redis client compatibility</li>
+</ul>
+
+<h4 id="postgresql-wire-protocol">PostgreSQL Wire Protocol</h4>
+<ul>
+  <li><strong>Status</strong>: ✅ Complete with full SQL engine</li>
+  <li><strong>DDL Support</strong>: CREATE/ALTER/DROP TABLE, INDEX, VIEW, SCHEMA</li>
+  <li><strong>DML Support</strong>: SELECT, INSERT, UPDATE, DELETE with full JOIN support</li>
+  <li><strong>Vector Operations</strong>: pgvector compatibility with IVFFLAT/HNSW indexes</li>
+  <li><strong>Performance</strong>: Optimized query execution with expression parsing</li>
+  <li><strong>Compatibility</strong>: Standard PostgreSQL client library support</li>
+</ul>
+
+<h3 id="planned-documentation-complete-">Planned (Documentation Complete) 📋</h3>
+
+<h4 id="neo4j-bolt-protocol-v44">Neo4j Bolt Protocol v4.4</h4>
+<ul>
+  <li><strong>Documentation</strong>: ✅ Complete (<a href="/orbit-rs/protocols/NEO4J_BOLT.html">NEO4J_BOLT.md</a>)</li>
+  <li><strong>Scope</strong>: Full Cypher language, graph algorithms, Neo4j ecosystem compatibility</li>
+  <li><strong>Features</strong>: Property graphs, traversals, built-in algorithms, distributed storage</li>
+  <li><strong>Timeline</strong>: Phase 13 (Q2 2025), 30-36 weeks development</li>
+  <li><strong>Performance Targets</strong>: 50K+ queries/sec, linear scaling, 100M+ nodes support</li>
+</ul>
+
+<h4 id="arangodb-multi-model-http-api">ArangoDB Multi-Model HTTP API</h4>
+<ul>
+  <li><strong>Documentation</strong>: ✅ Complete (<a href="/orbit-rs/protocols/ARANGODB_MULTI_MODEL.html">ARANGODB_MULTI_MODEL.md</a>)</li>
+  <li><strong>Scope</strong>: Document, Graph, Key-Value, Search, Geospatial unified through AQL</li>
+  <li><strong>Features</strong>: Multi-model transactions, smart graphs, full-text search, geospatial</li>
+  <li><strong>Timeline</strong>: Phase 15 (Q3 2025), 36-42 weeks development</li>
+  <li><strong>Performance Targets</strong>: 100K+ document ops/sec, 10K+ graph traversals/sec</li>
+</ul>
+
+<h4 id="redis-timeseries-protocol">Redis TimeSeries Protocol</h4>
+<ul>
+  <li><strong>Documentation</strong>: ✅ Complete (<a href="/orbit-rs/protocols/REDIS_TIMESERIES.html">REDIS_TIMESERIES.md</a>)</li>
+  <li><strong>Scope</strong>: Time-series data management with Redis TS compatibility</li>
+  <li><strong>Features</strong>: Aggregation rules, retention policies, multi-series operations</li>
+  <li><strong>Timeline</strong>: Phase 12 (Q1 2025), 8-10 weeks development</li>
+  <li><strong>Performance Targets</strong>: 1M+ samples/second ingestion</li>
+</ul>
+
+<h4 id="postgresql-timescaledb-extensions">PostgreSQL TimescaleDB Extensions</h4>
+<ul>
+  <li><strong>Documentation</strong>: ✅ Complete (<a href="/orbit-rs/protocols/POSTGRESQL_TIMESCALE.html">POSTGRESQL_TIMESCALE.md</a>)</li>
+  <li><strong>Scope</strong>: Time-series SQL extensions with hypertables</li>
+  <li><strong>Features</strong>: Continuous aggregates, compression, time functions</li>
+  <li><strong>Timeline</strong>: Phase 12 (Q1 2025), 10-12 weeks development</li>
+  <li><strong>Performance Targets</strong>: 500K+ rows/second ingestion</li>
+</ul>
+
+<hr />
+
+<h2 id="-testing-strategy">🧪 Testing Strategy</h2>
+
+<h3 id="feature-gated-testing-architecture">Feature-Gated Testing Architecture</h3>
+
+<p>Orbit-RS implements a comprehensive testing strategy using feature flags to enable tests only when implementations are ready:</p>
+
+<h4 id="test-categories">Test Categories</h4>
+
+<ol>
+  <li><strong>Mock Tests (Always Available)</strong>
+    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>./scripts/run-tests.sh mock
+</code></pre></div>    </div>
+    <ul>
+      <li>✅ Validate API design and contracts</li>
+      <li>✅ Enable TDD before implementation exists</li>
+      <li>✅ Serve as executable documentation</li>
+    </ul>
+  </li>
+  <li><strong>BDD/Cucumber Tests (User-Focused)</strong>
+    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>./scripts/run-tests.sh bdd
+</code></pre></div>    </div>
+    <ul>
+      <li>✅ Feature files for Neo4j Cypher, ArangoDB AQL, GraphML</li>
+      <li>✅ User story validation and regression testing</li>
+      <li>✅ Stakeholder communication bridge</li>
+    </ul>
+  </li>
+  <li><strong>Property-Based Tests (Edge Case Discovery)</strong>
+    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>./scripts/run-tests.sh property
+</code></pre></div>    </div>
+    <ul>
+      <li>✅ Automatic edge case generation</li>
+      <li>✅ Mathematical property validation</li>
+      <li>✅ Large input range testing</li>
+    </ul>
+  </li>
+  <li><strong>Performance Tests (Benchmark Validation)</strong>
+    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>./scripts/run-tests.sh performance
+</code></pre></div>    </div>
+    <ul>
+      <li>✅ Performance requirement validation</li>
+      <li>✅ Regression detection</li>
+      <li>✅ Scalability target verification</li>
+    </ul>
+  </li>
+</ol>
+
+<h4 id="feature-flag-system">Feature Flag System</h4>
+<div class="language-toml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">[</span><span class="n">features</span><span class="k">]</span>
+
+<span class="c"># Phase-specific flags</span>
+<span class="n">phase-13-features</span> <span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s">"neo4j-features"</span><span class="p">]</span>
+<span class="n">phase-15-features</span> <span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s">"arangodb-features"</span><span class="p">]</span>
+<span class="n">phase-16-features</span> <span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s">"graphml-features"</span><span class="p">,</span> <span class="s">"graphrag-features"</span><span class="p">]</span>
+
+<span class="c"># Technology-specific flags  </span>
+<span class="n">neo4j-features</span> <span class="o">=</span><span class="w"> </span><span class="p">[]</span>
+<span class="n">arangodb-features</span> <span class="o">=</span><span class="w"> </span><span class="p">[]</span>
+<span class="n">graphml-features</span> <span class="o">=</span><span class="w"> </span><span class="p">[]</span>
+<span class="n">graphrag-features</span> <span class="o">=</span><span class="w"> </span><span class="p">[]</span>
+</code></pre></div></div>
+
+<h4 id="test-organization">Test Organization</h4>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>tests/
+├── features/                     # BDD feature files
+│   ├── neo4j_cypher.feature     # Neo4j Cypher scenarios
+│   ├── arangodb_aql.feature     # ArangoDB AQL scenarios
+│   └── graphml.feature          # GraphML functionality
+├── neo4j/                       # Neo4j-specific tests
+│   ├── graph_actors_tests.rs    # Actor unit tests
+│   ├── cypher_parser_tests.rs   # BDD integration
+│   └── integration_tests.rs     # End-to-end tests
+├── graphml/                     # GraphML test suite
+│   ├── node_embeddings_tests.rs # ML algorithm tests
+│   └── integration_tests.rs     # ML pipeline tests
+└── scripts/run-tests.sh         # Test runner
+</code></pre></div></div>
+
+<h4 id="quality-metrics--gates">Quality Metrics &amp; Gates</h4>
+<ul>
+  <li><strong>Unit Tests</strong>: 95% line coverage target</li>
+  <li><strong>Integration Tests</strong>: 90% feature coverage</li>
+  <li><strong>BDD Tests</strong>: 100% user story coverage</li>
+  <li><strong>Property Tests</strong>: Key invariants validated</li>
+  <li><strong>Performance Tests</strong>: All requirements met</li>
+</ul>
+
+<hr />
+
+<h2 id="-github-issues-tracking">📊 GitHub Issues Tracking</h2>
+
+<h3 id="comprehensive-issue-management">Comprehensive Issue Management</h3>
+
+<p><strong>Total Issues to Track</strong>: 68 issues across 11 development phases</p>
+
+<h4 id="issues-by-phase">Issues by Phase</h4>
+
+<table>
+  <thead>
+    <tr>
+      <th>Phase</th>
+      <th>Issues</th>
+      <th>Features</th>
+      <th>Priority</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Phase 9</strong></td>
+      <td>5</td>
+      <td>Query optimization, SIMD, parallel processing</td>
+      <td>High</td>
+    </tr>
+    <tr>
+      <td><strong>Phase 10</strong></td>
+      <td>5</td>
+      <td>Production monitoring, HA, backup/recovery</td>
+      <td>High</td>
+    </tr>
+    <tr>
+      <td><strong>Phase 11</strong></td>
+      <td>5</td>
+      <td>Stored procedures, triggers, full-text search</td>
+      <td>High</td>
+    </tr>
+    <tr>
+      <td><strong>Phase 12</strong></td>
+      <td>5</td>
+      <td>Redis TS, TimescaleDB compatibility</td>
+      <td>High</td>
+    </tr>
+    <tr>
+      <td><strong>Phase 13</strong></td>
+      <td>6</td>
+      <td>Neo4j Bolt protocol, Cypher, graph algorithms</td>
+      <td>High</td>
+    </tr>
+    <tr>
+      <td><strong>Phase 14</strong></td>
+      <td>5</td>
+      <td>Distributed queries, time-series analytics</td>
+      <td>Medium</td>
+    </tr>
+    <tr>
+      <td><strong>Phase 15</strong></td>
+      <td>7</td>
+      <td>ArangoDB multi-model, AQL, geospatial</td>
+      <td>High</td>
+    </tr>
+    <tr>
+      <td><strong>Phase 16</strong></td>
+      <td>9</td>
+      <td>GraphML, GraphRAG, AI analytics</td>
+      <td>High</td>
+    </tr>
+    <tr>
+      <td><strong>Phase 17</strong></td>
+      <td>6</td>
+      <td>REST, GraphQL, WebSocket, Kafka</td>
+      <td>Medium</td>
+    </tr>
+    <tr>
+      <td><strong>Phase 18</strong></td>
+      <td>5</td>
+      <td>Multi-cloud, serverless, auto-scaling</td>
+      <td>Medium</td>
+    </tr>
+    <tr>
+      <td><strong>Phase 19</strong></td>
+      <td>5</td>
+      <td>Enterprise security, compliance</td>
+      <td>Medium</td>
+    </tr>
+  </tbody>
+</table>
+
+<h4 id="issue-creation-automation">Issue Creation Automation</h4>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Create all GitHub issues</span>
+./scripts/create-github-issues.sh
+
+<span class="c"># Create phase-specific issues</span>
+gh issue create <span class="nt">--title</span> <span class="s2">"[FEATURE] Neo4j Core Graph Actors"</span> <span class="se">\</span>
+  <span class="nt">--body-file</span> .github/issue-templates/neo4j-core-actors.md <span class="se">\</span>
+  <span class="nt">--label</span> <span class="s2">"enhancement,neo4j,phase-13"</span> <span class="se">\</span>
+  <span class="nt">--milestone</span> <span class="s2">"Phase 13"</span>
+</code></pre></div></div>
+
+<h4 id="labels--milestones">Labels &amp; Milestones</h4>
+<ul>
+  <li><strong>Priority</strong>: <code class="language-plaintext highlighter-rouge">critical</code>, <code class="language-plaintext highlighter-rouge">high</code>, <code class="language-plaintext highlighter-rouge">medium</code>, <code class="language-plaintext highlighter-rouge">low</code></li>
+  <li><strong>Category</strong>: <code class="language-plaintext highlighter-rouge">enhancement</code>, <code class="language-plaintext highlighter-rouge">optimization</code>, <code class="language-plaintext highlighter-rouge">production</code>, <code class="language-plaintext highlighter-rouge">advanced</code></li>
+  <li><strong>Technology</strong>: <code class="language-plaintext highlighter-rouge">neo4j</code>, <code class="language-plaintext highlighter-rouge">arangodb</code>, <code class="language-plaintext highlighter-rouge">graphml</code>, <code class="language-plaintext highlighter-rouge">graph-rag</code>, <code class="language-plaintext highlighter-rouge">timeseries</code></li>
+  <li><strong>Phase</strong>: <code class="language-plaintext highlighter-rouge">phase-9</code> through <code class="language-plaintext highlighter-rouge">phase-19</code></li>
+</ul>
+
+<hr />
+
+<h2 id="-development-workflow">💻 Development Workflow</h2>
+
+<h3 id="setup--prerequisites">Setup &amp; Prerequisites</h3>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Clone repository</span>
+git clone https://github.com/TuringWorks/orbit-rs.git
+<span class="nb">cd </span>orbit-rs
+
+<span class="c"># Install dependencies</span>
+cargo build
+
+<span class="c"># Run existing tests</span>
+cargo <span class="nb">test</span>
+
+<span class="c"># Run mock tests for future features</span>
+./scripts/run-tests.sh mock
+</code></pre></div></div>
+
+<h3 id="development-process">Development Process</h3>
+
+<ol>
+  <li><strong>Issue Selection</strong>: Choose from GitHub project board</li>
+  <li><strong>Feature Branch</strong>: Create branch from <code class="language-plaintext highlighter-rouge">main</code></li>
+  <li><strong>TDD Development</strong>: Write tests first, then implementation</li>
+  <li><strong>Documentation</strong>: Update relevant documentation</li>
+  <li><strong>Testing</strong>: Run comprehensive test suite</li>
+  <li><strong>Pull Request</strong>: Submit for review with tests passing</li>
+  <li><strong>Integration</strong>: Merge after approval and CI success</li>
+</ol>
+
+<h3 id="code-organization">Code Organization</h3>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>orbit-rs/
+├── orbit-shared/          # Shared types and utilities
+├── orbit-server/          # Core actor system implementation  
+├── orbit-client/          # Client-side proxy generation
+├── orbit-protocols/       # Protocol implementations
+├── orbit-operator/        # Kubernetes operator
+├── tests/                 # Comprehensive test suite
+├── examples/              # Usage examples and demos
+└── docs/                  # Complete documentation
+</code></pre></div></div>
+
+<h3 id="testing-commands">Testing Commands</h3>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Run all available tests</span>
+./scripts/run-tests.sh all
+
+<span class="c"># Run specific phase tests (when implemented)</span>
+./scripts/run-tests.sh phase-13  <span class="c"># Neo4j tests</span>
+./scripts/run-tests.sh phase-15  <span class="c"># ArangoDB tests</span>
+./scripts/run-tests.sh phase-16  <span class="c"># GraphML tests</span>
+
+<span class="c"># Run test categories</span>
+./scripts/run-tests.sh mock       <span class="c"># Mock tests (always available)</span>
+./scripts/run-tests.sh bdd        <span class="c"># BDD/Cucumber tests</span>
+./scripts/run-tests.sh property   <span class="c"># Property-based tests</span>
+./scripts/run-tests.sh performance <span class="c"># Performance benchmarks</span>
+</code></pre></div></div>
+
+<hr />
+
+<h2 id="-deployment-guide">🚢 Deployment Guide</h2>
+
+<h3 id="kubernetes-deployment-recommended">Kubernetes Deployment (Recommended)</h3>
+
+<h4 id="using-helm-chart">Using Helm Chart</h4>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Add Orbit-RS Helm repository</span>
+helm repo add orbit-rs https://turingworks.github.io/orbit-rs-helm
+helm repo update
+
+<span class="c"># Install Orbit-RS cluster</span>
+helm <span class="nb">install </span>orbit-cluster orbit-rs/orbit-rs <span class="se">\</span>
+  <span class="nt">--set</span> cluster.size<span class="o">=</span>3 <span class="se">\</span>
+  <span class="nt">--set</span> storage.size<span class="o">=</span>100Gi <span class="se">\</span>
+  <span class="nt">--set</span> monitoring.enabled<span class="o">=</span><span class="nb">true</span>
+</code></pre></div></div>
+
+<h4 id="using-kubernetes-operator">Using Kubernetes Operator</h4>
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c1"># orbit-cluster.yaml</span>
+<span class="na">apiVersion</span><span class="pi">:</span> <span class="s">orbit.turingworks.com/v1alpha1</span>
+<span class="na">kind</span><span class="pi">:</span> <span class="s">OrbitCluster</span>
+<span class="na">metadata</span><span class="pi">:</span>
+  <span class="na">name</span><span class="pi">:</span> <span class="s">production-cluster</span>
+<span class="na">spec</span><span class="pi">:</span>
+  <span class="na">size</span><span class="pi">:</span> <span class="m">5</span>
+  <span class="na">version</span><span class="pi">:</span> <span class="s2">"</span><span class="s">0.1.0"</span>
+  <span class="na">storage</span><span class="pi">:</span>
+    <span class="na">size</span><span class="pi">:</span> <span class="s">500Gi</span>
+    <span class="na">storageClass</span><span class="pi">:</span> <span class="s">fast-ssd</span>
+  <span class="na">monitoring</span><span class="pi">:</span>
+    <span class="na">prometheus</span><span class="pi">:</span> <span class="kc">true</span>
+    <span class="na">grafana</span><span class="pi">:</span> <span class="kc">true</span>
+  <span class="na">protocols</span><span class="pi">:</span>
+    <span class="na">redis</span><span class="pi">:</span> 
+      <span class="na">enabled</span><span class="pi">:</span> <span class="kc">true</span>
+      <span class="na">port</span><span class="pi">:</span> <span class="m">6379</span>
+    <span class="na">postgresql</span><span class="pi">:</span>
+      <span class="na">enabled</span><span class="pi">:</span> <span class="kc">true</span>  
+      <span class="na">port</span><span class="pi">:</span> <span class="m">5432</span>
+</code></pre></div></div>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>kubectl apply <span class="nt">-f</span> orbit-cluster.yaml
+</code></pre></div></div>
+
+<h3 id="docker-deployment">Docker Deployment</h3>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Pull latest image</span>
+docker pull turingworks/orbit-rs:latest
+
+<span class="c"># Run single node</span>
+docker run <span class="nt">-d</span> <span class="se">\</span>
+  <span class="nt">--name</span> orbit-node <span class="se">\</span>
+  <span class="nt">-p</span> 6379:6379 <span class="se">\</span>
+  <span class="nt">-p</span> 5432:5432 <span class="se">\</span>
+  <span class="nt">-e</span> <span class="nv">ORBIT_NODE_ID</span><span class="o">=</span>node-1 <span class="se">\</span>
+  turingworks/orbit-rs:latest
+
+<span class="c"># Run with Docker Compose</span>
+docker-compose up <span class="nt">-d</span>
+</code></pre></div></div>
+
+<h3 id="configuration">Configuration</h3>
+<div class="language-toml highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># orbit-config.toml</span>
+<span class="k">[</span><span class="n">cluster</span><span class="k">]</span>
+<span class="n">node_id</span> <span class="o">=</span><span class="w"> </span><span class="s">"node-1"</span>
+<span class="n">bind_address</span> <span class="o">=</span><span class="w"> </span><span class="s">"0.0.0.0:8080"</span>
+<span class="n">advertise_address</span> <span class="o">=</span><span class="w"> </span><span class="s">"192.168.1.100:8080"</span>
+
+<span class="k">[</span><span class="n">protocols</span><span class="k">.</span><span class="n">redis</span><span class="k">]</span>
+<span class="n">enabled</span> <span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+<span class="n">bind_address</span> <span class="o">=</span><span class="w"> </span><span class="s">"0.0.0.0:6379"</span>
+
+<span class="k">[</span><span class="n">protocols</span><span class="k">.</span><span class="n">postgresql</span><span class="k">]</span>
+<span class="n">enabled</span> <span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+<span class="n">bind_address</span> <span class="o">=</span><span class="w"> </span><span class="s">"0.0.0.0:5432"</span>
+
+<span class="k">[</span><span class="n">storage</span><span class="k">]</span>
+<span class="n">data_dir</span> <span class="o">=</span><span class="w"> </span><span class="s">"/var/lib/orbit"</span>
+<span class="n">max_memory</span> <span class="o">=</span><span class="w"> </span><span class="s">"8GB"</span>
+
+<span class="k">[</span><span class="n">monitoring</span><span class="k">]</span>
+<span class="n">prometheus_endpoint</span> <span class="o">=</span><span class="w"> </span><span class="s">"0.0.0.0:9090"</span>
+<span class="n">log_level</span> <span class="o">=</span><span class="w"> </span><span class="s">"info"</span>
+</code></pre></div></div>
+
+<hr />
+
+<h2 id="-contributing-guidelines">🤝 Contributing Guidelines</h2>
+
+<h3 id="ways-to-contribute">Ways to Contribute</h3>
+
+<ol>
+  <li><strong>Phase Development</strong>: Pick up issues from active development phases</li>
+  <li><strong>Testing</strong>: Expand test coverage, especially mock and BDD tests</li>
+  <li><strong>Documentation</strong>: Improve or translate documentation</li>
+  <li><strong>Performance</strong>: Optimize algorithms and data structures</li>
+  <li><strong>Bug Reports</strong>: Report issues with detailed reproduction steps</li>
+  <li><strong>Feature Requests</strong>: Propose new features with use cases</li>
+</ol>
+
+<h3 id="contribution-process">Contribution Process</h3>
+
+<ol>
+  <li><strong>Review Roadmap</strong>: Check current phase and planned features</li>
+  <li><strong>Select Issue</strong>: Choose from GitHub project board</li>
+  <li><strong>Discuss</strong>: Comment on issue before starting work</li>
+  <li><strong>Fork &amp; Branch</strong>: Create feature branch from latest main</li>
+  <li><strong>Develop</strong>: Follow TDD approach with comprehensive tests</li>
+  <li><strong>Document</strong>: Update relevant documentation</li>
+  <li><strong>Test</strong>: Ensure all tests pass including new ones</li>
+  <li><strong>Pull Request</strong>: Submit with clear description and test evidence</li>
+  <li><strong>Review</strong>: Address feedback and iterate as needed</li>
+  <li><strong>Merge</strong>: Integration after approval and CI success</li>
+</ol>
+
+<h3 id="code-standards">Code Standards</h3>
+<ul>
+  <li><strong>Language</strong>: Rust with 2021 edition</li>
+  <li><strong>Testing</strong>: Comprehensive test coverage (95%+ target)</li>
+  <li><strong>Documentation</strong>: Inline docs for all public APIs</li>
+  <li><strong>Performance</strong>: Benchmarks for performance-critical code</li>
+  <li><strong>Error Handling</strong>: Comprehensive error types and handling</li>
+</ul>
+
+<h3 id="getting-help">Getting Help</h3>
+<ul>
+  <li><strong>Discord</strong>: Join our development Discord server</li>
+  <li><strong>GitHub Issues</strong>: Use issue templates for bug reports</li>
+  <li><strong>Documentation</strong>: Check docs/ directory for detailed guides</li>
+  <li><strong>Examples</strong>: Review examples/ directory for usage patterns</li>
+</ul>
+
+<hr />
+
+<h2 id="-additional-resources">📚 Additional Resources</h2>
+
+<h3 id="documentation-files">Documentation Files</h3>
+<ul>
+  <li><strong><a href="OVERVIEW.md">Architecture Overview</a></strong>: Detailed system architecture</li>
+  <li><strong><a href="QUICK_START.md">Quick Start Guide</a></strong>: Getting started tutorial</li>
+  <li><strong><a href="development/DEVELOPMENT.md">Development Guide</a></strong>: Contribution workflow</li>
+  <li><strong><a href="/orbit-rs/development/TESTING_STRATEGY.html">Testing Strategy</a></strong>: Comprehensive testing approach</li>
+  <li><strong><a href="protocols/">Protocol Implementations</a></strong>: Protocol-specific documentation</li>
+  <li><strong><a href="/orbit-rs/deployment/DEPLOYMENT.html">Deployment Guide</a></strong>: Production deployment instructions</li>
+</ul>
+
+<h3 id="external-links">External Links</h3>
+<ul>
+  <li><strong>GitHub Repository</strong>: https://github.com/TuringWorks/orbit-rs</li>
+  <li><strong>Docker Hub</strong>: https://hub.docker.com/r/turingworks/orbit-rs</li>
+  <li><strong>Helm Charts</strong>: https://turingworks.github.io/orbit-rs-helm</li>
+  <li><strong>Live Roadmap</strong>: https://github.com/orgs/TuringWorks/projects/1</li>
+  <li><strong>Discord Community</strong>: [Join Development Discussion]</li>
+  <li><strong>Documentation Site</strong>: [Complete Documentation Portal]</li>
+</ul>
+
+<h3 id="performance-benchmarks">Performance Benchmarks</h3>
+<ul>
+  <li><strong>Current Throughput</strong>: 500k+ messages/second per core</li>
+  <li><strong>Target Throughput</strong>: 1M+ operations/second (Phase 9)</li>
+  <li><strong>Scalability</strong>: Linear scaling demonstrated up to 100 nodes</li>
+  <li><strong>Latency</strong>: Sub-millisecond for local operations</li>
+  <li><strong>Storage</strong>: Efficient memory usage with configurable limits</li>
+</ul>
+
+<hr />
+
+<p><strong>Orbit-RS</strong>: Building the future of distributed databases with actor-based architecture and multi-protocol compatibility.</p>
+
+<p><em>This document serves as the single source of truth for all Orbit-RS development, combining current achievements with planned roadmap features. It is updated continuously as development progresses.</em></p>
+
+<hr />
+
+<p><strong>Last Updated</strong>: January 5, 2025<br />
+<strong>Version</strong>: Phase 8 Complete + Full Roadmap Documentation<br />
+<strong>Next Update</strong>: After Phase 9 milestone completion</p>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/orbit-rs/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Orbit-RS Documentation</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">TuringWorks</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

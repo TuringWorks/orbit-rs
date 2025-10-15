@@ -1,0 +1,1008 @@
+<h1 id="rfc-002-unified-multi-modal-query-engine-for-orbit-rs">RFC-002: Unified Multi-Modal Query Engine for Orbit-RS</h1>
+
+<p><strong>Date</strong>: October 9, 2025<br />
+<strong>Author</strong>: AI Assistant<br />
+<strong>Status</strong>: Draft<br />
+<strong>Tracking Issue</strong>: TBD</p>
+
+<h2 id="summary">Summary</h2>
+
+<p>This RFC proposes a unified multi-modal query engine that enables seamless querying across relational, graph, time series, and vector data within a single query, providing unprecedented analytical capabilities that no current database system offers.</p>
+
+<h2 id="motivation">Motivation</h2>
+
+<p>Current database systems force users to choose between different data models and require complex integrations:</p>
+
+<ul>
+  <li><strong>Fragmented Ecosystem</strong>: Users need separate systems for relational (PostgreSQL), graph (Neo4j), time series (InfluxDB), and vector (Pinecone) data</li>
+  <li><strong>Integration Complexity</strong>: Joining data across systems requires complex ETL pipelines</li>
+  <li><strong>Performance Overhead</strong>: Data movement between systems introduces latency and consistency issues</li>
+  <li><strong>Limited Analytics</strong>: Complex analytical queries spanning multiple data types are nearly impossible</li>
+</ul>
+
+<p><strong>Market Opportunity</strong>: A unified query engine that seamlessly operates across all data models would be revolutionary and unique in the database market.</p>
+
+<h2 id="design-goals">Design Goals</h2>
+
+<h3 id="primary-goals">Primary Goals</h3>
+<ol>
+  <li><strong>Unified Query Language</strong>: Single query syntax that operates across all data models</li>
+  <li><strong>Performance</strong>: Near-native performance for each data model within unified queries</li>
+  <li><strong>Semantic Correctness</strong>: Preserve the semantics and capabilities of each data model</li>
+  <li><strong>Developer Experience</strong>: Intuitive query syntax that feels natural for each data type</li>
+</ol>
+
+<h3 id="secondary-goals">Secondary Goals</h3>
+<ol>
+  <li><strong>Query Optimization</strong>: Cross-modal query optimization to minimize data movement</li>
+  <li><strong>Scalability</strong>: Distributed execution across actor cluster</li>
+  <li><strong>Extensibility</strong>: Pluggable data model support for future extensions</li>
+  <li><strong>Compatibility</strong>: Support for existing SQL, Cypher, and specialized query patterns</li>
+</ol>
+
+<h2 id="detailed-design">Detailed Design</h2>
+
+<h3 id="architecture-overview">Architecture Overview</h3>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>┌─────────────────────────────────────────────────────────────────┐
+│                  Unified Query Interface                       │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐           │
+│  │Extended SQL │  │   OrbitQL   │  │  GraphQL+   │           │  
+│  │with modal   │  │Multi-Modal  │  │  VectorQL   │           │
+│  │extensions   │  │   Syntax    │  │   TSQuery   │           │
+│  └─────────────┘  └─────────────┘  └─────────────┘           │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                   Query Analysis &amp; Planning                    │
+│  ┌─────────────────────────────────────────────────────────────┐ │
+│  │              Multi-Modal Query Planner                     │ │
+│  │ • Data model detection     • Cross-modal join planning     │ │
+│  │ • Query decomposition      • Optimization opportunities    │ │
+│  │ • Execution ordering       • Data locality analysis        │ │
+│  └─────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                  Execution Orchestration                       │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────┐ │
+│  │ Relational  │  │   Graph     │  │Time Series │  │ Vector  │ │
+│  │  Executor   │  │  Executor   │  │  Executor   │  │Executor │ │
+│  │             │  │             │  │             │  │         │ │
+│  │ • SQL ops   │  │ • Traversal │  │ • Aggreg.   │  │ • Sim.  │ │
+│  │ • Joins     │  │ • Path find │  │ • Windows   │  │ • KNN   │ │
+│  │ • Aggreg.   │  │ • Pattern   │  │ • Forecast  │  │ • Embed │ │
+│  └─────────────┘  └─────────────┘  └─────────────┘  └─────────┘ │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                      Result Integration                        │
+│  ┌─────────────────────────────────────────────────────────────┐ │
+│  │           Cross-Modal Result Merger                        │ │
+│  │ • Schema unification      • Type coercion                 │ │
+│  │ • Result streaming        • Memory management             │ │
+│  │ • Format conversion       • Error handling                │ │
+│  └─────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────┘
+</code></pre></div></div>
+
+<h3 id="core-components">Core Components</h3>
+
+<h4 id="1-extended-multi-modal-sql-syntax">1. Extended Multi-Modal SQL Syntax</h4>
+
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Example 1: User recommendation with graph traversal and vector similarity</span>
+<span class="k">SELECT</span> 
+    <span class="n">u</span><span class="p">.</span><span class="n">name</span><span class="p">,</span>
+    <span class="n">u</span><span class="p">.</span><span class="k">location</span><span class="p">,</span>
+    <span class="c1">-- Graph: Find friends within 2 degrees</span>
+    <span class="n">GRAPH</span><span class="p">.</span><span class="n">TRAVERSE</span><span class="p">(</span><span class="n">u</span><span class="p">,</span> <span class="s1">'FRIEND'</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span> <span class="k">AS</span> <span class="n">friend_network</span><span class="p">,</span>
+    <span class="c1">-- Vector: Find similar users by embedding</span>
+    <span class="n">VECTOR</span><span class="p">.</span><span class="n">SIMILARITY</span><span class="p">(</span><span class="n">u</span><span class="p">.</span><span class="n">embedding</span><span class="p">,</span> <span class="err">$</span><span class="n">user_embedding</span><span class="p">,</span> <span class="mi">10</span><span class="p">)</span> <span class="k">AS</span> <span class="n">similarity_score</span><span class="p">,</span>
+    <span class="c1">-- Time series: Recent activity level</span>
+    <span class="n">TS</span><span class="p">.</span><span class="k">AVG</span><span class="p">(</span><span class="n">activity</span><span class="p">.</span><span class="k">level</span><span class="p">,</span> <span class="s1">'7d'</span><span class="p">)</span> <span class="k">AS</span> <span class="n">avg_activity</span><span class="p">,</span>
+    <span class="c1">-- ML: Predict user interest</span>
+    <span class="n">ML</span><span class="p">.</span><span class="n">PREDICT</span><span class="p">(</span><span class="s1">'interest_model'</span><span class="p">,</span> 
+        <span class="n">ARRAY</span><span class="p">[</span><span class="n">similarity_score</span><span class="p">,</span> <span class="n">avg_activity</span><span class="p">,</span> <span class="n">GRAPH</span><span class="p">.</span><span class="n">DEGREE</span><span class="p">(</span><span class="n">u</span><span class="p">)]</span>
+    <span class="p">)</span> <span class="k">AS</span> <span class="n">predicted_interest</span>
+<span class="k">FROM</span> <span class="n">users</span> <span class="n">u</span>
+<span class="k">JOIN</span> <span class="n">GRAPH</span><span class="p">.</span><span class="n">NEIGHBORS</span><span class="p">(</span><span class="n">u</span><span class="p">,</span> <span class="s1">'FRIEND'</span><span class="p">)</span> <span class="k">AS</span> <span class="n">friends</span>
+<span class="k">JOIN</span> <span class="n">time_series</span> <span class="n">activity</span> <span class="k">ON</span> <span class="n">u</span><span class="p">.</span><span class="n">id</span> <span class="o">=</span> <span class="n">activity</span><span class="p">.</span><span class="n">user_id</span>
+<span class="k">WHERE</span> <span class="n">VECTOR</span><span class="p">.</span><span class="n">DISTANCE</span><span class="p">(</span><span class="n">u</span><span class="p">.</span><span class="n">embedding</span><span class="p">,</span> <span class="err">$</span><span class="n">query_embedding</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">.</span><span class="mi">3</span>
+  <span class="k">AND</span> <span class="n">TS</span><span class="p">.</span><span class="n">LAST_VALUE</span><span class="p">(</span><span class="n">activity</span><span class="p">.</span><span class="nb">timestamp</span><span class="p">)</span> <span class="o">&gt;</span> <span class="n">NOW</span><span class="p">()</span> <span class="o">-</span> <span class="n">INTERVAL</span> <span class="s1">'30 days'</span>
+  <span class="k">AND</span> <span class="n">GRAPH</span><span class="p">.</span><span class="n">DEGREE</span><span class="p">(</span><span class="n">u</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">5</span>
+<span class="k">ORDER</span> <span class="k">BY</span> <span class="n">predicted_interest</span> <span class="k">DESC</span><span class="p">,</span> <span class="n">similarity_score</span> <span class="k">DESC</span>
+<span class="k">LIMIT</span> <span class="mi">20</span><span class="p">;</span>
+
+<span class="c1">-- Example 2: Financial fraud detection across modalities</span>
+<span class="k">SELECT</span> 
+    <span class="n">t</span><span class="p">.</span><span class="n">transaction_id</span><span class="p">,</span>
+    <span class="n">t</span><span class="p">.</span><span class="n">amount</span><span class="p">,</span>
+    <span class="n">u</span><span class="p">.</span><span class="n">risk_score</span><span class="p">,</span>
+    <span class="c1">-- Graph: Check for suspicious connection patterns</span>
+    <span class="n">GRAPH</span><span class="p">.</span><span class="n">SHORTEST_PATH</span><span class="p">(</span>
+        <span class="n">sender_account</span><span class="p">,</span> 
+        <span class="n">known_fraud_accounts</span>
+    <span class="p">).</span><span class="k">length</span> <span class="k">AS</span> <span class="n">fraud_connection_distance</span><span class="p">,</span>
+    <span class="c1">-- Time series: Unusual spending pattern detection</span>
+    <span class="n">TS</span><span class="p">.</span><span class="n">ANOMALY_DETECTION</span><span class="p">(</span>
+        <span class="n">u</span><span class="p">.</span><span class="n">spending_pattern</span><span class="p">,</span> 
+        <span class="n">t</span><span class="p">.</span><span class="n">amount</span><span class="p">,</span> 
+        <span class="n">t</span><span class="p">.</span><span class="nb">timestamp</span>
+    <span class="p">)</span> <span class="k">AS</span> <span class="n">spending_anomaly_score</span><span class="p">,</span>
+    <span class="c1">-- Vector: Similar transaction pattern matching</span>
+    <span class="n">VECTOR</span><span class="p">.</span><span class="n">KNN_SEARCH</span><span class="p">(</span>
+        <span class="n">t</span><span class="p">.</span><span class="n">feature_vector</span><span class="p">,</span>
+        <span class="n">fraud_transaction_embeddings</span><span class="p">,</span>
+        <span class="mi">5</span>
+    <span class="p">)</span> <span class="k">AS</span> <span class="n">similar_fraud_transactions</span><span class="p">,</span>
+    <span class="c1">-- Combined ML risk assessment</span>
+    <span class="n">ML</span><span class="p">.</span><span class="n">ENSEMBLE_PREDICT</span><span class="p">(</span>
+        <span class="n">ARRAY</span><span class="p">[</span><span class="s1">'fraud_model_v1'</span><span class="p">,</span> <span class="s1">'fraud_model_v2'</span><span class="p">],</span>
+        <span class="n">ARRAY</span><span class="p">[</span>
+            <span class="n">t</span><span class="p">.</span><span class="n">amount</span><span class="p">,</span>
+            <span class="n">fraud_connection_distance</span><span class="p">,</span>
+            <span class="n">spending_anomaly_score</span><span class="p">,</span>
+            <span class="n">VECTOR</span><span class="p">.</span><span class="n">MAX_SIMILARITY</span><span class="p">(</span><span class="n">similar_fraud_transactions</span><span class="p">)</span>
+        <span class="p">]</span>
+    <span class="p">)</span> <span class="k">AS</span> <span class="n">fraud_probability</span>
+<span class="k">FROM</span> <span class="n">transactions</span> <span class="n">t</span>
+<span class="k">JOIN</span> <span class="n">users</span> <span class="n">u</span> <span class="k">ON</span> <span class="n">t</span><span class="p">.</span><span class="n">user_id</span> <span class="o">=</span> <span class="n">u</span><span class="p">.</span><span class="n">id</span>
+<span class="k">WHERE</span> <span class="n">t</span><span class="p">.</span><span class="nb">timestamp</span> <span class="o">&gt;</span> <span class="n">NOW</span><span class="p">()</span> <span class="o">-</span> <span class="n">INTERVAL</span> <span class="s1">'1 hour'</span>
+  <span class="k">AND</span> <span class="p">(</span><span class="n">fraud_probability</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">.</span><span class="mi">8</span> 
+       <span class="k">OR</span> <span class="n">spending_anomaly_score</span> <span class="o">&gt;</span> <span class="mi">2</span><span class="p">.</span><span class="mi">0</span>
+       <span class="k">OR</span> <span class="n">fraud_connection_distance</span> <span class="o">&lt;</span> <span class="mi">3</span><span class="p">)</span>
+<span class="k">ORDER</span> <span class="k">BY</span> <span class="n">fraud_probability</span> <span class="k">DESC</span><span class="p">;</span>
+
+<span class="c1">-- Example 3: IoT sensor analytics with spatial-temporal patterns</span>
+<span class="k">SELECT</span> 
+    <span class="n">s</span><span class="p">.</span><span class="n">sensor_id</span><span class="p">,</span>
+    <span class="n">s</span><span class="p">.</span><span class="k">location</span><span class="p">,</span>
+    <span class="c1">-- Time series: Trend analysis</span>
+    <span class="n">TS</span><span class="p">.</span><span class="n">LINEAR_REGRESSION</span><span class="p">(</span>
+        <span class="n">s</span><span class="p">.</span><span class="n">temperature_readings</span><span class="p">,</span> 
+        <span class="s1">'24h'</span>
+    <span class="p">)</span> <span class="k">AS</span> <span class="n">temperature_trend</span><span class="p">,</span>
+    <span class="c1">-- Graph: Find spatially connected sensors</span>
+    <span class="n">GRAPH</span><span class="p">.</span><span class="n">WITHIN_DISTANCE</span><span class="p">(</span>
+        <span class="n">s</span><span class="p">.</span><span class="k">location</span><span class="p">,</span> 
+        <span class="mi">100</span><span class="p">,</span> <span class="c1">-- 100 meters</span>
+        <span class="s1">'CONNECTED_TO'</span>
+    <span class="p">)</span> <span class="k">AS</span> <span class="n">nearby_sensors</span><span class="p">,</span>
+    <span class="c1">-- Vector: Find sensors with similar patterns</span>
+    <span class="n">VECTOR</span><span class="p">.</span><span class="n">CLUSTER_ANALYSIS</span><span class="p">(</span>
+        <span class="n">s</span><span class="p">.</span><span class="n">pattern_embedding</span><span class="p">,</span>
+        <span class="n">nearby_sensors</span><span class="p">.</span><span class="n">pattern_embeddings</span><span class="p">,</span>
+        <span class="s1">'kmeans'</span><span class="p">,</span>
+        <span class="mi">5</span>
+    <span class="p">)</span> <span class="k">AS</span> <span class="n">pattern_cluster</span><span class="p">,</span>
+    <span class="c1">-- Geospatial: Environmental context</span>
+    <span class="n">GEO</span><span class="p">.</span><span class="n">WITHIN_POLYGON</span><span class="p">(</span>
+        <span class="n">s</span><span class="p">.</span><span class="k">location</span><span class="p">,</span>
+        <span class="n">environmental_zones</span>
+    <span class="p">)</span> <span class="k">AS</span> <span class="n">environmental_zone</span>
+<span class="k">FROM</span> <span class="n">sensors</span> <span class="n">s</span>
+<span class="k">JOIN</span> <span class="n">time_series</span> <span class="n">ts</span> <span class="k">ON</span> <span class="n">s</span><span class="p">.</span><span class="n">id</span> <span class="o">=</span> <span class="n">ts</span><span class="p">.</span><span class="n">sensor_id</span>
+<span class="k">WHERE</span> <span class="n">ts</span><span class="p">.</span><span class="nb">timestamp</span> <span class="o">&gt;</span> <span class="n">NOW</span><span class="p">()</span> <span class="o">-</span> <span class="n">INTERVAL</span> <span class="s1">'24 hours'</span>
+  <span class="k">AND</span> <span class="n">TS</span><span class="p">.</span><span class="n">STDDEV</span><span class="p">(</span><span class="n">ts</span><span class="p">.</span><span class="n">reading</span><span class="p">)</span> <span class="o">&gt;</span> <span class="n">s</span><span class="p">.</span><span class="n">normal_variance</span> <span class="o">*</span> <span class="mi">2</span>
+  <span class="k">AND</span> <span class="n">GEO</span><span class="p">.</span><span class="n">DISTANCE</span><span class="p">(</span><span class="n">s</span><span class="p">.</span><span class="k">location</span><span class="p">,</span> <span class="err">$</span><span class="n">incident_location</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">1000</span> <span class="c1">-- 1km</span>
+<span class="k">ORDER</span> <span class="k">BY</span> <span class="k">ABS</span><span class="p">(</span><span class="n">temperature_trend</span><span class="p">.</span><span class="n">slope</span><span class="p">)</span> <span class="k">DESC</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h4 id="2-query-parser-and-ast">2. Query Parser and AST</h4>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="cd">/// Extended AST supporting multi-modal operations</span>
+<span class="nd">#[derive(Debug,</span> <span class="nd">Clone)]</span>
+<span class="k">pub</span> <span class="k">enum</span> <span class="n">MultiModalExpression</span> <span class="p">{</span>
+    <span class="c1">// Standard SQL expressions</span>
+    <span class="nf">Column</span><span class="p">(</span><span class="n">ColumnRef</span><span class="p">),</span>
+    <span class="nf">Literal</span><span class="p">(</span><span class="n">Literal</span><span class="p">),</span>
+    <span class="n">BinaryOp</span> <span class="p">{</span> <span class="n">left</span><span class="p">:</span> <span class="nb">Box</span><span class="o">&lt;</span><span class="n">Expression</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">op</span><span class="p">:</span> <span class="n">BinaryOperator</span><span class="p">,</span> <span class="n">right</span><span class="p">:</span> <span class="nb">Box</span><span class="o">&lt;</span><span class="n">Expression</span><span class="o">&gt;</span> <span class="p">},</span>
+    
+    <span class="c1">// Graph operations</span>
+    <span class="nf">Graph</span><span class="p">(</span><span class="n">GraphOperation</span><span class="p">),</span>
+    
+    <span class="c1">// Vector operations  </span>
+    <span class="nf">Vector</span><span class="p">(</span><span class="n">VectorOperation</span><span class="p">),</span>
+    
+    <span class="c1">// Time series operations</span>
+    <span class="nf">TimeSeries</span><span class="p">(</span><span class="n">TimeSeriesOperation</span><span class="p">),</span>
+    
+    <span class="c1">// Geospatial operations</span>
+    <span class="nf">Geospatial</span><span class="p">(</span><span class="n">GeospatialOperation</span><span class="p">),</span>
+    
+    <span class="c1">// ML operations</span>
+    <span class="nf">MachineLearning</span><span class="p">(</span><span class="n">MLOperation</span><span class="p">),</span>
+    
+    <span class="c1">// Cross-modal operations</span>
+    <span class="nf">CrossModal</span><span class="p">(</span><span class="n">CrossModalOperation</span><span class="p">),</span>
+<span class="p">}</span>
+
+<span class="cd">/// Graph-specific operations in SQL</span>
+<span class="nd">#[derive(Debug,</span> <span class="nd">Clone)]</span>
+<span class="k">pub</span> <span class="k">enum</span> <span class="n">GraphOperation</span> <span class="p">{</span>
+    <span class="n">Traverse</span> <span class="p">{</span> 
+        <span class="n">start_node</span><span class="p">:</span> <span class="nb">Box</span><span class="o">&lt;</span><span class="n">Expression</span><span class="o">&gt;</span><span class="p">,</span> 
+        <span class="n">relationship</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span> 
+        <span class="n">max_depth</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="nb">u32</span><span class="o">&gt;</span> 
+    <span class="p">},</span>
+    <span class="n">ShortestPath</span> <span class="p">{</span> 
+        <span class="n">start</span><span class="p">:</span> <span class="nb">Box</span><span class="o">&lt;</span><span class="n">Expression</span><span class="o">&gt;</span><span class="p">,</span> 
+        <span class="n">end</span><span class="p">:</span> <span class="nb">Box</span><span class="o">&lt;</span><span class="n">Expression</span><span class="o">&gt;</span><span class="p">,</span>
+        <span class="n">relationship_filter</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="nb">String</span><span class="o">&gt;</span>
+    <span class="p">},</span>
+    <span class="n">Neighbors</span> <span class="p">{</span> 
+        <span class="n">node</span><span class="p">:</span> <span class="nb">Box</span><span class="o">&lt;</span><span class="n">Expression</span><span class="o">&gt;</span><span class="p">,</span> 
+        <span class="n">relationship</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span>
+        <span class="n">direction</span><span class="p">:</span> <span class="n">TraversalDirection</span> 
+    <span class="p">},</span>
+    <span class="n">Degree</span> <span class="p">{</span> <span class="n">node</span><span class="p">:</span> <span class="nb">Box</span><span class="o">&lt;</span><span class="n">Expression</span><span class="o">&gt;</span> <span class="p">},</span>
+    <span class="n">PageRank</span> <span class="p">{</span> <span class="n">graph</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span> <span class="n">damping</span><span class="p">:</span> <span class="nb">f64</span> <span class="p">},</span>
+    <span class="n">CommunityDetection</span> <span class="p">{</span> <span class="n">algorithm</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span> <span class="n">parameters</span><span class="p">:</span> <span class="n">HashMap</span><span class="o">&lt;</span><span class="nb">String</span><span class="p">,</span> <span class="n">Value</span><span class="o">&gt;</span> <span class="p">},</span>
+    <span class="n">WithinDistance</span> <span class="p">{</span> 
+        <span class="n">center</span><span class="p">:</span> <span class="nb">Box</span><span class="o">&lt;</span><span class="n">Expression</span><span class="o">&gt;</span><span class="p">,</span> 
+        <span class="n">distance</span><span class="p">:</span> <span class="nb">f64</span><span class="p">,</span> 
+        <span class="n">relationship</span><span class="p">:</span> <span class="nb">String</span> 
+    <span class="p">},</span>
+<span class="p">}</span>
+
+<span class="cd">/// Vector-specific operations</span>
+<span class="nd">#[derive(Debug,</span> <span class="nd">Clone)]</span>
+<span class="k">pub</span> <span class="k">enum</span> <span class="n">VectorOperation</span> <span class="p">{</span>
+    <span class="n">Similarity</span> <span class="p">{</span> 
+        <span class="n">vector1</span><span class="p">:</span> <span class="nb">Box</span><span class="o">&lt;</span><span class="n">Expression</span><span class="o">&gt;</span><span class="p">,</span> 
+        <span class="n">vector2</span><span class="p">:</span> <span class="nb">Box</span><span class="o">&lt;</span><span class="n">Expression</span><span class="o">&gt;</span><span class="p">,</span> 
+        <span class="n">metric</span><span class="p">:</span> <span class="n">SimilarityMetric</span> 
+    <span class="p">},</span>
+    <span class="n">KnnSearch</span> <span class="p">{</span> 
+        <span class="n">query_vector</span><span class="p">:</span> <span class="nb">Box</span><span class="o">&lt;</span><span class="n">Expression</span><span class="o">&gt;</span><span class="p">,</span> 
+        <span class="n">target_vectors</span><span class="p">:</span> <span class="nb">Box</span><span class="o">&lt;</span><span class="n">Expression</span><span class="o">&gt;</span><span class="p">,</span> 
+        <span class="n">k</span><span class="p">:</span> <span class="nb">u32</span> 
+    <span class="p">},</span>
+    <span class="n">ClusterAnalysis</span> <span class="p">{</span> 
+        <span class="n">vectors</span><span class="p">:</span> <span class="nb">Box</span><span class="o">&lt;</span><span class="n">Expression</span><span class="o">&gt;</span><span class="p">,</span> 
+        <span class="n">algorithm</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span> 
+        <span class="n">parameters</span><span class="p">:</span> <span class="n">HashMap</span><span class="o">&lt;</span><span class="nb">String</span><span class="p">,</span> <span class="n">Value</span><span class="o">&gt;</span> 
+    <span class="p">},</span>
+    <span class="n">EmbeddingGeneration</span> <span class="p">{</span> 
+        <span class="n">input</span><span class="p">:</span> <span class="nb">Box</span><span class="o">&lt;</span><span class="n">Expression</span><span class="o">&gt;</span><span class="p">,</span> 
+        <span class="n">model</span><span class="p">:</span> <span class="nb">String</span> 
+    <span class="p">},</span>
+    <span class="n">VectorDistance</span> <span class="p">{</span> 
+        <span class="n">vector1</span><span class="p">:</span> <span class="nb">Box</span><span class="o">&lt;</span><span class="n">Expression</span><span class="o">&gt;</span><span class="p">,</span> 
+        <span class="n">vector2</span><span class="p">:</span> <span class="nb">Box</span><span class="o">&lt;</span><span class="n">Expression</span><span class="o">&gt;</span><span class="p">,</span> 
+        <span class="n">metric</span><span class="p">:</span> <span class="n">DistanceMetric</span> 
+    <span class="p">},</span>
+<span class="p">}</span>
+
+<span class="cd">/// Time series operations</span>
+<span class="nd">#[derive(Debug,</span> <span class="nd">Clone)]</span>
+<span class="k">pub</span> <span class="k">enum</span> <span class="n">TimeSeriesOperation</span> <span class="p">{</span>
+    <span class="n">Aggregate</span> <span class="p">{</span> 
+        <span class="n">series</span><span class="p">:</span> <span class="nb">Box</span><span class="o">&lt;</span><span class="n">Expression</span><span class="o">&gt;</span><span class="p">,</span> 
+        <span class="n">function</span><span class="p">:</span> <span class="n">AggregateFunction</span><span class="p">,</span> 
+        <span class="n">window</span><span class="p">:</span> <span class="n">TimeWindow</span> 
+    <span class="p">},</span>
+    <span class="n">AnomalyDetection</span> <span class="p">{</span> 
+        <span class="n">series</span><span class="p">:</span> <span class="nb">Box</span><span class="o">&lt;</span><span class="n">Expression</span><span class="o">&gt;</span><span class="p">,</span> 
+        <span class="n">algorithm</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span> 
+        <span class="n">parameters</span><span class="p">:</span> <span class="n">HashMap</span><span class="o">&lt;</span><span class="nb">String</span><span class="p">,</span> <span class="n">Value</span><span class="o">&gt;</span> 
+    <span class="p">},</span>
+    <span class="n">Forecast</span> <span class="p">{</span> 
+        <span class="n">series</span><span class="p">:</span> <span class="nb">Box</span><span class="o">&lt;</span><span class="n">Expression</span><span class="o">&gt;</span><span class="p">,</span> 
+        <span class="n">periods</span><span class="p">:</span> <span class="nb">u32</span><span class="p">,</span> 
+        <span class="n">model</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="nb">String</span><span class="o">&gt;</span> 
+    <span class="p">},</span>
+    <span class="n">LinearRegression</span> <span class="p">{</span> 
+        <span class="n">series</span><span class="p">:</span> <span class="nb">Box</span><span class="o">&lt;</span><span class="n">Expression</span><span class="o">&gt;</span><span class="p">,</span> 
+        <span class="n">window</span><span class="p">:</span> <span class="n">TimeWindow</span> 
+    <span class="p">},</span>
+    <span class="n">SeasonalDecomposition</span> <span class="p">{</span> 
+        <span class="n">series</span><span class="p">:</span> <span class="nb">Box</span><span class="o">&lt;</span><span class="n">Expression</span><span class="o">&gt;</span><span class="p">,</span> 
+        <span class="n">period</span><span class="p">:</span> <span class="n">Duration</span> 
+    <span class="p">},</span>
+<span class="p">}</span>
+
+<span class="cd">/// Cross-modal operations that span multiple data types</span>
+<span class="nd">#[derive(Debug,</span> <span class="nd">Clone)]</span>
+<span class="k">pub</span> <span class="k">enum</span> <span class="n">CrossModalOperation</span> <span class="p">{</span>
+    <span class="n">GraphVectorJoin</span> <span class="p">{</span> 
+        <span class="n">graph_result</span><span class="p">:</span> <span class="nb">Box</span><span class="o">&lt;</span><span class="n">Expression</span><span class="o">&gt;</span><span class="p">,</span> 
+        <span class="n">vector_column</span><span class="p">:</span> <span class="nb">String</span> 
+    <span class="p">},</span>
+    <span class="n">TimeSeriesGraphCorrelation</span> <span class="p">{</span> 
+        <span class="n">ts_series</span><span class="p">:</span> <span class="nb">Box</span><span class="o">&lt;</span><span class="n">Expression</span><span class="o">&gt;</span><span class="p">,</span> 
+        <span class="n">graph_metric</span><span class="p">:</span> <span class="nb">Box</span><span class="o">&lt;</span><span class="n">Expression</span><span class="o">&gt;</span> 
+    <span class="p">},</span>
+    <span class="n">MultiModalCluster</span> <span class="p">{</span> 
+        <span class="n">features</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">Expression</span><span class="o">&gt;</span><span class="p">,</span> 
+        <span class="n">modalities</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">DataModality</span><span class="o">&gt;</span> 
+    <span class="p">},</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h4 id="3-multi-modal-query-planner">3. Multi-Modal Query Planner</h4>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="cd">/// Query planner that optimizes across multiple data modalities</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">MultiModalQueryPlanner</span> <span class="p">{</span>
+    <span class="cd">/// Statistics for different data modalities</span>
+    <span class="n">statistics</span><span class="p">:</span> <span class="n">MultiModalStatistics</span><span class="p">,</span>
+    <span class="cd">/// Cost model for cross-modal operations</span>
+    <span class="n">cost_model</span><span class="p">:</span> <span class="n">CrossModalCostModel</span><span class="p">,</span>
+    <span class="cd">/// Available execution engines</span>
+    <span class="n">executors</span><span class="p">:</span> <span class="n">HashMap</span><span class="o">&lt;</span><span class="n">DataModality</span><span class="p">,</span> <span class="nb">Box</span><span class="o">&lt;</span><span class="k">dyn</span> <span class="n">QueryExecutor</span><span class="o">&gt;&gt;</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="k">impl</span> <span class="n">MultiModalQueryPlanner</span> <span class="p">{</span>
+    <span class="cd">/// Plan multi-modal query execution</span>
+    <span class="k">pub</span> <span class="k">fn</span> <span class="nf">plan_query</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">query</span><span class="p">:</span> <span class="n">MultiModalQuery</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">ExecutionPlan</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="c1">// Phase 1: Analyze query structure and identify data modalities</span>
+        <span class="k">let</span> <span class="n">analysis</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.analyze_query_modalities</span><span class="p">(</span><span class="o">&amp;</span><span class="n">query</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+        
+        <span class="c1">// Phase 2: Decompose query into modality-specific subqueries</span>
+        <span class="k">let</span> <span class="n">subqueries</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.decompose_query</span><span class="p">(</span><span class="o">&amp;</span><span class="n">query</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">analysis</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+        
+        <span class="c1">// Phase 3: Optimize execution order based on data locality and cost</span>
+        <span class="k">let</span> <span class="n">execution_order</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.optimize_execution_order</span><span class="p">(</span><span class="o">&amp;</span><span class="n">subqueries</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+        
+        <span class="c1">// Phase 4: Plan cross-modal joins and data transfers</span>
+        <span class="k">let</span> <span class="n">join_plan</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.plan_cross_modal_joins</span><span class="p">(</span><span class="o">&amp;</span><span class="n">execution_order</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+        
+        <span class="c1">// Phase 5: Generate final execution plan</span>
+        <span class="nf">Ok</span><span class="p">(</span><span class="n">ExecutionPlan</span> <span class="p">{</span>
+            <span class="n">subqueries</span><span class="p">:</span> <span class="n">execution_order</span><span class="p">,</span>
+            <span class="n">join_operations</span><span class="p">:</span> <span class="n">join_plan</span><span class="p">,</span>
+            <span class="n">estimated_cost</span><span class="p">:</span> <span class="k">self</span><span class="nf">.estimate_total_cost</span><span class="p">(</span><span class="o">&amp;</span><span class="n">execution_order</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">join_plan</span><span class="p">),</span>
+            <span class="n">parallelization_strategy</span><span class="p">:</span> <span class="k">self</span><span class="nf">.plan_parallelization</span><span class="p">(</span><span class="o">&amp;</span><span class="n">execution_order</span><span class="p">)</span><span class="o">?</span><span class="p">,</span>
+        <span class="p">})</span>
+    <span class="p">}</span>
+    
+    <span class="cd">/// Analyze which data modalities are involved in the query</span>
+    <span class="k">fn</span> <span class="nf">analyze_query_modalities</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">query</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">MultiModalQuery</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">ModalityAnalysis</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="k">let</span> <span class="k">mut</span> <span class="n">analysis</span> <span class="o">=</span> <span class="nn">ModalityAnalysis</span><span class="p">::</span><span class="nf">new</span><span class="p">();</span>
+        
+        <span class="c1">// Walk the query AST to identify modality usage</span>
+        <span class="k">for</span> <span class="n">expression</span> <span class="k">in</span> <span class="o">&amp;</span><span class="n">query</span><span class="py">.expressions</span> <span class="p">{</span>
+            <span class="k">match</span> <span class="n">expression</span> <span class="p">{</span>
+                <span class="nn">MultiModalExpression</span><span class="p">::</span><span class="nf">Graph</span><span class="p">(</span><span class="n">_</span><span class="p">)</span> <span class="k">=&gt;</span> <span class="p">{</span>
+                    <span class="n">analysis</span><span class="nf">.add_modality</span><span class="p">(</span><span class="nn">DataModality</span><span class="p">::</span><span class="n">Graph</span><span class="p">);</span>
+                <span class="p">},</span>
+                <span class="nn">MultiModalExpression</span><span class="p">::</span><span class="nf">Vector</span><span class="p">(</span><span class="n">_</span><span class="p">)</span> <span class="k">=&gt;</span> <span class="p">{</span>
+                    <span class="n">analysis</span><span class="nf">.add_modality</span><span class="p">(</span><span class="nn">DataModality</span><span class="p">::</span><span class="n">Vector</span><span class="p">);</span>
+                <span class="p">},</span>
+                <span class="nn">MultiModalExpression</span><span class="p">::</span><span class="nf">TimeSeries</span><span class="p">(</span><span class="n">_</span><span class="p">)</span> <span class="k">=&gt;</span> <span class="p">{</span>
+                    <span class="n">analysis</span><span class="nf">.add_modality</span><span class="p">(</span><span class="nn">DataModality</span><span class="p">::</span><span class="n">TimeSeries</span><span class="p">);</span>
+                <span class="p">},</span>
+                <span class="nn">MultiModalExpression</span><span class="p">::</span><span class="nf">CrossModal</span><span class="p">(</span><span class="n">cross_op</span><span class="p">)</span> <span class="k">=&gt;</span> <span class="p">{</span>
+                    <span class="c1">// Cross-modal operations involve multiple modalities</span>
+                    <span class="n">analysis</span><span class="nf">.add_cross_modal_operation</span><span class="p">(</span><span class="n">cross_op</span><span class="nf">.clone</span><span class="p">());</span>
+                <span class="p">},</span>
+                <span class="n">_</span> <span class="k">=&gt;</span> <span class="p">{</span>
+                    <span class="c1">// Standard relational operations</span>
+                    <span class="n">analysis</span><span class="nf">.add_modality</span><span class="p">(</span><span class="nn">DataModality</span><span class="p">::</span><span class="n">Relational</span><span class="p">);</span>
+                <span class="p">}</span>
+            <span class="p">}</span>
+        <span class="p">}</span>
+        
+        <span class="c1">// Analyze data dependencies between modalities</span>
+        <span class="n">analysis</span><span class="py">.dependencies</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.analyze_data_dependencies</span><span class="p">(</span><span class="o">&amp;</span><span class="n">analysis</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+        
+        <span class="nf">Ok</span><span class="p">(</span><span class="n">analysis</span><span class="p">)</span>
+    <span class="p">}</span>
+    
+    <span class="cd">/// Decompose multi-modal query into modality-specific subqueries</span>
+    <span class="k">fn</span> <span class="nf">decompose_query</span><span class="p">(</span>
+        <span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> 
+        <span class="n">query</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">MultiModalQuery</span><span class="p">,</span>
+        <span class="n">analysis</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">ModalityAnalysis</span>
+    <span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="n">SubQuery</span><span class="o">&gt;&gt;</span> <span class="p">{</span>
+        <span class="k">let</span> <span class="k">mut</span> <span class="n">subqueries</span> <span class="o">=</span> <span class="nn">Vec</span><span class="p">::</span><span class="nf">new</span><span class="p">();</span>
+        
+        <span class="c1">// Create subquery for each modality</span>
+        <span class="k">for</span> <span class="n">modality</span> <span class="k">in</span> <span class="o">&amp;</span><span class="n">analysis</span><span class="py">.modalities</span> <span class="p">{</span>
+            <span class="k">let</span> <span class="n">modality_expressions</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.extract_modality_expressions</span><span class="p">(</span><span class="n">query</span><span class="p">,</span> <span class="o">*</span><span class="n">modality</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+            
+            <span class="k">if</span> <span class="o">!</span><span class="n">modality_expressions</span><span class="nf">.is_empty</span><span class="p">()</span> <span class="p">{</span>
+                <span class="k">let</span> <span class="n">subquery</span> <span class="o">=</span> <span class="n">SubQuery</span> <span class="p">{</span>
+                    <span class="n">modality</span><span class="p">:</span> <span class="o">*</span><span class="n">modality</span><span class="p">,</span>
+                    <span class="n">expressions</span><span class="p">:</span> <span class="n">modality_expressions</span><span class="p">,</span>
+                    <span class="n">dependencies</span><span class="p">:</span> <span class="n">analysis</span><span class="nf">.get_dependencies</span><span class="p">(</span><span class="o">*</span><span class="n">modality</span><span class="p">),</span>
+                    <span class="n">estimated_rows</span><span class="p">:</span> <span class="k">self</span><span class="nf">.estimate_result_size</span><span class="p">(</span><span class="o">*</span><span class="n">modality</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">modality_expressions</span><span class="p">)</span><span class="o">?</span><span class="p">,</span>
+                <span class="p">};</span>
+                <span class="n">subqueries</span><span class="nf">.push</span><span class="p">(</span><span class="n">subquery</span><span class="p">);</span>
+            <span class="p">}</span>
+        <span class="p">}</span>
+        
+        <span class="c1">// Handle cross-modal operations</span>
+        <span class="k">for</span> <span class="n">cross_op</span> <span class="k">in</span> <span class="o">&amp;</span><span class="n">analysis</span><span class="py">.cross_modal_operations</span> <span class="p">{</span>
+            <span class="k">let</span> <span class="n">cross_subquery</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.plan_cross_modal_operation</span><span class="p">(</span><span class="n">cross_op</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+            <span class="n">subqueries</span><span class="nf">.push</span><span class="p">(</span><span class="n">cross_subquery</span><span class="p">);</span>
+        <span class="p">}</span>
+        
+        <span class="nf">Ok</span><span class="p">(</span><span class="n">subqueries</span><span class="p">)</span>
+    <span class="p">}</span>
+    
+    <span class="cd">/// Optimize execution order based on cost model</span>
+    <span class="k">fn</span> <span class="nf">optimize_execution_order</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">subqueries</span><span class="p">:</span> <span class="o">&amp;</span><span class="p">[</span><span class="n">SubQuery</span><span class="p">])</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="n">SubQuery</span><span class="o">&gt;&gt;</span> <span class="p">{</span>
+        <span class="c1">// Build dependency graph</span>
+        <span class="k">let</span> <span class="n">dependency_graph</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.build_dependency_graph</span><span class="p">(</span><span class="n">subqueries</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+        
+        <span class="c1">// Topological sort respecting dependencies</span>
+        <span class="k">let</span> <span class="k">mut</span> <span class="n">ordered_queries</span> <span class="o">=</span> <span class="nn">Vec</span><span class="p">::</span><span class="nf">new</span><span class="p">();</span>
+        <span class="k">let</span> <span class="k">mut</span> <span class="n">remaining</span> <span class="o">=</span> <span class="n">subqueries</span><span class="nf">.to_vec</span><span class="p">();</span>
+        
+        <span class="k">while</span> <span class="o">!</span><span class="n">remaining</span><span class="nf">.is_empty</span><span class="p">()</span> <span class="p">{</span>
+            <span class="c1">// Find queries with no unresolved dependencies</span>
+            <span class="k">let</span> <span class="n">ready_queries</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">_</span><span class="o">&gt;</span> <span class="o">=</span> <span class="n">remaining</span>
+                <span class="nf">.iter</span><span class="p">()</span>
+                <span class="nf">.filter</span><span class="p">(|</span><span class="n">q</span><span class="p">|</span> <span class="k">self</span><span class="nf">.are_dependencies_resolved</span><span class="p">(</span><span class="n">q</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">ordered_queries</span><span class="p">))</span>
+                <span class="nf">.cloned</span><span class="p">()</span>
+                <span class="nf">.collect</span><span class="p">();</span>
+            
+            <span class="k">if</span> <span class="n">ready_queries</span><span class="nf">.is_empty</span><span class="p">()</span> <span class="p">{</span>
+                <span class="k">return</span> <span class="nf">Err</span><span class="p">(</span><span class="nn">OrbitError</span><span class="p">::</span><span class="nf">QueryPlanningError</span><span class="p">(</span>
+                    <span class="s">"Circular dependency detected in multi-modal query"</span><span class="nf">.to_string</span><span class="p">()</span>
+                <span class="p">));</span>
+            <span class="p">}</span>
+            
+            <span class="c1">// Among ready queries, choose the most selective one first</span>
+            <span class="k">let</span> <span class="n">next_query</span> <span class="o">=</span> <span class="n">ready_queries</span>
+                <span class="nf">.into_iter</span><span class="p">()</span>
+                <span class="nf">.min_by_key</span><span class="p">(|</span><span class="n">q</span><span class="p">|</span> <span class="k">self</span><span class="nf">.estimate_selectivity</span><span class="p">(</span><span class="n">q</span><span class="p">))</span>
+                <span class="nf">.unwrap</span><span class="p">();</span>
+            
+            <span class="n">ordered_queries</span><span class="nf">.push</span><span class="p">(</span><span class="n">next_query</span><span class="nf">.clone</span><span class="p">());</span>
+            <span class="n">remaining</span><span class="nf">.retain</span><span class="p">(|</span><span class="n">q</span><span class="p">|</span> <span class="n">q</span><span class="py">.id</span> <span class="o">!=</span> <span class="n">next_query</span><span class="py">.id</span><span class="p">);</span>
+        <span class="p">}</span>
+        
+        <span class="nf">Ok</span><span class="p">(</span><span class="n">ordered_queries</span><span class="p">)</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h4 id="4-cross-modal-result-integration">4. Cross-Modal Result Integration</h4>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="cd">/// Integrates results from different data modalities</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">CrossModalResultIntegrator</span> <span class="p">{</span>
+    <span class="cd">/// Schema mapping between modalities</span>
+    <span class="n">schema_mapper</span><span class="p">:</span> <span class="n">SchemaMapper</span><span class="p">,</span>
+    <span class="cd">/// Type conversion utilities</span>
+    <span class="n">type_converter</span><span class="p">:</span> <span class="n">TypeConverter</span><span class="p">,</span>
+    <span class="cd">/// Memory manager for large result sets</span>
+    <span class="n">memory_manager</span><span class="p">:</span> <span class="nb">Arc</span><span class="o">&lt;</span><span class="n">MemoryManager</span><span class="o">&gt;</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="k">impl</span> <span class="n">CrossModalResultIntegrator</span> <span class="p">{</span>
+    <span class="cd">/// Integrate results from multiple modality executors</span>
+    <span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">integrate_results</span><span class="p">(</span>
+        <span class="o">&amp;</span><span class="k">self</span><span class="p">,</span>
+        <span class="n">results</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">ModalityResult</span><span class="o">&gt;</span>
+    <span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">IntegratedResult</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="c1">// Phase 1: Schema unification</span>
+        <span class="k">let</span> <span class="n">unified_schema</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.unify_schemas</span><span class="p">(</span><span class="o">&amp;</span><span class="n">results</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+        
+        <span class="c1">// Phase 2: Type coercion and conversion</span>
+        <span class="k">let</span> <span class="n">converted_results</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.convert_types</span><span class="p">(</span><span class="n">results</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">unified_schema</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+        
+        <span class="c1">// Phase 3: Join/merge based on query semantics  </span>
+        <span class="k">let</span> <span class="n">merged_result</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.merge_results</span><span class="p">(</span><span class="n">converted_results</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">unified_schema</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+        
+        <span class="c1">// Phase 4: Final result formatting</span>
+        <span class="k">let</span> <span class="n">formatted_result</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.format_result</span><span class="p">(</span><span class="n">merged_result</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">unified_schema</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+        
+        <span class="nf">Ok</span><span class="p">(</span><span class="n">formatted_result</span><span class="p">)</span>
+    <span class="p">}</span>
+    
+    <span class="cd">/// Unify schemas from different modalities</span>
+    <span class="k">fn</span> <span class="nf">unify_schemas</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">results</span><span class="p">:</span> <span class="o">&amp;</span><span class="p">[</span><span class="n">ModalityResult</span><span class="p">])</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">UnifiedSchema</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="k">let</span> <span class="k">mut</span> <span class="n">unified</span> <span class="o">=</span> <span class="nn">UnifiedSchema</span><span class="p">::</span><span class="nf">new</span><span class="p">();</span>
+        
+        <span class="k">for</span> <span class="n">result</span> <span class="k">in</span> <span class="n">results</span> <span class="p">{</span>
+            <span class="k">match</span> <span class="n">result</span><span class="py">.modality</span> <span class="p">{</span>
+                <span class="nn">DataModality</span><span class="p">::</span><span class="n">Relational</span> <span class="k">=&gt;</span> <span class="p">{</span>
+                    <span class="c1">// Standard relational schema</span>
+                    <span class="k">for</span> <span class="n">column</span> <span class="k">in</span> <span class="o">&amp;</span><span class="n">result</span><span class="py">.schema.columns</span> <span class="p">{</span>
+                        <span class="n">unified</span><span class="nf">.add_column</span><span class="p">(</span><span class="n">column</span><span class="nf">.clone</span><span class="p">())</span><span class="o">?</span><span class="p">;</span>
+                    <span class="p">}</span>
+                <span class="p">},</span>
+                <span class="nn">DataModality</span><span class="p">::</span><span class="n">Graph</span> <span class="k">=&gt;</span> <span class="p">{</span>
+                    <span class="c1">// Graph results: nodes and edges</span>
+                    <span class="n">unified</span><span class="nf">.add_graph_schema</span><span class="p">(</span><span class="o">&amp;</span><span class="n">result</span><span class="py">.schema</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+                <span class="p">},</span>
+                <span class="nn">DataModality</span><span class="p">::</span><span class="n">Vector</span> <span class="k">=&gt;</span> <span class="p">{</span>
+                    <span class="c1">// Vector results: embeddings and similarities</span>
+                    <span class="n">unified</span><span class="nf">.add_vector_schema</span><span class="p">(</span><span class="o">&amp;</span><span class="n">result</span><span class="py">.schema</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+                <span class="p">},</span>
+                <span class="nn">DataModality</span><span class="p">::</span><span class="n">TimeSeries</span> <span class="k">=&gt;</span> <span class="p">{</span>
+                    <span class="c1">// Time series results: timestamps and values</span>
+                    <span class="n">unified</span><span class="nf">.add_timeseries_schema</span><span class="p">(</span><span class="o">&amp;</span><span class="n">result</span><span class="py">.schema</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+                <span class="p">}</span>
+            <span class="p">}</span>
+        <span class="p">}</span>
+        
+        <span class="c1">// Resolve schema conflicts and create mappings</span>
+        <span class="n">unified</span><span class="nf">.resolve_conflicts</span><span class="p">()</span><span class="o">?</span><span class="p">;</span>
+        
+        <span class="nf">Ok</span><span class="p">(</span><span class="n">unified</span><span class="p">)</span>
+    <span class="p">}</span>
+    
+    <span class="cd">/// Convert and merge results from different modalities</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">merge_results</span><span class="p">(</span>
+        <span class="o">&amp;</span><span class="k">self</span><span class="p">,</span>
+        <span class="n">results</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">ConvertedResult</span><span class="o">&gt;</span><span class="p">,</span>
+        <span class="n">unified_schema</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">UnifiedSchema</span>
+    <span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">MergedResult</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="c1">// Determine merge strategy based on result structure</span>
+        <span class="k">let</span> <span class="n">merge_strategy</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.determine_merge_strategy</span><span class="p">(</span><span class="o">&amp;</span><span class="n">results</span><span class="p">,</span> <span class="n">unified_schema</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+        
+        <span class="k">match</span> <span class="n">merge_strategy</span> <span class="p">{</span>
+            <span class="nn">MergeStrategy</span><span class="p">::</span><span class="n">Join</span> <span class="p">{</span> <span class="n">join_columns</span> <span class="p">}</span> <span class="k">=&gt;</span> <span class="p">{</span>
+                <span class="k">self</span><span class="nf">.perform_cross_modal_join</span><span class="p">(</span><span class="n">results</span><span class="p">,</span> <span class="n">join_columns</span><span class="p">)</span><span class="k">.await</span>
+            <span class="p">},</span>
+            <span class="nn">MergeStrategy</span><span class="p">::</span><span class="n">Union</span> <span class="k">=&gt;</span> <span class="p">{</span>
+                <span class="k">self</span><span class="nf">.perform_union</span><span class="p">(</span><span class="n">results</span><span class="p">)</span><span class="k">.await</span>  
+            <span class="p">},</span>
+            <span class="nn">MergeStrategy</span><span class="p">::</span><span class="n">Nested</span> <span class="k">=&gt;</span> <span class="p">{</span>
+                <span class="k">self</span><span class="nf">.perform_nested_merge</span><span class="p">(</span><span class="n">results</span><span class="p">)</span><span class="k">.await</span>
+            <span class="p">},</span>
+            <span class="nn">MergeStrategy</span><span class="p">::</span><span class="n">Cartesian</span> <span class="k">=&gt;</span> <span class="p">{</span>
+                <span class="k">self</span><span class="nf">.perform_cartesian_product</span><span class="p">(</span><span class="n">results</span><span class="p">)</span><span class="k">.await</span>
+            <span class="p">}</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+    
+    <span class="cd">/// Perform cross-modal join operation</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">perform_cross_modal_join</span><span class="p">(</span>
+        <span class="o">&amp;</span><span class="k">self</span><span class="p">,</span>
+        <span class="n">results</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">ConvertedResult</span><span class="o">&gt;</span><span class="p">,</span>
+        <span class="n">join_columns</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">JoinColumn</span><span class="o">&gt;</span>
+    <span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">MergedResult</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="c1">// Build hash tables for efficient joining</span>
+        <span class="k">let</span> <span class="k">mut</span> <span class="n">hash_tables</span> <span class="o">=</span> <span class="nn">HashMap</span><span class="p">::</span><span class="nf">new</span><span class="p">();</span>
+        
+        <span class="k">for</span> <span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">result</span><span class="p">)</span> <span class="k">in</span> <span class="n">results</span><span class="nf">.iter</span><span class="p">()</span><span class="nf">.enumerate</span><span class="p">()</span> <span class="p">{</span>
+            <span class="k">let</span> <span class="n">hash_table</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.build_hash_table</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">join_columns</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+            <span class="n">hash_tables</span><span class="nf">.insert</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">hash_table</span><span class="p">);</span>
+        <span class="p">}</span>
+        
+        <span class="c1">// Perform multi-way join</span>
+        <span class="k">let</span> <span class="k">mut</span> <span class="n">merged_rows</span> <span class="o">=</span> <span class="nn">Vec</span><span class="p">::</span><span class="nf">new</span><span class="p">();</span>
+        
+        <span class="c1">// Start with smallest result set for efficiency</span>
+        <span class="k">let</span> <span class="n">base_result_idx</span> <span class="o">=</span> <span class="n">results</span>
+            <span class="nf">.iter</span><span class="p">()</span>
+            <span class="nf">.enumerate</span><span class="p">()</span>
+            <span class="nf">.min_by_key</span><span class="p">(|(</span><span class="n">_</span><span class="p">,</span> <span class="n">r</span><span class="p">)|</span> <span class="n">r</span><span class="py">.rows</span><span class="nf">.len</span><span class="p">())</span>
+            <span class="nf">.map</span><span class="p">(|(</span><span class="n">i</span><span class="p">,</span> <span class="n">_</span><span class="p">)|</span> <span class="n">i</span><span class="p">)</span>
+            <span class="nf">.unwrap</span><span class="p">();</span>
+        
+        <span class="k">let</span> <span class="n">base_result</span> <span class="o">=</span> <span class="o">&amp;</span><span class="n">results</span><span class="p">[</span><span class="n">base_result_idx</span><span class="p">];</span>
+        
+        <span class="k">for</span> <span class="n">base_row</span> <span class="k">in</span> <span class="o">&amp;</span><span class="n">base_result</span><span class="py">.rows</span> <span class="p">{</span>
+            <span class="c1">// Find matching rows in all other results</span>
+            <span class="k">let</span> <span class="k">mut</span> <span class="n">joined_row</span> <span class="o">=</span> <span class="n">base_row</span><span class="nf">.clone</span><span class="p">();</span>
+            <span class="k">let</span> <span class="k">mut</span> <span class="n">join_successful</span> <span class="o">=</span> <span class="k">true</span><span class="p">;</span>
+            
+            <span class="k">for</span> <span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">other_result</span><span class="p">)</span> <span class="k">in</span> <span class="n">results</span><span class="nf">.iter</span><span class="p">()</span><span class="nf">.enumerate</span><span class="p">()</span> <span class="p">{</span>
+                <span class="k">if</span> <span class="n">i</span> <span class="o">==</span> <span class="n">base_result_idx</span> <span class="p">{</span>
+                    <span class="k">continue</span><span class="p">;</span>
+                <span class="p">}</span>
+                
+                <span class="k">let</span> <span class="n">join_key</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.extract_join_key</span><span class="p">(</span><span class="n">base_row</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">join_columns</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+                
+                <span class="k">if</span> <span class="k">let</span> <span class="nf">Some</span><span class="p">(</span><span class="n">matching_rows</span><span class="p">)</span> <span class="o">=</span> <span class="n">hash_tables</span><span class="p">[</span><span class="o">&amp;</span><span class="n">i</span><span class="p">]</span><span class="nf">.get</span><span class="p">(</span><span class="o">&amp;</span><span class="n">join_key</span><span class="p">)</span> <span class="p">{</span>
+                    <span class="c1">// For now, take first match (could extend to handle multiple matches)</span>
+                    <span class="k">if</span> <span class="k">let</span> <span class="nf">Some</span><span class="p">(</span><span class="n">matching_row</span><span class="p">)</span> <span class="o">=</span> <span class="n">matching_rows</span><span class="nf">.first</span><span class="p">()</span> <span class="p">{</span>
+                        <span class="n">joined_row</span><span class="nf">.extend</span><span class="p">(</span><span class="n">matching_row</span><span class="nf">.clone</span><span class="p">());</span>
+                    <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+                        <span class="n">join_successful</span> <span class="o">=</span> <span class="k">false</span><span class="p">;</span>
+                        <span class="k">break</span><span class="p">;</span>
+                    <span class="p">}</span>
+                <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+                    <span class="n">join_successful</span> <span class="o">=</span> <span class="k">false</span><span class="p">;</span>
+                    <span class="k">break</span><span class="p">;</span>
+                <span class="p">}</span>
+            <span class="p">}</span>
+            
+            <span class="k">if</span> <span class="n">join_successful</span> <span class="p">{</span>
+                <span class="n">merged_rows</span><span class="nf">.push</span><span class="p">(</span><span class="n">joined_row</span><span class="p">);</span>
+            <span class="p">}</span>
+        <span class="p">}</span>
+        
+        <span class="nf">Ok</span><span class="p">(</span><span class="n">MergedResult</span> <span class="p">{</span> 
+            <span class="n">rows</span><span class="p">:</span> <span class="n">merged_rows</span><span class="p">,</span>
+            <span class="n">schema</span><span class="p">:</span> <span class="n">unified_schema</span><span class="nf">.clone</span><span class="p">(),</span>
+            <span class="n">statistics</span><span class="p">:</span> <span class="k">self</span><span class="nf">.compute_result_statistics</span><span class="p">(</span><span class="o">&amp;</span><span class="n">merged_rows</span><span class="p">)</span><span class="o">?</span><span class="p">,</span>
+        <span class="p">})</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="performance-optimizations">Performance Optimizations</h3>
+
+<h4 id="1-data-locality-optimization">1. Data Locality Optimization</h4>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="cd">/// Optimize query execution based on data locality across modalities</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">DataLocalityOptimizer</span> <span class="p">{</span>
+    <span class="cd">/// Actor placement information</span>
+    <span class="n">actor_placement</span><span class="p">:</span> <span class="nb">Arc</span><span class="o">&lt;</span><span class="n">ActorPlacement</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="cd">/// Data distribution statistics</span>
+    <span class="n">data_distribution</span><span class="p">:</span> <span class="n">DataDistributionStats</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="k">impl</span> <span class="n">DataLocalityOptimizer</span> <span class="p">{</span>
+    <span class="cd">/// Optimize query plan for data locality</span>
+    <span class="k">pub</span> <span class="k">fn</span> <span class="nf">optimize_for_locality</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">plan</span><span class="p">:</span> <span class="n">ExecutionPlan</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">ExecutionPlan</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="k">let</span> <span class="k">mut</span> <span class="n">optimized_plan</span> <span class="o">=</span> <span class="n">plan</span><span class="p">;</span>
+        
+        <span class="c1">// Analyze data co-location opportunities</span>
+        <span class="k">let</span> <span class="n">colocation_analysis</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.analyze_data_colocation</span><span class="p">(</span><span class="o">&amp;</span><span class="n">optimized_plan</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+        
+        <span class="c1">// Reorder operations to maximize local processing</span>
+        <span class="n">optimized_plan</span><span class="py">.subqueries</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.reorder_for_locality</span><span class="p">(</span>
+            <span class="n">optimized_plan</span><span class="py">.subqueries</span><span class="p">,</span>
+            <span class="o">&amp;</span><span class="n">colocation_analysis</span>
+        <span class="p">)</span><span class="o">?</span><span class="p">;</span>
+        
+        <span class="c1">// Plan data movement to minimize network traffic  </span>
+        <span class="n">optimized_plan</span><span class="py">.data_movement_plan</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.plan_data_movement</span><span class="p">(</span>
+            <span class="o">&amp;</span><span class="n">optimized_plan</span><span class="py">.subqueries</span><span class="p">,</span>
+            <span class="o">&amp;</span><span class="n">colocation_analysis</span>
+        <span class="p">)</span><span class="o">?</span><span class="p">;</span>
+        
+        <span class="nf">Ok</span><span class="p">(</span><span class="n">optimized_plan</span><span class="p">)</span>
+    <span class="p">}</span>
+    
+    <span class="cd">/// Analyze which data is co-located on the same actors/nodes</span>
+    <span class="k">fn</span> <span class="nf">analyze_data_colocation</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">plan</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">ExecutionPlan</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">ColocationAnalysis</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="k">let</span> <span class="k">mut</span> <span class="n">analysis</span> <span class="o">=</span> <span class="nn">ColocationAnalysis</span><span class="p">::</span><span class="nf">new</span><span class="p">();</span>
+        
+        <span class="k">for</span> <span class="n">subquery</span> <span class="k">in</span> <span class="o">&amp;</span><span class="n">plan</span><span class="py">.subqueries</span> <span class="p">{</span>
+            <span class="c1">// Determine which actors hold the data for this subquery</span>
+            <span class="k">let</span> <span class="n">data_actors</span> <span class="o">=</span> <span class="k">match</span> <span class="n">subquery</span><span class="py">.modality</span> <span class="p">{</span>
+                <span class="nn">DataModality</span><span class="p">::</span><span class="n">Relational</span> <span class="k">=&gt;</span> <span class="p">{</span>
+                    <span class="k">self</span><span class="nf">.get_relational_data_actors</span><span class="p">(</span><span class="o">&amp;</span><span class="n">subquery</span><span class="py">.expressions</span><span class="p">)</span><span class="o">?</span>
+                <span class="p">},</span>
+                <span class="nn">DataModality</span><span class="p">::</span><span class="n">Graph</span> <span class="k">=&gt;</span> <span class="p">{</span>
+                    <span class="k">self</span><span class="nf">.get_graph_data_actors</span><span class="p">(</span><span class="o">&amp;</span><span class="n">subquery</span><span class="py">.expressions</span><span class="p">)</span><span class="o">?</span>  
+                <span class="p">},</span>
+                <span class="nn">DataModality</span><span class="p">::</span><span class="n">TimeSeries</span> <span class="k">=&gt;</span> <span class="p">{</span>
+                    <span class="k">self</span><span class="nf">.get_timeseries_data_actors</span><span class="p">(</span><span class="o">&amp;</span><span class="n">subquery</span><span class="py">.expressions</span><span class="p">)</span><span class="o">?</span>
+                <span class="p">},</span>
+                <span class="nn">DataModality</span><span class="p">::</span><span class="n">Vector</span> <span class="k">=&gt;</span> <span class="p">{</span>
+                    <span class="k">self</span><span class="nf">.get_vector_data_actors</span><span class="p">(</span><span class="o">&amp;</span><span class="n">subquery</span><span class="py">.expressions</span><span class="p">)</span><span class="o">?</span>
+                <span class="p">}</span>
+            <span class="p">};</span>
+            
+            <span class="n">analysis</span><span class="nf">.add_subquery_actors</span><span class="p">(</span><span class="n">subquery</span><span class="py">.id</span><span class="p">,</span> <span class="n">data_actors</span><span class="p">);</span>
+        <span class="p">}</span>
+        
+        <span class="c1">// Find overlapping actors between subqueries</span>
+        <span class="n">analysis</span><span class="nf">.find_colocation_opportunities</span><span class="p">()</span><span class="o">?</span><span class="p">;</span>
+        
+        <span class="nf">Ok</span><span class="p">(</span><span class="n">analysis</span><span class="p">)</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h4 id="2-adaptive-query-execution">2. Adaptive Query Execution</h4>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="cd">/// Adaptive executor that adjusts strategy based on runtime statistics</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">AdaptiveMultiModalExecutor</span> <span class="p">{</span>
+    <span class="cd">/// Runtime statistics collector</span>
+    <span class="n">statistics_collector</span><span class="p">:</span> <span class="nb">Arc</span><span class="o">&lt;</span><span class="n">RuntimeStatisticsCollector</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="cd">/// Execution strategy selector</span>
+    <span class="n">strategy_selector</span><span class="p">:</span> <span class="n">ExecutionStrategySelector</span><span class="p">,</span>
+    <span class="cd">/// Resource monitor</span>
+    <span class="n">resource_monitor</span><span class="p">:</span> <span class="nb">Arc</span><span class="o">&lt;</span><span class="n">ResourceMonitor</span><span class="o">&gt;</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="k">impl</span> <span class="n">AdaptiveMultiModalExecutor</span> <span class="p">{</span>
+    <span class="cd">/// Execute query with adaptive optimization</span>
+    <span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">execute_adaptive</span><span class="p">(</span>
+        <span class="o">&amp;</span><span class="k">self</span><span class="p">,</span>
+        <span class="n">plan</span><span class="p">:</span> <span class="n">ExecutionPlan</span>
+    <span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">QueryResult</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="c1">// Start with initial execution strategy</span>
+        <span class="k">let</span> <span class="k">mut</span> <span class="n">current_strategy</span> <span class="o">=</span> <span class="k">self</span><span class="py">.strategy_selector</span><span class="nf">.select_initial_strategy</span><span class="p">(</span><span class="o">&amp;</span><span class="n">plan</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+        <span class="k">let</span> <span class="k">mut</span> <span class="n">execution_context</span> <span class="o">=</span> <span class="nn">ExecutionContext</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="n">plan</span><span class="p">,</span> <span class="n">current_strategy</span><span class="p">);</span>
+        
+        <span class="c1">// Execute subqueries with runtime adaptation</span>
+        <span class="k">let</span> <span class="k">mut</span> <span class="n">results</span> <span class="o">=</span> <span class="nn">Vec</span><span class="p">::</span><span class="nf">new</span><span class="p">();</span>
+        
+        <span class="k">for</span> <span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">subquery</span><span class="p">)</span> <span class="k">in</span> <span class="n">execution_context</span><span class="py">.plan.subqueries</span><span class="nf">.iter</span><span class="p">()</span><span class="nf">.enumerate</span><span class="p">()</span> <span class="p">{</span>
+            <span class="c1">// Monitor resource usage before execution</span>
+            <span class="k">let</span> <span class="n">resource_snapshot</span> <span class="o">=</span> <span class="k">self</span><span class="py">.resource_monitor</span><span class="nf">.take_snapshot</span><span class="p">();</span>
+            
+            <span class="c1">// Execute subquery</span>
+            <span class="k">let</span> <span class="n">start_time</span> <span class="o">=</span> <span class="nn">Instant</span><span class="p">::</span><span class="nf">now</span><span class="p">();</span>
+            <span class="k">let</span> <span class="n">result</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.execute_subquery</span><span class="p">(</span><span class="n">subquery</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">execution_context</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+            <span class="k">let</span> <span class="n">execution_time</span> <span class="o">=</span> <span class="n">start_time</span><span class="nf">.elapsed</span><span class="p">();</span>
+            
+            <span class="c1">// Collect runtime statistics</span>
+            <span class="k">let</span> <span class="n">stats</span> <span class="o">=</span> <span class="n">RuntimeStatistics</span> <span class="p">{</span>
+                <span class="n">subquery_id</span><span class="p">:</span> <span class="n">subquery</span><span class="py">.id</span><span class="p">,</span>
+                <span class="n">execution_time</span><span class="p">,</span>
+                <span class="n">rows_processed</span><span class="p">:</span> <span class="n">result</span><span class="py">.row_count</span><span class="p">,</span>
+                <span class="n">memory_used</span><span class="p">:</span> <span class="n">resource_snapshot</span><span class="nf">.memory_delta</span><span class="p">(),</span>
+                <span class="n">cpu_utilization</span><span class="p">:</span> <span class="n">resource_snapshot</span><span class="nf">.cpu_utilization</span><span class="p">(),</span>
+            <span class="p">};</span>
+            
+            <span class="k">self</span><span class="py">.statistics_collector</span><span class="nf">.record_stats</span><span class="p">(</span><span class="n">stats</span><span class="p">);</span>
+            <span class="n">results</span><span class="nf">.push</span><span class="p">(</span><span class="n">result</span><span class="p">);</span>
+            
+            <span class="c1">// Adapt strategy for remaining subqueries if needed</span>
+            <span class="k">if</span> <span class="k">self</span><span class="nf">.should_adapt_strategy</span><span class="p">(</span><span class="o">&amp;</span><span class="n">execution_context</span><span class="p">,</span> <span class="n">i</span><span class="p">)</span><span class="o">?</span> <span class="p">{</span>
+                <span class="k">let</span> <span class="n">new_strategy</span> <span class="o">=</span> <span class="k">self</span><span class="py">.strategy_selector</span><span class="nf">.adapt_strategy</span><span class="p">(</span>
+                    <span class="o">&amp;</span><span class="n">execution_context</span><span class="p">,</span>
+                    <span class="o">&amp;</span><span class="k">self</span><span class="py">.statistics_collector</span><span class="nf">.get_recent_stats</span><span class="p">()</span>
+                <span class="p">)</span><span class="o">?</span><span class="p">;</span>
+                
+                <span class="k">if</span> <span class="n">new_strategy</span> <span class="o">!=</span> <span class="n">current_strategy</span> <span class="p">{</span>
+                    <span class="n">execution_context</span><span class="py">.strategy</span> <span class="o">=</span> <span class="n">new_strategy</span><span class="p">;</span>
+                    <span class="n">current_strategy</span> <span class="o">=</span> <span class="n">new_strategy</span><span class="p">;</span>
+                <span class="p">}</span>
+            <span class="p">}</span>
+        <span class="p">}</span>
+        
+        <span class="c1">// Integrate final results</span>
+        <span class="k">let</span> <span class="n">integrated_result</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.integrate_results</span><span class="p">(</span><span class="n">results</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+        
+        <span class="nf">Ok</span><span class="p">(</span><span class="n">integrated_result</span><span class="p">)</span>
+    <span class="p">}</span>
+    
+    <span class="cd">/// Determine if execution strategy should be adapted</span>
+    <span class="k">fn</span> <span class="nf">should_adapt_strategy</span><span class="p">(</span>
+        <span class="o">&amp;</span><span class="k">self</span><span class="p">,</span>
+        <span class="n">context</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">ExecutionContext</span><span class="p">,</span>
+        <span class="n">completed_subqueries</span><span class="p">:</span> <span class="nb">usize</span>
+    <span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="nb">bool</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="c1">// Check if performance is significantly different from expected</span>
+        <span class="k">let</span> <span class="n">recent_stats</span> <span class="o">=</span> <span class="k">self</span><span class="py">.statistics_collector</span><span class="nf">.get_recent_stats</span><span class="p">();</span>
+        <span class="k">let</span> <span class="n">expected_performance</span> <span class="o">=</span> <span class="n">context</span><span class="py">.plan.performance_estimates</span><span class="nf">.get</span><span class="p">(</span><span class="n">completed_subqueries</span><span class="p">);</span>
+        
+        <span class="k">if</span> <span class="k">let</span> <span class="nf">Some</span><span class="p">(</span><span class="n">expected</span><span class="p">)</span> <span class="o">=</span> <span class="n">expected_performance</span> <span class="p">{</span>
+            <span class="k">let</span> <span class="n">actual_avg_time</span> <span class="o">=</span> <span class="n">recent_stats</span>
+                <span class="nf">.iter</span><span class="p">()</span>
+                <span class="nf">.map</span><span class="p">(|</span><span class="n">s</span><span class="p">|</span> <span class="n">s</span><span class="py">.execution_time</span><span class="nf">.as_millis</span><span class="p">()</span> <span class="k">as</span> <span class="nb">f64</span><span class="p">)</span>
+                <span class="py">.sum</span><span class="p">::</span><span class="o">&lt;</span><span class="nb">f64</span><span class="o">&gt;</span><span class="p">()</span> <span class="o">/</span> <span class="n">recent_stats</span><span class="nf">.len</span><span class="p">()</span> <span class="k">as</span> <span class="nb">f64</span><span class="p">;</span>
+            
+            <span class="c1">// Adapt if actual performance is more than 50% different from expected</span>
+            <span class="k">let</span> <span class="n">performance_delta</span> <span class="o">=</span> <span class="p">(</span><span class="n">actual_avg_time</span> <span class="o">-</span> <span class="n">expected</span><span class="nf">.as_millis</span><span class="p">()</span> <span class="k">as</span> <span class="nb">f64</span><span class="p">)</span><span class="nf">.abs</span><span class="p">()</span> 
+                                   <span class="o">/</span> <span class="n">expected</span><span class="nf">.as_millis</span><span class="p">()</span> <span class="k">as</span> <span class="nb">f64</span><span class="p">;</span>
+            
+            <span class="nf">Ok</span><span class="p">(</span><span class="n">performance_delta</span> <span class="o">&gt;</span> <span class="mf">0.5</span><span class="p">)</span>
+        <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+            <span class="nf">Ok</span><span class="p">(</span><span class="k">false</span><span class="p">)</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h2 id="implementation-plan">Implementation Plan</h2>
+
+<h3 id="phase-1-foundation-10-12-weeks">Phase 1: Foundation (10-12 weeks)</h3>
+<ol>
+  <li><strong>Week 1-3</strong>: Extended SQL parser with multi-modal syntax</li>
+  <li><strong>Week 4-6</strong>: Basic AST and query analysis infrastructure</li>
+  <li><strong>Week 7-9</strong>: Simple multi-modal query decomposition</li>
+  <li><strong>Week 10-12</strong>: Basic cross-modal result integration</li>
+</ol>
+
+<h3 id="phase-2-core-execution-12-14-weeks">Phase 2: Core Execution (12-14 weeks)</h3>
+<ol>
+  <li><strong>Week 13-16</strong>: Multi-modal query planner and optimizer</li>
+  <li><strong>Week 17-20</strong>: Individual modality executors integration</li>
+  <li><strong>Week 21-24</strong>: Cross-modal join operations</li>
+  <li><strong>Week 25-26</strong>: Performance optimization and tuning</li>
+</ol>
+
+<h3 id="phase-3-advanced-features-10-12-weeks">Phase 3: Advanced Features (10-12 weeks)</h3>
+<ol>
+  <li><strong>Week 27-30</strong>: Adaptive query execution</li>
+  <li><strong>Week 31-34</strong>: Data locality optimization</li>
+  <li><strong>Week 35-38</strong>: Advanced cross-modal operations</li>
+  <li><strong>Week 39-40</strong>: Streaming and real-time integration</li>
+</ol>
+
+<h3 id="phase-4-production-ready-8-10-weeks">Phase 4: Production Ready (8-10 weeks)</h3>
+<ol>
+  <li><strong>Week 41-44</strong>: Error handling and fault tolerance</li>
+  <li><strong>Week 45-46</strong>: Performance benchmarking</li>
+  <li><strong>Week 47-48</strong>: Documentation and examples</li>
+  <li><strong>Week 49-50</strong>: Ecosystem integration and testing</li>
+</ol>
+
+<h2 id="use-cases--examples">Use Cases &amp; Examples</h2>
+
+<h3 id="1-social-media-analytics">1. Social Media Analytics</h3>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Find influential users in a topic with engagement patterns</span>
+<span class="k">SELECT</span> 
+    <span class="n">u</span><span class="p">.</span><span class="n">username</span><span class="p">,</span>
+    <span class="n">u</span><span class="p">.</span><span class="n">follower_count</span><span class="p">,</span>
+    <span class="c1">-- Graph: Influence network analysis</span>
+    <span class="n">GRAPH</span><span class="p">.</span><span class="n">PAGERANK</span><span class="p">(</span><span class="n">social_network</span><span class="p">,</span> <span class="n">u</span><span class="p">.</span><span class="n">id</span><span class="p">)</span> <span class="k">AS</span> <span class="n">influence_score</span><span class="p">,</span>
+    <span class="c1">-- Vector: Topic relevance</span>
+    <span class="n">VECTOR</span><span class="p">.</span><span class="n">SIMILARITY</span><span class="p">(</span><span class="n">u</span><span class="p">.</span><span class="n">content_embedding</span><span class="p">,</span> <span class="err">$</span><span class="n">topic_embedding</span><span class="p">)</span> <span class="k">AS</span> <span class="n">topic_relevance</span><span class="p">,</span>
+    <span class="c1">-- Time series: Engagement trends</span>
+    <span class="n">TS</span><span class="p">.</span><span class="n">LINEAR_REGRESSION</span><span class="p">(</span><span class="n">u</span><span class="p">.</span><span class="n">daily_engagement</span><span class="p">,</span> <span class="s1">'30d'</span><span class="p">).</span><span class="n">slope</span> <span class="k">AS</span> <span class="n">engagement_trend</span><span class="p">,</span>
+    <span class="c1">-- ML: Predict viral content probability</span>
+    <span class="n">ML</span><span class="p">.</span><span class="n">PREDICT</span><span class="p">(</span><span class="s1">'viral_model'</span><span class="p">,</span> 
+        <span class="n">ARRAY</span><span class="p">[</span><span class="n">influence_score</span><span class="p">,</span> <span class="n">topic_relevance</span><span class="p">,</span> <span class="n">engagement_trend</span><span class="p">]</span>
+    <span class="p">)</span> <span class="k">AS</span> <span class="n">viral_probability</span>
+<span class="k">FROM</span> <span class="n">users</span> <span class="n">u</span>
+<span class="k">JOIN</span> <span class="n">social_graph</span> <span class="n">sg</span> <span class="k">ON</span> <span class="n">u</span><span class="p">.</span><span class="n">id</span> <span class="o">=</span> <span class="n">sg</span><span class="p">.</span><span class="n">user_id</span>
+<span class="k">WHERE</span> <span class="n">GRAPH</span><span class="p">.</span><span class="n">DEGREE</span><span class="p">(</span><span class="n">u</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1000</span>
+  <span class="k">AND</span> <span class="n">topic_relevance</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">.</span><span class="mi">7</span>
+  <span class="k">AND</span> <span class="n">engagement_trend</span> <span class="o">&gt;</span> <span class="mi">0</span>
+<span class="k">ORDER</span> <span class="k">BY</span> <span class="n">viral_probability</span> <span class="k">DESC</span>
+<span class="k">LIMIT</span> <span class="mi">50</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h3 id="2-supply-chain-optimization">2. Supply Chain Optimization</h3>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Optimize supply chain with multi-modal analysis</span>
+<span class="k">SELECT</span> 
+    <span class="n">s</span><span class="p">.</span><span class="n">supplier_name</span><span class="p">,</span>
+    <span class="n">s</span><span class="p">.</span><span class="k">location</span><span class="p">,</span>
+    <span class="c1">-- Graph: Supply chain path analysis</span>
+    <span class="n">GRAPH</span><span class="p">.</span><span class="n">SHORTEST_PATH</span><span class="p">(</span><span class="n">s</span><span class="p">.</span><span class="n">id</span><span class="p">,</span> <span class="n">target_facility</span><span class="p">)</span> <span class="k">AS</span> <span class="n">supply_path</span><span class="p">,</span>
+    <span class="c1">-- Time series: Delivery performance</span>
+    <span class="n">TS</span><span class="p">.</span><span class="n">PERCENTILE</span><span class="p">(</span><span class="n">delivery_times</span><span class="p">.</span><span class="n">days</span><span class="p">,</span> <span class="mi">95</span><span class="p">)</span> <span class="k">AS</span> <span class="n">p95_delivery_time</span><span class="p">,</span>
+    <span class="c1">-- Vector: Find similar suppliers by capability</span>
+    <span class="n">VECTOR</span><span class="p">.</span><span class="n">KNN_SEARCH</span><span class="p">(</span><span class="n">s</span><span class="p">.</span><span class="n">capability_vector</span><span class="p">,</span> <span class="n">top_performers</span><span class="p">.</span><span class="n">vectors</span><span class="p">,</span> <span class="mi">5</span><span class="p">)</span> <span class="k">AS</span> <span class="n">similar_suppliers</span><span class="p">,</span>
+    <span class="c1">-- Geospatial: Transportation costs</span>
+    <span class="n">GEO</span><span class="p">.</span><span class="n">DISTANCE</span><span class="p">(</span><span class="n">s</span><span class="p">.</span><span class="k">location</span><span class="p">,</span> <span class="n">target_facility</span><span class="p">.</span><span class="k">location</span><span class="p">)</span> <span class="o">*</span> <span class="n">transport_rate</span> <span class="k">AS</span> <span class="n">estimated_cost</span><span class="p">,</span>
+    <span class="c1">-- ML: Risk assessment</span>
+    <span class="n">ML</span><span class="p">.</span><span class="n">PREDICT</span><span class="p">(</span><span class="s1">'supply_risk_model'</span><span class="p">,</span> 
+        <span class="n">ARRAY</span><span class="p">[</span><span class="n">supply_path</span><span class="p">.</span><span class="k">length</span><span class="p">,</span> <span class="n">p95_delivery_time</span><span class="p">,</span> <span class="n">estimated_cost</span><span class="p">]</span>
+    <span class="p">)</span> <span class="k">AS</span> <span class="n">risk_score</span>
+<span class="k">FROM</span> <span class="n">suppliers</span> <span class="n">s</span>
+<span class="k">JOIN</span> <span class="n">delivery_history</span> <span class="n">dh</span> <span class="k">ON</span> <span class="n">s</span><span class="p">.</span><span class="n">id</span> <span class="o">=</span> <span class="n">dh</span><span class="p">.</span><span class="n">supplier_id</span>
+<span class="k">WHERE</span> <span class="n">risk_score</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">.</span><span class="mi">3</span>
+  <span class="k">AND</span> <span class="n">p95_delivery_time</span> <span class="o">&lt;</span> <span class="mi">7</span>
+  <span class="k">AND</span> <span class="n">supply_path</span><span class="p">.</span><span class="k">length</span> <span class="o">&lt;</span> <span class="mi">4</span>
+<span class="k">ORDER</span> <span class="k">BY</span> <span class="n">estimated_cost</span> <span class="k">ASC</span><span class="p">,</span> <span class="n">risk_score</span> <span class="k">ASC</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h3 id="3-smart-city-infrastructure">3. Smart City Infrastructure</h3>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Optimize city services with multi-modal data</span>
+<span class="k">SELECT</span> 
+    <span class="k">zone</span><span class="p">.</span><span class="n">id</span><span class="p">,</span>
+    <span class="k">zone</span><span class="p">.</span><span class="n">name</span><span class="p">,</span>
+    <span class="c1">-- Time series: Traffic patterns</span>
+    <span class="n">TS</span><span class="p">.</span><span class="n">FORECAST</span><span class="p">(</span><span class="n">traffic</span><span class="p">.</span><span class="n">volume</span><span class="p">,</span> <span class="mi">24</span><span class="p">)</span> <span class="k">AS</span> <span class="n">predicted_traffic</span><span class="p">,</span>
+    <span class="c1">-- Graph: Service accessibility</span>
+    <span class="n">GRAPH</span><span class="p">.</span><span class="n">ACCESSIBILITY_SCORE</span><span class="p">(</span>
+        <span class="k">zone</span><span class="p">.</span><span class="n">id</span><span class="p">,</span> 
+        <span class="n">essential_services</span><span class="p">,</span>
+        <span class="n">transportation_network</span>
+    <span class="p">)</span> <span class="k">AS</span> <span class="n">service_accessibility</span><span class="p">,</span>
+    <span class="c1">-- Vector: Demographic similarity</span>
+    <span class="n">VECTOR</span><span class="p">.</span><span class="n">CLUSTER_ANALYSIS</span><span class="p">(</span>
+        <span class="k">zone</span><span class="p">.</span><span class="n">demographic_vector</span><span class="p">,</span>
+        <span class="n">city_zones</span><span class="p">.</span><span class="n">demographic_vectors</span><span class="p">,</span>
+        <span class="s1">'dbscan'</span>
+    <span class="p">)</span> <span class="k">AS</span> <span class="n">demographic_cluster</span><span class="p">,</span>
+    <span class="c1">-- Geospatial: Environmental factors</span>
+    <span class="n">GEO</span><span class="p">.</span><span class="n">POLLUTION_LEVEL</span><span class="p">(</span><span class="k">zone</span><span class="p">.</span><span class="n">boundaries</span><span class="p">,</span> <span class="n">air_quality_sensors</span><span class="p">)</span> <span class="k">AS</span> <span class="n">air_quality</span><span class="p">,</span>
+    <span class="c1">-- ML: Resource allocation optimization</span>
+    <span class="n">ML</span><span class="p">.</span><span class="n">OPTIMIZE</span><span class="p">(</span><span class="s1">'resource_allocation_model'</span><span class="p">,</span>
+        <span class="n">ARRAY</span><span class="p">[</span><span class="n">predicted_traffic</span><span class="p">,</span> <span class="n">service_accessibility</span><span class="p">,</span> <span class="n">air_quality</span><span class="p">],</span>
+        <span class="n">resource_constraints</span>
+    <span class="p">)</span> <span class="k">AS</span> <span class="n">optimal_allocation</span>
+<span class="k">FROM</span> <span class="n">city_zones</span> <span class="k">zone</span>
+<span class="k">JOIN</span> <span class="n">traffic_sensors</span> <span class="n">traffic</span> <span class="k">ON</span> <span class="n">GEO</span><span class="p">.</span><span class="n">INTERSECTS</span><span class="p">(</span><span class="k">zone</span><span class="p">.</span><span class="n">boundaries</span><span class="p">,</span> <span class="n">traffic</span><span class="p">.</span><span class="k">location</span><span class="p">)</span>
+<span class="k">WHERE</span> <span class="n">predicted_traffic</span><span class="p">.</span><span class="n">confidence</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">.</span><span class="mi">8</span>
+  <span class="k">AND</span> <span class="n">service_accessibility</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">.</span><span class="mi">6</span>
+<span class="k">ORDER</span> <span class="k">BY</span> <span class="n">optimal_allocation</span><span class="p">.</span><span class="n">priority</span> <span class="k">DESC</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h2 id="performance-targets">Performance Targets</h2>
+
+<h3 id="query-performance">Query Performance</h3>
+<ul>
+  <li><strong>Simple multi-modal queries</strong>: &lt; 100ms (e.g., graph + relational)</li>
+  <li><strong>Complex multi-modal queries</strong>: &lt; 5s (e.g., all 4 modalities)</li>
+  <li><strong>Cross-modal joins</strong>: 90% efficiency of single-modality joins</li>
+  <li><strong>Streaming queries</strong>: &lt; 10ms latency for real-time scenarios</li>
+</ul>
+
+<h3 id="scalability">Scalability</h3>
+<ul>
+  <li><strong>Distributed execution</strong>: Linear scaling across 100+ nodes</li>
+  <li><strong>Data volume</strong>: Handle petabyte-scale data across modalities</li>
+  <li><strong>Concurrent queries</strong>: 1000+ concurrent multi-modal queries</li>
+  <li><strong>Memory efficiency</strong>: &lt; 2x memory overhead vs single-modality queries</li>
+</ul>
+
+<h2 id="testing-strategy">Testing Strategy</h2>
+
+<h3 id="correctness-testing">Correctness Testing</h3>
+<ul>
+  <li><strong>Query semantics</strong>: Verify multi-modal queries produce correct results</li>
+  <li><strong>Type consistency</strong>: Ensure type conversions preserve data integrity</li>
+  <li><strong>Join correctness</strong>: Test cross-modal joins against reference implementations</li>
+  <li><strong>Edge cases</strong>: Handle schema mismatches and data inconsistencies</li>
+</ul>
+
+<h3 id="performance-testing">Performance Testing</h3>
+<ul>
+  <li><strong>Benchmark suite</strong>: Custom multi-modal benchmarks</li>
+  <li><strong>Scalability testing</strong>: Test with varying data sizes and cluster sizes</li>
+  <li><strong>Regression testing</strong>: Ensure performance doesn’t degrade over time</li>
+  <li><strong>Resource usage</strong>: Monitor memory, CPU, and network utilization</li>
+</ul>
+
+<h2 id="risks-and-mitigations">Risks and Mitigations</h2>
+
+<h3 id="technical-risks">Technical Risks</h3>
+<ol>
+  <li><strong>Query Planning Complexity</strong>: Multi-modal optimization is computationally complex
+    <ul>
+      <li><em>Mitigation</em>: Implement heuristic-based planning with optional cost-based optimization</li>
+    </ul>
+  </li>
+  <li><strong>Result Integration Overhead</strong>: Merging different data formats has performance cost
+    <ul>
+      <li><em>Mitigation</em>: Lazy evaluation and streaming result integration</li>
+    </ul>
+  </li>
+  <li><strong>Schema Evolution</strong>: Changes to modality schemas can break queries
+    <ul>
+      <li><em>Mitigation</em>: Schema versioning and backward compatibility guarantees</li>
+    </ul>
+  </li>
+</ol>
+
+<h3 id="performance-risks">Performance Risks</h3>
+<ol>
+  <li><strong>Cross-Modal Join Performance</strong>: Joins across modalities may be slow
+    <ul>
+      <li><em>Mitigation</em>: Intelligent caching and pre-computation of common join patterns</li>
+    </ul>
+  </li>
+  <li><strong>Memory Usage</strong>: Large multi-modal result sets may exceed memory
+    <ul>
+      <li><em>Mitigation</em>: Streaming results and disk-based temporary storage</li>
+    </ul>
+  </li>
+</ol>
+
+<h2 id="future-extensions">Future Extensions</h2>
+
+<h3 id="advanced-query-features">Advanced Query Features</h3>
+<ul>
+  <li><strong>Multi-modal window functions</strong>: Analytical functions spanning modalities</li>
+  <li><strong>Recursive multi-modal queries</strong>: Complex graph-time series patterns</li>
+  <li><strong>Approximate query processing</strong>: Fast approximate results for exploratory analytics</li>
+</ul>
+
+<h3 id="ai-integration">AI Integration</h3>
+<ul>
+  <li><strong>Automated query optimization</strong>: ML-based query plan optimization</li>
+  <li><strong>Semantic query understanding</strong>: Natural language to multi-modal SQL</li>
+  <li><strong>Intelligent caching</strong>: AI-powered prediction of query patterns for caching</li>
+</ul>
+
+<h3 id="edge-computing">Edge Computing</h3>
+<ul>
+  <li><strong>Federated multi-modal queries</strong>: Queries spanning edge and cloud</li>
+  <li><strong>Partial result computation</strong>: Handle network partitions gracefully</li>
+  <li><strong>Context-aware optimization</strong>: Adapt queries based on device capabilities</li>
+</ul>
+
+<h2 id="conclusion">Conclusion</h2>
+
+<p>The Unified Multi-Modal Query Engine represents a fundamental advancement in database technology, enabling unprecedented analytical capabilities that span traditional data silos. This unique capability positions Orbit-RS as a category-defining database system that can address the complex, multi-faceted data challenges of modern applications.</p>
+
+<p>Key benefits:</p>
+<ol>
+  <li><strong>Simplification</strong>: Replace multiple specialized systems with unified platform</li>
+  <li><strong>Performance</strong>: Near-native performance for each data model within unified queries</li>
+  <li><strong>Innovation</strong>: Enable new types of analytics previously impossible</li>
+  <li><strong>Competitive Advantage</strong>: Unique market position with no direct competitors</li>
+</ol>
+
+<p>Success of this RFC would establish Orbit-RS as the leader in next-generation database technology and create a new category of “Multi-Modal Analytics Platforms.”</p>

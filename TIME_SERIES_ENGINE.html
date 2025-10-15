@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Orbit-RS Time Series Engine | Orbit-RS Documentation</title>
+<meta name="generator" content="Jekyll v4.4.1" />
+<meta property="og:title" content="Orbit-RS Time Series Engine" />
+<meta name="author" content="TuringWorks" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<meta property="og:description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<link rel="canonical" href="https://turingworks.github.io/orbit-rs/TIME_SERIES_ENGINE.html" />
+<meta property="og:url" content="https://turingworks.github.io/orbit-rs/TIME_SERIES_ENGINE.html" />
+<meta property="og:site_name" content="Orbit-RS Documentation" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Orbit-RS Time Series Engine" />
+<meta name="twitter:site" content="@TuringWorksAI" />
+<meta name="twitter:creator" content="@TuringWorks" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","author":{"@type":"Person","name":"TuringWorks"},"description":"The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform","headline":"Orbit-RS Time Series Engine","url":"https://turingworks.github.io/orbit-rs/TIME_SERIES_ENGINE.html"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/orbit-rs/assets/main.css">
+  <link rel="stylesheet" href="/orbit-rs/assets/css/custom.css"><link type="application/atom+xml" rel="alternate" href="https://turingworks.github.io/orbit-rs/feed.xml" title="Orbit-RS Documentation" /></head><body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/orbit-rs/">Orbit-RS Documentation</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/orbit-rs/">Orbit-RS Documentation</a><a class="page-link" href="/orbit-rs/project_overview.html">Orbit-RS: Comprehensive Project Overview</a><a class="page-link" href="/orbit-rs/quick_start.html">Quick Start Guide - Multi-Protocol Database Server</a><a class="page-link" href="/orbit-rs/roadmap/">Development Roadmap</a><a class="page-link" href="/orbit-rs/features/">Orbit-RS Feature Index</a><a class="page-link" href="/orbit-rs/compute-acceleration/">Hardware Acceleration Guide</a><a class="page-link" href="/orbit-rs/contributing.html">Contributing Guide</a><a class="page-link" href="/orbit-rs/overview.html">Architecture Overview</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <h1 id="orbit-rs-time-series-engine">Orbit-RS Time Series Engine</h1>
+
+<h2 id="table-of-contents">Table of Contents</h2>
+
+<ol>
+  <li><a href="#overview">Overview</a></li>
+  <li><a href="#architecture">Architecture</a></li>
+  <li><a href="#storage-backends">Storage Backends</a></li>
+  <li><a href="#data-compression">Data Compression</a></li>
+  <li><a href="#query-engine">Query Engine</a></li>
+  <li><a href="#partitioning--retention">Partitioning &amp; Retention</a></li>
+  <li><a href="#real-time-ingestion">Real-time Ingestion</a></li>
+  <li><a href="#performance--scalability">Performance &amp; Scalability</a></li>
+  <li><a href="#use-cases">Use Cases</a></li>
+  <li><a href="#examples">Examples</a></li>
+  <li><a href="#api-reference">API Reference</a></li>
+</ol>
+
+<h2 id="overview">Overview</h2>
+
+<p>The Orbit-RS Time Series Engine is designed for high-throughput, low-latency time series data processing with:</p>
+
+<ul>
+  <li><strong>Multi-backend support</strong>: In-memory, Redis TimeSeries, PostgreSQL/TimescaleDB</li>
+  <li><strong>Advanced compression</strong>: Delta, DoubleDelta, Gorilla, LZ4, Zstd algorithms</li>
+  <li><strong>High performance</strong>: 3000+ data points ingested in 7ms</li>
+  <li><strong>Scalability</strong>: Multi-terabyte memory limits with smart partitioning</li>
+  <li><strong>Real-time analytics</strong>: Advanced aggregations and windowing functions</li>
+  <li><strong>Integration</strong>: Seamless integration with graph database and OrbitQL</li>
+</ul>
+
+<h2 id="architecture">Architecture</h2>
+
+<p>The time series engine follows a layered architecture:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   Query Layer   │    │ Analytics Layer │    │  Ingestion      │
+│  ┌───────────┐  │    │  ┌───────────┐  │    │  ┌───────────┐  │
+│  │ OrbitQL   │  │    │  │Aggregators│  │    │  │  Batch    │  │
+│  │Time Series│  │    │  │ Windows   │  │    │  │ Processing│  │
+│  │   Query   │  │    │  │Functions  │  │    │  │Real-time  │  │
+│  └───────────┘  │    │  └───────────┘  │    │  └───────────┘  │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+         │                       │                       │
+         ▼                       ▼                       ▼
+┌─────────────────────────────────────────────────────────────┐
+│                Time Series Engine Core                      │
+│  ┌─────────────────────────────────────────────────────┐    │
+│  │            Query Execution &amp; Planning               │    │
+│  │  • Time Range Queries  • Aggregation Pushdown       │    │
+│  │  • Series Selection    • Memory Management          │    │
+│  └─────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────┘
+         │
+         ▼
+┌─────────────────────────────────────────────────────────────┐
+│                  Storage Abstraction                        │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────┐  │
+│  │  Compression    │  │  Partitioning   │  │  Retention  │  │
+│  │     Layer       │  │     Manager     │  │   Policies  │  │
+│  │                 │  │                 │  │             │  │
+│  │ • Delta         │  │ • Time-based    │  │ • TTL       │  │
+│  │ • DoubleDelta   │  │ • Size-based    │  │ • Downsample│  │
+│  │ • Gorilla       │  │ • Label-based   │  │ • Cleanup   │  │
+│  │ • LZ4/Zstd      │  │                 │  │             │  │
+│  └─────────────────┘  └─────────────────┘  └─────────────┘  │
+└─────────────────────────────────────────────────────────────┘
+         │
+         ▼
+┌─────────────────────────────────────────────────────────────┐
+│                   Storage Backends                          │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────-┐ │
+│  │   In-Memory     │  │ Redis TimeSeries│  │PostgreSQL/   │ │
+│  │    Storage      │  │                 │  │ TimescaleDB  │ │
+│  │                 │  │                 │  │              │ │
+│  │ • HashMap Index │  │ • Native TS     │  │ • Hypertables│ │
+│  │ • Memory Limits │  │ • Redis Modules │  │ • Compression│ │
+│  │ • Fast Lookups  │  │ • Clustering    │  │ • SQL Queries│ │
+│  └─────────────────┘  └─────────────────┘  └─────────────-┘ │
+└─────────────────────────────────────────────────────────────┘
+</code></pre></div></div>
+
+<h2 id="storage-backends">Storage Backends</h2>
+
+<h3 id="in-memory-storage">In-Memory Storage</h3>
+
+<p>High-performance storage optimized for real-time analytics:</p>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">orbit_shared</span><span class="p">::</span><span class="nn">timeseries</span><span class="p">::{</span><span class="n">TimeSeriesEngine</span><span class="p">,</span> <span class="n">MemoryStorageConfig</span><span class="p">};</span>
+
+<span class="k">let</span> <span class="n">config</span> <span class="o">=</span> <span class="n">MemoryStorageConfig</span> <span class="p">{</span>
+    <span class="n">max_memory_mb</span><span class="p">:</span> <span class="mi">1024</span><span class="p">,</span>           <span class="c1">// 1GB memory limit</span>
+    <span class="n">max_series</span><span class="p">:</span> <span class="mi">100_000</span><span class="p">,</span>           <span class="c1">// Maximum series count</span>
+    <span class="n">retention_hours</span><span class="p">:</span> <span class="mi">24</span> <span class="o">*</span> <span class="mi">7</span><span class="p">,</span>       <span class="c1">// 7 days retention</span>
+    <span class="n">chunk_size_points</span><span class="p">:</span> <span class="mi">1000</span><span class="p">,</span>       <span class="c1">// Points per chunk</span>
+    <span class="n">compression_algorithm</span><span class="p">:</span> <span class="nn">CompressionType</span><span class="p">::</span><span class="n">Gorilla</span><span class="p">,</span>
+<span class="p">};</span>
+
+<span class="k">let</span> <span class="n">engine</span> <span class="o">=</span> <span class="nn">TimeSeriesEngine</span><span class="p">::</span><span class="nf">with_memory_storage</span><span class="p">(</span><span class="n">config</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+</code></pre></div></div>
+
+<p><strong>Features:</strong></p>
+<ul>
+  <li><strong>Memory-mapped storage</strong>: Efficient memory usage with OS-level caching</li>
+  <li><strong>Configurable limits</strong>: Memory and series count limits</li>
+  <li><strong>Fast queries</strong>: O(log n) lookups with skip-list indexing</li>
+  <li><strong>Concurrent access</strong>: Lock-free read operations</li>
+</ul>
+
+<h3 id="redis-timeseries-backend">Redis TimeSeries Backend</h3>
+
+<p>Integration with Redis TimeSeries for persistence and clustering:</p>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">orbit_shared</span><span class="p">::</span><span class="nn">timeseries</span><span class="p">::{</span><span class="n">TimeSeriesEngine</span><span class="p">,</span> <span class="n">RedisConfig</span><span class="p">};</span>
+
+<span class="k">let</span> <span class="n">config</span> <span class="o">=</span> <span class="n">RedisConfig</span> <span class="p">{</span>
+    <span class="n">url</span><span class="p">:</span> <span class="s">"redis://localhost:6379"</span><span class="p">,</span>
+    <span class="n">key_prefix</span><span class="p">:</span> <span class="s">"orbit_ts:"</span><span class="p">,</span>
+    <span class="n">pool_size</span><span class="p">:</span> <span class="mi">10</span><span class="p">,</span>
+    <span class="n">retention_policy</span><span class="p">:</span> <span class="nf">Some</span><span class="p">(</span><span class="s">"7d"</span><span class="nf">.to_string</span><span class="p">()),</span>  <span class="c1">// 7 days</span>
+    <span class="n">chunk_size</span><span class="p">:</span> <span class="mi">1000</span><span class="p">,</span>
+    <span class="n">duplicate_policy</span><span class="p">:</span> <span class="nn">DuplicatePolicy</span><span class="p">::</span><span class="n">Last</span><span class="p">,</span>
+<span class="p">};</span>
+
+<span class="k">let</span> <span class="n">engine</span> <span class="o">=</span> <span class="nn">TimeSeriesEngine</span><span class="p">::</span><span class="nf">with_redis_storage</span><span class="p">(</span><span class="n">config</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+</code></pre></div></div>
+
+<p><strong>Features:</strong></p>
+<ul>
+  <li><strong>Redis native</strong>: Uses Redis TimeSeries module</li>
+  <li><strong>High availability</strong>: Redis clustering support</li>
+  <li><strong>Persistence</strong>: RDB and AOF persistence options</li>
+  <li><strong>Memory efficiency</strong>: Native compression in Redis</li>
+</ul>
+
+<h3 id="postgresqltimescaledb-backend">PostgreSQL/TimescaleDB Backend</h3>
+
+<p>Enterprise-grade storage with SQL compatibility:</p>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">orbit_shared</span><span class="p">::</span><span class="nn">timeseries</span><span class="p">::{</span><span class="n">TimeSeriesEngine</span><span class="p">,</span> <span class="n">PostgreSQLConfig</span><span class="p">};</span>
+
+<span class="k">let</span> <span class="n">config</span> <span class="o">=</span> <span class="n">PostgreSQLConfig</span> <span class="p">{</span>
+    <span class="n">connection_string</span><span class="p">:</span> <span class="s">"postgresql://localhost/timeseries"</span><span class="p">,</span>
+    <span class="n">schema</span><span class="p">:</span> <span class="s">"orbit_ts"</span><span class="p">,</span>
+    <span class="n">chunk_time_interval</span><span class="p">:</span> <span class="s">"1 hour"</span><span class="p">,</span>
+    <span class="n">compression_policy</span><span class="p">:</span> <span class="nf">Some</span><span class="p">(</span><span class="s">"7 days"</span><span class="p">),</span>
+    <span class="n">retention_policy</span><span class="p">:</span> <span class="nf">Some</span><span class="p">(</span><span class="s">"30 days"</span><span class="p">),</span>
+    <span class="n">replication_factor</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+<span class="p">};</span>
+
+<span class="k">let</span> <span class="n">engine</span> <span class="o">=</span> <span class="nn">TimeSeriesEngine</span><span class="p">::</span><span class="nf">with_postgresql_storage</span><span class="p">(</span><span class="n">config</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+</code></pre></div></div>
+
+<p><strong>Features:</strong></p>
+<ul>
+  <li><strong>Hypertables</strong>: Automatic table partitioning</li>
+  <li><strong>Native compression</strong>: TimescaleDB compression</li>
+  <li><strong>SQL queries</strong>: Full SQL query support</li>
+  <li><strong>ACID transactions</strong>: Complete transaction support</li>
+</ul>
+
+<h2 id="data-compression">Data Compression</h2>
+
+<p>The time series engine supports multiple compression algorithms optimized for different data patterns:</p>
+
+<h3 id="delta-compression">Delta Compression</h3>
+
+<p>Ideal for slowly changing values:</p>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">orbit_shared</span><span class="p">::</span><span class="nn">timeseries</span><span class="p">::</span><span class="nn">compression</span><span class="p">::</span><span class="n">DeltaCompressor</span><span class="p">;</span>
+
+<span class="c1">// Configuration</span>
+<span class="k">let</span> <span class="n">compressor</span> <span class="o">=</span> <span class="nn">DeltaCompressor</span><span class="p">::</span><span class="nf">new</span><span class="p">();</span>
+
+<span class="c1">// Compression ratio: ~50-70% for typical sensor data</span>
+<span class="k">let</span> <span class="n">compressed</span> <span class="o">=</span> <span class="n">compressor</span><span class="nf">.compress</span><span class="p">(</span><span class="o">&amp;</span><span class="n">data_points</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h3 id="doubledelta-compression">DoubleDelta Compression</h3>
+
+<p>Optimized for regular interval data:</p>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">orbit_shared</span><span class="p">::</span><span class="nn">timeseries</span><span class="p">::</span><span class="nn">compression</span><span class="p">::</span><span class="n">DoubleDeltaCompressor</span><span class="p">;</span>
+
+<span class="c1">// Best for metrics with regular timestamps</span>
+<span class="k">let</span> <span class="n">compressor</span> <span class="o">=</span> <span class="nn">DoubleDeltaCompressor</span><span class="p">::</span><span class="nf">new</span><span class="p">();</span>
+<span class="k">let</span> <span class="n">compressed</span> <span class="o">=</span> <span class="n">compressor</span><span class="nf">.compress</span><span class="p">(</span><span class="o">&amp;</span><span class="n">data_points</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h3 id="gorilla-compression">Gorilla Compression</h3>
+
+<p>Facebook’s Gorilla algorithm for floating-point values:</p>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">orbit_shared</span><span class="p">::</span><span class="nn">timeseries</span><span class="p">::</span><span class="nn">compression</span><span class="p">::</span><span class="n">GorillaCompressor</span><span class="p">;</span>
+
+<span class="c1">// Excellent for floating-point time series</span>
+<span class="k">let</span> <span class="n">compressor</span> <span class="o">=</span> <span class="nn">GorillaCompressor</span><span class="p">::</span><span class="nf">new</span><span class="p">()</span>
+    <span class="nf">.with_precision</span><span class="p">(</span><span class="mf">0.01</span><span class="p">);</span>  <span class="c1">// 1% precision</span>
+
+<span class="k">let</span> <span class="n">compressed</span> <span class="o">=</span> <span class="n">compressor</span><span class="nf">.compress</span><span class="p">(</span><span class="o">&amp;</span><span class="n">data_points</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h3 id="lz4zstd-compression">LZ4/Zstd Compression</h3>
+
+<p>General-purpose compression for mixed data:</p>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">orbit_shared</span><span class="p">::</span><span class="nn">timeseries</span><span class="p">::</span><span class="nn">compression</span><span class="p">::{</span><span class="n">LZ4Compressor</span><span class="p">,</span> <span class="n">ZstdCompressor</span><span class="p">};</span>
+
+<span class="c1">// Fast compression (LZ4)</span>
+<span class="k">let</span> <span class="n">lz4</span> <span class="o">=</span> <span class="nn">LZ4Compressor</span><span class="p">::</span><span class="nf">new</span><span class="p">();</span>
+
+<span class="c1">// High compression ratio (Zstd)</span>
+<span class="k">let</span> <span class="n">zstd</span> <span class="o">=</span> <span class="nn">ZstdCompressor</span><span class="p">::</span><span class="nf">new</span><span class="p">()</span>
+    <span class="nf">.with_level</span><span class="p">(</span><span class="mi">3</span><span class="p">);</span>  <span class="c1">// Compression level 1-22</span>
+</code></pre></div></div>
+
+<h3 id="compression-performance">Compression Performance</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>Algorithm</th>
+      <th>Compression Ratio</th>
+      <th>Speed</th>
+      <th>Use Case</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Delta</td>
+      <td>2-3x</td>
+      <td>Very Fast</td>
+      <td>Slowly changing values</td>
+    </tr>
+    <tr>
+      <td>DoubleDelta</td>
+      <td>3-5x</td>
+      <td>Fast</td>
+      <td>Regular intervals</td>
+    </tr>
+    <tr>
+      <td>Gorilla</td>
+      <td>10-20x</td>
+      <td>Fast</td>
+      <td>Floating-point data</td>
+    </tr>
+    <tr>
+      <td>LZ4</td>
+      <td>2-4x</td>
+      <td>Very Fast</td>
+      <td>General purpose</td>
+    </tr>
+    <tr>
+      <td>Zstd</td>
+      <td>3-8x</td>
+      <td>Medium</td>
+      <td>Mixed data types</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="query-engine">Query Engine</h2>
+
+<h3 id="basic-queries">Basic Queries</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">orbit_shared</span><span class="p">::</span><span class="nn">timeseries</span><span class="p">::{</span><span class="n">TimeSeriesEngine</span><span class="p">,</span> <span class="n">QueryBuilder</span><span class="p">};</span>
+
+<span class="c1">// Point-in-time query</span>
+<span class="k">let</span> <span class="n">point</span> <span class="o">=</span> <span class="n">engine</span><span class="nf">.get_point</span><span class="p">(</span><span class="s">"sensor_01"</span><span class="p">,</span> <span class="n">timestamp</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+
+<span class="c1">// Range query</span>
+<span class="k">let</span> <span class="n">data</span> <span class="o">=</span> <span class="n">engine</span><span class="nf">.query_range</span><span class="p">(</span>
+    <span class="s">"sensor_01"</span><span class="p">,</span>
+    <span class="n">start_time</span><span class="p">,</span>
+    <span class="n">end_time</span><span class="p">,</span>
+<span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+
+<span class="c1">// Multiple series</span>
+<span class="k">let</span> <span class="n">results</span> <span class="o">=</span> <span class="n">engine</span><span class="nf">.query_multiple</span><span class="p">(</span>
+    <span class="o">&amp;</span><span class="p">[</span><span class="s">"sensor_01"</span><span class="p">,</span> <span class="s">"sensor_02"</span><span class="p">,</span> <span class="s">"sensor_03"</span><span class="p">],</span>
+    <span class="n">start_time</span><span class="p">,</span>
+    <span class="n">end_time</span><span class="p">,</span>
+<span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h3 id="advanced-queries-with-aggregations">Advanced Queries with Aggregations</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Query builder with aggregations</span>
+<span class="k">let</span> <span class="n">query</span> <span class="o">=</span> <span class="nn">QueryBuilder</span><span class="p">::</span><span class="nf">new</span><span class="p">()</span>
+    <span class="nf">.series</span><span class="p">(</span><span class="s">"temperature_sensors/*"</span><span class="p">)</span>  <span class="c1">// Wildcard selection</span>
+    <span class="nf">.time_range</span><span class="p">(</span><span class="n">start_time</span><span class="p">,</span> <span class="n">end_time</span><span class="p">)</span>
+    <span class="nf">.aggregate</span><span class="p">(</span><span class="nn">AggregationType</span><span class="p">::</span><span class="n">Average</span><span class="p">)</span>
+    <span class="nf">.window_size</span><span class="p">(</span><span class="nn">Duration</span><span class="p">::</span><span class="nf">minutes</span><span class="p">(</span><span class="mi">5</span><span class="p">))</span>
+    <span class="nf">.group_by</span><span class="p">(</span><span class="nd">vec!</span><span class="p">[</span><span class="s">"location"</span><span class="p">,</span> <span class="s">"sensor_type"</span><span class="p">])</span>
+    <span class="nf">.limit</span><span class="p">(</span><span class="mi">1000</span><span class="p">);</span>
+
+<span class="k">let</span> <span class="n">results</span> <span class="o">=</span> <span class="n">engine</span><span class="nf">.execute_query</span><span class="p">(</span><span class="n">query</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+
+<span class="c1">// Advanced aggregations</span>
+<span class="k">let</span> <span class="n">query</span> <span class="o">=</span> <span class="nn">QueryBuilder</span><span class="p">::</span><span class="nf">new</span><span class="p">()</span>
+    <span class="nf">.series</span><span class="p">(</span><span class="s">"cpu_usage"</span><span class="p">)</span>
+    <span class="nf">.time_range</span><span class="p">(</span><span class="n">last_hour</span><span class="p">,</span> <span class="n">now</span><span class="p">)</span>
+    <span class="nf">.aggregates</span><span class="p">(</span><span class="nd">vec!</span><span class="p">[</span>
+        <span class="nn">AggregationType</span><span class="p">::</span><span class="n">Average</span><span class="p">,</span>
+        <span class="nn">AggregationType</span><span class="p">::</span><span class="n">Max</span><span class="p">,</span>
+        <span class="nn">AggregationType</span><span class="p">::</span><span class="nf">Percentile</span><span class="p">(</span><span class="mf">95.0</span><span class="p">),</span>
+        <span class="nn">AggregationType</span><span class="p">::</span><span class="n">StandardDeviation</span><span class="p">,</span>
+    <span class="p">])</span>
+    <span class="nf">.window_size</span><span class="p">(</span><span class="nn">Duration</span><span class="p">::</span><span class="nf">seconds</span><span class="p">(</span><span class="mi">30</span><span class="p">));</span>
+
+<span class="k">let</span> <span class="n">stats</span> <span class="o">=</span> <span class="n">engine</span><span class="nf">.execute_query</span><span class="p">(</span><span class="n">query</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h3 id="window-functions">Window Functions</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">orbit_shared</span><span class="p">::</span><span class="nn">timeseries</span><span class="p">::</span><span class="nn">window</span><span class="p">::{</span><span class="n">WindowType</span><span class="p">,</span> <span class="n">WindowFunction</span><span class="p">};</span>
+
+<span class="c1">// Moving average</span>
+<span class="k">let</span> <span class="n">query</span> <span class="o">=</span> <span class="nn">QueryBuilder</span><span class="p">::</span><span class="nf">new</span><span class="p">()</span>
+    <span class="nf">.series</span><span class="p">(</span><span class="s">"stock_price"</span><span class="p">)</span>
+    <span class="nf">.window</span><span class="p">(</span><span class="nn">WindowType</span><span class="p">::</span><span class="n">Moving</span> <span class="p">{</span>
+        <span class="n">size</span><span class="p">:</span> <span class="nn">Duration</span><span class="p">::</span><span class="nf">minutes</span><span class="p">(</span><span class="mi">10</span><span class="p">),</span>
+        <span class="n">step</span><span class="p">:</span> <span class="nn">Duration</span><span class="p">::</span><span class="nf">minutes</span><span class="p">(</span><span class="mi">1</span><span class="p">),</span>
+    <span class="p">})</span>
+    <span class="nf">.function</span><span class="p">(</span><span class="nn">WindowFunction</span><span class="p">::</span><span class="n">Average</span><span class="p">);</span>
+
+<span class="c1">// Tumbling window aggregation</span>
+<span class="k">let</span> <span class="n">query</span> <span class="o">=</span> <span class="nn">QueryBuilder</span><span class="p">::</span><span class="nf">new</span><span class="p">()</span>
+    <span class="nf">.series</span><span class="p">(</span><span class="s">"request_count"</span><span class="p">)</span>
+    <span class="nf">.window</span><span class="p">(</span><span class="nn">WindowType</span><span class="p">::</span><span class="n">Tumbling</span> <span class="p">{</span>
+        <span class="n">size</span><span class="p">:</span> <span class="nn">Duration</span><span class="p">::</span><span class="nf">minutes</span><span class="p">(</span><span class="mi">5</span><span class="p">),</span>
+    <span class="p">})</span>
+    <span class="nf">.function</span><span class="p">(</span><span class="nn">WindowFunction</span><span class="p">::</span><span class="n">Sum</span><span class="p">);</span>
+</code></pre></div></div>
+
+<h2 id="partitioning--retention">Partitioning &amp; Retention</h2>
+
+<h3 id="time-based-partitioning">Time-based Partitioning</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">orbit_shared</span><span class="p">::</span><span class="nn">timeseries</span><span class="p">::</span><span class="nn">partitioning</span><span class="p">::{</span><span class="n">PartitionStrategy</span><span class="p">,</span> <span class="n">TimePartition</span><span class="p">};</span>
+
+<span class="k">let</span> <span class="n">strategy</span> <span class="o">=</span> <span class="nn">PartitionStrategy</span><span class="p">::</span><span class="n">Time</span> <span class="p">{</span>
+    <span class="n">interval</span><span class="p">:</span> <span class="nn">TimePartition</span><span class="p">::</span><span class="n">Hour</span><span class="p">,</span>  <span class="c1">// Hourly partitions</span>
+    <span class="n">retention</span><span class="p">:</span> <span class="nn">Duration</span><span class="p">::</span><span class="nf">days</span><span class="p">(</span><span class="mi">30</span><span class="p">),</span>
+    <span class="n">compression_after</span><span class="p">:</span> <span class="nn">Duration</span><span class="p">::</span><span class="nf">hours</span><span class="p">(</span><span class="mi">6</span><span class="p">),</span>
+<span class="p">};</span>
+
+<span class="n">engine</span><span class="nf">.configure_partitioning</span><span class="p">(</span><span class="s">"sensor_data"</span><span class="p">,</span> <span class="n">strategy</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h3 id="size-based-partitioning">Size-based Partitioning</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">orbit_shared</span><span class="p">::</span><span class="nn">timeseries</span><span class="p">::</span><span class="nn">partitioning</span><span class="p">::</span><span class="n">SizePartition</span><span class="p">;</span>
+
+<span class="k">let</span> <span class="n">strategy</span> <span class="o">=</span> <span class="nn">PartitionStrategy</span><span class="p">::</span><span class="n">Size</span> <span class="p">{</span>
+    <span class="n">max_size_mb</span><span class="p">:</span> <span class="mi">100</span><span class="p">,</span>  <span class="c1">// 100MB per partition</span>
+    <span class="n">max_points</span><span class="p">:</span> <span class="mi">1_000_000</span><span class="p">,</span>
+    <span class="n">compression_threshold</span><span class="p">:</span> <span class="mf">0.8</span><span class="p">,</span>  <span class="c1">// 80% full</span>
+<span class="p">};</span>
+
+<span class="n">engine</span><span class="nf">.configure_partitioning</span><span class="p">(</span><span class="s">"metrics"</span><span class="p">,</span> <span class="n">strategy</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h3 id="retention-policies">Retention Policies</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">orbit_shared</span><span class="p">::</span><span class="nn">timeseries</span><span class="p">::</span><span class="nn">retention</span><span class="p">::{</span><span class="n">RetentionPolicy</span><span class="p">,</span> <span class="n">DownsampleRule</span><span class="p">};</span>
+
+<span class="k">let</span> <span class="n">policy</span> <span class="o">=</span> <span class="nn">RetentionPolicy</span><span class="p">::</span><span class="nf">new</span><span class="p">()</span>
+    <span class="nf">.add_rule</span><span class="p">(</span><span class="n">DownsampleRule</span> <span class="p">{</span>
+        <span class="n">source_resolution</span><span class="p">:</span> <span class="nn">Duration</span><span class="p">::</span><span class="nf">seconds</span><span class="p">(</span><span class="mi">1</span><span class="p">),</span>
+        <span class="n">target_resolution</span><span class="p">:</span> <span class="nn">Duration</span><span class="p">::</span><span class="nf">minutes</span><span class="p">(</span><span class="mi">1</span><span class="p">),</span>
+        <span class="n">aggregation</span><span class="p">:</span> <span class="nn">AggregationType</span><span class="p">::</span><span class="n">Average</span><span class="p">,</span>
+        <span class="n">retention</span><span class="p">:</span> <span class="nn">Duration</span><span class="p">::</span><span class="nf">hours</span><span class="p">(</span><span class="mi">24</span><span class="p">),</span>
+    <span class="p">})</span>
+    <span class="nf">.add_rule</span><span class="p">(</span><span class="n">DownsampleRule</span> <span class="p">{</span>
+        <span class="n">source_resolution</span><span class="p">:</span> <span class="nn">Duration</span><span class="p">::</span><span class="nf">minutes</span><span class="p">(</span><span class="mi">1</span><span class="p">),</span>
+        <span class="n">target_resolution</span><span class="p">:</span> <span class="nn">Duration</span><span class="p">::</span><span class="nf">hours</span><span class="p">(</span><span class="mi">1</span><span class="p">),</span>
+        <span class="n">aggregation</span><span class="p">:</span> <span class="nn">AggregationType</span><span class="p">::</span><span class="n">Average</span><span class="p">,</span>
+        <span class="n">retention</span><span class="p">:</span> <span class="nn">Duration</span><span class="p">::</span><span class="nf">days</span><span class="p">(</span><span class="mi">30</span><span class="p">),</span>
+    <span class="p">})</span>
+    <span class="nf">.add_rule</span><span class="p">(</span><span class="n">DownsampleRule</span> <span class="p">{</span>
+        <span class="n">source_resolution</span><span class="p">:</span> <span class="nn">Duration</span><span class="p">::</span><span class="nf">hours</span><span class="p">(</span><span class="mi">1</span><span class="p">),</span>
+        <span class="n">target_resolution</span><span class="p">:</span> <span class="nn">Duration</span><span class="p">::</span><span class="nf">days</span><span class="p">(</span><span class="mi">1</span><span class="p">),</span>
+        <span class="n">aggregation</span><span class="p">:</span> <span class="nn">AggregationType</span><span class="p">::</span><span class="n">Average</span><span class="p">,</span>
+        <span class="n">retention</span><span class="p">:</span> <span class="nn">Duration</span><span class="p">::</span><span class="nf">days</span><span class="p">(</span><span class="mi">365</span><span class="p">),</span>
+    <span class="p">});</span>
+
+<span class="n">engine</span><span class="nf">.set_retention_policy</span><span class="p">(</span><span class="s">"long_term_metrics"</span><span class="p">,</span> <span class="n">policy</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h2 id="real-time-ingestion">Real-time Ingestion</h2>
+
+<h3 id="high-throughput-ingestion">High-throughput Ingestion</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">orbit_shared</span><span class="p">::</span><span class="nn">timeseries</span><span class="p">::{</span><span class="n">TimeSeriesEngine</span><span class="p">,</span> <span class="n">BatchInserter</span><span class="p">,</span> <span class="n">DataPoint</span><span class="p">};</span>
+
+<span class="c1">// Batch insertion for high throughput</span>
+<span class="k">let</span> <span class="k">mut</span> <span class="n">inserter</span> <span class="o">=</span> <span class="nn">BatchInserter</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="o">&amp;</span><span class="n">engine</span><span class="p">)</span>
+    <span class="nf">.batch_size</span><span class="p">(</span><span class="mi">1000</span><span class="p">)</span>
+    <span class="nf">.flush_interval</span><span class="p">(</span><span class="nn">Duration</span><span class="p">::</span><span class="nf">milliseconds</span><span class="p">(</span><span class="mi">100</span><span class="p">))</span>
+    <span class="nf">.backpressure_threshold</span><span class="p">(</span><span class="mi">10000</span><span class="p">);</span>
+
+<span class="c1">// Insert data points</span>
+<span class="k">for</span> <span class="n">i</span> <span class="k">in</span> <span class="mi">0</span><span class="o">..</span><span class="mi">10000</span> <span class="p">{</span>
+    <span class="n">inserter</span><span class="nf">.add_point</span><span class="p">(</span><span class="n">DataPoint</span> <span class="p">{</span>
+        <span class="n">series_id</span><span class="p">:</span> <span class="nd">format!</span><span class="p">(</span><span class="s">"sensor_{}"</span><span class="p">,</span> <span class="n">i</span> <span class="o">%</span> <span class="mi">100</span><span class="p">),</span>
+        <span class="n">timestamp</span><span class="p">:</span> <span class="nn">chrono</span><span class="p">::</span><span class="nn">Utc</span><span class="p">::</span><span class="nf">now</span><span class="p">()</span> <span class="o">+</span> <span class="nn">chrono</span><span class="p">::</span><span class="nn">Duration</span><span class="p">::</span><span class="nf">milliseconds</span><span class="p">(</span><span class="n">i</span><span class="p">),</span>
+        <span class="n">value</span><span class="p">:</span> <span class="p">(</span><span class="n">i</span> <span class="k">as</span> <span class="nb">f64</span><span class="p">)</span><span class="nf">.sin</span><span class="p">(),</span>
+        <span class="n">labels</span><span class="p">:</span> <span class="nf">Some</span><span class="p">([(</span><span class="s">"type"</span><span class="p">,</span> <span class="s">"temperature"</span><span class="p">)]</span><span class="nf">.iter</span><span class="p">()</span><span class="nf">.cloned</span><span class="p">()</span><span class="nf">.collect</span><span class="p">()),</span>
+    <span class="p">})</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="c1">// Flush remaining data</span>
+<span class="n">inserter</span><span class="nf">.flush</span><span class="p">()</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h3 id="streaming-ingestion">Streaming Ingestion</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">tokio_stream</span><span class="p">::</span><span class="n">StreamExt</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">orbit_shared</span><span class="p">::</span><span class="nn">timeseries</span><span class="p">::</span><span class="n">StreamingInserter</span><span class="p">;</span>
+
+<span class="k">let</span> <span class="k">mut</span> <span class="n">stream</span> <span class="o">=</span> <span class="nn">StreamingInserter</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="o">&amp;</span><span class="n">engine</span><span class="p">)</span>
+    <span class="nf">.with_backpressure</span><span class="p">(</span><span class="nn">BackpressureStrategy</span><span class="p">::</span><span class="n">Block</span><span class="p">)</span>
+    <span class="nf">.with_error_handling</span><span class="p">(</span><span class="nn">ErrorHandling</span><span class="p">::</span><span class="n">RetryWithBackoff</span><span class="p">);</span>
+
+<span class="c1">// Process streaming data</span>
+<span class="k">while</span> <span class="k">let</span> <span class="nf">Some</span><span class="p">(</span><span class="n">data_batch</span><span class="p">)</span> <span class="o">=</span> <span class="n">data_source</span><span class="nf">.next</span><span class="p">()</span><span class="k">.await</span> <span class="p">{</span>
+    <span class="n">stream</span><span class="nf">.ingest_batch</span><span class="p">(</span><span class="n">data_batch</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h2 id="performance--scalability">Performance &amp; Scalability</h2>
+
+<h3 id="memory-management">Memory Management</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">orbit_shared</span><span class="p">::</span><span class="nn">timeseries</span><span class="p">::</span><span class="nn">memory</span><span class="p">::{</span><span class="n">MemoryManager</span><span class="p">,</span> <span class="n">MemoryConfig</span><span class="p">};</span>
+
+<span class="k">let</span> <span class="n">memory_config</span> <span class="o">=</span> <span class="n">MemoryConfig</span> <span class="p">{</span>
+    <span class="n">max_memory_gb</span><span class="p">:</span> <span class="mi">8</span><span class="p">,</span>                    <span class="c1">// 8GB total limit</span>
+    <span class="n">series_cache_size</span><span class="p">:</span> <span class="mi">1000000</span><span class="p">,</span>          <span class="c1">// 1M series in cache</span>
+    <span class="n">chunk_cache_size_mb</span><span class="p">:</span> <span class="mi">512</span><span class="p">,</span>            <span class="c1">// 512MB chunk cache</span>
+    <span class="n">compression_threshold</span><span class="p">:</span> <span class="mf">0.8</span><span class="p">,</span>          <span class="c1">// Compress at 80% memory</span>
+    <span class="n">eviction_policy</span><span class="p">:</span> <span class="nn">EvictionPolicy</span><span class="p">::</span><span class="n">LRU</span><span class="p">,</span>
+<span class="p">};</span>
+
+<span class="n">engine</span><span class="nf">.configure_memory</span><span class="p">(</span><span class="n">memory_config</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h3 id="performance-monitoring">Performance Monitoring</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">orbit_shared</span><span class="p">::</span><span class="nn">timeseries</span><span class="p">::</span><span class="nn">metrics</span><span class="p">::</span><span class="n">EngineMetrics</span><span class="p">;</span>
+
+<span class="c1">// Get engine metrics</span>
+<span class="k">let</span> <span class="n">metrics</span> <span class="o">=</span> <span class="n">engine</span><span class="nf">.get_metrics</span><span class="p">()</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+
+<span class="nd">println!</span><span class="p">(</span><span class="s">"Ingestion rate: {} points/sec"</span><span class="p">,</span> <span class="n">metrics</span><span class="py">.ingestion_rate</span><span class="p">);</span>
+<span class="nd">println!</span><span class="p">(</span><span class="s">"Query latency P95: {}ms"</span><span class="p">,</span> <span class="n">metrics</span><span class="py">.query_latency_p95</span><span class="nf">.as_millis</span><span class="p">());</span>
+<span class="nd">println!</span><span class="p">(</span><span class="s">"Memory usage: {}MB"</span><span class="p">,</span> <span class="n">metrics</span><span class="py">.memory_usage_mb</span><span class="p">);</span>
+<span class="nd">println!</span><span class="p">(</span><span class="s">"Compression ratio: {:.2}x"</span><span class="p">,</span> <span class="n">metrics</span><span class="py">.compression_ratio</span><span class="p">);</span>
+<span class="nd">println!</span><span class="p">(</span><span class="s">"Active series: {}"</span><span class="p">,</span> <span class="n">metrics</span><span class="py">.active_series_count</span><span class="p">);</span>
+</code></pre></div></div>
+
+<h3 id="horizontal-scaling">Horizontal Scaling</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">orbit_shared</span><span class="p">::</span><span class="nn">timeseries</span><span class="p">::</span><span class="nn">cluster</span><span class="p">::{</span><span class="n">ClusterConfig</span><span class="p">,</span> <span class="n">ShardingStrategy</span><span class="p">};</span>
+
+<span class="k">let</span> <span class="n">cluster_config</span> <span class="o">=</span> <span class="n">ClusterConfig</span> <span class="p">{</span>
+    <span class="n">nodes</span><span class="p">:</span> <span class="nd">vec!</span><span class="p">[</span>
+        <span class="s">"node1:8080"</span><span class="nf">.to_string</span><span class="p">(),</span>
+        <span class="s">"node2:8080"</span><span class="nf">.to_string</span><span class="p">(),</span>
+        <span class="s">"node3:8080"</span><span class="nf">.to_string</span><span class="p">(),</span>
+    <span class="p">],</span>
+    <span class="n">sharding_strategy</span><span class="p">:</span> <span class="nn">ShardingStrategy</span><span class="p">::</span><span class="n">ConsistentHash</span><span class="p">,</span>
+    <span class="n">replication_factor</span><span class="p">:</span> <span class="mi">2</span><span class="p">,</span>
+    <span class="n">consistency_level</span><span class="p">:</span> <span class="nn">ConsistencyLevel</span><span class="p">::</span><span class="n">Quorum</span><span class="p">,</span>
+<span class="p">};</span>
+
+<span class="n">engine</span><span class="nf">.configure_cluster</span><span class="p">(</span><span class="n">cluster_config</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h2 id="use-cases">Use Cases</h2>
+
+<h3 id="iot-sensor-data-collection">IoT Sensor Data Collection</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// IoT sensor monitoring system</span>
+<span class="k">let</span> <span class="n">iot_engine</span> <span class="o">=</span> <span class="nn">TimeSeriesEngine</span><span class="p">::</span><span class="nf">new</span><span class="p">()</span>
+    <span class="nf">.with_retention_policy</span><span class="p">(</span><span class="s">"sensors"</span><span class="p">,</span> <span class="nn">RetentionPolicy</span><span class="p">::</span><span class="nf">new</span><span class="p">()</span>
+        <span class="nf">.raw_data_retention</span><span class="p">(</span><span class="nn">Duration</span><span class="p">::</span><span class="nf">days</span><span class="p">(</span><span class="mi">7</span><span class="p">))</span>
+        <span class="nf">.hourly_aggregates_retention</span><span class="p">(</span><span class="nn">Duration</span><span class="p">::</span><span class="nf">days</span><span class="p">(</span><span class="mi">90</span><span class="p">))</span>
+        <span class="nf">.daily_aggregates_retention</span><span class="p">(</span><span class="nn">Duration</span><span class="p">::</span><span class="nf">days</span><span class="p">(</span><span class="mi">365</span><span class="p">))</span>
+    <span class="p">)</span>
+    <span class="nf">.with_compression</span><span class="p">(</span><span class="nn">CompressionType</span><span class="p">::</span><span class="n">Gorilla</span><span class="p">)</span>
+    <span class="nf">.build</span><span class="p">()</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+
+<span class="c1">// Ingest sensor data</span>
+<span class="n">iot_engine</span><span class="nf">.insert_point</span><span class="p">(</span>
+    <span class="s">"temperature_sensor_01"</span><span class="p">,</span>
+    <span class="nn">chrono</span><span class="p">::</span><span class="nn">Utc</span><span class="p">::</span><span class="nf">now</span><span class="p">(),</span>
+    <span class="mf">23.5</span><span class="p">,</span>
+    <span class="nf">Some</span><span class="p">([(</span><span class="s">"location"</span><span class="p">,</span> <span class="s">"warehouse_a"</span><span class="p">),</span> <span class="p">(</span><span class="s">"floor"</span><span class="p">,</span> <span class="s">"2"</span><span class="p">)]</span><span class="nf">.iter</span><span class="p">()</span><span class="nf">.cloned</span><span class="p">()</span><span class="nf">.collect</span><span class="p">())</span>
+<span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h3 id="application-performance-monitoring-apm">Application Performance Monitoring (APM)</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// APM system for application metrics</span>
+<span class="k">let</span> <span class="n">apm_engine</span> <span class="o">=</span> <span class="nn">TimeSeriesEngine</span><span class="p">::</span><span class="nf">new</span><span class="p">()</span>
+    <span class="nf">.with_high_cardinality_support</span><span class="p">(</span><span class="k">true</span><span class="p">)</span>
+    <span class="nf">.with_labels_indexing</span><span class="p">(</span><span class="k">true</span><span class="p">)</span>
+    <span class="nf">.with_real_time_alerting</span><span class="p">(</span><span class="k">true</span><span class="p">)</span>
+    <span class="nf">.build</span><span class="p">()</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+
+<span class="c1">// Track application metrics</span>
+<span class="n">apm_engine</span><span class="nf">.insert_batch</span><span class="p">(</span><span class="nd">vec!</span><span class="p">[</span>
+    <span class="nn">DataPoint</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="s">"http_requests_total"</span><span class="p">,</span> <span class="n">timestamp</span><span class="p">,</span> <span class="mf">1247.0</span><span class="p">)</span>
+        <span class="nf">.with_labels</span><span class="p">([(</span><span class="s">"method"</span><span class="p">,</span> <span class="s">"GET"</span><span class="p">),</span> <span class="p">(</span><span class="s">"status"</span><span class="p">,</span> <span class="s">"200"</span><span class="p">),</span> <span class="p">(</span><span class="s">"endpoint"</span><span class="p">,</span> <span class="s">"/api/users"</span><span class="p">)]),</span>
+    <span class="nn">DataPoint</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="s">"response_time_ms"</span><span class="p">,</span> <span class="n">timestamp</span><span class="p">,</span> <span class="mf">45.2</span><span class="p">)</span>
+        <span class="nf">.with_labels</span><span class="p">([(</span><span class="s">"method"</span><span class="p">,</span> <span class="s">"GET"</span><span class="p">),</span> <span class="p">(</span><span class="s">"endpoint"</span><span class="p">,</span> <span class="s">"/api/users"</span><span class="p">)]),</span>
+    <span class="nn">DataPoint</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="s">"memory_usage_bytes"</span><span class="p">,</span> <span class="n">timestamp</span><span class="p">,</span> <span class="mf">512_000_000.0</span><span class="p">)</span>
+        <span class="nf">.with_labels</span><span class="p">([(</span><span class="s">"service"</span><span class="p">,</span> <span class="s">"user_service"</span><span class="p">),</span> <span class="p">(</span><span class="s">"instance"</span><span class="p">,</span> <span class="s">"i-1234"</span><span class="p">)]),</span>
+<span class="p">])</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h3 id="infrastructure-metrics">Infrastructure Metrics</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Infrastructure monitoring</span>
+<span class="k">let</span> <span class="n">infra_engine</span> <span class="o">=</span> <span class="nn">TimeSeriesEngine</span><span class="p">::</span><span class="nf">new</span><span class="p">()</span>
+    <span class="nf">.with_backend</span><span class="p">(</span><span class="nn">Backend</span><span class="p">::</span><span class="n">PostgreSQL</span><span class="p">)</span>  <span class="c1">// For long-term storage</span>
+    <span class="nf">.with_partitioning</span><span class="p">(</span><span class="nn">PartitionStrategy</span><span class="p">::</span><span class="n">Time</span> <span class="p">{</span>
+        <span class="n">interval</span><span class="p">:</span> <span class="nn">TimePartition</span><span class="p">::</span><span class="n">Day</span><span class="p">,</span>
+        <span class="n">retention</span><span class="p">:</span> <span class="nn">Duration</span><span class="p">::</span><span class="nf">days</span><span class="p">(</span><span class="mi">365</span><span class="p">),</span>
+    <span class="p">})</span>
+    <span class="nf">.build</span><span class="p">()</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+
+<span class="c1">// CPU, memory, disk metrics</span>
+<span class="n">infra_engine</span><span class="nf">.insert_infrastructure_metrics</span><span class="p">(</span><span class="nd">vec!</span><span class="p">[</span>
+    <span class="p">(</span><span class="s">"cpu_usage_percent"</span><span class="p">,</span> <span class="mf">67.5</span><span class="p">,</span> <span class="p">[(</span><span class="s">"host"</span><span class="p">,</span> <span class="s">"web-01"</span><span class="p">),</span> <span class="p">(</span><span class="s">"core"</span><span class="p">,</span> <span class="s">"0"</span><span class="p">)]),</span>
+    <span class="p">(</span><span class="s">"memory_usage_bytes"</span><span class="p">,</span> <span class="mi">8_589_934_592</span><span class="p">,</span> <span class="p">[(</span><span class="s">"host"</span><span class="p">,</span> <span class="s">"web-01"</span><span class="p">)]),</span>
+    <span class="p">(</span><span class="s">"disk_io_ops"</span><span class="p">,</span> <span class="mi">1250</span><span class="p">,</span> <span class="p">[(</span><span class="s">"host"</span><span class="p">,</span> <span class="s">"web-01"</span><span class="p">),</span> <span class="p">(</span><span class="s">"device"</span><span class="p">,</span> <span class="s">"sda1"</span><span class="p">)]),</span>
+<span class="p">])</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h3 id="financial-time-series">Financial Time Series</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Financial data analysis</span>
+<span class="k">let</span> <span class="n">finance_engine</span> <span class="o">=</span> <span class="nn">TimeSeriesEngine</span><span class="p">::</span><span class="nf">new</span><span class="p">()</span>
+    <span class="nf">.with_precision</span><span class="p">(</span><span class="mi">8</span><span class="p">)</span>  <span class="c1">// High precision for financial data</span>
+    <span class="nf">.with_compression</span><span class="p">(</span><span class="nn">CompressionType</span><span class="p">::</span><span class="n">DoubleDelta</span><span class="p">)</span>  <span class="c1">// Good for price data</span>
+    <span class="nf">.with_real_time_streaming</span><span class="p">(</span><span class="k">true</span><span class="p">)</span>
+    <span class="nf">.build</span><span class="p">()</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+
+<span class="c1">// Stock prices, trading volume</span>
+<span class="n">finance_engine</span><span class="nf">.insert_financial_data</span><span class="p">(</span><span class="nd">vec!</span><span class="p">[</span>
+    <span class="p">(</span><span class="s">"AAPL_price"</span><span class="p">,</span> <span class="n">timestamp</span><span class="p">,</span> <span class="mf">150.25</span><span class="p">,</span> <span class="p">[(</span><span class="s">"exchange"</span><span class="p">,</span> <span class="s">"NASDAQ"</span><span class="p">)]),</span>
+    <span class="p">(</span><span class="s">"AAPL_volume"</span><span class="p">,</span> <span class="n">timestamp</span><span class="p">,</span> <span class="mf">45_000_000.0</span><span class="p">,</span> <span class="p">[(</span><span class="s">"exchange"</span><span class="p">,</span> <span class="s">"NASDAQ"</span><span class="p">)]),</span>
+<span class="p">])</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+
+<span class="c1">// Calculate technical indicators</span>
+<span class="k">let</span> <span class="n">sma_20</span> <span class="o">=</span> <span class="n">finance_engine</span><span class="nf">.calculate_moving_average</span><span class="p">(</span>
+    <span class="s">"AAPL_price"</span><span class="p">,</span> 
+    <span class="nn">Duration</span><span class="p">::</span><span class="nf">days</span><span class="p">(</span><span class="mi">20</span><span class="p">),</span>
+    <span class="n">timestamp</span>
+<span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h2 id="examples">Examples</h2>
+
+<h3 id="complete-time-series-pipeline">Complete Time Series Pipeline</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">orbit_shared</span><span class="p">::</span><span class="nn">timeseries</span><span class="p">::</span><span class="o">*</span><span class="p">;</span>
+
+<span class="nd">#[tokio::main]</span>
+<span class="k">async</span> <span class="k">fn</span> <span class="nf">main</span><span class="p">()</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="p">(),</span> <span class="nb">Box</span><span class="o">&lt;</span><span class="k">dyn</span> <span class="nn">std</span><span class="p">::</span><span class="nn">error</span><span class="p">::</span><span class="n">Error</span><span class="o">&gt;&gt;</span> <span class="p">{</span>
+    <span class="c1">// Initialize engine with multiple backends</span>
+    <span class="k">let</span> <span class="n">engine</span> <span class="o">=</span> <span class="nn">TimeSeriesEngine</span><span class="p">::</span><span class="nf">builder</span><span class="p">()</span>
+        <span class="nf">.with_memory_storage</span><span class="p">(</span><span class="n">MemoryStorageConfig</span> <span class="p">{</span>
+            <span class="n">max_memory_mb</span><span class="p">:</span> <span class="mi">1024</span><span class="p">,</span>
+            <span class="n">retention_hours</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span> <span class="c1">// Hot data</span>
+            <span class="n">chunk_size_points</span><span class="p">:</span> <span class="mi">1000</span><span class="p">,</span>
+            <span class="n">compression_algorithm</span><span class="p">:</span> <span class="nn">CompressionType</span><span class="p">::</span><span class="n">Gorilla</span><span class="p">,</span>
+        <span class="p">})</span>
+        <span class="nf">.with_redis_storage</span><span class="p">(</span><span class="n">RedisConfig</span> <span class="p">{</span>
+            <span class="n">url</span><span class="p">:</span> <span class="s">"redis://localhost:6379"</span><span class="p">,</span>
+            <span class="n">retention_policy</span><span class="p">:</span> <span class="nf">Some</span><span class="p">(</span><span class="s">"24h"</span><span class="nf">.to_string</span><span class="p">()),</span>
+            <span class="o">..</span><span class="nn">Default</span><span class="p">::</span><span class="nf">default</span><span class="p">()</span>
+        <span class="p">})</span>
+        <span class="nf">.with_postgresql_storage</span><span class="p">(</span><span class="n">PostgreSQLConfig</span> <span class="p">{</span>
+            <span class="n">connection_string</span><span class="p">:</span> <span class="s">"postgresql://localhost/timeseries"</span><span class="p">,</span>
+            <span class="n">chunk_time_interval</span><span class="p">:</span> <span class="s">"1 hour"</span><span class="p">,</span>
+            <span class="n">retention_policy</span><span class="p">:</span> <span class="nf">Some</span><span class="p">(</span><span class="s">"365 days"</span><span class="p">),</span>
+            <span class="o">..</span><span class="nn">Default</span><span class="p">::</span><span class="nf">default</span><span class="p">()</span>
+        <span class="p">})</span>
+        <span class="nf">.build</span><span class="p">()</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+
+    <span class="c1">// Configure tiered storage</span>
+    <span class="n">engine</span><span class="nf">.configure_tiered_storage</span><span class="p">(</span><span class="nd">vec!</span><span class="p">[</span>
+        <span class="n">StorageTier</span> <span class="p">{</span>
+            <span class="n">backend</span><span class="p">:</span> <span class="nn">Backend</span><span class="p">::</span><span class="n">Memory</span><span class="p">,</span>
+            <span class="n">duration</span><span class="p">:</span> <span class="nn">Duration</span><span class="p">::</span><span class="nf">hours</span><span class="p">(</span><span class="mi">1</span><span class="p">),</span>
+            <span class="n">criteria</span><span class="p">:</span> <span class="nn">TieringCriteria</span><span class="p">::</span><span class="n">Age</span><span class="p">,</span>
+        <span class="p">},</span>
+        <span class="n">StorageTier</span> <span class="p">{</span>
+            <span class="n">backend</span><span class="p">:</span> <span class="nn">Backend</span><span class="p">::</span><span class="n">Redis</span><span class="p">,</span>
+            <span class="n">duration</span><span class="p">:</span> <span class="nn">Duration</span><span class="p">::</span><span class="nf">days</span><span class="p">(</span><span class="mi">1</span><span class="p">),</span>
+            <span class="n">criteria</span><span class="p">:</span> <span class="nn">TieringCriteria</span><span class="p">::</span><span class="n">Age</span><span class="p">,</span>
+        <span class="p">},</span>
+        <span class="n">StorageTier</span> <span class="p">{</span>
+            <span class="n">backend</span><span class="p">:</span> <span class="nn">Backend</span><span class="p">::</span><span class="n">PostgreSQL</span><span class="p">,</span>
+            <span class="n">duration</span><span class="p">:</span> <span class="nn">Duration</span><span class="p">::</span><span class="nf">days</span><span class="p">(</span><span class="mi">365</span><span class="p">),</span>
+            <span class="n">criteria</span><span class="p">:</span> <span class="nn">TieringCriteria</span><span class="p">::</span><span class="n">Age</span><span class="p">,</span>
+        <span class="p">},</span>
+    <span class="p">])</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+
+    <span class="c1">// Set up streaming ingestion</span>
+    <span class="k">let</span> <span class="k">mut</span> <span class="n">inserter</span> <span class="o">=</span> <span class="nn">BatchInserter</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="o">&amp;</span><span class="n">engine</span><span class="p">)</span>
+        <span class="nf">.batch_size</span><span class="p">(</span><span class="mi">5000</span><span class="p">)</span>
+        <span class="nf">.flush_interval</span><span class="p">(</span><span class="nn">Duration</span><span class="p">::</span><span class="nf">milliseconds</span><span class="p">(</span><span class="mi">50</span><span class="p">))</span>
+        <span class="nf">.with_compression</span><span class="p">(</span><span class="nn">CompressionType</span><span class="p">::</span><span class="n">Gorilla</span><span class="p">);</span>
+
+    <span class="c1">// Simulate real-time data</span>
+    <span class="k">let</span> <span class="n">start_time</span> <span class="o">=</span> <span class="nn">chrono</span><span class="p">::</span><span class="nn">Utc</span><span class="p">::</span><span class="nf">now</span><span class="p">();</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="k">in</span> <span class="mi">0</span><span class="o">..</span><span class="mi">100_000</span> <span class="p">{</span>
+        <span class="k">let</span> <span class="n">timestamp</span> <span class="o">=</span> <span class="n">start_time</span> <span class="o">+</span> <span class="nn">chrono</span><span class="p">::</span><span class="nn">Duration</span><span class="p">::</span><span class="nf">milliseconds</span><span class="p">(</span><span class="n">i</span> <span class="o">*</span> <span class="mi">10</span><span class="p">);</span>
+        
+        <span class="n">inserter</span><span class="nf">.add_point</span><span class="p">(</span><span class="n">DataPoint</span> <span class="p">{</span>
+            <span class="n">series_id</span><span class="p">:</span> <span class="nd">format!</span><span class="p">(</span><span class="s">"sensor_{}"</span><span class="p">,</span> <span class="n">i</span> <span class="o">%</span> <span class="mi">100</span><span class="p">),</span>
+            <span class="n">timestamp</span><span class="p">,</span>
+            <span class="n">value</span><span class="p">:</span> <span class="mf">20.0</span> <span class="o">+</span> <span class="mf">10.0</span> <span class="o">*</span> <span class="p">((</span><span class="n">i</span> <span class="k">as</span> <span class="nb">f64</span><span class="p">)</span> <span class="o">/</span> <span class="mf">1000.0</span><span class="p">)</span><span class="nf">.sin</span><span class="p">(),</span>
+            <span class="n">labels</span><span class="p">:</span> <span class="nf">Some</span><span class="p">([</span>
+                <span class="p">(</span><span class="s">"location"</span><span class="p">,</span> <span class="nd">format!</span><span class="p">(</span><span class="s">"building_{}"</span><span class="p">,</span> <span class="n">i</span> <span class="o">%</span> <span class="mi">10</span><span class="p">)),</span>
+                <span class="p">(</span><span class="s">"type"</span><span class="p">,</span> <span class="s">"temperature"</span><span class="nf">.to_string</span><span class="p">()),</span>
+            <span class="p">]</span><span class="nf">.iter</span><span class="p">()</span><span class="nf">.cloned</span><span class="p">()</span><span class="nf">.collect</span><span class="p">()),</span>
+        <span class="p">})</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+
+        <span class="k">if</span> <span class="n">i</span> <span class="o">%</span> <span class="mi">10000</span> <span class="o">==</span> <span class="mi">0</span> <span class="p">{</span>
+            <span class="nd">println!</span><span class="p">(</span><span class="s">"Inserted {} points"</span><span class="p">,</span> <span class="n">i</span><span class="p">);</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+
+    <span class="n">inserter</span><span class="nf">.flush</span><span class="p">()</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+
+    <span class="c1">// Query with aggregations</span>
+    <span class="k">let</span> <span class="n">results</span> <span class="o">=</span> <span class="n">engine</span><span class="nf">.query</span><span class="p">(</span>
+        <span class="nn">QueryBuilder</span><span class="p">::</span><span class="nf">new</span><span class="p">()</span>
+            <span class="nf">.series</span><span class="p">(</span><span class="s">"sensor_*"</span><span class="p">)</span>
+            <span class="nf">.time_range</span><span class="p">(</span>
+                <span class="n">start_time</span><span class="p">,</span>
+                <span class="n">start_time</span> <span class="o">+</span> <span class="nn">chrono</span><span class="p">::</span><span class="nn">Duration</span><span class="p">::</span><span class="nf">minutes</span><span class="p">(</span><span class="mi">10</span><span class="p">)</span>
+            <span class="p">)</span>
+            <span class="nf">.aggregate</span><span class="p">(</span><span class="nn">AggregationType</span><span class="p">::</span><span class="n">Average</span><span class="p">)</span>
+            <span class="nf">.window_size</span><span class="p">(</span><span class="nn">Duration</span><span class="p">::</span><span class="nf">seconds</span><span class="p">(</span><span class="mi">30</span><span class="p">))</span>
+            <span class="nf">.group_by</span><span class="p">(</span><span class="nd">vec!</span><span class="p">[</span><span class="s">"location"</span><span class="p">])</span>
+            <span class="nf">.build</span><span class="p">()</span>
+    <span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+
+    <span class="nd">println!</span><span class="p">(</span><span class="s">"Query results: {} series"</span><span class="p">,</span> <span class="n">results</span><span class="nf">.len</span><span class="p">());</span>
+
+    <span class="c1">// Get engine statistics</span>
+    <span class="k">let</span> <span class="n">metrics</span> <span class="o">=</span> <span class="n">engine</span><span class="nf">.get_metrics</span><span class="p">()</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+    <span class="nd">println!</span><span class="p">(</span><span class="s">"Engine metrics: {:#?}"</span><span class="p">,</span> <span class="n">metrics</span><span class="p">);</span>
+
+    <span class="nf">Ok</span><span class="p">(())</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h2 id="api-reference">API Reference</h2>
+
+<h3 id="engine-creation-and-configuration">Engine Creation and Configuration</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Create engine with default in-memory storage</span>
+<span class="k">let</span> <span class="n">engine</span> <span class="o">=</span> <span class="nn">TimeSeriesEngine</span><span class="p">::</span><span class="nf">new</span><span class="p">();</span>
+
+<span class="c1">// Create with specific backend</span>
+<span class="k">let</span> <span class="n">engine</span> <span class="o">=</span> <span class="nn">TimeSeriesEngine</span><span class="p">::</span><span class="nf">with_redis_storage</span><span class="p">(</span><span class="n">redis_config</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+
+<span class="c1">// Builder pattern for complex configurations</span>
+<span class="k">let</span> <span class="n">engine</span> <span class="o">=</span> <span class="nn">TimeSeriesEngine</span><span class="p">::</span><span class="nf">builder</span><span class="p">()</span>
+    <span class="nf">.with_memory_storage</span><span class="p">(</span><span class="n">memory_config</span><span class="p">)</span>
+    <span class="nf">.with_compression</span><span class="p">(</span><span class="nn">CompressionType</span><span class="p">::</span><span class="n">Gorilla</span><span class="p">)</span>
+    <span class="nf">.with_retention_policy</span><span class="p">(</span><span class="n">retention_policy</span><span class="p">)</span>
+    <span class="nf">.build</span><span class="p">()</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h3 id="data-insertion">Data Insertion</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Single point insertion</span>
+<span class="k">async</span> <span class="k">fn</span> <span class="nf">insert_point</span><span class="p">(</span>
+    <span class="n">series_id</span><span class="p">:</span> <span class="o">&amp;</span><span class="nb">str</span><span class="p">,</span>
+    <span class="n">timestamp</span><span class="p">:</span> <span class="n">DateTime</span><span class="o">&lt;</span><span class="n">Utc</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="n">value</span><span class="p">:</span> <span class="nb">f64</span>
+<span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span>
+
+<span class="c1">// Batch insertion</span>
+<span class="k">async</span> <span class="k">fn</span> <span class="nf">insert_batch</span><span class="p">(</span>
+    <span class="n">points</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">DataPoint</span><span class="o">&gt;</span>
+<span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span>
+
+<span class="c1">// Streaming insertion</span>
+<span class="k">async</span> <span class="k">fn</span> <span class="n">insert_stream</span><span class="o">&lt;</span><span class="n">S</span><span class="o">&gt;</span><span class="p">(</span>
+    <span class="n">stream</span><span class="p">:</span> <span class="n">S</span>
+<span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span>
+<span class="k">where</span>
+    <span class="n">S</span><span class="p">:</span> <span class="n">Stream</span><span class="o">&lt;</span><span class="n">Item</span> <span class="o">=</span> <span class="n">DataPoint</span><span class="o">&gt;</span>
+</code></pre></div></div>
+
+<h3 id="querying">Querying</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Point queries</span>
+<span class="k">async</span> <span class="k">fn</span> <span class="nf">get_point</span><span class="p">(</span><span class="n">series_id</span><span class="p">:</span> <span class="o">&amp;</span><span class="nb">str</span><span class="p">,</span> <span class="n">timestamp</span><span class="p">:</span> <span class="n">DateTime</span><span class="o">&lt;</span><span class="n">Utc</span><span class="o">&gt;</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="nb">Option</span><span class="o">&lt;</span><span class="n">DataPoint</span><span class="o">&gt;&gt;</span>
+<span class="k">async</span> <span class="k">fn</span> <span class="nf">get_latest</span><span class="p">(</span><span class="n">series_id</span><span class="p">:</span> <span class="o">&amp;</span><span class="nb">str</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="nb">Option</span><span class="o">&lt;</span><span class="n">DataPoint</span><span class="o">&gt;&gt;</span>
+
+<span class="c1">// Range queries</span>
+<span class="k">async</span> <span class="k">fn</span> <span class="nf">query_range</span><span class="p">(</span>
+    <span class="n">series_id</span><span class="p">:</span> <span class="o">&amp;</span><span class="nb">str</span><span class="p">,</span>
+    <span class="n">start</span><span class="p">:</span> <span class="n">DateTime</span><span class="o">&lt;</span><span class="n">Utc</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="n">end</span><span class="p">:</span> <span class="n">DateTime</span><span class="o">&lt;</span><span class="n">Utc</span><span class="o">&gt;</span>
+<span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="n">DataPoint</span><span class="o">&gt;&gt;</span>
+
+<span class="c1">// Advanced queries</span>
+<span class="k">async</span> <span class="k">fn</span> <span class="nf">execute_query</span><span class="p">(</span><span class="n">query</span><span class="p">:</span> <span class="n">Query</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="n">QueryResult</span><span class="o">&gt;</span>
+</code></pre></div></div>
+
+<h3 id="series-management">Series Management</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Create/delete series</span>
+<span class="k">async</span> <span class="k">fn</span> <span class="nf">create_series</span><span class="p">(</span><span class="n">series_id</span><span class="p">:</span> <span class="o">&amp;</span><span class="nb">str</span><span class="p">,</span> <span class="n">config</span><span class="p">:</span> <span class="n">SeriesConfig</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span>
+<span class="k">async</span> <span class="k">fn</span> <span class="nf">delete_series</span><span class="p">(</span><span class="n">series_id</span><span class="p">:</span> <span class="o">&amp;</span><span class="nb">str</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="nb">bool</span><span class="o">&gt;</span>
+
+<span class="c1">// List and search</span>
+<span class="k">async</span> <span class="k">fn</span> <span class="nf">list_series</span><span class="p">(</span><span class="n">pattern</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;&amp;</span><span class="nb">str</span><span class="o">&gt;</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="nb">String</span><span class="o">&gt;&gt;</span>
+<span class="k">async</span> <span class="k">fn</span> <span class="nf">search_series</span><span class="p">(</span><span class="n">labels</span><span class="p">:</span> <span class="n">HashMap</span><span class="o">&lt;</span><span class="nb">String</span><span class="p">,</span> <span class="nb">String</span><span class="o">&gt;</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="nb">String</span><span class="o">&gt;&gt;</span>
+</code></pre></div></div>
+
+<p>The Orbit-RS Time Series Engine provides a complete solution for time series data management, from high-frequency IoT sensor data to financial market analytics, with enterprise-grade performance and scalability.</p>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/orbit-rs/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Orbit-RS Documentation</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">TuringWorks</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["CompletionContext","TableType"],"fn":["create_default_schema","start_lsp_server"],"struct":["ColumnInfo","Document","FunctionInfo","IndexInfo","LSPConfig","OrbitQLLanguageServer","ParameterInfo","ParsedQuery","SchemaInfo","TableInfo"]};

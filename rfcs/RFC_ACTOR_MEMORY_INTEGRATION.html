@@ -1,0 +1,1039 @@
+<h1 id="rfc-virtual-actor-memory-management-integration">RFC: Virtual Actor Memory Management Integration</h1>
+
+<p><strong>Document</strong>: RFC_ACTOR_MEMORY_INTEGRATION<br />
+<strong>Status</strong>: Draft<br />
+<strong>Author</strong>: Orbit-RS Team<br />
+<strong>Created</strong>: 2025-01-08<br />
+<strong>Updated</strong>: 2025-01-08</p>
+
+<h2 id="abstract">Abstract</h2>
+
+<p>This RFC defines how Orbit-RS’s advanced memory management system integrates with the virtual actor model to provide zero-copy, ultra-low latency data access. The integration makes actors the fundamental unit of memory locality, automatic lifetime management, and distributed coordination, enabling sub-10μs tail latencies at petabyte scale.</p>
+
+<h2 id="1-overview">1. Overview</h2>
+
+<h3 id="11-problem-statement">1.1 Problem Statement</h3>
+
+<p>Traditional database systems struggle to provide consistent low latencies because:</p>
+<ul>
+  <li>Memory management is disconnected from application logic boundaries</li>
+  <li>No automatic coordination between data placement and computation placement</li>
+  <li>Manual memory tuning required for optimal performance</li>
+  <li>Difficult to maintain locality in distributed systems</li>
+</ul>
+
+<h3 id="12-solution-approach">1.2 Solution Approach</h3>
+
+<p>Orbit-RS solves this by making <strong>virtual actors the fundamental unit of memory management</strong>:</p>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Actors automatically manage their memory footprint</span>
+
+<span class="nd">#[derive(Addressable)]</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">GraphTraversalActor</span> <span class="p">{</span>
+    <span class="n">partition_id</span><span class="p">:</span> <span class="nb">u64</span><span class="p">,</span>
+    <span class="c1">// Memory management is automatic and transparent</span>
+<span class="p">}</span>
+
+<span class="k">impl</span> <span class="n">GraphTraversalActor</span> <span class="p">{</span>
+    <span class="c1">// Actor methods get sub-10μs latency automatically</span>
+    <span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">shortest_path</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">from</span><span class="p">:</span> <span class="n">NodeId</span><span class="p">,</span> <span class="n">to</span><span class="p">:</span> <span class="n">NodeId</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="n">Path</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="c1">// Data is automatically pinned based on actor's memory profile</span>
+        <span class="k">self</span><span class="nf">.traverse_pinned_partition</span><span class="p">(</span><span class="n">from</span><span class="p">,</span> <span class="n">to</span><span class="p">)</span><span class="k">.await</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="13-key-benefits">1.3 Key Benefits</h3>
+
+<ul>
+  <li><strong>Zero-Configuration Performance</strong>: Actors automatically get optimal memory placement</li>
+  <li><strong>Natural Locality</strong>: Actor boundaries define memory locality boundaries</li>
+  <li><strong>Distributed Coordination</strong>: Actor migration triggers coordinated memory management</li>
+  <li><strong>SLA Guarantees</strong>: Different actor types get different latency guarantees</li>
+</ul>
+
+<h2 id="2-actor-memory-profiles">2. Actor Memory Profiles</h2>
+
+<h3 id="21-memory-profile-classification">2.1 Memory Profile Classification</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="nd">#[derive(Debug,</span> <span class="nd">Clone,</span> <span class="nd">Copy,</span> <span class="nd">PartialEq)]</span>
+<span class="k">pub</span> <span class="k">enum</span> <span class="n">ActorMemoryProfile</span> <span class="p">{</span>
+    <span class="n">Hot</span><span class="p">,</span>    <span class="c1">// &lt;1ms tail latency requirement</span>
+    <span class="n">Warm</span><span class="p">,</span>   <span class="c1">// &lt;10ms tail latency requirement  </span>
+    <span class="n">Cold</span><span class="p">,</span>   <span class="c1">// &gt;100ms acceptable</span>
+<span class="p">}</span>
+
+<span class="k">pub</span> <span class="k">trait</span> <span class="n">ActorMemoryBehavior</span><span class="p">:</span> <span class="n">Addressable</span> <span class="p">{</span>
+    <span class="k">fn</span> <span class="nf">get_memory_profile</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">ActorMemoryProfile</span><span class="p">;</span>
+    <span class="k">fn</span> <span class="nf">get_connected_actors</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="n">AddressableReference</span><span class="o">&gt;&gt;</span><span class="p">;</span>
+    <span class="k">fn</span> <span class="nf">estimate_memory_footprint</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">MemoryFootprint</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="nd">#[derive(Debug,</span> <span class="nd">Clone)]</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">MemoryFootprint</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="n">persistent_state_mb</span><span class="p">:</span> <span class="nb">u64</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">working_set_mb</span><span class="p">:</span> <span class="nb">u64</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">prefetch_candidates</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">ExtentRef</span><span class="o">&gt;</span><span class="p">,</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="22-profile-based-memory-strategies">2.2 Profile-Based Memory Strategies</h3>
+
+<p><strong>Hot Profile Actors:</strong></p>
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">impl</span> <span class="n">ActorMemoryBehavior</span> <span class="k">for</span> <span class="n">RealTimeAnalyticsActor</span> <span class="p">{</span>
+    <span class="k">fn</span> <span class="nf">get_memory_profile</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">ActorMemoryProfile</span> <span class="p">{</span>
+        <span class="nn">ActorMemoryProfile</span><span class="p">::</span><span class="n">Hot</span>
+    <span class="p">}</span>
+    
+    <span class="k">fn</span> <span class="nf">estimate_memory_footprint</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">MemoryFootprint</span> <span class="p">{</span>
+        <span class="n">MemoryFootprint</span> <span class="p">{</span>
+            <span class="n">persistent_state_mb</span><span class="p">:</span> <span class="mi">128</span><span class="p">,</span>    <span class="c1">// Recent time buckets</span>
+            <span class="n">working_set_mb</span><span class="p">:</span> <span class="mi">64</span><span class="p">,</span>          <span class="c1">// Calculation buffers</span>
+            <span class="n">prefetch_candidates</span><span class="p">:</span> <span class="k">self</span><span class="nf">.get_adjacent_time_buckets</span><span class="p">(),</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+
+<span class="c1">// Hot actors get guaranteed memory pinning</span>
+<span class="k">let</span> <span class="n">pin_opts</span> <span class="o">=</span> <span class="n">PinOpts</span> <span class="p">{</span>
+    <span class="n">priority</span><span class="p">:</span> <span class="nn">PinPriority</span><span class="p">::</span><span class="n">TailLatencyCritical</span><span class="p">,</span>
+    <span class="n">use_hugepages</span><span class="p">:</span> <span class="k">true</span><span class="p">,</span>
+    <span class="n">numa_prefer</span><span class="p">:</span> <span class="nf">Some</span><span class="p">(</span><span class="k">self</span><span class="nf">.get_numa_node</span><span class="p">()),</span>
+    <span class="n">lifetime_class</span><span class="p">:</span> <span class="nn">LifetimeClass</span><span class="p">::</span><span class="n">LongLived</span><span class="p">,</span>
+    <span class="n">ttl_ms</span><span class="p">:</span> <span class="nb">None</span><span class="p">,</span> <span class="c1">// Never expire</span>
+    <span class="n">prefetch_adjacent</span><span class="p">:</span> <span class="mi">3</span><span class="p">,</span>
+<span class="p">};</span>
+</code></pre></div></div>
+
+<p><strong>Warm Profile Actors:</strong></p>
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">impl</span> <span class="n">ActorMemoryBehavior</span> <span class="k">for</span> <span class="n">SessionCacheActor</span> <span class="p">{</span>
+    <span class="k">fn</span> <span class="nf">get_memory_profile</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">ActorMemoryProfile</span> <span class="p">{</span>
+        <span class="nn">ActorMemoryProfile</span><span class="p">::</span><span class="n">Warm</span>
+    <span class="p">}</span>
+    
+    <span class="k">fn</span> <span class="nf">estimate_memory_footprint</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">MemoryFootprint</span> <span class="p">{</span>
+        <span class="n">MemoryFootprint</span> <span class="p">{</span>
+            <span class="n">persistent_state_mb</span><span class="p">:</span> <span class="mi">32</span><span class="p">,</span>     <span class="c1">// User session data</span>
+            <span class="n">working_set_mb</span><span class="p">:</span> <span class="mi">16</span><span class="p">,</span>          <span class="c1">// Query buffers</span>
+            <span class="n">prefetch_candidates</span><span class="p">:</span> <span class="k">self</span><span class="nf">.get_related_sessions</span><span class="p">(),</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+
+<span class="c1">// Warm actors get session-scoped pinning</span>
+<span class="k">let</span> <span class="n">pin_opts</span> <span class="o">=</span> <span class="n">PinOpts</span> <span class="p">{</span>
+    <span class="n">priority</span><span class="p">:</span> <span class="nn">PinPriority</span><span class="p">::</span><span class="n">QueryCritical</span><span class="p">,</span>
+    <span class="n">use_hugepages</span><span class="p">:</span> <span class="k">false</span><span class="p">,</span>
+    <span class="n">lifetime_class</span><span class="p">:</span> <span class="nn">LifetimeClass</span><span class="p">::</span><span class="n">Session</span><span class="p">,</span>
+    <span class="n">ttl_ms</span><span class="p">:</span> <span class="nf">Some</span><span class="p">(</span><span class="mi">30</span> <span class="o">*</span> <span class="mi">60</span> <span class="o">*</span> <span class="mi">1000</span><span class="p">),</span> <span class="c1">// 30 minute TTL</span>
+    <span class="n">prefetch_adjacent</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+<span class="p">};</span>
+</code></pre></div></div>
+
+<h2 id="3-actor-lifecycle-integration">3. Actor Lifecycle Integration</h2>
+
+<h3 id="31-enhanced-actor-lifecycle-trait">3.1 Enhanced Actor Lifecycle Trait</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="nd">#[async_trait]</span>
+<span class="k">pub</span> <span class="k">trait</span> <span class="n">ActorLifecycleWithMemory</span><span class="p">:</span> <span class="n">Addressable</span> <span class="p">{</span>
+    <span class="cd">/// Called when actor is first activated</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">on_activate</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span> <span class="k">self</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">ActorActivationContext</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span><span class="p">;</span>
+    
+    <span class="cd">/// Called when actor is deactivated due to inactivity</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">on_deactivate</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span> <span class="k">self</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">ActorDeactivationContext</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span><span class="p">;</span>
+    
+    <span class="cd">/// Called when actor is about to be migrated to another node</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">on_prepare_migration</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span> <span class="k">self</span><span class="p">,</span> <span class="n">target_node</span><span class="p">:</span> <span class="n">NodeId</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="n">MigrationPlan</span><span class="o">&gt;</span><span class="p">;</span>
+    
+    <span class="cd">/// Called after successful migration to new node</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">on_migration_complete</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span> <span class="k">self</span><span class="p">,</span> <span class="n">source_node</span><span class="p">:</span> <span class="n">NodeId</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">ActorActivationContext</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="n">actor_ref</span><span class="p">:</span> <span class="n">AddressableReference</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">memory_manager</span><span class="p">:</span> <span class="nb">Arc</span><span class="o">&lt;</span><span class="k">dyn</span> <span class="n">ActorMemoryManager</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">extent_index</span><span class="p">:</span> <span class="nb">Arc</span><span class="o">&lt;</span><span class="k">dyn</span> <span class="n">ExtentIndex</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">local_numa_node</span><span class="p">:</span> <span class="nb">u16</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">activation_reason</span><span class="p">:</span> <span class="n">ActivationReason</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="nd">#[derive(Debug,</span> <span class="nd">Clone,</span> <span class="nd">Copy)]</span>
+<span class="k">pub</span> <span class="k">enum</span> <span class="n">ActivationReason</span> <span class="p">{</span>
+    <span class="n">FirstInvocation</span><span class="p">,</span>
+    <span class="n">Migration</span><span class="p">,</span>
+    <span class="n">Reactivation</span><span class="p">,</span>
+    <span class="n">Prefetch</span><span class="p">,</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="32-automatic-memory-management-on-activation">3.2 Automatic Memory Management on Activation</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Example: Graph Database Actor</span>
+
+<span class="nd">#[derive(Addressable)]</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">GraphPartitionActor</span> <span class="p">{</span>
+    <span class="n">partition_id</span><span class="p">:</span> <span class="nb">u64</span><span class="p">,</span>
+    <span class="n">node_count</span><span class="p">:</span> <span class="nb">usize</span><span class="p">,</span>
+    <span class="n">edge_count</span><span class="p">:</span> <span class="nb">usize</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="nd">#[async_trait]</span>
+<span class="k">impl</span> <span class="n">ActorLifecycleWithMemory</span> <span class="k">for</span> <span class="n">GraphPartitionActor</span> <span class="p">{</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">on_activate</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span> <span class="k">self</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">ActorActivationContext</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="nd">println!</span><span class="p">(</span><span class="s">"Activating graph partition {} with {} nodes"</span><span class="p">,</span> 
+                 <span class="k">self</span><span class="py">.partition_id</span><span class="p">,</span> <span class="k">self</span><span class="py">.node_count</span><span class="p">);</span>
+        
+        <span class="c1">// 1. Get memory footprint for this partition</span>
+        <span class="k">let</span> <span class="n">footprint</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.estimate_memory_footprint</span><span class="p">();</span>
+        
+        <span class="c1">// 2. Pin persistent state (graph structure)</span>
+        <span class="k">let</span> <span class="n">partition_extents</span> <span class="o">=</span> <span class="n">context</span><span class="py">.extent_index</span>
+            <span class="nf">.lookup_graph_partition</span><span class="p">(</span><span class="k">self</span><span class="py">.partition_id</span><span class="p">);</span>
+            
+        <span class="k">for</span> <span class="n">extent</span> <span class="k">in</span> <span class="n">partition_extents</span> <span class="p">{</span>
+            <span class="n">context</span><span class="py">.memory_manager</span><span class="nf">.pin_actor_extent</span><span class="p">(</span>
+                <span class="o">&amp;</span><span class="n">context</span><span class="py">.actor_ref</span><span class="p">,</span>
+                <span class="n">extent</span><span class="p">,</span>
+                <span class="o">&amp;</span><span class="n">PinOpts</span> <span class="p">{</span>
+                    <span class="n">priority</span><span class="p">:</span> <span class="nn">PinPriority</span><span class="p">::</span><span class="n">TailLatencyCritical</span><span class="p">,</span>
+                    <span class="n">use_hugepages</span><span class="p">:</span> <span class="k">true</span><span class="p">,</span>
+                    <span class="n">numa_prefer</span><span class="p">:</span> <span class="nf">Some</span><span class="p">(</span><span class="n">context</span><span class="py">.local_numa_node</span><span class="p">),</span>
+                    <span class="n">lifetime_class</span><span class="p">:</span> <span class="nn">LifetimeClass</span><span class="p">::</span><span class="n">LongLived</span><span class="p">,</span>
+                    <span class="n">prefetch_adjacent</span><span class="p">:</span> <span class="mi">2</span><span class="p">,</span> <span class="c1">// Prefetch 2 neighbor partitions</span>
+                    <span class="o">..</span><span class="nn">Default</span><span class="p">::</span><span class="nf">default</span><span class="p">()</span>
+                <span class="p">},</span>
+            <span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+        <span class="p">}</span>
+        
+        <span class="c1">// 3. Prefetch connected partitions based on graph topology</span>
+        <span class="k">let</span> <span class="n">connected_partitions</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.get_connected_partitions</span><span class="p">();</span>
+        <span class="k">for</span> <span class="n">connected_id</span> <span class="k">in</span> <span class="n">connected_partitions</span> <span class="p">{</span>
+            <span class="k">let</span> <span class="n">connected_ref</span> <span class="o">=</span> <span class="n">AddressableReference</span> <span class="p">{</span>
+                <span class="n">addressable_type</span><span class="p">:</span> <span class="s">"GraphPartitionActor"</span><span class="nf">.to_string</span><span class="p">(),</span>
+                <span class="n">key</span><span class="p">:</span> <span class="nn">Key</span><span class="p">::</span><span class="n">Int64Key</span> <span class="p">{</span> <span class="n">key</span><span class="p">:</span> <span class="n">connected_id</span> <span class="k">as</span> <span class="nb">i64</span> <span class="p">},</span>
+            <span class="p">};</span>
+            
+            <span class="c1">// Send prefetch hint</span>
+            <span class="n">context</span><span class="py">.memory_manager</span><span class="nf">.send_memory_hint</span><span class="p">(</span><span class="nn">MemoryHint</span><span class="p">::</span><span class="n">WillAccessSoon</span> <span class="p">{</span>
+                <span class="n">actor_refs</span><span class="p">:</span> <span class="nd">vec!</span><span class="p">[</span><span class="n">connected_ref</span><span class="p">],</span>
+                <span class="n">estimated_delay_ms</span><span class="p">:</span> <span class="mi">100</span><span class="p">,</span> <span class="c1">// Expect access within 100ms</span>
+            <span class="p">})</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+        <span class="p">}</span>
+        
+        <span class="c1">// 4. Set up working memory for traversal algorithms</span>
+        <span class="n">context</span><span class="py">.memory_manager</span><span class="nf">.allocate_working_set</span><span class="p">(</span>
+            <span class="o">&amp;</span><span class="n">context</span><span class="py">.actor_ref</span><span class="p">,</span>
+            <span class="n">footprint</span><span class="py">.working_set_mb</span><span class="p">,</span>
+            <span class="nn">LifetimeClass</span><span class="p">::</span><span class="n">Session</span><span class="p">,</span>
+        <span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+        
+        <span class="nf">Ok</span><span class="p">(())</span>
+    <span class="p">}</span>
+    
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">on_deactivate</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span> <span class="k">self</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">ActorDeactivationContext</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="nd">println!</span><span class="p">(</span><span class="s">"Deactivating graph partition {}"</span><span class="p">,</span> <span class="k">self</span><span class="py">.partition_id</span><span class="p">);</span>
+        
+        <span class="c1">// Automatically unpin all memory associated with this actor</span>
+        <span class="n">context</span><span class="py">.memory_manager</span><span class="nf">.unpin_actor_memory</span><span class="p">(</span><span class="o">&amp;</span><span class="n">context</span><span class="py">.actor_ref</span><span class="p">)</span><span class="k">.await</span><span class="p">;</span>
+        
+        <span class="nf">Ok</span><span class="p">(())</span>
+    <span class="p">}</span>
+    
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">on_prepare_migration</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span> <span class="k">self</span><span class="p">,</span> <span class="n">target_node</span><span class="p">:</span> <span class="n">NodeId</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="n">MigrationPlan</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="c1">// Create migration plan with memory pre-warming</span>
+        <span class="k">let</span> <span class="n">current_extents</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.get_pinned_extents</span><span class="p">();</span>
+        
+        <span class="nf">Ok</span><span class="p">(</span><span class="n">MigrationPlan</span> <span class="p">{</span>
+            <span class="n">target_node</span><span class="p">,</span>
+            <span class="n">prewarm_extents</span><span class="p">:</span> <span class="n">current_extents</span><span class="p">,</span>
+            <span class="n">estimated_migration_time_ms</span><span class="p">:</span> <span class="mi">5000</span><span class="p">,</span>
+            <span class="n">requires_memory_sync</span><span class="p">:</span> <span class="k">true</span><span class="p">,</span>
+        <span class="p">})</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+
+<span class="k">impl</span> <span class="n">ActorMemoryBehavior</span> <span class="k">for</span> <span class="n">GraphPartitionActor</span> <span class="p">{</span>
+    <span class="k">fn</span> <span class="nf">get_memory_profile</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">ActorMemoryProfile</span> <span class="p">{</span>
+        <span class="k">match</span> <span class="k">self</span><span class="py">.node_count</span> <span class="p">{</span>
+            <span class="mi">0</span><span class="o">..=</span><span class="mi">1000</span> <span class="k">=&gt;</span> <span class="nn">ActorMemoryProfile</span><span class="p">::</span><span class="n">Cold</span><span class="p">,</span>
+            <span class="mi">1001</span><span class="o">..=</span><span class="mi">100000</span> <span class="k">=&gt;</span> <span class="nn">ActorMemoryProfile</span><span class="p">::</span><span class="n">Warm</span><span class="p">,</span> 
+            <span class="n">_</span> <span class="k">=&gt;</span> <span class="nn">ActorMemoryProfile</span><span class="p">::</span><span class="n">Hot</span><span class="p">,</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+    
+    <span class="k">fn</span> <span class="nf">estimate_memory_footprint</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">MemoryFootprint</span> <span class="p">{</span>
+        <span class="k">let</span> <span class="n">nodes_mb</span> <span class="o">=</span> <span class="p">(</span><span class="k">self</span><span class="py">.node_count</span> <span class="o">*</span> <span class="mi">64</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="mi">1024</span> <span class="o">*</span> <span class="mi">1024</span><span class="p">);</span> <span class="c1">// 64 bytes per node</span>
+        <span class="k">let</span> <span class="n">edges_mb</span> <span class="o">=</span> <span class="p">(</span><span class="k">self</span><span class="py">.edge_count</span> <span class="o">*</span> <span class="mi">32</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="mi">1024</span> <span class="o">*</span> <span class="mi">1024</span><span class="p">);</span>  <span class="c1">// 32 bytes per edge</span>
+        
+        <span class="n">MemoryFootprint</span> <span class="p">{</span>
+            <span class="n">persistent_state_mb</span><span class="p">:</span> <span class="n">nodes_mb</span> <span class="o">+</span> <span class="n">edges_mb</span><span class="p">,</span>
+            <span class="n">working_set_mb</span><span class="p">:</span> <span class="p">(</span><span class="n">nodes_mb</span> <span class="o">/</span> <span class="mi">4</span><span class="p">)</span><span class="nf">.max</span><span class="p">(</span><span class="mi">16</span><span class="p">),</span> <span class="c1">// 25% of data size, min 16MB</span>
+            <span class="n">prefetch_candidates</span><span class="p">:</span> <span class="k">self</span><span class="nf">.get_neighbor_partition_extents</span><span class="p">(),</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h2 id="4-actor-type-specific-strategies">4. Actor Type-Specific Strategies</h2>
+
+<h3 id="41-time-series-actors">4.1 Time Series Actors</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="nd">#[derive(Addressable)]</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">TimeSeriesActor</span> <span class="p">{</span>
+    <span class="n">metric_name</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span>
+    <span class="n">time_range</span><span class="p">:</span> <span class="n">TimeRange</span><span class="p">,</span>
+    <span class="n">bucket_size</span><span class="p">:</span> <span class="n">Duration</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="nd">#[async_trait]</span>
+<span class="k">impl</span> <span class="n">ActorLifecycleWithMemory</span> <span class="k">for</span> <span class="n">TimeSeriesActor</span> <span class="p">{</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">on_activate</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span> <span class="k">self</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">ActorActivationContext</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="c1">// Pin recent time buckets for hot queries</span>
+        <span class="k">let</span> <span class="n">recent_window</span> <span class="o">=</span> <span class="nn">Duration</span><span class="p">::</span><span class="nf">from_secs</span><span class="p">(</span><span class="mi">3600</span><span class="p">);</span> <span class="c1">// Last hour</span>
+        <span class="k">let</span> <span class="n">now</span> <span class="o">=</span> <span class="nn">SystemTime</span><span class="p">::</span><span class="nf">now</span><span class="p">();</span>
+        
+        <span class="k">let</span> <span class="n">recent_buckets</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.get_time_buckets_in_window</span><span class="p">(</span><span class="n">now</span> <span class="o">-</span> <span class="n">recent_window</span><span class="p">,</span> <span class="n">now</span><span class="p">);</span>
+        
+        <span class="k">for</span> <span class="n">bucket</span> <span class="k">in</span> <span class="n">recent_buckets</span> <span class="p">{</span>
+            <span class="k">let</span> <span class="n">bucket_extents</span> <span class="o">=</span> <span class="n">context</span><span class="py">.extent_index</span>
+                <span class="nf">.lookup_time_bucket</span><span class="p">(</span><span class="n">bucket</span><span class="py">.bucket_id</span><span class="p">);</span>
+                
+            <span class="k">for</span> <span class="n">extent</span> <span class="k">in</span> <span class="n">bucket_extents</span> <span class="p">{</span>
+                <span class="k">let</span> <span class="n">priority</span> <span class="o">=</span> <span class="k">if</span> <span class="n">bucket</span><span class="py">.age</span> <span class="o">&lt;</span> <span class="nn">Duration</span><span class="p">::</span><span class="nf">from_secs</span><span class="p">(</span><span class="mi">300</span><span class="p">)</span> <span class="p">{</span>
+                    <span class="nn">PinPriority</span><span class="p">::</span><span class="n">TailLatencyCritical</span> <span class="c1">// Last 5 minutes = hot</span>
+                <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+                    <span class="nn">PinPriority</span><span class="p">::</span><span class="n">QueryCritical</span>       <span class="c1">// Last hour = warm</span>
+                <span class="p">};</span>
+                
+                <span class="n">context</span><span class="py">.memory_manager</span><span class="nf">.pin_actor_extent</span><span class="p">(</span>
+                    <span class="o">&amp;</span><span class="n">context</span><span class="py">.actor_ref</span><span class="p">,</span>
+                    <span class="n">extent</span><span class="p">,</span>
+                    <span class="o">&amp;</span><span class="n">PinOpts</span> <span class="p">{</span>
+                        <span class="n">priority</span><span class="p">,</span>
+                        <span class="n">use_hugepages</span><span class="p">:</span> <span class="n">extent</span><span class="py">.len</span> <span class="o">&gt;=</span> <span class="mi">64</span> <span class="o">*</span> <span class="mi">1024</span> <span class="o">*</span> <span class="mi">1024</span><span class="p">,</span>
+                        <span class="n">lifetime_class</span><span class="p">:</span> <span class="nn">LifetimeClass</span><span class="p">::</span><span class="n">Session</span><span class="p">,</span>
+                        <span class="n">ttl_ms</span><span class="p">:</span> <span class="nf">Some</span><span class="p">(</span><span class="mi">3600</span> <span class="o">*</span> <span class="mi">1000</span><span class="p">),</span> <span class="c1">// 1 hour TTL</span>
+                        <span class="o">..</span><span class="nn">Default</span><span class="p">::</span><span class="nf">default</span><span class="p">()</span>
+                    <span class="p">},</span>
+                <span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+            <span class="p">}</span>
+        <span class="p">}</span>
+        
+        <span class="nf">Ok</span><span class="p">(())</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+
+<span class="k">impl</span> <span class="n">TimeSeriesActor</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">query_recent</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">window</span><span class="p">:</span> <span class="n">Duration</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="n">DataPoint</span><span class="o">&gt;&gt;</span> <span class="p">{</span>
+        <span class="c1">// Data is already pinned and available at memory speed</span>
+        <span class="k">let</span> <span class="n">buckets</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.get_recent_buckets</span><span class="p">(</span><span class="n">window</span><span class="p">);</span>
+        <span class="k">let</span> <span class="k">mut</span> <span class="n">results</span> <span class="o">=</span> <span class="nn">Vec</span><span class="p">::</span><span class="nf">new</span><span class="p">();</span>
+        
+        <span class="k">for</span> <span class="n">bucket</span> <span class="k">in</span> <span class="n">buckets</span> <span class="p">{</span>
+            <span class="c1">// Zero-copy access to pinned memory-mapped data</span>
+            <span class="k">let</span> <span class="n">data</span> <span class="o">=</span> <span class="n">bucket</span><span class="nf">.read_pinned_data</span><span class="p">()</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+            <span class="n">results</span><span class="nf">.extend</span><span class="p">(</span><span class="n">data</span><span class="p">);</span>
+        <span class="p">}</span>
+        
+        <span class="nf">Ok</span><span class="p">(</span><span class="n">results</span><span class="p">)</span>
+    <span class="p">}</span>
+    
+    <span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">append_data_point</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span> <span class="k">self</span><span class="p">,</span> <span class="n">point</span><span class="p">:</span> <span class="n">DataPoint</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="c1">// Ensure current bucket is pinned for writes</span>
+        <span class="k">let</span> <span class="n">current_bucket</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.get_current_bucket</span><span class="p">();</span>
+        <span class="k">self</span><span class="nf">.ensure_bucket_pinned</span><span class="p">(</span><span class="n">current_bucket</span><span class="p">,</span> <span class="nn">PinPriority</span><span class="p">::</span><span class="n">TailLatencyCritical</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+        
+        <span class="c1">// Append to memory-mapped file</span>
+        <span class="n">current_bucket</span><span class="nf">.append_point</span><span class="p">(</span><span class="n">point</span><span class="p">)</span><span class="k">.await</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="42-document-store-actors">4.2 Document Store Actors</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="nd">#[derive(Addressable)]</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">DocumentCollectionActor</span> <span class="p">{</span>
+    <span class="n">collection_name</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span>
+    <span class="n">key_range</span><span class="p">:</span> <span class="n">KeyRange</span><span class="p">,</span>
+    <span class="n">document_count</span><span class="p">:</span> <span class="nb">u64</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="nd">#[async_trait]</span>
+<span class="k">impl</span> <span class="n">ActorLifecycleWithMemory</span> <span class="k">for</span> <span class="n">DocumentCollectionActor</span> <span class="p">{</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">on_activate</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span> <span class="k">self</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">ActorActivationContext</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="c1">// Pin frequently accessed document ranges</span>
+        <span class="k">let</span> <span class="n">hot_ranges</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.get_hot_key_ranges</span><span class="p">();</span>
+        
+        <span class="k">for</span> <span class="n">range</span> <span class="k">in</span> <span class="n">hot_ranges</span> <span class="p">{</span>
+            <span class="k">let</span> <span class="n">range_extents</span> <span class="o">=</span> <span class="n">context</span><span class="py">.extent_index</span>
+                <span class="nf">.lookup_document_range</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="py">.collection_name</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">range</span><span class="p">);</span>
+                
+            <span class="k">for</span> <span class="n">extent</span> <span class="k">in</span> <span class="n">range_extents</span> <span class="p">{</span>
+                <span class="n">context</span><span class="py">.memory_manager</span><span class="nf">.pin_actor_extent</span><span class="p">(</span>
+                    <span class="o">&amp;</span><span class="n">context</span><span class="py">.actor_ref</span><span class="p">,</span>
+                    <span class="n">extent</span><span class="p">,</span>
+                    <span class="o">&amp;</span><span class="n">PinOpts</span> <span class="p">{</span>
+                        <span class="n">priority</span><span class="p">:</span> <span class="nn">PinPriority</span><span class="p">::</span><span class="n">QueryCritical</span><span class="p">,</span>
+                        <span class="n">use_hugepages</span><span class="p">:</span> <span class="k">false</span><span class="p">,</span> <span class="c1">// Documents are typically small</span>
+                        <span class="n">lifetime_class</span><span class="p">:</span> <span class="nn">LifetimeClass</span><span class="p">::</span><span class="n">Session</span><span class="p">,</span>
+                        <span class="n">ttl_ms</span><span class="p">:</span> <span class="nf">Some</span><span class="p">(</span><span class="mi">15</span> <span class="o">*</span> <span class="mi">60</span> <span class="o">*</span> <span class="mi">1000</span><span class="p">),</span> <span class="c1">// 15 minute TTL</span>
+                        <span class="o">..</span><span class="nn">Default</span><span class="p">::</span><span class="nf">default</span><span class="p">()</span>
+                    <span class="p">},</span>
+                <span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+            <span class="p">}</span>
+        <span class="p">}</span>
+        
+        <span class="c1">// Pin index structures for this key range</span>
+        <span class="k">let</span> <span class="n">index_extents</span> <span class="o">=</span> <span class="n">context</span><span class="py">.extent_index</span>
+            <span class="nf">.lookup_collection_indices</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="py">.collection_name</span><span class="p">);</span>
+            
+        <span class="k">for</span> <span class="n">extent</span> <span class="k">in</span> <span class="n">index_extents</span> <span class="p">{</span>
+            <span class="n">context</span><span class="py">.memory_manager</span><span class="nf">.pin_actor_extent</span><span class="p">(</span>
+                <span class="o">&amp;</span><span class="n">context</span><span class="py">.actor_ref</span><span class="p">,</span>
+                <span class="n">extent</span><span class="p">,</span>
+                <span class="o">&amp;</span><span class="n">PinOpts</span> <span class="p">{</span>
+                    <span class="n">priority</span><span class="p">:</span> <span class="nn">PinPriority</span><span class="p">::</span><span class="n">TailLatencyCritical</span><span class="p">,</span>
+                    <span class="n">use_hugepages</span><span class="p">:</span> <span class="k">true</span><span class="p">,</span>
+                    <span class="n">lifetime_class</span><span class="p">:</span> <span class="nn">LifetimeClass</span><span class="p">::</span><span class="n">LongLived</span><span class="p">,</span>
+                    <span class="o">..</span><span class="nn">Default</span><span class="p">::</span><span class="nf">default</span><span class="p">()</span>
+                <span class="p">},</span>
+            <span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+        <span class="p">}</span>
+        
+        <span class="nf">Ok</span><span class="p">(())</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+
+<span class="k">impl</span> <span class="n">DocumentCollectionActor</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">get_document</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="o">&amp;</span><span class="nb">str</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="nb">Option</span><span class="o">&lt;</span><span class="n">Document</span><span class="o">&gt;&gt;</span> <span class="p">{</span>
+        <span class="c1">// Check if key is in our range</span>
+        <span class="k">if</span> <span class="o">!</span><span class="k">self</span><span class="py">.key_range</span><span class="nf">.contains</span><span class="p">(</span><span class="n">key</span><span class="p">)</span> <span class="p">{</span>
+            <span class="k">return</span> <span class="nf">Err</span><span class="p">(</span><span class="nd">anyhow!</span><span class="p">(</span><span class="s">"Key {} not in range {:?}"</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="k">self</span><span class="py">.key_range</span><span class="p">));</span>
+        <span class="p">}</span>
+        
+        <span class="c1">// Access is zero-copy from pinned memory</span>
+        <span class="k">let</span> <span class="n">extent</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.find_extent_for_key</span><span class="p">(</span><span class="n">key</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+        <span class="n">extent</span><span class="nf">.read_document</span><span class="p">(</span><span class="n">key</span><span class="p">)</span><span class="k">.await</span>
+    <span class="p">}</span>
+    
+    <span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">put_document</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span> <span class="k">self</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="o">&amp;</span><span class="nb">str</span><span class="p">,</span> <span class="n">doc</span><span class="p">:</span> <span class="n">Document</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="c1">// Ensure target extent is pinned for writes</span>
+        <span class="k">let</span> <span class="n">extent</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.find_or_create_extent_for_key</span><span class="p">(</span><span class="n">key</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+        <span class="k">self</span><span class="nf">.ensure_extent_pinned</span><span class="p">(</span><span class="n">extent</span><span class="p">,</span> <span class="nn">PinPriority</span><span class="p">::</span><span class="n">QueryCritical</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+        
+        <span class="c1">// Write to memory-mapped file</span>
+        <span class="n">extent</span><span class="nf">.write_document</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">doc</span><span class="p">)</span><span class="k">.await</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h2 id="5-actor-communication-and-memory-hints">5. Actor Communication and Memory Hints</h2>
+
+<h3 id="51-memory-hint-messages">5.1 Memory Hint Messages</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="nd">#[derive(Debug,</span> <span class="nd">Clone,</span> <span class="nd">Serialize,</span> <span class="nd">Deserialize)]</span>
+<span class="k">pub</span> <span class="k">enum</span> <span class="n">MemoryHint</span> <span class="p">{</span>
+    <span class="cd">/// Hint that these actors will be accessed soon</span>
+    <span class="n">WillAccessSoon</span> <span class="p">{</span>
+        <span class="n">actor_refs</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">AddressableReference</span><span class="o">&gt;</span><span class="p">,</span>
+        <span class="n">estimated_delay_ms</span><span class="p">:</span> <span class="nb">u64</span><span class="p">,</span>
+        <span class="n">access_pattern</span><span class="p">:</span> <span class="n">AccessPattern</span><span class="p">,</span>
+    <span class="p">},</span>
+    
+    <span class="cd">/// Hint that access to these actors is complete</span>
+    <span class="n">AccessComplete</span> <span class="p">{</span>
+        <span class="n">actor_refs</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">AddressableReference</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="p">},</span>
+    
+    <span class="cd">/// Request to migrate actor for better locality</span>
+    <span class="n">MigrateForLocality</span> <span class="p">{</span>
+        <span class="n">actor_ref</span><span class="p">:</span> <span class="n">AddressableReference</span><span class="p">,</span>
+        <span class="n">target_numa_node</span><span class="p">:</span> <span class="nb">u16</span><span class="p">,</span>
+        <span class="n">locality_score</span><span class="p">:</span> <span class="nb">f32</span><span class="p">,</span>
+    <span class="p">},</span>
+    
+    <span class="cd">/// Hint about expected query pattern</span>
+    <span class="n">QueryPatternHint</span> <span class="p">{</span>
+        <span class="n">actor_ref</span><span class="p">:</span> <span class="n">AddressableReference</span><span class="p">,</span>
+        <span class="n">pattern</span><span class="p">:</span> <span class="n">QueryPattern</span><span class="p">,</span>
+        <span class="n">expected_frequency</span><span class="p">:</span> <span class="n">QueryFrequency</span><span class="p">,</span>
+    <span class="p">},</span>
+<span class="p">}</span>
+
+<span class="nd">#[derive(Debug,</span> <span class="nd">Clone,</span> <span class="nd">Copy,</span> <span class="nd">Serialize,</span> <span class="nd">Deserialize)]</span>
+<span class="k">pub</span> <span class="k">enum</span> <span class="n">AccessPattern</span> <span class="p">{</span>
+    <span class="n">Sequential</span><span class="p">,</span>
+    <span class="n">Random</span><span class="p">,</span>
+    <span class="n">Scan</span><span class="p">,</span>
+    <span class="nf">JoinWith</span><span class="p">(</span><span class="nb">u64</span><span class="p">),</span> <span class="c1">// Join with another actor</span>
+<span class="p">}</span>
+
+<span class="nd">#[derive(Debug,</span> <span class="nd">Clone,</span> <span class="nd">Copy,</span> <span class="nd">Serialize,</span> <span class="nd">Deserialize)]</span>
+<span class="k">pub</span> <span class="k">enum</span> <span class="n">QueryPattern</span> <span class="p">{</span>
+    <span class="n">PointLookup</span><span class="p">,</span>
+    <span class="n">RangeScan</span><span class="p">,</span>
+    <span class="n">Aggregation</span><span class="p">,</span>
+    <span class="n">GraphTraversal</span><span class="p">,</span>
+    <span class="n">TimeSeriesAnalytics</span><span class="p">,</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="52-smart-prefetching-based-on-actor-relationships">5.2 Smart Prefetching Based on Actor Relationships</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Graph traversal actor automatically prefetches neighbor partitions</span>
+<span class="k">impl</span> <span class="n">GraphTraversalActor</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">breadth_first_search</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">start</span><span class="p">:</span> <span class="n">NodeId</span><span class="p">,</span> <span class="n">max_depth</span><span class="p">:</span> <span class="nb">u32</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="n">Path</span><span class="o">&gt;&gt;</span> <span class="p">{</span>
+        <span class="k">let</span> <span class="k">mut</span> <span class="n">current_level</span> <span class="o">=</span> <span class="nd">vec!</span><span class="p">[</span><span class="n">start</span><span class="p">];</span>
+        <span class="k">let</span> <span class="k">mut</span> <span class="n">visited</span> <span class="o">=</span> <span class="nn">HashSet</span><span class="p">::</span><span class="nf">new</span><span class="p">();</span>
+        <span class="k">let</span> <span class="k">mut</span> <span class="n">paths</span> <span class="o">=</span> <span class="nn">Vec</span><span class="p">::</span><span class="nf">new</span><span class="p">();</span>
+        
+        <span class="k">for</span> <span class="n">depth</span> <span class="k">in</span> <span class="mi">0</span><span class="o">..</span><span class="n">max_depth</span> <span class="p">{</span>
+            <span class="k">let</span> <span class="k">mut</span> <span class="n">next_level</span> <span class="o">=</span> <span class="nn">Vec</span><span class="p">::</span><span class="nf">new</span><span class="p">();</span>
+            
+            <span class="c1">// Send prefetch hints for next level partitions</span>
+            <span class="k">let</span> <span class="n">next_partitions</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.predict_next_partitions</span><span class="p">(</span><span class="o">&amp;</span><span class="n">current_level</span><span class="p">);</span>
+            <span class="k">for</span> <span class="n">partition_id</span> <span class="k">in</span> <span class="n">next_partitions</span> <span class="p">{</span>
+                <span class="k">let</span> <span class="n">partition_ref</span> <span class="o">=</span> <span class="n">AddressableReference</span> <span class="p">{</span>
+                    <span class="n">addressable_type</span><span class="p">:</span> <span class="s">"GraphPartitionActor"</span><span class="nf">.to_string</span><span class="p">(),</span>
+                    <span class="n">key</span><span class="p">:</span> <span class="nn">Key</span><span class="p">::</span><span class="n">Int64Key</span> <span class="p">{</span> <span class="n">key</span><span class="p">:</span> <span class="n">partition_id</span> <span class="k">as</span> <span class="nb">i64</span> <span class="p">},</span>
+                <span class="p">};</span>
+                
+                <span class="k">self</span><span class="nf">.send_memory_hint</span><span class="p">(</span><span class="nn">MemoryHint</span><span class="p">::</span><span class="n">WillAccessSoon</span> <span class="p">{</span>
+                    <span class="n">actor_refs</span><span class="p">:</span> <span class="nd">vec!</span><span class="p">[</span><span class="n">partition_ref</span><span class="p">],</span>
+                    <span class="n">estimated_delay_ms</span><span class="p">:</span> <span class="mi">50</span><span class="p">,</span> <span class="c1">// Will access in ~50ms</span>
+                    <span class="n">access_pattern</span><span class="p">:</span> <span class="nn">AccessPattern</span><span class="p">::</span><span class="n">GraphTraversal</span><span class="p">,</span>
+                <span class="p">})</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+            <span class="p">}</span>
+            
+            <span class="c1">// Process current level (data is already pinned)</span>
+            <span class="k">for</span> <span class="n">node_id</span> <span class="k">in</span> <span class="n">current_level</span> <span class="p">{</span>
+                <span class="k">if</span> <span class="n">visited</span><span class="nf">.contains</span><span class="p">(</span><span class="o">&amp;</span><span class="n">node_id</span><span class="p">)</span> <span class="p">{</span>
+                    <span class="k">continue</span><span class="p">;</span>
+                <span class="p">}</span>
+                
+                <span class="n">visited</span><span class="nf">.insert</span><span class="p">(</span><span class="n">node_id</span><span class="p">);</span>
+                <span class="k">let</span> <span class="n">neighbors</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.get_neighbors</span><span class="p">(</span><span class="n">node_id</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span> <span class="c1">// Zero-copy from pinned memory</span>
+                <span class="n">next_level</span><span class="nf">.extend</span><span class="p">(</span><span class="n">neighbors</span><span class="p">);</span>
+            <span class="p">}</span>
+            
+            <span class="n">current_level</span> <span class="o">=</span> <span class="n">next_level</span><span class="p">;</span>
+        <span class="p">}</span>
+        
+        <span class="nf">Ok</span><span class="p">(</span><span class="n">paths</span><span class="p">)</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h2 id="6-numa-aware-actor-placement">6. NUMA-Aware Actor Placement</h2>
+
+<h3 id="61-actor-placement-strategy">6.1 Actor Placement Strategy</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">pub</span> <span class="k">struct</span> <span class="n">NumaAwareActorPlacement</span> <span class="p">{</span>
+    <span class="n">topology</span><span class="p">:</span> <span class="n">NumaTopology</span><span class="p">,</span>
+    <span class="n">memory_managers</span><span class="p">:</span> <span class="n">HashMap</span><span class="o">&lt;</span><span class="nb">u16</span><span class="p">,</span> <span class="nb">Arc</span><span class="o">&lt;</span><span class="k">dyn</span> <span class="n">ActorMemoryManager</span><span class="o">&gt;&gt;</span><span class="p">,</span>
+    <span class="n">placement_history</span><span class="p">:</span> <span class="n">LruCache</span><span class="o">&lt;</span><span class="n">AddressableReference</span><span class="p">,</span> <span class="n">PlacementStats</span><span class="o">&gt;</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="k">impl</span> <span class="n">NumaAwareActorPlacement</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">optimal_placement</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">actor_ref</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">AddressableReference</span><span class="p">)</span> 
+        <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="n">PlacementDecision</span><span class="o">&gt;</span> <span class="p">{</span>
+        
+        <span class="c1">// Analyze actor's expected memory access patterns</span>
+        <span class="k">let</span> <span class="n">memory_analysis</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.analyze_actor_memory_patterns</span><span class="p">(</span><span class="n">actor_ref</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+        
+        <span class="c1">// Score each NUMA node based on data locality</span>
+        <span class="k">let</span> <span class="k">mut</span> <span class="n">numa_scores</span> <span class="o">=</span> <span class="nn">HashMap</span><span class="p">::</span><span class="nf">new</span><span class="p">();</span>
+        <span class="k">for</span> <span class="n">numa_node</span> <span class="k">in</span> <span class="k">self</span><span class="py">.topology</span><span class="nf">.get_nodes</span><span class="p">()</span> <span class="p">{</span>
+            <span class="k">let</span> <span class="k">mut</span> <span class="n">score</span> <span class="o">=</span> <span class="mf">0.0f64</span><span class="p">;</span>
+            
+            <span class="c1">// Score based on already-pinned data</span>
+            <span class="k">for</span> <span class="n">extent</span> <span class="k">in</span> <span class="o">&amp;</span><span class="n">memory_analysis</span><span class="py">.expected_extents</span> <span class="p">{</span>
+                <span class="k">if</span> <span class="k">let</span> <span class="nf">Some</span><span class="p">(</span><span class="n">pinned_node</span><span class="p">)</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.get_extent_numa_node</span><span class="p">(</span><span class="n">extent</span><span class="p">)</span> <span class="p">{</span>
+                    <span class="k">if</span> <span class="n">pinned_node</span> <span class="o">==</span> <span class="n">numa_node</span> <span class="p">{</span>
+                        <span class="n">score</span> <span class="o">+=</span> <span class="n">extent</span><span class="py">.len</span> <span class="k">as</span> <span class="nb">f64</span> <span class="o">*</span> <span class="mf">1.0</span><span class="p">;</span> <span class="c1">// Full score for local data</span>
+                    <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+                        <span class="k">let</span> <span class="n">distance</span> <span class="o">=</span> <span class="k">self</span><span class="py">.topology</span><span class="nf">.get_distance</span><span class="p">(</span><span class="n">numa_node</span><span class="p">,</span> <span class="n">pinned_node</span><span class="p">);</span>
+                        <span class="n">score</span> <span class="o">+=</span> <span class="n">extent</span><span class="py">.len</span> <span class="k">as</span> <span class="nb">f64</span> <span class="o">*</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">/</span> <span class="n">distance</span> <span class="k">as</span> <span class="nb">f64</span><span class="p">);</span>
+                    <span class="p">}</span>
+                <span class="p">}</span>
+            <span class="p">}</span>
+            
+            <span class="c1">// Score based on co-located actors</span>
+            <span class="k">for</span> <span class="n">connected_actor</span> <span class="k">in</span> <span class="o">&amp;</span><span class="n">memory_analysis</span><span class="py">.connected_actors</span> <span class="p">{</span>
+                <span class="k">if</span> <span class="k">let</span> <span class="nf">Some</span><span class="p">(</span><span class="n">connected_node</span><span class="p">)</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.get_actor_numa_node</span><span class="p">(</span><span class="n">connected_actor</span><span class="p">)</span> <span class="p">{</span>
+                    <span class="k">if</span> <span class="n">connected_node</span> <span class="o">==</span> <span class="n">numa_node</span> <span class="p">{</span>
+                        <span class="n">score</span> <span class="o">+=</span> <span class="mf">1000.0</span><span class="p">;</span> <span class="c1">// High score for co-location</span>
+                    <span class="p">}</span>
+                <span class="p">}</span>
+            <span class="p">}</span>
+            
+            <span class="c1">// Score based on available memory</span>
+            <span class="k">let</span> <span class="n">available_memory</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.get_available_memory</span><span class="p">(</span><span class="n">numa_node</span><span class="p">);</span>
+            <span class="k">let</span> <span class="n">memory_pressure</span> <span class="o">=</span> <span class="mf">1.0</span> <span class="o">-</span> <span class="p">(</span><span class="n">available_memory</span> <span class="k">as</span> <span class="nb">f64</span> <span class="o">/</span> <span class="k">self</span><span class="nf">.get_total_memory</span><span class="p">(</span><span class="n">numa_node</span><span class="p">)</span> <span class="k">as</span> <span class="nb">f64</span><span class="p">);</span>
+            <span class="n">score</span> <span class="o">*=</span> <span class="mf">1.0</span> <span class="o">-</span> <span class="n">memory_pressure</span><span class="p">;</span> <span class="c1">// Reduce score for high memory pressure</span>
+            
+            <span class="n">numa_scores</span><span class="nf">.insert</span><span class="p">(</span><span class="n">numa_node</span><span class="p">,</span> <span class="n">score</span><span class="p">);</span>
+        <span class="p">}</span>
+        
+        <span class="k">let</span> <span class="n">optimal_numa</span> <span class="o">=</span> <span class="n">numa_scores</span>
+            <span class="nf">.into_iter</span><span class="p">()</span>
+            <span class="nf">.max_by</span><span class="p">(|</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">|</span> <span class="n">a</span><span class="na">.1</span><span class="nf">.partial_cmp</span><span class="p">(</span><span class="o">&amp;</span><span class="n">b</span><span class="na">.1</span><span class="p">)</span><span class="nf">.unwrap_or</span><span class="p">(</span><span class="nn">std</span><span class="p">::</span><span class="nn">cmp</span><span class="p">::</span><span class="nn">Ordering</span><span class="p">::</span><span class="n">Equal</span><span class="p">))</span>
+            <span class="nf">.map</span><span class="p">(|(</span><span class="n">node</span><span class="p">,</span> <span class="n">_</span><span class="p">)|</span> <span class="n">node</span><span class="p">);</span>
+        
+        <span class="nf">Ok</span><span class="p">(</span><span class="n">PlacementDecision</span> <span class="p">{</span>
+            <span class="n">preferred_numa_node</span><span class="p">:</span> <span class="n">optimal_numa</span><span class="p">,</span>
+            <span class="n">expected_memory_mb</span><span class="p">:</span> <span class="n">memory_analysis</span><span class="py">.total_memory_mb</span><span class="p">,</span>
+            <span class="n">co_location_score</span><span class="p">:</span> <span class="n">memory_analysis</span><span class="py">.co_location_score</span><span class="p">,</span>
+            <span class="n">data_locality_score</span><span class="p">:</span> <span class="n">memory_analysis</span><span class="py">.locality_score</span><span class="p">,</span>
+        <span class="p">})</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+
+<span class="nd">#[derive(Debug)]</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">MemoryAnalysis</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="n">expected_extents</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">ExtentRef</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">connected_actors</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">AddressableReference</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">total_memory_mb</span><span class="p">:</span> <span class="nb">u64</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">locality_score</span><span class="p">:</span> <span class="nb">f64</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">co_location_score</span><span class="p">:</span> <span class="nb">f64</span><span class="p">,</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h2 id="7-distributed-memory-coordination">7. Distributed Memory Coordination</h2>
+
+<h3 id="71-cross-node-memory-management">7.1 Cross-Node Memory Management</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">pub</span> <span class="k">struct</span> <span class="n">DistributedActorMemoryCoordinator</span> <span class="p">{</span>
+    <span class="n">local_memory_manager</span><span class="p">:</span> <span class="nb">Arc</span><span class="o">&lt;</span><span class="k">dyn</span> <span class="n">ActorMemoryManager</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="n">cluster_view</span><span class="p">:</span> <span class="nb">Arc</span><span class="o">&lt;</span><span class="n">ClusterMemoryView</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="n">replication_manager</span><span class="p">:</span> <span class="nb">Arc</span><span class="o">&lt;</span><span class="n">ReplicationManager</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="n">migration_coordinator</span><span class="p">:</span> <span class="nb">Arc</span><span class="o">&lt;</span><span class="n">ActorMigrationCoordinator</span><span class="o">&gt;</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="k">impl</span> <span class="n">DistributedActorMemoryCoordinator</span> <span class="p">{</span>
+    <span class="cd">/// Coordinate actor migration with memory pre-warming</span>
+    <span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">migrate_actor_with_prewarm</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> 
+        <span class="n">actor_ref</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">AddressableReference</span><span class="p">,</span>
+        <span class="n">target_node</span><span class="p">:</span> <span class="n">NodeId</span>
+    <span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="nd">println!</span><span class="p">(</span><span class="s">"Migrating actor {} to node {}"</span><span class="p">,</span> <span class="n">actor_ref</span><span class="p">,</span> <span class="n">target_node</span><span class="p">);</span>
+        
+        <span class="c1">// 1. Analyze current memory footprint</span>
+        <span class="k">let</span> <span class="n">memory_stats</span> <span class="o">=</span> <span class="k">self</span><span class="py">.local_memory_manager</span>
+            <span class="nf">.get_actor_memory_stats</span><span class="p">(</span><span class="n">actor_ref</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+        
+        <span class="nd">println!</span><span class="p">(</span><span class="s">"Actor memory footprint: {} MB across {} extents"</span><span class="p">,</span> 
+                 <span class="n">memory_stats</span><span class="py">.total_memory_mb</span><span class="p">,</span> <span class="n">memory_stats</span><span class="py">.pinned_extents</span><span class="nf">.len</span><span class="p">());</span>
+        
+        <span class="c1">// 2. Pre-warm target node by pinning actor's data there</span>
+        <span class="k">let</span> <span class="n">prewarm_start</span> <span class="o">=</span> <span class="nn">Instant</span><span class="p">::</span><span class="nf">now</span><span class="p">();</span>
+        <span class="k">for</span> <span class="n">extent</span> <span class="k">in</span> <span class="o">&amp;</span><span class="n">memory_stats</span><span class="py">.pinned_extents</span> <span class="p">{</span>
+            <span class="k">self</span><span class="nf">.send_remote_pin_request</span><span class="p">(</span>
+                <span class="n">target_node</span><span class="p">,</span>
+                <span class="n">extent</span><span class="p">,</span>
+                <span class="nn">PinPriority</span><span class="p">::</span><span class="n">QueryCritical</span><span class="p">,</span>
+            <span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+        <span class="p">}</span>
+        
+        <span class="c1">// 3. Wait for pre-warming to complete</span>
+        <span class="k">self</span><span class="nf">.wait_for_prewarm_completion</span><span class="p">(</span><span class="n">target_node</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">memory_stats</span><span class="py">.pinned_extents</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+        <span class="k">let</span> <span class="n">prewarm_time</span> <span class="o">=</span> <span class="n">prewarm_start</span><span class="nf">.elapsed</span><span class="p">();</span>
+        <span class="nd">println!</span><span class="p">(</span><span class="s">"Pre-warming completed in {:?}"</span><span class="p">,</span> <span class="n">prewarm_time</span><span class="p">);</span>
+        
+        <span class="c1">// 4. Migrate the actor (fast because data is already warm)</span>
+        <span class="k">let</span> <span class="n">migration_start</span> <span class="o">=</span> <span class="nn">Instant</span><span class="p">::</span><span class="nf">now</span><span class="p">();</span>
+        <span class="k">self</span><span class="py">.migration_coordinator</span><span class="nf">.migrate_actor</span><span class="p">(</span><span class="n">actor_ref</span><span class="p">,</span> <span class="n">target_node</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+        <span class="k">let</span> <span class="n">migration_time</span> <span class="o">=</span> <span class="n">migration_start</span><span class="nf">.elapsed</span><span class="p">();</span>
+        <span class="nd">println!</span><span class="p">(</span><span class="s">"Actor migration completed in {:?}"</span><span class="p">,</span> <span class="n">migration_time</span><span class="p">);</span>
+        
+        <span class="c1">// 5. Gradually unpin memory on source node (delayed for safety)</span>
+        <span class="nn">tokio</span><span class="p">::</span><span class="nf">spawn</span><span class="p">({</span>
+            <span class="k">let</span> <span class="n">local_manager</span> <span class="o">=</span> <span class="k">self</span><span class="py">.local_memory_manager</span><span class="nf">.clone</span><span class="p">();</span>
+            <span class="k">let</span> <span class="n">extents</span> <span class="o">=</span> <span class="n">memory_stats</span><span class="py">.pinned_extents</span><span class="nf">.clone</span><span class="p">();</span>
+            <span class="k">async</span> <span class="k">move</span> <span class="p">{</span>
+                <span class="nn">tokio</span><span class="p">::</span><span class="nn">time</span><span class="p">::</span><span class="nf">sleep</span><span class="p">(</span><span class="nn">Duration</span><span class="p">::</span><span class="nf">from_secs</span><span class="p">(</span><span class="mi">30</span><span class="p">))</span><span class="k">.await</span><span class="p">;</span> <span class="c1">// Grace period</span>
+                <span class="k">for</span> <span class="n">extent</span> <span class="k">in</span> <span class="n">extents</span> <span class="p">{</span>
+                    <span class="n">local_manager</span><span class="nf">.unpin_extent</span><span class="p">(</span><span class="n">extent</span><span class="p">)</span><span class="k">.await</span><span class="nf">.ok</span><span class="p">();</span>
+                <span class="p">}</span>
+                <span class="nd">println!</span><span class="p">(</span><span class="s">"Source node memory cleanup completed"</span><span class="p">);</span>
+            <span class="p">}</span>
+        <span class="p">});</span>
+        
+        <span class="nf">Ok</span><span class="p">(())</span>
+    <span class="p">}</span>
+    
+    <span class="cd">/// Handle replication-aware memory management</span>
+    <span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">coordinate_replicated_actor_memory</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span>
+        <span class="n">actor_ref</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">AddressableReference</span>
+    <span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="k">let</span> <span class="n">actor_extents</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.get_actor_extents</span><span class="p">(</span><span class="n">actor_ref</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+        
+        <span class="k">for</span> <span class="n">extent</span> <span class="k">in</span> <span class="n">actor_extents</span> <span class="p">{</span>
+            <span class="k">let</span> <span class="n">replica_nodes</span> <span class="o">=</span> <span class="k">self</span><span class="py">.replication_manager</span><span class="nf">.get_replica_nodes</span><span class="p">(</span><span class="o">&amp;</span><span class="n">extent</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+            
+            <span class="c1">// Pin on primary replica with high priority</span>
+            <span class="k">if</span> <span class="k">let</span> <span class="nf">Some</span><span class="p">(</span><span class="n">primary_node</span><span class="p">)</span> <span class="o">=</span> <span class="n">replica_nodes</span><span class="py">.primary</span> <span class="p">{</span>
+                <span class="k">if</span> <span class="n">primary_node</span> <span class="o">==</span> <span class="k">self</span><span class="nf">.get_local_node_id</span><span class="p">()</span> <span class="p">{</span>
+                    <span class="k">self</span><span class="py">.local_memory_manager</span><span class="nf">.pin_extent</span><span class="p">(</span>
+                        <span class="n">extent</span><span class="p">,</span>
+                        <span class="n">PinOpts</span> <span class="p">{</span>
+                            <span class="n">priority</span><span class="p">:</span> <span class="nn">PinPriority</span><span class="p">::</span><span class="n">TailLatencyCritical</span><span class="p">,</span>
+                            <span class="n">use_hugepages</span><span class="p">:</span> <span class="k">true</span><span class="p">,</span>
+                            <span class="n">lifetime_class</span><span class="p">:</span> <span class="nn">LifetimeClass</span><span class="p">::</span><span class="n">LongLived</span><span class="p">,</span>
+                            <span class="o">..</span><span class="nn">Default</span><span class="p">::</span><span class="nf">default</span><span class="p">()</span>
+                        <span class="p">},</span>
+                    <span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+                <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+                    <span class="k">self</span><span class="nf">.send_remote_pin_request</span><span class="p">(</span>
+                        <span class="n">primary_node</span><span class="p">,</span> 
+                        <span class="o">&amp;</span><span class="n">extent</span><span class="p">,</span> 
+                        <span class="nn">PinPriority</span><span class="p">::</span><span class="n">TailLatencyCritical</span>
+                    <span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+                <span class="p">}</span>
+            <span class="p">}</span>
+            
+            <span class="c1">// Pin on secondary replicas with lower priority</span>
+            <span class="k">for</span> <span class="n">secondary_node</span> <span class="k">in</span> <span class="n">replica_nodes</span><span class="py">.secondaries</span> <span class="p">{</span>
+                <span class="k">let</span> <span class="n">secondary_priority</span> <span class="o">=</span> <span class="nn">PinPriority</span><span class="p">::</span><span class="n">QueryCritical</span><span class="p">;</span>
+                
+                <span class="k">if</span> <span class="n">secondary_node</span> <span class="o">==</span> <span class="k">self</span><span class="nf">.get_local_node_id</span><span class="p">()</span> <span class="p">{</span>
+                    <span class="k">self</span><span class="py">.local_memory_manager</span><span class="nf">.pin_extent</span><span class="p">(</span>
+                        <span class="n">extent</span><span class="p">,</span>
+                        <span class="n">PinOpts</span> <span class="p">{</span>
+                            <span class="n">priority</span><span class="p">:</span> <span class="n">secondary_priority</span><span class="p">,</span>
+                            <span class="n">lifetime_class</span><span class="p">:</span> <span class="nn">LifetimeClass</span><span class="p">::</span><span class="n">Task</span><span class="p">,</span>
+                            <span class="o">..</span><span class="nn">Default</span><span class="p">::</span><span class="nf">default</span><span class="p">()</span>
+                        <span class="p">},</span>
+                    <span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+                <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+                    <span class="k">self</span><span class="nf">.send_remote_pin_request</span><span class="p">(</span>
+                        <span class="n">secondary_node</span><span class="p">,</span> 
+                        <span class="o">&amp;</span><span class="n">extent</span><span class="p">,</span> 
+                        <span class="n">secondary_priority</span>
+                    <span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+                <span class="p">}</span>
+            <span class="p">}</span>
+        <span class="p">}</span>
+        
+        <span class="nf">Ok</span><span class="p">(())</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h2 id="8-performance-guarantees-and-sla-enforcement">8. Performance Guarantees and SLA Enforcement</h2>
+
+<h3 id="81-actor-level-sla-definition">8.1 Actor-Level SLA Definition</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="nd">#[derive(Debug,</span> <span class="nd">Clone)]</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">ActorSLA</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="n">max_activation_time_ms</span><span class="p">:</span> <span class="nb">u64</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">max_response_time_p99_ms</span><span class="p">:</span> <span class="nb">u64</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">max_response_time_p999_ms</span><span class="p">:</span> <span class="nb">u64</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">memory_guarantee</span><span class="p">:</span> <span class="n">MemoryGuarantee</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">availability_guarantee</span><span class="p">:</span> <span class="nb">f64</span><span class="p">,</span> <span class="c1">// 0.0 to 1.0</span>
+<span class="p">}</span>
+
+<span class="nd">#[derive(Debug,</span> <span class="nd">Clone)]</span>
+<span class="k">pub</span> <span class="k">enum</span> <span class="n">MemoryGuarantee</span> <span class="p">{</span>
+    <span class="n">AlwaysPinned</span><span class="p">,</span>                    <span class="c1">// Memory always resident</span>
+    <span class="n">PinnedDuringAccess</span><span class="p">,</span>             <span class="c1">// Memory pinned only when active</span>
+    <span class="n">BestEffort</span><span class="p">,</span>                      <span class="c1">// No guarantee, subject to eviction</span>
+<span class="p">}</span>
+
+<span class="c1">// Example SLA definitions</span>
+<span class="k">impl</span> <span class="n">GraphPartitionActor</span> <span class="p">{</span>
+    <span class="k">fn</span> <span class="nf">get_sla</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">ActorSLA</span> <span class="p">{</span>
+        <span class="n">ActorSLA</span> <span class="p">{</span>
+            <span class="n">max_activation_time_ms</span><span class="p">:</span> <span class="mi">100</span><span class="p">,</span>           <span class="c1">// 100ms to activate</span>
+            <span class="n">max_response_time_p99_ms</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>           <span class="c1">// 1ms P99 response time</span>
+            <span class="n">max_response_time_p999_ms</span><span class="p">:</span> <span class="mi">10</span><span class="p">,</span>         <span class="c1">// 10ms P99.9 response time</span>
+            <span class="n">memory_guarantee</span><span class="p">:</span> <span class="nn">MemoryGuarantee</span><span class="p">::</span><span class="n">AlwaysPinned</span><span class="p">,</span>
+            <span class="n">availability_guarantee</span><span class="p">:</span> <span class="mf">0.9999</span><span class="p">,</span>        <span class="c1">// 99.99% availability</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+
+<span class="k">impl</span> <span class="n">SessionCacheActor</span> <span class="p">{</span>
+    <span class="k">fn</span> <span class="nf">get_sla</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">ActorSLA</span> <span class="p">{</span>
+        <span class="n">ActorSLA</span> <span class="p">{</span>
+            <span class="n">max_activation_time_ms</span><span class="p">:</span> <span class="mi">500</span><span class="p">,</span>           <span class="c1">// 500ms to activate</span>
+            <span class="n">max_response_time_p99_ms</span><span class="p">:</span> <span class="mi">10</span><span class="p">,</span>          <span class="c1">// 10ms P99 response time</span>
+            <span class="n">max_response_time_p999_ms</span><span class="p">:</span> <span class="mi">100</span><span class="p">,</span>        <span class="c1">// 100ms P99.9 response time</span>
+            <span class="n">memory_guarantee</span><span class="p">:</span> <span class="nn">MemoryGuarantee</span><span class="p">::</span><span class="n">PinnedDuringAccess</span><span class="p">,</span>
+            <span class="n">availability_guarantee</span><span class="p">:</span> <span class="mf">0.999</span><span class="p">,</span>         <span class="c1">// 99.9% availability</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="82-sla-monitoring-and-enforcement">8.2 SLA Monitoring and Enforcement</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">pub</span> <span class="k">struct</span> <span class="n">ActorSLAMonitor</span> <span class="p">{</span>
+    <span class="n">response_time_histograms</span><span class="p">:</span> <span class="n">HashMap</span><span class="o">&lt;</span><span class="nb">String</span><span class="p">,</span> <span class="n">Histogram</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="n">activation_time_histograms</span><span class="p">:</span> <span class="n">HashMap</span><span class="o">&lt;</span><span class="nb">String</span><span class="p">,</span> <span class="n">Histogram</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="n">memory_usage_trackers</span><span class="p">:</span> <span class="n">HashMap</span><span class="o">&lt;</span><span class="n">AddressableReference</span><span class="p">,</span> <span class="n">MemoryUsageTracker</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="n">sla_violations</span><span class="p">:</span> <span class="nb">Arc</span><span class="o">&lt;</span><span class="n">Mutex</span><span class="o">&lt;</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="n">SLAViolation</span><span class="o">&gt;&gt;&gt;</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="k">impl</span> <span class="n">ActorSLAMonitor</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">record_actor_invocation</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> 
+        <span class="n">actor_ref</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">AddressableReference</span><span class="p">,</span>
+        <span class="n">response_time</span><span class="p">:</span> <span class="n">Duration</span><span class="p">,</span>
+        <span class="n">memory_access_pattern</span><span class="p">:</span> <span class="n">MemoryAccessPattern</span>
+    <span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="k">let</span> <span class="n">actor_type</span> <span class="o">=</span> <span class="o">&amp;</span><span class="n">actor_ref</span><span class="py">.addressable_type</span><span class="p">;</span>
+        
+        <span class="c1">// Record response time</span>
+        <span class="k">if</span> <span class="k">let</span> <span class="nf">Some</span><span class="p">(</span><span class="n">histogram</span><span class="p">)</span> <span class="o">=</span> <span class="k">self</span><span class="py">.response_time_histograms</span><span class="nf">.get_mut</span><span class="p">(</span><span class="n">actor_type</span><span class="p">)</span> <span class="p">{</span>
+            <span class="n">histogram</span><span class="nf">.record</span><span class="p">(</span><span class="n">response_time</span><span class="nf">.as_micros</span><span class="p">()</span> <span class="k">as</span> <span class="nb">u64</span><span class="p">);</span>
+        <span class="p">}</span>
+        
+        <span class="c1">// Check for SLA violations</span>
+        <span class="k">let</span> <span class="n">sla</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.get_actor_sla</span><span class="p">(</span><span class="n">actor_ref</span><span class="p">);</span>
+        <span class="k">let</span> <span class="n">p99_micros</span> <span class="o">=</span> <span class="n">histogram</span><span class="nf">.value_at_percentile</span><span class="p">(</span><span class="mf">99.0</span><span class="p">)</span> <span class="k">as</span> <span class="nb">u64</span><span class="p">;</span>
+        <span class="k">let</span> <span class="n">p999_micros</span> <span class="o">=</span> <span class="n">histogram</span><span class="nf">.value_at_percentile</span><span class="p">(</span><span class="mf">99.9</span><span class="p">)</span> <span class="k">as</span> <span class="nb">u64</span><span class="p">;</span>
+        
+        <span class="k">if</span> <span class="n">p99_micros</span> <span class="o">&gt;</span> <span class="n">sla</span><span class="py">.max_response_time_p99_ms</span> <span class="o">*</span> <span class="mi">1000</span> <span class="p">{</span>
+            <span class="k">self</span><span class="nf">.report_sla_violation</span><span class="p">(</span><span class="n">SLAViolation</span> <span class="p">{</span>
+                <span class="n">actor_ref</span><span class="p">:</span> <span class="n">actor_ref</span><span class="nf">.clone</span><span class="p">(),</span>
+                <span class="n">violation_type</span><span class="p">:</span> <span class="nn">ViolationType</span><span class="p">::</span><span class="n">P99ResponseTime</span><span class="p">,</span>
+                <span class="n">actual_value</span><span class="p">:</span> <span class="n">p99_micros</span><span class="p">,</span>
+                <span class="n">expected_value</span><span class="p">:</span> <span class="n">sla</span><span class="py">.max_response_time_p99_ms</span> <span class="o">*</span> <span class="mi">1000</span><span class="p">,</span>
+                <span class="n">timestamp</span><span class="p">:</span> <span class="nn">SystemTime</span><span class="p">::</span><span class="nf">now</span><span class="p">(),</span>
+            <span class="p">})</span><span class="k">.await</span><span class="p">;</span>
+        <span class="p">}</span>
+        
+        <span class="nf">Ok</span><span class="p">(())</span>
+    <span class="p">}</span>
+    
+    <span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">report_sla_violation</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">violation</span><span class="p">:</span> <span class="n">SLAViolation</span><span class="p">)</span> <span class="p">{</span>
+        <span class="nd">println!</span><span class="p">(</span><span class="s">"SLA VIOLATION: {:?}"</span><span class="p">,</span> <span class="n">violation</span><span class="p">);</span>
+        
+        <span class="c1">// Trigger remediation actions</span>
+        <span class="k">match</span> <span class="n">violation</span><span class="py">.violation_type</span> <span class="p">{</span>
+            <span class="nn">ViolationType</span><span class="p">::</span><span class="n">P99ResponseTime</span> <span class="k">=&gt;</span> <span class="p">{</span>
+                <span class="c1">// Increase memory pinning priority</span>
+                <span class="k">self</span><span class="nf">.upgrade_memory_priority</span><span class="p">(</span><span class="o">&amp;</span><span class="n">violation</span><span class="py">.actor_ref</span><span class="p">,</span> <span class="nn">PinPriority</span><span class="p">::</span><span class="n">TailLatencyCritical</span><span class="p">)</span><span class="k">.await</span><span class="p">;</span>
+            <span class="p">},</span>
+            <span class="nn">ViolationType</span><span class="p">::</span><span class="n">ActivationTime</span> <span class="k">=&gt;</span> <span class="p">{</span>
+                <span class="c1">// Pre-warm actor memory</span>
+                <span class="k">self</span><span class="nf">.prewarm_actor_memory</span><span class="p">(</span><span class="o">&amp;</span><span class="n">violation</span><span class="py">.actor_ref</span><span class="p">)</span><span class="k">.await</span><span class="p">;</span>
+            <span class="p">},</span>
+            <span class="nn">ViolationType</span><span class="p">::</span><span class="n">MemoryPressure</span> <span class="k">=&gt;</span> <span class="p">{</span>
+                <span class="c1">// Migrate to node with more available memory</span>
+                <span class="k">self</span><span class="nf">.migrate_for_memory_pressure</span><span class="p">(</span><span class="o">&amp;</span><span class="n">violation</span><span class="py">.actor_ref</span><span class="p">)</span><span class="k">.await</span><span class="p">;</span>
+            <span class="p">},</span>
+        <span class="p">}</span>
+        
+        <span class="k">let</span> <span class="k">mut</span> <span class="n">violations</span> <span class="o">=</span> <span class="k">self</span><span class="py">.sla_violations</span><span class="nf">.lock</span><span class="p">()</span><span class="k">.await</span><span class="p">;</span>
+        <span class="n">violations</span><span class="nf">.push</span><span class="p">(</span><span class="n">violation</span><span class="p">);</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h2 id="9-example-usage-scenarios">9. Example Usage Scenarios</h2>
+
+<h3 id="91-real-time-graph-analytics">9.1 Real-Time Graph Analytics</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Example: Social media influence analysis</span>
+
+<span class="nd">#[derive(Addressable)]</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">InfluenceAnalysisActor</span> <span class="p">{</span>
+    <span class="n">user_id</span><span class="p">:</span> <span class="nb">u64</span><span class="p">,</span>
+    <span class="n">influence_score</span><span class="p">:</span> <span class="nb">f64</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="k">impl</span> <span class="n">InfluenceAnalysisActor</span> <span class="p">{</span>
+    <span class="cd">/// Calculate influence score by traversing follower network</span>
+    <span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">calculate_influence</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">depth</span><span class="p">:</span> <span class="nb">u32</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="nb">f64</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="c1">// Actor's memory is automatically optimized for graph traversal</span>
+        <span class="k">let</span> <span class="n">followers</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.get_followers</span><span class="p">()</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span> <span class="c1">// Zero-copy from pinned memory</span>
+        <span class="k">let</span> <span class="k">mut</span> <span class="n">total_influence</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">;</span>
+        
+        <span class="c1">// Traverse follower network up to specified depth</span>
+        <span class="k">for</span> <span class="n">follower</span> <span class="k">in</span> <span class="n">followers</span> <span class="p">{</span>
+            <span class="c1">// Memory hints ensure follower data is prefetched</span>
+            <span class="k">let</span> <span class="n">follower_actor</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.get_follower_actor</span><span class="p">(</span><span class="n">follower</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+            <span class="k">let</span> <span class="n">follower_influence</span> <span class="o">=</span> <span class="n">follower_actor</span><span class="nf">.get_influence_score</span><span class="p">()</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+            <span class="n">total_influence</span> <span class="o">+=</span> <span class="n">follower_influence</span><span class="p">;</span>
+            
+            <span class="k">if</span> <span class="n">depth</span> <span class="o">&gt;</span> <span class="mi">1</span> <span class="p">{</span>
+                <span class="c1">// Recursive calculation with automatic memory optimization</span>
+                <span class="n">total_influence</span> <span class="o">+=</span> <span class="n">follower_actor</span><span class="nf">.calculate_influence</span><span class="p">(</span><span class="n">depth</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span> <span class="o">*</span> <span class="mf">0.5</span><span class="p">;</span>
+            <span class="p">}</span>
+        <span class="p">}</span>
+        
+        <span class="nf">Ok</span><span class="p">(</span><span class="n">total_influence</span><span class="p">)</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+
+<span class="nd">#[async_trait]</span>
+<span class="k">impl</span> <span class="n">ActorLifecycleWithMemory</span> <span class="k">for</span> <span class="n">InfluenceAnalysisActor</span> <span class="p">{</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">on_activate</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span> <span class="k">self</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">ActorActivationContext</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="c1">// Pin user's social network data</span>
+        <span class="k">let</span> <span class="n">network_extents</span> <span class="o">=</span> <span class="n">context</span><span class="py">.extent_index</span>
+            <span class="nf">.lookup_social_network</span><span class="p">(</span><span class="k">self</span><span class="py">.user_id</span><span class="p">);</span>
+            
+        <span class="k">for</span> <span class="n">extent</span> <span class="k">in</span> <span class="n">network_extents</span> <span class="p">{</span>
+            <span class="n">context</span><span class="py">.memory_manager</span><span class="nf">.pin_actor_extent</span><span class="p">(</span>
+                <span class="o">&amp;</span><span class="n">context</span><span class="py">.actor_ref</span><span class="p">,</span>
+                <span class="n">extent</span><span class="p">,</span>
+                <span class="o">&amp;</span><span class="n">PinOpts</span> <span class="p">{</span>
+                    <span class="n">priority</span><span class="p">:</span> <span class="nn">PinPriority</span><span class="p">::</span><span class="n">TailLatencyCritical</span><span class="p">,</span> <span class="c1">// Real-time requirements</span>
+                    <span class="n">use_hugepages</span><span class="p">:</span> <span class="k">true</span><span class="p">,</span>
+                    <span class="n">lifetime_class</span><span class="p">:</span> <span class="nn">LifetimeClass</span><span class="p">::</span><span class="n">Session</span><span class="p">,</span>
+                    <span class="n">prefetch_adjacent</span><span class="p">:</span> <span class="mi">3</span><span class="p">,</span> <span class="c1">// Prefetch 3 degrees of separation</span>
+                    <span class="o">..</span><span class="nn">Default</span><span class="p">::</span><span class="nf">default</span><span class="p">()</span>
+                <span class="p">},</span>
+            <span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+        <span class="p">}</span>
+        
+        <span class="nf">Ok</span><span class="p">(())</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="92-high-frequency-trading-analytics">9.2 High-Frequency Trading Analytics</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="nd">#[derive(Addressable)]</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">TradingSignalActor</span> <span class="p">{</span>
+    <span class="n">symbol</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span>
+    <span class="n">signal_window</span><span class="p">:</span> <span class="n">Duration</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="k">impl</span> <span class="n">TradingSignalActor</span> <span class="p">{</span>
+    <span class="cd">/// Generate trading signal from recent price data</span>
+    <span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">generate_signal</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="n">TradingSignal</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="c1">// Ultra-low latency access to recent price data (always pinned)</span>
+        <span class="k">let</span> <span class="n">recent_prices</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.get_recent_prices</span><span class="p">(</span><span class="k">self</span><span class="py">.signal_window</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+        
+        <span class="c1">// Technical indicators calculated from pinned memory</span>
+        <span class="k">let</span> <span class="n">sma_short</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.calculate_sma</span><span class="p">(</span><span class="o">&amp;</span><span class="n">recent_prices</span><span class="p">,</span> <span class="mi">10</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+        <span class="k">let</span> <span class="n">sma_long</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.calculate_sma</span><span class="p">(</span><span class="o">&amp;</span><span class="n">recent_prices</span><span class="p">,</span> <span class="mi">50</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+        <span class="k">let</span> <span class="n">rsi</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.calculate_rsi</span><span class="p">(</span><span class="o">&amp;</span><span class="n">recent_prices</span><span class="p">,</span> <span class="mi">14</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+        
+        <span class="c1">// Generate signal based on indicators</span>
+        <span class="k">let</span> <span class="n">signal</span> <span class="o">=</span> <span class="k">if</span> <span class="n">sma_short</span> <span class="o">&gt;</span> <span class="n">sma_long</span> <span class="o">&amp;&amp;</span> <span class="n">rsi</span> <span class="o">&lt;</span> <span class="mf">70.0</span> <span class="p">{</span>
+            <span class="nn">TradingSignal</span><span class="p">::</span><span class="n">Buy</span>
+        <span class="p">}</span> <span class="k">else</span> <span class="k">if</span> <span class="n">sma_short</span> <span class="o">&lt;</span> <span class="n">sma_long</span> <span class="o">&amp;&amp;</span> <span class="n">rsi</span> <span class="o">&gt;</span> <span class="mf">30.0</span> <span class="p">{</span>
+            <span class="nn">TradingSignal</span><span class="p">::</span><span class="n">Sell</span>
+        <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+            <span class="nn">TradingSignal</span><span class="p">::</span><span class="n">Hold</span>
+        <span class="p">};</span>
+        
+        <span class="nf">Ok</span><span class="p">(</span><span class="n">signal</span><span class="p">)</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+
+<span class="nd">#[async_trait]</span>
+<span class="k">impl</span> <span class="n">ActorLifecycleWithMemory</span> <span class="k">for</span> <span class="n">TradingSignalActor</span> <span class="p">{</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">on_activate</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span> <span class="k">self</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">ActorActivationContext</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="c1">// Pin last hour of price data for this symbol</span>
+        <span class="k">let</span> <span class="n">price_extents</span> <span class="o">=</span> <span class="n">context</span><span class="py">.extent_index</span>
+            <span class="nf">.lookup_price_data</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="py">.symbol</span><span class="p">,</span> <span class="nn">Duration</span><span class="p">::</span><span class="nf">from_secs</span><span class="p">(</span><span class="mi">3600</span><span class="p">));</span>
+            
+        <span class="k">for</span> <span class="n">extent</span> <span class="k">in</span> <span class="n">price_extents</span> <span class="p">{</span>
+            <span class="n">context</span><span class="py">.memory_manager</span><span class="nf">.pin_actor_extent</span><span class="p">(</span>
+                <span class="o">&amp;</span><span class="n">context</span><span class="py">.actor_ref</span><span class="p">,</span>
+                <span class="n">extent</span><span class="p">,</span>
+                <span class="o">&amp;</span><span class="n">PinOpts</span> <span class="p">{</span>
+                    <span class="n">priority</span><span class="p">:</span> <span class="nn">PinPriority</span><span class="p">::</span><span class="n">TailLatencyCritical</span><span class="p">,</span>
+                    <span class="n">use_hugepages</span><span class="p">:</span> <span class="k">true</span><span class="p">,</span>
+                    <span class="n">numa_prefer</span><span class="p">:</span> <span class="nf">Some</span><span class="p">(</span><span class="n">context</span><span class="py">.local_numa_node</span><span class="p">),</span>
+                    <span class="n">lifetime_class</span><span class="p">:</span> <span class="nn">LifetimeClass</span><span class="p">::</span><span class="n">LongLived</span><span class="p">,</span> <span class="c1">// Always keep recent data hot</span>
+                    <span class="n">ttl_ms</span><span class="p">:</span> <span class="nb">None</span><span class="p">,</span> <span class="c1">// Never expire</span>
+                    <span class="o">..</span><span class="nn">Default</span><span class="p">::</span><span class="nf">default</span><span class="p">()</span>
+                <span class="p">},</span>
+            <span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+        <span class="p">}</span>
+        
+        <span class="c1">// Pre-warm related symbols for correlation analysis</span>
+        <span class="k">let</span> <span class="n">correlated_symbols</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.get_correlated_symbols</span><span class="p">();</span>
+        <span class="k">for</span> <span class="n">symbol</span> <span class="k">in</span> <span class="n">correlated_symbols</span> <span class="p">{</span>
+            <span class="k">let</span> <span class="n">symbol_ref</span> <span class="o">=</span> <span class="n">AddressableReference</span> <span class="p">{</span>
+                <span class="n">addressable_type</span><span class="p">:</span> <span class="s">"TradingSignalActor"</span><span class="nf">.to_string</span><span class="p">(),</span>
+                <span class="n">key</span><span class="p">:</span> <span class="nn">Key</span><span class="p">::</span><span class="n">StringKey</span> <span class="p">{</span> <span class="n">key</span><span class="p">:</span> <span class="n">symbol</span> <span class="p">},</span>
+            <span class="p">};</span>
+            
+            <span class="n">context</span><span class="py">.memory_manager</span><span class="nf">.send_memory_hint</span><span class="p">(</span><span class="nn">MemoryHint</span><span class="p">::</span><span class="n">WillAccessSoon</span> <span class="p">{</span>
+                <span class="n">actor_refs</span><span class="p">:</span> <span class="nd">vec!</span><span class="p">[</span><span class="n">symbol_ref</span><span class="p">],</span>
+                <span class="n">estimated_delay_ms</span><span class="p">:</span> <span class="mi">10</span><span class="p">,</span> <span class="c1">// Need within 10ms for correlation calc</span>
+                <span class="n">access_pattern</span><span class="p">:</span> <span class="nn">AccessPattern</span><span class="p">::</span><span class="n">Sequential</span><span class="p">,</span>
+            <span class="p">})</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+        <span class="p">}</span>
+        
+        <span class="nf">Ok</span><span class="p">(())</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+
+<span class="k">impl</span> <span class="n">ActorMemoryBehavior</span> <span class="k">for</span> <span class="n">TradingSignalActor</span> <span class="p">{</span>
+    <span class="k">fn</span> <span class="nf">get_memory_profile</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">ActorMemoryProfile</span> <span class="p">{</span>
+        <span class="nn">ActorMemoryProfile</span><span class="p">::</span><span class="n">Hot</span> <span class="c1">// Ultra-low latency requirement</span>
+    <span class="p">}</span>
+    
+    <span class="k">fn</span> <span class="nf">estimate_memory_footprint</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">MemoryFootprint</span> <span class="p">{</span>
+        <span class="n">MemoryFootprint</span> <span class="p">{</span>
+            <span class="n">persistent_state_mb</span><span class="p">:</span> <span class="mi">64</span><span class="p">,</span>    <span class="c1">// 1 hour of minute-level price data</span>
+            <span class="n">working_set_mb</span><span class="p">:</span> <span class="mi">16</span><span class="p">,</span>         <span class="c1">// Calculation buffers</span>
+            <span class="n">prefetch_candidates</span><span class="p">:</span> <span class="k">self</span><span class="nf">.get_correlated_symbol_extents</span><span class="p">(),</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h2 id="10-implementation-roadmap">10. Implementation Roadmap</h2>
+
+<h3 id="101-phase-1-core-integration-weeks-1-4">10.1 Phase 1: Core Integration (Weeks 1-4)</h3>
+<ul class="task-list">
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Implement <code class="language-plaintext highlighter-rouge">ActorMemoryManager</code> trait and basic integration</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Add memory profile classification to actor traits</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Create actor lifecycle hooks for memory management</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Basic pin/unpin on activate/deactivate</li>
+</ul>
+
+<h3 id="102-phase-2-smart-optimization-weeks-5-8">10.2 Phase 2: Smart Optimization (Weeks 5-8)</h3>
+<ul class="task-list">
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Implement memory hint messaging system</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Add NUMA-aware actor placement</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Implement cross-actor prefetching</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Memory pressure-based priority adjustment</li>
+</ul>
+
+<h3 id="103-phase-3-distributed-coordination-weeks-9-12">10.3 Phase 3: Distributed Coordination (Weeks 9-12)</h3>
+<ul class="task-list">
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Cross-node memory management coordination</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Actor migration with memory pre-warming</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Replication-aware memory management</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Cluster-wide memory budgeting</li>
+</ul>
+
+<h3 id="104-phase-4-sla-and-monitoring-weeks-13-16">10.4 Phase 4: SLA and Monitoring (Weeks 13-16)</h3>
+<ul class="task-list">
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Actor-level SLA definition and monitoring</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Automatic remediation for SLA violations</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Performance telemetry and dashboards</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Memory usage optimization recommendations</li>
+</ul>
+
+<h2 id="11-conclusion">11. Conclusion</h2>
+
+<p>The integration of advanced memory management with Orbit-RS’s virtual actor model provides:</p>
+
+<ol>
+  <li><strong>Zero-Configuration Performance</strong>: Actors automatically get optimal memory placement</li>
+  <li><strong>Natural Boundaries</strong>: Actor boundaries define memory locality and lifecycle</li>
+  <li><strong>Distributed Intelligence</strong>: Actor relationships drive distributed memory coordination</li>
+  <li><strong>SLA Guarantees</strong>: Different actor types get appropriate performance guarantees</li>
+  <li><strong>Transparent Optimization</strong>: Memory management is invisible to application code</li>
+</ol>
+
+<p>This creates a system where petabyte-scale data can be accessed with microsecond latencies through intelligent, automatic memory management that leverages the actor model’s natural structure.</p>
+
+<p>The approach scales from single-node development to distributed production deployments while maintaining the elegant simplicity that makes Orbit-RS easy to develop with and operate.</p>

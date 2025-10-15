@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["discriminant_name","parse_node_id_from_string"],"struct":["LogStats","PersistentLogConfig","PersistentLogEntry","SqliteTransactionLogger"],"trait":["PersistentTransactionLogger"]};

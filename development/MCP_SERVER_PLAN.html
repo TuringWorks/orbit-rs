@@ -1,0 +1,433 @@
+<h1 id="mcp-server-for-orbit-rs-llm-integration-plan">MCP Server for Orbit-RS: LLM Integration Plan</h1>
+
+<h2 id="overview">Overview</h2>
+
+<p>The Model Context Protocol (MCP) server for Orbit-RS will provide Large Language Models (LLMs) with intelligent access to the underlying distributed actor system and data through natural language queries. This creates a powerful bridge between natural language processing and the Orbit distributed data platform.</p>
+
+<h2 id="architecture">Architecture</h2>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>LLM Client (Claude, GPT, etc.)
+       ↓
+   MCP Protocol
+       ↓ 
+┌─────────────────────────────────────┐
+│           MCP Server                │
+│  ┌─────────────────────────────────┐│
+│  │     Natural Language            ││
+│  │     Query Processor             ││  
+│  │  ┌─────────────────────────┐    ││
+│  │  │   Intent Classification │    ││
+│  │  │   Entity Recognition    │    ││
+│  │  │   Query Understanding   │    ││
+│  │  └─────────────────────────┘    ││
+│  └─────────────────────────────────┘│
+│  ┌─────────────────────────────────┐│
+│  │      SQL Generation             ││
+│  │  ┌─────────────────────────┐    ││
+│  │  │   Schema Analysis       │    ││
+│  │  │   Query Construction    │    ││
+│  │  │   Optimization          │    ││
+│  │  └─────────────────────────┘    ││
+│  └─────────────────────────────────┘│
+│  ┌─────────────────────────────────┐│
+│  │      Result Processing          ││
+│  │  ┌─────────────────────────┐    ││
+│  │  │   Data Formatting       │    ││
+│  │  │   Summarization         │    ││
+│  │  │   Visualization Hints   │    ││
+│  │  └─────────────────────────┘    ││
+│  └─────────────────────────────────┘│
+└─────────────────────────────────────┘
+       ↓
+  Orbit PostgreSQL 
+  Wire Protocol
+       ↓
+┌─────────────────────────────────────┐
+│         Orbit-RS Cluster            │
+│  ┌─────────────────────────────────┐│
+│  │      SQL Query Engine           ││
+│  │   (Phase 8 Implementation)      ││
+│  └─────────────────────────────────┘│
+│  ┌─────────────────────────────────┐│
+│  │      Actor System               ││
+│  │   - Table Actors                ││
+│  │   - Collection Actors           ││
+│  │   - Transaction Coordinators    ││
+│  └─────────────────────────────────┘│
+└─────────────────────────────────────┘
+</code></pre></div></div>
+
+<h2 id="core-components">Core Components</h2>
+
+<h3 id="1-mcp-protocol-handler">1. MCP Protocol Handler</h3>
+
+<p><strong>Responsibility</strong>: Handle the Model Context Protocol communication with LLMs</p>
+
+<p><strong>Key Features:</strong></p>
+<ul>
+  <li>Protocol-compliant message handling</li>
+  <li>Authentication and authorization</li>
+  <li>Session management</li>
+  <li>Error handling and recovery</li>
+</ul>
+
+<p><strong>Implementation:</strong></p>
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">pub</span> <span class="k">struct</span> <span class="n">McpServer</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="n">config</span><span class="p">:</span> <span class="n">McpConfig</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">orbit_client</span><span class="p">:</span> <span class="n">OrbitClient</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">query_processor</span><span class="p">:</span> <span class="n">NlpQueryProcessor</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">sql_generator</span><span class="p">:</span> <span class="n">SqlGenerator</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="k">pub</span> <span class="k">trait</span> <span class="n">McpProtocolHandler</span> <span class="p">{</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">handle_request</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">request</span><span class="p">:</span> <span class="n">McpRequest</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="n">McpResponse</span><span class="p">,</span> <span class="n">McpError</span><span class="o">&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">handle_tool_call</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">tool_call</span><span class="p">:</span> <span class="n">ToolCall</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="n">ToolResult</span><span class="p">,</span> <span class="n">McpError</span><span class="o">&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">handle_resource_request</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">resource</span><span class="p">:</span> <span class="n">ResourceRequest</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="n">ResourceResponse</span><span class="p">,</span> <span class="n">McpError</span><span class="o">&gt;</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="2-natural-language-query-processor">2. Natural Language Query Processor</h3>
+
+<p><strong>Responsibility</strong>: Parse and understand natural language queries</p>
+
+<p><strong>Key Features:</strong></p>
+<ul>
+  <li>Intent classification (SELECT, INSERT, UPDATE, DELETE, ANALYZE, SUMMARIZE)</li>
+  <li>Entity recognition (table names, column names, values)</li>
+  <li>Query context understanding</li>
+  <li>Ambiguity resolution</li>
+</ul>
+
+<p><strong>Implementation:</strong></p>
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">pub</span> <span class="k">struct</span> <span class="n">NlpQueryProcessor</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="n">schema_analyzer</span><span class="p">:</span> <span class="n">SchemaAnalyzer</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">intent_classifier</span><span class="p">:</span> <span class="n">IntentClassifier</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">entity_extractor</span><span class="p">:</span> <span class="n">EntityExtractor</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">QueryIntent</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="n">operation</span><span class="p">:</span> <span class="n">SqlOperation</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">entities</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">RecognizedEntity</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">conditions</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">QueryCondition</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">projections</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">ProjectionColumn</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">confidence</span><span class="p">:</span> <span class="nb">f64</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="k">pub</span> <span class="k">enum</span> <span class="n">SqlOperation</span> <span class="p">{</span>
+    <span class="n">Select</span> <span class="p">{</span> 
+        <span class="n">aggregation</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="n">AggregationType</span><span class="o">&gt;</span><span class="p">,</span>
+        <span class="n">limit</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="nb">u64</span><span class="o">&gt;</span><span class="p">,</span>
+        <span class="n">ordering</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="n">OrderingSpec</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="p">},</span>
+    <span class="n">Insert</span> <span class="p">{</span>
+        <span class="n">mode</span><span class="p">:</span> <span class="n">InsertMode</span><span class="p">,</span> <span class="c1">// Single, Batch, FromSelect</span>
+    <span class="p">},</span>
+    <span class="n">Update</span> <span class="p">{</span>
+        <span class="n">conditional</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
+    <span class="p">},</span>
+    <span class="n">Delete</span> <span class="p">{</span>
+        <span class="n">conditional</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
+    <span class="p">},</span>
+    <span class="n">Analyze</span> <span class="p">{</span>
+        <span class="n">analysis_type</span><span class="p">:</span> <span class="n">AnalysisType</span><span class="p">,</span> <span class="c1">// Summary, Distribution, Trends</span>
+    <span class="p">},</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="3-sql-generation-engine">3. SQL Generation Engine</h3>
+
+<p><strong>Responsibility</strong>: Convert natural language intents to SQL queries</p>
+
+<p><strong>Key Features:</strong></p>
+<ul>
+  <li>Schema-aware query generation</li>
+  <li>Type-safe parameter binding</li>
+  <li>Query optimization hints</li>
+  <li>Vector similarity integration</li>
+  <li>Complex query construction</li>
+</ul>
+
+<p><strong>Implementation:</strong></p>
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">pub</span> <span class="k">struct</span> <span class="n">SqlGenerator</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="n">schema_cache</span><span class="p">:</span> <span class="n">SchemaCache</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">query_builder</span><span class="p">:</span> <span class="n">QueryBuilder</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">optimizer</span><span class="p">:</span> <span class="n">QueryOptimizer</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">GeneratedQuery</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="n">sql</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">parameters</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">SqlValue</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">query_type</span><span class="p">:</span> <span class="n">QueryType</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">estimated_complexity</span><span class="p">:</span> <span class="n">QueryComplexity</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">optimization_hints</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">OptimizationHint</span><span class="o">&gt;</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="k">pub</span> <span class="k">trait</span> <span class="n">QueryBuilder</span> <span class="p">{</span>
+    <span class="k">fn</span> <span class="nf">build_select</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">intent</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">SelectIntent</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="n">GeneratedQuery</span><span class="p">,</span> <span class="n">SqlError</span><span class="o">&gt;</span><span class="p">;</span>
+    <span class="k">fn</span> <span class="nf">build_insert</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">intent</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">InsertIntent</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="n">GeneratedQuery</span><span class="p">,</span> <span class="n">SqlError</span><span class="o">&gt;</span><span class="p">;</span>
+    <span class="k">fn</span> <span class="nf">build_update</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">intent</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">UpdateIntent</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="n">GeneratedQuery</span><span class="p">,</span> <span class="n">SqlError</span><span class="o">&gt;</span><span class="p">;</span>
+    <span class="k">fn</span> <span class="nf">build_delete</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">intent</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">DeleteIntent</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="n">GeneratedQuery</span><span class="p">,</span> <span class="n">SqlError</span><span class="o">&gt;</span><span class="p">;</span>
+    <span class="k">fn</span> <span class="nf">build_analytical</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">intent</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">AnalyticalIntent</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="n">GeneratedQuery</span><span class="p">,</span> <span class="n">SqlError</span><span class="o">&gt;</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="4-schema-analysis-and-caching">4. Schema Analysis and Caching</h3>
+
+<p><strong>Responsibility</strong>: Maintain up-to-date schema information for intelligent query generation</p>
+
+<p><strong>Key Features:</strong></p>
+<ul>
+  <li>Real-time schema discovery</li>
+  <li>Column statistics and metadata</li>
+  <li>Relationship inference</li>
+  <li>Performance characteristics</li>
+  <li>Data distribution analysis</li>
+</ul>
+
+<p><strong>Implementation:</strong></p>
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">pub</span> <span class="k">struct</span> <span class="n">SchemaAnalyzer</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="n">orbit_client</span><span class="p">:</span> <span class="n">OrbitClient</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">schema_cache</span><span class="p">:</span> <span class="nb">Arc</span><span class="o">&lt;</span><span class="n">RwLock</span><span class="o">&lt;</span><span class="n">SchemaCache</span><span class="o">&gt;&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">statistics_collector</span><span class="p">:</span> <span class="n">StatisticsCollector</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">SchemaCache</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="n">tables</span><span class="p">:</span> <span class="n">HashMap</span><span class="o">&lt;</span><span class="nb">String</span><span class="p">,</span> <span class="n">TableSchema</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">indexes</span><span class="p">:</span> <span class="n">HashMap</span><span class="o">&lt;</span><span class="nb">String</span><span class="p">,</span> <span class="n">IndexInfo</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">relationships</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">TableRelationship</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">statistics</span><span class="p">:</span> <span class="n">HashMap</span><span class="o">&lt;</span><span class="nb">String</span><span class="p">,</span> <span class="n">ColumnStatistics</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">last_updated</span><span class="p">:</span> <span class="n">SystemTime</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">TableSchema</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="n">name</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">columns</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">ColumnInfo</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">constraints</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">ConstraintInfo</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">indexes</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">IndexInfo</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">row_estimate</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="nb">u64</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">data_size_estimate</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="nb">u64</span><span class="o">&gt;</span><span class="p">,</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="5-result-processing-and-formatting">5. Result Processing and Formatting</h3>
+
+<p><strong>Responsibility</strong>: Process query results for optimal LLM consumption</p>
+
+<p><strong>Key Features:</strong></p>
+<ul>
+  <li>Intelligent data summarization</li>
+  <li>Format optimization for LLM context</li>
+  <li>Large result set handling</li>
+  <li>Visualization hint generation</li>
+  <li>Statistical summary generation</li>
+</ul>
+
+<p><strong>Implementation:</strong></p>
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">pub</span> <span class="k">struct</span> <span class="n">ResultProcessor</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="n">formatter</span><span class="p">:</span> <span class="n">ResultFormatter</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">summarizer</span><span class="p">:</span> <span class="n">DataSummarizer</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">visualizer</span><span class="p">:</span> <span class="n">VisualizationHintGenerator</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">ProcessedResult</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="n">summary</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">data_preview</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">Row</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">statistics</span><span class="p">:</span> <span class="n">ResultStatistics</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">visualization_hints</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">VisualizationHint</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">full_result_available</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">continuation_token</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="nb">String</span><span class="o">&gt;</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="k">pub</span> <span class="k">trait</span> <span class="n">DataSummarizer</span> <span class="p">{</span>
+    <span class="k">fn</span> <span class="nf">summarize_numeric_data</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">column</span><span class="p">:</span> <span class="o">&amp;</span><span class="nb">str</span><span class="p">,</span> <span class="n">values</span><span class="p">:</span> <span class="o">&amp;</span><span class="p">[</span><span class="nb">f64</span><span class="p">])</span> <span class="k">-&gt;</span> <span class="n">NumericSummary</span><span class="p">;</span>
+    <span class="k">fn</span> <span class="nf">summarize_text_data</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">column</span><span class="p">:</span> <span class="o">&amp;</span><span class="nb">str</span><span class="p">,</span> <span class="n">values</span><span class="p">:</span> <span class="o">&amp;</span><span class="p">[</span><span class="nb">String</span><span class="p">])</span> <span class="k">-&gt;</span> <span class="n">TextSummary</span><span class="p">;</span>
+    <span class="k">fn</span> <span class="nf">summarize_temporal_data</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">column</span><span class="p">:</span> <span class="o">&amp;</span><span class="nb">str</span><span class="p">,</span> <span class="n">values</span><span class="p">:</span> <span class="o">&amp;</span><span class="p">[</span><span class="n">DateTime</span><span class="p">])</span> <span class="k">-&gt;</span> <span class="n">TemporalSummary</span><span class="p">;</span>
+    <span class="k">fn</span> <span class="nf">generate_insights</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">result</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">QueryResult</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">DataInsight</span><span class="o">&gt;</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h2 id="mcp-tool-definitions">MCP Tool Definitions</h2>
+
+<h3 id="core-data-tools">Core Data Tools</h3>
+
+<ol>
+  <li><strong>query_data</strong>: Execute natural language queries against Orbit data</li>
+  <li><strong>describe_schema</strong>: Get schema information for tables and relationships</li>
+  <li><strong>analyze_data</strong>: Perform statistical analysis and data profiling</li>
+  <li><strong>search_similar</strong>: Vector similarity search using pgvector operations</li>
+  <li><strong>summarize_table</strong>: Generate comprehensive table summaries</li>
+</ol>
+
+<h3 id="administrative-tools">Administrative Tools</h3>
+
+<ol>
+  <li><strong>list_tables</strong>: Get available tables and basic metadata</li>
+  <li><strong>check_performance</strong>: Query performance analysis and optimization</li>
+  <li><strong>get_statistics</strong>: Database and table-level statistics</li>
+  <li><strong>validate_query</strong>: Validate SQL queries without execution</li>
+</ol>
+
+<h3 id="advanced-analytics-tools">Advanced Analytics Tools</h3>
+
+<ol>
+  <li><strong>trend_analysis</strong>: Time-series trend analysis</li>
+  <li><strong>correlation_analysis</strong>: Column correlation analysis</li>
+  <li><strong>distribution_analysis</strong>: Data distribution profiling</li>
+  <li><strong>outlier_detection</strong>: Statistical outlier identification</li>
+</ol>
+
+<h2 id="natural-language-processing-capabilities">Natural Language Processing Capabilities</h2>
+
+<h3 id="intent-classification-examples">Intent Classification Examples</h3>
+
+<p><strong>Data Retrieval:</strong></p>
+<ul>
+  <li>“Show me all users from California”</li>
+  <li>“What are the top 10 products by revenue?”</li>
+  <li>“Find documents similar to this embedding vector”</li>
+  <li>“Get the average order value by month”</li>
+</ul>
+
+<p><strong>Data Analysis:</strong></p>
+<ul>
+  <li>“Analyze the distribution of customer ages”</li>
+  <li>“What’s the correlation between price and sales volume?”</li>
+  <li>“Show me trends in user sign-ups over the past year”</li>
+  <li>“Identify outliers in the transaction amounts”</li>
+</ul>
+
+<p><strong>Data Modification:</strong></p>
+<ul>
+  <li>“Add a new user with email john@example.com”</li>
+  <li>“Update all products in category ‘electronics’ to have free shipping”</li>
+  <li>“Delete old log entries from before last month”</li>
+</ul>
+
+<h3 id="entity-recognition">Entity Recognition</h3>
+
+<ul>
+  <li><strong>Table Names</strong>: “users”, “products”, “orders”, “documents”</li>
+  <li><strong>Column Names</strong>: “email”, “price”, “created_at”, “embedding”</li>
+  <li><strong>Values</strong>: Strings, numbers, dates, vectors</li>
+  <li><strong>Operators</strong>: “greater than”, “similar to”, “between”, “in”</li>
+  <li><strong>Aggregations</strong>: “average”, “sum”, “count”, “maximum”</li>
+</ul>
+
+<h2 id="integration-with-orbit-rs">Integration with Orbit-RS</h2>
+
+<h3 id="connection-management">Connection Management</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">pub</span> <span class="k">struct</span> <span class="n">OrbitMcpClient</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="n">postgres_client</span><span class="p">:</span> <span class="nb">Arc</span><span class="o">&lt;</span><span class="n">PostgresClient</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">actor_client</span><span class="p">:</span> <span class="nb">Arc</span><span class="o">&lt;</span><span class="n">ActorClient</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">transaction_manager</span><span class="p">:</span> <span class="nb">Arc</span><span class="o">&lt;</span><span class="n">TransactionManager</span><span class="o">&gt;</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="k">impl</span> <span class="n">OrbitMcpClient</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">execute_query</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">query</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">GeneratedQuery</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="n">QueryResult</span><span class="p">,</span> <span class="n">OrbitError</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="k">match</span> <span class="n">query</span><span class="py">.query_type</span> <span class="p">{</span>
+            <span class="nn">QueryType</span><span class="p">::</span><span class="n">Read</span> <span class="k">=&gt;</span> <span class="k">self</span><span class="py">.postgres_client</span><span class="nf">.execute_select</span><span class="p">(</span><span class="n">query</span><span class="p">)</span><span class="k">.await</span><span class="p">,</span>
+            <span class="nn">QueryType</span><span class="p">::</span><span class="n">Write</span> <span class="k">=&gt;</span> <span class="p">{</span>
+                <span class="k">let</span> <span class="n">tx</span> <span class="o">=</span> <span class="k">self</span><span class="py">.transaction_manager</span><span class="nf">.begin_transaction</span><span class="p">()</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+                <span class="k">let</span> <span class="n">result</span> <span class="o">=</span> <span class="k">self</span><span class="py">.postgres_client</span><span class="nf">.execute_write</span><span class="p">(</span><span class="n">query</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+                <span class="n">tx</span><span class="nf">.commit</span><span class="p">()</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+                <span class="nf">Ok</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+            <span class="p">},</span>
+            <span class="nn">QueryType</span><span class="p">::</span><span class="n">Analysis</span> <span class="k">=&gt;</span> <span class="k">self</span><span class="nf">.execute_analytical_query</span><span class="p">(</span><span class="n">query</span><span class="p">)</span><span class="k">.await</span><span class="p">,</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="actor-system-integration">Actor System Integration</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">pub</span> <span class="k">struct</span> <span class="n">TableActor</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">schema</span><span class="p">:</span> <span class="n">TableSchema</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">data_store</span><span class="p">:</span> <span class="nb">Arc</span><span class="o">&lt;</span><span class="k">dyn</span> <span class="n">DataStorage</span><span class="o">&gt;</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="nd">#[async_trait]</span>
+<span class="k">impl</span> <span class="n">ActorWithStringKey</span> <span class="k">for</span> <span class="n">TableActor</span> <span class="p">{</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">handle_query</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">query</span><span class="p">:</span> <span class="n">SqlQuery</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="n">QueryResult</span><span class="p">,</span> <span class="n">ActorError</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="k">match</span> <span class="n">query</span><span class="py">.operation</span> <span class="p">{</span>
+            <span class="nn">SqlOperation</span><span class="p">::</span><span class="nf">Select</span><span class="p">(</span><span class="n">select</span><span class="p">)</span> <span class="k">=&gt;</span> <span class="k">self</span><span class="nf">.execute_select</span><span class="p">(</span><span class="n">select</span><span class="p">)</span><span class="k">.await</span><span class="p">,</span>
+            <span class="nn">SqlOperation</span><span class="p">::</span><span class="nf">Insert</span><span class="p">(</span><span class="n">insert</span><span class="p">)</span> <span class="k">=&gt;</span> <span class="k">self</span><span class="nf">.execute_insert</span><span class="p">(</span><span class="n">insert</span><span class="p">)</span><span class="k">.await</span><span class="p">,</span>
+            <span class="nn">SqlOperation</span><span class="p">::</span><span class="nf">Update</span><span class="p">(</span><span class="n">update</span><span class="p">)</span> <span class="k">=&gt;</span> <span class="k">self</span><span class="nf">.execute_update</span><span class="p">(</span><span class="n">update</span><span class="p">)</span><span class="k">.await</span><span class="p">,</span>
+            <span class="nn">SqlOperation</span><span class="p">::</span><span class="nf">Delete</span><span class="p">(</span><span class="n">delete</span><span class="p">)</span> <span class="k">=&gt;</span> <span class="k">self</span><span class="nf">.execute_delete</span><span class="p">(</span><span class="n">delete</span><span class="p">)</span><span class="k">.await</span><span class="p">,</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h2 id="implementation-plan">Implementation Plan</h2>
+
+<h3 id="phase-1-mcp-foundation-week-1">Phase 1: MCP Foundation (Week 1)</h3>
+<ul class="task-list">
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Set up MCP server infrastructure</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Implement basic protocol handlers</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Create Orbit client integration</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Basic tool definitions</li>
+</ul>
+
+<h3 id="phase-2-natural-language-processing-week-2">Phase 2: Natural Language Processing (Week 2)</h3>
+<ul class="task-list">
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Intent classification system</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Entity recognition for SQL elements</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Schema analysis and caching</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Basic SQL generation</li>
+</ul>
+
+<h3 id="phase-3-advanced-features-week-3">Phase 3: Advanced Features (Week 3)</h3>
+<ul class="task-list">
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Vector similarity search integration</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Advanced analytics tools</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Result processing and summarization</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Performance optimization</li>
+</ul>
+
+<h3 id="phase-4-integration-and-testing-week-4">Phase 4: Integration and Testing (Week 4)</h3>
+<ul class="task-list">
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />End-to-end integration testing</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />LLM client testing (Claude, GPT-4)</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Performance benchmarking</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Documentation and examples</li>
+</ul>
+
+<h2 id="example-usage-scenarios">Example Usage Scenarios</h2>
+
+<h3 id="data-exploration">Data Exploration</h3>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>LLM: "I need to understand the customer data structure"
+MCP: Executes describe_schema("customers") and provides detailed schema information
+
+LLM: "Show me a sample of customer data from the last month"
+MCP: Generates and executes SELECT query with date filtering and LIMIT
+
+LLM: "What's the distribution of customer ages?"
+MCP: Executes analyze_data with distribution analysis on age column
+</code></pre></div></div>
+
+<h3 id="vector-search">Vector Search</h3>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>LLM: "Find documents similar to 'machine learning algorithms'"
+MCP: Converts text to embedding vector and executes similarity search
+MCP: Returns top results with distance scores and content summaries
+</code></pre></div></div>
+
+<h3 id="analytical-queries">Analytical Queries</h3>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>LLM: "Analyze sales trends over the past year by product category"
+MCP: Generates complex analytical query with time-series grouping
+MCP: Returns processed results with statistical insights and visualization hints
+</code></pre></div></div>
+
+<h2 id="success-criteria">Success Criteria</h2>
+
+<ol>
+  <li><strong>Protocol Compliance</strong>: Full MCP protocol compatibility with major LLM clients</li>
+  <li><strong>Natural Language Understanding</strong>: High accuracy (&gt;85%) intent classification and entity recognition</li>
+  <li><strong>SQL Generation Quality</strong>: Generated queries are syntactically correct and semantically meaningful</li>
+  <li><strong>Performance</strong>: Sub-second response times for most queries</li>
+  <li><strong>Integration</strong>: Seamless integration with Orbit-RS Phase 8 SQL engine</li>
+  <li><strong>Usability</strong>: LLMs can effectively query and analyze Orbit data through natural language</li>
+</ol>
+
+<p>This MCP server will position Orbit-RS as a leading platform for AI-powered data analysis and make distributed data accessible through natural language interfaces.</p>

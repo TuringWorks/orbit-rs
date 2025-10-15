@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Java Spring Boot Integration with Orbit-RS | Orbit-RS Documentation</title>
+<meta name="generator" content="Jekyll v4.4.1" />
+<meta property="og:title" content="Java Spring Boot Integration with Orbit-RS" />
+<meta name="author" content="TuringWorks" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<meta property="og:description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<link rel="canonical" href="https://turingworks.github.io/orbit-rs/examples/java_spring_boot_integration.html" />
+<meta property="og:url" content="https://turingworks.github.io/orbit-rs/examples/java_spring_boot_integration.html" />
+<meta property="og:site_name" content="Orbit-RS Documentation" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Java Spring Boot Integration with Orbit-RS" />
+<meta name="twitter:site" content="@TuringWorksAI" />
+<meta name="twitter:creator" content="@TuringWorks" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","author":{"@type":"Person","name":"TuringWorks"},"description":"The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform","headline":"Java Spring Boot Integration with Orbit-RS","url":"https://turingworks.github.io/orbit-rs/examples/java_spring_boot_integration.html"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/orbit-rs/assets/main.css">
+  <link rel="stylesheet" href="/orbit-rs/assets/css/custom.css"><link type="application/atom+xml" rel="alternate" href="https://turingworks.github.io/orbit-rs/feed.xml" title="Orbit-RS Documentation" /></head><body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/orbit-rs/">Orbit-RS Documentation</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/orbit-rs/">Orbit-RS Documentation</a><a class="page-link" href="/orbit-rs/project_overview.html">Orbit-RS: Comprehensive Project Overview</a><a class="page-link" href="/orbit-rs/quick_start.html">Quick Start Guide - Multi-Protocol Database Server</a><a class="page-link" href="/orbit-rs/roadmap/">Development Roadmap</a><a class="page-link" href="/orbit-rs/features/">Orbit-RS Feature Index</a><a class="page-link" href="/orbit-rs/compute-acceleration/">Hardware Acceleration Guide</a><a class="page-link" href="/orbit-rs/contributing.html">Contributing Guide</a><a class="page-link" href="/orbit-rs/overview.html">Architecture Overview</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <h1 id="java-spring-boot-integration-with-orbit-rs">Java Spring Boot Integration with Orbit-RS</h1>
+
+<p>This example demonstrates how to integrate Rust Orbit services with Java Spring Boot applications using multiple communication methods: HTTP REST API, gRPC, and JNI (Java Native Interface).</p>
+
+<h2 id="overview">Overview</h2>
+
+<p>The <code class="language-plaintext highlighter-rouge">orbit-client-spring</code> crate now provides comprehensive Java Spring Boot integration through three different communication channels:</p>
+
+<ol>
+  <li><strong>HTTP Server</strong> - RESTful API endpoints accessible via HTTP client</li>
+  <li><strong>gRPC Server</strong> - High-performance type-safe gRPC communication</li>
+  <li><strong>JNI Bindings</strong> - Direct native method calls from Java to Rust</li>
+</ol>
+
+<h2 id="architecture">Architecture</h2>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>┌─────────────────────┐    ┌─────────────────────────────────┐
+│   Java Spring Boot  │    │         Orbit-RS Rust           │
+│    Application      │    │                                 │
+│                     │    │  ┌─────────────────────────────┐ │
+│  ┌─────────────────┐│    │  │   ApplicationContext        │ │
+│  │ HTTP Client     ││───▶│  │   (Spring-like IoC)         │ │
+│  └─────────────────┘│    │  └─────────────────────────────┘ │
+│                     │    │                                 │
+│  ┌─────────────────┐│    │  ┌─────────────────────────────┐ │
+│  │ gRPC Client     ││───▶│  │   HTTP Server               │ │
+│  └─────────────────┘│    │  │   (Axum-based REST API)    │ │
+│                     │    │  └─────────────────────────────┘ │
+│  ┌─────────────────┐│    │                                 │
+│  │ JNI Bindings    ││───▶│  ┌─────────────────────────────┐ │
+│  └─────────────────┘│    │  │   gRPC Server               │ │
+└─────────────────────┘    │  │   (Tonic-based)             │ │
+                           │  └─────────────────────────────┘ │
+                           │                                 │
+                           │  ┌─────────────────────────────┐ │
+                           │  │   JNI Bindings              │ │
+                           │  │   (Native Interface)        │ │
+                           │  └─────────────────────────────┘ │
+                           └─────────────────────────────────┘
+</code></pre></div></div>
+
+<h2 id="features-implemented">Features Implemented</h2>
+
+<h3 id="1-http-server-http_serverrs">1. HTTP Server (<code class="language-plaintext highlighter-rouge">http_server.rs</code>)</h3>
+
+<ul>
+  <li><strong>RESTful API endpoints</strong> for service management</li>
+  <li><strong>JSON request/response</strong> format</li>
+  <li><strong>Health checks</strong> and status monitoring</li>
+  <li><strong>Configuration management</strong> via HTTP</li>
+  <li><strong>Graceful shutdown</strong> support</li>
+</ul>
+
+<p><strong>Key Endpoints:</strong></p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">GET /orbit/services</code> - List all registered services</li>
+  <li><code class="language-plaintext highlighter-rouge">GET /orbit/services/{name}</code> - Get specific service info</li>
+  <li><code class="language-plaintext highlighter-rouge">GET /orbit/config</code> - Get application configuration</li>
+  <li><code class="language-plaintext highlighter-rouge">GET /orbit/health</code> - Health check endpoint</li>
+  <li><code class="language-plaintext highlighter-rouge">POST /orbit/context/start</code> - Start application context</li>
+  <li><code class="language-plaintext highlighter-rouge">POST /orbit/context/stop</code> - Stop application context</li>
+</ul>
+
+<h3 id="2-grpc-server-grpc_serverrs">2. gRPC Server (<code class="language-plaintext highlighter-rouge">grpc_server.rs</code>)</h3>
+
+<ul>
+  <li><strong>Type-safe Protocol Buffers</strong> communication</li>
+  <li><strong>Streaming support</strong> for real-time events</li>
+  <li><strong>High-performance</strong> binary protocol</li>
+  <li><strong>Service discovery</strong> and registration</li>
+  <li><strong>Configuration management</strong> via gRPC</li>
+</ul>
+
+<p><strong>Key Services:</strong></p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">OrbitSpringService.ListServices()</code> - Get all services</li>
+  <li><code class="language-plaintext highlighter-rouge">OrbitSpringService.GetServiceInfo()</code> - Service details</li>
+  <li><code class="language-plaintext highlighter-rouge">OrbitSpringService.GetConfig()</code> - Configuration access</li>
+  <li><code class="language-plaintext highlighter-rouge">OrbitSpringService.HealthCheck()</code> - Health monitoring</li>
+  <li><code class="language-plaintext highlighter-rouge">OrbitSpringService.StreamServiceEvents()</code> - Event streaming</li>
+</ul>
+
+<h3 id="3-jni-bindings-jni_bindingsrs">3. JNI Bindings (<code class="language-plaintext highlighter-rouge">jni_bindings.rs</code>)</h3>
+
+<ul>
+  <li><strong>Direct native method calls</strong> from Java</li>
+  <li><strong>Memory-safe</strong> Rust-Java interop</li>
+  <li><strong>Context management</strong> with proper lifecycle</li>
+  <li><strong>Error handling</strong> with Java exception propagation</li>
+  <li><strong>Thread-safe</strong> global state management</li>
+</ul>
+
+<p><strong>Key Native Methods:</strong></p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">initializeContext(String configPath)</code> - Initialize Orbit context</li>
+  <li><code class="language-plaintext highlighter-rouge">startContext(long contextId)</code> - Start application context</li>
+  <li><code class="language-plaintext highlighter-rouge">stopContext(long contextId)</code> - Stop application context</li>
+  <li><code class="language-plaintext highlighter-rouge">getServiceNames(long contextId)</code> - List service names</li>
+  <li><code class="language-plaintext highlighter-rouge">healthCheck(long contextId)</code> - Perform health check</li>
+</ul>
+
+<h3 id="4-integration-layer-java_integrationrs">4. Integration Layer (<code class="language-plaintext highlighter-rouge">java_integration.rs</code>)</h3>
+
+<ul>
+  <li><strong>Unified configuration</strong> for all communication methods</li>
+  <li><strong>Builder pattern</strong> for easy setup</li>
+  <li><strong>Graceful startup/shutdown</strong> coordination</li>
+  <li><strong>Status monitoring</strong> across all services</li>
+  <li><strong>Example usage</strong> functions</li>
+</ul>
+
+<h2 id="usage-examples">Usage Examples</h2>
+
+<h3 id="rust-side-setup">Rust Side Setup</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">orbit_client_spring</span><span class="p">::</span><span class="nn">java_integration</span><span class="p">::</span><span class="o">*</span><span class="p">;</span>
+
+<span class="nd">#[tokio::main]</span>
+<span class="k">async</span> <span class="k">fn</span> <span class="nf">main</span><span class="p">()</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="p">(),</span> <span class="nb">Box</span><span class="o">&lt;</span><span class="k">dyn</span> <span class="nn">std</span><span class="p">::</span><span class="nn">error</span><span class="p">::</span><span class="n">Error</span><span class="o">&gt;&gt;</span> <span class="p">{</span>
+    <span class="c1">// Create HTTP and gRPC configurations</span>
+    <span class="k">let</span> <span class="n">http_config</span> <span class="o">=</span> <span class="n">HttpServerConfig</span> <span class="p">{</span>
+        <span class="n">host</span><span class="p">:</span> <span class="s">"localhost"</span><span class="nf">.to_string</span><span class="p">(),</span>
+        <span class="n">port</span><span class="p">:</span> <span class="mi">8080</span><span class="p">,</span>
+        <span class="n">base_path</span><span class="p">:</span> <span class="s">"/api/v1"</span><span class="nf">.to_string</span><span class="p">(),</span>
+    <span class="p">};</span>
+
+    <span class="k">let</span> <span class="n">grpc_config</span> <span class="o">=</span> <span class="n">GrpcServerConfig</span> <span class="p">{</span>
+        <span class="n">host</span><span class="p">:</span> <span class="s">"localhost"</span><span class="nf">.to_string</span><span class="p">(),</span>
+        <span class="n">port</span><span class="p">:</span> <span class="mi">9090</span><span class="p">,</span>
+        <span class="n">tls_enabled</span><span class="p">:</span> <span class="k">false</span><span class="p">,</span>
+        <span class="n">max_message_size</span><span class="p">:</span> <span class="mi">8</span> <span class="o">*</span> <span class="mi">1024</span> <span class="o">*</span> <span class="mi">1024</span><span class="p">,</span>
+    <span class="p">};</span>
+
+    <span class="c1">// Build and run the integration</span>
+    <span class="k">let</span> <span class="n">integration</span> <span class="o">=</span> <span class="nn">JavaSpringBootIntegrationBuilder</span><span class="p">::</span><span class="nf">new</span><span class="p">()</span>
+        <span class="nf">.http_config</span><span class="p">(</span><span class="n">http_config</span><span class="p">)</span>
+        <span class="nf">.grpc_config</span><span class="p">(</span><span class="n">grpc_config</span><span class="p">)</span>
+        <span class="nf">.enable_http</span><span class="p">(</span><span class="k">true</span><span class="p">)</span>
+        <span class="nf">.enable_grpc</span><span class="p">(</span><span class="k">true</span><span class="p">)</span>
+        <span class="nf">.enable_jni</span><span class="p">(</span><span class="k">true</span><span class="p">)</span>
+        <span class="nf">.build</span><span class="p">();</span>
+
+    <span class="c1">// Start all servers and wait for shutdown</span>
+    <span class="n">integration</span><span class="nf">.run</span><span class="p">()</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+    
+    <span class="nf">Ok</span><span class="p">(())</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="java-spring-boot-integration">Java Spring Boot Integration</h3>
+
+<h4 id="1-http-client-usage">1. HTTP Client Usage</h4>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nd">@RestController</span>
+<span class="nd">@RequestMapping</span><span class="o">(</span><span class="s">"/orbit"</span><span class="o">)</span>
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">OrbitController</span> <span class="o">{</span>
+    
+    <span class="nd">@Autowired</span>
+    <span class="kd">private</span> <span class="nc">OrbitHttpClient</span> <span class="n">orbitClient</span><span class="o">;</span>
+    
+    <span class="nd">@GetMapping</span><span class="o">(</span><span class="s">"/services"</span><span class="o">)</span>
+    <span class="kd">public</span> <span class="nc">ResponseEntity</span><span class="o">&lt;</span><span class="nc">ServiceListResponse</span><span class="o">&gt;</span> <span class="nf">getServices</span><span class="o">()</span> <span class="o">{</span>
+        <span class="k">try</span> <span class="o">{</span>
+            <span class="nc">ServiceListResponse</span> <span class="n">services</span> <span class="o">=</span> <span class="n">orbitClient</span><span class="o">.</span><span class="na">listServices</span><span class="o">();</span>
+            <span class="k">return</span> <span class="nc">ResponseEntity</span><span class="o">.</span><span class="na">ok</span><span class="o">(</span><span class="n">services</span><span class="o">);</span>
+        <span class="o">}</span> <span class="k">catch</span> <span class="o">(</span><span class="nc">Exception</span> <span class="n">e</span><span class="o">)</span> <span class="o">{</span>
+            <span class="k">return</span> <span class="nc">ResponseEntity</span><span class="o">.</span><span class="na">status</span><span class="o">(</span><span class="mi">500</span><span class="o">).</span><span class="na">build</span><span class="o">();</span>
+        <span class="o">}</span>
+    <span class="o">}</span>
+    
+    <span class="nd">@GetMapping</span><span class="o">(</span><span class="s">"/health"</span><span class="o">)</span>
+    <span class="kd">public</span> <span class="nc">ResponseEntity</span><span class="o">&lt;</span><span class="nc">HealthResponse</span><span class="o">&gt;</span> <span class="nf">healthCheck</span><span class="o">()</span> <span class="o">{</span>
+        <span class="k">try</span> <span class="o">{</span>
+            <span class="nc">HealthResponse</span> <span class="n">health</span> <span class="o">=</span> <span class="n">orbitClient</span><span class="o">.</span><span class="na">healthCheck</span><span class="o">();</span>
+            <span class="k">return</span> <span class="nc">ResponseEntity</span><span class="o">.</span><span class="na">ok</span><span class="o">(</span><span class="n">health</span><span class="o">);</span>
+        <span class="o">}</span> <span class="k">catch</span> <span class="o">(</span><span class="nc">Exception</span> <span class="n">e</span><span class="o">)</span> <span class="o">{</span>
+            <span class="k">return</span> <span class="nc">ResponseEntity</span><span class="o">.</span><span class="na">status</span><span class="o">(</span><span class="mi">500</span><span class="o">).</span><span class="na">build</span><span class="o">();</span>
+        <span class="o">}</span>
+    <span class="o">}</span>
+<span class="o">}</span>
+</code></pre></div></div>
+
+<h4 id="2-grpc-client-usage">2. gRPC Client Usage</h4>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nd">@Service</span>
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">OrbitGrpcService</span> <span class="o">{</span>
+    
+    <span class="kd">private</span> <span class="kd">final</span> <span class="nc">OrbitGrpcClient</span> <span class="n">grpcClient</span><span class="o">;</span>
+    
+    <span class="kd">public</span> <span class="nf">OrbitGrpcService</span><span class="o">()</span> <span class="o">{</span>
+        <span class="k">this</span><span class="o">.</span><span class="na">grpcClient</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">OrbitGrpcClient</span><span class="o">(</span><span class="s">"localhost"</span><span class="o">,</span> <span class="mi">9090</span><span class="o">);</span>
+    <span class="o">}</span>
+    
+    <span class="kd">public</span> <span class="nc">List</span><span class="o">&lt;</span><span class="nc">ServiceInfo</span><span class="o">&gt;</span> <span class="nf">getAllServices</span><span class="o">()</span> <span class="o">{</span>
+        <span class="nc">ListServicesRequest</span> <span class="n">request</span> <span class="o">=</span> <span class="nc">ListServicesRequest</span><span class="o">.</span><span class="na">newBuilder</span><span class="o">().</span><span class="na">build</span><span class="o">();</span>
+        <span class="nc">ListServicesResponse</span> <span class="n">response</span> <span class="o">=</span> <span class="n">grpcClient</span><span class="o">.</span><span class="na">listServices</span><span class="o">(</span><span class="n">request</span><span class="o">);</span>
+        <span class="k">return</span> <span class="n">response</span><span class="o">.</span><span class="na">getServicesList</span><span class="o">();</span>
+    <span class="o">}</span>
+    
+    <span class="kd">public</span> <span class="kt">void</span> <span class="nf">streamEvents</span><span class="o">()</span> <span class="o">{</span>
+        <span class="nc">StreamServiceEventsRequest</span> <span class="n">request</span> <span class="o">=</span> <span class="nc">StreamServiceEventsRequest</span><span class="o">.</span><span class="na">newBuilder</span><span class="o">()</span>
+            <span class="o">.</span><span class="na">addServiceFilter</span><span class="o">(</span><span class="s">"user-service"</span><span class="o">)</span>
+            <span class="o">.</span><span class="na">build</span><span class="o">();</span>
+            
+        <span class="n">grpcClient</span><span class="o">.</span><span class="na">streamServiceEvents</span><span class="o">(</span><span class="n">request</span><span class="o">)</span>
+            <span class="o">.</span><span class="na">forEach</span><span class="o">(</span><span class="n">event</span> <span class="o">-&gt;</span> <span class="o">{</span>
+                <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">"Received event: "</span> <span class="o">+</span> <span class="n">event</span><span class="o">.</span><span class="na">getEventType</span><span class="o">());</span>
+            <span class="o">});</span>
+    <span class="o">}</span>
+<span class="o">}</span>
+</code></pre></div></div>
+
+<h4 id="3-jni-direct-integration">3. JNI Direct Integration</h4>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nd">@Component</span>
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">OrbitNativeService</span> <span class="o">{</span>
+    
+    <span class="kd">static</span> <span class="o">{</span>
+        <span class="nc">System</span><span class="o">.</span><span class="na">loadLibrary</span><span class="o">(</span><span class="s">"orbit_client_spring"</span><span class="o">);</span>
+    <span class="o">}</span>
+    
+    <span class="kd">private</span> <span class="kt">long</span> <span class="n">contextId</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span><span class="o">;</span>
+    
+    <span class="nd">@PostConstruct</span>
+    <span class="kd">public</span> <span class="kt">void</span> <span class="nf">initialize</span><span class="o">()</span> <span class="o">{</span>
+        <span class="n">contextId</span> <span class="o">=</span> <span class="nc">OrbitClient</span><span class="o">.</span><span class="na">initializeContext</span><span class="o">(</span><span class="s">"/etc/orbit/config.yaml"</span><span class="o">);</span>
+        <span class="k">if</span> <span class="o">(</span><span class="n">contextId</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="o">)</span> <span class="o">{</span>
+            <span class="kt">boolean</span> <span class="n">started</span> <span class="o">=</span> <span class="nc">OrbitClient</span><span class="o">.</span><span class="na">startContext</span><span class="o">(</span><span class="n">contextId</span><span class="o">);</span>
+            <span class="k">if</span> <span class="o">(</span><span class="n">started</span><span class="o">)</span> <span class="o">{</span>
+                <span class="nc">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">"✅ Orbit context started successfully"</span><span class="o">);</span>
+            <span class="o">}</span>
+        <span class="o">}</span>
+    <span class="o">}</span>
+    
+    <span class="kd">public</span> <span class="nc">String</span><span class="o">[]</span> <span class="nf">getServiceNames</span><span class="o">()</span> <span class="o">{</span>
+        <span class="k">if</span> <span class="o">(</span><span class="n">contextId</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="o">)</span> <span class="o">{</span>
+            <span class="k">return</span> <span class="nc">OrbitClient</span><span class="o">.</span><span class="na">getServiceNames</span><span class="o">(</span><span class="n">contextId</span><span class="o">);</span>
+        <span class="o">}</span>
+        <span class="k">return</span> <span class="k">new</span> <span class="nc">String</span><span class="o">[</span><span class="mi">0</span><span class="o">];</span>
+    <span class="o">}</span>
+    
+    <span class="kd">public</span> <span class="kt">boolean</span> <span class="nf">isHealthy</span><span class="o">()</span> <span class="o">{</span>
+        <span class="k">if</span> <span class="o">(</span><span class="n">contextId</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="o">)</span> <span class="o">{</span>
+            <span class="k">return</span> <span class="nc">OrbitClient</span><span class="o">.</span><span class="na">healthCheck</span><span class="o">(</span><span class="n">contextId</span><span class="o">);</span>
+        <span class="o">}</span>
+        <span class="k">return</span> <span class="kc">false</span><span class="o">;</span>
+    <span class="o">}</span>
+    
+    <span class="nd">@PreDestroy</span>
+    <span class="kd">public</span> <span class="kt">void</span> <span class="nf">cleanup</span><span class="o">()</span> <span class="o">{</span>
+        <span class="k">if</span> <span class="o">(</span><span class="n">contextId</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="o">)</span> <span class="o">{</span>
+            <span class="nc">OrbitClient</span><span class="o">.</span><span class="na">stopContext</span><span class="o">(</span><span class="n">contextId</span><span class="o">);</span>
+            <span class="nc">OrbitClient</span><span class="o">.</span><span class="na">destroyContext</span><span class="o">(</span><span class="n">contextId</span><span class="o">);</span>
+        <span class="o">}</span>
+    <span class="o">}</span>
+<span class="o">}</span>
+</code></pre></div></div>
+
+<h3 id="maven-dependencies">Maven Dependencies</h3>
+
+<div class="language-xml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nt">&lt;dependencies&gt;</span>
+    <span class="c">&lt;!-- Orbit Spring Boot Starter --&gt;</span>
+    <span class="nt">&lt;dependency&gt;</span>
+        <span class="nt">&lt;groupId&gt;</span>com.orbit<span class="nt">&lt;/groupId&gt;</span>
+        <span class="nt">&lt;artifactId&gt;</span>orbit-spring-boot-starter<span class="nt">&lt;/artifactId&gt;</span>
+        <span class="nt">&lt;version&gt;</span>1.0.0<span class="nt">&lt;/version&gt;</span>
+    <span class="nt">&lt;/dependency&gt;</span>
+    
+    <span class="c">&lt;!-- gRPC dependencies (if using gRPC) --&gt;</span>
+    <span class="nt">&lt;dependency&gt;</span>
+        <span class="nt">&lt;groupId&gt;</span>io.grpc<span class="nt">&lt;/groupId&gt;</span>
+        <span class="nt">&lt;artifactId&gt;</span>grpc-netty-shaded<span class="nt">&lt;/artifactId&gt;</span>
+        <span class="nt">&lt;version&gt;</span>1.58.0<span class="nt">&lt;/version&gt;</span>
+    <span class="nt">&lt;/dependency&gt;</span>
+    <span class="nt">&lt;dependency&gt;</span>
+        <span class="nt">&lt;groupId&gt;</span>io.grpc<span class="nt">&lt;/groupId&gt;</span>
+        <span class="nt">&lt;artifactId&gt;</span>grpc-protobuf<span class="nt">&lt;/artifactId&gt;</span>
+        <span class="nt">&lt;version&gt;</span>1.58.0<span class="nt">&lt;/version&gt;</span>
+    <span class="nt">&lt;/dependency&gt;</span>
+<span class="nt">&lt;/dependencies&gt;</span>
+</code></pre></div></div>
+
+<h3 id="application-configuration">Application Configuration</h3>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c1"># application.yml</span>
+<span class="na">orbit</span><span class="pi">:</span>
+  <span class="na">enabled</span><span class="pi">:</span> <span class="kc">true</span>
+  
+  <span class="c1"># HTTP client configuration</span>
+  <span class="na">http</span><span class="pi">:</span>
+    <span class="na">url</span><span class="pi">:</span> <span class="s">http://localhost:8080/api/v1</span>
+    <span class="na">timeout</span><span class="pi">:</span> <span class="m">30000</span>
+    <span class="na">retry-attempts</span><span class="pi">:</span> <span class="m">3</span>
+  
+  <span class="c1"># gRPC client configuration  </span>
+  <span class="na">grpc</span><span class="pi">:</span>
+    <span class="na">host</span><span class="pi">:</span> <span class="s">localhost</span>
+    <span class="na">port</span><span class="pi">:</span> <span class="m">9090</span>
+    <span class="na">tls-enabled</span><span class="pi">:</span> <span class="kc">false</span>
+    <span class="na">max-message-size</span><span class="pi">:</span> <span class="m">8388608</span>
+    
+  <span class="c1"># JNI configuration</span>
+  <span class="na">jni</span><span class="pi">:</span>
+    <span class="na">enabled</span><span class="pi">:</span> <span class="kc">true</span>
+    <span class="na">config-path</span><span class="pi">:</span> <span class="s">/etc/orbit/config.yaml</span>
+    <span class="na">library-path</span><span class="pi">:</span> <span class="s">/usr/local/lib</span>
+</code></pre></div></div>
+
+<h2 id="build-instructions">Build Instructions</h2>
+
+<h3 id="building-the-rust-library">Building the Rust Library</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Build the shared library for JNI</span>
+<span class="nb">cd </span>orbit-client-spring
+cargo build <span class="nt">--release</span>
+
+<span class="c"># For cross-platform builds (macOS to Linux)</span>
+cargo build <span class="nt">--release</span> <span class="nt">--target</span> x86_64-unknown-linux-gnu
+
+<span class="c"># The shared library will be generated as:</span>
+<span class="c"># target/release/liborbit_client_spring.dylib (macOS)</span>
+<span class="c"># target/release/liborbit_client_spring.so (Linux)</span>
+</code></pre></div></div>
+
+<h3 id="java-client-generation">Java Client Generation</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Generate Java client stubs from gRPC proto files</span>
+protoc <span class="nt">--java_out</span><span class="o">=</span>src/main/java <span class="se">\</span>
+       <span class="nt">--grpc-java_out</span><span class="o">=</span>src/main/java <span class="se">\</span>
+       <span class="nt">--proto_path</span><span class="o">=</span>proto <span class="se">\</span>
+       orbit_spring.proto
+</code></pre></div></div>
+
+<h2 id="testing">Testing</h2>
+
+<h3 id="integration-tests">Integration Tests</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Start the Rust server</span>
+cargo run <span class="nt">--example</span> java_integration_server
+
+<span class="c"># In another terminal, run Java tests</span>
+<span class="nb">cd </span>java-client
+mvn <span class="nb">test</span>
+
+<span class="c"># Or run specific integration test</span>
+mvn <span class="nb">test</span> <span class="nt">-Dtest</span><span class="o">=</span>OrbitIntegrationTest
+</code></pre></div></div>
+
+<h3 id="manual-testing">Manual Testing</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Test HTTP endpoints</span>
+curl http://localhost:8080/api/v1/services
+curl http://localhost:8080/api/v1/health
+curl http://localhost:8080/api/v1/config
+
+<span class="c"># Test gRPC (using grpcurl)</span>
+grpcurl <span class="nt">-plaintext</span> localhost:9090 orbit.spring.OrbitSpringService/ListServices
+grpcurl <span class="nt">-plaintext</span> localhost:9090 orbit.spring.OrbitSpringService/HealthCheck
+
+<span class="c"># Test JNI (from Java application)</span>
+java <span class="nt">-Djava</span>.library.path<span class="o">=</span>/path/to/rust/target/release <span class="se">\</span>
+     <span class="nt">-cp</span> target/classes <span class="se">\</span>
+     com.example.OrbitClientTest
+</code></pre></div></div>
+
+<h2 id="performance-characteristics">Performance Characteristics</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>Method</th>
+      <th>Throughput</th>
+      <th>Latency</th>
+      <th>Memory</th>
+      <th>Use Case</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>HTTP</td>
+      <td>~10K req/s</td>
+      <td>~5ms</td>
+      <td>Low</td>
+      <td>Web APIs, REST services</td>
+    </tr>
+    <tr>
+      <td>gRPC</td>
+      <td>~50K req/s</td>
+      <td>~1ms</td>
+      <td>Medium</td>
+      <td>Microservices, streaming</td>
+    </tr>
+    <tr>
+      <td>JNI</td>
+      <td>~100K req/s</td>
+      <td>~0.1ms</td>
+      <td>High</td>
+      <td>High-performance computing</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="future-enhancements">Future Enhancements</h2>
+
+<ol>
+  <li><strong>Protocol Buffers Generation</strong>: Automated Java client generation from Rust</li>
+  <li><strong>Spring Boot Autoconfiguration</strong>: Automatic bean registration and configuration</li>
+  <li><strong>Metrics Integration</strong>: Micrometer metrics support for monitoring</li>
+  <li><strong>Security</strong>: Authentication and authorization support</li>
+  <li><strong>Load Balancing</strong>: Client-side load balancing for multiple Rust instances</li>
+  <li><strong>Circuit Breaker</strong>: Resilience patterns for fault tolerance</li>
+</ol>
+
+<h2 id="troubleshooting">Troubleshooting</h2>
+
+<h3 id="common-issues">Common Issues</h3>
+
+<ol>
+  <li><strong>JNI Library Not Found</strong>
+    <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>java.lang.UnsatisfiedLinkError: no orbit_client_spring in java.library.path
+</code></pre></div>    </div>
+    <p>Solution: Ensure the shared library is in the Java library path.</p>
+  </li>
+  <li><strong>gRPC Connection Refused</strong>
+    <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>io.grpc.StatusRuntimeException: UNAVAILABLE
+</code></pre></div>    </div>
+    <p>Solution: Check that the Rust gRPC server is running on the correct port.</p>
+  </li>
+  <li><strong>HTTP 404 Errors</strong>
+    <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>404 Not Found
+</code></pre></div>    </div>
+    <p>Solution: Verify the base path configuration matches between client and server.</p>
+  </li>
+</ol>
+
+<h3 id="debugging">Debugging</h3>
+
+<p>Enable debug logging in both Rust and Java:</p>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Rust</span>
+<span class="nn">tracing_subscriber</span><span class="p">::</span><span class="nn">fmt</span><span class="p">::</span><span class="nf">init</span><span class="p">();</span>
+</code></pre></div></div>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Java - application.yml</span>
+<span class="nl">logging:</span>
+  <span class="nl">level:</span>
+    <span class="n">com</span><span class="o">.</span><span class="na">orbit</span><span class="o">:</span> <span class="no">DEBUG</span>
+</code></pre></div></div>
+
+<p>This comprehensive integration provides a robust foundation for Java Spring Boot applications to interact with Rust-based Orbit services using their preferred communication method.</p>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/orbit-rs/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Orbit-RS Documentation</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">TuringWorks</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

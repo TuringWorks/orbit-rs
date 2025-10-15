@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["SqlType","SqlValue"],"struct":["IpNet","PostgresInterval","SqlRange","TsVectorElement"]};

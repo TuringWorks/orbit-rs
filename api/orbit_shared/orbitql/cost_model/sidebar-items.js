@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["CardinalityEstimate","CostModel","CostModelConfig","QueryCost"]};

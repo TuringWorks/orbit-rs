@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["AQLSpatialResult","SpatialIndexType"],"struct":["AQLSpatialExecutor","AQLSpatialParser","Document","SpatialCollection","SpatialIndex"]};

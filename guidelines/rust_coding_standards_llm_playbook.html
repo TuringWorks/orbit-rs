@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Rust Coding Standards — LLM Execution Playbook | Orbit-RS Documentation</title>
+<meta name="generator" content="Jekyll v4.4.1" />
+<meta property="og:title" content="Rust Coding Standards — LLM Execution Playbook" />
+<meta name="author" content="TuringWorks" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<meta property="og:description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<link rel="canonical" href="https://turingworks.github.io/orbit-rs/guidelines/rust_coding_standards_llm_playbook.html" />
+<meta property="og:url" content="https://turingworks.github.io/orbit-rs/guidelines/rust_coding_standards_llm_playbook.html" />
+<meta property="og:site_name" content="Orbit-RS Documentation" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Rust Coding Standards — LLM Execution Playbook" />
+<meta name="twitter:site" content="@TuringWorksAI" />
+<meta name="twitter:creator" content="@TuringWorks" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","author":{"@type":"Person","name":"TuringWorks"},"description":"The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform","headline":"Rust Coding Standards — LLM Execution Playbook","url":"https://turingworks.github.io/orbit-rs/guidelines/rust_coding_standards_llm_playbook.html"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/orbit-rs/assets/main.css">
+  <link rel="stylesheet" href="/orbit-rs/assets/css/custom.css"><link type="application/atom+xml" rel="alternate" href="https://turingworks.github.io/orbit-rs/feed.xml" title="Orbit-RS Documentation" /></head><body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/orbit-rs/">Orbit-RS Documentation</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/orbit-rs/">Orbit-RS Documentation</a><a class="page-link" href="/orbit-rs/project_overview.html">Orbit-RS: Comprehensive Project Overview</a><a class="page-link" href="/orbit-rs/quick_start.html">Quick Start Guide - Multi-Protocol Database Server</a><a class="page-link" href="/orbit-rs/roadmap/">Development Roadmap</a><a class="page-link" href="/orbit-rs/features/">Orbit-RS Feature Index</a><a class="page-link" href="/orbit-rs/compute-acceleration/">Hardware Acceleration Guide</a><a class="page-link" href="/orbit-rs/contributing.html">Contributing Guide</a><a class="page-link" href="/orbit-rs/overview.html">Architecture Overview</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <h1 id="rust-coding-standards--llm-execution-playbook">Rust Coding Standards — LLM Execution Playbook</h1>
+
+<blockquote>
+  <p>Purpose: Give a large language model (LLM) precise, deterministic rules to <strong>write, modify, and review</strong> Rust code in a way that a human team can trust. Follow the checklists and command recipes <em>exactly</em>. When unsure, use the <strong>Defaults</strong> section at the end.</p>
+</blockquote>
+
+<hr />
+
+<h2 id="0-toolchain--global-constraints-must">0) Toolchain &amp; Global Constraints (MUST)</h2>
+<ul>
+  <li><strong>Edition</strong>: <code class="language-plaintext highlighter-rouge">2021</code> (upgrade to <code class="language-plaintext highlighter-rouge">2024</code> only if the repo explicitly says so).</li>
+  <li><strong>MSRV</strong> (Minimum Supported Rust Version): <strong>pin in <code class="language-plaintext highlighter-rouge">rust-toolchain.toml</code></strong> (example: <code class="language-plaintext highlighter-rouge">1.79.0</code>). Never require features beyond MSRV.</li>
+  <li><strong>Formatting</strong>: <code class="language-plaintext highlighter-rouge">rustfmt</code> required. CI fails if not formatted.</li>
+  <li><strong>Lints</strong>: Run <code class="language-plaintext highlighter-rouge">clippy</code> on <strong>all targets</strong> and <strong>all features</strong>; fail on warnings.</li>
+  <li><strong>Docs</strong>: <code class="language-plaintext highlighter-rouge">cargo doc --no-deps</code> must succeed; all <strong>public</strong> items documented.</li>
+  <li><strong>License &amp; Security</strong>: run <code class="language-plaintext highlighter-rouge">cargo deny</code> and <code class="language-plaintext highlighter-rouge">cargo audit</code> in CI; fail on vulnerable or yanked crates.</li>
+</ul>
+
+<p><strong>Files to create/update at repo root</strong> (idempotent):</p>
+<div class="language-toml highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># rust-toolchain.toml</span>
+<span class="k">[</span><span class="n">toolchain</span><span class="k">]</span>
+<span class="n">channel</span> <span class="o">=</span><span class="w"> </span><span class="s">"1.79.0"</span>
+<span class="n">components</span> <span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s">"clippy"</span><span class="p">,</span> <span class="s">"rustfmt"</span><span class="p">]</span>
+<span class="n">profile</span> <span class="o">=</span><span class="w"> </span><span class="s">"minimal"</span>
+</code></pre></div></div>
+
+<div class="language-toml highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># .rustfmt.toml</span>
+<span class="n">edition</span> <span class="o">=</span><span class="w"> </span><span class="s">"2021"</span>
+<span class="n">use_small_heuristics</span> <span class="o">=</span><span class="w"> </span><span class="s">"Max"</span>
+<span class="n">normalize_doc_attributes</span> <span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+<span class="n">newline_style</span> <span class="o">=</span><span class="w"> </span><span class="s">"Unix"</span>
+<span class="n">group_imports</span> <span class="o">=</span><span class="w"> </span><span class="s">"StdExternalCrate"</span>
+<span class="n">imports_granularity</span> <span class="o">=</span><span class="w"> </span><span class="s">"Crate"</span>
+<span class="n">format_code_in_doc_comments</span> <span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+</code></pre></div></div>
+
+<div class="language-toml highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># clippy.toml</span>
+<span class="n">warns</span> <span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s">"clippy::pedantic"</span><span class="p">,</span> <span class="s">"clippy::nursery"</span><span class="p">]</span>
+<span class="n">msrv</span> <span class="o">=</span><span class="w"> </span><span class="s">"1.79"</span>
+<span class="n">allow-unwrap-in-tests</span> <span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+</code></pre></div></div>
+
+<p><strong>CI Commands (must pass):</strong></p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>cargo <span class="nb">fmt</span> <span class="nt">--all</span> <span class="nt">--</span> <span class="nt">--check</span>
+cargo clippy <span class="nt">--workspace</span> <span class="nt">--all-targets</span> <span class="nt">--all-features</span> <span class="nt">--</span> <span class="nt">-D</span> warnings
+cargo <span class="nb">test</span> <span class="nt">--workspace</span> <span class="nt">--all-features</span>
+cargo doc <span class="nt">--no-deps</span>
+cargo audit
+cargo deny check
+</code></pre></div></div>
+
+<hr />
+
+<h2 id="1-repository--crate-layout-must">1) Repository &amp; Crate Layout (MUST)</h2>
+<ul>
+  <li>Use a <strong>workspace</strong> with clear boundaries:
+    <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>repo/
+Cargo.toml            # [workspace]
+crates/
+  app/                # binary: CLI or service entrypoint
+  core/               # library: domain logic (pure, no IO side effects)
+  infra/              # library: IO adapters (DB, FS, HTTP, queues)
+  macros/             # optional: proc-macro crate
+</code></pre></div>    </div>
+  </li>
+  <li><strong>Library crates</strong> (e.g., <code class="language-plaintext highlighter-rouge">core</code>) MUST NOT panic for recoverable errors. Provide typed errors.</li>
+  <li><strong>Binary crates</strong> (e.g., <code class="language-plaintext highlighter-rouge">app</code>) MAY use <code class="language-plaintext highlighter-rouge">anyhow</code> at the top boundary to aggregate errors.</li>
+  <li>Keep files <strong>&lt; 400 lines</strong>; split by <strong>domain concepts</strong> not technical layers.</li>
+</ul>
+
+<hr />
+
+<h2 id="2-naming-style--conventions-must">2) Naming, Style &amp; Conventions (MUST)</h2>
+<ul>
+  <li>Crates: <code class="language-plaintext highlighter-rouge">kebab-case</code>; modules/files: <code class="language-plaintext highlighter-rouge">snake_case</code>; types/traits/enums: <code class="language-plaintext highlighter-rouge">UpperCamelCase</code>; functions/vars: <code class="language-plaintext highlighter-rouge">snake_case</code>.</li>
+  <li>Prefer <strong>expressive identifiers</strong> over comments: <code class="language-plaintext highlighter-rouge">retry_backoff_ms</code> not <code class="language-plaintext highlighter-rouge">rbms</code>.</li>
+  <li>Constants: <code class="language-plaintext highlighter-rouge">SCREAMING_SNAKE_CASE</code>.</li>
+  <li>Public API items <strong>must</strong> include <code class="language-plaintext highlighter-rouge">///</code> docs with a short summary and example when relevant.</li>
+</ul>
+
+<hr />
+
+<h2 id="3-error-handling-must">3) Error Handling (MUST)</h2>
+<ul>
+  <li>In libraries, define a typed error with <code class="language-plaintext highlighter-rouge">thiserror</code>; never <code class="language-plaintext highlighter-rouge">.unwrap()</code> or <code class="language-plaintext highlighter-rouge">.expect()</code> except for <strong>proven invariants</strong> (document why).</li>
+  <li>Return <code class="language-plaintext highlighter-rouge">Result&lt;T, Error&gt;</code> from fallible functions.</li>
+  <li>Add <strong>context at boundaries</strong> (e.g., IO, FFI, network) to preserve causality.</li>
+  <li>In binaries, use <code class="language-plaintext highlighter-rouge">anyhow::Result</code> in <code class="language-plaintext highlighter-rouge">main()</code> and <code class="language-plaintext highlighter-rouge">.context("action")</code> at call sites.</li>
+</ul>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// crates/core/src/error.rs</span>
+<span class="k">use</span> <span class="nn">thiserror</span><span class="p">::</span><span class="n">Error</span><span class="p">;</span>
+
+<span class="nd">#[derive(Debug,</span> <span class="nd">Error)]</span>
+<span class="k">pub</span> <span class="k">enum</span> <span class="n">CoreError</span> <span class="p">{</span>
+    <span class="nd">#[error(</span><span class="s">"missing config key: {0}"</span><span class="nd">)]</span>
+    <span class="nf">MissingConfig</span><span class="p">(</span><span class="nb">String</span><span class="p">),</span>
+    <span class="nd">#[error(transparent)]</span>
+    <span class="nf">Io</span><span class="p">(</span><span class="nd">#[from]</span> <span class="nn">std</span><span class="p">::</span><span class="nn">io</span><span class="p">::</span><span class="n">Error</span><span class="p">),</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// crates/app/src/main.rs</span>
+<span class="k">use</span> <span class="nn">anyhow</span><span class="p">::</span><span class="n">Context</span><span class="p">;</span>
+
+<span class="k">fn</span> <span class="nf">main</span><span class="p">()</span> <span class="k">-&gt;</span> <span class="nn">anyhow</span><span class="p">::</span><span class="nb">Result</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span> <span class="p">{</span>
+    <span class="k">let</span> <span class="n">cfg</span> <span class="o">=</span> <span class="nf">load_config</span><span class="p">()</span><span class="nf">.context</span><span class="p">(</span><span class="s">"loading config"</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+    <span class="nf">run</span><span class="p">(</span><span class="n">cfg</span><span class="p">)</span><span class="nf">.context</span><span class="p">(</span><span class="s">"running service"</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+    <span class="nf">Ok</span><span class="p">(())</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p><strong>LLM rule</strong>: If a function can fail, <strong>never</strong> return <code class="language-plaintext highlighter-rouge">Option&lt;T&gt;</code>—use <code class="language-plaintext highlighter-rouge">Result&lt;T, E&gt;</code> and define <code class="language-plaintext highlighter-rouge">E</code>.</p>
+
+<hr />
+
+<h2 id="4-panics-must-not-with-exceptions">4) Panics (MUST-NOT with Exceptions)</h2>
+<ul>
+  <li><strong>Never</strong> panic in library public surfaces for recoverable issues.</li>
+  <li><strong>Allowed</strong>:
+    <ul>
+      <li>Tests and examples.</li>
+      <li>Truly unreachable states with a <strong>documented</strong> invariant (<code class="language-plaintext highlighter-rouge">debug_assert!</code>/<code class="language-plaintext highlighter-rouge">unreachable!()</code>).</li>
+    </ul>
+  </li>
+  <li>Use <code class="language-plaintext highlighter-rouge">.expect("why it cannot fail")</code> only when the reason is clear and documented.</li>
+</ul>
+
+<hr />
+
+<h2 id="5-concurrency--async-should">5) Concurrency &amp; Async (SHOULD)</h2>
+<ul>
+  <li>Use a single async runtime per process (<code class="language-plaintext highlighter-rouge">tokio</code> preferred).</li>
+  <li><strong>No blocking calls in async contexts</strong>. If unavoidable, use <code class="language-plaintext highlighter-rouge">tokio::task::spawn_blocking</code>.</li>
+  <li>Prefer message passing (<code class="language-plaintext highlighter-rouge">tokio::sync::mpsc</code>) over shared mutexes.</li>
+  <li>Trait objects crossing threads: annotate with <code class="language-plaintext highlighter-rouge">dyn Trait + Send + Sync</code> when required.</li>
+</ul>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="nd">#[tokio::main]</span>
+<span class="k">async</span> <span class="k">fn</span> <span class="nf">main</span><span class="p">()</span> <span class="k">-&gt;</span> <span class="nn">anyhow</span><span class="p">::</span><span class="nb">Result</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span> <span class="p">{</span>
+    <span class="k">let</span> <span class="p">(</span><span class="n">tx</span><span class="p">,</span> <span class="k">mut</span> <span class="n">rx</span><span class="p">)</span> <span class="o">=</span> <span class="nn">tokio</span><span class="p">::</span><span class="nn">sync</span><span class="p">::</span><span class="nn">mpsc</span><span class="p">::</span><span class="nn">channel</span><span class="p">::</span><span class="o">&lt;</span><span class="nb">String</span><span class="o">&gt;</span><span class="p">(</span><span class="mi">64</span><span class="p">);</span>
+    <span class="nn">tokio</span><span class="p">::</span><span class="nf">spawn</span><span class="p">(</span><span class="k">async</span> <span class="k">move</span> <span class="p">{</span>
+        <span class="k">while</span> <span class="k">let</span> <span class="nf">Some</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span> <span class="o">=</span> <span class="n">rx</span><span class="nf">.recv</span><span class="p">()</span><span class="k">.await</span> <span class="p">{</span>
+            <span class="nn">tracing</span><span class="p">::</span><span class="nd">info!</span><span class="p">(</span><span class="o">%</span><span class="n">msg</span><span class="p">,</span> <span class="s">"processing"</span><span class="p">);</span>
+        <span class="p">}</span>
+    <span class="p">});</span>
+    <span class="n">tx</span><span class="nf">.send</span><span class="p">(</span><span class="s">"work"</span><span class="nf">.into</span><span class="p">())</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+    <span class="nf">Ok</span><span class="p">(())</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<hr />
+
+<h2 id="6-api--type-design-should">6) API &amp; Type Design (SHOULD)</h2>
+<ul>
+  <li>Keep traits <strong>small and focused</strong> (Interface Segregation).</li>
+  <li>Use <strong>newtypes</strong> for units/IDs to avoid parameter mix-ups: <code class="language-plaintext highlighter-rouge">struct Port(u16);</code></li>
+  <li>Prefer <strong>builders</strong> for complex config structs.</li>
+  <li>Put <strong>Serde</strong> derives on <strong>DTO/adapters</strong>, not core domain structs (keep domain IO-agnostic).</li>
+  <li>Time handling: use one library (<code class="language-plaintext highlighter-rouge">time</code> or <code class="language-plaintext highlighter-rouge">chrono</code>), UTC storage, explicit offsets in APIs.</li>
+</ul>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">pub</span> <span class="k">struct</span> <span class="nf">Port</span><span class="p">(</span><span class="nb">u16</span><span class="p">);</span> <span class="c1">// newtype</span>
+
+<span class="k">pub</span> <span class="k">trait</span> <span class="n">Repository</span> <span class="p">{</span>
+    <span class="k">fn</span> <span class="nf">get</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">id</span><span class="p">:</span> <span class="n">Id</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="n">Entity</span><span class="p">,</span> <span class="n">RepoError</span><span class="o">&gt;</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<hr />
+
+<h2 id="7-logging-tracing--metrics-must">7) Logging, Tracing &amp; Metrics (MUST)</h2>
+<ul>
+  <li>Use <code class="language-plaintext highlighter-rouge">tracing</code> and <code class="language-plaintext highlighter-rouge">tracing-subscriber</code> with structured fields.</li>
+  <li>Wrap request/job lifecycles in <code class="language-plaintext highlighter-rouge">#[tracing::instrument]</code> or explicit spans.</li>
+  <li>Do <strong>not</strong> log secrets or PII.</li>
+  <li>Add metrics (<code class="language-plaintext highlighter-rouge">metrics</code> crate or OpenTelemetry) for hot paths when applicable.</li>
+</ul>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="nd">#[tracing::instrument(skip(self),</span> <span class="nd">fields(user_id=</span><span class="err">%</span><span class="nd">uid))]</span>
+<span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">handle</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">uid</span><span class="p">:</span> <span class="n">UserId</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="nn">anyhow</span><span class="p">::</span><span class="nb">Result</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span> <span class="p">{</span>
+    <span class="nn">tracing</span><span class="p">::</span><span class="nd">info!</span><span class="p">(</span><span class="s">"handling request"</span><span class="p">);</span>
+    <span class="nf">Ok</span><span class="p">(())</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<hr />
+
+<h2 id="8-unsafe-performance--memory-must">8) Unsafe, Performance &amp; Memory (MUST)</h2>
+<ul>
+  <li><strong>Unsafe</strong> is disallowed by default. If needed: isolate in <code class="language-plaintext highlighter-rouge">unsafe_</code> module with proofs; add tests and fuzzing.</li>
+  <li>Prefer borrowing (<code class="language-plaintext highlighter-rouge">&amp;str</code>, <code class="language-plaintext highlighter-rouge">&amp;[T]</code>) over owning (<code class="language-plaintext highlighter-rouge">String</code>, <code class="language-plaintext highlighter-rouge">Vec&lt;T&gt;</code>).</li>
+  <li>Benchmark with <code class="language-plaintext highlighter-rouge">criterion</code> before micro-optimizing.</li>
+</ul>
+
+<hr />
+
+<h2 id="9-tests-must">9) Tests (MUST)</h2>
+<ul>
+  <li><strong>Unit tests</strong> near the code (<code class="language-plaintext highlighter-rouge">mod tests</code>).</li>
+  <li><strong>Integration tests</strong> in <code class="language-plaintext highlighter-rouge">tests/</code> using only public APIs.</li>
+  <li><strong>Property tests</strong> with <code class="language-plaintext highlighter-rouge">proptest</code> for core invariants.</li>
+  <li>Async tests use <code class="language-plaintext highlighter-rouge">#[tokio::test(flavor = "multi_thread", worker_threads = 2)]</code>.</li>
+  <li>Test data via helper builders; avoid hidden global state.</li>
+</ul>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="nd">#[cfg(test)]</span>
+<span class="k">mod</span> <span class="n">tests</span> <span class="p">{</span>
+    <span class="k">use</span> <span class="k">super</span><span class="p">::</span><span class="o">*</span><span class="p">;</span>
+    <span class="nd">#[test]</span>
+    <span class="k">fn</span> <span class="nf">parses_id</span><span class="p">()</span> <span class="p">{</span>
+        <span class="nd">assert!</span><span class="p">(</span><span class="nn">Id</span><span class="p">::</span><span class="nf">parse</span><span class="p">(</span><span class="s">"abc_123"</span><span class="p">)</span><span class="nf">.is_ok</span><span class="p">());</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<hr />
+
+<h2 id="10-dependencies-must">10) Dependencies (MUST)</h2>
+<ul>
+  <li>Prefer actively maintained crates. Avoid abandoned ones.</li>
+  <li>Avoid wildcard versions. Turn off unnecessary default features:
+    <div class="language-toml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">some-crate</span> <span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">version</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s">"1"</span><span class="p">,</span><span class="w"> </span><span class="n">default-features</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span><span class="w"> </span><span class="n">features</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span><span class="s">"x"</span><span class="p">]</span><span class="w"> </span><span class="p">}</span>
+</code></pre></div>    </div>
+  </li>
+  <li>Periodically run <code class="language-plaintext highlighter-rouge">cargo tree -d</code> and remove duplicates/conflicts.</li>
+</ul>
+
+<hr />
+
+<h2 id="11-documentation--examples-must">11) Documentation &amp; Examples (MUST)</h2>
+<ul>
+  <li>Crate-level <code class="language-plaintext highlighter-rouge">//!</code> explains purpose, invariants, and a minimal example.</li>
+  <li>Public items have <code class="language-plaintext highlighter-rouge">///</code> docs; include <code class="language-plaintext highlighter-rouge"># Examples</code> that compile (<code class="language-plaintext highlighter-rouge">doctest</code>).</li>
+  <li>Place runnable examples in <code class="language-plaintext highlighter-rouge">examples/</code>. Keep them building in CI.</li>
+  <li>Maintain a <code class="language-plaintext highlighter-rouge">CHANGELOG.md</code> (Keep a Changelog format).</li>
+</ul>
+
+<hr />
+
+<h2 id="12-service--cli-conventions-should">12) Service &amp; CLI Conventions (SHOULD)</h2>
+<ul>
+  <li><strong>CLI</strong>: use <code class="language-plaintext highlighter-rouge">clap</code> derive; support <code class="language-plaintext highlighter-rouge">--config</code>, <code class="language-plaintext highlighter-rouge">-v/-q</code> for verbosity; print helpful <code class="language-plaintext highlighter-rouge">--help</code>.</li>
+  <li><strong>Service</strong>: graceful shutdown, health/readiness endpoints, layered config (env + file + defaults).</li>
+</ul>
+
+<hr />
+
+<h2 id="13-code-review-checklist-llm-must-enforce">13) Code Review Checklist (LLM must enforce)</h2>
+<ol>
+  <li>Ownership &amp; borrowing correct; no unnecessary <code class="language-plaintext highlighter-rouge">clone()</code>.</li>
+  <li>No <code class="language-plaintext highlighter-rouge">unwrap/expect/panic</code> in library paths.</li>
+  <li>Errors are typed and add context at boundaries.</li>
+  <li><code class="language-plaintext highlighter-rouge">tracing</code> present at hot paths; no secret leakage.</li>
+  <li>Features minimal and orthogonal; no coupling.</li>
+  <li>Tests cover happy paths + edge cases; docs updated.</li>
+  <li>CI passes: fmt, clippy (deny warnings), tests, docs, audit, deny.</li>
+</ol>
+
+<hr />
+
+<h2 id="14-machine-readable-policy-yaml-for-cibots">14) Machine-Readable Policy (YAML for CI/bots)</h2>
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">rust_policy</span><span class="pi">:</span>
+  <span class="na">edition</span><span class="pi">:</span> <span class="s2">"</span><span class="s">2021"</span>
+  <span class="na">msrv</span><span class="pi">:</span> <span class="s2">"</span><span class="s">1.79.0"</span>
+  <span class="na">formatting</span><span class="pi">:</span>
+    <span class="na">rustfmt</span><span class="pi">:</span> <span class="s">required</span>
+  <span class="na">lints</span><span class="pi">:</span>
+    <span class="na">clippy</span><span class="pi">:</span>
+      <span class="na">deny_warnings</span><span class="pi">:</span> <span class="kc">true</span>
+      <span class="na">pedantic</span><span class="pi">:</span> <span class="kc">true</span>
+      <span class="na">nursery</span><span class="pi">:</span> <span class="kc">true</span>
+  <span class="na">docs</span><span class="pi">:</span>
+    <span class="na">require_public_item_docs</span><span class="pi">:</span> <span class="kc">true</span>
+  <span class="na">security</span><span class="pi">:</span>
+    <span class="na">cargo_audit</span><span class="pi">:</span> <span class="s">required</span>
+    <span class="na">cargo_deny</span><span class="pi">:</span> <span class="s">required</span>
+  <span class="na">libraries</span><span class="pi">:</span>
+    <span class="na">disallow_panic_in_public_api</span><span class="pi">:</span> <span class="kc">true</span>
+    <span class="na">typed_errors</span><span class="pi">:</span> <span class="kc">true</span>
+  <span class="na">async</span><span class="pi">:</span>
+    <span class="na">single_runtime</span><span class="pi">:</span> <span class="s">tokio</span>
+    <span class="na">forbid_blocking_in_async</span><span class="pi">:</span> <span class="kc">true</span>
+  <span class="na">logging</span><span class="pi">:</span>
+    <span class="na">tracing_required</span><span class="pi">:</span> <span class="kc">true</span>
+    <span class="na">forbid_secret_logging</span><span class="pi">:</span> <span class="kc">true</span>
+  <span class="na">testing</span><span class="pi">:</span>
+    <span class="na">unit</span><span class="pi">:</span> <span class="s">required</span>
+    <span class="na">integration</span><span class="pi">:</span> <span class="s">required</span>
+    <span class="na">property</span><span class="pi">:</span> <span class="s">recommended</span>
+  <span class="na">serialization</span><span class="pi">:</span>
+    <span class="na">serde_in_adapters_only</span><span class="pi">:</span> <span class="kc">true</span>
+</code></pre></div></div>
+<p>Bots should fail the PR if any rule is violated.</p>
+
+<hr />
+
+<h2 id="15-quick-command-cookbook-copypaste">15) Quick Command Cookbook (copy/paste)</h2>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># format &amp; lint</span>
+cargo <span class="nb">fmt</span> <span class="nt">--all</span>
+cargo clippy <span class="nt">--workspace</span> <span class="nt">--all-targets</span> <span class="nt">--all-features</span> <span class="nt">--</span> <span class="nt">-D</span> warnings
+
+<span class="c"># test &amp; doc</span>
+cargo <span class="nb">test</span> <span class="nt">--workspace</span> <span class="nt">--all-features</span>
+cargo doc <span class="nt">--no-deps</span> <span class="nt">--document-private-items</span>
+
+<span class="c"># security &amp; licensing</span>
+cargo audit
+cargo deny check
+
+<span class="c"># dependency hygiene</span>
+cargo update <span class="nt">-p</span> &lt;crate&gt; <span class="nt">--precise</span> &lt;version&gt;
+cargo tree <span class="nt">-d</span>
+</code></pre></div></div>
+
+<hr />
+
+<h2 id="16-defaults-when-unsure">16) Defaults (When Unsure)</h2>
+<ul>
+  <li>Prefer <strong>typed errors</strong> + <code class="language-plaintext highlighter-rouge">Result</code> over <code class="language-plaintext highlighter-rouge">Option</code> or panics.</li>
+  <li>Prefer <strong>borrowing</strong> over cloning; use <code class="language-plaintext highlighter-rouge">to_owned()</code> only with justification.</li>
+  <li>Prefer <strong>DTO adapters</strong> at IO boundaries; keep domain types pure.</li>
+  <li>Add <strong><code class="language-plaintext highlighter-rouge">tracing</code> instrumentation</strong> on public async entry points.</li>
+  <li>Write <strong>docs + tests</strong> for every new public function or type.</li>
+</ul>
+
+<hr />
+
+<h2 id="17-2024-edition-migration-optional-when-repo-opts-in">17) 2024 Edition Migration (Optional When Repo Opts In)</h2>
+<ul>
+  <li>Run <code class="language-plaintext highlighter-rouge">cargo fix --edition</code> first.</li>
+  <li>Recheck async trait bounds and <code class="language-plaintext highlighter-rouge">impl Trait</code> changes.</li>
+  <li>Keep MSRV policy aligned with edition bump; update <code class="language-plaintext highlighter-rouge">clippy.toml: msrv</code>.</li>
+</ul>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/orbit-rs/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Orbit-RS Documentation</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">TuringWorks</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

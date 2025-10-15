@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ProcessedEntity","ProcessedRelationship"],"struct":["DocumentGraphRequest","EntityDeduplicationConfig","GraphConstructionResult","KnowledgeGraphBuilder","KnowledgeGraphConfig","KnowledgeGraphStats"]};

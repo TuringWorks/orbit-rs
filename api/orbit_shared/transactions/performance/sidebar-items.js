@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["BatchConfig","BatchProcessor","BatchStats","BatchedOperation","ConnectionPool","ConnectionPoolConfig","PoolStats","PooledConnection","ResourceGuard","ResourceManager"],"type":["BatchProcessorFn"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["QueryResult","Statement"],"struct":["ActorRecord","Condition","QueryEngine","SimpleColumnDef","WhereClause"]};

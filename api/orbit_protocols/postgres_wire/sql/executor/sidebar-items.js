@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ExecutionResult","ObjectType","PrivilegeType"],"struct":["ColumnSchema","ExtensionDefinition","IndexSchema","JoinExecutionContext","Permission","SavepointData","SchemaDefinition","SqlExecutor","TableConstraintSchema","TableSchema","TransactionLogEntry","TransactionState","UserRole","ViewSchema"],"type":["TableData"]};

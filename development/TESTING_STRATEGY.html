@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Orbit-RS Testing Strategy | Orbit-RS Documentation</title>
+<meta name="generator" content="Jekyll v4.4.1" />
+<meta property="og:title" content="Orbit-RS Testing Strategy" />
+<meta name="author" content="TuringWorks" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<meta property="og:description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<link rel="canonical" href="https://turingworks.github.io/orbit-rs/development/TESTING_STRATEGY.html" />
+<meta property="og:url" content="https://turingworks.github.io/orbit-rs/development/TESTING_STRATEGY.html" />
+<meta property="og:site_name" content="Orbit-RS Documentation" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Orbit-RS Testing Strategy" />
+<meta name="twitter:site" content="@TuringWorksAI" />
+<meta name="twitter:creator" content="@TuringWorks" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","author":{"@type":"Person","name":"TuringWorks"},"description":"The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform","headline":"Orbit-RS Testing Strategy","url":"https://turingworks.github.io/orbit-rs/development/TESTING_STRATEGY.html"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/orbit-rs/assets/main.css">
+  <link rel="stylesheet" href="/orbit-rs/assets/css/custom.css"><link type="application/atom+xml" rel="alternate" href="https://turingworks.github.io/orbit-rs/feed.xml" title="Orbit-RS Documentation" /></head><body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/orbit-rs/">Orbit-RS Documentation</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/orbit-rs/">Orbit-RS Documentation</a><a class="page-link" href="/orbit-rs/project_overview.html">Orbit-RS: Comprehensive Project Overview</a><a class="page-link" href="/orbit-rs/quick_start.html">Quick Start Guide - Multi-Protocol Database Server</a><a class="page-link" href="/orbit-rs/roadmap/">Development Roadmap</a><a class="page-link" href="/orbit-rs/features/">Orbit-RS Feature Index</a><a class="page-link" href="/orbit-rs/compute-acceleration/">Hardware Acceleration Guide</a><a class="page-link" href="/orbit-rs/contributing.html">Contributing Guide</a><a class="page-link" href="/orbit-rs/overview.html">Architecture Overview</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <h1 id="orbit-rs-testing-strategy">Orbit-RS Testing Strategy</h1>
+
+<p>This document outlines the comprehensive testing strategy for Orbit-RS, including Test-Driven Development (TDD), Behavior-Driven Development (BDD), and feature-gated testing approach.</p>
+
+<h2 id="-overview">📋 Overview</h2>
+
+<p>Orbit-RS uses a multi-layered testing strategy that ensures quality while allowing development across multiple phases:</p>
+
+<ol>
+  <li><strong>Feature-Gated Tests</strong>: Tests are enabled only when implementations are ready</li>
+  <li><strong>Mock-First Development</strong>: Comprehensive mock tests available from day one</li>
+  <li><strong>TDD Approach</strong>: Unit tests drive implementation design</li>
+  <li><strong>BDD Integration</strong>: Cucumber tests for user-facing behavior</li>
+  <li><strong>Property-Based Testing</strong>: Automated edge case discovery</li>
+  <li><strong>Performance Testing</strong>: Benchmarks and load testing</li>
+</ol>
+
+<h2 id="️-test-architecture">🏗️ Test Architecture</h2>
+
+<h3 id="feature-flags-system">Feature Flags System</h3>
+
+<p>Tests are organized using Cargo feature flags that align with development phases:</p>
+
+<div class="language-toml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">[</span><span class="n">features</span><span class="k">]</span>
+
+<span class="c"># Phase-specific feature flags</span>
+<span class="n">phase-13-features</span> <span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s">"neo4j-features"</span><span class="p">]</span>
+<span class="n">phase-15-features</span> <span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s">"arangodb-features"</span><span class="p">]</span>  
+<span class="n">phase-16-features</span> <span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s">"graphml-features"</span><span class="p">,</span> <span class="s">"graphrag-features"</span><span class="p">]</span>
+
+<span class="c"># Technology-specific feature flags</span>
+<span class="n">neo4j-features</span> <span class="o">=</span><span class="w"> </span><span class="p">[]</span>
+<span class="n">arangodb-features</span> <span class="o">=</span><span class="w"> </span><span class="p">[]</span>
+<span class="n">graphml-features</span> <span class="o">=</span><span class="w"> </span><span class="p">[]</span>
+<span class="n">graphrag-features</span> <span class="o">=</span><span class="w"> </span><span class="p">[]</span>
+</code></pre></div></div>
+
+<h3 id="test-categories">Test Categories</h3>
+
+<h4 id="1-mock-tests-always-available">1. Mock Tests (Always Available)</h4>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Run all mock tests</span>
+./scripts/run-tests.sh mock
+
+<span class="c"># Run specific mock tests</span>
+cargo <span class="nb">test</span> <span class="nt">--features</span> <span class="s2">"neo4j-features"</span> <span class="nt">--lib</span> neo4j::
+cargo <span class="nb">test</span> <span class="nt">--features</span> <span class="s2">"graphml-features"</span> <span class="nt">--lib</span> graphml::
+</code></pre></div></div>
+
+<p><strong>Purpose</strong>:</p>
+<ul>
+  <li>Validate API design and contracts</li>
+  <li>Enable TDD before implementation exists</li>
+  <li>Serve as executable documentation</li>
+  <li>Provide immediate feedback during development</li>
+</ul>
+
+<h4 id="2-unit-tests-implementation-gated">2. Unit Tests (Implementation-Gated)</h4>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Run when implementation is ready</span>
+cargo <span class="nb">test</span> <span class="nt">--features</span> <span class="s2">"neo4j-features"</span> <span class="nt">--test</span> neo4j_integration
+</code></pre></div></div>
+
+<p><strong>Purpose</strong>:</p>
+<ul>
+  <li>Test individual components in isolation</li>
+  <li>Validate business logic correctness</li>
+  <li>Ensure error handling robustness</li>
+  <li>Drive implementation through failing tests</li>
+</ul>
+
+<h4 id="3-bddcucumber-tests-user-focused">3. BDD/Cucumber Tests (User-Focused)</h4>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Run BDD feature tests</span>
+./scripts/run-tests.sh bdd
+</code></pre></div></div>
+
+<p><strong>Purpose</strong>:</p>
+<ul>
+  <li>Validate user-facing behavior</li>
+  <li>Ensure feature completeness</li>
+  <li>Bridge communication between stakeholders</li>
+  <li>Regression testing for user workflows</li>
+</ul>
+
+<h4 id="4-property-based-tests-edge-case-discovery">4. Property-Based Tests (Edge Case Discovery)</h4>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Run property-based tests</span>
+./scripts/run-tests.sh property
+</code></pre></div></div>
+
+<p><strong>Purpose</strong>:</p>
+<ul>
+  <li>Automatically discover edge cases</li>
+  <li>Validate invariants and properties</li>
+  <li>Test with large input ranges</li>
+  <li>Catch subtle bugs missed by example-based tests</li>
+</ul>
+
+<h4 id="5-performance-tests-benchmark-validation">5. Performance Tests (Benchmark Validation)</h4>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Run performance benchmarks</span>
+./scripts/run-tests.sh performance
+</code></pre></div></div>
+
+<p><strong>Purpose</strong>:</p>
+<ul>
+  <li>Validate performance requirements</li>
+  <li>Detect performance regressions</li>
+  <li>Compare algorithm implementations</li>
+  <li>Ensure scalability targets are met</li>
+</ul>
+
+<h2 id="-test-organization">📂 Test Organization</h2>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>tests/
+├── Cargo.toml                    # Feature flags and dependencies
+├── features/                     # BDD feature files
+│   ├── neo4j_cypher.feature     # Neo4j Cypher language tests
+│   ├── arangodb_aql.feature     # ArangoDB AQL tests
+│   └── graphml.feature          # GraphML functionality tests
+├── neo4j/                       # Neo4j-specific tests
+│   ├── mod.rs                   # Module declaration with feature flags
+│   ├── graph_actors_tests.rs    # Graph actor unit tests
+│   ├── cypher_parser_tests.rs   # Cypher parser BDD tests
+│   ├── bolt_protocol_tests.rs   # Bolt protocol tests
+│   └── integration_tests.rs     # End-to-end integration tests
+├── arangodb/                    # ArangoDB-specific tests
+│   ├── mod.rs                   # Feature-gated module
+│   ├── multi_model_tests.rs     # Multi-model functionality
+│   ├── aql_parser_tests.rs      # AQL parser tests
+│   └── integration_tests.rs     # Full ArangoDB integration
+├── graphml/                     # GraphML and AI tests
+│   ├── mod.rs                   # GraphML test module
+│   ├── node_embeddings_tests.rs # Node embedding algorithms
+│   ├── gnn_tests.rs             # Graph neural networks
+│   └── integration_tests.rs     # ML pipeline integration
+├── graphrag/                    # GraphRAG tests
+│   ├── mod.rs                   # GraphRAG test module
+│   ├── knowledge_graph_tests.rs # Knowledge graph construction
+│   ├── reasoning_tests.rs       # Multi-hop reasoning
+│   └── integration_tests.rs     # End-to-end RAG pipeline
+└── scripts/
+    └── run-tests.sh             # Test runner script
+</code></pre></div></div>
+
+<h2 id="-mock-implementation-strategy">🔧 Mock Implementation Strategy</h2>
+
+<h3 id="neo4j-graph-actors-example">Neo4j Graph Actors Example</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// tests/neo4j/graph_actors_tests.rs</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">MockGraphNodeActor</span><span class="p">;</span>
+
+<span class="nd">#[async_trait::async_trait]</span>
+<span class="k">impl</span> <span class="n">GraphNodeActor</span> <span class="k">for</span> <span class="n">MockGraphNodeActor</span> <span class="p">{</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">create_node</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">labels</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="nb">String</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">properties</span><span class="p">:</span> <span class="n">HashMap</span><span class="o">&lt;</span><span class="nb">String</span><span class="p">,</span> <span class="n">Value</span><span class="o">&gt;</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">NodeId</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="c1">// Mock implementation that validates input and returns expected output</span>
+        <span class="nf">Ok</span><span class="p">(</span><span class="nf">NodeId</span><span class="p">(</span><span class="s">"test-node-1"</span><span class="nf">.to_string</span><span class="p">()))</span>
+    <span class="p">}</span>
+    
+    <span class="c1">// ... other methods</span>
+<span class="p">}</span>
+
+<span class="nd">#[cfg(test)]</span>
+<span class="k">mod</span> <span class="n">tests</span> <span class="p">{</span>
+    <span class="nd">#[tokio::test]</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">test_create_node_success</span><span class="p">()</span> <span class="p">{</span>
+        <span class="c1">// Given</span>
+        <span class="k">let</span> <span class="n">actor</span> <span class="o">=</span> <span class="n">MockGraphNodeActor</span><span class="p">;</span>
+        <span class="k">let</span> <span class="n">labels</span> <span class="o">=</span> <span class="nd">vec!</span><span class="p">[</span><span class="s">"Person"</span><span class="nf">.to_string</span><span class="p">()];</span>
+        <span class="k">let</span> <span class="n">properties</span> <span class="o">=</span> <span class="nn">HashMap</span><span class="p">::</span><span class="nf">new</span><span class="p">();</span>
+        
+        <span class="c1">// When</span>
+        <span class="k">let</span> <span class="n">result</span> <span class="o">=</span> <span class="n">actor</span><span class="nf">.create_node</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="n">properties</span><span class="p">)</span><span class="k">.await</span><span class="p">;</span>
+        
+        <span class="c1">// Then</span>
+        <span class="nd">assert!</span><span class="p">(</span><span class="n">result</span><span class="nf">.is_ok</span><span class="p">());</span>
+        <span class="c1">// Validate expected behavior</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="benefits-of-mock-first-approach">Benefits of Mock-First Approach</h3>
+
+<ol>
+  <li><strong>Early API Validation</strong>: Discover API design issues before implementation</li>
+  <li><strong>Parallel Development</strong>: Frontend/integration can proceed while backend develops</li>
+  <li><strong>Documentation</strong>: Tests serve as executable examples</li>
+  <li><strong>Regression Prevention</strong>: Catch breaking changes in contracts</li>
+</ol>
+
+<h2 id="-bdd-implementation-with-cucumber">🥒 BDD Implementation with Cucumber</h2>
+
+<h3 id="feature-file-example">Feature File Example</h3>
+
+<div class="language-gherkin highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># tests/features/neo4j_cypher.feature</span>
+<span class="kd">Feature</span><span class="p">:</span> Neo4j Cypher Query Language Support
+  As a graph database user
+  I want to execute Cypher queries against Orbit-RS
+  So that I can manage graph data using familiar Neo4j syntax
+
+  <span class="kn">Scenario</span><span class="p">:</span> Creating a node with properties
+    <span class="err">When I execute the Cypher query "CREATE (n</span><span class="p">:</span><span class="err">Person {name</span><span class="p">:</span> <span class="err">'Alice', age</span><span class="p">:</span> <span class="err">30})</span> <span class="err">RETURN</span> <span class="err">n"</span>
+    <span class="nf">Then </span>the query should succeed
+    <span class="nf">And </span>the result should contain 1 row
+    <span class="nf">And </span>the result should have columns <span class="s">"n"</span>
+</code></pre></div></div>
+
+<h3 id="step-implementation">Step Implementation</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="nd">#[given(</span><span class="s">"an empty graph database"</span><span class="nd">)]</span>
+<span class="k">fn</span> <span class="nf">empty_graph_database</span><span class="p">(</span><span class="n">world</span><span class="p">:</span> <span class="o">&amp;</span><span class="k">mut</span> <span class="n">CypherWorld</span><span class="p">)</span> <span class="p">{</span>
+    <span class="n">world</span><span class="py">.engine</span> <span class="o">=</span> <span class="nn">MockCypherEngine</span><span class="p">::</span><span class="nf">new</span><span class="p">();</span>
+<span class="p">}</span>
+
+<span class="nd">#[when(regex</span> <span class="nd">=</span> <span class="s">r"^I execute the Cypher query \"</span><span class="nd">(</span><span class="err">.+</span><span class="nd">)</span><span class="err">\</span><span class="s">"$"</span><span class="nd">)]</span>
+<span class="k">async</span> <span class="k">fn</span> <span class="nf">execute_cypher_query</span><span class="p">(</span><span class="n">world</span><span class="p">:</span> <span class="o">&amp;</span><span class="k">mut</span> <span class="n">CypherWorld</span><span class="p">,</span> <span class="n">query</span><span class="p">:</span> <span class="nb">String</span><span class="p">)</span> <span class="p">{</span>
+    <span class="k">let</span> <span class="n">cypher_query</span> <span class="o">=</span> <span class="n">CypherQuery</span> <span class="p">{</span>
+        <span class="n">query</span><span class="p">:</span> <span class="n">query</span><span class="nf">.clone</span><span class="p">(),</span>
+        <span class="n">parameters</span><span class="p">:</span> <span class="nn">HashMap</span><span class="p">::</span><span class="nf">new</span><span class="p">(),</span>
+    <span class="p">};</span>
+    
+    <span class="k">match</span> <span class="n">world</span><span class="py">.engine</span><span class="nf">.execute</span><span class="p">(</span><span class="n">cypher_query</span><span class="p">)</span><span class="k">.await</span> <span class="p">{</span>
+        <span class="nf">Ok</span><span class="p">(</span><span class="n">result</span><span class="p">)</span> <span class="k">=&gt;</span> <span class="n">world</span><span class="py">.last_result</span> <span class="o">=</span> <span class="nf">Some</span><span class="p">(</span><span class="n">result</span><span class="p">),</span>
+        <span class="nf">Err</span><span class="p">(</span><span class="n">error</span><span class="p">)</span> <span class="k">=&gt;</span> <span class="n">world</span><span class="py">.last_error</span> <span class="o">=</span> <span class="nf">Some</span><span class="p">(</span><span class="n">error</span><span class="p">),</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+
+<span class="nd">#[then(</span><span class="s">"the query should succeed"</span><span class="nd">)]</span>
+<span class="k">fn</span> <span class="nf">query_should_succeed</span><span class="p">(</span><span class="n">world</span><span class="p">:</span> <span class="o">&amp;</span><span class="k">mut</span> <span class="n">CypherWorld</span><span class="p">)</span> <span class="p">{</span>
+    <span class="nd">assert!</span><span class="p">(</span><span class="n">world</span><span class="py">.last_error</span><span class="nf">.is_none</span><span class="p">());</span>
+    <span class="nd">assert!</span><span class="p">(</span><span class="n">world</span><span class="py">.last_result</span><span class="nf">.is_some</span><span class="p">());</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h2 id="-property-based-testing">🎲 Property-Based Testing</h2>
+
+<h3 id="example-node-embedding-properties">Example: Node Embedding Properties</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="nd">#[cfg(feature</span> <span class="nd">=</span> <span class="s">"property-tests"</span><span class="nd">)]</span>
+<span class="k">mod</span> <span class="n">property_tests</span> <span class="p">{</span>
+    <span class="k">use</span> <span class="nn">proptest</span><span class="p">::</span><span class="nn">prelude</span><span class="p">::</span><span class="o">*</span><span class="p">;</span>
+    
+    <span class="nd">proptest!</span> <span class="p">{</span>
+        <span class="nd">#[test]</span>
+        <span class="k">fn</span> <span class="nf">test_cosine_similarity_properties</span><span class="p">(</span>
+            <span class="n">vec_a</span> <span class="k">in</span> <span class="nn">prop</span><span class="p">::</span><span class="nn">collection</span><span class="p">::</span><span class="nf">vec</span><span class="p">(</span><span class="o">-</span><span class="mf">1.0f64</span><span class="o">..</span><span class="mf">1.0</span><span class="p">,</span> <span class="mi">10</span><span class="o">..</span><span class="mi">100</span><span class="p">),</span>
+            <span class="n">vec_b</span> <span class="k">in</span> <span class="nn">prop</span><span class="p">::</span><span class="nn">collection</span><span class="p">::</span><span class="nf">vec</span><span class="p">(</span><span class="o">-</span><span class="mf">1.0f64</span><span class="o">..</span><span class="mf">1.0</span><span class="p">,</span> <span class="mi">10</span><span class="o">..</span><span class="mi">100</span><span class="p">)</span>
+        <span class="p">)</span> <span class="p">{</span>
+            <span class="k">if</span> <span class="n">vec_a</span><span class="nf">.len</span><span class="p">()</span> <span class="o">==</span> <span class="n">vec_b</span><span class="nf">.len</span><span class="p">()</span> <span class="p">{</span>
+                <span class="k">let</span> <span class="n">similarity</span> <span class="o">=</span> <span class="nf">cosine_similarity</span><span class="p">(</span><span class="o">&amp;</span><span class="n">vec_a</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">vec_b</span><span class="p">);</span>
+                
+                <span class="c1">// Properties that should always hold</span>
+                <span class="nd">prop_assert!</span><span class="p">(</span><span class="n">similarity</span> <span class="o">&gt;=</span> <span class="o">-</span><span class="mf">1.0</span> <span class="o">&amp;&amp;</span> <span class="n">similarity</span> <span class="o">&lt;=</span> <span class="mf">1.0</span><span class="p">);</span>
+                
+                <span class="c1">// Self-similarity should be 1 for non-zero vectors</span>
+                <span class="k">let</span> <span class="n">norm</span> <span class="o">=</span> <span class="n">vec_a</span><span class="nf">.iter</span><span class="p">()</span><span class="nf">.map</span><span class="p">(|</span><span class="n">x</span><span class="p">|</span> <span class="n">x</span> <span class="o">*</span> <span class="n">x</span><span class="p">)</span><span class="py">.sum</span><span class="p">::</span><span class="o">&lt;</span><span class="nb">f64</span><span class="o">&gt;</span><span class="p">()</span><span class="nf">.sqrt</span><span class="p">();</span>
+                <span class="k">if</span> <span class="n">norm</span> <span class="o">&gt;</span> <span class="mf">1e-10</span> <span class="p">{</span>
+                    <span class="k">let</span> <span class="n">self_sim</span> <span class="o">=</span> <span class="nf">cosine_similarity</span><span class="p">(</span><span class="o">&amp;</span><span class="n">vec_a</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">vec_a</span><span class="p">);</span>
+                    <span class="nd">prop_assert!</span><span class="p">((</span><span class="n">self_sim</span> <span class="o">-</span> <span class="mf">1.0</span><span class="p">)</span><span class="nf">.abs</span><span class="p">()</span> <span class="o">&lt;</span> <span class="mf">1e-10</span><span class="p">);</span>
+                <span class="p">}</span>
+            <span class="p">}</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h2 id="-performance-testing">📊 Performance Testing</h2>
+
+<h3 id="benchmark-structure">Benchmark Structure</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="nd">#[cfg(feature</span> <span class="nd">=</span> <span class="s">"performance-tests"</span><span class="nd">)]</span>
+<span class="k">mod</span> <span class="n">performance_tests</span> <span class="p">{</span>
+    <span class="k">use</span> <span class="nn">std</span><span class="p">::</span><span class="nn">time</span><span class="p">::</span><span class="n">Instant</span><span class="p">;</span>
+    
+    <span class="nd">#[tokio::test]</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">benchmark_node2vec_training</span><span class="p">()</span> <span class="p">{</span>
+        <span class="k">let</span> <span class="n">actor</span> <span class="o">=</span> <span class="n">MockGraphMLActor</span><span class="p">;</span>
+        <span class="k">let</span> <span class="n">graph</span> <span class="o">=</span> <span class="nf">GraphHandle</span><span class="p">(</span><span class="s">"large-graph"</span><span class="nf">.to_string</span><span class="p">());</span>
+        <span class="k">let</span> <span class="n">params</span> <span class="o">=</span> <span class="nn">Node2VecParams</span><span class="p">::</span><span class="nf">default</span><span class="p">();</span>
+        
+        <span class="k">let</span> <span class="n">start</span> <span class="o">=</span> <span class="nn">Instant</span><span class="p">::</span><span class="nf">now</span><span class="p">();</span>
+        <span class="k">let</span> <span class="n">model</span> <span class="o">=</span> <span class="n">actor</span><span class="nf">.train_node2vec</span><span class="p">(</span><span class="n">graph</span><span class="p">,</span> <span class="n">params</span><span class="p">)</span><span class="k">.await</span><span class="nf">.unwrap</span><span class="p">();</span>
+        <span class="k">let</span> <span class="n">duration</span> <span class="o">=</span> <span class="n">start</span><span class="nf">.elapsed</span><span class="p">();</span>
+        
+        <span class="c1">// Performance assertions</span>
+        <span class="nd">assert!</span><span class="p">(</span><span class="n">duration</span><span class="nf">.as_secs</span><span class="p">()</span> <span class="o">&lt;</span> <span class="mi">60</span><span class="p">,</span> <span class="s">"Training took too long: {:?}"</span><span class="p">,</span> <span class="n">duration</span><span class="p">);</span>
+        <span class="nd">assert!</span><span class="p">(</span><span class="n">model</span><span class="py">.embeddings</span><span class="nf">.len</span><span class="p">()</span> <span class="o">&gt;=</span> <span class="mi">1000</span><span class="p">,</span> <span class="s">"Too few embeddings generated"</span><span class="p">);</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h2 id="-test-execution-strategy">🚀 Test Execution Strategy</h2>
+
+<h3 id="development-workflow">Development Workflow</h3>
+
+<ol>
+  <li><strong>Write Mock Tests First</strong>: Define expected behavior</li>
+  <li><strong>Implement BDD Scenarios</strong>: Capture user requirements</li>
+  <li><strong>Add Property Tests</strong>: Define invariants</li>
+  <li><strong>Develop Implementation</strong>: Make tests pass</li>
+  <li><strong>Enable Integration Tests</strong>: Full end-to-end validation</li>
+  <li><strong>Performance Validation</strong>: Ensure performance targets</li>
+</ol>
+
+<h3 id="continuous-integration">Continuous Integration</h3>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c1"># .github/workflows/tests.yml</span>
+<span class="na">name</span><span class="pi">:</span> <span class="s">Comprehensive Testing</span>
+
+<span class="na">on</span><span class="pi">:</span> <span class="pi">[</span><span class="nv">push</span><span class="pi">,</span> <span class="nv">pull_request</span><span class="pi">]</span>
+
+<span class="na">jobs</span><span class="pi">:</span>
+  <span class="na">mock-tests</span><span class="pi">:</span>
+    <span class="na">runs-on</span><span class="pi">:</span> <span class="s">ubuntu-latest</span>
+    <span class="na">steps</span><span class="pi">:</span>
+      <span class="pi">-</span> <span class="na">uses</span><span class="pi">:</span> <span class="s">actions/checkout@v3</span>
+      <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">Run Mock Tests</span>
+        <span class="na">run</span><span class="pi">:</span> <span class="s">./scripts/run-tests.sh mock</span>
+  
+  <span class="na">phase-tests</span><span class="pi">:</span>
+    <span class="na">runs-on</span><span class="pi">:</span> <span class="s">ubuntu-latest</span>
+    <span class="na">strategy</span><span class="pi">:</span>
+      <span class="na">matrix</span><span class="pi">:</span>
+        <span class="na">phase</span><span class="pi">:</span> <span class="pi">[</span><span class="nv">phase-9</span><span class="pi">,</span> <span class="nv">phase-10</span><span class="pi">,</span> <span class="nv">phase-13</span><span class="pi">,</span> <span class="nv">phase-15</span><span class="pi">,</span> <span class="nv">phase-16</span><span class="pi">]</span>
+    <span class="na">steps</span><span class="pi">:</span>
+      <span class="pi">-</span> <span class="na">uses</span><span class="pi">:</span> <span class="s">actions/checkout@v3</span>
+      <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">Run Phase Tests</span>
+        <span class="na">run</span><span class="pi">:</span> <span class="s">./scripts/run-tests.sh $</span>
+  
+  <span class="na">property-tests</span><span class="pi">:</span>
+    <span class="na">runs-on</span><span class="pi">:</span> <span class="s">ubuntu-latest</span>
+    <span class="na">steps</span><span class="pi">:</span>
+      <span class="pi">-</span> <span class="na">uses</span><span class="pi">:</span> <span class="s">actions/checkout@v3</span>
+      <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">Run Property Tests</span>
+        <span class="na">run</span><span class="pi">:</span> <span class="s">./scripts/run-tests.sh property</span>
+</code></pre></div></div>
+
+<h2 id="-implementation-readiness-gates">📋 Implementation Readiness Gates</h2>
+
+<p>Tests are automatically enabled based on implementation readiness:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Check if Neo4j implementation exists</span>
+<span class="k">if</span> <span class="o">[</span> <span class="nt">-f</span> <span class="s2">"orbit-protocols/src/neo4j/mod.rs"</span> <span class="o">]</span><span class="p">;</span> <span class="k">then</span>
+    <span class="c"># Run full Neo4j test suite</span>
+    cargo <span class="nb">test</span> <span class="nt">--features</span> <span class="s2">"neo4j-features"</span> neo4j_integration
+<span class="k">else</span>
+    <span class="c"># Run only mock tests</span>
+    cargo <span class="nb">test</span> <span class="nt">--features</span> <span class="s2">"neo4j-features"</span> <span class="nt">--lib</span> neo4j::
+<span class="k">fi</span>
+</code></pre></div></div>
+
+<h3 id="implementation-detection">Implementation Detection</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>Feature</th>
+      <th>Implementation File</th>
+      <th>Test Suite</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Neo4j</strong></td>
+      <td><code class="language-plaintext highlighter-rouge">orbit-protocols/src/neo4j/mod.rs</code></td>
+      <td>Neo4j integration tests</td>
+    </tr>
+    <tr>
+      <td><strong>ArangoDB</strong></td>
+      <td><code class="language-plaintext highlighter-rouge">orbit-protocols/src/arangodb/mod.rs</code></td>
+      <td>ArangoDB integration tests</td>
+    </tr>
+    <tr>
+      <td><strong>GraphML</strong></td>
+      <td><code class="language-plaintext highlighter-rouge">orbit-protocols/src/graphml/mod.rs</code></td>
+      <td>GraphML integration tests</td>
+    </tr>
+    <tr>
+      <td><strong>GraphRAG</strong></td>
+      <td><code class="language-plaintext highlighter-rouge">orbit-protocols/src/graphrag/mod.rs</code></td>
+      <td>GraphRAG integration tests</td>
+    </tr>
+    <tr>
+      <td><strong>TimeSeries</strong></td>
+      <td><code class="language-plaintext highlighter-rouge">orbit-protocols/src/timeseries/mod.rs</code></td>
+      <td>TimeSeries integration tests</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="-test-quality-metrics">🔍 Test Quality Metrics</h2>
+
+<h3 id="coverage-targets">Coverage Targets</h3>
+
+<ul>
+  <li><strong>Unit Tests</strong>: 95% line coverage</li>
+  <li><strong>Integration Tests</strong>: 90% feature coverage</li>
+  <li><strong>BDD Tests</strong>: 100% user story coverage</li>
+  <li><strong>Property Tests</strong>: Key invariants covered</li>
+  <li><strong>Performance Tests</strong>: All performance requirements validated</li>
+</ul>
+
+<h3 id="quality-gates">Quality Gates</h3>
+
+<ol>
+  <li><strong>All Mock Tests Pass</strong>: Before any implementation</li>
+  <li><strong>BDD Scenarios Pass</strong>: Before feature completion</li>
+  <li><strong>Property Tests Pass</strong>: Before release</li>
+  <li><strong>Performance Tests Pass</strong>: Before deployment</li>
+  <li><strong>Integration Tests Pass</strong>: Before production</li>
+</ol>
+
+<h2 id="-test-documentation-standards">📖 Test Documentation Standards</h2>
+
+<h3 id="test-naming-convention">Test Naming Convention</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="nd">#[tokio::test]</span>
+<span class="k">async</span> <span class="k">fn</span> <span class="nf">test_create_node_with_valid_properties_should_succeed</span><span class="p">()</span> <span class="p">{</span>
+    <span class="c1">// Test name describes: action + condition + expected_outcome</span>
+<span class="p">}</span>
+
+<span class="nd">#[tokio::test]</span>  
+<span class="k">async</span> <span class="k">fn</span> <span class="nf">test_create_node_with_invalid_properties_should_fail</span><span class="p">()</span> <span class="p">{</span>
+    <span class="c1">// Clear, descriptive test names</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="test-structure-given-when-then">Test Structure (Given-When-Then)</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="nd">#[tokio::test]</span>
+<span class="k">async</span> <span class="k">fn</span> <span class="nf">test_example</span><span class="p">()</span> <span class="p">{</span>
+    <span class="c1">// Given - Setup test data and conditions</span>
+    <span class="k">let</span> <span class="n">actor</span> <span class="o">=</span> <span class="n">MockGraphNodeActor</span><span class="p">;</span>
+    <span class="k">let</span> <span class="n">valid_properties</span> <span class="o">=</span> <span class="nn">HashMap</span><span class="p">::</span><span class="nf">new</span><span class="p">();</span>
+    
+    <span class="c1">// When - Execute the operation under test</span>
+    <span class="k">let</span> <span class="n">result</span> <span class="o">=</span> <span class="n">actor</span><span class="nf">.create_node</span><span class="p">(</span><span class="nd">vec!</span><span class="p">[</span><span class="s">"Person"</span><span class="nf">.to_string</span><span class="p">()],</span> <span class="n">valid_properties</span><span class="p">)</span><span class="k">.await</span><span class="p">;</span>
+    
+    <span class="c1">// Then - Assert expected outcomes</span>
+    <span class="nd">assert!</span><span class="p">(</span><span class="n">result</span><span class="nf">.is_ok</span><span class="p">());</span>
+    <span class="k">let</span> <span class="n">node_id</span> <span class="o">=</span> <span class="n">result</span><span class="nf">.unwrap</span><span class="p">();</span>
+    <span class="nd">assert!</span><span class="p">(</span><span class="o">!</span><span class="n">node_id</span><span class="na">.0</span><span class="nf">.is_empty</span><span class="p">());</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>This comprehensive testing strategy ensures high-quality implementation while enabling parallel development across multiple phases and features. The feature-gated approach allows tests to be written and validated before implementations exist, driving better API design and catching issues early in the development process.</p>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/orbit-rs/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Orbit-RS Documentation</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">TuringWorks</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

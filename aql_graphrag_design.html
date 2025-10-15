@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>AQL GraphRAG Function Design | Orbit-RS Documentation</title>
+<meta name="generator" content="Jekyll v4.4.1" />
+<meta property="og:title" content="AQL GraphRAG Function Design" />
+<meta name="author" content="TuringWorks" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<meta property="og:description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<link rel="canonical" href="https://turingworks.github.io/orbit-rs/aql_graphrag_design.html" />
+<meta property="og:url" content="https://turingworks.github.io/orbit-rs/aql_graphrag_design.html" />
+<meta property="og:site_name" content="Orbit-RS Documentation" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="AQL GraphRAG Function Design" />
+<meta name="twitter:site" content="@TuringWorksAI" />
+<meta name="twitter:creator" content="@TuringWorks" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","author":{"@type":"Person","name":"TuringWorks"},"description":"The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform","headline":"AQL GraphRAG Function Design","url":"https://turingworks.github.io/orbit-rs/aql_graphrag_design.html"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/orbit-rs/assets/main.css">
+  <link rel="stylesheet" href="/orbit-rs/assets/css/custom.css"><link type="application/atom+xml" rel="alternate" href="https://turingworks.github.io/orbit-rs/feed.xml" title="Orbit-RS Documentation" /></head><body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/orbit-rs/">Orbit-RS Documentation</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/orbit-rs/">Orbit-RS Documentation</a><a class="page-link" href="/orbit-rs/project_overview.html">Orbit-RS: Comprehensive Project Overview</a><a class="page-link" href="/orbit-rs/quick_start.html">Quick Start Guide - Multi-Protocol Database Server</a><a class="page-link" href="/orbit-rs/roadmap/">Development Roadmap</a><a class="page-link" href="/orbit-rs/features/">Orbit-RS Feature Index</a><a class="page-link" href="/orbit-rs/compute-acceleration/">Hardware Acceleration Guide</a><a class="page-link" href="/orbit-rs/contributing.html">Contributing Guide</a><a class="page-link" href="/orbit-rs/overview.html">Architecture Overview</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <h1 id="aql-graphrag-function-design">AQL GraphRAG Function Design</h1>
+
+<h2 id="overview">Overview</h2>
+
+<p>This document defines the AQL (ArangoDB Query Language) GraphRAG functions that integrate with Orbit’s GraphRAG capabilities. These functions follow AQL conventions and provide natural integration with ArangoDB-style queries.</p>
+
+<h2 id="function-categories">Function Categories</h2>
+
+<h3 id="1-document-processing-functions">1. Document Processing Functions</h3>
+
+<h4 id="graphrag_build_knowledgecollection-options">GRAPHRAG_BUILD_KNOWLEDGE(collection, options)</h4>
+<p>Builds knowledge graphs from documents in a collection.</p>
+
+<pre><code class="language-aql">// Build knowledge graph from all documents in papers collection
+FOR result IN GRAPHRAG_BUILD_KNOWLEDGE("research_papers", {
+    "knowledge_graph": "scientific_knowledge",
+    "extractors": ["entity_extraction", "relationship_extraction"],
+    "build_graph": true,
+    "generate_embeddings": true
+})
+RETURN result
+
+// Build with metadata filtering
+FOR doc IN research_papers
+    FILTER doc.year &gt;= 2020
+    FOR result IN GRAPHRAG_BUILD_KNOWLEDGE(doc, {
+        "knowledge_graph": "recent_research", 
+        "document_id": doc._key,
+        "metadata": {"year": doc.year, "journal": doc.journal}
+    })
+    RETURN result
+</code></pre>
+
+<h4 id="graphrag_extract_entitiestext-options">GRAPHRAG_EXTRACT_ENTITIES(text, options)</h4>
+<p>Extracts entities from text without building full knowledge graph.</p>
+
+<pre><code class="language-aql">// Extract entities from document text
+FOR doc IN news_articles
+    FOR entity IN GRAPHRAG_EXTRACT_ENTITIES(doc.content, {
+        "extractors": ["named_entity", "keyword"],
+        "confidence_threshold": 0.7
+    })
+    RETURN {
+        "article_id": doc._key,
+        "entity": entity.text,
+        "type": entity.entity_type,
+        "confidence": entity.confidence
+    }
+</code></pre>
+
+<h3 id="2-query-and-retrieval-functions">2. Query and Retrieval Functions</h3>
+
+<h4 id="graphrag_queryknowledge_graph-query_text-options">GRAPHRAG_QUERY(knowledge_graph, query_text, options)</h4>
+<p>Performs RAG queries against knowledge graphs.</p>
+
+<pre><code class="language-aql">// Simple RAG query
+FOR answer IN GRAPHRAG_QUERY("scientific_knowledge", 
+    "What are the latest developments in quantum computing?", {
+    "max_hops": 3,
+    "context_size": 2048,
+    "llm_provider": "ollama",
+    "include_explanation": true
+})
+RETURN answer
+
+// RAG query with filtering by metadata
+FOR paper IN research_papers
+    FILTER paper.field == "quantum_computing"
+    FOR answer IN GRAPHRAG_QUERY("scientific_knowledge",
+        CONCAT("Summarize findings from ", paper.title), {
+        "max_hops": 2,
+        "entity_filter": {"source_document": paper._key}
+    })
+    RETURN {
+        "paper": paper.title,
+        "summary": answer.response,
+        "confidence": answer.confidence
+    }
+</code></pre>
+
+<h4 id="graphrag_find_pathsknowledge_graph-from_entity-to_entity-options">GRAPHRAG_FIND_PATHS(knowledge_graph, from_entity, to_entity, options)</h4>
+<p>Finds reasoning paths between entities using multi-hop reasoning.</p>
+
+<pre><code class="language-aql">// Find connections between concepts
+FOR path IN GRAPHRAG_FIND_PATHS("tech_knowledge", "Apple Inc.", "iPhone", {
+    "max_hops": 4,
+    "include_explanation": true,
+    "max_results": 5
+})
+RETURN {
+    "path_nodes": path.nodes,
+    "relationships": path.relationships,
+    "score": path.score,
+    "explanation": path.explanation
+}
+
+// Find paths with relationship type filtering
+FOR entity1 IN entities
+    FILTER entity1.type == "Company"
+    FOR entity2 IN entities
+        FILTER entity2.type == "Product" AND entity1 != entity2
+        FOR path IN GRAPHRAG_FIND_PATHS("business_kg", entity1.name, entity2.name, {
+            "relationship_types": ["PRODUCES", "DEVELOPS", "OWNS"],
+            "max_hops": 3
+        })
+        RETURN {
+            "company": entity1.name,
+            "product": entity2.name,
+            "connection_strength": path.score
+        }
+</code></pre>
+
+<h3 id="3-similarity-and-search-functions">3. Similarity and Search Functions</h3>
+
+<h4 id="graphrag_find_similarknowledge_graph-entity-options">GRAPHRAG_FIND_SIMILAR(knowledge_graph, entity, options)</h4>
+<p>Finds entities similar to a given entity using vector similarity.</p>
+
+<pre><code class="language-aql">// Find similar companies
+FOR similar IN GRAPHRAG_FIND_SIMILAR("business_kg", "Apple Inc.", {
+    "limit": 10,
+    "threshold": 0.8,
+    "entity_types": ["Company"]
+})
+RETURN {
+    "entity": similar.entity_name,
+    "similarity": similar.score,
+    "shared_attributes": similar.common_properties
+}
+
+// Find similar concepts across different knowledge graphs
+FOR concept IN concepts
+    FOR similar IN GRAPHRAG_FIND_SIMILAR("research_kg", concept.name, {
+        "limit": 5,
+        "cross_kg_search": true
+    })
+    FILTER similar.score &gt; 0.7
+    RETURN {
+        "original": concept.name,
+        "similar": similar.entity_name,
+        "similarity": similar.score
+    }
+</code></pre>
+
+<h3 id="4-knowledge-graph-management-functions">4. Knowledge Graph Management Functions</h3>
+
+<h4 id="graphrag_get_statsknowledge_graph">GRAPHRAG_GET_STATS(knowledge_graph)</h4>
+<p>Retrieves statistics about a knowledge graph.</p>
+
+<pre><code class="language-aql">// Get knowledge graph statistics
+FOR stats IN GRAPHRAG_GET_STATS("research_kg")
+RETURN {
+    "documents_processed": stats.documents_processed,
+    "entities_count": stats.entities_extracted,
+    "relationships_count": stats.relationships_extracted,
+    "avg_processing_time": stats.avg_document_processing_time_ms,
+    "success_rate": stats.rag_success_rate
+}
+
+// Compare statistics across knowledge graphs  
+FOR kg_name IN ["research_kg", "business_kg", "news_kg"]
+    FOR stats IN GRAPHRAG_GET_STATS(kg_name)
+    RETURN {
+        "knowledge_graph": kg_name,
+        "entity_density": stats.entities_extracted / stats.documents_processed,
+        "relationship_density": stats.relationships_extracted / stats.entities_extracted
+    }
+</code></pre>
+
+<h4 id="graphrag_list_entitiesknowledge_graph-options">GRAPHRAG_LIST_ENTITIES(knowledge_graph, options)</h4>
+<p>Lists entities from a knowledge graph with optional filtering.</p>
+
+<pre><code class="language-aql">// List all person entities
+FOR entity IN GRAPHRAG_LIST_ENTITIES("news_kg", {
+    "entity_type": "Person",
+    "limit": 100,
+    "sort_by": "confidence",
+    "sort_order": "DESC"
+})
+RETURN entity
+
+// List entities with property filters
+FOR entity IN GRAPHRAG_LIST_ENTITIES("business_kg", {
+    "entity_type": "Company",
+    "property_filters": {
+        "industry": "technology",
+        "founded_after": 2000
+    }
+})
+RETURN entity
+</code></pre>
+
+<h3 id="5-advanced-analytics-functions">5. Advanced Analytics Functions</h3>
+
+<h4 id="graphrag_analyze_trendsknowledge_graph-concept-options">GRAPHRAG_ANALYZE_TRENDS(knowledge_graph, concept, options)</h4>
+<p>Analyzes trends and patterns around a specific concept.</p>
+
+<pre><code class="language-aql">// Analyze research trends over time
+FOR trend IN GRAPHRAG_ANALYZE_TRENDS("research_kg", "artificial intelligence", {
+    "time_grouping": "year",
+    "metrics": ["mention_frequency", "sentiment", "innovation_score"],
+    "time_range": {"start": "2020-01-01", "end": "2024-01-01"}
+})
+SORT trend.year
+RETURN trend
+
+// Compare trends between related concepts
+FOR concept IN ["machine learning", "deep learning", "neural networks"]
+    FOR trend IN GRAPHRAG_ANALYZE_TRENDS("research_kg", concept, {
+        "time_grouping": "quarter",
+        "normalize": true
+    })
+    RETURN {
+        "concept": concept,
+        "period": trend.period,
+        "relative_growth": trend.normalized_growth
+    }
+</code></pre>
+
+<h4 id="graphrag_detect_communitiesknowledge_graph-options">GRAPHRAG_DETECT_COMMUNITIES(knowledge_graph, options)</h4>
+<p>Detects communities and clusters within the knowledge graph.</p>
+
+<pre><code class="language-aql">// Detect research communities
+FOR community IN GRAPHRAG_DETECT_COMMUNITIES("research_kg", {
+    "algorithm": "louvain",
+    "min_community_size": 5,
+    "edge_weight_threshold": 0.5
+})
+RETURN {
+    "community_id": community.id,
+    "size": LENGTH(community.entities),
+    "main_topics": community.dominant_concepts[0..5],
+    "cohesion_score": community.internal_density
+}
+</code></pre>
+
+<h2 id="integration-with-aql-features">Integration with AQL Features</h2>
+
+<h3 id="1-collection-based-processing">1. Collection-Based Processing</h3>
+
+<pre><code class="language-aql">// Process documents with AQL iteration
+FOR doc IN documents
+    FILTER doc.language == "en"
+    FOR result IN GRAPHRAG_BUILD_KNOWLEDGE(doc, {
+        "knowledge_graph": CONCAT("kg_", doc.category),
+        "document_id": doc._key
+    })
+    INSERT {
+        "document_id": doc._key,
+        "processing_result": result,
+        "processed_at": DATE_NOW()
+    } INTO processing_log
+</code></pre>
+
+<h3 id="2-graph-traversal-integration">2. Graph Traversal Integration</h3>
+
+<pre><code class="language-aql">// Combine AQL graph traversal with GraphRAG
+FOR vertex, edge, path IN 1..3 OUTBOUND "papers/quantum_paper_1" paper_citations
+    FOR related_concepts IN GRAPHRAG_QUERY("research_kg", 
+        CONCAT("What concepts are related to ", vertex.title), {
+        "max_hops": 2,
+        "context_from_path": path
+    })
+    RETURN {
+        "paper": vertex.title,
+        "citation_path_length": LENGTH(path.vertices),
+        "related_concepts": related_concepts.entities_involved
+    }
+</code></pre>
+
+<h3 id="3-aggregation-and-analytics">3. Aggregation and Analytics</h3>
+
+<pre><code class="language-aql">// Aggregate GraphRAG results
+FOR doc IN research_papers
+    FOR entities IN GRAPHRAG_EXTRACT_ENTITIES(doc.abstract, {})
+    COLLECT entity_type = entities.entity_type INTO groups = entities
+    RETURN {
+        "entity_type": entity_type,
+        "total_mentions": LENGTH(groups),
+        "avg_confidence": AVG(groups[*].confidence),
+        "unique_entities": LENGTH(UNIQUE(groups[*].text))
+    }
+</code></pre>
+
+<h3 id="4-subqueries-and-joins">4. Subqueries and Joins</h3>
+
+<pre><code class="language-aql">// Use GraphRAG in subqueries
+FOR paper IN research_papers
+    LET similar_papers = (
+        FOR similar IN GRAPHRAG_FIND_SIMILAR("research_kg", paper.title, {"limit": 5})
+        FOR p IN research_papers
+            FILTER p.title == similar.entity_name
+            RETURN p
+    )
+    RETURN {
+        "original_paper": paper,
+        "similar_papers": similar_papers,
+        "similarity_cluster_size": LENGTH(similar_papers)
+    }
+</code></pre>
+
+<h2 id="function-return-types">Function Return Types</h2>
+
+<h3 id="standard-result-structure">Standard Result Structure</h3>
+<p>All GraphRAG functions return objects with consistent structure:</p>
+
+<div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span><span class="w">
+    </span><span class="nl">"success"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span><span class="w">
+    </span><span class="nl">"result"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="err">/*</span><span class="w"> </span><span class="err">function-specific</span><span class="w"> </span><span class="err">result</span><span class="w"> </span><span class="err">*/</span><span class="w"> </span><span class="p">},</span><span class="w">
+    </span><span class="nl">"metadata"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">
+        </span><span class="nl">"processing_time_ms"</span><span class="p">:</span><span class="w"> </span><span class="mi">1250</span><span class="p">,</span><span class="w">
+        </span><span class="nl">"knowledge_graph"</span><span class="p">:</span><span class="w"> </span><span class="s2">"research_kg"</span><span class="p">,</span><span class="w"> 
+        </span><span class="nl">"timestamp"</span><span class="p">:</span><span class="w"> </span><span class="s2">"2024-01-15T10:30:00Z"</span><span class="w">
+    </span><span class="p">},</span><span class="w">
+    </span><span class="nl">"warnings"</span><span class="p">:</span><span class="w"> </span><span class="p">[]</span><span class="w">
+</span><span class="p">}</span><span class="w">
+</span></code></pre></div></div>
+
+<h3 id="error-handling">Error Handling</h3>
+
+<pre><code class="language-aql">// Error handling with AQL
+FOR result IN GRAPHRAG_QUERY("nonexistent_kg", "test query", {})
+    FILTER result.success == true
+    RETURN result.result
+
+// Handle warnings
+FOR result IN GRAPHRAG_BUILD_KNOWLEDGE(doc, {})
+    FILTER LENGTH(result.warnings) &gt; 0
+    INSERT {
+        "document_id": doc._key,
+        "warnings": result.warnings,
+        "timestamp": DATE_NOW()
+    } INTO processing_warnings
+</code></pre>
+
+<h2 id="performance-optimization">Performance Optimization</h2>
+
+<h3 id="1-batch-processing">1. Batch Processing</h3>
+
+<pre><code class="language-aql">// Batch document processing
+FOR batch IN RANGE(0, LENGTH(documents), 100)
+    LET batch_docs = SLICE(documents, batch, 100)
+    FOR doc IN batch_docs
+        FOR result IN GRAPHRAG_BUILD_KNOWLEDGE(doc, {
+            "batch_mode": true,
+            "defer_indexing": true
+        })
+        RETURN result
+</code></pre>
+
+<h3 id="2-caching-integration">2. Caching Integration</h3>
+
+<pre><code class="language-aql">// Use AQL caching for repeated queries
+FOR cached_result IN GRAPHRAG_QUERY("research_kg", @query_text, {
+    "cache_ttl_seconds": 3600,
+    "cache_key": CONCAT("query_", MD5(@query_text))
+})
+RETURN cached_result
+</code></pre>
+
+<p>This design provides native AQL integration while leveraging all of ArangoDB’s powerful query capabilities alongside GraphRAG functionality.</p>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/orbit-rs/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Orbit-RS Documentation</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">TuringWorks</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

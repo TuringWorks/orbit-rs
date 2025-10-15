@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Architecture Overview | Orbit-RS Documentation</title>
+<meta name="generator" content="Jekyll v4.4.1" />
+<meta property="og:title" content="Architecture Overview" />
+<meta name="author" content="TuringWorks" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<meta property="og:description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<link rel="canonical" href="https://turingworks.github.io/orbit-rs/overview.html" />
+<meta property="og:url" content="https://turingworks.github.io/orbit-rs/overview.html" />
+<meta property="og:site_name" content="Orbit-RS Documentation" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Architecture Overview" />
+<meta name="twitter:site" content="@TuringWorksAI" />
+<meta name="twitter:creator" content="@TuringWorks" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","author":{"@type":"Person","name":"TuringWorks"},"description":"The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform","headline":"Architecture Overview","url":"https://turingworks.github.io/orbit-rs/overview.html"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/orbit-rs/assets/main.css">
+  <link rel="stylesheet" href="/orbit-rs/assets/css/custom.css"><link type="application/atom+xml" rel="alternate" href="https://turingworks.github.io/orbit-rs/feed.xml" title="Orbit-RS Documentation" /></head><body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/orbit-rs/">Orbit-RS Documentation</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/orbit-rs/">Orbit-RS Documentation</a><a class="page-link" href="/orbit-rs/project_overview.html">Orbit-RS: Comprehensive Project Overview</a><a class="page-link" href="/orbit-rs/quick_start.html">Quick Start Guide - Multi-Protocol Database Server</a><a class="page-link" href="/orbit-rs/roadmap/">Development Roadmap</a><a class="page-link" href="/orbit-rs/features/">Orbit-RS Feature Index</a><a class="page-link" href="/orbit-rs/compute-acceleration/">Hardware Acceleration Guide</a><a class="page-link" href="/orbit-rs/contributing.html">Contributing Guide</a><a class="page-link" href="/orbit-rs/overview.html">Architecture Overview</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <h1 id="orbit-rs-architecture-overview">Orbit-RS: Architecture Overview</h1>
+
+<p><strong>Production-Ready Multi-Model Distributed Database Platform</strong></p>
+
+<p>Orbit-RS is a high-performance, distributed multi-model database system written in Rust that combines virtual actor architecture with comprehensive database capabilities including SQL, vector operations, time-series, graph data, and AI/ML integration.</p>
+
+<p><a href="https://github.com/TuringWorks/orbit-rs"><img src="https://img.shields.io/badge/version-Production--Ready-brightgreen.svg" alt="Version" /></a>
+<a href="https://github.com/TuringWorks/orbit-rs/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="License" /></a>
+<a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/rust-1.70+-red.svg" alt="Rust Version" /></a>
+<a href="roadmap.md"><img src="https://img.shields.io/badge/Phase%208-Complete-brightgreen.svg" alt="Phase 8" /></a>
+<a href="project_overview.md"><img src="https://img.shields.io/badge/lines-144K+-blue.svg" alt="144K+ Lines" /></a>
+<a href="features.md"><img src="https://img.shields.io/badge/tests-720%2B-green.svg" alt="720+ Tests" /></a></p>
+
+<h2 id="what-is-orbit-rs">What is Orbit-RS?</h2>
+
+<p>Orbit-RS is a production-ready, multi-model distributed database platform that combines the power of virtual actor architecture with comprehensive database capabilities. It’s designed as a next-generation system that unifies:</p>
+
+<ul>
+  <li><strong>Virtual Actor Framework</strong> for distributed computing</li>
+  <li><strong>Multi-Protocol Database</strong> with SQL, vector, time-series, and graph support</li>
+  <li><strong>AI/ML Integration</strong> with vector operations and neural engine acceleration</li>
+  <li><strong>Cloud-Native Operations</strong> with Kubernetes operators and enterprise features</li>
+</ul>
+
+<h3 id="-current-status-phase-8-complete-production-ready">🎯 <strong>Current Status: Phase 8 Complete (Production Ready)</strong></h3>
+
+<p>Orbit-RS has successfully completed its Phase 8 milestone, delivering a <strong>comprehensive multi-model database platform</strong> with:</p>
+<ul>
+  <li><strong>144,855+ lines</strong> of production-ready Rust code</li>
+  <li><strong>720+ tests</strong> ensuring reliability and correctness</li>
+  <li><strong>124+ Redis commands</strong> with full compatibility</li>
+  <li><strong>Complete PostgreSQL wire protocol</strong> implementation</li>
+  <li><strong>Advanced AI/ML capabilities</strong> with vector operations</li>
+</ul>
+
+<hr />
+
+<h2 id="️-core-features">🏗️ Core Features</h2>
+
+<h3 id="-virtual-actor-system">🎭 <strong>Virtual Actor System</strong></h3>
+<ul>
+  <li><strong>Distributed Computing</strong>: Actor-based distributed programming model</li>
+  <li><strong>Automatic Lifecycle Management</strong>: On-demand activation and transparent scaling</li>
+  <li><strong>Type-Safe Interfaces</strong>: Compile-time guarantees with Rust’s type system</li>
+  <li><strong>Location Transparency</strong>: Actors can move between nodes seamlessly</li>
+  <li><strong>State Persistence</strong>: Automatic state management with configurable backends</li>
+</ul>
+
+<h3 id="-multi-model-database">📊 <strong>Multi-Model Database</strong></h3>
+<ul>
+  <li><strong>SQL Database</strong>: Full ANSI SQL support with PostgreSQL wire protocol compatibility</li>
+  <li><strong>Vector Database</strong>: High-performance similarity search with HNSW/IVFFLAT indexing</li>
+  <li><strong>Time-Series Database</strong>: RedisTimeSeries-compatible with advanced aggregation</li>
+  <li><strong>Graph Database</strong>: Cypher-like queries with distributed graph operations</li>
+  <li><strong>Document Store</strong>: Flexible JSON document storage and querying</li>
+</ul>
+
+<h3 id="-aiml-integration">🤖 <strong>AI/ML Integration</strong></h3>
+<ul>
+  <li><strong>Vector Operations</strong>: pgvector compatibility with similarity search</li>
+  <li><strong>Neural Engine Acceleration</strong>: Apple Neural Engine, Snapdragon DSP integration</li>
+  <li><strong>Machine Learning Functions</strong>: Built-in statistical functions in SQL</li>
+  <li><strong>Embeddings Support</strong>: Seamless integration with AI embedding models</li>
+  <li><strong>Model Context Protocol</strong>: AI agent integration and tool ecosystem</li>
+</ul>
+
+<h3 id="-protocol-support">🔌 <strong>Protocol Support</strong></h3>
+<ul>
+  <li><strong>Redis RESP Protocol</strong>: 124+ commands with clustering support</li>
+  <li><strong>PostgreSQL Wire Protocol</strong>: Full DDL/DML/DCL/TCL operations</li>
+  <li><strong>gRPC Services</strong>: High-performance service-to-service communication</li>
+  <li><strong>Model Context Protocol (MCP)</strong>: AI agent and tool integration</li>
+  <li><strong>REST APIs</strong>: RESTful interface for web applications</li>
+</ul>
+
+<h3 id="️-cloud-native-architecture">☁️ <strong>Cloud-Native Architecture</strong></h3>
+<ul>
+  <li><strong>Kubernetes Operator</strong>: Custom resources for cluster management</li>
+  <li><strong>Helm Charts</strong>: Production-ready deployment templates</li>
+  <li><strong>Auto-Scaling</strong>: Dynamic cluster scaling based on workload</li>
+  <li><strong>Multi-Platform</strong>: Support for linux/amd64, linux/arm64, and Apple Silicon</li>
+  <li><strong>Enterprise Security</strong>: RBAC, audit trails, and compliance features</li>
+</ul>
+
+<h3 id="-performance--scale">⚡ <strong>Performance &amp; Scale</strong></h3>
+<ul>
+  <li><strong>500k+ messages/second</strong> per core throughput</li>
+  <li><strong>Sub-microsecond latency</strong> for actor message processing</li>
+  <li><strong>~10MB binary size</strong> vs ~100MB JVM equivalents</li>
+  <li><strong>Zero GC pauses</strong> with predictable memory usage</li>
+  <li><strong>5-50x speedups</strong> with heterogeneous compute acceleration</li>
+</ul>
+
+<hr />
+
+<h2 id="️-system-architecture">🏗️ System Architecture</h2>
+
+<p>Orbit-RS is built as a <strong>comprehensive workspace</strong> with <strong>14 core modules</strong> and <strong>20+ example applications</strong>:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>orbit-rs/
+├── 💭 Core Framework
+│   ├── orbit-client/         # Client-side actor proxies and invocation
+│   ├── orbit-shared/         # Common types, errors, spatial operations  
+│   ├── orbit-server/         # Cluster management and health monitoring
+│   ├── orbit-proto/          # gRPC services and Protocol Buffers
+│   └── orbit-util/           # Utilities, RNG, metrics
+├── 🔌 Protocol Adapters
+│   └── orbit-protocols/      # Redis RESP, PostgreSQL, MCP, REST APIs
+├── ☁️ Cloud &amp; Operations
+│   ├── orbit-operator/       # Kubernetes operator with CRDs
+│   ├── orbit-server-etcd/    # etcd integration for clustering
+│   └── orbit-server-prometheus/ # Metrics and monitoring
+├── 🚀 Applications &amp; Integration
+│   ├── orbit-application/    # Application framework
+│   ├── orbit-client-spring/  # Spring Boot integration
+│   └── orbit-compute/        # Hardware acceleration (GPU/Neural)
+├── 📊 Performance &amp; Testing
+│   ├── orbit-benchmarks/     # Performance benchmarks
+│   └── tests/                # Integration tests
+└── 📈 Examples (20+)
+    ├── hello-world/          # Basic actor demonstration
+    ├── distributed-transactions/ # ACID transaction patterns
+    ├── vector-store/         # AI/ML vector operations
+    ├── resp-server/          # Redis-compatible server
+    ├── pgvector-store/       # PostgreSQL vector extension
+    ├── mcp-advanced-server/  # AI agent integration
+    └── ... and 15+ more examples
+</code></pre></div></div>
+
+<h3 id="component-overview">Component Overview</h3>
+
+<h4 id="orbit-client">orbit-client</h4>
+<ul>
+  <li><strong>Actor Proxies</strong>: Client-side representations of remote actors</li>
+  <li><strong>Invocation</strong>: Message routing and remote procedure calls</li>
+  <li><strong>Lease Management</strong>: Actor lifetime and resource management</li>
+</ul>
+
+<h4 id="orbit-shared">orbit-shared</h4>
+<ul>
+  <li><strong>Data Types</strong>: Common data structures and type definitions</li>
+  <li><strong>Messages</strong>: Inter-actor communication protocols</li>
+  <li><strong>Transactions</strong>: Distributed transaction coordination and recovery</li>
+  <li><strong>OrbitQL</strong>: SQL-like query language for actor systems</li>
+  <li><strong>Persistence</strong>: Storage backend abstractions and providers</li>
+</ul>
+
+<h4 id="orbit-server">orbit-server</h4>
+<ul>
+  <li><strong>Cluster Management</strong>: Node discovery and cluster membership</li>
+  <li><strong>Load Balancer</strong>: Request distribution and resource optimization</li>
+  <li><strong>Health Checks</strong>: System monitoring and failure detection</li>
+  <li><strong>Persistence Providers</strong>: Multiple storage backends (Memory, COW B+Tree, LSM-Tree, RocksDB)</li>
+</ul>
+
+<h4 id="orbit-proto">orbit-proto</h4>
+<ul>
+  <li><strong>gRPC Services</strong>: Network communication layer</li>
+  <li><strong>Protocol Buffers</strong>: Serialization and type safety</li>
+  <li><strong>Cross-language Support</strong>: Interoperability with other systems</li>
+</ul>
+
+<h4 id="orbit-protocols">orbit-protocols</h4>
+<ul>
+  <li><strong>Redis RESP</strong>: Full Redis protocol compatibility</li>
+  <li><strong>PostgreSQL Wire</strong>: Database protocol adapter</li>
+  <li><strong>REST/HTTP</strong>: RESTful API interface</li>
+  <li><strong>MCP Support</strong>: Model Context Protocol integration</li>
+</ul>
+
+<h4 id="orbit-operator">orbit-operator</h4>
+<ul>
+  <li><strong>Kubernetes CRDs</strong>: Custom resource definitions for K8s deployment</li>
+  <li><strong>Persistence Configuration</strong>: Declarative storage backend management</li>
+  <li><strong>Config Management</strong>: Automated configuration and scaling</li>
+</ul>
+
+<h2 id="key-advantages">Key Advantages</h2>
+
+<h3 id="memory-safety">Memory Safety</h3>
+<ul>
+  <li>Compile-time elimination of data races and memory errors</li>
+  <li>Safe concurrent programming with Rust’s ownership model</li>
+  <li>No null pointer exceptions or memory leaks</li>
+</ul>
+
+<h3 id="performance-benefits">Performance Benefits</h3>
+<ul>
+  <li>Zero-cost abstractions for high-level programming</li>
+  <li>Native performance without virtual machine overhead</li>
+  <li>Efficient memory usage and CPU utilization</li>
+</ul>
+
+<h3 id="operational-excellence">Operational Excellence</h3>
+<ul>
+  <li>Single binary deployment with minimal dependencies</li>
+  <li>Built-in observability and monitoring</li>
+  <li>Comprehensive error handling and debugging support</li>
+  <li>Production-ready with enterprise features</li>
+</ul>
+
+<h2 id="use-cases">Use Cases</h2>
+
+<p>Orbit-RS is ideal for building:</p>
+
+<ul>
+  <li><strong>Microservices Architectures</strong>: Distributed actor-based services</li>
+  <li><strong>Real-time Applications</strong>: Low-latency message processing</li>
+  <li><strong>IoT Systems</strong>: Device management and data processing</li>
+  <li><strong>Game Backends</strong>: Player state management and matchmaking</li>
+  <li><strong>Financial Systems</strong>: Transaction processing and audit trails</li>
+  <li><strong>Data Processing</strong>: Stream processing and ETL pipelines</li>
+</ul>
+
+<hr />
+
+<h2 id="-next-steps--documentation">📚 Next Steps &amp; Documentation</h2>
+
+<h3 id="-getting-started">🚀 <strong>Getting Started</strong></h3>
+<ul>
+  <li><a href="/orbit-rs/quick_start.html">🏃 <strong>Quick Start Guide</strong></a> - Get up and running in 5 minutes</li>
+  <li><a href="/orbit-rs/project_overview.html">📖 <strong>Project Overview</strong></a> - Complete project status and capabilities</li>
+  <li><a href="/orbit-rs/features/">🎯 <strong>Feature Index</strong></a> - Comprehensive feature overview</li>
+  <li><a href="/orbit-rs/contributing.html">🤝 <strong>Contributing Guide</strong></a> - How to contribute to the project</li>
+</ul>
+
+<h3 id="️-architecture--core-systems">🏗️ <strong>Architecture &amp; Core Systems</strong></h3>
+<ul>
+  <li><a href="/orbit-rs/virtual_actor_persistence.html">🎭 <strong>Virtual Actor Persistence</strong></a> - Actor state management and lifecycle</li>
+  <li><a href="/orbit-rs/advanced_transaction_features.html">💳 <strong>Advanced Transaction Features</strong></a> - Distributed transaction capabilities</li>
+  <li><a href="/orbit-rs/compute-acceleration/">⚡ <strong>Compute Acceleration Guide</strong></a> - GPU/Neural hardware acceleration</li>
+  <li><a href="/orbit-rs/rfcs/heterogeneous-compute/">🧠 <strong>Heterogeneous Compute RFC</strong></a> - Technical deep-dive on acceleration</li>
+</ul>
+
+<h3 id="-operations--deployment">🚀 <strong>Operations &amp; Deployment</strong></h3>
+<ul>
+  <li><a href="/orbit-rs/kubernetes_deployment.html">☸️ <strong>Kubernetes Deployment</strong></a> - Production Kubernetes setup</li>
+  <li><a href="/orbit-rs/KUBERNETES_STORAGE_GUIDE.html">💾 <strong>Kubernetes Storage Guide</strong></a> - Persistent storage configuration</li>
+  <li><a href="/orbit-rs/roadmap/">🔧 <strong>Development Roadmap</strong></a> - Strategic vision and timeline</li>
+  <li><a href="/orbit-rs/SECURITY.html">🔒 <strong>Security Guide</strong></a> - Security policies and best practices</li>
+</ul>
+
+<h3 id="-integration--examples">🔌 <strong>Integration &amp; Examples</strong></h3>
+<ul>
+  <li><a href="../examples/">📊 <strong>All 20+ Examples</strong></a> - Working code examples for all features</li>
+  <li><a href="../containerfiles/">🐳 <strong>Container Deployment</strong></a> - Docker and container setup</li>
+  <li><a href="../config/">⚙️ <strong>Configuration Examples</strong></a> - Sample configurations</li>
+  <li><a href="api/">📋 <strong>API Documentation</strong></a> - Complete API reference</li>
+</ul>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/orbit-rs/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Orbit-RS Documentation</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">TuringWorks</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

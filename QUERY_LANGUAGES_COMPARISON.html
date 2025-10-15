@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Query Languages Comparison Guide | Orbit-RS Documentation</title>
+<meta name="generator" content="Jekyll v4.4.1" />
+<meta property="og:title" content="Query Languages Comparison Guide" />
+<meta name="author" content="TuringWorks" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<meta property="og:description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<link rel="canonical" href="https://turingworks.github.io/orbit-rs/QUERY_LANGUAGES_COMPARISON.html" />
+<meta property="og:url" content="https://turingworks.github.io/orbit-rs/QUERY_LANGUAGES_COMPARISON.html" />
+<meta property="og:site_name" content="Orbit-RS Documentation" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Query Languages Comparison Guide" />
+<meta name="twitter:site" content="@TuringWorksAI" />
+<meta name="twitter:creator" content="@TuringWorks" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","author":{"@type":"Person","name":"TuringWorks"},"description":"The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform","headline":"Query Languages Comparison Guide","url":"https://turingworks.github.io/orbit-rs/QUERY_LANGUAGES_COMPARISON.html"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/orbit-rs/assets/main.css">
+  <link rel="stylesheet" href="/orbit-rs/assets/css/custom.css"><link type="application/atom+xml" rel="alternate" href="https://turingworks.github.io/orbit-rs/feed.xml" title="Orbit-RS Documentation" /></head><body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/orbit-rs/">Orbit-RS Documentation</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/orbit-rs/">Orbit-RS Documentation</a><a class="page-link" href="/orbit-rs/project_overview.html">Orbit-RS: Comprehensive Project Overview</a><a class="page-link" href="/orbit-rs/quick_start.html">Quick Start Guide - Multi-Protocol Database Server</a><a class="page-link" href="/orbit-rs/roadmap/">Development Roadmap</a><a class="page-link" href="/orbit-rs/features/">Orbit-RS Feature Index</a><a class="page-link" href="/orbit-rs/compute-acceleration/">Hardware Acceleration Guide</a><a class="page-link" href="/orbit-rs/contributing.html">Contributing Guide</a><a class="page-link" href="/orbit-rs/overview.html">Architecture Overview</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <h1 id="query-languages-comparison-guide">Query Languages Comparison Guide</h1>
+
+<h2 id="table-of-contents">Table of Contents</h2>
+
+<ol>
+  <li><a href="#overview">Overview</a></li>
+  <li><a href="#language-comparison-matrix">Language Comparison Matrix</a></li>
+  <li><a href="#cypher">Cypher</a></li>
+  <li><a href="#aql-arrangodb-query-language">AQL (ArrangoDB Query Language)</a></li>
+  <li><a href="#orbitql">OrbitQL</a></li>
+  <li><a href="#use-case-recommendations">Use Case Recommendations</a></li>
+  <li><a href="#syntax-comparisons">Syntax Comparisons</a></li>
+  <li><a href="#performance-characteristics">Performance Characteristics</a></li>
+  <li><a href="#migration-guide">Migration Guide</a></li>
+  <li><a href="#best-practices">Best Practices</a></li>
+</ol>
+
+<h2 id="overview">Overview</h2>
+
+<h3 id="why-multiple-query-languages">Why Multiple Query Languages?</h3>
+
+<p>Orbit-RS supports multiple query languages to provide:</p>
+
+<ul>
+  <li><strong>Ecosystem compatibility</strong>: Work with existing tools and applications</li>
+  <li><strong>Developer familiarity</strong>: Use languages you already know</li>
+  <li><strong>Specialized optimization</strong>: Each language optimized for specific patterns</li>
+  <li><strong>Flexibility</strong>: Choose the best tool for each task</li>
+</ul>
+
+<h3 id="language-philosophy">Language Philosophy</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>Language</th>
+      <th>Philosophy</th>
+      <th>Primary Focus</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Cypher</strong></td>
+      <td>Graph-first declarative querying</td>
+      <td>Graph pattern matching and traversal</td>
+    </tr>
+    <tr>
+      <td><strong>AQL</strong></td>
+      <td>Multi-model document-centric</td>
+      <td>Document manipulation with graph capabilities</td>
+    </tr>
+    <tr>
+      <td><strong>OrbitQL</strong></td>
+      <td>Unified multi-model with SQL familiarity</td>
+      <td>Cross-model queries with SQL comfort</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="language-comparison-matrix">Language Comparison Matrix</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>Feature</th>
+      <th>Cypher</th>
+      <th>AQL</th>
+      <th>OrbitQL</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Graph Traversal</strong></td>
+      <td>⭐⭐⭐⭐⭐</td>
+      <td>⭐⭐⭐⭐</td>
+      <td>⭐⭐⭐⭐</td>
+    </tr>
+    <tr>
+      <td><strong>Pattern Matching</strong></td>
+      <td>⭐⭐⭐⭐⭐</td>
+      <td>⭐⭐⭐</td>
+      <td>⭐⭐⭐⭐</td>
+    </tr>
+    <tr>
+      <td><strong>Document Queries</strong></td>
+      <td>⭐⭐</td>
+      <td>⭐⭐⭐⭐⭐</td>
+      <td>⭐⭐⭐⭐</td>
+    </tr>
+    <tr>
+      <td><strong>Time Series</strong></td>
+      <td>⭐⭐</td>
+      <td>⭐⭐⭐</td>
+      <td>⭐⭐⭐⭐⭐</td>
+    </tr>
+    <tr>
+      <td><strong>SQL Familiarity</strong></td>
+      <td>⭐⭐</td>
+      <td>⭐⭐⭐</td>
+      <td>⭐⭐⭐⭐⭐</td>
+    </tr>
+    <tr>
+      <td><strong>Advanced SQL Features</strong></td>
+      <td>⭐⭐</td>
+      <td>⭐⭐⭐</td>
+      <td>⭐⭐⭐⭐⭐</td>
+    </tr>
+    <tr>
+      <td><strong>Aggregations</strong></td>
+      <td>⭐⭐⭐</td>
+      <td>⭐⭐⭐⭐⭐</td>
+      <td>⭐⭐⭐⭐⭐</td>
+    </tr>
+    <tr>
+      <td><strong>Distributed Queries</strong></td>
+      <td>⭐⭐⭐</td>
+      <td>⭐⭐⭐</td>
+      <td>⭐⭐⭐⭐⭐</td>
+    </tr>
+    <tr>
+      <td><strong>Actor Integration</strong></td>
+      <td>⭐⭐</td>
+      <td>⭐⭐</td>
+      <td>⭐⭐⭐⭐⭐</td>
+    </tr>
+    <tr>
+      <td><strong>Neo4j Compatibility</strong></td>
+      <td>⭐⭐⭐⭐⭐</td>
+      <td>⭐</td>
+      <td>⭐⭐</td>
+    </tr>
+    <tr>
+      <td><strong>ArangoDB Compatibility</strong></td>
+      <td>⭐</td>
+      <td>⭐⭐⭐⭐⭐</td>
+      <td>⭐⭐</td>
+    </tr>
+    <tr>
+      <td><strong>Learning Curve</strong></td>
+      <td>Medium</td>
+      <td>Medium</td>
+      <td>Easy (for SQL users)</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="cypher">Cypher</h2>
+
+<h3 id="strengths">Strengths</h3>
+
+<ul>
+  <li><strong>Graph-native</strong>: Designed specifically for graph pattern matching</li>
+  <li><strong>Neo4j ecosystem</strong>: Full compatibility with Neo4j tools and drivers</li>
+  <li><strong>Intuitive patterns</strong>: Visual representation of graph relationships</li>
+  <li><strong>Rich traversal</strong>: Advanced path finding and pattern matching</li>
+</ul>
+
+<h3 id="best-for">Best For</h3>
+
+<ul>
+  <li>Graph analytics and social networks</li>
+  <li>Knowledge graphs and recommendation systems</li>
+  <li>Path finding and network analysis</li>
+  <li>Neo4j migrations and integrations</li>
+</ul>
+
+<h3 id="example">Example</h3>
+
+<div class="language-cypher highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Find influential users in a social network</span>
+<span class="k">MATCH</span><span class="w"> </span><span class="ss">(</span><span class="py">user:</span><span class="n">Person</span><span class="ss">)</span><span class="o">-</span><span class="ss">[</span><span class="py">r:</span><span class="n">FOLLOWS</span><span class="ss">]</span><span class="o">-&gt;</span><span class="ss">(</span><span class="py">influencer:</span><span class="n">Person</span><span class="ss">)</span>
+<span class="k">WHERE</span> <span class="n">influencer.follower_count</span> <span class="o">&gt;</span> <span class="mi">10000</span>
+<span class="k">WITH</span> <span class="n">influencer</span><span class="ss">,</span> <span class="nf">count</span><span class="ss">(</span><span class="n">r</span><span class="ss">)</span> <span class="k">as</span> <span class="n">influence_score</span>
+<span class="k">ORDER</span> <span class="k">BY</span> <span class="n">influence_score</span> <span class="k">DESC</span>
+<span class="k">LIMIT</span> <span class="mi">10</span>
+<span class="k">RETURN</span> <span class="n">influencer.name</span><span class="ss">,</span> <span class="n">influencer.follower_count</span><span class="ss">,</span> <span class="n">influence_score</span>
+</code></pre></div></div>
+
+<h3 id="limitations">Limitations</h3>
+
+<ul>
+  <li>Limited document/JSON manipulation</li>
+  <li>No native time series support</li>
+  <li>Less familiar to SQL developers</li>
+  <li>Focused primarily on graph operations</li>
+</ul>
+
+<h2 id="aql-arrangodb-query-language">AQL (ArrangoDB Query Language)</h2>
+
+<h3 id="strengths-1">Strengths</h3>
+
+<ul>
+  <li><strong>Multi-model</strong>: Native support for documents, graphs, and key-value</li>
+  <li><strong>Powerful aggregations</strong>: Advanced statistical and analytical functions</li>
+  <li><strong>Flexible syntax</strong>: Combines declarative and functional programming</li>
+  <li><strong>ArangoDB compatibility</strong>: Full feature parity with ArangoDB</li>
+</ul>
+
+<h3 id="best-for-1">Best For</h3>
+
+<ul>
+  <li>Document-centric applications with graph relationships</li>
+  <li>Complex analytical queries across multiple data types</li>
+  <li>ArangoDB migrations and integrations</li>
+  <li>Applications requiring flexible data modeling</li>
+</ul>
+
+<h3 id="example-1">Example</h3>
+
+<pre><code class="language-aql">// Analyze user behavior across documents and graphs
+FOR user IN users
+  FILTER user.active == true
+  LET friends = (
+    FOR friend IN 1..1 OUTBOUND user follows
+      RETURN friend
+  )
+  FOR order IN orders
+    FILTER order.customer_id == user._id
+    COLLECT user_info = user INTO user_orders = order
+    RETURN {
+      user: user_info.name,
+      friend_count: LENGTH(friends),
+      total_spent: SUM(user_orders[*].amount),
+      avg_order: AVERAGE(user_orders[*].amount)
+    }
+</code></pre>
+
+<h3 id="limitations-1">Limitations</h3>
+
+<ul>
+  <li>Learning curve for developers new to functional syntax</li>
+  <li>Less intuitive for pure graph operations</li>
+  <li>Limited time series capabilities</li>
+  <li>Not as familiar as SQL for most developers</li>
+</ul>
+
+<h2 id="orbitql">OrbitQL</h2>
+
+<h3 id="strengths-2">Strengths</h3>
+
+<ul>
+  <li><strong>Advanced SQL compatibility</strong>: Full support for CTEs, CASE expressions, temporal functions</li>
+  <li><strong>SQL familiarity</strong>: Builds on well-known SQL foundations with modern extensions</li>
+  <li><strong>Multi-model unified</strong>: Single syntax for all data models with cross-model JOINs</li>
+  <li><strong>Temporal functions</strong>: Native NOW(), INTERVAL, and time-based analytics</li>
+  <li><strong>Enhanced aggregates</strong>: COUNT(DISTINCT), conditional aggregates, complex expressions</li>
+  <li><strong>Null-handling</strong>: COALESCE and advanced null manipulation</li>
+  <li><strong>Distributed by design</strong>: Optimized for cross-node operations</li>
+  <li><strong>Actor integration</strong>: Direct access to Orbit actor system</li>
+</ul>
+
+<h3 id="best-for-2">Best For</h3>
+
+<ul>
+  <li>Applications requiring multiple data models</li>
+  <li>Time series analytics and IoT data processing</li>
+  <li>Teams with strong SQL background</li>
+  <li>Complex distributed queries</li>
+  <li>Real-time analytics dashboards</li>
+</ul>
+
+<h3 id="example-2">Example</h3>
+
+<pre><code class="language-orbitql">-- Advanced multi-model query with CTEs, CASE expressions, and temporal functions
+WITH recent_activity AS (
+    SELECT 
+        user_id,
+        COUNT(DISTINCT session_id) as unique_sessions,
+        AVG(CASE WHEN metric_name = 'cpu_usage' THEN value END) as avg_cpu,
+        COUNT(CASE WHEN timestamp &gt; NOW() - INTERVAL '1 hour' THEN 1 END) as recent_events
+    FROM metrics 
+    WHERE timestamp &gt;= NOW() - INTERVAL '24 hours'
+    GROUP BY user_id
+    HAVING COUNT(*) &gt; 10
+),
+user_segments AS (
+    SELECT 
+        u.id,
+        u.name,
+        CASE 
+            WHEN ra.unique_sessions &gt; 50 THEN 'power_user'
+            WHEN ra.unique_sessions &gt; 10 THEN 'regular_user'
+            ELSE 'casual_user'
+        END as user_type,
+        COUNT(DISTINCT f.to_user_id) as follower_count
+    FROM users u
+    JOIN recent_activity ra ON u.id = ra.user_id
+    LEFT JOIN follows f ON u.id = f.to_user_id
+    GROUP BY u.id, u.name, ra.unique_sessions
+)
+SELECT 
+    us.name,
+    us.user_type,
+    us.follower_count,
+    COALESCE(ra.avg_cpu, 0) as avg_cpu_usage,
+    ra.recent_events,
+    CASE 
+        WHEN us.follower_count &gt; 1000 AND ra.avg_cpu &gt; 80 THEN 'high_impact'
+        WHEN us.follower_count &gt; 100 OR ra.avg_cpu &gt; 50 THEN 'medium_impact'
+        ELSE 'low_impact'
+    END as impact_level
+FROM user_segments us
+JOIN recent_activity ra ON us.id = ra.user_id
+WHERE us.user_type != 'casual_user'
+ORDER BY us.follower_count DESC, ra.avg_cpu DESC
+LIMIT 20;
+</code></pre>
+
+<h3 id="limitations-2">Limitations</h3>
+
+<ul>
+  <li>Newer language with smaller ecosystem</li>
+  <li>Some advanced graph operations may be less concise than Cypher</li>
+  <li>Still evolving feature set</li>
+</ul>
+
+<h2 id="use-case-recommendations">Use Case Recommendations</h2>
+
+<h3 id="choose-cypher-when">Choose Cypher When:</h3>
+
+<p>✅ <strong>Primary focus is graph operations</strong></p>
+<div class="language-cypher highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Complex graph pattern matching</span>
+<span class="k">MATCH</span><span class="w"> </span><span class="ss">(</span><span class="py">a:</span><span class="n">Person</span><span class="ss">)</span><span class="o">-</span><span class="ss">[</span><span class="nc">:KNOWS</span><span class="ss">]</span><span class="o">-&gt;</span><span class="ss">(</span><span class="py">b:</span><span class="n">Person</span><span class="ss">)</span><span class="o">-</span><span class="ss">[</span><span class="nc">:WORKS_AT</span><span class="ss">]</span><span class="o">-&gt;</span><span class="ss">(</span><span class="py">c:</span><span class="n">Company</span><span class="ss">)</span>
+<span class="k">WHERE</span> <span class="n">c.industry</span> <span class="o">=</span> <span class="s1">'tech'</span>
+<span class="k">RETURN</span> <span class="n">a</span><span class="ss">,</span> <span class="n">b</span><span class="ss">,</span> <span class="n">c</span>
+</code></pre></div></div>
+
+<p>✅ <strong>Migrating from Neo4j</strong>
+✅ <strong>Building recommendation engines</strong>
+✅ <strong>Analyzing social networks</strong>
+✅ <strong>Need Neo4j tool compatibility</strong></p>
+
+<h3 id="choose-aql-when">Choose AQL When:</h3>
+
+<p>✅ <strong>Document-heavy workloads with graph relationships</strong></p>
+<pre><code class="language-aql">FOR user IN users
+  FILTER user.profile.preferences.notifications == true
+  FOR friend IN 1..1 OUTBOUND user follows
+    RETURN {user: user, friend: friend}
+</code></pre>
+
+<p>✅ <strong>Migrating from ArangoDB</strong>
+✅ <strong>Complex analytical queries</strong>
+✅ <strong>Need flexible document manipulation</strong>
+✅ <strong>Working with varied data structures</strong></p>
+
+<h3 id="choose-orbitql-when">Choose OrbitQL When:</h3>
+
+<p>✅ <strong>Multi-model applications</strong></p>
+<pre><code class="language-orbitql">SELECT u.name, ts.avg_value, COUNT(f.id) as friends
+FROM users u
+JOIN TimeSeries ts ON u.sensor_id = ts.series_id
+TRAVERSE OUTBOUND 1..1 STEPS ON follows TO f
+WHERE ts.timestamp &gt;= NOW() - INTERVAL '1 hour'
+GROUP BY u.id, u.name, ts.avg_value;
+</code></pre>
+
+<p>✅ <strong>Team has strong SQL background</strong>
+✅ <strong>Time series analytics are important</strong>
+✅ <strong>Building distributed applications</strong>
+✅ <strong>Need actor system integration</strong></p>
+
+<h2 id="syntax-comparisons">Syntax Comparisons</h2>
+
+<h3 id="basic-node-selection">Basic Node Selection</h3>
+
+<p><strong>Cypher</strong></p>
+<div class="language-cypher highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">MATCH</span><span class="w"> </span><span class="ss">(</span><span class="py">user:</span><span class="n">Person</span> <span class="ss">{</span><span class="nl">age</span><span class="dl">:</span><span class="w"> </span><span class="m">30</span><span class="ss">})</span>
+<span class="k">RETURN</span> <span class="n">user.name</span>
+</code></pre></div></div>
+
+<p><strong>AQL</strong></p>
+<pre><code class="language-aql">FOR user IN users
+  FILTER user.age == 30
+  RETURN user.name
+</code></pre>
+
+<p><strong>OrbitQL</strong></p>
+<pre><code class="language-orbitql">SELECT name 
+FROM users 
+WHERE age = 30
+</code></pre>
+
+<h3 id="graph-traversal">Graph Traversal</h3>
+
+<p><strong>Cypher</strong></p>
+<div class="language-cypher highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">MATCH</span><span class="w"> </span><span class="ss">(</span><span class="py">user:</span><span class="n">Person</span><span class="ss">)</span><span class="o">-</span><span class="ss">[</span><span class="nc">:FOLLOWS</span><span class="o">*</span><span class="m">1</span><span class="o">..</span><span class="m">3</span><span class="ss">]</span><span class="o">-&gt;</span><span class="ss">(</span><span class="py">friend:</span><span class="n">Person</span><span class="ss">)</span>
+<span class="k">WHERE</span> <span class="n">user.name</span> <span class="o">=</span> <span class="s1">'Alice'</span>
+<span class="k">RETURN</span> <span class="n">friend.name</span>
+</code></pre></div></div>
+
+<p><strong>AQL</strong></p>
+<pre><code class="language-aql">FOR friend IN 1..3 OUTBOUND 'users/alice' follows
+  RETURN friend.name
+</code></pre>
+
+<p><strong>OrbitQL</strong></p>
+<pre><code class="language-orbitql">SELECT friend.name
+FROM users user
+TRAVERSE OUTBOUND 1..3 STEPS ON follows TO friend
+WHERE user.name = 'Alice'
+</code></pre>
+
+<h3 id="aggregations">Aggregations</h3>
+
+<p><strong>Cypher</strong></p>
+<div class="language-cypher highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">MATCH</span><span class="w"> </span><span class="ss">(</span><span class="py">user:</span><span class="n">Person</span><span class="ss">)</span><span class="o">-</span><span class="ss">[</span><span class="nc">:PURCHASED</span><span class="ss">]</span><span class="o">-&gt;</span><span class="ss">(</span><span class="py">product:</span><span class="n">Product</span><span class="ss">)</span>
+<span class="k">RETURN</span> <span class="n">product.category</span><span class="ss">,</span> <span class="nf">count</span><span class="ss">(</span><span class="o">*</span><span class="ss">)</span> <span class="k">as</span> <span class="n">purchases</span><span class="ss">,</span> <span class="nf">avg</span><span class="ss">(</span><span class="n">product.price</span><span class="ss">)</span> <span class="k">as</span> <span class="n">avg_price</span>
+<span class="k">ORDER</span> <span class="k">BY</span> <span class="n">purchases</span> <span class="k">DESC</span>
+</code></pre></div></div>
+
+<p><strong>AQL</strong></p>
+<pre><code class="language-aql">FOR user IN users
+  FOR product IN products
+    FILTER product.id IN user.purchased_products
+    COLLECT category = product.category
+    AGGREGATE purchases = COUNT(), avg_price = AVERAGE(product.price)
+    SORT purchases DESC
+    RETURN {category, purchases, avg_price}
+</code></pre>
+
+<p><strong>OrbitQL</strong></p>
+<pre><code class="language-orbitql">SELECT 
+    p.category,
+    COUNT(*) as purchases,
+    AVG(p.price) as avg_price
+FROM users u
+JOIN user_purchases up ON u.id = up.user_id
+JOIN products p ON up.product_id = p.id
+GROUP BY p.category
+ORDER BY purchases DESC
+</code></pre>
+
+<h3 id="time-series-operations">Time Series Operations</h3>
+
+<p><strong>Cypher</strong> (Limited support)</p>
+<div class="language-cypher highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Not natively supported, requires custom functions</span>
+<span class="k">MATCH</span><span class="w"> </span><span class="ss">(</span><span class="py">sensor:</span><span class="n">Sensor</span><span class="ss">)</span>
+<span class="k">CALL</span> <span class="n">time_series.query</span><span class="ss">(</span><span class="n">sensor.id</span><span class="ss">,</span> <span class="s1">'1 hour'</span><span class="ss">)</span> <span class="k">YIELD</span> <span class="n">timestamp</span><span class="ss">,</span> <span class="n">value</span>
+<span class="k">RETURN</span> <span class="n">sensor.name</span><span class="ss">,</span> <span class="nf">avg</span><span class="ss">(</span><span class="n">value</span><span class="ss">)</span>
+</code></pre></div></div>
+
+<p><strong>AQL</strong></p>
+<pre><code class="language-aql">FOR point IN timeseries
+  FILTER point.series_id == "sensor_01"
+    AND point.timestamp &gt;= DATE_SUBTRACT(DATE_NOW(), 1, "hour")
+  COLLECT sensor = point.series_id
+  AGGREGATE avg_value = AVERAGE(point.value)
+  RETURN {sensor, avg_value}
+</code></pre>
+
+<p><strong>OrbitQL</strong></p>
+<pre><code class="language-orbitql">SELECT 
+    series_id,
+    AVG(value) OVER TIME WINDOW '15 minutes' as avg_value
+FROM metrics 
+WHERE series_id = 'sensor_01'
+  AND timestamp &gt;= NOW() - INTERVAL '1 hour'
+GROUP BY TIME BUCKET '15 minutes'
+</code></pre>
+
+<h2 id="performance-characteristics">Performance Characteristics</h2>
+
+<h3 id="query-execution-performance">Query Execution Performance</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>Operation</th>
+      <th>Cypher</th>
+      <th>AQL</th>
+      <th>OrbitQL</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Simple node lookup</strong></td>
+      <td>Excellent</td>
+      <td>Good</td>
+      <td>Excellent</td>
+    </tr>
+    <tr>
+      <td><strong>Graph traversal</strong></td>
+      <td>Excellent</td>
+      <td>Good</td>
+      <td>Very Good</td>
+    </tr>
+    <tr>
+      <td><strong>Document filtering</strong></td>
+      <td>Good</td>
+      <td>Excellent</td>
+      <td>Very Good</td>
+    </tr>
+    <tr>
+      <td><strong>Aggregations</strong></td>
+      <td>Good</td>
+      <td>Excellent</td>
+      <td>Excellent</td>
+    </tr>
+    <tr>
+      <td><strong>Time series</strong></td>
+      <td>Limited</td>
+      <td>Good</td>
+      <td>Excellent</td>
+    </tr>
+    <tr>
+      <td><strong>Cross-model joins</strong></td>
+      <td>Limited</td>
+      <td>Good</td>
+      <td>Excellent</td>
+    </tr>
+    <tr>
+      <td><strong>Distributed queries</strong></td>
+      <td>Good</td>
+      <td>Good</td>
+      <td>Excellent</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 id="memory-usage">Memory Usage</h3>
+
+<ul>
+  <li><strong>Cypher</strong>: Optimized for graph operations, efficient path storage</li>
+  <li><strong>AQL</strong>: Flexible memory usage, good for varied data types</li>
+  <li><strong>OrbitQL</strong>: Optimized for streaming and large result sets</li>
+</ul>
+
+<h3 id="scalability">Scalability</h3>
+
+<ul>
+  <li><strong>Cypher</strong>: Scales well for graph-heavy workloads</li>
+  <li><strong>AQL</strong>: Good scalability for mixed workloads</li>
+  <li><strong>OrbitQL</strong>: Designed for distributed scaling from ground up</li>
+</ul>
+
+<h2 id="migration-guide">Migration Guide</h2>
+
+<h3 id="from-neo4jcypher-to-orbitql">From Neo4j/Cypher to OrbitQL</h3>
+
+<div class="language-cypher highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Cypher</span>
+<span class="k">MATCH</span><span class="w"> </span><span class="ss">(</span><span class="py">u:</span><span class="n">User</span><span class="ss">)</span><span class="o">-</span><span class="ss">[</span><span class="nc">:FOLLOWS</span><span class="ss">]</span><span class="o">-&gt;</span><span class="ss">(</span><span class="py">f:</span><span class="n">User</span><span class="ss">)</span>
+<span class="k">WHERE</span> <span class="n">u.location</span> <span class="o">=</span> <span class="s1">'NYC'</span>
+<span class="k">RETURN</span> <span class="n">u.name</span><span class="ss">,</span> <span class="n">f.name</span>
+</code></pre></div></div>
+
+<pre><code class="language-orbitql">-- OrbitQL
+SELECT u.name, f.name
+FROM users u
+TRAVERSE OUTBOUND 1..1 STEPS ON follows TO f
+WHERE u.location = 'NYC'
+</code></pre>
+
+<h3 id="from-arangodbaql-to-orbitql">From ArangoDB/AQL to OrbitQL</h3>
+
+<pre><code class="language-aql">// AQL
+FOR user IN users
+  FILTER user.age &gt; 25
+  FOR friend IN 1..1 OUTBOUND user follows
+    RETURN {user: user.name, friend: friend.name}
+</code></pre>
+
+<pre><code class="language-orbitql">-- OrbitQL
+SELECT u.name as user, f.name as friend
+FROM users u
+TRAVERSE OUTBOUND 1..1 STEPS ON follows TO f  
+WHERE u.age &gt; 25
+</code></pre>
+
+<h3 id="from-sql-to-orbitql">From SQL to OrbitQL</h3>
+
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- SQL</span>
+<span class="k">SELECT</span> <span class="n">u</span><span class="p">.</span><span class="n">name</span><span class="p">,</span> <span class="k">COUNT</span><span class="p">(</span><span class="n">o</span><span class="p">.</span><span class="n">id</span><span class="p">)</span> <span class="k">as</span> <span class="n">order_count</span>
+<span class="k">FROM</span> <span class="n">users</span> <span class="n">u</span>
+<span class="k">LEFT</span> <span class="k">JOIN</span> <span class="n">orders</span> <span class="n">o</span> <span class="k">ON</span> <span class="n">u</span><span class="p">.</span><span class="n">id</span> <span class="o">=</span> <span class="n">o</span><span class="p">.</span><span class="n">user_id</span>
+<span class="k">GROUP</span> <span class="k">BY</span> <span class="n">u</span><span class="p">.</span><span class="n">id</span><span class="p">,</span> <span class="n">u</span><span class="p">.</span><span class="n">name</span>
+</code></pre></div></div>
+
+<pre><code class="language-orbitql">-- OrbitQL (identical syntax)
+SELECT u.name, COUNT(o.id) as order_count
+FROM users u
+LEFT JOIN orders o ON u.id = o.user_id
+GROUP BY u.id, u.name
+</code></pre>
+
+<h2 id="best-practices">Best Practices</h2>
+
+<h3 id="language-selection-strategy">Language Selection Strategy</h3>
+
+<ol>
+  <li><strong>Start with your team’s expertise</strong>
+    <ul>
+      <li>SQL background → OrbitQL</li>
+      <li>Neo4j experience → Cypher</li>
+      <li>ArangoDB experience → AQL</li>
+    </ul>
+  </li>
+  <li><strong>Consider primary data patterns</strong>
+    <ul>
+      <li>Graph-heavy → Cypher</li>
+      <li>Document-centric → AQL</li>
+      <li>Multi-model/Time series → OrbitQL</li>
+    </ul>
+  </li>
+  <li><strong>Evaluate ecosystem requirements</strong>
+    <ul>
+      <li>Neo4j tools → Cypher</li>
+      <li>ArangoDB tools → AQL</li>
+      <li>Custom applications → OrbitQL</li>
+    </ul>
+  </li>
+</ol>
+
+<h3 id="performance-optimization">Performance Optimization</h3>
+
+<h4 id="cypher-optimization">Cypher Optimization</h4>
+<div class="language-cypher highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Use specific labels and properties for efficient filtering</span>
+<span class="k">MATCH</span><span class="w"> </span><span class="ss">(</span><span class="py">u:</span><span class="n">User</span> <span class="ss">{</span><span class="py">active:</span> <span class="k">true</span><span class="ss">})</span><span class="o">-</span><span class="ss">[</span><span class="nc">:FOLLOWS</span><span class="ss">]</span><span class="o">-&gt;</span><span class="ss">(</span><span class="py">f:</span><span class="n">User</span><span class="ss">)</span>
+<span class="k">WHERE</span> <span class="n">u.created_at</span> <span class="o">&gt;</span> <span class="nf">date</span><span class="ss">(</span><span class="s1">'2023-01-01'</span><span class="ss">)</span>
+<span class="k">RETURN</span> <span class="n">u</span><span class="ss">,</span> <span class="n">f</span>
+</code></pre></div></div>
+
+<h4 id="aql-optimization">AQL Optimization</h4>
+<pre><code class="language-aql">// Filter early and use indexes
+FOR user IN users
+  FILTER user.active == true AND user.created_at &gt; "2023-01-01"
+  FOR friend IN 1..1 OUTBOUND user follows
+    RETURN {user, friend}
+</code></pre>
+
+<h4 id="orbitql-optimization">OrbitQL Optimization</h4>
+<pre><code class="language-orbitql">-- Use appropriate indexes and limit result sets
+SELECT /*+ INDEX(users, idx_active_created) */ u.name, f.name
+FROM users u
+TRAVERSE OUTBOUND 1..1 STEPS ON follows TO f
+WHERE u.active = true AND u.created_at &gt; '2023-01-01'
+LIMIT 1000
+</code></pre>
+
+<h3 id="cross-language-integration">Cross-Language Integration</h3>
+
+<p>You can use multiple languages in the same application:</p>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Use the best language for each operation</span>
+<span class="k">let</span> <span class="n">social_data</span> <span class="o">=</span> <span class="n">cypher_engine</span><span class="nf">.execute</span><span class="p">(</span>
+    <span class="s">"MATCH (u:User)-[:FOLLOWS*2..3]-&gt;(influence:User) 
+     WHERE u.name = $name 
+     RETURN influence"</span>
+<span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+
+<span class="k">let</span> <span class="n">user_profile</span> <span class="o">=</span> <span class="n">aql_engine</span><span class="nf">.execute</span><span class="p">(</span>
+    <span class="s">"FOR user IN users 
+     FILTER user._id == @user_id 
+     RETURN user.profile"</span>
+<span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+
+<span class="k">let</span> <span class="n">time_series_data</span> <span class="o">=</span> <span class="n">orbitql_engine</span><span class="nf">.execute</span><span class="p">(</span>
+    <span class="s">"SELECT AVG(value) OVER TIME WINDOW '1 hour'
+     FROM metrics 
+     WHERE series_id = @series_id 
+     AND timestamp &gt;= NOW() - INTERVAL '24 hours'"</span>
+<span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h3 id="when-to-use-multiple-languages">When to Use Multiple Languages</h3>
+
+<p>✅ <strong>Different teams with different expertise</strong>
+✅ <strong>Migrating between systems gradually</strong>
+✅ <strong>Specialized operations requiring optimal performance</strong>
+✅ <strong>Integration with existing tools and systems</strong></p>
+
+<p>❌ <strong>Don’t mix languages unnecessarily</strong>
+❌ <strong>Avoid if team size is small</strong>
+❌ <strong>Skip if maintenance complexity is a concern</strong></p>
+
+<h2 id="conclusion">Conclusion</h2>
+
+<p>Orbit-RS’s multi-language support provides unprecedented flexibility for building modern applications. Choose the language that best fits your use case, team expertise, and performance requirements. Remember that you can always mix languages within the same application to get the best of all worlds.</p>
+
+<p>The key is to start with one language that matches your primary use case and expand to others as your needs evolve. OrbitQL is often the best starting point for new projects due to its SQL familiarity and multi-model capabilities, while Cypher and AQL provide specialized advantages for graph and document operations respectively.</p>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/orbit-rs/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Orbit-RS Documentation</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">TuringWorks</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

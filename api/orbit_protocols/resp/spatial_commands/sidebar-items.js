@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["RedisValue"],"struct":["GeofenceDefinition","GeofenceEngine","RedisSpatialCommands","SpatialDataSet"]};

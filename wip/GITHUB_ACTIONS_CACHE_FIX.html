@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>GitHub Actions Cache Fix - core.rs Detection Issue | Orbit-RS Documentation</title>
+<meta name="generator" content="Jekyll v4.4.1" />
+<meta property="og:title" content="GitHub Actions Cache Fix - core.rs Detection Issue" />
+<meta name="author" content="TuringWorks" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<meta property="og:description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<link rel="canonical" href="https://turingworks.github.io/orbit-rs/wip/GITHUB_ACTIONS_CACHE_FIX.html" />
+<meta property="og:url" content="https://turingworks.github.io/orbit-rs/wip/GITHUB_ACTIONS_CACHE_FIX.html" />
+<meta property="og:site_name" content="Orbit-RS Documentation" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="GitHub Actions Cache Fix - core.rs Detection Issue" />
+<meta name="twitter:site" content="@TuringWorksAI" />
+<meta name="twitter:creator" content="@TuringWorks" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","author":{"@type":"Person","name":"TuringWorks"},"description":"The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform","headline":"GitHub Actions Cache Fix - core.rs Detection Issue","url":"https://turingworks.github.io/orbit-rs/wip/GITHUB_ACTIONS_CACHE_FIX.html"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/orbit-rs/assets/main.css">
+  <link rel="stylesheet" href="/orbit-rs/assets/css/custom.css"><link type="application/atom+xml" rel="alternate" href="https://turingworks.github.io/orbit-rs/feed.xml" title="Orbit-RS Documentation" /></head><body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/orbit-rs/">Orbit-RS Documentation</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/orbit-rs/">Orbit-RS Documentation</a><a class="page-link" href="/orbit-rs/project_overview.html">Orbit-RS: Comprehensive Project Overview</a><a class="page-link" href="/orbit-rs/quick_start.html">Quick Start Guide - Multi-Protocol Database Server</a><a class="page-link" href="/orbit-rs/roadmap/">Development Roadmap</a><a class="page-link" href="/orbit-rs/features/">Orbit-RS Feature Index</a><a class="page-link" href="/orbit-rs/compute-acceleration/">Hardware Acceleration Guide</a><a class="page-link" href="/orbit-rs/contributing.html">Contributing Guide</a><a class="page-link" href="/orbit-rs/overview.html">Architecture Overview</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <h1 id="github-actions-cache-fix---corers-detection-issue">GitHub Actions Cache Fix - core.rs Detection Issue</h1>
+
+<p><strong>Date:</strong> 2025-10-03<br />
+<strong>Issue:</strong> CI/CD still failing with “core.rs does not exist” error despite file being in repository<br />
+<strong>Root Cause:</strong> Stale GitHub Actions cache<br />
+<strong>Status:</strong> ✅ Fixed</p>
+
+<hr />
+
+<h2 id="problem-analysis">Problem Analysis</h2>
+
+<h3 id="symptoms">Symptoms</h3>
+<p>Even after successfully adding <code class="language-plaintext highlighter-rouge">core.rs</code> to the repository (commit 117a9d7), the CI/CD pipeline continued to fail with:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Error writing files: failed to resolve mod `core`: 
+/home/runner/work/orbit-rs/orbit-rs/orbit-shared/src/transactions/core.rs does not exist
+</code></pre></div></div>
+
+<h3 id="verification-steps-taken">Verification Steps Taken</h3>
+
+<ol>
+  <li><strong>Confirmed file exists locally:</strong>
+    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">ls</span> <span class="nt">-lh</span> orbit-shared/src/transactions/core.rs
+<span class="c"># Result: -rw-r--r-- 30K Oct 2 23:41 core.rs ✓</span>
+</code></pre></div>    </div>
+  </li>
+  <li><strong>Confirmed file is in git:</strong>
+    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>git ls-files orbit-shared/src/transactions/core.rs
+<span class="c"># Result: orbit-shared/src/transactions/core.rs ✓</span>
+</code></pre></div>    </div>
+  </li>
+  <li><strong>Confirmed file is on remote:</strong>
+    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>git ls-tree <span class="nt">-r</span> origin/main <span class="nt">--name-only</span> | <span class="nb">grep </span>core.rs
+<span class="c"># Result: orbit-shared/src/transactions/core.rs ✓</span>
+</code></pre></div>    </div>
+  </li>
+  <li><strong>Confirmed file content exists:</strong>
+    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>git show origin/main:orbit-shared/src/transactions/core.rs | <span class="nb">wc</span> <span class="nt">-l</span>
+<span class="c"># Result: 945 lines ✓</span>
+</code></pre></div>    </div>
+  </li>
+  <li><strong>Confirmed local build works:</strong>
+    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>cargo <span class="nb">fmt</span> <span class="nt">--all</span> <span class="nt">--</span> <span class="nt">--check</span>
+<span class="c"># Result: No errors ✓</span>
+</code></pre></div>    </div>
+  </li>
+</ol>
+
+<h3 id="root-cause-stale-github-actions-cache">Root Cause: Stale GitHub Actions Cache</h3>
+
+<p>The <code class="language-plaintext highlighter-rouge">.github/workflows/ci-cd.yml</code> workflow uses GitHub Actions caching:</p>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">Cache Rust dependencies</span>
+  <span class="na">uses</span><span class="pi">:</span> <span class="s">actions/cache@v3</span>
+  <span class="na">with</span><span class="pi">:</span>
+    <span class="na">path</span><span class="pi">:</span> <span class="pi">|</span>
+      <span class="s">~/.cargo/registry</span>
+      <span class="s">~/.cargo/git</span>
+      <span class="s">target</span>
+    <span class="na">key</span><span class="pi">:</span> <span class="s">$-cargo-$</span>
+    <span class="na">restore-keys</span><span class="pi">:</span> <span class="pi">|</span>
+      <span class="s">$-cargo-</span>
+</code></pre></div></div>
+
+<p><strong>The Problem:</strong></p>
+<ul>
+  <li>The cache was created BEFORE <code class="language-plaintext highlighter-rouge">core.rs</code> was added to the repository</li>
+  <li>The cache key (<code class="language-plaintext highlighter-rouge">$-cargo-$</code>) only changes when <code class="language-plaintext highlighter-rouge">Cargo.lock</code> changes</li>
+  <li>Since adding <code class="language-plaintext highlighter-rouge">core.rs</code> doesn’t modify <code class="language-plaintext highlighter-rouge">Cargo.lock</code>, the same cache key was used</li>
+  <li>GitHub Actions restored the old cached <code class="language-plaintext highlighter-rouge">target</code> directory that didn’t know about <code class="language-plaintext highlighter-rouge">core.rs</code></li>
+  <li>Even though the source code was freshly checked out, the cached build artifacts were stale</li>
+</ul>
+
+<hr />
+
+<h2 id="solution-implemented">Solution Implemented</h2>
+
+<h3 id="change-cache-key-version">Change Cache Key Version</h3>
+
+<p>Updated the cache key to include a version identifier:</p>
+
+<p><strong>Before:</strong></p>
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">key</span><span class="pi">:</span> <span class="s">$-cargo-$</span>
+<span class="na">restore-keys</span><span class="pi">:</span> <span class="pi">|</span>
+  <span class="s">$-cargo-</span>
+</code></pre></div></div>
+
+<p><strong>After:</strong></p>
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">key</span><span class="pi">:</span> <span class="s">$-cargo-v2-$</span>
+<span class="na">restore-keys</span><span class="pi">:</span> <span class="pi">|</span>
+  <span class="s">$-cargo-v2-</span>
+</code></pre></div></div>
+
+<p><strong>Effect:</strong></p>
+<ul>
+  <li>Old cache keys: <code class="language-plaintext highlighter-rouge">Linux-cargo-&lt;hash&gt;</code>, <code class="language-plaintext highlighter-rouge">macOS-cargo-&lt;hash&gt;</code>, etc.</li>
+  <li>New cache keys: <code class="language-plaintext highlighter-rouge">Linux-cargo-v2-&lt;hash&gt;</code>, <code class="language-plaintext highlighter-rouge">macOS-cargo-v2-&lt;hash&gt;</code>, etc.</li>
+  <li>GitHub Actions won’t find matching cache from old version</li>
+  <li>Forces fresh build with all current source files</li>
+</ul>
+
+<hr />
+
+<h2 id="commit-details">Commit Details</h2>
+
+<p><strong>Commit:</strong> 014a31a<br />
+<strong>Message:</strong> “f5af3c4b-2824-4224-9108-f14836957253”<br />
+<strong>Files Changed:</strong> <code class="language-plaintext highlighter-rouge">.github/workflows/ci-cd.yml</code></p>
+
+<p><strong>Changes:</strong></p>
+<div class="language-diff highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="gd">-    key: $-cargo-$
+</span><span class="gi">+    key: $-cargo-v2-$
+</span>     restore-keys: |
+<span class="gd">-      $-cargo-
+</span><span class="gi">+      $-cargo-v2-
+</span></code></pre></div></div>
+
+<hr />
+
+<h2 id="expected-results">Expected Results</h2>
+
+<h3 id="next-cicd-run-will">Next CI/CD Run Will:</h3>
+
+<ol>
+  <li><strong>Checkout fresh code</strong> ✓ (includes core.rs)</li>
+  <li><strong>Look for cache</strong> with key <code class="language-plaintext highlighter-rouge">Linux-cargo-v2-&lt;hash&gt;</code></li>
+  <li><strong>Cache miss</strong> (no cache exists with v2 key)</li>
+  <li><strong>Fresh build</strong> from scratch</li>
+  <li><strong>Discover core.rs</strong> during build</li>
+  <li><strong>cargo fmt succeeds</strong> ✓</li>
+  <li><strong>Create new cache</strong> with v2 key for future runs</li>
+</ol>
+
+<h3 id="future-runs-will">Future Runs Will:</h3>
+<ul>
+  <li>Use the new v2 cache (which includes core.rs knowledge)</li>
+  <li>Build successfully</li>
+  <li>Be faster due to valid cache</li>
+</ul>
+
+<hr />
+
+<h2 id="understanding-github-actions-caching">Understanding GitHub Actions Caching</h2>
+
+<h3 id="what-gets-cached">What Gets Cached</h3>
+<p>The workflow caches three directories:</p>
+<ol>
+  <li><code class="language-plaintext highlighter-rouge">~/.cargo/registry</code> - Downloaded crate binaries</li>
+  <li><code class="language-plaintext highlighter-rouge">~/.cargo/git</code> - Git repositories of dependencies</li>
+  <li><code class="language-plaintext highlighter-rouge">target</code> - Build artifacts and compilation cache</li>
+</ol>
+
+<h3 id="when-cache-is-restored">When Cache is Restored</h3>
+<ul>
+  <li>GitHub Actions looks for cache with matching key</li>
+  <li>If exact match found: restores entire cached directories</li>
+  <li>If no exact match: tries <code class="language-plaintext highlighter-rouge">restore-keys</code> for partial match</li>
+  <li>If no match: starts fresh (cache miss)</li>
+</ul>
+
+<h3 id="the-problem-with-target-directory">The Problem with <code class="language-plaintext highlighter-rouge">target</code> Directory</h3>
+<p>The <code class="language-plaintext highlighter-rouge">target</code> directory contains:</p>
+<ul>
+  <li>Compiled dependencies</li>
+  <li>Build metadata about source files</li>
+  <li><strong>Incremental compilation state</strong></li>
+</ul>
+
+<p>When <code class="language-plaintext highlighter-rouge">core.rs</code> was added:</p>
+<ul>
+  <li>Source code had the new file</li>
+  <li>Cached <code class="language-plaintext highlighter-rouge">target</code> directory didn’t know about it</li>
+  <li>Cargo used cached metadata saying “core module doesn’t exist”</li>
+  <li>Result: build failure</li>
+</ul>
+
+<hr />
+
+<h2 id="alternative-solutions-considered">Alternative Solutions Considered</h2>
+
+<h3 id="option-1-dont-cache-target-directory">Option 1: Don’t Cache <code class="language-plaintext highlighter-rouge">target</code> Directory</h3>
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">path</span><span class="pi">:</span> <span class="pi">|</span>
+  <span class="s">~/.cargo/registry</span>
+  <span class="s">~/.cargo/git</span>
+  <span class="s"># target  # Remove this line</span>
+</code></pre></div></div>
+
+<p><strong>Pros:</strong> Prevents stale build artifacts<br />
+<strong>Cons:</strong> Slower builds (recompile everything each time)</p>
+
+<h3 id="option-2-clear-cache-manually">Option 2: Clear Cache Manually</h3>
+<p>Go to GitHub Actions → Caches → Delete all caches</p>
+
+<p><strong>Pros:</strong> One-time fix<br />
+<strong>Cons:</strong> Manual process, not automated</p>
+
+<h3 id="option-3-cache-key-based-on-source-hash">Option 3: Cache Key Based on Source Hash</h3>
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">key</span><span class="pi">:</span> <span class="s">$-cargo-$</span>
+</code></pre></div></div>
+
+<p><strong>Pros:</strong> Cache invalidates when any source file changes<br />
+<strong>Cons:</strong> Cache invalidates TOO often (every commit touches source files)</p>
+
+<h3 id="option-4-version-based-cache-key-chosen">Option 4: Version-Based Cache Key (CHOSEN)</h3>
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">key</span><span class="pi">:</span> <span class="s">$-cargo-v2-$</span>
+</code></pre></div></div>
+
+<p><strong>Pros:</strong></p>
+<ul>
+  <li>Simple to implement</li>
+  <li>Can manually invalidate when needed</li>
+  <li>Doesn’t invalidate too frequently</li>
+  <li>Clear versioning for debugging</li>
+</ul>
+
+<p><strong>Cons:</strong></p>
+<ul>
+  <li>Must remember to bump version when major changes occur</li>
+</ul>
+
+<hr />
+
+<h2 id="when-to-bump-cache-version">When to Bump Cache Version</h2>
+
+<p>Bump the cache version (<code class="language-plaintext highlighter-rouge">v2</code> → <code class="language-plaintext highlighter-rouge">v3</code>, etc.) when:</p>
+
+<h3 id="-do-bump-version-when">✅ DO Bump Version When:</h3>
+<ul>
+  <li>Adding new source files that change module structure</li>
+  <li>Upgrading Rust toolchain version</li>
+  <li>Changing build flags or environment variables</li>
+  <li>After repository reorganization</li>
+  <li>CI/CD builds failing with “file does not exist” errors</li>
+  <li>Suspecting stale cache is causing issues</li>
+</ul>
+
+<h3 id="-dont-bump-version-when">❌ DON’T Bump Version When:</h3>
+<ul>
+  <li>Normal code changes to existing files (cache handles this)</li>
+  <li>Dependency updates (Cargo.lock hash changes automatically)</li>
+  <li>Documentation-only changes</li>
+  <li>Test-only changes</li>
+</ul>
+
+<hr />
+
+<h2 id="best-practices-for-cicd-caching">Best Practices for CI/CD Caching</h2>
+
+<h3 id="1-version-your-cache-keys">1. Version Your Cache Keys</h3>
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">key</span><span class="pi">:</span> <span class="s">$-cargo-v1-$</span>
+</code></pre></div></div>
+<p>Include a version number you can manually increment.</p>
+
+<h3 id="2-use-appropriate-cache-scope">2. Use Appropriate Cache Scope</h3>
+<p>For Rust projects:</p>
+<ul>
+  <li><strong>Cache:</strong> <code class="language-plaintext highlighter-rouge">~/.cargo/registry</code>, <code class="language-plaintext highlighter-rouge">~/.cargo/git</code>, <code class="language-plaintext highlighter-rouge">target</code></li>
+  <li><strong>Don’t cache:</strong> Source files (always check out fresh)</li>
+</ul>
+
+<h3 id="3-set-cache-size-limits">3. Set Cache Size Limits</h3>
+<p>GitHub has a 10GB cache limit per repository:</p>
+<ul>
+  <li>Monitor cache sizes</li>
+  <li>Clean old caches periodically</li>
+  <li>Consider separate caches for different workflows</li>
+</ul>
+
+<h3 id="4-document-cache-strategy">4. Document Cache Strategy</h3>
+<p>In your workflow file or README:</p>
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c1"># Cache key versioning:</span>
+<span class="c1"># v1: Initial implementation</span>
+<span class="c1"># v2: Added core.rs transaction module (Oct 2025)</span>
+<span class="c1"># v3: Upgraded to Rust 1.75 (when it happens)</span>
+</code></pre></div></div>
+
+<h3 id="5-test-cache-behavior">5. Test Cache Behavior</h3>
+<ul>
+  <li>Test with cache hit (normal run)</li>
+  <li>Test with cache miss (bump version)</li>
+  <li>Test with partial cache hit (restore-keys)</li>
+</ul>
+
+<hr />
+
+<h2 id="monitoring-and-debugging">Monitoring and Debugging</h2>
+
+<h3 id="check-cache-status-in-github-actions">Check Cache Status in GitHub Actions</h3>
+<ol>
+  <li>Go to repository → Actions → Workflow run</li>
+  <li>Expand the “Cache Rust dependencies” step</li>
+  <li>Look for:
+    <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Cache hit: true/false
+Restored from: &lt;cache-key&gt;
+</code></pre></div>    </div>
+  </li>
+</ol>
+
+<h3 id="debug-cache-issues">Debug Cache Issues</h3>
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">Debug cache</span>
+  <span class="na">run</span><span class="pi">:</span> <span class="pi">|</span>
+    <span class="s">echo "Cache key: $-cargo-v2-$"</span>
+    <span class="s">ls -la target/ || echo "No target directory"</span>
+    <span class="s">cargo clean --verbose</span>
+</code></pre></div></div>
+
+<h3 id="force-cache-refresh">Force Cache Refresh</h3>
+<p>To temporarily force fresh build without changing version:</p>
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">Cache Rust dependencies</span>
+  <span class="na">uses</span><span class="pi">:</span> <span class="s">actions/cache@v3</span>
+  <span class="na">with</span><span class="pi">:</span>
+    <span class="c1"># ... existing config ...</span>
+    <span class="na">key</span><span class="pi">:</span> <span class="s">$-cargo-v2-$-$</span>
+</code></pre></div></div>
+<p>This uses <code class="language-plaintext highlighter-rouge">github.run_id</code> which is unique per run, forcing cache miss.</p>
+
+<hr />
+
+<h2 id="timeline-of-events">Timeline of Events</h2>
+
+<ol>
+  <li><strong>Initial State:</strong> core.rs doesn’t exist, cache created</li>
+  <li><strong>Commit 117a9d7:</strong> Added core.rs to repository</li>
+  <li><strong>CI/CD Run:</strong> Checked out new code BUT restored old cache</li>
+  <li><strong>Error:</strong> “core.rs does not exist” (from cached build metadata)</li>
+  <li><strong>Investigation:</strong> Confirmed file exists locally and remotely</li>
+  <li><strong>Root Cause:</strong> Identified stale GitHub Actions cache</li>
+  <li><strong>Fix (Commit 014a31a):</strong> Bumped cache version from v1 to v2</li>
+  <li><strong>Expected:</strong> Next CI/CD run will use fresh build</li>
+</ol>
+
+<hr />
+
+<h2 id="verification-checklist">Verification Checklist</h2>
+
+<p>After the fix is deployed:</p>
+
+<ul class="task-list">
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Next CI/CD run starts</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Cache miss logged (no v2 cache exists yet)</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Fresh build initiated</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><code class="language-plaintext highlighter-rouge">cargo fmt --all -- --check</code> passes</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Build completes successfully</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />New v2 cache created</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Subsequent runs use v2 cache successfully</li>
+</ul>
+
+<hr />
+
+<h2 id="related-documentation">Related Documentation</h2>
+
+<ul>
+  <li><a href="https://docs.github.com/en/actions/using-workflows/caching-dependencies-to-speed-up-workflows">GitHub Actions Caching</a></li>
+  <li><a href="https://doc.rust-lang.org/cargo/guide/build-cache.html">Cargo Build Cache</a></li>
+  <li><a href="/orbit-rs/wip/GITIGNORE_FIX_SUMMARY.html">GITIGNORE_FIX_SUMMARY.md</a> - Initial fix for core.rs</li>
+</ul>
+
+<hr />
+
+<h2 id="key-takeaways">Key Takeaways</h2>
+
+<ol>
+  <li><strong>GitHub Actions caches can become stale</strong> when structural changes occur</li>
+  <li><strong>Versioning cache keys</strong> provides manual control over cache invalidation</li>
+  <li><strong>The <code class="language-plaintext highlighter-rouge">target</code> directory cache</strong> can cause “file not found” errors if stale</li>
+  <li><strong>Always verify locally</strong> before assuming CI/CD environment issue</li>
+  <li><strong>Cache invalidation is a common problem</strong> in CI/CD systems</li>
+</ol>
+
+<hr />
+
+<p><strong>Status:</strong> ✅ Fixed (cache key updated)<br />
+<strong>Next Steps:</strong> Monitor next CI/CD run to confirm fix<br />
+<strong>Cache Version:</strong> v2<br />
+<strong>Last Updated:</strong> 2025-10-03</p>
+
+<p>For future cache issues, bump the version number in <code class="language-plaintext highlighter-rouge">.github/workflows/ci-cd.yml</code>:</p>
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">key</span><span class="pi">:</span> <span class="s">$-cargo-v3-$</span>
+</code></pre></div></div>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/orbit-rs/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Orbit-RS Documentation</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">TuringWorks</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

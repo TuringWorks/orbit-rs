@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Redis Time Series Compatibility | Orbit-RS Documentation</title>
+<meta name="generator" content="Jekyll v4.4.1" />
+<meta property="og:title" content="Redis Time Series Compatibility" />
+<meta name="author" content="TuringWorks" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<meta property="og:description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<link rel="canonical" href="https://turingworks.github.io/orbit-rs/protocols/REDIS_TIMESERIES.html" />
+<meta property="og:url" content="https://turingworks.github.io/orbit-rs/protocols/REDIS_TIMESERIES.html" />
+<meta property="og:site_name" content="Orbit-RS Documentation" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Redis Time Series Compatibility" />
+<meta name="twitter:site" content="@TuringWorksAI" />
+<meta name="twitter:creator" content="@TuringWorks" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","author":{"@type":"Person","name":"TuringWorks"},"description":"The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform","headline":"Redis Time Series Compatibility","url":"https://turingworks.github.io/orbit-rs/protocols/REDIS_TIMESERIES.html"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/orbit-rs/assets/main.css">
+  <link rel="stylesheet" href="/orbit-rs/assets/css/custom.css"><link type="application/atom+xml" rel="alternate" href="https://turingworks.github.io/orbit-rs/feed.xml" title="Orbit-RS Documentation" /></head><body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/orbit-rs/">Orbit-RS Documentation</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/orbit-rs/">Orbit-RS Documentation</a><a class="page-link" href="/orbit-rs/project_overview.html">Orbit-RS: Comprehensive Project Overview</a><a class="page-link" href="/orbit-rs/quick_start.html">Quick Start Guide - Multi-Protocol Database Server</a><a class="page-link" href="/orbit-rs/roadmap/">Development Roadmap</a><a class="page-link" href="/orbit-rs/features/">Orbit-RS Feature Index</a><a class="page-link" href="/orbit-rs/compute-acceleration/">Hardware Acceleration Guide</a><a class="page-link" href="/orbit-rs/contributing.html">Contributing Guide</a><a class="page-link" href="/orbit-rs/overview.html">Architecture Overview</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <h1 id="redis-time-series-compatibility">Redis Time Series Compatibility</h1>
+
+<h2 id="overview">Overview</h2>
+
+<p>Redis Time Series is a Redis module that adds time-series data structure support to Redis. Orbit-RS will provide native compatibility with RedisTimeSeries commands, allowing existing applications to seamlessly migrate or integrate with Orbit’s distributed actor system.</p>
+
+<h2 id="planned-features">Planned Features</h2>
+
+<h3 id="-phase-12-time-series-foundation">🎯 <strong>Phase 12: Time Series Foundation</strong></h3>
+
+<h4 id="core-time-series-actor">Core Time Series Actor</h4>
+<ul>
+  <li><strong>TimeSeriesActor</strong>: Distributed time-series data management</li>
+  <li><strong>Time-based partitioning</strong>: Automatic data partitioning by time windows</li>
+  <li><strong>Compression</strong>: Built-in data compression for storage efficiency</li>
+  <li><strong>Retention policies</strong>: Automatic data expiration and cleanup</li>
+</ul>
+
+<h4 id="basic-commands">Basic Commands</h4>
+<ul>
+  <li><strong>TS.CREATE</strong>: Create time series with metadata and retention policy</li>
+  <li><strong>TS.ADD</strong>: Add timestamp-value pairs to time series</li>
+  <li><strong>TS.GET</strong>: Get the latest or specific timestamp value</li>
+  <li><strong>TS.RANGE</strong>: Query data within time ranges</li>
+  <li><strong>TS.REVRANGE</strong>: Query data in reverse chronological order</li>
+</ul>
+
+<h3 id="-phase-13-advanced-time-series-operations">🚀 <strong>Phase 13: Advanced Time Series Operations</strong></h3>
+
+<h4 id="aggregation-commands">Aggregation Commands</h4>
+<ul>
+  <li><strong>TS.CREATERULE</strong>: Create aggregation rules between time series</li>
+  <li><strong>TS.DELETERULE</strong>: Delete aggregation rules</li>
+  <li><strong>TS.MRANGE</strong>: Multi-series range queries with filters</li>
+  <li><strong>TS.MREVRANGE</strong>: Multi-series reverse range queries</li>
+  <li><strong>TS.MGET</strong>: Get latest values from multiple time series</li>
+</ul>
+
+<h4 id="statistical-functions">Statistical Functions</h4>
+<ul>
+  <li><strong>Built-in aggregators</strong>: AVG, SUM, MIN, MAX, COUNT, STDDEV, VAR</li>
+  <li><strong>Time-window aggregations</strong>: Configurable time windows (1s, 1m, 1h, 1d)</li>
+  <li><strong>Downsampling</strong>: Automatic data reduction for long-term storage</li>
+</ul>
+
+<h3 id="-phase-14-enterprise-time-series-features">📊 <strong>Phase 14: Enterprise Time Series Features</strong></h3>
+
+<h4 id="advanced-analytics">Advanced Analytics</h4>
+<ul>
+  <li><strong>TS.QUERYINDEX</strong>: Query time series by labels and filters</li>
+  <li><strong>TS.INFO</strong>: Get comprehensive time series metadata</li>
+  <li><strong>Labeling system</strong>: Multi-dimensional time series organization</li>
+  <li><strong>Compaction</strong>: Automatic data compaction with configurable policies</li>
+</ul>
+
+<h4 id="performance-optimizations">Performance Optimizations</h4>
+<ul>
+  <li><strong>Chunk-based storage</strong>: Efficient memory and disk usage</li>
+  <li><strong>Indexing</strong>: Fast time-based and label-based queries</li>
+  <li><strong>Caching</strong>: Intelligent caching for frequently accessed data</li>
+  <li><strong>Parallel processing</strong>: Multi-threaded query execution</li>
+</ul>
+
+<h2 id="technical-implementation">Technical Implementation</h2>
+
+<h3 id="actor-architecture">Actor Architecture</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="nd">#[async_trait]</span>
+<span class="k">pub</span> <span class="k">trait</span> <span class="n">TimeSeriesActor</span><span class="p">:</span> <span class="n">ActorWithStringKey</span> <span class="p">{</span>
+    <span class="c1">// Core operations</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">add_sample</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">timestamp</span><span class="p">:</span> <span class="nb">u64</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="nb">f64</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="nb">u64</span><span class="o">&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">get_sample</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">timestamp</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="nb">u64</span><span class="o">&gt;</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="nb">Option</span><span class="o">&lt;</span><span class="p">(</span><span class="nb">u64</span><span class="p">,</span> <span class="nb">f64</span><span class="p">)</span><span class="o">&gt;&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">range_query</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">from</span><span class="p">:</span> <span class="nb">u64</span><span class="p">,</span> <span class="n">to</span><span class="p">:</span> <span class="nb">u64</span><span class="p">,</span> <span class="n">aggregation</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="n">Aggregation</span><span class="o">&gt;</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="p">(</span><span class="nb">u64</span><span class="p">,</span> <span class="nb">f64</span><span class="p">)</span><span class="o">&gt;&gt;</span><span class="p">;</span>
+    
+    <span class="c1">// Metadata operations</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">create_series</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">config</span><span class="p">:</span> <span class="n">TimeSeriesConfig</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">add_label</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="nb">String</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">get_info</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">TimeSeriesInfo</span><span class="o">&gt;</span><span class="p">;</span>
+    
+    <span class="c1">// Aggregation rules</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">create_rule</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">dest_key</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span> <span class="n">aggregation</span><span class="p">:</span> <span class="n">Aggregation</span><span class="p">,</span> <span class="n">bucket_duration</span><span class="p">:</span> <span class="nb">u64</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">delete_rule</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">dest_key</span><span class="p">:</span> <span class="nb">String</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="nb">bool</span><span class="o">&gt;</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="data-structures">Data Structures</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="nd">#[derive(Debug,</span> <span class="nd">Clone,</span> <span class="nd">Serialize,</span> <span class="nd">Deserialize)]</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">TimeSeriesConfig</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="n">retention_ms</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="nb">u64</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">chunk_size</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="nb">usize</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">duplicate_policy</span><span class="p">:</span> <span class="n">DuplicatePolicy</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">labels</span><span class="p">:</span> <span class="n">HashMap</span><span class="o">&lt;</span><span class="nb">String</span><span class="p">,</span> <span class="nb">String</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">uncompressed</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="nd">#[derive(Debug,</span> <span class="nd">Clone,</span> <span class="nd">Serialize,</span> <span class="nd">Deserialize)]</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">TimeSeriesSample</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="n">timestamp</span><span class="p">:</span> <span class="nb">u64</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">value</span><span class="p">:</span> <span class="nb">f64</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="nd">#[derive(Debug,</span> <span class="nd">Clone,</span> <span class="nd">Serialize,</span> <span class="nd">Deserialize)]</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">AggregationRule</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="n">dest_key</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">aggregation</span><span class="p">:</span> <span class="n">Aggregation</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">bucket_duration</span><span class="p">:</span> <span class="nb">u64</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">alignment_timestamp</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="nb">u64</span><span class="o">&gt;</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="nd">#[derive(Debug,</span> <span class="nd">Clone,</span> <span class="nd">Serialize,</span> <span class="nd">Deserialize)]</span>
+<span class="k">pub</span> <span class="k">enum</span> <span class="n">Aggregation</span> <span class="p">{</span>
+    <span class="n">Avg</span><span class="p">,</span>
+    <span class="n">Sum</span><span class="p">,</span>
+    <span class="n">Min</span><span class="p">,</span>
+    <span class="n">Max</span><span class="p">,</span>
+    <span class="n">Range</span><span class="p">,</span>
+    <span class="n">Count</span><span class="p">,</span>
+    <span class="n">Std</span><span class="p">,</span>
+    <span class="n">Var</span><span class="p">,</span>
+    <span class="n">First</span><span class="p">,</span>
+    <span class="n">Last</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="nd">#[derive(Debug,</span> <span class="nd">Clone,</span> <span class="nd">Serialize,</span> <span class="nd">Deserialize)]</span>
+<span class="k">pub</span> <span class="k">enum</span> <span class="n">DuplicatePolicy</span> <span class="p">{</span>
+    <span class="n">Block</span><span class="p">,</span>    <span class="c1">// Reject duplicate timestamps</span>
+    <span class="n">Last</span><span class="p">,</span>     <span class="c1">// Keep last value</span>
+    <span class="n">First</span><span class="p">,</span>    <span class="c1">// Keep first value</span>
+    <span class="n">Min</span><span class="p">,</span>      <span class="c1">// Keep minimum value</span>
+    <span class="n">Max</span><span class="p">,</span>      <span class="c1">// Keep maximum value</span>
+    <span class="n">Sum</span><span class="p">,</span>      <span class="c1">// Sum values</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h2 id="command-reference">Command Reference</h2>
+
+<h3 id="tscreate">TS.CREATE</h3>
+<pre><code class="language-redis">TS.CREATE key [RETENTION retentionTime] [UNCOMPRESSED] [CHUNK_SIZE size] [DUPLICATE_POLICY policy] [LABELS label value...]
+</code></pre>
+
+<h3 id="tsadd">TS.ADD</h3>
+<pre><code class="language-redis">TS.ADD key timestamp value [RETENTION retentionTime] [UNCOMPRESSED] [CHUNK_SIZE size] [ON_DUPLICATE policy] [LABELS label value...]
+</code></pre>
+
+<h3 id="tsrange">TS.RANGE</h3>
+<pre><code class="language-redis">TS.RANGE key fromTimestamp toTimestamp [LATEST] [FILTER_BY_TS ts...] [FILTER_BY_VALUE min max] [COUNT count] [AGGREGATION aggregator bucketDuration [alignTimestamp]] [SELECTED_LABELS label...]
+</code></pre>
+
+<h3 id="tsmrange">TS.MRANGE</h3>
+<pre><code class="language-redis">TS.MRANGE fromTimestamp toTimestamp [LATEST] [FILTER_BY_TS ts...] [FILTER_BY_VALUE min max] [WITHLABELS | SELECTED_LABELS label...] [COUNT count] [AGGREGATION aggregator bucketDuration [alignTimestamp]] FILTER filter...
+</code></pre>
+
+<h3 id="tscreaterule">TS.CREATERULE</h3>
+<pre><code class="language-redis">TS.CREATERULE sourceKey destKey AGGREGATION aggregator bucketDuration [alignTimestamp]
+</code></pre>
+
+<h2 id="usage-examples">Usage Examples</h2>
+
+<h3 id="basic-time-series-operations">Basic Time Series Operations</h3>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">import</span> <span class="n">redis</span>
+<span class="n">r</span> <span class="o">=</span> <span class="n">redis</span><span class="p">.</span><span class="nc">Redis</span><span class="p">(</span><span class="n">host</span><span class="o">=</span><span class="sh">'</span><span class="s">localhost</span><span class="sh">'</span><span class="p">,</span> <span class="n">port</span><span class="o">=</span><span class="mi">6380</span><span class="p">)</span>  <span class="c1"># Orbit-RS RESP server
+</span>
+<span class="c1"># Create time series with 1 hour retention
+</span><span class="n">r</span><span class="p">.</span><span class="nf">execute_command</span><span class="p">(</span><span class="sh">'</span><span class="s">TS.CREATE</span><span class="sh">'</span><span class="p">,</span> <span class="sh">'</span><span class="s">temperature:sensor1</span><span class="sh">'</span><span class="p">,</span> 
+                 <span class="sh">'</span><span class="s">RETENTION</span><span class="sh">'</span><span class="p">,</span> <span class="mi">3600000</span><span class="p">,</span> 
+                 <span class="sh">'</span><span class="s">LABELS</span><span class="sh">'</span><span class="p">,</span> <span class="sh">'</span><span class="s">sensor_id</span><span class="sh">'</span><span class="p">,</span> <span class="sh">'</span><span class="s">1</span><span class="sh">'</span><span class="p">,</span> <span class="sh">'</span><span class="s">location</span><span class="sh">'</span><span class="p">,</span> <span class="sh">'</span><span class="s">room_a</span><span class="sh">'</span><span class="p">)</span>
+
+<span class="c1"># Add temperature readings
+</span><span class="kn">import</span> <span class="n">time</span>
+<span class="n">now</span> <span class="o">=</span> <span class="nf">int</span><span class="p">(</span><span class="n">time</span><span class="p">.</span><span class="nf">time</span><span class="p">()</span> <span class="o">*</span> <span class="mi">1000</span><span class="p">)</span>
+<span class="n">r</span><span class="p">.</span><span class="nf">execute_command</span><span class="p">(</span><span class="sh">'</span><span class="s">TS.ADD</span><span class="sh">'</span><span class="p">,</span> <span class="sh">'</span><span class="s">temperature:sensor1</span><span class="sh">'</span><span class="p">,</span> <span class="n">now</span><span class="p">,</span> <span class="mf">23.5</span><span class="p">)</span>
+<span class="n">r</span><span class="p">.</span><span class="nf">execute_command</span><span class="p">(</span><span class="sh">'</span><span class="s">TS.ADD</span><span class="sh">'</span><span class="p">,</span> <span class="sh">'</span><span class="s">temperature:sensor1</span><span class="sh">'</span><span class="p">,</span> <span class="n">now</span> <span class="o">+</span> <span class="mi">1000</span><span class="p">,</span> <span class="mf">24.1</span><span class="p">)</span>
+<span class="n">r</span><span class="p">.</span><span class="nf">execute_command</span><span class="p">(</span><span class="sh">'</span><span class="s">TS.ADD</span><span class="sh">'</span><span class="p">,</span> <span class="sh">'</span><span class="s">temperature:sensor1</span><span class="sh">'</span><span class="p">,</span> <span class="n">now</span> <span class="o">+</span> <span class="mi">2000</span><span class="p">,</span> <span class="mf">23.8</span><span class="p">)</span>
+
+<span class="c1"># Query range with 1-minute averages
+</span><span class="n">results</span> <span class="o">=</span> <span class="n">r</span><span class="p">.</span><span class="nf">execute_command</span><span class="p">(</span><span class="sh">'</span><span class="s">TS.RANGE</span><span class="sh">'</span><span class="p">,</span> <span class="sh">'</span><span class="s">temperature:sensor1</span><span class="sh">'</span><span class="p">,</span> 
+                           <span class="n">now</span> <span class="o">-</span> <span class="mi">300000</span><span class="p">,</span> <span class="n">now</span><span class="p">,</span>
+                           <span class="sh">'</span><span class="s">AGGREGATION</span><span class="sh">'</span><span class="p">,</span> <span class="sh">'</span><span class="s">AVG</span><span class="sh">'</span><span class="p">,</span> <span class="mi">60000</span><span class="p">)</span>
+<span class="nf">print</span><span class="p">(</span><span class="sa">f</span><span class="sh">"</span><span class="s">1-minute averages: </span><span class="si">{</span><span class="n">results</span><span class="si">}</span><span class="sh">"</span><span class="p">)</span>
+
+<span class="c1"># Create downsampling rule for hourly averages
+</span><span class="n">r</span><span class="p">.</span><span class="nf">execute_command</span><span class="p">(</span><span class="sh">'</span><span class="s">TS.CREATERULE</span><span class="sh">'</span><span class="p">,</span> <span class="sh">'</span><span class="s">temperature:sensor1</span><span class="sh">'</span><span class="p">,</span> <span class="sh">'</span><span class="s">temperature:sensor1:hourly</span><span class="sh">'</span><span class="p">,</span>
+                 <span class="sh">'</span><span class="s">AGGREGATION</span><span class="sh">'</span><span class="p">,</span> <span class="sh">'</span><span class="s">AVG</span><span class="sh">'</span><span class="p">,</span> <span class="mi">3600000</span><span class="p">)</span>
+</code></pre></div></div>
+
+<h3 id="multi-series-analytics">Multi-Series Analytics</h3>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c1"># Create multiple time series for different sensors
+</span><span class="n">sensors</span> <span class="o">=</span> <span class="p">[</span><span class="sh">'</span><span class="s">sensor1</span><span class="sh">'</span><span class="p">,</span> <span class="sh">'</span><span class="s">sensor2</span><span class="sh">'</span><span class="p">,</span> <span class="sh">'</span><span class="s">sensor3</span><span class="sh">'</span><span class="p">]</span>
+<span class="k">for</span> <span class="n">sensor_id</span> <span class="ow">in</span> <span class="n">sensors</span><span class="p">:</span>
+    <span class="n">r</span><span class="p">.</span><span class="nf">execute_command</span><span class="p">(</span><span class="sh">'</span><span class="s">TS.CREATE</span><span class="sh">'</span><span class="p">,</span> <span class="sa">f</span><span class="sh">'</span><span class="s">temperature:</span><span class="si">{</span><span class="n">sensor_id</span><span class="si">}</span><span class="sh">'</span><span class="p">,</span>
+                     <span class="sh">'</span><span class="s">LABELS</span><span class="sh">'</span><span class="p">,</span> <span class="sh">'</span><span class="s">sensor_id</span><span class="sh">'</span><span class="p">,</span> <span class="n">sensor_id</span><span class="p">,</span> <span class="sh">'</span><span class="s">type</span><span class="sh">'</span><span class="p">,</span> <span class="sh">'</span><span class="s">temperature</span><span class="sh">'</span><span class="p">)</span>
+
+<span class="c1"># Add readings to all sensors
+</span><span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">sensor_id</span> <span class="ow">in</span> <span class="nf">enumerate</span><span class="p">(</span><span class="n">sensors</span><span class="p">):</span>
+    <span class="n">base_temp</span> <span class="o">=</span> <span class="mi">20</span> <span class="o">+</span> <span class="n">i</span>  <span class="c1"># Different base temperatures
+</span>    <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nf">range</span><span class="p">(</span><span class="mi">100</span><span class="p">):</span>
+        <span class="n">timestamp</span> <span class="o">=</span> <span class="n">now</span> <span class="o">+</span> <span class="n">j</span> <span class="o">*</span> <span class="mi">1000</span>
+        <span class="n">temp</span> <span class="o">=</span> <span class="n">base_temp</span> <span class="o">+</span> <span class="p">(</span><span class="n">j</span> <span class="o">%</span> <span class="mi">10</span><span class="p">)</span>  <span class="c1"># Simulated temperature variation
+</span>        <span class="n">r</span><span class="p">.</span><span class="nf">execute_command</span><span class="p">(</span><span class="sh">'</span><span class="s">TS.ADD</span><span class="sh">'</span><span class="p">,</span> <span class="sa">f</span><span class="sh">'</span><span class="s">temperature:</span><span class="si">{</span><span class="n">sensor_id</span><span class="si">}</span><span class="sh">'</span><span class="p">,</span> <span class="n">timestamp</span><span class="p">,</span> <span class="n">temp</span><span class="p">)</span>
+
+<span class="c1"># Query all temperature sensors for the last 10 minutes
+</span><span class="n">results</span> <span class="o">=</span> <span class="n">r</span><span class="p">.</span><span class="nf">execute_command</span><span class="p">(</span><span class="sh">'</span><span class="s">TS.MRANGE</span><span class="sh">'</span><span class="p">,</span> <span class="n">now</span> <span class="o">-</span> <span class="mi">600000</span><span class="p">,</span> <span class="n">now</span><span class="p">,</span>
+                           <span class="sh">'</span><span class="s">AGGREGATION</span><span class="sh">'</span><span class="p">,</span> <span class="sh">'</span><span class="s">AVG</span><span class="sh">'</span><span class="p">,</span> <span class="mi">60000</span><span class="p">,</span>
+                           <span class="sh">'</span><span class="s">FILTER</span><span class="sh">'</span><span class="p">,</span> <span class="sh">'</span><span class="s">type=temperature</span><span class="sh">'</span><span class="p">)</span>
+
+<span class="k">for</span> <span class="n">series_data</span> <span class="ow">in</span> <span class="n">results</span><span class="p">:</span>
+    <span class="n">sensor_name</span><span class="p">,</span> <span class="n">labels</span><span class="p">,</span> <span class="n">samples</span> <span class="o">=</span> <span class="n">series_data</span>
+    <span class="nf">print</span><span class="p">(</span><span class="sa">f</span><span class="sh">"</span><span class="si">{</span><span class="n">sensor_name</span><span class="si">}</span><span class="s">: </span><span class="si">{</span><span class="nf">len</span><span class="p">(</span><span class="n">samples</span><span class="p">)</span><span class="si">}</span><span class="s"> samples</span><span class="sh">"</span><span class="p">)</span>
+</code></pre></div></div>
+
+<h3 id="iot-data-pipeline">IoT Data Pipeline</h3>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c1"># Real-time IoT data ingestion
+</span><span class="k">def</span> <span class="nf">ingest_sensor_data</span><span class="p">(</span><span class="n">device_id</span><span class="p">,</span> <span class="n">sensor_type</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+    <span class="n">timestamp</span> <span class="o">=</span> <span class="nf">int</span><span class="p">(</span><span class="n">time</span><span class="p">.</span><span class="nf">time</span><span class="p">()</span> <span class="o">*</span> <span class="mi">1000</span><span class="p">)</span>
+    <span class="n">key</span> <span class="o">=</span> <span class="sa">f</span><span class="sh">"</span><span class="si">{</span><span class="n">sensor_type</span><span class="si">}</span><span class="s">:</span><span class="si">{</span><span class="n">device_id</span><span class="si">}</span><span class="sh">"</span>
+    
+    <span class="c1"># Create series if it doesn't exist
+</span>    <span class="k">try</span><span class="p">:</span>
+        <span class="n">r</span><span class="p">.</span><span class="nf">execute_command</span><span class="p">(</span><span class="sh">'</span><span class="s">TS.CREATE</span><span class="sh">'</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span>
+                         <span class="sh">'</span><span class="s">RETENTION</span><span class="sh">'</span><span class="p">,</span> <span class="mi">86400000</span><span class="p">,</span>  <span class="c1"># 24 hours
+</span>                         <span class="sh">'</span><span class="s">LABELS</span><span class="sh">'</span><span class="p">,</span> 
+                         <span class="sh">'</span><span class="s">device_id</span><span class="sh">'</span><span class="p">,</span> <span class="n">device_id</span><span class="p">,</span>
+                         <span class="sh">'</span><span class="s">sensor_type</span><span class="sh">'</span><span class="p">,</span> <span class="n">sensor_type</span><span class="p">,</span>
+                         <span class="sh">'</span><span class="s">location</span><span class="sh">'</span><span class="p">,</span> <span class="nf">get_device_location</span><span class="p">(</span><span class="n">device_id</span><span class="p">))</span>
+    <span class="k">except</span><span class="p">:</span>
+        <span class="k">pass</span>  <span class="c1"># Series already exists
+</span>    
+    <span class="c1"># Add sample
+</span>    <span class="n">r</span><span class="p">.</span><span class="nf">execute_command</span><span class="p">(</span><span class="sh">'</span><span class="s">TS.ADD</span><span class="sh">'</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">timestamp</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+    
+    <span class="c1"># Create aggregation rules for analytics
+</span>    <span class="n">hourly_key</span> <span class="o">=</span> <span class="sa">f</span><span class="sh">"</span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s">:hourly</span><span class="sh">"</span>
+    <span class="n">daily_key</span> <span class="o">=</span> <span class="sa">f</span><span class="sh">"</span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s">:daily</span><span class="sh">"</span>
+    
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">r</span><span class="p">.</span><span class="nf">execute_command</span><span class="p">(</span><span class="sh">'</span><span class="s">TS.CREATERULE</span><span class="sh">'</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">hourly_key</span><span class="p">,</span>
+                         <span class="sh">'</span><span class="s">AGGREGATION</span><span class="sh">'</span><span class="p">,</span> <span class="sh">'</span><span class="s">AVG</span><span class="sh">'</span><span class="p">,</span> <span class="mi">3600000</span><span class="p">)</span>
+        <span class="n">r</span><span class="p">.</span><span class="nf">execute_command</span><span class="p">(</span><span class="sh">'</span><span class="s">TS.CREATERULE</span><span class="sh">'</span><span class="p">,</span> <span class="n">hourly_key</span><span class="p">,</span> <span class="n">daily_key</span><span class="p">,</span>
+                         <span class="sh">'</span><span class="s">AGGREGATION</span><span class="sh">'</span><span class="p">,</span> <span class="sh">'</span><span class="s">AVG</span><span class="sh">'</span><span class="p">,</span> <span class="mi">86400000</span><span class="p">)</span>
+    <span class="k">except</span><span class="p">:</span>
+        <span class="k">pass</span>  <span class="c1"># Rules already exist
+</span>
+<span class="c1"># Usage
+</span><span class="nf">ingest_sensor_data</span><span class="p">(</span><span class="sh">'</span><span class="s">device_001</span><span class="sh">'</span><span class="p">,</span> <span class="sh">'</span><span class="s">temperature</span><span class="sh">'</span><span class="p">,</span> <span class="mf">25.6</span><span class="p">)</span>
+<span class="nf">ingest_sensor_data</span><span class="p">(</span><span class="sh">'</span><span class="s">device_001</span><span class="sh">'</span><span class="p">,</span> <span class="sh">'</span><span class="s">humidity</span><span class="sh">'</span><span class="p">,</span> <span class="mf">65.2</span><span class="p">)</span>
+<span class="nf">ingest_sensor_data</span><span class="p">(</span><span class="sh">'</span><span class="s">device_002</span><span class="sh">'</span><span class="p">,</span> <span class="sh">'</span><span class="s">pressure</span><span class="sh">'</span><span class="p">,</span> <span class="mf">1013.25</span><span class="p">)</span>
+</code></pre></div></div>
+
+<h2 id="integration-with-orbit-features">Integration with Orbit Features</h2>
+
+<h3 id="distributed-time-series">Distributed Time Series</h3>
+<ul>
+  <li><strong>Actor partitioning</strong>: Time series data distributed across cluster nodes</li>
+  <li><strong>Consistent hashing</strong>: Deterministic placement of time series actors</li>
+  <li><strong>Replication</strong>: Configurable replication for high availability</li>
+  <li><strong>Failover</strong>: Automatic failover for time series actors</li>
+</ul>
+
+<h3 id="transaction-support">Transaction Support</h3>
+<ul>
+  <li><strong>ACID compliance</strong>: Ensure data consistency across time series operations</li>
+  <li><strong>Bulk operations</strong>: Efficient batch insertion of time series data</li>
+  <li><strong>Cross-series transactions</strong>: Atomic operations across multiple time series</li>
+</ul>
+
+<h3 id="performance-optimization">Performance Optimization</h3>
+<ul>
+  <li><strong>Vectorized operations</strong>: SIMD-optimized aggregation functions</li>
+  <li><strong>Parallel queries</strong>: Multi-threaded range and aggregation queries</li>
+  <li><strong>Caching</strong>: Intelligent caching of frequently accessed time windows</li>
+  <li><strong>Compression</strong>: Advanced compression algorithms for time series data</li>
+</ul>
+
+<h2 id="monitoring-and-observability">Monitoring and Observability</h2>
+
+<h3 id="metrics">Metrics</h3>
+<ul>
+  <li>Time series operation latency and throughput</li>
+  <li>Storage efficiency and compression ratios</li>
+  <li>Query performance across different time ranges</li>
+  <li>Actor distribution and load balancing</li>
+</ul>
+
+<h3 id="grafana-integration">Grafana Integration</h3>
+<ul>
+  <li>Pre-built dashboards for time series monitoring</li>
+  <li>Custom query builder for Orbit time series data</li>
+  <li>Real-time alerting based on time series patterns</li>
+  <li>Historical trend analysis and forecasting</li>
+</ul>
+
+<h2 id="development-timeline">Development Timeline</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>Phase</th>
+      <th>Duration</th>
+      <th>Features</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Phase 12</strong></td>
+      <td>8-10 weeks</td>
+      <td>Core time series foundation, basic commands</td>
+    </tr>
+    <tr>
+      <td><strong>Phase 13</strong></td>
+      <td>6-8 weeks</td>
+      <td>Advanced operations, aggregation rules</td>
+    </tr>
+    <tr>
+      <td><strong>Phase 14</strong></td>
+      <td>8-10 weeks</td>
+      <td>Enterprise features, performance optimization</td>
+    </tr>
+  </tbody>
+</table>
+
+<p><strong>Total Estimated Effort</strong>: 22-28 weeks</p>
+
+<h2 id="compatibility">Compatibility</h2>
+
+<h3 id="redis-time-series-compatibility-1">Redis Time Series Compatibility</h3>
+<ul>
+  <li><strong>API compatibility</strong>: 100% command compatibility with RedisTimeSeries</li>
+  <li><strong>Data format</strong>: Compatible time series data structures</li>
+  <li><strong>Client support</strong>: Works with existing Redis time series clients</li>
+  <li><strong>Migration</strong>: Tools for migrating from RedisTimeSeries to Orbit-RS</li>
+</ul>
+
+<h3 id="integration-points">Integration Points</h3>
+<ul>
+  <li><strong>Grafana</strong>: Native data source plugin</li>
+  <li><strong>Prometheus</strong>: Export time series data to Prometheus</li>
+  <li><strong>InfluxDB</strong>: Migration and compatibility tools</li>
+  <li><strong>TimescaleDB</strong>: Cross-platform time series analytics</li>
+</ul>
+
+<p>This comprehensive time series implementation will position Orbit-RS as a powerful alternative to dedicated time series databases while maintaining Redis protocol compatibility.</p>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/orbit-rs/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Orbit-RS Documentation</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">TuringWorks</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

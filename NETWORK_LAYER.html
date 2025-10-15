@@ -1,0 +1,1253 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Orbit-RS Network Layer Documentation | Orbit-RS Documentation</title>
+<meta name="generator" content="Jekyll v4.4.1" />
+<meta property="og:title" content="Orbit-RS Network Layer Documentation" />
+<meta name="author" content="TuringWorks" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<meta property="og:description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<link rel="canonical" href="https://turingworks.github.io/orbit-rs/NETWORK_LAYER.html" />
+<meta property="og:url" content="https://turingworks.github.io/orbit-rs/NETWORK_LAYER.html" />
+<meta property="og:site_name" content="Orbit-RS Documentation" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Orbit-RS Network Layer Documentation" />
+<meta name="twitter:site" content="@TuringWorksAI" />
+<meta name="twitter:creator" content="@TuringWorks" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","author":{"@type":"Person","name":"TuringWorks"},"description":"The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform","headline":"Orbit-RS Network Layer Documentation","url":"https://turingworks.github.io/orbit-rs/NETWORK_LAYER.html"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/orbit-rs/assets/main.css">
+  <link rel="stylesheet" href="/orbit-rs/assets/css/custom.css"><link type="application/atom+xml" rel="alternate" href="https://turingworks.github.io/orbit-rs/feed.xml" title="Orbit-RS Documentation" /></head><body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/orbit-rs/">Orbit-RS Documentation</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/orbit-rs/">Orbit-RS Documentation</a><a class="page-link" href="/orbit-rs/project_overview.html">Orbit-RS: Comprehensive Project Overview</a><a class="page-link" href="/orbit-rs/quick_start.html">Quick Start Guide - Multi-Protocol Database Server</a><a class="page-link" href="/orbit-rs/roadmap/">Development Roadmap</a><a class="page-link" href="/orbit-rs/features/">Orbit-RS Feature Index</a><a class="page-link" href="/orbit-rs/compute-acceleration/">Hardware Acceleration Guide</a><a class="page-link" href="/orbit-rs/contributing.html">Contributing Guide</a><a class="page-link" href="/orbit-rs/overview.html">Architecture Overview</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <h1 id="orbit-rs-network-layer-documentation">Orbit-RS Network Layer Documentation</h1>
+
+<h2 id="overview">Overview</h2>
+<p>The Orbit-RS network layer provides a comprehensive gRPC-based communication infrastructure for distributed actor systems. Built on <code class="language-plaintext highlighter-rouge">tonic</code> and Protocol Buffers, it enables reliable, high-performance inter-node communication with automatic connection management, retry logic, and health monitoring.</p>
+
+<hr />
+
+<h2 id="architecture">Architecture</h2>
+
+<h3 id="components">Components</h3>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>orbit-proto/              # Protocol Buffer definitions and gRPC services
+├── proto/
+│   ├── messages.proto   # Message and invocation protocols
+│   ├── node.proto       # Node information and capabilities
+│   ├── addressable.proto # Actor reference types
+│   ├── connection.proto # Connection service definitions
+│   └── health.proto     # Health check service
+├── build.rs             # tonic-build integration
+└── src/
+    ├── lib.rs          # Generated proto code inclusion
+    ├── converters.rs   # Rust ↔ Protobuf converters
+    └── services.rs     # gRPC service implementations
+
+orbit-shared/src/
+├── transport.rs         # Transaction transport layer
+└── raft_transport.rs    # Raft consensus transport
+</code></pre></div></div>
+
+<hr />
+
+<h2 id="protocol-buffer-definitions">Protocol Buffer Definitions</h2>
+
+<h3 id="message-protocol-messagesproto">Message Protocol (<code class="language-plaintext highlighter-rouge">messages.proto</code>)</h3>
+
+<p>The message protocol defines the core communication structures for actor invocations and system messages.</p>
+
+<div class="language-protobuf highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">message</span> <span class="nc">MessageProto</span> <span class="p">{</span>
+    <span class="kt">int64</span> <span class="na">message_id</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span>
+    <span class="n">NodeIdProto</span> <span class="na">source</span> <span class="o">=</span> <span class="mi">2</span><span class="p">;</span>
+    <span class="n">MessageTargetProto</span> <span class="na">target</span> <span class="o">=</span> <span class="mi">3</span><span class="p">;</span>
+    <span class="n">MessageContentProto</span> <span class="na">content</span> <span class="o">=</span> <span class="mi">4</span><span class="p">;</span>
+    <span class="kt">int64</span> <span class="na">attempts</span> <span class="o">=</span> <span class="mi">5</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="kd">message</span> <span class="nc">MessageTargetProto</span> <span class="p">{</span>
+    <span class="k">oneof</span> <span class="n">target</span> <span class="p">{</span>
+        <span class="n">Unicast</span> <span class="na">unicast_target</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span>
+        <span class="n">RoutedUnicast</span> <span class="na">routed_unicast_target</span> <span class="o">=</span> <span class="mi">2</span><span class="p">;</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+
+<span class="kd">message</span> <span class="nc">MessageContentProto</span> <span class="p">{</span>
+    <span class="k">oneof</span> <span class="n">content</span> <span class="p">{</span>
+        <span class="n">ErrorProto</span> <span class="na">error</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span>
+        <span class="n">ConnectionInfoRequestProto</span> <span class="na">info_request</span> <span class="o">=</span> <span class="mi">2</span><span class="p">;</span>
+        <span class="n">ConnectionInfoResponseProto</span> <span class="na">info_response</span> <span class="o">=</span> <span class="mi">3</span><span class="p">;</span>
+        <span class="n">InvocationRequestProto</span> <span class="na">invocation_request</span> <span class="o">=</span> <span class="mi">4</span><span class="p">;</span>
+        <span class="n">InvocationResponseProto</span> <span class="na">invocation_response</span> <span class="o">=</span> <span class="mi">5</span><span class="p">;</span>
+        <span class="n">InvocationResponseErrorProto</span> <span class="na">invocation_response_error</span> <span class="o">=</span> <span class="mi">6</span><span class="p">;</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p><strong>Key Features:</strong></p>
+<ul>
+  <li>Message routing (unicast, routed unicast)</li>
+  <li>Request/response pattern support</li>
+  <li>Error propagation</li>
+  <li>Retry attempt tracking</li>
+</ul>
+
+<h3 id="node-protocol-nodeproto">Node Protocol (<code class="language-plaintext highlighter-rouge">node.proto</code>)</h3>
+
+<p>Defines cluster node information and capabilities.</p>
+
+<div class="language-protobuf highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">message</span> <span class="nc">NodeInfoProto</span> <span class="p">{</span>
+    <span class="n">NodeIdProto</span> <span class="na">id</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span>
+    <span class="kt">string</span> <span class="na">url</span> <span class="o">=</span> <span class="mi">2</span><span class="p">;</span>
+    <span class="kt">uint32</span> <span class="na">port</span> <span class="o">=</span> <span class="mi">3</span><span class="p">;</span>
+    <span class="n">NodeCapabilitiesProto</span> <span class="na">capabilities</span> <span class="o">=</span> <span class="mi">4</span><span class="p">;</span>
+    <span class="n">NodeStatusProto</span> <span class="na">status</span> <span class="o">=</span> <span class="mi">5</span><span class="p">;</span>
+    <span class="k">optional</span> <span class="n">NodeLeaseProto</span> <span class="na">lease</span> <span class="o">=</span> <span class="mi">6</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="kd">message</span> <span class="nc">NodeCapabilitiesProto</span> <span class="p">{</span>
+    <span class="k">repeated</span> <span class="kt">string</span> <span class="na">addressable_types</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span>
+    <span class="k">optional</span> <span class="kt">uint32</span> <span class="na">max_addressables</span> <span class="o">=</span> <span class="mi">2</span><span class="p">;</span>
+    <span class="n">map</span><span class="o">&lt;</span><span class="kt">string</span><span class="p">,</span> <span class="kt">string</span><span class="err">&gt;</span> <span class="na">tags</span> <span class="o">=</span> <span class="mi">3</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="kd">enum</span> <span class="n">NodeStatusProto</span> <span class="p">{</span>
+    <span class="na">ACTIVE</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+    <span class="na">DRAINING</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span>
+    <span class="na">STOPPED</span> <span class="o">=</span> <span class="mi">2</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p><strong>Use Cases:</strong></p>
+<ul>
+  <li>Node discovery and registration</li>
+  <li>Capability negotiation</li>
+  <li>Health monitoring</li>
+  <li>Lease management</li>
+</ul>
+
+<h3 id="addressable-protocol-addressableproto">Addressable Protocol (<code class="language-plaintext highlighter-rouge">addressable.proto</code>)</h3>
+
+<p>Defines actor reference types and keys.</p>
+
+<div class="language-protobuf highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">message</span> <span class="nc">KeyProto</span> <span class="p">{</span>
+    <span class="k">oneof</span> <span class="n">key</span> <span class="p">{</span>
+        <span class="kt">string</span> <span class="na">string_key</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span>
+        <span class="kt">int32</span> <span class="na">int32_key</span> <span class="o">=</span> <span class="mi">2</span><span class="p">;</span>
+        <span class="kt">int64</span> <span class="na">int64_key</span> <span class="o">=</span> <span class="mi">3</span><span class="p">;</span>
+        <span class="n">NoKeyProto</span> <span class="na">no_key</span> <span class="o">=</span> <span class="mi">4</span><span class="p">;</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+
+<span class="kd">message</span> <span class="nc">AddressableReferenceProto</span> <span class="p">{</span>
+    <span class="kt">string</span> <span class="na">addressable_type</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span>
+    <span class="n">KeyProto</span> <span class="na">key</span> <span class="o">=</span> <span class="mi">2</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="kd">message</span> <span class="nc">AddressableLeaseProto</span> <span class="p">{</span>
+    <span class="n">AddressableReferenceProto</span> <span class="na">reference</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span>
+    <span class="n">NodeIdProto</span> <span class="na">node_id</span> <span class="o">=</span> <span class="mi">2</span><span class="p">;</span>
+    <span class="n">google.protobuf.Timestamp</span> <span class="na">expires_at</span> <span class="o">=</span> <span class="mi">3</span><span class="p">;</span>
+    <span class="n">google.protobuf.Timestamp</span> <span class="na">renew_at</span> <span class="o">=</span> <span class="mi">4</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p><strong>Features:</strong></p>
+<ul>
+  <li>Type-safe actor keys (String, Int32, Int64, NoKey)</li>
+  <li>Actor lease management</li>
+  <li>Namespace support</li>
+</ul>
+
+<hr />
+
+<h2 id="grpc-services">gRPC Services</h2>
+
+<h3 id="connectionservice">ConnectionService</h3>
+
+<p>Bidirectional streaming service for actor communication.</p>
+
+<div class="language-protobuf highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">service</span> <span class="n">ConnectionService</span> <span class="p">{</span>
+    <span class="k">rpc</span> <span class="n">OpenStream</span><span class="p">(</span><span class="n">stream</span> <span class="n">MessageProto</span><span class="p">)</span> <span class="k">returns</span> <span class="p">(</span><span class="n">stream</span> <span class="n">MessageProto</span><span class="p">);</span>
+    <span class="k">rpc</span> <span class="n">GetConnectionInfo</span><span class="p">(</span><span class="n">ConnectionInfoRequestProto</span><span class="p">)</span> <span class="k">returns</span> <span class="p">(</span><span class="n">ConnectionInfoResponseProto</span><span class="p">);</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p><strong>Implementation</strong> (<code class="language-plaintext highlighter-rouge">orbit-proto/src/services.rs</code>):</p>
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">pub</span> <span class="k">struct</span> <span class="n">OrbitConnectionService</span> <span class="p">{</span>
+    <span class="n">connections</span><span class="p">:</span> <span class="nb">Arc</span><span class="o">&lt;</span><span class="n">Mutex</span><span class="o">&lt;</span><span class="n">HashMap</span><span class="o">&lt;</span><span class="nb">String</span><span class="p">,</span> <span class="nn">mpsc</span><span class="p">::</span><span class="n">UnboundedSender</span><span class="o">&lt;</span><span class="n">MessageProto</span><span class="o">&gt;&gt;&gt;&gt;</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="k">impl</span> <span class="nn">connection_service_server</span><span class="p">::</span><span class="n">ConnectionService</span> <span class="k">for</span> <span class="n">OrbitConnectionService</span> <span class="p">{</span>
+    <span class="k">type</span> <span class="n">OpenStreamStream</span> <span class="o">=</span> <span class="nn">tokio_stream</span><span class="p">::</span><span class="nn">wrappers</span><span class="p">::</span><span class="n">UnboundedReceiverStream</span><span class="o">&lt;</span><span class="nb">Result</span><span class="o">&lt;</span><span class="n">MessageProto</span><span class="p">,</span> <span class="n">Status</span><span class="o">&gt;&gt;</span><span class="p">;</span>
+
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">open_stream</span><span class="p">(</span>
+        <span class="o">&amp;</span><span class="k">self</span><span class="p">,</span>
+        <span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="o">&lt;</span><span class="n">Streaming</span><span class="o">&lt;</span><span class="n">MessageProto</span><span class="o">&gt;&gt;</span><span class="p">,</span>
+    <span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="n">Response</span><span class="o">&lt;</span><span class="k">Self</span><span class="p">::</span><span class="n">OpenStreamStream</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">Status</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="c1">// Bidirectional message streaming</span>
+    <span class="p">}</span>
+
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">get_connection_info</span><span class="p">(</span>
+        <span class="o">&amp;</span><span class="k">self</span><span class="p">,</span>
+        <span class="n">_request</span><span class="p">:</span> <span class="n">Request</span><span class="o">&lt;</span><span class="n">ConnectionInfoRequestProto</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="n">Response</span><span class="o">&lt;</span><span class="n">ConnectionInfoResponseProto</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">Status</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="c1">// Return node connection information</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p><strong>Usage:</strong></p>
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">orbit_proto</span><span class="p">::</span><span class="nn">connection_service_client</span><span class="p">::</span><span class="n">ConnectionServiceClient</span><span class="p">;</span>
+
+<span class="k">let</span> <span class="k">mut</span> <span class="n">client</span> <span class="o">=</span> <span class="nn">ConnectionServiceClient</span><span class="p">::</span><span class="nf">connect</span><span class="p">(</span><span class="s">"http://[::1]:50051"</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+<span class="k">let</span> <span class="p">(</span><span class="n">tx</span><span class="p">,</span> <span class="n">rx</span><span class="p">)</span> <span class="o">=</span> <span class="nn">mpsc</span><span class="p">::</span><span class="nf">unbounded_channel</span><span class="p">();</span>
+
+<span class="k">let</span> <span class="n">response</span> <span class="o">=</span> <span class="n">client</span><span class="nf">.open_stream</span><span class="p">(</span><span class="nn">tokio_stream</span><span class="p">::</span><span class="nn">wrappers</span><span class="p">::</span><span class="nn">UnboundedReceiverStream</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="n">rx</span><span class="p">))</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+<span class="k">let</span> <span class="k">mut</span> <span class="n">stream</span> <span class="o">=</span> <span class="n">response</span><span class="nf">.into_inner</span><span class="p">();</span>
+
+<span class="c1">// Send messages</span>
+<span class="n">tx</span><span class="nf">.send</span><span class="p">(</span><span class="n">message</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+
+<span class="c1">// Receive responses</span>
+<span class="k">while</span> <span class="k">let</span> <span class="nf">Some</span><span class="p">(</span><span class="n">response</span><span class="p">)</span> <span class="o">=</span> <span class="n">stream</span><span class="nf">.message</span><span class="p">()</span><span class="k">.await</span><span class="o">?</span> <span class="p">{</span>
+    <span class="nd">println!</span><span class="p">(</span><span class="s">"Received: {:?}"</span><span class="p">,</span> <span class="n">response</span><span class="p">);</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="healthservice">HealthService</h3>
+
+<p>Standard health check service for monitoring.</p>
+
+<div class="language-protobuf highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">service</span> <span class="n">HealthService</span> <span class="p">{</span>
+    <span class="k">rpc</span> <span class="n">Check</span><span class="p">(</span><span class="n">HealthCheckRequest</span><span class="p">)</span> <span class="k">returns</span> <span class="p">(</span><span class="n">HealthCheckResponse</span><span class="p">);</span>
+    <span class="k">rpc</span> <span class="n">Watch</span><span class="p">(</span><span class="n">HealthCheckRequest</span><span class="p">)</span> <span class="k">returns</span> <span class="p">(</span><span class="n">stream</span> <span class="n">HealthCheckResponse</span><span class="p">);</span>
+<span class="p">}</span>
+
+<span class="kd">enum</span> <span class="n">ServingStatus</span> <span class="p">{</span>
+    <span class="na">UNKNOWN</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+    <span class="na">SERVING</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span>
+    <span class="na">NOT_SERVING</span> <span class="o">=</span> <span class="mi">2</span><span class="p">;</span>
+    <span class="na">SERVICE_UNKNOWN</span> <span class="o">=</span> <span class="mi">3</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p><strong>Implementation:</strong></p>
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">pub</span> <span class="k">struct</span> <span class="n">OrbitHealthService</span> <span class="p">{</span>
+    <span class="n">status</span><span class="p">:</span> <span class="nb">Arc</span><span class="o">&lt;</span><span class="n">Mutex</span><span class="o">&lt;</span><span class="nn">health_check_response</span><span class="p">::</span><span class="n">ServingStatus</span><span class="o">&gt;&gt;</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="k">impl</span> <span class="n">OrbitHealthService</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">set_serving_status</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">status</span><span class="p">:</span> <span class="nn">health_check_response</span><span class="p">::</span><span class="n">ServingStatus</span><span class="p">)</span> <span class="p">{</span>
+        <span class="k">let</span> <span class="k">mut</span> <span class="n">current_status</span> <span class="o">=</span> <span class="k">self</span><span class="py">.status</span><span class="nf">.lock</span><span class="p">()</span><span class="k">.await</span><span class="p">;</span>
+        <span class="o">*</span><span class="n">current_status</span> <span class="o">=</span> <span class="n">status</span><span class="p">;</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p><strong>Usage:</strong></p>
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">orbit_proto</span><span class="p">::</span><span class="nn">health_service_client</span><span class="p">::</span><span class="n">HealthServiceClient</span><span class="p">;</span>
+
+<span class="k">let</span> <span class="k">mut</span> <span class="n">client</span> <span class="o">=</span> <span class="nn">HealthServiceClient</span><span class="p">::</span><span class="nf">connect</span><span class="p">(</span><span class="s">"http://[::1]:50051"</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+<span class="k">let</span> <span class="n">request</span> <span class="o">=</span> <span class="n">HealthCheckRequest</span> <span class="p">{</span> <span class="n">service</span><span class="p">:</span> <span class="s">"orbit"</span><span class="nf">.to_string</span><span class="p">()</span> <span class="p">};</span>
+<span class="k">let</span> <span class="n">response</span> <span class="o">=</span> <span class="n">client</span><span class="nf">.check</span><span class="p">(</span><span class="n">request</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+
+<span class="k">match</span> <span class="n">response</span><span class="nf">.into_inner</span><span class="p">()</span><span class="py">.status</span> <span class="p">{</span>
+    <span class="nn">ServingStatus</span><span class="p">::</span><span class="n">Serving</span> <span class="k">=&gt;</span> <span class="nd">println!</span><span class="p">(</span><span class="s">"Service is healthy"</span><span class="p">),</span>
+    <span class="n">_</span> <span class="k">=&gt;</span> <span class="nd">println!</span><span class="p">(</span><span class="s">"Service is unhealthy"</span><span class="p">),</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<hr />
+
+<h2 id="transport-layer">Transport Layer</h2>
+
+<h3 id="transaction-transport-orbit-sharedsrctransportrs">Transaction Transport (<code class="language-plaintext highlighter-rouge">orbit-shared/src/transport.rs</code>)</h3>
+
+<p>High-performance gRPC transport for distributed transactions with connection pooling, retry logic, and metrics.</p>
+
+<h4 id="configuration">Configuration</h4>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">orbit_shared</span><span class="p">::</span><span class="nn">transport</span><span class="p">::</span><span class="n">TransportConfig</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">std</span><span class="p">::</span><span class="nn">time</span><span class="p">::</span><span class="n">Duration</span><span class="p">;</span>
+
+<span class="k">let</span> <span class="n">config</span> <span class="o">=</span> <span class="n">TransportConfig</span> <span class="p">{</span>
+    <span class="n">max_connections_per_endpoint</span><span class="p">:</span> <span class="mi">10</span><span class="p">,</span>
+    <span class="n">connect_timeout</span><span class="p">:</span> <span class="nn">Duration</span><span class="p">::</span><span class="nf">from_secs</span><span class="p">(</span><span class="mi">5</span><span class="p">),</span>
+    <span class="n">request_timeout</span><span class="p">:</span> <span class="nn">Duration</span><span class="p">::</span><span class="nf">from_secs</span><span class="p">(</span><span class="mi">30</span><span class="p">),</span>
+    <span class="n">keep_alive_interval</span><span class="p">:</span> <span class="nf">Some</span><span class="p">(</span><span class="nn">Duration</span><span class="p">::</span><span class="nf">from_secs</span><span class="p">(</span><span class="mi">30</span><span class="p">)),</span>
+    <span class="n">keep_alive_timeout</span><span class="p">:</span> <span class="nf">Some</span><span class="p">(</span><span class="nn">Duration</span><span class="p">::</span><span class="nf">from_secs</span><span class="p">(</span><span class="mi">10</span><span class="p">)),</span>
+    <span class="n">max_message_size</span><span class="p">:</span> <span class="mi">16</span> <span class="o">*</span> <span class="mi">1024</span> <span class="o">*</span> <span class="mi">1024</span><span class="p">,</span> <span class="c1">// 16MB</span>
+    <span class="n">retry_attempts</span><span class="p">:</span> <span class="mi">3</span><span class="p">,</span>
+    <span class="n">retry_backoff_initial</span><span class="p">:</span> <span class="nn">Duration</span><span class="p">::</span><span class="nf">from_millis</span><span class="p">(</span><span class="mi">100</span><span class="p">),</span>
+    <span class="n">retry_backoff_multiplier</span><span class="p">:</span> <span class="mf">2.0</span><span class="p">,</span>
+    <span class="n">tcp_keepalive</span><span class="p">:</span> <span class="nf">Some</span><span class="p">(</span><span class="nn">Duration</span><span class="p">::</span><span class="nf">from_secs</span><span class="p">(</span><span class="mi">10</span><span class="p">)),</span>
+    <span class="n">http2_adaptive_window</span><span class="p">:</span> <span class="k">true</span><span class="p">,</span>
+<span class="p">};</span>
+</code></pre></div></div>
+
+<h4 id="connection-pool">Connection Pool</h4>
+
+<p>Automatic connection management with health tracking:</p>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">orbit_shared</span><span class="p">::</span><span class="nn">transport</span><span class="p">::</span><span class="n">ConnectionPool</span><span class="p">;</span>
+
+<span class="k">let</span> <span class="n">pool</span> <span class="o">=</span> <span class="nn">ConnectionPool</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="n">config</span><span class="p">);</span>
+
+<span class="c1">// Automatic connection creation and caching</span>
+<span class="k">let</span> <span class="n">client</span> <span class="o">=</span> <span class="n">pool</span><span class="nf">.get_connection</span><span class="p">(</span><span class="s">"http://node1:50051"</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+
+<span class="c1">// Automatic cleanup of idle connections</span>
+<span class="n">pool</span><span class="nf">.cleanup_idle_connections</span><span class="p">(</span><span class="nn">Duration</span><span class="p">::</span><span class="nf">from_secs</span><span class="p">(</span><span class="mi">600</span><span class="p">))</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+
+<span class="c1">// Get pool statistics</span>
+<span class="k">let</span> <span class="n">stats</span> <span class="o">=</span> <span class="n">pool</span><span class="nf">.get_stats</span><span class="p">()</span><span class="k">.await</span><span class="p">;</span>
+<span class="nd">println!</span><span class="p">(</span><span class="s">"Connections: {}"</span><span class="p">,</span> <span class="n">stats</span><span class="py">.total_connections</span><span class="p">);</span>
+<span class="nd">println!</span><span class="p">(</span><span class="s">"Requests: {}"</span><span class="p">,</span> <span class="n">stats</span><span class="py">.total_requests</span><span class="p">);</span>
+<span class="nd">println!</span><span class="p">(</span><span class="s">"Errors: {}"</span><span class="p">,</span> <span class="n">stats</span><span class="py">.total_errors</span><span class="p">);</span>
+<span class="nd">println!</span><span class="p">(</span><span class="s">"Avg Latency: {}ms"</span><span class="p">,</span> <span class="n">stats</span><span class="py">.average_latency_ms</span><span class="p">);</span>
+</code></pre></div></div>
+
+<p><strong>Connection Metrics:</strong></p>
+<ul>
+  <li>Creation time tracking</li>
+  <li>Last used timestamp</li>
+  <li>Request count</li>
+  <li>Error count</li>
+  <li>Average latency (exponential moving average)</li>
+</ul>
+
+<h4 id="grpc-transaction-sender">gRPC Transaction Sender</h4>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">orbit_shared</span><span class="p">::</span><span class="nn">transport</span><span class="p">::</span><span class="n">GrpcTransactionMessageSender</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">orbit_shared</span><span class="p">::</span><span class="nn">transactions</span><span class="p">::</span><span class="n">TransactionMessage</span><span class="p">;</span>
+
+<span class="k">let</span> <span class="n">sender</span> <span class="o">=</span> <span class="nn">GrpcTransactionMessageSender</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span>
+    <span class="n">node_id</span><span class="p">,</span>
+    <span class="nn">Arc</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="n">node_resolver</span><span class="p">),</span>
+    <span class="n">config</span><span class="p">,</span>
+<span class="p">);</span>
+
+<span class="c1">// Start background maintenance</span>
+<span class="n">sender</span><span class="nf">.start_background_tasks</span><span class="p">()</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+
+<span class="c1">// Send transaction message</span>
+<span class="n">sender</span><span class="nf">.send_message</span><span class="p">(</span><span class="o">&amp;</span><span class="n">target_actor</span><span class="p">,</span> <span class="n">message</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+
+<span class="c1">// Broadcast to multiple actors</span>
+<span class="n">sender</span><span class="nf">.broadcast_message</span><span class="p">(</span><span class="o">&amp;</span><span class="n">targets</span><span class="p">,</span> <span class="n">message</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+
+<span class="c1">// Get transport stats</span>
+<span class="k">let</span> <span class="n">stats</span> <span class="o">=</span> <span class="n">sender</span><span class="nf">.get_stats</span><span class="p">()</span><span class="k">.await</span><span class="p">;</span>
+</code></pre></div></div>
+
+<p><strong>Features:</strong></p>
+<ul>
+  <li>Automatic retry with exponential backoff</li>
+  <li>Request timeout enforcement</li>
+  <li>Node resolution integration</li>
+  <li>Broadcast optimization (groups by node)</li>
+  <li>Comprehensive error handling</li>
+  <li>Non-retryable error detection (InvalidArgument, NotFound, PermissionDenied)</li>
+</ul>
+
+<h4 id="node-resolution">Node Resolution</h4>
+
+<p>Implement the <code class="language-plaintext highlighter-rouge">NodeResolver</code> trait to integrate with your directory service:</p>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">orbit_shared</span><span class="p">::</span><span class="nn">transport</span><span class="p">::</span><span class="n">NodeResolver</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">async_trait</span><span class="p">::</span><span class="n">async_trait</span><span class="p">;</span>
+
+<span class="k">struct</span> <span class="n">EtcdNodeResolver</span> <span class="p">{</span>
+    <span class="c1">// etcd client</span>
+<span class="p">}</span>
+
+<span class="nd">#[async_trait]</span>
+<span class="k">impl</span> <span class="n">NodeResolver</span> <span class="k">for</span> <span class="n">EtcdNodeResolver</span> <span class="p">{</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">resolve_node</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">node_id</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">NodeId</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="nb">String</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="c1">// Query etcd for node endpoint</span>
+        <span class="nf">Ok</span><span class="p">(</span><span class="nd">format!</span><span class="p">(</span><span class="s">"http://{}:50051"</span><span class="p">,</span> <span class="n">node_id</span><span class="py">.key</span><span class="p">))</span>
+    <span class="p">}</span>
+
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">resolve_addressable</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">addressable</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">AddressableReference</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">NodeId</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="c1">// Query directory for actor location</span>
+        <span class="c1">// ...</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="raft-consensus-transport-orbit-sharedsrcraft_transportrs">Raft Consensus Transport (<code class="language-plaintext highlighter-rouge">orbit-shared/src/raft_transport.rs</code>)</h3>
+
+<p>Specialized gRPC transport for Raft consensus protocol.</p>
+
+<h4 id="setup">Setup</h4>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">orbit_shared</span><span class="p">::</span><span class="nn">raft_transport</span><span class="p">::</span><span class="n">GrpcRaftTransport</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">std</span><span class="p">::</span><span class="nn">collections</span><span class="p">::</span><span class="n">HashMap</span><span class="p">;</span>
+
+<span class="k">let</span> <span class="k">mut</span> <span class="n">node_addresses</span> <span class="o">=</span> <span class="nn">HashMap</span><span class="p">::</span><span class="nf">new</span><span class="p">();</span>
+<span class="n">node_addresses</span><span class="nf">.insert</span><span class="p">(</span>
+    <span class="nn">NodeId</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="s">"node-1"</span><span class="nf">.to_string</span><span class="p">(),</span> <span class="s">"default"</span><span class="nf">.to_string</span><span class="p">()),</span>
+    <span class="s">"http://node1:50051"</span><span class="nf">.to_string</span><span class="p">(),</span>
+<span class="p">);</span>
+<span class="n">node_addresses</span><span class="nf">.insert</span><span class="p">(</span>
+    <span class="nn">NodeId</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="s">"node-2"</span><span class="nf">.to_string</span><span class="p">(),</span> <span class="s">"default"</span><span class="nf">.to_string</span><span class="p">()),</span>
+    <span class="s">"http://node2:50051"</span><span class="nf">.to_string</span><span class="p">(),</span>
+<span class="p">);</span>
+
+<span class="k">let</span> <span class="n">transport</span> <span class="o">=</span> <span class="nn">GrpcRaftTransport</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span>
+    <span class="n">node_id</span><span class="p">,</span>
+    <span class="n">node_addresses</span><span class="p">,</span>
+    <span class="nn">Duration</span><span class="p">::</span><span class="nf">from_secs</span><span class="p">(</span><span class="mi">5</span><span class="p">),</span>  <span class="c1">// connection timeout</span>
+    <span class="nn">Duration</span><span class="p">::</span><span class="nf">from_secs</span><span class="p">(</span><span class="mi">10</span><span class="p">),</span> <span class="c1">// request timeout</span>
+<span class="p">);</span>
+</code></pre></div></div>
+
+<h4 id="rafttransport-trait">RaftTransport Trait</h4>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="nd">#[async_trait]</span>
+<span class="k">pub</span> <span class="k">trait</span> <span class="n">RaftTransport</span><span class="p">:</span> <span class="nb">Send</span> <span class="o">+</span> <span class="nb">Sync</span> <span class="p">{</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">send_vote_request</span><span class="p">(</span>
+        <span class="o">&amp;</span><span class="k">self</span><span class="p">,</span>
+        <span class="n">target</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">NodeId</span><span class="p">,</span>
+        <span class="n">request</span><span class="p">:</span> <span class="n">VoteRequest</span><span class="p">,</span>
+    <span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">VoteResponse</span><span class="o">&gt;</span><span class="p">;</span>
+
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">send_append_entries</span><span class="p">(</span>
+        <span class="o">&amp;</span><span class="k">self</span><span class="p">,</span>
+        <span class="n">target</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">NodeId</span><span class="p">,</span>
+        <span class="n">request</span><span class="p">:</span> <span class="n">AppendEntriesRequest</span><span class="p">,</span>
+    <span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">AppendEntriesResponse</span><span class="o">&gt;</span><span class="p">;</span>
+
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">broadcast_heartbeat</span><span class="p">(</span>
+        <span class="o">&amp;</span><span class="k">self</span><span class="p">,</span>
+        <span class="n">nodes</span><span class="p">:</span> <span class="o">&amp;</span><span class="p">[</span><span class="n">NodeId</span><span class="p">],</span>
+        <span class="n">request</span><span class="p">:</span> <span class="n">AppendEntriesRequest</span><span class="p">,</span>
+    <span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="n">AppendEntriesResponse</span><span class="o">&gt;&gt;</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h4 id="integration-with-raft-consensus">Integration with Raft Consensus</h4>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">orbit_shared</span><span class="p">::</span><span class="nn">consensus</span><span class="p">::</span><span class="n">RaftConsensus</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">orbit_shared</span><span class="p">::</span><span class="nn">raft_transport</span><span class="p">::</span><span class="n">start_raft_server</span><span class="p">;</span>
+
+<span class="c1">// Create consensus instance</span>
+<span class="k">let</span> <span class="n">consensus</span> <span class="o">=</span> <span class="nn">Arc</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="nn">RaftConsensus</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span>
+    <span class="n">node_id</span><span class="nf">.clone</span><span class="p">(),</span>
+    <span class="n">cluster_nodes</span><span class="p">,</span>
+    <span class="nn">RaftConfig</span><span class="p">::</span><span class="nf">default</span><span class="p">(),</span>
+<span class="p">));</span>
+
+<span class="c1">// Start transport</span>
+<span class="k">let</span> <span class="n">transport</span> <span class="o">=</span> <span class="nn">Arc</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="nn">GrpcRaftTransport</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span>
+    <span class="n">node_id</span><span class="p">,</span>
+    <span class="n">node_addresses</span><span class="p">,</span>
+    <span class="nn">Duration</span><span class="p">::</span><span class="nf">from_secs</span><span class="p">(</span><span class="mi">5</span><span class="p">),</span>
+    <span class="nn">Duration</span><span class="p">::</span><span class="nf">from_secs</span><span class="p">(</span><span class="mi">10</span><span class="p">),</span>
+<span class="p">));</span>
+
+<span class="n">consensus</span><span class="nf">.start</span><span class="p">(</span><span class="n">transport</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+
+<span class="c1">// Start gRPC server for incoming Raft messages</span>
+<span class="nn">tokio</span><span class="p">::</span><span class="nf">spawn</span><span class="p">(</span><span class="k">async</span> <span class="k">move</span> <span class="p">{</span>
+    <span class="nf">start_raft_server</span><span class="p">(</span><span class="n">consensus</span><span class="nf">.clone</span><span class="p">(),</span> <span class="s">"0.0.0.0:50051"</span><span class="p">)</span><span class="k">.await</span>
+<span class="p">});</span>
+</code></pre></div></div>
+
+<p><strong>Features:</strong></p>
+<ul>
+  <li>Automatic client connection management</li>
+  <li>Connection failure handling and reconnection</li>
+  <li>Concurrent heartbeat broadcasting</li>
+  <li>Dynamic node address updates</li>
+  <li>Timeout-based failure detection</li>
+</ul>
+
+<hr />
+
+<h2 id="message-serialization">Message Serialization</h2>
+
+<h3 id="protocol-buffer-converters">Protocol Buffer Converters</h3>
+
+<p>The <code class="language-plaintext highlighter-rouge">orbit-proto/src/converters.rs</code> module provides bidirectional conversion between Rust domain types and Protocol Buffer messages.</p>
+
+<h4 id="key-converters">Key Converters</h4>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">orbit_proto</span><span class="p">::</span><span class="o">*</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">orbit_shared</span><span class="p">::</span><span class="o">*</span><span class="p">;</span>
+
+<span class="c1">// Key conversion</span>
+<span class="k">let</span> <span class="n">rust_key</span> <span class="o">=</span> <span class="nn">Key</span><span class="p">::</span><span class="n">StringKey</span> <span class="p">{</span> <span class="n">key</span><span class="p">:</span> <span class="s">"actor-123"</span><span class="nf">.to_string</span><span class="p">()</span> <span class="p">};</span>
+<span class="k">let</span> <span class="n">proto_key</span> <span class="o">=</span> <span class="nn">KeyConverter</span><span class="p">::</span><span class="nf">to_proto</span><span class="p">(</span><span class="o">&amp;</span><span class="n">rust_key</span><span class="p">);</span>
+<span class="k">let</span> <span class="n">back_to_rust</span> <span class="o">=</span> <span class="nn">KeyConverter</span><span class="p">::</span><span class="nf">from_proto</span><span class="p">(</span><span class="o">&amp;</span><span class="n">proto_key</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+
+<span class="c1">// NodeId conversion</span>
+<span class="k">let</span> <span class="n">node_id</span> <span class="o">=</span> <span class="nn">NodeId</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="s">"node-1"</span><span class="nf">.to_string</span><span class="p">(),</span> <span class="s">"default"</span><span class="nf">.to_string</span><span class="p">());</span>
+<span class="k">let</span> <span class="n">proto_node_id</span> <span class="o">=</span> <span class="nn">NodeIdConverter</span><span class="p">::</span><span class="nf">to_proto</span><span class="p">(</span><span class="o">&amp;</span><span class="n">node_id</span><span class="p">);</span>
+<span class="k">let</span> <span class="n">back_to_node_id</span> <span class="o">=</span> <span class="nn">NodeIdConverter</span><span class="p">::</span><span class="nf">from_proto</span><span class="p">(</span><span class="o">&amp;</span><span class="n">proto_node_id</span><span class="p">);</span>
+
+<span class="c1">// AddressableReference conversion</span>
+<span class="k">let</span> <span class="n">actor_ref</span> <span class="o">=</span> <span class="n">AddressableReference</span> <span class="p">{</span>
+    <span class="n">addressable_type</span><span class="p">:</span> <span class="s">"MyActor"</span><span class="nf">.to_string</span><span class="p">(),</span>
+    <span class="n">key</span><span class="p">:</span> <span class="nn">Key</span><span class="p">::</span><span class="n">StringKey</span> <span class="p">{</span> <span class="n">key</span><span class="p">:</span> <span class="s">"actor-123"</span><span class="nf">.to_string</span><span class="p">()</span> <span class="p">},</span>
+<span class="p">};</span>
+<span class="k">let</span> <span class="n">proto_ref</span> <span class="o">=</span> <span class="nn">AddressableReferenceConverter</span><span class="p">::</span><span class="nf">to_proto</span><span class="p">(</span><span class="o">&amp;</span><span class="n">actor_ref</span><span class="p">);</span>
+<span class="k">let</span> <span class="n">back_to_ref</span> <span class="o">=</span> <span class="nn">AddressableReferenceConverter</span><span class="p">::</span><span class="nf">from_proto</span><span class="p">(</span><span class="o">&amp;</span><span class="n">proto_ref</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+
+<span class="c1">// Timestamp conversion</span>
+<span class="k">let</span> <span class="n">now</span> <span class="o">=</span> <span class="nn">Utc</span><span class="p">::</span><span class="nf">now</span><span class="p">();</span>
+<span class="k">let</span> <span class="n">proto_timestamp</span> <span class="o">=</span> <span class="nn">TimestampConverter</span><span class="p">::</span><span class="nf">to_proto</span><span class="p">(</span><span class="o">&amp;</span><span class="n">now</span><span class="p">);</span>
+<span class="k">let</span> <span class="n">back_to_datetime</span> <span class="o">=</span> <span class="nn">TimestampConverter</span><span class="p">::</span><span class="nf">from_proto</span><span class="p">(</span><span class="o">&amp;</span><span class="n">proto_timestamp</span><span class="p">);</span>
+</code></pre></div></div>
+
+<h4 id="available-converters">Available Converters</h4>
+
+<ul>
+  <li><strong>KeyConverter</strong>: Handles all key types (String, Int32, Int64, NoKey)</li>
+  <li><strong>NodeIdConverter</strong>: Node identification</li>
+  <li><strong>AddressableReferenceConverter</strong>: Actor references</li>
+  <li><strong>TimestampConverter</strong>: DateTime ↔ protobuf Timestamp</li>
+  <li><strong>InvocationReasonConverter</strong>: Invocation vs Rerouted</li>
+  <li><strong>NodeStatusConverter</strong>: Active, Draining, Stopped</li>
+</ul>
+
+<h3 id="transaction-message-serialization">Transaction Message Serialization</h3>
+
+<p>Internal conversion for transaction protocol messages:</p>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Transaction message → Protobuf</span>
+<span class="k">let</span> <span class="n">tx_message</span> <span class="o">=</span> <span class="nn">TransactionMessage</span><span class="p">::</span><span class="n">Prepare</span> <span class="p">{</span>
+    <span class="n">transaction_id</span><span class="p">:</span> <span class="n">tx_id</span><span class="nf">.clone</span><span class="p">(),</span>
+    <span class="n">operations</span><span class="p">:</span> <span class="nd">vec!</span><span class="p">[</span><span class="n">operation</span><span class="p">],</span>
+    <span class="n">timeout</span><span class="p">:</span> <span class="nn">Duration</span><span class="p">::</span><span class="nf">from_secs</span><span class="p">(</span><span class="mi">30</span><span class="p">),</span>
+<span class="p">};</span>
+
+<span class="k">let</span> <span class="n">proto_message</span> <span class="o">=</span> <span class="nf">convert_message_to_proto</span><span class="p">(</span><span class="n">tx_message</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+
+<span class="c1">// Protobuf → Transaction message (handled in transport layer)</span>
+</code></pre></div></div>
+
+<p><strong>Supported Message Types:</strong></p>
+<ul>
+  <li><strong>Prepare</strong>: Transaction initiation with operations</li>
+  <li><strong>Vote</strong>: Participant vote (Yes, No, Uncertain)</li>
+  <li><strong>Commit</strong>: Commit decision</li>
+  <li><strong>Abort</strong>: Abort with reason</li>
+  <li><strong>Acknowledge</strong>: Operation acknowledgment</li>
+  <li><strong>QueryStatus</strong>: Status inquiry</li>
+  <li><strong>StatusResponse</strong>: Current transaction state</li>
+</ul>
+
+<hr />
+
+<h2 id="performance-optimization">Performance Optimization</h2>
+
+<h3 id="connection-pooling">Connection Pooling</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Configurable pool settings</span>
+<span class="k">let</span> <span class="n">config</span> <span class="o">=</span> <span class="n">TransportConfig</span> <span class="p">{</span>
+    <span class="n">max_connections_per_endpoint</span><span class="p">:</span> <span class="mi">10</span><span class="p">,</span>  <span class="c1">// Pool size per endpoint</span>
+    <span class="o">..</span><span class="nn">Default</span><span class="p">::</span><span class="nf">default</span><span class="p">()</span>
+<span class="p">};</span>
+
+<span class="c1">// Automatic connection reuse</span>
+<span class="k">let</span> <span class="n">pool</span> <span class="o">=</span> <span class="nn">ConnectionPool</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="n">config</span><span class="p">);</span>
+<span class="k">let</span> <span class="n">client1</span> <span class="o">=</span> <span class="n">pool</span><span class="nf">.get_connection</span><span class="p">(</span><span class="s">"http://node1:50051"</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span> <span class="c1">// Creates new</span>
+<span class="k">let</span> <span class="n">client2</span> <span class="o">=</span> <span class="n">pool</span><span class="nf">.get_connection</span><span class="p">(</span><span class="s">"http://node1:50051"</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span> <span class="c1">// Reuses existing</span>
+
+<span class="c1">// Background cleanup (runs every 5 minutes)</span>
+<span class="n">pool</span><span class="nf">.cleanup_idle_connections</span><span class="p">(</span><span class="nn">Duration</span><span class="p">::</span><span class="nf">from_secs</span><span class="p">(</span><span class="mi">600</span><span class="p">))</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+</code></pre></div></div>
+
+<p><strong>Benefits:</strong></p>
+<ul>
+  <li>Eliminates connection establishment overhead</li>
+  <li>Reduces TCP handshake latency</li>
+  <li>Maintains persistent HTTP/2 connections</li>
+  <li>Automatic health-based cleanup</li>
+</ul>
+
+<h3 id="retry-logic">Retry Logic</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">let</span> <span class="n">config</span> <span class="o">=</span> <span class="n">TransportConfig</span> <span class="p">{</span>
+    <span class="n">retry_attempts</span><span class="p">:</span> <span class="mi">3</span><span class="p">,</span>                                <span class="c1">// Max retries</span>
+    <span class="n">retry_backoff_initial</span><span class="p">:</span> <span class="nn">Duration</span><span class="p">::</span><span class="nf">from_millis</span><span class="p">(</span><span class="mi">100</span><span class="p">),</span> <span class="c1">// Initial delay</span>
+    <span class="n">retry_backoff_multiplier</span><span class="p">:</span> <span class="mf">2.0</span><span class="p">,</span>                    <span class="c1">// Exponential backoff</span>
+    <span class="o">..</span><span class="nn">Default</span><span class="p">::</span><span class="nf">default</span><span class="p">()</span>
+<span class="p">};</span>
+
+<span class="c1">// Automatic retry with backoff:</span>
+<span class="c1">// Attempt 1: immediate</span>
+<span class="c1">// Attempt 2: +100ms</span>
+<span class="c1">// Attempt 3: +200ms</span>
+<span class="c1">// Attempt 4: +400ms</span>
+</code></pre></div></div>
+
+<p><strong>Retry Strategy:</strong></p>
+<ul>
+  <li>Exponential backoff prevents thundering herd</li>
+  <li>Non-retryable errors exit immediately (InvalidArgument, NotFound, PermissionDenied)</li>
+  <li>Timeout errors trigger retry</li>
+  <li>Network errors trigger retry</li>
+</ul>
+
+<h3 id="keep-alive-configuration">Keep-Alive Configuration</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">let</span> <span class="n">config</span> <span class="o">=</span> <span class="n">TransportConfig</span> <span class="p">{</span>
+    <span class="n">keep_alive_interval</span><span class="p">:</span> <span class="nf">Some</span><span class="p">(</span><span class="nn">Duration</span><span class="p">::</span><span class="nf">from_secs</span><span class="p">(</span><span class="mi">30</span><span class="p">)),</span>  <span class="c1">// Send keep-alive every 30s</span>
+    <span class="n">keep_alive_timeout</span><span class="p">:</span> <span class="nf">Some</span><span class="p">(</span><span class="nn">Duration</span><span class="p">::</span><span class="nf">from_secs</span><span class="p">(</span><span class="mi">10</span><span class="p">)),</span>   <span class="c1">// Timeout after 10s</span>
+    <span class="n">tcp_keepalive</span><span class="p">:</span> <span class="nf">Some</span><span class="p">(</span><span class="nn">Duration</span><span class="p">::</span><span class="nf">from_secs</span><span class="p">(</span><span class="mi">10</span><span class="p">)),</span>        <span class="c1">// TCP-level keep-alive</span>
+    <span class="n">http2_adaptive_window</span><span class="p">:</span> <span class="k">true</span><span class="p">,</span>                         <span class="c1">// Adaptive flow control</span>
+    <span class="o">..</span><span class="nn">Default</span><span class="p">::</span><span class="nf">default</span><span class="p">()</span>
+<span class="p">};</span>
+</code></pre></div></div>
+
+<p><strong>Benefits:</strong></p>
+<ul>
+  <li>Detects dead connections quickly</li>
+  <li>Prevents firewall connection drops</li>
+  <li>Maintains connection health</li>
+  <li>HTTP/2 flow control optimization</li>
+</ul>
+
+<h3 id="message-size-limits">Message Size Limits</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">let</span> <span class="n">config</span> <span class="o">=</span> <span class="n">TransportConfig</span> <span class="p">{</span>
+    <span class="n">max_message_size</span><span class="p">:</span> <span class="mi">16</span> <span class="o">*</span> <span class="mi">1024</span> <span class="o">*</span> <span class="mi">1024</span><span class="p">,</span> <span class="c1">// 16MB max message size</span>
+    <span class="o">..</span><span class="nn">Default</span><span class="p">::</span><span class="nf">default</span><span class="p">()</span>
+<span class="p">};</span>
+
+<span class="c1">// Applied to both encoding and decoding</span>
+<span class="k">let</span> <span class="n">client</span> <span class="o">=</span> <span class="nn">TransactionServiceClient</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="n">channel</span><span class="p">)</span>
+    <span class="nf">.max_decoding_message_size</span><span class="p">(</span><span class="n">config</span><span class="py">.max_message_size</span><span class="p">)</span>
+    <span class="nf">.max_encoding_message_size</span><span class="p">(</span><span class="n">config</span><span class="py">.max_message_size</span><span class="p">);</span>
+</code></pre></div></div>
+
+<hr />
+
+<h2 id="monitoring-and-observability">Monitoring and Observability</h2>
+
+<h3 id="connection-metrics">Connection Metrics</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">let</span> <span class="n">stats</span> <span class="o">=</span> <span class="n">pool</span><span class="nf">.get_stats</span><span class="p">()</span><span class="k">.await</span><span class="p">;</span>
+<span class="nd">println!</span><span class="p">(</span><span class="s">"Total connections: {}"</span><span class="p">,</span> <span class="n">stats</span><span class="py">.total_connections</span><span class="p">);</span>
+<span class="nd">println!</span><span class="p">(</span><span class="s">"Total requests: {}"</span><span class="p">,</span> <span class="n">stats</span><span class="py">.total_requests</span><span class="p">);</span>
+<span class="nd">println!</span><span class="p">(</span><span class="s">"Total errors: {}"</span><span class="p">,</span> <span class="n">stats</span><span class="py">.total_errors</span><span class="p">);</span>
+<span class="nd">println!</span><span class="p">(</span><span class="s">"Average latency: {}ms"</span><span class="p">,</span> <span class="n">stats</span><span class="py">.average_latency_ms</span><span class="p">);</span>
+</code></pre></div></div>
+
+<p><strong>Metrics Tracked:</strong></p>
+<ul>
+  <li>Connection creation time</li>
+  <li>Last used timestamp</li>
+  <li>Request count per connection</li>
+  <li>Error count per connection</li>
+  <li>Average latency (exponential moving average)</li>
+</ul>
+
+<h3 id="health-checks">Health Checks</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Set service status</span>
+<span class="n">health_service</span><span class="nf">.set_serving_status</span><span class="p">(</span>
+    <span class="nn">health_check_response</span><span class="p">::</span><span class="nn">ServingStatus</span><span class="p">::</span><span class="n">Serving</span>
+<span class="p">)</span><span class="k">.await</span><span class="p">;</span>
+
+<span class="c1">// Query health</span>
+<span class="k">let</span> <span class="n">response</span> <span class="o">=</span> <span class="n">health_client</span><span class="nf">.check</span><span class="p">(</span><span class="n">HealthCheckRequest</span> <span class="p">{</span>
+    <span class="n">service</span><span class="p">:</span> <span class="s">"orbit"</span><span class="nf">.to_string</span><span class="p">(),</span>
+<span class="p">})</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+
+<span class="c1">// Watch for health changes</span>
+<span class="k">let</span> <span class="k">mut</span> <span class="n">watch_stream</span> <span class="o">=</span> <span class="n">health_client</span><span class="nf">.watch</span><span class="p">(</span><span class="n">HealthCheckRequest</span> <span class="p">{</span>
+    <span class="n">service</span><span class="p">:</span> <span class="s">"orbit"</span><span class="nf">.to_string</span><span class="p">(),</span>
+<span class="p">})</span><span class="k">.await</span><span class="o">?</span><span class="nf">.into_inner</span><span class="p">();</span>
+
+<span class="k">while</span> <span class="k">let</span> <span class="nf">Some</span><span class="p">(</span><span class="n">status</span><span class="p">)</span> <span class="o">=</span> <span class="n">watch_stream</span><span class="nf">.message</span><span class="p">()</span><span class="k">.await</span><span class="o">?</span> <span class="p">{</span>
+    <span class="nd">println!</span><span class="p">(</span><span class="s">"Health status: {:?}"</span><span class="p">,</span> <span class="n">status</span><span class="p">);</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="tracing-integration">Tracing Integration</h3>
+
+<p>The transport layer uses <code class="language-plaintext highlighter-rouge">tracing</code> crate for structured logging:</p>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">tracing</span><span class="p">::{</span><span class="n">info</span><span class="p">,</span> <span class="n">warn</span><span class="p">,</span> <span class="n">error</span><span class="p">,</span> <span class="n">debug</span><span class="p">};</span>
+
+<span class="c1">// Connection events</span>
+<span class="nd">debug!</span><span class="p">(</span><span class="s">"Creating new gRPC connection to: {}"</span><span class="p">,</span> <span class="n">endpoint_url</span><span class="p">);</span>
+<span class="nd">info!</span><span class="p">(</span><span class="s">"Created new gRPC connection to: {}"</span><span class="p">,</span> <span class="n">endpoint_url</span><span class="p">);</span>
+
+<span class="c1">// Request failures</span>
+<span class="nd">warn!</span><span class="p">(</span><span class="s">"Vote request to {} failed: {}"</span><span class="p">,</span> <span class="n">target</span><span class="p">,</span> <span class="n">status</span><span class="p">);</span>
+<span class="nd">error!</span><span class="p">(</span><span class="s">"Connection cleanup failed: {}"</span><span class="p">,</span> <span class="n">e</span><span class="p">);</span>
+
+<span class="c1">// Transaction events</span>
+<span class="nd">debug!</span><span class="p">(</span><span class="s">"Sent transaction message to {} ({}ms)"</span><span class="p">,</span> <span class="n">target</span><span class="p">,</span> <span class="n">response</span><span class="py">.processing_time_ms</span><span class="p">);</span>
+<span class="nd">info!</span><span class="p">(</span><span class="s">"Broadcast completed: {} successful sends"</span><span class="p">,</span> <span class="n">total_successful</span><span class="p">);</span>
+</code></pre></div></div>
+
+<p><strong>Log Levels:</strong></p>
+<ul>
+  <li><strong>debug</strong>: Connection lifecycle, message routing details</li>
+  <li><strong>info</strong>: Connection creation, broadcast completion, successful operations</li>
+  <li><strong>warn</strong>: Request failures, timeouts (with automatic retry)</li>
+  <li><strong>error</strong>: Fatal errors, connection cleanup failures</li>
+</ul>
+
+<hr />
+
+<h2 id="error-handling">Error Handling</h2>
+
+<h3 id="error-types">Error Types</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">orbit_shared</span><span class="p">::</span><span class="nn">exception</span><span class="p">::{</span><span class="n">OrbitError</span><span class="p">,</span> <span class="n">OrbitResult</span><span class="p">};</span>
+
+<span class="c1">// Network errors</span>
+<span class="nn">OrbitError</span><span class="p">::</span><span class="nf">network</span><span class="p">(</span><span class="s">"Connection failed"</span><span class="p">)</span>
+<span class="nn">OrbitError</span><span class="p">::</span><span class="nf">timeout</span><span class="p">(</span><span class="s">"Request timeout"</span><span class="p">)</span>
+
+<span class="c1">// Cluster errors</span>
+<span class="nn">OrbitError</span><span class="p">::</span><span class="nf">cluster</span><span class="p">(</span><span class="s">"Node not found"</span><span class="p">)</span>
+
+<span class="c1">// Internal errors</span>
+<span class="nn">OrbitError</span><span class="p">::</span><span class="nf">internal</span><span class="p">(</span><span class="s">"Invalid endpoint URL"</span><span class="p">)</span>
+
+<span class="c1">// Configuration errors</span>
+<span class="nn">OrbitError</span><span class="p">::</span><span class="nf">configuration</span><span class="p">(</span><span class="s">"Invalid bind address"</span><span class="p">)</span>
+</code></pre></div></div>
+
+<h3 id="retry-classification">Retry Classification</h3>
+
+<p><strong>Retryable Errors:</strong></p>
+<ul>
+  <li>Network connection failures</li>
+  <li>Timeout errors</li>
+  <li>Transient gRPC errors (Unavailable, DeadlineExceeded)</li>
+</ul>
+
+<p><strong>Non-Retryable Errors:</strong></p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">Code::InvalidArgument</code> - Invalid request format</li>
+  <li><code class="language-plaintext highlighter-rouge">Code::NotFound</code> - Resource doesn’t exist</li>
+  <li><code class="language-plaintext highlighter-rouge">Code::PermissionDenied</code> - Authorization failure</li>
+</ul>
+
+<h3 id="error-recovery">Error Recovery</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Automatic connection removal on failure</span>
+<span class="k">async</span> <span class="k">fn</span> <span class="nf">remove_client</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">target_node</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">NodeId</span><span class="p">)</span> <span class="p">{</span>
+    <span class="k">let</span> <span class="k">mut</span> <span class="n">clients</span> <span class="o">=</span> <span class="k">self</span><span class="py">.clients</span><span class="nf">.write</span><span class="p">()</span><span class="k">.await</span><span class="p">;</span>
+    <span class="k">if</span> <span class="n">clients</span><span class="nf">.remove</span><span class="p">(</span><span class="n">target_node</span><span class="p">)</span><span class="nf">.is_some</span><span class="p">()</span> <span class="p">{</span>
+        <span class="nd">debug!</span><span class="p">(</span><span class="s">"Removed client connection to node {}"</span><span class="p">,</span> <span class="n">target_node</span><span class="p">);</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+
+<span class="c1">// Next request will create a fresh connection</span>
+</code></pre></div></div>
+
+<hr />
+
+<h2 id="usage-examples">Usage Examples</h2>
+
+<h3 id="complete-actor-invocation-flow">Complete Actor Invocation Flow</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">orbit_proto</span><span class="p">::</span><span class="o">*</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">orbit_shared</span><span class="p">::</span><span class="o">*</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">orbit_shared</span><span class="p">::</span><span class="nn">transport</span><span class="p">::</span><span class="o">*</span><span class="p">;</span>
+
+<span class="c1">// 1. Set up transport</span>
+<span class="k">let</span> <span class="n">config</span> <span class="o">=</span> <span class="nn">TransportConfig</span><span class="p">::</span><span class="nf">default</span><span class="p">();</span>
+<span class="k">let</span> <span class="n">node_resolver</span> <span class="o">=</span> <span class="nn">Arc</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="nn">MyNodeResolver</span><span class="p">::</span><span class="nf">new</span><span class="p">());</span>
+<span class="k">let</span> <span class="n">sender</span> <span class="o">=</span> <span class="nn">GrpcTransactionMessageSender</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span>
+    <span class="n">node_id</span><span class="p">,</span>
+    <span class="n">node_resolver</span><span class="p">,</span>
+    <span class="n">config</span><span class="p">,</span>
+<span class="p">);</span>
+
+<span class="n">sender</span><span class="nf">.start_background_tasks</span><span class="p">()</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+
+<span class="c1">// 2. Define target actor</span>
+<span class="k">let</span> <span class="n">target_actor</span> <span class="o">=</span> <span class="n">AddressableReference</span> <span class="p">{</span>
+    <span class="n">addressable_type</span><span class="p">:</span> <span class="s">"BankAccount"</span><span class="nf">.to_string</span><span class="p">(),</span>
+    <span class="n">key</span><span class="p">:</span> <span class="nn">Key</span><span class="p">::</span><span class="n">StringKey</span> <span class="p">{</span> <span class="n">key</span><span class="p">:</span> <span class="s">"account-123"</span><span class="nf">.to_string</span><span class="p">()</span> <span class="p">},</span>
+<span class="p">};</span>
+
+<span class="c1">// 3. Create transaction message</span>
+<span class="k">let</span> <span class="n">tx_id</span> <span class="o">=</span> <span class="nn">TransactionId</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="n">node_id</span><span class="nf">.clone</span><span class="p">());</span>
+<span class="k">let</span> <span class="n">operation</span> <span class="o">=</span> <span class="n">TransactionOperation</span> <span class="p">{</span>
+    <span class="n">operation_id</span><span class="p">:</span> <span class="s">"op-1"</span><span class="nf">.to_string</span><span class="p">(),</span>
+    <span class="n">target_actor</span><span class="p">:</span> <span class="n">target_actor</span><span class="nf">.clone</span><span class="p">(),</span>
+    <span class="n">operation_type</span><span class="p">:</span> <span class="s">"debit"</span><span class="nf">.to_string</span><span class="p">(),</span>
+    <span class="n">operation_data</span><span class="p">:</span> <span class="nn">serde_json</span><span class="p">::</span><span class="nd">json!</span><span class="p">({</span><span class="s">"amount"</span><span class="p">:</span> <span class="mi">100</span><span class="p">}),</span>
+    <span class="n">compensation_data</span><span class="p">:</span> <span class="nf">Some</span><span class="p">(</span><span class="nn">serde_json</span><span class="p">::</span><span class="nd">json!</span><span class="p">({</span><span class="s">"action"</span><span class="p">:</span> <span class="s">"credit"</span><span class="p">,</span> <span class="s">"amount"</span><span class="p">:</span> <span class="mi">100</span><span class="p">})),</span>
+<span class="p">};</span>
+
+<span class="k">let</span> <span class="n">message</span> <span class="o">=</span> <span class="nn">TransactionMessage</span><span class="p">::</span><span class="n">Prepare</span> <span class="p">{</span>
+    <span class="n">transaction_id</span><span class="p">:</span> <span class="n">tx_id</span><span class="p">,</span>
+    <span class="n">operations</span><span class="p">:</span> <span class="nd">vec!</span><span class="p">[</span><span class="n">operation</span><span class="p">],</span>
+    <span class="n">timeout</span><span class="p">:</span> <span class="nn">Duration</span><span class="p">::</span><span class="nf">from_secs</span><span class="p">(</span><span class="mi">30</span><span class="p">),</span>
+<span class="p">};</span>
+
+<span class="c1">// 4. Send message</span>
+<span class="n">sender</span><span class="nf">.send_message</span><span class="p">(</span><span class="o">&amp;</span><span class="n">target_actor</span><span class="p">,</span> <span class="n">message</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h3 id="setting-up-a-complete-node">Setting Up a Complete Node</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">orbit_proto</span><span class="p">::</span><span class="o">*</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">orbit_shared</span><span class="p">::</span><span class="o">*</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">orbit_shared</span><span class="p">::</span><span class="nn">raft_transport</span><span class="p">::</span><span class="o">*</span><span class="p">;</span>
+<span class="k">use</span> <span class="nn">std</span><span class="p">::</span><span class="nn">sync</span><span class="p">::</span><span class="nb">Arc</span><span class="p">;</span>
+<span class="k">use</span> <span class="n">tokio</span><span class="p">;</span>
+
+<span class="nd">#[tokio::main]</span>
+<span class="k">async</span> <span class="k">fn</span> <span class="nf">main</span><span class="p">()</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span> <span class="p">{</span>
+    <span class="c1">// Node configuration</span>
+    <span class="k">let</span> <span class="n">node_id</span> <span class="o">=</span> <span class="nn">NodeId</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="s">"node-1"</span><span class="nf">.to_string</span><span class="p">(),</span> <span class="s">"default"</span><span class="nf">.to_string</span><span class="p">());</span>
+    
+    <span class="c1">// Set up Raft transport</span>
+    <span class="k">let</span> <span class="k">mut</span> <span class="n">node_addresses</span> <span class="o">=</span> <span class="nn">HashMap</span><span class="p">::</span><span class="nf">new</span><span class="p">();</span>
+    <span class="n">node_addresses</span><span class="nf">.insert</span><span class="p">(</span>
+        <span class="nn">NodeId</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="s">"node-2"</span><span class="nf">.to_string</span><span class="p">(),</span> <span class="s">"default"</span><span class="nf">.to_string</span><span class="p">()),</span>
+        <span class="s">"http://node2:50051"</span><span class="nf">.to_string</span><span class="p">(),</span>
+    <span class="p">);</span>
+    
+    <span class="k">let</span> <span class="n">raft_transport</span> <span class="o">=</span> <span class="nn">Arc</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="nn">GrpcRaftTransport</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span>
+        <span class="n">node_id</span><span class="nf">.clone</span><span class="p">(),</span>
+        <span class="n">node_addresses</span><span class="p">,</span>
+        <span class="nn">Duration</span><span class="p">::</span><span class="nf">from_secs</span><span class="p">(</span><span class="mi">5</span><span class="p">),</span>
+        <span class="nn">Duration</span><span class="p">::</span><span class="nf">from_secs</span><span class="p">(</span><span class="mi">10</span><span class="p">),</span>
+    <span class="p">));</span>
+    
+    <span class="c1">// Create consensus</span>
+    <span class="k">let</span> <span class="n">consensus</span> <span class="o">=</span> <span class="nn">Arc</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="nn">RaftConsensus</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span>
+        <span class="n">node_id</span><span class="nf">.clone</span><span class="p">(),</span>
+        <span class="nd">vec!</span><span class="p">[</span><span class="n">node_id</span><span class="nf">.clone</span><span class="p">()],</span>
+        <span class="nn">RaftConfig</span><span class="p">::</span><span class="nf">default</span><span class="p">(),</span>
+    <span class="p">));</span>
+    
+    <span class="c1">// Start consensus</span>
+    <span class="n">consensus</span><span class="nf">.start</span><span class="p">(</span><span class="n">raft_transport</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+    
+    <span class="c1">// Start gRPC server</span>
+    <span class="nf">start_raft_server</span><span class="p">(</span><span class="n">consensus</span><span class="nf">.clone</span><span class="p">(),</span> <span class="s">"0.0.0.0:50051"</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+    
+    <span class="nf">Ok</span><span class="p">(())</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="broadcast-optimization-example">Broadcast Optimization Example</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Broadcast to multiple actors</span>
+<span class="k">let</span> <span class="n">targets</span> <span class="o">=</span> <span class="nd">vec!</span><span class="p">[</span>
+    <span class="n">AddressableReference</span> <span class="p">{</span>
+        <span class="n">addressable_type</span><span class="p">:</span> <span class="s">"Counter"</span><span class="nf">.to_string</span><span class="p">(),</span>
+        <span class="n">key</span><span class="p">:</span> <span class="nn">Key</span><span class="p">::</span><span class="n">StringKey</span> <span class="p">{</span> <span class="n">key</span><span class="p">:</span> <span class="s">"counter-1"</span><span class="nf">.to_string</span><span class="p">()</span> <span class="p">},</span>
+    <span class="p">},</span>
+    <span class="n">AddressableReference</span> <span class="p">{</span>
+        <span class="n">addressable_type</span><span class="p">:</span> <span class="s">"Counter"</span><span class="nf">.to_string</span><span class="p">(),</span>
+        <span class="n">key</span><span class="p">:</span> <span class="nn">Key</span><span class="p">::</span><span class="n">StringKey</span> <span class="p">{</span> <span class="n">key</span><span class="p">:</span> <span class="s">"counter-2"</span><span class="nf">.to_string</span><span class="p">()</span> <span class="p">},</span>
+    <span class="p">},</span>
+    <span class="n">AddressableReference</span> <span class="p">{</span>
+        <span class="n">addressable_type</span><span class="p">:</span> <span class="s">"Counter"</span><span class="nf">.to_string</span><span class="p">(),</span>
+        <span class="n">key</span><span class="p">:</span> <span class="nn">Key</span><span class="p">::</span><span class="n">StringKey</span> <span class="p">{</span> <span class="n">key</span><span class="p">:</span> <span class="s">"counter-3"</span><span class="nf">.to_string</span><span class="p">()</span> <span class="p">},</span>
+    <span class="p">},</span>
+<span class="p">];</span>
+
+<span class="k">let</span> <span class="n">message</span> <span class="o">=</span> <span class="nn">TransactionMessage</span><span class="p">::</span><span class="n">Commit</span> <span class="p">{</span> <span class="n">transaction_id</span><span class="p">:</span> <span class="n">tx_id</span> <span class="p">};</span>
+
+<span class="c1">// Automatically groups targets by hosting node</span>
+<span class="c1">// Sends one broadcast request per node instead of N individual requests</span>
+<span class="n">sender</span><span class="nf">.broadcast_message</span><span class="p">(</span><span class="o">&amp;</span><span class="n">targets</span><span class="p">,</span> <span class="n">message</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+</code></pre></div></div>
+
+<hr />
+
+<h2 id="best-practices">Best Practices</h2>
+
+<h3 id="1-connection-pool-configuration">1. Connection Pool Configuration</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Production configuration</span>
+<span class="k">let</span> <span class="n">config</span> <span class="o">=</span> <span class="n">TransportConfig</span> <span class="p">{</span>
+    <span class="n">max_connections_per_endpoint</span><span class="p">:</span> <span class="mi">10</span><span class="p">,</span>
+    <span class="n">connect_timeout</span><span class="p">:</span> <span class="nn">Duration</span><span class="p">::</span><span class="nf">from_secs</span><span class="p">(</span><span class="mi">5</span><span class="p">),</span>
+    <span class="n">request_timeout</span><span class="p">:</span> <span class="nn">Duration</span><span class="p">::</span><span class="nf">from_secs</span><span class="p">(</span><span class="mi">30</span><span class="p">),</span>
+    <span class="n">keep_alive_interval</span><span class="p">:</span> <span class="nf">Some</span><span class="p">(</span><span class="nn">Duration</span><span class="p">::</span><span class="nf">from_secs</span><span class="p">(</span><span class="mi">30</span><span class="p">)),</span>
+    <span class="n">keep_alive_timeout</span><span class="p">:</span> <span class="nf">Some</span><span class="p">(</span><span class="nn">Duration</span><span class="p">::</span><span class="nf">from_secs</span><span class="p">(</span><span class="mi">10</span><span class="p">)),</span>
+    <span class="n">max_message_size</span><span class="p">:</span> <span class="mi">16</span> <span class="o">*</span> <span class="mi">1024</span> <span class="o">*</span> <span class="mi">1024</span><span class="p">,</span>
+    <span class="n">retry_attempts</span><span class="p">:</span> <span class="mi">3</span><span class="p">,</span>
+    <span class="n">retry_backoff_initial</span><span class="p">:</span> <span class="nn">Duration</span><span class="p">::</span><span class="nf">from_millis</span><span class="p">(</span><span class="mi">100</span><span class="p">),</span>
+    <span class="n">retry_backoff_multiplier</span><span class="p">:</span> <span class="mf">2.0</span><span class="p">,</span>
+    <span class="n">tcp_keepalive</span><span class="p">:</span> <span class="nf">Some</span><span class="p">(</span><span class="nn">Duration</span><span class="p">::</span><span class="nf">from_secs</span><span class="p">(</span><span class="mi">10</span><span class="p">)),</span>
+    <span class="n">http2_adaptive_window</span><span class="p">:</span> <span class="k">true</span><span class="p">,</span>
+<span class="p">};</span>
+</code></pre></div></div>
+
+<p><strong>Recommendations:</strong></p>
+<ul>
+  <li><strong>Development</strong>: 2-5 connections per endpoint</li>
+  <li><strong>Production</strong>: 10-20 connections per endpoint</li>
+  <li><strong>High throughput</strong>: 20-50 connections per endpoint</li>
+  <li><strong>Request timeout</strong>: 2-3x expected P99 latency</li>
+</ul>
+
+<h3 id="2-error-handling-patterns">2. Error Handling Patterns</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Pattern 1: Retry on network errors</span>
+<span class="k">match</span> <span class="n">sender</span><span class="nf">.send_message</span><span class="p">(</span><span class="o">&amp;</span><span class="n">target</span><span class="p">,</span> <span class="n">message</span><span class="nf">.clone</span><span class="p">())</span><span class="k">.await</span> <span class="p">{</span>
+    <span class="nf">Ok</span><span class="p">(</span><span class="n">_</span><span class="p">)</span> <span class="k">=&gt;</span> <span class="nd">println!</span><span class="p">(</span><span class="s">"Message sent successfully"</span><span class="p">),</span>
+    <span class="nf">Err</span><span class="p">(</span><span class="nn">OrbitError</span><span class="p">::</span><span class="nf">Network</span><span class="p">(</span><span class="n">_</span><span class="p">))</span> <span class="p">|</span> <span class="nf">Err</span><span class="p">(</span><span class="nn">OrbitError</span><span class="p">::</span><span class="nf">Timeout</span><span class="p">(</span><span class="n">_</span><span class="p">))</span> <span class="k">=&gt;</span> <span class="p">{</span>
+        <span class="c1">// Already retried automatically, log and handle</span>
+        <span class="nd">error!</span><span class="p">(</span><span class="s">"Failed to send message after retries"</span><span class="p">);</span>
+    <span class="p">}</span>
+    <span class="nf">Err</span><span class="p">(</span><span class="n">e</span><span class="p">)</span> <span class="k">=&gt;</span> <span class="p">{</span>
+        <span class="c1">// Non-retryable error</span>
+        <span class="nd">error!</span><span class="p">(</span><span class="s">"Fatal error: {}"</span><span class="p">,</span> <span class="n">e</span><span class="p">);</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+
+<span class="c1">// Pattern 2: Circuit breaker for node failures</span>
+<span class="k">let</span> <span class="k">mut</span> <span class="n">failure_count</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+<span class="k">const</span> <span class="n">MAX_FAILURES</span><span class="p">:</span> <span class="nb">u32</span> <span class="o">=</span> <span class="mi">5</span><span class="p">;</span>
+
+<span class="k">for</span> <span class="n">message</span> <span class="k">in</span> <span class="n">messages</span> <span class="p">{</span>
+    <span class="k">match</span> <span class="n">sender</span><span class="nf">.send_message</span><span class="p">(</span><span class="o">&amp;</span><span class="n">target</span><span class="p">,</span> <span class="n">message</span><span class="p">)</span><span class="k">.await</span> <span class="p">{</span>
+        <span class="nf">Ok</span><span class="p">(</span><span class="n">_</span><span class="p">)</span> <span class="k">=&gt;</span> <span class="n">failure_count</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
+        <span class="nf">Err</span><span class="p">(</span><span class="n">_</span><span class="p">)</span> <span class="k">=&gt;</span> <span class="p">{</span>
+            <span class="n">failure_count</span> <span class="o">+=</span> <span class="mi">1</span><span class="p">;</span>
+            <span class="k">if</span> <span class="n">failure_count</span> <span class="o">&gt;=</span> <span class="n">MAX_FAILURES</span> <span class="p">{</span>
+                <span class="c1">// Open circuit, stop sending</span>
+                <span class="k">break</span><span class="p">;</span>
+            <span class="p">}</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="3-monitoring-integration">3. Monitoring Integration</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Periodic metrics collection</span>
+<span class="nn">tokio</span><span class="p">::</span><span class="nf">spawn</span><span class="p">(</span><span class="k">async</span> <span class="k">move</span> <span class="p">{</span>
+    <span class="k">let</span> <span class="k">mut</span> <span class="n">interval</span> <span class="o">=</span> <span class="nn">tokio</span><span class="p">::</span><span class="nn">time</span><span class="p">::</span><span class="nf">interval</span><span class="p">(</span><span class="nn">Duration</span><span class="p">::</span><span class="nf">from_secs</span><span class="p">(</span><span class="mi">60</span><span class="p">));</span>
+    <span class="k">loop</span> <span class="p">{</span>
+        <span class="n">interval</span><span class="nf">.tick</span><span class="p">()</span><span class="k">.await</span><span class="p">;</span>
+        <span class="k">let</span> <span class="n">stats</span> <span class="o">=</span> <span class="n">sender</span><span class="nf">.get_stats</span><span class="p">()</span><span class="k">.await</span><span class="p">;</span>
+        
+        <span class="c1">// Export to monitoring system</span>
+        <span class="nn">metrics</span><span class="p">::</span><span class="nd">gauge!</span><span class="p">(</span><span class="s">"orbit.transport.connections"</span><span class="p">,</span> <span class="n">stats</span><span class="py">.total_connections</span> <span class="k">as</span> <span class="nb">f64</span><span class="p">);</span>
+        <span class="nn">metrics</span><span class="p">::</span><span class="nd">counter!</span><span class="p">(</span><span class="s">"orbit.transport.requests"</span><span class="p">,</span> <span class="n">stats</span><span class="py">.total_requests</span><span class="p">);</span>
+        <span class="nn">metrics</span><span class="p">::</span><span class="nd">counter!</span><span class="p">(</span><span class="s">"orbit.transport.errors"</span><span class="p">,</span> <span class="n">stats</span><span class="py">.total_errors</span><span class="p">);</span>
+        <span class="nn">metrics</span><span class="p">::</span><span class="nd">histogram!</span><span class="p">(</span><span class="s">"orbit.transport.latency_ms"</span><span class="p">,</span> <span class="n">stats</span><span class="py">.average_latency_ms</span><span class="p">);</span>
+    <span class="p">}</span>
+<span class="p">});</span>
+</code></pre></div></div>
+
+<h3 id="4-dynamic-node-management">4. Dynamic Node Management</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Add new nodes dynamically</span>
+<span class="n">raft_transport</span><span class="nf">.update_node_address</span><span class="p">(</span>
+    <span class="nn">NodeId</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="s">"node-3"</span><span class="nf">.to_string</span><span class="p">(),</span> <span class="s">"default"</span><span class="nf">.to_string</span><span class="p">()),</span>
+    <span class="s">"http://node3:50051"</span><span class="nf">.to_string</span><span class="p">(),</span>
+<span class="p">)</span><span class="k">.await</span><span class="p">;</span>
+
+<span class="c1">// Existing connections are automatically removed and recreated</span>
+</code></pre></div></div>
+
+<h3 id="5-graceful-shutdown">5. Graceful Shutdown</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Stop accepting new connections</span>
+<span class="n">health_service</span><span class="nf">.set_serving_status</span><span class="p">(</span>
+    <span class="nn">health_check_response</span><span class="p">::</span><span class="nn">ServingStatus</span><span class="p">::</span><span class="n">NotServing</span>
+<span class="p">)</span><span class="k">.await</span><span class="p">;</span>
+
+<span class="c1">// Drain in-flight requests</span>
+<span class="nn">tokio</span><span class="p">::</span><span class="nn">time</span><span class="p">::</span><span class="nf">sleep</span><span class="p">(</span><span class="nn">Duration</span><span class="p">::</span><span class="nf">from_secs</span><span class="p">(</span><span class="mi">30</span><span class="p">))</span><span class="k">.await</span><span class="p">;</span>
+
+<span class="c1">// Cleanup connections</span>
+<span class="n">pool</span><span class="nf">.cleanup_idle_connections</span><span class="p">(</span><span class="nn">Duration</span><span class="p">::</span><span class="nf">from_secs</span><span class="p">(</span><span class="mi">0</span><span class="p">))</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+</code></pre></div></div>
+
+<hr />
+
+<h2 id="testing">Testing</h2>
+
+<h3 id="unit-tests">Unit Tests</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="nd">#[tokio::test]</span>
+<span class="k">async</span> <span class="k">fn</span> <span class="nf">test_connection_pool_reuse</span><span class="p">()</span> <span class="p">{</span>
+    <span class="k">let</span> <span class="n">config</span> <span class="o">=</span> <span class="nn">TransportConfig</span><span class="p">::</span><span class="nf">default</span><span class="p">();</span>
+    <span class="k">let</span> <span class="n">pool</span> <span class="o">=</span> <span class="nn">ConnectionPool</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="n">config</span><span class="p">);</span>
+    
+    <span class="k">let</span> <span class="n">client1</span> <span class="o">=</span> <span class="n">pool</span><span class="nf">.get_connection</span><span class="p">(</span><span class="s">"http://localhost:50051"</span><span class="p">)</span><span class="k">.await</span><span class="nf">.unwrap</span><span class="p">();</span>
+    <span class="k">let</span> <span class="n">client2</span> <span class="o">=</span> <span class="n">pool</span><span class="nf">.get_connection</span><span class="p">(</span><span class="s">"http://localhost:50051"</span><span class="p">)</span><span class="k">.await</span><span class="nf">.unwrap</span><span class="p">();</span>
+    
+    <span class="c1">// Should reuse the same connection</span>
+    <span class="k">let</span> <span class="n">stats</span> <span class="o">=</span> <span class="n">pool</span><span class="nf">.get_stats</span><span class="p">()</span><span class="k">.await</span><span class="p">;</span>
+    <span class="nd">assert_eq!</span><span class="p">(</span><span class="n">stats</span><span class="py">.total_connections</span><span class="p">,</span> <span class="mi">1</span><span class="p">);</span>
+<span class="p">}</span>
+
+<span class="nd">#[tokio::test]</span>
+<span class="k">async</span> <span class="k">fn</span> <span class="nf">test_message_conversion</span><span class="p">()</span> <span class="p">{</span>
+    <span class="k">let</span> <span class="n">tx_id</span> <span class="o">=</span> <span class="nn">TransactionId</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="nn">NodeId</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="s">"test"</span><span class="nf">.to_string</span><span class="p">(),</span> <span class="s">"default"</span><span class="nf">.to_string</span><span class="p">()));</span>
+    <span class="k">let</span> <span class="n">message</span> <span class="o">=</span> <span class="nn">TransactionMessage</span><span class="p">::</span><span class="n">Commit</span> <span class="p">{</span> <span class="n">transaction_id</span><span class="p">:</span> <span class="n">tx_id</span><span class="nf">.clone</span><span class="p">()</span> <span class="p">};</span>
+    
+    <span class="k">let</span> <span class="n">proto</span> <span class="o">=</span> <span class="nf">convert_message_to_proto</span><span class="p">(</span><span class="n">message</span><span class="p">)</span><span class="nf">.unwrap</span><span class="p">();</span>
+    <span class="nd">assert!</span><span class="p">(</span><span class="n">proto</span><span class="py">.message_type</span><span class="nf">.is_some</span><span class="p">());</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="integration-tests">Integration Tests</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="nd">#[tokio::test]</span>
+<span class="k">async</span> <span class="k">fn</span> <span class="nf">test_full_transaction_flow</span><span class="p">()</span> <span class="p">{</span>
+    <span class="c1">// Start server</span>
+    <span class="k">let</span> <span class="n">server_handle</span> <span class="o">=</span> <span class="nn">tokio</span><span class="p">::</span><span class="nf">spawn</span><span class="p">(</span><span class="k">async</span> <span class="p">{</span>
+        <span class="nf">start_raft_server</span><span class="p">(</span><span class="n">consensus</span><span class="p">,</span> <span class="s">"127.0.0.1:50051"</span><span class="p">)</span><span class="k">.await</span>
+    <span class="p">});</span>
+    
+    <span class="nn">tokio</span><span class="p">::</span><span class="nn">time</span><span class="p">::</span><span class="nf">sleep</span><span class="p">(</span><span class="nn">Duration</span><span class="p">::</span><span class="nf">from_millis</span><span class="p">(</span><span class="mi">100</span><span class="p">))</span><span class="k">.await</span><span class="p">;</span>
+    
+    <span class="c1">// Create client</span>
+    <span class="k">let</span> <span class="n">sender</span> <span class="o">=</span> <span class="nn">GrpcTransactionMessageSender</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span>
+        <span class="n">node_id</span><span class="p">,</span>
+        <span class="nn">Arc</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="n">mock_resolver</span><span class="p">),</span>
+        <span class="nn">TransportConfig</span><span class="p">::</span><span class="nf">default</span><span class="p">(),</span>
+    <span class="p">);</span>
+    
+    <span class="c1">// Send message</span>
+    <span class="k">let</span> <span class="n">result</span> <span class="o">=</span> <span class="n">sender</span><span class="nf">.send_message</span><span class="p">(</span><span class="o">&amp;</span><span class="n">target</span><span class="p">,</span> <span class="n">message</span><span class="p">)</span><span class="k">.await</span><span class="p">;</span>
+    <span class="nd">assert!</span><span class="p">(</span><span class="n">result</span><span class="nf">.is_ok</span><span class="p">());</span>
+    
+    <span class="c1">// Cleanup</span>
+    <span class="n">server_handle</span><span class="nf">.abort</span><span class="p">();</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<hr />
+
+<h2 id="troubleshooting">Troubleshooting</h2>
+
+<h3 id="connection-failures">Connection Failures</h3>
+
+<p><strong>Symptom:</strong> <code class="language-plaintext highlighter-rouge">OrbitError::Network("Connection failed")</code></p>
+
+<p><strong>Solutions:</strong></p>
+<ol>
+  <li>Verify endpoint URL format: <code class="language-plaintext highlighter-rouge">http://hostname:port</code></li>
+  <li>Check network connectivity: <code class="language-plaintext highlighter-rouge">telnet hostname port</code></li>
+  <li>Verify DNS resolution</li>
+  <li>Check firewall rules</li>
+  <li>Increase <code class="language-plaintext highlighter-rouge">connect_timeout</code></li>
+</ol>
+
+<h3 id="timeout-errors">Timeout Errors</h3>
+
+<p><strong>Symptom:</strong> <code class="language-plaintext highlighter-rouge">OrbitError::Timeout("Request timeout")</code></p>
+
+<p><strong>Solutions:</strong></p>
+<ol>
+  <li>Increase <code class="language-plaintext highlighter-rouge">request_timeout</code> in config</li>
+  <li>Check server health and load</li>
+  <li>Enable detailed tracing: <code class="language-plaintext highlighter-rouge">RUST_LOG=debug</code></li>
+  <li>Monitor connection pool stats</li>
+  <li>Verify network latency</li>
+</ol>
+
+<h3 id="high-latency">High Latency</h3>
+
+<p><strong>Symptom:</strong> Slow request processing</p>
+
+<p><strong>Solutions:</strong></p>
+<ol>
+  <li>Check connection pool configuration</li>
+  <li>Enable HTTP/2 adaptive window</li>
+  <li>Tune TCP keepalive settings</li>
+  <li>Monitor connection reuse rate</li>
+  <li>Consider adding more connections per endpoint</li>
+</ol>
+
+<h3 id="memory-leaks">Memory Leaks</h3>
+
+<p><strong>Symptom:</strong> Growing memory usage</p>
+
+<p><strong>Solutions:</strong></p>
+<ol>
+  <li>Enable connection cleanup background task</li>
+  <li>Reduce <code class="language-plaintext highlighter-rouge">max_connections_per_endpoint</code></li>
+  <li>Decrease connection idle timeout</li>
+  <li>Monitor connection pool stats</li>
+  <li>Check for unclosed streams</li>
+</ol>
+
+<h3 id="grpc-status-codes">gRPC Status Codes</h3>
+
+<p>Common gRPC errors and their meanings:</p>
+
+<ul>
+  <li><strong>UNAVAILABLE</strong>: Service temporarily unavailable (retryable)</li>
+  <li><strong>DEADLINE_EXCEEDED</strong>: Request timeout (retryable)</li>
+  <li><strong>INVALID_ARGUMENT</strong>: Invalid request format (not retryable)</li>
+  <li><strong>NOT_FOUND</strong>: Resource doesn’t exist (not retryable)</li>
+  <li><strong>PERMISSION_DENIED</strong>: Authorization failure (not retryable)</li>
+  <li><strong>RESOURCE_EXHAUSTED</strong>: Rate limited or quota exceeded (retryable with backoff)</li>
+</ul>
+
+<hr />
+
+<h2 id="performance-characteristics">Performance Characteristics</h2>
+
+<h3 id="throughput">Throughput</h3>
+
+<p><strong>Expected Performance:</strong></p>
+<ul>
+  <li>Single connection: 10,000-50,000 RPS</li>
+  <li>Connection pool (10 connections): 100,000-500,000 RPS</li>
+  <li>Network-bound at 1Gbps: ~80,000 RPS for 1KB messages</li>
+</ul>
+
+<h3 id="latency">Latency</h3>
+
+<p><strong>P50 Latency:</strong></p>
+<ul>
+  <li>Local network: 0.5-1ms</li>
+  <li>Same datacenter: 1-5ms</li>
+  <li>Cross-region: 50-200ms</li>
+</ul>
+
+<p><strong>P99 Latency:</strong></p>
+<ul>
+  <li>Local network: 2-5ms</li>
+  <li>Same datacenter: 5-20ms</li>
+  <li>Cross-region: 200-500ms</li>
+</ul>
+
+<h3 id="resource-usage">Resource Usage</h3>
+
+<p><strong>Per Connection:</strong></p>
+<ul>
+  <li>Memory: ~100KB-500KB</li>
+  <li>File descriptors: 1</li>
+  <li>Threads: Shared tokio runtime</li>
+</ul>
+
+<p><strong>Connection Pool (10 connections):</strong></p>
+<ul>
+  <li>Memory: ~1-5MB</li>
+  <li>File descriptors: 10</li>
+  <li>CPU: &lt;1% idle, 10-50% under load</li>
+</ul>
+
+<hr />
+
+<h2 id="future-enhancements">Future Enhancements</h2>
+
+<h3 id="planned-features">Planned Features</h3>
+
+<ol>
+  <li><strong>TLS/mTLS Support</strong>
+    <ul>
+      <li>Certificate-based authentication</li>
+      <li>Encrypted transport</li>
+      <li>Certificate rotation</li>
+    </ul>
+  </li>
+  <li><strong>Load Balancing</strong>
+    <ul>
+      <li>Client-side load balancing</li>
+      <li>Weighted round-robin</li>
+      <li>Least-connections strategy</li>
+    </ul>
+  </li>
+  <li><strong>Circuit Breaker</strong>
+    <ul>
+      <li>Automatic failure detection</li>
+      <li>Temporary endpoint isolation</li>
+      <li>Gradual recovery</li>
+    </ul>
+  </li>
+  <li><strong>Distributed Tracing</strong>
+    <ul>
+      <li>OpenTelemetry integration</li>
+      <li>Trace propagation</li>
+      <li>Span correlation</li>
+    </ul>
+  </li>
+  <li><strong>Advanced Metrics</strong>
+    <ul>
+      <li>Per-endpoint metrics</li>
+      <li>Request/response size histograms</li>
+      <li>Error rate tracking</li>
+    </ul>
+  </li>
+</ol>
+
+<hr />
+
+<h2 id="references">References</h2>
+
+<ul>
+  <li><a href="https://grpc.io/docs/">gRPC Documentation</a></li>
+  <li><a href="https://github.com/hyperium/tonic">Tonic Rust gRPC Framework</a></li>
+  <li><a href="https://protobuf.dev/">Protocol Buffers</a></li>
+  <li><a href="https://http2.github.io/">HTTP/2 Specification</a></li>
+  <li><a href="../ORBIT_ARCHITECTURE.md">Orbit-RS Architecture</a></li>
+  <li><a href="./ADVANCED_TRANSACTION_FEATURES.md">Distributed Transactions Guide</a></li>
+</ul>
+
+<hr />
+
+<p><strong>Document Version:</strong> 1.0<br />
+<strong>Last Updated:</strong> 2025-10-03<br />
+<strong>Status:</strong> ✅ Production Ready</p>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/orbit-rs/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Orbit-RS Documentation</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">TuringWorks</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

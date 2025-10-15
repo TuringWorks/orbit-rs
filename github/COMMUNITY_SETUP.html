@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Orbit-RS Community Setup | Orbit-RS Documentation</title>
+<meta name="generator" content="Jekyll v4.4.1" />
+<meta property="og:title" content="Orbit-RS Community Setup" />
+<meta name="author" content="TuringWorks" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<meta property="og:description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<link rel="canonical" href="https://turingworks.github.io/orbit-rs/github/COMMUNITY_SETUP.html" />
+<meta property="og:url" content="https://turingworks.github.io/orbit-rs/github/COMMUNITY_SETUP.html" />
+<meta property="og:site_name" content="Orbit-RS Documentation" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Orbit-RS Community Setup" />
+<meta name="twitter:site" content="@TuringWorksAI" />
+<meta name="twitter:creator" content="@TuringWorks" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","author":{"@type":"Person","name":"TuringWorks"},"description":"The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform","headline":"Orbit-RS Community Setup","url":"https://turingworks.github.io/orbit-rs/github/COMMUNITY_SETUP.html"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/orbit-rs/assets/main.css">
+  <link rel="stylesheet" href="/orbit-rs/assets/css/custom.css"><link type="application/atom+xml" rel="alternate" href="https://turingworks.github.io/orbit-rs/feed.xml" title="Orbit-RS Documentation" /></head><body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/orbit-rs/">Orbit-RS Documentation</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/orbit-rs/">Orbit-RS Documentation</a><a class="page-link" href="/orbit-rs/project_overview.html">Orbit-RS: Comprehensive Project Overview</a><a class="page-link" href="/orbit-rs/quick_start.html">Quick Start Guide - Multi-Protocol Database Server</a><a class="page-link" href="/orbit-rs/roadmap/">Development Roadmap</a><a class="page-link" href="/orbit-rs/features/">Orbit-RS Feature Index</a><a class="page-link" href="/orbit-rs/compute-acceleration/">Hardware Acceleration Guide</a><a class="page-link" href="/orbit-rs/contributing.html">Contributing Guide</a><a class="page-link" href="/orbit-rs/overview.html">Architecture Overview</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <h1 id="orbit-rs-community-setup">Orbit-RS Community Setup</h1>
+
+<p>This document outlines the community infrastructure for the Orbit-RS project.</p>
+
+<h2 id="-github-repository-settings">🚀 GitHub Repository Settings</h2>
+
+<h3 id="required-github-features-to-enable">Required GitHub Features to Enable:</h3>
+
+<ol>
+  <li><strong>Issues</strong> ✅ (Already enabled)
+    <ul>
+      <li>Bug reports: <code class="language-plaintext highlighter-rouge">.github/ISSUE_TEMPLATE/bug_report.md</code></li>
+      <li>Feature requests: <code class="language-plaintext highlighter-rouge">.github/ISSUE_TEMPLATE/feature_request.md</code></li>
+    </ul>
+  </li>
+  <li><strong>Discussions</strong> (Needs to be enabled in repository settings)
+    <ul>
+      <li>Navigate to: Settings → General → Features → Discussions</li>
+      <li>Enable discussions to activate community Q&amp;A</li>
+      <li>Discussion templates: <code class="language-plaintext highlighter-rouge">.github/DISCUSSION_TEMPLATE/general.yml</code></li>
+    </ul>
+  </li>
+  <li><strong>Projects</strong> (For roadmap tracking)
+    <ul>
+      <li>Public roadmap project board</li>
+      <li>Phase tracking and milestone management</li>
+    </ul>
+  </li>
+</ol>
+
+<h3 id="github-repository-configuration">GitHub Repository Configuration:</h3>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># Settings to configure:</span>
+<span class="na">repository</span><span class="pi">:</span>
+  <span class="na">has_discussions</span><span class="pi">:</span> <span class="kc">true</span>
+  <span class="na">has_issues</span><span class="pi">:</span> <span class="kc">true</span>
+  <span class="na">has_projects</span><span class="pi">:</span> <span class="kc">true</span>
+  
+<span class="na">discussions</span><span class="pi">:</span>
+  <span class="na">categories</span><span class="pi">:</span>
+    <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s2">"</span><span class="s">General"</span>
+      <span class="na">description</span><span class="pi">:</span> <span class="s2">"</span><span class="s">General</span><span class="nv"> </span><span class="s">questions</span><span class="nv"> </span><span class="s">and</span><span class="nv"> </span><span class="s">discussions"</span>
+    <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s2">"</span><span class="s">Q&amp;A"</span> 
+      <span class="na">description</span><span class="pi">:</span> <span class="s2">"</span><span class="s">Get</span><span class="nv"> </span><span class="s">help</span><span class="nv"> </span><span class="s">with</span><span class="nv"> </span><span class="s">specific</span><span class="nv"> </span><span class="s">problems"</span>
+    <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s2">"</span><span class="s">Ideas"</span>
+      <span class="na">description</span><span class="pi">:</span> <span class="s2">"</span><span class="s">Feature</span><span class="nv"> </span><span class="s">requests</span><span class="nv"> </span><span class="s">and</span><span class="nv"> </span><span class="s">suggestions"</span>
+    <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s2">"</span><span class="s">Show</span><span class="nv"> </span><span class="s">and</span><span class="nv"> </span><span class="s">tell"</span>
+      <span class="na">description</span><span class="pi">:</span> <span class="s2">"</span><span class="s">Share</span><span class="nv"> </span><span class="s">your</span><span class="nv"> </span><span class="s">Orbit-RS</span><span class="nv"> </span><span class="s">projects"</span>
+    <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s2">"</span><span class="s">Performance"</span>
+      <span class="na">description</span><span class="pi">:</span> <span class="s2">"</span><span class="s">Performance-related</span><span class="nv"> </span><span class="s">discussions"</span>
+    <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s2">"</span><span class="s">Hardware</span><span class="nv"> </span><span class="s">Acceleration"</span>
+      <span class="na">description</span><span class="pi">:</span> <span class="s2">"</span><span class="s">GPU/Neural</span><span class="nv"> </span><span class="s">engine</span><span class="nv"> </span><span class="s">optimization"</span>
+    <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s2">"</span><span class="s">Announcements"</span>
+      <span class="na">description</span><span class="pi">:</span> <span class="s2">"</span><span class="s">Project</span><span class="nv"> </span><span class="s">updates</span><span class="nv"> </span><span class="s">and</span><span class="nv"> </span><span class="s">news"</span>
+</code></pre></div></div>
+
+<h2 id="-discord-community">💬 Discord Community</h2>
+
+<h3 id="discord-server-setup-required">Discord Server Setup Required:</h3>
+
+<p><strong>Server Name</strong>: Orbit-RS Community
+<strong>Invite Link</strong>: <code class="language-plaintext highlighter-rouge">https://discord.gg/orbit-rs</code> (needs to be created)</p>
+
+<h3 id="recommended-discord-channels">Recommended Discord Channels:</h3>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>📋 INFORMATION
+├── #welcome
+├── #announcements  
+├── #rules-and-guidelines
+└── #project-updates
+
+💬 GENERAL
+├── #general-chat
+├── #introductions
+├── #showcase
+└── #random
+
+🛠️ DEVELOPMENT  
+├── #development-discussion
+├── #pull-requests
+├── #issues-and-bugs
+├── #feature-requests
+└── #code-review
+
+🚀 SUPPORT
+├── #general-help
+├── #installation-setup
+├── #performance-tuning
+├── #hardware-acceleration
+└── #deployment-ops
+
+🎯 SPECIALIZED
+├── #sql-and-queries
+├── #vector-operations
+├── #time-series
+├── #graph-database
+└── #protocol-development
+
+🔧 RESOURCES
+├── #documentation
+├── #tutorials-guides
+├── #external-resources
+└── #job-board
+</code></pre></div></div>
+
+<h3 id="discord-bot-integrations">Discord Bot Integrations:</h3>
+
+<ul>
+  <li><strong>GitHub Integration</strong>: Post new issues, PRs, and releases</li>
+  <li><strong>Documentation Bot</strong>: Quick access to docs and examples</li>
+  <li><strong>Welcome Bot</strong>: Greet new members with resources</li>
+</ul>
+
+<h2 id="-email-lists--communication">📧 Email Lists &amp; Communication</h2>
+
+<h3 id="mailing-lists-to-set-up">Mailing Lists to Set Up:</h3>
+
+<ol>
+  <li><strong>announcements@turingworks.com</strong>
+    <ul>
+      <li>Major releases and important updates</li>
+      <li>Low volume, high importance</li>
+    </ul>
+  </li>
+  <li><strong>community@turingworks.com</strong>
+    <ul>
+      <li>Community discussions and events</li>
+      <li>Weekly/monthly digest</li>
+    </ul>
+  </li>
+  <li><strong>security@turingworks.com</strong>
+    <ul>
+      <li>Responsible disclosure</li>
+      <li>Security-related communications</li>
+    </ul>
+  </li>
+</ol>
+
+<h3 id="professional-support">Professional Support:</h3>
+
+<ul>
+  <li><strong>support@turingworks.com</strong> - Technical support</li>
+  <li><strong>enterprise@turingworks.com</strong> - Enterprise sales and support</li>
+  <li><strong>contact@turingworks.com</strong> - General inquiries</li>
+</ul>
+
+<h2 id="-community-guidelines">🌍 Community Guidelines</h2>
+
+<h3 id="code-of-conduct">Code of Conduct:</h3>
+<ul>
+  <li>Welcoming and inclusive environment</li>
+  <li>Professional and respectful communication</li>
+  <li>Focus on constructive feedback</li>
+  <li>Help others learn and grow</li>
+</ul>
+
+<h3 id="contribution-guidelines">Contribution Guidelines:</h3>
+<ul>
+  <li>Follow GitHub issue templates</li>
+  <li>Search existing issues before creating new ones</li>
+  <li>Provide clear reproduction steps for bugs</li>
+  <li>Include relevant system information</li>
+</ul>
+
+<h2 id="-community-metrics-to-track">📊 Community Metrics to Track:</h2>
+
+<ul>
+  <li>GitHub Stars, Forks, Issues, PRs</li>
+  <li>Discord member count and activity</li>
+  <li>Documentation page views</li>
+  <li>Community contributions (code, docs, issues)</li>
+  <li>Response times for support requests</li>
+</ul>
+
+<h2 id="-action-items">🎯 Action Items:</h2>
+
+<ol>
+  <li><strong>Enable GitHub Discussions</strong> in repository settings</li>
+  <li><strong>Create Discord Server</strong> with the channels above</li>
+  <li><strong>Set up mailing lists</strong> and email forwarding</li>
+  <li><strong>Configure GitHub repository</strong> settings and templates</li>
+  <li><strong>Create welcome documentation</strong> for new contributors</li>
+  <li><strong>Set up community moderation</strong> guidelines and team</li>
+</ol>
+
+<hr />
+
+<p><strong>Status</strong>: Setup Required
+<strong>Priority</strong>: High - Community infrastructure is essential for project adoption
+<strong>Owner</strong>: Project maintainers</p>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/orbit-rs/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Orbit-RS Documentation</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">TuringWorks</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

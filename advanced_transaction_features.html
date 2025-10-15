@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Advanced Transaction Features Guide | Orbit-RS Documentation</title>
+<meta name="generator" content="Jekyll v4.4.1" />
+<meta property="og:title" content="Advanced Transaction Features Guide" />
+<meta name="author" content="TuringWorks" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<meta property="og:description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<link rel="canonical" href="https://turingworks.github.io/orbit-rs/advanced_transaction_features.html" />
+<meta property="og:url" content="https://turingworks.github.io/orbit-rs/advanced_transaction_features.html" />
+<meta property="og:site_name" content="Orbit-RS Documentation" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Advanced Transaction Features Guide" />
+<meta name="twitter:site" content="@TuringWorksAI" />
+<meta name="twitter:creator" content="@TuringWorks" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","author":{"@type":"Person","name":"TuringWorks"},"description":"The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform","headline":"Advanced Transaction Features Guide","url":"https://turingworks.github.io/orbit-rs/advanced_transaction_features.html"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/orbit-rs/assets/main.css">
+  <link rel="stylesheet" href="/orbit-rs/assets/css/custom.css"><link type="application/atom+xml" rel="alternate" href="https://turingworks.github.io/orbit-rs/feed.xml" title="Orbit-RS Documentation" /></head><body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/orbit-rs/">Orbit-RS Documentation</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/orbit-rs/">Orbit-RS Documentation</a><a class="page-link" href="/orbit-rs/project_overview.html">Orbit-RS: Comprehensive Project Overview</a><a class="page-link" href="/orbit-rs/quick_start.html">Quick Start Guide - Multi-Protocol Database Server</a><a class="page-link" href="/orbit-rs/roadmap/">Development Roadmap</a><a class="page-link" href="/orbit-rs/features/">Orbit-RS Feature Index</a><a class="page-link" href="/orbit-rs/compute-acceleration/">Hardware Acceleration Guide</a><a class="page-link" href="/orbit-rs/contributing.html">Contributing Guide</a><a class="page-link" href="/orbit-rs/overview.html">Architecture Overview</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <h1 id="advanced-transaction-features-guide">Advanced Transaction Features Guide</h1>
+
+<h2 id="table-of-contents">Table of Contents</h2>
+
+<ol>
+  <li><a href="#distributed-locks">Distributed Locks</a></li>
+  <li><a href="#metrics-integration">Metrics Integration</a></li>
+  <li><a href="#security-features">Security Features</a></li>
+  <li><a href="#performance-optimizations">Performance Optimizations</a></li>
+  <li><a href="#saga-pattern">Saga Pattern</a></li>
+  <li><a href="#best-practices">Best Practices</a></li>
+</ol>
+
+<h2 id="distributed-locks">Distributed Locks</h2>
+
+<h3 id="overview">Overview</h3>
+
+<p>The distributed lock system provides coordination mechanisms across the cluster with automatic deadlock detection and prevention.</p>
+
+<h3 id="basic-usage">Basic Usage</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">orbit_shared</span><span class="p">::</span><span class="nn">transactions</span><span class="p">::{</span>
+    <span class="n">DistributedLockManager</span><span class="p">,</span> <span class="n">LockManagerConfig</span><span class="p">,</span> <span class="n">LockMode</span>
+<span class="p">};</span>
+<span class="k">use</span> <span class="nn">std</span><span class="p">::</span><span class="nn">time</span><span class="p">::</span><span class="n">Duration</span><span class="p">;</span>
+
+<span class="nd">#[tokio::main]</span>
+<span class="k">async</span> <span class="k">fn</span> <span class="nf">main</span><span class="p">()</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="p">(),</span> <span class="nb">Box</span><span class="o">&lt;</span><span class="k">dyn</span> <span class="nn">std</span><span class="p">::</span><span class="nn">error</span><span class="p">::</span><span class="n">Error</span><span class="o">&gt;&gt;</span> <span class="p">{</span>
+    <span class="c1">// Configure lock manager</span>
+    <span class="k">let</span> <span class="n">config</span> <span class="o">=</span> <span class="n">LockManagerConfig</span> <span class="p">{</span>
+        <span class="n">default_timeout</span><span class="p">:</span> <span class="nn">Duration</span><span class="p">::</span><span class="nf">from_secs</span><span class="p">(</span><span class="mi">30</span><span class="p">),</span>
+        <span class="n">deadlock_detection_interval</span><span class="p">:</span> <span class="nn">Duration</span><span class="p">::</span><span class="nf">from_secs</span><span class="p">(</span><span class="mi">5</span><span class="p">),</span>
+        <span class="n">max_locks_per_transaction</span><span class="p">:</span> <span class="mi">100</span><span class="p">,</span>
+    <span class="p">};</span>
+    
+    <span class="c1">// Create lock manager</span>
+    <span class="k">let</span> <span class="n">lock_manager</span> <span class="o">=</span> <span class="nn">DistributedLockManager</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="n">config</span><span class="p">);</span>
+    
+    <span class="c1">// Acquire exclusive lock</span>
+    <span class="k">let</span> <span class="n">lock</span> <span class="o">=</span> <span class="n">lock_manager</span><span class="nf">.acquire_lock</span><span class="p">(</span>
+        <span class="s">"resource-123"</span><span class="p">,</span>
+        <span class="nn">LockMode</span><span class="p">::</span><span class="n">Exclusive</span><span class="p">,</span>
+        <span class="nn">Duration</span><span class="p">::</span><span class="nf">from_secs</span><span class="p">(</span><span class="mi">30</span><span class="p">)</span>
+    <span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+    
+    <span class="c1">// Perform protected operation</span>
+    <span class="nd">println!</span><span class="p">(</span><span class="s">"Lock acquired, performing operation..."</span><span class="p">);</span>
+    
+    <span class="c1">// Lock automatically released when dropped</span>
+    <span class="nf">drop</span><span class="p">(</span><span class="n">lock</span><span class="p">);</span>
+    
+    <span class="nf">Ok</span><span class="p">(())</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="lock-modes">Lock Modes</h3>
+
+<h4 id="exclusive-lock">Exclusive Lock</h4>
+<p>Prevents all other access (read or write) to the resource.</p>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">let</span> <span class="n">exclusive_lock</span> <span class="o">=</span> <span class="n">lock_manager</span><span class="nf">.acquire_lock</span><span class="p">(</span>
+    <span class="n">resource_id</span><span class="p">,</span>
+    <span class="nn">LockMode</span><span class="p">::</span><span class="n">Exclusive</span><span class="p">,</span>
+    <span class="n">timeout</span>
+<span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h4 id="shared-lock">Shared Lock</h4>
+<p>Multiple readers can hold shared locks simultaneously, but writers must wait.</p>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">let</span> <span class="n">shared_lock</span> <span class="o">=</span> <span class="n">lock_manager</span><span class="nf">.acquire_lock</span><span class="p">(</span>
+    <span class="n">resource_id</span><span class="p">,</span>
+    <span class="nn">LockMode</span><span class="p">::</span><span class="n">Shared</span><span class="p">,</span>
+    <span class="n">timeout</span>
+<span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h3 id="deadlock-detection">Deadlock Detection</h3>
+
+<p>The system automatically detects deadlocks using wait-for graph analysis:</p>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Example scenario that could cause deadlock</span>
+<span class="c1">// Transaction A: Lock R1, then try to lock R2</span>
+<span class="c1">// Transaction B: Lock R2, then try to lock R1</span>
+
+<span class="c1">// The deadlock detector will:</span>
+<span class="c1">// 1. Build wait-for graph</span>
+<span class="c1">// 2. Detect cycle using DFS</span>
+<span class="c1">// 3. Abort one transaction to break the cycle</span>
+<span class="c1">// 4. Return DeadlockDetected error</span>
+
+<span class="k">match</span> <span class="n">lock_manager</span><span class="nf">.acquire_lock</span><span class="p">(</span><span class="n">resource_id</span><span class="p">,</span> <span class="n">mode</span><span class="p">,</span> <span class="n">timeout</span><span class="p">)</span><span class="k">.await</span> <span class="p">{</span>
+    <span class="nf">Ok</span><span class="p">(</span><span class="n">lock</span><span class="p">)</span> <span class="k">=&gt;</span> <span class="p">{</span>
+        <span class="c1">// Lock acquired successfully</span>
+    <span class="p">},</span>
+    <span class="nf">Err</span><span class="p">(</span><span class="nn">OrbitError</span><span class="p">::</span><span class="nf">Internal</span><span class="p">(</span><span class="n">msg</span><span class="p">))</span> <span class="k">if</span> <span class="n">msg</span><span class="nf">.contains</span><span class="p">(</span><span class="s">"deadlock"</span><span class="p">)</span> <span class="k">=&gt;</span> <span class="p">{</span>
+        <span class="c1">// Deadlock detected - handle retry logic</span>
+        <span class="nd">warn!</span><span class="p">(</span><span class="s">"Deadlock detected, retrying transaction"</span><span class="p">);</span>
+    <span class="p">},</span>
+    <span class="nf">Err</span><span class="p">(</span><span class="n">e</span><span class="p">)</span> <span class="k">=&gt;</span> <span class="k">return</span> <span class="nf">Err</span><span class="p">(</span><span class="n">e</span><span class="p">),</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="lock-statistics">Lock Statistics</h3>
+
+<p>Query lock statistics for monitoring:</p>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">let</span> <span class="n">stats</span> <span class="o">=</span> <span class="n">lock_manager</span><span class="nf">.get_statistics</span><span class="p">()</span><span class="k">.await</span><span class="p">;</span>
+<span class="nd">println!</span><span class="p">(</span><span class="s">"Active locks: {}"</span><span class="p">,</span> <span class="n">stats</span><span class="py">.active_locks</span><span class="p">);</span>
+<span class="nd">println!</span><span class="p">(</span><span class="s">"Waiting requests: {}"</span><span class="p">,</span> <span class="n">stats</span><span class="py">.waiting_requests</span><span class="p">);</span>
+<span class="nd">println!</span><span class="p">(</span><span class="s">"Deadlocks detected: {}"</span><span class="p">,</span> <span class="n">stats</span><span class="py">.deadlocks_detected</span><span class="p">);</span>
+<span class="nd">println!</span><span class="p">(</span><span class="s">"Deadlocks resolved: {}"</span><span class="p">,</span> <span class="n">stats</span><span class="py">.deadlocks_resolved</span><span class="p">);</span>
+</code></pre></div></div>
+
+<h2 id="metrics-integration">Metrics Integration</h2>
+
+<h3 id="overview-1">Overview</h3>
+
+<p>Comprehensive Prometheus metrics for transaction monitoring and observability.</p>
+
+<h3 id="initializing-metrics">Initializing Metrics</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">orbit_shared</span><span class="p">::</span><span class="nn">transactions</span><span class="p">::{</span><span class="n">TransactionMetrics</span><span class="p">,</span> <span class="n">TransactionMetricsAggregator</span><span class="p">};</span>
+<span class="k">use</span> <span class="nn">orbit_shared</span><span class="p">::</span><span class="nn">mesh</span><span class="p">::</span><span class="n">NodeId</span><span class="p">;</span>
+
+<span class="c1">// Create metrics for a node</span>
+<span class="k">let</span> <span class="n">node_id</span> <span class="o">=</span> <span class="nn">NodeId</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="s">"node-1"</span><span class="nf">.to_string</span><span class="p">(),</span> <span class="s">"cluster-1"</span><span class="nf">.to_string</span><span class="p">());</span>
+<span class="k">let</span> <span class="n">metrics</span> <span class="o">=</span> <span class="nn">TransactionMetrics</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="n">node_id</span><span class="nf">.clone</span><span class="p">());</span>
+
+<span class="c1">// Create aggregator for cluster-wide metrics</span>
+<span class="k">let</span> <span class="n">aggregator</span> <span class="o">=</span> <span class="nn">TransactionMetricsAggregator</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="n">node_id</span><span class="p">);</span>
+</code></pre></div></div>
+
+<h3 id="recording-transaction-metrics">Recording Transaction Metrics</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Transaction lifecycle</span>
+<span class="n">metrics</span><span class="nf">.record_transaction_started</span><span class="p">(</span><span class="o">&amp;</span><span class="n">tx_id</span><span class="p">)</span><span class="k">.await</span><span class="p">;</span>
+<span class="n">metrics</span><span class="nf">.record_transaction_prepared</span><span class="p">(</span><span class="o">&amp;</span><span class="n">tx_id</span><span class="p">,</span> <span class="n">participant_count</span><span class="p">)</span><span class="k">.await</span><span class="p">;</span>
+<span class="n">metrics</span><span class="nf">.record_transaction_committed</span><span class="p">(</span><span class="o">&amp;</span><span class="n">tx_id</span><span class="p">)</span><span class="k">.await</span><span class="p">;</span>
+
+<span class="c1">// Or on failure</span>
+<span class="n">metrics</span><span class="nf">.record_transaction_aborted</span><span class="p">(</span><span class="o">&amp;</span><span class="n">tx_id</span><span class="p">)</span><span class="k">.await</span><span class="p">;</span>
+<span class="n">metrics</span><span class="nf">.record_transaction_failed</span><span class="p">(</span><span class="o">&amp;</span><span class="n">tx_id</span><span class="p">,</span> <span class="s">"reason"</span><span class="p">)</span><span class="k">.await</span><span class="p">;</span>
+<span class="n">metrics</span><span class="nf">.record_transaction_timeout</span><span class="p">(</span><span class="o">&amp;</span><span class="n">tx_id</span><span class="p">)</span><span class="k">.await</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h3 id="recording-saga-metrics">Recording Saga Metrics</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">orbit_shared</span><span class="p">::</span><span class="nn">transactions</span><span class="p">::</span><span class="n">SagaMetrics</span><span class="p">;</span>
+
+<span class="k">let</span> <span class="n">saga_metrics</span> <span class="o">=</span> <span class="nn">SagaMetrics</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="n">node_id</span><span class="p">);</span>
+
+<span class="n">saga_metrics</span><span class="nf">.record_saga_started</span><span class="p">(</span><span class="o">&amp;</span><span class="n">saga_id</span><span class="p">)</span><span class="k">.await</span><span class="p">;</span>
+<span class="n">saga_metrics</span><span class="nf">.record_step_executed</span><span class="p">(</span><span class="o">&amp;</span><span class="n">saga_id</span><span class="p">,</span> <span class="n">step_count</span><span class="p">)</span><span class="k">.await</span><span class="p">;</span>
+<span class="n">saga_metrics</span><span class="nf">.record_saga_completed</span><span class="p">(</span><span class="o">&amp;</span><span class="n">saga_id</span><span class="p">,</span> <span class="n">step_count</span><span class="p">)</span><span class="k">.await</span><span class="p">;</span>
+
+<span class="c1">// On compensation</span>
+<span class="n">saga_metrics</span><span class="nf">.record_saga_compensating</span><span class="p">(</span><span class="o">&amp;</span><span class="n">saga_id</span><span class="p">)</span><span class="k">.await</span><span class="p">;</span>
+<span class="n">saga_metrics</span><span class="nf">.record_step_compensated</span><span class="p">(</span><span class="o">&amp;</span><span class="n">saga_id</span><span class="p">)</span><span class="k">.await</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h3 id="recording-lock-metrics">Recording Lock Metrics</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">orbit_shared</span><span class="p">::</span><span class="nn">transactions</span><span class="p">::</span><span class="n">LockMetrics</span><span class="p">;</span>
+
+<span class="k">let</span> <span class="n">lock_metrics</span> <span class="o">=</span> <span class="nn">LockMetrics</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="n">node_id</span><span class="p">);</span>
+
+<span class="n">lock_metrics</span><span class="nf">.record_lock_acquired</span><span class="p">(</span><span class="o">&amp;</span><span class="n">lock_id</span><span class="p">,</span> <span class="n">wait_duration</span><span class="p">)</span><span class="k">.await</span><span class="p">;</span>
+<span class="n">lock_metrics</span><span class="nf">.record_lock_released</span><span class="p">(</span><span class="o">&amp;</span><span class="n">lock_id</span><span class="p">,</span> <span class="n">hold_duration</span><span class="p">)</span><span class="k">.await</span><span class="p">;</span>
+<span class="n">lock_metrics</span><span class="nf">.record_deadlock_detected</span><span class="p">(</span><span class="o">&amp;</span><span class="p">[</span><span class="n">tx_id1</span><span class="p">,</span> <span class="n">tx_id2</span><span class="p">])</span><span class="k">.await</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h3 id="prometheus-endpoint">Prometheus Endpoint</h3>
+
+<p>Metrics are automatically exported in Prometheus format:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+# HELP orbit_transaction_node_1_started_total Total transactions started
+# TYPE orbit_transaction_node_1_started_total counter
+orbit_transaction_node_1_started_total 1234
+
+# HELP orbit_transaction_node_1_active Active transactions
+# TYPE orbit_transaction_node_1_active gauge
+orbit_transaction_node_1_active 5
+
+# HELP orbit_transaction_node_1_duration_seconds Transaction duration
+# TYPE orbit_transaction_node_1_duration_seconds histogram
+orbit_transaction_node_1_duration_seconds_bucket{le="0.005"} 100
+orbit_transaction_node_1_duration_seconds_bucket{le="0.01"} 250
+</code></pre></div></div>
+
+<h3 id="grafana-dashboard">Grafana Dashboard</h3>
+
+<p>Example dashboard queries:</p>
+
+<pre><code class="language-promql">
+# Transaction throughput
+rate(orbit_transaction_started_total[5m])
+
+# Active transactions
+sum(orbit_transaction_active)
+
+# P99 transaction latency
+histogram_quantile(0.99, rate(orbit_transaction_duration_seconds_bucket[5m]))
+
+# Lock contention
+rate(orbit_locks_timeout_total[5m])
+
+# Deadlock rate
+rate(orbit_locks_deadlock_detected_total[5m])
+</code></pre>
+
+<h2 id="security-features">Security Features</h2>
+
+<h3 id="overview-2">Overview</h3>
+
+<p>Token-based authentication, scope-based authorization, and comprehensive audit logging.</p>
+
+<h3 id="authentication">Authentication</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">orbit_shared</span><span class="p">::</span><span class="nn">transactions</span><span class="p">::{</span>
+    <span class="n">TransactionSecurityManager</span><span class="p">,</span> <span class="n">SecurityConfig</span><span class="p">,</span> <span class="n">AuthToken</span>
+<span class="p">};</span>
+
+<span class="c1">// Initialize security manager</span>
+<span class="k">let</span> <span class="n">config</span> <span class="o">=</span> <span class="nn">SecurityConfig</span><span class="p">::</span><span class="nf">default</span><span class="p">();</span>
+<span class="k">let</span> <span class="n">security_mgr</span> <span class="o">=</span> <span class="nn">TransactionSecurityManager</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="n">config</span><span class="p">);</span>
+
+<span class="c1">// Create authentication token</span>
+<span class="k">let</span> <span class="n">token</span> <span class="o">=</span> <span class="n">AuthToken</span> <span class="p">{</span>
+    <span class="n">token_id</span><span class="p">:</span> <span class="s">"token-123"</span><span class="nf">.to_string</span><span class="p">(),</span>
+    <span class="n">issuer</span><span class="p">:</span> <span class="s">"auth-service"</span><span class="nf">.to_string</span><span class="p">(),</span>
+    <span class="n">subject</span><span class="p">:</span> <span class="s">"user-alice"</span><span class="nf">.to_string</span><span class="p">(),</span>
+    <span class="n">scopes</span><span class="p">:</span> <span class="nd">vec!</span><span class="p">[</span><span class="s">"transaction:write"</span><span class="nf">.to_string</span><span class="p">(),</span> <span class="s">"transaction:read"</span><span class="nf">.to_string</span><span class="p">()],</span>
+    <span class="n">issued_at</span><span class="p">:</span> <span class="nn">SystemTime</span><span class="p">::</span><span class="nf">now</span><span class="p">(),</span>
+    <span class="n">expires_at</span><span class="p">:</span> <span class="nn">SystemTime</span><span class="p">::</span><span class="nf">now</span><span class="p">()</span> <span class="o">+</span> <span class="nn">Duration</span><span class="p">::</span><span class="nf">from_secs</span><span class="p">(</span><span class="mi">3600</span><span class="p">),</span>
+<span class="p">};</span>
+
+<span class="c1">// Authenticate</span>
+<span class="n">security_mgr</span><span class="nf">.authenticate</span><span class="p">(</span><span class="o">&amp;</span><span class="n">token</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h3 id="authorization">Authorization</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">orbit_shared</span><span class="p">::</span><span class="nn">transactions</span><span class="p">::</span><span class="n">TransactionPermission</span><span class="p">;</span>
+
+<span class="c1">// Check permissions before operations</span>
+<span class="n">security_mgr</span><span class="nf">.authorize</span><span class="p">(</span>
+    <span class="o">&amp;</span><span class="n">token</span><span class="p">,</span>
+    <span class="o">&amp;</span><span class="n">transaction_id</span><span class="p">,</span>
+    <span class="nn">TransactionPermission</span><span class="p">::</span><span class="n">Begin</span>
+<span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+
+<span class="n">security_mgr</span><span class="nf">.authorize</span><span class="p">(</span>
+    <span class="o">&amp;</span><span class="n">token</span><span class="p">,</span>
+    <span class="o">&amp;</span><span class="n">transaction_id</span><span class="p">,</span>
+    <span class="nn">TransactionPermission</span><span class="p">::</span><span class="n">Commit</span>
+<span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h3 id="permission-types">Permission Types</h3>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">Begin</code>: Start a new transaction</li>
+  <li><code class="language-plaintext highlighter-rouge">Commit</code>: Commit a transaction</li>
+  <li><code class="language-plaintext highlighter-rouge">Abort</code>: Abort a transaction</li>
+  <li><code class="language-plaintext highlighter-rouge">Read</code>: Read transaction data</li>
+  <li><code class="language-plaintext highlighter-rouge">Write</code>: Write transaction data</li>
+  <li><code class="language-plaintext highlighter-rouge">Coordinate</code>: Act as transaction coordinator</li>
+  <li><code class="language-plaintext highlighter-rouge">Participate</code>: Participate in a transaction</li>
+</ul>
+
+<h3 id="audit-logging">Audit Logging</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Audit log entries are automatically created for key operations</span>
+<span class="c1">// but you can also create custom entries</span>
+
+<span class="n">security_mgr</span><span class="nf">.audit_log_entry</span><span class="p">(</span>
+    <span class="n">transaction_id</span><span class="nf">.clone</span><span class="p">(),</span>
+    <span class="s">"CUSTOM_ACTION"</span><span class="nf">.to_string</span><span class="p">(),</span>
+    <span class="s">"success"</span><span class="nf">.to_string</span><span class="p">()</span>
+<span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+
+<span class="c1">// Query audit logs</span>
+<span class="k">let</span> <span class="n">entries</span> <span class="o">=</span> <span class="n">security_mgr</span><span class="nf">.query_audit_logs</span><span class="p">(</span>
+    <span class="nf">Some</span><span class="p">(</span><span class="n">transaction_id</span><span class="p">),</span>
+    <span class="nf">Some</span><span class="p">(</span><span class="n">start_time</span><span class="p">),</span>
+    <span class="nf">Some</span><span class="p">(</span><span class="n">end_time</span><span class="p">),</span>
+    <span class="mi">100</span>
+<span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+
+<span class="k">for</span> <span class="n">entry</span> <span class="k">in</span> <span class="n">entries</span> <span class="p">{</span>
+    <span class="nd">println!</span><span class="p">(</span><span class="s">"{:?}: {} - {}"</span><span class="p">,</span> <span class="n">entry</span><span class="py">.timestamp</span><span class="p">,</span> <span class="n">entry</span><span class="py">.action</span><span class="p">,</span> <span class="n">entry</span><span class="py">.outcome</span><span class="p">);</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="custom-authentication-provider">Custom Authentication Provider</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">orbit_shared</span><span class="p">::</span><span class="nn">transactions</span><span class="p">::{</span><span class="n">AuthenticationProvider</span><span class="p">,</span> <span class="n">AuthToken</span><span class="p">};</span>
+<span class="k">use</span> <span class="nn">async_trait</span><span class="p">::</span><span class="n">async_trait</span><span class="p">;</span>
+
+<span class="k">struct</span> <span class="n">MyAuthProvider</span> <span class="p">{</span>
+    <span class="c1">// Your authentication backend</span>
+<span class="p">}</span>
+
+<span class="nd">#[async_trait]</span>
+<span class="k">impl</span> <span class="n">AuthenticationProvider</span> <span class="k">for</span> <span class="n">MyAuthProvider</span> <span class="p">{</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">authenticate</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">token</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">AuthToken</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="nb">bool</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="c1">// Implement your authentication logic</span>
+        <span class="c1">// e.g., validate JWT, check database, etc.</span>
+        <span class="nf">Ok</span><span class="p">(</span><span class="k">true</span><span class="p">)</span>
+    <span class="p">}</span>
+    
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">refresh</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">token</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">AuthToken</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">AuthToken</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="c1">// Implement token refresh logic</span>
+        <span class="nf">Ok</span><span class="p">(</span><span class="n">token</span><span class="nf">.clone</span><span class="p">())</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h2 id="performance-optimizations">Performance Optimizations</h2>
+
+<h3 id="batch-processing">Batch Processing</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">orbit_shared</span><span class="p">::</span><span class="nn">transactions</span><span class="p">::{</span><span class="n">BatchProcessor</span><span class="p">,</span> <span class="n">BatchConfig</span><span class="p">};</span>
+
+<span class="c1">// Configure batch processor</span>
+<span class="k">let</span> <span class="n">config</span> <span class="o">=</span> <span class="n">BatchConfig</span> <span class="p">{</span>
+    <span class="n">max_batch_size</span><span class="p">:</span> <span class="mi">100</span><span class="p">,</span>
+    <span class="n">max_wait_time</span><span class="p">:</span> <span class="nn">Duration</span><span class="p">::</span><span class="nf">from_millis</span><span class="p">(</span><span class="mi">10</span><span class="p">),</span>
+    <span class="n">min_batch_size</span><span class="p">:</span> <span class="mi">10</span><span class="p">,</span>
+    <span class="n">enable_adaptive_sizing</span><span class="p">:</span> <span class="k">true</span><span class="p">,</span>
+<span class="p">};</span>
+
+<span class="k">let</span> <span class="n">processor</span> <span class="o">=</span> <span class="nn">BatchProcessor</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="n">config</span><span class="p">);</span>
+
+<span class="c1">// Add operations</span>
+<span class="k">for</span> <span class="n">operation</span> <span class="k">in</span> <span class="n">operations</span> <span class="p">{</span>
+    <span class="n">processor</span><span class="nf">.add_operation</span><span class="p">(</span><span class="n">operation</span><span class="p">,</span> <span class="n">priority</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="c1">// Flush manually or wait for automatic flush</span>
+<span class="k">let</span> <span class="n">batch</span> <span class="o">=</span> <span class="n">processor</span><span class="nf">.flush</span><span class="p">()</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+
+<span class="c1">// Process batch</span>
+<span class="k">for</span> <span class="n">op</span> <span class="k">in</span> <span class="n">batch</span> <span class="p">{</span>
+    <span class="nf">process_operation</span><span class="p">(</span><span class="n">op</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="connection-pooling">Connection Pooling</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">orbit_shared</span><span class="p">::</span><span class="nn">transactions</span><span class="p">::{</span><span class="n">ConnectionPool</span><span class="p">,</span> <span class="n">ConnectionPoolConfig</span><span class="p">};</span>
+
+<span class="c1">// Define connection factory</span>
+<span class="k">async</span> <span class="k">fn</span> <span class="nf">create_connection</span><span class="p">()</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">DatabaseConnection</span><span class="o">&gt;</span> <span class="p">{</span>
+    <span class="nn">DatabaseConnection</span><span class="p">::</span><span class="nf">connect</span><span class="p">(</span><span class="s">"postgres://localhost/mydb"</span><span class="p">)</span><span class="k">.await</span>
+<span class="p">}</span>
+
+<span class="c1">// Configure pool</span>
+<span class="k">let</span> <span class="n">config</span> <span class="o">=</span> <span class="n">ConnectionPoolConfig</span> <span class="p">{</span>
+    <span class="n">min_connections</span><span class="p">:</span> <span class="mi">5</span><span class="p">,</span>
+    <span class="n">max_connections</span><span class="p">:</span> <span class="mi">20</span><span class="p">,</span>
+    <span class="n">connection_timeout</span><span class="p">:</span> <span class="nn">Duration</span><span class="p">::</span><span class="nf">from_secs</span><span class="p">(</span><span class="mi">5</span><span class="p">),</span>
+    <span class="n">idle_timeout</span><span class="p">:</span> <span class="nn">Duration</span><span class="p">::</span><span class="nf">from_secs</span><span class="p">(</span><span class="mi">300</span><span class="p">),</span>
+    <span class="n">health_check_interval</span><span class="p">:</span> <span class="nn">Duration</span><span class="p">::</span><span class="nf">from_secs</span><span class="p">(</span><span class="mi">30</span><span class="p">),</span>
+<span class="p">};</span>
+
+<span class="k">let</span> <span class="n">pool</span> <span class="o">=</span> <span class="nn">ConnectionPool</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="n">config</span><span class="p">,</span> <span class="n">create_connection</span><span class="p">);</span>
+
+<span class="c1">// Acquire connection</span>
+<span class="k">let</span> <span class="n">conn</span> <span class="o">=</span> <span class="n">pool</span><span class="nf">.acquire</span><span class="p">()</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+
+<span class="c1">// Use connection</span>
+<span class="n">conn</span><span class="nf">.execute_query</span><span class="p">(</span><span class="s">"SELECT * FROM transactions"</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+
+<span class="c1">// Connection automatically returned to pool when dropped</span>
+</code></pre></div></div>
+
+<h3 id="resource-management">Resource Management</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">orbit_shared</span><span class="p">::</span><span class="nn">transactions</span><span class="p">::</span><span class="n">ResourceManager</span><span class="p">;</span>
+
+<span class="c1">// Initialize resource manager</span>
+<span class="k">let</span> <span class="n">resource_mgr</span> <span class="o">=</span> <span class="nn">ResourceManager</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span>
+    <span class="mi">1_000_000_000</span><span class="p">,</span> <span class="c1">// 1GB max memory</span>
+    <span class="mi">100</span>            <span class="c1">// 100 max concurrent operations</span>
+<span class="p">);</span>
+
+<span class="c1">// Acquire resources</span>
+<span class="k">let</span> <span class="n">guard</span> <span class="o">=</span> <span class="n">resource_mgr</span><span class="nf">.acquire</span><span class="p">(</span><span class="n">estimated_memory</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+
+<span class="c1">// Perform operation - resources are reserved</span>
+<span class="nf">perform_operation</span><span class="p">()</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+
+<span class="c1">// Resources automatically released when guard drops</span>
+<span class="nf">drop</span><span class="p">(</span><span class="n">guard</span><span class="p">);</span>
+
+<span class="c1">// Check current usage</span>
+<span class="k">let</span> <span class="p">(</span><span class="n">memory</span><span class="p">,</span> <span class="n">concurrent</span><span class="p">)</span> <span class="o">=</span> <span class="n">resource_mgr</span><span class="nf">.current_usage</span><span class="p">()</span><span class="k">.await</span><span class="p">;</span>
+<span class="nd">println!</span><span class="p">(</span><span class="s">"Memory: {}MB, Concurrent: {}"</span><span class="p">,</span> <span class="n">memory</span> <span class="o">/</span> <span class="mi">1_000_000</span><span class="p">,</span> <span class="n">concurrent</span><span class="p">);</span>
+</code></pre></div></div>
+
+<h2 id="saga-pattern">Saga Pattern</h2>
+
+<h3 id="overview-3">Overview</h3>
+
+<p>Long-running distributed transactions with automatic compensation on failure.</p>
+
+<h3 id="basic-saga">Basic Saga</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">orbit_shared</span><span class="p">::</span><span class="nn">saga</span><span class="p">::{</span><span class="n">SagaOrchestrator</span><span class="p">,</span> <span class="n">SagaStep</span><span class="p">};</span>
+
+<span class="c1">// Create saga orchestrator</span>
+<span class="k">let</span> <span class="k">mut</span> <span class="n">saga</span> <span class="o">=</span> <span class="nn">SagaOrchestrator</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="s">"transfer-funds"</span><span class="p">);</span>
+
+<span class="c1">// Add steps with compensation</span>
+<span class="n">saga</span><span class="nf">.add_step</span><span class="p">(</span><span class="n">SagaStep</span> <span class="p">{</span>
+    <span class="n">name</span><span class="p">:</span> <span class="s">"reserve-inventory"</span><span class="nf">.to_string</span><span class="p">(),</span>
+    <span class="n">action</span><span class="p">:</span> <span class="nn">Box</span><span class="p">::</span><span class="nf">new</span><span class="p">(||</span> <span class="k">async</span> <span class="p">{</span>
+        <span class="n">inventory_service</span><span class="nf">.reserve</span><span class="p">(</span><span class="n">item_id</span><span class="p">,</span> <span class="n">quantity</span><span class="p">)</span><span class="k">.await</span>
+    <span class="p">}),</span>
+    <span class="n">compensation</span><span class="p">:</span> <span class="nf">Some</span><span class="p">(</span><span class="nn">Box</span><span class="p">::</span><span class="nf">new</span><span class="p">(||</span> <span class="k">async</span> <span class="p">{</span>
+        <span class="n">inventory_service</span><span class="nf">.release</span><span class="p">(</span><span class="n">item_id</span><span class="p">,</span> <span class="n">quantity</span><span class="p">)</span><span class="k">.await</span>
+    <span class="p">})),</span>
+<span class="p">});</span>
+
+<span class="n">saga</span><span class="nf">.add_step</span><span class="p">(</span><span class="n">SagaStep</span> <span class="p">{</span>
+    <span class="n">name</span><span class="p">:</span> <span class="s">"charge-payment"</span><span class="nf">.to_string</span><span class="p">(),</span>
+    <span class="n">action</span><span class="p">:</span> <span class="nn">Box</span><span class="p">::</span><span class="nf">new</span><span class="p">(||</span> <span class="k">async</span> <span class="p">{</span>
+        <span class="n">payment_service</span><span class="nf">.charge</span><span class="p">(</span><span class="n">user_id</span><span class="p">,</span> <span class="n">amount</span><span class="p">)</span><span class="k">.await</span>
+    <span class="p">}),</span>
+    <span class="n">compensation</span><span class="p">:</span> <span class="nf">Some</span><span class="p">(</span><span class="nn">Box</span><span class="p">::</span><span class="nf">new</span><span class="p">(||</span> <span class="k">async</span> <span class="p">{</span>
+        <span class="n">payment_service</span><span class="nf">.refund</span><span class="p">(</span><span class="n">user_id</span><span class="p">,</span> <span class="n">amount</span><span class="p">)</span><span class="k">.await</span>
+    <span class="p">})),</span>
+<span class="p">});</span>
+
+<span class="n">saga</span><span class="nf">.add_step</span><span class="p">(</span><span class="n">SagaStep</span> <span class="p">{</span>
+    <span class="n">name</span><span class="p">:</span> <span class="s">"ship-order"</span><span class="nf">.to_string</span><span class="p">(),</span>
+    <span class="n">action</span><span class="p">:</span> <span class="nn">Box</span><span class="p">::</span><span class="nf">new</span><span class="p">(||</span> <span class="k">async</span> <span class="p">{</span>
+        <span class="n">shipping_service</span><span class="nf">.create_shipment</span><span class="p">(</span><span class="n">order_id</span><span class="p">)</span><span class="k">.await</span>
+    <span class="p">}),</span>
+    <span class="n">compensation</span><span class="p">:</span> <span class="nf">Some</span><span class="p">(</span><span class="nn">Box</span><span class="p">::</span><span class="nf">new</span><span class="p">(||</span> <span class="k">async</span> <span class="p">{</span>
+        <span class="n">shipping_service</span><span class="nf">.cancel_shipment</span><span class="p">(</span><span class="n">order_id</span><span class="p">)</span><span class="k">.await</span>
+    <span class="p">})),</span>
+<span class="p">});</span>
+
+<span class="c1">// Execute saga</span>
+<span class="k">match</span> <span class="n">saga</span><span class="nf">.execute</span><span class="p">()</span><span class="k">.await</span> <span class="p">{</span>
+    <span class="nf">Ok</span><span class="p">(</span><span class="n">_</span><span class="p">)</span> <span class="k">=&gt;</span> <span class="nd">println!</span><span class="p">(</span><span class="s">"Saga completed successfully"</span><span class="p">),</span>
+    <span class="nf">Err</span><span class="p">(</span><span class="n">e</span><span class="p">)</span> <span class="k">=&gt;</span> <span class="p">{</span>
+        <span class="c1">// Compensation automatically triggered</span>
+        <span class="nd">println!</span><span class="p">(</span><span class="s">"Saga failed, compensation completed: {:?}"</span><span class="p">,</span> <span class="n">e</span><span class="p">);</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="saga-with-metrics">Saga with Metrics</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">let</span> <span class="n">saga_metrics</span> <span class="o">=</span> <span class="nn">SagaMetrics</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="n">node_id</span><span class="p">);</span>
+<span class="k">let</span> <span class="n">saga_id</span> <span class="o">=</span> <span class="nn">uuid</span><span class="p">::</span><span class="nn">Uuid</span><span class="p">::</span><span class="nf">new_v4</span><span class="p">()</span><span class="nf">.to_string</span><span class="p">();</span>
+
+<span class="n">saga_metrics</span><span class="nf">.record_saga_started</span><span class="p">(</span><span class="o">&amp;</span><span class="n">saga_id</span><span class="p">)</span><span class="k">.await</span><span class="p">;</span>
+
+<span class="k">let</span> <span class="k">mut</span> <span class="n">step_count</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+<span class="k">for</span> <span class="n">step</span> <span class="k">in</span> <span class="n">saga</span><span class="py">.steps</span> <span class="p">{</span>
+    <span class="n">saga_metrics</span><span class="nf">.record_step_executing</span><span class="p">(</span><span class="o">&amp;</span><span class="n">saga_id</span><span class="p">)</span><span class="k">.await</span><span class="p">;</span>
+    
+    <span class="k">match</span> <span class="n">step</span><span class="nf">.execute</span><span class="p">()</span><span class="k">.await</span> <span class="p">{</span>
+        <span class="nf">Ok</span><span class="p">(</span><span class="n">_</span><span class="p">)</span> <span class="k">=&gt;</span> <span class="p">{</span>
+            <span class="n">step_count</span> <span class="o">+=</span> <span class="mi">1</span><span class="p">;</span>
+            <span class="n">saga_metrics</span><span class="nf">.record_step_executed</span><span class="p">(</span><span class="o">&amp;</span><span class="n">saga_id</span><span class="p">,</span> <span class="n">step_count</span><span class="p">)</span><span class="k">.await</span><span class="p">;</span>
+        <span class="p">}</span>
+        <span class="nf">Err</span><span class="p">(</span><span class="n">e</span><span class="p">)</span> <span class="k">=&gt;</span> <span class="p">{</span>
+            <span class="n">saga_metrics</span><span class="nf">.record_saga_compensating</span><span class="p">(</span><span class="o">&amp;</span><span class="n">saga_id</span><span class="p">)</span><span class="k">.await</span><span class="p">;</span>
+            <span class="c1">// Trigger compensation</span>
+            <span class="k">break</span><span class="p">;</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+
+<span class="n">saga_metrics</span><span class="nf">.record_saga_completed</span><span class="p">(</span><span class="o">&amp;</span><span class="n">saga_id</span><span class="p">,</span> <span class="n">step_count</span><span class="p">)</span><span class="k">.await</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h2 id="best-practices">Best Practices</h2>
+
+<h3 id="lock-management">Lock Management</h3>
+
+<ol>
+  <li><strong>Always use timeouts</strong>: Never acquire locks without a timeout to prevent indefinite waits</li>
+  <li><strong>Lock ordering</strong>: Establish a consistent lock ordering to prevent deadlocks</li>
+  <li><strong>Minimize lock hold time</strong>: Hold locks for the shortest duration necessary</li>
+  <li><strong>Use shared locks for reads</strong>: Maximize concurrency by using shared locks when possible</li>
+</ol>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Good: Use timeouts</span>
+<span class="k">let</span> <span class="n">lock</span> <span class="o">=</span> <span class="n">lock_manager</span><span class="nf">.acquire_lock</span><span class="p">(</span>
+    <span class="n">resource_id</span><span class="p">,</span>
+    <span class="nn">LockMode</span><span class="p">::</span><span class="n">Exclusive</span><span class="p">,</span>
+    <span class="nn">Duration</span><span class="p">::</span><span class="nf">from_secs</span><span class="p">(</span><span class="mi">30</span><span class="p">)</span> <span class="c1">// Always specify timeout</span>
+<span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+
+<span class="c1">// Good: Consistent lock ordering</span>
+<span class="k">let</span> <span class="n">locks</span> <span class="o">=</span> <span class="nd">vec!</span><span class="p">[</span>
+    <span class="n">lock_manager</span><span class="nf">.acquire_lock</span><span class="p">(</span><span class="s">"resource-1"</span><span class="p">,</span> <span class="n">mode</span><span class="p">,</span> <span class="n">timeout</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">,</span>
+    <span class="n">lock_manager</span><span class="nf">.acquire_lock</span><span class="p">(</span><span class="s">"resource-2"</span><span class="p">,</span> <span class="n">mode</span><span class="p">,</span> <span class="n">timeout</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">,</span>
+<span class="p">];</span>
+
+<span class="c1">// Good: Release locks early</span>
+<span class="p">{</span>
+    <span class="k">let</span> <span class="n">lock</span> <span class="o">=</span> <span class="n">lock_manager</span><span class="nf">.acquire_lock</span><span class="p">(</span><span class="n">resource_id</span><span class="p">,</span> <span class="n">mode</span><span class="p">,</span> <span class="n">timeout</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+    <span class="nf">perform_quick_operation</span><span class="p">();</span>
+<span class="p">}</span> <span class="c1">// Lock released here</span>
+
+<span class="c1">// Good: Use shared locks for reads</span>
+<span class="k">let</span> <span class="n">lock</span> <span class="o">=</span> <span class="n">lock_manager</span><span class="nf">.acquire_lock</span><span class="p">(</span>
+    <span class="n">resource_id</span><span class="p">,</span>
+    <span class="nn">LockMode</span><span class="p">::</span><span class="n">Shared</span><span class="p">,</span> <span class="c1">// Allow concurrent readers</span>
+    <span class="n">timeout</span>
+<span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h3 id="metrics-collection">Metrics Collection</h3>
+
+<ol>
+  <li><strong>Sample high-cardinality metrics</strong>: Avoid creating unique metrics for each transaction</li>
+  <li><strong>Use histogram buckets wisely</strong>: Configure buckets based on expected latencies</li>
+  <li><strong>Aggregate metrics</strong>: Use the aggregator for cluster-wide views</li>
+  <li><strong>Monitor metric cardinality</strong>: High cardinality can impact Prometheus performance</li>
+</ol>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Good: Use node-level metrics</span>
+<span class="k">let</span> <span class="n">metrics</span> <span class="o">=</span> <span class="nn">TransactionMetrics</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="n">node_id</span><span class="p">);</span>
+
+<span class="c1">// Good: Aggregate for cluster view</span>
+<span class="k">let</span> <span class="n">aggregator</span> <span class="o">=</span> <span class="nn">TransactionMetricsAggregator</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="n">node_id</span><span class="p">);</span>
+<span class="n">aggregator</span><span class="nf">.add_node_metrics</span><span class="p">(</span><span class="n">metrics</span><span class="p">)</span><span class="k">.await</span><span class="p">;</span>
+
+<span class="c1">// Good: Query aggregated stats</span>
+<span class="k">let</span> <span class="n">stats</span> <span class="o">=</span> <span class="n">aggregator</span><span class="nf">.get_aggregated_stats</span><span class="p">()</span><span class="k">.await</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h3 id="security">Security</h3>
+
+<ol>
+  <li><strong>Validate tokens on every request</strong>: Don’t cache authorization decisions</li>
+  <li><strong>Use short-lived tokens</strong>: Set appropriate expiration times</li>
+  <li><strong>Implement token refresh</strong>: Allow seamless token renewal</li>
+  <li><strong>Audit all critical operations</strong>: Log authentication, authorization, and transaction lifecycle events</li>
+</ol>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Good: Validate on every request</span>
+<span class="n">security_mgr</span><span class="nf">.authenticate</span><span class="p">(</span><span class="o">&amp;</span><span class="n">token</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+<span class="n">security_mgr</span><span class="nf">.authorize</span><span class="p">(</span><span class="o">&amp;</span><span class="n">token</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">tx_id</span><span class="p">,</span> <span class="n">permission</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+
+<span class="c1">// Good: Use appropriate token lifetimes</span>
+<span class="k">let</span> <span class="n">token</span> <span class="o">=</span> <span class="n">AuthToken</span> <span class="p">{</span>
+    <span class="n">expires_at</span><span class="p">:</span> <span class="nn">SystemTime</span><span class="p">::</span><span class="nf">now</span><span class="p">()</span> <span class="o">+</span> <span class="nn">Duration</span><span class="p">::</span><span class="nf">from_secs</span><span class="p">(</span><span class="mi">300</span><span class="p">),</span> <span class="c1">// 5 minutes</span>
+    <span class="c1">// ...</span>
+<span class="p">};</span>
+
+<span class="c1">// Good: Audit critical operations</span>
+<span class="n">security_mgr</span><span class="nf">.audit_log_entry</span><span class="p">(</span><span class="n">tx_id</span><span class="p">,</span> <span class="s">"COMMIT"</span><span class="p">,</span> <span class="s">"success"</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h3 id="performance">Performance</h3>
+
+<ol>
+  <li><strong>Use batching for write-heavy workloads</strong>: Reduce coordination overhead</li>
+  <li><strong>Configure pool sizes appropriately</strong>: Match pool sizes to expected concurrency</li>
+  <li><strong>Set resource limits</strong>: Prevent resource exhaustion with memory and concurrency limits</li>
+  <li><strong>Monitor resource usage</strong>: Track memory and connection usage</li>
+</ol>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Good: Batch writes</span>
+<span class="k">let</span> <span class="n">batch_processor</span> <span class="o">=</span> <span class="nn">BatchProcessor</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="n">config</span><span class="p">);</span>
+<span class="k">for</span> <span class="n">write</span> <span class="k">in</span> <span class="n">writes</span> <span class="p">{</span>
+    <span class="n">batch_processor</span><span class="nf">.add_operation</span><span class="p">(</span><span class="n">write</span><span class="p">,</span> <span class="n">priority</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+<span class="p">}</span>
+<span class="k">let</span> <span class="n">batch</span> <span class="o">=</span> <span class="n">batch_processor</span><span class="nf">.flush</span><span class="p">()</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+
+<span class="c1">// Good: Size pools based on load</span>
+<span class="k">let</span> <span class="n">pool</span> <span class="o">=</span> <span class="nn">ConnectionPool</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="n">ConnectionPoolConfig</span> <span class="p">{</span>
+    <span class="n">min_connections</span><span class="p">:</span> <span class="n">expected_baseline</span><span class="p">,</span>
+    <span class="n">max_connections</span><span class="p">:</span> <span class="n">expected_peak</span> <span class="o">*</span> <span class="mi">2</span><span class="p">,</span>
+    <span class="c1">// ...</span>
+<span class="p">},</span> <span class="n">factory</span><span class="p">);</span>
+
+<span class="c1">// Good: Set resource limits</span>
+<span class="k">let</span> <span class="n">resource_mgr</span> <span class="o">=</span> <span class="nn">ResourceManager</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span>
+    <span class="n">available_memory</span> <span class="o">*</span> <span class="mf">0.8</span><span class="p">,</span> <span class="c1">// Leave headroom</span>
+    <span class="n">max_expected_concurrency</span> <span class="o">*</span> <span class="mf">1.5</span>
+<span class="p">);</span>
+</code></pre></div></div>
+
+<h3 id="saga-design">Saga Design</h3>
+
+<ol>
+  <li><strong>Make compensation idempotent</strong>: Compensation may be executed multiple times</li>
+  <li><strong>Design for partial failure</strong>: Each step should be independently compensatable</li>
+  <li><strong>Keep saga state persistent</strong>: Store saga progress for recovery</li>
+  <li><strong>Use timeouts</strong>: Don’t let sagas run indefinitely</li>
+</ol>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Good: Idempotent compensation</span>
+<span class="k">async</span> <span class="k">fn</span> <span class="nf">compensate_inventory_reservation</span><span class="p">(</span><span class="n">item_id</span><span class="p">:</span> <span class="o">&amp;</span><span class="nb">str</span><span class="p">,</span> <span class="n">quantity</span><span class="p">:</span> <span class="nb">i32</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span> <span class="p">{</span>
+    <span class="c1">// Check if already compensated before releasing</span>
+    <span class="k">if</span> <span class="o">!</span><span class="n">inventory_service</span><span class="nf">.is_reserved</span><span class="p">(</span><span class="n">item_id</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span> <span class="p">{</span>
+        <span class="k">return</span> <span class="nf">Ok</span><span class="p">(());</span> <span class="c1">// Already compensated</span>
+    <span class="p">}</span>
+    <span class="n">inventory_service</span><span class="nf">.release</span><span class="p">(</span><span class="n">item_id</span><span class="p">,</span> <span class="n">quantity</span><span class="p">)</span><span class="k">.await</span>
+<span class="p">}</span>
+
+<span class="c1">// Good: Each step is independently compensatable</span>
+<span class="n">saga</span><span class="nf">.add_step</span><span class="p">(</span><span class="n">SagaStep</span> <span class="p">{</span>
+    <span class="n">name</span><span class="p">:</span> <span class="s">"step-1"</span><span class="p">,</span>
+    <span class="n">action</span><span class="p">:</span> <span class="n">independent_action_1</span><span class="p">,</span>
+    <span class="n">compensation</span><span class="p">:</span> <span class="nf">Some</span><span class="p">(</span><span class="n">independent_compensation_1</span><span class="p">),</span>
+<span class="p">});</span>
+
+<span class="n">saga</span><span class="nf">.add_step</span><span class="p">(</span><span class="n">SagaStep</span> <span class="p">{</span>
+    <span class="n">name</span><span class="p">:</span> <span class="s">"step-2"</span><span class="p">,</span>
+    <span class="n">action</span><span class="p">:</span> <span class="n">independent_action_2</span><span class="p">,</span>
+    <span class="n">compensation</span><span class="p">:</span> <span class="nf">Some</span><span class="p">(</span><span class="n">independent_compensation_2</span><span class="p">),</span>
+<span class="p">});</span>
+</code></pre></div></div>
+
+<h2 id="troubleshooting">Troubleshooting</h2>
+
+<h3 id="deadlock-issues">Deadlock Issues</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Enable deadlock detection logging</span>
+<span class="nn">env</span><span class="p">::</span><span class="nf">set_var</span><span class="p">(</span><span class="s">"RUST_LOG"</span><span class="p">,</span> <span class="s">"orbit_shared::transactions::locks=debug"</span><span class="p">);</span>
+
+<span class="c1">// Check deadlock statistics</span>
+<span class="k">let</span> <span class="n">stats</span> <span class="o">=</span> <span class="n">lock_manager</span><span class="nf">.get_statistics</span><span class="p">()</span><span class="k">.await</span><span class="p">;</span>
+<span class="k">if</span> <span class="n">stats</span><span class="py">.deadlocks_detected</span> <span class="o">&gt;</span> <span class="n">threshold</span> <span class="p">{</span>
+    <span class="nd">warn!</span><span class="p">(</span><span class="s">"High deadlock rate: {}"</span><span class="p">,</span> <span class="n">stats</span><span class="py">.deadlocks_detected</span><span class="p">);</span>
+    <span class="c1">// Consider reviewing lock acquisition order</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="performance-issues">Performance Issues</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Monitor batch processing efficiency</span>
+<span class="k">let</span> <span class="n">stats</span> <span class="o">=</span> <span class="n">batch_processor</span><span class="nf">.get_stats</span><span class="p">()</span><span class="k">.await</span><span class="p">;</span>
+<span class="nd">println!</span><span class="p">(</span><span class="s">"Avg batch size: {}"</span><span class="p">,</span> <span class="n">stats</span><span class="py">.average_batch_size</span><span class="p">);</span>
+<span class="nd">println!</span><span class="p">(</span><span class="s">"Flush rate: {}"</span><span class="p">,</span> <span class="n">stats</span><span class="py">.flushes_per_second</span><span class="p">);</span>
+
+<span class="c1">// Monitor connection pool health</span>
+<span class="k">let</span> <span class="n">pool_stats</span> <span class="o">=</span> <span class="n">pool</span><span class="nf">.get_stats</span><span class="p">()</span><span class="k">.await</span><span class="p">;</span>
+<span class="nd">println!</span><span class="p">(</span><span class="s">"Active connections: {}"</span><span class="p">,</span> <span class="n">pool_stats</span><span class="py">.active</span><span class="p">);</span>
+<span class="nd">println!</span><span class="p">(</span><span class="s">"Idle connections: {}"</span><span class="p">,</span> <span class="n">pool_stats</span><span class="py">.idle</span><span class="p">);</span>
+<span class="nd">println!</span><span class="p">(</span><span class="s">"Wait time: {:?}"</span><span class="p">,</span> <span class="n">pool_stats</span><span class="py">.average_wait_time</span><span class="p">);</span>
+</code></pre></div></div>
+
+<h3 id="security-issues">Security Issues</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Query audit logs for security incidents</span>
+<span class="k">let</span> <span class="n">failed_auths</span> <span class="o">=</span> <span class="n">security_mgr</span><span class="nf">.query_audit_logs</span><span class="p">(</span>
+    <span class="nb">None</span><span class="p">,</span>
+    <span class="nf">Some</span><span class="p">(</span><span class="n">start_time</span><span class="p">),</span>
+    <span class="nf">Some</span><span class="p">(</span><span class="n">end_time</span><span class="p">),</span>
+    <span class="mi">1000</span>
+<span class="p">)</span><span class="k">.await</span><span class="o">?</span>
+<span class="nf">.into_iter</span><span class="p">()</span>
+<span class="nf">.filter</span><span class="p">(|</span><span class="n">entry</span><span class="p">|</span> <span class="n">entry</span><span class="py">.outcome</span> <span class="o">==</span> <span class="s">"failure"</span> <span class="o">&amp;&amp;</span> <span class="n">entry</span><span class="py">.action</span><span class="nf">.starts_with</span><span class="p">(</span><span class="s">"AUTH"</span><span class="p">))</span>
+<span class="py">.collect</span><span class="p">::</span><span class="o">&lt;</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="n">_</span><span class="o">&gt;&gt;</span><span class="p">();</span>
+
+<span class="k">if</span> <span class="n">failed_auths</span><span class="nf">.len</span><span class="p">()</span> <span class="o">&gt;</span> <span class="n">threshold</span> <span class="p">{</span>
+    <span class="nd">alert!</span><span class="p">(</span><span class="s">"High authentication failure rate"</span><span class="p">);</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h2 id="additional-resources">Additional Resources</h2>
+
+<ul>
+  <li><a href="../ADVANCED_FEATURES_IMPLEMENTATION.md">Implementation Summary</a></li>
+  <li><a href="../ORBIT_ARCHITECTURE.md">Architecture Documentation</a></li>
+  <li><a href="https://turingworks.github.io/orbit-rs/api/">API Documentation</a></li>
+  <li><a href="../examples/">Examples</a></li>
+</ul>
+
+<h2 id="support">Support</h2>
+
+<p>For questions or issues:</p>
+<ul>
+  <li>GitHub Issues: https://github.com/TuringWorks/orbit-rs/issues</li>
+  <li>Documentation: https://turingworks.github.io/orbit-rs/api/</li>
+  <li>Examples: See the <code class="language-plaintext highlighter-rouge">examples/</code> directory</li>
+</ul>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/orbit-rs/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Orbit-RS Documentation</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">TuringWorks</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

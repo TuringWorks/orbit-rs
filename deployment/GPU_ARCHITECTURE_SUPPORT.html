@@ -1,0 +1,903 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>GPU Architecture Support in Orbit-RS | Orbit-RS Documentation</title>
+<meta name="generator" content="Jekyll v4.4.1" />
+<meta property="og:title" content="GPU Architecture Support in Orbit-RS" />
+<meta name="author" content="TuringWorks" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<meta property="og:description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<link rel="canonical" href="https://turingworks.github.io/orbit-rs/deployment/GPU_ARCHITECTURE_SUPPORT.html" />
+<meta property="og:url" content="https://turingworks.github.io/orbit-rs/deployment/GPU_ARCHITECTURE_SUPPORT.html" />
+<meta property="og:site_name" content="Orbit-RS Documentation" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="GPU Architecture Support in Orbit-RS" />
+<meta name="twitter:site" content="@TuringWorksAI" />
+<meta name="twitter:creator" content="@TuringWorks" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","author":{"@type":"Person","name":"TuringWorks"},"description":"The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform","headline":"GPU Architecture Support in Orbit-RS","url":"https://turingworks.github.io/orbit-rs/deployment/GPU_ARCHITECTURE_SUPPORT.html"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/orbit-rs/assets/main.css">
+  <link rel="stylesheet" href="/orbit-rs/assets/css/custom.css"><link type="application/atom+xml" rel="alternate" href="https://turingworks.github.io/orbit-rs/feed.xml" title="Orbit-RS Documentation" /></head><body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/orbit-rs/">Orbit-RS Documentation</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/orbit-rs/">Orbit-RS Documentation</a><a class="page-link" href="/orbit-rs/project_overview.html">Orbit-RS: Comprehensive Project Overview</a><a class="page-link" href="/orbit-rs/quick_start.html">Quick Start Guide - Multi-Protocol Database Server</a><a class="page-link" href="/orbit-rs/roadmap/">Development Roadmap</a><a class="page-link" href="/orbit-rs/features/">Orbit-RS Feature Index</a><a class="page-link" href="/orbit-rs/compute-acceleration/">Hardware Acceleration Guide</a><a class="page-link" href="/orbit-rs/contributing.html">Contributing Guide</a><a class="page-link" href="/orbit-rs/overview.html">Architecture Overview</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <h1 id="gpu-architecture-support-in-orbit-rs">GPU Architecture Support in Orbit-RS</h1>
+
+<p><strong>Date</strong>: 2025-01-09<br />
+<strong>Version</strong>: 2.0.0<br />
+<strong>Status</strong>: Production Ready</p>
+
+<h2 id="overview">Overview</h2>
+
+<p>Orbit-RS provides comprehensive support for the latest GPU architectures across NVIDIA, AMD, and other vendors, enabling optimal performance for AI/ML workloads, vector operations, and distributed computing tasks. This document details the supported architectures, configurations, and deployment options.</p>
+
+<h2 id="supported-gpu-architectures">Supported GPU Architectures</h2>
+
+<h3 id="nvidia-gpus">NVIDIA GPUs</h3>
+
+<h4 id="-blackwell-architecture-2024---next-generation">🚀 Blackwell Architecture (2024+) - Next Generation</h4>
+<p><strong>Status</strong>: Early Support / Preview<br />
+<strong>Use Cases</strong>: Large-scale AI training, foundation models, multi-modal AI</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Model</th>
+      <th>Memory</th>
+      <th>Architecture</th>
+      <th>Key Features</th>
+      <th>Cloud Availability</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>B200</strong></td>
+      <td>288GB HBM3E</td>
+      <td>Blackwell</td>
+      <td>FP4/FP6/FP8, 20 PetaFLOPS</td>
+      <td>AWS P6 (2024)</td>
+    </tr>
+    <tr>
+      <td><strong>B100</strong></td>
+      <td>192GB HBM3E</td>
+      <td>Blackwell</td>
+      <td>Ultra-large models</td>
+      <td>AWS P6, Azure NCv6</td>
+    </tr>
+    <tr>
+      <td><strong>GB200</strong></td>
+      <td>288GB Unified</td>
+      <td>Grace+Blackwell</td>
+      <td>CPU+GPU SuperChip</td>
+      <td>Specialized instances</td>
+    </tr>
+    <tr>
+      <td><strong>B40</strong></td>
+      <td>48GB GDDR6X</td>
+      <td>Blackwell</td>
+      <td>Mid-range inference</td>
+      <td>Standard instances</td>
+    </tr>
+  </tbody>
+</table>
+
+<p><strong>Blackwell-Specific Features:</strong></p>
+<ul>
+  <li><strong>FP4 Precision</strong>: Revolutionary 4-bit floating point for extreme efficiency</li>
+  <li><strong>FP6 Precision</strong>: 6-bit precision for specific AI workloads</li>
+  <li><strong>Enhanced FP8</strong>: Improved transformer engine with better accuracy</li>
+  <li><strong>Secure AI Compute</strong>: Hardware-level AI security and confidentiality</li>
+  <li><strong>NVLink 5.0</strong>: 1.8TB/s inter-GPU bandwidth</li>
+  <li><strong>Transformer Engine V2</strong>: Advanced sparse and mixed precision</li>
+</ul>
+
+<p><strong>Configuration Example:</strong></p>
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">gpu_config</span><span class="pi">:</span>
+  <span class="na">driver_version</span><span class="pi">:</span> <span class="s2">"</span><span class="s">550.90.07"</span>
+  <span class="na">cuda_version</span><span class="pi">:</span> <span class="s2">"</span><span class="s">12.4"</span>
+  <span class="na">gpu_architecture</span><span class="pi">:</span> <span class="s2">"</span><span class="s">blackwell"</span>
+  <span class="na">gpu_model</span><span class="pi">:</span> <span class="s2">"</span><span class="s">B100_SXM_192GB"</span>
+  
+  <span class="c1"># Blackwell-specific features</span>
+  <span class="na">transformer_engine_v2</span><span class="pi">:</span> <span class="kc">true</span>
+  <span class="na">enable_fp4_precision</span><span class="pi">:</span> <span class="kc">true</span>
+  <span class="na">enable_fp6_precision</span><span class="pi">:</span> <span class="kc">true</span>
+  <span class="na">secure_ai_compute</span><span class="pi">:</span> <span class="kc">true</span>
+  <span class="na">nvlink_topology</span><span class="pi">:</span> <span class="s2">"</span><span class="s">fully_connected_gen5"</span>
+</code></pre></div></div>
+
+<h4 id="-hopper-architecture-current-gen">⚡ Hopper Architecture (Current Gen)</h4>
+<p><strong>Status</strong>: Full Production Support<br />
+<strong>Use Cases</strong>: AI training, large language models, scientific computing</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Model</th>
+      <th>Memory</th>
+      <th>Performance</th>
+      <th>Cloud Instances</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>H200</strong></td>
+      <td>141GB HBM3e</td>
+      <td>67 TFLOPS (FP16)</td>
+      <td>AWS P5, Azure NC H100v5</td>
+    </tr>
+    <tr>
+      <td><strong>H100 SXM</strong></td>
+      <td>80GB HBM3</td>
+      <td>60 TFLOPS (FP16)</td>
+      <td>AWS P5, GCP A3, Azure</td>
+    </tr>
+    <tr>
+      <td><strong>H100 PCIe</strong></td>
+      <td>80GB HBM3</td>
+      <td>51 TFLOPS (FP16)</td>
+      <td>Standard server instances</td>
+    </tr>
+    <tr>
+      <td><strong>H100 NVL</strong></td>
+      <td>94GB HBM3</td>
+      <td>60 TFLOPS (FP16)</td>
+      <td>Specialized deployments</td>
+    </tr>
+  </tbody>
+</table>
+
+<p><strong>Hopper Features:</strong></p>
+<ul>
+  <li><strong>Transformer Engine</strong>: Native FP8 support for transformers</li>
+  <li><strong>DPX Instructions</strong>: Dynamic programming acceleration</li>
+  <li><strong>Thread Block Clusters</strong>: Advanced GPU thread management</li>
+  <li><strong>Confidential Computing</strong>: TEE support for secure AI</li>
+  <li><strong>4th Gen NVLink</strong>: 900 GB/s inter-GPU bandwidth</li>
+</ul>
+
+<h4 id="-ampere-architecture-mainstream">🔥 Ampere Architecture (Mainstream)</h4>
+<p><strong>Status</strong>: Full Production Support<br />
+<strong>Use Cases</strong>: ML training/inference, HPC, graphics workloads</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Model</th>
+      <th>Memory</th>
+      <th>Performance</th>
+      <th>Cost Effectiveness</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>A100 SXM</strong></td>
+      <td>80GB HBM2e</td>
+      <td>19.5 TFLOPS (FP32)</td>
+      <td>High-end training</td>
+    </tr>
+    <tr>
+      <td><strong>A100 PCIe</strong></td>
+      <td>40GB/80GB</td>
+      <td>19.5 TFLOPS (FP32)</td>
+      <td>Versatile deployment</td>
+    </tr>
+    <tr>
+      <td><strong>A10G</strong></td>
+      <td>24GB GDDR6</td>
+      <td>31.2 TFLOPS (FP16)</td>
+      <td>Graphics + AI</td>
+    </tr>
+    <tr>
+      <td><strong>A10</strong></td>
+      <td>24GB GDDR6</td>
+      <td>31.2 TFLOPS (FP16)</td>
+      <td>Professional workstations</td>
+    </tr>
+  </tbody>
+</table>
+
+<h4 id="️-turing-architecture-inference-optimized">⚙️ Turing Architecture (Inference Optimized)</h4>
+<p><strong>Status</strong>: Full Production Support<br />
+<strong>Use Cases</strong>: Cost-effective inference, edge deployment</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Model</th>
+      <th>Memory</th>
+      <th>Performance</th>
+      <th>Best Use Case</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>T4</strong></td>
+      <td>16GB GDDR6</td>
+      <td>8.1 TFLOPS (FP16)</td>
+      <td>Inference at scale</td>
+    </tr>
+    <tr>
+      <td><strong>T4G</strong></td>
+      <td>16GB GDDR6</td>
+      <td>Enhanced inference</td>
+      <td>Edge deployments</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 id="amd-gpus">AMD GPUs</h3>
+
+<h4 id="-cdna-3-architecture-latest-data-center">🔴 CDNA 3 Architecture (Latest Data Center)</h4>
+<p><strong>Status</strong>: Full Production Support<br />
+<strong>Use Cases</strong>: AI training, HPC, large-scale inference</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Model</th>
+      <th>Memory</th>
+      <th>Performance</th>
+      <th>Unique Features</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>MI300X</strong></td>
+      <td>192GB HBM3</td>
+      <td>163 TFLOPS (FP16)</td>
+      <td>Pure compute accelerator</td>
+    </tr>
+    <tr>
+      <td><strong>MI300A</strong></td>
+      <td>128GB Unified</td>
+      <td>APU design</td>
+      <td>CPU+GPU unified memory</td>
+    </tr>
+    <tr>
+      <td><strong>MI300C</strong></td>
+      <td>192GB HBM3</td>
+      <td>Cloud-optimized</td>
+      <td>Multi-tenant workloads</td>
+    </tr>
+  </tbody>
+</table>
+
+<p><strong>CDNA3 Features:</strong></p>
+<ul>
+  <li><strong>Infinity Cache</strong>: Large on-chip cache for bandwidth amplification</li>
+  <li><strong>Matrix Cores</strong>: Dedicated AI acceleration units</li>
+  <li><strong>XGMI</strong>: High-speed inter-GPU communication (up to 896 GB/s)</li>
+  <li><strong>ROCm 6.0</strong>: Mature software stack with HIP/OpenMP</li>
+  <li><strong>Unified Memory</strong>: Coherent CPU-GPU memory access (MI300A)</li>
+</ul>
+
+<p><strong>Configuration Example:</strong></p>
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">gpu_config</span><span class="pi">:</span>
+  <span class="na">rocm_version</span><span class="pi">:</span> <span class="s2">"</span><span class="s">6.0"</span>
+  <span class="na">hip_version</span><span class="pi">:</span> <span class="s2">"</span><span class="s">6.0"</span>
+  <span class="na">gpu_architecture</span><span class="pi">:</span> <span class="s2">"</span><span class="s">CDNA3"</span>
+  <span class="na">gpu_model</span><span class="pi">:</span> <span class="s2">"</span><span class="s">MI300X"</span>
+  
+  <span class="c1"># AMD-specific optimizations</span>
+  <span class="na">enable_infinity_cache</span><span class="pi">:</span> <span class="kc">true</span>
+  <span class="na">enable_smart_access_memory</span><span class="pi">:</span> <span class="kc">true</span>
+  <span class="na">matrix_cores</span><span class="pi">:</span> <span class="kc">true</span>
+  <span class="na">enable_xgmi</span><span class="pi">:</span> <span class="kc">true</span>
+  <span class="na">xgmi_topology</span><span class="pi">:</span> <span class="s2">"</span><span class="s">fully_connected"</span>
+</code></pre></div></div>
+
+<h4 id="-cdna-2-architecture">🔴 CDNA 2 Architecture</h4>
+<p><strong>Status</strong>: Full Production Support<br />
+<strong>Use Cases</strong>: AI training, scientific computing</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Model</th>
+      <th>Memory</th>
+      <th>Performance</th>
+      <th>Notes</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>MI250X</strong></td>
+      <td>128GB HBM2e</td>
+      <td>95 TFLOPS (FP16)</td>
+      <td>Dual-GPU design</td>
+    </tr>
+    <tr>
+      <td><strong>MI250</strong></td>
+      <td>128GB HBM2e</td>
+      <td>95 TFLOPS (FP16)</td>
+      <td>Standard variant</td>
+    </tr>
+    <tr>
+      <td><strong>MI210</strong></td>
+      <td>64GB HBM2e</td>
+      <td>45 TFLOPS (FP16)</td>
+      <td>Entry-level CDNA2</td>
+    </tr>
+  </tbody>
+</table>
+
+<h4 id="-rdna-4-architecture-2024">🎮 RDNA 4 Architecture (2024+)</h4>
+<p><strong>Status</strong>: Early Support<br />
+<strong>Use Cases</strong>: Graphics, consumer AI, edge computing</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Model</th>
+      <th>Memory</th>
+      <th>Target Market</th>
+      <th>Availability</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>RX 8800 XT</strong></td>
+      <td>20GB GDDR6X</td>
+      <td>High-end gaming</td>
+      <td>Q1 2024</td>
+    </tr>
+    <tr>
+      <td><strong>RX 8700 XT</strong></td>
+      <td>16GB GDDR6X</td>
+      <td>Mid-high range</td>
+      <td>Q1 2024</td>
+    </tr>
+    <tr>
+      <td><strong>RX 8600 XT</strong></td>
+      <td>12GB GDDR6X</td>
+      <td>Mainstream</td>
+      <td>Q2 2024</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 id="cpu-architectures">CPU Architectures</h3>
+
+<h4 id="-amd-epyc-processors">🔥 AMD EPYC Processors</h4>
+<p><strong>Status</strong>: Full Production Support<br />
+<strong>Use Cases</strong>: High-performance computing, database workloads, CPU-intensive AI</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Generation</th>
+      <th>Microarchitecture</th>
+      <th>Cores</th>
+      <th>Memory</th>
+      <th>Key Features</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>EPYC 9004 “Genoa”</strong></td>
+      <td>Zen 4</td>
+      <td>up to 96</td>
+      <td>DDR5-4800</td>
+      <td>5nm, PCIe 5.0, AVX-512</td>
+    </tr>
+    <tr>
+      <td><strong>EPYC 9004 “Bergamo”</strong></td>
+      <td>Zen 4c</td>
+      <td>up to 128</td>
+      <td>DDR5-4800</td>
+      <td>Cloud-optimized, dense compute</td>
+    </tr>
+    <tr>
+      <td><strong>EPYC 7003 “Milan”</strong></td>
+      <td>Zen 3</td>
+      <td>up to 64</td>
+      <td>DDR4-3200</td>
+      <td>Mature, proven performance</td>
+    </tr>
+    <tr>
+      <td><strong>EPYC 7002 “Rome”</strong></td>
+      <td>Zen 2</td>
+      <td>up to 64</td>
+      <td>DDR4-3200</td>
+      <td>Cost-effective option</td>
+    </tr>
+  </tbody>
+</table>
+
+<p><strong>EPYC Optimization Features:</strong></p>
+<ul>
+  <li><strong>AVX-512</strong>: Advanced vector extensions for compute acceleration</li>
+  <li><strong>3D V-Cache</strong>: Additional cache for database and analytics workloads</li>
+  <li><strong>CCD/IOD Design</strong>: Scalable chiplet architecture</li>
+  <li><strong>Infinity Fabric</strong>: High-speed interconnect</li>
+  <li><strong>SMT</strong>: Simultaneous multithreading (2 threads per core)</li>
+</ul>
+
+<p><strong>Configuration Example:</strong></p>
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">epyc_optimizations</span><span class="pi">:</span>
+  <span class="na">compiler_flags</span><span class="pi">:</span> <span class="s2">"</span><span class="s">-march=znver4</span><span class="nv"> </span><span class="s">-mtune=znver4"</span>
+  <span class="na">enable_avx512</span><span class="pi">:</span> <span class="kc">true</span>
+  <span class="na">enable_numa_balancing</span><span class="pi">:</span> <span class="kc">true</span>
+  <span class="na">memory_allocator</span><span class="pi">:</span> <span class="s2">"</span><span class="s">jemalloc"</span>
+  <span class="na">pcie_optimization</span><span class="pi">:</span> <span class="kc">true</span>
+</code></pre></div></div>
+
+<h4 id="-arm-graviton-processors">🌿 ARM Graviton Processors</h4>
+<p><strong>Status</strong>: Full Production Support<br />
+<strong>Use Cases</strong>: Energy-efficient computing, cost optimization</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Generation</th>
+      <th>Architecture</th>
+      <th>Performance</th>
+      <th>Cost Benefit</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Graviton3</strong></td>
+      <td>ARMv8.2</td>
+      <td>25% better than Graviton2</td>
+      <td>Up to 20% cost savings</td>
+    </tr>
+    <tr>
+      <td><strong>Graviton2</strong></td>
+      <td>ARMv8.2</td>
+      <td>Mature performance</td>
+      <td>Proven cost effectiveness</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 id="intel-gpus">Intel GPUs</h3>
+
+<h4 id="-intel-arc--xe-architecture">⚡ Intel Arc &amp; Xe Architecture</h4>
+<p><strong>Status</strong>: Early Support<br />
+<strong>Use Cases</strong>: Development, testing, specialized workloads</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Architecture</th>
+      <th>Models</th>
+      <th>Key Features</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Arc Alchemist</strong></td>
+      <td>A770, A750, A580</td>
+      <td>Hardware ray tracing, AV1 encode</td>
+    </tr>
+    <tr>
+      <td><strong>Xe-HP</strong></td>
+      <td>Data center variants</td>
+      <td>AI acceleration, HPC</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="cloud-provider-support">Cloud Provider Support</h2>
+
+<h3 id="amazon-web-services-aws">Amazon Web Services (AWS)</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>Instance Family</th>
+      <th>GPU Type</th>
+      <th>Availability</th>
+      <th>Best Use Case</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>P6</strong></td>
+      <td>Blackwell B100/B200</td>
+      <td>2024 (Preview)</td>
+      <td>Next-gen AI training</td>
+    </tr>
+    <tr>
+      <td><strong>P5</strong></td>
+      <td>H100 SXM</td>
+      <td>Available</td>
+      <td>Large-scale ML training</td>
+    </tr>
+    <tr>
+      <td><strong>P4d/P4de</strong></td>
+      <td>A100 SXM</td>
+      <td>Available</td>
+      <td>ML training/inference</td>
+    </tr>
+    <tr>
+      <td><strong>P3</strong></td>
+      <td>V100 SXM</td>
+      <td>Available</td>
+      <td>Legacy ML workloads</td>
+    </tr>
+    <tr>
+      <td><strong>G5</strong></td>
+      <td>A10G</td>
+      <td>Available</td>
+      <td>Graphics + AI</td>
+    </tr>
+    <tr>
+      <td><strong>G4dn</strong></td>
+      <td>T4</td>
+      <td>Available</td>
+      <td>Cost-effective inference</td>
+    </tr>
+    <tr>
+      <td><strong>P5a</strong></td>
+      <td>AMD MI300</td>
+      <td>Future</td>
+      <td>AMD-based AI workloads</td>
+    </tr>
+    <tr>
+      <td><strong>M7a</strong></td>
+      <td>EPYC Genoa</td>
+      <td>Available</td>
+      <td>CPU-intensive workloads</td>
+    </tr>
+    <tr>
+      <td><strong>C7g</strong></td>
+      <td>Graviton3</td>
+      <td>Available</td>
+      <td>ARM-based computing</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 id="microsoft-azure">Microsoft Azure</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>VM Series</th>
+      <th>GPU Type</th>
+      <th>Availability</th>
+      <th>Use Case</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>NC H100v5</strong></td>
+      <td>H100 SXM</td>
+      <td>Available</td>
+      <td>AI training</td>
+    </tr>
+    <tr>
+      <td><strong>NC A100v4</strong></td>
+      <td>A100 SXM</td>
+      <td>Available</td>
+      <td>ML workloads</td>
+    </tr>
+    <tr>
+      <td><strong>NCv3</strong></td>
+      <td>V100</td>
+      <td>Available</td>
+      <td>Legacy AI</td>
+    </tr>
+    <tr>
+      <td><strong>NV A10v5</strong></td>
+      <td>A10</td>
+      <td>Available</td>
+      <td>Graphics workloads</td>
+    </tr>
+    <tr>
+      <td><strong>Standard_D8ps_v5</strong></td>
+      <td>EPYC-based</td>
+      <td>Available</td>
+      <td>AMD CPU workloads</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 id="google-cloud-platform-gcp">Google Cloud Platform (GCP)</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>Machine Type</th>
+      <th>GPU Type</th>
+      <th>Availability</th>
+      <th>Use Case</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>A3</strong></td>
+      <td>H100 SXM</td>
+      <td>Available</td>
+      <td>Ultra-large models</td>
+    </tr>
+    <tr>
+      <td><strong>A2</strong></td>
+      <td>A100 SXM</td>
+      <td>Available</td>
+      <td>ML training</td>
+    </tr>
+    <tr>
+      <td><strong>T4</strong></td>
+      <td>T4</td>
+      <td>Available</td>
+      <td>Inference</td>
+    </tr>
+    <tr>
+      <td><strong>C3</strong></td>
+      <td>EPYC-based</td>
+      <td>Available</td>
+      <td>High-performance CPU</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="performance-optimization-guides">Performance Optimization Guides</h2>
+
+<h3 id="nvidia-gpu-optimization">NVIDIA GPU Optimization</h3>
+
+<h4 id="blackwell-b100b200-optimization">Blackwell B100/B200 Optimization</h4>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Enable all Blackwell features</span>
+<span class="nb">export </span><span class="nv">CUDA_VERSION</span><span class="o">=</span>12.4
+<span class="nb">export </span><span class="nv">ENABLE_FP4_PRECISION</span><span class="o">=</span><span class="nb">true
+export </span><span class="nv">ENABLE_FP6_PRECISION</span><span class="o">=</span><span class="nb">true
+export </span><span class="nv">ENABLE_TRANSFORMER_ENGINE_V2</span><span class="o">=</span><span class="nb">true
+export </span><span class="nv">NVLINK_TOPOLOGY</span><span class="o">=</span>fully_connected_gen5
+
+<span class="c"># Memory optimization</span>
+<span class="nb">export </span><span class="nv">GPU_MEMORY_FRACTION</span><span class="o">=</span>0.95
+<span class="nb">export </span><span class="nv">CUDA_MEMORY_POOL_PREALLOC</span><span class="o">=</span>80%
+
+<span class="c"># Multi-GPU settings</span>
+<span class="nb">export </span><span class="nv">NCCL_VERSION</span><span class="o">=</span>2.20
+<span class="nb">export </span><span class="nv">NCCL_TREE_THRESHOLD</span><span class="o">=</span>0
+<span class="nb">export </span><span class="nv">NCCL_ALGO</span><span class="o">=</span>Tree
+</code></pre></div></div>
+
+<h4 id="h100-optimization">H100 Optimization</h4>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># H100-specific settings</span>
+<span class="nb">export </span><span class="nv">CUDA_VERSION</span><span class="o">=</span>12.2
+<span class="nb">export </span><span class="nv">ENABLE_FP8_PRECISION</span><span class="o">=</span><span class="nb">true
+export </span><span class="nv">ENABLE_TRANSFORMER_ENGINE</span><span class="o">=</span><span class="nb">true
+export </span><span class="nv">NVLINK_TOPOLOGY</span><span class="o">=</span>fully_connected
+
+<span class="c"># Performance tuning</span>
+nvidia-smi <span class="nt">-pm</span> 1  <span class="c"># Persistence mode</span>
+nvidia-smi <span class="nt">-ac</span> 1215,1980  <span class="c"># Memory and graphics clocks</span>
+nvidia-smi <span class="nt">-pl</span> 700  <span class="c"># Power limit</span>
+</code></pre></div></div>
+
+<h3 id="amd-gpu-optimization">AMD GPU Optimization</h3>
+
+<h4 id="mi300x-optimization">MI300X Optimization</h4>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># ROCm environment</span>
+<span class="nb">export </span><span class="nv">ROCM_VERSION</span><span class="o">=</span>6.0
+<span class="nb">export </span><span class="nv">HIP_VISIBLE_DEVICES</span><span class="o">=</span>0
+<span class="nb">export </span><span class="nv">GPU_MEMORY_FRACTION</span><span class="o">=</span>0.9
+
+<span class="c"># AMD-specific optimizations</span>
+<span class="nb">export </span><span class="nv">ENABLE_INFINITY_CACHE</span><span class="o">=</span><span class="nb">true
+export </span><span class="nv">ENABLE_MATRIX_CORES</span><span class="o">=</span><span class="nb">true
+export </span><span class="nv">XGMI_TOPOLOGY</span><span class="o">=</span>fully_connected
+
+<span class="c"># ROCm performance</span>
+rocm-smi <span class="nt">--setsclk</span> 7  <span class="c"># Set memory clock</span>
+rocm-smi <span class="nt">--setpowerplay</span> 0  <span class="c"># Performance mode</span>
+</code></pre></div></div>
+
+<h3 id="amd-epyc-optimization">AMD EPYC Optimization</h3>
+
+<h4 id="zen-4-genoa-optimization">Zen 4 (Genoa) Optimization</h4>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Compiler optimizations</span>
+<span class="nb">export </span><span class="nv">CC</span><span class="o">=</span>clang
+<span class="nb">export </span><span class="nv">CXX</span><span class="o">=</span>clang++
+<span class="nb">export </span><span class="nv">CFLAGS</span><span class="o">=</span><span class="s2">"-march=znver4 -mtune=znver4 -O3 -mavx512f"</span>
+<span class="nb">export </span><span class="nv">CXXFLAGS</span><span class="o">=</span><span class="s2">"-march=znver4 -mtune=znver4 -O3 -mavx512f"</span>
+
+<span class="c"># Runtime optimizations</span>
+<span class="nb">echo </span>performance | <span class="nb">sudo tee</span> /sys/devices/system/cpu/cpu<span class="k">*</span>/cpufreq/scaling_governor
+<span class="nb">echo </span>1 | <span class="nb">sudo tee</span> /sys/devices/system/cpu/cpu<span class="k">*</span>/cache/index3/cache_disable_0
+
+<span class="c"># NUMA optimization</span>
+numactl <span class="nt">--interleave</span><span class="o">=</span>all ./orbit-server
+</code></pre></div></div>
+
+<h2 id="container-images">Container Images</h2>
+
+<p>Orbit-RS provides optimized container images for different architectures:</p>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># Multi-architecture images</span>
+<span class="na">images</span><span class="pi">:</span>
+  <span class="na">nvidia_gpu</span><span class="pi">:</span> <span class="s2">"</span><span class="s">ghcr.io/orbit-rs/orbit-compute-gpu:blackwell-latest"</span>
+  <span class="na">amd_gpu</span><span class="pi">:</span> <span class="s2">"</span><span class="s">ghcr.io/orbit-rs/orbit-compute-amd:rocm6.0-latest"</span>  
+  <span class="na">epyc_cpu</span><span class="pi">:</span> <span class="s2">"</span><span class="s">ghcr.io/orbit-rs/orbit-compute-x86:epyc-optimized"</span>
+  <span class="na">graviton_cpu</span><span class="pi">:</span> <span class="s2">"</span><span class="s">ghcr.io/orbit-rs/orbit-compute-arm64:graviton-latest"</span>
+  <span class="na">intel_gpu</span><span class="pi">:</span> <span class="s2">"</span><span class="s">ghcr.io/orbit-rs/orbit-compute-intel:xe-latest"</span>
+</code></pre></div></div>
+
+<h2 id="workload-specific-recommendations">Workload-Specific Recommendations</h2>
+
+<h3 id="large-language-model-training">Large Language Model Training</h3>
+<ul>
+  <li><strong>Best Choice</strong>: Blackwell B200 (8x) &gt; H100 (8x) &gt; MI300X (8x)</li>
+  <li><strong>Memory Requirements</strong>: 192GB+ for 70B+ parameter models</li>
+  <li><strong>Network</strong>: NVLink/XGMI topology essential</li>
+  <li><strong>Storage</strong>: NVMe SSD, 10TB+ for datasets</li>
+</ul>
+
+<h3 id="ai-inference-at-scale">AI Inference at Scale</h3>
+<ul>
+  <li><strong>Best Choice</strong>: H100 &gt; A100 &gt; T4 (cost-effective)</li>
+  <li><strong>Batch Size</strong>: Optimize for throughput vs latency</li>
+  <li><strong>Precision</strong>: FP16/INT8 for production, FP8 on H100+</li>
+  <li><strong>Auto-scaling</strong>: Based on request queue length</li>
+</ul>
+
+<h3 id="scientific-computing">Scientific Computing</h3>
+<ul>
+  <li><strong>Best Choice</strong>: MI300A (unified memory) &gt; H100 &gt; A100</li>
+  <li><strong>Memory</strong>: Large memory crucial for simulations</li>
+  <li><strong>Precision</strong>: FP64 for scientific accuracy</li>
+  <li><strong>Network</strong>: High-bandwidth interconnect required</li>
+</ul>
+
+<h3 id="database-analytics">Database Analytics</h3>
+<ul>
+  <li><strong>Best Choice</strong>: EPYC 9004 Genoa &gt; Graviton3 &gt; Intel Xeon</li>
+  <li><strong>Memory</strong>: DDR5 with large capacity</li>
+  <li><strong>Storage</strong>: NVMe with high IOPS</li>
+  <li><strong>CPU</strong>: Many cores for parallel processing</li>
+</ul>
+
+<h2 id="cost-optimization-strategies">Cost Optimization Strategies</h2>
+
+<h3 id="gpu-cost-optimization">GPU Cost Optimization</h3>
+<ol>
+  <li><strong>Right-sizing</strong>: Match GPU to workload requirements</li>
+  <li><strong>Spot Instances</strong>: 60-80% cost reduction for training</li>
+  <li><strong>Reserved Instances</strong>: 30-60% savings for predictable workloads</li>
+  <li><strong>Mixed Workloads</strong>: Inference + training on same hardware</li>
+</ol>
+
+<h3 id="cpu-cost-optimization">CPU Cost Optimization</h3>
+<ol>
+  <li><strong>EPYC vs Intel</strong>: Up to 30% better price/performance</li>
+  <li><strong>Graviton</strong>: 20% cost savings vs x86-64</li>
+  <li><strong>Instance Families</strong>: Choose compute-optimized vs general purpose</li>
+</ol>
+
+<h2 id="monitoring-and-observability">Monitoring and Observability</h2>
+
+<h3 id="gpu-metrics">GPU Metrics</h3>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># NVIDIA GPU monitoring</span>
+nvidia-smi dmon <span class="nt">-s</span> pucvmet <span class="nt">-i</span> 0 <span class="nt">-d</span> 1
+
+<span class="c"># AMD GPU monitoring  </span>
+rocm-smi <span class="nt">-a</span> <span class="nt">-l</span>
+
+<span class="c"># Comprehensive monitoring</span>
+orbit-rs monitor <span class="nt">--gpu-metrics</span> <span class="nt">--interval</span><span class="o">=</span>1s
+</code></pre></div></div>
+
+<h3 id="key-metrics-to-monitor">Key Metrics to Monitor</h3>
+<ul>
+  <li><strong>GPU Utilization</strong>: Target 80-95%</li>
+  <li><strong>GPU Memory Usage</strong>: Monitor memory pressure</li>
+  <li><strong>Temperature</strong>: Keep below thermal limits</li>
+  <li><strong>Power Consumption</strong>: Monitor against limits</li>
+  <li><strong>Memory Bandwidth</strong>: Bottleneck detection</li>
+</ul>
+
+<h2 id="troubleshooting-common-issues">Troubleshooting Common Issues</h2>
+
+<h3 id="nvidia-gpu-issues">NVIDIA GPU Issues</h3>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Driver issues</span>
+nvidia-smi  <span class="c"># Check driver status</span>
+<span class="nb">sudo </span>dmesg | <span class="nb">grep </span>nvidia  <span class="c"># Check kernel messages</span>
+lsmod | <span class="nb">grep </span>nvidia  <span class="c"># Check loaded modules</span>
+
+<span class="c"># CUDA issues</span>
+nvcc <span class="nt">--version</span>  <span class="c"># Check CUDA version</span>
+<span class="nb">export </span><span class="nv">CUDA_LAUNCH_BLOCKING</span><span class="o">=</span>1  <span class="c"># Debug CUDA errors</span>
+</code></pre></div></div>
+
+<h3 id="amd-gpu-issues">AMD GPU Issues</h3>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># ROCm issues</span>
+rocm-smi  <span class="c"># Check GPU status</span>
+rocminfo  <span class="c"># Check ROCm installation</span>
+<span class="nb">export </span><span class="nv">HIP_LAUNCH_BLOCKING</span><span class="o">=</span>1  <span class="c"># Debug HIP errors</span>
+
+<span class="c"># Driver issues</span>
+lsmod | <span class="nb">grep </span>amdgpu
+dmesg | <span class="nb">grep </span>amdgpu
+</code></pre></div></div>
+
+<h3 id="performance-issues">Performance Issues</h3>
+<ol>
+  <li><strong>Check GPU utilization</strong>: Should be &gt;80% for training</li>
+  <li><strong>Memory bottlenecks</strong>: Monitor memory bandwidth</li>
+  <li><strong>CPU bottlenecks</strong>: Ensure adequate CPU resources</li>
+  <li><strong>Network bottlenecks</strong>: Multi-GPU communication</li>
+  <li><strong>Storage bottlenecks</strong>: I/O for data loading</li>
+</ol>
+
+<h2 id="best-practices">Best Practices</h2>
+
+<h3 id="gpu-deployment">GPU Deployment</h3>
+<ol>
+  <li><strong>Use placement groups</strong> for multi-GPU instances</li>
+  <li><strong>Enable persistence mode</strong> for NVIDIA GPUs</li>
+  <li><strong>Set appropriate power limits</strong> for thermal management</li>
+  <li><strong>Use fast interconnects</strong> (NVLink/XGMI) for multi-GPU</li>
+  <li><strong>Monitor temperatures</strong> and throttling</li>
+</ol>
+
+<h3 id="container-optimization">Container Optimization</h3>
+<ol>
+  <li><strong>Use GPU-optimized base images</strong></li>
+  <li><strong>Pre-install drivers and runtimes</strong></li>
+  <li><strong>Set appropriate resource limits</strong></li>
+  <li><strong>Use multi-stage builds</strong> for size optimization</li>
+  <li><strong>Enable GPU sharing</strong> where appropriate</li>
+</ol>
+
+<h3 id="cost-management">Cost Management</h3>
+<ol>
+  <li><strong>Implement auto-scaling</strong> based on workload</li>
+  <li><strong>Use spot instances</strong> for non-critical workloads</li>
+  <li><strong>Monitor unused resources</strong> and right-size</li>
+  <li><strong>Use reserved instances</strong> for predictable loads</li>
+  <li><strong>Implement cost alerts</strong> and budgets</li>
+</ol>
+
+<p>This comprehensive support enables Orbit-RS to leverage the full performance potential of modern GPU and CPU architectures across all major cloud providers, ensuring optimal performance and cost-effectiveness for diverse workloads.</p>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/orbit-rs/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Orbit-RS Documentation</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">TuringWorks</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

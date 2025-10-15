@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>GraphRAG Commands Reference | Orbit-RS Documentation</title>
+<meta name="generator" content="Jekyll v4.4.1" />
+<meta property="og:title" content="GraphRAG Commands Reference" />
+<meta name="author" content="TuringWorks" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<meta property="og:description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<link rel="canonical" href="https://turingworks.github.io/orbit-rs/graphrag-commands.html" />
+<meta property="og:url" content="https://turingworks.github.io/orbit-rs/graphrag-commands.html" />
+<meta property="og:site_name" content="Orbit-RS Documentation" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="GraphRAG Commands Reference" />
+<meta name="twitter:site" content="@TuringWorksAI" />
+<meta name="twitter:creator" content="@TuringWorks" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","author":{"@type":"Person","name":"TuringWorks"},"description":"The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform","headline":"GraphRAG Commands Reference","url":"https://turingworks.github.io/orbit-rs/graphrag-commands.html"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/orbit-rs/assets/main.css">
+  <link rel="stylesheet" href="/orbit-rs/assets/css/custom.css"><link type="application/atom+xml" rel="alternate" href="https://turingworks.github.io/orbit-rs/feed.xml" title="Orbit-RS Documentation" /></head><body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/orbit-rs/">Orbit-RS Documentation</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/orbit-rs/">Orbit-RS Documentation</a><a class="page-link" href="/orbit-rs/project_overview.html">Orbit-RS: Comprehensive Project Overview</a><a class="page-link" href="/orbit-rs/quick_start.html">Quick Start Guide - Multi-Protocol Database Server</a><a class="page-link" href="/orbit-rs/roadmap/">Development Roadmap</a><a class="page-link" href="/orbit-rs/features/">Orbit-RS Feature Index</a><a class="page-link" href="/orbit-rs/compute-acceleration/">Hardware Acceleration Guide</a><a class="page-link" href="/orbit-rs/contributing.html">Contributing Guide</a><a class="page-link" href="/orbit-rs/overview.html">Architecture Overview</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <h1 id="graphrag-commands-reference">GraphRAG Commands Reference</h1>
+
+<p>This document describes the GraphRAG (Graph-enhanced Retrieval-Augmented Generation) commands available in Orbit-RS via the RESP protocol.</p>
+
+<h2 id="overview">Overview</h2>
+
+<p>GraphRAG commands are available under the <code class="language-plaintext highlighter-rouge">GRAPHRAG.*</code> namespace and provide comprehensive knowledge graph construction and querying capabilities:</p>
+
+<ul>
+  <li><strong>GRAPHRAG.BUILD</strong> - Process documents to extract entities and build knowledge graph</li>
+  <li><strong>GRAPHRAG.QUERY</strong> - Execute RAG queries with graph traversal and LLM generation</li>
+  <li><strong>GRAPHRAG.EXTRACT</strong> - Extract entities and relationships without building graph</li>
+  <li><strong>GRAPHRAG.REASON</strong> - Find reasoning paths between entities</li>
+  <li><strong>GRAPHRAG.STATS</strong> - Get statistics about knowledge graph</li>
+  <li><strong>GRAPHRAG.ENTITIES</strong> - List entities in knowledge graph</li>
+  <li><strong>GRAPHRAG.SIMILAR</strong> - Find similar entities using vector embeddings</li>
+</ul>
+
+<h2 id="command-details">Command Details</h2>
+
+<h3 id="graphragbuild">GRAPHRAG.BUILD</h3>
+
+<p>Build a knowledge graph from a document by extracting entities and relationships.</p>
+
+<p><strong>Syntax:</strong></p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>GRAPHRAG.BUILD &lt;kg_name&gt; &lt;document_id&gt; &lt;text&gt; [metadata key value ...]
+</code></pre></div></div>
+
+<p><strong>Parameters:</strong></p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">kg_name</code> - Knowledge graph identifier</li>
+  <li><code class="language-plaintext highlighter-rouge">document_id</code> - Unique document identifier</li>
+  <li><code class="language-plaintext highlighter-rouge">text</code> - Document text content</li>
+  <li><code class="language-plaintext highlighter-rouge">metadata</code> - Optional key-value pairs for document metadata</li>
+</ul>
+
+<p><strong>Response:</strong> Array with processing statistics</p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">entities_extracted</code> - Number of entities extracted</li>
+  <li><code class="language-plaintext highlighter-rouge">relationships_extracted</code> - Number of relationships extracted</li>
+  <li><code class="language-plaintext highlighter-rouge">extractors_used</code> - Number of extractors applied</li>
+  <li><code class="language-plaintext highlighter-rouge">processing_time_ms</code> - Processing time in milliseconds</li>
+</ul>
+
+<p><strong>Example:</strong></p>
+<pre><code class="language-redis">GRAPHRAG.BUILD company_kg doc1 "Apple Inc. is a technology company founded by Steve Jobs. Microsoft Corporation is another major technology company." company "Apple Inc." industry "Technology"
+</code></pre>
+
+<h3 id="graphragquery">GRAPHRAG.QUERY</h3>
+
+<p>Execute a RAG query that combines graph traversal with LLM generation.</p>
+
+<p><strong>Syntax:</strong></p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>GRAPHRAG.QUERY &lt;kg_name&gt; &lt;query_text&gt; [MAX_HOPS &lt;hops&gt;] [CONTEXT_SIZE &lt;size&gt;] [LLM_PROVIDER &lt;provider&gt;] [INCLUDE_EXPLANATION]
+</code></pre></div></div>
+
+<p><strong>Parameters:</strong></p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">kg_name</code> - Knowledge graph identifier</li>
+  <li><code class="language-plaintext highlighter-rouge">query_text</code> - Natural language query</li>
+  <li><code class="language-plaintext highlighter-rouge">MAX_HOPS</code> - Maximum hops for graph traversal (optional)</li>
+  <li><code class="language-plaintext highlighter-rouge">CONTEXT_SIZE</code> - Maximum context size for LLM (optional)</li>
+  <li><code class="language-plaintext highlighter-rouge">LLM_PROVIDER</code> - LLM provider to use (optional)</li>
+  <li><code class="language-plaintext highlighter-rouge">INCLUDE_EXPLANATION</code> - Include reasoning paths in response (optional flag)</li>
+</ul>
+
+<p><strong>Response:</strong> Array with query results</p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">response</code> - Generated LLM response</li>
+  <li><code class="language-plaintext highlighter-rouge">confidence</code> - Confidence score (0.0-1.0)</li>
+  <li><code class="language-plaintext highlighter-rouge">processing_time_ms</code> - Total processing time</li>
+  <li><code class="language-plaintext highlighter-rouge">entities_involved</code> - Array of entities involved in reasoning</li>
+  <li><code class="language-plaintext highlighter-rouge">reasoning_paths</code> - Array of reasoning paths (if INCLUDE_EXPLANATION specified)</li>
+  <li><code class="language-plaintext highlighter-rouge">citations</code> - Array of source citations</li>
+</ul>
+
+<p><strong>Example:</strong></p>
+<pre><code class="language-redis">GRAPHRAG.QUERY company_kg "What is the relationship between Apple and technology?" MAX_HOPS 3 INCLUDE_EXPLANATION
+</code></pre>
+
+<h3 id="graphragextract">GRAPHRAG.EXTRACT</h3>
+
+<p>Extract entities and relationships from text without building the knowledge graph.</p>
+
+<p><strong>Syntax:</strong></p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>GRAPHRAG.EXTRACT &lt;kg_name&gt; &lt;document_id&gt; &lt;text&gt; [EXTRACTORS extractor1 extractor2 ...]
+</code></pre></div></div>
+
+<p><strong>Parameters:</strong></p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">kg_name</code> - Knowledge graph identifier</li>
+  <li><code class="language-plaintext highlighter-rouge">document_id</code> - Unique document identifier</li>
+  <li><code class="language-plaintext highlighter-rouge">text</code> - Document text content</li>
+  <li><code class="language-plaintext highlighter-rouge">EXTRACTORS</code> - Optional list of specific extractors to use</li>
+</ul>
+
+<p><strong>Response:</strong> Array with extraction statistics</p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">entities_extracted</code> - Number of entities extracted</li>
+  <li><code class="language-plaintext highlighter-rouge">relationships_extracted</code> - Number of relationships extracted</li>
+  <li><code class="language-plaintext highlighter-rouge">processing_time_ms</code> - Processing time in milliseconds</li>
+  <li><code class="language-plaintext highlighter-rouge">warnings</code> - Array of warning messages (if any)</li>
+</ul>
+
+<p><strong>Example:</strong></p>
+<pre><code class="language-redis">GRAPHRAG.EXTRACT company_kg doc2 "Tesla Inc. was founded by Elon Musk in 2003." EXTRACTORS regex_ner keyword_extraction
+</code></pre>
+
+<h3 id="graphragreason">GRAPHRAG.REASON</h3>
+
+<p>Find reasoning paths between two specific entities in the knowledge graph.</p>
+
+<p><strong>Syntax:</strong></p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>GRAPHRAG.REASON &lt;kg_name&gt; &lt;from_entity&gt; &lt;to_entity&gt; [MAX_HOPS &lt;hops&gt;] [INCLUDE_EXPLANATION]
+</code></pre></div></div>
+
+<p><strong>Parameters:</strong></p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">kg_name</code> - Knowledge graph identifier</li>
+  <li><code class="language-plaintext highlighter-rouge">from_entity</code> - Starting entity name</li>
+  <li><code class="language-plaintext highlighter-rouge">to_entity</code> - Target entity name</li>
+  <li><code class="language-plaintext highlighter-rouge">MAX_HOPS</code> - Maximum hops to traverse (optional)</li>
+  <li><code class="language-plaintext highlighter-rouge">INCLUDE_EXPLANATION</code> - Include explanations for paths (optional flag)</li>
+</ul>
+
+<p><strong>Response:</strong> Array with reasoning results</p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">from_entity</code> - Starting entity name</li>
+  <li><code class="language-plaintext highlighter-rouge">to_entity</code> - Target entity name</li>
+  <li><code class="language-plaintext highlighter-rouge">paths_found</code> - Number of reasoning paths discovered</li>
+  <li><code class="language-plaintext highlighter-rouge">paths</code> - Array of reasoning paths with nodes, relationships, scores, and explanations</li>
+</ul>
+
+<p><strong>Example:</strong></p>
+<pre><code class="language-redis">GRAPHRAG.REASON company_kg "Apple Inc." "Steve Jobs" MAX_HOPS 2 INCLUDE_EXPLANATION
+</code></pre>
+
+<h3 id="graphragstats">GRAPHRAG.STATS</h3>
+
+<p>Get comprehensive statistics about a knowledge graph.</p>
+
+<p><strong>Syntax:</strong></p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>GRAPHRAG.STATS &lt;kg_name&gt;
+</code></pre></div></div>
+
+<p><strong>Parameters:</strong></p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">kg_name</code> - Knowledge graph identifier</li>
+</ul>
+
+<p><strong>Response:</strong> Array with statistics</p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">kg_name</code> - Knowledge graph name</li>
+  <li><code class="language-plaintext highlighter-rouge">documents_processed</code> - Total documents processed</li>
+  <li><code class="language-plaintext highlighter-rouge">rag_queries_executed</code> - Total RAG queries executed</li>
+  <li><code class="language-plaintext highlighter-rouge">reasoning_queries_executed</code> - Total reasoning queries executed</li>
+  <li><code class="language-plaintext highlighter-rouge">entities_extracted</code> - Total entities extracted</li>
+  <li><code class="language-plaintext highlighter-rouge">relationships_extracted</code> - Total relationships extracted</li>
+  <li><code class="language-plaintext highlighter-rouge">avg_document_processing_time_ms</code> - Average document processing time</li>
+  <li><code class="language-plaintext highlighter-rouge">avg_rag_query_time_ms</code> - Average RAG query time</li>
+  <li><code class="language-plaintext highlighter-rouge">avg_reasoning_query_time_ms</code> - Average reasoning query time</li>
+  <li><code class="language-plaintext highlighter-rouge">rag_success_rate</code> - RAG query success rate</li>
+</ul>
+
+<p><strong>Example:</strong></p>
+<pre><code class="language-redis">GRAPHRAG.STATS company_kg
+</code></pre>
+
+<h3 id="graphragentities">GRAPHRAG.ENTITIES</h3>
+
+<p>List entities in the knowledge graph with optional filtering.</p>
+
+<p><strong>Syntax:</strong></p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>GRAPHRAG.ENTITIES &lt;kg_name&gt; [LIMIT &lt;limit&gt;] [ENTITY_TYPE &lt;type&gt;]
+</code></pre></div></div>
+
+<p><strong>Parameters:</strong></p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">kg_name</code> - Knowledge graph identifier</li>
+  <li><code class="language-plaintext highlighter-rouge">LIMIT</code> - Maximum number of entities to return (optional)</li>
+  <li><code class="language-plaintext highlighter-rouge">ENTITY_TYPE</code> - Filter by entity type (optional)</li>
+</ul>
+
+<p><strong>Response:</strong> Array with entity information</p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">kg_name</code> - Knowledge graph name</li>
+  <li><code class="language-plaintext highlighter-rouge">entities</code> - Array of entity details</li>
+  <li><code class="language-plaintext highlighter-rouge">total_count</code> - Total number of matching entities</li>
+</ul>
+
+<p><strong>Example:</strong></p>
+<pre><code class="language-redis">GRAPHRAG.ENTITIES company_kg LIMIT 10 ENTITY_TYPE person
+</code></pre>
+
+<h3 id="graphragsimilar">GRAPHRAG.SIMILAR</h3>
+
+<p>Find entities similar to a given entity using vector embeddings.</p>
+
+<p><strong>Syntax:</strong></p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>GRAPHRAG.SIMILAR &lt;kg_name&gt; &lt;entity_name&gt; [LIMIT &lt;limit&gt;] [THRESHOLD &lt;threshold&gt;]
+</code></pre></div></div>
+
+<p><strong>Parameters:</strong></p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">kg_name</code> - Knowledge graph identifier</li>
+  <li><code class="language-plaintext highlighter-rouge">entity_name</code> - Entity name to find similar entities for</li>
+  <li><code class="language-plaintext highlighter-rouge">LIMIT</code> - Maximum number of similar entities to return (optional)</li>
+  <li><code class="language-plaintext highlighter-rouge">THRESHOLD</code> - Similarity threshold (0.0-1.0, optional)</li>
+</ul>
+
+<p><strong>Response:</strong> Array with similarity results</p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">entity_name</code> - Query entity name</li>
+  <li><code class="language-plaintext highlighter-rouge">kg_name</code> - Knowledge graph name</li>
+  <li><code class="language-plaintext highlighter-rouge">similar_entities</code> - Array of similar entities with similarity scores</li>
+  <li><code class="language-plaintext highlighter-rouge">threshold_used</code> - Similarity threshold applied</li>
+</ul>
+
+<p><strong>Example:</strong></p>
+<pre><code class="language-redis">GRAPHRAG.SIMILAR company_kg "Apple Inc." LIMIT 5 THRESHOLD 0.8
+</code></pre>
+
+<h2 id="usage-patterns">Usage Patterns</h2>
+
+<h3 id="building-a-knowledge-graph">Building a Knowledge Graph</h3>
+
+<ol>
+  <li>First, build the knowledge graph from documents:
+    <pre><code class="language-redis">GRAPHRAG.BUILD my_kg doc1 "Your document content here..."
+GRAPHRAG.BUILD my_kg doc2 "More document content..."
+</code></pre>
+  </li>
+  <li>Check statistics:
+    <pre><code class="language-redis">GRAPHRAG.STATS my_kg
+</code></pre>
+  </li>
+</ol>
+
+<h3 id="querying-with-rag">Querying with RAG</h3>
+
+<ol>
+  <li>Execute natural language queries:
+    <pre><code class="language-redis">GRAPHRAG.QUERY my_kg "What are the main relationships in the data?" INCLUDE_EXPLANATION
+</code></pre>
+  </li>
+  <li>Find specific connections:
+    <pre><code class="language-redis">GRAPHRAG.REASON my_kg "Entity A" "Entity B" MAX_HOPS 3
+</code></pre>
+  </li>
+</ol>
+
+<h3 id="entity-analysis">Entity Analysis</h3>
+
+<ol>
+  <li>List entities by type:
+    <pre><code class="language-redis">GRAPHRAG.ENTITIES my_kg ENTITY_TYPE person LIMIT 20
+</code></pre>
+  </li>
+  <li>Find similar entities:
+    <pre><code class="language-redis">GRAPHRAG.SIMILAR my_kg "Important Entity" THRESHOLD 0.7
+</code></pre>
+  </li>
+</ol>
+
+<h2 id="performance-notes">Performance Notes</h2>
+
+<ul>
+  <li><strong>Document Processing</strong>: Entity extraction and graph construction are computationally intensive</li>
+  <li><strong>RAG Queries</strong>: Combine graph traversal, vector search, and LLM generation - expect higher latency</li>
+  <li><strong>Caching</strong>: Results are cached where possible to improve performance</li>
+  <li><strong>Batch Processing</strong>: Consider processing multiple documents before querying for better efficiency</li>
+</ul>
+
+<h2 id="error-handling">Error Handling</h2>
+
+<p>All GraphRAG commands return detailed error messages for common issues:</p>
+
+<ul>
+  <li>Invalid knowledge graph names</li>
+  <li>Malformed query text</li>
+  <li>Missing required parameters</li>
+  <li>Processing timeouts</li>
+  <li>Resource limitations</li>
+</ul>
+
+<p>Check the response for error messages and adjust parameters accordingly.</p>
+
+<h2 id="integration-examples">Integration Examples</h2>
+
+<h3 id="python-using-redis-py">Python (using redis-py)</h3>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">import</span> <span class="n">redis</span>
+
+<span class="c1"># Connect to Orbit-RS RESP server
+</span><span class="n">client</span> <span class="o">=</span> <span class="n">redis</span><span class="p">.</span><span class="nc">Redis</span><span class="p">(</span><span class="n">host</span><span class="o">=</span><span class="sh">'</span><span class="s">localhost</span><span class="sh">'</span><span class="p">,</span> <span class="n">port</span><span class="o">=</span><span class="mi">6379</span><span class="p">)</span>
+
+<span class="c1"># Build knowledge graph
+</span><span class="n">result</span> <span class="o">=</span> <span class="n">client</span><span class="p">.</span><span class="nf">execute_command</span><span class="p">(</span>
+    <span class="sh">'</span><span class="s">GRAPHRAG.BUILD</span><span class="sh">'</span><span class="p">,</span> <span class="sh">'</span><span class="s">my_kg</span><span class="sh">'</span><span class="p">,</span> <span class="sh">'</span><span class="s">doc1</span><span class="sh">'</span><span class="p">,</span> 
+    <span class="sh">'</span><span class="s">Apple Inc. is a technology company founded by Steve Jobs.</span><span class="sh">'</span>
+<span class="p">)</span>
+<span class="nf">print</span><span class="p">(</span><span class="sa">f</span><span class="sh">"</span><span class="s">Entities extracted: </span><span class="si">{</span><span class="n">result</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="sh">"</span><span class="p">)</span>
+
+<span class="c1"># Query the graph
+</span><span class="n">response</span> <span class="o">=</span> <span class="n">client</span><span class="p">.</span><span class="nf">execute_command</span><span class="p">(</span>
+    <span class="sh">'</span><span class="s">GRAPHRAG.QUERY</span><span class="sh">'</span><span class="p">,</span> <span class="sh">'</span><span class="s">my_kg</span><span class="sh">'</span><span class="p">,</span> 
+    <span class="sh">'</span><span class="s">Tell me about Apple Inc.</span><span class="sh">'</span><span class="p">,</span>
+    <span class="sh">'</span><span class="s">INCLUDE_EXPLANATION</span><span class="sh">'</span>
+<span class="p">)</span>
+<span class="nf">print</span><span class="p">(</span><span class="sa">f</span><span class="sh">"</span><span class="s">Response: </span><span class="si">{</span><span class="n">response</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="sh">"</span><span class="p">)</span>
+</code></pre></div></div>
+
+<h3 id="nodejs-using-ioredis">Node.js (using ioredis)</h3>
+
+<div class="language-javascript highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">Redis</span> <span class="o">=</span> <span class="nf">require</span><span class="p">(</span><span class="dl">'</span><span class="s1">ioredis</span><span class="dl">'</span><span class="p">);</span>
+<span class="kd">const</span> <span class="nx">client</span> <span class="o">=</span> <span class="k">new</span> <span class="nc">Redis</span><span class="p">();</span>
+
+<span class="c1">// Build knowledge graph</span>
+<span class="kd">const</span> <span class="nx">buildResult</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">client</span><span class="p">.</span><span class="nf">call</span><span class="p">(</span>
+    <span class="dl">'</span><span class="s1">GRAPHRAG.BUILD</span><span class="dl">'</span><span class="p">,</span> <span class="dl">'</span><span class="s1">my_kg</span><span class="dl">'</span><span class="p">,</span> <span class="dl">'</span><span class="s1">doc1</span><span class="dl">'</span><span class="p">,</span>
+    <span class="dl">'</span><span class="s1">Microsoft Corporation is a technology company.</span><span class="dl">'</span>
+<span class="p">);</span>
+<span class="nx">console</span><span class="p">.</span><span class="nf">log</span><span class="p">(</span><span class="s2">`Relationships extracted: </span><span class="p">${</span><span class="nx">buildResult</span><span class="p">[</span><span class="mi">3</span><span class="p">]}</span><span class="s2">`</span><span class="p">);</span>
+
+<span class="c1">// Query with reasoning</span>
+<span class="kd">const</span> <span class="nx">queryResult</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">client</span><span class="p">.</span><span class="nf">call</span><span class="p">(</span>
+    <span class="dl">'</span><span class="s1">GRAPHRAG.QUERY</span><span class="dl">'</span><span class="p">,</span> <span class="dl">'</span><span class="s1">my_kg</span><span class="dl">'</span><span class="p">,</span>
+    <span class="dl">'</span><span class="s1">What companies are mentioned?</span><span class="dl">'</span><span class="p">,</span>
+    <span class="dl">'</span><span class="s1">MAX_HOPS</span><span class="dl">'</span><span class="p">,</span> <span class="mi">2</span>
+<span class="p">);</span>
+<span class="nx">console</span><span class="p">.</span><span class="nf">log</span><span class="p">(</span><span class="s2">`Query response: </span><span class="p">${</span><span class="nx">queryResult</span><span class="p">[</span><span class="mi">1</span><span class="p">]}</span><span class="s2">`</span><span class="p">);</span>
+</code></pre></div></div>
+
+<p>This comprehensive GraphRAG implementation provides powerful knowledge graph construction and querying capabilities through familiar Redis-compatible commands.</p>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/orbit-rs/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Orbit-RS Documentation</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">TuringWorks</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

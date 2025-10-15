@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Kubernetes Storage Guide for Orbit-RS | Orbit-RS Documentation</title>
+<meta name="generator" content="Jekyll v4.4.1" />
+<meta property="og:title" content="Kubernetes Storage Guide for Orbit-RS" />
+<meta name="author" content="TuringWorks" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<meta property="og:description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<link rel="canonical" href="https://turingworks.github.io/orbit-rs/KUBERNETES_STORAGE_GUIDE.html" />
+<meta property="og:url" content="https://turingworks.github.io/orbit-rs/KUBERNETES_STORAGE_GUIDE.html" />
+<meta property="og:site_name" content="Orbit-RS Documentation" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Kubernetes Storage Guide for Orbit-RS" />
+<meta name="twitter:site" content="@TuringWorksAI" />
+<meta name="twitter:creator" content="@TuringWorks" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","author":{"@type":"Person","name":"TuringWorks"},"description":"The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform","headline":"Kubernetes Storage Guide for Orbit-RS","url":"https://turingworks.github.io/orbit-rs/KUBERNETES_STORAGE_GUIDE.html"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/orbit-rs/assets/main.css">
+  <link rel="stylesheet" href="/orbit-rs/assets/css/custom.css"><link type="application/atom+xml" rel="alternate" href="https://turingworks.github.io/orbit-rs/feed.xml" title="Orbit-RS Documentation" /></head><body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/orbit-rs/">Orbit-RS Documentation</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/orbit-rs/">Orbit-RS Documentation</a><a class="page-link" href="/orbit-rs/project_overview.html">Orbit-RS: Comprehensive Project Overview</a><a class="page-link" href="/orbit-rs/quick_start.html">Quick Start Guide - Multi-Protocol Database Server</a><a class="page-link" href="/orbit-rs/roadmap/">Development Roadmap</a><a class="page-link" href="/orbit-rs/features/">Orbit-RS Feature Index</a><a class="page-link" href="/orbit-rs/compute-acceleration/">Hardware Acceleration Guide</a><a class="page-link" href="/orbit-rs/contributing.html">Contributing Guide</a><a class="page-link" href="/orbit-rs/overview.html">Architecture Overview</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <h1 id="kubernetes-storage-guide-for-orbit-rs">Kubernetes Storage Guide for Orbit-RS</h1>
+
+<h2 id="-tldr---what-you-need-to-know">🎯 <strong>TL;DR - What You Need to Know</strong></h2>
+
+<p><strong>✅ Current Status</strong>: Basic local storage (PVC) works<br />
+<strong>✅ Enhanced</strong>: Now supports all backends (Memory, LSM-Tree, RocksDB, S3, Azure, GCP)<br />
+<strong>✅ Provided</strong>: Enhanced manifests, Helm chart guidance, and updated Operator CRDs</p>
+
+<h2 id="-storage-backend-overview">📋 <strong>Storage Backend Overview</strong></h2>
+
+<h3 id="local-storage-backends-require-persistentvolumes"><strong>Local Storage Backends</strong> (Require PersistentVolumes)</h3>
+<ul>
+  <li><strong>Memory</strong> (with disk backup)</li>
+  <li><strong>Copy-on-Write B+ Tree</strong></li>
+  <li><strong>LSM-Tree</strong></li>
+  <li><strong>RocksDB</strong></li>
+</ul>
+
+<p><strong>Kubernetes Requirements</strong>: StatefulSet + PVC + SSD StorageClass</p>
+
+<h3 id="cloud-storage-backends-no-persistentvolumes"><strong>Cloud Storage Backends</strong> (No PersistentVolumes)</h3>
+<ul>
+  <li><strong>S3</strong> (AWS, MinIO)</li>
+  <li><strong>Azure Blob Storage</strong></li>
+  <li><strong>Google Cloud Storage</strong></li>
+</ul>
+
+<p><strong>Kubernetes Requirements</strong>: Deployment + Secrets (no PVC needed)</p>
+
+<h2 id="-implementation-changes-made">🔧 <strong>Implementation Changes Made</strong></h2>
+
+<h3 id="1-enhanced-configuration">1. <strong>Enhanced Configuration</strong></h3>
+
+<p><strong>File</strong>: <a href="file:///Users/ravindraboddipalli/sources/orbit-rs/k8s/01-configmap-enhanced.yaml"><code class="language-plaintext highlighter-rouge">k8s/01-configmap-enhanced.yaml</code></a></p>
+
+<p><strong>Key Features</strong>:</p>
+<ul>
+  <li>✅ Environment variable-driven backend selection</li>
+  <li>✅ Configuration sections for all persistence backends</li>
+  <li>✅ Intelligent entrypoint script that creates directories based on backend</li>
+  <li>✅ Health checks that vary by backend type</li>
+</ul>
+
+<p><strong>Example Environment Variables</strong>:</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Backend Selection</span>
+<span class="nv">ORBIT_PERSISTENCE_BACKEND</span><span class="o">=</span>lsm_tree
+
+<span class="c"># LSM-Tree Configuration</span>
+<span class="nv">ORBIT_LSM_DATA_DIR</span><span class="o">=</span>/app/data/lsm_tree
+<span class="nv">ORBIT_LSM_MEMTABLE_SIZE</span><span class="o">=</span>67108864
+<span class="nv">ORBIT_LSM_ENABLE_COMPACTION</span><span class="o">=</span><span class="nb">true</span>
+
+<span class="c"># S3 Configuration (from secrets)</span>
+<span class="nv">ORBIT_S3_ENDPOINT</span><span class="o">=</span>https://s3.amazonaws.com
+<span class="nv">ORBIT_S3_BUCKET</span><span class="o">=</span>orbit-production-state
+<span class="nv">ORBIT_S3_ACCESS_KEY_ID</span><span class="o">=</span>&lt;from-secret&gt;
+</code></pre></div></div>
+
+<h3 id="2-enhanced-statefulset">2. <strong>Enhanced StatefulSet</strong></h3>
+
+<p><strong>File</strong>: <a href="file:///Users/ravindraboddipalli/sources/orbit-rs/k8s/03-statefulset-enhanced.yaml"><code class="language-plaintext highlighter-rouge">k8s/03-statefulset-enhanced.yaml</code></a></p>
+
+<p><strong>Key Features</strong>:</p>
+<ul>
+  <li>✅ All persistence backend environment variables pre-configured</li>
+  <li>✅ Secrets integration for cloud backends</li>
+  <li>✅ Flexible volume mounts</li>
+  <li>✅ Alternative Deployment for cloud-only backends</li>
+</ul>
+
+<h3 id="3-enhanced-kubernetes-operator">3. <strong>Enhanced Kubernetes Operator</strong></h3>
+
+<p><strong>File</strong>: <a href="file:///Users/ravindraboddipalli/sources/orbit-rs/orbit-operator/src/crd.rs"><code class="language-plaintext highlighter-rouge">orbit-operator/src/crd.rs</code></a></p>
+
+<p><strong>Key Features</strong>:</p>
+<ul>
+  <li>✅ PersistenceConfig added to OrbitCluster CRD</li>
+  <li>✅ Support for memory, local, and cloud storage configurations</li>
+  <li>✅ Type-safe configuration with defaults</li>
+</ul>
+
+<h2 id="-deployment-examples">🚀 <strong>Deployment Examples</strong></h2>
+
+<h3 id="option-1-raw-kubernetes-manifests"><strong>Option 1: Raw Kubernetes Manifests</strong></h3>
+
+<h4 id="lsm-tree-backend-high-performance-local-storage"><strong>LSM-Tree Backend</strong> (High-performance local storage)</h4>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># 1. Apply base manifests</span>
+kubectl apply <span class="nt">-f</span> k8s/00-namespace.yaml
+kubectl apply <span class="nt">-f</span> k8s/02-storage.yaml  <span class="c"># Creates SSD StorageClass</span>
+
+<span class="c"># 2. Apply enhanced configuration</span>
+kubectl apply <span class="nt">-f</span> k8s/01-configmap-enhanced.yaml
+
+<span class="c"># 3. Modify StatefulSet for LSM-Tree</span>
+kubectl apply <span class="nt">-f</span> - <span class="o">&lt;&lt;</span><span class="no">EOF</span><span class="sh">
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: orbit-server
+  namespace: orbit-rs
+
+# ... (copy from 03-statefulset-enhanced.yaml)
+spec:
+  template:
+    spec:
+      containers:
+      - name: orbit-server
+        env:
+        - name: ORBIT_PERSISTENCE_BACKEND
+          value: "lsm_tree"
+        - name: ORBIT_LSM_MEMTABLE_SIZE
+          value: "134217728"  # 128MB for high throughput
+        - name: ORBIT_LSM_MAX_MEMTABLES
+          value: "16"
+        # ... other LSM-Tree configs
+</span><span class="no">EOF
+</span></code></pre></div></div>
+
+<h4 id="s3-backend-cloud-storage"><strong>S3 Backend</strong> (Cloud storage)</h4>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># 1. Create S3 credentials secret</span>
+kubectl create secret generic orbit-server-secrets <span class="nt">-n</span> orbit-rs <span class="se">\</span>
+  <span class="nt">--from-literal</span><span class="o">=</span>s3-access-key-id<span class="o">=</span><span class="s2">"AKIA..."</span> <span class="se">\</span>
+  <span class="nt">--from-literal</span><span class="o">=</span>s3-secret-access-key<span class="o">=</span><span class="s2">"xyz..."</span>
+
+<span class="c"># 2. Use Deployment instead of StatefulSet (no PVC needed)</span>
+kubectl apply <span class="nt">-f</span> - <span class="o">&lt;&lt;</span><span class="no">EOF</span><span class="sh">
+apiVersion: apps/v1
+kind: Deployment  # Note: Deployment, not StatefulSet
+metadata:
+  name: orbit-server-s3
+  namespace: orbit-rs
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: orbit-server
+        env:
+        - name: ORBIT_PERSISTENCE_BACKEND
+          value: "s3"
+        - name: ORBIT_S3_ENDPOINT
+          value: "https://s3.amazonaws.com"
+        - name: ORBIT_S3_REGION
+          value: "us-west-2"
+        - name: ORBIT_S3_BUCKET
+          value: "orbit-production-state"
+        # Secrets mounted automatically from enhanced config
+</span><span class="no">EOF
+</span></code></pre></div></div>
+
+<h3 id="option-2-helm-chart"><strong>Option 2: Helm Chart</strong></h3>
+
+<h4 id="rocksdb-backend-production-database"><strong>RocksDB Backend</strong> (Production database)</h4>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c1"># values-rocksdb.yaml</span>
+<span class="na">orbitServer</span><span class="pi">:</span>
+  <span class="na">replicaCount</span><span class="pi">:</span> <span class="m">5</span>  <span class="c1"># Scale up for production</span>
+  <span class="na">env</span><span class="pi">:</span>
+    <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">ORBIT_PERSISTENCE_BACKEND</span>
+      <span class="na">value</span><span class="pi">:</span> <span class="s2">"</span><span class="s">rocksdb"</span>
+    <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">ORBIT_ROCKSDB_WRITE_BUFFER_SIZE</span>
+      <span class="na">value</span><span class="pi">:</span> <span class="s2">"</span><span class="s">268435456"</span>  <span class="c1"># 256MB</span>
+    <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">ORBIT_ROCKSDB_BLOCK_CACHE_SIZE</span>
+      <span class="na">value</span><span class="pi">:</span> <span class="s2">"</span><span class="s">536870912"</span>  <span class="c1"># 512MB</span>
+    <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">ORBIT_ROCKSDB_MAX_BACKGROUND_JOBS</span>
+      <span class="na">value</span><span class="pi">:</span> <span class="s2">"</span><span class="s">8"</span>
+  
+  <span class="na">resources</span><span class="pi">:</span>
+    <span class="na">requests</span><span class="pi">:</span>
+      <span class="na">memory</span><span class="pi">:</span> <span class="s2">"</span><span class="s">1Gi"</span>
+      <span class="na">cpu</span><span class="pi">:</span> <span class="s2">"</span><span class="s">500m"</span>
+    <span class="na">limits</span><span class="pi">:</span>
+      <span class="na">memory</span><span class="pi">:</span> <span class="s2">"</span><span class="s">4Gi"</span>
+      <span class="na">cpu</span><span class="pi">:</span> <span class="s2">"</span><span class="s">2000m"</span>
+
+<span class="na">persistence</span><span class="pi">:</span>
+  <span class="na">enabled</span><span class="pi">:</span> <span class="kc">true</span>
+  <span class="na">storageClass</span><span class="pi">:</span> <span class="s2">"</span><span class="s">gp3"</span>
+  <span class="na">size</span><span class="pi">:</span> <span class="s">100Gi</span>
+
+<span class="c1"># Deploy</span>
+<span class="s">helm install orbit-rs ./helm/orbit-rs -f values-rocksdb.yaml</span>
+</code></pre></div></div>
+
+<h4 id="azure-backend-cloud-storage"><strong>Azure Backend</strong> (Cloud storage)</h4>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c1"># values-azure.yaml</span>
+<span class="na">orbitServer</span><span class="pi">:</span>
+  <span class="na">env</span><span class="pi">:</span>
+    <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">ORBIT_PERSISTENCE_BACKEND</span>
+      <span class="na">value</span><span class="pi">:</span> <span class="s2">"</span><span class="s">azure"</span>
+    <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">ORBIT_AZURE_ACCOUNT_NAME</span>
+      <span class="na">value</span><span class="pi">:</span> <span class="s2">"</span><span class="s">myorbitaccount"</span>
+    <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">ORBIT_AZURE_CONTAINER_NAME</span>
+      <span class="na">value</span><span class="pi">:</span> <span class="s2">"</span><span class="s">orbit-data"</span>
+
+<span class="na">persistence</span><span class="pi">:</span>
+  <span class="na">enabled</span><span class="pi">:</span> <span class="kc">false</span>  <span class="c1"># No PVC needed for cloud</span>
+
+<span class="c1"># Create Azure secret first</span>
+<span class="s">kubectl create secret generic orbit-server-secrets -n orbit-rs \</span>
+  <span class="s">--from-literal=azure-account-key="abcd1234..."</span>
+
+<span class="s">helm install orbit-rs ./helm/orbit-rs -f values-azure.yaml</span>
+</code></pre></div></div>
+
+<h3 id="option-3-kubernetes-operator"><strong>Option 3: Kubernetes Operator</strong></h3>
+
+<h4 id="lsm-tree-with-high-performance"><strong>LSM-Tree with High Performance</strong></h4>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">apiVersion</span><span class="pi">:</span> <span class="s">orbit.turingworks.com/v1</span>
+<span class="na">kind</span><span class="pi">:</span> <span class="s">OrbitCluster</span>
+<span class="na">metadata</span><span class="pi">:</span>
+  <span class="na">name</span><span class="pi">:</span> <span class="s">production-cluster</span>
+  <span class="na">namespace</span><span class="pi">:</span> <span class="s">orbit-rs</span>
+<span class="na">spec</span><span class="pi">:</span>
+  <span class="na">replicas</span><span class="pi">:</span> <span class="m">5</span>
+  <span class="na">image</span><span class="pi">:</span>
+    <span class="na">repository</span><span class="pi">:</span> <span class="s">orbit-rs/orbit-server</span>
+    <span class="na">tag</span><span class="pi">:</span> <span class="s2">"</span><span class="s">v1.0.0"</span>
+  
+  <span class="c1"># Persistence configuration</span>
+  <span class="na">persistence</span><span class="pi">:</span>
+    <span class="na">backend</span><span class="pi">:</span> <span class="s2">"</span><span class="s">lsm_tree"</span>
+    <span class="na">local</span><span class="pi">:</span>
+      <span class="na">backend_type</span><span class="pi">:</span> <span class="s2">"</span><span class="s">lsm_tree"</span>
+      <span class="na">data_dir</span><span class="pi">:</span> <span class="s2">"</span><span class="s">/app/data/lsm_tree"</span>
+      <span class="na">enable_compression</span><span class="pi">:</span> <span class="kc">true</span>
+      <span class="na">write_buffer_size</span><span class="pi">:</span> <span class="m">268435456</span>   <span class="c1"># 256MB</span>
+      <span class="na">cache_size</span><span class="pi">:</span> <span class="m">536870912</span>          <span class="c1"># 512MB</span>
+      <span class="na">config</span><span class="pi">:</span>
+        <span class="na">memtable_size_limit</span><span class="pi">:</span> <span class="s2">"</span><span class="s">134217728"</span>    <span class="c1"># 128MB</span>
+        <span class="na">max_memtables</span><span class="pi">:</span> <span class="s2">"</span><span class="s">16"</span>
+        <span class="na">compaction_threshold</span><span class="pi">:</span> <span class="s2">"</span><span class="s">8"</span>
+        <span class="na">bloom_filter_fp_rate</span><span class="pi">:</span> <span class="s2">"</span><span class="s">0.001"</span>
+  
+  <span class="na">resources</span><span class="pi">:</span>
+    <span class="na">cpuRequest</span><span class="pi">:</span> <span class="s2">"</span><span class="s">1000m"</span>
+    <span class="na">memoryRequest</span><span class="pi">:</span> <span class="s2">"</span><span class="s">2Gi"</span>
+    <span class="na">cpuLimit</span><span class="pi">:</span> <span class="s2">"</span><span class="s">4000m"</span>
+    <span class="na">memoryLimit</span><span class="pi">:</span> <span class="s2">"</span><span class="s">8Gi"</span>
+  
+  <span class="na">storage</span><span class="pi">:</span>
+    <span class="na">storageClass</span><span class="pi">:</span> <span class="s2">"</span><span class="s">premium-ssd"</span>
+    <span class="na">size</span><span class="pi">:</span> <span class="s2">"</span><span class="s">200Gi"</span>
+    <span class="na">accessMode</span><span class="pi">:</span> <span class="s2">"</span><span class="s">ReadWriteOnce"</span>
+</code></pre></div></div>
+
+<h4 id="s3-with-multi-region"><strong>S3 with Multi-Region</strong></h4>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">apiVersion</span><span class="pi">:</span> <span class="s">orbit.turingworks.com/v1</span>
+<span class="na">kind</span><span class="pi">:</span> <span class="s">OrbitCluster</span>
+<span class="na">metadata</span><span class="pi">:</span>
+  <span class="na">name</span><span class="pi">:</span> <span class="s">s3-cluster</span>
+  <span class="na">namespace</span><span class="pi">:</span> <span class="s">orbit-rs</span>
+<span class="na">spec</span><span class="pi">:</span>
+  <span class="na">replicas</span><span class="pi">:</span> <span class="m">3</span>
+  
+  <span class="na">persistence</span><span class="pi">:</span>
+    <span class="na">backend</span><span class="pi">:</span> <span class="s2">"</span><span class="s">s3"</span>
+    <span class="na">cloud</span><span class="pi">:</span>
+      <span class="na">provider</span><span class="pi">:</span> <span class="s2">"</span><span class="s">s3"</span>
+      <span class="na">endpoint</span><span class="pi">:</span> <span class="s2">"</span><span class="s">https://s3.amazonaws.com"</span>
+      <span class="na">region</span><span class="pi">:</span> <span class="s2">"</span><span class="s">us-west-2"</span>
+      <span class="na">bucket</span><span class="pi">:</span> <span class="s2">"</span><span class="s">orbit-global-state"</span>
+      <span class="na">prefix</span><span class="pi">:</span> <span class="s2">"</span><span class="s">production"</span>
+      <span class="na">connection_timeout</span><span class="pi">:</span> <span class="m">30</span>
+      <span class="na">retry_count</span><span class="pi">:</span> <span class="m">5</span>
+      <span class="na">enable_ssl</span><span class="pi">:</span> <span class="kc">true</span>
+      <span class="na">credentials_secret</span><span class="pi">:</span> <span class="s2">"</span><span class="s">orbit-s3-credentials"</span>
+  
+  <span class="c1"># No storage section needed for cloud backends</span>
+</code></pre></div></div>
+
+<h2 id="-storage-requirements-by-backend">📊 <strong>Storage Requirements by Backend</strong></h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>Backend</th>
+      <th>Kubernetes Resource</th>
+      <th>Volume Type</th>
+      <th>Size Recommendation</th>
+      <th>IOPS Requirement</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Memory</strong></td>
+      <td>StatefulSet</td>
+      <td>Small PVC (backup)</td>
+      <td>1-10Gi</td>
+      <td>Low</td>
+    </tr>
+    <tr>
+      <td><strong>COW B+Tree</strong></td>
+      <td>StatefulSet</td>
+      <td>SSD PVC</td>
+      <td>10-100Gi</td>
+      <td>Medium</td>
+    </tr>
+    <tr>
+      <td><strong>LSM-Tree</strong></td>
+      <td>StatefulSet</td>
+      <td>High-IOPS SSD</td>
+      <td>50-500Gi</td>
+      <td>High</td>
+    </tr>
+    <tr>
+      <td><strong>RocksDB</strong></td>
+      <td>StatefulSet</td>
+      <td>Premium SSD</td>
+      <td>100-1000Gi</td>
+      <td>Very High</td>
+    </tr>
+    <tr>
+      <td><strong>S3</strong></td>
+      <td>Deployment</td>
+      <td>None</td>
+      <td>N/A</td>
+      <td>N/A</td>
+    </tr>
+    <tr>
+      <td><strong>Azure</strong></td>
+      <td>Deployment</td>
+      <td>None</td>
+      <td>N/A</td>
+      <td>N/A</td>
+    </tr>
+    <tr>
+      <td><strong>GCP</strong></td>
+      <td>Deployment</td>
+      <td>None</td>
+      <td>N/A</td>
+      <td>N/A</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="️-security-considerations">🛡️ <strong>Security Considerations</strong></h2>
+
+<h3 id="secrets-management"><strong>Secrets Management</strong></h3>
+
+<p><strong>For Cloud Backends</strong>, create secrets:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># S3</span>
+kubectl create secret generic orbit-server-secrets <span class="se">\</span>
+  <span class="nt">--from-literal</span><span class="o">=</span>s3-access-key-id<span class="o">=</span><span class="s2">"AKIA..."</span> <span class="se">\</span>
+  <span class="nt">--from-literal</span><span class="o">=</span>s3-secret-access-key<span class="o">=</span><span class="s2">"xyz..."</span>
+
+<span class="c"># Azure</span>
+kubectl create secret generic orbit-server-secrets <span class="se">\</span>
+  <span class="nt">--from-literal</span><span class="o">=</span>azure-account-key<span class="o">=</span><span class="s2">"abcd..."</span>
+
+<span class="c"># GCP</span>
+kubectl create secret generic orbit-server-secrets <span class="se">\</span>
+  <span class="nt">--from-file</span><span class="o">=</span>gcp-service-account-key<span class="o">=</span>./service-account.json
+</code></pre></div></div>
+
+<h3 id="rbac-requirements"><strong>RBAC Requirements</strong></h3>
+
+<p>The Orbit-RS pods need these permissions:</p>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c1"># Already included in orbit-server ServiceAccount</span>
+<span class="na">rules</span><span class="pi">:</span>
+<span class="pi">-</span> <span class="na">apiGroups</span><span class="pi">:</span> <span class="pi">[</span><span class="s2">"</span><span class="s">"</span><span class="pi">]</span>
+  <span class="na">resources</span><span class="pi">:</span> <span class="pi">[</span><span class="s2">"</span><span class="s">pods"</span><span class="pi">,</span> <span class="s2">"</span><span class="s">endpoints"</span><span class="pi">]</span>
+  <span class="na">verbs</span><span class="pi">:</span> <span class="pi">[</span><span class="s2">"</span><span class="s">get"</span><span class="pi">,</span> <span class="s2">"</span><span class="s">list"</span><span class="pi">,</span> <span class="s2">"</span><span class="s">watch"</span><span class="pi">]</span>
+<span class="pi">-</span> <span class="na">apiGroups</span><span class="pi">:</span> <span class="pi">[</span><span class="s2">"</span><span class="s">coordination.k8s.io"</span><span class="pi">]</span>
+  <span class="na">resources</span><span class="pi">:</span> <span class="pi">[</span><span class="s2">"</span><span class="s">leases"</span><span class="pi">]</span>
+  <span class="na">verbs</span><span class="pi">:</span> <span class="pi">[</span><span class="s2">"</span><span class="s">get"</span><span class="pi">,</span> <span class="s2">"</span><span class="s">list"</span><span class="pi">,</span> <span class="s2">"</span><span class="s">watch"</span><span class="pi">,</span> <span class="s2">"</span><span class="s">create"</span><span class="pi">,</span> <span class="s2">"</span><span class="s">update"</span><span class="pi">,</span> <span class="s2">"</span><span class="s">patch"</span><span class="pi">,</span> <span class="s2">"</span><span class="s">delete"</span><span class="pi">]</span>
+</code></pre></div></div>
+
+<h2 id="-troubleshooting">🔍 <strong>Troubleshooting</strong></h2>
+
+<h3 id="common-issues"><strong>Common Issues</strong></h3>
+
+<ol>
+  <li><strong>PVC not binding</strong>
+    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>kubectl get pv,pvc <span class="nt">-n</span> orbit-rs
+<span class="c"># Check StorageClass availability</span>
+kubectl get storageclass
+</code></pre></div>    </div>
+  </li>
+  <li><strong>Backend not starting</strong>
+    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Check logs</span>
+kubectl logs <span class="nt">-n</span> orbit-rs orbit-server-0
+<span class="c"># Look for: "Starting Orbit-RS server with persistence backend: xxx"</span>
+</code></pre></div>    </div>
+  </li>
+  <li><strong>Cloud authentication failures</strong>
+    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Verify secrets exist</span>
+kubectl get secrets <span class="nt">-n</span> orbit-rs orbit-server-secrets <span class="nt">-o</span> yaml
+<span class="c"># Check secret keys match expected names</span>
+</code></pre></div>    </div>
+  </li>
+</ol>
+
+<h3 id="health-check-endpoints"><strong>Health Check Endpoints</strong></h3>
+
+<p>The enhanced health checks provide backend-specific information:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Basic health</span>
+curl http://pod-ip:8080/health
+
+<span class="c"># Detailed health (includes persistence backend status)</span>
+curl http://pod-ip:8080/health/ready
+</code></pre></div></div>
+
+<h2 id="-performance-tuning">📈 <strong>Performance Tuning</strong></h2>
+
+<h3 id="local-storage-backends"><strong>Local Storage Backends</strong></h3>
+
+<p><strong>LSM-Tree</strong>: High write throughput</p>
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">env</span><span class="pi">:</span>
+<span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">ORBIT_LSM_MEMTABLE_SIZE</span>
+  <span class="na">value</span><span class="pi">:</span> <span class="s2">"</span><span class="s">134217728"</span>  <span class="c1"># Larger memtables = fewer flushes</span>
+<span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">ORBIT_LSM_MAX_MEMTABLES</span>  
+  <span class="na">value</span><span class="pi">:</span> <span class="s2">"</span><span class="s">16"</span>         <span class="c1"># More memtables = better write buffering</span>
+<span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">ORBIT_LSM_COMPACTION_THRESHOLD</span>
+  <span class="na">value</span><span class="pi">:</span> <span class="s2">"</span><span class="s">8"</span>          <span class="c1"># More aggressive compaction</span>
+</code></pre></div></div>
+
+<p><strong>RocksDB</strong>: Balanced read/write performance</p>
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">env</span><span class="pi">:</span>
+<span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">ORBIT_ROCKSDB_WRITE_BUFFER_SIZE</span>
+  <span class="na">value</span><span class="pi">:</span> <span class="s2">"</span><span class="s">268435456"</span>  <span class="c1"># 256MB write buffers</span>
+<span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">ORBIT_ROCKSDB_BLOCK_CACHE_SIZE</span>  
+  <span class="na">value</span><span class="pi">:</span> <span class="s2">"</span><span class="s">1073741824"</span> <span class="c1"># 1GB block cache for reads</span>
+<span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">ORBIT_ROCKSDB_MAX_BACKGROUND_JOBS</span>
+  <span class="na">value</span><span class="pi">:</span> <span class="s2">"</span><span class="s">8"</span>          <span class="c1"># More compaction threads</span>
+</code></pre></div></div>
+
+<h3 id="cloud-storage-backends"><strong>Cloud Storage Backends</strong></h3>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">env</span><span class="pi">:</span>
+<span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">ORBIT_S3_CONNECTION_TIMEOUT</span>
+  <span class="na">value</span><span class="pi">:</span> <span class="s2">"</span><span class="s">60"</span>         <span class="c1"># Longer timeout for large objects</span>
+<span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">ORBIT_S3_RETRY_COUNT</span>
+  <span class="na">value</span><span class="pi">:</span> <span class="s2">"</span><span class="s">5"</span>          <span class="c1"># More retries for reliability</span>
+</code></pre></div></div>
+
+<h3 id="resource-allocation"><strong>Resource Allocation</strong></h3>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">resources</span><span class="pi">:</span>
+  <span class="na">requests</span><span class="pi">:</span>
+    <span class="na">memory</span><span class="pi">:</span> <span class="s2">"</span><span class="s">2Gi"</span>     <span class="c1"># Minimum for RocksDB/LSM-Tree</span>
+    <span class="na">cpu</span><span class="pi">:</span> <span class="s2">"</span><span class="s">1000m"</span>      <span class="c1"># Minimum for compaction</span>
+  <span class="na">limits</span><span class="pi">:</span>
+    <span class="na">memory</span><span class="pi">:</span> <span class="s2">"</span><span class="s">8Gi"</span>     <span class="c1"># Allow burst for large operations</span>
+    <span class="na">cpu</span><span class="pi">:</span> <span class="s2">"</span><span class="s">4000m"</span>      <span class="c1"># Allow burst for compaction</span>
+</code></pre></div></div>
+
+<h2 id="-files-reference">📚 <strong>Files Reference</strong></h2>
+
+<p><strong>Enhanced Kubernetes Manifests</strong>:</p>
+<ul>
+  <li><a href="file:///Users/ravindraboddipalli/sources/orbit-rs/k8s/01-configmap-enhanced.yaml"><code class="language-plaintext highlighter-rouge">k8s/01-configmap-enhanced.yaml</code></a> - Configuration with all backends</li>
+  <li><a href="file:///Users/ravindraboddipalli/sources/orbit-rs/k8s/03-statefulset-enhanced.yaml"><code class="language-plaintext highlighter-rouge">k8s/03-statefulset-enhanced.yaml</code></a> - StatefulSet + Deployment variants</li>
+</ul>
+
+<p><strong>Operator Updates</strong>:</p>
+<ul>
+  <li><a href="file:///Users/ravindraboddipalli/sources/orbit-rs/orbit-operator/src/crd.rs"><code class="language-plaintext highlighter-rouge">orbit-operator/src/crd.rs</code></a> - Enhanced CRD with persistence config</li>
+</ul>
+
+<p><strong>Documentation</strong>:</p>
+<ul>
+  <li><a href="/orbit-rs/KUBERNETES_PERSISTENCE.html"><code class="language-plaintext highlighter-rouge">docs/KUBERNETES_PERSISTENCE.md</code></a> - Quick setup guide</li>
+  <li><a href="VIRTUAL_ACTOR_PERSISTENCE.md"><code class="language-plaintext highlighter-rouge">docs/VIRTUAL_ACTOR_PERSISTENCE.md</code></a> - Complete persistence architecture</li>
+  <li><a href="/orbit-rs/STORAGE_BACKEND_INDEPENDENCE.html"><code class="language-plaintext highlighter-rouge">docs/STORAGE_BACKEND_INDEPENDENCE.md</code></a> - Backend independence explanation</li>
+</ul>
+
+<h2 id="-next-steps">✅ <strong>Next Steps</strong></h2>
+
+<ol>
+  <li><strong>Test the enhanced manifests</strong> with your preferred backend</li>
+  <li><strong>Update Helm chart templates</strong> to incorporate the environment variables</li>
+  <li><strong>Implement operator logic</strong> to translate CRD persistence config to pod specs</li>
+  <li><strong>Add monitoring</strong> for persistence metrics via Prometheus</li>
+</ol>
+
+<p>The foundation is now in place to support all Orbit-RS persistence backends on Kubernetes! 🚀</p>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/orbit-rs/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Orbit-RS Documentation</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">TuringWorks</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

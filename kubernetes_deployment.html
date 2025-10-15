@@ -1,0 +1,848 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Orbit-RS Kubernetes Deployment Guide | Orbit-RS Documentation</title>
+<meta name="generator" content="Jekyll v4.4.1" />
+<meta property="og:title" content="Orbit-RS Kubernetes Deployment Guide" />
+<meta name="author" content="TuringWorks" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<meta property="og:description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<link rel="canonical" href="https://turingworks.github.io/orbit-rs/kubernetes_deployment.html" />
+<meta property="og:url" content="https://turingworks.github.io/orbit-rs/kubernetes_deployment.html" />
+<meta property="og:site_name" content="Orbit-RS Documentation" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Orbit-RS Kubernetes Deployment Guide" />
+<meta name="twitter:site" content="@TuringWorksAI" />
+<meta name="twitter:creator" content="@TuringWorks" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","author":{"@type":"Person","name":"TuringWorks"},"description":"The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform","headline":"Orbit-RS Kubernetes Deployment Guide","url":"https://turingworks.github.io/orbit-rs/kubernetes_deployment.html"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/orbit-rs/assets/main.css">
+  <link rel="stylesheet" href="/orbit-rs/assets/css/custom.css"><link type="application/atom+xml" rel="alternate" href="https://turingworks.github.io/orbit-rs/feed.xml" title="Orbit-RS Documentation" /></head><body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/orbit-rs/">Orbit-RS Documentation</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/orbit-rs/">Orbit-RS Documentation</a><a class="page-link" href="/orbit-rs/project_overview.html">Orbit-RS: Comprehensive Project Overview</a><a class="page-link" href="/orbit-rs/quick_start.html">Quick Start Guide - Multi-Protocol Database Server</a><a class="page-link" href="/orbit-rs/roadmap/">Development Roadmap</a><a class="page-link" href="/orbit-rs/features/">Orbit-RS Feature Index</a><a class="page-link" href="/orbit-rs/compute-acceleration/">Hardware Acceleration Guide</a><a class="page-link" href="/orbit-rs/contributing.html">Contributing Guide</a><a class="page-link" href="/orbit-rs/overview.html">Architecture Overview</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <h1 id="orbit-rs-kubernetes-deployment-guide">Orbit-RS Kubernetes Deployment Guide</h1>
+
+<p>This guide provides comprehensive instructions for deploying Orbit-RS on Kubernetes in production environments.</p>
+
+<h2 id="table-of-contents">Table of Contents</h2>
+
+<ul>
+  <li><a href="#prerequisites">Prerequisites</a></li>
+  <li><a href="#quick-start">Quick Start</a></li>
+  <li><a href="#architecture-overview">Architecture Overview</a></li>
+  <li><a href="#manual-deployment">Manual Deployment</a></li>
+  <li><a href="#helm-deployment">Helm Deployment</a></li>
+  <li><a href="#configuration">Configuration</a></li>
+  <li><a href="#monitoring">Monitoring</a></li>
+  <li><a href="#high-availability">High Availability</a></li>
+  <li><a href="#security">Security</a></li>
+  <li><a href="#troubleshooting">Troubleshooting</a></li>
+  <li><a href="#maintenance">Maintenance</a></li>
+</ul>
+
+<h2 id="prerequisites">Prerequisites</h2>
+
+<h3 id="kubernetes-cluster-requirements">Kubernetes Cluster Requirements</h3>
+
+<ul>
+  <li><strong>Kubernetes version</strong>: 1.24+</li>
+  <li><strong>Minimum nodes</strong>: 3 (for high availability)</li>
+  <li><strong>Node resources</strong>: 2 CPU cores, 4GB RAM per node minimum</li>
+  <li><strong>Storage</strong>: Persistent storage with ReadWriteOnce support</li>
+  <li><strong>Network</strong>: Pod-to-pod communication, LoadBalancer support (optional)</li>
+</ul>
+
+<h3 id="required-tools">Required Tools</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Install kubectl</span>
+curl <span class="nt">-LO</span> <span class="s2">"https://dl.k8s.io/release/</span><span class="si">$(</span>curl <span class="nt">-L</span> <span class="nt">-s</span> https://dl.k8s.io/release/stable.txt<span class="si">)</span><span class="s2">/bin/linux/amd64/kubectl"</span>
+<span class="nb">chmod</span> +x kubectl <span class="o">&amp;&amp;</span> <span class="nb">sudo mv </span>kubectl /usr/local/bin/
+
+<span class="c"># Install Helm (recommended)</span>
+curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+
+<span class="c"># Install Docker (for building images)</span>
+curl <span class="nt">-fsSL</span> https://get.docker.com <span class="nt">-o</span> get-docker.sh <span class="o">&amp;&amp;</span> sh get-docker.sh
+</code></pre></div></div>
+
+<h3 id="optional-tools">Optional Tools</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Prometheus Operator (for monitoring)</span>
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm repo update
+
+<span class="c"># Grafana (for visualization)</span>
+helm repo add grafana https://grafana.github.io/helm-charts
+
+<span class="c"># cert-manager (for TLS certificates)</span>
+kubectl apply <span class="nt">-f</span> https://github.com/cert-manager/cert-manager/releases/download/v1.13.0/cert-manager.yaml
+</code></pre></div></div>
+
+<h2 id="quick-start">Quick Start</h2>
+
+<h3 id="using-helm-recommended">Using Helm (Recommended)</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Add Helm repository (once available)</span>
+helm repo add orbit-rs https://turingworks.github.io/orbit-rs
+helm repo update
+
+<span class="c"># Install Orbit-RS</span>
+helm <span class="nb">install </span>orbit-rs orbit-rs/orbit-rs <span class="se">\</span>
+  <span class="nt">--namespace</span> orbit-rs <span class="se">\</span>
+  <span class="nt">--create-namespace</span> <span class="se">\</span>
+  <span class="nt">--set</span> monitoring.serviceMonitor.enabled<span class="o">=</span><span class="nb">true</span> <span class="se">\</span>
+  <span class="nt">--set</span> autoscaling.enabled<span class="o">=</span><span class="nb">true</span>
+</code></pre></div></div>
+
+<h3 id="using-local-helm-chart">Using Local Helm Chart</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Clone the repository</span>
+git clone https://github.com/TuringWorks/orbit-rs.git
+<span class="nb">cd </span>orbit-rs
+
+<span class="c"># Build Docker image</span>
+docker build <span class="nt">-t</span> orbit-rs/orbit-server:latest <span class="nb">.</span>
+
+<span class="c"># Deploy using local Helm chart</span>
+helm <span class="nb">install </span>orbit-rs helm/orbit-rs <span class="se">\</span>
+  <span class="nt">--namespace</span> orbit-rs <span class="se">\</span>
+  <span class="nt">--create-namespace</span> <span class="se">\</span>
+  <span class="nt">--values</span> helm/orbit-rs/values.yaml
+</code></pre></div></div>
+
+<h2 id="architecture-overview">Architecture Overview</h2>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>┌─────────────────────────────────────────────────────────────┐
+│                         Internet                              │
+└─────────────────────┬───────────────────────────────────────┘
+                      │
+┌─────────────────────▼───────────────────────────────────────┐
+│                 Load Balancer                                │
+│            (Kubernetes Service)                              │
+└─────────────────────┬───────────────────────────────────────┘
+                      │
+┌─────────────────────▼───────────────────────────────────────┐
+│                   Ingress Controller                         │
+│              (nginx/traefik/istio)                          │
+└─────────────────────┬───────────────────────────────────────┘
+                      │
+        ┌─────────────┼─────────────┐
+        │             │             │
+┌───────▼──────┬──────▼──────┬──────▼──────┐
+│ orbit-server │ orbit-server │ orbit-server │
+│    Pod 1     │    Pod 2     │    Pod 3     │
+│              │              │              │
+│ ┌──────────┐ │ ┌──────────┐ │ ┌──────────┐ │
+│ │   App    │ │ │   App    │ │ │   App    │ │
+│ └──────────┘ │ └──────────┘ │ └──────────┘ │
+│ ┌──────────┐ │ ┌──────────┐ │ ┌──────────┐ │
+│ │ SQLite   │ │ │ SQLite   │ │ │ SQLite   │ │
+│ │    DB    │ │ │    DB    │ │ │    DB    │ │
+│ └──────────┘ │ └──────────┘ │ └──────────┘ │
+└──────┬───────┴──────┬───────┴──────┬───────┘
+       │              │              │
+┌──────▼──────┬───────▼──────┬───────▼──────┐
+│Persistent   │Persistent    │Persistent    │
+│Volume 1     │Volume 2      │Volume 3      │
+└─────────────┴──────────────┴──────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│                    Monitoring Stack                          │
+│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐           │
+│  │ Prometheus  │ │   Grafana   │ │  AlertMgr   │           │
+│  └─────────────┘ └─────────────┘ └─────────────┘           │
+└─────────────────────────────────────────────────────────────┘
+</code></pre></div></div>
+
+<h3 id="component-description">Component Description</h3>
+
+<ul>
+  <li><strong>StatefulSet</strong>: Manages orbit-server pods with stable network identities</li>
+  <li><strong>Headless Service</strong>: Enables pod-to-pod communication for cluster formation</li>
+  <li><strong>Load Balancer Service</strong>: External access point for clients</li>
+  <li><strong>Persistent Volumes</strong>: Durable storage for transaction logs</li>
+  <li><strong>ConfigMaps</strong>: Configuration management</li>
+  <li><strong>ServiceMonitor</strong>: Prometheus metrics collection</li>
+  <li><strong>PrometheusRule</strong>: Alerting rules</li>
+</ul>
+
+<h2 id="manual-deployment">Manual Deployment</h2>
+
+<h3 id="step-1-create-namespace-and-rbac">Step 1: Create Namespace and RBAC</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>kubectl apply <span class="nt">-f</span> k8s/00-namespace.yaml
+</code></pre></div></div>
+
+<h3 id="step-2-configure-storage">Step 2: Configure Storage</h3>
+
+<p>Update the storage class in <code class="language-plaintext highlighter-rouge">k8s/02-storage.yaml</code> based on your cloud provider:</p>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c1"># For AWS EKS</span>
+<span class="na">provisioner</span><span class="pi">:</span> <span class="s">ebs.csi.aws.com</span>
+<span class="na">parameters</span><span class="pi">:</span>
+  <span class="na">type</span><span class="pi">:</span> <span class="s">gp3</span>
+
+<span class="c1"># For Google GKE  </span>
+<span class="na">provisioner</span><span class="pi">:</span> <span class="s">pd.csi.storage.gke.io</span>
+<span class="na">parameters</span><span class="pi">:</span>
+  <span class="na">type</span><span class="pi">:</span> <span class="s">pd-ssd</span>
+
+<span class="c1"># For Azure AKS</span>
+<span class="na">provisioner</span><span class="pi">:</span> <span class="s">disk.csi.azure.com</span>
+<span class="na">parameters</span><span class="pi">:</span>
+  <span class="na">storageaccounttype</span><span class="pi">:</span> <span class="s">Premium_LRS</span>
+</code></pre></div></div>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>kubectl apply <span class="nt">-f</span> k8s/02-storage.yaml
+</code></pre></div></div>
+
+<h3 id="step-3-deploy-configuration">Step 3: Deploy Configuration</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>kubectl apply <span class="nt">-f</span> k8s/01-configmap.yaml
+</code></pre></div></div>
+
+<h3 id="step-4-deploy-statefulset-and-services">Step 4: Deploy StatefulSet and Services</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>kubectl apply <span class="nt">-f</span> k8s/03-statefulset.yaml
+kubectl apply <span class="nt">-f</span> k8s/04-services.yaml
+</code></pre></div></div>
+
+<h3 id="step-5-verify-deployment">Step 5: Verify Deployment</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Check pods</span>
+kubectl get pods <span class="nt">-n</span> orbit-rs
+
+<span class="c"># Check services</span>
+kubectl get services <span class="nt">-n</span> orbit-rs
+
+<span class="c"># Check persistent volumes</span>
+kubectl get pvc <span class="nt">-n</span> orbit-rs
+
+<span class="c"># Check logs</span>
+kubectl logs <span class="nt">-n</span> orbit-rs orbit-server-0
+</code></pre></div></div>
+
+<h2 id="helm-deployment">Helm Deployment</h2>
+
+<h3 id="configuration-values">Configuration Values</h3>
+
+<p>Create a custom values file <code class="language-plaintext highlighter-rouge">my-values.yaml</code>:</p>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">orbitServer</span><span class="pi">:</span>
+  <span class="na">replicaCount</span><span class="pi">:</span> <span class="m">3</span>
+  <span class="na">image</span><span class="pi">:</span>
+    <span class="na">repository</span><span class="pi">:</span> <span class="s">ghcr.io/turingworks/orbit-rs/orbit-server</span>
+    <span class="na">tag</span><span class="pi">:</span> <span class="s2">"</span><span class="s">v0.1.0"</span>
+  <span class="na">resources</span><span class="pi">:</span>
+    <span class="na">requests</span><span class="pi">:</span>
+      <span class="na">memory</span><span class="pi">:</span> <span class="s2">"</span><span class="s">1Gi"</span>
+      <span class="na">cpu</span><span class="pi">:</span> <span class="s2">"</span><span class="s">500m"</span>
+    <span class="na">limits</span><span class="pi">:</span>
+      <span class="na">memory</span><span class="pi">:</span> <span class="s2">"</span><span class="s">4Gi"</span>
+      <span class="na">cpu</span><span class="pi">:</span> <span class="s2">"</span><span class="s">2000m"</span>
+
+<span class="na">persistence</span><span class="pi">:</span>
+  <span class="na">enabled</span><span class="pi">:</span> <span class="kc">true</span>
+  <span class="na">size</span><span class="pi">:</span> <span class="s">20Gi</span>
+  <span class="na">storageClass</span><span class="pi">:</span> <span class="s2">"</span><span class="s">fast-ssd"</span>
+
+<span class="na">monitoring</span><span class="pi">:</span>
+  <span class="na">serviceMonitor</span><span class="pi">:</span>
+    <span class="na">enabled</span><span class="pi">:</span> <span class="kc">true</span>
+  <span class="na">prometheusRule</span><span class="pi">:</span>
+    <span class="na">enabled</span><span class="pi">:</span> <span class="kc">true</span>
+  <span class="na">grafanaDashboard</span><span class="pi">:</span>
+    <span class="na">enabled</span><span class="pi">:</span> <span class="kc">true</span>
+
+<span class="na">autoscaling</span><span class="pi">:</span>
+  <span class="na">enabled</span><span class="pi">:</span> <span class="kc">true</span>
+  <span class="na">minReplicas</span><span class="pi">:</span> <span class="m">3</span>
+  <span class="na">maxReplicas</span><span class="pi">:</span> <span class="m">10</span>
+  <span class="na">targetCPUUtilizationPercentage</span><span class="pi">:</span> <span class="m">70</span>
+
+<span class="na">ingress</span><span class="pi">:</span>
+  <span class="na">enabled</span><span class="pi">:</span> <span class="kc">true</span>
+  <span class="na">className</span><span class="pi">:</span> <span class="s2">"</span><span class="s">nginx"</span>
+  <span class="na">annotations</span><span class="pi">:</span>
+    <span class="na">cert-manager.io/cluster-issuer</span><span class="pi">:</span> <span class="s2">"</span><span class="s">letsencrypt-prod"</span>
+  <span class="na">hosts</span><span class="pi">:</span>
+    <span class="pi">-</span> <span class="na">host</span><span class="pi">:</span> <span class="s">orbit-rs.yourdomain.com</span>
+      <span class="na">paths</span><span class="pi">:</span>
+        <span class="pi">-</span> <span class="na">path</span><span class="pi">:</span> <span class="s">/</span>
+          <span class="na">pathType</span><span class="pi">:</span> <span class="s">Prefix</span>
+  <span class="na">tls</span><span class="pi">:</span>
+    <span class="pi">-</span> <span class="na">secretName</span><span class="pi">:</span> <span class="s">orbit-rs-tls</span>
+      <span class="na">hosts</span><span class="pi">:</span>
+        <span class="pi">-</span> <span class="s">orbit-rs.yourdomain.com</span>
+
+<span class="na">config</span><span class="pi">:</span>
+  <span class="na">logging</span><span class="pi">:</span>
+    <span class="na">level</span><span class="pi">:</span> <span class="s2">"</span><span class="s">info"</span>
+  <span class="na">transactions</span><span class="pi">:</span>
+    <span class="na">maxConnections</span><span class="pi">:</span> <span class="m">20</span>
+  <span class="na">saga</span><span class="pi">:</span>
+    <span class="na">maxExecutionTimeSeconds</span><span class="pi">:</span> <span class="m">7200</span>
+</code></pre></div></div>
+
+<h3 id="deploy-with-helm">Deploy with Helm</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Deploy</span>
+helm <span class="nb">install </span>orbit-rs helm/orbit-rs <span class="se">\</span>
+  <span class="nt">--namespace</span> orbit-rs <span class="se">\</span>
+  <span class="nt">--create-namespace</span> <span class="se">\</span>
+  <span class="nt">--values</span> my-values.yaml
+
+<span class="c"># Upgrade</span>
+helm upgrade orbit-rs helm/orbit-rs <span class="se">\</span>
+  <span class="nt">--namespace</span> orbit-rs <span class="se">\</span>
+  <span class="nt">--values</span> my-values.yaml
+
+<span class="c"># Rollback</span>
+helm rollback orbit-rs 1 <span class="nt">--namespace</span> orbit-rs
+
+<span class="c"># Uninstall</span>
+helm uninstall orbit-rs <span class="nt">--namespace</span> orbit-rs
+</code></pre></div></div>
+
+<h2 id="configuration">Configuration</h2>
+
+<h3 id="environment-specific-configurations">Environment-Specific Configurations</h3>
+
+<h4 id="development">Development</h4>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c1"># dev-values.yaml</span>
+<span class="na">orbitServer</span><span class="pi">:</span>
+  <span class="na">replicaCount</span><span class="pi">:</span> <span class="m">1</span>
+  <span class="na">resources</span><span class="pi">:</span>
+    <span class="na">requests</span><span class="pi">:</span>
+      <span class="na">memory</span><span class="pi">:</span> <span class="s2">"</span><span class="s">256Mi"</span>
+      <span class="na">cpu</span><span class="pi">:</span> <span class="s2">"</span><span class="s">100m"</span>
+    <span class="na">limits</span><span class="pi">:</span>
+      <span class="na">memory</span><span class="pi">:</span> <span class="s2">"</span><span class="s">1Gi"</span>
+      <span class="na">cpu</span><span class="pi">:</span> <span class="s2">"</span><span class="s">500m"</span>
+
+<span class="na">persistence</span><span class="pi">:</span>
+  <span class="na">size</span><span class="pi">:</span> <span class="s">5Gi</span>
+
+<span class="na">config</span><span class="pi">:</span>
+  <span class="na">logging</span><span class="pi">:</span>
+    <span class="na">level</span><span class="pi">:</span> <span class="s2">"</span><span class="s">debug"</span>
+</code></pre></div></div>
+
+<h4 id="staging">Staging</h4>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c1"># staging-values.yaml</span>
+<span class="na">orbitServer</span><span class="pi">:</span>
+  <span class="na">replicaCount</span><span class="pi">:</span> <span class="m">2</span>
+  <span class="na">resources</span><span class="pi">:</span>
+    <span class="na">requests</span><span class="pi">:</span>
+      <span class="na">memory</span><span class="pi">:</span> <span class="s2">"</span><span class="s">512Mi"</span>
+      <span class="na">cpu</span><span class="pi">:</span> <span class="s2">"</span><span class="s">250m"</span>
+    <span class="na">limits</span><span class="pi">:</span>
+      <span class="na">memory</span><span class="pi">:</span> <span class="s2">"</span><span class="s">2Gi"</span>
+      <span class="na">cpu</span><span class="pi">:</span> <span class="s2">"</span><span class="s">1000m"</span>
+
+<span class="na">persistence</span><span class="pi">:</span>
+  <span class="na">size</span><span class="pi">:</span> <span class="s">10Gi</span>
+
+<span class="na">config</span><span class="pi">:</span>
+  <span class="na">logging</span><span class="pi">:</span>
+    <span class="na">level</span><span class="pi">:</span> <span class="s2">"</span><span class="s">info"</span>
+</code></pre></div></div>
+
+<h4 id="production">Production</h4>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c1"># prod-values.yaml</span>
+<span class="na">orbitServer</span><span class="pi">:</span>
+  <span class="na">replicaCount</span><span class="pi">:</span> <span class="m">5</span>
+  <span class="na">resources</span><span class="pi">:</span>
+    <span class="na">requests</span><span class="pi">:</span>
+      <span class="na">memory</span><span class="pi">:</span> <span class="s2">"</span><span class="s">1Gi"</span>
+      <span class="na">cpu</span><span class="pi">:</span> <span class="s2">"</span><span class="s">500m"</span>
+    <span class="na">limits</span><span class="pi">:</span>
+      <span class="na">memory</span><span class="pi">:</span> <span class="s2">"</span><span class="s">4Gi"</span>
+      <span class="na">cpu</span><span class="pi">:</span> <span class="s2">"</span><span class="s">2000m"</span>
+
+<span class="na">persistence</span><span class="pi">:</span>
+  <span class="na">size</span><span class="pi">:</span> <span class="s">50Gi</span>
+  
+<span class="na">autoscaling</span><span class="pi">:</span>
+  <span class="na">enabled</span><span class="pi">:</span> <span class="kc">true</span>
+  <span class="na">minReplicas</span><span class="pi">:</span> <span class="m">5</span>
+  <span class="na">maxReplicas</span><span class="pi">:</span> <span class="m">20</span>
+
+<span class="na">monitoring</span><span class="pi">:</span>
+  <span class="na">serviceMonitor</span><span class="pi">:</span>
+    <span class="na">enabled</span><span class="pi">:</span> <span class="kc">true</span>
+  <span class="na">prometheusRule</span><span class="pi">:</span>
+    <span class="na">enabled</span><span class="pi">:</span> <span class="kc">true</span>
+
+<span class="na">config</span><span class="pi">:</span>
+  <span class="na">logging</span><span class="pi">:</span>
+    <span class="na">level</span><span class="pi">:</span> <span class="s2">"</span><span class="s">warn"</span>
+  <span class="na">transactions</span><span class="pi">:</span>
+    <span class="na">maxConnections</span><span class="pi">:</span> <span class="m">50</span>
+</code></pre></div></div>
+
+<h3 id="configuration-management">Configuration Management</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Create environment-specific configurations</span>
+kubectl create configmap orbit-rs-prod-config <span class="se">\</span>
+  <span class="nt">--from-file</span><span class="o">=</span>config/production.toml <span class="se">\</span>
+  <span class="nt">--namespace</span> orbit-rs
+
+<span class="c"># Use external secrets (recommended for production)</span>
+kubectl apply <span class="nt">-f</span> - <span class="o">&lt;&lt;</span><span class="no">EOF</span><span class="sh">
+apiVersion: external-secrets.io/v1beta1
+kind: SecretStore
+metadata:
+  name: vault-backend
+  namespace: orbit-rs
+spec:
+  provider:
+    vault:
+      server: "https://vault.example.com"
+      path: "secret"
+      auth:
+        kubernetes:
+          mountPath: "kubernetes"
+          role: "orbit-rs"
+</span><span class="no">EOF
+</span></code></pre></div></div>
+
+<h2 id="monitoring">Monitoring</h2>
+
+<h3 id="prometheus-integration">Prometheus Integration</h3>
+
+<p>Deploy Prometheus Operator:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>helm <span class="nb">install </span>prometheus prometheus-community/kube-prometheus-stack <span class="se">\</span>
+  <span class="nt">--namespace</span> monitoring <span class="se">\</span>
+  <span class="nt">--create-namespace</span> <span class="se">\</span>
+  <span class="nt">--set</span> prometheus.prometheusSpec.serviceMonitorSelectorNilUsesHelmValues<span class="o">=</span><span class="nb">false</span>
+</code></pre></div></div>
+
+<p>Enable monitoring in Orbit-RS:</p>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">monitoring</span><span class="pi">:</span>
+  <span class="na">serviceMonitor</span><span class="pi">:</span>
+    <span class="na">enabled</span><span class="pi">:</span> <span class="kc">true</span>
+    <span class="na">interval</span><span class="pi">:</span> <span class="s">30s</span>
+    <span class="na">additionalLabels</span><span class="pi">:</span>
+      <span class="na">release</span><span class="pi">:</span> <span class="s">prometheus</span>
+  <span class="na">prometheusRule</span><span class="pi">:</span>
+    <span class="na">enabled</span><span class="pi">:</span> <span class="kc">true</span>
+    <span class="na">additionalLabels</span><span class="pi">:</span>
+      <span class="na">release</span><span class="pi">:</span> <span class="s">prometheus</span>
+</code></pre></div></div>
+
+<h3 id="grafana-dashboards">Grafana Dashboards</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Deploy Grafana dashboard</span>
+kubectl apply <span class="nt">-f</span> k8s/05-monitoring.yaml
+
+<span class="c"># Access Grafana</span>
+kubectl port-forward svc/prometheus-grafana 3000:80 <span class="nt">-n</span> monitoring
+
+<span class="c"># Default login: admin/prom-operator</span>
+</code></pre></div></div>
+
+<h3 id="key-metrics-to-monitor">Key Metrics to Monitor</h3>
+
+<ul>
+  <li><strong>Transaction Rate</strong>: <code class="language-plaintext highlighter-rouge">rate(orbit_transactions_total[5m])</code></li>
+  <li><strong>Success Rate</strong>: <code class="language-plaintext highlighter-rouge">rate(orbit_transactions_completed_total[5m]) / rate(orbit_transactions_total[5m])</code></li>
+  <li><strong>Active Transactions</strong>: <code class="language-plaintext highlighter-rouge">orbit_transactions_active</code></li>
+  <li><strong>Saga Statistics</strong>: <code class="language-plaintext highlighter-rouge">rate(orbit_sagas_*_total[5m])</code></li>
+  <li><strong>Recovery Operations</strong>: <code class="language-plaintext highlighter-rouge">rate(orbit_recovery_*_total[5m])</code></li>
+  <li><strong>Memory Usage</strong>: <code class="language-plaintext highlighter-rouge">container_memory_usage_bytes</code></li>
+  <li><strong>CPU Usage</strong>: <code class="language-plaintext highlighter-rouge">rate(container_cpu_usage_seconds_total[5m])</code></li>
+</ul>
+
+<h3 id="alerting-rules">Alerting Rules</h3>
+
+<p>Key alerts configured in PrometheusRule:</p>
+
+<ul>
+  <li><strong>OrbitServerDown</strong>: Server instances unavailable</li>
+  <li><strong>OrbitServerHighMemoryUsage</strong>: Memory usage &gt; 90%</li>
+  <li><strong>OrbitServerHighCPUUsage</strong>: CPU usage &gt; 80%</li>
+  <li><strong>OrbitTransactionFailureRate</strong>: Failure rate &gt; 10%</li>
+  <li><strong>OrbitSagaCompensationRate</strong>: Compensation rate &gt; 20%</li>
+  <li><strong>OrbitRecoveryFailure</strong>: Multiple recovery failures</li>
+</ul>
+
+<h2 id="high-availability">High Availability</h2>
+
+<h3 id="multi-zone-deployment">Multi-Zone Deployment</h3>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c1"># Enable pod anti-affinity</span>
+<span class="na">affinity</span><span class="pi">:</span>
+  <span class="na">podAntiAffinity</span><span class="pi">:</span>
+    <span class="na">requiredDuringSchedulingIgnoredDuringExecution</span><span class="pi">:</span>
+    <span class="pi">-</span> <span class="na">labelSelector</span><span class="pi">:</span>
+        <span class="na">matchExpressions</span><span class="pi">:</span>
+        <span class="pi">-</span> <span class="na">key</span><span class="pi">:</span> <span class="s">app.kubernetes.io/name</span>
+          <span class="na">operator</span><span class="pi">:</span> <span class="s">In</span>
+          <span class="na">values</span><span class="pi">:</span>
+          <span class="pi">-</span> <span class="s">orbit-rs</span>
+      <span class="na">topologyKey</span><span class="pi">:</span> <span class="s">failure-domain.beta.kubernetes.io/zone</span>
+
+<span class="c1"># Use zone-aware storage</span>
+<span class="na">persistence</span><span class="pi">:</span>
+  <span class="na">storageClass</span><span class="pi">:</span> <span class="s2">"</span><span class="s">zone-aware-ssd"</span>
+</code></pre></div></div>
+
+<h3 id="pod-disruption-budget">Pod Disruption Budget</h3>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">podDisruptionBudget</span><span class="pi">:</span>
+  <span class="na">enabled</span><span class="pi">:</span> <span class="kc">true</span>
+  <span class="na">minAvailable</span><span class="pi">:</span> <span class="m">2</span>  <span class="c1"># Always keep at least 2 replicas running</span>
+</code></pre></div></div>
+
+<h3 id="automated-recovery">Automated Recovery</h3>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c1"># Configure probe timeouts</span>
+<span class="na">livenessProbe</span><span class="pi">:</span>
+  <span class="na">enabled</span><span class="pi">:</span> <span class="kc">true</span>
+  <span class="na">initialDelaySeconds</span><span class="pi">:</span> <span class="m">60</span>
+  <span class="na">periodSeconds</span><span class="pi">:</span> <span class="m">30</span>
+  <span class="na">failureThreshold</span><span class="pi">:</span> <span class="m">3</span>
+
+<span class="na">readinessProbe</span><span class="pi">:</span>
+  <span class="na">enabled</span><span class="pi">:</span> <span class="kc">true</span>
+  <span class="na">initialDelaySeconds</span><span class="pi">:</span> <span class="m">30</span>
+  <span class="na">periodSeconds</span><span class="pi">:</span> <span class="m">10</span>
+  <span class="na">failureThreshold</span><span class="pi">:</span> <span class="m">3</span>
+
+<span class="c1"># Configure rolling update strategy</span>
+<span class="na">strategy</span><span class="pi">:</span>
+  <span class="na">type</span><span class="pi">:</span> <span class="s">RollingUpdate</span>
+  <span class="na">rollingUpdate</span><span class="pi">:</span>
+    <span class="na">maxUnavailable</span><span class="pi">:</span> <span class="m">1</span>
+    <span class="na">maxSurge</span><span class="pi">:</span> <span class="m">1</span>
+</code></pre></div></div>
+
+<h2 id="security">Security</h2>
+
+<h3 id="network-policies">Network Policies</h3>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">apiVersion</span><span class="pi">:</span> <span class="s">networking.k8s.io/v1</span>
+<span class="na">kind</span><span class="pi">:</span> <span class="s">NetworkPolicy</span>
+<span class="na">metadata</span><span class="pi">:</span>
+  <span class="na">name</span><span class="pi">:</span> <span class="s">orbit-rs-network-policy</span>
+  <span class="na">namespace</span><span class="pi">:</span> <span class="s">orbit-rs</span>
+<span class="na">spec</span><span class="pi">:</span>
+  <span class="na">podSelector</span><span class="pi">:</span>
+    <span class="na">matchLabels</span><span class="pi">:</span>
+      <span class="na">app.kubernetes.io/name</span><span class="pi">:</span> <span class="s">orbit-rs</span>
+  <span class="na">policyTypes</span><span class="pi">:</span>
+  <span class="pi">-</span> <span class="s">Ingress</span>
+  <span class="pi">-</span> <span class="s">Egress</span>
+  <span class="na">ingress</span><span class="pi">:</span>
+  <span class="pi">-</span> <span class="na">from</span><span class="pi">:</span>
+    <span class="pi">-</span> <span class="na">namespaceSelector</span><span class="pi">:</span>
+        <span class="na">matchLabels</span><span class="pi">:</span>
+          <span class="na">name</span><span class="pi">:</span> <span class="s">ingress-nginx</span>
+    <span class="na">ports</span><span class="pi">:</span>
+    <span class="pi">-</span> <span class="na">protocol</span><span class="pi">:</span> <span class="s">TCP</span>
+      <span class="na">port</span><span class="pi">:</span> <span class="m">50051</span>
+  <span class="pi">-</span> <span class="na">from</span><span class="pi">:</span> <span class="pi">[]</span>
+    <span class="na">ports</span><span class="pi">:</span>
+    <span class="pi">-</span> <span class="na">protocol</span><span class="pi">:</span> <span class="s">TCP</span>
+      <span class="na">port</span><span class="pi">:</span> <span class="m">8080</span>  <span class="c1"># Health checks</span>
+    <span class="pi">-</span> <span class="na">protocol</span><span class="pi">:</span> <span class="s">TCP</span>
+      <span class="na">port</span><span class="pi">:</span> <span class="m">9090</span>  <span class="c1"># Metrics</span>
+  <span class="na">egress</span><span class="pi">:</span>
+  <span class="pi">-</span> <span class="pi">{}</span> <span class="c1"># Allow all outbound (restrict as needed)</span>
+</code></pre></div></div>
+
+<h3 id="pod-security-standards">Pod Security Standards</h3>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c1"># Enable restricted pod security</span>
+<span class="na">apiVersion</span><span class="pi">:</span> <span class="s">v1</span>
+<span class="na">kind</span><span class="pi">:</span> <span class="s">Namespace</span>
+<span class="na">metadata</span><span class="pi">:</span>
+  <span class="na">name</span><span class="pi">:</span> <span class="s">orbit-rs</span>
+  <span class="na">labels</span><span class="pi">:</span>
+    <span class="na">pod-security.kubernetes.io/enforce</span><span class="pi">:</span> <span class="s">restricted</span>
+    <span class="na">pod-security.kubernetes.io/audit</span><span class="pi">:</span> <span class="s">restricted</span>
+    <span class="na">pod-security.kubernetes.io/warn</span><span class="pi">:</span> <span class="s">restricted</span>
+</code></pre></div></div>
+
+<h3 id="tls-configuration">TLS Configuration</h3>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c1"># Enable TLS</span>
+<span class="na">config</span><span class="pi">:</span>
+  <span class="na">tls</span><span class="pi">:</span>
+    <span class="na">enabled</span><span class="pi">:</span> <span class="kc">true</span>
+    <span class="na">certFile</span><span class="pi">:</span> <span class="s2">"</span><span class="s">/app/certs/tls.crt"</span>
+    <span class="na">keyFile</span><span class="pi">:</span> <span class="s2">"</span><span class="s">/app/certs/tls.key"</span>
+
+<span class="c1"># Mount TLS certificates</span>
+<span class="na">extraVolumes</span><span class="pi">:</span>
+<span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">tls-certs</span>
+  <span class="na">secret</span><span class="pi">:</span>
+    <span class="na">secretName</span><span class="pi">:</span> <span class="s">orbit-rs-tls</span>
+    
+<span class="na">extraVolumeMounts</span><span class="pi">:</span>
+<span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">tls-certs</span>
+  <span class="na">mountPath</span><span class="pi">:</span> <span class="s">/app/certs</span>
+  <span class="na">readOnly</span><span class="pi">:</span> <span class="kc">true</span>
+</code></pre></div></div>
+
+<h3 id="rbac-configuration">RBAC Configuration</h3>
+
+<p>The deployment includes minimal RBAC permissions:</p>
+
+<ul>
+  <li>Read access to nodes, pods, services, endpoints</li>
+  <li>Create/update access to events</li>
+  <li>Full access to coordination.k8s.io/leases (for leader election)</li>
+</ul>
+
+<h2 id="troubleshooting">Troubleshooting</h2>
+
+<h3 id="common-issues">Common Issues</h3>
+
+<h4 id="1-pods-not-starting">1. Pods Not Starting</h4>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Check pod status</span>
+kubectl describe pod orbit-server-0 <span class="nt">-n</span> orbit-rs
+
+<span class="c"># Check logs</span>
+kubectl logs orbit-server-0 <span class="nt">-n</span> orbit-rs <span class="nt">--previous</span>
+
+<span class="c"># Common causes:</span>
+<span class="c"># - Resource constraints</span>
+<span class="c"># - Image pull failures</span>
+<span class="c"># - Configuration errors</span>
+<span class="c"># - Storage issues</span>
+</code></pre></div></div>
+
+<h4 id="2-persistent-volume-issues">2. Persistent Volume Issues</h4>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Check PVCs</span>
+kubectl get pvc <span class="nt">-n</span> orbit-rs
+
+<span class="c"># Check storage class</span>
+kubectl get storageclass
+
+<span class="c"># Check events</span>
+kubectl get events <span class="nt">-n</span> orbit-rs <span class="nt">--sort-by</span><span class="o">=</span>.metadata.creationTimestamp
+</code></pre></div></div>
+
+<h4 id="3-network-connectivity">3. Network Connectivity</h4>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Test internal connectivity</span>
+kubectl <span class="nb">exec</span> <span class="nt">-it</span> orbit-server-0 <span class="nt">-n</span> orbit-rs <span class="nt">--</span> curl http://orbit-server-1.orbit-server-headless:8080/health
+
+<span class="c"># Test external connectivity</span>
+kubectl port-forward svc/orbit-server 8080:8080 <span class="nt">-n</span> orbit-rs
+curl http://localhost:8080/health
+</code></pre></div></div>
+
+<h4 id="4-configuration-issues">4. Configuration Issues</h4>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Check configuration</span>
+kubectl <span class="nb">exec</span> <span class="nt">-it</span> orbit-server-0 <span class="nt">-n</span> orbit-rs <span class="nt">--</span> <span class="nb">cat</span> /tmp/orbit-server.toml
+
+<span class="c"># Validate configuration</span>
+kubectl <span class="nb">exec</span> <span class="nt">-it</span> orbit-server-0 <span class="nt">-n</span> orbit-rs <span class="nt">--</span> /app/orbit-server <span class="nt">--config</span> /tmp/orbit-server.toml <span class="nt">--validate</span>
+</code></pre></div></div>
+
+<h3 id="debugging-commands">Debugging Commands</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Get all resources</span>
+kubectl get all <span class="nt">-n</span> orbit-rs
+
+<span class="c"># Describe problematic pod</span>
+kubectl describe pod &lt;pod-name&gt; <span class="nt">-n</span> orbit-rs
+
+<span class="c"># Get logs with timestamps</span>
+kubectl logs &lt;pod-name&gt; <span class="nt">-n</span> orbit-rs <span class="nt">--timestamps</span>
+
+<span class="c"># Execute commands in pod</span>
+kubectl <span class="nb">exec</span> <span class="nt">-it</span> &lt;pod-name&gt; <span class="nt">-n</span> orbit-rs <span class="nt">--</span> bash
+
+<span class="c"># Check resource usage</span>
+kubectl top pods <span class="nt">-n</span> orbit-rs
+
+<span class="c"># Get events</span>
+kubectl get events <span class="nt">-n</span> orbit-rs <span class="nt">--sort-by</span><span class="o">=</span><span class="s1">'.lastTimestamp'</span>
+</code></pre></div></div>
+
+<h2 id="maintenance">Maintenance</h2>
+
+<h3 id="backup-procedures">Backup Procedures</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Backup persistent volumes</span>
+kubectl get pvc <span class="nt">-n</span> orbit-rs <span class="nt">-o</span> yaml <span class="o">&gt;</span> orbit-rs-pvc-backup.yaml
+
+<span class="c"># Backup configuration</span>
+kubectl get configmap <span class="nt">-n</span> orbit-rs <span class="nt">-o</span> yaml <span class="o">&gt;</span> orbit-rs-config-backup.yaml
+kubectl get secret <span class="nt">-n</span> orbit-rs <span class="nt">-o</span> yaml <span class="o">&gt;</span> orbit-rs-secrets-backup.yaml
+
+<span class="c"># Application-level backup (if supported)</span>
+kubectl <span class="nb">exec</span> <span class="nt">-it</span> orbit-server-0 <span class="nt">-n</span> orbit-rs <span class="nt">--</span> /app/orbit-server <span class="nt">--backup</span> /app/data/backup.sql
+</code></pre></div></div>
+
+<h3 id="updates-and-upgrades">Updates and Upgrades</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Update image version</span>
+helm upgrade orbit-rs helm/orbit-rs <span class="se">\</span>
+  <span class="nt">--set</span> orbitServer.image.tag<span class="o">=</span>v0.2.0 <span class="se">\</span>
+  <span class="nt">--namespace</span> orbit-rs
+
+<span class="c"># Rollback if needed</span>
+helm rollback orbit-rs <span class="nt">--namespace</span> orbit-rs
+
+<span class="c"># Zero-downtime update strategy</span>
+kubectl patch statefulset orbit-server <span class="nt">-n</span> orbit-rs <span class="nt">-p</span> <span class="s1">'{"spec":{"updateStrategy":{"type":"RollingUpdate"}}}'</span>
+</code></pre></div></div>
+
+<h3 id="scaling-operations">Scaling Operations</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Manual scaling</span>
+kubectl scale statefulset orbit-server <span class="nt">--replicas</span><span class="o">=</span>5 <span class="nt">-n</span> orbit-rs
+
+<span class="c"># Using Helm</span>
+helm upgrade orbit-rs helm/orbit-rs <span class="se">\</span>
+  <span class="nt">--set</span> orbitServer.replicaCount<span class="o">=</span>5 <span class="se">\</span>
+  <span class="nt">--namespace</span> orbit-rs
+
+<span class="c"># Enable autoscaling</span>
+helm upgrade orbit-rs helm/orbit-rs <span class="se">\</span>
+  <span class="nt">--set</span> autoscaling.enabled<span class="o">=</span><span class="nb">true</span> <span class="se">\</span>
+  <span class="nt">--set</span> autoscaling.minReplicas<span class="o">=</span>3 <span class="se">\</span>
+  <span class="nt">--set</span> autoscaling.maxReplicas<span class="o">=</span>10 <span class="se">\</span>
+  <span class="nt">--namespace</span> orbit-rs
+</code></pre></div></div>
+
+<h3 id="performance-tuning">Performance Tuning</h3>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c1"># Resource optimization</span>
+<span class="na">resources</span><span class="pi">:</span>
+  <span class="na">requests</span><span class="pi">:</span>
+    <span class="na">memory</span><span class="pi">:</span> <span class="s2">"</span><span class="s">2Gi"</span>
+    <span class="na">cpu</span><span class="pi">:</span> <span class="s2">"</span><span class="s">1000m"</span>
+  <span class="na">limits</span><span class="pi">:</span>
+    <span class="na">memory</span><span class="pi">:</span> <span class="s2">"</span><span class="s">8Gi"</span> 
+    <span class="na">cpu</span><span class="pi">:</span> <span class="s2">"</span><span class="s">4000m"</span>
+
+<span class="c1"># Configuration tuning</span>
+<span class="na">config</span><span class="pi">:</span>
+  <span class="na">performance</span><span class="pi">:</span>
+    <span class="na">workerThreads</span><span class="pi">:</span> <span class="m">8</span>
+    <span class="na">maxBlockingThreads</span><span class="pi">:</span> <span class="m">1024</span>
+  <span class="na">transactions</span><span class="pi">:</span>
+    <span class="na">maxConnections</span><span class="pi">:</span> <span class="m">50</span>
+</code></pre></div></div>
+
+<h3 id="log-management">Log Management</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Centralized logging with Fluentd/Filebeat</span>
+<span class="c"># Configure log rotation</span>
+kubectl patch statefulset orbit-server <span class="nt">-n</span> orbit-rs <span class="nt">--type</span><span class="o">=</span><span class="s1">'merge'</span> <span class="nt">-p</span><span class="o">=</span><span class="s1">'{
+  "spec": {
+    "template": {
+      "spec": {
+        "containers": [{
+          "name": "orbit-server",
+          "env": [{
+            "name": "RUST_LOG_MAX_SIZE",
+            "value": "100MB"
+          }]
+        }]
+      }
+    }
+  }
+}'</span>
+</code></pre></div></div>
+
+<h2 id="support-and-documentation">Support and Documentation</h2>
+
+<ul>
+  <li><strong>GitHub Issues</strong>: https://github.com/TuringWorks/orbit-rs/issues</li>
+  <li><strong>Documentation</strong>: https://github.com/TuringWorks/orbit-rs/docs</li>
+  <li><strong>Discussions</strong>: https://github.com/TuringWorks/orbit-rs/discussions</li>
+  <li><strong>Wiki</strong>: https://github.com/TuringWorks/orbit-rs/wiki</li>
+</ul>
+
+<hr />
+
+<p>This deployment guide provides comprehensive coverage of Orbit-RS Kubernetes deployment scenarios. For additional help or specific use cases, please refer to the project documentation or create an issue on GitHub.</p>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/orbit-rs/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Orbit-RS Documentation</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">TuringWorks</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

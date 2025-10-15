@@ -1,0 +1,1046 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Digital Ocean Deployment Guide | Orbit-RS Documentation</title>
+<meta name="generator" content="Jekyll v4.4.1" />
+<meta property="og:title" content="Digital Ocean Deployment Guide" />
+<meta name="author" content="TuringWorks" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<meta property="og:description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<link rel="canonical" href="https://turingworks.github.io/orbit-rs/deployment/DIGITAL_OCEAN.html" />
+<meta property="og:url" content="https://turingworks.github.io/orbit-rs/deployment/DIGITAL_OCEAN.html" />
+<meta property="og:site_name" content="Orbit-RS Documentation" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Digital Ocean Deployment Guide" />
+<meta name="twitter:site" content="@TuringWorksAI" />
+<meta name="twitter:creator" content="@TuringWorks" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","author":{"@type":"Person","name":"TuringWorks"},"description":"The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform","headline":"Digital Ocean Deployment Guide","url":"https://turingworks.github.io/orbit-rs/deployment/DIGITAL_OCEAN.html"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/orbit-rs/assets/main.css">
+  <link rel="stylesheet" href="/orbit-rs/assets/css/custom.css"><link type="application/atom+xml" rel="alternate" href="https://turingworks.github.io/orbit-rs/feed.xml" title="Orbit-RS Documentation" /></head><body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/orbit-rs/">Orbit-RS Documentation</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/orbit-rs/">Orbit-RS Documentation</a><a class="page-link" href="/orbit-rs/project_overview.html">Orbit-RS: Comprehensive Project Overview</a><a class="page-link" href="/orbit-rs/quick_start.html">Quick Start Guide - Multi-Protocol Database Server</a><a class="page-link" href="/orbit-rs/roadmap/">Development Roadmap</a><a class="page-link" href="/orbit-rs/features/">Orbit-RS Feature Index</a><a class="page-link" href="/orbit-rs/compute-acceleration/">Hardware Acceleration Guide</a><a class="page-link" href="/orbit-rs/contributing.html">Contributing Guide</a><a class="page-link" href="/orbit-rs/overview.html">Architecture Overview</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <h1 id="digital-ocean-deployment-guide">Digital Ocean Deployment Guide</h1>
+
+<p>This guide provides comprehensive instructions for deploying Orbit-RS to Digital Ocean using droplets with optional GPU support and Digital Ocean Spaces for object storage.</p>
+
+<h2 id="table-of-contents">Table of Contents</h2>
+
+<ul>
+  <li><a href="#overview">Overview</a></li>
+  <li><a href="#prerequisites">Prerequisites</a></li>
+  <li><a href="#quick-start">Quick Start</a></li>
+  <li><a href="#infrastructure-setup">Infrastructure Setup</a></li>
+  <li><a href="#digital-ocean-spaces-configuration">Digital Ocean Spaces Configuration</a></li>
+  <li><a href="#gpu-droplets">GPU Droplets</a></li>
+  <li><a href="#deployment-methods">Deployment Methods</a></li>
+  <li><a href="#monitoring-and-observability">Monitoring and Observability</a></li>
+  <li><a href="#cost-optimization">Cost Optimization</a></li>
+  <li><a href="#troubleshooting">Troubleshooting</a></li>
+  <li><a href="#best-practices">Best Practices</a></li>
+</ul>
+
+<h2 id="overview">Overview</h2>
+
+<p>Orbit-RS supports deployment to Digital Ocean using:</p>
+
+<ul>
+  <li><strong>Standard Droplets</strong>: For general compute workloads</li>
+  <li><strong>GPU Droplets</strong>: For AI/ML and compute-intensive workloads (H100, A100, V100)</li>
+  <li><strong>Digital Ocean Spaces</strong>: S3-compatible object storage with CDN support</li>
+  <li><strong>Load Balancers</strong>: For high availability and traffic distribution</li>
+  <li><strong>VPC</strong>: For network isolation and security</li>
+  <li><strong>Auto-scaling</strong>: Based on CPU, memory, and GPU utilization</li>
+</ul>
+
+<h3 id="architecture-diagram">Architecture Diagram</h3>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>┌─────────────────┐    ┌─────────────────┐
+│   Load Balancer │────│   Firewall      │
+└─────────────────┘    └─────────────────┘
+          │                       │
+          ▼                       ▼
+┌─────────────────┐    ┌─────────────────┐
+│ Standard        │    │ GPU Droplets    │
+│ Droplets        │    │ (H100/A100)     │
+│ - orbit-server  │    │ - orbit-compute │
+│ - orbit-client  │    │ - ML workloads  │
+│ - orbit-operator│    │                 │
+└─────────────────┘    └─────────────────┘
+          │                       │
+          └───────────────────────┘
+                      │
+                      ▼
+          ┌─────────────────┐
+          │ Digital Ocean   │
+          │ Spaces          │
+          │ (Object Storage)│
+          └─────────────────┘
+</code></pre></div></div>
+
+<h2 id="prerequisites">Prerequisites</h2>
+
+<h3 id="digital-ocean-account-setup">Digital Ocean Account Setup</h3>
+
+<ol>
+  <li><strong>Create a Digital Ocean Account</strong>
+    <ul>
+      <li>Sign up at <a href="https://digitalocean.com">digitalocean.com</a></li>
+      <li>Add a payment method</li>
+      <li>Verify your email</li>
+    </ul>
+  </li>
+  <li><strong>Generate API Token</strong>
+    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Go to Digital Ocean Control Panel &gt; API &gt; Tokens</span>
+<span class="c"># Generate a new Personal Access Token with read/write permissions</span>
+<span class="nb">export </span><span class="nv">DO_API_TOKEN</span><span class="o">=</span><span class="s2">"your_api_token_here"</span>
+</code></pre></div>    </div>
+  </li>
+  <li><strong>Create SSH Key</strong>
+    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Generate SSH key pair</span>
+ssh-keygen <span class="nt">-t</span> ed25519 <span class="nt">-C</span> <span class="s2">"your_email@example.com"</span> <span class="nt">-f</span> ~/.ssh/orbit-rs-do
+   
+<span class="c"># Add public key to Digital Ocean</span>
+<span class="c"># Control Panel &gt; Settings &gt; Security &gt; SSH Keys</span>
+<span class="c"># Copy content of ~/.ssh/orbit-rs-do.pub</span>
+   
+<span class="c"># Get the SSH key ID</span>
+doctl compute ssh-key list
+<span class="nb">export </span><span class="nv">DO_SSH_KEY_ID</span><span class="o">=</span><span class="s2">"your_ssh_key_id"</span>
+</code></pre></div>    </div>
+  </li>
+</ol>
+
+<h3 id="local-environment">Local Environment</h3>
+
+<ol>
+  <li><strong>Install Required Tools</strong>
+    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Install doctl (Digital Ocean CLI)</span>
+<span class="c"># macOS</span>
+brew <span class="nb">install </span>doctl
+   
+<span class="c"># Linux</span>
+snap <span class="nb">install </span>doctl
+   
+<span class="c"># Or download from: https://github.com/digitalocean/doctl/releases</span>
+   
+<span class="c"># Authenticate doctl</span>
+doctl auth init
+</code></pre></div>    </div>
+  </li>
+  <li><strong>Install Docker</strong>
+    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Required for local container operations</span>
+curl <span class="nt">-fsSL</span> https://get.docker.com | sh
+</code></pre></div>    </div>
+  </li>
+  <li><strong>Clone Repository</strong>
+    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>git clone https://github.com/your-org/orbit-rs.git
+<span class="nb">cd </span>orbit-rs
+</code></pre></div>    </div>
+  </li>
+</ol>
+
+<h2 id="quick-start">Quick Start</h2>
+
+<h3 id="1-environment-variables">1. Environment Variables</h3>
+
+<p>Create a <code class="language-plaintext highlighter-rouge">.env</code> file with your Digital Ocean credentials:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Digital Ocean API Configuration</span>
+<span class="nv">DO_API_TOKEN</span><span class="o">=</span><span class="s2">"your_api_token_here"</span>
+<span class="nv">DO_SSH_KEY_ID</span><span class="o">=</span><span class="s2">"your_ssh_key_id"</span>
+
+<span class="c"># Digital Ocean Spaces Configuration  </span>
+<span class="nv">DO_SPACES_NAME</span><span class="o">=</span><span class="s2">"orbit-rs-storage"</span>
+<span class="nv">DO_SPACES_REGION</span><span class="o">=</span><span class="s2">"nyc3"</span>
+<span class="nv">DO_SPACES_ACCESS_KEY</span><span class="o">=</span><span class="s2">"your_spaces_access_key"</span>
+<span class="nv">DO_SPACES_SECRET_KEY</span><span class="o">=</span><span class="s2">"your_spaces_secret_key"</span>
+
+<span class="c"># Optional: Backup Spaces</span>
+<span class="nv">DO_SPACES_BACKUP_NAME</span><span class="o">=</span><span class="s2">"orbit-rs-backup"</span>
+<span class="nv">DO_SPACES_BACKUP_ACCESS_KEY</span><span class="o">=</span><span class="s2">"your_backup_access_key"</span>
+<span class="nv">DO_SPACES_BACKUP_SECRET_KEY</span><span class="o">=</span><span class="s2">"your_backup_secret_key"</span>
+
+<span class="c"># Load Balancer Configuration</span>
+<span class="nv">DO_LB_ID</span><span class="o">=</span><span class="s2">"will_be_set_after_creation"</span>
+
+<span class="c"># Monitoring</span>
+<span class="nv">GRAFANA_ADMIN_PASSWORD</span><span class="o">=</span><span class="s2">"secure_password"</span>
+<span class="nv">SLACK_WEBHOOK_URL</span><span class="o">=</span><span class="s2">"https://hooks.slack.com/services/..."</span>
+</code></pre></div></div>
+
+<h3 id="2-quick-deployment">2. Quick Deployment</h3>
+
+<p>Using the GitHub Actions workflow:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Trigger deployment via GitHub UI or API</span>
+gh workflow run digitalocean-deploy.yml <span class="se">\</span>
+  <span class="nt">-f</span> <span class="nv">deployment_environment</span><span class="o">=</span>staging <span class="se">\</span>
+  <span class="nt">-f</span> <span class="nv">enable_gpu_droplets</span><span class="o">=</span><span class="nb">true</span> <span class="se">\</span>
+  <span class="nt">-f</span> <span class="nv">droplet_count</span><span class="o">=</span>3 <span class="se">\</span>
+  <span class="nt">-f</span> <span class="nv">gpu_droplet_count</span><span class="o">=</span>1
+</code></pre></div></div>
+
+<p>Or deploy manually using configuration files:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Deploy using example configuration</span>
+<span class="nb">cp </span>deploy/examples/digitalocean-droplets-config.yaml deploy/config/production.yaml
+
+<span class="c"># Edit the configuration</span>
+vim deploy/config/production.yaml
+
+<span class="c"># Deploy using infrastructure-as-code tools (recommended)</span>
+<span class="c"># See "Deployment Methods" section below</span>
+</code></pre></div></div>
+
+<h2 id="infrastructure-setup">Infrastructure Setup</h2>
+
+<h3 id="1-vpc-and-networking">1. VPC and Networking</h3>
+
+<p>Create a Virtual Private Cloud for network isolation:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Create VPC</span>
+<span class="nv">VPC_ID</span><span class="o">=</span><span class="si">$(</span>doctl compute vpc create <span class="se">\</span>
+  <span class="nt">--name</span> <span class="s2">"orbit-rs-vpc"</span> <span class="se">\</span>
+  <span class="nt">--region</span> <span class="s2">"nyc3"</span> <span class="se">\</span>
+  <span class="nt">--ip-range</span> <span class="s2">"10.116.0.0/20"</span> <span class="se">\</span>
+  <span class="nt">--format</span> ID <span class="nt">--no-header</span><span class="si">)</span>
+
+<span class="nb">echo</span> <span class="s2">"VPC_ID=</span><span class="k">${</span><span class="nv">VPC_ID</span><span class="k">}</span><span class="s2">"</span>
+</code></pre></div></div>
+
+<h3 id="2-firewall-rules">2. Firewall Rules</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Create firewall</span>
+<span class="nv">FIREWALL_ID</span><span class="o">=</span><span class="si">$(</span>doctl compute firewall create <span class="se">\</span>
+  <span class="nt">--name</span> <span class="s2">"orbit-rs-firewall"</span> <span class="se">\</span>
+  <span class="nt">--inbound-rules</span> <span class="s2">"protocol:tcp,ports:22,address:YOUR_IP/32 protocol:tcp,ports:50051,address:10.116.0.0/20 protocol:tcp,ports:8080,address:10.116.0.0/20"</span> <span class="se">\</span>
+  <span class="nt">--outbound-rules</span> <span class="s2">"protocol:tcp,ports:443,address:0.0.0.0/0 protocol:tcp,ports:80,address:0.0.0.0/0"</span> <span class="se">\</span>
+  <span class="nt">--format</span> ID <span class="nt">--no-header</span><span class="si">)</span>
+
+<span class="nb">echo</span> <span class="s2">"FIREWALL_ID=</span><span class="k">${</span><span class="nv">FIREWALL_ID</span><span class="k">}</span><span class="s2">"</span>
+</code></pre></div></div>
+
+<h3 id="3-load-balancer">3. Load Balancer</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Create load balancer</span>
+<span class="nv">LB_ID</span><span class="o">=</span><span class="si">$(</span>doctl compute load-balancer create <span class="se">\</span>
+  <span class="nt">--name</span> <span class="s2">"orbit-rs-lb"</span> <span class="se">\</span>
+  <span class="nt">--region</span> <span class="s2">"nyc3"</span> <span class="se">\</span>
+  <span class="nt">--size</span> <span class="s2">"lb-small"</span> <span class="se">\</span>
+  <span class="nt">--algorithm</span> <span class="s2">"round_robin"</span> <span class="se">\</span>
+  <span class="nt">--forwarding-rules</span> <span class="s2">"entry_protocol:http,entry_port:80,target_protocol:http,target_port:8080"</span> <span class="se">\</span>
+  <span class="nt">--health-check</span> <span class="s2">"protocol:http,port:8080,path:/health"</span> <span class="se">\</span>
+  <span class="nt">--format</span> ID <span class="nt">--no-header</span><span class="si">)</span>
+
+<span class="nb">echo</span> <span class="s2">"LB_ID=</span><span class="k">${</span><span class="nv">LB_ID</span><span class="k">}</span><span class="s2">"</span>
+</code></pre></div></div>
+
+<h3 id="4-standard-droplets">4. Standard Droplets</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Create standard compute droplets</span>
+<span class="k">for </span>i <span class="k">in</span> <span class="o">{</span>1..3<span class="o">}</span><span class="p">;</span> <span class="k">do
+  </span><span class="nv">DROPLET_ID</span><span class="o">=</span><span class="si">$(</span>doctl compute droplet create <span class="s2">"orbit-rs-</span><span class="k">${</span><span class="nv">i</span><span class="k">}</span><span class="s2">"</span> <span class="se">\</span>
+    <span class="nt">--image</span> ubuntu-22-04-x64 <span class="se">\</span>
+    <span class="nt">--size</span> s-2vcpu-4gb <span class="se">\</span>
+    <span class="nt">--region</span> nyc3 <span class="se">\</span>
+    <span class="nt">--vpc-uuid</span> <span class="nv">$VPC_ID</span> <span class="se">\</span>
+    <span class="nt">--user-data-file</span> deploy/scripts/standard-droplet-init.sh <span class="se">\</span>
+    <span class="nt">--ssh-keys</span> <span class="nv">$DO_SSH_KEY_ID</span> <span class="se">\</span>
+    <span class="nt">--tag-names</span> <span class="s2">"orbit-rs,standard-compute"</span> <span class="se">\</span>
+    <span class="nt">--wait</span> <span class="se">\</span>
+    <span class="nt">--format</span> ID <span class="nt">--no-header</span><span class="si">)</span>
+  
+  <span class="nb">echo</span> <span class="s2">"Created droplet: orbit-rs-</span><span class="k">${</span><span class="nv">i</span><span class="k">}</span><span class="s2"> (ID: </span><span class="k">${</span><span class="nv">DROPLET_ID</span><span class="k">}</span><span class="s2">)"</span>
+  
+  <span class="c"># Add to firewall and load balancer</span>
+  doctl compute firewall add-droplets <span class="nv">$FIREWALL_ID</span> <span class="nt">--droplet-ids</span> <span class="nv">$DROPLET_ID</span>
+  doctl compute load-balancer add-droplets <span class="nv">$LB_ID</span> <span class="nt">--droplet-ids</span> <span class="nv">$DROPLET_ID</span>
+<span class="k">done</span>
+</code></pre></div></div>
+
+<h3 id="5-gpu-droplets-optional">5. GPU Droplets (Optional)</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Create GPU droplets (if needed)</span>
+<span class="nv">GPU_DROPLET_ID</span><span class="o">=</span><span class="si">$(</span>doctl compute droplet create <span class="s2">"orbit-rs-gpu-1"</span> <span class="se">\</span>
+  <span class="nt">--image</span> gpu-h100x1-base <span class="se">\</span>
+  <span class="nt">--size</span> gd-8vcpu-32gb-nvidia-h100x1 <span class="se">\</span>
+  <span class="nt">--region</span> nyc3 <span class="se">\</span>
+  <span class="nt">--vpc-uuid</span> <span class="nv">$VPC_ID</span> <span class="se">\</span>
+  <span class="nt">--user-data-file</span> deploy/scripts/gpu-droplet-init.sh <span class="se">\</span>
+  <span class="nt">--ssh-keys</span> <span class="nv">$DO_SSH_KEY_ID</span> <span class="se">\</span>
+  <span class="nt">--tag-names</span> <span class="s2">"orbit-rs,gpu-compute,ml-workload"</span> <span class="se">\</span>
+  <span class="nt">--wait</span> <span class="se">\</span>
+  <span class="nt">--format</span> ID <span class="nt">--no-header</span><span class="si">)</span>
+
+<span class="nb">echo</span> <span class="s2">"Created GPU droplet: orbit-rs-gpu-1 (ID: </span><span class="k">${</span><span class="nv">GPU_DROPLET_ID</span><span class="k">}</span><span class="s2">)"</span>
+</code></pre></div></div>
+
+<h2 id="digital-ocean-spaces-configuration">Digital Ocean Spaces Configuration</h2>
+
+<h3 id="1-create-spaces-bucket">1. Create Spaces Bucket</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Create primary storage space</span>
+doctl spaces bucket create <span class="nv">$DO_SPACES_NAME</span> <span class="nt">--region</span> <span class="nv">$DO_SPACES_REGION</span>
+
+<span class="c"># Create backup space (different region for DR)</span>
+doctl spaces bucket create <span class="nv">$DO_SPACES_BACKUP_NAME</span> <span class="nt">--region</span> sfo3
+</code></pre></div></div>
+
+<h3 id="2-configure-cors-if-needed">2. Configure CORS (if needed)</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Create CORS configuration</span>
+<span class="nb">cat</span> <span class="o">&gt;</span> cors-config.json <span class="o">&lt;&lt;</span> <span class="sh">'</span><span class="no">EOF</span><span class="sh">'
+{
+  "CORSRules": [
+    {
+      "AllowedHeaders": ["*"],
+      "AllowedMethods": ["GET", "POST", "PUT", "DELETE", "HEAD"],
+      "AllowedOrigins": ["*"],
+      "MaxAgeSeconds": 3000
+    }
+  ]
+}
+</span><span class="no">EOF
+
+</span><span class="c"># Apply CORS configuration</span>
+doctl spaces bucket put-cors <span class="nv">$DO_SPACES_NAME</span> <span class="nt">--config</span> cors-config.json
+</code></pre></div></div>
+
+<h3 id="3-cdn-configuration">3. CDN Configuration</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Enable CDN for your space via the Digital Ocean control panel</span>
+<span class="c"># The CDN endpoint will be: ${DO_SPACES_NAME}.${DO_SPACES_REGION}.cdn.digitaloceanspaces.com</span>
+</code></pre></div></div>
+
+<h3 id="4-orbit-rs-configuration">4. Orbit-RS Configuration</h3>
+
+<p>Create a configuration file for Orbit-RS to use Digital Ocean Spaces:</p>
+
+<div class="language-toml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># /opt/orbit-rs/config/orbit-server.toml</span>
+<span class="k">[</span><span class="n">storage</span><span class="k">]</span>
+<span class="n">provider</span> <span class="o">=</span><span class="w"> </span><span class="s">"digitalocean_spaces"</span>
+
+<span class="k">[</span><span class="n">storage</span><span class="k">.</span><span class="n">digitalocean_spaces</span><span class="k">]</span>
+<span class="n">endpoint</span> <span class="o">=</span><span class="w"> </span><span class="s">"nyc3.digitaloceanspaces.com"</span>
+<span class="n">region</span> <span class="o">=</span><span class="w"> </span><span class="s">"nyc3"</span>
+<span class="n">space_name</span> <span class="o">=</span><span class="w"> </span><span class="s">"orbit-rs-storage"</span>
+<span class="n">access_key_id</span> <span class="o">=</span><span class="w"> </span><span class="s">"${DO_SPACES_ACCESS_KEY}"</span>
+<span class="n">secret_access_key</span> <span class="o">=</span><span class="w"> </span><span class="s">"${DO_SPACES_SECRET_KEY}"</span>
+<span class="n">enable_ssl</span> <span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+<span class="n">enable_cdn</span> <span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+<span class="n">enable_encryption</span> <span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+<span class="n">prefix</span> <span class="o">=</span><span class="w"> </span><span class="s">"orbit-rs-production"</span>
+
+<span class="k">[</span><span class="n">storage</span><span class="k">.</span><span class="n">digitalocean_spaces</span><span class="k">.</span><span class="n">tags</span><span class="k">]</span>
+<span class="n">project</span> <span class="o">=</span><span class="w"> </span><span class="s">"orbit-rs"</span>
+<span class="n">environment</span> <span class="o">=</span><span class="w"> </span><span class="s">"production"</span>
+</code></pre></div></div>
+
+<h2 id="gpu-droplets">GPU Droplets</h2>
+
+<h3 id="available-gpu-droplet-types">Available GPU Droplet Types</h3>
+
+<p>Digital Ocean offers several GPU droplet types:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Size</th>
+      <th>vCPUs</th>
+      <th>RAM</th>
+      <th>GPU</th>
+      <th>GPU Memory</th>
+      <th>Storage</th>
+      <th>Price/hour</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">gd-2vcpu-8gb-nvidia-rtx-4000</code></td>
+      <td>2</td>
+      <td>8 GB</td>
+      <td>RTX 4000</td>
+      <td>20 GB</td>
+      <td>200 GB SSD</td>
+      <td>~$0.50</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">gd-4vcpu-16gb-nvidia-rtx-5000</code></td>
+      <td>4</td>
+      <td>16 GB</td>
+      <td>RTX 5000</td>
+      <td>32 GB</td>
+      <td>400 GB SSD</td>
+      <td>~$1.00</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">gd-8vcpu-32gb-nvidia-h100x1</code></td>
+      <td>8</td>
+      <td>32 GB</td>
+      <td>H100</td>
+      <td>80 GB</td>
+      <td>800 GB SSD</td>
+      <td>~$3.00</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">gd-16vcpu-64gb-nvidia-h100x2</code></td>
+      <td>16</td>
+      <td>64 GB</td>
+      <td>2x H100</td>
+      <td>160 GB</td>
+      <td>1.6 TB SSD</td>
+      <td>~$6.00</td>
+    </tr>
+  </tbody>
+</table>
+
+<p><em>Prices are approximate and vary by region</em></p>
+
+<h3 id="gpu-droplet-configuration">GPU Droplet Configuration</h3>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># deploy/config/gpu-droplets.yaml</span>
+<span class="na">gpu_droplets</span><span class="pi">:</span>
+  <span class="na">image</span><span class="pi">:</span> <span class="s2">"</span><span class="s">gpu-h100x1-base"</span>
+  <span class="na">size</span><span class="pi">:</span> <span class="s2">"</span><span class="s">gd-8vcpu-32gb-nvidia-h100x1"</span>
+  <span class="na">region</span><span class="pi">:</span> <span class="s2">"</span><span class="s">nyc3"</span>
+  <span class="na">count</span><span class="pi">:</span> <span class="m">2</span>
+  
+  <span class="na">gpu_config</span><span class="pi">:</span>
+    <span class="na">driver_version</span><span class="pi">:</span> <span class="s2">"</span><span class="s">535.154.05"</span>
+    <span class="na">cuda_version</span><span class="pi">:</span> <span class="s2">"</span><span class="s">12.2"</span>
+    <span class="na">cudnn_version</span><span class="pi">:</span> <span class="s2">"</span><span class="s">8.9"</span>
+    <span class="na">enable_persistence_mode</span><span class="pi">:</span> <span class="kc">true</span>
+    <span class="na">memory_clock</span><span class="pi">:</span> <span class="m">1215</span>
+    <span class="na">graphics_clock</span><span class="pi">:</span> <span class="m">1410</span>
+    <span class="na">power_limit</span><span class="pi">:</span> <span class="m">350</span>
+    <span class="na">memory_fraction</span><span class="pi">:</span> <span class="m">0.9</span>
+
+  <span class="na">monitoring</span><span class="pi">:</span>
+    <span class="na">gpu_metrics</span><span class="pi">:</span> <span class="kc">true</span>
+    <span class="na">temperature_threshold</span><span class="pi">:</span> <span class="m">83</span>
+    <span class="na">power_threshold</span><span class="pi">:</span> <span class="m">300</span>
+    <span class="na">memory_threshold</span><span class="pi">:</span> <span class="m">80</span>
+    <span class="na">enable_nvml</span><span class="pi">:</span> <span class="kc">true</span>
+</code></pre></div></div>
+
+<h3 id="gpu-workload-deployment">GPU Workload Deployment</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Deploy GPU-optimized containers</span>
+docker run <span class="nt">-d</span> <span class="se">\</span>
+  <span class="nt">--name</span> orbit-compute-gpu <span class="se">\</span>
+  <span class="nt">--restart</span> unless-stopped <span class="se">\</span>
+  <span class="nt">--gpus</span> all <span class="se">\</span>
+  <span class="nt">-e</span> <span class="nv">NVIDIA_VISIBLE_DEVICES</span><span class="o">=</span>all <span class="se">\</span>
+  <span class="nt">-e</span> <span class="nv">CUDA_VISIBLE_DEVICES</span><span class="o">=</span>0 <span class="se">\</span>
+  <span class="nt">-e</span> <span class="nv">GPU_MEMORY_FRACTION</span><span class="o">=</span>0.8 <span class="se">\</span>
+  ghcr.io/your-org/orbit-rs/orbit-compute:latest-gpu
+</code></pre></div></div>
+
+<h2 id="deployment-methods">Deployment Methods</h2>
+
+<h3 id="method-1-github-actions-recommended">Method 1: GitHub Actions (Recommended)</h3>
+
+<p>The automated deployment pipeline handles everything:</p>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># .github/workflows/digitalocean-deploy.yml is already configured</span>
+<span class="c1"># Trigger deployment:</span>
+<span class="na">name</span><span class="pi">:</span> <span class="s">Deploy to Digital Ocean</span>
+<span class="na">on</span><span class="pi">:</span>
+  <span class="na">workflow_dispatch</span><span class="pi">:</span>
+    <span class="na">inputs</span><span class="pi">:</span>
+      <span class="na">environment</span><span class="pi">:</span>
+        <span class="na">type</span><span class="pi">:</span> <span class="s">choice</span>
+        <span class="na">options</span><span class="pi">:</span> <span class="pi">[</span><span class="nv">development</span><span class="pi">,</span> <span class="nv">staging</span><span class="pi">,</span> <span class="nv">production</span><span class="pi">]</span>
+      <span class="na">enable_gpu</span><span class="pi">:</span>
+        <span class="na">type</span><span class="pi">:</span> <span class="s">boolean</span>
+        <span class="na">default</span><span class="pi">:</span> <span class="kc">false</span>
+</code></pre></div></div>
+
+<h3 id="method-2-terraform-infrastructure-as-code">Method 2: Terraform (Infrastructure as Code)</h3>
+
+<div class="language-hcl highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># terraform/digitalocean/main.tf</span>
+<span class="nx">terraform</span> <span class="p">{</span>
+  <span class="nx">required_providers</span> <span class="p">{</span>
+    <span class="nx">digitalocean</span> <span class="o">=</span> <span class="p">{</span>
+      <span class="nx">source</span>  <span class="o">=</span> <span class="s2">"digitalocean/digitalocean"</span>
+      <span class="nx">version</span> <span class="o">=</span> <span class="s2">"~&gt; 2.0"</span>
+    <span class="p">}</span>
+  <span class="p">}</span>
+<span class="p">}</span>
+
+<span class="nx">provider</span> <span class="s2">"digitalocean"</span> <span class="p">{</span>
+  <span class="nx">token</span> <span class="o">=</span> <span class="nx">var</span><span class="p">.</span><span class="nx">do_token</span>
+<span class="p">}</span>
+
+<span class="nx">resource</span> <span class="s2">"digitalocean_vpc"</span> <span class="s2">"orbit_vpc"</span> <span class="p">{</span>
+  <span class="nx">name</span>     <span class="o">=</span> <span class="s2">"orbit-rs-vpc"</span>
+  <span class="nx">region</span>   <span class="o">=</span> <span class="nx">var</span><span class="p">.</span><span class="nx">region</span>
+  <span class="nx">ip_range</span> <span class="o">=</span> <span class="s2">"10.116.0.0/20"</span>
+<span class="p">}</span>
+
+<span class="nx">resource</span> <span class="s2">"digitalocean_droplet"</span> <span class="s2">"orbit_servers"</span> <span class="p">{</span>
+  <span class="nx">count</span>    <span class="o">=</span> <span class="nx">var</span><span class="p">.</span><span class="nx">droplet_count</span>
+  <span class="nx">image</span>    <span class="o">=</span> <span class="s2">"ubuntu-22-04-x64"</span>
+  <span class="nx">name</span>     <span class="o">=</span> <span class="s2">"orbit-rs-${count.index + 1}"</span>
+  <span class="nx">region</span>   <span class="o">=</span> <span class="nx">var</span><span class="p">.</span><span class="nx">region</span>
+  <span class="nx">size</span>     <span class="o">=</span> <span class="s2">"s-2vcpu-4gb"</span>
+  <span class="nx">vpc_uuid</span> <span class="o">=</span> <span class="nx">digitalocean_vpc</span><span class="p">.</span><span class="nx">orbit_vpc</span><span class="p">.</span><span class="nx">id</span>
+  
+  <span class="nx">user_data</span> <span class="o">=</span> <span class="nx">file</span><span class="p">(</span><span class="s2">"${path.module}/scripts/droplet-init.sh"</span><span class="p">)</span>
+  
+  <span class="nx">ssh_keys</span> <span class="o">=</span> <span class="p">[</span><span class="nx">var</span><span class="p">.</span><span class="nx">ssh_key_id</span><span class="p">]</span>
+  
+  <span class="nx">tags</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"orbit-rs"</span><span class="p">,</span> <span class="s2">"standard-compute"</span><span class="p">]</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="method-3-ansible-playbooks">Method 3: Ansible Playbooks</h3>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># ansible/digitalocean.yml</span>
+<span class="nn">---</span>
+<span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">Deploy Orbit-RS to Digital Ocean</span>
+  <span class="na">hosts</span><span class="pi">:</span> <span class="s">localhost</span>
+  <span class="na">vars</span><span class="pi">:</span>
+    <span class="na">do_token</span><span class="pi">:</span> <span class="s2">"</span><span class="s">"</span>
+    <span class="na">droplet_count</span><span class="pi">:</span> <span class="m">3</span>
+    
+  <span class="na">tasks</span><span class="pi">:</span>
+    <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">Create VPC</span>
+      <span class="na">digital_ocean_vpc</span><span class="pi">:</span>
+        <span class="na">api_token</span><span class="pi">:</span> <span class="s2">"</span><span class="s">"</span>
+        <span class="na">name</span><span class="pi">:</span> <span class="s2">"</span><span class="s">orbit-rs-vpc"</span>
+        <span class="na">region</span><span class="pi">:</span> <span class="s2">"</span><span class="s">nyc3"</span>
+        <span class="na">ip_range</span><span class="pi">:</span> <span class="s2">"</span><span class="s">10.116.0.0/20"</span>
+        <span class="na">state</span><span class="pi">:</span> <span class="s">present</span>
+      <span class="na">register</span><span class="pi">:</span> <span class="s">vpc_result</span>
+      
+    <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">Create droplets</span>
+      <span class="na">digital_ocean_droplet</span><span class="pi">:</span>
+        <span class="na">api_token</span><span class="pi">:</span> <span class="s2">"</span><span class="s">"</span>
+        <span class="na">name</span><span class="pi">:</span> <span class="s2">"</span><span class="s">orbit-rs-"</span>
+        <span class="na">size</span><span class="pi">:</span> <span class="s2">"</span><span class="s">s-2vcpu-4gb"</span>
+        <span class="na">image</span><span class="pi">:</span> <span class="s2">"</span><span class="s">ubuntu-22-04-x64"</span>
+        <span class="na">region</span><span class="pi">:</span> <span class="s2">"</span><span class="s">nyc3"</span>
+        <span class="na">vpc_uuid</span><span class="pi">:</span> <span class="s2">"</span><span class="s">"</span>
+        <span class="na">user_data</span><span class="pi">:</span> <span class="s2">"</span><span class="s">"</span>
+        <span class="na">ssh_keys</span><span class="pi">:</span> <span class="pi">[</span><span class="s2">"</span><span class="s">"</span><span class="pi">]</span>
+        <span class="na">tags</span><span class="pi">:</span> <span class="pi">[</span><span class="s2">"</span><span class="s">orbit-rs"</span><span class="pi">,</span> <span class="s2">"</span><span class="s">standard-compute"</span><span class="pi">]</span>
+        <span class="na">state</span><span class="pi">:</span> <span class="s">present</span>
+      <span class="na">loop</span><span class="pi">:</span> <span class="s2">"</span><span class="s">"</span>
+</code></pre></div></div>
+
+<h3 id="method-4-docker-compose-single-droplet">Method 4: Docker Compose (Single Droplet)</h3>
+
+<p>For smaller deployments on a single droplet:</p>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># docker-compose.digitalocean.yml</span>
+<span class="na">version</span><span class="pi">:</span> <span class="s1">'</span><span class="s">3.8'</span>
+
+<span class="na">services</span><span class="pi">:</span>
+  <span class="na">orbit-server</span><span class="pi">:</span>
+    <span class="na">image</span><span class="pi">:</span> <span class="s">ghcr.io/your-org/orbit-rs/orbit-server:latest</span>
+    <span class="na">ports</span><span class="pi">:</span>
+      <span class="pi">-</span> <span class="s2">"</span><span class="s">50051:50051"</span>
+      <span class="pi">-</span> <span class="s2">"</span><span class="s">8080:8080"</span>
+      <span class="pi">-</span> <span class="s2">"</span><span class="s">9090:9090"</span>
+    <span class="na">environment</span><span class="pi">:</span>
+      <span class="pi">-</span> <span class="s">DEPLOYMENT_MODE=digital_ocean</span>
+      <span class="pi">-</span> <span class="s">DO_SPACES_NAME=${DO_SPACES_NAME}</span>
+      <span class="pi">-</span> <span class="s">DO_SPACES_REGION=${DO_SPACES_REGION}</span>
+      <span class="pi">-</span> <span class="s">DO_SPACES_ACCESS_KEY=${DO_SPACES_ACCESS_KEY}</span>
+      <span class="pi">-</span> <span class="s">DO_SPACES_SECRET_KEY=${DO_SPACES_SECRET_KEY}</span>
+    <span class="na">volumes</span><span class="pi">:</span>
+      <span class="pi">-</span> <span class="s">orbit_data:/app/data</span>
+      <span class="pi">-</span> <span class="s">orbit_logs:/app/logs</span>
+    <span class="na">restart</span><span class="pi">:</span> <span class="s">unless-stopped</span>
+
+  <span class="na">orbit-client</span><span class="pi">:</span>
+    <span class="na">image</span><span class="pi">:</span> <span class="s">ghcr.io/your-org/orbit-rs/orbit-client:latest</span>
+    <span class="na">depends_on</span><span class="pi">:</span>
+      <span class="pi">-</span> <span class="s">orbit-server</span>
+    <span class="na">environment</span><span class="pi">:</span>
+      <span class="pi">-</span> <span class="s">ORBIT_SERVER_URL=http://orbit-server:50051</span>
+    <span class="na">restart</span><span class="pi">:</span> <span class="s">unless-stopped</span>
+
+<span class="na">volumes</span><span class="pi">:</span>
+  <span class="na">orbit_data</span><span class="pi">:</span>
+  <span class="na">orbit_logs</span><span class="pi">:</span>
+</code></pre></div></div>
+
+<h2 id="monitoring-and-observability">Monitoring and Observability</h2>
+
+<h3 id="1-digital-ocean-monitoring">1. Digital Ocean Monitoring</h3>
+
+<p>Digital Ocean provides built-in monitoring:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Enable monitoring for droplets</span>
+doctl compute droplet-action enable-monitoring <span class="nv">$DROPLET_ID</span>
+</code></pre></div></div>
+
+<h3 id="2-prometheus-and-grafana">2. Prometheus and Grafana</h3>
+
+<p>Deploy monitoring stack:</p>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># monitoring/docker-compose.yml</span>
+<span class="na">version</span><span class="pi">:</span> <span class="s1">'</span><span class="s">3.8'</span>
+
+<span class="na">services</span><span class="pi">:</span>
+  <span class="na">prometheus</span><span class="pi">:</span>
+    <span class="na">image</span><span class="pi">:</span> <span class="s">prom/prometheus:latest</span>
+    <span class="na">ports</span><span class="pi">:</span>
+      <span class="pi">-</span> <span class="s2">"</span><span class="s">9090:9090"</span>
+    <span class="na">volumes</span><span class="pi">:</span>
+      <span class="pi">-</span> <span class="s">./prometheus.yml:/etc/prometheus/prometheus.yml</span>
+    <span class="na">command</span><span class="pi">:</span>
+      <span class="pi">-</span> <span class="s1">'</span><span class="s">--config.file=/etc/prometheus/prometheus.yml'</span>
+      <span class="pi">-</span> <span class="s1">'</span><span class="s">--storage.tsdb.path=/prometheus'</span>
+      <span class="pi">-</span> <span class="s1">'</span><span class="s">--web.console.libraries=/etc/prometheus/console_libraries'</span>
+      <span class="pi">-</span> <span class="s1">'</span><span class="s">--web.console.templates=/etc/prometheus/consoles'</span>
+
+  <span class="na">grafana</span><span class="pi">:</span>
+    <span class="na">image</span><span class="pi">:</span> <span class="s">grafana/grafana:latest</span>
+    <span class="na">ports</span><span class="pi">:</span>
+      <span class="pi">-</span> <span class="s2">"</span><span class="s">3000:3000"</span>
+    <span class="na">environment</span><span class="pi">:</span>
+      <span class="pi">-</span> <span class="s">GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}</span>
+    <span class="na">volumes</span><span class="pi">:</span>
+      <span class="pi">-</span> <span class="s">grafana_data:/var/lib/grafana</span>
+      <span class="pi">-</span> <span class="s">./grafana/dashboards:/etc/grafana/provisioning/dashboards</span>
+      <span class="pi">-</span> <span class="s">./grafana/datasources:/etc/grafana/provisioning/datasources</span>
+
+<span class="na">volumes</span><span class="pi">:</span>
+  <span class="na">grafana_data</span><span class="pi">:</span>
+</code></pre></div></div>
+
+<h3 id="3-gpu-monitoring">3. GPU Monitoring</h3>
+
+<p>For GPU droplets, additional monitoring is available:</p>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># GPU monitoring with DCGM</span>
+<span class="na">services</span><span class="pi">:</span>
+  <span class="na">dcgm-exporter</span><span class="pi">:</span>
+    <span class="na">image</span><span class="pi">:</span> <span class="s">nvcr.io/nvidia/k8s/dcgm-exporter:3.1.8-3.1.5-ubuntu20.04</span>
+    <span class="na">runtime</span><span class="pi">:</span> <span class="s">nvidia</span>
+    <span class="na">environment</span><span class="pi">:</span>
+      <span class="pi">-</span> <span class="s">NVIDIA_VISIBLE_DEVICES=all</span>
+    <span class="na">ports</span><span class="pi">:</span>
+      <span class="pi">-</span> <span class="s2">"</span><span class="s">9400:9400"</span>
+    <span class="na">deploy</span><span class="pi">:</span>
+      <span class="na">resources</span><span class="pi">:</span>
+        <span class="na">reservations</span><span class="pi">:</span>
+          <span class="na">devices</span><span class="pi">:</span>
+            <span class="pi">-</span> <span class="na">driver</span><span class="pi">:</span> <span class="s">nvidia</span>
+              <span class="na">count</span><span class="pi">:</span> <span class="s">all</span>
+              <span class="na">capabilities</span><span class="pi">:</span> <span class="pi">[</span><span class="nv">gpu</span><span class="pi">]</span>
+</code></pre></div></div>
+
+<h3 id="4-log-aggregation">4. Log Aggregation</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Configure log forwarding to Digital Ocean's log aggregation service</span>
+<span class="c"># or use external services like Grafana Loki, ELK, etc.</span>
+
+<span class="c"># Example: Forward logs to external service</span>
+curl <span class="nt">-X</span> POST <span class="s2">"https://api.digitalocean.com/v2/monitoring/logs/forward"</span> <span class="se">\</span>
+  <span class="nt">-H</span> <span class="s2">"Authorization: Bearer </span><span class="nv">$DO_API_TOKEN</span><span class="s2">"</span> <span class="se">\</span>
+  <span class="nt">-H</span> <span class="s2">"Content-Type: application/json"</span> <span class="se">\</span>
+  <span class="nt">-d</span> <span class="s1">'{
+    "name": "orbit-rs-logs",
+    "config": {
+      "endpoint": "your-log-service-endpoint",
+      "format": "json"
+    }
+  }'</span>
+</code></pre></div></div>
+
+<h2 id="cost-optimization">Cost Optimization</h2>
+
+<h3 id="1-right-sizing-instances">1. Right-sizing Instances</h3>
+
+<p>Monitor resource usage and adjust droplet sizes:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Get droplet metrics</span>
+doctl monitoring metrics droplet cpu <span class="se">\</span>
+  <span class="nt">--start</span> <span class="si">$(</span><span class="nb">date</span> <span class="nt">-d</span> <span class="s1">'1 hour ago'</span> <span class="nt">--iso-8601</span><span class="si">)</span> <span class="se">\</span>
+  <span class="nt">--end</span> <span class="si">$(</span><span class="nb">date</span> <span class="nt">--iso-8601</span><span class="si">)</span> <span class="se">\</span>
+  <span class="nv">$DROPLET_ID</span>
+
+<span class="c"># Resize droplet if needed (requires shutdown)</span>
+doctl compute droplet-action resize <span class="nv">$DROPLET_ID</span> <span class="nt">--size</span> s-1vcpu-2gb
+</code></pre></div></div>
+
+<h3 id="2-reserved-instances">2. Reserved Instances</h3>
+
+<p>While Digital Ocean doesn’t offer traditional reserved instances, consider:</p>
+
+<ul>
+  <li><strong>Long-term discounts</strong>: Contact sales for volume discounts</li>
+  <li><strong>Scheduled scaling</strong>: Scale down during off-hours</li>
+</ul>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Example: Automated scaling script</span>
+<span class="nb">cat</span> <span class="o">&gt;</span> scale-down.sh <span class="o">&lt;&lt;</span> <span class="sh">'</span><span class="no">EOF</span><span class="sh">'
+#!/bin/bash
+# Scale down non-production environments during off-hours
+
+if [[ </span><span class="si">$(</span><span class="nb">date</span> +%H<span class="si">)</span><span class="sh"> -gt 20 || </span><span class="si">$(</span><span class="nb">date</span> +%H<span class="si">)</span><span class="sh"> -lt 8 ]]; then
+  # Scale down development droplets
+  doctl compute droplet delete orbit-rs-dev-2 orbit-rs-dev-3 --force
+fi
+</span><span class="no">EOF
+</span></code></pre></div></div>
+
+<h3 id="3-storage-optimization">3. Storage Optimization</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Set up lifecycle policies for Spaces</span>
+<span class="nb">cat</span> <span class="o">&gt;</span> lifecycle-policy.json <span class="o">&lt;&lt;</span> <span class="sh">'</span><span class="no">EOF</span><span class="sh">'
+{
+  "Rules": [
+    {
+      "ID": "archive-old-logs",
+      "Status": "Enabled",
+      "Filter": {
+        "Prefix": "logs/"
+      },
+      "Transitions": [
+        {
+          "Days": 30,
+          "StorageClass": "GLACIER"
+        }
+      ],
+      "Expiration": {
+        "Days": 365
+      }
+    }
+  ]
+}
+</span><span class="no">EOF
+
+</span><span class="c"># Apply lifecycle policy (when supported)</span>
+<span class="c"># doctl spaces bucket put-lifecycle $DO_SPACES_NAME --config lifecycle-policy.json</span>
+</code></pre></div></div>
+
+<h3 id="4-auto-scaling-configuration">4. Auto-scaling Configuration</h3>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># Auto-scaling based on metrics</span>
+<span class="na">auto_scaling</span><span class="pi">:</span>
+  <span class="na">enabled</span><span class="pi">:</span> <span class="kc">true</span>
+  
+  <span class="na">standard</span><span class="pi">:</span>
+    <span class="na">min_instances</span><span class="pi">:</span> <span class="m">2</span>
+    <span class="na">max_instances</span><span class="pi">:</span> <span class="m">10</span>
+    <span class="na">target_cpu_utilization</span><span class="pi">:</span> <span class="m">70</span>
+    <span class="na">scale_up_cooldown</span><span class="pi">:</span> <span class="s2">"</span><span class="s">5m"</span>
+    <span class="na">scale_down_cooldown</span><span class="pi">:</span> <span class="s2">"</span><span class="s">10m"</span>
+    
+  <span class="na">gpu</span><span class="pi">:</span>
+    <span class="na">min_instances</span><span class="pi">:</span> <span class="m">1</span>
+    <span class="na">max_instances</span><span class="pi">:</span> <span class="m">4</span>
+    <span class="na">target_gpu_utilization</span><span class="pi">:</span> <span class="m">80</span>
+    <span class="na">scale_up_cooldown</span><span class="pi">:</span> <span class="s2">"</span><span class="s">10m"</span>
+    <span class="na">scale_down_cooldown</span><span class="pi">:</span> <span class="s2">"</span><span class="s">20m"</span>
+</code></pre></div></div>
+
+<h2 id="troubleshooting">Troubleshooting</h2>
+
+<h3 id="common-issues">Common Issues</h3>
+
+<h4 id="1-droplet-creation-failed">1. Droplet Creation Failed</h4>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Check quota limits</span>
+doctl account get
+
+<span class="c"># Check available sizes in region</span>
+doctl compute size list <span class="nt">--region</span> nyc3
+
+<span class="c"># Check available images</span>
+doctl compute image list <span class="nt">--public</span> <span class="nt">--type</span> distribution
+</code></pre></div></div>
+
+<h4 id="2-gpu-droplet-issues">2. GPU Droplet Issues</h4>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># SSH into GPU droplet and check GPU status</span>
+doctl compute ssh <span class="nv">$GPU_DROPLET_ID</span> <span class="nt">--ssh-command</span> <span class="s2">"nvidia-smi"</span>
+
+<span class="c"># Check CUDA installation</span>
+doctl compute ssh <span class="nv">$GPU_DROPLET_ID</span> <span class="nt">--ssh-command</span> <span class="s2">"nvcc --version"</span>
+
+<span class="c"># Check Docker GPU support</span>
+doctl compute ssh <span class="nv">$GPU_DROPLET_ID</span> <span class="nt">--ssh-command</span> <span class="s2">"docker run --rm --gpus all nvidia/cuda:11.0-base nvidia-smi"</span>
+</code></pre></div></div>
+
+<h4 id="3-spaces-connectivity-issues">3. Spaces Connectivity Issues</h4>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Test Spaces connectivity</span>
+curl <span class="nt">-I</span> https://<span class="k">${</span><span class="nv">DO_SPACES_REGION</span><span class="k">}</span>.digitaloceanspaces.com/<span class="k">${</span><span class="nv">DO_SPACES_NAME</span><span class="k">}</span>/
+
+<span class="c"># Check credentials</span>
+s3cmd <span class="nt">--host</span><span class="o">=</span><span class="k">${</span><span class="nv">DO_SPACES_REGION</span><span class="k">}</span>.digitaloceanspaces.com <span class="se">\</span>
+      <span class="nt">--access_key</span><span class="o">=</span><span class="k">${</span><span class="nv">DO_SPACES_ACCESS_KEY</span><span class="k">}</span> <span class="se">\</span>
+      <span class="nt">--secret_key</span><span class="o">=</span><span class="k">${</span><span class="nv">DO_SPACES_SECRET_KEY</span><span class="k">}</span> <span class="se">\</span>
+      <span class="nb">ls </span>s3://<span class="k">${</span><span class="nv">DO_SPACES_NAME</span><span class="k">}</span>/
+</code></pre></div></div>
+
+<h4 id="4-load-balancer-health-checks-failing">4. Load Balancer Health Checks Failing</h4>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Check droplet health endpoints</span>
+<span class="k">for </span>droplet_ip <span class="k">in</span> <span class="si">$(</span>doctl compute droplet list <span class="nt">--tag-name</span> orbit-rs <span class="nt">--format</span> PublicIPv4 <span class="nt">--no-header</span><span class="si">)</span><span class="p">;</span> <span class="k">do
+  </span><span class="nb">echo</span> <span class="s2">"Checking </span><span class="nv">$droplet_ip</span><span class="s2">"</span>
+  curl <span class="nt">-f</span> http://<span class="nv">$droplet_ip</span>:8080/health <span class="o">||</span> <span class="nb">echo</span> <span class="s2">"Health check failed"</span>
+<span class="k">done</span>
+
+<span class="c"># Check load balancer configuration</span>
+doctl compute load-balancer get <span class="nv">$LB_ID</span>
+</code></pre></div></div>
+
+<h3 id="debug-commands">Debug Commands</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># View droplet console output</span>
+doctl compute droplet get <span class="nv">$DROPLET_ID</span> <span class="nt">--format</span> ID,Name,Status,PublicIPv4
+
+<span class="c"># Check cloud-init logs</span>
+doctl compute ssh <span class="nv">$DROPLET_ID</span> <span class="nt">--ssh-command</span> <span class="s2">"sudo cat /var/log/cloud-init-output.log"</span>
+
+<span class="c"># Monitor resource usage</span>
+doctl monitoring metrics droplet cpu <span class="se">\</span>
+  <span class="nt">--start</span> <span class="si">$(</span><span class="nb">date</span> <span class="nt">-d</span> <span class="s1">'1 hour ago'</span> <span class="nt">--iso-8601</span><span class="si">)</span> <span class="se">\</span>
+  <span class="nt">--end</span> <span class="si">$(</span><span class="nb">date</span> <span class="nt">--iso-8601</span><span class="si">)</span> <span class="se">\</span>
+  <span class="nv">$DROPLET_ID</span>
+</code></pre></div></div>
+
+<h3 id="log-locations">Log Locations</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Droplet initialization logs</span>
+/var/log/orbit-droplet-init.log
+/var/log/orbit-gpu-droplet-init.log
+
+<span class="c"># Application logs</span>
+/opt/orbit-rs/logs/
+/var/log/orbit-rs/
+
+<span class="c"># System logs</span>
+/var/log/syslog
+/var/log/cloud-init.log
+</code></pre></div></div>
+
+<h2 id="best-practices">Best Practices</h2>
+
+<h3 id="1-security">1. Security</h3>
+
+<ul>
+  <li><strong>Network Security</strong>
+    <ul>
+      <li>Use VPC for network isolation</li>
+      <li>Restrict firewall rules to necessary ports only</li>
+      <li>Disable root SSH login</li>
+      <li>Use SSH keys instead of passwords</li>
+      <li>Keep systems updated</li>
+    </ul>
+  </li>
+</ul>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Security hardening script</span>
+<span class="nb">cat</span> <span class="o">&gt;</span> harden.sh <span class="o">&lt;&lt;</span> <span class="sh">'</span><span class="no">EOF</span><span class="sh">'
+#!/bin/bash
+# Disable root login
+sed -i 's/PermitRootLogin yes/PermitRootLogin no/' /etc/ssh/sshd_config
+
+# Disable password authentication
+sed -i 's/#PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_config
+
+# Configure fail2ban
+systemctl enable fail2ban
+systemctl start fail2ban
+
+# Update system
+apt update &amp;&amp; apt upgrade -y
+</span><span class="no">EOF
+</span></code></pre></div></div>
+
+<ul>
+  <li><strong>Secrets Management</strong>
+    <ul>
+      <li>Use environment variables for sensitive data</li>
+      <li>Consider external secret management (HashiCorp Vault)</li>
+      <li>Rotate credentials regularly</li>
+    </ul>
+  </li>
+</ul>
+
+<h3 id="2-high-availability">2. High Availability</h3>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># Multi-region deployment</span>
+<span class="na">regions</span><span class="pi">:</span>
+  <span class="na">primary</span><span class="pi">:</span> <span class="s2">"</span><span class="s">nyc3"</span>
+  <span class="na">secondary</span><span class="pi">:</span> <span class="s2">"</span><span class="s">sfo3"</span>
+  
+<span class="na">load_balancer</span><span class="pi">:</span>
+  <span class="na">algorithm</span><span class="pi">:</span> <span class="s2">"</span><span class="s">round_robin"</span>
+  <span class="na">health_check</span><span class="pi">:</span>
+    <span class="na">path</span><span class="pi">:</span> <span class="s2">"</span><span class="s">/health"</span>
+    <span class="na">interval</span><span class="pi">:</span> <span class="m">10</span>
+    <span class="na">timeout</span><span class="pi">:</span> <span class="m">5</span>
+    <span class="na">unhealthy_threshold</span><span class="pi">:</span> <span class="m">3</span>
+
+<span class="na">backup</span><span class="pi">:</span>
+  <span class="na">enabled</span><span class="pi">:</span> <span class="kc">true</span>
+  <span class="na">schedule</span><span class="pi">:</span> <span class="s2">"</span><span class="s">0</span><span class="nv"> </span><span class="s">2</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">*"</span>  <span class="c1"># Daily at 2 AM</span>
+  <span class="na">retention</span><span class="pi">:</span> <span class="s2">"</span><span class="s">30d"</span>
+</code></pre></div></div>
+
+<h3 id="3-performance-optimization">3. Performance Optimization</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Network optimization</span>
+<span class="nb">echo</span> <span class="s1">'net.core.rmem_max = 134217728'</span> <span class="o">&gt;&gt;</span> /etc/sysctl.conf
+<span class="nb">echo</span> <span class="s1">'net.core.wmem_max = 134217728'</span> <span class="o">&gt;&gt;</span> /etc/sysctl.conf
+<span class="nb">echo</span> <span class="s1">'net.ipv4.tcp_congestion_control = bbr'</span> <span class="o">&gt;&gt;</span> /etc/sysctl.conf
+
+<span class="c"># GPU optimization (for GPU droplets)</span>
+nvidia-smi <span class="nt">-pm</span> 1  <span class="c"># Enable persistence mode</span>
+nvidia-smi <span class="nt">-ac</span> 1215,1410  <span class="c"># Set memory and graphics clocks</span>
+</code></pre></div></div>
+
+<h3 id="4-monitoring-strategy">4. Monitoring Strategy</h3>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">monitoring</span><span class="pi">:</span>
+  <span class="na">metrics</span><span class="pi">:</span>
+    <span class="pi">-</span> <span class="s">cpu_usage</span>
+    <span class="pi">-</span> <span class="s">memory_usage</span>  
+    <span class="pi">-</span> <span class="s">disk_usage</span>
+    <span class="pi">-</span> <span class="s">network_io</span>
+    <span class="pi">-</span> <span class="s">gpu_usage (for GPU droplets)</span>
+    <span class="pi">-</span> <span class="s">application_metrics</span>
+    
+  <span class="na">alerts</span><span class="pi">:</span>
+    <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s2">"</span><span class="s">high_cpu"</span>
+      <span class="na">condition</span><span class="pi">:</span> <span class="s2">"</span><span class="s">cpu</span><span class="nv"> </span><span class="s">&gt;</span><span class="nv"> </span><span class="s">80%"</span>
+      <span class="na">duration</span><span class="pi">:</span> <span class="s2">"</span><span class="s">5m"</span>
+    <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s2">"</span><span class="s">gpu_temp"</span>
+      <span class="na">condition</span><span class="pi">:</span> <span class="s2">"</span><span class="s">gpu_temp</span><span class="nv"> </span><span class="s">&gt;</span><span class="nv"> </span><span class="s">85°C"</span>
+      <span class="na">duration</span><span class="pi">:</span> <span class="s2">"</span><span class="s">2m"</span>
+      
+  <span class="na">dashboards</span><span class="pi">:</span>
+    <span class="pi">-</span> <span class="s2">"</span><span class="s">infrastructure_overview"</span>
+    <span class="pi">-</span> <span class="s2">"</span><span class="s">application_performance"</span> 
+    <span class="pi">-</span> <span class="s2">"</span><span class="s">gpu_metrics"</span>
+</code></pre></div></div>
+
+<h3 id="5-backup-and-recovery">5. Backup and Recovery</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Automated backup script</span>
+<span class="nb">cat</span> <span class="o">&gt;</span> backup.sh <span class="o">&lt;&lt;</span> <span class="sh">'</span><span class="no">EOF</span><span class="sh">'
+#!/bin/bash
+DATE=</span><span class="si">$(</span><span class="nb">date</span> +%Y%m%d_%H%M%S<span class="si">)</span><span class="sh">
+BACKUP_NAME="orbit-rs-backup-</span><span class="k">${</span><span class="nv">DATE</span><span class="k">}</span><span class="sh">"
+
+# Create snapshots of droplets
+for droplet in </span><span class="si">$(</span>doctl compute droplet list <span class="nt">--tag-name</span> orbit-rs <span class="nt">--format</span> ID <span class="nt">--no-header</span><span class="si">)</span><span class="sh">; do
+  doctl compute droplet-action snapshot </span><span class="nv">$droplet</span><span class="sh"> --snapshot-name "</span><span class="k">${</span><span class="nv">BACKUP_NAME</span><span class="k">}</span><span class="sh">-droplet-</span><span class="k">${</span><span class="nv">droplet</span><span class="k">}</span><span class="sh">"
+done
+
+# Backup Spaces data to different region
+s3cmd sync s3://</span><span class="k">${</span><span class="nv">DO_SPACES_NAME</span><span class="k">}</span><span class="sh">/ s3://</span><span class="k">${</span><span class="nv">DO_SPACES_BACKUP_NAME</span><span class="k">}</span><span class="sh">/backups/</span><span class="k">${</span><span class="nv">DATE</span><span class="k">}</span><span class="sh">/
+</span><span class="no">EOF
+</span></code></pre></div></div>
+
+<h3 id="6-cicd-integration">6. CI/CD Integration</h3>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># .github/workflows/deploy-production.yml</span>
+<span class="na">name</span><span class="pi">:</span> <span class="s">Deploy to Production</span>
+<span class="na">on</span><span class="pi">:</span>
+  <span class="na">push</span><span class="pi">:</span>
+    <span class="na">branches</span><span class="pi">:</span> <span class="pi">[</span><span class="nv">main</span><span class="pi">]</span>
+    
+<span class="na">env</span><span class="pi">:</span>
+  <span class="na">DO_API_TOKEN</span><span class="pi">:</span> <span class="s">$</span>
+  <span class="na">DO_SPACES_ACCESS_KEY</span><span class="pi">:</span> <span class="s">$</span>
+  <span class="na">DO_SPACES_SECRET_KEY</span><span class="pi">:</span> <span class="s">$</span>
+
+<span class="na">jobs</span><span class="pi">:</span>
+  <span class="na">deploy</span><span class="pi">:</span>
+    <span class="na">runs-on</span><span class="pi">:</span> <span class="s">ubuntu-latest</span>
+    <span class="na">steps</span><span class="pi">:</span>
+      <span class="pi">-</span> <span class="na">uses</span><span class="pi">:</span> <span class="s">actions/checkout@v4</span>
+      
+      <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">Deploy to Digital Ocean</span>
+        <span class="na">uses</span><span class="pi">:</span> <span class="s">./.github/actions/digitalocean-deploy</span>
+        <span class="na">with</span><span class="pi">:</span>
+          <span class="na">environment</span><span class="pi">:</span> <span class="s">production</span>
+          <span class="na">enable_gpu</span><span class="pi">:</span> <span class="kc">true</span>
+          <span class="na">droplet_count</span><span class="pi">:</span> <span class="m">5</span>
+</code></pre></div></div>
+
+<hr />
+
+<h2 id="next-steps">Next Steps</h2>
+
+<p>After successful deployment:</p>
+
+<ol>
+  <li><strong>Configure monitoring and alerting</strong></li>
+  <li><strong>Set up automated backups</strong></li>
+  <li><strong>Implement auto-scaling policies</strong></li>
+  <li><strong>Configure SSL/TLS certificates</strong></li>
+  <li><strong>Set up log aggregation</strong></li>
+  <li><strong>Perform load testing</strong></li>
+  <li><strong>Document runbooks for operations</strong></li>
+</ol>
+
+<h2 id="support">Support</h2>
+
+<ul>
+  <li><strong>Digital Ocean Documentation</strong>: https://docs.digitalocean.com/</li>
+  <li><strong>Orbit-RS Documentation</strong>: [Link to main docs]</li>
+  <li><strong>Community Support</strong>: [Link to community forum/Discord]</li>
+  <li><strong>Professional Support</strong>: [Contact information]</li>
+</ul>
+
+<p>For issues specific to Digital Ocean deployment, please check the <a href="#troubleshooting">troubleshooting section</a> or create an issue in the repository.</p>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/orbit-rs/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Orbit-RS Documentation</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">TuringWorks</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

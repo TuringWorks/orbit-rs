@@ -1,0 +1,858 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>OrbitQL Machine Learning Guide | Orbit-RS Documentation</title>
+<meta name="generator" content="Jekyll v4.4.1" />
+<meta property="og:title" content="OrbitQL Machine Learning Guide" />
+<meta name="author" content="TuringWorks" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<meta property="og:description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<link rel="canonical" href="https://turingworks.github.io/orbit-rs/ORBITQL_ML_GUIDE.html" />
+<meta property="og:url" content="https://turingworks.github.io/orbit-rs/ORBITQL_ML_GUIDE.html" />
+<meta property="og:site_name" content="Orbit-RS Documentation" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="OrbitQL Machine Learning Guide" />
+<meta name="twitter:site" content="@TuringWorksAI" />
+<meta name="twitter:creator" content="@TuringWorks" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","author":{"@type":"Person","name":"TuringWorks"},"description":"The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform","headline":"OrbitQL Machine Learning Guide","url":"https://turingworks.github.io/orbit-rs/ORBITQL_ML_GUIDE.html"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/orbit-rs/assets/main.css">
+  <link rel="stylesheet" href="/orbit-rs/assets/css/custom.css"><link type="application/atom+xml" rel="alternate" href="https://turingworks.github.io/orbit-rs/feed.xml" title="Orbit-RS Documentation" /></head><body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/orbit-rs/">Orbit-RS Documentation</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/orbit-rs/">Orbit-RS Documentation</a><a class="page-link" href="/orbit-rs/project_overview.html">Orbit-RS: Comprehensive Project Overview</a><a class="page-link" href="/orbit-rs/quick_start.html">Quick Start Guide - Multi-Protocol Database Server</a><a class="page-link" href="/orbit-rs/roadmap/">Development Roadmap</a><a class="page-link" href="/orbit-rs/features/">Orbit-RS Feature Index</a><a class="page-link" href="/orbit-rs/compute-acceleration/">Hardware Acceleration Guide</a><a class="page-link" href="/orbit-rs/contributing.html">Contributing Guide</a><a class="page-link" href="/orbit-rs/overview.html">Architecture Overview</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <h1 id="orbitql-machine-learning-guide">OrbitQL Machine Learning Guide</h1>
+
+<p><strong>Complete guide to using ML functions and boosting algorithms in OrbitQL</strong></p>
+
+<h2 id="-overview">🎯 <strong>Overview</strong></h2>
+
+<p>OrbitQL now supports comprehensive machine learning capabilities directly in SQL, including state-of-the-art boosting algorithms like XGBoost, LightGBM, CatBoost, and AdaBoost. This brings ML computation directly to your data without complex ETL pipelines.</p>
+
+<h2 id="️-quick-start">🏗️ <strong>Quick Start</strong></h2>
+
+<h3 id="basic-ml-query">Basic ML Query</h3>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Train a customer segmentation model using XGBoost</span>
+<span class="k">SELECT</span> <span class="n">ML_XGBOOST</span><span class="p">(</span>
+    <span class="n">ARRAY</span><span class="p">[</span><span class="n">age</span><span class="p">,</span> <span class="n">income</span><span class="p">,</span> <span class="n">purchase_frequency</span><span class="p">,</span> <span class="n">days_since_last_order</span><span class="p">],</span>
+    <span class="n">customer_segment</span>
+<span class="p">)</span> <span class="k">as</span> <span class="n">model_accuracy</span>
+<span class="k">FROM</span> <span class="n">customer_data</span>
+<span class="k">WHERE</span> <span class="n">created_at</span> <span class="o">&gt;</span> <span class="n">NOW</span><span class="p">()</span> <span class="o">-</span> <span class="n">INTERVAL</span> <span class="s1">'1 year'</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h3 id="model-management">Model Management</h3>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Train and save a model</span>
+<span class="k">SELECT</span> <span class="n">ML_TRAIN_MODEL</span><span class="p">(</span>
+    <span class="s1">'fraud_detector'</span><span class="p">,</span>           <span class="c1">-- Model name</span>
+    <span class="s1">'XGBOOST'</span><span class="p">,</span>                 <span class="c1">-- Algorithm</span>
+    <span class="n">ARRAY</span><span class="p">[</span><span class="n">amount</span><span class="p">,</span> <span class="n">merchant_category</span><span class="p">,</span> <span class="n">hour_of_day</span><span class="p">,</span> <span class="n">user_age</span><span class="p">],</span>  <span class="c1">-- Features</span>
+    <span class="n">is_fraud</span>                   <span class="c1">-- Target</span>
+<span class="p">)</span> <span class="k">as</span> <span class="n">training_result</span>
+<span class="k">FROM</span> <span class="n">transactions</span>
+<span class="k">WHERE</span> <span class="n">created_at</span> <span class="o">&gt;</span> <span class="n">NOW</span><span class="p">()</span> <span class="o">-</span> <span class="n">INTERVAL</span> <span class="s1">'90 days'</span><span class="p">;</span>
+
+<span class="c1">-- Use the trained model for predictions</span>
+<span class="k">SELECT</span> 
+    <span class="n">transaction_id</span><span class="p">,</span>
+    <span class="n">amount</span><span class="p">,</span>
+    <span class="n">ML_PREDICT</span><span class="p">(</span><span class="s1">'fraud_detector'</span><span class="p">,</span> <span class="n">ARRAY</span><span class="p">[</span><span class="n">amount</span><span class="p">,</span> <span class="n">merchant_category</span><span class="p">,</span> <span class="n">hour_of_day</span><span class="p">,</span> <span class="n">user_age</span><span class="p">])</span> <span class="k">as</span> <span class="n">fraud_probability</span>
+<span class="k">FROM</span> <span class="n">new_transactions</span>
+<span class="k">WHERE</span> <span class="n">fraud_probability</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">.</span><span class="mi">8</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h2 id="-boosting-algorithms">📚 <strong>Boosting Algorithms</strong></h2>
+
+<h3 id="1-xgboost---extreme-gradient-boosting">1. <strong>XGBoost</strong> - Extreme Gradient Boosting</h3>
+
+<p><strong>Best for</strong>: Large datasets, high accuracy requirements, feature importance analysis</p>
+
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Basic XGBoost with default parameters</span>
+<span class="k">SELECT</span> <span class="n">ML_XGBOOST</span><span class="p">(</span>
+    <span class="n">ARRAY</span><span class="p">[</span><span class="n">feature1</span><span class="p">,</span> <span class="n">feature2</span><span class="p">,</span> <span class="n">feature3</span><span class="p">],</span>
+    <span class="n">target_column</span>
+<span class="p">)</span> <span class="k">FROM</span> <span class="n">training_data</span><span class="p">;</span>
+
+<span class="c1">-- Advanced XGBoost with custom parameters</span>
+<span class="k">SELECT</span> <span class="n">ML_TRAIN_MODEL</span><span class="p">(</span>
+    <span class="s1">'advanced_xgb_model'</span><span class="p">,</span>
+    <span class="s1">'XGBOOST'</span><span class="p">,</span> 
+    <span class="n">ARRAY</span><span class="p">[</span><span class="n">age</span><span class="p">,</span> <span class="n">income</span><span class="p">,</span> <span class="n">credit_score</span><span class="p">,</span> <span class="n">debt_ratio</span><span class="p">],</span>
+    <span class="n">loan_default</span><span class="p">,</span>
+    <span class="k">OBJECT</span><span class="p">(</span>
+        <span class="s1">'n_estimators'</span><span class="p">,</span> <span class="mi">100</span><span class="p">,</span>
+        <span class="s1">'learning_rate'</span><span class="p">,</span> <span class="mi">0</span><span class="p">.</span><span class="mi">1</span><span class="p">,</span>
+        <span class="s1">'max_depth'</span><span class="p">,</span> <span class="mi">6</span><span class="p">,</span>
+        <span class="s1">'subsample'</span><span class="p">,</span> <span class="mi">0</span><span class="p">.</span><span class="mi">8</span><span class="p">,</span>
+        <span class="s1">'colsample_bytree'</span><span class="p">,</span> <span class="mi">0</span><span class="p">.</span><span class="mi">8</span><span class="p">,</span>
+        <span class="s1">'reg_alpha'</span><span class="p">,</span> <span class="mi">0</span><span class="p">.</span><span class="mi">1</span><span class="p">,</span>
+        <span class="s1">'reg_lambda'</span><span class="p">,</span> <span class="mi">1</span><span class="p">.</span><span class="mi">0</span>
+    <span class="p">)</span>
+<span class="p">)</span> <span class="k">FROM</span> <span class="n">loan_applications</span><span class="p">;</span>
+</code></pre></div></div>
+
+<p><strong>Parameters:</strong></p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">n_estimators</code>: Number of boosting rounds (default: 100)</li>
+  <li><code class="language-plaintext highlighter-rouge">learning_rate</code>: Step size shrinkage (default: 0.3)</li>
+  <li><code class="language-plaintext highlighter-rouge">max_depth</code>: Maximum tree depth (default: 6)</li>
+  <li><code class="language-plaintext highlighter-rouge">subsample</code>: Subsample ratio of training instances (default: 1.0)</li>
+  <li><code class="language-plaintext highlighter-rouge">colsample_bytree</code>: Subsample ratio of features (default: 1.0)</li>
+</ul>
+
+<h3 id="2-lightgbm---light-gradient-boosting-machine">2. <strong>LightGBM</strong> - Light Gradient Boosting Machine</h3>
+
+<p><strong>Best for</strong>: Fast training, memory efficiency, categorical features</p>
+
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- LightGBM for categorical data</span>
+<span class="k">SELECT</span> <span class="n">ML_LIGHTGBM</span><span class="p">(</span>
+    <span class="n">ARRAY</span><span class="p">[</span><span class="n">category_id</span><span class="p">,</span> <span class="n">numerical_feature</span><span class="p">,</span> <span class="n">another_category</span><span class="p">],</span>
+    <span class="n">sales_volume</span>
+<span class="p">)</span> <span class="k">FROM</span> <span class="n">product_sales</span>
+<span class="k">WHERE</span> <span class="n">product_category</span> <span class="k">IN</span> <span class="p">(</span><span class="s1">'electronics'</span><span class="p">,</span> <span class="s1">'clothing'</span><span class="p">,</span> <span class="s1">'books'</span><span class="p">);</span>
+
+<span class="c1">-- LightGBM with categorical feature specification</span>
+<span class="k">SELECT</span> <span class="n">ML_TRAIN_MODEL</span><span class="p">(</span>
+    <span class="s1">'sales_forecaster'</span><span class="p">,</span>
+    <span class="s1">'LIGHTGBM'</span><span class="p">,</span>
+    <span class="n">ARRAY</span><span class="p">[</span><span class="n">product_category</span><span class="p">,</span> <span class="n">season</span><span class="p">,</span> <span class="n">price_tier</span><span class="p">,</span> <span class="n">promotion_active</span><span class="p">],</span>
+    <span class="n">monthly_sales</span><span class="p">,</span>
+    <span class="k">OBJECT</span><span class="p">(</span>
+        <span class="s1">'num_leaves'</span><span class="p">,</span> <span class="mi">31</span><span class="p">,</span>
+        <span class="s1">'learning_rate'</span><span class="p">,</span> <span class="mi">0</span><span class="p">.</span><span class="mi">05</span><span class="p">,</span>
+        <span class="s1">'feature_fraction'</span><span class="p">,</span> <span class="mi">0</span><span class="p">.</span><span class="mi">9</span><span class="p">,</span>
+        <span class="s1">'bagging_fraction'</span><span class="p">,</span> <span class="mi">0</span><span class="p">.</span><span class="mi">8</span><span class="p">,</span>
+        <span class="s1">'categorical_feature'</span><span class="p">,</span> <span class="n">ARRAY</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">]</span>  <span class="c1">-- Indices of categorical columns</span>
+    <span class="p">)</span>
+<span class="p">)</span> <span class="k">FROM</span> <span class="n">historical_sales</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h3 id="3-catboost---categorical-boosting">3. <strong>CatBoost</strong> - Categorical Boosting</h3>
+
+<p><strong>Best for</strong>: Datasets with many categorical features, minimal preprocessing</p>
+
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- CatBoost handles categorical features automatically</span>
+<span class="k">SELECT</span> <span class="n">ML_CATBOOST</span><span class="p">(</span>
+    <span class="n">ARRAY</span><span class="p">[</span><span class="n">user_country</span><span class="p">,</span> <span class="n">device_type</span><span class="p">,</span> <span class="n">browser</span><span class="p">,</span> <span class="n">os_version</span><span class="p">,</span> <span class="n">session_duration</span><span class="p">],</span>
+    <span class="n">conversion_rate</span>
+<span class="p">)</span> <span class="k">FROM</span> <span class="n">user_sessions</span><span class="p">;</span>
+
+<span class="c1">-- Advanced CatBoost configuration</span>
+<span class="k">SELECT</span> <span class="n">ML_TRAIN_MODEL</span><span class="p">(</span>
+    <span class="s1">'conversion_optimizer'</span><span class="p">,</span>
+    <span class="s1">'CATBOOST'</span><span class="p">,</span>
+    <span class="n">ARRAY</span><span class="p">[</span><span class="n">country</span><span class="p">,</span> <span class="n">device</span><span class="p">,</span> <span class="n">browser</span><span class="p">,</span> <span class="n">hour_of_day</span><span class="p">,</span> <span class="n">page_views</span><span class="p">],</span>
+    <span class="n">converted</span><span class="p">,</span>
+    <span class="k">OBJECT</span><span class="p">(</span>
+        <span class="s1">'iterations'</span><span class="p">,</span> <span class="mi">1000</span><span class="p">,</span>
+        <span class="s1">'learning_rate'</span><span class="p">,</span> <span class="mi">0</span><span class="p">.</span><span class="mi">03</span><span class="p">,</span>
+        <span class="s1">'depth'</span><span class="p">,</span> <span class="mi">6</span><span class="p">,</span>
+        <span class="s1">'l2_leaf_reg'</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span>
+        <span class="s1">'border_count'</span><span class="p">,</span> <span class="mi">128</span><span class="p">,</span>
+        <span class="s1">'auto_class_weights'</span><span class="p">,</span> <span class="s1">'Balanced'</span>
+    <span class="p">)</span>
+<span class="p">)</span> <span class="k">FROM</span> <span class="n">user_behavior_data</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h3 id="4-adaboost---adaptive-boosting">4. <strong>AdaBoost</strong> - Adaptive Boosting</h3>
+
+<p><strong>Best for</strong>: Binary classification, when you want interpretable results</p>
+
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Simple AdaBoost for binary classification</span>
+<span class="k">SELECT</span> <span class="n">ML_ADABOOST</span><span class="p">(</span>
+    <span class="n">ARRAY</span><span class="p">[</span><span class="n">credit_score</span><span class="p">,</span> <span class="n">income</span><span class="p">,</span> <span class="n">age</span><span class="p">,</span> <span class="n">employment_years</span><span class="p">],</span>
+    <span class="n">loan_approved</span>
+<span class="p">)</span> <span class="k">FROM</span> <span class="n">loan_decisions</span><span class="p">;</span>
+
+<span class="c1">-- AdaBoost with custom base estimator</span>
+<span class="k">SELECT</span> <span class="n">ML_TRAIN_MODEL</span><span class="p">(</span>
+    <span class="s1">'credit_approval_model'</span><span class="p">,</span>
+    <span class="s1">'ADABOOST'</span><span class="p">,</span>
+    <span class="n">ARRAY</span><span class="p">[</span><span class="n">credit_score</span><span class="p">,</span> <span class="n">income</span><span class="p">,</span> <span class="n">debt_ratio</span><span class="p">,</span> <span class="n">employment_status</span><span class="p">],</span>
+    <span class="n">approved</span><span class="p">,</span>
+    <span class="k">OBJECT</span><span class="p">(</span>
+        <span class="s1">'n_estimators'</span><span class="p">,</span> <span class="mi">50</span><span class="p">,</span>
+        <span class="s1">'learning_rate'</span><span class="p">,</span> <span class="mi">1</span><span class="p">.</span><span class="mi">0</span><span class="p">,</span>
+        <span class="s1">'algorithm'</span><span class="p">,</span> <span class="s1">'SAMME.R'</span><span class="p">,</span>
+        <span class="s1">'random_state'</span><span class="p">,</span> <span class="mi">42</span>
+    <span class="p">)</span>
+<span class="p">)</span> <span class="k">FROM</span> <span class="n">credit_applications</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h3 id="5-gradient-boosting-machine---classic-gbm">5. <strong>Gradient Boosting Machine</strong> - Classic GBM</h3>
+
+<p><strong>Best for</strong>: Regression tasks, when you need smooth predictions</p>
+
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Gradient Boosting for regression</span>
+<span class="k">SELECT</span> <span class="n">ML_GRADIENT_BOOSTING</span><span class="p">(</span>
+    <span class="n">ARRAY</span><span class="p">[</span><span class="n">bedrooms</span><span class="p">,</span> <span class="n">bathrooms</span><span class="p">,</span> <span class="n">sqft</span><span class="p">,</span> <span class="n">lot_size</span><span class="p">,</span> <span class="n">age</span><span class="p">],</span>
+    <span class="n">house_price</span>
+<span class="p">)</span> <span class="k">FROM</span> <span class="n">real_estate_data</span><span class="p">;</span>
+
+<span class="c1">-- GBM with loss function specification</span>
+<span class="k">SELECT</span> <span class="n">ML_TRAIN_MODEL</span><span class="p">(</span>
+    <span class="s1">'house_price_model'</span><span class="p">,</span>
+    <span class="s1">'GRADIENT_BOOSTING'</span><span class="p">,</span>
+    <span class="n">ARRAY</span><span class="p">[</span><span class="n">bedrooms</span><span class="p">,</span> <span class="n">bathrooms</span><span class="p">,</span> <span class="n">sqft</span><span class="p">,</span> <span class="n">neighborhood_score</span><span class="p">],</span>
+    <span class="n">price</span><span class="p">,</span>
+    <span class="k">OBJECT</span><span class="p">(</span>
+        <span class="s1">'n_estimators'</span><span class="p">,</span> <span class="mi">100</span><span class="p">,</span>
+        <span class="s1">'learning_rate'</span><span class="p">,</span> <span class="mi">0</span><span class="p">.</span><span class="mi">1</span><span class="p">,</span>
+        <span class="s1">'max_depth'</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span>
+        <span class="s1">'loss'</span><span class="p">,</span> <span class="s1">'huber'</span><span class="p">,</span>           <span class="c1">-- Robust to outliers</span>
+        <span class="s1">'alpha'</span><span class="p">,</span> <span class="mi">0</span><span class="p">.</span><span class="mi">9</span>              <span class="c1">-- Quantile for huber loss</span>
+    <span class="p">)</span>
+<span class="p">)</span> <span class="k">FROM</span> <span class="n">housing_market</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h2 id="-model-management-workflow">🔄 <strong>Model Management Workflow</strong></h2>
+
+<h3 id="complete-ml-pipeline-example">Complete ML Pipeline Example</h3>
+
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- 1. Train multiple models and compare performance</span>
+<span class="k">WITH</span> <span class="n">model_comparison</span> <span class="k">AS</span> <span class="p">(</span>
+    <span class="k">SELECT</span> 
+        <span class="s1">'XGBoost'</span> <span class="k">as</span> <span class="n">algorithm</span><span class="p">,</span>
+        <span class="n">ML_TRAIN_MODEL</span><span class="p">(</span><span class="s1">'customer_xgb'</span><span class="p">,</span> <span class="s1">'XGBOOST'</span><span class="p">,</span> <span class="n">features</span><span class="p">,</span> <span class="n">target</span><span class="p">)</span> <span class="k">as</span> <span class="k">result</span>
+    <span class="k">FROM</span> <span class="n">customer_features</span>
+    <span class="k">UNION</span> <span class="k">ALL</span>
+    <span class="k">SELECT</span> 
+        <span class="s1">'LightGBM'</span> <span class="k">as</span> <span class="n">algorithm</span><span class="p">,</span>
+        <span class="n">ML_TRAIN_MODEL</span><span class="p">(</span><span class="s1">'customer_lgb'</span><span class="p">,</span> <span class="s1">'LIGHTGBM'</span><span class="p">,</span> <span class="n">features</span><span class="p">,</span> <span class="n">target</span><span class="p">)</span> <span class="k">as</span> <span class="k">result</span>
+    <span class="k">FROM</span> <span class="n">customer_features</span>
+    <span class="k">UNION</span> <span class="k">ALL</span>
+    <span class="k">SELECT</span> 
+        <span class="s1">'CatBoost'</span> <span class="k">as</span> <span class="n">algorithm</span><span class="p">,</span>
+        <span class="n">ML_TRAIN_MODEL</span><span class="p">(</span><span class="s1">'customer_cat'</span><span class="p">,</span> <span class="s1">'CATBOOST'</span><span class="p">,</span> <span class="n">features</span><span class="p">,</span> <span class="n">target</span><span class="p">)</span> <span class="k">as</span> <span class="k">result</span>
+    <span class="k">FROM</span> <span class="n">customer_features</span>
+<span class="p">)</span>
+<span class="c1">-- 2. Evaluate all models</span>
+<span class="k">SELECT</span> 
+    <span class="n">algorithm</span><span class="p">,</span>
+    <span class="n">ML_EVALUATE_MODEL</span><span class="p">(</span>
+        <span class="n">CONCAT</span><span class="p">(</span><span class="s1">'customer_'</span><span class="p">,</span> <span class="k">LOWER</span><span class="p">(</span><span class="k">SUBSTRING</span><span class="p">(</span><span class="n">algorithm</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">))),</span> 
+        <span class="n">test_features</span><span class="p">,</span> 
+        <span class="n">test_target</span>
+    <span class="p">)</span> <span class="k">as</span> <span class="n">performance_metrics</span>
+<span class="k">FROM</span> <span class="n">model_comparison</span><span class="p">,</span> <span class="n">test_data</span><span class="p">;</span>
+
+<span class="c1">-- 3. Use the best performing model</span>
+<span class="k">SELECT</span> 
+    <span class="n">customer_id</span><span class="p">,</span>
+    <span class="n">customer_name</span><span class="p">,</span>
+    <span class="n">ML_PREDICT</span><span class="p">(</span><span class="s1">'customer_xgb'</span><span class="p">,</span> 
+        <span class="n">ARRAY</span><span class="p">[</span><span class="n">age</span><span class="p">,</span> <span class="n">income</span><span class="p">,</span> <span class="n">purchase_frequency</span><span class="p">,</span> <span class="n">days_since_last_order</span><span class="p">]</span>
+    <span class="p">)</span> <span class="k">as</span> <span class="n">predicted_segment</span><span class="p">,</span>
+    <span class="n">ML_PREDICT</span><span class="p">(</span><span class="s1">'customer_xgb'</span><span class="p">,</span> 
+        <span class="n">ARRAY</span><span class="p">[</span><span class="n">age</span><span class="p">,</span> <span class="n">income</span><span class="p">,</span> <span class="n">purchase_frequency</span><span class="p">,</span> <span class="n">days_since_last_order</span><span class="p">]</span>
+    <span class="p">)[</span><span class="mi">1</span><span class="p">]</span> <span class="k">as</span> <span class="n">segment_probability</span>
+<span class="k">FROM</span> <span class="n">current_customers</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h3 id="model-versioning-and-updates">Model Versioning and Updates</h3>
+
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Create versioned models</span>
+<span class="k">SELECT</span> <span class="n">ML_TRAIN_MODEL</span><span class="p">(</span>
+    <span class="s1">'fraud_detector_v2'</span><span class="p">,</span>
+    <span class="s1">'XGBOOST'</span><span class="p">,</span>
+    <span class="n">ARRAY</span><span class="p">[</span><span class="n">amount</span><span class="p">,</span> <span class="n">merchant_type</span><span class="p">,</span> <span class="n">time_of_day</span><span class="p">,</span> <span class="n">location_risk_score</span><span class="p">],</span>
+    <span class="n">is_fraud</span><span class="p">,</span>
+    <span class="k">OBJECT</span><span class="p">(</span><span class="s1">'version'</span><span class="p">,</span> <span class="s1">'2.0'</span><span class="p">,</span> <span class="s1">'description'</span><span class="p">,</span> <span class="s1">'Added location risk score'</span><span class="p">)</span>
+<span class="p">)</span> <span class="k">FROM</span> <span class="n">fraud_training_data_v2</span><span class="p">;</span>
+
+<span class="c1">-- Online learning - update existing model with new data</span>
+<span class="k">SELECT</span> <span class="n">ML_UPDATE_MODEL</span><span class="p">(</span>
+    <span class="s1">'fraud_detector_v2'</span><span class="p">,</span>
+    <span class="n">ARRAY</span><span class="p">[</span><span class="n">amount</span><span class="p">,</span> <span class="n">merchant_type</span><span class="p">,</span> <span class="n">time_of_day</span><span class="p">,</span> <span class="n">location_risk_score</span><span class="p">],</span>
+    <span class="n">is_fraud</span>
+<span class="p">)</span> <span class="k">FROM</span> <span class="n">new_fraud_cases</span>
+<span class="k">WHERE</span> <span class="n">created_at</span> <span class="o">&gt;</span> <span class="n">NOW</span><span class="p">()</span> <span class="o">-</span> <span class="n">INTERVAL</span> <span class="s1">'7 days'</span><span class="p">;</span>
+
+<span class="c1">-- Model metadata</span>
+<span class="k">SELECT</span> <span class="n">ML_MODEL_INFO</span><span class="p">(</span><span class="s1">'fraud_detector_v2'</span><span class="p">);</span>
+<span class="c1">-- Returns:</span>
+<span class="c1">-- {</span>
+<span class="c1">--   "name": "fraud_detector_v2",</span>
+<span class="c1">--   "algorithm": "XGBoost", </span>
+<span class="c1">--   "accuracy": 0.94,</span>
+<span class="c1">--   "features": ["amount", "merchant_type", "time_of_day", "location_risk_score"],</span>
+<span class="c1">--   "created_at": "2024-01-15T10:30:00Z",</span>
+<span class="c1">--   "last_updated": "2024-01-20T15:45:00Z",</span>
+<span class="c1">--   "training_samples": 50000,</span>
+<span class="c1">--   "version": "2.0"</span>
+<span class="c1">-- }</span>
+</code></pre></div></div>
+
+<h2 id="-real-world-use-cases">🎯 <strong>Real-World Use Cases</strong></h2>
+
+<h3 id="1-e-commerce-recommendation-engine">1. <strong>E-commerce Recommendation Engine</strong></h3>
+
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Train collaborative filtering model</span>
+<span class="k">WITH</span> <span class="n">user_item_features</span> <span class="k">AS</span> <span class="p">(</span>
+    <span class="k">SELECT</span> 
+        <span class="n">user_id</span><span class="p">,</span>
+        <span class="n">item_id</span><span class="p">,</span>
+        <span class="n">ARRAY</span><span class="p">[</span>
+            <span class="n">user_age</span><span class="p">,</span> <span class="n">user_location_score</span><span class="p">,</span> <span class="n">user_purchase_history_length</span><span class="p">,</span>
+            <span class="n">item_category_id</span><span class="p">,</span> <span class="n">item_price_tier</span><span class="p">,</span> <span class="n">item_rating</span><span class="p">,</span> <span class="n">item_popularity</span>
+        <span class="p">]</span> <span class="k">as</span> <span class="n">features</span><span class="p">,</span>
+        <span class="n">purchased</span> <span class="k">as</span> <span class="n">target</span>
+    <span class="k">FROM</span> <span class="n">user_item_interactions</span>
+<span class="p">)</span>
+<span class="k">SELECT</span> <span class="n">ML_TRAIN_MODEL</span><span class="p">(</span>
+    <span class="s1">'recommendation_engine'</span><span class="p">,</span>
+    <span class="s1">'LIGHTGBM'</span><span class="p">,</span>
+    <span class="n">features</span><span class="p">,</span>
+    <span class="n">target</span><span class="p">,</span>
+    <span class="k">OBJECT</span><span class="p">(</span>
+        <span class="s1">'objective'</span><span class="p">,</span> <span class="s1">'binary'</span><span class="p">,</span>
+        <span class="s1">'metric'</span><span class="p">,</span> <span class="s1">'auc'</span><span class="p">,</span>
+        <span class="s1">'num_leaves'</span><span class="p">,</span> <span class="mi">100</span><span class="p">,</span>
+        <span class="s1">'learning_rate'</span><span class="p">,</span> <span class="mi">0</span><span class="p">.</span><span class="mi">1</span>
+    <span class="p">)</span>
+<span class="p">)</span> <span class="k">FROM</span> <span class="n">user_item_features</span><span class="p">;</span>
+
+<span class="c1">-- Generate recommendations</span>
+<span class="k">SELECT</span> 
+    <span class="n">u</span><span class="p">.</span><span class="n">user_id</span><span class="p">,</span>
+    <span class="n">u</span><span class="p">.</span><span class="n">name</span><span class="p">,</span>
+    <span class="n">i</span><span class="p">.</span><span class="n">item_id</span><span class="p">,</span>
+    <span class="n">i</span><span class="p">.</span><span class="n">title</span><span class="p">,</span>
+    <span class="n">ML_PREDICT</span><span class="p">(</span><span class="s1">'recommendation_engine'</span><span class="p">,</span> 
+        <span class="n">ARRAY</span><span class="p">[</span><span class="n">u</span><span class="p">.</span><span class="n">age</span><span class="p">,</span> <span class="n">u</span><span class="p">.</span><span class="n">location_score</span><span class="p">,</span> <span class="n">u</span><span class="p">.</span><span class="n">purchase_history_length</span><span class="p">,</span>
+              <span class="n">i</span><span class="p">.</span><span class="n">category_id</span><span class="p">,</span> <span class="n">i</span><span class="p">.</span><span class="n">price_tier</span><span class="p">,</span> <span class="n">i</span><span class="p">.</span><span class="n">rating</span><span class="p">,</span> <span class="n">i</span><span class="p">.</span><span class="n">popularity</span><span class="p">]</span>
+    <span class="p">)</span> <span class="k">as</span> <span class="n">recommendation_score</span>
+<span class="k">FROM</span> <span class="n">users</span> <span class="n">u</span>
+<span class="k">CROSS</span> <span class="k">JOIN</span> <span class="n">items</span> <span class="n">i</span>
+<span class="k">WHERE</span> <span class="n">ML_PREDICT</span><span class="p">(</span><span class="s1">'recommendation_engine'</span><span class="p">,</span> 
+    <span class="n">ARRAY</span><span class="p">[</span><span class="n">u</span><span class="p">.</span><span class="n">age</span><span class="p">,</span> <span class="n">u</span><span class="p">.</span><span class="n">location_score</span><span class="p">,</span> <span class="n">u</span><span class="p">.</span><span class="n">purchase_history_length</span><span class="p">,</span>
+          <span class="n">i</span><span class="p">.</span><span class="n">category_id</span><span class="p">,</span> <span class="n">i</span><span class="p">.</span><span class="n">price_tier</span><span class="p">,</span> <span class="n">i</span><span class="p">.</span><span class="n">rating</span><span class="p">,</span> <span class="n">i</span><span class="p">.</span><span class="n">popularity</span><span class="p">]</span>
+<span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">.</span><span class="mi">7</span>
+<span class="k">ORDER</span> <span class="k">BY</span> <span class="n">u</span><span class="p">.</span><span class="n">user_id</span><span class="p">,</span> <span class="n">recommendation_score</span> <span class="k">DESC</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h3 id="2-financial-risk-assessment">2. <strong>Financial Risk Assessment</strong></h3>
+
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Multi-model ensemble for credit scoring</span>
+<span class="k">WITH</span> <span class="n">risk_models</span> <span class="k">AS</span> <span class="p">(</span>
+    <span class="c1">-- Conservative model (high precision)</span>
+    <span class="k">SELECT</span> <span class="n">ML_TRAIN_MODEL</span><span class="p">(</span>
+        <span class="s1">'conservative_risk'</span><span class="p">,</span>
+        <span class="s1">'ADABOOST'</span><span class="p">,</span>
+        <span class="n">ARRAY</span><span class="p">[</span><span class="n">credit_score</span><span class="p">,</span> <span class="n">income</span><span class="p">,</span> <span class="n">debt_ratio</span><span class="p">,</span> <span class="n">employment_years</span><span class="p">],</span>
+        <span class="n">default_risk</span><span class="p">,</span>
+        <span class="k">OBJECT</span><span class="p">(</span><span class="s1">'n_estimators'</span><span class="p">,</span> <span class="mi">100</span><span class="p">,</span> <span class="s1">'learning_rate'</span><span class="p">,</span> <span class="mi">0</span><span class="p">.</span><span class="mi">5</span><span class="p">)</span>
+    <span class="p">)</span> <span class="k">as</span> <span class="n">conservative_result</span><span class="p">,</span>
+    
+    <span class="c1">-- Aggressive model (high recall) </span>
+    <span class="n">ML_TRAIN_MODEL</span><span class="p">(</span>
+        <span class="s1">'aggressive_risk'</span><span class="p">,</span>
+        <span class="s1">'XGBOOST'</span><span class="p">,</span>
+        <span class="n">ARRAY</span><span class="p">[</span><span class="n">credit_score</span><span class="p">,</span> <span class="n">income</span><span class="p">,</span> <span class="n">debt_ratio</span><span class="p">,</span> <span class="n">employment_years</span><span class="p">,</span> 
+              <span class="n">social_media_score</span><span class="p">,</span> <span class="n">alternative_credit_data</span><span class="p">],</span>
+        <span class="n">default_risk</span><span class="p">,</span>
+        <span class="k">OBJECT</span><span class="p">(</span><span class="s1">'scale_pos_weight'</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>  <span class="c1">-- Handle class imbalance</span>
+    <span class="p">)</span> <span class="k">as</span> <span class="n">aggressive_result</span><span class="p">,</span>
+    
+    <span class="c1">-- Balanced model</span>
+    <span class="n">ML_TRAIN_MODEL</span><span class="p">(</span>
+        <span class="s1">'balanced_risk'</span><span class="p">,</span>
+        <span class="s1">'CATBOOST'</span><span class="p">,</span>
+        <span class="n">ARRAY</span><span class="p">[</span><span class="n">credit_score</span><span class="p">,</span> <span class="n">income</span><span class="p">,</span> <span class="n">debt_ratio</span><span class="p">,</span> <span class="n">employment_years</span><span class="p">,</span>
+              <span class="n">payment_history</span><span class="p">,</span> <span class="n">account_age</span><span class="p">],</span>
+        <span class="n">default_risk</span>
+    <span class="p">)</span> <span class="k">as</span> <span class="n">balanced_result</span>
+    <span class="k">FROM</span> <span class="n">credit_training_data</span>
+<span class="p">),</span>
+
+<span class="c1">-- Ensemble predictions</span>
+<span class="n">ensemble_predictions</span> <span class="k">AS</span> <span class="p">(</span>
+    <span class="k">SELECT</span> 
+        <span class="n">application_id</span><span class="p">,</span>
+        <span class="n">applicant_name</span><span class="p">,</span>
+        <span class="c1">-- Individual model predictions</span>
+        <span class="n">ML_PREDICT</span><span class="p">(</span><span class="s1">'conservative_risk'</span><span class="p">,</span> <span class="n">features</span><span class="p">)</span> <span class="k">as</span> <span class="n">conservative_score</span><span class="p">,</span>
+        <span class="n">ML_PREDICT</span><span class="p">(</span><span class="s1">'aggressive_risk'</span><span class="p">,</span> <span class="n">features</span><span class="p">)</span> <span class="k">as</span> <span class="n">aggressive_score</span><span class="p">,</span>
+        <span class="n">ML_PREDICT</span><span class="p">(</span><span class="s1">'balanced_risk'</span><span class="p">,</span> <span class="n">features</span><span class="p">)</span> <span class="k">as</span> <span class="n">balanced_score</span><span class="p">,</span>
+        
+        <span class="c1">-- Weighted ensemble</span>
+        <span class="p">(</span><span class="n">ML_PREDICT</span><span class="p">(</span><span class="s1">'conservative_risk'</span><span class="p">,</span> <span class="n">features</span><span class="p">)</span> <span class="o">*</span> <span class="mi">0</span><span class="p">.</span><span class="mi">4</span> <span class="o">+</span>
+         <span class="n">ML_PREDICT</span><span class="p">(</span><span class="s1">'aggressive_risk'</span><span class="p">,</span> <span class="n">features</span><span class="p">)</span> <span class="o">*</span> <span class="mi">0</span><span class="p">.</span><span class="mi">3</span> <span class="o">+</span>
+         <span class="n">ML_PREDICT</span><span class="p">(</span><span class="s1">'balanced_risk'</span><span class="p">,</span> <span class="n">features</span><span class="p">)</span> <span class="o">*</span> <span class="mi">0</span><span class="p">.</span><span class="mi">3</span><span class="p">)</span> <span class="k">as</span> <span class="n">ensemble_score</span>
+         
+    <span class="k">FROM</span> <span class="n">loan_applications</span>
+    <span class="k">WHERE</span> <span class="n">status</span> <span class="o">=</span> <span class="s1">'pending'</span>
+<span class="p">)</span>
+
+<span class="c1">-- Final risk assessment</span>
+<span class="k">SELECT</span> 
+    <span class="n">application_id</span><span class="p">,</span>
+    <span class="n">applicant_name</span><span class="p">,</span>
+    <span class="n">ensemble_score</span><span class="p">,</span>
+    <span class="k">CASE</span> 
+        <span class="k">WHEN</span> <span class="n">ensemble_score</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">.</span><span class="mi">3</span> <span class="k">THEN</span> <span class="s1">'LOW_RISK'</span>
+        <span class="k">WHEN</span> <span class="n">ensemble_score</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">.</span><span class="mi">7</span> <span class="k">THEN</span> <span class="s1">'MEDIUM_RISK'</span> 
+        <span class="k">ELSE</span> <span class="s1">'HIGH_RISK'</span>
+    <span class="k">END</span> <span class="k">as</span> <span class="n">risk_category</span><span class="p">,</span>
+    
+    <span class="k">CASE</span>
+        <span class="k">WHEN</span> <span class="n">ensemble_score</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">.</span><span class="mi">3</span> <span class="k">THEN</span> <span class="s1">'APPROVE'</span>
+        <span class="k">WHEN</span> <span class="n">ensemble_score</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">.</span><span class="mi">5</span> <span class="k">THEN</span> <span class="s1">'MANUAL_REVIEW'</span>
+        <span class="k">ELSE</span> <span class="s1">'REJECT'</span>
+    <span class="k">END</span> <span class="k">as</span> <span class="n">recommendation</span>
+    
+<span class="k">FROM</span> <span class="n">ensemble_predictions</span>
+<span class="k">ORDER</span> <span class="k">BY</span> <span class="n">ensemble_score</span> <span class="k">DESC</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h3 id="3-predictive-maintenance">3. <strong>Predictive Maintenance</strong></h3>
+
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Time series forecasting for equipment failure</span>
+<span class="k">WITH</span> <span class="n">sensor_features</span> <span class="k">AS</span> <span class="p">(</span>
+    <span class="k">SELECT</span> 
+        <span class="n">equipment_id</span><span class="p">,</span>
+        <span class="nb">timestamp</span><span class="p">,</span>
+        <span class="c1">-- Rolling statistics</span>
+        <span class="k">AVG</span><span class="p">(</span><span class="n">temperature</span><span class="p">)</span> <span class="n">OVER</span> <span class="p">(</span>
+            <span class="k">PARTITION</span> <span class="k">BY</span> <span class="n">equipment_id</span> 
+            <span class="k">ORDER</span> <span class="k">BY</span> <span class="nb">timestamp</span> 
+            <span class="k">ROWS</span> <span class="k">BETWEEN</span> <span class="mi">23</span> <span class="k">PRECEDING</span> <span class="k">AND</span> <span class="k">CURRENT</span> <span class="k">ROW</span>
+        <span class="p">)</span> <span class="k">as</span> <span class="n">temp_24h_avg</span><span class="p">,</span>
+        
+        <span class="n">STDDEV</span><span class="p">(</span><span class="n">vibration</span><span class="p">)</span> <span class="n">OVER</span> <span class="p">(</span>
+            <span class="k">PARTITION</span> <span class="k">BY</span> <span class="n">equipment_id</span> 
+            <span class="k">ORDER</span> <span class="k">BY</span> <span class="nb">timestamp</span> 
+            <span class="k">ROWS</span> <span class="k">BETWEEN</span> <span class="mi">11</span> <span class="k">PRECEDING</span> <span class="k">AND</span> <span class="k">CURRENT</span> <span class="k">ROW</span>  
+        <span class="p">)</span> <span class="k">as</span> <span class="n">vibration_12h_std</span><span class="p">,</span>
+        
+        <span class="c1">-- Trend features</span>
+        <span class="n">temperature</span> <span class="o">-</span> <span class="n">LAG</span><span class="p">(</span><span class="n">temperature</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span> <span class="n">OVER</span> <span class="p">(</span>
+            <span class="k">PARTITION</span> <span class="k">BY</span> <span class="n">equipment_id</span> <span class="k">ORDER</span> <span class="k">BY</span> <span class="nb">timestamp</span>
+        <span class="p">)</span> <span class="k">as</span> <span class="n">temp_change</span><span class="p">,</span>
+        
+        <span class="n">failure_within_7_days</span>
+        
+    <span class="k">FROM</span> <span class="n">equipment_sensors</span> <span class="n">es</span>
+    <span class="k">JOIN</span> <span class="n">equipment_failures</span> <span class="n">ef</span> <span class="k">ON</span> <span class="n">es</span><span class="p">.</span><span class="n">equipment_id</span> <span class="o">=</span> <span class="n">ef</span><span class="p">.</span><span class="n">equipment_id</span>
+        <span class="k">AND</span> <span class="n">ef</span><span class="p">.</span><span class="n">failure_date</span> <span class="k">BETWEEN</span> <span class="n">es</span><span class="p">.</span><span class="nb">timestamp</span> <span class="k">AND</span> <span class="n">es</span><span class="p">.</span><span class="nb">timestamp</span> <span class="o">+</span> <span class="n">INTERVAL</span> <span class="s1">'7 days'</span>
+<span class="p">)</span>
+
+<span class="c1">-- Train failure prediction model</span>
+<span class="k">SELECT</span> <span class="n">ML_TRAIN_MODEL</span><span class="p">(</span>
+    <span class="s1">'equipment_failure_predictor'</span><span class="p">,</span>
+    <span class="s1">'LIGHTGBM'</span><span class="p">,</span>
+    <span class="n">ARRAY</span><span class="p">[</span><span class="n">temp_24h_avg</span><span class="p">,</span> <span class="n">vibration_12h_std</span><span class="p">,</span> <span class="n">temp_change</span><span class="p">,</span> 
+          <span class="n">pressure</span><span class="p">,</span> <span class="n">rpm</span><span class="p">,</span> <span class="n">load_factor</span><span class="p">],</span>
+    <span class="n">failure_within_7_days</span><span class="p">,</span>
+    <span class="k">OBJECT</span><span class="p">(</span>
+        <span class="s1">'objective'</span><span class="p">,</span> <span class="s1">'binary'</span><span class="p">,</span>
+        <span class="s1">'is_unbalance'</span><span class="p">,</span> <span class="k">true</span><span class="p">,</span>         <span class="c1">-- Handle class imbalance</span>
+        <span class="s1">'metric'</span><span class="p">,</span> <span class="s1">'auc'</span><span class="p">,</span>
+        <span class="s1">'num_iterations'</span><span class="p">,</span> <span class="mi">1000</span><span class="p">,</span>
+        <span class="s1">'early_stopping_rounds'</span><span class="p">,</span> <span class="mi">50</span>
+    <span class="p">)</span>
+<span class="p">)</span> <span class="k">FROM</span> <span class="n">sensor_features</span><span class="p">;</span>
+
+<span class="c1">-- Real-time failure prediction</span>
+<span class="k">SELECT</span> 
+    <span class="n">equipment_id</span><span class="p">,</span>
+    <span class="n">equipment_name</span><span class="p">,</span>
+    <span class="k">location</span><span class="p">,</span>
+    <span class="k">current_timestamp</span><span class="p">,</span>
+    <span class="n">ML_PREDICT</span><span class="p">(</span><span class="s1">'equipment_failure_predictor'</span><span class="p">,</span> <span class="n">current_features</span><span class="p">)</span> <span class="k">as</span> <span class="n">failure_probability</span><span class="p">,</span>
+    
+    <span class="k">CASE</span> 
+        <span class="k">WHEN</span> <span class="n">ML_PREDICT</span><span class="p">(</span><span class="s1">'equipment_failure_predictor'</span><span class="p">,</span> <span class="n">current_features</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">.</span><span class="mi">8</span> 
+        <span class="k">THEN</span> <span class="s1">'CRITICAL - Schedule immediate maintenance'</span>
+        <span class="k">WHEN</span> <span class="n">ML_PREDICT</span><span class="p">(</span><span class="s1">'equipment_failure_predictor'</span><span class="p">,</span> <span class="n">current_features</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">.</span><span class="mi">5</span>
+        <span class="k">THEN</span> <span class="s1">'WARNING - Schedule maintenance within 48 hours'</span>
+        <span class="k">WHEN</span> <span class="n">ML_PREDICT</span><span class="p">(</span><span class="s1">'equipment_failure_predictor'</span><span class="p">,</span> <span class="n">current_features</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">.</span><span class="mi">3</span>
+        <span class="k">THEN</span> <span class="s1">'CAUTION - Monitor closely'</span>
+        <span class="k">ELSE</span> <span class="s1">'NORMAL - Continue operation'</span>
+    <span class="k">END</span> <span class="k">as</span> <span class="n">maintenance_recommendation</span>
+    
+<span class="k">FROM</span> <span class="n">current_equipment_status</span>
+<span class="k">WHERE</span> <span class="n">ML_PREDICT</span><span class="p">(</span><span class="s1">'equipment_failure_predictor'</span><span class="p">,</span> <span class="n">current_features</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">.</span><span class="mi">3</span>
+<span class="k">ORDER</span> <span class="k">BY</span> <span class="n">failure_probability</span> <span class="k">DESC</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h2 id="-feature-engineering-functions">🎨 <strong>Feature Engineering Functions</strong></h2>
+
+<h3 id="data-preprocessing">Data Preprocessing</h3>
+
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Normalize features for better model performance</span>
+<span class="k">SELECT</span> 
+    <span class="n">customer_id</span><span class="p">,</span>
+    <span class="n">ML_NORMALIZE</span><span class="p">(</span>
+        <span class="n">ARRAY</span><span class="p">[</span><span class="n">age</span><span class="p">,</span> <span class="n">income</span><span class="p">,</span> <span class="n">purchase_amount</span><span class="p">],</span> 
+        <span class="s1">'Z_SCORE'</span>  <span class="c1">-- Options: MIN_MAX, Z_SCORE, ROBUST, UNIT_VECTOR</span>
+    <span class="p">)</span> <span class="k">as</span> <span class="n">normalized_features</span>
+<span class="k">FROM</span> <span class="n">customer_data</span><span class="p">;</span>
+
+<span class="c1">-- Handle categorical variables</span>
+<span class="k">SELECT</span> 
+    <span class="n">ML_ENCODE_CATEGORICAL</span><span class="p">(</span>
+        <span class="n">customer_segment</span><span class="p">,</span> 
+        <span class="s1">'ONE_HOT'</span>  <span class="c1">-- Options: ONE_HOT, LABEL, TARGET, BINARY</span>
+    <span class="p">)</span> <span class="k">as</span> <span class="n">encoded_segment</span>
+<span class="k">FROM</span> <span class="n">customers</span><span class="p">;</span>
+
+<span class="c1">-- Principal Component Analysis for dimensionality reduction</span>
+<span class="k">SELECT</span> 
+    <span class="n">customer_id</span><span class="p">,</span>
+    <span class="n">ML_PCA</span><span class="p">(</span>
+        <span class="n">ARRAY</span><span class="p">[</span><span class="n">feature1</span><span class="p">,</span> <span class="n">feature2</span><span class="p">,</span> <span class="n">feature3</span><span class="p">,</span> <span class="n">feature4</span><span class="p">,</span> <span class="n">feature5</span><span class="p">],</span>
+        <span class="mi">3</span>  <span class="c1">-- Reduce to 3 components</span>
+    <span class="p">)</span> <span class="k">as</span> <span class="n">reduced_features</span>
+<span class="k">FROM</span> <span class="n">high_dimensional_data</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h3 id="advanced-feature-engineering">Advanced Feature Engineering</h3>
+
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Polynomial features for capturing interactions</span>
+<span class="k">SELECT</span> 
+    <span class="n">ML_POLYNOMIAL_FEATURES</span><span class="p">(</span>
+        <span class="n">ARRAY</span><span class="p">[</span><span class="n">age</span><span class="p">,</span> <span class="n">income</span><span class="p">],</span>
+        <span class="mi">2</span>  <span class="c1">-- Degree 2: age, income, age^2, income^2, age*income</span>
+    <span class="p">)</span> <span class="k">as</span> <span class="n">polynomial_features</span>
+<span class="k">FROM</span> <span class="n">customer_data</span><span class="p">;</span>
+
+<span class="c1">-- Automatic feature selection</span>
+<span class="k">SELECT</span> 
+    <span class="n">ML_FEATURE_SELECTION</span><span class="p">(</span>
+        <span class="n">ARRAY</span><span class="p">[</span><span class="n">f1</span><span class="p">,</span> <span class="n">f2</span><span class="p">,</span> <span class="n">f3</span><span class="p">,</span> <span class="n">f4</span><span class="p">,</span> <span class="n">f5</span><span class="p">,</span> <span class="n">f6</span><span class="p">,</span> <span class="n">f7</span><span class="p">,</span> <span class="n">f8</span><span class="p">,</span> <span class="n">f9</span><span class="p">,</span> <span class="n">f10</span><span class="p">],</span>
+        <span class="n">target_variable</span><span class="p">,</span>
+        <span class="s1">'MUTUAL_INFO'</span>  <span class="c1">-- Selection method</span>
+    <span class="p">)</span> <span class="k">as</span> <span class="n">selected_features</span>
+<span class="k">FROM</span> <span class="n">training_data</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h2 id="-model-evaluation-and-monitoring">📊 <strong>Model Evaluation and Monitoring</strong></h2>
+
+<h3 id="performance-metrics">Performance Metrics</h3>
+
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Comprehensive model evaluation</span>
+<span class="k">SELECT</span> 
+    <span class="n">model_name</span><span class="p">,</span>
+    <span class="n">ML_EVALUATE_MODEL</span><span class="p">(</span>
+        <span class="n">model_name</span><span class="p">,</span>
+        <span class="n">test_features</span><span class="p">,</span>
+        <span class="n">test_target</span><span class="p">,</span>
+        <span class="n">ARRAY</span><span class="p">[</span><span class="s1">'accuracy'</span><span class="p">,</span> <span class="s1">'precision'</span><span class="p">,</span> <span class="s1">'recall'</span><span class="p">,</span> <span class="s1">'f1_score'</span><span class="p">,</span> <span class="s1">'roc_auc'</span><span class="p">]</span>
+    <span class="p">)</span> <span class="k">as</span> <span class="n">metrics</span>
+<span class="k">FROM</span> <span class="n">model_registry</span>
+<span class="k">CROSS</span> <span class="k">JOIN</span> <span class="n">test_dataset</span><span class="p">;</span>
+
+<span class="c1">-- Model performance over time</span>
+<span class="k">WITH</span> <span class="n">daily_predictions</span> <span class="k">AS</span> <span class="p">(</span>
+    <span class="k">SELECT</span> 
+        <span class="nb">DATE</span><span class="p">(</span><span class="n">prediction_timestamp</span><span class="p">)</span> <span class="k">as</span> <span class="n">prediction_date</span><span class="p">,</span>
+        <span class="n">actual_value</span><span class="p">,</span>
+        <span class="n">ML_PREDICT</span><span class="p">(</span><span class="s1">'production_model'</span><span class="p">,</span> <span class="n">features</span><span class="p">)</span> <span class="k">as</span> <span class="n">predicted_value</span>
+    <span class="k">FROM</span> <span class="n">prediction_log</span>
+    <span class="k">WHERE</span> <span class="n">prediction_timestamp</span> <span class="o">&gt;</span> <span class="n">NOW</span><span class="p">()</span> <span class="o">-</span> <span class="n">INTERVAL</span> <span class="s1">'30 days'</span>
+<span class="p">),</span>
+<span class="n">daily_metrics</span> <span class="k">AS</span> <span class="p">(</span>
+    <span class="k">SELECT</span> 
+        <span class="n">prediction_date</span><span class="p">,</span>
+        <span class="c1">-- Classification metrics</span>
+        <span class="k">AVG</span><span class="p">(</span><span class="k">CASE</span> <span class="k">WHEN</span> <span class="n">actual_value</span> <span class="o">=</span> <span class="n">ROUND</span><span class="p">(</span><span class="n">predicted_value</span><span class="p">)</span> <span class="k">THEN</span> <span class="mi">1</span><span class="p">.</span><span class="mi">0</span> <span class="k">ELSE</span> <span class="mi">0</span><span class="p">.</span><span class="mi">0</span> <span class="k">END</span><span class="p">)</span> <span class="k">as</span> <span class="n">daily_accuracy</span><span class="p">,</span>
+        
+        <span class="c1">-- Regression metrics</span>
+        <span class="n">SQRT</span><span class="p">(</span><span class="k">AVG</span><span class="p">(</span><span class="n">POWER</span><span class="p">(</span><span class="n">actual_value</span> <span class="o">-</span> <span class="n">predicted_value</span><span class="p">,</span> <span class="mi">2</span><span class="p">)))</span> <span class="k">as</span> <span class="n">daily_rmse</span><span class="p">,</span>
+        <span class="k">AVG</span><span class="p">(</span><span class="k">ABS</span><span class="p">(</span><span class="n">actual_value</span> <span class="o">-</span> <span class="n">predicted_value</span><span class="p">))</span> <span class="k">as</span> <span class="n">daily_mae</span>
+        
+    <span class="k">FROM</span> <span class="n">daily_predictions</span>
+    <span class="k">GROUP</span> <span class="k">BY</span> <span class="n">prediction_date</span>
+<span class="p">)</span>
+<span class="k">SELECT</span> 
+    <span class="n">prediction_date</span><span class="p">,</span>
+    <span class="n">daily_accuracy</span><span class="p">,</span>
+    <span class="n">daily_rmse</span><span class="p">,</span>
+    <span class="n">daily_mae</span><span class="p">,</span>
+    <span class="c1">-- Trend detection</span>
+    <span class="n">daily_accuracy</span> <span class="o">-</span> <span class="n">LAG</span><span class="p">(</span><span class="n">daily_accuracy</span><span class="p">,</span> <span class="mi">7</span><span class="p">)</span> <span class="n">OVER</span> <span class="p">(</span><span class="k">ORDER</span> <span class="k">BY</span> <span class="n">prediction_date</span><span class="p">)</span> <span class="k">as</span> <span class="n">accuracy_change_7d</span>
+<span class="k">FROM</span> <span class="n">daily_metrics</span>
+<span class="k">ORDER</span> <span class="k">BY</span> <span class="n">prediction_date</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h2 id="-advanced-configuration">🔧 <strong>Advanced Configuration</strong></h2>
+
+<h3 id="hyperparameter-tuning">Hyperparameter Tuning</h3>
+
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Grid search for hyperparameter optimization</span>
+<span class="k">WITH</span> <span class="n">hyperparameter_grid</span> <span class="k">AS</span> <span class="p">(</span>
+    <span class="k">SELECT</span> <span class="o">*</span> <span class="k">FROM</span> <span class="p">(</span>
+        <span class="k">VALUES</span> 
+        <span class="p">(</span><span class="mi">100</span><span class="p">,</span> <span class="mi">0</span><span class="p">.</span><span class="mi">1</span><span class="p">,</span> <span class="mi">6</span><span class="p">),</span> <span class="p">(</span><span class="mi">100</span><span class="p">,</span> <span class="mi">0</span><span class="p">.</span><span class="mi">1</span><span class="p">,</span> <span class="mi">8</span><span class="p">),</span> <span class="p">(</span><span class="mi">100</span><span class="p">,</span> <span class="mi">0</span><span class="p">.</span><span class="mi">1</span><span class="p">,</span> <span class="mi">10</span><span class="p">),</span>
+        <span class="p">(</span><span class="mi">200</span><span class="p">,</span> <span class="mi">0</span><span class="p">.</span><span class="mi">1</span><span class="p">,</span> <span class="mi">6</span><span class="p">),</span> <span class="p">(</span><span class="mi">200</span><span class="p">,</span> <span class="mi">0</span><span class="p">.</span><span class="mi">1</span><span class="p">,</span> <span class="mi">8</span><span class="p">),</span> <span class="p">(</span><span class="mi">200</span><span class="p">,</span> <span class="mi">0</span><span class="p">.</span><span class="mi">1</span><span class="p">,</span> <span class="mi">10</span><span class="p">),</span>
+        <span class="p">(</span><span class="mi">100</span><span class="p">,</span> <span class="mi">0</span><span class="p">.</span><span class="mi">05</span><span class="p">,</span> <span class="mi">6</span><span class="p">),</span> <span class="p">(</span><span class="mi">100</span><span class="p">,</span> <span class="mi">0</span><span class="p">.</span><span class="mi">05</span><span class="p">,</span> <span class="mi">8</span><span class="p">),</span> <span class="p">(</span><span class="mi">100</span><span class="p">,</span> <span class="mi">0</span><span class="p">.</span><span class="mi">05</span><span class="p">,</span> <span class="mi">10</span><span class="p">)</span>
+    <span class="p">)</span> <span class="k">as</span> <span class="n">params</span><span class="p">(</span><span class="n">n_estimators</span><span class="p">,</span> <span class="n">learning_rate</span><span class="p">,</span> <span class="n">max_depth</span><span class="p">)</span>
+<span class="p">),</span>
+<span class="n">model_results</span> <span class="k">AS</span> <span class="p">(</span>
+    <span class="k">SELECT</span> 
+        <span class="n">n_estimators</span><span class="p">,</span>
+        <span class="n">learning_rate</span><span class="p">,</span> 
+        <span class="n">max_depth</span><span class="p">,</span>
+        <span class="n">ML_TRAIN_MODEL</span><span class="p">(</span>
+            <span class="n">CONCAT</span><span class="p">(</span><span class="s1">'xgb_'</span><span class="p">,</span> <span class="n">n_estimators</span><span class="p">,</span> <span class="s1">'_'</span><span class="p">,</span> <span class="k">CAST</span><span class="p">(</span><span class="n">learning_rate</span><span class="o">*</span><span class="mi">100</span> <span class="k">AS</span> <span class="nb">INT</span><span class="p">),</span> <span class="s1">'_'</span><span class="p">,</span> <span class="n">max_depth</span><span class="p">),</span>
+            <span class="s1">'XGBOOST'</span><span class="p">,</span>
+            <span class="n">ARRAY</span><span class="p">[</span><span class="n">feature1</span><span class="p">,</span> <span class="n">feature2</span><span class="p">,</span> <span class="n">feature3</span><span class="p">],</span>
+            <span class="n">target</span><span class="p">,</span>
+            <span class="k">OBJECT</span><span class="p">(</span>
+                <span class="s1">'n_estimators'</span><span class="p">,</span> <span class="n">n_estimators</span><span class="p">,</span>
+                <span class="s1">'learning_rate'</span><span class="p">,</span> <span class="n">learning_rate</span><span class="p">,</span>
+                <span class="s1">'max_depth'</span><span class="p">,</span> <span class="n">max_depth</span>
+            <span class="p">)</span>
+        <span class="p">)</span> <span class="k">as</span> <span class="n">training_result</span>
+    <span class="k">FROM</span> <span class="n">hyperparameter_grid</span>
+    <span class="k">CROSS</span> <span class="k">JOIN</span> <span class="n">training_data</span>
+<span class="p">),</span>
+<span class="n">model_evaluation</span> <span class="k">AS</span> <span class="p">(</span>
+    <span class="k">SELECT</span> 
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">ML_EVALUATE_MODEL</span><span class="p">(</span>
+            <span class="n">model_name</span><span class="p">,</span>
+            <span class="n">validation_features</span><span class="p">,</span>
+            <span class="n">validation_target</span>
+        <span class="p">)</span> <span class="k">as</span> <span class="n">validation_score</span>
+    <span class="k">FROM</span> <span class="n">model_results</span>
+    <span class="k">CROSS</span> <span class="k">JOIN</span> <span class="n">validation_data</span>
+<span class="p">)</span>
+<span class="c1">-- Select best hyperparameters</span>
+<span class="k">SELECT</span> 
+    <span class="n">n_estimators</span><span class="p">,</span>
+    <span class="n">learning_rate</span><span class="p">,</span>
+    <span class="n">max_depth</span><span class="p">,</span>
+    <span class="n">validation_score</span>
+<span class="k">FROM</span> <span class="n">model_evaluation</span>
+<span class="k">ORDER</span> <span class="k">BY</span> <span class="n">validation_score</span><span class="o">-&gt;&gt;</span><span class="s1">'accuracy'</span> <span class="k">DESC</span>
+<span class="k">LIMIT</span> <span class="mi">1</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h3 id="model-deployment-and-ab-testing">Model Deployment and A/B Testing</h3>
+
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Deploy model with A/B testing</span>
+<span class="k">CREATE</span> <span class="k">TABLE</span> <span class="n">model_deployment_config</span> <span class="p">(</span>
+    <span class="n">model_name</span> <span class="nb">VARCHAR</span><span class="p">(</span><span class="mi">100</span><span class="p">),</span>
+    <span class="n">traffic_percentage</span> <span class="nb">DECIMAL</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span><span class="mi">2</span><span class="p">),</span>
+    <span class="n">is_active</span> <span class="nb">BOOLEAN</span><span class="p">,</span>
+    <span class="n">deployment_date</span> <span class="nb">TIMESTAMP</span>
+<span class="p">);</span>
+
+<span class="c1">-- A/B test configuration</span>
+<span class="k">INSERT</span> <span class="k">INTO</span> <span class="n">model_deployment_config</span> <span class="k">VALUES</span>
+<span class="p">(</span><span class="s1">'fraud_detector_v1'</span><span class="p">,</span> <span class="mi">0</span><span class="p">.</span><span class="mi">5</span><span class="p">,</span> <span class="k">true</span><span class="p">,</span> <span class="n">NOW</span><span class="p">()),</span>
+<span class="p">(</span><span class="s1">'fraud_detector_v2'</span><span class="p">,</span> <span class="mi">0</span><span class="p">.</span><span class="mi">5</span><span class="p">,</span> <span class="k">true</span><span class="p">,</span> <span class="n">NOW</span><span class="p">());</span>
+
+<span class="c1">-- A/B testing query</span>
+<span class="k">WITH</span> <span class="n">model_assignment</span> <span class="k">AS</span> <span class="p">(</span>
+    <span class="k">SELECT</span> 
+        <span class="n">transaction_id</span><span class="p">,</span>
+        <span class="k">CASE</span> 
+            <span class="k">WHEN</span> <span class="n">HASH</span><span class="p">(</span><span class="n">transaction_id</span><span class="p">)</span> <span class="o">%</span> <span class="mi">100</span> <span class="o">&lt;</span> <span class="mi">50</span> <span class="k">THEN</span> <span class="s1">'fraud_detector_v1'</span>
+            <span class="k">ELSE</span> <span class="s1">'fraud_detector_v2'</span>
+        <span class="k">END</span> <span class="k">as</span> <span class="n">assigned_model</span>
+    <span class="k">FROM</span> <span class="n">transactions</span>
+    <span class="k">WHERE</span> <span class="nb">timestamp</span> <span class="o">&gt;</span> <span class="n">NOW</span><span class="p">()</span> <span class="o">-</span> <span class="n">INTERVAL</span> <span class="s1">'1 hour'</span>
+<span class="p">),</span>
+<span class="n">predictions</span> <span class="k">AS</span> <span class="p">(</span>
+    <span class="k">SELECT</span> 
+        <span class="n">ma</span><span class="p">.</span><span class="n">transaction_id</span><span class="p">,</span>
+        <span class="n">ma</span><span class="p">.</span><span class="n">assigned_model</span><span class="p">,</span>
+        <span class="n">t</span><span class="p">.</span><span class="n">actual_fraud</span><span class="p">,</span>
+        <span class="n">ML_PREDICT</span><span class="p">(</span><span class="n">ma</span><span class="p">.</span><span class="n">assigned_model</span><span class="p">,</span> 
+            <span class="n">ARRAY</span><span class="p">[</span><span class="n">t</span><span class="p">.</span><span class="n">amount</span><span class="p">,</span> <span class="n">t</span><span class="p">.</span><span class="n">merchant_category</span><span class="p">,</span> <span class="n">t</span><span class="p">.</span><span class="n">hour_of_day</span><span class="p">]</span>
+        <span class="p">)</span> <span class="k">as</span> <span class="n">fraud_prediction</span>
+    <span class="k">FROM</span> <span class="n">model_assignment</span> <span class="n">ma</span>
+    <span class="k">JOIN</span> <span class="n">transactions</span> <span class="n">t</span> <span class="k">ON</span> <span class="n">ma</span><span class="p">.</span><span class="n">transaction_id</span> <span class="o">=</span> <span class="n">t</span><span class="p">.</span><span class="n">id</span>
+<span class="p">)</span>
+<span class="c1">-- Compare model performance</span>
+<span class="k">SELECT</span> 
+    <span class="n">assigned_model</span><span class="p">,</span>
+    <span class="k">COUNT</span><span class="p">(</span><span class="o">*</span><span class="p">)</span> <span class="k">as</span> <span class="n">predictions_made</span><span class="p">,</span>
+    <span class="k">AVG</span><span class="p">(</span><span class="k">CASE</span> <span class="k">WHEN</span> <span class="n">ROUND</span><span class="p">(</span><span class="n">fraud_prediction</span><span class="p">)</span> <span class="o">=</span> <span class="n">actual_fraud</span> <span class="k">THEN</span> <span class="mi">1</span><span class="p">.</span><span class="mi">0</span> <span class="k">ELSE</span> <span class="mi">0</span><span class="p">.</span><span class="mi">0</span> <span class="k">END</span><span class="p">)</span> <span class="k">as</span> <span class="n">accuracy</span><span class="p">,</span>
+    <span class="k">AVG</span><span class="p">(</span><span class="n">fraud_prediction</span><span class="p">)</span> <span class="k">as</span> <span class="n">avg_fraud_score</span>
+<span class="k">FROM</span> <span class="n">predictions</span>
+<span class="k">GROUP</span> <span class="k">BY</span> <span class="n">assigned_model</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h2 id="-integration-with-orbit-desktop">📈 <strong>Integration with Orbit Desktop</strong></h2>
+
+<p>The Orbit Desktop application provides a rich UI for interacting with ML models:</p>
+
+<h3 id="model-management-interface">Model Management Interface</h3>
+<ul>
+  <li><strong>Visual Model Training</strong>: Drag-and-drop interface for feature selection</li>
+  <li><strong>Performance Dashboard</strong>: Real-time model metrics and performance charts</li>
+  <li><strong>Hyperparameter Tuning</strong>: GUI for parameter optimization</li>
+  <li><strong>Model Versioning</strong>: Track model evolution and rollbacks</li>
+</ul>
+
+<h3 id="query-builder">Query Builder</h3>
+<ul>
+  <li><strong>ML Query Templates</strong>: Pre-built templates for common ML tasks</li>
+  <li><strong>Syntax Highlighting</strong>: OrbitQL ML function highlighting</li>
+  <li><strong>Auto-completion</strong>: IntelliSense for ML functions and parameters</li>
+  <li><strong>Result Visualization</strong>: Charts and graphs for ML results</li>
+</ul>
+
+<h3 id="example-desktop-usage">Example Desktop Usage:</h3>
+<div class="language-javascript highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// In Orbit Desktop - Execute ML query</span>
+<span class="kd">const</span> <span class="nx">mlQuery</span> <span class="o">=</span> <span class="s2">`
+    SELECT ML_XGBOOST(
+        ARRAY[age, income, credit_score],
+        loan_default
+    ) as model_accuracy
+    FROM loan_data
+`</span><span class="p">;</span>
+
+<span class="kd">const</span> <span class="nx">result</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">orbitDesktop</span><span class="p">.</span><span class="nf">executeQuery</span><span class="p">(</span><span class="nx">mlQuery</span><span class="p">);</span>
+<span class="c1">// Result includes model performance metrics and visualizations</span>
+</code></pre></div></div>
+
+<h2 id="-best-practices">🚀 <strong>Best Practices</strong></h2>
+
+<h3 id="1-data-preparation">1. <strong>Data Preparation</strong></h3>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Always check data quality before training</span>
+<span class="k">SELECT</span> 
+    <span class="k">COUNT</span><span class="p">(</span><span class="o">*</span><span class="p">)</span> <span class="k">as</span> <span class="n">total_rows</span><span class="p">,</span>
+    <span class="k">COUNT</span><span class="p">(</span><span class="k">DISTINCT</span> <span class="n">customer_id</span><span class="p">)</span> <span class="k">as</span> <span class="n">unique_customers</span><span class="p">,</span>
+    <span class="k">AVG</span><span class="p">(</span><span class="k">CASE</span> <span class="k">WHEN</span> <span class="n">age</span> <span class="k">IS</span> <span class="k">NULL</span> <span class="k">THEN</span> <span class="mi">1</span><span class="p">.</span><span class="mi">0</span> <span class="k">ELSE</span> <span class="mi">0</span><span class="p">.</span><span class="mi">0</span> <span class="k">END</span><span class="p">)</span> <span class="k">as</span> <span class="n">age_null_rate</span><span class="p">,</span>
+    <span class="k">MIN</span><span class="p">(</span><span class="n">age</span><span class="p">)</span> <span class="k">as</span> <span class="n">min_age</span><span class="p">,</span>
+    <span class="k">MAX</span><span class="p">(</span><span class="n">age</span><span class="p">)</span> <span class="k">as</span> <span class="n">max_age</span><span class="p">,</span>
+    <span class="n">STDDEV</span><span class="p">(</span><span class="n">income</span><span class="p">)</span> <span class="k">as</span> <span class="n">income_std</span>
+<span class="k">FROM</span> <span class="n">customer_data</span><span class="p">;</span>
+
+<span class="c1">-- Handle missing values</span>
+<span class="k">SELECT</span> 
+    <span class="n">customer_id</span><span class="p">,</span>
+    <span class="n">COALESCE</span><span class="p">(</span><span class="n">age</span><span class="p">,</span> <span class="p">(</span><span class="k">SELECT</span> <span class="k">AVG</span><span class="p">(</span><span class="n">age</span><span class="p">)</span> <span class="k">FROM</span> <span class="n">customer_data</span><span class="p">))</span> <span class="k">as</span> <span class="n">age</span><span class="p">,</span>
+    <span class="n">COALESCE</span><span class="p">(</span><span class="n">income</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span> <span class="k">as</span> <span class="n">income</span><span class="p">,</span>
+    <span class="k">CASE</span> <span class="k">WHEN</span> <span class="n">phone_number</span> <span class="k">IS</span> <span class="k">NULL</span> <span class="k">THEN</span> <span class="mi">0</span> <span class="k">ELSE</span> <span class="mi">1</span> <span class="k">END</span> <span class="k">as</span> <span class="n">has_phone</span>
+<span class="k">FROM</span> <span class="n">customer_data</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h3 id="2-model-selection-strategy">2. <strong>Model Selection Strategy</strong></h3>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Use cross-validation for model selection</span>
+<span class="k">WITH</span> <span class="n">fold_results</span> <span class="k">AS</span> <span class="p">(</span>
+    <span class="k">SELECT</span> 
+        <span class="n">model_type</span><span class="p">,</span>
+        <span class="n">fold_number</span><span class="p">,</span>
+        <span class="n">ML_CROSS_VALIDATE</span><span class="p">(</span>
+            <span class="n">model_type</span><span class="p">,</span>
+            <span class="n">features</span><span class="p">,</span>
+            <span class="n">target</span><span class="p">,</span>
+            <span class="n">fold_number</span><span class="p">,</span>
+            <span class="mi">5</span>  <span class="c1">-- 5-fold CV</span>
+        <span class="p">)</span> <span class="k">as</span> <span class="n">cv_score</span>
+    <span class="k">FROM</span> <span class="p">(</span>
+        <span class="k">VALUES</span> <span class="p">(</span><span class="s1">'XGBOOST'</span><span class="p">),</span> <span class="p">(</span><span class="s1">'LIGHTGBM'</span><span class="p">),</span> <span class="p">(</span><span class="s1">'CATBOOST'</span><span class="p">)</span>
+    <span class="p">)</span> <span class="k">as</span> <span class="n">models</span><span class="p">(</span><span class="n">model_type</span><span class="p">)</span>
+    <span class="k">CROSS</span> <span class="k">JOIN</span> <span class="n">generate_series</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">5</span><span class="p">)</span> <span class="k">as</span> <span class="n">folds</span><span class="p">(</span><span class="n">fold_number</span><span class="p">)</span>
+    <span class="k">CROSS</span> <span class="k">JOIN</span> <span class="n">training_data</span>
+<span class="p">)</span>
+<span class="k">SELECT</span> 
+    <span class="n">model_type</span><span class="p">,</span>
+    <span class="k">AVG</span><span class="p">(</span><span class="n">cv_score</span><span class="p">)</span> <span class="k">as</span> <span class="n">mean_cv_score</span><span class="p">,</span>
+    <span class="n">STDDEV</span><span class="p">(</span><span class="n">cv_score</span><span class="p">)</span> <span class="k">as</span> <span class="n">cv_score_std</span>
+<span class="k">FROM</span> <span class="n">fold_results</span>
+<span class="k">GROUP</span> <span class="k">BY</span> <span class="n">model_type</span>
+<span class="k">ORDER</span> <span class="k">BY</span> <span class="n">mean_cv_score</span> <span class="k">DESC</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h3 id="3-production-monitoring">3. <strong>Production Monitoring</strong></h3>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Set up model monitoring</span>
+<span class="k">CREATE</span> <span class="k">TABLE</span> <span class="n">model_performance_log</span> <span class="p">(</span>
+    <span class="n">model_name</span> <span class="nb">VARCHAR</span><span class="p">(</span><span class="mi">100</span><span class="p">),</span>
+    <span class="n">prediction_date</span> <span class="nb">DATE</span><span class="p">,</span>
+    <span class="n">accuracy</span> <span class="nb">DECIMAL</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span><span class="mi">3</span><span class="p">),</span>
+    <span class="nb">precision</span> <span class="nb">DECIMAL</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span><span class="mi">3</span><span class="p">),</span>
+    <span class="n">recall</span> <span class="nb">DECIMAL</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span><span class="mi">3</span><span class="p">),</span>
+    <span class="n">data_drift_score</span> <span class="nb">DECIMAL</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span><span class="mi">3</span><span class="p">),</span>
+    <span class="n">created_at</span> <span class="nb">TIMESTAMP</span> <span class="k">DEFAULT</span> <span class="n">NOW</span><span class="p">()</span>
+<span class="p">);</span>
+
+<span class="c1">-- Daily model monitoring</span>
+<span class="k">INSERT</span> <span class="k">INTO</span> <span class="n">model_performance_log</span>
+<span class="k">SELECT</span> 
+    <span class="s1">'production_model'</span><span class="p">,</span>
+    <span class="k">CURRENT_DATE</span><span class="p">,</span>
+    <span class="c1">-- Performance metrics from daily predictions</span>
+    <span class="k">AVG</span><span class="p">(</span><span class="k">CASE</span> <span class="k">WHEN</span> <span class="n">actual</span> <span class="o">=</span> <span class="n">ROUND</span><span class="p">(</span><span class="n">predicted</span><span class="p">)</span> <span class="k">THEN</span> <span class="mi">1</span><span class="p">.</span><span class="mi">0</span> <span class="k">ELSE</span> <span class="mi">0</span><span class="p">.</span><span class="mi">0</span> <span class="k">END</span><span class="p">),</span>
+    <span class="k">AVG</span><span class="p">(</span><span class="k">CASE</span> <span class="k">WHEN</span> <span class="n">ROUND</span><span class="p">(</span><span class="n">predicted</span><span class="p">)</span> <span class="o">=</span> <span class="mi">1</span> <span class="k">AND</span> <span class="n">actual</span> <span class="o">=</span> <span class="mi">1</span> <span class="k">THEN</span> <span class="mi">1</span><span class="p">.</span><span class="mi">0</span> <span class="k">ELSE</span> <span class="mi">0</span><span class="p">.</span><span class="mi">0</span> <span class="k">END</span><span class="p">)</span> <span class="o">/</span>
+    <span class="k">AVG</span><span class="p">(</span><span class="k">CASE</span> <span class="k">WHEN</span> <span class="n">ROUND</span><span class="p">(</span><span class="n">predicted</span><span class="p">)</span> <span class="o">=</span> <span class="mi">1</span> <span class="k">THEN</span> <span class="mi">1</span><span class="p">.</span><span class="mi">0</span> <span class="k">ELSE</span> <span class="mi">0</span><span class="p">.</span><span class="mi">0</span> <span class="k">END</span><span class="p">),</span>
+    <span class="k">AVG</span><span class="p">(</span><span class="k">CASE</span> <span class="k">WHEN</span> <span class="n">actual</span> <span class="o">=</span> <span class="mi">1</span> <span class="k">AND</span> <span class="n">ROUND</span><span class="p">(</span><span class="n">predicted</span><span class="p">)</span> <span class="o">=</span> <span class="mi">1</span> <span class="k">THEN</span> <span class="mi">1</span><span class="p">.</span><span class="mi">0</span> <span class="k">ELSE</span> <span class="mi">0</span><span class="p">.</span><span class="mi">0</span> <span class="k">END</span><span class="p">)</span> <span class="o">/</span>
+    <span class="k">AVG</span><span class="p">(</span><span class="k">CASE</span> <span class="k">WHEN</span> <span class="n">actual</span> <span class="o">=</span> <span class="mi">1</span> <span class="k">THEN</span> <span class="mi">1</span><span class="p">.</span><span class="mi">0</span> <span class="k">ELSE</span> <span class="mi">0</span><span class="p">.</span><span class="mi">0</span> <span class="k">END</span><span class="p">),</span>
+    <span class="c1">-- Data drift detection would be implemented here</span>
+    <span class="mi">0</span><span class="p">.</span><span class="mi">0</span><span class="p">,</span>
+    <span class="n">NOW</span><span class="p">()</span>
+<span class="k">FROM</span> <span class="n">daily_predictions</span>
+<span class="k">WHERE</span> <span class="n">prediction_date</span> <span class="o">=</span> <span class="k">CURRENT_DATE</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h2 id="-summary">🎯 <strong>Summary</strong></h2>
+
+<p>OrbitQL’s ML capabilities bring enterprise-grade machine learning directly to your SQL environment:</p>
+
+<ul>
+  <li><strong>🚀 Boosting Algorithms</strong>: XGBoost, LightGBM, CatBoost, AdaBoost, and GBM</li>
+  <li><strong>🎯 Model Management</strong>: Train, evaluate, deploy, and monitor models</li>
+  <li><strong>🔧 Feature Engineering</strong>: Built-in preprocessing and feature selection</li>
+  <li><strong>📊 Production Ready</strong>: A/B testing, monitoring, and drift detection</li>
+  <li><strong>🖥️ Desktop UI</strong>: Rich graphical interface with Orbit Desktop</li>
+  <li><strong>⚡ Performance</strong>: Optimized for large-scale data processing</li>
+</ul>
+
+<p>Start building intelligent applications today with OrbitQL’s comprehensive ML toolkit!</p>
+
+<hr />
+
+<p><em>For more examples and advanced use cases, visit the <a href="/examples/ml/">Orbit Desktop ML Examples</a> directory.</em></p>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/orbit-rs/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Orbit-RS Documentation</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">TuringWorks</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

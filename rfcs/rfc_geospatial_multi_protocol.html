@@ -1,0 +1,1267 @@
+<h1 id="rfc-multi-protocol-geospatial-data-support-for-orbit-rs">RFC: Multi-Protocol Geospatial Data Support for Orbit-RS</h1>
+
+<p><strong>RFC Number</strong>: RFC-2024-005<br />
+<strong>Title</strong>: Multi-Protocol Geospatial Data Support<br />
+<strong>Status</strong>: Proposed<br />
+<strong>Priority</strong>: High (Critical for Smart Cities, IoT, Mapping Applications)<br />
+<strong>Authors</strong>: Orbit-RS Core Team<br />
+<strong>Created</strong>: 2025-10-09<br />
+<strong>Target Implementation</strong>: Q1 2025</p>
+
+<hr />
+
+<h2 id="abstract">Abstract</h2>
+
+<p>This RFC proposes comprehensive geospatial data support across all Orbit-RS protocols (Redis, AQL, PostgreSQL, Cypher, OrbitQL), providing unified spatial capabilities that leverage the existing multi-model architecture while delivering industry-leading performance through GPU acceleration and advanced spatial indexing.</p>
+
+<h2 id="motivation">Motivation</h2>
+
+<h3 id="current-market-need">Current Market Need</h3>
+<ul>
+  <li><strong>$8B+ geospatial analytics market</strong> growing 15% annually</li>
+  <li><strong>Smart cities investing $2.5T+</strong> in digital infrastructure by 2025</li>
+  <li><strong>75B+ IoT devices</strong> requiring location services and real-time spatial analytics</li>
+  <li><strong>Critical gap</strong> in unified geospatial databases supporting multiple query languages</li>
+</ul>
+
+<h3 id="current-limitations-in-orbit-rs">Current Limitations in Orbit-RS</h3>
+<ul>
+  <li><strong>No native spatial data types</strong> (POINT, POLYGON, LINESTRING)</li>
+  <li><strong>Limited spatial functions</strong> (basic AQL GEO_* functions only)</li>
+  <li><strong>No PostGIS compatibility</strong> for PostgreSQL protocol</li>
+  <li><strong>No spatial indexing</strong> (R-tree, QuadTree, Geohash)</li>
+  <li><strong>Missing coordinate reference systems</strong> and projections</li>
+  <li><strong>No spatial analytics</strong> beyond basic distance/containment</li>
+</ul>
+
+<h3 id="strategic-opportunity">Strategic Opportunity</h3>
+<p>Position Orbit-RS as the <strong>definitive next-generation geospatial database</strong> by combining:</p>
+<ul>
+  <li><strong>Multi-protocol support</strong> (unique in the market)</li>
+  <li><strong>Multi-model integration</strong> (spatial + graph + vector + time-series)</li>
+  <li><strong>GPU acceleration</strong> for 10x performance improvements</li>
+  <li><strong>Horizontal scalability</strong> for modern cloud applications</li>
+  <li><strong>Real-time streaming</strong> for IoT and live mapping use cases</li>
+</ul>
+
+<hr />
+
+<h2 id="detailed-design">Detailed Design</h2>
+
+<h3 id="architecture-overview">Architecture Overview</h3>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>┌─────────────────────────────────────────────────────────────┐
+│                    Client Applications                       │
+│  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐ │
+│  │  Redis  │ │   AQL   │ │PostgreSQL│ │ Cypher  │ │OrbitQL  │ │
+│  │Protocol │ │Protocol │ │ Protocol │ │Protocol │ │Protocol │ │
+│  └─────────┘ └─────────┘ └─────────┘ └─────────┘ └─────────┘ │
+└─────────────────────────────────────────────────────────────┘
+                              │
+┌─────────────────────────────────────────────────────────────┐
+│                 Unified Geospatial Engine                   │
+│  ┌─────────────────────────────────────────────────────────┐ │
+│  │           Multi-Protocol Query Translator               │ │
+│  │  Redis GEO → AQL GEO → SQL ST_* → Cypher → OrbitQL     │ │
+│  └─────────────────────────────────────────────────────────┘ │
+│  ┌─────────────────────────────────────────────────────────┐ │
+│  │              Spatial Query Engine                       │ │
+│  │   ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐      │ │
+│  │   │Spatial  │ │Spatial  │ │ Spatial │ │   CRS   │      │ │
+│  │   │Functions│ │Relations│ │Analytics│ │Transform│      │ │
+│  │   └─────────┘ └─────────┘ └─────────┘ └─────────┘      │ │
+│  └─────────────────────────────────────────────────────────┘ │
+│  ┌─────────────────────────────────────────────────────────┐ │
+│  │            High-Performance Spatial Indexing            │ │
+│  │   ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐      │ │
+│  │   │R-Tree   │ │QuadTree │ │Geohash  │ │GPU Grid │      │ │
+│  │   │Index    │ │ Index   │ │ Index   │ │ Index   │      │ │
+│  │   └─────────┘ └─────────┘ └─────────┘ └─────────┘      │ │
+│  └─────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+                              │
+┌─────────────────────────────────────────────────────────────┐
+│                 Orbit-RS Storage Engine                     │
+│  ┌─────────────────────────────────────────────────────────┐ │
+│  │                  Spatial Data Types                     │ │
+│  │   Point │ LineString │ Polygon │ MultiGeometry │ ...    │ │
+│  └─────────────────────────────────────────────────────────┘ │
+│  ┌─────────────────────────────────────────────────────────┐ │
+│  │                 LSM-Tree + Spatial                      │ │
+│  │    Actor Sharding │ ACID Transactions │ Vector Store    │ │
+│  └─────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+</code></pre></div></div>
+
+<hr />
+
+<h2 id="core-spatial-data-types">Core Spatial Data Types</h2>
+
+<h3 id="rust-implementation-ogc-compliant">Rust Implementation (OGC Compliant)</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="cd">/// Universal spatial geometry types based on OGC Simple Features</span>
+
+<span class="nd">#[derive(Debug,</span> <span class="nd">Clone,</span> <span class="nd">Serialize,</span> <span class="nd">Deserialize)]</span>
+<span class="k">pub</span> <span class="k">enum</span> <span class="n">SpatialGeometry</span> <span class="p">{</span>
+    <span class="nf">Point</span><span class="p">(</span><span class="n">Point</span><span class="p">),</span>
+    <span class="nf">LineString</span><span class="p">(</span><span class="n">LineString</span><span class="p">),</span>
+    <span class="nf">Polygon</span><span class="p">(</span><span class="n">Polygon</span><span class="p">),</span>
+    <span class="nf">MultiPoint</span><span class="p">(</span><span class="n">MultiPoint</span><span class="p">),</span>
+    <span class="nf">MultiLineString</span><span class="p">(</span><span class="n">MultiLineString</span><span class="p">),</span>
+    <span class="nf">MultiPolygon</span><span class="p">(</span><span class="n">MultiPolygon</span><span class="p">),</span>
+    <span class="nf">GeometryCollection</span><span class="p">(</span><span class="n">GeometryCollection</span><span class="p">),</span>
+<span class="p">}</span>
+
+<span class="nd">#[derive(Debug,</span> <span class="nd">Clone,</span> <span class="nd">Serialize,</span> <span class="nd">Deserialize)]</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">Point</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="n">x</span><span class="p">:</span> <span class="nb">f64</span><span class="p">,</span>                    <span class="c1">// Longitude or X coordinate</span>
+    <span class="k">pub</span> <span class="n">y</span><span class="p">:</span> <span class="nb">f64</span><span class="p">,</span>                    <span class="c1">// Latitude or Y coordinate  </span>
+    <span class="k">pub</span> <span class="n">z</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="nb">f64</span><span class="o">&gt;</span><span class="p">,</span>            <span class="c1">// Elevation (Z coordinate)</span>
+    <span class="k">pub</span> <span class="n">m</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="nb">f64</span><span class="o">&gt;</span><span class="p">,</span>            <span class="c1">// Measure value</span>
+    <span class="k">pub</span> <span class="n">srid</span><span class="p">:</span> <span class="nb">i32</span><span class="p">,</span>                 <span class="c1">// Spatial Reference System ID</span>
+<span class="p">}</span>
+
+<span class="nd">#[derive(Debug,</span> <span class="nd">Clone,</span> <span class="nd">Serialize,</span> <span class="nd">Deserialize)]</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">LineString</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="n">points</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">Point</span><span class="o">&gt;</span><span class="p">,</span>        <span class="c1">// Minimum 2 points</span>
+    <span class="k">pub</span> <span class="n">srid</span><span class="p">:</span> <span class="nb">i32</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="nd">#[derive(Debug,</span> <span class="nd">Clone,</span> <span class="nd">Serialize,</span> <span class="nd">Deserialize)]</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">Polygon</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="n">exterior_ring</span><span class="p">:</span> <span class="n">LinearRing</span><span class="p">,</span> <span class="c1">// Outer boundary</span>
+    <span class="k">pub</span> <span class="n">interior_rings</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">LinearRing</span><span class="o">&gt;</span><span class="p">,</span> <span class="c1">// Holes</span>
+    <span class="k">pub</span> <span class="n">srid</span><span class="p">:</span> <span class="nb">i32</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="nd">#[derive(Debug,</span> <span class="nd">Clone,</span> <span class="nd">Serialize,</span> <span class="nd">Deserialize)]</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">LinearRing</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="n">points</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">Point</span><span class="o">&gt;</span><span class="p">,</span>        <span class="c1">// Closed ring (first == last point)</span>
+<span class="p">}</span>
+
+<span class="cd">/// Coordinate Reference System support</span>
+
+<span class="nd">#[derive(Debug,</span> <span class="nd">Clone)]</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">CoordinateReferenceSystem</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="n">srid</span><span class="p">:</span> <span class="nb">i32</span><span class="p">,</span>                 <span class="c1">// EPSG code</span>
+    <span class="k">pub</span> <span class="n">authority</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span>         <span class="c1">// "EPSG", "ESRI", etc.</span>
+    <span class="k">pub</span> <span class="n">code</span><span class="p">:</span> <span class="nb">i32</span><span class="p">,</span>                <span class="c1">// Authority-specific code</span>
+    <span class="k">pub</span> <span class="n">proj4_string</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span>      <span class="c1">// Projection definition</span>
+    <span class="k">pub</span> <span class="n">wkt</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span>              <span class="c1">// Well-Known Text definition</span>
+<span class="p">}</span>
+
+<span class="c1">// Common coordinate systems</span>
+<span class="k">pub</span> <span class="k">const</span> <span class="n">WGS84</span><span class="p">:</span> <span class="nb">i32</span> <span class="o">=</span> <span class="mi">4326</span><span class="p">;</span>              <span class="c1">// World Geodetic System 1984</span>
+<span class="k">pub</span> <span class="k">const</span> <span class="n">WEB_MERCATOR</span><span class="p">:</span> <span class="nb">i32</span> <span class="o">=</span> <span class="mi">3857</span><span class="p">;</span>       <span class="c1">// Web Mercator (Google Maps)</span>
+<span class="k">pub</span> <span class="k">const</span> <span class="n">UTM_ZONE_33N</span><span class="p">:</span> <span class="nb">i32</span> <span class="o">=</span> <span class="mi">32633</span><span class="p">;</span>      <span class="c1">// UTM Zone 33N (Europe)</span>
+</code></pre></div></div>
+
+<h3 id="spatial-indexing-strategy">Spatial Indexing Strategy</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="cd">/// Multi-level spatial indexing for optimal performance</span>
+<span class="k">pub</span> <span class="k">enum</span> <span class="n">SpatialIndex</span> <span class="p">{</span>
+    <span class="cd">/// Hierarchical spatial index for point data</span>
+    <span class="n">QuadTree</span> <span class="p">{</span>
+        <span class="n">max_depth</span><span class="p">:</span> <span class="nb">usize</span><span class="p">,</span>              <span class="c1">// Maximum tree depth (default: 20)</span>
+        <span class="n">max_points_per_node</span><span class="p">:</span> <span class="nb">usize</span><span class="p">,</span>    <span class="c1">// Split threshold (default: 100)</span>
+        <span class="n">bounds</span><span class="p">:</span> <span class="n">BoundingBox</span><span class="p">,</span>           <span class="c1">// Spatial boundaries</span>
+    <span class="p">},</span>
+    
+    <span class="cd">/// R-tree for complex geometries and range queries</span>
+    <span class="n">RTree</span> <span class="p">{</span>
+        <span class="n">max_entries</span><span class="p">:</span> <span class="nb">usize</span><span class="p">,</span>            <span class="c1">// Max entries per node (default: 16)</span>
+        <span class="n">min_entries</span><span class="p">:</span> <span class="nb">usize</span><span class="p">,</span>            <span class="c1">// Min entries per node (default: 4)</span>
+        <span class="n">split_strategy</span><span class="p">:</span> <span class="n">RTreeSplitStrategy</span><span class="p">,</span>
+    <span class="p">},</span>
+    
+    <span class="cd">/// Grid-based indexing for global applications</span>
+    <span class="n">GeohashGrid</span> <span class="p">{</span>
+        <span class="n">precision</span><span class="p">:</span> <span class="nb">u8</span><span class="p">,</span>                 <span class="c1">// Geohash precision 1-12</span>
+        <span class="n">grid_size</span><span class="p">:</span> <span class="nb">usize</span><span class="p">,</span>             <span class="c1">// Grid cell count</span>
+    <span class="p">},</span>
+    
+    <span class="cd">/// K-d tree for high-dimensional spatial data</span>
+    <span class="n">KdTree</span> <span class="p">{</span>
+        <span class="n">dimensions</span><span class="p">:</span> <span class="nb">u8</span><span class="p">,</span>                <span class="c1">// 2D, 3D, 4D support</span>
+        <span class="n">balance_threshold</span><span class="p">:</span> <span class="nb">f64</span><span class="p">,</span>        <span class="c1">// Tree balancing factor</span>
+    <span class="p">},</span>
+    
+    <span class="cd">/// GPU-accelerated spatial grid for massive datasets</span>
+    <span class="n">SpatialGPUGrid</span> <span class="p">{</span>
+        <span class="n">tile_size</span><span class="p">:</span> <span class="p">(</span><span class="nb">u32</span><span class="p">,</span> <span class="nb">u32</span><span class="p">),</span>        <span class="c1">// GPU tile dimensions</span>
+        <span class="n">gpu_memory_mb</span><span class="p">:</span> <span class="nb">usize</span><span class="p">,</span>         <span class="c1">// GPU memory allocation</span>
+        <span class="n">compute_shaders</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">SpatialComputeShader</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+
+<span class="cd">/// Adaptive index selection based on data characteristics</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">AdaptiveSpatialIndexer</span> <span class="p">{</span>
+    <span class="n">point_density_threshold</span><span class="p">:</span> <span class="nb">f64</span><span class="p">,</span>
+    <span class="n">polygon_complexity_threshold</span><span class="p">:</span> <span class="nb">usize</span><span class="p">,</span>
+    <span class="n">query_pattern_analyzer</span><span class="p">:</span> <span class="n">QueryPatternAnalyzer</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="k">impl</span> <span class="n">AdaptiveSpatialIndexer</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="k">fn</span> <span class="nf">recommend_index</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">stats</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">GeometryStatistics</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">SpatialIndex</span> <span class="p">{</span>
+        <span class="k">match</span> <span class="n">stats</span> <span class="p">{</span>
+            <span class="c1">// High-density point clouds</span>
+            <span class="n">GeometryStatistics</span> <span class="p">{</span> <span class="n">point_density</span><span class="p">,</span> <span class="o">..</span> <span class="p">}</span> <span class="k">if</span> <span class="o">*</span><span class="n">point_density</span> <span class="o">&gt;</span> <span class="mf">1_000_000.0</span> <span class="k">=&gt;</span> <span class="p">{</span>
+                <span class="nn">SpatialIndex</span><span class="p">::</span><span class="n">GeohashGrid</span> <span class="p">{</span> 
+                    <span class="n">precision</span><span class="p">:</span> <span class="mi">8</span><span class="p">,</span> 
+                    <span class="n">grid_size</span><span class="p">:</span> <span class="mi">1024</span> 
+                <span class="p">}</span>
+            <span class="p">},</span>
+            
+            <span class="c1">// Complex polygons</span>
+            <span class="n">GeometryStatistics</span> <span class="p">{</span> <span class="n">avg_polygon_vertices</span><span class="p">,</span> <span class="o">..</span> <span class="p">}</span> <span class="k">if</span> <span class="o">*</span><span class="n">avg_polygon_vertices</span> <span class="o">&gt;</span> <span class="mi">1000</span> <span class="k">=&gt;</span> <span class="p">{</span>
+                <span class="nn">SpatialIndex</span><span class="p">::</span><span class="n">RTree</span> <span class="p">{</span> 
+                    <span class="n">max_entries</span><span class="p">:</span> <span class="mi">16</span><span class="p">,</span> 
+                    <span class="n">min_entries</span><span class="p">:</span> <span class="mi">4</span><span class="p">,</span> 
+                    <span class="n">split_strategy</span><span class="p">:</span> <span class="nn">RTreeSplitStrategy</span><span class="p">::</span><span class="n">RStart</span> 
+                <span class="p">}</span>
+            <span class="p">},</span>
+            
+            <span class="c1">// GPU-accelerated for massive datasets</span>
+            <span class="n">GeometryStatistics</span> <span class="p">{</span> <span class="n">total_records</span><span class="p">,</span> <span class="o">..</span> <span class="p">}</span> <span class="k">if</span> <span class="o">*</span><span class="n">total_records</span> <span class="o">&gt;</span> <span class="mi">10_000_000</span> <span class="k">=&gt;</span> <span class="p">{</span>
+                <span class="nn">SpatialIndex</span><span class="p">::</span><span class="n">SpatialGPUGrid</span> <span class="p">{</span>
+                    <span class="n">tile_size</span><span class="p">:</span> <span class="p">(</span><span class="mi">1024</span><span class="p">,</span> <span class="mi">1024</span><span class="p">),</span>
+                    <span class="n">gpu_memory_mb</span><span class="p">:</span> <span class="mi">4096</span><span class="p">,</span>
+                    <span class="n">compute_shaders</span><span class="p">:</span> <span class="nd">vec!</span><span class="p">[</span>
+                        <span class="nn">SpatialComputeShader</span><span class="p">::</span><span class="n">PointInPolygon</span><span class="p">,</span>
+                        <span class="nn">SpatialComputeShader</span><span class="p">::</span><span class="n">NearestNeighbor</span><span class="p">,</span>
+                        <span class="nn">SpatialComputeShader</span><span class="p">::</span><span class="n">SpatialClustering</span>
+                    <span class="p">]</span>
+                <span class="p">}</span>
+            <span class="p">},</span>
+            
+            <span class="c1">// Default QuadTree for general use</span>
+            <span class="n">_</span> <span class="k">=&gt;</span> <span class="nn">SpatialIndex</span><span class="p">::</span><span class="n">QuadTree</span> <span class="p">{</span>
+                <span class="n">max_depth</span><span class="p">:</span> <span class="mi">20</span><span class="p">,</span>
+                <span class="n">max_points_per_node</span><span class="p">:</span> <span class="mi">100</span><span class="p">,</span>
+                <span class="n">bounds</span><span class="p">:</span> <span class="n">stats</span><span class="nf">.calculate_bounds</span><span class="p">()</span>
+            <span class="p">}</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<hr />
+
+<h2 id="multi-protocol-implementation">Multi-Protocol Implementation</h2>
+
+<h3 id="1-postgresql-protocol-postgis-compatible">1. PostgreSQL Protocol (PostGIS Compatible)</h3>
+
+<h4 id="spatial-data-types">Spatial Data Types</h4>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Create table with spatial columns</span>
+<span class="k">CREATE</span> <span class="k">TABLE</span> <span class="n">cities</span> <span class="p">(</span>
+    <span class="n">id</span> <span class="nb">SERIAL</span> <span class="k">PRIMARY</span> <span class="k">KEY</span><span class="p">,</span>
+    <span class="n">name</span> <span class="nb">TEXT</span> <span class="k">NOT</span> <span class="k">NULL</span><span class="p">,</span>
+    <span class="k">location</span> <span class="n">GEOMETRY</span><span class="p">(</span><span class="n">POINT</span><span class="p">,</span> <span class="mi">4326</span><span class="p">),</span>        <span class="c1">-- WGS84 point</span>
+    <span class="n">boundary</span> <span class="n">GEOMETRY</span><span class="p">(</span><span class="n">POLYGON</span><span class="p">,</span> <span class="mi">4326</span><span class="p">),</span>      <span class="c1">-- City boundary</span>
+    <span class="n">metro_area</span> <span class="n">GEOMETRY</span><span class="p">(</span><span class="n">MULTIPOLYGON</span><span class="p">,</span> <span class="mi">4326</span><span class="p">),</span> <span class="c1">-- Metro region</span>
+    <span class="n">created_at</span> <span class="nb">TIMESTAMP</span> <span class="k">DEFAULT</span> <span class="n">NOW</span><span class="p">()</span>
+<span class="p">);</span>
+
+<span class="c1">-- Create spatial indexes</span>
+<span class="k">CREATE</span> <span class="k">INDEX</span> <span class="n">idx_cities_location</span> <span class="k">ON</span> <span class="n">cities</span> <span class="k">USING</span> <span class="n">GIST</span><span class="p">(</span><span class="k">location</span><span class="p">);</span>
+<span class="k">CREATE</span> <span class="k">INDEX</span> <span class="n">idx_cities_boundary</span> <span class="k">ON</span> <span class="n">cities</span> <span class="k">USING</span> <span class="n">RTREE</span><span class="p">(</span><span class="n">boundary</span><span class="p">);</span>
+<span class="k">CREATE</span> <span class="k">INDEX</span> <span class="n">idx_cities_metro</span> <span class="k">ON</span> <span class="n">cities</span> <span class="k">USING</span> <span class="n">GEOHASH</span><span class="p">(</span><span class="n">metro_area</span><span class="p">);</span>
+
+<span class="c1">-- Mixed geometry column</span>
+<span class="k">ALTER</span> <span class="k">TABLE</span> <span class="n">places</span> <span class="k">ADD</span> <span class="k">COLUMN</span> <span class="n">geom</span> <span class="n">GEOMETRY</span><span class="p">;</span>
+<span class="k">ALTER</span> <span class="k">TABLE</span> <span class="n">places</span> <span class="k">ADD</span> <span class="k">COLUMN</span> <span class="n">geog</span> <span class="n">GEOGRAPHY</span><span class="p">;</span> <span class="c1">-- Spherical calculations</span>
+</code></pre></div></div>
+
+<h4 id="spatial-functions-full-postgis-compatibility">Spatial Functions (Full PostGIS Compatibility)</h4>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Geometric constructors</span>
+<span class="k">SELECT</span> <span class="n">ST_Point</span><span class="p">(</span><span class="o">-</span><span class="mi">122</span><span class="p">.</span><span class="mi">4194</span><span class="p">,</span> <span class="mi">37</span><span class="p">.</span><span class="mi">7749</span><span class="p">)</span> <span class="k">as</span> <span class="n">san_francisco</span><span class="p">;</span>
+<span class="k">SELECT</span> <span class="n">ST_MakePoint</span><span class="p">(</span><span class="o">-</span><span class="mi">122</span><span class="p">.</span><span class="mi">4194</span><span class="p">,</span> <span class="mi">37</span><span class="p">.</span><span class="mi">7749</span><span class="p">,</span> <span class="mi">4326</span><span class="p">)</span> <span class="k">as</span> <span class="n">sf_with_srid</span><span class="p">;</span>
+<span class="k">SELECT</span> <span class="n">ST_GeomFromText</span><span class="p">(</span><span class="s1">'POINT(-122.4194 37.7749)'</span><span class="p">,</span> <span class="mi">4326</span><span class="p">)</span> <span class="k">as</span> <span class="n">sf_wkt</span><span class="p">;</span>
+<span class="k">SELECT</span> <span class="n">ST_GeomFromGeoJSON</span><span class="p">(</span><span class="s1">'{"type":"Point","coordinates":[-122.4194,37.7749]}'</span><span class="p">)</span> <span class="k">as</span> <span class="n">sf_geojson</span><span class="p">;</span>
+
+<span class="c1">-- Spatial relationships</span>
+<span class="k">SELECT</span> <span class="o">*</span> <span class="k">FROM</span> <span class="n">restaurants</span> 
+<span class="k">WHERE</span> <span class="n">ST_Within</span><span class="p">(</span><span class="k">location</span><span class="p">,</span> <span class="p">(</span><span class="k">SELECT</span> <span class="n">boundary</span> <span class="k">FROM</span> <span class="n">neighborhoods</span> <span class="k">WHERE</span> <span class="n">name</span> <span class="o">=</span> <span class="s1">'SOMA'</span><span class="p">));</span>
+
+<span class="k">SELECT</span> <span class="o">*</span> <span class="k">FROM</span> <span class="n">roads</span> 
+<span class="k">WHERE</span> <span class="n">ST_Intersects</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">ST_Buffer</span><span class="p">(</span><span class="n">ST_Point</span><span class="p">(</span><span class="o">-</span><span class="mi">122</span><span class="p">.</span><span class="mi">4194</span><span class="p">,</span> <span class="mi">37</span><span class="p">.</span><span class="mi">7749</span><span class="p">),</span> <span class="mi">1000</span><span class="p">));</span>
+
+<span class="k">SELECT</span> <span class="k">COUNT</span><span class="p">(</span><span class="o">*</span><span class="p">)</span> <span class="k">FROM</span> <span class="n">buildings</span> 
+<span class="k">WHERE</span> <span class="n">ST_Overlaps</span><span class="p">(</span><span class="n">footprint</span><span class="p">,</span> <span class="p">(</span><span class="k">SELECT</span> <span class="n">ST_Union</span><span class="p">(</span><span class="n">boundary</span><span class="p">)</span> <span class="k">FROM</span> <span class="n">flood_zones</span><span class="p">));</span>
+
+<span class="c1">-- Distance and proximity</span>
+<span class="k">SELECT</span> <span class="n">name</span><span class="p">,</span> <span class="n">ST_Distance</span><span class="p">(</span><span class="k">location</span><span class="p">,</span> <span class="n">ST_Point</span><span class="p">(</span><span class="o">-</span><span class="mi">122</span><span class="p">.</span><span class="mi">4194</span><span class="p">,</span> <span class="mi">37</span><span class="p">.</span><span class="mi">7749</span><span class="p">))</span> <span class="k">as</span> <span class="n">distance_meters</span>
+<span class="k">FROM</span> <span class="n">restaurants</span> 
+<span class="k">WHERE</span> <span class="n">ST_DWithin</span><span class="p">(</span><span class="k">location</span><span class="p">,</span> <span class="n">ST_Point</span><span class="p">(</span><span class="o">-</span><span class="mi">122</span><span class="p">.</span><span class="mi">4194</span><span class="p">,</span> <span class="mi">37</span><span class="p">.</span><span class="mi">7749</span><span class="p">),</span> <span class="mi">5000</span><span class="p">)</span>
+<span class="k">ORDER</span> <span class="k">BY</span> <span class="n">distance_meters</span> <span class="k">LIMIT</span> <span class="mi">10</span><span class="p">;</span>
+
+<span class="c1">-- Spatial aggregations</span>
+<span class="k">SELECT</span> <span class="n">district_id</span><span class="p">,</span> 
+       <span class="n">ST_Union</span><span class="p">(</span><span class="n">boundary</span><span class="p">)</span> <span class="k">as</span> <span class="n">district_boundary</span><span class="p">,</span>
+       <span class="n">ST_ConvexHull</span><span class="p">(</span><span class="n">ST_Collect</span><span class="p">(</span><span class="k">location</span><span class="p">))</span> <span class="k">as</span> <span class="n">service_area</span><span class="p">,</span>
+       <span class="k">COUNT</span><span class="p">(</span><span class="o">*</span><span class="p">)</span> <span class="k">as</span> <span class="n">location_count</span>
+<span class="k">FROM</span> <span class="n">service_points</span> 
+<span class="k">GROUP</span> <span class="k">BY</span> <span class="n">district_id</span><span class="p">;</span>
+
+<span class="c1">-- Advanced spatial analytics</span>
+<span class="k">SELECT</span> <span class="n">ST_ClusterKMeans</span><span class="p">(</span><span class="k">location</span><span class="p">,</span> <span class="mi">5</span><span class="p">)</span> <span class="n">OVER</span><span class="p">()</span> <span class="k">as</span> <span class="n">cluster_id</span><span class="p">,</span>
+       <span class="k">COUNT</span><span class="p">(</span><span class="o">*</span><span class="p">)</span> <span class="k">as</span> <span class="n">cluster_size</span><span class="p">,</span>
+       <span class="n">ST_Centroid</span><span class="p">(</span><span class="n">ST_Collect</span><span class="p">(</span><span class="k">location</span><span class="p">))</span> <span class="k">as</span> <span class="n">cluster_center</span>
+<span class="k">FROM</span> <span class="n">events</span> 
+<span class="k">WHERE</span> <span class="n">event_date</span> <span class="o">&gt;</span> <span class="k">CURRENT_DATE</span> <span class="o">-</span> <span class="n">INTERVAL</span> <span class="s1">'30 days'</span>
+<span class="k">GROUP</span> <span class="k">BY</span> <span class="n">cluster_id</span><span class="p">;</span>
+
+<span class="c1">-- Geometric operations</span>
+<span class="k">SELECT</span> <span class="n">a</span><span class="p">.</span><span class="n">name</span> <span class="k">as</span> <span class="n">zone_a</span><span class="p">,</span> <span class="n">b</span><span class="p">.</span><span class="n">name</span> <span class="k">as</span> <span class="n">zone_b</span><span class="p">,</span>
+       <span class="n">ST_Area</span><span class="p">(</span><span class="n">ST_Intersection</span><span class="p">(</span><span class="n">a</span><span class="p">.</span><span class="n">boundary</span><span class="p">,</span> <span class="n">b</span><span class="p">.</span><span class="n">boundary</span><span class="p">))</span> <span class="k">as</span> <span class="n">overlap_area</span><span class="p">,</span>
+       <span class="n">ST_Area</span><span class="p">(</span><span class="n">ST_Union</span><span class="p">(</span><span class="n">a</span><span class="p">.</span><span class="n">boundary</span><span class="p">,</span> <span class="n">b</span><span class="p">.</span><span class="n">boundary</span><span class="p">))</span> <span class="k">as</span> <span class="n">total_area</span>
+<span class="k">FROM</span> <span class="n">zones</span> <span class="n">a</span><span class="p">,</span> <span class="n">zones</span> <span class="n">b</span> 
+<span class="k">WHERE</span> <span class="n">a</span><span class="p">.</span><span class="n">id</span> <span class="o">&lt;</span> <span class="n">b</span><span class="p">.</span><span class="n">id</span> <span class="k">AND</span> <span class="n">ST_Intersects</span><span class="p">(</span><span class="n">a</span><span class="p">.</span><span class="n">boundary</span><span class="p">,</span> <span class="n">b</span><span class="p">.</span><span class="n">boundary</span><span class="p">);</span>
+
+<span class="c1">-- 3D operations</span>
+<span class="k">SELECT</span> <span class="n">building_id</span><span class="p">,</span> 
+       <span class="n">ST_3DDistance</span><span class="p">(</span><span class="k">location</span><span class="p">,</span> <span class="n">ST_MakePoint</span><span class="p">(</span><span class="o">-</span><span class="mi">122</span><span class="p">.</span><span class="mi">4194</span><span class="p">,</span> <span class="mi">37</span><span class="p">.</span><span class="mi">7749</span><span class="p">,</span> <span class="mi">100</span><span class="p">))</span> <span class="k">as</span> <span class="n">distance_3d</span><span class="p">,</span>
+       <span class="n">ST_Volume</span><span class="p">(</span><span class="n">ST_Extrude</span><span class="p">(</span><span class="n">footprint</span><span class="p">,</span> <span class="n">height</span><span class="p">))</span> <span class="k">as</span> <span class="n">building_volume</span>
+<span class="k">FROM</span> <span class="n">buildings_3d</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h4 id="spatio-temporal-queries">Spatio-Temporal Queries</h4>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Time-series spatial data</span>
+<span class="k">CREATE</span> <span class="k">TABLE</span> <span class="n">sensor_readings</span> <span class="p">(</span>
+    <span class="n">sensor_id</span> <span class="nb">INTEGER</span><span class="p">,</span>
+    <span class="n">reading_time</span> <span class="n">TIMESTAMPTZ</span><span class="p">,</span>
+    <span class="k">location</span> <span class="n">GEOMETRY</span><span class="p">(</span><span class="n">POINT</span><span class="p">,</span> <span class="mi">4326</span><span class="p">),</span>
+    <span class="n">temperature</span> <span class="nb">FLOAT</span><span class="p">,</span>
+    <span class="n">humidity</span> <span class="nb">FLOAT</span>
+<span class="p">)</span> <span class="k">PARTITION</span> <span class="k">BY</span> <span class="k">RANGE</span> <span class="p">(</span><span class="n">reading_time</span><span class="p">);</span>
+
+<span class="c1">-- Spatio-temporal index</span>
+<span class="k">CREATE</span> <span class="k">INDEX</span> <span class="n">idx_sensor_spacetime</span> <span class="k">ON</span> <span class="n">sensor_readings</span> 
+<span class="k">USING</span> <span class="n">GIST</span><span class="p">(</span><span class="k">location</span><span class="p">,</span> <span class="n">reading_time</span><span class="p">);</span>
+
+<span class="c1">-- Moving object trajectories</span>
+<span class="k">SELECT</span> <span class="n">vehicle_id</span><span class="p">,</span>
+       <span class="n">ST_MakeLine</span><span class="p">(</span><span class="k">location</span> <span class="k">ORDER</span> <span class="k">BY</span> <span class="n">gps_time</span><span class="p">)</span> <span class="k">as</span> <span class="n">trajectory</span><span class="p">,</span>
+       <span class="n">ST_Length</span><span class="p">(</span><span class="n">ST_MakeLine</span><span class="p">(</span><span class="k">location</span> <span class="k">ORDER</span> <span class="k">BY</span> <span class="n">gps_time</span><span class="p">))</span> <span class="k">as</span> <span class="n">distance_km</span><span class="p">,</span>
+       <span class="k">MAX</span><span class="p">(</span><span class="n">gps_time</span><span class="p">)</span> <span class="o">-</span> <span class="k">MIN</span><span class="p">(</span><span class="n">gps_time</span><span class="p">)</span> <span class="k">as</span> <span class="n">duration</span>
+<span class="k">FROM</span> <span class="n">gps_tracks</span> 
+<span class="k">WHERE</span> <span class="n">gps_time</span> <span class="o">&gt;</span> <span class="n">NOW</span><span class="p">()</span> <span class="o">-</span> <span class="n">INTERVAL</span> <span class="s1">'1 hour'</span>
+<span class="k">GROUP</span> <span class="k">BY</span> <span class="n">vehicle_id</span><span class="p">;</span>
+
+<span class="c1">-- Spatio-temporal range queries</span>
+<span class="k">SELECT</span> <span class="n">sensor_id</span><span class="p">,</span> <span class="k">AVG</span><span class="p">(</span><span class="n">temperature</span><span class="p">)</span> <span class="k">as</span> <span class="n">avg_temp</span>
+<span class="k">FROM</span> <span class="n">sensor_readings</span> 
+<span class="k">WHERE</span> <span class="n">reading_time</span> <span class="o">&gt;</span> <span class="n">NOW</span><span class="p">()</span> <span class="o">-</span> <span class="n">INTERVAL</span> <span class="s1">'24 hours'</span>
+  <span class="k">AND</span> <span class="n">ST_DWithin</span><span class="p">(</span><span class="k">location</span><span class="p">,</span> <span class="n">ST_Point</span><span class="p">(</span><span class="o">-</span><span class="mi">122</span><span class="p">.</span><span class="mi">4194</span><span class="p">,</span> <span class="mi">37</span><span class="p">.</span><span class="mi">7749</span><span class="p">),</span> <span class="mi">10000</span><span class="p">)</span>
+<span class="k">GROUP</span> <span class="k">BY</span> <span class="n">sensor_id</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h3 id="2-redis-protocol-geospatial-commands">2. Redis Protocol (Geospatial Commands)</h3>
+
+<h4 id="basic-geospatial-commands">Basic Geospatial Commands</h4>
+<pre><code class="language-redis">
+# Add points to geospatial index
+GEOADD cities -122.4194 37.7749 "San Francisco"
+GEOADD cities -74.0060 40.7128 "New York"
+GEOADD cities -87.6298 41.8781 "Chicago"
+
+# Get coordinates
+GEOPOS cities "San Francisco" "New York"
+
+# Calculate distance
+GEODIST cities "San Francisco" "New York" km
+
+# Find nearby points
+GEORADIUS cities -122.4 37.8 100 km WITHDIST WITHCOORD
+GEORADIUSBYMEMBER cities "San Francisco" 500 km COUNT 5
+
+# Geohash encoding
+GEOHASH cities "San Francisco" "New York"
+</code></pre>
+
+<h4 id="extended-spatial-commands-orbit-rs-specific">Extended Spatial Commands (Orbit-RS Specific)</h4>
+<pre><code class="language-redis">
+# Create spatial indexes
+GEO.INDEX.CREATE poi_index RTREE
+GEO.INDEX.CREATE traffic_grid GEOHASH precision 8
+
+# Add complex geometries
+GEO.POLYGON.ADD zones "golden_gate_park" "POLYGON((-122.511 37.769, -122.511 37.775, -122.490 37.775, -122.490 37.769, -122.511 37.769))"
+GEO.LINESTRING.ADD roads "lombard_street" "LINESTRING(-122.418 37.802, -122.417 37.801, -122.416 37.800)"
+
+# Spatial relationships
+GEO.WITHIN poi_index -122.45 37.75 zones "golden_gate_park"
+GEO.INTERSECTS roads "lombard_street" zones "russian_hill"
+GEO.BUFFER.CREATE zones "golden_gate_park" 500 "park_buffer"
+
+# Real-time geofencing
+GEO.FENCE.ADD vehicle_alerts "downtown_zone" "POLYGON(...)" 
+GEO.FENCE.SUBSCRIBE vehicle_alerts ENTER EXIT
+GEO.FENCE.CHECK vehicle_123 -122.4194 37.7749
+
+# Spatial analytics
+GEO.CLUSTER.KMEANS poi_index 5 
+GEO.DENSITY.HEATMAP poi_index -122.5 37.7 -122.4 37.8 grid_size 100
+GEO.NEAREST.NEIGHBORS poi_index -122.4194 37.7749 k 10
+
+# Time-series geospatial
+GEO.TS.ADD vehicle_tracks vehicle_123 1634567890 -122.4194 37.7749
+GEO.TS.RANGE vehicle_tracks vehicle_123 1634567890 1634571490
+GEO.TS.TRAJECTORY vehicle_tracks vehicle_123 last_hour
+</code></pre>
+
+<h4 id="streaming-geospatial-operations">Streaming Geospatial Operations</h4>
+<pre><code class="language-redis">
+# Real-time GPS stream processing
+XADD gps_stream * vehicle_id 123 lat 37.7749 lng -122.4194 speed 45 heading 270
+GEO.STREAM.PROCESS gps_stream vehicle_positions UPDATE_INTERVAL 1000
+
+# Geofence violation streams  
+GEO.STREAM.SUBSCRIBE fence_violations
+GEO.ALERT.ADD vehicle_123 GEOFENCE downtown_zone VIOLATION_TYPE enter,exit
+
+# Live traffic analysis
+GEO.STREAM.AGGREGATE traffic_data road_segments WINDOW 15min FUNCTION avg_speed
+</code></pre>
+
+<h3 id="3-aql-protocol-arangodb-compatible">3. AQL Protocol (ArangoDB Compatible)</h3>
+
+<h4 id="basic-geospatial-queries">Basic Geospatial Queries</h4>
+<pre><code class="language-aql">// Points within radius
+FOR poi IN points_of_interest
+    FILTER GEO_DISTANCE([poi.lat, poi.lng], [37.7749, -122.4194]) &lt;= 5000
+    SORT GEO_DISTANCE([poi.lat, poi.lng], [37.7749, -122.4194])
+    LIMIT 10
+    RETURN {
+        name: poi.name,
+        distance: GEO_DISTANCE([poi.lat, poi.lng], [37.7749, -122.4194])
+    }
+
+// Points within polygon
+LET park_boundary = {
+    type: "Polygon",
+    coordinates: [[
+        [-122.511, 37.769], [-122.511, 37.775], 
+        [-122.490, 37.775], [-122.490, 37.769], 
+        [-122.511, 37.769]
+    ]]
+}
+FOR location IN locations
+    FILTER GEO_CONTAINS(park_boundary, [location.lng, location.lat])
+    RETURN location
+
+// Nearest neighbors
+FOR location IN NEAR(locations, 37.7749, -122.4194, 10, "distance")
+    RETURN {
+        name: location.name,
+        coordinates: [location.lat, location.lng],
+        distance: location.distance
+    }
+</code></pre>
+
+<h4 id="advanced-aql-geospatial-operations">Advanced AQL Geospatial Operations</h4>
+<pre><code class="language-aql">// Complex polygon operations
+FOR zone_a IN zones
+    FOR zone_b IN zones
+        FILTER zone_a._key != zone_b._key
+        LET intersection = GEO_INTERSECTION(zone_a.boundary, zone_b.boundary)
+        FILTER intersection != null
+        RETURN {
+            zone_a: zone_a.name,
+            zone_b: zone_b.name,
+            overlap_area: GEO_AREA(intersection),
+            overlap_percentage: GEO_AREA(intersection) / GEO_AREA(zone_a.boundary) * 100
+        }
+
+// Spatial aggregations with grouping
+FOR sensor IN sensor_data
+    FILTER sensor.reading_time &gt; DATE_SUBTRACT(DATE_NOW(), 1, "hour")
+    COLLECT region = GEO_GEOHASH([sensor.lng, sensor.lat], 6)
+    AGGREGATE 
+        avg_temp = AVG(sensor.temperature),
+        sensor_count = COUNT(),
+        center_point = AVG([sensor.lat, sensor.lng])
+    RETURN {
+        region: region,
+        average_temperature: avg_temp,
+        sensor_count: sensor_count,
+        center: center_point
+    }
+
+// Route calculation with graph traversal
+FOR route IN OUTBOUND SHORTEST_PATH 
+    GEO_POINT(-122.4194, 37.7749) TO GEO_POINT(-122.4089, 37.7849)
+    GRAPH "road_network"
+    OPTIONS {
+        weightAttribute: "travel_time",
+        defaultWeight: 1
+    }
+    RETURN {
+        path: route.vertices[*].coordinates,
+        total_distance: SUM(route.edges[*].distance),
+        estimated_time: route.weight,
+        waypoints: route.vertices[*].name
+    }
+
+// Geofencing with real-time alerts
+FOR device IN devices
+    LET current_geofences = (
+        FOR fence IN geofences
+            FILTER GEO_CONTAINS(fence.boundary, [device.current_lng, device.current_lat])
+            RETURN fence
+    )
+    LET previous_geofences = (
+        FOR fence IN geofences
+            FILTER GEO_CONTAINS(fence.boundary, [device.previous_lng, device.previous_lat])
+            RETURN fence
+    )
+    LET entered_fences = MINUS(current_geofences, previous_geofences)
+    LET exited_fences = MINUS(previous_geofences, current_geofences)
+    
+    FILTER LENGTH(entered_fences) &gt; 0 OR LENGTH(exited_fences) &gt; 0
+    RETURN {
+        device_id: device.id,
+        entered_geofences: entered_fences[*].name,
+        exited_geofences: exited_fences[*].name,
+        current_location: [device.current_lat, device.current_lng],
+        timestamp: DATE_NOW()
+    }
+</code></pre>
+
+<h4 id="multi-model-spatial-queries">Multi-Model Spatial Queries</h4>
+<pre><code class="language-aql">// Combine spatial, graph, and document data
+FOR user IN users
+    FOR friend IN 1..2 OUTBOUND user GRAPH "social_network"
+    FOR checkin IN checkins
+        FILTER checkin.user_id == friend._key
+        AND checkin.timestamp &gt; DATE_SUBTRACT(DATE_NOW(), 1, "week")
+        AND GEO_DISTANCE(
+            [checkin.lat, checkin.lng], 
+            [user.home_lat, user.home_lng]
+        ) &lt;= 10000
+    COLLECT user_id = user._key, friend_id = friend._key
+    WITH COUNT INTO nearby_checkins
+    FILTER nearby_checkins &gt;= 3
+    RETURN {
+        user: user.name,
+        friend: friend.name,
+        nearby_activity_count: nearby_checkins
+    }
+</code></pre>
+
+<h3 id="4-cypher-protocol-neo4j-compatible">4. Cypher Protocol (Neo4j Compatible)</h3>
+
+<h4 id="spatial-nodes-and-relationships">Spatial Nodes and Relationships</h4>
+<div class="language-cypher highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Create spatial nodes</span>
+<span class="k">CREATE</span><span class="w"> </span><span class="ss">(</span><span class="py">sf:</span><span class="n">City</span> <span class="ss">{</span><span class="py">name:</span> <span class="s1">'San Francisco'</span><span class="ss">,</span> <span class="py">location:</span> <span class="n">point</span><span class="ss">({</span><span class="nl">latitude</span><span class="dl">:</span><span class="w"> </span><span class="m">37.7749</span><span class="ss">,</span> <span class="nl">longitude</span><span class="dl">:</span><span class="w"> </span><span class="m">-122.4194</span><span class="ss">})})</span>
+<span class="k">CREATE</span><span class="w"> </span><span class="ss">(</span><span class="py">ny:</span><span class="n">City</span> <span class="ss">{</span><span class="py">name:</span> <span class="s1">'New York'</span><span class="ss">,</span> <span class="py">location:</span> <span class="n">point</span><span class="ss">({</span><span class="nl">latitude</span><span class="dl">:</span><span class="w"> </span><span class="m">40.7128</span><span class="ss">,</span> <span class="nl">longitude</span><span class="dl">:</span><span class="w"> </span><span class="m">-74.0060</span><span class="ss">})})</span>
+<span class="k">CREATE</span><span class="w"> </span><span class="ss">(</span><span class="py">restaurant:</span><span class="n">POI</span> <span class="ss">{</span><span class="py">name:</span> <span class="s1">'Lombard Cafe'</span><span class="ss">,</span> <span class="py">location:</span> <span class="n">point</span><span class="ss">({</span><span class="nl">latitude</span><span class="dl">:</span><span class="w"> </span><span class="m">37.8024</span><span class="ss">,</span> <span class="nl">longitude</span><span class="dl">:</span><span class="w"> </span><span class="m">-122.4183</span><span class="ss">})})</span>
+
+<span class="c1">// Create spatial relationships</span>
+<span class="k">MATCH</span><span class="w"> </span><span class="ss">(</span><span class="py">r:</span><span class="n">POI</span><span class="ss">),</span> <span class="ss">(</span><span class="py">c:</span><span class="n">City</span><span class="ss">)</span>
+<span class="k">WHERE</span> <span class="n">distance</span><span class="ss">(</span><span class="n">r.location</span><span class="ss">,</span> <span class="n">c.location</span><span class="ss">)</span> <span class="o">&lt;</span> <span class="mi">5000</span>
+<span class="k">CREATE</span><span class="w"> </span><span class="ss">(</span><span class="n">r</span><span class="ss">)</span><span class="o">-</span><span class="ss">[</span><span class="nc">:LOCATED_IN</span> <span class="ss">{</span><span class="py">distance:</span> <span class="n">distance</span><span class="ss">(</span><span class="n">r.location</span><span class="ss">,</span> <span class="n">c.location</span><span class="ss">)}]</span><span class="o">-&gt;</span><span class="ss">(</span><span class="n">c</span><span class="ss">)</span>
+
+<span class="c1">// Find nearby nodes</span>
+<span class="k">MATCH</span><span class="w"> </span><span class="ss">(</span><span class="py">p:</span><span class="n">POI</span><span class="ss">)</span>
+<span class="k">WHERE</span> <span class="n">distance</span><span class="ss">(</span><span class="n">p.location</span><span class="ss">,</span> <span class="n">point</span><span class="ss">({</span><span class="nl">latitude</span><span class="dl">:</span><span class="w"> </span><span class="m">37.7749</span><span class="ss">,</span> <span class="nl">longitude</span><span class="dl">:</span><span class="w"> </span><span class="m">-122.4194</span><span class="ss">}))</span> <span class="o">&lt;</span> <span class="mi">1000</span>
+<span class="k">RETURN</span> <span class="n">p.name</span><span class="ss">,</span> <span class="n">distance</span><span class="ss">(</span><span class="n">p.location</span><span class="ss">,</span> <span class="n">point</span><span class="ss">({</span><span class="nl">latitude</span><span class="dl">:</span><span class="w"> </span><span class="m">37.7749</span><span class="ss">,</span> <span class="nl">longitude</span><span class="dl">:</span><span class="w"> </span><span class="m">-122.4194</span><span class="ss">}))</span> <span class="k">AS</span> <span class="n">distance</span>
+<span class="k">ORDER</span> <span class="k">BY</span> <span class="n">distance</span>
+</code></pre></div></div>
+
+<h4 id="advanced-spatial-cypher-queries">Advanced Spatial Cypher Queries</h4>
+<div class="language-cypher highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Spatial range queries with graph traversal  </span>
+<span class="k">MATCH</span><span class="w"> </span><span class="ss">(</span><span class="py">user:</span><span class="n">User</span><span class="ss">)</span><span class="o">-</span><span class="ss">[</span><span class="nc">:LIVES_IN</span><span class="ss">]</span><span class="o">-&gt;</span><span class="ss">(</span><span class="py">city:</span><span class="n">City</span><span class="ss">)</span>
+<span class="k">MATCH</span><span class="w"> </span><span class="ss">(</span><span class="py">poi:</span><span class="n">POI</span><span class="ss">)</span>
+<span class="k">WHERE</span> <span class="n">distance</span><span class="ss">(</span><span class="n">poi.location</span><span class="ss">,</span> <span class="n">city.location</span><span class="ss">)</span> <span class="o">&lt;</span> <span class="mi">10000</span>
+<span class="k">WITH</span> <span class="n">user</span><span class="ss">,</span> <span class="n">poi</span><span class="ss">,</span> <span class="n">city</span>
+<span class="k">MATCH</span><span class="w"> </span><span class="ss">(</span><span class="n">user</span><span class="ss">)</span><span class="o">-</span><span class="ss">[</span><span class="nc">:FRIEND</span><span class="o">*</span><span class="m">1</span><span class="o">..</span><span class="m">2</span><span class="ss">]</span><span class="o">-</span><span class="ss">(</span><span class="py">friend:</span><span class="n">User</span><span class="ss">)</span>
+<span class="k">MATCH</span><span class="w"> </span><span class="ss">(</span><span class="n">friend</span><span class="ss">)</span><span class="o">-</span><span class="ss">[</span><span class="nc">:REVIEWED</span><span class="ss">]</span><span class="o">-&gt;</span><span class="ss">(</span><span class="n">poi</span><span class="ss">)</span>
+<span class="k">RETURN</span> <span class="n">user.name</span><span class="ss">,</span> <span class="n">poi.name</span><span class="ss">,</span> 
+       <span class="n">distance</span><span class="ss">(</span><span class="n">poi.location</span><span class="ss">,</span> <span class="n">city.location</span><span class="ss">)</span> <span class="k">AS</span> <span class="n">distance</span><span class="ss">,</span>
+       <span class="nf">COUNT</span><span class="ss">(</span><span class="n">friend</span><span class="ss">)</span> <span class="k">AS</span> <span class="n">friend_reviews</span>
+<span class="k">ORDER</span> <span class="k">BY</span> <span class="n">distance</span><span class="ss">,</span> <span class="n">friend_reviews</span> <span class="k">DESC</span>
+
+<span class="c1">// Spatial clustering with community detection</span>
+<span class="k">MATCH</span><span class="w"> </span><span class="ss">(</span><span class="py">poi:</span><span class="n">POI</span><span class="ss">)</span>
+<span class="k">WITH</span> <span class="nf">collect</span><span class="ss">(</span><span class="n">poi</span><span class="ss">)</span> <span class="k">AS</span> <span class="n">pois</span>
+<span class="k">CALL</span> <span class="n">spatial.cluster.kmeans</span><span class="ss">(</span><span class="n">pois</span><span class="ss">,</span> <span class="s1">'location'</span><span class="ss">,</span> <span class="mi">5</span><span class="ss">)</span> <span class="k">YIELD</span> <span class="n">cluster</span><span class="ss">,</span> <span class="n">centroid</span>
+<span class="k">RETURN</span> <span class="n">cluster</span><span class="ss">,</span> 
+       <span class="nf">COUNT</span><span class="ss">(</span><span class="o">*</span><span class="ss">)</span> <span class="k">AS</span> <span class="n">poi_count</span><span class="ss">,</span>
+       <span class="n">centroid</span> <span class="k">AS</span> <span class="n">cluster_center</span>
+
+<span class="c1">// Route finding through spatial graph</span>
+<span class="k">MATCH</span> <span class="n">path</span> <span class="o">=</span> <span class="nf">shortestPath</span><span class="ss">((</span><span class="py">start:</span><span class="n">Location</span><span class="ss">)</span><span class="o">-</span><span class="ss">[</span><span class="nc">:ROAD</span><span class="o">*</span><span class="ss">]</span><span class="o">-</span><span class="ss">(</span><span class="py">end:</span><span class="n">Location</span><span class="ss">))</span>
+<span class="k">WHERE</span> <span class="n">distance</span><span class="ss">(</span><span class="n">start.location</span><span class="ss">,</span> <span class="n">point</span><span class="ss">({</span><span class="nl">latitude</span><span class="dl">:</span><span class="w"> </span><span class="m">37.7749</span><span class="ss">,</span> <span class="nl">longitude</span><span class="dl">:</span><span class="w"> </span><span class="m">-122.4194</span><span class="ss">}))</span> <span class="o">&lt;</span> <span class="mi">100</span>
+  <span class="ow">AND</span> <span class="n">distance</span><span class="ss">(</span><span class="n">end.location</span><span class="ss">,</span> <span class="n">point</span><span class="ss">({</span><span class="nl">latitude</span><span class="dl">:</span><span class="w"> </span><span class="m">37.7849</span><span class="ss">,</span> <span class="nl">longitude</span><span class="dl">:</span><span class="w"> </span><span class="m">-122.4089</span><span class="ss">}))</span> <span class="o">&lt;</span> <span class="mi">100</span>
+<span class="k">RETURN</span> <span class="n">path</span><span class="ss">,</span> 
+       <span class="nf">reduce</span><span class="ss">(</span><span class="n">total</span> <span class="o">=</span> <span class="mi">0</span><span class="ss">,</span> <span class="n">rel</span> <span class="ow">IN</span> <span class="nf">relationships</span><span class="ss">(</span><span class="n">path</span><span class="ss">)</span> <span class="o">|</span> <span class="n">total</span> <span class="o">+</span> <span class="n">rel.distance</span><span class="ss">)</span> <span class="k">AS</span> <span class="n">total_distance</span>
+
+<span class="c1">// Geofencing with temporal constraints</span>
+<span class="k">MATCH</span><span class="w"> </span><span class="ss">(</span><span class="py">device:</span><span class="n">Device</span><span class="ss">)</span><span class="o">-</span><span class="ss">[</span><span class="py">checkin:</span><span class="n">CHECKIN_AT</span><span class="ss">]</span><span class="o">-&gt;</span><span class="ss">(</span><span class="py">location:</span><span class="n">Location</span><span class="ss">)</span>
+<span class="k">WHERE</span> <span class="n">checkin.timestamp</span> <span class="o">&gt;</span> <span class="n">datetime</span><span class="ss">()</span> <span class="o">-</span> <span class="n">duration</span><span class="ss">(</span><span class="s1">'PT1H'</span><span class="ss">)</span>
+<span class="k">MATCH</span><span class="w"> </span><span class="ss">(</span><span class="py">fence:</span><span class="n">Geofence</span><span class="ss">)</span>
+<span class="k">WHERE</span> <span class="n">spatial.within</span><span class="ss">(</span><span class="n">location.coordinates</span><span class="ss">,</span> <span class="n">fence.boundary</span><span class="ss">)</span>
+<span class="k">WITH</span> <span class="n">device</span><span class="ss">,</span> <span class="n">fence</span><span class="ss">,</span> <span class="n">checkin</span>
+<span class="k">MATCH</span><span class="w"> </span><span class="ss">(</span><span class="n">device</span><span class="ss">)</span><span class="o">-</span><span class="ss">[</span><span class="py">prev:</span><span class="n">CHECKIN_AT</span><span class="ss">]</span><span class="o">-&gt;</span><span class="ss">(</span><span class="py">prev_loc:</span><span class="n">Location</span><span class="ss">)</span>
+<span class="k">WHERE</span> <span class="n">prev.timestamp</span> <span class="o">&lt;</span> <span class="n">checkin.timestamp</span>
+  <span class="ow">AND</span> <span class="ow">NOT</span> <span class="n">spatial.within</span><span class="ss">(</span><span class="n">prev_loc.coordinates</span><span class="ss">,</span> <span class="n">fence.boundary</span><span class="ss">)</span>
+<span class="k">RETURN</span> <span class="n">device.id</span><span class="ss">,</span> <span class="n">fence.name</span><span class="ss">,</span> <span class="s1">'ENTER'</span> <span class="k">AS</span> <span class="n">event_type</span><span class="ss">,</span> <span class="n">checkin.timestamp</span>
+</code></pre></div></div>
+
+<h4 id="spatial-analytics-with-graph-algorithms">Spatial Analytics with Graph Algorithms</h4>
+<div class="language-cypher highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Influence analysis with spatial constraints</span>
+<span class="k">MATCH</span><span class="w"> </span><span class="ss">(</span><span class="py">user:</span><span class="n">User</span><span class="ss">)</span><span class="o">-</span><span class="ss">[</span><span class="nc">:LIVES_IN</span><span class="ss">]</span><span class="o">-&gt;</span><span class="ss">(</span><span class="py">city:</span><span class="n">City</span><span class="ss">)</span>
+<span class="k">MATCH</span><span class="w"> </span><span class="ss">(</span><span class="n">user</span><span class="ss">)</span><span class="o">-</span><span class="ss">[</span><span class="nc">:POSTED</span><span class="ss">]</span><span class="o">-&gt;</span><span class="ss">(</span><span class="py">content:</span><span class="n">Content</span><span class="ss">)</span>
+<span class="k">WHERE</span> <span class="n">content.location</span> <span class="k">IS</span> <span class="ow">NOT</span> <span class="k">NULL</span>
+<span class="k">WITH</span> <span class="n">user</span><span class="ss">,</span> <span class="n">city</span><span class="ss">,</span> 
+     <span class="nf">collect</span><span class="ss">(</span><span class="n">content</span><span class="ss">)</span> <span class="k">AS</span> <span class="n">contents</span><span class="ss">,</span>
+     <span class="n">point</span><span class="ss">({</span><span class="py">latitude:</span> <span class="nf">avg</span><span class="ss">([</span><span class="n">c</span> <span class="ow">IN</span> <span class="nf">collect</span><span class="ss">(</span><span class="n">content</span><span class="ss">)</span> <span class="o">|</span> <span class="n">c.location.latitude</span><span class="ss">]),</span> 
+            <span class="py">longitude:</span> <span class="nf">avg</span><span class="ss">([</span><span class="n">c</span> <span class="ow">IN</span> <span class="nf">collect</span><span class="ss">(</span><span class="n">content</span><span class="ss">)</span> <span class="o">|</span> <span class="n">c.location.longitude</span><span class="ss">])})</span> <span class="k">AS</span> <span class="n">activity_center</span>
+<span class="k">CALL</span> <span class="n">gds.pageRank.stream</span><span class="ss">(</span><span class="s1">'social_graph'</span><span class="ss">)</span> 
+<span class="k">YIELD</span> <span class="n">nodeId</span><span class="ss">,</span> <span class="n">score</span>
+<span class="k">WHERE</span> <span class="nf">id</span><span class="ss">(</span><span class="n">user</span><span class="ss">)</span> <span class="o">=</span> <span class="n">nodeId</span>
+<span class="k">RETURN</span> <span class="n">user.name</span><span class="ss">,</span> 
+       <span class="n">city.name</span><span class="ss">,</span>
+       <span class="n">score</span> <span class="k">AS</span> <span class="n">influence</span><span class="ss">,</span>
+       <span class="n">distance</span><span class="ss">(</span><span class="n">activity_center</span><span class="ss">,</span> <span class="n">city.location</span><span class="ss">)</span> <span class="k">AS</span> <span class="n">mobility_radius</span>
+<span class="k">ORDER</span> <span class="k">BY</span> <span class="n">score</span> <span class="k">DESC</span>
+</code></pre></div></div>
+
+<h3 id="5-orbitql-protocol-native-multi-model">5. OrbitQL Protocol (Native Multi-Model)</h3>
+
+<h4 id="unified-multi-model-spatial-queries">Unified Multi-Model Spatial Queries</h4>
+<pre><code class="language-orbitql">-- Combine spatial, vector, graph, and time-series data in a single query
+QUERY spatial_analysis {
+    -- Find restaurants near user with similar taste preferences
+    FROM restaurants r
+    SPATIAL JOIN users u ON ST_DWithin(r.location, u.home_location, 5000)
+    VECTOR JOIN u.taste_profile &lt;-&gt; r.cuisine_embedding THRESHOLD 0.7
+    GRAPH TRAVERSE u-[:FRIEND*1..2]-&gt;(friend)
+    TIME_SERIES JOIN reviews rev ON rev.restaurant_id = r.id 
+        WHERE rev.review_date &gt; NOW() - INTERVAL '3 months'
+    
+    -- Spatial aggregations
+    GROUP BY ST_ClusterKMeans(r.location, 5) AS cluster_id
+    
+    -- Return combined results
+    RETURN {
+        cluster_id: cluster_id,
+        restaurants: COLLECT({
+            name: r.name,
+            location: ST_AsGeoJSON(r.location),
+            avg_rating: AVG(rev.rating),
+            friend_reviews: COUNT(DISTINCT friend),
+            taste_similarity: MAX(VECTOR_SIMILARITY(u.taste_profile, r.cuisine_embedding))
+        }),
+        cluster_center: ST_Centroid(ST_Collect(r.location)),
+        total_restaurants: COUNT(r)
+    }
+    ORDER BY cluster_id
+}
+</code></pre>
+
+<h4 id="advanced-orbitql-spatial-operations">Advanced OrbitQL Spatial Operations</h4>
+<pre><code class="language-orbitql">-- Real-time IoT sensor analysis with spatial context
+STREAM sensor_analysis {
+    -- Process live sensor data
+    FROM STREAM sensor_data s
+    WINDOW TUMBLING(INTERVAL '5 minutes')
+    
+    -- Enrich with spatial context
+    SPATIAL JOIN static_locations loc ON ST_DWithin(s.location, loc.point, 100)
+    GRAPH JOIN loc-[:BELONGS_TO]-&gt;(:Zone {type: 'commercial'}) AS zone
+    
+    -- Time-series correlation  
+    TIME_SERIES CORRELATE s.temperature WITH weather.temperature
+        LAG INTERVAL '15 minutes'
+    
+    -- Spatial analytics
+    WHERE ST_Within(s.location, zone.boundary)
+    GROUP BY zone.id
+    
+    -- Real-time alerts
+    ALERT WHEN AVG(s.temperature) &gt; zone.temperature_threshold
+    
+    RETURN {
+        zone_id: zone.id,
+        zone_name: zone.name,
+        sensor_count: COUNT(DISTINCT s.sensor_id),
+        avg_temperature: AVG(s.temperature),
+        temperature_anomaly: AVG(s.temperature) - AVG(weather.temperature),
+        hotspot_locations: ST_ClusterDBSCAN(
+            COLLECT(s.location WHERE s.temperature &gt; AVG(s.temperature) + 2*STDDEV(s.temperature)), 
+            eps: 50, 
+            min_points: 3
+        ),
+        alert_level: CASE 
+            WHEN AVG(s.temperature) &gt; zone.critical_threshold THEN 'CRITICAL'
+            WHEN AVG(s.temperature) &gt; zone.warning_threshold THEN 'WARNING'
+            ELSE 'NORMAL'
+        END
+    }
+}
+</code></pre>
+
+<h4 id="smart-city-analytics-with-orbitql">Smart City Analytics with OrbitQL</h4>
+<pre><code class="language-orbitql">-- Comprehensive traffic flow analysis
+QUERY traffic_optimization {
+    -- Real-time vehicle tracking
+    FROM vehicle_positions v
+    TIME_WINDOW SLIDING(INTERVAL '15 minutes', INTERVAL '1 minute')
+    
+    -- Map to road network
+    SPATIAL SNAP v.location TO road_segments r WITHIN 10 METERS
+    
+    -- Calculate traffic metrics
+    GRAPH TRAVERSE r-[:CONNECTS]-&gt;(:RoadSegment) AS route_network
+    
+    -- Aggregate by road segments
+    GROUP BY r.segment_id
+    
+    -- Traffic analysis
+    WITH METRICS {
+        vehicle_count: COUNT(DISTINCT v.vehicle_id),
+        avg_speed: AVG(v.speed),
+        speed_variance: VARIANCE(v.speed),
+        congestion_level: CASE
+            WHEN AVG(v.speed) &lt; r.speed_limit * 0.3 THEN 'SEVERE'
+            WHEN AVG(v.speed) &lt; r.speed_limit * 0.6 THEN 'MODERATE'
+            ELSE 'NORMAL'
+        END,
+        flow_direction: ST_Azimuth(
+            ST_StartPoint(r.geometry), 
+            ST_EndPoint(r.geometry)
+        )
+    }
+    
+    -- Spatial clustering of congestion
+    SPATIAL CLUSTER road_segments BY congestion_level
+    USING ST_ClusterDBSCAN(ST_Centroid(geometry), eps: 500, min_points: 3)
+    
+    -- Emergency response optimization
+    EMERGENCY_ROUTES OPTIMIZE FOR ambulance_stations
+    AVOIDING road_segments WHERE congestion_level IN ('SEVERE', 'MODERATE')
+    
+    RETURN {
+        segment_id: r.segment_id,
+        road_name: r.name,
+        current_conditions: metrics,
+        congestion_cluster: cluster_id,
+        alternative_routes: SHORTEST_PATHS(
+            start: ST_StartPoint(r.geometry),
+            end: ST_EndPoint(r.geometry),
+            graph: route_network,
+            avoid: congested_segments,
+            count: 3
+        ),
+        estimated_delay: (r.free_flow_time - (ST_Length(r.geometry) / AVG(v.speed) * 3.6)),
+        optimization_suggestions: [
+            traffic_light_timing_adjustment,
+            dynamic_routing_recommendations,
+            public_transport_alternatives
+        ]
+    }
+    ORDER BY metrics.congestion_level DESC, metrics.vehicle_count DESC
+}
+</code></pre>
+
+<hr />
+
+<h2 id="performance-architecture">Performance Architecture</h2>
+
+<h3 id="gpu-accelerated-spatial-computing">GPU-Accelerated Spatial Computing</h3>
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="cd">/// High-performance spatial operations using GPU acceleration</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">GPUSpatialEngine</span> <span class="p">{</span>
+    <span class="n">cuda_context</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="n">CudaContext</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="n">opencl_context</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="n">OpenCLContext</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="n">metal_context</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="n">MetalContext</span><span class="o">&gt;</span><span class="p">,</span>      <span class="c1">// Apple Silicon support</span>
+    <span class="n">vulkan_context</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="n">VulkanContext</span><span class="o">&gt;</span><span class="p">,</span>    <span class="c1">// Cross-platform compute</span>
+    <span class="n">compute_shaders</span><span class="p">:</span> <span class="n">SpatialComputeShaderSet</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="k">impl</span> <span class="n">GPUSpatialEngine</span> <span class="p">{</span>
+    <span class="cd">/// Batch point-in-polygon operations (100K+ points simultaneously)</span>
+    <span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">batch_point_in_polygon</span><span class="p">(</span>
+        <span class="o">&amp;</span><span class="k">self</span><span class="p">,</span>
+        <span class="n">points</span><span class="p">:</span> <span class="o">&amp;</span><span class="p">[</span><span class="n">Point</span><span class="p">],</span>
+        <span class="n">polygon</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">Polygon</span>
+    <span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="nb">bool</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">SpatialError</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="k">match</span> <span class="o">&amp;</span><span class="k">self</span><span class="py">.cuda_context</span> <span class="p">{</span>
+            <span class="nf">Some</span><span class="p">(</span><span class="n">cuda</span><span class="p">)</span> <span class="k">=&gt;</span> <span class="p">{</span>
+                <span class="n">cuda</span><span class="nf">.launch_kernel</span><span class="p">(</span>
+                    <span class="s">"point_in_polygon_batch"</span><span class="p">,</span>
+                    <span class="n">points</span><span class="nf">.len</span><span class="p">(),</span>
+                    <span class="o">&amp;</span><span class="p">[</span><span class="n">points</span><span class="nf">.as_gpu_buffer</span><span class="p">(),</span> <span class="n">polygon</span><span class="nf">.as_gpu_buffer</span><span class="p">()]</span>
+                <span class="p">)</span><span class="k">.await</span>
+            <span class="p">}</span>
+            <span class="n">_</span> <span class="k">=&gt;</span> <span class="k">self</span><span class="nf">.cpu_fallback_point_in_polygon</span><span class="p">(</span><span class="n">points</span><span class="p">,</span> <span class="n">polygon</span><span class="p">)</span><span class="k">.await</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+    
+    <span class="cd">/// Massively parallel distance matrix calculations</span>
+    <span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">batch_distance_matrix</span><span class="p">(</span>
+        <span class="o">&amp;</span><span class="k">self</span><span class="p">,</span>
+        <span class="n">points_a</span><span class="p">:</span> <span class="o">&amp;</span><span class="p">[</span><span class="n">Point</span><span class="p">],</span>
+        <span class="n">points_b</span><span class="p">:</span> <span class="o">&amp;</span><span class="p">[</span><span class="n">Point</span><span class="p">],</span>
+        <span class="n">distance_function</span><span class="p">:</span> <span class="n">DistanceFunction</span>
+    <span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="n">Matrix</span><span class="o">&lt;</span><span class="nb">f64</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">SpatialError</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="k">let</span> <span class="n">total_calculations</span> <span class="o">=</span> <span class="n">points_a</span><span class="nf">.len</span><span class="p">()</span> <span class="o">*</span> <span class="n">points_b</span><span class="nf">.len</span><span class="p">();</span>
+        
+        <span class="k">if</span> <span class="n">total_calculations</span> <span class="o">&gt;</span> <span class="mi">1_000_000</span> <span class="p">{</span>
+            <span class="c1">// Use GPU for large matrices</span>
+            <span class="k">self</span><span class="nf">.gpu_distance_matrix</span><span class="p">(</span><span class="n">points_a</span><span class="p">,</span> <span class="n">points_b</span><span class="p">,</span> <span class="n">distance_function</span><span class="p">)</span><span class="k">.await</span>
+        <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+            <span class="c1">// Use CPU for smaller matrices</span>
+            <span class="k">self</span><span class="nf">.cpu_distance_matrix</span><span class="p">(</span><span class="n">points_a</span><span class="p">,</span> <span class="n">points_b</span><span class="p">,</span> <span class="n">distance_function</span><span class="p">)</span><span class="k">.await</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+    
+    <span class="cd">/// Real-time spatial clustering on GPU</span>
+    <span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">gpu_spatial_clustering</span><span class="p">(</span>
+        <span class="o">&amp;</span><span class="k">self</span><span class="p">,</span>
+        <span class="n">points</span><span class="p">:</span> <span class="o">&amp;</span><span class="p">[</span><span class="n">Point</span><span class="p">],</span>
+        <span class="n">algorithm</span><span class="p">:</span> <span class="n">ClusteringAlgorithm</span>
+    <span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="n">ClusterId</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">SpatialError</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="k">match</span> <span class="n">algorithm</span> <span class="p">{</span>
+            <span class="nn">ClusteringAlgorithm</span><span class="p">::</span><span class="n">DBSCAN</span> <span class="p">{</span> <span class="n">eps</span><span class="p">,</span> <span class="n">min_points</span> <span class="p">}</span> <span class="k">=&gt;</span> <span class="p">{</span>
+                <span class="k">self</span><span class="nf">.gpu_dbscan_clustering</span><span class="p">(</span><span class="n">points</span><span class="p">,</span> <span class="n">eps</span><span class="p">,</span> <span class="n">min_points</span><span class="p">)</span><span class="k">.await</span>
+            <span class="p">}</span>
+            <span class="nn">ClusteringAlgorithm</span><span class="p">::</span><span class="n">KMeans</span> <span class="p">{</span> <span class="n">k</span> <span class="p">}</span> <span class="k">=&gt;</span> <span class="p">{</span>
+                <span class="k">self</span><span class="nf">.gpu_kmeans_clustering</span><span class="p">(</span><span class="n">points</span><span class="p">,</span> <span class="n">k</span><span class="p">)</span><span class="k">.await</span>
+            <span class="p">}</span>
+            <span class="nn">ClusteringAlgorithm</span><span class="p">::</span><span class="n">Hierarchical</span> <span class="p">{</span> <span class="n">linkage</span> <span class="p">}</span> <span class="k">=&gt;</span> <span class="p">{</span>
+                <span class="k">self</span><span class="nf">.gpu_hierarchical_clustering</span><span class="p">(</span><span class="n">points</span><span class="p">,</span> <span class="n">linkage</span><span class="p">)</span><span class="k">.await</span>
+            <span class="p">}</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+
+<span class="cd">/// Spatial compute shaders for different GPU APIs</span>
+
+<span class="nd">#[derive(Debug,</span> <span class="nd">Clone)]</span>
+<span class="k">pub</span> <span class="k">enum</span> <span class="n">SpatialComputeShader</span> <span class="p">{</span>
+    <span class="n">PointInPolygon</span> <span class="p">{</span>
+        <span class="n">shader_code</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span>
+        <span class="n">entry_point</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span>
+        <span class="n">workgroup_size</span><span class="p">:</span> <span class="p">(</span><span class="nb">u32</span><span class="p">,</span> <span class="nb">u32</span><span class="p">,</span> <span class="nb">u32</span><span class="p">),</span>
+    <span class="p">},</span>
+    <span class="n">NearestNeighbor</span> <span class="p">{</span>
+        <span class="n">shader_code</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span>
+        <span class="n">spatial_tree_buffer</span><span class="p">:</span> <span class="n">GpuBuffer</span><span class="p">,</span>
+        <span class="n">max_results</span><span class="p">:</span> <span class="nb">u32</span><span class="p">,</span>
+    <span class="p">},</span>
+    <span class="n">SpatialClustering</span> <span class="p">{</span>
+        <span class="n">algorithm</span><span class="p">:</span> <span class="n">ClusteringAlgorithm</span><span class="p">,</span>
+        <span class="n">shader_variants</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="nb">String</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="p">},</span>
+    <span class="n">BufferGeneration</span> <span class="p">{</span>
+        <span class="n">buffer_distance</span><span class="p">:</span> <span class="nb">f64</span><span class="p">,</span>
+        <span class="n">resolution</span><span class="p">:</span> <span class="nb">u32</span><span class="p">,</span>
+    <span class="p">},</span>
+    <span class="n">SpatialJoin</span> <span class="p">{</span>
+        <span class="n">join_predicate</span><span class="p">:</span> <span class="n">SpatialPredicate</span><span class="p">,</span>
+        <span class="n">index_structure</span><span class="p">:</span> <span class="n">SpatialIndexGPU</span><span class="p">,</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="real-time-streaming-spatial-processor">Real-Time Streaming Spatial Processor</h3>
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="cd">/// Process millions of spatial updates per second</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">SpatialStreamProcessor</span> <span class="p">{</span>
+    <span class="c1">// Input streams</span>
+    <span class="n">gps_stream</span><span class="p">:</span> <span class="n">GpsDataStream</span><span class="p">,</span>
+    <span class="n">sensor_stream</span><span class="p">:</span> <span class="n">SensorDataStream</span><span class="p">,</span>
+    <span class="n">geofence_stream</span><span class="p">:</span> <span class="n">GeofenceDefinitionStream</span><span class="p">,</span>
+    
+    <span class="c1">// Spatial indexes (thread-safe)</span>
+    <span class="n">spatial_index</span><span class="p">:</span> <span class="nb">Arc</span><span class="o">&lt;</span><span class="n">RwLock</span><span class="o">&lt;</span><span class="n">SpatialIndex</span><span class="o">&gt;&gt;</span><span class="p">,</span>
+    <span class="n">geofence_index</span><span class="p">:</span> <span class="nb">Arc</span><span class="o">&lt;</span><span class="n">RwLock</span><span class="o">&lt;</span><span class="n">GeofenceIndex</span><span class="o">&gt;&gt;</span><span class="p">,</span>
+    
+    <span class="c1">// Processing components</span>
+    <span class="n">gpu_spatial_engine</span><span class="p">:</span> <span class="n">GPUSpatialEngine</span><span class="p">,</span>
+    <span class="n">alert_dispatcher</span><span class="p">:</span> <span class="n">AlertDispatcher</span><span class="p">,</span>
+    <span class="n">analytics_aggregator</span><span class="p">:</span> <span class="n">SpatialAnalyticsAggregator</span><span class="p">,</span>
+    
+    <span class="c1">// Configuration</span>
+    <span class="n">batch_size</span><span class="p">:</span> <span class="nb">usize</span><span class="p">,</span>                    <span class="c1">// Points processed per batch</span>
+    <span class="n">processing_interval</span><span class="p">:</span> <span class="n">Duration</span><span class="p">,</span>        <span class="c1">// Batch processing frequency</span>
+    <span class="n">alert_threshold_ms</span><span class="p">:</span> <span class="nb">u64</span><span class="p">,</span>              <span class="c1">// Alert latency SLA</span>
+<span class="p">}</span>
+
+<span class="k">impl</span> <span class="n">SpatialStreamProcessor</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">start_processing</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span> <span class="k">self</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="p">(),</span> <span class="n">SpatialError</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="k">let</span> <span class="k">mut</span> <span class="n">batch_buffer</span> <span class="o">=</span> <span class="nn">Vec</span><span class="p">::</span><span class="nf">with_capacity</span><span class="p">(</span><span class="k">self</span><span class="py">.batch_size</span><span class="p">);</span>
+        <span class="k">let</span> <span class="k">mut</span> <span class="n">last_processed</span> <span class="o">=</span> <span class="nn">Instant</span><span class="p">::</span><span class="nf">now</span><span class="p">();</span>
+        
+        <span class="k">loop</span> <span class="p">{</span>
+            <span class="c1">// Collect batch of spatial updates</span>
+            <span class="k">while</span> <span class="n">batch_buffer</span><span class="nf">.len</span><span class="p">()</span> <span class="o">&lt;</span> <span class="k">self</span><span class="py">.batch_size</span> <span class="p">{</span>
+                <span class="nn">tokio</span><span class="p">::</span><span class="nd">select!</span> <span class="p">{</span>
+                    <span class="nf">Some</span><span class="p">(</span><span class="n">gps_point</span><span class="p">)</span> <span class="o">=</span> <span class="k">self</span><span class="py">.gps_stream</span><span class="nf">.next</span><span class="p">()</span> <span class="k">=&gt;</span> <span class="p">{</span>
+                        <span class="n">batch_buffer</span><span class="nf">.push</span><span class="p">(</span><span class="nn">SpatialUpdate</span><span class="p">::</span><span class="nf">GPS</span><span class="p">(</span><span class="n">gps_point</span><span class="p">));</span>
+                    <span class="p">}</span>
+                    <span class="nf">Some</span><span class="p">(</span><span class="n">sensor_reading</span><span class="p">)</span> <span class="o">=</span> <span class="k">self</span><span class="py">.sensor_stream</span><span class="nf">.next</span><span class="p">()</span> <span class="k">=&gt;</span> <span class="p">{</span>
+                        <span class="n">batch_buffer</span><span class="nf">.push</span><span class="p">(</span><span class="nn">SpatialUpdate</span><span class="p">::</span><span class="nf">Sensor</span><span class="p">(</span><span class="n">sensor_reading</span><span class="p">));</span>
+                    <span class="p">}</span>
+                    <span class="n">_</span> <span class="o">=</span> <span class="nn">tokio</span><span class="p">::</span><span class="nn">time</span><span class="p">::</span><span class="nf">sleep</span><span class="p">(</span><span class="nn">Duration</span><span class="p">::</span><span class="nf">from_millis</span><span class="p">(</span><span class="mi">10</span><span class="p">))</span> <span class="k">=&gt;</span> <span class="p">{</span>
+                        <span class="c1">// Timeout - process partial batch</span>
+                        <span class="k">break</span><span class="p">;</span>
+                    <span class="p">}</span>
+                <span class="p">}</span>
+            <span class="p">}</span>
+            
+            <span class="k">if</span> <span class="o">!</span><span class="n">batch_buffer</span><span class="nf">.is_empty</span><span class="p">()</span> <span class="p">{</span>
+                <span class="c1">// Process batch in parallel</span>
+                <span class="k">let</span> <span class="n">processing_tasks</span> <span class="o">=</span> <span class="nd">vec!</span><span class="p">[</span>
+                    <span class="k">self</span><span class="nf">.update_spatial_indexes</span><span class="p">(</span><span class="o">&amp;</span><span class="n">batch_buffer</span><span class="p">),</span>
+                    <span class="k">self</span><span class="nf">.check_geofence_violations</span><span class="p">(</span><span class="o">&amp;</span><span class="n">batch_buffer</span><span class="p">),</span>
+                    <span class="k">self</span><span class="nf">.update_analytics</span><span class="p">(</span><span class="o">&amp;</span><span class="n">batch_buffer</span><span class="p">),</span>
+                    <span class="k">self</span><span class="nf">.detect_spatial_anomalies</span><span class="p">(</span><span class="o">&amp;</span><span class="n">batch_buffer</span><span class="p">),</span>
+                <span class="p">];</span>
+                
+                <span class="k">let</span> <span class="n">results</span> <span class="o">=</span> <span class="nn">futures</span><span class="p">::</span><span class="nf">join_all</span><span class="p">(</span><span class="n">processing_tasks</span><span class="p">)</span><span class="k">.await</span><span class="p">;</span>
+                
+                <span class="c1">// Handle results and dispatch alerts</span>
+                <span class="k">for</span> <span class="n">result</span> <span class="k">in</span> <span class="n">results</span> <span class="p">{</span>
+                    <span class="k">match</span> <span class="n">result</span> <span class="p">{</span>
+                        <span class="nf">Ok</span><span class="p">(</span><span class="n">alerts</span><span class="p">)</span> <span class="k">=&gt;</span> <span class="p">{</span>
+                            <span class="k">for</span> <span class="n">alert</span> <span class="k">in</span> <span class="n">alerts</span> <span class="p">{</span>
+                                <span class="k">self</span><span class="nf">.dispatch_alert</span><span class="p">(</span><span class="n">alert</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+                            <span class="p">}</span>
+                        <span class="p">}</span>
+                        <span class="nf">Err</span><span class="p">(</span><span class="n">e</span><span class="p">)</span> <span class="k">=&gt;</span> <span class="p">{</span>
+                            <span class="nn">tracing</span><span class="p">::</span><span class="nd">error!</span><span class="p">(</span><span class="s">"Spatial processing error: {}"</span><span class="p">,</span> <span class="n">e</span><span class="p">);</span>
+                        <span class="p">}</span>
+                    <span class="p">}</span>
+                <span class="p">}</span>
+                
+                <span class="n">batch_buffer</span><span class="nf">.clear</span><span class="p">();</span>
+            <span class="p">}</span>
+            
+            <span class="c1">// Performance monitoring</span>
+            <span class="k">let</span> <span class="n">processing_time</span> <span class="o">=</span> <span class="n">last_processed</span><span class="nf">.elapsed</span><span class="p">();</span>
+            <span class="k">if</span> <span class="n">processing_time</span> <span class="o">&gt;</span> <span class="nn">Duration</span><span class="p">::</span><span class="nf">from_millis</span><span class="p">(</span><span class="k">self</span><span class="py">.alert_threshold_ms</span><span class="p">)</span> <span class="p">{</span>
+                <span class="nn">tracing</span><span class="p">::</span><span class="nd">warn!</span><span class="p">(</span>
+                    <span class="s">"Spatial processing latency {} ms exceeds threshold {} ms"</span><span class="p">,</span>
+                    <span class="n">processing_time</span><span class="nf">.as_millis</span><span class="p">(),</span>
+                    <span class="k">self</span><span class="py">.alert_threshold_ms</span>
+                <span class="p">);</span>
+            <span class="p">}</span>
+            <span class="n">last_processed</span> <span class="o">=</span> <span class="nn">Instant</span><span class="p">::</span><span class="nf">now</span><span class="p">();</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+    
+    <span class="cd">/// Update spatial indexes with new location data</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">update_spatial_indexes</span><span class="p">(</span>
+        <span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> 
+        <span class="n">updates</span><span class="p">:</span> <span class="o">&amp;</span><span class="p">[</span><span class="n">SpatialUpdate</span><span class="p">]</span>
+    <span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="n">Alert</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">SpatialError</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="k">let</span> <span class="k">mut</span> <span class="n">index_guard</span> <span class="o">=</span> <span class="k">self</span><span class="py">.spatial_index</span><span class="nf">.write</span><span class="p">()</span><span class="k">.await</span><span class="p">;</span>
+        <span class="k">let</span> <span class="k">mut</span> <span class="n">alerts</span> <span class="o">=</span> <span class="nn">Vec</span><span class="p">::</span><span class="nf">new</span><span class="p">();</span>
+        
+        <span class="k">for</span> <span class="n">update</span> <span class="k">in</span> <span class="n">updates</span> <span class="p">{</span>
+            <span class="k">match</span> <span class="n">update</span> <span class="p">{</span>
+                <span class="nn">SpatialUpdate</span><span class="p">::</span><span class="nf">GPS</span><span class="p">(</span><span class="n">gps</span><span class="p">)</span> <span class="k">=&gt;</span> <span class="p">{</span>
+                    <span class="c1">// Update vehicle position</span>
+                    <span class="k">let</span> <span class="n">old_position</span> <span class="o">=</span> <span class="n">index_guard</span><span class="nf">.update_point</span><span class="p">(</span><span class="n">gps</span><span class="py">.vehicle_id</span><span class="p">,</span> <span class="n">gps</span><span class="py">.location</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+                    
+                    <span class="c1">// Check for significant movement</span>
+                    <span class="k">if</span> <span class="k">let</span> <span class="nf">Some</span><span class="p">(</span><span class="n">old_pos</span><span class="p">)</span> <span class="o">=</span> <span class="n">old_position</span> <span class="p">{</span>
+                        <span class="k">let</span> <span class="n">distance</span> <span class="o">=</span> <span class="n">gps</span><span class="py">.location</span><span class="nf">.distance</span><span class="p">(</span><span class="o">&amp;</span><span class="n">old_pos</span><span class="p">);</span>
+                        <span class="k">if</span> <span class="n">distance</span> <span class="o">&gt;</span> <span class="mf">1000.0</span> <span class="p">{</span> <span class="c1">// 1km threshold</span>
+                            <span class="n">alerts</span><span class="nf">.push</span><span class="p">(</span><span class="nn">Alert</span><span class="p">::</span><span class="n">SignificantMovement</span> <span class="p">{</span>
+                                <span class="n">entity_id</span><span class="p">:</span> <span class="n">gps</span><span class="py">.vehicle_id</span><span class="p">,</span>
+                                <span class="n">old_position</span><span class="p">:</span> <span class="n">old_pos</span><span class="p">,</span>
+                                <span class="n">new_position</span><span class="p">:</span> <span class="n">gps</span><span class="py">.location</span><span class="p">,</span>
+                                <span class="n">distance</span><span class="p">:</span> <span class="n">distance</span><span class="p">,</span>
+                            <span class="p">});</span>
+                        <span class="p">}</span>
+                    <span class="p">}</span>
+                <span class="p">}</span>
+                <span class="nn">SpatialUpdate</span><span class="p">::</span><span class="nf">Sensor</span><span class="p">(</span><span class="n">sensor</span><span class="p">)</span> <span class="k">=&gt;</span> <span class="p">{</span>
+                    <span class="c1">// Update sensor location (if mobile)</span>
+                    <span class="n">index_guard</span><span class="nf">.update_point</span><span class="p">(</span><span class="n">sensor</span><span class="py">.sensor_id</span><span class="p">,</span> <span class="n">sensor</span><span class="py">.location</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+                <span class="p">}</span>
+            <span class="p">}</span>
+        <span class="p">}</span>
+        
+        <span class="nf">Ok</span><span class="p">(</span><span class="n">alerts</span><span class="p">)</span>
+    <span class="p">}</span>
+    
+    <span class="cd">/// Real-time geofence violation detection</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">check_geofence_violations</span><span class="p">(</span>
+        <span class="o">&amp;</span><span class="k">self</span><span class="p">,</span>
+        <span class="n">updates</span><span class="p">:</span> <span class="o">&amp;</span><span class="p">[</span><span class="n">SpatialUpdate</span><span class="p">]</span>
+    <span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="n">Alert</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">SpatialError</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="k">let</span> <span class="n">geofence_guard</span> <span class="o">=</span> <span class="k">self</span><span class="py">.geofence_index</span><span class="nf">.read</span><span class="p">()</span><span class="k">.await</span><span class="p">;</span>
+        <span class="k">let</span> <span class="k">mut</span> <span class="n">violations</span> <span class="o">=</span> <span class="nn">Vec</span><span class="p">::</span><span class="nf">new</span><span class="p">();</span>
+        
+        <span class="c1">// Batch process geofence checks on GPU for performance</span>
+        <span class="k">let</span> <span class="n">points</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">Point</span><span class="o">&gt;</span> <span class="o">=</span> <span class="n">updates</span><span class="nf">.iter</span><span class="p">()</span>
+            <span class="nf">.filter_map</span><span class="p">(|</span><span class="n">update</span><span class="p">|</span> <span class="n">update</span><span class="nf">.location</span><span class="p">())</span>
+            <span class="nf">.collect</span><span class="p">();</span>
+            
+        <span class="k">let</span> <span class="n">active_geofences</span> <span class="o">=</span> <span class="n">geofence_guard</span><span class="nf">.get_active_geofences</span><span class="p">();</span>
+        
+        <span class="k">for</span> <span class="n">geofence</span> <span class="k">in</span> <span class="n">active_geofences</span> <span class="p">{</span>
+            <span class="c1">// GPU-accelerated batch point-in-polygon test</span>
+            <span class="k">let</span> <span class="n">inside_flags</span> <span class="o">=</span> <span class="k">self</span><span class="py">.gpu_spatial_engine</span>
+                <span class="nf">.batch_point_in_polygon</span><span class="p">(</span><span class="o">&amp;</span><span class="n">points</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">geofence</span><span class="py">.boundary</span><span class="p">)</span>
+                <span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+                
+            <span class="k">for</span> <span class="p">(</span><span class="n">update</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">inside</span><span class="p">)</span> <span class="k">in</span> <span class="n">updates</span><span class="nf">.iter</span><span class="p">()</span><span class="nf">.zip</span><span class="p">(</span><span class="n">inside_flags</span><span class="nf">.iter</span><span class="p">())</span> <span class="p">{</span>
+                <span class="k">let</span> <span class="n">entity_id</span> <span class="o">=</span> <span class="n">update</span><span class="nf">.entity_id</span><span class="p">();</span>
+                <span class="k">let</span> <span class="n">was_inside</span> <span class="o">=</span> <span class="n">geofence_guard</span><span class="nf">.was_entity_inside</span><span class="p">(</span><span class="n">entity_id</span><span class="p">,</span> <span class="n">geofence</span><span class="py">.id</span><span class="p">);</span>
+                
+                <span class="k">match</span> <span class="p">(</span><span class="n">was_inside</span><span class="p">,</span> <span class="n">inside</span><span class="p">)</span> <span class="p">{</span>
+                    <span class="p">(</span><span class="k">false</span><span class="p">,</span> <span class="k">true</span><span class="p">)</span> <span class="k">=&gt;</span> <span class="p">{</span>
+                        <span class="n">violations</span><span class="nf">.push</span><span class="p">(</span><span class="nn">Alert</span><span class="p">::</span><span class="n">GeofenceEntered</span> <span class="p">{</span>
+                            <span class="n">entity_id</span><span class="p">,</span>
+                            <span class="n">geofence_id</span><span class="p">:</span> <span class="n">geofence</span><span class="py">.id</span><span class="p">,</span>
+                            <span class="n">location</span><span class="p">:</span> <span class="n">update</span><span class="nf">.location</span><span class="p">()</span><span class="nf">.unwrap</span><span class="p">(),</span>
+                            <span class="n">timestamp</span><span class="p">:</span> <span class="n">update</span><span class="nf">.timestamp</span><span class="p">(),</span>
+                        <span class="p">});</span>
+                    <span class="p">}</span>
+                    <span class="p">(</span><span class="k">true</span><span class="p">,</span> <span class="k">false</span><span class="p">)</span> <span class="k">=&gt;</span> <span class="p">{</span>
+                        <span class="n">violations</span><span class="nf">.push</span><span class="p">(</span><span class="nn">Alert</span><span class="p">::</span><span class="n">GeofenceExited</span> <span class="p">{</span>
+                            <span class="n">entity_id</span><span class="p">,</span>
+                            <span class="n">geofence_id</span><span class="p">:</span> <span class="n">geofence</span><span class="py">.id</span><span class="p">,</span>
+                            <span class="n">location</span><span class="p">:</span> <span class="n">update</span><span class="nf">.location</span><span class="p">()</span><span class="nf">.unwrap</span><span class="p">(),</span>
+                            <span class="n">timestamp</span><span class="p">:</span> <span class="n">update</span><span class="nf">.timestamp</span><span class="p">(),</span>
+                        <span class="p">});</span>
+                    <span class="p">}</span>
+                    <span class="n">_</span> <span class="k">=&gt;</span> <span class="p">{}</span> <span class="c1">// No violation</span>
+                <span class="p">}</span>
+            <span class="p">}</span>
+        <span class="p">}</span>
+        
+        <span class="nf">Ok</span><span class="p">(</span><span class="n">violations</span><span class="p">)</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<hr />
+
+<h2 id="performance-targets-and-benchmarks">Performance Targets and Benchmarks</h2>
+
+<h3 id="throughput-benchmarks-industry-leading">Throughput Benchmarks (Industry-Leading)</h3>
+<p>| Operation Type | Target Performance | Current Leaders | Orbit-RS Advantage |
+|—|—|—|—|
+| <strong>Point Queries</strong> | 1M+ queries/sec/node | PostGIS: 100K/sec | <strong>10x improvement</strong> |
+| <strong>Range Queries</strong> | 100K+ complex/sec | MongoDB: 50K/sec | <strong>2x improvement</strong> |<br />
+| <strong>GPS Ingestion</strong> | 10M+ points/sec | InfluxDB: 5M/sec | <strong>2x improvement</strong> |
+| <strong>Geofence Checks</strong> | 1M+ evaluations/sec | Redis: 500K/sec | <strong>2x improvement</strong> |
+| <strong>Spatial Joins</strong> | 50K+ joins/sec | PostGIS: 10K/sec | <strong>5x improvement</strong> |</p>
+
+<h3 id="latency-targets-99th-percentile">Latency Targets (99th Percentile)</h3>
+<p>| Operation | Target Latency | Industry Standard | Improvement |
+|—|—|—|—|
+| <strong>Point-in-Polygon</strong> | &lt;1ms | PostGIS: 5ms | <strong>5x faster</strong> |
+| <strong>Nearest Neighbor</strong> | &lt;5ms (10M points) | PostGIS: 50ms | <strong>10x faster</strong> |
+| <strong>Complex Spatial Join</strong> | &lt;100ms (1M x 1M) | PostGIS: 1s+ | <strong>10x faster</strong> |
+| <strong>Real-time Alerts</strong> | &lt;10ms end-to-end | Current: 100ms+ | <strong>10x faster</strong> |
+| <strong>Tile Generation</strong> | &lt;50ms (zoom 15) | MapServer: 200ms | <strong>4x faster</strong> |</p>
+
+<h3 id="scalability-goals">Scalability Goals</h3>
+<p>| Metric | Target | Justification |
+|—|—|—|
+| <strong>Data Volume</strong> | 100B+ spatial records/cluster | Smart city scale |
+| <strong>Concurrent Users</strong> | 100K+ simultaneous queries | Public applications |
+| <strong>Geographic Coverage</strong> | Global with sub-meter precision | IoT/GPS requirements |
+| <strong>Update Rate</strong> | 1M+ spatial updates/second | Real-time vehicle tracking |
+| <strong>Cluster Size</strong> | 1000+ nodes linear scaling | Cloud-native architecture |</p>
+
+<hr />
+
+<h2 id="implementation-timeline">Implementation Timeline</h2>
+
+<h3 id="phase-1-core-spatial-foundation-weeks-1-2">Phase 1: Core Spatial Foundation (Weeks 1-2)</h3>
+<p><strong>Deliverables:</strong></p>
+<ul class="task-list">
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Native spatial data types (Point, LineString, Polygon, Multi*)</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Coordinate reference system support (WGS84, Web Mercator, UTM)</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Basic spatial serialization/deserialization</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />SQL parser extensions for spatial types</li>
+</ul>
+
+<p><strong>Success Criteria:</strong></p>
+<ul>
+  <li>Create and query tables with spatial columns</li>
+  <li>Basic INSERT/SELECT operations with spatial data</li>
+  <li>Coordinate system transformations working</li>
+</ul>
+
+<h3 id="phase-2-multi-protocol-integration-weeks-3-4">Phase 2: Multi-Protocol Integration (Weeks 3-4)</h3>
+<p><strong>Deliverables:</strong></p>
+<ul class="task-list">
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />PostgreSQL spatial functions (ST_* compatibility)</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Redis geospatial command extensions</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />AQL spatial query enhancements</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Cypher spatial node/relationship support</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />OrbitQL multi-model spatial syntax</li>
+</ul>
+
+<p><strong>Success Criteria:</strong></p>
+<ul>
+  <li>Each protocol can create, query, and manipulate spatial data</li>
+  <li>Cross-protocol spatial data compatibility</li>
+  <li>Basic spatial queries working in all protocols</li>
+</ul>
+
+<h3 id="phase-3-high-performance-indexing-weeks-5-7">Phase 3: High-Performance Indexing (Weeks 5-7)</h3>
+<p><strong>Deliverables:</strong></p>
+<ul class="task-list">
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />R-tree spatial index implementation</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />QuadTree index for point data</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Geohash grid indexing for global applications</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Adaptive index selection algorithm</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Spatial index integration with LSM-tree storage</li>
+</ul>
+
+<p><strong>Success Criteria:</strong></p>
+<ul>
+  <li>10x improvement in spatial query performance</li>
+  <li>Automatic index selection based on data characteristics</li>
+  <li>Spatial queries scale to 100M+ records</li>
+</ul>
+
+<h3 id="phase-4-gpu-acceleration-weeks-8-10">Phase 4: GPU Acceleration (Weeks 8-10)</h3>
+<p><strong>Deliverables:</strong></p>
+<ul class="task-list">
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />CUDA/OpenCL spatial compute kernels</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />GPU-accelerated point-in-polygon operations</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Batch spatial distance calculations</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />GPU spatial clustering algorithms</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Metal support for Apple Silicon</li>
+</ul>
+
+<p><strong>Success Criteria:</strong></p>
+<ul>
+  <li>100K+ point-in-polygon tests in &lt;10ms</li>
+  <li>Spatial clustering of 1M+ points in &lt;1 second</li>
+  <li>GPU acceleration works across platforms</li>
+</ul>
+
+<h3 id="phase-5-real-time-streaming-weeks-11-12">Phase 5: Real-Time Streaming (Weeks 11-12)</h3>
+<p><strong>Deliverables:</strong></p>
+<ul class="task-list">
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Spatial stream processing framework</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Real-time geofencing engine with &lt;10ms alerts</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />GPS tracking with 10M+ points/second ingestion</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Spatial analytics aggregation pipeline</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />WebSocket spatial data streaming APIs</li>
+</ul>
+
+<p><strong>Success Criteria:</strong></p>
+<ul>
+  <li>Process 10M+ GPS points/second sustained</li>
+  <li>Geofence violations detected in &lt;10ms</li>
+  <li>Real-time spatial analytics dashboard working</li>
+</ul>
+
+<h3 id="phase-6-advanced-features-weeks-13-14">Phase 6: Advanced Features (Weeks 13-14)</h3>
+<p><strong>Deliverables:</strong></p>
+<ul class="task-list">
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Map tile generation service</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Spatio-temporal data structures and queries</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Advanced spatial analytics (clustering, hotspots)</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Smart city analytics functions</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Performance optimization and benchmarking</li>
+</ul>
+
+<p><strong>Success Criteria:</strong></p>
+<ul>
+  <li>Generate 10K+ map tiles/second at zoom level 15</li>
+  <li>Spatio-temporal queries working efficiently</li>
+  <li>Meet or exceed all performance targets</li>
+  <li>Production-ready with comprehensive testing</li>
+</ul>
+
+<hr />
+
+<h2 id="success-metrics-and-kpis">Success Metrics and KPIs</h2>
+
+<h3 id="technical-performance-kpis">Technical Performance KPIs</h3>
+<ul>
+  <li>✅ <strong>100% PostGIS function compatibility</strong> for core spatial operations</li>
+  <li>✅ <strong>10x query performance improvement</strong> over traditional spatial databases</li>
+  <li>✅ <strong>Sub-millisecond point-in-polygon</strong> queries (99th percentile)</li>
+  <li>✅ <strong>Linear horizontal scalability</strong> to 1000+ nodes</li>
+  <li>✅ <strong>10M+ GPS points/second</strong> ingestion and processing</li>
+  <li>✅ <strong>&lt;10ms real-time alerts</strong> for geofence violations</li>
+</ul>
+
+<h3 id="market-adoption-kpis">Market Adoption KPIs</h3>
+<ul>
+  <li>✅ <strong>5+ major smart cities</strong> adoption in first year post-launch</li>
+  <li>✅ <strong>10+ IoT platforms</strong> integration within 18 months</li>
+  <li>✅ <strong>1000+ developers</strong> building spatial applications on Orbit-RS</li>
+  <li>✅ <strong>100+ enterprise customers</strong> in logistics, transportation, urban planning</li>
+  <li>✅ <strong>$50M+ pipeline</strong> from spatial database use cases</li>
+</ul>
+
+<h3 id="developer-experience-kpis">Developer Experience KPIs</h3>
+<ul>
+  <li>✅ <strong>Multi-protocol compatibility</strong> - same spatial data across all query languages</li>
+  <li>✅ <strong>Zero-configuration optimization</strong> - automatic spatial index selection</li>
+  <li>✅ <strong>Comprehensive documentation</strong> with examples for all protocols</li>
+  <li>✅ <strong>Sub-hour migration</strong> from PostGIS using automated tools</li>
+  <li>✅ <strong>Real-time monitoring</strong> dashboards for spatial workloads</li>
+</ul>
+
+<hr />
+
+<h2 id="risk-mitigation">Risk Mitigation</h2>
+
+<h3 id="technical-risks">Technical Risks</h3>
+<p>| Risk | Impact | Mitigation Strategy |
+|—|—|—|
+| <strong>GPU compatibility issues</strong> | High | Multi-GPU API support (CUDA/OpenCL/Metal/Vulkan) |
+| <strong>Spatial index performance</strong> | High | Multiple index types with adaptive selection |
+| <strong>Protocol compatibility</strong> | Medium | Extensive testing against reference implementations |
+| <strong>Memory usage for large datasets</strong> | Medium | Streaming algorithms and efficient data structures |
+| <strong>Cross-platform spatial differences</strong> | Low | Standard OGC compliance and extensive testing |</p>
+
+<h3 id="market-risks">Market Risks</h3>
+<p>| Risk | Impact | Mitigation Strategy |
+|—|—|—|
+| <strong>Competition from established players</strong> | High | Focus on unique multi-model + GPU advantages |
+| <strong>Slow enterprise adoption</strong> | Medium | Beta program with key customers and migration tools |
+| <strong>Developer ecosystem fragmentation</strong> | Medium | Consistent APIs across all protocols |
+| <strong>Regulatory/privacy concerns</strong> | Low | Local processing, audit trails, compliance features |</p>
+
+<hr />
+
+<h2 id="conclusion">Conclusion</h2>
+
+<p>This RFC proposes a comprehensive multi-protocol geospatial enhancement that will position Orbit-RS as the industry-leading spatial database. By providing native spatial support across Redis, AQL, PostgreSQL, Cypher, and OrbitQL protocols, combined with GPU acceleration and real-time streaming capabilities, Orbit-RS will offer unprecedented performance and flexibility for modern spatial applications.</p>
+
+<h3 id="key-strategic-advantages">Key Strategic Advantages</h3>
+
+<ol>
+  <li><strong>Only database with unified spatial support</strong> across multiple query languages</li>
+  <li><strong>Only spatial database</strong> with native multi-model integration (spatial + graph + vector + time-series)</li>
+  <li><strong>Only solution</strong> optimized for real-time IoT and smart city applications</li>
+  <li><strong>Industry-leading performance</strong> through GPU acceleration and advanced indexing</li>
+  <li><strong>Horizontal scalability</strong> that traditional spatial databases can’t match</li>
+</ol>
+
+<h3 id="market-opportunity">Market Opportunity</h3>
+
+<p>The convergence of IoT growth, smart city investments, and demand for real-time location intelligence creates a <strong>$20B+ addressable market</strong> for next-generation spatial databases. Orbit-RS is positioned to capture significant market share by offering the only solution that combines enterprise-grade spatial capabilities with modern cloud-native architecture.</p>
+
+<p><strong>This RFC represents a strategic investment in Orbit-RS’s future as the definitive platform for spatial data management and analytics.</strong> 🚀🌍</p>
+
+<hr />
+
+<p><strong>Next Steps:</strong></p>
+<ol>
+  <li><strong>Stakeholder review and approval</strong> of this RFC</li>
+  <li><strong>Resource allocation</strong> - assign dedicated spatial development team</li>
+  <li><strong>Community engagement</strong> - gather feedback from GIS and smart city communities</li>
+  <li><strong>Partnership development</strong> - strategic partnerships with mapping and IoT platforms</li>
+  <li><strong>Beta customer recruitment</strong> - identify early adopters for testing and feedback</li>
+</ol>
+
+<p><em>Ready to revolutionize spatial databases with Orbit-RS!</em></p>

@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Benchmarking Guide | Orbit-RS Documentation</title>
+<meta name="generator" content="Jekyll v4.4.1" />
+<meta property="og:title" content="Benchmarking Guide" />
+<meta name="author" content="TuringWorks" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="How to run performance benchmarks for Orbit-RS" />
+<meta property="og:description" content="How to run performance benchmarks for Orbit-RS" />
+<link rel="canonical" href="https://turingworks.github.io/orbit-rs/development/benchmarking/" />
+<meta property="og:url" content="https://turingworks.github.io/orbit-rs/development/benchmarking/" />
+<meta property="og:site_name" content="Orbit-RS Documentation" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Benchmarking Guide" />
+<meta name="twitter:site" content="@TuringWorksAI" />
+<meta name="twitter:creator" content="@TuringWorks" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","author":{"@type":"Person","name":"TuringWorks"},"description":"How to run performance benchmarks for Orbit-RS","headline":"Benchmarking Guide","url":"https://turingworks.github.io/orbit-rs/development/benchmarking/"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/orbit-rs/assets/main.css">
+  <link rel="stylesheet" href="/orbit-rs/assets/css/custom.css"><link type="application/atom+xml" rel="alternate" href="https://turingworks.github.io/orbit-rs/feed.xml" title="Orbit-RS Documentation" /></head><body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/orbit-rs/">Orbit-RS Documentation</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/orbit-rs/">Orbit-RS Documentation</a><a class="page-link" href="/orbit-rs/project_overview.html">Orbit-RS: Comprehensive Project Overview</a><a class="page-link" href="/orbit-rs/quick_start.html">Quick Start Guide - Multi-Protocol Database Server</a><a class="page-link" href="/orbit-rs/roadmap/">Development Roadmap</a><a class="page-link" href="/orbit-rs/features/">Orbit-RS Feature Index</a><a class="page-link" href="/orbit-rs/compute-acceleration/">Hardware Acceleration Guide</a><a class="page-link" href="/orbit-rs/contributing.html">Contributing Guide</a><a class="page-link" href="/orbit-rs/overview.html">Architecture Overview</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <h1 id="benchmarking-guide">Benchmarking Guide</h1>
+
+<p>This guide explains how to run performance benchmarks for Orbit-RS and why they are excluded from regular CI/CD pipelines.</p>
+
+<h2 id="-quick-start">🚀 Quick Start</h2>
+
+<h3 id="local-benchmarks">Local Benchmarks</h3>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">cd </span>orbit-benchmarks
+
+<span class="c"># Use the consolidated script (recommended)</span>
+./scripts/run_benchmarks.sh <span class="nt">-t</span> safe
+./scripts/run_benchmarks.sh <span class="nt">-t</span> actor <span class="nt">-v</span>
+
+<span class="c"># Or run individual benchmarks directly</span>
+cargo bench <span class="nt">--bench</span> actor_benchmarks
+cargo bench <span class="nt">--bench</span> leader_election_benchmarks
+</code></pre></div></div>
+
+<h3 id="github-actions-benchmarks">GitHub Actions Benchmarks</h3>
+<ol>
+  <li>Go to <strong>Actions</strong> tab → <strong>Benchmarks</strong> workflow</li>
+  <li>Click <strong>Run workflow</strong></li>
+  <li>Select benchmark type and duration</li>
+  <li>View results in workflow artifacts</li>
+</ol>
+
+<h2 id="-available-benchmarks">📋 Available Benchmarks</h2>
+
+<h3 id="actor-performance-benchmarks">Actor Performance Benchmarks</h3>
+<ul>
+  <li><strong>File</strong>: <code class="language-plaintext highlighter-rouge">benches/actor_benchmarks.rs</code></li>
+  <li><strong>Focus</strong>: Virtual actor system performance</li>
+  <li><strong>Metrics</strong>: Message throughput, latency</li>
+  <li><strong>Status</strong>: ✅ Stable</li>
+</ul>
+
+<h3 id="leader-election-benchmarks">Leader Election Benchmarks</h3>
+<ul>
+  <li><strong>File</strong>: <code class="language-plaintext highlighter-rouge">benches/leader_election_benchmarks.rs</code></li>
+  <li><strong>Focus</strong>: Raft consensus performance</li>
+  <li><strong>Metrics</strong>: Election timing, state persistence</li>
+  <li><strong>Status</strong>: ✅ Stable</li>
+</ul>
+
+<h3 id="persistence-comparison-benchmarks-️">Persistence Comparison Benchmarks ⚠️</h3>
+<ul>
+  <li><strong>File</strong>: <code class="language-plaintext highlighter-rouge">benches/persistence_comparison.rs</code></li>
+  <li><strong>Focus</strong>: Storage backend performance (COW B+ Trees vs RocksDB)</li>
+  <li><strong>Metrics</strong>: Read/write performance, memory usage</li>
+  <li><strong>Status</strong>: ⚠️ <strong>Known WAL replay issues - use with caution</strong></li>
+</ul>
+
+<h3 id="orbitql-query-language-benchmarks-">OrbitQL Query Language Benchmarks 🆕</h3>
+<ul>
+  <li><strong>Files</strong>: <code class="language-plaintext highlighter-rouge">src/orbitql/benchmark.rs</code>, <code class="language-plaintext highlighter-rouge">src/orbitql/comprehensive_benchmark.rs</code></li>
+  <li><strong>Focus</strong>: Query engine performance with industry-standard workloads</li>
+  <li><strong>Metrics</strong>: Query execution time, throughput, optimization effectiveness, vectorization performance</li>
+  <li><strong>Workloads</strong>: TPC-H (22 queries), TPC-C (OLTP), TPC-DS (analytics), custom query patterns</li>
+  <li><strong>Status</strong>: ✅ <strong>Stable - Recently moved from orbit-shared</strong></li>
+</ul>
+
+<h2 id="-cicd-exclusion-strategy">🔒 CI/CD Exclusion Strategy</h2>
+
+<h3 id="why-benchmarks-are-excluded">Why Benchmarks Are Excluded</h3>
+
+<p>Benchmarks are excluded from regular CI/CD pipelines because:</p>
+
+<ol>
+  <li><strong>Performance Focus</strong>: CI/CD should focus on correctness, not performance</li>
+  <li><strong>Resource Intensive</strong>: Benchmarks consume significant CPU and memory</li>
+  <li><strong>Time Consuming</strong>: Can add 10-30 minutes to build times</li>
+  <li><strong>WAL Replay Issues</strong>: Some benchmarks have known infinite loop issues</li>
+  <li><strong>Environment Sensitivity</strong>: Results vary significantly across different hardware</li>
+</ol>
+
+<h3 id="exclusion-implementation">Exclusion Implementation</h3>
+
+<h4 id="workspace-level">Workspace Level</h4>
+<div class="language-toml highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Cargo.toml</span>
+<span class="k">[</span><span class="n">workspace</span><span class="k">]</span>
+<span class="n">exclude</span> <span class="o">=</span><span class="w"> </span><span class="p">[</span>
+    <span class="s">"orbit-benchmarks"</span><span class="p">,</span>  <span class="c"># Excluded from workspace builds</span>
+<span class="p">]</span>
+</code></pre></div></div>
+
+<h4 id="cicd-level">CI/CD Level</h4>
+<ul>
+  <li><strong>ci.yml</strong>: Benchmark job completely removed</li>
+  <li><strong>ci-cd.yml</strong>: No benchmark steps in build matrix</li>
+  <li><strong>benchmarks.yml</strong>: Separate manual-only workflow</li>
+</ul>
+
+<h3 id="manual-execution-only">Manual Execution Only</h3>
+
+<p>Benchmarks can only be executed via:</p>
+<ul>
+  <li>✅ Local development (<code class="language-plaintext highlighter-rouge">cd orbit-benchmarks &amp;&amp; cargo bench</code>)</li>
+  <li>✅ Manual GitHub Actions workflow</li>
+  <li>❌ <strong>Not via</strong>: <code class="language-plaintext highlighter-rouge">cargo bench --package orbit-benchmarks</code> from workspace root</li>
+  <li>❌ <strong>Not via</strong>: Regular CI/CD pipelines</li>
+  <li>❌ <strong>Not via</strong>: <code class="language-plaintext highlighter-rouge">cargo build --workspace</code> (automatically excluded)</li>
+</ul>
+
+<h2 id="-consolidated-benchmark-scripts">🔧 Consolidated Benchmark Scripts</h2>
+
+<p>All benchmark-related scripts are now consolidated under <code class="language-plaintext highlighter-rouge">orbit-benchmarks/scripts/</code>:</p>
+
+<h3 id="main-scripts">Main Scripts</h3>
+<ul>
+  <li><strong><code class="language-plaintext highlighter-rouge">run_benchmarks.sh</code></strong>: Master benchmark runner with timeout protection</li>
+  <li><strong><code class="language-plaintext highlighter-rouge">analyze_results.py</code></strong>: Python script for result analysis and reporting</li>
+</ul>
+
+<h3 id="script-usage">Script Usage</h3>
+
+<h4 id="benchmark-runner">Benchmark Runner</h4>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">cd </span>orbit-benchmarks
+
+<span class="c"># Run all safe benchmarks (actor + leader election)</span>
+./scripts/run_benchmarks.sh
+./scripts/run_benchmarks.sh <span class="nt">-t</span> safe
+
+<span class="c"># Run specific benchmark types</span>
+./scripts/run_benchmarks.sh <span class="nt">-t</span> actor          <span class="c"># Actor benchmarks only</span>
+./scripts/run_benchmarks.sh <span class="nt">-t</span> leader         <span class="c"># Leader election only</span>
+./scripts/run_benchmarks.sh <span class="nt">-t</span> persistence    <span class="c"># Persistence (⚠️ may hang)</span>
+
+<span class="c"># With custom options</span>
+./scripts/run_benchmarks.sh <span class="nt">-t</span> actor <span class="nt">-v</span>       <span class="c"># Verbose output</span>
+./scripts/run_benchmarks.sh <span class="nt">-t</span> persistence <span class="nt">-d</span> 2m  <span class="c"># 2 minute timeout</span>
+./scripts/run_benchmarks.sh <span class="nt">-t</span> safe <span class="nt">-o</span> ./my_results  <span class="c"># Custom output dir</span>
+</code></pre></div></div>
+
+<h4 id="result-analysis">Result Analysis</h4>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">cd </span>orbit-benchmarks
+
+<span class="c"># Generate HTML analysis report</span>
+./scripts/analyze_results.py <span class="nt">--results-dir</span> ./results
+
+<span class="c"># Generate JSON summary</span>
+./scripts/analyze_results.py <span class="nt">--format</span> json <span class="nt">--output</span> summary.json
+
+<span class="c"># Compare two benchmark runs</span>
+./scripts/analyze_results.py <span class="nt">--compare</span> <span class="s2">"*actor*"</span> <span class="s2">"*leader*"</span>
+
+<span class="c"># Text summary to console</span>
+./scripts/analyze_results.py <span class="nt">--format</span> text
+</code></pre></div></div>
+
+<h2 id="️-local-development">🛠️ Local Development</h2>
+
+<h3 id="prerequisites">Prerequisites</h3>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># System dependencies</span>
+<span class="nb">sudo </span>apt-get <span class="nb">install</span> <span class="nt">-y</span> pkg-config libssl-dev libsqlite3-dev protobuf-compiler
+
+<span class="c"># Rust toolchain with stable</span>
+rustup toolchain <span class="nb">install </span>stable
+</code></pre></div></div>
+
+<h3 id="running-specific-benchmarks">Running Specific Benchmarks</h3>
+
+<h4 id="safe-benchmarks-recommended">Safe Benchmarks (Recommended)</h4>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">cd </span>orbit-benchmarks
+
+<span class="c"># Actor performance - safe to run</span>
+cargo bench <span class="nt">--bench</span> actor_benchmarks
+
+<span class="c"># Leader election - safe to run  </span>
+cargo bench <span class="nt">--bench</span> leader_election_benchmarks
+</code></pre></div></div>
+
+<h4 id="risky-benchmarks-use-caution">Risky Benchmarks (Use Caution)</h4>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">cd </span>orbit-benchmarks
+
+<span class="c"># Persistence comparison - may hang due to WAL replay</span>
+<span class="nb">timeout </span>5m cargo bench <span class="nt">--bench</span> persistence_comparison <span class="o">||</span> <span class="nb">echo</span> <span class="s2">"Timed out as expected"</span>
+</code></pre></div></div>
+
+<h3 id="benchmark-results">Benchmark Results</h3>
+
+<p>Results are saved to:</p>
+<ul>
+  <li><strong>Criterion reports</strong>: <code class="language-plaintext highlighter-rouge">orbit-benchmarks/target/criterion/</code></li>
+  <li><strong>JSON output</strong>: <code class="language-plaintext highlighter-rouge">orbit-benchmarks/*.json</code> (when using <code class="language-plaintext highlighter-rouge">--output-format json</code>)</li>
+  <li><strong>HTML reports</strong>: <code class="language-plaintext highlighter-rouge">orbit-benchmarks/target/criterion/reports/index.html</code></li>
+</ul>
+
+<h2 id="-github-actions-integration">🤖 GitHub Actions Integration</h2>
+
+<h3 id="manual-workflow-features">Manual Workflow Features</h3>
+
+<p>The manual benchmark workflow (<code class="language-plaintext highlighter-rouge">.github/workflows/benchmarks.yml</code>) provides:</p>
+
+<h4 id="configurable-options">Configurable Options</h4>
+<ul>
+  <li><strong>Benchmark Type</strong>: All, actor only, leader election only, persistence only</li>
+  <li><strong>Duration</strong>: Timeout in minutes (default: 5)</li>
+  <li><strong>Upload Results</strong>: Save artifacts for analysis</li>
+</ul>
+
+<h4 id="execution-safety">Execution Safety</h4>
+<ul>
+  <li><strong>Timeout Protection</strong>: Prevents infinite loops from WAL replay issues</li>
+  <li><strong>Error Handling</strong>: Continues on individual benchmark failures</li>
+  <li><strong>Resource Limits</strong>: 60-minute maximum workflow timeout</li>
+</ul>
+
+<h4 id="result-management">Result Management</h4>
+<ul>
+  <li><strong>Artifact Upload</strong>: Saves JSON results and HTML reports</li>
+  <li><strong>Summary Generation</strong>: Creates markdown report with key metrics</li>
+  <li><strong>Issue Creation</strong>: Automatically creates issues on benchmark failures</li>
+</ul>
+
+<h3 id="running-manual-workflow">Running Manual Workflow</h3>
+
+<ol>
+  <li><strong>Navigate to Actions</strong>:
+    <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>https://github.com/YourOrg/orbit-rs/actions/workflows/benchmarks.yml
+</code></pre></div>    </div>
+  </li>
+  <li>
+    <p><strong>Click “Run workflow”</strong></p>
+  </li>
+  <li><strong>Configure Options</strong>:
+    <ul>
+      <li><strong>Benchmark type</strong>: Choose specific or all benchmarks</li>
+      <li><strong>Duration</strong>: Set timeout (5-30 minutes recommended)</li>
+      <li><strong>Upload results</strong>: Enable for result analysis</li>
+    </ul>
+  </li>
+  <li><strong>Monitor Execution</strong>:
+    <ul>
+      <li>View real-time logs</li>
+      <li>Check for timeout issues</li>
+      <li>Download artifacts when complete</li>
+    </ul>
+  </li>
+</ol>
+
+<h2 id="️-known-issues">⚠️ Known Issues</h2>
+
+<h3 id="wal-replay-problem">WAL Replay Problem</h3>
+
+<p>The persistence comparison benchmarks suffer from Write-Ahead Log replay issues:</p>
+
+<h4 id="problem-description">Problem Description</h4>
+<ol>
+  <li>Each benchmark iteration creates new persistence instance</li>
+  <li>Instance replays all existing WAL entries from temp directory</li>
+  <li>New operations add more WAL entries</li>
+  <li>WAL grows continuously, causing exponentially longer replay times</li>
+  <li>Eventually appears to hang or consume excessive memory</li>
+</ol>
+
+<h4 id="affected-components">Affected Components</h4>
+<ul>
+  <li>COW B+ Tree persistence layer</li>
+  <li>LSM Tree implementation</li>
+  <li>Any benchmark using durable storage</li>
+</ul>
+
+<h4 id="mitigation-strategies">Mitigation Strategies</h4>
+<ul>
+  <li><strong>Local</strong>: Use <code class="language-plaintext highlighter-rouge">timeout</code> command to prevent infinite runs</li>
+  <li><strong>CI</strong>: Workflow has built-in timeout protection</li>
+  <li><strong>Development</strong>: Run individual benchmark functions, not full suites</li>
+</ul>
+
+<h3 id="workarounds">Workarounds</h3>
+
+<h4 id="safe-local-testing">Safe Local Testing</h4>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">cd </span>orbit-benchmarks
+
+<span class="c"># Use timeout for problematic benchmarks</span>
+<span class="nb">timeout </span>2m cargo bench <span class="nt">--bench</span> persistence_comparison
+
+<span class="c"># Run specific benchmark functions only</span>
+cargo bench <span class="nt">--bench</span> persistence_comparison <span class="nt">--</span> <span class="nt">--exact</span> <span class="s2">"benchmark_function_name"</span>
+</code></pre></div></div>
+
+<h4 id="clean-state-testing">Clean State Testing</h4>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Ensure clean state between runs</span>
+<span class="nb">rm</span> <span class="nt">-rf</span> /tmp/orbit-benchmark-<span class="k">*</span>
+<span class="nb">cd </span>orbit-benchmarks
+cargo clean
+cargo bench <span class="nt">--bench</span> actor_benchmarks
+</code></pre></div></div>
+
+<h2 id="-performance-baselines">📊 Performance Baselines</h2>
+
+<h3 id="expected-performance-macbook-pro-m2">Expected Performance (MacBook Pro M2)</h3>
+
+<h4 id="actor-benchmarks">Actor Benchmarks</h4>
+<ul>
+  <li><strong>Message Processing</strong>: 500k+ messages/second per core</li>
+  <li><strong>Actor Activation</strong>: Sub-microsecond latency</li>
+  <li><strong>Memory Usage</strong>: ~10MB base footprint</li>
+</ul>
+
+<h4 id="leader-election-benchmarks-1">Leader Election Benchmarks</h4>
+<ul>
+  <li><strong>Election Time</strong>: 1-15µs (depending on cluster size)</li>
+  <li><strong>State Persistence</strong>: 300-600µs per save operation</li>
+  <li><strong>Cluster Health Checks</strong>: 350-1400ns (depending on size)</li>
+</ul>
+
+<h4 id="persistence-benchmarks-when-working">Persistence Benchmarks (When Working)</h4>
+<ul>
+  <li><strong>COW B+ Tree</strong>: 15-50k ops/second</li>
+  <li><strong>RocksDB</strong>: 10-30k ops/second</li>
+  <li><strong>Memory Usage</strong>: Varies significantly by backend</li>
+</ul>
+
+<h3 id="performance-regression-detection">Performance Regression Detection</h3>
+
+<p>Since benchmarks are manual-only:</p>
+<ul>
+  <li><strong>No automatic regression detection</strong></li>
+  <li><strong>Manual comparison required</strong></li>
+  <li><strong>Results should be documented in performance issues</strong></li>
+  <li><strong>Consider running before major releases</strong></li>
+</ul>
+
+<h2 id="-troubleshooting">🔍 Troubleshooting</h2>
+
+<h3 id="common-issues">Common Issues</h3>
+
+<h4 id="package-not-found-error">“Package not found” Error</h4>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Wrong - will fail</span>
+cargo bench <span class="nt">--package</span> orbit-benchmarks
+
+<span class="c"># Correct - run from benchmarks directory  </span>
+<span class="nb">cd </span>orbit-benchmarks <span class="o">&amp;&amp;</span> cargo bench
+</code></pre></div></div>
+
+<h4 id="compilation-errors">Compilation Errors</h4>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">cd </span>orbit-benchmarks
+
+<span class="c"># Clean and rebuild</span>
+cargo clean
+cargo build <span class="nt">--release</span>
+
+<span class="c"># Check dependencies</span>
+cargo update
+</code></pre></div></div>
+
+<h4 id="hanging-benchmarks">Hanging Benchmarks</h4>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Use timeout for protection</span>
+<span class="nb">timeout </span>5m cargo bench
+
+<span class="c"># Kill hanging processes</span>
+pkill <span class="nt">-f</span> <span class="s2">"cargo bench"</span>
+pkill <span class="nt">-f</span> <span class="s2">"orbit-benchmarks"</span>
+</code></pre></div></div>
+
+<h4 id="memory-issues">Memory Issues</h4>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Monitor memory usage</span>
+htop
+
+<span class="c"># Reduce benchmark scope</span>
+cargo bench <span class="nt">--bench</span> actor_benchmarks <span class="nt">--</span> <span class="nt">--quick</span>
+</code></pre></div></div>
+
+<h2 id="-additional-resources">📚 Additional Resources</h2>
+
+<h3 id="related-documentation">Related Documentation</h3>
+<ul>
+  <li><a href="/orbit-rs/development/development.html">Development Guide</a></li>
+  <li><a href="../performance.md">Performance Architecture</a></li>
+  <li><a href="../cicd.md">CI/CD Pipeline</a></li>
+</ul>
+
+<h3 id="external-tools">External Tools</h3>
+<ul>
+  <li><a href="https://bheisler.github.io/criterion.rs/">Criterion.rs Documentation</a></li>
+  <li><a href="https://doc.rust-lang.org/cargo/commands/cargo-bench.html">cargo-bench Documentation</a></li>
+  <li><a href="https://docs.github.com/en/actions/managing-workflow-runs/manually-running-a-workflow">GitHub Actions Manual Workflows</a></li>
+</ul>
+
+<hr />
+
+<p><strong>⚠️ Remember</strong>: Benchmarks are excluded from regular development workflows for good reasons. Only run them when you specifically need performance analysis, and always use appropriate timeouts to prevent system issues.</p>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/orbit-rs/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Orbit-RS Documentation</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">TuringWorks</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

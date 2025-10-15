@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["parse_additive_expression","parse_and_expression","parse_comparison_expression","parse_data_type","parse_equality_expression","parse_expression","parse_literal_value","parse_multiplicative_expression","parse_or_expression","parse_primary_expression","parse_select_statement","parse_table_name","parse_unary_expression","parse_vector_elements"]};

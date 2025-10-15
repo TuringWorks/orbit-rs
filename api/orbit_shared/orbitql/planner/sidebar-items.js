@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["PlanNode","PlanningError"],"struct":["AggregateExpression","ColumnStats","CostStats","ExecutionPlan","IndexStats","QueryPlanner","SortExpression","TableStats"]};

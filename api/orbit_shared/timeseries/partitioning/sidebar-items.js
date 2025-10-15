@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["PartitionStrategy"],"struct":["PartitionInfo","PartitionManager","PartitioningStats"]};

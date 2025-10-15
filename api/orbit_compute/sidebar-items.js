@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["create_acceleration_engine","init_heterogeneous_compute"],"mod":["capabilities","cpu","engine","errors","linux","memory","monitoring","query","scheduler","x86_64"]};

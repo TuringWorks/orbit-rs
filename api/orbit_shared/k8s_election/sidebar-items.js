@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["DeploymentMode","NodeDiscoveryMethod"],"struct":["K8sElectionConfig","K8sLease","KubernetesLeaseClient","MockLeaseClient","UniversalElectionManager"],"trait":["K8sLeaseClient"]};

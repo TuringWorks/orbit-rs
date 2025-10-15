@@ -1,0 +1,1079 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Kubernetes Deployment Sizing Guide | Orbit-RS Documentation</title>
+<meta name="generator" content="Jekyll v4.4.1" />
+<meta property="og:title" content="Kubernetes Deployment Sizing Guide" />
+<meta name="author" content="TuringWorks" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<meta property="og:description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<link rel="canonical" href="https://turingworks.github.io/orbit-rs/k8s-deployment-sizing-guide.html" />
+<meta property="og:url" content="https://turingworks.github.io/orbit-rs/k8s-deployment-sizing-guide.html" />
+<meta property="og:site_name" content="Orbit-RS Documentation" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Kubernetes Deployment Sizing Guide" />
+<meta name="twitter:site" content="@TuringWorksAI" />
+<meta name="twitter:creator" content="@TuringWorks" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","author":{"@type":"Person","name":"TuringWorks"},"description":"The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform","headline":"Kubernetes Deployment Sizing Guide","url":"https://turingworks.github.io/orbit-rs/k8s-deployment-sizing-guide.html"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/orbit-rs/assets/main.css">
+  <link rel="stylesheet" href="/orbit-rs/assets/css/custom.css"><link type="application/atom+xml" rel="alternate" href="https://turingworks.github.io/orbit-rs/feed.xml" title="Orbit-RS Documentation" /></head><body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/orbit-rs/">Orbit-RS Documentation</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/orbit-rs/">Orbit-RS Documentation</a><a class="page-link" href="/orbit-rs/project_overview.html">Orbit-RS: Comprehensive Project Overview</a><a class="page-link" href="/orbit-rs/quick_start.html">Quick Start Guide - Multi-Protocol Database Server</a><a class="page-link" href="/orbit-rs/roadmap/">Development Roadmap</a><a class="page-link" href="/orbit-rs/features/">Orbit-RS Feature Index</a><a class="page-link" href="/orbit-rs/compute-acceleration/">Hardware Acceleration Guide</a><a class="page-link" href="/orbit-rs/contributing.html">Contributing Guide</a><a class="page-link" href="/orbit-rs/overview.html">Architecture Overview</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <h1 id="kubernetes-deployment-sizing-guide">Kubernetes Deployment Sizing Guide</h1>
+
+<h2 id="table-of-contents">Table of Contents</h2>
+
+<ul>
+  <li><a href="#overview">Overview</a></li>
+  <li><a href="#workload-classifications">Workload Classifications</a></li>
+  <li><a href="#component-specific-sizing">Component-Specific Sizing</a></li>
+  <li><a href="#storage-and-persistent-volume-configurations">Storage and Persistent Volume Configurations</a></li>
+  <li><a href="#gpu-and-acceleration-configurations">GPU and Acceleration Configurations</a></li>
+  <li><a href="#memory-mapped-file-storage">Memory-Mapped File Storage</a></li>
+  <li><a href="#monitoring-and-autoscaling">Monitoring and Autoscaling</a></li>
+  <li><a href="#example-deployments">Example Deployments</a></li>
+</ul>
+
+<h2 id="overview">Overview</h2>
+
+<p>Orbit-RS is designed for various workload intensities, from small development environments to enterprise-scale deployments handling petabyte-scale data. Proper resource sizing is crucial for:</p>
+
+<ul>
+  <li><strong>Performance</strong>: Optimal CPU/memory allocation for workload characteristics</li>
+  <li><strong>Cost Efficiency</strong>: Avoiding over-provisioning while maintaining performance</li>
+  <li><strong>Scalability</strong>: Ensuring resources can scale with demand</li>
+  <li><strong>Reliability</strong>: Providing adequate resources for stability and fault tolerance</li>
+</ul>
+
+<h2 id="workload-classifications">Workload Classifications</h2>
+
+<h3 id="developmenttesting-small">Development/Testing (Small)</h3>
+<ul>
+  <li><strong>Use Case</strong>: Development, testing, small demos</li>
+  <li><strong>Data Scale</strong>: &lt; 10GB</li>
+  <li><strong>Concurrent Users</strong>: 1-10</li>
+  <li><strong>Expected Throughput</strong>: &lt; 1,000 ops/sec</li>
+</ul>
+
+<h3 id="productionstaging-medium">Production/Staging (Medium)</h3>
+<ul>
+  <li><strong>Use Case</strong>: Production workloads, staging environments</li>
+  <li><strong>Data Scale</strong>: 10GB - 1TB</li>
+  <li><strong>Concurrent Users</strong>: 10-100</li>
+  <li><strong>Expected Throughput</strong>: 1,000 - 50,000 ops/sec</li>
+</ul>
+
+<h3 id="enterprise-large">Enterprise (Large)</h3>
+<ul>
+  <li><strong>Use Case</strong>: Enterprise production, high-availability</li>
+  <li><strong>Data Scale</strong>: 1TB - 100TB</li>
+  <li><strong>Concurrent Users</strong>: 100-1,000</li>
+  <li><strong>Expected Throughput</strong>: 50,000 - 500,000 ops/sec</li>
+</ul>
+
+<h3 id="hyperscale-xlarge">Hyperscale (XLarge)</h3>
+<ul>
+  <li><strong>Use Case</strong>: Hyperscale deployments, petabyte-scale</li>
+  <li><strong>Data Scale</strong>: &gt; 100TB</li>
+  <li><strong>Concurrent Users</strong>: &gt; 1,000</li>
+  <li><strong>Expected Throughput</strong>: &gt; 500,000 ops/sec</li>
+</ul>
+
+<h2 id="component-specific-sizing">Component-Specific Sizing</h2>
+
+<h3 id="orbit-server-core-database-engine">Orbit-Server (Core Database Engine)</h3>
+
+<h4 id="small-workload">Small Workload</h4>
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">resources</span><span class="pi">:</span>
+  <span class="na">requests</span><span class="pi">:</span>
+    <span class="na">cpu</span><span class="pi">:</span> <span class="s2">"</span><span class="s">500m"</span>
+    <span class="na">memory</span><span class="pi">:</span> <span class="s2">"</span><span class="s">1Gi"</span>
+    <span class="na">ephemeral-storage</span><span class="pi">:</span> <span class="s2">"</span><span class="s">10Gi"</span>
+  <span class="na">limits</span><span class="pi">:</span>
+    <span class="na">cpu</span><span class="pi">:</span> <span class="s2">"</span><span class="s">2"</span>
+    <span class="na">memory</span><span class="pi">:</span> <span class="s2">"</span><span class="s">4Gi"</span>
+    <span class="na">ephemeral-storage</span><span class="pi">:</span> <span class="s2">"</span><span class="s">50Gi"</span>
+
+<span class="c1"># JVM-style memory allocation for Rust</span>
+<span class="na">env</span><span class="pi">:</span>
+  <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">RUST_MIN_STACK</span>
+    <span class="na">value</span><span class="pi">:</span> <span class="s2">"</span><span class="s">8388608"</span>  <span class="c1"># 8MB stack</span>
+  <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">ORBIT_CACHE_SIZE</span>
+    <span class="na">value</span><span class="pi">:</span> <span class="s2">"</span><span class="s">512MB"</span>
+  <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">ORBIT_WAL_BUFFER_SIZE</span>
+    <span class="na">value</span><span class="pi">:</span> <span class="s2">"</span><span class="s">64MB"</span>
+</code></pre></div></div>
+
+<h4 id="medium-workload">Medium Workload</h4>
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">resources</span><span class="pi">:</span>
+  <span class="na">requests</span><span class="pi">:</span>
+    <span class="na">cpu</span><span class="pi">:</span> <span class="s2">"</span><span class="s">2"</span>
+    <span class="na">memory</span><span class="pi">:</span> <span class="s2">"</span><span class="s">8Gi"</span>
+    <span class="na">ephemeral-storage</span><span class="pi">:</span> <span class="s2">"</span><span class="s">50Gi"</span>
+  <span class="na">limits</span><span class="pi">:</span>
+    <span class="na">cpu</span><span class="pi">:</span> <span class="s2">"</span><span class="s">8"</span>
+    <span class="na">memory</span><span class="pi">:</span> <span class="s2">"</span><span class="s">32Gi"</span>
+    <span class="na">ephemeral-storage</span><span class="pi">:</span> <span class="s2">"</span><span class="s">200Gi"</span>
+
+<span class="na">env</span><span class="pi">:</span>
+  <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">ORBIT_CACHE_SIZE</span>
+    <span class="na">value</span><span class="pi">:</span> <span class="s2">"</span><span class="s">4GB"</span>
+  <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">ORBIT_WAL_BUFFER_SIZE</span>
+    <span class="na">value</span><span class="pi">:</span> <span class="s2">"</span><span class="s">256MB"</span>
+  <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">ORBIT_QUERY_CACHE_SIZE</span>
+    <span class="na">value</span><span class="pi">:</span> <span class="s2">"</span><span class="s">1GB"</span>
+  <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">ORBIT_MAX_CONNECTIONS</span>
+    <span class="na">value</span><span class="pi">:</span> <span class="s2">"</span><span class="s">1000"</span>
+</code></pre></div></div>
+
+<h4 id="large-workload">Large Workload</h4>
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">resources</span><span class="pi">:</span>
+  <span class="na">requests</span><span class="pi">:</span>
+    <span class="na">cpu</span><span class="pi">:</span> <span class="s2">"</span><span class="s">8"</span>
+    <span class="na">memory</span><span class="pi">:</span> <span class="s2">"</span><span class="s">32Gi"</span>
+    <span class="na">ephemeral-storage</span><span class="pi">:</span> <span class="s2">"</span><span class="s">200Gi"</span>
+  <span class="na">limits</span><span class="pi">:</span>
+    <span class="na">cpu</span><span class="pi">:</span> <span class="s2">"</span><span class="s">32"</span>
+    <span class="na">memory</span><span class="pi">:</span> <span class="s2">"</span><span class="s">128Gi"</span>
+    <span class="na">ephemeral-storage</span><span class="pi">:</span> <span class="s2">"</span><span class="s">1Ti"</span>
+
+<span class="na">env</span><span class="pi">:</span>
+  <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">ORBIT_CACHE_SIZE</span>
+    <span class="na">value</span><span class="pi">:</span> <span class="s2">"</span><span class="s">16GB"</span>
+  <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">ORBIT_WAL_BUFFER_SIZE</span>
+    <span class="na">value</span><span class="pi">:</span> <span class="s2">"</span><span class="s">1GB"</span>
+  <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">ORBIT_QUERY_CACHE_SIZE</span>
+    <span class="na">value</span><span class="pi">:</span> <span class="s2">"</span><span class="s">4GB"</span>
+  <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">ORBIT_MAX_CONNECTIONS</span>
+    <span class="na">value</span><span class="pi">:</span> <span class="s2">"</span><span class="s">5000"</span>
+  <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">ORBIT_BACKGROUND_THREADS</span>
+    <span class="na">value</span><span class="pi">:</span> <span class="s2">"</span><span class="s">16"</span>
+</code></pre></div></div>
+
+<h4 id="xlarge-workload-hyperscale">XLarge Workload (Hyperscale)</h4>
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">resources</span><span class="pi">:</span>
+  <span class="na">requests</span><span class="pi">:</span>
+    <span class="na">cpu</span><span class="pi">:</span> <span class="s2">"</span><span class="s">32"</span>
+    <span class="na">memory</span><span class="pi">:</span> <span class="s2">"</span><span class="s">128Gi"</span>
+    <span class="na">ephemeral-storage</span><span class="pi">:</span> <span class="s2">"</span><span class="s">1Ti"</span>
+  <span class="na">limits</span><span class="pi">:</span>
+    <span class="na">cpu</span><span class="pi">:</span> <span class="s2">"</span><span class="s">64"</span>
+    <span class="na">memory</span><span class="pi">:</span> <span class="s2">"</span><span class="s">512Gi"</span>
+    <span class="na">ephemeral-storage</span><span class="pi">:</span> <span class="s2">"</span><span class="s">5Ti"</span>
+
+<span class="na">env</span><span class="pi">:</span>
+  <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">ORBIT_CACHE_SIZE</span>
+    <span class="na">value</span><span class="pi">:</span> <span class="s2">"</span><span class="s">64GB"</span>
+  <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">ORBIT_WAL_BUFFER_SIZE</span>
+    <span class="na">value</span><span class="pi">:</span> <span class="s2">"</span><span class="s">4GB"</span>
+  <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">ORBIT_QUERY_CACHE_SIZE</span>
+    <span class="na">value</span><span class="pi">:</span> <span class="s2">"</span><span class="s">16GB"</span>
+  <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">ORBIT_MAX_CONNECTIONS</span>
+    <span class="na">value</span><span class="pi">:</span> <span class="s2">"</span><span class="s">20000"</span>
+  <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">ORBIT_BACKGROUND_THREADS</span>
+    <span class="na">value</span><span class="pi">:</span> <span class="s2">"</span><span class="s">32"</span>
+  <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">ORBIT_NUMA_AWARE</span>
+    <span class="na">value</span><span class="pi">:</span> <span class="s2">"</span><span class="s">true"</span>
+</code></pre></div></div>
+
+<h3 id="orbit-compute-gpuacceleration-engine">Orbit-Compute (GPU/Acceleration Engine)</h3>
+
+<h4 id="small-workload-1">Small Workload</h4>
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">resources</span><span class="pi">:</span>
+  <span class="na">requests</span><span class="pi">:</span>
+    <span class="na">cpu</span><span class="pi">:</span> <span class="s2">"</span><span class="s">1"</span>
+    <span class="na">memory</span><span class="pi">:</span> <span class="s2">"</span><span class="s">2Gi"</span>
+  <span class="na">limits</span><span class="pi">:</span>
+    <span class="na">cpu</span><span class="pi">:</span> <span class="s2">"</span><span class="s">4"</span>
+    <span class="na">memory</span><span class="pi">:</span> <span class="s2">"</span><span class="s">8Gi"</span>
+
+<span class="c1"># Optional GPU support</span>
+<span class="c1"># Uncomment for GPU-enabled nodes</span>
+<span class="c1"># nvidia.com/gpu: 1</span>
+<span class="c1"># amd.com/gpu: 1</span>
+</code></pre></div></div>
+
+<h4 id="medium-workload-1">Medium Workload</h4>
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">resources</span><span class="pi">:</span>
+  <span class="na">requests</span><span class="pi">:</span>
+    <span class="na">cpu</span><span class="pi">:</span> <span class="s2">"</span><span class="s">4"</span>
+    <span class="na">memory</span><span class="pi">:</span> <span class="s2">"</span><span class="s">8Gi"</span>
+  <span class="na">limits</span><span class="pi">:</span>
+    <span class="na">cpu</span><span class="pi">:</span> <span class="s2">"</span><span class="s">16"</span>
+    <span class="na">memory</span><span class="pi">:</span> <span class="s2">"</span><span class="s">32Gi"</span>
+    <span class="na">nvidia.com/gpu</span><span class="pi">:</span> <span class="m">1</span>  <span class="c1"># NVIDIA GPU</span>
+    <span class="c1"># amd.com/gpu: 1   # Alternative: AMD GPU</span>
+
+<span class="na">env</span><span class="pi">:</span>
+  <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">ORBIT_GPU_MEMORY_FRACTION</span>
+    <span class="na">value</span><span class="pi">:</span> <span class="s2">"</span><span class="s">0.8"</span>  <span class="c1"># Use 80% of GPU memory</span>
+  <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">ORBIT_CPU_GPU_RATIO</span>
+    <span class="na">value</span><span class="pi">:</span> <span class="s2">"</span><span class="s">4:1"</span>  <span class="c1"># 4 CPU cores per GPU</span>
+</code></pre></div></div>
+
+<h4 id="large-workload-1">Large Workload</h4>
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">resources</span><span class="pi">:</span>
+  <span class="na">requests</span><span class="pi">:</span>
+    <span class="na">cpu</span><span class="pi">:</span> <span class="s2">"</span><span class="s">8"</span>
+    <span class="na">memory</span><span class="pi">:</span> <span class="s2">"</span><span class="s">32Gi"</span>
+  <span class="na">limits</span><span class="pi">:</span>
+    <span class="na">cpu</span><span class="pi">:</span> <span class="s2">"</span><span class="s">32"</span>
+    <span class="na">memory</span><span class="pi">:</span> <span class="s2">"</span><span class="s">128Gi"</span>
+    <span class="na">nvidia.com/gpu</span><span class="pi">:</span> <span class="m">2</span>  <span class="c1"># Multiple GPUs</span>
+    
+<span class="na">env</span><span class="pi">:</span>
+  <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">ORBIT_GPU_MEMORY_FRACTION</span>
+    <span class="na">value</span><span class="pi">:</span> <span class="s2">"</span><span class="s">0.9"</span>
+  <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">ORBIT_MULTI_GPU_STRATEGY</span>
+    <span class="na">value</span><span class="pi">:</span> <span class="s2">"</span><span class="s">data_parallel"</span>
+  <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">ORBIT_CUDA_STREAMS</span>
+    <span class="na">value</span><span class="pi">:</span> <span class="s2">"</span><span class="s">8"</span>
+</code></pre></div></div>
+
+<h4 id="xlarge-workload-gpu-cluster">XLarge Workload (GPU Cluster)</h4>
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">resources</span><span class="pi">:</span>
+  <span class="na">requests</span><span class="pi">:</span>
+    <span class="na">cpu</span><span class="pi">:</span> <span class="s2">"</span><span class="s">32"</span>
+    <span class="na">memory</span><span class="pi">:</span> <span class="s2">"</span><span class="s">128Gi"</span>
+  <span class="na">limits</span><span class="pi">:</span>
+    <span class="na">cpu</span><span class="pi">:</span> <span class="s2">"</span><span class="s">64"</span>
+    <span class="na">memory</span><span class="pi">:</span> <span class="s2">"</span><span class="s">256Gi"</span>
+    <span class="na">nvidia.com/gpu</span><span class="pi">:</span> <span class="m">4</span>  <span class="c1"># 4 GPUs per pod</span>
+    
+<span class="c1"># Node affinity for GPU nodes</span>
+<span class="na">nodeSelector</span><span class="pi">:</span>
+  <span class="na">accelerator</span><span class="pi">:</span> <span class="s">nvidia-tesla-v100</span>
+  <span class="c1"># accelerator: nvidia-a100-40gb</span>
+  <span class="c1"># accelerator: amd-mi250x</span>
+
+<span class="na">tolerations</span><span class="pi">:</span>
+<span class="pi">-</span> <span class="na">key</span><span class="pi">:</span> <span class="s">nvidia.com/gpu</span>
+  <span class="na">operator</span><span class="pi">:</span> <span class="s">Exists</span>
+  <span class="na">effect</span><span class="pi">:</span> <span class="s">NoSchedule</span>
+
+<span class="na">env</span><span class="pi">:</span>
+  <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">ORBIT_GPU_MEMORY_FRACTION</span>
+    <span class="na">value</span><span class="pi">:</span> <span class="s2">"</span><span class="s">0.95"</span>
+  <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">ORBIT_MULTI_GPU_STRATEGY</span>
+    <span class="na">value</span><span class="pi">:</span> <span class="s2">"</span><span class="s">model_parallel"</span>
+  <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">ORBIT_GPU_PEER_ACCESS</span>
+    <span class="na">value</span><span class="pi">:</span> <span class="s2">"</span><span class="s">true"</span>
+</code></pre></div></div>
+
+<h3 id="orbit-client-connection-pool">Orbit-Client (Connection Pool)</h3>
+
+<h4 id="small-workload-2">Small Workload</h4>
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">resources</span><span class="pi">:</span>
+  <span class="na">requests</span><span class="pi">:</span>
+    <span class="na">cpu</span><span class="pi">:</span> <span class="s2">"</span><span class="s">100m"</span>
+    <span class="na">memory</span><span class="pi">:</span> <span class="s2">"</span><span class="s">256Mi"</span>
+  <span class="na">limits</span><span class="pi">:</span>
+    <span class="na">cpu</span><span class="pi">:</span> <span class="s2">"</span><span class="s">500m"</span>
+    <span class="na">memory</span><span class="pi">:</span> <span class="s2">"</span><span class="s">1Gi"</span>
+
+<span class="na">env</span><span class="pi">:</span>
+  <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">ORBIT_MAX_POOL_SIZE</span>
+    <span class="na">value</span><span class="pi">:</span> <span class="s2">"</span><span class="s">50"</span>
+  <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">ORBIT_MIN_POOL_SIZE</span>
+    <span class="na">value</span><span class="pi">:</span> <span class="s2">"</span><span class="s">5"</span>
+</code></pre></div></div>
+
+<h4 id="medium-workload-2">Medium Workload</h4>
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">resources</span><span class="pi">:</span>
+  <span class="na">requests</span><span class="pi">:</span>
+    <span class="na">cpu</span><span class="pi">:</span> <span class="s2">"</span><span class="s">500m"</span>
+    <span class="na">memory</span><span class="pi">:</span> <span class="s2">"</span><span class="s">1Gi"</span>
+  <span class="na">limits</span><span class="pi">:</span>
+    <span class="na">cpu</span><span class="pi">:</span> <span class="s2">"</span><span class="s">2"</span>
+    <span class="na">memory</span><span class="pi">:</span> <span class="s2">"</span><span class="s">4Gi"</span>
+
+<span class="na">env</span><span class="pi">:</span>
+  <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">ORBIT_MAX_POOL_SIZE</span>
+    <span class="na">value</span><span class="pi">:</span> <span class="s2">"</span><span class="s">500"</span>
+  <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">ORBIT_MIN_POOL_SIZE</span>
+    <span class="na">value</span><span class="pi">:</span> <span class="s2">"</span><span class="s">50"</span>
+  <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">ORBIT_KEEPALIVE_TIMEOUT</span>
+    <span class="na">value</span><span class="pi">:</span> <span class="s2">"</span><span class="s">30s"</span>
+</code></pre></div></div>
+
+<h4 id="large-workload-2">Large Workload</h4>
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">resources</span><span class="pi">:</span>
+  <span class="na">requests</span><span class="pi">:</span>
+    <span class="na">cpu</span><span class="pi">:</span> <span class="s2">"</span><span class="s">2"</span>
+    <span class="na">memory</span><span class="pi">:</span> <span class="s2">"</span><span class="s">4Gi"</span>
+  <span class="na">limits</span><span class="pi">:</span>
+    <span class="na">cpu</span><span class="pi">:</span> <span class="s2">"</span><span class="s">8"</span>
+    <span class="na">memory</span><span class="pi">:</span> <span class="s2">"</span><span class="s">16Gi"</span>
+
+<span class="na">env</span><span class="pi">:</span>
+  <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">ORBIT_MAX_POOL_SIZE</span>
+    <span class="na">value</span><span class="pi">:</span> <span class="s2">"</span><span class="s">2000"</span>
+  <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">ORBIT_MIN_POOL_SIZE</span>
+    <span class="na">value</span><span class="pi">:</span> <span class="s2">"</span><span class="s">200"</span>
+  <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">ORBIT_CIRCUIT_BREAKER_ENABLED</span>
+    <span class="na">value</span><span class="pi">:</span> <span class="s2">"</span><span class="s">true"</span>
+</code></pre></div></div>
+
+<h3 id="orbit-operator-kubernetes-operator">Orbit-Operator (Kubernetes Operator)</h3>
+
+<h4 id="all-workloads-control-plane">All Workloads (Control Plane)</h4>
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">resources</span><span class="pi">:</span>
+  <span class="na">requests</span><span class="pi">:</span>
+    <span class="na">cpu</span><span class="pi">:</span> <span class="s2">"</span><span class="s">100m"</span>
+    <span class="na">memory</span><span class="pi">:</span> <span class="s2">"</span><span class="s">256Mi"</span>
+  <span class="na">limits</span><span class="pi">:</span>
+    <span class="na">cpu</span><span class="pi">:</span> <span class="s2">"</span><span class="s">1"</span>
+    <span class="na">memory</span><span class="pi">:</span> <span class="s2">"</span><span class="s">2Gi"</span>
+
+<span class="na">env</span><span class="pi">:</span>
+  <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">ORBIT_RECONCILE_INTERVAL</span>
+    <span class="na">value</span><span class="pi">:</span> <span class="s2">"</span><span class="s">30s"</span>
+  <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">ORBIT_LEADER_ELECTION</span>
+    <span class="na">value</span><span class="pi">:</span> <span class="s2">"</span><span class="s">true"</span>
+</code></pre></div></div>
+
+<h2 id="storage-and-persistent-volume-configurations">Storage and Persistent Volume Configurations</h2>
+
+<h3 id="development-storage">Development Storage</h3>
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c1"># Basic PVC for development</span>
+<span class="na">apiVersion</span><span class="pi">:</span> <span class="s">v1</span>
+<span class="na">kind</span><span class="pi">:</span> <span class="s">PersistentVolumeClaim</span>
+<span class="na">metadata</span><span class="pi">:</span>
+  <span class="na">name</span><span class="pi">:</span> <span class="s">orbit-data-small</span>
+<span class="na">spec</span><span class="pi">:</span>
+  <span class="na">accessModes</span><span class="pi">:</span>
+    <span class="pi">-</span> <span class="s">ReadWriteOnce</span>
+  <span class="na">storageClassName</span><span class="pi">:</span> <span class="s">standard</span>  <span class="c1"># Use cluster default</span>
+  <span class="na">resources</span><span class="pi">:</span>
+    <span class="na">requests</span><span class="pi">:</span>
+      <span class="na">storage</span><span class="pi">:</span> <span class="s">50Gi</span>
+</code></pre></div></div>
+
+<h3 id="production-storage-with-fast-nvme">Production Storage with Fast NVMe</h3>
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c1"># High-performance storage for production</span>
+<span class="na">apiVersion</span><span class="pi">:</span> <span class="s">v1</span>
+<span class="na">kind</span><span class="pi">:</span> <span class="s">PersistentVolumeClaim</span>
+<span class="na">metadata</span><span class="pi">:</span>
+  <span class="na">name</span><span class="pi">:</span> <span class="s">orbit-data-nvme</span>
+<span class="na">spec</span><span class="pi">:</span>
+  <span class="na">accessModes</span><span class="pi">:</span>
+    <span class="pi">-</span> <span class="s">ReadWriteOnce</span>
+  <span class="na">storageClassName</span><span class="pi">:</span> <span class="s">fast-nvme</span>  <span class="c1"># NVMe-based storage class</span>
+  <span class="na">resources</span><span class="pi">:</span>
+    <span class="na">requests</span><span class="pi">:</span>
+      <span class="na">storage</span><span class="pi">:</span> <span class="s">1Ti</span>
+      
+<span class="nn">---</span>
+
+<span class="c1"># Memory-mapped file storage (tmpfs/RAM disk)</span>
+<span class="na">apiVersion</span><span class="pi">:</span> <span class="s">v1</span>
+<span class="na">kind</span><span class="pi">:</span> <span class="s">PersistentVolumeClaim</span>
+<span class="na">metadata</span><span class="pi">:</span>
+  <span class="na">name</span><span class="pi">:</span> <span class="s">orbit-mmap-cache</span>
+<span class="na">spec</span><span class="pi">:</span>
+  <span class="na">accessModes</span><span class="pi">:</span>
+    <span class="pi">-</span> <span class="s">ReadWriteOnce</span>
+  <span class="na">storageClassName</span><span class="pi">:</span> <span class="s">memory</span>  <span class="c1"># RAM-based storage</span>
+  <span class="na">resources</span><span class="pi">:</span>
+    <span class="na">requests</span><span class="pi">:</span>
+      <span class="na">storage</span><span class="pi">:</span> <span class="s">32Gi</span>  <span class="c1"># Large memory-mapped cache</span>
+</code></pre></div></div>
+
+<h3 id="enterprise-storage-with-replication">Enterprise Storage with Replication</h3>
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c1"># Replicated storage for enterprise</span>
+<span class="na">apiVersion</span><span class="pi">:</span> <span class="s">v1</span>
+<span class="na">kind</span><span class="pi">:</span> <span class="s">PersistentVolumeClaim</span>
+<span class="na">metadata</span><span class="pi">:</span>
+  <span class="na">name</span><span class="pi">:</span> <span class="s">orbit-data-replicated</span>
+<span class="na">spec</span><span class="pi">:</span>
+  <span class="na">accessModes</span><span class="pi">:</span>
+    <span class="pi">-</span> <span class="s">ReadWriteOnce</span>
+  <span class="na">storageClassName</span><span class="pi">:</span> <span class="s">fast-replicated</span>  <span class="c1"># Replicated NVMe</span>
+  <span class="na">resources</span><span class="pi">:</span>
+    <span class="na">requests</span><span class="pi">:</span>
+      <span class="na">storage</span><span class="pi">:</span> <span class="s">10Ti</span>
+
+<span class="nn">---</span>
+
+<span class="c1"># Backup storage (slower, cheaper)</span>
+<span class="na">apiVersion</span><span class="pi">:</span> <span class="s">v1</span>
+<span class="na">kind</span><span class="pi">:</span> <span class="s">PersistentVolumeClaim</span>
+<span class="na">metadata</span><span class="pi">:</span>
+  <span class="na">name</span><span class="pi">:</span> <span class="s">orbit-backup</span>
+<span class="na">spec</span><span class="pi">:</span>
+  <span class="na">accessModes</span><span class="pi">:</span>
+    <span class="pi">-</span> <span class="s">ReadWriteMany</span>
+  <span class="na">storageClassName</span><span class="pi">:</span> <span class="s">backup-storage</span>
+  <span class="na">resources</span><span class="pi">:</span>
+    <span class="na">requests</span><span class="pi">:</span>
+      <span class="na">storage</span><span class="pi">:</span> <span class="s">50Ti</span>
+</code></pre></div></div>
+
+<h2 id="gpu-and-acceleration-configurations">GPU and Acceleration Configurations</h2>
+
+<h3 id="nvidia-gpu-node-pool">NVIDIA GPU Node Pool</h3>
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">apiVersion</span><span class="pi">:</span> <span class="s">v1</span>
+<span class="na">kind</span><span class="pi">:</span> <span class="s">ConfigMap</span>
+<span class="na">metadata</span><span class="pi">:</span>
+  <span class="na">name</span><span class="pi">:</span> <span class="s">gpu-node-config</span>
+<span class="na">data</span><span class="pi">:</span>
+  <span class="c1"># GPU node configuration</span>
+  <span class="na">gpu-driver-version</span><span class="pi">:</span> <span class="s2">"</span><span class="s">535.129.03"</span>
+  <span class="na">cuda-version</span><span class="pi">:</span> <span class="s2">"</span><span class="s">12.2"</span>
+  <span class="na">nvidia-docker-runtime</span><span class="pi">:</span> <span class="s2">"</span><span class="s">true"</span>
+  
+<span class="nn">---</span>
+
+<span class="c1"># GPU-optimized storage class</span>
+<span class="na">apiVersion</span><span class="pi">:</span> <span class="s">storage.k8s.io/v1</span>
+<span class="na">kind</span><span class="pi">:</span> <span class="s">StorageClass</span>
+<span class="na">metadata</span><span class="pi">:</span>
+  <span class="na">name</span><span class="pi">:</span> <span class="s">gpu-optimized-nvme</span>
+<span class="na">provisioner</span><span class="pi">:</span> <span class="s">kubernetes.io/aws-ebs</span>  <span class="c1"># or your cloud provider</span>
+<span class="na">parameters</span><span class="pi">:</span>
+  <span class="na">type</span><span class="pi">:</span> <span class="s">io2</span>  <span class="c1"># High IOPS for GPU workloads</span>
+  <span class="na">iopsPerGB</span><span class="pi">:</span> <span class="s2">"</span><span class="s">50"</span>
+  <span class="na">fsType</span><span class="pi">:</span> <span class="s">ext4</span>
+<span class="na">allowVolumeExpansion</span><span class="pi">:</span> <span class="kc">true</span>
+<span class="na">volumeBindingMode</span><span class="pi">:</span> <span class="s">WaitForFirstConsumer</span>
+</code></pre></div></div>
+
+<h3 id="amd-gpu-support">AMD GPU Support</h3>
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c1"># AMD ROCm configuration</span>
+<span class="na">apiVersion</span><span class="pi">:</span> <span class="s">v1</span>
+<span class="na">kind</span><span class="pi">:</span> <span class="s">ConfigMap</span>
+<span class="na">metadata</span><span class="pi">:</span>
+  <span class="na">name</span><span class="pi">:</span> <span class="s">rocm-config</span>
+<span class="na">data</span><span class="pi">:</span>
+  <span class="na">rocm-version</span><span class="pi">:</span> <span class="s2">"</span><span class="s">5.7.0"</span>
+  <span class="na">hip-version</span><span class="pi">:</span> <span class="s2">"</span><span class="s">5.7.0"</span>
+  <span class="na">rocblas-version</span><span class="pi">:</span> <span class="s2">"</span><span class="s">2.45.0"</span>
+  
+<span class="nn">---</span>
+
+<span class="c1"># ROCm device plugin daemonset</span>
+<span class="na">apiVersion</span><span class="pi">:</span> <span class="s">apps/v1</span>
+<span class="na">kind</span><span class="pi">:</span> <span class="s">DaemonSet</span>
+<span class="na">metadata</span><span class="pi">:</span>
+  <span class="na">name</span><span class="pi">:</span> <span class="s">amd-gpu-device-plugin</span>
+<span class="na">spec</span><span class="pi">:</span>
+  <span class="na">selector</span><span class="pi">:</span>
+    <span class="na">matchLabels</span><span class="pi">:</span>
+      <span class="na">name</span><span class="pi">:</span> <span class="s">amd-gpu-device-plugin</span>
+  <span class="na">template</span><span class="pi">:</span>
+    <span class="na">metadata</span><span class="pi">:</span>
+      <span class="na">labels</span><span class="pi">:</span>
+        <span class="na">name</span><span class="pi">:</span> <span class="s">amd-gpu-device-plugin</span>
+    <span class="na">spec</span><span class="pi">:</span>
+      <span class="na">nodeSelector</span><span class="pi">:</span>
+        <span class="na">accelerator</span><span class="pi">:</span> <span class="s">amd-gpu</span>
+      <span class="na">containers</span><span class="pi">:</span>
+      <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">amd-gpu-device-plugin</span>
+        <span class="na">image</span><span class="pi">:</span> <span class="s">rocm/k8s-device-plugin:latest</span>
+        <span class="na">securityContext</span><span class="pi">:</span>
+          <span class="na">privileged</span><span class="pi">:</span> <span class="kc">true</span>
+</code></pre></div></div>
+
+<h2 id="memory-mapped-file-storage">Memory-Mapped File Storage</h2>
+
+<h3 id="fast-storage-configuration">Fast Storage Configuration</h3>
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c1"># Storage class for memory-mapped files</span>
+<span class="na">apiVersion</span><span class="pi">:</span> <span class="s">storage.k8s.io/v1</span>
+<span class="na">kind</span><span class="pi">:</span> <span class="s">StorageClass</span>
+<span class="na">metadata</span><span class="pi">:</span>
+  <span class="na">name</span><span class="pi">:</span> <span class="s">mmap-optimized</span>
+<span class="na">provisioner</span><span class="pi">:</span> <span class="s">kubernetes.io/aws-ebs</span>
+<span class="na">parameters</span><span class="pi">:</span>
+  <span class="na">type</span><span class="pi">:</span> <span class="s">io2</span>
+  <span class="na">iopsPerGB</span><span class="pi">:</span> <span class="s2">"</span><span class="s">100"</span>  <span class="c1"># Very high IOPS</span>
+  <span class="na">encrypted</span><span class="pi">:</span> <span class="s2">"</span><span class="s">true"</span>
+  <span class="na">fsType</span><span class="pi">:</span> <span class="s">ext4</span>
+<span class="na">mountOptions</span><span class="pi">:</span>
+  <span class="pi">-</span> <span class="s">noatime</span>  <span class="c1"># Disable access time updates</span>
+  <span class="pi">-</span> <span class="s">data=writeback</span>  <span class="c1"># Optimize for throughput</span>
+<span class="na">allowVolumeExpansion</span><span class="pi">:</span> <span class="kc">true</span>
+
+<span class="nn">---</span>
+
+<span class="c1"># Pod configuration with memory-mapped storage</span>
+<span class="na">apiVersion</span><span class="pi">:</span> <span class="s">apps/v1</span>
+<span class="na">kind</span><span class="pi">:</span> <span class="s">StatefulSet</span>
+<span class="na">metadata</span><span class="pi">:</span>
+  <span class="na">name</span><span class="pi">:</span> <span class="s">orbit-server-mmap</span>
+<span class="na">spec</span><span class="pi">:</span>
+  <span class="na">template</span><span class="pi">:</span>
+    <span class="na">spec</span><span class="pi">:</span>
+      <span class="na">containers</span><span class="pi">:</span>
+      <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">orbit-server</span>
+        <span class="na">env</span><span class="pi">:</span>
+        <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">ORBIT_MMAP_PATH</span>
+          <span class="na">value</span><span class="pi">:</span> <span class="s2">"</span><span class="s">/mmap-cache"</span>
+        <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">ORBIT_MMAP_SIZE</span>
+          <span class="na">value</span><span class="pi">:</span> <span class="s2">"</span><span class="s">64GB"</span>
+        <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">ORBIT_MMAP_HUGEPAGES</span>
+          <span class="na">value</span><span class="pi">:</span> <span class="s2">"</span><span class="s">true"</span>
+        <span class="na">volumeMounts</span><span class="pi">:</span>
+        <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">mmap-cache</span>
+          <span class="na">mountPath</span><span class="pi">:</span> <span class="s">/mmap-cache</span>
+        <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">hugepages-2mi</span>
+          <span class="na">mountPath</span><span class="pi">:</span> <span class="s">/hugepages-2Mi</span>
+      <span class="na">volumes</span><span class="pi">:</span>
+      <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">hugepages-2mi</span>
+        <span class="na">emptyDir</span><span class="pi">:</span>
+          <span class="na">medium</span><span class="pi">:</span> <span class="s">HugePages-2Mi</span>
+  <span class="na">volumeClaimTemplates</span><span class="pi">:</span>
+  <span class="pi">-</span> <span class="na">metadata</span><span class="pi">:</span>
+      <span class="na">name</span><span class="pi">:</span> <span class="s">mmap-cache</span>
+    <span class="na">spec</span><span class="pi">:</span>
+      <span class="na">accessModes</span><span class="pi">:</span> <span class="pi">[</span><span class="s2">"</span><span class="s">ReadWriteOnce"</span><span class="pi">]</span>
+      <span class="na">storageClassName</span><span class="pi">:</span> <span class="s">mmap-optimized</span>
+      <span class="na">resources</span><span class="pi">:</span>
+        <span class="na">requests</span><span class="pi">:</span>
+          <span class="na">storage</span><span class="pi">:</span> <span class="s">100Gi</span>
+</code></pre></div></div>
+
+<h3 id="ram-disk-configuration">RAM Disk Configuration</h3>
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c1"># RAM disk for ultra-fast memory mapping</span>
+<span class="na">apiVersion</span><span class="pi">:</span> <span class="s">v1</span>
+<span class="na">kind</span><span class="pi">:</span> <span class="s">Pod</span>
+<span class="na">metadata</span><span class="pi">:</span>
+  <span class="na">name</span><span class="pi">:</span> <span class="s">orbit-server-ramdisk</span>
+<span class="na">spec</span><span class="pi">:</span>
+  <span class="na">containers</span><span class="pi">:</span>
+  <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">orbit-server</span>
+    <span class="na">resources</span><span class="pi">:</span>
+      <span class="na">requests</span><span class="pi">:</span>
+        <span class="na">memory</span><span class="pi">:</span> <span class="s2">"</span><span class="s">64Gi"</span>  <span class="c1"># Ensure enough RAM</span>
+      <span class="na">limits</span><span class="pi">:</span>
+        <span class="na">memory</span><span class="pi">:</span> <span class="s2">"</span><span class="s">128Gi"</span>
+        <span class="na">hugepages-2Mi</span><span class="pi">:</span> <span class="s2">"</span><span class="s">32Gi"</span>  <span class="c1"># Huge pages for performance</span>
+    <span class="na">volumeMounts</span><span class="pi">:</span>
+    <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">ramdisk</span>
+      <span class="na">mountPath</span><span class="pi">:</span> <span class="s">/ramdisk</span>
+    <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">hugepages</span>
+      <span class="na">mountPath</span><span class="pi">:</span> <span class="s">/hugepages</span>
+    <span class="na">env</span><span class="pi">:</span>
+    <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">ORBIT_RAMDISK_PATH</span>
+      <span class="na">value</span><span class="pi">:</span> <span class="s2">"</span><span class="s">/ramdisk"</span>
+    <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">ORBIT_USE_HUGEPAGES</span>
+      <span class="na">value</span><span class="pi">:</span> <span class="s2">"</span><span class="s">true"</span>
+  <span class="na">volumes</span><span class="pi">:</span>
+  <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">ramdisk</span>
+    <span class="na">emptyDir</span><span class="pi">:</span>
+      <span class="na">medium</span><span class="pi">:</span> <span class="s">Memory</span>
+      <span class="na">sizeLimit</span><span class="pi">:</span> <span class="s2">"</span><span class="s">32Gi"</span>
+  <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">hugepages</span>
+    <span class="na">emptyDir</span><span class="pi">:</span>
+      <span class="na">medium</span><span class="pi">:</span> <span class="s">HugePages-2Mi</span>
+</code></pre></div></div>
+
+<h2 id="monitoring-and-autoscaling">Monitoring and Autoscaling</h2>
+
+<h3 id="horizontal-pod-autoscaler-hpa">Horizontal Pod Autoscaler (HPA)</h3>
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">apiVersion</span><span class="pi">:</span> <span class="s">autoscaling/v2</span>
+<span class="na">kind</span><span class="pi">:</span> <span class="s">HorizontalPodAutoscaler</span>
+<span class="na">metadata</span><span class="pi">:</span>
+  <span class="na">name</span><span class="pi">:</span> <span class="s">orbit-server-hpa</span>
+<span class="na">spec</span><span class="pi">:</span>
+  <span class="na">scaleTargetRef</span><span class="pi">:</span>
+    <span class="na">apiVersion</span><span class="pi">:</span> <span class="s">apps/v1</span>
+    <span class="na">kind</span><span class="pi">:</span> <span class="s">StatefulSet</span>
+    <span class="na">name</span><span class="pi">:</span> <span class="s">orbit-server</span>
+  <span class="na">minReplicas</span><span class="pi">:</span> <span class="m">3</span>
+  <span class="na">maxReplicas</span><span class="pi">:</span> <span class="m">20</span>
+  <span class="na">metrics</span><span class="pi">:</span>
+  <span class="pi">-</span> <span class="na">type</span><span class="pi">:</span> <span class="s">Resource</span>
+    <span class="na">resource</span><span class="pi">:</span>
+      <span class="na">name</span><span class="pi">:</span> <span class="s">cpu</span>
+      <span class="na">target</span><span class="pi">:</span>
+        <span class="na">type</span><span class="pi">:</span> <span class="s">Utilization</span>
+        <span class="na">averageUtilization</span><span class="pi">:</span> <span class="m">70</span>
+  <span class="pi">-</span> <span class="na">type</span><span class="pi">:</span> <span class="s">Resource</span>
+    <span class="na">resource</span><span class="pi">:</span>
+      <span class="na">name</span><span class="pi">:</span> <span class="s">memory</span>
+      <span class="na">target</span><span class="pi">:</span>
+        <span class="na">type</span><span class="pi">:</span> <span class="s">Utilization</span>
+        <span class="na">averageUtilization</span><span class="pi">:</span> <span class="m">80</span>
+  <span class="c1"># Custom metrics for GPU utilization</span>
+  <span class="pi">-</span> <span class="na">type</span><span class="pi">:</span> <span class="s">Pods</span>
+    <span class="na">pods</span><span class="pi">:</span>
+      <span class="na">metric</span><span class="pi">:</span>
+        <span class="na">name</span><span class="pi">:</span> <span class="s">gpu_utilization</span>
+      <span class="na">target</span><span class="pi">:</span>
+        <span class="na">type</span><span class="pi">:</span> <span class="s">AverageValue</span>
+        <span class="na">averageValue</span><span class="pi">:</span> <span class="s2">"</span><span class="s">70"</span>
+
+<span class="nn">---</span>
+
+<span class="c1"># Vertical Pod Autoscaler (VPA)</span>
+<span class="na">apiVersion</span><span class="pi">:</span> <span class="s">autoscaling.k8s.io/v1</span>
+<span class="na">kind</span><span class="pi">:</span> <span class="s">VerticalPodAutoscaler</span>
+<span class="na">metadata</span><span class="pi">:</span>
+  <span class="na">name</span><span class="pi">:</span> <span class="s">orbit-server-vpa</span>
+<span class="na">spec</span><span class="pi">:</span>
+  <span class="na">targetRef</span><span class="pi">:</span>
+    <span class="na">apiVersion</span><span class="pi">:</span> <span class="s">apps/v1</span>
+    <span class="na">kind</span><span class="pi">:</span> <span class="s">StatefulSet</span>
+    <span class="na">name</span><span class="pi">:</span> <span class="s">orbit-server</span>
+  <span class="na">updatePolicy</span><span class="pi">:</span>
+    <span class="na">updateMode</span><span class="pi">:</span> <span class="s2">"</span><span class="s">Auto"</span>  <span class="c1"># Automatically apply recommendations</span>
+  <span class="na">resourcePolicy</span><span class="pi">:</span>
+    <span class="na">containerPolicies</span><span class="pi">:</span>
+    <span class="pi">-</span> <span class="na">containerName</span><span class="pi">:</span> <span class="s">orbit-server</span>
+      <span class="na">maxAllowed</span><span class="pi">:</span>
+        <span class="na">cpu</span><span class="pi">:</span> <span class="s2">"</span><span class="s">64"</span>
+        <span class="na">memory</span><span class="pi">:</span> <span class="s2">"</span><span class="s">512Gi"</span>
+      <span class="na">minAllowed</span><span class="pi">:</span>
+        <span class="na">cpu</span><span class="pi">:</span> <span class="s2">"</span><span class="s">500m"</span>
+        <span class="na">memory</span><span class="pi">:</span> <span class="s2">"</span><span class="s">1Gi"</span>
+      <span class="na">controlledResources</span><span class="pi">:</span> <span class="pi">[</span><span class="s2">"</span><span class="s">cpu"</span><span class="pi">,</span> <span class="s2">"</span><span class="s">memory"</span><span class="pi">]</span>
+</code></pre></div></div>
+
+<h3 id="gpu-node-autoscaling">GPU Node Autoscaling</h3>
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c1"># Cluster Autoscaler configuration for GPU nodes</span>
+<span class="na">apiVersion</span><span class="pi">:</span> <span class="s">v1</span>
+<span class="na">kind</span><span class="pi">:</span> <span class="s">ConfigMap</span>
+<span class="na">metadata</span><span class="pi">:</span>
+  <span class="na">name</span><span class="pi">:</span> <span class="s">cluster-autoscaler-status</span>
+  <span class="na">namespace</span><span class="pi">:</span> <span class="s">kube-system</span>
+<span class="na">data</span><span class="pi">:</span>
+  <span class="na">gpu-node-group.min</span><span class="pi">:</span> <span class="s2">"</span><span class="s">0"</span>
+  <span class="na">gpu-node-group.max</span><span class="pi">:</span> <span class="s2">"</span><span class="s">10"</span>
+  <span class="na">gpu-node-group.scale-down-delay</span><span class="pi">:</span> <span class="s2">"</span><span class="s">10m"</span>
+  <span class="na">gpu-node-group.scale-down-utilization</span><span class="pi">:</span> <span class="s2">"</span><span class="s">0.5"</span>
+
+<span class="nn">---</span>
+
+<span class="c1"># GPU-specific node affinity and taints</span>
+<span class="na">apiVersion</span><span class="pi">:</span> <span class="s">v1</span>
+<span class="na">kind</span><span class="pi">:</span> <span class="s">Node</span>
+<span class="na">metadata</span><span class="pi">:</span>
+  <span class="na">name</span><span class="pi">:</span> <span class="s">gpu-node-template</span>
+  <span class="na">labels</span><span class="pi">:</span>
+    <span class="na">accelerator</span><span class="pi">:</span> <span class="s">nvidia-tesla-v100</span>
+    <span class="na">instance-type</span><span class="pi">:</span> <span class="s">p3.2xlarge</span>
+    <span class="na">orbit.rs/gpu-enabled</span><span class="pi">:</span> <span class="s2">"</span><span class="s">true"</span>
+<span class="na">spec</span><span class="pi">:</span>
+  <span class="na">taints</span><span class="pi">:</span>
+  <span class="pi">-</span> <span class="na">key</span><span class="pi">:</span> <span class="s">nvidia.com/gpu</span>
+    <span class="na">value</span><span class="pi">:</span> <span class="s2">"</span><span class="s">true"</span>
+    <span class="na">effect</span><span class="pi">:</span> <span class="s">NoSchedule</span>
+  <span class="pi">-</span> <span class="na">key</span><span class="pi">:</span> <span class="s">orbit.rs/gpu-workload</span>
+    <span class="na">value</span><span class="pi">:</span> <span class="s2">"</span><span class="s">true"</span>
+    <span class="na">effect</span><span class="pi">:</span> <span class="s">NoSchedule</span>
+</code></pre></div></div>
+
+<h2 id="example-deployments">Example Deployments</h2>
+
+<h3 id="small-development-environment">Small Development Environment</h3>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Deploy development environment</span>
+kubectl apply <span class="nt">-f</span> - <span class="o">&lt;&lt;</span><span class="no">EOF</span><span class="sh">
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: orbit-dev
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: orbit-server
+  namespace: orbit-dev
+spec:
+  replicas: 1
+  serviceName: orbit-server
+  selector:
+    matchLabels:
+      app: orbit-server
+  template:
+    metadata:
+      labels:
+        app: orbit-server
+    spec:
+      containers:
+      - name: orbit-server
+        image: ghcr.io/turingworks/orbit-rs/orbit-server:latest-release
+        ports:
+        - containerPort: 8080
+        resources:
+          requests:
+            cpu: "500m"
+            memory: "1Gi"
+          limits:
+            cpu: "2"
+            memory: "4Gi"
+        env:
+        - name: ORBIT_CACHE_SIZE
+          value: "512MB"
+        - name: RUST_LOG
+          value: "info"
+        volumeMounts:
+        - name: orbit-data
+          mountPath: /data
+  volumeClaimTemplates:
+  - metadata:
+      name: orbit-data
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 50Gi
+</span><span class="no">EOF
+</span></code></pre></div></div>
+
+<h3 id="production-environment-with-gpu">Production Environment with GPU</h3>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Deploy production environment with GPU acceleration</span>
+kubectl apply <span class="nt">-f</span> - <span class="o">&lt;&lt;</span><span class="no">EOF</span><span class="sh">
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: orbit-prod
+  labels:
+    orbit.rs/environment: production
+
+---
+
+# Orbit Server with high availability
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: orbit-server
+  namespace: orbit-prod
+spec:
+  replicas: 3
+  serviceName: orbit-server
+  selector:
+    matchLabels:
+      app: orbit-server
+  template:
+    metadata:
+      labels:
+        app: orbit-server
+    spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchLabels:
+                app: orbit-server
+            topologyKey: kubernetes.io/hostname
+      containers:
+      - name: orbit-server
+        image: ghcr.io/turingworks/orbit-rs/orbit-server:latest-release
+        ports:
+        - containerPort: 8080
+        resources:
+          requests:
+            cpu: "8"
+            memory: "32Gi"
+          limits:
+            cpu: "32"
+            memory: "128Gi"
+        env:
+        - name: ORBIT_CACHE_SIZE
+          value: "16GB"
+        - name: ORBIT_WAL_BUFFER_SIZE
+          value: "1GB"
+        - name: RUST_LOG
+          value: "info"
+        volumeMounts:
+        - name: orbit-data
+          mountPath: /data
+        - name: orbit-mmap
+          mountPath: /mmap-cache
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+  volumeClaimTemplates:
+  - metadata:
+      name: orbit-data
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: fast-nvme
+      resources:
+        requests:
+          storage: 1Ti
+  - metadata:
+      name: orbit-mmap
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: mmap-optimized
+      resources:
+        requests:
+          storage: 100Gi
+
+---
+
+# Orbit Compute with GPU
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orbit-compute
+  namespace: orbit-prod
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: orbit-compute
+  template:
+    metadata:
+      labels:
+        app: orbit-compute
+    spec:
+      nodeSelector:
+        accelerator: nvidia-tesla-v100
+      tolerations:
+      - key: nvidia.com/gpu
+        operator: Exists
+        effect: NoSchedule
+      containers:
+      - name: orbit-compute
+        image: ghcr.io/turingworks/orbit-rs/orbit-compute:latest-release-gpu
+        resources:
+          requests:
+            cpu: "8"
+            memory: "32Gi"
+          limits:
+            cpu: "32"
+            memory: "128Gi"
+            nvidia.com/gpu: 2
+        env:
+        - name: ORBIT_GPU_MEMORY_FRACTION
+          value: "0.9"
+        - name: ORBIT_MULTI_GPU_STRATEGY
+          value: "data_parallel"
+        - name: RUST_LOG
+          value: "info"
+</span><span class="no">EOF
+</span></code></pre></div></div>
+
+<h3 id="enterprise-hyperscale-deployment">Enterprise Hyperscale Deployment</h3>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Deploy enterprise hyperscale environment</span>
+kubectl apply <span class="nt">-f</span> - <span class="o">&lt;&lt;</span><span class="no">EOF</span><span class="sh">
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: orbit-enterprise
+  labels:
+    orbit.rs/environment: enterprise
+    orbit.rs/scale: hyperscale
+
+---
+
+# High-availability Orbit Server cluster
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: orbit-server
+  namespace: orbit-enterprise
+spec:
+  replicas: 9  # 3 regions × 3 replicas
+  serviceName: orbit-server
+  selector:
+    matchLabels:
+      app: orbit-server
+  template:
+    metadata:
+      labels:
+        app: orbit-server
+    spec:
+      topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: topology.kubernetes.io/zone
+        whenUnsatisfiable: DoNotSchedule
+        labelSelector:
+          matchLabels:
+            app: orbit-server
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: DoNotSchedule
+        labelSelector:
+          matchLabels:
+            app: orbit-server
+      nodeSelector:
+        orbit.rs/node-class: compute-optimized
+      containers:
+      - name: orbit-server
+        image: ghcr.io/turingworks/orbit-rs/orbit-server:latest-release
+        ports:
+        - containerPort: 8080
+        resources:
+          requests:
+            cpu: "32"
+            memory: "128Gi"
+          limits:
+            cpu: "64"
+            memory: "512Gi"
+            hugepages-2Mi: "64Gi"
+        env:
+        - name: ORBIT_CACHE_SIZE
+          value: "64GB"
+        - name: ORBIT_WAL_BUFFER_SIZE
+          value: "4GB"
+        - name: ORBIT_QUERY_CACHE_SIZE
+          value: "16GB"
+        - name: ORBIT_MAX_CONNECTIONS
+          value: "20000"
+        - name: ORBIT_NUMA_AWARE
+          value: "true"
+        - name: ORBIT_USE_HUGEPAGES
+          value: "true"
+        - name: RUST_LOG
+          value: "info"
+        volumeMounts:
+        - name: orbit-data
+          mountPath: /data
+        - name: orbit-mmap
+          mountPath: /mmap-cache
+        - name: hugepages
+          mountPath: /hugepages
+      volumes:
+      - name: hugepages
+        emptyDir:
+          medium: HugePages-2Mi
+  volumeClaimTemplates:
+  - metadata:
+      name: orbit-data
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: enterprise-nvme
+      resources:
+        requests:
+          storage: 10Ti
+  - metadata:
+      name: orbit-mmap
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: mmap-optimized
+      resources:
+        requests:
+          storage: 1Ti
+
+---
+
+# GPU compute cluster
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orbit-compute-gpu
+  namespace: orbit-enterprise
+spec:
+  replicas: 6
+  selector:
+    matchLabels:
+      app: orbit-compute-gpu
+  template:
+    metadata:
+      labels:
+        app: orbit-compute-gpu
+    spec:
+      nodeSelector:
+        accelerator: nvidia-a100-40gb
+      tolerations:
+      - key: nvidia.com/gpu
+        operator: Exists
+        effect: NoSchedule
+      containers:
+      - name: orbit-compute
+        image: ghcr.io/turingworks/orbit-rs/orbit-compute:latest-release-gpu
+        resources:
+          requests:
+            cpu: "32"
+            memory: "128Gi"
+          limits:
+            cpu: "64"
+            memory: "256Gi"
+            nvidia.com/gpu: 4
+        env:
+        - name: ORBIT_GPU_MEMORY_FRACTION
+          value: "0.95"
+        - name: ORBIT_MULTI_GPU_STRATEGY
+          value: "model_parallel"
+        - name: ORBIT_GPU_PEER_ACCESS
+          value: "true"
+        - name: NCCL_DEBUG
+          value: "INFO"
+</span><span class="no">EOF
+</span></code></pre></div></div>
+
+<h2 id="performance-tuning-tips">Performance Tuning Tips</h2>
+
+<ol>
+  <li><strong>CPU Affinity</strong>: Use CPU pinning for consistent performance</li>
+  <li><strong>NUMA Awareness</strong>: Configure NUMA topology for multi-socket systems</li>
+  <li><strong>Huge Pages</strong>: Enable huge pages for large memory workloads</li>
+  <li><strong>Network Optimization</strong>: Use SR-IOV for high-performance networking</li>
+  <li><strong>Storage Optimization</strong>: Use NVMe with appropriate filesystems (ext4, xfs)</li>
+  <li><strong>GPU Memory</strong>: Configure GPU memory fractions based on workload</li>
+  <li><strong>Monitoring</strong>: Implement comprehensive monitoring for all resources</li>
+</ol>
+
+<p>This guide provides a foundation for deploying Orbit-RS at any scale. Adjust the configurations based on your specific workload characteristics and performance requirements.</p>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/orbit-rs/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Orbit-RS Documentation</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">TuringWorks</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

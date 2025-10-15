@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>GraphRAG Architecture Design for Orbit-RS | Orbit-RS Documentation</title>
+<meta name="generator" content="Jekyll v4.4.1" />
+<meta property="og:title" content="GraphRAG Architecture Design for Orbit-RS" />
+<meta name="author" content="TuringWorks" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<meta property="og:description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<link rel="canonical" href="https://turingworks.github.io/orbit-rs/GraphRAG_ARCHITECTURE.html" />
+<meta property="og:url" content="https://turingworks.github.io/orbit-rs/GraphRAG_ARCHITECTURE.html" />
+<meta property="og:site_name" content="Orbit-RS Documentation" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="GraphRAG Architecture Design for Orbit-RS" />
+<meta name="twitter:site" content="@TuringWorksAI" />
+<meta name="twitter:creator" content="@TuringWorks" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","author":{"@type":"Person","name":"TuringWorks"},"description":"The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform","headline":"GraphRAG Architecture Design for Orbit-RS","url":"https://turingworks.github.io/orbit-rs/GraphRAG_ARCHITECTURE.html"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/orbit-rs/assets/main.css">
+  <link rel="stylesheet" href="/orbit-rs/assets/css/custom.css"><link type="application/atom+xml" rel="alternate" href="https://turingworks.github.io/orbit-rs/feed.xml" title="Orbit-RS Documentation" /></head><body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/orbit-rs/">Orbit-RS Documentation</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/orbit-rs/">Orbit-RS Documentation</a><a class="page-link" href="/orbit-rs/project_overview.html">Orbit-RS: Comprehensive Project Overview</a><a class="page-link" href="/orbit-rs/quick_start.html">Quick Start Guide - Multi-Protocol Database Server</a><a class="page-link" href="/orbit-rs/roadmap/">Development Roadmap</a><a class="page-link" href="/orbit-rs/features/">Orbit-RS Feature Index</a><a class="page-link" href="/orbit-rs/compute-acceleration/">Hardware Acceleration Guide</a><a class="page-link" href="/orbit-rs/contributing.html">Contributing Guide</a><a class="page-link" href="/orbit-rs/overview.html">Architecture Overview</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <h1 id="graphrag-architecture-design-for-orbit-rs">GraphRAG Architecture Design for Orbit-RS</h1>
+
+<h2 id="-executive-summary">🎯 Executive Summary</h2>
+
+<p>This document outlines the architecture for implementing GraphRAG (Graph-enhanced Retrieval-Augmented Generation) capabilities in Orbit-RS, leveraging the existing distributed actor system, graph database (GRAPH.<em>), vector store (VECTOR.</em>), and search engine (FT.*) infrastructure.</p>
+
+<h2 id="️-current-architecture-analysis">🏗️ Current Architecture Analysis</h2>
+
+<h3 id="existing-components">Existing Components</h3>
+
+<p>From our analysis, Orbit-RS provides an excellent foundation for GraphRAG:</p>
+
+<h4 id="1-graph-database-layer">1. <strong>Graph Database Layer</strong></h4>
+<ul>
+  <li><strong>GraphActor</strong>: Manages individual named graphs with Cypher query support</li>
+  <li><strong>CypherParser</strong>: Parses and executes Cypher queries for graph operations</li>
+  <li><strong>GraphEngine</strong>: Query execution engine with MATCH, CREATE, RETURN support</li>
+  <li><strong>InMemoryGraphStorage</strong>: Persistent graph storage with nodes and relationships</li>
+  <li><strong>Statistics &amp; Profiling</strong>: Query optimization and performance monitoring</li>
+</ul>
+
+<h4 id="2-vector-store-layer">2. <strong>Vector Store Layer</strong></h4>
+<ul>
+  <li><strong>VectorActor</strong>: High-dimensional vector storage with metadata support</li>
+  <li><strong>Multiple Similarity Metrics</strong>: Cosine, Euclidean, Dot Product, Manhattan</li>
+  <li><strong>Advanced Search</strong>: KNN search, threshold filtering, metadata filtering</li>
+  <li><strong>Vector Indexing</strong>: Configurable indices for fast similarity search</li>
+</ul>
+
+<h4 id="3-full-text-search-layer">3. <strong>Full-Text Search Layer</strong></h4>
+<ul>
+  <li><strong>FT.* Commands</strong>: RedisSearch-compatible full-text indexing and search</li>
+  <li><strong>Text Processing</strong>: Indexing, retrieval, and ranking capabilities</li>
+  <li><strong>Metadata Integration</strong>: Key-value metadata filtering</li>
+</ul>
+
+<h4 id="4-distributed-actor-system">4. <strong>Distributed Actor System</strong></h4>
+<ul>
+  <li><strong>Actor Communication</strong>: Message passing with async/await support</li>
+  <li><strong>Actor Discovery</strong>: Service location and routing across nodes</li>
+  <li><strong>Performance Monitoring</strong>: Metrics, heartbeats, and health tracking</li>
+  <li><strong>Scalability</strong>: Distributed processing and load balancing</li>
+</ul>
+
+<h2 id="-graphrag-architecture-design">🚀 GraphRAG Architecture Design</h2>
+
+<h3 id="core-principles">Core Principles</h3>
+
+<ol>
+  <li><strong>Leverage Existing Infrastructure</strong>: Build upon existing actors and protocols</li>
+  <li><strong>Maintain Redis Compatibility</strong>: Extend RESP protocol with GraphRAG.* commands</li>
+  <li><strong>Distributed by Design</strong>: Support scaling across multiple nodes</li>
+  <li><strong>Multi-Modal Integration</strong>: Combine graph, vector, and text search seamlessly</li>
+  <li><strong>LLM-Ready</strong>: Design for integration with various LLM providers</li>
+</ol>
+
+<h3 id="graphrag-actor-ecosystem">GraphRAG Actor Ecosystem</h3>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>┌─────────────────────────────────────────────────────────────────┐
+│                     GraphRAG Orchestrator                      │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐ │
+│  │ Knowledge Graph │  │   RAG Pipeline  │  │ Query Processor │ │
+│  │   Constructor   │  │     Manager     │  │    &amp; Router     │ │
+│  └─────────────────┘  └─────────────────┘  └─────────────────┘ │
+└─────────────────────────────────────────────────────────────────┘
+                                │
+                ┌───────────────┼───────────────┐
+                │               │               │
+┌─────────────────────┐ ┌─────────────────┐ ┌─────────────────┐
+│   GraphActor        │ │  VectorActor    │ │  SearchActor    │
+│   (Enhanced)        │ │   (Enhanced)    │ │   (Enhanced)    │
+│                     │ │                 │ │                 │
+│ • Cypher Queries    │ │ • Embeddings    │ │ • Text Search   │
+│ • Entity Relations  │ │ • Similarity    │ │ • Indexing      │
+│ • Multi-hop Paths   │ │ • KNN Search    │ │ • Ranking       │
+│ • Graph Algorithms  │ │ • Metadata      │ │ • Filtering     │
+│ • Vector Properties │ │ • Clustering    │ │ • Analysis      │
+└─────────────────────┘ └─────────────────┘ └─────────────────┘
+</code></pre></div></div>
+
+<h3 id="new-components">New Components</h3>
+
+<h4 id="1-graphragactor">1. GraphRAGActor</h4>
+<p><strong>Purpose</strong>: Orchestrates knowledge graph construction, entity extraction, and RAG operations.</p>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="nd">#[derive(Debug,</span> <span class="nd">Clone,</span> <span class="nd">Serialize,</span> <span class="nd">Deserialize)]</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">GraphRAGActor</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="n">kg_name</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">config</span><span class="p">:</span> <span class="n">GraphRAGConfig</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">stats</span><span class="p">:</span> <span class="n">GraphRAGStats</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">entity_extractors</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">EntityExtractor</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">embedding_models</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">EmbeddingModel</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">llm_providers</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">LLMProvider</span><span class="o">&gt;</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="nd">#[derive(Debug,</span> <span class="nd">Clone,</span> <span class="nd">Serialize,</span> <span class="nd">Deserialize)]</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">GraphRAGConfig</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="n">max_entities_per_document</span><span class="p">:</span> <span class="nb">usize</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">max_relationships_per_document</span><span class="p">:</span> <span class="nb">usize</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">embedding_dimension</span><span class="p">:</span> <span class="nb">usize</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">similarity_threshold</span><span class="p">:</span> <span class="nb">f32</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">max_hops</span><span class="p">:</span> <span class="nb">u32</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">rag_context_size</span><span class="p">:</span> <span class="nb">usize</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">enable_entity_deduplication</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">enable_relationship_inference</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p><strong>Key Methods</strong>:</p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">process_document()</code> - Extract entities/relationships and build knowledge graph</li>
+  <li><code class="language-plaintext highlighter-rouge">query_rag()</code> - Perform retrieval-augmented generation queries</li>
+  <li><code class="language-plaintext highlighter-rouge">traverse_graph()</code> - Multi-hop reasoning across relationships</li>
+  <li><code class="language-plaintext highlighter-rouge">semantic_search()</code> - Vector similarity search across graph entities</li>
+  <li><code class="language-plaintext highlighter-rouge">hybrid_search()</code> - Combine graph traversal, vector search, and text search</li>
+</ul>
+
+<h4 id="2-entityextractionactor">2. EntityExtractionActor</h4>
+<p><strong>Purpose</strong>: NLP pipeline for identifying entities and relationships from text.</p>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="nd">#[derive(Debug,</span> <span class="nd">Clone,</span> <span class="nd">Serialize,</span> <span class="nd">Deserialize)]</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">EntityExtractionActor</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="n">extractors</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">ExtractorConfig</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">confidence_threshold</span><span class="p">:</span> <span class="nb">f32</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">deduplication_strategy</span><span class="p">:</span> <span class="n">DeduplicationStrategy</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="nd">#[derive(Debug,</span> <span class="nd">Clone,</span> <span class="nd">Serialize,</span> <span class="nd">Deserialize)]</span>
+<span class="k">pub</span> <span class="k">enum</span> <span class="n">ExtractorConfig</span> <span class="p">{</span>
+    <span class="n">NamedEntityRecognition</span> <span class="p">{</span> <span class="n">model_path</span><span class="p">:</span> <span class="nb">String</span> <span class="p">},</span>
+    <span class="n">RelationshipExtraction</span> <span class="p">{</span> <span class="n">model_path</span><span class="p">:</span> <span class="nb">String</span> <span class="p">},</span>
+    <span class="n">CustomPattern</span> <span class="p">{</span> <span class="n">regex_patterns</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="nb">String</span><span class="o">&gt;</span> <span class="p">},</span>
+    <span class="n">LLMBased</span> <span class="p">{</span> <span class="n">provider</span><span class="p">:</span> <span class="n">LLMProvider</span><span class="p">,</span> <span class="n">prompt_template</span><span class="p">:</span> <span class="nb">String</span> <span class="p">},</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p><strong>Key Methods</strong>:</p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">extract_entities()</code> - Named entity recognition</li>
+  <li><code class="language-plaintext highlighter-rouge">extract_relationships()</code> - Relationship extraction</li>
+  <li><code class="language-plaintext highlighter-rouge">deduplicate_entities()</code> - Entity resolution and merging</li>
+  <li><code class="language-plaintext highlighter-rouge">enrich_entities()</code> - Add metadata and context</li>
+</ul>
+
+<h4 id="3-enhanced-graphnode-with-vector-embeddings">3. Enhanced GraphNode with Vector Embeddings</h4>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="nd">#[derive(Debug,</span> <span class="nd">Clone,</span> <span class="nd">Serialize,</span> <span class="nd">Deserialize)]</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">EnhancedGraphNode</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="n">id</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">labels</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="nb">String</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">properties</span><span class="p">:</span> <span class="n">HashMap</span><span class="o">&lt;</span><span class="nb">String</span><span class="p">,</span> <span class="nn">serde_json</span><span class="p">::</span><span class="n">Value</span><span class="o">&gt;</span><span class="p">,</span>
+    
+    <span class="c1">// GraphRAG Extensions</span>
+    <span class="k">pub</span> <span class="n">embeddings</span><span class="p">:</span> <span class="n">HashMap</span><span class="o">&lt;</span><span class="nb">String</span><span class="p">,</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="nb">f32</span><span class="o">&gt;&gt;</span><span class="p">,</span> <span class="c1">// Multiple embeddings per model</span>
+    <span class="k">pub</span> <span class="n">entity_type</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="n">EntityType</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">confidence_score</span><span class="p">:</span> <span class="nb">f32</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">source_documents</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="nb">String</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">last_updated</span><span class="p">:</span> <span class="nb">i64</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="nd">#[derive(Debug,</span> <span class="nd">Clone,</span> <span class="nd">Serialize,</span> <span class="nd">Deserialize)]</span>
+<span class="k">pub</span> <span class="k">enum</span> <span class="n">EntityType</span> <span class="p">{</span>
+    <span class="n">Person</span><span class="p">,</span>
+    <span class="n">Organization</span><span class="p">,</span>
+    <span class="n">Location</span><span class="p">,</span>
+    <span class="n">Event</span><span class="p">,</span>
+    <span class="n">Concept</span><span class="p">,</span>
+    <span class="n">Document</span><span class="p">,</span>
+    <span class="nf">Custom</span><span class="p">(</span><span class="nb">String</span><span class="p">),</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h4 id="4-multi-hop-reasoning-engine">4. Multi-Hop Reasoning Engine</h4>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="nd">#[derive(Debug,</span> <span class="nd">Clone)]</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">MultiHopReasoningEngine</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="n">max_hops</span><span class="p">:</span> <span class="nb">u32</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">path_scoring</span><span class="p">:</span> <span class="n">PathScoringStrategy</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">pruning_strategy</span><span class="p">:</span> <span class="n">PruningStrategy</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="k">impl</span> <span class="n">MultiHopReasoningEngine</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">find_paths</span><span class="p">(</span>
+        <span class="o">&amp;</span><span class="k">self</span><span class="p">,</span>
+        <span class="n">start_nodes</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="nb">String</span><span class="o">&gt;</span><span class="p">,</span>
+        <span class="n">end_nodes</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="nb">String</span><span class="o">&gt;</span><span class="p">,</span>
+        <span class="n">relationship_types</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="nb">String</span><span class="o">&gt;&gt;</span><span class="p">,</span>
+    <span class="p">)</span> <span class="k">-&gt;</span> <span class="n">ProtocolResult</span><span class="o">&lt;</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="n">ReasoningPath</span><span class="o">&gt;&gt;</span><span class="p">;</span>
+    
+    <span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">explain_connection</span><span class="p">(</span>
+        <span class="o">&amp;</span><span class="k">self</span><span class="p">,</span>
+        <span class="n">entity_a</span><span class="p">:</span> <span class="o">&amp;</span><span class="nb">str</span><span class="p">,</span>
+        <span class="n">entity_b</span><span class="p">:</span> <span class="o">&amp;</span><span class="nb">str</span><span class="p">,</span>
+    <span class="p">)</span> <span class="k">-&gt;</span> <span class="n">ProtocolResult</span><span class="o">&lt;</span><span class="n">ConnectionExplanation</span><span class="o">&gt;</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h2 id="-graphrag-command-interface-resp-protocol-extension">📊 GraphRAG Command Interface (RESP Protocol Extension)</h2>
+
+<h3 id="knowledge-graph-construction-commands">Knowledge Graph Construction Commands</h3>
+
+<pre><code class="language-redis">
+# Build knowledge graph from documents
+GRAPHRAG.BUILD &lt;kg_name&gt; &lt;document_id&gt; &lt;document_text&gt; [extractors...]
+
+# Add entities and relationships manually
+GRAPHRAG.ADD_ENTITY &lt;kg_name&gt; &lt;entity_id&gt; &lt;entity_type&gt; &lt;properties&gt; [embedding]
+GRAPHRAG.ADD_RELATIONSHIP &lt;kg_name&gt; &lt;from_entity&gt; &lt;to_entity&gt; &lt;rel_type&gt; &lt;properties&gt;
+
+# Get knowledge graph statistics
+GRAPHRAG.STATS &lt;kg_name&gt;
+
+# Query entities by type or properties
+GRAPHRAG.ENTITIES &lt;kg_name&gt; [TYPE &lt;entity_type&gt;] [FILTER &lt;key&gt; &lt;value&gt;] [LIMIT &lt;n&gt;]
+</code></pre>
+
+<h3 id="retrieval-augmented-generation-commands">Retrieval-Augmented Generation Commands</h3>
+
+<pre><code class="language-redis">
+# Perform RAG query with context retrieval
+GRAPHRAG.QUERY &lt;kg_name&gt; &lt;query_text&gt; [MAX_HOPS &lt;n&gt;] [CONTEXT_SIZE &lt;n&gt;] [LLM &lt;provider&gt;]
+
+# Get relevant context for a query
+GRAPHRAG.CONTEXT &lt;kg_name&gt; &lt;query_text&gt; [STRATEGY &lt;hybrid|graph|vector|text&gt;]
+
+# Multi-hop reasoning between entities
+GRAPHRAG.REASON &lt;kg_name&gt; &lt;entity_a&gt; &lt;entity_b&gt; [MAX_HOPS &lt;n&gt;] [EXPLAIN]
+
+# Semantic similarity search across entities
+GRAPHRAG.SIMILAR &lt;kg_name&gt; &lt;entity_id&gt; &lt;limit&gt; [THRESHOLD &lt;f&gt;] [ENTITY_TYPES &lt;types&gt;]
+</code></pre>
+
+<h3 id="advanced-graphrag-operations">Advanced GraphRAG Operations</h3>
+
+<pre><code class="language-redis">
+# Extract entities from new documents
+GRAPHRAG.EXTRACT &lt;kg_name&gt; &lt;document_text&gt; [CONFIDENCE &lt;f&gt;] [EXTRACTORS &lt;types&gt;]
+
+# Merge duplicate entities
+GRAPHRAG.DEDUPLICATE &lt;kg_name&gt; [SIMILARITY_THRESHOLD &lt;f&gt;]
+
+# Update entity embeddings
+GRAPHRAG.EMBED &lt;kg_name&gt; &lt;entity_id&gt; &lt;embedding_model&gt; [FORCE]
+
+# Query expansion using graph relationships
+GRAPHRAG.EXPAND_QUERY &lt;kg_name&gt; &lt;query_text&gt; [MAX_EXPANSIONS &lt;n&gt;]
+
+# Get entity recommendations based on graph structure
+GRAPHRAG.RECOMMEND &lt;kg_name&gt; &lt;entity_id&gt; [ALGORITHM &lt;pagerank|centrality|similarity&gt;]
+</code></pre>
+
+<h2 id="-data-flow-architecture">🔄 Data Flow Architecture</h2>
+
+<h3 id="1-knowledge-graph-construction-flow">1. Knowledge Graph Construction Flow</h3>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Document Text
+      ↓
+[EntityExtractionActor]
+      ↓
+Entity/Relationship Candidates
+      ↓
+[GraphRAGActor.process_document()]
+      ↓
+┌─────────────────┬─────────────────┬─────────────────┐
+│   GraphActor    │  VectorActor    │  SearchActor    │
+│ Store entities  │ Store entity    │ Index entity    │
+│ and relations   │  embeddings     │  text content   │
+└─────────────────┴─────────────────┴─────────────────┘
+</code></pre></div></div>
+
+<h3 id="2-rag-query-processing-flow">2. RAG Query Processing Flow</h3>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>User Query
+    ↓
+[GraphRAGActor.query_rag()]
+    ↓
+Query Analysis &amp; Intent Detection
+    ↓
+┌─────────────┬─────────────┬─────────────┐
+│ Graph       │ Vector      │ Text        │
+│ Traversal   │ Similarity  │ Search      │
+│             │ Search      │             │
+└─────────────┴─────────────┴─────────────┘
+    ↓
+Context Fusion &amp; Ranking
+    ↓
+LLM Provider Integration
+    ↓
+Enhanced Response with Citations
+</code></pre></div></div>
+
+<h3 id="3-multi-hop-reasoning-flow">3. Multi-Hop Reasoning Flow</h3>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Source Entity
+     ↓
+[MultiHopReasoningEngine]
+     ↓
+┌─ Hop 1 ─┐  ┌─ Hop 2 ─┐  ┌─ Hop N ─┐
+│ Graph   │→ │ Vector  │→ │ Final   │
+│ Query   │  │ Filter  │  │ Results │
+└─────────┘  └─────────┘  └─────────┘
+     ↓
+Path Scoring &amp; Pruning
+     ↓
+Ranked Connection Paths
+</code></pre></div></div>
+
+<h2 id="-integration-strategies">🧮 Integration Strategies</h2>
+
+<h3 id="1-vector-enhanced-graph-nodes">1. Vector-Enhanced Graph Nodes</h3>
+
+<p>Each graph node stores multiple embeddings for different models:</p>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Node with semantic embeddings</span>
+<span class="n">node</span><span class="py">.embeddings</span><span class="nf">.insert</span><span class="p">(</span><span class="s">"sentence-transformer"</span><span class="p">,</span> <span class="n">embedding_384d</span><span class="p">);</span>
+<span class="n">node</span><span class="py">.embeddings</span><span class="nf">.insert</span><span class="p">(</span><span class="s">"openai-ada"</span><span class="p">,</span> <span class="n">embedding_1536d</span><span class="p">);</span>
+<span class="n">node</span><span class="py">.embeddings</span><span class="nf">.insert</span><span class="p">(</span><span class="s">"custom-domain"</span><span class="p">,</span> <span class="n">embedding_768d</span><span class="p">);</span>
+
+<span class="c1">// Vector similarity search across graph entities</span>
+<span class="k">let</span> <span class="n">similar_entities</span> <span class="o">=</span> <span class="n">vector_actor</span><span class="nf">.search_vectors</span><span class="p">(</span><span class="n">VectorSearchParams</span> <span class="p">{</span>
+    <span class="n">query_vector</span><span class="p">:</span> <span class="n">query_embedding</span><span class="p">,</span>
+    <span class="n">metadata_filters</span><span class="p">:</span> <span class="nd">hashmap!</span><span class="p">{</span><span class="s">"node_type"</span> <span class="k">=&gt;</span> <span class="s">"entity"</span><span class="p">,</span> <span class="s">"graph_id"</span> <span class="k">=&gt;</span> <span class="n">kg_name</span><span class="p">},</span>
+    <span class="n">limit</span><span class="p">:</span> <span class="mi">50</span><span class="p">,</span>
+    <span class="n">threshold</span><span class="p">:</span> <span class="nf">Some</span><span class="p">(</span><span class="mf">0.7</span><span class="p">),</span>
+    <span class="n">metric</span><span class="p">:</span> <span class="nn">SimilarityMetric</span><span class="p">::</span><span class="n">Cosine</span><span class="p">,</span>
+<span class="p">})</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h3 id="2-hybrid-search-strategy">2. Hybrid Search Strategy</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">hybrid_search</span><span class="p">(</span>
+    <span class="o">&amp;</span><span class="k">self</span><span class="p">,</span>
+    <span class="n">query</span><span class="p">:</span> <span class="o">&amp;</span><span class="nb">str</span><span class="p">,</span>
+    <span class="n">kg_name</span><span class="p">:</span> <span class="o">&amp;</span><span class="nb">str</span><span class="p">,</span>
+    <span class="n">strategy</span><span class="p">:</span> <span class="n">SearchStrategy</span><span class="p">,</span>
+<span class="p">)</span> <span class="k">-&gt;</span> <span class="n">ProtocolResult</span><span class="o">&lt;</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="n">ContextItem</span><span class="o">&gt;&gt;</span> <span class="p">{</span>
+    <span class="k">match</span> <span class="n">strategy</span> <span class="p">{</span>
+        <span class="nn">SearchStrategy</span><span class="p">::</span><span class="n">GraphFirst</span> <span class="k">=&gt;</span> <span class="p">{</span>
+            <span class="c1">// 1. Graph traversal from query entities</span>
+            <span class="c1">// 2. Vector similarity on connected nodes</span>
+            <span class="c1">// 3. Text search for additional context</span>
+        <span class="p">}</span>
+        <span class="nn">SearchStrategy</span><span class="p">::</span><span class="n">VectorFirst</span> <span class="k">=&gt;</span> <span class="p">{</span>
+            <span class="c1">// 1. Vector similarity search</span>
+            <span class="c1">// 2. Graph expansion from similar entities</span>
+            <span class="c1">// 3. Text search refinement</span>
+        <span class="p">}</span>
+        <span class="nn">SearchStrategy</span><span class="p">::</span><span class="n">Balanced</span> <span class="k">=&gt;</span> <span class="p">{</span>
+            <span class="c1">// 1. Parallel graph, vector, and text search</span>
+            <span class="c1">// 2. Score fusion and ranking</span>
+            <span class="c1">// 3. Diverse result selection</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="3-llm-provider-integration">3. LLM Provider Integration</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="nd">#[derive(Debug,</span> <span class="nd">Clone)]</span>
+<span class="k">pub</span> <span class="k">enum</span> <span class="n">LLMProvider</span> <span class="p">{</span>
+    <span class="n">OpenAI</span> <span class="p">{</span> <span class="n">api_key</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span> <span class="n">model</span><span class="p">:</span> <span class="nb">String</span> <span class="p">},</span>
+    <span class="n">Anthropic</span> <span class="p">{</span> <span class="n">api_key</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span> <span class="n">model</span><span class="p">:</span> <span class="nb">String</span> <span class="p">},</span>
+    <span class="n">Local</span> <span class="p">{</span> <span class="n">endpoint</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span> <span class="n">model</span><span class="p">:</span> <span class="nb">String</span> <span class="p">},</span>
+    <span class="n">Ollama</span> <span class="p">{</span> <span class="n">model</span><span class="p">:</span> <span class="nb">String</span> <span class="p">},</span>
+<span class="p">}</span>
+
+<span class="k">impl</span> <span class="n">GraphRAGActor</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">generate_response</span><span class="p">(</span>
+        <span class="o">&amp;</span><span class="k">self</span><span class="p">,</span>
+        <span class="n">context</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">ContextItem</span><span class="o">&gt;</span><span class="p">,</span>
+        <span class="n">query</span><span class="p">:</span> <span class="o">&amp;</span><span class="nb">str</span><span class="p">,</span>
+        <span class="n">provider</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">LLMProvider</span><span class="p">,</span>
+    <span class="p">)</span> <span class="k">-&gt;</span> <span class="n">ProtocolResult</span><span class="o">&lt;</span><span class="n">RAGResponse</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="k">let</span> <span class="n">prompt</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.build_rag_prompt</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">query</span><span class="p">);</span>
+        
+        <span class="k">match</span> <span class="n">provider</span> <span class="p">{</span>
+            <span class="nn">LLMProvider</span><span class="p">::</span><span class="n">Ollama</span> <span class="p">{</span> <span class="n">model</span> <span class="p">}</span> <span class="k">=&gt;</span> <span class="p">{</span>
+                <span class="k">self</span><span class="nf">.query_ollama</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">prompt</span><span class="p">)</span><span class="k">.await</span>
+            <span class="p">}</span>
+            <span class="c1">// Handle other providers...</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h2 id="-performance-optimizations">⚡ Performance Optimizations</h2>
+
+<h3 id="1-caching-strategy">1. Caching Strategy</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="nd">#[derive(Debug)]</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">GraphRAGCache</span> <span class="p">{</span>
+    <span class="n">entity_embeddings</span><span class="p">:</span> <span class="nb">Arc</span><span class="o">&lt;</span><span class="n">RwLock</span><span class="o">&lt;</span><span class="n">LruCache</span><span class="o">&lt;</span><span class="nb">String</span><span class="p">,</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="nb">f32</span><span class="o">&gt;&gt;&gt;&gt;</span><span class="p">,</span>
+    <span class="n">query_results</span><span class="p">:</span> <span class="nb">Arc</span><span class="o">&lt;</span><span class="n">RwLock</span><span class="o">&lt;</span><span class="n">LruCache</span><span class="o">&lt;</span><span class="nb">String</span><span class="p">,</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">ContextItem</span><span class="o">&gt;&gt;&gt;&gt;</span><span class="p">,</span>
+    <span class="n">path_cache</span><span class="p">:</span> <span class="nb">Arc</span><span class="o">&lt;</span><span class="n">RwLock</span><span class="o">&lt;</span><span class="n">LruCache</span><span class="o">&lt;</span><span class="p">(</span><span class="nb">String</span><span class="p">,</span> <span class="nb">String</span><span class="p">),</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">ReasoningPath</span><span class="o">&gt;&gt;&gt;&gt;</span><span class="p">,</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="2-batch-processing">2. Batch Processing</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">impl</span> <span class="n">GraphRAGActor</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">process_documents_batch</span><span class="p">(</span>
+        <span class="o">&amp;</span><span class="k">mut</span> <span class="k">self</span><span class="p">,</span>
+        <span class="n">documents</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">Document</span><span class="o">&gt;</span><span class="p">,</span>
+        <span class="n">batch_size</span><span class="p">:</span> <span class="nb">usize</span><span class="p">,</span>
+    <span class="p">)</span> <span class="k">-&gt;</span> <span class="n">ProtocolResult</span><span class="o">&lt;</span><span class="n">BatchProcessingResult</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="k">let</span> <span class="n">batches</span> <span class="o">=</span> <span class="n">documents</span><span class="nf">.chunks</span><span class="p">(</span><span class="n">batch_size</span><span class="p">);</span>
+        <span class="k">let</span> <span class="k">mut</span> <span class="n">results</span> <span class="o">=</span> <span class="nn">Vec</span><span class="p">::</span><span class="nf">new</span><span class="p">();</span>
+        
+        <span class="k">for</span> <span class="n">batch</span> <span class="k">in</span> <span class="n">batches</span> <span class="p">{</span>
+            <span class="k">let</span> <span class="n">batch_futures</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">_</span><span class="o">&gt;</span> <span class="o">=</span> <span class="n">batch</span><span class="nf">.iter</span><span class="p">()</span>
+                <span class="nf">.map</span><span class="p">(|</span><span class="n">doc</span><span class="p">|</span> <span class="k">self</span><span class="nf">.process_document</span><span class="p">(</span><span class="n">doc</span><span class="p">))</span>
+                <span class="nf">.collect</span><span class="p">();</span>
+            
+            <span class="k">let</span> <span class="n">batch_results</span> <span class="o">=</span> <span class="nn">futures</span><span class="p">::</span><span class="nn">future</span><span class="p">::</span><span class="nf">try_join_all</span><span class="p">(</span><span class="n">batch_futures</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+            <span class="n">results</span><span class="nf">.extend</span><span class="p">(</span><span class="n">batch_results</span><span class="p">);</span>
+        <span class="p">}</span>
+        
+        <span class="nf">Ok</span><span class="p">(</span><span class="n">BatchProcessingResult</span> <span class="p">{</span> <span class="n">results</span> <span class="p">})</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="3-distributed-processing">3. Distributed Processing</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">impl</span> <span class="n">GraphRAGActor</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">distributed_entity_extraction</span><span class="p">(</span>
+        <span class="o">&amp;</span><span class="k">self</span><span class="p">,</span>
+        <span class="n">document</span><span class="p">:</span> <span class="o">&amp;</span><span class="nb">str</span><span class="p">,</span>
+        <span class="n">nodes</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">NodeId</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="p">)</span> <span class="k">-&gt;</span> <span class="n">ProtocolResult</span><span class="o">&lt;</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="n">Entity</span><span class="o">&gt;&gt;</span> <span class="p">{</span>
+        <span class="k">let</span> <span class="n">chunks</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.chunk_document</span><span class="p">(</span><span class="n">document</span><span class="p">,</span> <span class="n">nodes</span><span class="nf">.len</span><span class="p">());</span>
+        <span class="k">let</span> <span class="n">extraction_tasks</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">_</span><span class="o">&gt;</span> <span class="o">=</span> <span class="n">chunks</span><span class="nf">.into_iter</span><span class="p">()</span>
+            <span class="nf">.zip</span><span class="p">(</span><span class="n">nodes</span><span class="nf">.iter</span><span class="p">())</span>
+            <span class="nf">.map</span><span class="p">(|(</span><span class="n">chunk</span><span class="p">,</span> <span class="n">node_id</span><span class="p">)|</span> <span class="p">{</span>
+                <span class="k">self</span><span class="nf">.extract_entities_on_node</span><span class="p">(</span><span class="n">chunk</span><span class="p">,</span> <span class="o">*</span><span class="n">node_id</span><span class="p">)</span>
+            <span class="p">})</span>
+            <span class="nf">.collect</span><span class="p">();</span>
+        
+        <span class="k">let</span> <span class="n">results</span> <span class="o">=</span> <span class="nn">futures</span><span class="p">::</span><span class="nn">future</span><span class="p">::</span><span class="nf">try_join_all</span><span class="p">(</span><span class="n">extraction_tasks</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+        <span class="k">let</span> <span class="n">entities</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.merge_entity_results</span><span class="p">(</span><span class="n">results</span><span class="p">);</span>
+        
+        <span class="nf">Ok</span><span class="p">(</span><span class="n">entities</span><span class="p">)</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h2 id="-implementation-phases">🔧 Implementation Phases</h2>
+
+<h3 id="phase-1-foundation-current-sprint">Phase 1: Foundation (Current Sprint)</h3>
+<ol>
+  <li>✅ Architecture design and planning</li>
+  <li>🔄 Extend GraphNode with vector embeddings</li>
+  <li>🔄 Implement basic EntityExtractionActor</li>
+  <li>🔄 Create GraphRAGActor scaffold</li>
+</ol>
+
+<h3 id="phase-2-core-graphrag-features">Phase 2: Core GraphRAG Features</h3>
+<ol>
+  <li>Knowledge graph construction pipeline</li>
+  <li>Basic RAG query processing</li>
+  <li>Entity deduplication and merging</li>
+  <li>Multi-hop reasoning engine</li>
+</ol>
+
+<h3 id="phase-3-advanced-features">Phase 3: Advanced Features</h3>
+<ol>
+  <li>Hybrid search strategies</li>
+  <li>LLM provider integrations</li>
+  <li>Query expansion and optimization</li>
+  <li>Advanced graph algorithms</li>
+</ol>
+
+<h3 id="phase-4-production-readiness">Phase 4: Production Readiness</h3>
+<ol>
+  <li>Performance optimizations</li>
+  <li>Distributed processing</li>
+  <li>Comprehensive testing</li>
+  <li>Documentation and examples</li>
+</ol>
+
+<h2 id="-success-metrics">📈 Success Metrics</h2>
+
+<h3 id="functional-metrics">Functional Metrics</h3>
+<ul>
+  <li><strong>Entity Extraction Accuracy</strong>: &gt;90% precision and recall</li>
+  <li><strong>Relationship Extraction Quality</strong>: &gt;85% accuracy</li>
+  <li><strong>RAG Response Relevance</strong>: &gt;80% user satisfaction</li>
+  <li><strong>Multi-hop Reasoning Correctness</strong>: &gt;75% valid connections</li>
+</ul>
+
+<h3 id="performance-metrics">Performance Metrics</h3>
+<ul>
+  <li><strong>Document Processing Speed</strong>: &lt;2 seconds per 1000 words</li>
+  <li><strong>RAG Query Response Time</strong>: &lt;500ms average</li>
+  <li><strong>Graph Traversal Speed</strong>: &lt;100ms for 3-hop queries</li>
+  <li><strong>Vector Search Performance</strong>: &lt;50ms for 10K entities</li>
+</ul>
+
+<h3 id="scale-metrics">Scale Metrics</h3>
+<ul>
+  <li><strong>Knowledge Graph Size</strong>: Support 1M+ entities</li>
+  <li><strong>Concurrent Users</strong>: 1000+ simultaneous RAG queries</li>
+  <li><strong>Document Throughput</strong>: 10K+ documents/hour processing</li>
+  <li><strong>Multi-tenant Support</strong>: 100+ isolated knowledge graphs</li>
+</ul>
+
+<hr />
+
+<p>This comprehensive architecture leverages Orbit-RS’s existing strengths while adding powerful GraphRAG capabilities. The design maintains backward compatibility, ensures scalability, and provides a foundation for advanced AI-powered applications.</p>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/orbit-rs/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Orbit-RS Documentation</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">TuringWorks</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

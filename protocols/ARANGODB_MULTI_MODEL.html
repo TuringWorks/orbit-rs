@@ -1,0 +1,900 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>ArangoDB Multi-Model Database Compatibility | Orbit-RS Documentation</title>
+<meta name="generator" content="Jekyll v4.4.1" />
+<meta property="og:title" content="ArangoDB Multi-Model Database Compatibility" />
+<meta name="author" content="TuringWorks" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<meta property="og:description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<link rel="canonical" href="https://turingworks.github.io/orbit-rs/protocols/ARANGODB_MULTI_MODEL.html" />
+<meta property="og:url" content="https://turingworks.github.io/orbit-rs/protocols/ARANGODB_MULTI_MODEL.html" />
+<meta property="og:site_name" content="Orbit-RS Documentation" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="ArangoDB Multi-Model Database Compatibility" />
+<meta name="twitter:site" content="@TuringWorksAI" />
+<meta name="twitter:creator" content="@TuringWorks" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","author":{"@type":"Person","name":"TuringWorks"},"description":"The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform","headline":"ArangoDB Multi-Model Database Compatibility","url":"https://turingworks.github.io/orbit-rs/protocols/ARANGODB_MULTI_MODEL.html"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/orbit-rs/assets/main.css">
+  <link rel="stylesheet" href="/orbit-rs/assets/css/custom.css"><link type="application/atom+xml" rel="alternate" href="https://turingworks.github.io/orbit-rs/feed.xml" title="Orbit-RS Documentation" /></head><body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/orbit-rs/">Orbit-RS Documentation</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/orbit-rs/">Orbit-RS Documentation</a><a class="page-link" href="/orbit-rs/project_overview.html">Orbit-RS: Comprehensive Project Overview</a><a class="page-link" href="/orbit-rs/quick_start.html">Quick Start Guide - Multi-Protocol Database Server</a><a class="page-link" href="/orbit-rs/roadmap/">Development Roadmap</a><a class="page-link" href="/orbit-rs/features/">Orbit-RS Feature Index</a><a class="page-link" href="/orbit-rs/compute-acceleration/">Hardware Acceleration Guide</a><a class="page-link" href="/orbit-rs/contributing.html">Contributing Guide</a><a class="page-link" href="/orbit-rs/overview.html">Architecture Overview</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <h1 id="arangodb-multi-model-database-compatibility">ArangoDB Multi-Model Database Compatibility</h1>
+
+<h2 id="overview">Overview</h2>
+
+<p>ArangoDB is a multi-model NoSQL database that combines graph, document, and key-value data models in a single system. Orbit-RS will provide full ArangoDB compatibility, allowing applications to leverage the power of multiple data models through a unified query language (AQL) while gaining enhanced scalability, fault tolerance, and performance through Orbit’s distributed actor system.</p>
+
+<h2 id="planned-features">Planned Features</h2>
+
+<h3 id="-phase-18-arangodb-foundation">🎯 <strong>Phase 18: ArangoDB Foundation</strong></h3>
+
+<h4 id="multi-model-core-actors">Multi-Model Core Actors</h4>
+<ul>
+  <li><strong>DocumentCollectionActor</strong>: JSON document storage and retrieval with schema-less flexibility</li>
+  <li><strong>GraphActor</strong>: Property graph management with vertices and edges</li>
+  <li><strong>KeyValueActor</strong>: High-performance key-value storage with TTL support</li>
+  <li><strong>SearchIndexActor</strong>: Full-text search with analyzers and ranking</li>
+  <li><strong>GeospatialActor</strong>: Location-based data with spatial indexing</li>
+</ul>
+
+<h4 id="aql-query-engine">AQL Query Engine</h4>
+<ul>
+  <li><strong>AQL Parser</strong>: Complete ArangoDB Query Language parsing and optimization</li>
+  <li><strong>Query Planner</strong>: Multi-model query execution planning</li>
+  <li><strong>Result Streaming</strong>: Efficient cursor-based result pagination</li>
+  <li><strong>Transaction Support</strong>: ACID transactions across multiple data models</li>
+</ul>
+
+<h3 id="-phase-19-advanced-multi-model-operations">🚀 <strong>Phase 19: Advanced Multi-Model Operations</strong></h3>
+
+<h4 id="document-database-features">Document Database Features</h4>
+<ul>
+  <li><strong>Schema-less Documents</strong>: Flexible JSON document storage</li>
+  <li><strong>Document Validation</strong>: JSON Schema-based validation rules</li>
+  <li><strong>Nested Object Indexing</strong>: Deep indexing of document properties</li>
+  <li><strong>Array Processing</strong>: Advanced array operations and indexing</li>
+  <li><strong>Document Versioning</strong>: Revision tracking and conflict resolution</li>
+</ul>
+
+<h4 id="graph-database-features">Graph Database Features</h4>
+<ul>
+  <li><strong>Property Graphs</strong>: Vertices and edges with arbitrary properties</li>
+  <li><strong>Graph Traversals</strong>: Flexible traversal patterns with pruning</li>
+  <li><strong>Path Finding</strong>: Shortest path, K-paths, and all paths algorithms</li>
+  <li><strong>Graph Analytics</strong>: Centrality measures, community detection, clustering</li>
+  <li><strong>Smart Graphs</strong>: Enterprise-grade graph sharding and distribution</li>
+</ul>
+
+<h4 id="full-text-search">Full-Text Search</h4>
+<ul>
+  <li><strong>Text Analyzers</strong>: Multiple language analyzers with stemming</li>
+  <li><strong>Search Views</strong>: Materialized search indexes with real-time updates</li>
+  <li><strong>Ranking Algorithms</strong>: TF-IDF, BM25, and custom scoring</li>
+  <li><strong>Phrase Queries</strong>: Proximity search and phrase matching</li>
+  <li><strong>Faceted Search</strong>: Multi-dimensional search with aggregations</li>
+</ul>
+
+<h3 id="-phase-20-enterprise-multi-model-features">📊 <strong>Phase 20: Enterprise Multi-Model Features</strong></h3>
+
+<h4 id="geospatial-capabilities">Geospatial Capabilities</h4>
+<ul>
+  <li><strong>GeoJSON Support</strong>: Points, lines, polygons, and multi-geometries</li>
+  <li><strong>Spatial Indexes</strong>: R-tree and geohash indexing</li>
+  <li><strong>Proximity Queries</strong>: Near, within, and intersects operations</li>
+  <li><strong>Routing Services</strong>: Shortest path routing with turn restrictions</li>
+  <li><strong>Geofencing</strong>: Real-time location-based alerts</li>
+</ul>
+
+<h4 id="advanced-analytics">Advanced Analytics</h4>
+<ul>
+  <li><strong>AQL User Functions</strong>: Custom JavaScript functions in queries</li>
+  <li><strong>Streaming Analytics</strong>: Real-time data processing pipelines</li>
+  <li><strong>Machine Learning</strong>: In-database ML with graph neural networks</li>
+  <li><strong>Time Series</strong>: Temporal data analysis with window functions</li>
+  <li><strong>Graph Machine Learning</strong>: Node embeddings, link prediction, anomaly detection</li>
+</ul>
+
+<h4 id="performance--scalability">Performance &amp; Scalability</h4>
+<ul>
+  <li><strong>Smart Graphs</strong>: Automatic graph sharding across cluster</li>
+  <li><strong>OneShard Databases</strong>: Single-shard performance optimization</li>
+  <li><strong>Satellite Collections</strong>: Distributed reference data</li>
+  <li><strong>Query Optimization</strong>: Cost-based optimizer with statistics</li>
+  <li><strong>Parallel Processing</strong>: Multi-threaded query execution</li>
+</ul>
+
+<h2 id="technical-implementation">Technical Implementation</h2>
+
+<h3 id="actor-architecture">Actor Architecture</h3>
+
+<h4 id="document-collection-actor">Document Collection Actor</h4>
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="nd">#[async_trait]</span>
+<span class="k">pub</span> <span class="k">trait</span> <span class="n">DocumentCollectionActor</span><span class="p">:</span> <span class="n">ActorWithStringKey</span> <span class="p">{</span>
+    <span class="c1">// Document operations</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">create_document</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">document</span><span class="p">:</span> <span class="n">Document</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">DocumentHandle</span><span class="o">&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">get_document</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="nb">String</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="nb">Option</span><span class="o">&lt;</span><span class="n">Document</span><span class="o">&gt;&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">update_document</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span> <span class="n">document</span><span class="p">:</span> <span class="n">Document</span><span class="p">,</span> <span class="n">options</span><span class="p">:</span> <span class="n">UpdateOptions</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">DocumentHandle</span><span class="o">&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">replace_document</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span> <span class="n">document</span><span class="p">:</span> <span class="n">Document</span><span class="p">,</span> <span class="n">options</span><span class="p">:</span> <span class="n">ReplaceOptions</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">DocumentHandle</span><span class="o">&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">delete_document</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span> <span class="n">options</span><span class="p">:</span> <span class="n">DeleteOptions</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="nb">bool</span><span class="o">&gt;</span><span class="p">;</span>
+    
+    <span class="c1">// Bulk operations</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">insert_documents</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">documents</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">Document</span><span class="o">&gt;</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="n">DocumentResult</span><span class="o">&gt;&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">update_documents</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">updates</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">DocumentUpdate</span><span class="o">&gt;</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="n">DocumentResult</span><span class="o">&gt;&gt;</span><span class="p">;</span>
+    
+    <span class="c1">// Indexing</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">create_index</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">index_spec</span><span class="p">:</span> <span class="n">IndexSpec</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">IndexHandle</span><span class="o">&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">list_indexes</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="n">IndexInfo</span><span class="o">&gt;&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">drop_index</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">index_handle</span><span class="p">:</span> <span class="n">IndexHandle</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="nb">bool</span><span class="o">&gt;</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h4 id="graph-actor">Graph Actor</h4>
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="nd">#[async_trait]</span>
+<span class="k">pub</span> <span class="k">trait</span> <span class="n">GraphActor</span><span class="p">:</span> <span class="n">ActorWithStringKey</span> <span class="p">{</span>
+    <span class="c1">// Vertex operations</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">create_vertex</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">collection</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span> <span class="n">vertex</span><span class="p">:</span> <span class="n">Vertex</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">VertexHandle</span><span class="o">&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">get_vertex</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">collection</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="nb">String</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="nb">Option</span><span class="o">&lt;</span><span class="n">Vertex</span><span class="o">&gt;&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">update_vertex</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">collection</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span> <span class="n">vertex</span><span class="p">:</span> <span class="n">Vertex</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">VertexHandle</span><span class="o">&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">delete_vertex</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">collection</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="nb">String</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="nb">bool</span><span class="o">&gt;</span><span class="p">;</span>
+    
+    <span class="c1">// Edge operations</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">create_edge</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">collection</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span> <span class="n">edge</span><span class="p">:</span> <span class="n">Edge</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">EdgeHandle</span><span class="o">&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">get_edge</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">collection</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="nb">String</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="nb">Option</span><span class="o">&lt;</span><span class="n">Edge</span><span class="o">&gt;&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">update_edge</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">collection</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span> <span class="n">edge</span><span class="p">:</span> <span class="n">Edge</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">EdgeHandle</span><span class="o">&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">delete_edge</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">collection</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="nb">String</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="nb">bool</span><span class="o">&gt;</span><span class="p">;</span>
+    
+    <span class="c1">// Traversal operations</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">traverse</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">start_vertex</span><span class="p">:</span> <span class="n">VertexHandle</span><span class="p">,</span> <span class="n">traversal_spec</span><span class="p">:</span> <span class="n">TraversalSpec</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">TraversalResult</span><span class="o">&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">shortest_path</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">from</span><span class="p">:</span> <span class="n">VertexHandle</span><span class="p">,</span> <span class="n">to</span><span class="p">:</span> <span class="n">VertexHandle</span><span class="p">,</span> <span class="n">options</span><span class="p">:</span> <span class="n">PathOptions</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="nb">Option</span><span class="o">&lt;</span><span class="n">Path</span><span class="o">&gt;&gt;</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h4 id="aql-query-actor">AQL Query Actor</h4>
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="nd">#[async_trait]</span>
+<span class="k">pub</span> <span class="k">trait</span> <span class="n">AQLQueryActor</span><span class="p">:</span> <span class="n">ActorWithStringKey</span> <span class="p">{</span>
+    <span class="c1">// Query execution</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">execute_aql</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">query</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span> <span class="n">bind_vars</span><span class="p">:</span> <span class="n">HashMap</span><span class="o">&lt;</span><span class="nb">String</span><span class="p">,</span> <span class="n">Value</span><span class="o">&gt;</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">QueryResult</span><span class="o">&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">execute_aql_stream</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">query</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span> <span class="n">bind_vars</span><span class="p">:</span> <span class="n">HashMap</span><span class="o">&lt;</span><span class="nb">String</span><span class="p">,</span> <span class="n">Value</span><span class="o">&gt;</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">QueryCursor</span><span class="o">&gt;</span><span class="p">;</span>
+    
+    <span class="c1">// Query optimization</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">explain_query</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">query</span><span class="p">:</span> <span class="nb">String</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">QueryPlan</span><span class="o">&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">validate_query</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">query</span><span class="p">:</span> <span class="nb">String</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">QueryValidation</span><span class="o">&gt;</span><span class="p">;</span>
+    
+    <span class="c1">// Cursor management</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">create_cursor</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">query</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span> <span class="n">options</span><span class="p">:</span> <span class="n">CursorOptions</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">CursorHandle</span><span class="o">&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">read_cursor</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">cursor</span><span class="p">:</span> <span class="n">CursorHandle</span><span class="p">,</span> <span class="n">count</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="nb">u32</span><span class="o">&gt;</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">CursorResult</span><span class="o">&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">delete_cursor</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">cursor</span><span class="p">:</span> <span class="n">CursorHandle</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="nb">bool</span><span class="o">&gt;</span><span class="p">;</span>
+    
+    <span class="c1">// Transaction support</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">begin_transaction</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">collections</span><span class="p">:</span> <span class="n">TransactionCollections</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">TransactionHandle</span><span class="o">&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">commit_transaction</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">tx</span><span class="p">:</span> <span class="n">TransactionHandle</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">TransactionResult</span><span class="o">&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">abort_transaction</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">tx</span><span class="p">:</span> <span class="n">TransactionHandle</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h4 id="search-index-actor">Search Index Actor</h4>
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="nd">#[async_trait]</span>
+<span class="k">pub</span> <span class="k">trait</span> <span class="n">SearchIndexActor</span><span class="p">:</span> <span class="n">ActorWithStringKey</span> <span class="p">{</span>
+    <span class="c1">// View management</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">create_view</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">view_spec</span><span class="p">:</span> <span class="n">ViewSpec</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">ViewHandle</span><span class="o">&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">update_view</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">view</span><span class="p">:</span> <span class="n">ViewHandle</span><span class="p">,</span> <span class="n">properties</span><span class="p">:</span> <span class="n">ViewProperties</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">drop_view</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">view</span><span class="p">:</span> <span class="n">ViewHandle</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="nb">bool</span><span class="o">&gt;</span><span class="p">;</span>
+    
+    <span class="c1">// Search operations</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">search</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">view</span><span class="p">:</span> <span class="n">ViewHandle</span><span class="p">,</span> <span class="n">query</span><span class="p">:</span> <span class="n">SearchQuery</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">SearchResult</span><span class="o">&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">suggest</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">view</span><span class="p">:</span> <span class="n">ViewHandle</span><span class="p">,</span> <span class="n">text</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span> <span class="n">options</span><span class="p">:</span> <span class="n">SuggestOptions</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="n">Suggestion</span><span class="o">&gt;&gt;</span><span class="p">;</span>
+    
+    <span class="c1">// Analyzer management</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">create_analyzer</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">analyzer_spec</span><span class="p">:</span> <span class="n">AnalyzerSpec</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">AnalyzerHandle</span><span class="o">&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">list_analyzers</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="n">AnalyzerInfo</span><span class="o">&gt;&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">drop_analyzer</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">analyzer</span><span class="p">:</span> <span class="n">AnalyzerHandle</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="nb">bool</span><span class="o">&gt;</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="data-structures">Data Structures</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="nd">#[derive(Debug,</span> <span class="nd">Clone,</span> <span class="nd">Serialize,</span> <span class="nd">Deserialize)]</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">Document</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="n">key</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="nb">String</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">revision</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="nb">String</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">data</span><span class="p">:</span> <span class="nn">serde_json</span><span class="p">::</span><span class="n">Value</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">metadata</span><span class="p">:</span> <span class="n">DocumentMetadata</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="nd">#[derive(Debug,</span> <span class="nd">Clone,</span> <span class="nd">Serialize,</span> <span class="nd">Deserialize)]</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">Vertex</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="n">key</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="nb">String</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">revision</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="nb">String</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">data</span><span class="p">:</span> <span class="nn">serde_json</span><span class="p">::</span><span class="n">Value</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">metadata</span><span class="p">:</span> <span class="n">VertexMetadata</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="nd">#[derive(Debug,</span> <span class="nd">Clone,</span> <span class="nd">Serialize,</span> <span class="nd">Deserialize)]</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">Edge</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="n">key</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="nb">String</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">revision</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="nb">String</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">from</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">to</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">data</span><span class="p">:</span> <span class="nn">serde_json</span><span class="p">::</span><span class="n">Value</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">metadata</span><span class="p">:</span> <span class="n">EdgeMetadata</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="nd">#[derive(Debug,</span> <span class="nd">Clone,</span> <span class="nd">Serialize,</span> <span class="nd">Deserialize)]</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">SearchQuery</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="n">query_string</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">highlight</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="n">HighlightOptions</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">facets</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="n">FacetSpec</span><span class="o">&gt;&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">sort</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="n">SortSpec</span><span class="o">&gt;&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">limit</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="nb">u32</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">offset</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="nb">u32</span><span class="o">&gt;</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="nd">#[derive(Debug,</span> <span class="nd">Clone,</span> <span class="nd">Serialize,</span> <span class="nd">Deserialize)]</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">GeoPoint</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="n">latitude</span><span class="p">:</span> <span class="nb">f64</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">longitude</span><span class="p">:</span> <span class="nb">f64</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="nd">#[derive(Debug,</span> <span class="nd">Clone,</span> <span class="nd">Serialize,</span> <span class="nd">Deserialize)]</span>
+<span class="k">pub</span> <span class="k">enum</span> <span class="n">GeoShape</span> <span class="p">{</span>
+    <span class="nf">Point</span><span class="p">(</span><span class="n">GeoPoint</span><span class="p">),</span>
+    <span class="nf">LineString</span><span class="p">(</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="n">GeoPoint</span><span class="o">&gt;</span><span class="p">),</span>
+    <span class="nf">Polygon</span><span class="p">(</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="n">GeoPoint</span><span class="o">&gt;&gt;</span><span class="p">),</span>
+    <span class="nf">MultiPoint</span><span class="p">(</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="n">GeoPoint</span><span class="o">&gt;</span><span class="p">),</span>
+    <span class="nf">MultiLineString</span><span class="p">(</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="n">GeoPoint</span><span class="o">&gt;&gt;</span><span class="p">),</span>
+    <span class="nf">MultiPolygon</span><span class="p">(</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="n">GeoPoint</span><span class="o">&gt;&gt;&gt;</span><span class="p">),</span>
+<span class="p">}</span>
+
+<span class="nd">#[derive(Debug,</span> <span class="nd">Clone,</span> <span class="nd">Serialize,</span> <span class="nd">Deserialize)]</span>
+<span class="k">pub</span> <span class="k">enum</span> <span class="n">Value</span> <span class="p">{</span>
+    <span class="n">Null</span><span class="p">,</span>
+    <span class="nf">Bool</span><span class="p">(</span><span class="nb">bool</span><span class="p">),</span>
+    <span class="nf">Number</span><span class="p">(</span><span class="nn">serde_json</span><span class="p">::</span><span class="n">Number</span><span class="p">),</span>
+    <span class="nf">String</span><span class="p">(</span><span class="nb">String</span><span class="p">),</span>
+    <span class="nf">Array</span><span class="p">(</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="n">Value</span><span class="o">&gt;</span><span class="p">),</span>
+    <span class="nf">Object</span><span class="p">(</span><span class="nn">serde_json</span><span class="p">::</span><span class="n">Map</span><span class="o">&lt;</span><span class="nb">String</span><span class="p">,</span> <span class="n">Value</span><span class="o">&gt;</span><span class="p">),</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h2 id="aql-query-language-support">AQL Query Language Support</h2>
+
+<h3 id="document-operations">Document Operations</h3>
+
+<h4 id="basic-document-queries">Basic Document Queries</h4>
+<pre><code class="language-aql">// Insert documents
+FOR doc IN [
+    { name: "Alice", age: 30, city: "New York" },
+    { name: "Bob", age: 25, city: "San Francisco" }
+]
+INSERT doc INTO users
+
+// Query documents
+FOR user IN users
+    FILTER user.age &gt; 25
+    RETURN { name: user.name, city: user.city }
+
+// Update documents
+FOR user IN users
+    FILTER user.name == "Alice"
+    UPDATE user WITH { age: 31 } IN users
+
+// Replace documents
+FOR user IN users
+    FILTER user.name == "Bob"
+    REPLACE user WITH { 
+        name: "Bob Smith", 
+        age: 26, 
+        city: "Los Angeles",
+        updated: DATE_NOW()
+    } IN users
+
+// Delete documents
+FOR user IN users
+    FILTER user.age &lt; 18
+    REMOVE user IN users
+</code></pre>
+
+<h4 id="advanced-document-operations">Advanced Document Operations</h4>
+<pre><code class="language-aql">// Complex filtering with nested objects
+FOR product IN products
+    FILTER product.specs.memory &gt;= 8
+    AND product.specs.storage.type == "SSD"
+    AND product.price &lt; 1000
+    SORT product.price ASC
+    LIMIT 10
+    RETURN {
+        name: product.name,
+        price: product.price,
+        specs: product.specs
+    }
+
+// Array operations
+FOR order IN orders
+    FILTER LENGTH(order.items) &gt; 0
+    LET total = SUM(
+        FOR item IN order.items
+            RETURN item.price * item.quantity
+    )
+    FILTER total &gt; 100
+    RETURN {
+        orderId: order._key,
+        itemCount: LENGTH(order.items),
+        total: total
+    }
+
+// Aggregation operations
+FOR user IN users
+    COLLECT city = user.city WITH COUNT INTO cityCount
+    SORT cityCount DESC
+    RETURN {
+        city: city,
+        userCount: cityCount
+    }
+</code></pre>
+
+<h3 id="graph-traversal-operations">Graph Traversal Operations</h3>
+
+<h4 id="basic-graph-traversals">Basic Graph Traversals</h4>
+<pre><code class="language-aql">// Simple outbound traversal
+FOR v, e, p IN 1..3 OUTBOUND "users/alice" GRAPH "social"
+    RETURN { vertex: v, edge: e, path: p }
+
+// Inbound traversal with filtering
+FOR v, e IN 1..2 INBOUND "posts/123" GRAPH "blog"
+    FILTER e.type == "authored"
+    RETURN v
+
+// Any direction traversal
+FOR v IN 2..4 ANY "users/alice" GRAPH "social"
+    FILTER v.active == true
+    RETURN v
+
+// Named graph traversal
+FOR v, e, p IN 1..5 OUTBOUND "users/alice" friends, colleagues
+    FILTER p.edges[*].weight ALL &gt;= 0.5
+    RETURN {
+        friend: v.name,
+        path: p.vertices[*].name,
+        strength: AVG(p.edges[*].weight)
+    }
+</code></pre>
+
+<h4 id="advanced-graph-operations">Advanced Graph Operations</h4>
+<pre><code class="language-aql">// Shortest path
+FOR path IN OUTBOUND SHORTEST_PATH "users/alice" TO "users/bob" GRAPH "social"
+    RETURN {
+        path: path.vertices[*].name,
+        length: LENGTH(path.vertices) - 1
+    }
+
+// K shortest paths
+FOR path IN OUTBOUND K_SHORTEST_PATHS "users/alice" TO "users/bob" GRAPH "social"
+    OPTIONS {weightAttribute: "distance"}
+    LIMIT 3
+    RETURN {
+        path: path.vertices[*].name,
+        distance: path.weight
+    }
+
+// All shortest paths
+FOR path IN OUTBOUND ALL_SHORTEST_PATHS "users/alice" TO "users/bob" GRAPH "social"
+    RETURN path.vertices[*].name
+
+// Complex traversal with pruning
+FOR v, e, p IN 1..10 OUTBOUND "users/alice" GRAPH "social"
+    PRUNE v.blocked == true
+    FILTER v.country == "USA"
+    RETURN DISTINCT v
+</code></pre>
+
+<h3 id="full-text-search-operations">Full-Text Search Operations</h3>
+
+<h4 id="basic-search-queries">Basic Search Queries</h4>
+<pre><code class="language-aql">// Simple text search
+FOR doc IN articles
+    SEARCH ANALYZER(doc.title, "text_en") == "machine learning"
+    RETURN doc
+
+// Phrase search
+FOR doc IN articles
+    SEARCH PHRASE(doc.content, "artificial intelligence", "text_en")
+    RETURN { title: doc.title, score: BM25(doc) }
+
+// Boolean search
+FOR doc IN articles
+    SEARCH (
+        ANALYZER(doc.title, "text_en") == "AI" OR
+        ANALYZER(doc.content, "text_en") == "neural networks"
+    ) AND doc.published &gt; DATE_SUBTRACT(DATE_NOW(), 1, "year")
+    SORT BM25(doc) DESC
+    LIMIT 20
+    RETURN doc
+</code></pre>
+
+<h4 id="advanced-search-features">Advanced Search Features</h4>
+<pre><code class="language-aql">// Search with facets
+FOR doc IN products
+    SEARCH doc.description IN TOKENS("smartphone camera", "text_en")
+    COLLECT 
+        brand = doc.brand WITH COUNT INTO brandCount,
+        category = doc.category WITH COUNT INTO categoryCount
+    RETURN {
+        facets: {
+            brands: { [brand]: brandCount },
+            categories: { [category]: categoryCount }
+        }
+    }
+
+// Search with highlighting
+FOR doc IN articles
+    SEARCH ANALYZER(doc.content, "text_en") == "quantum computing"
+    RETURN {
+        title: doc.title,
+        excerpt: SUBSTRING(doc.content, 0, 200),
+        highlights: HIGHLIGHT(doc.content, "quantum computing")
+    }
+
+// Fuzzy search
+FOR doc IN products
+    SEARCH LEVENSHTEIN_MATCH(doc.name, "iphone", 2, false)
+    RETURN { name: doc.name, score: BM25(doc) }
+</code></pre>
+
+<h3 id="geospatial-operations">Geospatial Operations</h3>
+
+<h4 id="basic-geospatial-queries">Basic Geospatial Queries</h4>
+<pre><code class="language-aql">// Points within radius
+FOR location IN locations
+    FILTER GEO_DISTANCE([location.lat, location.lng], [40.7128, -74.0060]) &lt;= 10000
+    RETURN {
+        name: location.name,
+        distance: GEO_DISTANCE([location.lat, location.lng], [40.7128, -74.0060])
+    }
+
+// Points within polygon
+LET polygon = {
+    type: "Polygon",
+    coordinates: [[
+        [-74.1, 40.6], [-74.0, 40.6], 
+        [-74.0, 40.8], [-74.1, 40.8], 
+        [-74.1, 40.6]
+    ]]
+}
+FOR location IN locations
+    FILTER GEO_CONTAINS(polygon, [location.lng, location.lat])
+    RETURN location
+
+// Nearest neighbors
+FOR location IN NEAR(locations, 40.7128, -74.0060, 10, "distance")
+    RETURN {
+        name: location.name,
+        distance: location.distance
+    }
+</code></pre>
+
+<h4 id="advanced-geospatial-features">Advanced Geospatial Features</h4>
+<pre><code class="language-aql">// Route calculation
+FOR route IN OUTBOUND SHORTEST_PATH 
+    GEO_POINT(40.7128, -74.0060) TO GEO_POINT(40.7589, -73.9851)
+    GRAPH "road_network"
+    OPTIONS {weightAttribute: "travelTime"}
+    RETURN {
+        path: route.vertices[*].coordinates,
+        duration: route.weight,
+        distance: SUM(route.edges[*].distance)
+    }
+
+// Geofencing
+FOR device IN devices
+    LET geofences = (
+        FOR fence IN geofences
+            FILTER GEO_CONTAINS(fence.boundary, [device.lng, device.lat])
+            RETURN fence
+    )
+    FILTER LENGTH(geofences) &gt; 0
+    RETURN {
+        deviceId: device.id,
+        location: [device.lat, device.lng],
+        activeGeofences: geofences[*].name
+    }
+
+// Spatial aggregation
+FOR location IN locations
+    COLLECT region = GEO_POLYGON_AREA(location.region) WITH COUNT INTO locationCount
+    RETURN {
+        region: region,
+        count: locationCount,
+        density: locationCount / GEO_AREA(region)
+    }
+</code></pre>
+
+<h3 id="multi-model-queries">Multi-Model Queries</h3>
+
+<h4 id="document-graph-hybrid-queries">Document-Graph Hybrid Queries</h4>
+<pre><code class="language-aql">// Join documents with graph relationships
+FOR user IN users
+    FOR friend IN 1..1 OUTBOUND user GRAPH "social"
+    FOR post IN posts
+        FILTER post.authorId == friend._key
+        AND post.publishedAt &gt; DATE_SUBTRACT(DATE_NOW(), 1, "week")
+    RETURN {
+        user: user.name,
+        friend: friend.name,
+        recentPosts: COLLECT_LIST(post.title)
+    }
+
+// Graph analysis with document enrichment
+FOR company IN companies
+    LET employees = (
+        FOR emp IN 1..1 INBOUND company GRAPH "employment"
+        RETURN emp
+    )
+    LET avgSalary = AVG(employees[*].salary)
+    LET departments = UNIQUE(employees[*].department)
+    RETURN {
+        company: company.name,
+        employeeCount: LENGTH(employees),
+        avgSalary: avgSalary,
+        departments: departments
+    }
+</code></pre>
+
+<h4 id="search-graph-integration">Search-Graph Integration</h4>
+<pre><code class="language-aql">// Find experts through social network
+FOR expert IN experts
+    SEARCH ANALYZER(expert.skills, "text_en") == "machine learning"
+    FOR connection IN 1..3 ANY expert GRAPH "professional"
+        FILTER connection.industry == "technology"
+    COLLECT colleague = connection WITH COUNT INTO strength
+    SORT strength DESC
+    LIMIT 10
+    RETURN {
+        expert: expert.name,
+        colleague: colleague.name,
+        connectionStrength: strength,
+        skills: expert.skills
+    }
+
+// Content recommendation through graph
+FOR user IN users
+    FILTER user._key == "users/alice"
+    FOR friend IN 2..3 OUTBOUND user GRAPH "social"
+    FOR article IN articles
+        SEARCH ANALYZER(article.content, "text_en") IN TOKENS(friend.interests, "text_en")
+        AND article.publishedAt &gt; DATE_SUBTRACT(DATE_NOW(), 1, "month")
+    COLLECT recommendation = article WITH COUNT INTO relevance
+    SORT relevance DESC, BM25(article) DESC
+    LIMIT 20
+    RETURN {
+        article: recommendation.title,
+        relevanceScore: relevance,
+        searchScore: BM25(recommendation)
+    }
+</code></pre>
+
+<h2 id="advanced-features-implementation">Advanced Features Implementation</h2>
+
+<h3 id="smart-graphs--distribution">Smart Graphs &amp; Distribution</h3>
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">pub</span> <span class="k">struct</span> <span class="n">SmartGraph</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="n">name</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">vertex_collections</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">SmartVertexCollection</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">edge_definitions</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">SmartEdgeDefinition</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">sharding_strategy</span><span class="p">:</span> <span class="n">ShardingStrategy</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="nd">#[derive(Debug,</span> <span class="nd">Clone)]</span>
+<span class="k">pub</span> <span class="k">enum</span> <span class="n">ShardingStrategy</span> <span class="p">{</span>
+    <span class="n">Hash</span> <span class="p">{</span> <span class="n">shard_key</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span> <span class="n">shards</span><span class="p">:</span> <span class="nb">u32</span> <span class="p">},</span>
+    <span class="n">Range</span> <span class="p">{</span> <span class="n">shard_key</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span> <span class="n">ranges</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">Range</span><span class="o">&gt;</span> <span class="p">},</span>
+    <span class="n">Custom</span> <span class="p">{</span> <span class="n">function</span><span class="p">:</span> <span class="nb">String</span> <span class="p">},</span>
+<span class="p">}</span>
+
+<span class="k">impl</span> <span class="n">SmartGraph</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">create_vertex</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">collection</span><span class="p">:</span> <span class="o">&amp;</span><span class="nb">str</span><span class="p">,</span> <span class="n">vertex</span><span class="p">:</span> <span class="n">Vertex</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">VertexHandle</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="k">let</span> <span class="n">shard</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.determine_shard</span><span class="p">(</span><span class="o">&amp;</span><span class="n">vertex</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+        <span class="k">let</span> <span class="n">actor</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.get_shard_actor</span><span class="p">(</span><span class="n">shard</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+        <span class="n">actor</span><span class="nf">.create_vertex</span><span class="p">(</span><span class="n">collection</span><span class="nf">.to_string</span><span class="p">(),</span> <span class="n">vertex</span><span class="p">)</span><span class="k">.await</span>
+    <span class="p">}</span>
+    
+    <span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">traverse</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">start</span><span class="p">:</span> <span class="n">VertexHandle</span><span class="p">,</span> <span class="n">spec</span><span class="p">:</span> <span class="n">TraversalSpec</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">TraversalResult</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="c1">// Distributed traversal across shards</span>
+        <span class="k">let</span> <span class="k">mut</span> <span class="n">visited</span> <span class="o">=</span> <span class="nn">HashSet</span><span class="p">::</span><span class="nf">new</span><span class="p">();</span>
+        <span class="k">let</span> <span class="k">mut</span> <span class="n">queue</span> <span class="o">=</span> <span class="nn">VecDeque</span><span class="p">::</span><span class="nf">new</span><span class="p">();</span>
+        <span class="n">queue</span><span class="nf">.push_back</span><span class="p">((</span><span class="n">start</span><span class="p">,</span> <span class="mi">0</span><span class="p">));</span>
+        
+        <span class="k">let</span> <span class="k">mut</span> <span class="n">results</span> <span class="o">=</span> <span class="nn">Vec</span><span class="p">::</span><span class="nf">new</span><span class="p">();</span>
+        
+        <span class="k">while</span> <span class="k">let</span> <span class="nf">Some</span><span class="p">((</span><span class="n">vertex_handle</span><span class="p">,</span> <span class="n">depth</span><span class="p">))</span> <span class="o">=</span> <span class="n">queue</span><span class="nf">.pop_front</span><span class="p">()</span> <span class="p">{</span>
+            <span class="k">if</span> <span class="n">depth</span> <span class="o">&gt;</span> <span class="n">spec</span><span class="py">.max_depth</span> <span class="p">||</span> <span class="n">visited</span><span class="nf">.contains</span><span class="p">(</span><span class="o">&amp;</span><span class="n">vertex_handle</span><span class="p">)</span> <span class="p">{</span>
+                <span class="k">continue</span><span class="p">;</span>
+            <span class="p">}</span>
+            
+            <span class="n">visited</span><span class="nf">.insert</span><span class="p">(</span><span class="n">vertex_handle</span><span class="nf">.clone</span><span class="p">());</span>
+            <span class="k">let</span> <span class="n">shard</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.get_vertex_shard</span><span class="p">(</span><span class="o">&amp;</span><span class="n">vertex_handle</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+            <span class="k">let</span> <span class="n">actor</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.get_shard_actor</span><span class="p">(</span><span class="n">shard</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+            
+            <span class="k">let</span> <span class="n">neighbors</span> <span class="o">=</span> <span class="n">actor</span><span class="nf">.get_neighbors</span><span class="p">(</span><span class="o">&amp;</span><span class="n">vertex_handle</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">spec</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+            <span class="k">for</span> <span class="n">neighbor</span> <span class="k">in</span> <span class="n">neighbors</span> <span class="p">{</span>
+                <span class="k">if</span> <span class="o">!</span><span class="n">visited</span><span class="nf">.contains</span><span class="p">(</span><span class="o">&amp;</span><span class="n">neighbor</span><span class="py">.handle</span><span class="p">)</span> <span class="p">{</span>
+                    <span class="n">queue</span><span class="nf">.push_back</span><span class="p">((</span><span class="n">neighbor</span><span class="py">.handle</span><span class="nf">.clone</span><span class="p">(),</span> <span class="n">depth</span> <span class="o">+</span> <span class="mi">1</span><span class="p">));</span>
+                    <span class="n">results</span><span class="nf">.push</span><span class="p">(</span><span class="n">neighbor</span><span class="p">);</span>
+                <span class="p">}</span>
+            <span class="p">}</span>
+        <span class="p">}</span>
+        
+        <span class="nf">Ok</span><span class="p">(</span><span class="n">TraversalResult</span> <span class="p">{</span> <span class="n">vertices</span><span class="p">:</span> <span class="n">results</span> <span class="p">})</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="aql-query-optimizer">AQL Query Optimizer</h3>
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">pub</span> <span class="k">struct</span> <span class="n">AQLOptimizer</span> <span class="p">{</span>
+    <span class="n">statistics</span><span class="p">:</span> <span class="n">StatisticsCollector</span><span class="p">,</span>
+    <span class="n">cost_model</span><span class="p">:</span> <span class="n">CostModel</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="k">impl</span> <span class="n">AQLOptimizer</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="k">fn</span> <span class="nf">optimize_query</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">query</span><span class="p">:</span> <span class="n">ParsedQuery</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">OptimizedPlan</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="k">let</span> <span class="k">mut</span> <span class="n">plan</span> <span class="o">=</span> <span class="nn">ExecutionPlan</span><span class="p">::</span><span class="nf">from_query</span><span class="p">(</span><span class="n">query</span><span class="p">);</span>
+        
+        <span class="c1">// Apply optimization rules</span>
+        <span class="n">plan</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.apply_predicate_pushdown</span><span class="p">(</span><span class="n">plan</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+        <span class="n">plan</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.apply_index_selection</span><span class="p">(</span><span class="n">plan</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+        <span class="n">plan</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.apply_join_reordering</span><span class="p">(</span><span class="n">plan</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+        <span class="n">plan</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.apply_traversal_optimization</span><span class="p">(</span><span class="n">plan</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+        <span class="n">plan</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.apply_search_optimization</span><span class="p">(</span><span class="n">plan</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+        
+        <span class="nf">Ok</span><span class="p">(</span><span class="nn">OptimizedPlan</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="n">plan</span><span class="p">))</span>
+    <span class="p">}</span>
+    
+    <span class="k">fn</span> <span class="nf">apply_traversal_optimization</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="k">mut</span> <span class="n">plan</span><span class="p">:</span> <span class="n">ExecutionPlan</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">ExecutionPlan</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="c1">// Optimize graph traversals</span>
+        <span class="k">for</span> <span class="n">node</span> <span class="k">in</span> <span class="n">plan</span><span class="nf">.nodes_mut</span><span class="p">()</span> <span class="p">{</span>
+            <span class="k">if</span> <span class="k">let</span> <span class="nn">ExecutionNode</span><span class="p">::</span><span class="nf">Traversal</span><span class="p">(</span><span class="k">ref</span> <span class="k">mut</span> <span class="n">traversal</span><span class="p">)</span> <span class="o">=</span> <span class="n">node</span> <span class="p">{</span>
+                <span class="c1">// Choose optimal traversal strategy</span>
+                <span class="k">if</span> <span class="n">traversal</span><span class="py">.max_depth</span> <span class="o">&lt;=</span> <span class="mi">2</span> <span class="o">&amp;&amp;</span> <span class="n">traversal</span><span class="nf">.has_filters</span><span class="p">()</span> <span class="p">{</span>
+                    <span class="n">traversal</span><span class="py">.strategy</span> <span class="o">=</span> <span class="nn">TraversalStrategy</span><span class="p">::</span><span class="n">BreadthFirst</span><span class="p">;</span>
+                <span class="p">}</span> <span class="k">else</span> <span class="k">if</span> <span class="n">traversal</span><span class="py">.max_depth</span> <span class="o">&gt;</span> <span class="mi">5</span> <span class="p">{</span>
+                    <span class="n">traversal</span><span class="py">.strategy</span> <span class="o">=</span> <span class="nn">TraversalStrategy</span><span class="p">::</span><span class="n">DepthFirstLimited</span><span class="p">;</span>
+                <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+                    <span class="n">traversal</span><span class="py">.strategy</span> <span class="o">=</span> <span class="nn">TraversalStrategy</span><span class="p">::</span><span class="n">Bidirectional</span><span class="p">;</span>
+                <span class="p">}</span>
+                
+                <span class="c1">// Apply pruning optimizations</span>
+                <span class="k">if</span> <span class="k">let</span> <span class="nf">Some</span><span class="p">(</span><span class="n">filter</span><span class="p">)</span> <span class="o">=</span> <span class="o">&amp;</span><span class="n">traversal</span><span class="py">.filter</span> <span class="p">{</span>
+                    <span class="n">traversal</span><span class="py">.pruning</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.generate_pruning_condition</span><span class="p">(</span><span class="n">filter</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+                <span class="p">}</span>
+            <span class="p">}</span>
+        <span class="p">}</span>
+        
+        <span class="nf">Ok</span><span class="p">(</span><span class="n">plan</span><span class="p">)</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="multi-model-transaction-support">Multi-Model Transaction Support</h3>
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="nd">#[async_trait]</span>
+<span class="k">pub</span> <span class="k">trait</span> <span class="n">MultiModelTransaction</span> <span class="p">{</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">begin</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">collections</span><span class="p">:</span> <span class="n">TransactionCollections</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">TransactionHandle</span><span class="o">&gt;</span><span class="p">;</span>
+    
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">execute_document_operation</span><span class="p">(</span>
+        <span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> 
+        <span class="n">tx</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">TransactionHandle</span><span class="p">,</span> 
+        <span class="n">operation</span><span class="p">:</span> <span class="n">DocumentOperation</span>
+    <span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">DocumentResult</span><span class="o">&gt;</span><span class="p">;</span>
+    
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">execute_graph_operation</span><span class="p">(</span>
+        <span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> 
+        <span class="n">tx</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">TransactionHandle</span><span class="p">,</span> 
+        <span class="n">operation</span><span class="p">:</span> <span class="n">GraphOperation</span>
+    <span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">GraphResult</span><span class="o">&gt;</span><span class="p">;</span>
+    
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">execute_search_operation</span><span class="p">(</span>
+        <span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> 
+        <span class="n">tx</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">TransactionHandle</span><span class="p">,</span> 
+        <span class="n">operation</span><span class="p">:</span> <span class="n">SearchOperation</span>
+    <span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">SearchResult</span><span class="o">&gt;</span><span class="p">;</span>
+    
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">commit</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">tx</span><span class="p">:</span> <span class="n">TransactionHandle</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">TransactionResult</span><span class="o">&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">abort</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">tx</span><span class="p">:</span> <span class="n">TransactionHandle</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">MultiModelTransactionManager</span> <span class="p">{</span>
+    <span class="n">document_actors</span><span class="p">:</span> <span class="n">HashMap</span><span class="o">&lt;</span><span class="nb">String</span><span class="p">,</span> <span class="nb">Arc</span><span class="o">&lt;</span><span class="k">dyn</span> <span class="n">DocumentCollectionActor</span><span class="o">&gt;&gt;</span><span class="p">,</span>
+    <span class="n">graph_actors</span><span class="p">:</span> <span class="n">HashMap</span><span class="o">&lt;</span><span class="nb">String</span><span class="p">,</span> <span class="nb">Arc</span><span class="o">&lt;</span><span class="k">dyn</span> <span class="n">GraphActor</span><span class="o">&gt;&gt;</span><span class="p">,</span>
+    <span class="n">search_actors</span><span class="p">:</span> <span class="n">HashMap</span><span class="o">&lt;</span><span class="nb">String</span><span class="p">,</span> <span class="nb">Arc</span><span class="o">&lt;</span><span class="k">dyn</span> <span class="n">SearchIndexActor</span><span class="o">&gt;&gt;</span><span class="p">,</span>
+    <span class="n">transaction_coordinator</span><span class="p">:</span> <span class="nb">Arc</span><span class="o">&lt;</span><span class="n">TransactionCoordinator</span><span class="o">&gt;</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="k">impl</span> <span class="n">MultiModelTransactionManager</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">execute_aql_transaction</span><span class="p">(</span>
+        <span class="o">&amp;</span><span class="k">self</span><span class="p">,</span>
+        <span class="n">queries</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="nb">String</span><span class="o">&gt;</span><span class="p">,</span>
+        <span class="n">options</span><span class="p">:</span> <span class="n">TransactionOptions</span><span class="p">,</span>
+    <span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="n">QueryResult</span><span class="o">&gt;&gt;</span> <span class="p">{</span>
+        <span class="k">let</span> <span class="n">tx</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.begin</span><span class="p">(</span><span class="n">options</span><span class="py">.collections</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+        <span class="k">let</span> <span class="k">mut</span> <span class="n">results</span> <span class="o">=</span> <span class="nn">Vec</span><span class="p">::</span><span class="nf">new</span><span class="p">();</span>
+        
+        <span class="k">for</span> <span class="n">query</span> <span class="k">in</span> <span class="n">queries</span> <span class="p">{</span>
+            <span class="k">let</span> <span class="n">parsed</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.parse_aql</span><span class="p">(</span><span class="o">&amp;</span><span class="n">query</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+            <span class="k">let</span> <span class="n">plan</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.optimize_query</span><span class="p">(</span><span class="n">parsed</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+            
+            <span class="k">match</span> <span class="k">self</span><span class="nf">.execute_plan</span><span class="p">(</span><span class="o">&amp;</span><span class="n">tx</span><span class="p">,</span> <span class="n">plan</span><span class="p">)</span><span class="k">.await</span> <span class="p">{</span>
+                <span class="nf">Ok</span><span class="p">(</span><span class="n">result</span><span class="p">)</span> <span class="k">=&gt;</span> <span class="n">results</span><span class="nf">.push</span><span class="p">(</span><span class="n">result</span><span class="p">),</span>
+                <span class="nf">Err</span><span class="p">(</span><span class="n">e</span><span class="p">)</span> <span class="k">=&gt;</span> <span class="p">{</span>
+                    <span class="k">self</span><span class="nf">.abort</span><span class="p">(</span><span class="n">tx</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+                    <span class="k">return</span> <span class="nf">Err</span><span class="p">(</span><span class="n">e</span><span class="p">);</span>
+                <span class="p">}</span>
+            <span class="p">}</span>
+        <span class="p">}</span>
+        
+        <span class="k">self</span><span class="nf">.commit</span><span class="p">(</span><span class="n">tx</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+        <span class="nf">Ok</span><span class="p">(</span><span class="n">results</span><span class="p">)</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h2 id="integration-with-arangograph-cloud-features">Integration with ArangoGraph Cloud Features</h2>
+
+<h3 id="managed-service-integration">Managed Service Integration</h3>
+<ul>
+  <li><strong>Auto-scaling</strong>: Dynamic cluster scaling based on workload</li>
+  <li><strong>Backup &amp; Recovery</strong>: Automated backups with point-in-time recovery</li>
+  <li><strong>Monitoring</strong>: Comprehensive metrics and alerting</li>
+  <li><strong>Security</strong>: Enterprise-grade security with encryption at rest and in transit</li>
+  <li><strong>Multi-cloud</strong>: Support for AWS, Azure, and Google Cloud</li>
+</ul>
+
+<h3 id="performance-optimization">Performance Optimization</h3>
+<ul>
+  <li><strong>OneShard Optimization</strong>: Single-shard collections for improved performance</li>
+  <li><strong>Satellite Collections</strong>: Distributed reference data replication</li>
+  <li><strong>Query Caching</strong>: Intelligent result caching with invalidation</li>
+  <li><strong>Connection Pooling</strong>: Efficient connection management and reuse</li>
+</ul>
+
+<h2 id="migration-and-compatibility">Migration and Compatibility</h2>
+
+<h3 id="arangodb-compatibility">ArangoDB Compatibility</h3>
+<ul>
+  <li><strong>HTTP API</strong>: Full REST API compatibility</li>
+  <li><strong>Drivers</strong>: Support for all official ArangoDB drivers (JavaScript, Python, Java, Go, C#, PHP)</li>
+  <li><strong>AQL Language</strong>: 100% AQL query language compatibility</li>
+  <li><strong>Data Import/Export</strong>: Compatible import/export tools and formats</li>
+</ul>
+
+<h3 id="migration-tools">Migration Tools</h3>
+<ul>
+  <li><strong>Schema Migration</strong>: Tools for migrating database structures</li>
+  <li><strong>Data Migration</strong>: Bulk data import from existing ArangoDB instances</li>
+  <li><strong>Query Migration</strong>: AQL query compatibility validation</li>
+  <li><strong>Performance Comparison</strong>: Benchmarking tools for validation</li>
+</ul>
+
+<h2 id="development-timeline">Development Timeline</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>Phase</th>
+      <th>Duration</th>
+      <th>Features</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Phase 18</strong></td>
+      <td>14-16 weeks</td>
+      <td>Multi-model foundation, AQL basics, document/graph/KV actors</td>
+    </tr>
+    <tr>
+      <td><strong>Phase 19</strong></td>
+      <td>12-14 weeks</td>
+      <td>Advanced operations, full-text search, geospatial features</td>
+    </tr>
+    <tr>
+      <td><strong>Phase 20</strong></td>
+      <td>10-12 weeks</td>
+      <td>Enterprise features, smart graphs, performance optimization</td>
+    </tr>
+  </tbody>
+</table>
+
+<p><strong>Total Estimated Effort</strong>: 36-42 weeks</p>
+
+<h2 id="performance-targets">Performance Targets</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>Metric</th>
+      <th>Target</th>
+      <th>Notes</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Document Operations</strong></td>
+      <td>&gt; 100K ops/sec</td>
+      <td>Single document CRUD operations</td>
+    </tr>
+    <tr>
+      <td><strong>Graph Traversals</strong></td>
+      <td>&gt; 10K traversals/sec</td>
+      <td>2-3 hop traversals</td>
+    </tr>
+    <tr>
+      <td><strong>Full-text Search</strong></td>
+      <td>&gt; 50K queries/sec</td>
+      <td>Simple text search queries</td>
+    </tr>
+    <tr>
+      <td><strong>Complex AQL Queries</strong></td>
+      <td>&gt; 1K queries/sec</td>
+      <td>Multi-model join queries</td>
+    </tr>
+    <tr>
+      <td><strong>Data Loading</strong></td>
+      <td>&gt; 500K docs/sec</td>
+      <td>Bulk document insertion</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>This comprehensive ArangoDB implementation will establish Orbit-RS as a premier multi-model database platform while providing superior distributed capabilities and maintaining full ArangoDB ecosystem compatibility.</p>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/orbit-rs/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Orbit-RS Documentation</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">TuringWorks</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

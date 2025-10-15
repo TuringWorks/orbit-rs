@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Complete GraphRAG Integration Summary | Orbit-RS Documentation</title>
+<meta name="generator" content="Jekyll v4.4.1" />
+<meta property="og:title" content="Complete GraphRAG Integration Summary" />
+<meta name="author" content="TuringWorks" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<meta property="og:description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<link rel="canonical" href="https://turingworks.github.io/orbit-rs/complete_graphrag_integration_summary.html" />
+<meta property="og:url" content="https://turingworks.github.io/orbit-rs/complete_graphrag_integration_summary.html" />
+<meta property="og:site_name" content="Orbit-RS Documentation" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Complete GraphRAG Integration Summary" />
+<meta name="twitter:site" content="@TuringWorksAI" />
+<meta name="twitter:creator" content="@TuringWorks" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","author":{"@type":"Person","name":"TuringWorks"},"description":"The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform","headline":"Complete GraphRAG Integration Summary","url":"https://turingworks.github.io/orbit-rs/complete_graphrag_integration_summary.html"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/orbit-rs/assets/main.css">
+  <link rel="stylesheet" href="/orbit-rs/assets/css/custom.css"><link type="application/atom+xml" rel="alternate" href="https://turingworks.github.io/orbit-rs/feed.xml" title="Orbit-RS Documentation" /></head><body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/orbit-rs/">Orbit-RS Documentation</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/orbit-rs/">Orbit-RS Documentation</a><a class="page-link" href="/orbit-rs/project_overview.html">Orbit-RS: Comprehensive Project Overview</a><a class="page-link" href="/orbit-rs/quick_start.html">Quick Start Guide - Multi-Protocol Database Server</a><a class="page-link" href="/orbit-rs/roadmap/">Development Roadmap</a><a class="page-link" href="/orbit-rs/features/">Orbit-RS Feature Index</a><a class="page-link" href="/orbit-rs/compute-acceleration/">Hardware Acceleration Guide</a><a class="page-link" href="/orbit-rs/contributing.html">Contributing Guide</a><a class="page-link" href="/orbit-rs/overview.html">Architecture Overview</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <h1 id="complete-graphrag-integration-summary">Complete GraphRAG Integration Summary</h1>
+
+<h2 id="overview">Overview</h2>
+
+<p>This document summarizes the comprehensive GraphRAG integration across multiple protocols in Orbit-RS, providing knowledge graph capabilities through familiar database query languages.</p>
+
+<h2 id="completed-implementation">Completed Implementation</h2>
+
+<h3 id="-multi-protocol-graphrag-support">🎯 <strong>Multi-Protocol GraphRAG Support</strong></h3>
+
+<p>I have successfully implemented GraphRAG functionality across <strong>four major protocols</strong>:</p>
+
+<ol>
+  <li><strong>✅ RESP (Redis-compatible)</strong></li>
+  <li><strong>✅ PostgreSQL Wire Protocol</strong></li>
+  <li><strong>✅ AQL (ArangoDB Query Language)</strong></li>
+  <li><strong>✅ Bolt/Cypher (Neo4j-compatible)</strong></li>
+</ol>
+
+<h3 id="-implementation-matrix">📊 <strong>Implementation Matrix</strong></h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>Protocol</th>
+      <th>Function Type</th>
+      <th>Syntax Example</th>
+      <th>Integration Level</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>RESP</strong></td>
+      <td>Commands</td>
+      <td><code class="language-plaintext highlighter-rouge">GRAPHRAG.BUILD kg_name doc_id text</code></td>
+      <td>✅ Complete</td>
+    </tr>
+    <tr>
+      <td><strong>PostgreSQL</strong></td>
+      <td>SQL Functions</td>
+      <td><code class="language-plaintext highlighter-rouge">SELECT * FROM GRAPHRAG_BUILD(...)</code></td>
+      <td>✅ Complete</td>
+    </tr>
+    <tr>
+      <td><strong>AQL</strong></td>
+      <td>Function Calls</td>
+      <td><code class="language-plaintext highlighter-rouge">FOR result IN GRAPHRAG_QUERY(...) RETURN result</code></td>
+      <td>✅ Complete</td>
+    </tr>
+    <tr>
+      <td><strong>Cypher/Bolt</strong></td>
+      <td>Stored Procedures</td>
+      <td><code class="language-plaintext highlighter-rouge">CALL orbit.graphrag.buildKnowledge(...)</code></td>
+      <td>✅ Complete</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 id="️-core-components-implemented">🏗️ <strong>Core Components Implemented</strong></h3>
+
+<h4 id="1-graphrag-actor-system">1. GraphRAG Actor System</h4>
+<ul>
+  <li><strong>✅ Document Processing</strong>: Multi-strategy entity extraction and knowledge graph building</li>
+  <li><strong>✅ RAG Queries</strong>: Retrieval-Augmented Generation with multi-hop reasoning</li>
+  <li><strong>✅ Entity Extraction</strong>: Named entity recognition with configurable extractors</li>
+  <li><strong>✅ Multi-hop Reasoning</strong>: Path finding between entities with explanations</li>
+  <li><strong>✅ Statistics &amp; Analytics</strong>: Comprehensive metrics and performance tracking</li>
+</ul>
+
+<h4 id="2-protocol-specific-engines">2. Protocol-Specific Engines</h4>
+<ul>
+  <li><strong>✅ RESP Command Handlers</strong>: Redis-compatible GraphRAG commands</li>
+  <li><strong>✅ PostgreSQL GraphRAG Engine</strong>: SQL function call processing with result sets</li>
+  <li><strong>✅ AQL GraphRAG Engine</strong>: Function integration with AQL query execution</li>
+  <li><strong>✅ Bolt GraphRAG Procedures</strong>: Cypher stored procedure handlers</li>
+</ul>
+
+<h4 id="3-integration-points">3. Integration Points</h4>
+<ul>
+  <li><strong>✅ Error Handling</strong>: Protocol-specific error types and responses</li>
+  <li><strong>✅ Result Formatting</strong>: Native result formats for each protocol</li>
+  <li><strong>✅ Parameter Parsing</strong>: Protocol-appropriate argument parsing</li>
+  <li><strong>✅ Async Operations</strong>: Non-blocking execution across all protocols</li>
+</ul>
+
+<h2 id="feature-comparison">Feature Comparison</h2>
+
+<h3 id="graphrag-functions-available">GraphRAG Functions Available</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>Function</th>
+      <th>RESP</th>
+      <th>PostgreSQL</th>
+      <th>AQL</th>
+      <th>Cypher</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Build Knowledge</strong></td>
+      <td>✅</td>
+      <td>✅</td>
+      <td>✅</td>
+      <td>✅</td>
+      <td>Process documents and build knowledge graphs</td>
+    </tr>
+    <tr>
+      <td><strong>RAG Query</strong></td>
+      <td>✅</td>
+      <td>✅</td>
+      <td>✅</td>
+      <td>✅</td>
+      <td>Perform retrieval-augmented generation</td>
+    </tr>
+    <tr>
+      <td><strong>Entity Extraction</strong></td>
+      <td>✅</td>
+      <td>✅</td>
+      <td>✅</td>
+      <td>✅</td>
+      <td>Extract entities without full graph building</td>
+    </tr>
+    <tr>
+      <td><strong>Find Paths</strong></td>
+      <td>✅</td>
+      <td>✅</td>
+      <td>✅</td>
+      <td>✅</td>
+      <td>Multi-hop reasoning between entities</td>
+    </tr>
+    <tr>
+      <td><strong>Get Statistics</strong></td>
+      <td>✅</td>
+      <td>✅</td>
+      <td>✅</td>
+      <td>✅</td>
+      <td>Knowledge graph metrics and analytics</td>
+    </tr>
+    <tr>
+      <td><strong>List Entities</strong></td>
+      <td>✅</td>
+      <td>✅</td>
+      <td>✅</td>
+      <td>✅</td>
+      <td>Browse entities with filtering</td>
+    </tr>
+    <tr>
+      <td><strong>Find Similar</strong></td>
+      <td>✅</td>
+      <td>✅</td>
+      <td>✅</td>
+      <td>✅</td>
+      <td>Vector similarity search</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 id="protocol-advantages">Protocol Advantages</h3>
+
+<h4 id="resp-redis-compatible">RESP (Redis-compatible)</h4>
+<ul>
+  <li><strong>✅ Ultra-fast operations</strong> for simple GraphRAG commands</li>
+  <li><strong>✅ Familiar Redis syntax</strong> for existing Redis users</li>
+  <li><strong>✅ Easy integration</strong> with Redis-based applications</li>
+  <li><strong>✅ High-performance caching</strong> patterns</li>
+</ul>
+
+<h4 id="postgresql-wire-protocol">PostgreSQL Wire Protocol</h4>
+<ul>
+  <li><strong>✅ Standard SQL functions</strong> - works with any PostgreSQL client</li>
+  <li><strong>✅ BI tool compatibility</strong> - Grafana, Tableau, Power BI, etc.</li>
+  <li><strong>✅ Rich result sets</strong> with proper column metadata</li>
+  <li><strong>✅ ACID transactions</strong> and data consistency</li>
+</ul>
+
+<h4 id="aql-arangodb">AQL (ArangoDB)</h4>
+<ul>
+  <li><strong>✅ Document-oriented queries</strong> for complex document processing</li>
+  <li><strong>✅ Advanced aggregation</strong> with COLLECT and analytical functions</li>
+  <li><strong>✅ Multi-model operations</strong> combining documents and graphs</li>
+  <li><strong>✅ Flexible filtering</strong> and data transformation</li>
+</ul>
+
+<h4 id="cypherbolt-neo4j">Cypher/Bolt (Neo4j)</h4>
+<ul>
+  <li><strong>✅ Native graph patterns</strong> with MATCH syntax</li>
+  <li><strong>✅ Complex relationship queries</strong> and path analysis</li>
+  <li><strong>✅ Graph algorithm integration</strong> potential</li>
+  <li><strong>✅ Visual query building</strong> with Neo4j tools</li>
+</ul>
+
+<h2 id="usage-examples">Usage Examples</h2>
+
+<h3 id="simple-knowledge-building">Simple Knowledge Building</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Redis/RESP</span>
+GRAPHRAG.BUILD research_kg paper_001 <span class="s2">"Machine learning research..."</span> <span class="s2">"{}"</span>
+
+<span class="c"># PostgreSQL  </span>
+SELECT <span class="k">*</span> FROM GRAPHRAG_BUILD<span class="o">(</span><span class="s1">'research_kg'</span>, <span class="s1">'paper_001'</span>, <span class="s1">'Machine learning...'</span>, <span class="s1">'{}'</span>::json<span class="o">)</span><span class="p">;</span>
+
+<span class="c"># AQL</span>
+FOR result IN GRAPHRAG_BUILD_KNOWLEDGE<span class="o">(</span><span class="s2">"Machine learning..."</span>, <span class="o">{</span><span class="s2">"knowledge_graph"</span>: <span class="s2">"research_kg"</span><span class="o">})</span>
+RETURN result
+
+<span class="c"># Cypher</span>
+CALL orbit.graphrag.buildKnowledge<span class="o">(</span><span class="s2">"research_kg"</span>, <span class="s2">"paper_001"</span>, <span class="s2">"Machine learning..."</span>, <span class="o">{}</span>, <span class="o">{})</span>
+YIELD entities_extracted, processing_time_ms
+</code></pre></div></div>
+
+<h3 id="complex-multi-protocol-workflow">Complex Multi-Protocol Workflow</h3>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c1"># Multi-protocol GraphRAG application
+</span><span class="k">class</span> <span class="nc">GraphRAGPipeline</span><span class="p">:</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="n">self</span><span class="p">):</span>
+        <span class="c1"># Different protocols for different tasks
+</span>        <span class="n">self</span><span class="p">.</span><span class="n">redis_client</span> <span class="o">=</span> <span class="n">redis</span><span class="p">.</span><span class="nc">Redis</span><span class="p">(</span><span class="n">host</span><span class="o">=</span><span class="sh">'</span><span class="s">localhost</span><span class="sh">'</span><span class="p">,</span> <span class="n">port</span><span class="o">=</span><span class="mi">6379</span><span class="p">)</span>  <span class="c1"># Fast operations
+</span>        <span class="n">self</span><span class="p">.</span><span class="n">pg_conn</span> <span class="o">=</span> <span class="n">psycopg2</span><span class="p">.</span><span class="nf">connect</span><span class="p">(</span><span class="sh">"</span><span class="s">host=localhost port=5433</span><span class="sh">"</span><span class="p">)</span>  <span class="c1"># Analytics
+</span>        <span class="n">self</span><span class="p">.</span><span class="n">neo4j_driver</span> <span class="o">=</span> <span class="n">neo4j</span><span class="p">.</span><span class="n">GraphDatabase</span><span class="p">.</span><span class="nf">driver</span><span class="p">(</span><span class="sh">"</span><span class="s">bolt://localhost:7687</span><span class="sh">"</span><span class="p">)</span>  <span class="c1"># Graph queries
+</span>    
+    <span class="k">def</span> <span class="nf">process_documents</span><span class="p">(</span><span class="n">self</span><span class="p">,</span> <span class="n">documents</span><span class="p">):</span>
+        <span class="sh">"""</span><span class="s">Use Redis for fast document processing</span><span class="sh">"""</span>
+        <span class="k">for</span> <span class="n">doc</span> <span class="ow">in</span> <span class="n">documents</span><span class="p">:</span>
+            <span class="n">result</span> <span class="o">=</span> <span class="n">self</span><span class="p">.</span><span class="n">redis_client</span><span class="p">.</span><span class="nf">execute_command</span><span class="p">(</span>
+                <span class="sh">'</span><span class="s">GRAPHRAG.BUILD</span><span class="sh">'</span><span class="p">,</span> <span class="sh">'</span><span class="s">main_kg</span><span class="sh">'</span><span class="p">,</span> <span class="n">doc</span><span class="p">.</span><span class="nb">id</span><span class="p">,</span> <span class="n">doc</span><span class="p">.</span><span class="n">text</span><span class="p">,</span> <span class="n">json</span><span class="p">.</span><span class="nf">dumps</span><span class="p">(</span><span class="n">doc</span><span class="p">.</span><span class="n">metadata</span><span class="p">)</span>
+            <span class="p">)</span>
+    
+    <span class="k">def</span> <span class="nf">analyze_trends</span><span class="p">(</span><span class="n">self</span><span class="p">,</span> <span class="n">query</span><span class="p">):</span>
+        <span class="sh">"""</span><span class="s">Use PostgreSQL for complex analytics</span><span class="sh">"""</span>
+        <span class="k">with</span> <span class="n">self</span><span class="p">.</span><span class="n">pg_conn</span><span class="p">.</span><span class="nf">cursor</span><span class="p">()</span> <span class="k">as</span> <span class="n">cur</span><span class="p">:</span>
+            <span class="n">cur</span><span class="p">.</span><span class="nf">execute</span><span class="p">(</span><span class="sh">"""</span><span class="s">
+                SELECT response, confidence, entities_involved 
+                FROM GRAPHRAG_QUERY(</span><span class="sh">'</span><span class="s">main_kg</span><span class="sh">'</span><span class="s">, %s, 3, 2048, </span><span class="sh">'</span><span class="s">ollama</span><span class="sh">'</span><span class="s">, true)
+                WHERE confidence &gt; 0.8
+            </span><span class="sh">"""</span><span class="p">,</span> <span class="p">(</span><span class="n">query</span><span class="p">,))</span>
+            <span class="k">return</span> <span class="n">cur</span><span class="p">.</span><span class="nf">fetchall</span><span class="p">()</span>
+    
+    <span class="k">def</span> <span class="nf">find_connections</span><span class="p">(</span><span class="n">self</span><span class="p">,</span> <span class="n">entity1</span><span class="p">,</span> <span class="n">entity2</span><span class="p">):</span>
+        <span class="sh">"""</span><span class="s">Use Neo4j for complex graph patterns</span><span class="sh">"""</span>
+        <span class="k">with</span> <span class="n">self</span><span class="p">.</span><span class="n">neo4j_driver</span><span class="p">.</span><span class="nf">session</span><span class="p">()</span> <span class="k">as</span> <span class="n">session</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">session</span><span class="p">.</span><span class="nf">run</span><span class="p">(</span><span class="sh">"""</span><span class="s">
+                CALL orbit.graphrag.findPaths(</span><span class="sh">'</span><span class="s">main_kg</span><span class="sh">'</span><span class="s">, $entity1, $entity2, {
+                    max_hops: 4, include_explanation: true
+                })
+                YIELD path_nodes, relationships, score, explanation
+                WHERE score &gt; 0.7
+                RETURN path_nodes, explanation
+                ORDER BY score DESC
+            </span><span class="sh">"""</span><span class="p">,</span> <span class="n">entity1</span><span class="o">=</span><span class="n">entity1</span><span class="p">,</span> <span class="n">entity2</span><span class="o">=</span><span class="n">entity2</span><span class="p">).</span><span class="nf">data</span><span class="p">()</span>
+</code></pre></div></div>
+
+<h2 id="performance-characteristics">Performance Characteristics</h2>
+
+<h3 id="protocol-performance-comparison">Protocol Performance Comparison</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>Metric</th>
+      <th>RESP</th>
+      <th>PostgreSQL</th>
+      <th>AQL</th>
+      <th>Cypher</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Query Parsing</strong></td>
+      <td>Fastest</td>
+      <td>Fast</td>
+      <td>Medium</td>
+      <td>Medium</td>
+    </tr>
+    <tr>
+      <td><strong>Result Formatting</strong></td>
+      <td>Minimal</td>
+      <td>Rich</td>
+      <td>Rich</td>
+      <td>Rich</td>
+    </tr>
+    <tr>
+      <td><strong>Memory Usage</strong></td>
+      <td>Lowest</td>
+      <td>Medium</td>
+      <td>Medium</td>
+      <td>Medium</td>
+    </tr>
+    <tr>
+      <td><strong>Complex Queries</strong></td>
+      <td>Limited</td>
+      <td>Good</td>
+      <td>Excellent</td>
+      <td>Excellent</td>
+    </tr>
+    <tr>
+      <td><strong>Aggregation</strong></td>
+      <td>Basic</td>
+      <td>Good</td>
+      <td>Excellent</td>
+      <td>Good</td>
+    </tr>
+    <tr>
+      <td><strong>Transaction Support</strong></td>
+      <td>None</td>
+      <td>Full ACID</td>
+      <td>ArangoDB</td>
+      <td>Neo4j</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 id="optimization-strategies">Optimization Strategies</h3>
+
+<h4 id="for-high-throughput-applications">For High-Throughput Applications</h4>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Use RESP for maximum throughput</span>
+GRAPHRAG.BUILD kg doc_001 <span class="s2">"text"</span> <span class="s2">"{}"</span> 
+GRAPHRAG.BUILD kg doc_002 <span class="s2">"text"</span> <span class="s2">"{}"</span>
+GRAPHRAG.STATS kg
+</code></pre></div></div>
+
+<h4 id="for-analytics-and-bi">For Analytics and BI</h4>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Use PostgreSQL for complex analytics</span>
+<span class="k">WITH</span> <span class="n">kg_stats</span> <span class="k">AS</span> <span class="p">(</span>
+    <span class="k">SELECT</span> <span class="o">*</span> <span class="k">FROM</span> <span class="n">GRAPHRAG_STATS</span><span class="p">(</span><span class="s1">'research_kg'</span><span class="p">)</span>
+<span class="p">)</span>
+<span class="k">SELECT</span> 
+    <span class="n">documents_processed</span><span class="p">,</span>
+    <span class="n">entities_extracted</span> <span class="o">/</span> <span class="n">documents_processed</span> <span class="k">as</span> <span class="n">entity_density</span><span class="p">,</span>
+    <span class="n">avg_rag_query_time_ms</span>
+<span class="k">FROM</span> <span class="n">kg_stats</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h4 id="for-document-processing">For Document Processing</h4>
+<pre><code class="language-aql">// Use AQL for document-heavy workflows
+FOR doc IN documents
+    FILTER doc.year &gt;= 2020
+    FOR result IN GRAPHRAG_BUILD_KNOWLEDGE(doc, {
+        "knowledge_graph": "research_kg",
+        "batch_mode": true
+    })
+    COLLECT year = doc.year INTO yearly_results = result
+    RETURN {
+        "year": year,
+        "documents_processed": LENGTH(yearly_results),
+        "total_entities": SUM(yearly_results[*].entities_extracted)
+    }
+</code></pre>
+
+<h4 id="for-graph-analysis">For Graph Analysis</h4>
+<div class="language-cypher highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Use Cypher for relationship-heavy queries</span>
+<span class="k">MATCH</span><span class="w"> </span><span class="ss">(</span><span class="py">c:</span><span class="n">Company</span><span class="ss">)</span><span class="o">-</span><span class="ss">[</span><span class="py">r:</span><span class="n">COMPETES_WITH</span><span class="ss">]</span><span class="o">-&gt;</span><span class="ss">(</span><span class="py">competitor:</span><span class="n">Company</span><span class="ss">)</span>
+<span class="k">WITH</span> <span class="nf">collect</span><span class="ss">({</span><span class="py">company:</span> <span class="n">c.name</span><span class="ss">,</span> <span class="py">competitor:</span> <span class="n">competitor.name</span><span class="ss">})</span> <span class="k">as</span> <span class="n">relationships</span>
+<span class="k">UNWIND</span> <span class="n">relationships</span> <span class="k">as</span> <span class="n">rel</span>
+<span class="k">CALL</span> <span class="n">orbit.graphrag.findPaths</span><span class="ss">(</span><span class="s2">"business_kg"</span><span class="ss">,</span> <span class="n">rel.company</span><span class="ss">,</span> <span class="n">rel.competitor</span><span class="ss">,</span> <span class="ss">{</span>
+    <span class="nl">max_hops</span><span class="dl">:</span><span class="w"> </span><span class="m">2</span><span class="ss">,</span> 
+    <span class="py">relationship_types:</span> <span class="ss">[</span><span class="s2">"PARTNERS_WITH"</span><span class="ss">,</span> <span class="s2">"SUPPLIES_TO"</span><span class="ss">,</span> <span class="s2">"ACQUIRED_BY"</span><span class="ss">]</span>
+<span class="ss">})</span> <span class="k">YIELD</span> <span class="n">score</span><span class="ss">,</span> <span class="n">explanation</span>
+<span class="k">WHERE</span> <span class="n">score</span> <span class="o">&gt;</span> <span class="mf">0.6</span>
+<span class="k">RETURN</span> <span class="n">rel.company</span><span class="ss">,</span> <span class="n">rel.competitor</span><span class="ss">,</span> <span class="n">explanation</span>
+</code></pre></div></div>
+
+<h2 id="documentation-created">Documentation Created</h2>
+
+<h3 id="-comprehensive-documentation-suite">📚 <strong>Comprehensive Documentation Suite</strong></h3>
+
+<ol>
+  <li><strong>✅ RESP Command Reference</strong> - Complete Redis-compatible command documentation</li>
+  <li><strong>✅ PostgreSQL Integration Guide</strong> - SQL functions with BI tool examples</li>
+  <li><strong>✅ AQL Function Design</strong> - ArangoDB-native function syntax and patterns</li>
+  <li><strong>✅ Cypher Procedures Design</strong> - Neo4j stored procedure reference</li>
+  <li><strong>✅ Multi-Protocol Integration Guide</strong> - Comparison and best practices</li>
+  <li><strong>✅ Implementation Summary</strong> - Technical architecture overview</li>
+</ol>
+
+<h3 id="️-developer-resources">🛠️ <strong>Developer Resources</strong></h3>
+
+<ul>
+  <li><strong>Code Examples</strong>: Working examples for all protocols</li>
+  <li><strong>Best Practices</strong>: Performance optimization guidelines</li>
+  <li><strong>Error Handling</strong>: Protocol-specific error patterns</li>
+  <li><strong>Integration Patterns</strong>: Multi-protocol application designs</li>
+  <li><strong>Client Libraries</strong>: Python, Node.js, and other language examples</li>
+</ul>
+
+<h2 id="architecture-benefits">Architecture Benefits</h2>
+
+<h3 id="-unified-graphrag-core">🎨 <strong>Unified GraphRAG Core</strong></h3>
+<ul>
+  <li><strong>Single Actor System</strong>: All protocols use the same GraphRAG actors</li>
+  <li><strong>Consistent Functionality</strong>: Same features available across all protocols</li>
+  <li><strong>Shared Configuration</strong>: Common settings and knowledge graphs</li>
+  <li><strong>Cross-Protocol Compatibility</strong>: Knowledge graphs built in one protocol accessible from others</li>
+</ul>
+
+<h3 id="-protocol-optimized-interfaces">🔧 <strong>Protocol-Optimized Interfaces</strong></h3>
+<ul>
+  <li><strong>Native Query Patterns</strong>: Each protocol uses its natural syntax</li>
+  <li><strong>Optimized Result Formats</strong>: Protocol-appropriate data structures</li>
+  <li><strong>Error Handling</strong>: Protocol-specific error responses</li>
+  <li><strong>Performance Tuning</strong>: Each protocol optimized for its use case</li>
+</ul>
+
+<h3 id="-scalability-features">📈 <strong>Scalability Features</strong></h3>
+<ul>
+  <li><strong>Async Processing</strong>: Non-blocking operations across all protocols</li>
+  <li><strong>Actor Isolation</strong>: Knowledge graphs are isolated and scalable</li>
+  <li><strong>Protocol Independence</strong>: Protocols can scale independently</li>
+  <li><strong>Resource Management</strong>: Efficient memory and connection handling</li>
+</ul>
+
+<h2 id="future-enhancements">Future Enhancements</h2>
+
+<h3 id="-potential-extensions">🚀 <strong>Potential Extensions</strong></h3>
+<ul>
+  <li><strong>GraphQL Integration</strong>: GraphRAG via GraphQL schema and resolvers</li>
+  <li><strong>gRPC Support</strong>: High-performance RPC interface for GraphRAG</li>
+  <li><strong>WebSocket Streaming</strong>: Real-time GraphRAG updates</li>
+  <li><strong>Vector Database Integration</strong>: Enhanced similarity search</li>
+  <li><strong>Advanced Analytics</strong>: Machine learning integration</li>
+</ul>
+
+<h3 id="-use-case-expansion">🎯 <strong>Use Case Expansion</strong></h3>
+<ul>
+  <li><strong>Multi-tenant Knowledge Graphs</strong>: Isolated graphs per organization</li>
+  <li><strong>Federated GraphRAG</strong>: Queries across multiple knowledge graphs</li>
+  <li><strong>Real-time Processing</strong>: Stream processing with Apache Kafka</li>
+  <li><strong>Enterprise Features</strong>: RBAC, audit logs, compliance</li>
+</ul>
+
+<h2 id="conclusion">Conclusion</h2>
+
+<p>This comprehensive GraphRAG integration successfully brings knowledge graph and RAG capabilities to <strong>four major database protocols</strong>, making these advanced AI features accessible through familiar query languages. The modular, actor-based architecture ensures scalability while providing protocol-optimized interfaces for maximum developer productivity.</p>
+
+<p><strong>Key Achievements:</strong></p>
+<ul>
+  <li>✅ <strong>Complete Protocol Coverage</strong>: RESP, PostgreSQL, AQL, and Cypher</li>
+  <li>✅ <strong>Unified Backend</strong>: Single GraphRAG actor system serving all protocols</li>
+  <li>✅ <strong>Rich Documentation</strong>: Comprehensive guides and examples</li>
+  <li>✅ <strong>Production Ready</strong>: Error handling, performance optimization, and best practices</li>
+  <li>✅ <strong>Developer Friendly</strong>: Native syntax and patterns for each protocol</li>
+</ul>
+
+<p>The integration enables developers to choose the optimal protocol for their specific use case while maintaining access to the full GraphRAG feature set across all interfaces.</p>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/orbit-rs/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Orbit-RS Documentation</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">TuringWorks</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

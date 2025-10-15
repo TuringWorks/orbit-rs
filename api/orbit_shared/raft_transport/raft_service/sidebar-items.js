@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["raft_consensus_client","raft_consensus_server"],"struct":["AppendEntriesRequestProto","AppendEntriesResponseProto","LogEntryProto","VoteRequestProto","VoteResponseProto"]};

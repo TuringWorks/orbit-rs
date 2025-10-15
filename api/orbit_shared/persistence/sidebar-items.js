@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["ActorSnapshot","ActorStateManager","MemoryPersistenceBackend","PersistenceConfig","PersistenceMetrics"],"trait":["PersistenceBackend"]};

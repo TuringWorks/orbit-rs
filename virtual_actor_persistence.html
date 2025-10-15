@@ -1,0 +1,886 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Virtual Actor State Persistence and Activation in Orbit-RS | Orbit-RS Documentation</title>
+<meta name="generator" content="Jekyll v4.4.1" />
+<meta property="og:title" content="Virtual Actor State Persistence and Activation in Orbit-RS" />
+<meta name="author" content="TuringWorks" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<meta property="og:description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<link rel="canonical" href="https://turingworks.github.io/orbit-rs/virtual_actor_persistence.html" />
+<meta property="og:url" content="https://turingworks.github.io/orbit-rs/virtual_actor_persistence.html" />
+<meta property="og:site_name" content="Orbit-RS Documentation" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Virtual Actor State Persistence and Activation in Orbit-RS" />
+<meta name="twitter:site" content="@TuringWorksAI" />
+<meta name="twitter:creator" content="@TuringWorks" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","author":{"@type":"Person","name":"TuringWorks"},"description":"The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform","headline":"Virtual Actor State Persistence and Activation in Orbit-RS","url":"https://turingworks.github.io/orbit-rs/virtual_actor_persistence.html"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/orbit-rs/assets/main.css">
+  <link rel="stylesheet" href="/orbit-rs/assets/css/custom.css"><link type="application/atom+xml" rel="alternate" href="https://turingworks.github.io/orbit-rs/feed.xml" title="Orbit-RS Documentation" /></head><body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/orbit-rs/">Orbit-RS Documentation</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/orbit-rs/">Orbit-RS Documentation</a><a class="page-link" href="/orbit-rs/project_overview.html">Orbit-RS: Comprehensive Project Overview</a><a class="page-link" href="/orbit-rs/quick_start.html">Quick Start Guide - Multi-Protocol Database Server</a><a class="page-link" href="/orbit-rs/roadmap/">Development Roadmap</a><a class="page-link" href="/orbit-rs/features/">Orbit-RS Feature Index</a><a class="page-link" href="/orbit-rs/compute-acceleration/">Hardware Acceleration Guide</a><a class="page-link" href="/orbit-rs/contributing.html">Contributing Guide</a><a class="page-link" href="/orbit-rs/overview.html">Architecture Overview</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <h1 id="virtual-actor-state-persistence-and-activation-in-orbit-rs">Virtual Actor State Persistence and Activation in Orbit-RS</h1>
+
+<h2 id="overview">Overview</h2>
+
+<p>Orbit-RS implements a sophisticated virtual actor system where actors can be transparently activated on-demand when messages arrive, with their state automatically persisted and restored across the distributed cluster. This document explains the architecture, mechanisms, and implementation details of how virtual actors maintain state persistence and handle activation/deactivation cycles.</p>
+
+<h3 id="-quick-answer-storage-backend-independence">🔍 <strong>Quick Answer: Storage Backend Independence</strong></h3>
+
+<p><strong>Yes, cloud storage (S3, Azure, GCP, MinIO) and local storage (LSM-Tree, RocksDB, B-Tree) implementations are completely independent:</strong></p>
+
+<ul>
+  <li>✅ <strong>Cloud providers</strong> directly use REST APIs to store data as objects/blobs</li>
+  <li>✅ <strong>Local providers</strong> implement complete storage engines with their own file formats</li>
+  <li>✅ <strong>No layering</strong> - you choose ONE backend type, not a combination</li>
+  <li>✅ <strong>Each is self-contained</strong> - handles all persistence operations independently</li>
+</ul>
+
+<p>See the <a href="#%EF%B8%8F-important-storage-backend-independence">Storage Backend Independence</a> section for detailed technical explanation.</p>
+
+<h2 id="core-concepts">Core Concepts</h2>
+
+<h3 id="virtual-actors">Virtual Actors</h3>
+
+<p>Virtual actors in Orbit-RS are objects that:</p>
+<ul>
+  <li>Interact with the world using asynchronous messages</li>
+  <li>Can be <strong>active</strong> (in-memory and processing messages) or <strong>inactive</strong> (state persisted to storage)</li>
+  <li>Are automatically activated on any available server when messages arrive</li>
+  <li>Have their state transparently managed by the framework</li>
+</ul>
+
+<h3 id="actor-lifecycle-states">Actor Lifecycle States</h3>
+
+<pre><code class="language-mermaid">stateDiagram-v2
+    [*] --&gt; Inactive: Initial State
+    Inactive --&gt; Activating: Message Arrives
+    Activating --&gt; Active: State Loaded
+    Active --&gt; Deactivating: Idle Timeout / Explicit Shutdown
+    Deactivating --&gt; Inactive: State Persisted
+    Active --&gt; Active: Processing Messages
+    
+    note right of Activating : Load state from persistence
+    note right of Deactivating : Save state to persistence
+</code></pre>
+
+<h2 id="architecture-components">Architecture Components</h2>
+
+<h3 id="1-actor-leases">1. Actor Leases</h3>
+
+<p>Actor leases are the foundation of distributed coordination in Orbit-RS. They prevent multiple nodes from activating the same actor simultaneously.</p>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="nd">#[derive(Debug,</span> <span class="nd">Clone,</span> <span class="nd">Serialize,</span> <span class="nd">Deserialize,</span> <span class="nd">PartialEq)]</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">ActorLease</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="n">key</span><span class="p">:</span> <span class="n">ActorKey</span><span class="p">,</span>           <span class="c1">// Actor identifier</span>
+    <span class="k">pub</span> <span class="n">node_id</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span>         <span class="c1">// Owning node</span>
+    <span class="k">pub</span> <span class="n">expires_at</span><span class="p">:</span> <span class="n">SystemTime</span><span class="p">,</span>  <span class="c1">// Lease expiration</span>
+    <span class="k">pub</span> <span class="n">lease_duration</span><span class="p">:</span> <span class="n">Duration</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">version</span><span class="p">:</span> <span class="nb">u64</span><span class="p">,</span>            <span class="c1">// For optimistic concurrency</span>
+    <span class="k">pub</span> <span class="n">metadata</span><span class="p">:</span> <span class="n">LeaseMetadata</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="nd">#[derive(Debug,</span> <span class="nd">Clone,</span> <span class="nd">Hash,</span> <span class="nd">PartialEq,</span> <span class="nd">Eq)]</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">ActorKey</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="n">actor_id</span><span class="p">:</span> <span class="n">Uuid</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">actor_type</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p><strong>Key Features:</strong></p>
+<ul>
+  <li><strong>Distributed Ownership</strong>: Only one node can hold a lease for an actor at a time</li>
+  <li><strong>Automatic Expiration</strong>: Leases expire if not renewed, preventing deadlocks</li>
+  <li><strong>Version Control</strong>: Optimistic concurrency control prevents conflicts</li>
+  <li><strong>Metadata Tracking</strong>: Creation time, renewal count, and custom data</li>
+</ul>
+
+<h3 id="2-actor-snapshots">2. Actor Snapshots</h3>
+
+<p>Actor snapshots contain the serialized state of virtual actors with integrity checking and versioning.</p>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="nd">#[derive(Debug,</span> <span class="nd">Clone,</span> <span class="nd">Serialize,</span> <span class="nd">Deserialize)]</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">ActorSnapshot</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="n">actor_reference</span><span class="p">:</span> <span class="n">AddressableReference</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">snapshot_id</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span>      <span class="c1">// Unique snapshot identifier</span>
+    <span class="k">pub</span> <span class="n">version</span><span class="p">:</span> <span class="nb">u64</span><span class="p">,</span>             <span class="c1">// State version number</span>
+    <span class="k">pub</span> <span class="n">state_data</span><span class="p">:</span> <span class="nn">serde_json</span><span class="p">::</span><span class="n">Value</span><span class="p">,</span> <span class="c1">// Serialized actor state</span>
+    <span class="k">pub</span> <span class="n">created_at</span><span class="p">:</span> <span class="nb">i64</span><span class="p">,</span>          <span class="c1">// Creation timestamp</span>
+    <span class="k">pub</span> <span class="n">updated_at</span><span class="p">:</span> <span class="nb">i64</span><span class="p">,</span>          <span class="c1">// Last update timestamp</span>
+    <span class="k">pub</span> <span class="n">state_hash</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span>       <span class="c1">// SHA-256 integrity hash</span>
+    <span class="k">pub</span> <span class="n">tags</span><span class="p">:</span> <span class="n">HashMap</span><span class="o">&lt;</span><span class="nb">String</span><span class="p">,</span> <span class="nb">String</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">ttl_seconds</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="nb">u64</span><span class="o">&gt;</span><span class="p">,</span> <span class="c1">// Automatic cleanup</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p><strong>Key Features:</strong></p>
+<ul>
+  <li><strong>Integrity Checking</strong>: SHA-256 hashes ensure data consistency</li>
+  <li><strong>Version Control</strong>: Optimistic concurrency with version numbers</li>
+  <li><strong>Automatic Cleanup</strong>: TTL-based expiration for old snapshots</li>
+  <li><strong>Metadata Tags</strong>: Custom categorization and search capabilities</li>
+</ul>
+
+<h2 id="persistence-backends">Persistence Backends</h2>
+
+<p>Orbit-RS supports multiple configurable storage backends that fall into two main categories:</p>
+
+<h3 id="local-storage-backends-self-contained"><strong>Local Storage Backends</strong> (Self-Contained)</h3>
+<p>These providers implement complete storage engines locally:</p>
+
+<h3 id="1-copy-on-write-b-tree-cowbtreeprovider">1. Copy-on-Write B+ Tree (<code class="language-plaintext highlighter-rouge">CowBTreeProvider</code>)</h3>
+
+<p><strong>Optimized for</strong>: OLTP workloads with frequent reads and moderate writes</p>
+
+<p><strong>Features:</strong></p>
+<ul>
+  <li>Write-ahead logging (WAL) for durability</li>
+  <li>Memory-efficient copy-on-write operations</li>
+  <li>Fast point lookups and range queries</li>
+  <li>Automatic background snapshots</li>
+</ul>
+
+<div class="language-toml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">[</span><span class="n">persistence</span><span class="k">]</span>
+<span class="n">type</span> <span class="o">=</span><span class="w"> </span><span class="s">"cow_btree"</span>
+<span class="n">data_dir</span> <span class="o">=</span><span class="w"> </span><span class="s">"./orbit_data"</span>
+<span class="n">max_keys_per_node</span> <span class="o">=</span><span class="w"> </span><span class="mi">256</span>
+<span class="n">wal_buffer_size</span> <span class="o">=</span><span class="w"> </span><span class="mi">1048576</span>
+<span class="n">enable_compression</span> <span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+<span class="n">wal_sync_interval</span> <span class="o">=</span><span class="w"> </span><span class="mi">5</span>
+</code></pre></div></div>
+
+<h3 id="2-lsm-tree-lsmtreeprovider">2. LSM-Tree (<code class="language-plaintext highlighter-rouge">LsmTreeProvider</code>)</h3>
+
+<p><strong>Optimized for</strong>: Write-heavy workloads with high throughput requirements</p>
+
+<p><strong>Features:</strong></p>
+<ul>
+  <li>Log-structured merge tree with background compaction</li>
+  <li>Bloom filters for efficient negative lookups</li>
+  <li>Immutable memtables for consistent reads</li>
+  <li>Configurable compaction strategies</li>
+</ul>
+
+<div class="language-toml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">[</span><span class="n">persistence</span><span class="k">]</span>
+<span class="n">type</span> <span class="o">=</span><span class="w"> </span><span class="s">"lsm_tree"</span>
+<span class="n">data_dir</span> <span class="o">=</span><span class="w"> </span><span class="s">"./orbit_lsm_data"</span>
+<span class="n">memtable_size_limit</span> <span class="o">=</span><span class="w"> </span><span class="mi">67108864</span>  <span class="c"># 64MB</span>
+<span class="n">max_memtables</span> <span class="o">=</span><span class="w"> </span><span class="mi">10</span>
+<span class="n">bloom_filter_fp_rate</span> <span class="o">=</span><span class="w"> </span><span class="mf">0.01</span>
+<span class="n">enable_compaction</span> <span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+<span class="n">compaction_threshold</span> <span class="o">=</span><span class="w"> </span><span class="mi">4</span>
+</code></pre></div></div>
+
+<h3 id="3-rocksdb-rocksdbprovider">3. RocksDB (<code class="language-plaintext highlighter-rouge">RocksDBProvider</code>)</h3>
+
+<p><strong>Optimized for</strong>: Production workloads requiring ACID transactions</p>
+
+<p><strong>Features:</strong></p>
+<ul>
+  <li>Production-ready embedded database</li>
+  <li>ACID transaction support with 2-phase commit</li>
+  <li>Column families for data organization</li>
+  <li>Built-in compression and backup</li>
+</ul>
+
+<div class="language-toml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">[</span><span class="n">persistence</span><span class="k">]</span>
+<span class="n">type</span> <span class="o">=</span><span class="w"> </span><span class="s">"rocksdb"</span>
+<span class="n">data_dir</span> <span class="o">=</span><span class="w"> </span><span class="s">"./orbit_rocksdb"</span>
+<span class="n">create_if_missing</span> <span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+<span class="n">enable_statistics</span> <span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+<span class="n">compression_type</span> <span class="o">=</span><span class="w"> </span><span class="s">"snappy"</span>
+<span class="n">block_cache_size</span> <span class="o">=</span><span class="w"> </span><span class="mi">268435456</span>  <span class="c"># 256MB</span>
+</code></pre></div></div>
+
+<h3 id="cloud-storage-backends-object-storage"><strong>Cloud Storage Backends</strong> (Object Storage)</h3>
+<p>These providers use external cloud services and are <strong>independent</strong> of the local storage implementations:</p>
+
+<h3 id="4-cloud-storage-s3-azure-gcp">4. Cloud Storage (S3, Azure, GCP)</h3>
+
+<p><strong>Optimized for</strong>: Distributed deployments with high durability requirements</p>
+
+<p><strong>Features:</strong></p>
+<ul>
+  <li>Object storage for massive scale</li>
+  <li>Built-in redundancy and availability</li>
+  <li>Cross-region replication</li>
+  <li>Server-side encryption</li>
+</ul>
+
+<div class="language-toml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">[</span><span class="n">persistence</span><span class="k">.</span><span class="n">s3</span><span class="k">]</span>
+<span class="n">type</span> <span class="o">=</span><span class="w"> </span><span class="s">"s3"</span>
+<span class="n">endpoint</span> <span class="o">=</span><span class="w"> </span><span class="s">"https://s3.amazonaws.com"</span>
+<span class="n">region</span> <span class="o">=</span><span class="w"> </span><span class="s">"us-west-2"</span>
+<span class="n">bucket</span> <span class="o">=</span><span class="w"> </span><span class="s">"orbit-actor-state"</span>
+<span class="n">access_key_id</span> <span class="o">=</span><span class="w"> </span><span class="s">"${AWS_ACCESS_KEY_ID}"</span>
+<span class="n">secret_access_key</span> <span class="o">=</span><span class="w"> </span><span class="s">"${AWS_SECRET_ACCESS_KEY}"</span>
+<span class="n">prefix</span> <span class="o">=</span><span class="w"> </span><span class="s">"orbit"</span>
+<span class="n">enable_ssl</span> <span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+</code></pre></div></div>
+
+<h3 id="5-in-memory-memoryprovider">5. In-Memory (<code class="language-plaintext highlighter-rouge">MemoryProvider</code>)</h3>
+
+<p><strong>Optimized for</strong>: Development, testing, and high-performance scenarios</p>
+
+<p><strong>Features:</strong></p>
+<ul>
+  <li>Ultra-fast concurrent data structures (DashMap)</li>
+  <li>Optional disk backup with compression</li>
+  <li>Memory usage monitoring and limits</li>
+  <li>Perfect for stateless or ephemeral workloads</li>
+</ul>
+
+<div class="language-toml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">[</span><span class="n">persistence</span><span class="k">.</span><span class="n">memory</span><span class="k">]</span>
+<span class="n">type</span> <span class="o">=</span><span class="w"> </span><span class="s">"memory"</span>
+<span class="n">max_entries</span> <span class="o">=</span><span class="w"> </span><span class="mi">100000</span>
+<span class="n">enable_disk_backup</span> <span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+<span class="n">backup_path</span> <span class="o">=</span><span class="w"> </span><span class="s">"/data/orbit-backup.json"</span>
+<span class="n">sync_interval</span> <span class="o">=</span><span class="w"> </span><span class="mi">300</span>
+<span class="n">compression</span> <span class="o">=</span><span class="w"> </span><span class="s">"gzip"</span>
+</code></pre></div></div>
+
+<h2 id="️-important-storage-backend-independence">⚠️ <strong>Important: Storage Backend Independence</strong></h2>
+
+<p>The <strong>cloud storage backends (S3, Azure, GCP, MinIO)</strong> are <strong>completely independent</strong> from the <strong>local storage implementations (LSM-Tree, RocksDB, B-Tree)</strong>:</p>
+
+<h3 id="cloud-providers-are-self-contained"><strong>Cloud Providers Are Self-Contained</strong></h3>
+<ul>
+  <li><strong>Direct Object Storage</strong>: Cloud providers directly store actor leases and snapshots as objects/blobs</li>
+  <li><strong>No Local Storage Layer</strong>: They don’t use LSM-Tree, RocksDB, or B-Tree underneath</li>
+  <li><strong>REST API Based</strong>: Use HTTP REST APIs to interact with cloud services</li>
+  <li><strong>Simple Key-Value</strong>: Store serialized actor data as JSON objects with metadata</li>
+</ul>
+
+<h3 id="local-providers-are-self-contained"><strong>Local Providers Are Self-Contained</strong></h3>
+<ul>
+  <li><strong>Complete Storage Engines</strong>: Each implements its own data structures and persistence</li>
+  <li><strong>Disk-Based</strong>: Store data in local files using their own formats</li>
+  <li><strong>No Cloud Dependency</strong>: Operate entirely on local storage devices</li>
+</ul>
+
+<h3 id="example-configurations"><strong>Example Configurations</strong></h3>
+
+<p><strong>Option 1: Pure Cloud Storage (S3)</strong></p>
+<div class="language-toml highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Uses S3 directly - no local storage involved</span>
+<span class="k">[</span><span class="n">server</span><span class="k">]</span>
+<span class="n">persistence_backend</span> <span class="o">=</span><span class="w"> </span><span class="s">"s3"</span>
+
+<span class="k">[</span><span class="n">persistence</span><span class="k">.</span><span class="n">s3</span><span class="k">]</span>
+<span class="n">type</span> <span class="o">=</span><span class="w"> </span><span class="s">"s3"</span>
+<span class="n">endpoint</span> <span class="o">=</span><span class="w"> </span><span class="s">"https://s3.amazonaws.com"</span>
+<span class="n">bucket</span> <span class="o">=</span><span class="w"> </span><span class="s">"orbit-actor-state"</span>
+
+<span class="c"># Actor leases stored as: s3://bucket/orbit/leases/ActorType/actor-id</span>
+</code></pre></div></div>
+
+<p><strong>Option 2: Pure Local Storage (LSM-Tree)</strong></p>
+<div class="language-toml highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Uses LSM-Tree directly - no cloud storage involved</span>
+<span class="k">[</span><span class="n">server</span><span class="k">]</span>
+<span class="n">persistence_backend</span> <span class="o">=</span><span class="w"> </span><span class="s">"lsm_tree"</span>
+
+<span class="k">[</span><span class="n">persistence</span><span class="k">.</span><span class="n">lsm_tree</span><span class="k">]</span>
+<span class="n">type</span> <span class="o">=</span><span class="w"> </span><span class="s">"lsm_tree"</span>
+<span class="n">data_dir</span> <span class="o">=</span><span class="w"> </span><span class="s">"/ssd/orbit_data"</span>
+
+<span class="c"># Actor leases stored in local LSM-Tree files</span>
+</code></pre></div></div>
+
+<p><strong>You cannot combine them</strong> - each backend is a complete, standalone persistence solution.</p>
+
+<h3 id="architecture-diagram"><strong>Architecture Diagram</strong></h3>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>┌─────────────────────────────────────────────────────────────┐
+│                    Orbit-RS Framework                      │
+├─────────────────────────────────────────────────────────────┤
+│              AddressableDirectoryProvider                  │
+│                ClusterNodeProvider                         │
+├─────────────┬─────────────┬─────────────┬─────────────────┤
+│             │             │             │                 │
+│   Cloud     │   Local     │   Local     │     Local       │
+│  Storage    │  Storage    │  Storage    │    Storage      │
+│             │             │             │                 │
+│ ┌─────────┐ │ ┌─────────┐ │ ┌─────────┐ │  ┌─────────────┐│
+│ │   S3    │ │ │LSM-Tree │ │ │RocksDB  │ │  │ B+Tree+WAL ││
+│ │Provider │ │ │Provider │ │ │Provider │ │  │ Provider    ││
+│ │         │ │ │         │ │ │         │ │  │             ││
+│ │REST API │ │ │SSTables │ │ │ColumnF │ │  │ COW Nodes   ││
+│ │Objects  │ │ │Memtable │ │ │ WAL     │ │  │ WAL         ││
+│ └─────────┘ │ └─────────┘ │ └─────────┘ │  └─────────────┘│
+│      │      │      │      │      │      │        │        │
+│      │      │      │      │      │      │        │        │
+│   AWS S3    │ Local SSD   │ Local SSD   │   Local SSD    │
+│   Storage   │   Files     │   Files     │     Files      │
+└──────┼──────┴──────┼──────┴──────┼──────┴────────┼────────┘
+       │             │             │               │
+    Internet      Disk I/O      Disk I/O       Disk I/O
+</code></pre></div></div>
+
+<h3 id="code-implementation-evidence"><strong>Code Implementation Evidence</strong></h3>
+
+<p>Looking at the actual implementation in <code class="language-plaintext highlighter-rouge">cloud.rs</code> vs local storage:</p>
+
+<p><strong>S3 Provider</strong> (Direct REST API):</p>
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// S3 stores data directly as HTTP objects</span>
+<span class="k">impl</span> <span class="n">S3AddressableDirectoryProvider</span> <span class="p">{</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">put_object</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="o">&amp;</span><span class="nb">str</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="o">&amp;</span><span class="p">[</span><span class="nb">u8</span><span class="p">])</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="k">let</span> <span class="n">url</span> <span class="o">=</span> <span class="nd">format!</span><span class="p">(</span><span class="s">"{}/{}/{}"</span><span class="p">,</span> <span class="k">self</span><span class="py">.config.endpoint</span><span class="p">,</span> <span class="k">self</span><span class="py">.config.bucket</span><span class="p">,</span> <span class="n">key</span><span class="p">);</span>
+        <span class="k">let</span> <span class="n">response</span> <span class="o">=</span> <span class="k">self</span><span class="py">.client</span><span class="nf">.put</span><span class="p">(</span><span class="o">&amp;</span><span class="n">url</span><span class="p">)</span><span class="nf">.body</span><span class="p">(</span><span class="n">data</span><span class="nf">.to_vec</span><span class="p">())</span><span class="nf">.send</span><span class="p">()</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+        <span class="c1">// Direct HTTP PUT to S3 - no local storage involved</span>
+    <span class="p">}</span>
+    
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">get_object</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="o">&amp;</span><span class="nb">str</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="nb">Option</span><span class="o">&lt;</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="nb">u8</span><span class="o">&gt;&gt;&gt;</span> <span class="p">{</span>
+        <span class="k">let</span> <span class="n">url</span> <span class="o">=</span> <span class="nd">format!</span><span class="p">(</span><span class="s">"{}/{}/{}"</span><span class="p">,</span> <span class="k">self</span><span class="py">.config.endpoint</span><span class="p">,</span> <span class="k">self</span><span class="py">.config.bucket</span><span class="p">,</span> <span class="n">key</span><span class="p">);</span>
+        <span class="k">let</span> <span class="n">response</span> <span class="o">=</span> <span class="k">self</span><span class="py">.client</span><span class="nf">.get</span><span class="p">(</span><span class="o">&amp;</span><span class="n">url</span><span class="p">)</span><span class="nf">.send</span><span class="p">()</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+        <span class="c1">// Direct HTTP GET from S3 - no local storage involved</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p><strong>LSM-Tree Provider</strong> (Local Data Structures):</p>
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// LSM-Tree manages its own memtables, SSTables, and compaction</span>
+<span class="k">impl</span> <span class="n">LsmTreeAddressableProvider</span> <span class="p">{</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">store_lease</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">lease</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">AddressableLease</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="c1">// Write to WAL</span>
+        <span class="k">self</span><span class="py">.wal</span><span class="nf">.lock</span><span class="p">()</span><span class="k">.await</span><span class="nf">.append</span><span class="p">(</span><span class="o">&amp;</span><span class="n">key</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">value</span><span class="p">,</span> <span class="s">"INSERT"</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+        
+        <span class="c1">// Write to active memtable</span>
+        <span class="k">let</span> <span class="k">mut</span> <span class="n">memtable</span> <span class="o">=</span> <span class="k">self</span><span class="py">.active_memtable</span><span class="nf">.write</span><span class="p">()</span><span class="nf">.unwrap</span><span class="p">();</span>
+        <span class="n">memtable</span><span class="nf">.insert</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">);</span>
+        
+        <span class="c1">// Trigger compaction if needed</span>
+        <span class="k">self</span><span class="nf">.maybe_trigger_compaction</span><span class="p">()</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+        <span class="c1">// All data managed locally - no cloud storage involved</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p><strong>RocksDB Provider</strong> (Embedded Database):</p>
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// RocksDB uses its own storage format and APIs</span>
+<span class="k">impl</span> <span class="n">RocksDbAddressableProvider</span> <span class="p">{</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">store_lease</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">lease</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">AddressableLease</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="k">let</span> <span class="n">key</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.lease_key</span><span class="p">(</span><span class="o">&amp;</span><span class="n">lease</span><span class="py">.reference</span><span class="p">);</span>
+        <span class="k">let</span> <span class="n">value</span> <span class="o">=</span> <span class="nn">serde_json</span><span class="p">::</span><span class="nf">to_vec</span><span class="p">(</span><span class="n">lease</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+        
+        <span class="k">self</span><span class="py">.db</span><span class="nf">.put</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span><span class="o">?</span><span class="p">;</span>
+        <span class="c1">// Uses RocksDB's internal storage - no cloud storage involved</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h2 id="actor-activation-process">Actor Activation Process</h2>
+
+<h3 id="step-1-message-arrival">Step 1: Message Arrival</h3>
+
+<p>When a message arrives for a virtual actor:</p>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">handle_message</span><span class="p">(</span>
+    <span class="o">&amp;</span><span class="k">self</span><span class="p">,</span>
+    <span class="n">actor_ref</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">AddressableReference</span><span class="p">,</span>
+    <span class="n">message</span><span class="p">:</span> <span class="n">ActorMessage</span><span class="p">,</span>
+<span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span> <span class="p">{</span>
+    <span class="c1">// Check if actor is already active locally</span>
+    <span class="k">if</span> <span class="k">let</span> <span class="nf">Some</span><span class="p">(</span><span class="n">actor</span><span class="p">)</span> <span class="o">=</span> <span class="k">self</span><span class="py">.local_actors</span><span class="nf">.get</span><span class="p">(</span><span class="n">actor_ref</span><span class="p">)</span> <span class="p">{</span>
+        <span class="k">return</span> <span class="n">actor</span><span class="nf">.handle_message</span><span class="p">(</span><span class="n">message</span><span class="p">)</span><span class="k">.await</span><span class="p">;</span>
+    <span class="p">}</span>
+    
+    <span class="c1">// Actor not active - initiate activation process</span>
+    <span class="k">self</span><span class="nf">.activate_actor</span><span class="p">(</span><span class="n">actor_ref</span><span class="p">,</span> <span class="n">message</span><span class="p">)</span><span class="k">.await</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="step-2-lease-acquisition">Step 2: Lease Acquisition</h3>
+
+<p>The node attempts to acquire an exclusive lease for the actor:</p>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">async</span> <span class="k">fn</span> <span class="nf">acquire_lease</span><span class="p">(</span>
+    <span class="o">&amp;</span><span class="k">self</span><span class="p">,</span>
+    <span class="n">actor_ref</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">AddressableReference</span><span class="p">,</span>
+<span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">ActorLease</span><span class="o">&gt;</span> <span class="p">{</span>
+    <span class="k">let</span> <span class="n">lease</span> <span class="o">=</span> <span class="nn">ActorLease</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span>
+        <span class="n">actor_ref</span><span class="py">.actor_id</span><span class="p">,</span>
+        <span class="n">actor_ref</span><span class="py">.actor_type</span><span class="nf">.clone</span><span class="p">(),</span>
+        <span class="k">self</span><span class="py">.node_id</span><span class="nf">.clone</span><span class="p">(),</span>
+        <span class="nn">Duration</span><span class="p">::</span><span class="nf">from_secs</span><span class="p">(</span><span class="mi">300</span><span class="p">),</span> <span class="c1">// 5-minute lease</span>
+    <span class="p">);</span>
+    
+    <span class="c1">// Attempt to store the lease atomically</span>
+    <span class="k">match</span> <span class="k">self</span><span class="py">.persistence</span><span class="nf">.store_lease</span><span class="p">(</span><span class="o">&amp;</span><span class="n">lease</span><span class="p">)</span><span class="k">.await</span> <span class="p">{</span>
+        <span class="nf">Ok</span><span class="p">(</span><span class="n">_</span><span class="p">)</span> <span class="k">=&gt;</span> <span class="nf">Ok</span><span class="p">(</span><span class="n">lease</span><span class="p">),</span>
+        <span class="nf">Err</span><span class="p">(</span><span class="nn">OrbitError</span><span class="p">::</span><span class="n">Conflict</span> <span class="p">{</span> <span class="o">..</span> <span class="p">})</span> <span class="k">=&gt;</span> <span class="p">{</span>
+            <span class="c1">// Another node already has the lease</span>
+            <span class="k">self</span><span class="nf">.forward_message_to_owner</span><span class="p">(</span><span class="n">actor_ref</span><span class="p">,</span> <span class="n">message</span><span class="p">)</span><span class="k">.await</span>
+        <span class="p">},</span>
+        <span class="nf">Err</span><span class="p">(</span><span class="n">e</span><span class="p">)</span> <span class="k">=&gt;</span> <span class="nf">Err</span><span class="p">(</span><span class="n">e</span><span class="p">),</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="step-3-state-loading">Step 3: State Loading</h3>
+
+<p>Once the lease is acquired, load the actor’s persisted state:</p>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">async</span> <span class="k">fn</span> <span class="n">load_actor_state</span><span class="o">&lt;</span><span class="n">T</span><span class="p">:</span> <span class="n">Actor</span><span class="o">&gt;</span><span class="p">(</span>
+    <span class="o">&amp;</span><span class="k">self</span><span class="p">,</span>
+    <span class="n">actor_ref</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">AddressableReference</span><span class="p">,</span>
+<span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="nb">Option</span><span class="o">&lt;</span><span class="nn">T</span><span class="p">::</span><span class="n">State</span><span class="o">&gt;&gt;</span> <span class="p">{</span>
+    <span class="k">if</span> <span class="k">let</span> <span class="nf">Some</span><span class="p">(</span><span class="n">snapshot</span><span class="p">)</span> <span class="o">=</span> <span class="k">self</span><span class="py">.state_manager</span>
+        <span class="nf">.load_snapshot</span><span class="p">(</span><span class="n">actor_ref</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span> <span class="p">{</span>
+        
+        <span class="c1">// Verify snapshot integrity</span>
+        <span class="k">if</span> <span class="o">!</span><span class="n">snapshot</span><span class="nf">.verify_integrity</span><span class="p">()</span> <span class="p">{</span>
+            <span class="k">return</span> <span class="nf">Err</span><span class="p">(</span><span class="nn">OrbitError</span><span class="p">::</span><span class="nf">internal</span><span class="p">(</span><span class="s">"Snapshot integrity check failed"</span><span class="p">));</span>
+        <span class="p">}</span>
+        
+        <span class="c1">// Deserialize state</span>
+        <span class="k">let</span> <span class="n">state</span><span class="p">:</span> <span class="nn">T</span><span class="p">::</span><span class="n">State</span> <span class="o">=</span> <span class="nn">serde_json</span><span class="p">::</span><span class="nf">from_value</span><span class="p">(</span><span class="n">snapshot</span><span class="py">.state_data</span><span class="p">)</span>
+            <span class="nf">.map_err</span><span class="p">(|</span><span class="n">e</span><span class="p">|</span> <span class="nn">OrbitError</span><span class="p">::</span><span class="nf">internal</span><span class="p">(</span><span class="nd">format!</span><span class="p">(</span><span class="s">"State deserialization failed: {}"</span><span class="p">,</span> <span class="n">e</span><span class="p">)))</span><span class="o">?</span><span class="p">;</span>
+        
+        <span class="nn">tracing</span><span class="p">::</span><span class="nd">info!</span><span class="p">(</span>
+            <span class="s">"Loaded state for actor {} (version: {})"</span><span class="p">,</span>
+            <span class="n">actor_ref</span><span class="p">,</span> <span class="n">snapshot</span><span class="py">.version</span>
+        <span class="p">);</span>
+        
+        <span class="nf">Ok</span><span class="p">(</span><span class="nf">Some</span><span class="p">(</span><span class="n">state</span><span class="p">))</span>
+    <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+        <span class="c1">// No previous state - create new actor</span>
+        <span class="nf">Ok</span><span class="p">(</span><span class="nb">None</span><span class="p">)</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="step-4-actor-instantiation">Step 4: Actor Instantiation</h3>
+
+<p>Create the actor instance with loaded or default state:</p>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">async</span> <span class="k">fn</span> <span class="n">instantiate_actor</span><span class="o">&lt;</span><span class="n">T</span><span class="p">:</span> <span class="n">Actor</span><span class="o">&gt;</span><span class="p">(</span>
+    <span class="o">&amp;</span><span class="k">self</span><span class="p">,</span>
+    <span class="n">actor_ref</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">AddressableReference</span><span class="p">,</span>
+    <span class="n">state</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="nn">T</span><span class="p">::</span><span class="n">State</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="n">lease</span><span class="p">:</span> <span class="n">ActorLease</span><span class="p">,</span>
+<span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="nb">Arc</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;&gt;</span> <span class="p">{</span>
+    <span class="k">let</span> <span class="n">actor_state</span> <span class="o">=</span> <span class="n">state</span><span class="nf">.unwrap_or_else</span><span class="p">(||</span> <span class="nn">T</span><span class="p">::</span><span class="nn">State</span><span class="p">::</span><span class="nf">default</span><span class="p">());</span>
+    
+    <span class="k">let</span> <span class="n">actor</span> <span class="o">=</span> <span class="nn">T</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="n">actor_ref</span><span class="nf">.clone</span><span class="p">(),</span> <span class="n">actor_state</span><span class="p">);</span>
+    <span class="k">let</span> <span class="n">actor</span> <span class="o">=</span> <span class="nn">Arc</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="n">actor</span><span class="p">);</span>
+    
+    <span class="c1">// Register in local actor registry</span>
+    <span class="k">self</span><span class="py">.local_actors</span><span class="nf">.insert</span><span class="p">(</span><span class="n">actor_ref</span><span class="nf">.clone</span><span class="p">(),</span> <span class="n">actor</span><span class="nf">.clone</span><span class="p">());</span>
+    
+    <span class="c1">// Start lease renewal background task</span>
+    <span class="k">self</span><span class="nf">.start_lease_renewal_task</span><span class="p">(</span><span class="n">actor_ref</span><span class="nf">.clone</span><span class="p">(),</span> <span class="n">lease</span><span class="p">)</span><span class="k">.await</span><span class="p">;</span>
+    
+    <span class="c1">// Start periodic state snapshot task</span>
+    <span class="k">self</span><span class="nf">.start_snapshot_task</span><span class="p">(</span><span class="n">actor_ref</span><span class="nf">.clone</span><span class="p">(),</span> <span class="n">actor</span><span class="nf">.clone</span><span class="p">())</span><span class="k">.await</span><span class="p">;</span>
+    
+    <span class="nf">Ok</span><span class="p">(</span><span class="n">actor</span><span class="p">)</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="step-5-message-processing">Step 5: Message Processing</h3>
+
+<p>The activated actor processes the pending message and subsequent messages:</p>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">impl</span><span class="o">&lt;</span><span class="n">T</span><span class="p">:</span> <span class="n">Actor</span><span class="o">&gt;</span> <span class="n">ActiveActor</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">handle_message</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">message</span><span class="p">:</span> <span class="n">ActorMessage</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">ActorResponse</span><span class="o">&gt;</span> <span class="p">{</span>
+        <span class="c1">// Update last activity timestamp</span>
+        <span class="k">self</span><span class="py">.last_activity</span><span class="nf">.store</span><span class="p">(</span><span class="nn">Instant</span><span class="p">::</span><span class="nf">now</span><span class="p">());</span>
+        
+        <span class="c1">// Process the message</span>
+        <span class="k">let</span> <span class="n">response</span> <span class="o">=</span> <span class="k">self</span><span class="py">.actor</span><span class="nf">.handle_message</span><span class="p">(</span><span class="n">message</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+        
+        <span class="c1">// Increment version for state changes</span>
+        <span class="k">self</span><span class="py">.state_version</span><span class="nf">.fetch_add</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="nn">Ordering</span><span class="p">::</span><span class="n">SeqCst</span><span class="p">);</span>
+        
+        <span class="nf">Ok</span><span class="p">(</span><span class="n">response</span><span class="p">)</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h2 id="state-persistence-process">State Persistence Process</h2>
+
+<h3 id="periodic-snapshots">Periodic Snapshots</h3>
+
+<p>Actors automatically save their state at regular intervals:</p>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">async</span> <span class="k">fn</span> <span class="n">snapshot_actor_state</span><span class="o">&lt;</span><span class="n">T</span><span class="p">:</span> <span class="n">Actor</span><span class="o">&gt;</span><span class="p">(</span>
+    <span class="o">&amp;</span><span class="k">self</span><span class="p">,</span>
+    <span class="n">actor_ref</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">AddressableReference</span><span class="p">,</span>
+    <span class="n">actor</span><span class="p">:</span> <span class="nb">Arc</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span><span class="p">,</span>
+<span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span> <span class="p">{</span>
+    <span class="k">let</span> <span class="n">state</span> <span class="o">=</span> <span class="n">actor</span><span class="nf">.get_state</span><span class="p">()</span><span class="k">.await</span><span class="p">;</span>
+    <span class="k">let</span> <span class="n">version</span> <span class="o">=</span> <span class="n">actor</span><span class="nf">.get_state_version</span><span class="p">();</span>
+    
+    <span class="c1">// Create snapshot</span>
+    <span class="k">let</span> <span class="n">state_data</span> <span class="o">=</span> <span class="nn">serde_json</span><span class="p">::</span><span class="nf">to_value</span><span class="p">(</span><span class="o">&amp;</span><span class="n">state</span><span class="p">)</span>
+        <span class="nf">.map_err</span><span class="p">(|</span><span class="n">e</span><span class="p">|</span> <span class="nn">OrbitError</span><span class="p">::</span><span class="nf">internal</span><span class="p">(</span><span class="nd">format!</span><span class="p">(</span><span class="s">"State serialization failed: {}"</span><span class="p">,</span> <span class="n">e</span><span class="p">)))</span><span class="o">?</span><span class="p">;</span>
+    
+    <span class="k">let</span> <span class="n">snapshot</span> <span class="o">=</span> <span class="nn">ActorSnapshot</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="n">actor_ref</span><span class="nf">.clone</span><span class="p">(),</span> <span class="n">state_data</span><span class="p">,</span> <span class="n">version</span><span class="p">)</span>
+        <span class="nf">.with_tags</span><span class="p">(</span><span class="nn">HashMap</span><span class="p">::</span><span class="nf">from</span><span class="p">([</span>
+            <span class="p">(</span><span class="s">"node_id"</span><span class="nf">.to_string</span><span class="p">(),</span> <span class="k">self</span><span class="py">.node_id</span><span class="nf">.clone</span><span class="p">()),</span>
+            <span class="p">(</span><span class="s">"last_activity"</span><span class="nf">.to_string</span><span class="p">(),</span> <span class="n">actor</span><span class="nf">.last_activity</span><span class="p">()</span><span class="nf">.to_string</span><span class="p">()),</span>
+        <span class="p">]))</span>
+        <span class="nf">.with_ttl</span><span class="p">(</span><span class="mi">3600</span><span class="p">);</span> <span class="c1">// 1 hour TTL</span>
+    
+    <span class="c1">// Save to persistence layer</span>
+    <span class="k">self</span><span class="py">.state_manager</span><span class="nf">.save_snapshot</span><span class="p">(</span><span class="o">&amp;</span><span class="n">snapshot</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+    
+    <span class="nn">tracing</span><span class="p">::</span><span class="nd">debug!</span><span class="p">(</span>
+        <span class="s">"Saved snapshot for actor {} (version: {})"</span><span class="p">,</span>
+        <span class="n">actor_ref</span><span class="p">,</span> <span class="n">version</span>
+    <span class="p">);</span>
+    
+    <span class="nf">Ok</span><span class="p">(())</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="deactivation-process">Deactivation Process</h3>
+
+<p>When an actor becomes inactive (due to idle timeout or explicit shutdown):</p>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">async</span> <span class="k">fn</span> <span class="nf">deactivate_actor</span><span class="p">(</span>
+    <span class="o">&amp;</span><span class="k">self</span><span class="p">,</span>
+    <span class="n">actor_ref</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">AddressableReference</span><span class="p">,</span>
+<span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span> <span class="p">{</span>
+    <span class="k">if</span> <span class="k">let</span> <span class="nf">Some</span><span class="p">(</span><span class="n">actor</span><span class="p">)</span> <span class="o">=</span> <span class="k">self</span><span class="py">.local_actors</span><span class="nf">.remove</span><span class="p">(</span><span class="n">actor_ref</span><span class="p">)</span> <span class="p">{</span>
+        <span class="c1">// Save final state snapshot</span>
+        <span class="k">self</span><span class="nf">.snapshot_actor_state</span><span class="p">(</span><span class="n">actor_ref</span><span class="p">,</span> <span class="n">actor</span><span class="nf">.clone</span><span class="p">())</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+        
+        <span class="c1">// Release the lease</span>
+        <span class="k">self</span><span class="py">.persistence</span><span class="nf">.remove_lease</span><span class="p">(</span><span class="n">actor_ref</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+        
+        <span class="c1">// Stop background tasks</span>
+        <span class="k">self</span><span class="nf">.stop_actor_tasks</span><span class="p">(</span><span class="n">actor_ref</span><span class="p">)</span><span class="k">.await</span><span class="p">;</span>
+        
+        <span class="nn">tracing</span><span class="p">::</span><span class="nd">info!</span><span class="p">(</span><span class="s">"Deactivated actor: {}"</span><span class="p">,</span> <span class="n">actor_ref</span><span class="p">);</span>
+    <span class="p">}</span>
+    
+    <span class="nf">Ok</span><span class="p">(())</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h2 id="advanced-features">Advanced Features</h2>
+
+<h3 id="transaction-support">Transaction Support</h3>
+
+<p>Orbit-RS supports ACID transactions across multiple actors:</p>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">execute_transaction</span><span class="p">(</span>
+    <span class="o">&amp;</span><span class="k">self</span><span class="p">,</span>
+    <span class="n">transaction</span><span class="p">:</span> <span class="n">Transaction</span><span class="p">,</span>
+<span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">TransactionResult</span><span class="o">&gt;</span> <span class="p">{</span>
+    <span class="k">let</span> <span class="n">tx_id</span> <span class="o">=</span> <span class="nn">Uuid</span><span class="p">::</span><span class="nf">new_v4</span><span class="p">()</span><span class="nf">.to_string</span><span class="p">();</span>
+    
+    <span class="c1">// Begin distributed transaction</span>
+    <span class="k">let</span> <span class="n">tx_context</span> <span class="o">=</span> <span class="n">TransactionContext</span> <span class="p">{</span>
+        <span class="n">id</span><span class="p">:</span> <span class="n">tx_id</span><span class="nf">.clone</span><span class="p">(),</span>
+        <span class="n">participants</span><span class="p">:</span> <span class="n">transaction</span><span class="py">.actors</span><span class="nf">.clone</span><span class="p">(),</span>
+        <span class="n">isolation_level</span><span class="p">:</span> <span class="nn">IsolationLevel</span><span class="p">::</span><span class="n">ReadCommitted</span><span class="p">,</span>
+        <span class="n">timeout</span><span class="p">:</span> <span class="nn">Duration</span><span class="p">::</span><span class="nf">from_secs</span><span class="p">(</span><span class="mi">30</span><span class="p">),</span>
+    <span class="p">};</span>
+    
+    <span class="k">self</span><span class="py">.persistence</span><span class="nf">.begin_transaction</span><span class="p">(</span><span class="n">tx_context</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+    
+    <span class="c1">// Execute operations on all participating actors</span>
+    <span class="k">let</span> <span class="k">mut</span> <span class="n">results</span> <span class="o">=</span> <span class="nn">Vec</span><span class="p">::</span><span class="nf">new</span><span class="p">();</span>
+    <span class="k">for</span> <span class="n">operation</span> <span class="k">in</span> <span class="n">transaction</span><span class="py">.operations</span> <span class="p">{</span>
+        <span class="k">let</span> <span class="n">result</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.execute_operation</span><span class="p">(</span><span class="o">&amp;</span><span class="n">tx_id</span><span class="p">,</span> <span class="n">operation</span><span class="p">)</span><span class="k">.await</span><span class="p">;</span>
+        <span class="n">results</span><span class="nf">.push</span><span class="p">(</span><span class="n">result</span><span class="p">);</span>
+    <span class="p">}</span>
+    
+    <span class="c1">// Two-phase commit</span>
+    <span class="k">if</span> <span class="n">results</span><span class="nf">.iter</span><span class="p">()</span><span class="nf">.all</span><span class="p">(|</span><span class="n">r</span><span class="p">|</span> <span class="n">r</span><span class="nf">.is_ok</span><span class="p">())</span> <span class="p">{</span>
+        <span class="k">self</span><span class="py">.persistence</span><span class="nf">.commit_transaction</span><span class="p">(</span><span class="o">&amp;</span><span class="n">tx_id</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+        <span class="nf">Ok</span><span class="p">(</span><span class="nn">TransactionResult</span><span class="p">::</span><span class="nf">Committed</span><span class="p">(</span><span class="n">results</span><span class="p">))</span>
+    <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+        <span class="k">self</span><span class="py">.persistence</span><span class="nf">.rollback_transaction</span><span class="p">(</span><span class="o">&amp;</span><span class="n">tx_id</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+        <span class="nf">Ok</span><span class="p">(</span><span class="nn">TransactionResult</span><span class="p">::</span><span class="n">Aborted</span><span class="p">)</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="state-versioning-and-conflict-resolution">State Versioning and Conflict Resolution</h3>
+
+<p>The framework handles concurrent modifications using optimistic concurrency control:</p>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="n">update_actor_state</span><span class="o">&lt;</span><span class="n">T</span><span class="p">:</span> <span class="n">Actor</span><span class="o">&gt;</span><span class="p">(</span>
+    <span class="o">&amp;</span><span class="k">self</span><span class="p">,</span>
+    <span class="n">actor_ref</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">AddressableReference</span><span class="p">,</span>
+    <span class="n">expected_version</span><span class="p">:</span> <span class="nb">u64</span><span class="p">,</span>
+    <span class="n">state_update</span><span class="p">:</span> <span class="nn">T</span><span class="p">::</span><span class="n">StateUpdate</span><span class="p">,</span>
+<span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="nb">u64</span><span class="o">&gt;</span> <span class="p">{</span>
+    <span class="k">let</span> <span class="n">actor</span> <span class="o">=</span> <span class="k">self</span><span class="py">.get_or_activate_actor</span><span class="p">::</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;</span><span class="p">(</span><span class="n">actor_ref</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+    
+    <span class="c1">// Check version for optimistic concurrency control</span>
+    <span class="k">let</span> <span class="n">current_version</span> <span class="o">=</span> <span class="n">actor</span><span class="nf">.get_state_version</span><span class="p">();</span>
+    <span class="k">if</span> <span class="n">current_version</span> <span class="o">!=</span> <span class="n">expected_version</span> <span class="p">{</span>
+        <span class="k">return</span> <span class="nf">Err</span><span class="p">(</span><span class="nn">OrbitError</span><span class="p">::</span><span class="n">Conflict</span> <span class="p">{</span>
+            <span class="n">message</span><span class="p">:</span> <span class="nd">format!</span><span class="p">(</span>
+                <span class="s">"Version mismatch: expected {}, got {}"</span><span class="p">,</span>
+                <span class="n">expected_version</span><span class="p">,</span> <span class="n">current_version</span>
+            <span class="p">),</span>
+        <span class="p">});</span>
+    <span class="p">}</span>
+    
+    <span class="c1">// Apply update atomically</span>
+    <span class="k">let</span> <span class="n">new_version</span> <span class="o">=</span> <span class="n">actor</span><span class="nf">.apply_state_update</span><span class="p">(</span><span class="n">state_update</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+    
+    <span class="c1">// Save snapshot with new version</span>
+    <span class="k">self</span><span class="nf">.snapshot_actor_state</span><span class="p">(</span><span class="n">actor_ref</span><span class="p">,</span> <span class="n">actor</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+    
+    <span class="nf">Ok</span><span class="p">(</span><span class="n">new_version</span><span class="p">)</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="health-monitoring-and-metrics">Health Monitoring and Metrics</h3>
+
+<p>The persistence layer provides comprehensive monitoring:</p>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="nd">#[derive(Debug,</span> <span class="nd">Clone)]</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">PersistenceMetrics</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="n">snapshots_created</span><span class="p">:</span> <span class="nb">u64</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">snapshots_loaded</span><span class="p">:</span> <span class="nb">u64</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">snapshots_deleted</span><span class="p">:</span> <span class="nb">u64</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">total_storage_bytes</span><span class="p">:</span> <span class="nb">u64</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">average_save_time_ms</span><span class="p">:</span> <span class="nb">f64</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">average_load_time_ms</span><span class="p">:</span> <span class="nb">f64</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">failed_operations</span><span class="p">:</span> <span class="nb">u64</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">cache_hit_rate</span><span class="p">:</span> <span class="nb">f64</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">lease_renewals</span><span class="p">:</span> <span class="nb">u64</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">lease_conflicts</span><span class="p">:</span> <span class="nb">u64</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="k">impl</span> <span class="n">PersistenceLayer</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">get_health_status</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">ProviderHealth</span> <span class="p">{</span>
+        <span class="k">let</span> <span class="n">metrics</span> <span class="o">=</span> <span class="k">self</span><span class="nf">.get_metrics</span><span class="p">()</span><span class="k">.await</span><span class="p">;</span>
+        
+        <span class="k">if</span> <span class="n">metrics</span><span class="py">.failed_operations</span> <span class="o">&gt;</span> <span class="mi">100</span> <span class="p">{</span>
+            <span class="nn">ProviderHealth</span><span class="p">::</span><span class="n">Degraded</span> <span class="p">{</span>
+                <span class="n">reason</span><span class="p">:</span> <span class="nd">format!</span><span class="p">(</span><span class="s">"High error count: {}"</span><span class="p">,</span> <span class="n">metrics</span><span class="py">.failed_operations</span><span class="p">),</span>
+            <span class="p">}</span>
+        <span class="p">}</span> <span class="k">else</span> <span class="k">if</span> <span class="n">metrics</span><span class="py">.average_save_time_ms</span> <span class="o">&gt;</span> <span class="mf">1000.0</span> <span class="p">{</span>
+            <span class="nn">ProviderHealth</span><span class="p">::</span><span class="n">Degraded</span> <span class="p">{</span>
+                <span class="n">reason</span><span class="p">:</span> <span class="s">"High latency detected"</span><span class="nf">.to_string</span><span class="p">(),</span>
+            <span class="p">}</span>
+        <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+            <span class="nn">ProviderHealth</span><span class="p">::</span><span class="n">Healthy</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h2 id="configuration-examples">Configuration Examples</h2>
+
+<h3 id="high-performance-in-memory-setup">High-Performance In-Memory Setup</h3>
+
+<div class="language-toml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">[</span><span class="n">server</span><span class="k">]</span>
+<span class="n">persistence_backend</span> <span class="o">=</span><span class="w"> </span><span class="s">"memory"</span>
+
+<span class="k">[</span><span class="n">persistence</span><span class="k">.</span><span class="n">memory</span><span class="k">]</span>
+<span class="n">type</span> <span class="o">=</span><span class="w"> </span><span class="s">"memory"</span>
+<span class="n">max_entries</span> <span class="o">=</span><span class="w"> </span><span class="mi">1000000</span>
+<span class="n">enable_disk_backup</span> <span class="o">=</span><span class="w"> </span><span class="kc">false</span>
+
+<span class="k">[</span><span class="n">actor_management</span><span class="k">]</span>
+<span class="n">lease_duration_seconds</span> <span class="o">=</span><span class="w"> </span><span class="mi">300</span>
+<span class="n">snapshot_interval_seconds</span> <span class="o">=</span><span class="w"> </span><span class="mi">60</span>
+<span class="n">idle_timeout_seconds</span> <span class="o">=</span><span class="w"> </span><span class="mi">1800</span>
+<span class="n">max_concurrent_activations</span> <span class="o">=</span><span class="w"> </span><span class="mi">10000</span>
+</code></pre></div></div>
+
+<h3 id="production-cloud-setup">Production Cloud Setup</h3>
+
+<div class="language-toml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">[</span><span class="n">server</span><span class="k">]</span>
+<span class="n">persistence_backend</span> <span class="o">=</span><span class="w"> </span><span class="s">"s3"</span>
+
+<span class="k">[</span><span class="n">persistence</span><span class="k">.</span><span class="n">s3</span><span class="k">]</span>
+<span class="n">type</span> <span class="o">=</span><span class="w"> </span><span class="s">"s3"</span>
+<span class="n">endpoint</span> <span class="o">=</span><span class="w"> </span><span class="s">"https://s3.amazonaws.com"</span>
+<span class="n">region</span> <span class="o">=</span><span class="w"> </span><span class="s">"us-west-2"</span>
+<span class="n">bucket</span> <span class="o">=</span><span class="w"> </span><span class="s">"orbit-production-state"</span>
+<span class="n">enable_ssl</span> <span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+<span class="n">connection_timeout</span> <span class="o">=</span><span class="w"> </span><span class="mi">30</span>
+<span class="n">retry_count</span> <span class="o">=</span><span class="w"> </span><span class="mi">3</span>
+
+<span class="k">[</span><span class="n">actor_management</span><span class="k">]</span>
+<span class="n">lease_duration_seconds</span> <span class="o">=</span><span class="w"> </span><span class="mi">300</span>
+<span class="n">snapshot_interval_seconds</span> <span class="o">=</span><span class="w"> </span><span class="mi">300</span>
+<span class="n">idle_timeout_seconds</span> <span class="o">=</span><span class="w"> </span><span class="mi">3600</span>
+<span class="n">max_concurrent_activations</span> <span class="o">=</span><span class="w"> </span><span class="mi">50000</span>
+<span class="n">enable_state_compression</span> <span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+</code></pre></div></div>
+
+<h3 id="high-throughput-lsm-setup">High-Throughput LSM Setup</h3>
+
+<div class="language-toml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">[</span><span class="n">server</span><span class="k">]</span>
+<span class="n">persistence_backend</span> <span class="o">=</span><span class="w"> </span><span class="s">"lsm_tree"</span>
+
+<span class="k">[</span><span class="n">persistence</span><span class="k">.</span><span class="n">lsm_tree</span><span class="k">]</span>
+<span class="n">type</span> <span class="o">=</span><span class="w"> </span><span class="s">"lsm_tree"</span>
+<span class="n">data_dir</span> <span class="o">=</span><span class="w"> </span><span class="s">"/fast-ssd/orbit_data"</span>
+<span class="n">memtable_size_limit</span> <span class="o">=</span><span class="w"> </span><span class="mi">134217728</span>  <span class="c"># 128MB</span>
+<span class="n">max_memtables</span> <span class="o">=</span><span class="w"> </span><span class="mi">16</span>
+<span class="n">bloom_filter_fp_rate</span> <span class="o">=</span><span class="w"> </span><span class="mf">0.001</span>
+<span class="n">enable_compaction</span> <span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+<span class="n">compaction_threshold</span> <span class="o">=</span><span class="w"> </span><span class="mi">8</span>
+
+<span class="k">[</span><span class="n">actor_management</span><span class="k">]</span>
+<span class="n">lease_duration_seconds</span> <span class="o">=</span><span class="w"> </span><span class="mi">180</span>
+<span class="n">snapshot_interval_seconds</span> <span class="o">=</span><span class="w"> </span><span class="mi">30</span>
+<span class="n">batch_size</span> <span class="o">=</span><span class="w"> </span><span class="mi">1000</span>
+</code></pre></div></div>
+
+<h2 id="best-practices">Best Practices</h2>
+
+<h3 id="1-state-design">1. State Design</h3>
+
+<ul>
+  <li><strong>Keep state serializable</strong>: Use types that implement <code class="language-plaintext highlighter-rouge">Serialize</code> and <code class="language-plaintext highlighter-rouge">Deserialize</code></li>
+  <li><strong>Minimize state size</strong>: Large states increase activation/deactivation latency</li>
+  <li><strong>Use versioning</strong>: Design state structures to support evolution</li>
+</ul>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="nd">#[derive(Serialize,</span> <span class="nd">Deserialize,</span> <span class="nd">Debug,</span> <span class="nd">Clone)]</span>
+<span class="nd">#[serde(tag</span> <span class="nd">=</span> <span class="s">"version"</span><span class="nd">)]</span>
+<span class="k">enum</span> <span class="n">UserState</span> <span class="p">{</span>
+    <span class="nd">#[serde(rename</span> <span class="nd">=</span> <span class="s">"v1"</span><span class="nd">)]</span>
+    <span class="n">V1</span> <span class="p">{</span> <span class="n">name</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span> <span class="n">balance</span><span class="p">:</span> <span class="nb">i64</span> <span class="p">},</span>
+    <span class="nd">#[serde(rename</span> <span class="nd">=</span> <span class="s">"v2"</span><span class="nd">)]</span>
+    <span class="n">V2</span> <span class="p">{</span> <span class="n">name</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span> <span class="n">balance</span><span class="p">:</span> <span class="nb">i64</span><span class="p">,</span> <span class="n">preferences</span><span class="p">:</span> <span class="n">UserPreferences</span> <span class="p">},</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="2-lease-management">2. Lease Management</h3>
+
+<ul>
+  <li><strong>Set appropriate lease durations</strong>: Too short causes frequent renewals, too long delays failover</li>
+  <li><strong>Monitor lease conflicts</strong>: High conflicts indicate hotspotting or clock skew</li>
+  <li><strong>Use lease metadata</strong>: Store debugging information for operational visibility</li>
+</ul>
+
+<h3 id="3-snapshot-strategy">3. Snapshot Strategy</h3>
+
+<ul>
+  <li><strong>Balance frequency vs. overhead</strong>: More frequent snapshots reduce recovery time but increase I/O</li>
+  <li><strong>Use TTL for cleanup</strong>: Prevent unlimited storage growth</li>
+  <li><strong>Enable compression</strong>: Reduce storage costs for cloud deployments</li>
+</ul>
+
+<h3 id="4-performance-optimization">4. Performance Optimization</h3>
+
+<ul>
+  <li><strong>Choose appropriate backend</strong>: Match storage characteristics to workload</li>
+  <li><strong>Monitor metrics</strong>: Track activation latency, storage utilization, and error rates</li>
+  <li><strong>Use caching</strong>: The built-in cache reduces persistence layer load</li>
+</ul>
+
+<h2 id="troubleshooting">Troubleshooting</h2>
+
+<h3 id="common-issues">Common Issues</h3>
+
+<ol>
+  <li><strong>Actor Activation Timeouts</strong>
+    <ul>
+      <li>Check persistence backend health and latency</li>
+      <li>Verify network connectivity to storage systems</li>
+      <li>Monitor CPU and memory usage during activation</li>
+    </ul>
+  </li>
+  <li><strong>Lease Conflicts</strong>
+    <ul>
+      <li>Ensure system clocks are synchronized across nodes</li>
+      <li>Check for network partitions causing split-brain scenarios</li>
+      <li>Review lease duration settings</li>
+    </ul>
+  </li>
+  <li><strong>State Corruption</strong>
+    <ul>
+      <li>Enable integrity checking with SHA-256 hashes</li>
+      <li>Verify serialization/deserialization logic</li>
+      <li>Check storage system consistency guarantees</li>
+    </ul>
+  </li>
+  <li><strong>Performance Degradation</strong>
+    <ul>
+      <li>Monitor storage backend metrics</li>
+      <li>Check for compaction overhead in LSM systems</li>
+      <li>Review actor hotspotting patterns</li>
+    </ul>
+  </li>
+</ol>
+
+<h3 id="debugging-tools">Debugging Tools</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Check actor lease status</span>
+orbit-cli actor list-leases <span class="nt">--node-id</span> node-1
+
+<span class="c"># View actor state snapshots</span>
+orbit-cli actor inspect-state <span class="nt">--actor-type</span> UserActor <span class="nt">--actor-id</span> user-123
+
+<span class="c"># Monitor persistence metrics</span>
+orbit-cli metrics persistence <span class="nt">--watch</span>
+
+<span class="c"># Verify storage backend health</span>
+orbit-cli persistence health-check
+</code></pre></div></div>
+
+<h2 id="conclusion">Conclusion</h2>
+
+<p>Orbit-RS provides a comprehensive and flexible virtual actor persistence system that enables building scalable distributed applications. The combination of automatic lifecycle management, configurable storage backends, and built-in monitoring makes it suitable for a wide range of use cases from development to large-scale production deployments.</p>
+
+<p>The framework’s design ensures that virtual actors can transparently move between nodes while maintaining consistency and performance, making it an ideal foundation for building resilient distributed systems.</p>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/orbit-rs/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Orbit-RS Documentation</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">TuringWorks</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["AqlValue","CollectionStatus","CollectionType","IndexType"],"struct":["AqlBindVars","AqlCollection","AqlDocument","AqlEdge","AqlIndex","AqlPath","AqlTraversalResult"],"type":["AqlVertex"]};

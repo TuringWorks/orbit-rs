@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ActionMatcher","ConditionOperator","ConditionType","PolicyEffect","ResourceMatcher","ResourceType","SecurityAction","SubjectMatcher","SubjectType"],"struct":["AccessPolicy","Condition","Permission","RbacEngine","Role","SecurityResource","SecuritySubject"],"trait":["RoleBasedAccessControl"]};

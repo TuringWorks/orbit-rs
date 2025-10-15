@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["SerializationError"],"trait":["SerializableData"],"type":["Result"]};

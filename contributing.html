@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Contributing Guide | Orbit-RS Documentation</title>
+<meta name="generator" content="Jekyll v4.4.1" />
+<meta property="og:title" content="Contributing Guide" />
+<meta name="author" content="TuringWorks" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<meta property="og:description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<link rel="canonical" href="https://turingworks.github.io/orbit-rs/contributing.html" />
+<meta property="og:url" content="https://turingworks.github.io/orbit-rs/contributing.html" />
+<meta property="og:site_name" content="Orbit-RS Documentation" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Contributing Guide" />
+<meta name="twitter:site" content="@TuringWorksAI" />
+<meta name="twitter:creator" content="@TuringWorks" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","author":{"@type":"Person","name":"TuringWorks"},"description":"The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform","headline":"Contributing Guide","url":"https://turingworks.github.io/orbit-rs/contributing.html"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/orbit-rs/assets/main.css">
+  <link rel="stylesheet" href="/orbit-rs/assets/css/custom.css"><link type="application/atom+xml" rel="alternate" href="https://turingworks.github.io/orbit-rs/feed.xml" title="Orbit-RS Documentation" /></head><body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/orbit-rs/">Orbit-RS Documentation</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/orbit-rs/">Orbit-RS Documentation</a><a class="page-link" href="/orbit-rs/project_overview.html">Orbit-RS: Comprehensive Project Overview</a><a class="page-link" href="/orbit-rs/quick_start.html">Quick Start Guide - Multi-Protocol Database Server</a><a class="page-link" href="/orbit-rs/roadmap/">Development Roadmap</a><a class="page-link" href="/orbit-rs/features/">Orbit-RS Feature Index</a><a class="page-link" href="/orbit-rs/compute-acceleration/">Hardware Acceleration Guide</a><a class="page-link" href="/orbit-rs/contributing.html">Contributing Guide</a><a class="page-link" href="/orbit-rs/overview.html">Architecture Overview</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <h1 id="contributing-to-orbit-rs">Contributing to Orbit-RS</h1>
+
+<p>Thank you for your interest in contributing to Orbit-RS! This document provides guidelines and information about contributing to the project.</p>
+
+<h2 id="table-of-contents">Table of Contents</h2>
+
+<ul>
+  <li><a href="#code-of-conduct">Code of Conduct</a></li>
+  <li><a href="#getting-started">Getting Started</a></li>
+  <li><a href="#development-setup">Development Setup</a></li>
+  <li><a href="#contributing-process">Contributing Process</a></li>
+  <li><a href="#coding-standards">Coding Standards</a></li>
+  <li><a href="#testing">Testing</a></li>
+  <li><a href="#documentation">Documentation</a></li>
+  <li><a href="#performance-considerations">Performance Considerations</a></li>
+  <li><a href="#submitting-changes">Submitting Changes</a></li>
+</ul>
+
+<h2 id="code-of-conduct">Code of Conduct</h2>
+
+<p>By participating in this project, you agree to abide by our Code of Conduct. Please treat all contributors and users with respect and create a welcoming environment for everyone.</p>
+
+<h2 id="getting-started">Getting Started</h2>
+
+<ol>
+  <li><strong>Fork the repository</strong> on GitHub</li>
+  <li><strong>Clone your fork</strong> locally:
+    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>git clone https://github.com/yourusername/orbit-rs.git
+<span class="nb">cd </span>orbit-rs
+</code></pre></div>    </div>
+  </li>
+  <li><strong>Add the upstream remote</strong>:
+    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>git remote add upstream https://github.com/original/orbit-rs.git
+</code></pre></div>    </div>
+  </li>
+</ol>
+
+<h2 id="development-setup">Development Setup</h2>
+
+<h3 id="prerequisites">Prerequisites</h3>
+
+<ul>
+  <li><strong>Rust 1.70+</strong>: Install via <a href="https://rustup.rs/">rustup</a></li>
+  <li><strong>Protocol Buffers Compiler</strong>: Install <code class="language-plaintext highlighter-rouge">protoc</code>
+    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># macOS</span>
+brew <span class="nb">install </span>protobuf
+  
+<span class="c"># Ubuntu/Debian</span>
+<span class="nb">sudo </span>apt-get <span class="nb">install </span>protobuf-compiler
+  
+<span class="c"># Windows</span>
+<span class="c"># Download from https://github.com/protocolbuffers/protobuf/releases</span>
+</code></pre></div>    </div>
+  </li>
+  <li><strong>SQLite development libraries</strong> (for transaction logging)</li>
+</ul>
+
+<h3 id="building-the-project">Building the Project</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Build all crates</span>
+cargo build
+
+<span class="c"># Build with all features</span>
+cargo build <span class="nt">--all-features</span>
+
+<span class="c"># Build specific crate</span>
+cargo build <span class="nt">--package</span> orbit-shared
+</code></pre></div></div>
+
+<h3 id="running-tests">Running Tests</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Run all tests</span>
+cargo <span class="nb">test</span>
+
+<span class="c"># Run tests for specific crate</span>
+cargo <span class="nb">test</span> <span class="nt">--package</span> orbit-shared
+
+<span class="c"># Run tests with output</span>
+cargo <span class="nb">test</span> <span class="nt">--</span> <span class="nt">--nocapture</span>
+
+<span class="c"># Run ignored tests</span>
+cargo <span class="nb">test</span> <span class="nt">--</span> <span class="nt">--ignored</span>
+</code></pre></div></div>
+
+<h3 id="running-examples">Running Examples</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Hello World example</span>
+cargo run <span class="nt">--example</span> hello-world
+
+<span class="c"># Distributed Transactions example</span>
+cargo run <span class="nt">--example</span> distributed-transactions
+</code></pre></div></div>
+
+<h2 id="contributing-process">Contributing Process</h2>
+
+<h3 id="1-choose-what-to-work-on">1. Choose What to Work On</h3>
+
+<ul>
+  <li>Check the <a href="https://github.com/yourusername/orbit-rs/issues">Issues</a> page for open issues</li>
+  <li>Look for issues labeled <code class="language-plaintext highlighter-rouge">good first issue</code> for newcomers</li>
+  <li>Check the <a href="/orbit-rs/CHANGELOG.html">CHANGELOG.md</a> for planned features</li>
+  <li>Discuss new features in issues before starting work</li>
+</ul>
+
+<h3 id="2-create-a-branch">2. Create a Branch</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>git checkout <span class="nt">-b</span> feature/your-feature-name
+</code></pre></div></div>
+
+<p>Branch naming conventions:</p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">feature/feature-name</code> - New features</li>
+  <li><code class="language-plaintext highlighter-rouge">fix/issue-description</code> - Bug fixes</li>
+  <li><code class="language-plaintext highlighter-rouge">docs/documentation-update</code> - Documentation changes</li>
+  <li><code class="language-plaintext highlighter-rouge">refactor/component-name</code> - Code refactoring</li>
+</ul>
+
+<h3 id="3-make-changes">3. Make Changes</h3>
+
+<p>Follow the coding standards and guidelines outlined below.</p>
+
+<h3 id="4-test-your-changes">4. Test Your Changes</h3>
+
+<p>Ensure all tests pass and add new tests for your changes:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>cargo <span class="nb">test
+</span>cargo clippy
+cargo <span class="nb">fmt</span> <span class="nt">--all</span>
+</code></pre></div></div>
+
+<h3 id="5-commit-your-changes">5. Commit Your Changes</h3>
+
+<p>Write clear, descriptive commit messages:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>git commit <span class="nt">-m</span> <span class="s2">"feat: add distributed transaction recovery mechanism
+
+- Implement coordinator failover detection
+- Add transaction checkpoint management  
+- Include recovery event handlers
+- Add comprehensive tests for recovery scenarios
+"</span>
+</code></pre></div></div>
+
+<p>Commit message format:</p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">feat:</code> - New features</li>
+  <li><code class="language-plaintext highlighter-rouge">fix:</code> - Bug fixes</li>
+  <li><code class="language-plaintext highlighter-rouge">docs:</code> - Documentation changes</li>
+  <li><code class="language-plaintext highlighter-rouge">style:</code> - Code style changes</li>
+  <li><code class="language-plaintext highlighter-rouge">refactor:</code> - Code refactoring</li>
+  <li><code class="language-plaintext highlighter-rouge">test:</code> - Adding tests</li>
+  <li><code class="language-plaintext highlighter-rouge">chore:</code> - Maintenance tasks</li>
+</ul>
+
+<h2 id="coding-standards">Coding Standards</h2>
+
+<h3 id="rust-style-guide">Rust Style Guide</h3>
+
+<ul>
+  <li><strong>Follow standard Rust formatting</strong>: Use <code class="language-plaintext highlighter-rouge">cargo fmt</code></li>
+  <li><strong>Use clippy</strong>: Run <code class="language-plaintext highlighter-rouge">cargo clippy</code> and address warnings</li>
+  <li><strong>Documentation</strong>: Document all public APIs with <code class="language-plaintext highlighter-rouge">///</code> comments</li>
+  <li><strong>Error handling</strong>: Use <code class="language-plaintext highlighter-rouge">OrbitResult&lt;T&gt;</code> for recoverable errors</li>
+  <li><strong>Async/await</strong>: Use async/await for I/O operations</li>
+  <li><strong>Memory safety</strong>: Avoid <code class="language-plaintext highlighter-rouge">unsafe</code> code unless absolutely necessary</li>
+</ul>
+
+<h3 id="code-organization">Code Organization</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// File structure within modules</span>
+<span class="k">use</span> <span class="nn">std</span><span class="p">::</span><span class="o">...</span><span class="p">;</span>           <span class="c1">// Standard library</span>
+<span class="k">use</span> <span class="nn">external_crate</span><span class="p">::</span><span class="o">...</span><span class="p">;</span>  <span class="c1">// External dependencies  </span>
+<span class="k">use</span> <span class="k">crate</span><span class="p">::</span><span class="o">...</span><span class="p">;</span>         <span class="c1">// Internal crate dependencies</span>
+
+<span class="c1">// Constants</span>
+<span class="k">const</span> <span class="n">MAX_RETRIES</span><span class="p">:</span> <span class="nb">u32</span> <span class="o">=</span> <span class="mi">3</span><span class="p">;</span>
+
+<span class="c1">// Type definitions</span>
+<span class="k">pub</span> <span class="k">type</span> <span class="n">TransactionId</span> <span class="o">=</span> <span class="nb">String</span><span class="p">;</span>
+
+<span class="c1">// Structs and enums</span>
+
+<span class="nd">#[derive(Debug,</span> <span class="nd">Clone)]</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">MyStruct</span> <span class="p">{</span>
+    <span class="c1">// fields</span>
+<span class="p">}</span>
+
+<span class="c1">// Trait definitions</span>
+<span class="k">pub</span> <span class="k">trait</span> <span class="n">MyTrait</span> <span class="p">{</span>
+    <span class="c1">// methods</span>
+<span class="p">}</span>
+
+<span class="c1">// Implementations</span>
+<span class="k">impl</span> <span class="n">MyStruct</span> <span class="p">{</span>
+    <span class="c1">// methods</span>
+<span class="p">}</span>
+
+<span class="c1">// Tests (at bottom of file)</span>
+
+<span class="nd">#[cfg(test)]</span>
+<span class="k">mod</span> <span class="n">tests</span> <span class="p">{</span>
+    <span class="k">use</span> <span class="k">super</span><span class="p">::</span><span class="o">*</span><span class="p">;</span>
+    
+    <span class="nd">#[tokio::test]</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">test_my_function</span><span class="p">()</span> <span class="p">{</span>
+        <span class="c1">// test code</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="transaction-system-guidelines">Transaction System Guidelines</h3>
+
+<p>When working on transaction-related code:</p>
+
+<ul>
+  <li><strong>ACID Properties</strong>: Ensure atomicity, consistency, isolation, durability</li>
+  <li><strong>Error Handling</strong>: Handle network failures, timeouts, and participant failures gracefully</li>
+  <li><strong>Logging</strong>: Use structured logging with <code class="language-plaintext highlighter-rouge">tracing</code> crate</li>
+  <li><strong>Testing</strong>: Include both unit tests and integration tests</li>
+  <li><strong>Performance</strong>: Consider batch operations and connection pooling</li>
+  <li><strong>Recovery</strong>: Design for coordinator failure and transaction recovery</li>
+</ul>
+
+<h3 id="documentation-standards">Documentation Standards</h3>
+
+<ul>
+  <li><strong>Public APIs</strong>: Document with examples</li>
+  <li><strong>Complex algorithms</strong>: Explain the approach and trade-offs</li>
+  <li><strong>Configuration</strong>: Document all configuration options</li>
+  <li><strong>Error conditions</strong>: Document when functions return errors</li>
+</ul>
+
+<p>Example:</p>
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="cd">/// Begins a new distributed transaction across multiple participants.</span>
+<span class="cd">///</span>
+<span class="cd">/// This method initiates a 2-phase commit protocol that ensures ACID</span>
+<span class="cd">/// properties across distributed actors. The transaction will timeout</span>
+<span class="cd">/// after the specified duration.</span>
+<span class="cd">///</span>
+<span class="cd">/// # Arguments</span>
+<span class="cd">///</span>
+<span class="cd">/// * `timeout` - Optional timeout for the transaction. If None, uses</span>
+<span class="cd">///   the configured default timeout.</span>
+<span class="cd">///</span>
+<span class="cd">/// # Returns</span>
+<span class="cd">///</span>
+<span class="cd">/// Returns a `TransactionId` that can be used to add operations and</span>
+<span class="cd">/// commit the transaction.</span>
+<span class="cd">///</span>
+<span class="cd">/// # Errors</span>
+<span class="cd">///</span>
+<span class="cd">/// Returns `OrbitError::Internal` if the maximum number of concurrent</span>
+<span class="cd">/// transactions has been exceeded.</span>
+<span class="cd">///</span>
+<span class="cd">/// # Example</span>
+<span class="cd">///</span>
+<span class="cd">/// ```rust</span>
+<span class="cd">/// let tx_id = coordinator.begin_transaction(Some(Duration::from_secs(30))).await?;</span>
+<span class="cd">/// // Add operations and commit...</span>
+<span class="cd">/// ```</span>
+<span class="k">pub</span> <span class="k">async</span> <span class="k">fn</span> <span class="nf">begin_transaction</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">timeout</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="n">Duration</span><span class="o">&gt;</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">TransactionId</span><span class="o">&gt;</span> <span class="p">{</span>
+    <span class="c1">// implementation</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h2 id="testing">Testing</h2>
+
+<h3 id="types-of-tests">Types of Tests</h3>
+
+<ol>
+  <li><strong>Unit Tests</strong>: Test individual functions and modules</li>
+  <li><strong>Integration Tests</strong>: Test component interactions</li>
+  <li><strong>Example Tests</strong>: Ensure examples compile and run</li>
+  <li><strong>Property Tests</strong>: Use <code class="language-plaintext highlighter-rouge">proptest</code> for property-based testing</li>
+  <li><strong>Benchmark Tests</strong>: Performance regression testing</li>
+</ol>
+
+<h3 id="test-structure">Test Structure</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="nd">#[cfg(test)]</span>
+<span class="k">mod</span> <span class="n">tests</span> <span class="p">{</span>
+    <span class="k">use</span> <span class="k">super</span><span class="p">::</span><span class="o">*</span><span class="p">;</span>
+    <span class="k">use</span> <span class="nn">tempfile</span><span class="p">::</span><span class="n">tempdir</span><span class="p">;</span>
+    
+    <span class="nd">#[tokio::test]</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">test_transaction_creation</span><span class="p">()</span> <span class="p">{</span>
+        <span class="c1">// Arrange</span>
+        <span class="k">let</span> <span class="n">config</span> <span class="o">=</span> <span class="nn">TransactionConfig</span><span class="p">::</span><span class="nf">default</span><span class="p">();</span>
+        <span class="k">let</span> <span class="n">coordinator</span> <span class="o">=</span> <span class="nf">setup_test_coordinator</span><span class="p">(</span><span class="n">config</span><span class="p">)</span><span class="k">.await</span><span class="p">;</span>
+        
+        <span class="c1">// Act</span>
+        <span class="k">let</span> <span class="n">result</span> <span class="o">=</span> <span class="n">coordinator</span><span class="nf">.begin_transaction</span><span class="p">(</span><span class="nb">None</span><span class="p">)</span><span class="k">.await</span><span class="p">;</span>
+        
+        <span class="c1">// Assert</span>
+        <span class="nd">assert!</span><span class="p">(</span><span class="n">result</span><span class="nf">.is_ok</span><span class="p">());</span>
+        <span class="k">let</span> <span class="n">tx_id</span> <span class="o">=</span> <span class="n">result</span><span class="nf">.unwrap</span><span class="p">();</span>
+        <span class="nd">assert!</span><span class="p">(</span><span class="o">!</span><span class="n">tx_id</span><span class="py">.id</span><span class="nf">.is_empty</span><span class="p">());</span>
+    <span class="p">}</span>
+    
+    <span class="c1">// Helper functions</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">setup_test_coordinator</span><span class="p">(</span><span class="n">config</span><span class="p">:</span> <span class="n">TransactionConfig</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">TransactionCoordinator</span> <span class="p">{</span>
+        <span class="c1">// setup code</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="mocking-and-test-utilities">Mocking and Test Utilities</h3>
+
+<ul>
+  <li>Use mock implementations for external dependencies</li>
+  <li>Create test utilities in <code class="language-plaintext highlighter-rouge">tests/common/</code> for reusable test code</li>
+  <li>Use <code class="language-plaintext highlighter-rouge">tempfile</code> for temporary file system operations</li>
+</ul>
+
+<h2 id="documentation">Documentation</h2>
+
+<h3 id="api-documentation">API Documentation</h3>
+
+<ul>
+  <li>Use <code class="language-plaintext highlighter-rouge">cargo doc</code> to generate documentation</li>
+  <li>Include examples in doc comments</li>
+  <li>Document error conditions and edge cases</li>
+  <li>Keep documentation up to date with code changes</li>
+</ul>
+
+<h3 id="readme-and-guides">README and Guides</h3>
+
+<ul>
+  <li>Update README.md for user-facing changes</li>
+  <li>Add examples for new features</li>
+  <li>Update architecture documentation for significant changes</li>
+</ul>
+
+<h2 id="performance-considerations">Performance Considerations</h2>
+
+<h3 id="transaction-system-performance">Transaction System Performance</h3>
+
+<ul>
+  <li><strong>Connection Pooling</strong>: Reuse gRPC connections</li>
+  <li><strong>Batch Operations</strong>: Process multiple operations together</li>
+  <li><strong>Async I/O</strong>: Use tokio for non-blocking operations</li>
+  <li><strong>Memory Usage</strong>: Consider memory allocations in hot paths</li>
+  <li><strong>Database Operations</strong>: Use prepared statements and transactions</li>
+</ul>
+
+<h3 id="benchmarking">Benchmarking</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Run benchmarks</span>
+cargo bench <span class="nt">--package</span> orbit-benchmarks
+
+<span class="c"># Profile with perf (Linux)</span>
+cargo build <span class="nt">--release</span>
+perf record <span class="nt">--call-graph</span><span class="o">=</span>dwarf target/release/your-binary
+perf report
+</code></pre></div></div>
+
+<h2 id="submitting-changes">Submitting Changes</h2>
+
+<h3 id="pull-request-process">Pull Request Process</h3>
+
+<ol>
+  <li><strong>Update documentation</strong> for any user-facing changes</li>
+  <li><strong>Add tests</strong> for new functionality</li>
+  <li><strong>Update CHANGELOG.md</strong> with your changes</li>
+  <li><strong>Ensure CI passes</strong> - all tests, linting, and formatting</li>
+  <li><strong>Request review</strong> from maintainers</li>
+</ol>
+
+<h3 id="pull-request-template">Pull Request Template</h3>
+
+<div class="language-markdown highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="gu">## Description</span>
+Brief description of changes.
+
+<span class="gu">## Type of Change</span>
+<span class="p">-</span> [ ] Bug fix
+<span class="p">-</span> [ ] New feature  
+<span class="p">-</span> [ ] Documentation update
+<span class="p">-</span> [ ] Performance improvement
+<span class="p">-</span> [ ] Refactoring
+
+<span class="gu">## Testing</span>
+<span class="p">-</span> [ ] Unit tests pass
+<span class="p">-</span> [ ] Integration tests pass
+<span class="p">-</span> [ ] Added new tests for this change
+<span class="p">-</span> [ ] Manual testing completed
+
+<span class="gu">## Checklist</span>
+<span class="p">-</span> [ ] Code follows style guidelines
+<span class="p">-</span> [ ] Self-review completed
+<span class="p">-</span> [ ] Documentation updated
+<span class="p">-</span> [ ] CHANGELOG.md updated
+</code></pre></div></div>
+
+<h3 id="review-process">Review Process</h3>
+
+<ul>
+  <li><strong>Code review</strong>: At least one maintainer review required</li>
+  <li><strong>CI checks</strong>: All automated checks must pass</li>
+  <li><strong>Documentation</strong>: Ensure docs are updated</li>
+  <li><strong>Breaking changes</strong>: Must be discussed and approved</li>
+</ul>
+
+<h2 id="getting-help">Getting Help</h2>
+
+<ul>
+  <li><strong>GitHub Issues</strong>: For bug reports and feature requests</li>
+  <li><strong>Discussions</strong>: For questions and general discussion</li>
+  <li><strong>Discord/Slack</strong>: Real-time chat (if available)</li>
+  <li><strong>Email</strong>: Contact maintainers directly for sensitive issues</li>
+</ul>
+
+<h2 id="recognition">Recognition</h2>
+
+<p>Contributors will be recognized in:</p>
+<ul>
+  <li>CHANGELOG.md for significant contributions</li>
+  <li>README.md contributors section</li>
+  <li>GitHub contributors page</li>
+</ul>
+
+<p>Thank you for contributing to Orbit-RS! 🚀</p>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/orbit-rs/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Orbit-RS Documentation</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">TuringWorks</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

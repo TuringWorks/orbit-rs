@@ -1,0 +1,230 @@
+<h1 id="gitflow-for-llms-an-execution-playbook">GitFlow for LLMs: An Execution Playbook</h1>
+
+<h2 id="1-branch-roles-single-source-of-truth">1) Branch Roles (single source of truth)</h2>
+<ul>
+  <li><strong><code class="language-plaintext highlighter-rouge">main</code></strong>: only production-ready code. Every commit on <code class="language-plaintext highlighter-rouge">main</code> is a released build and must be <strong>tagged</strong>.</li>
+  <li><strong><code class="language-plaintext highlighter-rouge">develop</code></strong>: integration branch for the next release. Always buildable/green.</li>
+  <li><strong><code class="language-plaintext highlighter-rouge">feature/*</code></strong>: short-lived branches off <code class="language-plaintext highlighter-rouge">develop</code> for new work. Merged into <code class="language-plaintext highlighter-rouge">develop</code>.</li>
+  <li><strong><code class="language-plaintext highlighter-rouge">release/*</code></strong>: harden a specific version; off <code class="language-plaintext highlighter-rouge">develop</code>, into <code class="language-plaintext highlighter-rouge">main</code> and back-merge into <code class="language-plaintext highlighter-rouge">develop</code>.</li>
+  <li><strong><code class="language-plaintext highlighter-rouge">hotfix/*</code></strong>: emergency production fix; off <code class="language-plaintext highlighter-rouge">main</code>, into <code class="language-plaintext highlighter-rouge">main</code> <strong>and</strong> <code class="language-plaintext highlighter-rouge">develop</code>.</li>
+  <li><strong><code class="language-plaintext highlighter-rouge">support/*</code></strong> (optional): long-term support lines for old majors; off a tagged release, into that support line and back-merged as policy dictates.</li>
+</ul>
+
+<h2 id="2-naming-conventions-machine-parseable">2) Naming Conventions (machine-parseable)</h2>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">feature/&lt;ticket|-|slug&gt;</code> (e.g., <code class="language-plaintext highlighter-rouge">feature/ABC-123-user-onboarding</code>)</li>
+  <li><code class="language-plaintext highlighter-rouge">release/&lt;semver&gt;</code> (e.g., <code class="language-plaintext highlighter-rouge">release/1.4.0</code>)</li>
+  <li><code class="language-plaintext highlighter-rouge">hotfix/&lt;semver&gt;</code> (e.g., <code class="language-plaintext highlighter-rouge">hotfix/1.4.1</code>)</li>
+  <li><code class="language-plaintext highlighter-rouge">support/&lt;major.minor&gt;</code> (e.g., <code class="language-plaintext highlighter-rouge">support/1.4</code>)</li>
+</ul>
+
+<p><strong>Commit messages</strong>: Conventional Commits (<code class="language-plaintext highlighter-rouge">type(scope)!: summary</code>).<br />
+<strong>Tags</strong>: <code class="language-plaintext highlighter-rouge">v&lt;semver&gt;</code> (e.g., <code class="language-plaintext highlighter-rouge">v1.4.0</code>).</p>
+
+<h2 id="3-merge--protection-rules">3) Merge &amp; Protection Rules</h2>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">main</code>: protected; only PRs from <code class="language-plaintext highlighter-rouge">release/*</code> or <code class="language-plaintext highlighter-rouge">hotfix/*</code>. Require CI green, code review, and tag on merge.</li>
+  <li><code class="language-plaintext highlighter-rouge">develop</code>: protected; only PRs from <code class="language-plaintext highlighter-rouge">feature/*</code> or <code class="language-plaintext highlighter-rouge">release/*</code> (back-merge). Require CI.</li>
+  <li><strong>Merge strategy</strong>: “merge commit” (no fast-forward) to preserve branch history.<br />
+Optionally “squash” for feature branches—decide once and document.</li>
+</ul>
+
+<h2 id="4-versioning-policy">4) Versioning Policy</h2>
+<ul>
+  <li>Use <strong>SemVer</strong>:
+    <ul>
+      <li><strong>major</strong>: breaking change</li>
+      <li><strong>minor</strong>: new features, no breaking change</li>
+      <li><strong>patch</strong>: bug fixes only</li>
+    </ul>
+  </li>
+  <li><strong>Release branch</strong> sets the target version; hotfix uses next patch on <code class="language-plaintext highlighter-rouge">main</code>.</li>
+</ul>
+
+<hr />
+
+<h2 id="5-standard-operating-procedures">5) Standard Operating Procedures</h2>
+
+<h3 id="51-feature-work">5.1 Feature Work</h3>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>git checkout develop
+git pull origin develop
+git checkout <span class="nt">-b</span> feature/ABC-123-user-onboarding
+
+<span class="c"># work, commit, push</span>
+git push <span class="nt">-u</span> origin feature/ABC-123-user-onboarding
+
+<span class="c"># open PR → base: develop</span>
+</code></pre></div></div>
+
+<h3 id="52-cutting-a-release">5.2 Cutting a Release</h3>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">export </span><span class="nv">VERSION</span><span class="o">=</span>1.4.0
+git checkout develop <span class="o">&amp;&amp;</span> git pull
+git checkout <span class="nt">-b</span> release/<span class="k">${</span><span class="nv">VERSION</span><span class="k">}</span>
+
+<span class="c"># bump versions, update changelog</span>
+git commit <span class="nt">-am</span> <span class="s2">"chore(release): prepare v</span><span class="k">${</span><span class="nv">VERSION</span><span class="k">}</span><span class="s2">"</span>
+git push <span class="nt">-u</span> origin release/<span class="k">${</span><span class="nv">VERSION</span><span class="k">}</span>
+</code></pre></div></div>
+
+<p>Finish release:</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>git checkout main
+git merge <span class="nt">--no-ff</span> release/<span class="k">${</span><span class="nv">VERSION</span><span class="k">}</span>
+git tag <span class="nt">-a</span> v<span class="k">${</span><span class="nv">VERSION</span><span class="k">}</span> <span class="nt">-m</span> <span class="s2">"Release v</span><span class="k">${</span><span class="nv">VERSION</span><span class="k">}</span><span class="s2">"</span>
+git push origin v<span class="k">${</span><span class="nv">VERSION</span><span class="k">}</span>
+git checkout develop
+git merge <span class="nt">--no-ff</span> release/<span class="k">${</span><span class="nv">VERSION</span><span class="k">}</span>
+</code></pre></div></div>
+
+<h3 id="53-hotfix">5.3 Hotfix</h3>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">export </span><span class="nv">VERSION</span><span class="o">=</span>1.4.1
+git checkout main <span class="o">&amp;&amp;</span> git pull
+git checkout <span class="nt">-b</span> hotfix/<span class="k">${</span><span class="nv">VERSION</span><span class="k">}</span>
+
+<span class="c"># fix, commit</span>
+git push <span class="nt">-u</span> origin hotfix/<span class="k">${</span><span class="nv">VERSION</span><span class="k">}</span>
+</code></pre></div></div>
+
+<p>Finish hotfix:</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>git checkout main
+git merge <span class="nt">--no-ff</span> hotfix/<span class="k">${</span><span class="nv">VERSION</span><span class="k">}</span>
+git tag <span class="nt">-a</span> v<span class="k">${</span><span class="nv">VERSION</span><span class="k">}</span> <span class="nt">-m</span> <span class="s2">"Hotfix v</span><span class="k">${</span><span class="nv">VERSION</span><span class="k">}</span><span class="s2">"</span>
+git push origin v<span class="k">${</span><span class="nv">VERSION</span><span class="k">}</span>
+git checkout develop
+git merge <span class="nt">--no-ff</span> hotfix/<span class="k">${</span><span class="nv">VERSION</span><span class="k">}</span>
+</code></pre></div></div>
+
+<h3 id="54-support-branches">5.4 Support Branches</h3>
+<ul>
+  <li>Create <code class="language-plaintext highlighter-rouge">support/&lt;major.minor&gt;</code> from the tag.</li>
+  <li>Hotfixes merge back into that branch and get tagged.</li>
+</ul>
+
+<hr />
+
+<h2 id="6-back-merge-matrix">6) Back-Merge Matrix</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>Source → Target</th>
+      <th style="text-align: right">develop</th>
+      <th style="text-align: right">main</th>
+      <th style="text-align: right">release/x.y.z</th>
+      <th style="text-align: right">hotfix/x.y.z</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>feature/*</td>
+      <td style="text-align: right">✅</td>
+      <td style="text-align: right">❌</td>
+      <td style="text-align: right">❌</td>
+      <td style="text-align: right">❌</td>
+    </tr>
+    <tr>
+      <td>release/*</td>
+      <td style="text-align: right">✅</td>
+      <td style="text-align: right">✅</td>
+      <td style="text-align: right">✅</td>
+      <td style="text-align: right">❌</td>
+    </tr>
+    <tr>
+      <td>hotfix/*</td>
+      <td style="text-align: right">✅</td>
+      <td style="text-align: right">✅</td>
+      <td style="text-align: right">✅</td>
+      <td style="text-align: right">✅</td>
+    </tr>
+  </tbody>
+</table>
+
+<hr />
+
+<h2 id="7-cicd-hookpoints">7) CI/CD Hookpoints</h2>
+<ul>
+  <li>PR to <code class="language-plaintext highlighter-rouge">develop</code>: lint, unit tests, build.</li>
+  <li>PR to <code class="language-plaintext highlighter-rouge">main</code>: above + e2e/integration, security scan.</li>
+  <li>Tag: build &amp; publish artifacts, container images, notify.</li>
+</ul>
+
+<hr />
+
+<h2 id="8-conflict--divergence">8) Conflict &amp; Divergence</h2>
+<ul>
+  <li>Prefer <strong>back-merge</strong> (<code class="language-plaintext highlighter-rouge">git merge</code>) over cherry-pick.</li>
+  <li>If a release branch is open and a hotfix ships → merge hotfix into main, develop, and release.</li>
+</ul>
+
+<hr />
+
+<h2 id="9-minimal-command-cookbook">9) Minimal Command Cookbook</h2>
+
+<p><strong>Sync:</strong></p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>git fetch <span class="nt">--all</span> <span class="nt">--prune</span>
+git checkout develop <span class="o">&amp;&amp;</span> git pull
+</code></pre></div></div>
+
+<p><strong>Feature:</strong></p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>git checkout <span class="nt">-b</span> feature/ABC-123-something develop
+</code></pre></div></div>
+
+<p><strong>Release:</strong></p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>git checkout <span class="nt">-b</span> release/1.5.0 develop
+</code></pre></div></div>
+
+<p><strong>Hotfix:</strong></p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>git checkout <span class="nt">-b</span> hotfix/1.5.1 main
+</code></pre></div></div>
+
+<hr />
+
+<h2 id="10-automation-policy-yaml">10) Automation Policy (YAML)</h2>
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">gitflow</span><span class="pi">:</span>
+  <span class="na">protected_branches</span><span class="pi">:</span>
+    <span class="pi">-</span> <span class="s">main</span>
+    <span class="pi">-</span> <span class="s">develop</span>
+  <span class="na">allowed_sources</span><span class="pi">:</span>
+    <span class="na">main</span><span class="pi">:</span>
+      <span class="pi">-</span> <span class="s">release/*</span>
+      <span class="pi">-</span> <span class="s">hotfix/*</span>
+    <span class="na">develop</span><span class="pi">:</span>
+      <span class="pi">-</span> <span class="s">feature/*</span>
+      <span class="pi">-</span> <span class="s">release/*</span>
+      <span class="pi">-</span> <span class="s">hotfix/*</span>
+  <span class="na">branch_patterns</span><span class="pi">:</span>
+    <span class="na">feature</span><span class="pi">:</span> <span class="s">^feature\/[a-zA-Z0-9._-]+$</span>
+    <span class="na">release</span><span class="pi">:</span> <span class="s">^release\/(\d+)\.(\d+)\.(\d+)$</span>
+    <span class="na">hotfix</span><span class="pi">:</span>  <span class="s">^hotfix\/(\d+)\.(\d+)\.(\d+)$</span>
+  <span class="na">commit_message</span><span class="pi">:</span>
+    <span class="na">conventional_commits</span><span class="pi">:</span> <span class="kc">true</span>
+  <span class="na">merges</span><span class="pi">:</span>
+    <span class="na">strategy</span><span class="pi">:</span> <span class="s">merge-commit</span>
+    <span class="na">require_ci_green</span><span class="pi">:</span> <span class="kc">true</span>
+    <span class="na">require_reviews</span><span class="pi">:</span>
+      <span class="na">main</span><span class="pi">:</span> <span class="m">2</span>
+      <span class="na">develop</span><span class="pi">:</span> <span class="m">1</span>
+  <span class="na">tagging</span><span class="pi">:</span>
+    <span class="na">on_merge_to_main_from</span><span class="pi">:</span>
+      <span class="pi">-</span> <span class="s">release/*</span>
+      <span class="pi">-</span> <span class="s">hotfix/*</span>
+    <span class="na">tag_format</span><span class="pi">:</span> <span class="s">v{version}</span>
+  <span class="na">versioning</span><span class="pi">:</span>
+    <span class="na">scheme</span><span class="pi">:</span> <span class="s">semver</span>
+    <span class="na">release_branch_sets_version</span><span class="pi">:</span> <span class="kc">true</span>
+  <span class="na">backmerge</span><span class="pi">:</span>
+    <span class="na">hotfix_to</span><span class="pi">:</span>
+      <span class="pi">-</span> <span class="s">develop</span>
+      <span class="pi">-</span> <span class="s">release/*</span>
+    <span class="na">release_to</span><span class="pi">:</span>
+      <span class="pi">-</span> <span class="s">main</span>
+      <span class="pi">-</span> <span class="s">develop</span>
+</code></pre></div></div>
+
+<hr />
+
+<h2 id="11-defaults-for-llms">11) Defaults (for LLMs)</h2>
+<ul>
+  <li>Production bug? → hotfix off <code class="language-plaintext highlighter-rouge">main</code>, merge to <code class="language-plaintext highlighter-rouge">main</code>, back-merge to <code class="language-plaintext highlighter-rouge">develop</code> (and <code class="language-plaintext highlighter-rouge">release/*</code>).</li>
+  <li>New feature? → feature off <code class="language-plaintext highlighter-rouge">develop</code>, merge to <code class="language-plaintext highlighter-rouge">develop</code>.</li>
+  <li>Preparing shipment? → release off <code class="language-plaintext highlighter-rouge">develop</code>, merge to <code class="language-plaintext highlighter-rouge">main</code>, tag, back-merge to <code class="language-plaintext highlighter-rouge">develop</code>.</li>
+</ul>

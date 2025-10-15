@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Orbit-RS Redis Spatial Extensions | Orbit-RS Documentation</title>
+<meta name="generator" content="Jekyll v4.4.1" />
+<meta property="og:title" content="Orbit-RS Redis Spatial Extensions" />
+<meta name="author" content="TuringWorks" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<meta property="og:description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<link rel="canonical" href="https://turingworks.github.io/orbit-rs/protocols/SPATIAL_README.html" />
+<meta property="og:url" content="https://turingworks.github.io/orbit-rs/protocols/SPATIAL_README.html" />
+<meta property="og:site_name" content="Orbit-RS Documentation" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Orbit-RS Redis Spatial Extensions" />
+<meta name="twitter:site" content="@TuringWorksAI" />
+<meta name="twitter:creator" content="@TuringWorks" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","author":{"@type":"Person","name":"TuringWorks"},"description":"The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform","headline":"Orbit-RS Redis Spatial Extensions","url":"https://turingworks.github.io/orbit-rs/protocols/SPATIAL_README.html"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/orbit-rs/assets/main.css">
+  <link rel="stylesheet" href="/orbit-rs/assets/css/custom.css"><link type="application/atom+xml" rel="alternate" href="https://turingworks.github.io/orbit-rs/feed.xml" title="Orbit-RS Documentation" /></head><body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/orbit-rs/">Orbit-RS Documentation</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/orbit-rs/">Orbit-RS Documentation</a><a class="page-link" href="/orbit-rs/project_overview.html">Orbit-RS: Comprehensive Project Overview</a><a class="page-link" href="/orbit-rs/quick_start.html">Quick Start Guide - Multi-Protocol Database Server</a><a class="page-link" href="/orbit-rs/roadmap/">Development Roadmap</a><a class="page-link" href="/orbit-rs/features/">Orbit-RS Feature Index</a><a class="page-link" href="/orbit-rs/compute-acceleration/">Hardware Acceleration Guide</a><a class="page-link" href="/orbit-rs/contributing.html">Contributing Guide</a><a class="page-link" href="/orbit-rs/overview.html">Architecture Overview</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <h1 id="orbit-rs-redis-spatial-extensions">Orbit-RS Redis Spatial Extensions</h1>
+
+<h2 id="standard-redis-geo-commands-enhanced">Standard Redis GEO Commands (Enhanced)</h2>
+
+<p>Orbit-RS implements all standard Redis geospatial commands with performance optimizations and enhanced functionality:</p>
+
+<h3 id="geoadd">GEOADD</h3>
+<pre><code class="language-redis">GEOADD key longitude latitude member [longitude latitude member ...]
+</code></pre>
+<p>Adds one or more geospatial items to the specified key.</p>
+
+<p><strong>Example:</strong></p>
+<pre><code class="language-redis">GEOADD cities -122.4194 37.7749 "San Francisco" -74.0060 40.7128 "New York"
+</code></pre>
+
+<h3 id="geopos">GEOPOS</h3>
+<pre><code class="language-redis">GEOPOS key member [member ...]
+</code></pre>
+<p>Returns longitude/latitude coordinates for given members.</p>
+
+<p><strong>Example:</strong></p>
+<pre><code class="language-redis">GEOPOS cities "San Francisco"
+1) 1) "-122.41940000000002"
+   2) "37.77489999999999"
+</code></pre>
+
+<h3 id="geodist">GEODIST</h3>
+<pre><code class="language-redis">GEODIST key member1 member2 [m|km|ft|mi]
+</code></pre>
+<p>Calculates the distance between two members.</p>
+
+<p><strong>Example:</strong></p>
+<pre><code class="language-redis">GEODIST cities "San Francisco" "New York" km
+"4134.972"
+</code></pre>
+
+<h3 id="geohash">GEOHASH</h3>
+<pre><code class="language-redis">GEOHASH key member [member ...]
+</code></pre>
+<p>Returns geohash strings for the given members.</p>
+
+<h3 id="georadius">GEORADIUS</h3>
+<pre><code class="language-redis">GEORADIUS key longitude latitude radius m|km|ft|mi [WITHCOORD] [WITHDIST] [COUNT count]
+</code></pre>
+<p>Query points within a radius from given coordinates.</p>
+
+<p><strong>Example:</strong></p>
+<pre><code class="language-redis">GEORADIUS cities -122.4 37.8 50 km WITHCOORD WITHDIST COUNT 10
+</code></pre>
+
+<h3 id="georadiusbymember">GEORADIUSBYMEMBER</h3>
+<pre><code class="language-redis">GEORADIUSBYMEMBER key member radius m|km|ft|mi [WITHCOORD] [WITHDIST] [COUNT count]
+</code></pre>
+<p>Query points within a radius from an existing member.</p>
+
+<h2 id="extended-spatial-commands-orbit-rs-specific">Extended Spatial Commands (Orbit-RS Specific)</h2>
+
+<h3 id="index-management">Index Management</h3>
+
+<h4 id="geoindexcreate">GEO.INDEX.CREATE</h4>
+<pre><code class="language-redis">GEO.INDEX.CREATE index_name index_type [options]
+</code></pre>
+<p>Creates a spatial index with the specified type.</p>
+
+<p><strong>Index Types:</strong></p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">QUADTREE</code> - Quad-tree spatial index (default)</li>
+  <li><code class="language-plaintext highlighter-rouge">RTREE</code> - R-tree spatial index</li>
+  <li><code class="language-plaintext highlighter-rouge">GRID</code> - Grid-based spatial index</li>
+  <li><code class="language-plaintext highlighter-rouge">GPU</code> - GPU-accelerated spatial index</li>
+</ul>
+
+<p><strong>Example:</strong></p>
+<pre><code class="language-redis">GEO.INDEX.CREATE my_locations RTREE
+</code></pre>
+
+<h4 id="geoindexdrop">GEO.INDEX.DROP</h4>
+<pre><code class="language-redis">GEO.INDEX.DROP index_name
+</code></pre>
+<p>Removes a spatial index.</p>
+
+<h4 id="geoindexinfo">GEO.INDEX.INFO</h4>
+<pre><code class="language-redis">GEO.INDEX.INFO index_name
+</code></pre>
+<p>Returns information about a spatial index.</p>
+
+<h3 id="complex-geometry-support">Complex Geometry Support</h3>
+
+<h4 id="geopolygonadd">GEO.POLYGON.ADD</h4>
+<pre><code class="language-redis">GEO.POLYGON.ADD key member "POLYGON((x1 y1, x2 y2, x3 y3, x1 y1))"
+</code></pre>
+<p>Adds a polygon geometry to the spatial index.</p>
+
+<p><strong>Example:</strong></p>
+<pre><code class="language-redis">GEO.POLYGON.ADD zones downtown "POLYGON((-122.42 37.77, -122.41 37.77, -122.41 37.78, -122.42 37.78, -122.42 37.77))"
+</code></pre>
+
+<h4 id="geolinestringadd">GEO.LINESTRING.ADD</h4>
+<pre><code class="language-redis">GEO.LINESTRING.ADD key member "LINESTRING(x1 y1, x2 y2, x3 y3)"
+</code></pre>
+<p>Adds a linestring geometry.</p>
+
+<h4 id="geogeometryget">GEO.GEOMETRY.GET</h4>
+<pre><code class="language-redis">GEO.GEOMETRY.GET key member
+</code></pre>
+<p>Retrieves the geometry for a given member.</p>
+
+<h4 id="geogeometrydel">GEO.GEOMETRY.DEL</h4>
+<pre><code class="language-redis">GEO.GEOMETRY.DEL key member [member ...]
+</code></pre>
+<p>Removes geometries from the spatial index.</p>
+
+<h3 id="spatial-relationship-queries">Spatial Relationship Queries</h3>
+
+<h4 id="geowithin">GEO.WITHIN</h4>
+<pre><code class="language-redis">GEO.WITHIN key "POLYGON((x1 y1, x2 y2, x3 y3, x1 y1))"
+</code></pre>
+<p>Finds all geometries within the given polygon.</p>
+
+<h4 id="geointersects">GEO.INTERSECTS</h4>
+<pre><code class="language-redis">GEO.INTERSECTS key geometry_wkt
+</code></pre>
+<p>Finds all geometries that intersect with the given geometry.</p>
+
+<h4 id="geocontains">GEO.CONTAINS</h4>
+<pre><code class="language-redis">GEO.CONTAINS key geometry_wkt
+</code></pre>
+<p>Finds all geometries that contain the given geometry.</p>
+
+<h4 id="geooverlaps">GEO.OVERLAPS</h4>
+<pre><code class="language-redis">GEO.OVERLAPS key geometry_wkt
+</code></pre>
+<p>Finds all geometries that overlap with the given geometry.</p>
+
+<h2 id="real-time-geofencing">Real-Time Geofencing</h2>
+
+<h3 id="geofenceadd">GEO.FENCE.ADD</h3>
+<pre><code class="language-redis">GEO.FENCE.ADD fence_name geometry_wkt alert_types
+</code></pre>
+<p>Creates a geofence with alerting capabilities.</p>
+
+<p><strong>Alert Types:</strong></p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">ENTER</code> - Alert when entities enter the fence</li>
+  <li><code class="language-plaintext highlighter-rouge">EXIT</code> - Alert when entities exit the fence</li>
+  <li><code class="language-plaintext highlighter-rouge">ENTER,EXIT</code> - Alert on both enter and exit</li>
+</ul>
+
+<p><strong>Example:</strong></p>
+<pre><code class="language-redis">GEO.FENCE.ADD downtown_zone "POLYGON((-122.42 37.77, -122.41 37.77, -122.41 37.78, -122.42 37.78, -122.42 37.77))" ENTER,EXIT
+</code></pre>
+
+<h3 id="geofencedel">GEO.FENCE.DEL</h3>
+<pre><code class="language-redis">GEO.FENCE.DEL fence_name [fence_name ...]
+</code></pre>
+<p>Removes one or more geofences.</p>
+
+<h3 id="geofencecheck">GEO.FENCE.CHECK</h3>
+<pre><code class="language-redis">GEO.FENCE.CHECK entity_id longitude latitude
+</code></pre>
+<p>Checks if a location violates any active geofences.</p>
+
+<p><strong>Example:</strong></p>
+<pre><code class="language-redis">GEO.FENCE.CHECK user123 -122.415 37.775
+1) 1) "downtown_zone"
+   2) "INSIDE"
+</code></pre>
+
+<h3 id="geofencesubscribe">GEO.FENCE.SUBSCRIBE</h3>
+<pre><code class="language-redis">GEO.FENCE.SUBSCRIBE channel fence_name [fence_name ...]
+</code></pre>
+<p>Subscribes to geofence violations on a channel.</p>
+
+<h3 id="geofencelist">GEO.FENCE.LIST</h3>
+<pre><code class="language-redis">GEO.FENCE.LIST [PATTERN pattern]
+</code></pre>
+<p>Lists all active geofences, optionally filtered by pattern.</p>
+
+<h2 id="spatial-analytics">Spatial Analytics</h2>
+
+<h3 id="clustering">Clustering</h3>
+
+<h4 id="geoclusterkmeans">GEO.CLUSTER.KMEANS</h4>
+<pre><code class="language-redis">GEO.CLUSTER.KMEANS index_name k_value
+</code></pre>
+<p>Performs K-means clustering on spatial points.</p>
+
+<p><strong>Example:</strong></p>
+<pre><code class="language-redis">GEO.CLUSTER.KMEANS user_locations 3
+1) 1) "user1"
+   2) (integer) 0
+2) 1) "user2"  
+   2) (integer) 0
+3) 1) "user3"
+   2) (integer) 1
+</code></pre>
+
+<h4 id="geoclusterdbscan">GEO.CLUSTER.DBSCAN</h4>
+<pre><code class="language-redis">GEO.CLUSTER.DBSCAN index_name epsilon min_points
+</code></pre>
+<p>Performs DBSCAN clustering for density-based clustering.</p>
+
+<h3 id="density-analysis">Density Analysis</h3>
+
+<h4 id="geodensityheatmap">GEO.DENSITY.HEATMAP</h4>
+<pre><code class="language-redis">GEO.DENSITY.HEATMAP index_name grid_size [bounds]
+</code></pre>
+<p>Generates a density heatmap of spatial points.</p>
+
+<h3 id="nearest-neighbors">Nearest Neighbors</h3>
+
+<h4 id="geonearestneighbors">GEO.NEAREST.NEIGHBORS</h4>
+<pre><code class="language-redis">GEO.NEAREST.NEIGHBORS index_name longitude latitude k [algorithm]
+</code></pre>
+<p>Finds k nearest neighbors to a given point.</p>
+
+<p><strong>Algorithms:</strong></p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">BRUTE_FORCE</code> - Brute force search</li>
+  <li><code class="language-plaintext highlighter-rouge">KD_TREE</code> - KD-tree based search</li>
+  <li><code class="language-plaintext highlighter-rouge">BALL_TREE</code> - Ball tree based search</li>
+  <li><code class="language-plaintext highlighter-rouge">GPU</code> - GPU-accelerated search</li>
+</ul>
+
+<h2 id="real-time-spatial-streaming">Real-Time Spatial Streaming</h2>
+
+<h3 id="geostreamprocess">GEO.STREAM.PROCESS</h3>
+<pre><code class="language-redis">GEO.STREAM.PROCESS stream_key processor_config
+</code></pre>
+<p>Sets up real-time spatial stream processing.</p>
+
+<h3 id="geostreamsubscribe">GEO.STREAM.SUBSCRIBE</h3>
+<pre><code class="language-redis">GEO.STREAM.SUBSCRIBE channel pattern
+</code></pre>
+<p>Subscribes to spatial stream events.</p>
+
+<h3 id="geostreamaggregate">GEO.STREAM.AGGREGATE</h3>
+<pre><code class="language-redis">GEO.STREAM.AGGREGATE stream_key time_window aggregation_function
+</code></pre>
+<p>Performs time-windowed spatial aggregations.</p>
+
+<h2 id="time-series-geospatial-data">Time-Series Geospatial Data</h2>
+
+<h3 id="geotsadd">GEO.TS.ADD</h3>
+<pre><code class="language-redis">GEO.TS.ADD key timestamp longitude latitude [metadata]
+</code></pre>
+<p>Adds a time-stamped spatial point.</p>
+
+<p><strong>Example:</strong></p>
+<pre><code class="language-redis">GEO.TS.ADD vehicle_track 1640995200 -122.4194 37.7749 speed=65
+</code></pre>
+
+<h3 id="geotsrange">GEO.TS.RANGE</h3>
+<pre><code class="language-redis">GEO.TS.RANGE key from_timestamp to_timestamp [WITHLOCATION] [WITHMETADATA]
+</code></pre>
+<p>Queries spatial data within a time range.</p>
+
+<h3 id="geotstrajectory">GEO.TS.TRAJECTORY</h3>
+<pre><code class="language-redis">GEO.TS.TRAJECTORY key from_timestamp to_timestamp [SIMPLIFY tolerance]
+</code></pre>
+<p>Reconstructs movement trajectory from time-series spatial data.</p>
+
+<h2 id="performance-features">Performance Features</h2>
+
+<h3 id="gpu-acceleration">GPU Acceleration</h3>
+<p>Many spatial operations can leverage GPU acceleration when available:</p>
+<ul>
+  <li>Spatial clustering (K-means, DBSCAN)</li>
+  <li>Nearest neighbor search</li>
+  <li>Complex spatial queries</li>
+  <li>Density calculations</li>
+</ul>
+
+<h3 id="parallel-processing">Parallel Processing</h3>
+<p>Orbit-RS automatically parallelizes spatial operations across available CPU cores for:</p>
+<ul>
+  <li>Large-scale spatial joins</li>
+  <li>Bulk geometry operations</li>
+  <li>Multi-polygon intersections</li>
+</ul>
+
+<h3 id="adaptive-indexing">Adaptive Indexing</h3>
+<p>Spatial indexes automatically optimize themselves based on:</p>
+<ul>
+  <li>Data distribution patterns</li>
+  <li>Query patterns</li>
+  <li>Available memory</li>
+  <li>Hardware capabilities</li>
+</ul>
+
+<h2 id="configuration">Configuration</h2>
+
+<p>Spatial functionality can be configured through environment variables or configuration files:</p>
+
+<div class="language-toml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">[</span><span class="n">spatial</span><span class="k">]</span>
+
+<span class="c"># Enable GPU acceleration (requires CUDA/OpenCL)</span>
+<span class="n">gpu_enabled</span> <span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+
+<span class="c"># Default spatial reference system</span>
+<span class="n">default_srid</span> <span class="o">=</span><span class="w"> </span><span class="mi">4326</span>  <span class="c"># WGS84</span>
+
+<span class="c"># Index optimization settings</span>
+<span class="n">auto_optimize_indexes</span> <span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+<span class="n">optimization_interval</span> <span class="o">=</span><span class="w"> </span><span class="s">"1h"</span>
+
+<span class="c"># Memory limits for spatial operations</span>
+<span class="n">max_memory_per_operation</span> <span class="o">=</span><span class="w"> </span><span class="s">"1GB"</span>
+
+<span class="c"># Parallel processing settings</span>
+<span class="n">max_parallel_threads</span> <span class="o">=</span><span class="w"> </span><span class="mi">0</span>  <span class="c"># 0 = auto-detect</span>
+
+<span class="k">[</span><span class="n">geofencing</span><span class="k">]</span>
+
+<span class="c"># Maximum number of active geofences</span>
+<span class="n">max_geofences</span> <span class="o">=</span><span class="w"> </span><span class="mi">10000</span>
+
+<span class="c"># Real-time processing buffer size</span>
+<span class="n">buffer_size</span> <span class="o">=</span><span class="w"> </span><span class="mi">1000</span>
+
+<span class="c"># Alert delivery timeout</span>
+<span class="n">alert_timeout</span> <span class="o">=</span><span class="w"> </span><span class="s">"5s"</span>
+</code></pre></div></div>
+
+<h2 id="error-handling">Error Handling</h2>
+
+<p>Spatial commands return standard Redis error responses:</p>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">(error) ERR Invalid geometry</code> - Malformed WKT or coordinates</li>
+  <li><code class="language-plaintext highlighter-rouge">(error) ERR Index not found</code> - Referenced spatial index doesn’t exist</li>
+  <li><code class="language-plaintext highlighter-rouge">(error) ERR Unsupported operation</code> - Operation not supported for geometry type</li>
+  <li><code class="language-plaintext highlighter-rouge">(error) ERR Out of memory</code> - Insufficient memory for spatial operation</li>
+  <li><code class="language-plaintext highlighter-rouge">(error) ERR GPU not available</code> - GPU acceleration requested but not available</li>
+</ul>
+
+<h2 id="examples">Examples</h2>
+
+<h3 id="setting-up-a-real-time-location-tracking-system">Setting up a real-time location tracking system:</h3>
+
+<pre><code class="language-redis">
+# Create a spatial index for vehicles
+GEO.INDEX.CREATE vehicle_locations RTREE
+
+# Add some vehicles
+GEOADD vehicle_locations -122.4194 37.7749 vehicle1 -122.4094 37.7849 vehicle2
+
+# Create a geofence for downtown area
+GEO.FENCE.ADD downtown "POLYGON((-122.42 37.77, -122.40 37.77, -122.40 37.79, -122.42 37.79, -122.42 37.77))" ENTER,EXIT
+
+# Subscribe to geofence violations
+GEO.FENCE.SUBSCRIBE alerts downtown
+
+# Check for vehicles in downtown area
+GEO.WITHIN vehicle_locations "POLYGON((-122.42 37.77, -122.40 37.77, -122.40 37.79, -122.42 37.79, -122.42 37.77))"
+
+# Find clusters of vehicles
+GEO.CLUSTER.KMEANS vehicle_locations 3
+
+# Track vehicle movement over time
+GEO.TS.ADD vehicle1_track 1640995200 -122.4194 37.7749
+GEO.TS.ADD vehicle1_track 1640995260 -122.4184 37.7759
+GEO.TS.TRAJECTORY vehicle1_track 1640995200 1640999999
+</code></pre>
+
+<h3 id="spatial-analytics-on-customer-locations">Spatial analytics on customer locations:</h3>
+
+<pre><code class="language-redis">
+# Create customer location index  
+GEO.INDEX.CREATE customers QUADTREE
+
+# Add customer locations
+GEOADD customers -74.0060 40.7128 customer1 -73.9352 40.7306 customer2
+
+# Find density hotspots
+GEO.DENSITY.HEATMAP customers 0.01
+
+# Cluster customers by location
+GEO.CLUSTER.DBSCAN customers 0.005 5
+
+# Find customers within delivery zones
+GEO.WITHIN customers "POLYGON((-74.01 40.71, -74.00 40.71, -74.00 40.72, -74.01 40.72, -74.01 40.71))"
+</code></pre>
+
+<p>This spatial extension makes Orbit-RS a powerful platform for building location-aware applications with Redis-compatible tooling.</p>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/orbit-rs/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Orbit-RS Documentation</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">TuringWorks</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

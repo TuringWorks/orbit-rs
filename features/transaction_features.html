@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Advanced Transaction Features | Orbit-RS Documentation</title>
+<meta name="generator" content="Jekyll v4.4.1" />
+<meta property="og:title" content="Advanced Transaction Features" />
+<meta name="author" content="TuringWorks" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<meta property="og:description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<link rel="canonical" href="https://turingworks.github.io/orbit-rs/features/transaction_features.html" />
+<meta property="og:url" content="https://turingworks.github.io/orbit-rs/features/transaction_features.html" />
+<meta property="og:site_name" content="Orbit-RS Documentation" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Advanced Transaction Features" />
+<meta name="twitter:site" content="@TuringWorksAI" />
+<meta name="twitter:creator" content="@TuringWorks" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","author":{"@type":"Person","name":"TuringWorks"},"description":"The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform","headline":"Advanced Transaction Features","url":"https://turingworks.github.io/orbit-rs/features/transaction_features.html"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/orbit-rs/assets/main.css">
+  <link rel="stylesheet" href="/orbit-rs/assets/css/custom.css"><link type="application/atom+xml" rel="alternate" href="https://turingworks.github.io/orbit-rs/feed.xml" title="Orbit-RS Documentation" /></head><body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/orbit-rs/">Orbit-RS Documentation</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/orbit-rs/">Orbit-RS Documentation</a><a class="page-link" href="/orbit-rs/project_overview.html">Orbit-RS: Comprehensive Project Overview</a><a class="page-link" href="/orbit-rs/quick_start.html">Quick Start Guide - Multi-Protocol Database Server</a><a class="page-link" href="/orbit-rs/roadmap/">Development Roadmap</a><a class="page-link" href="/orbit-rs/features/">Orbit-RS Feature Index</a><a class="page-link" href="/orbit-rs/compute-acceleration/">Hardware Acceleration Guide</a><a class="page-link" href="/orbit-rs/contributing.html">Contributing Guide</a><a class="page-link" href="/orbit-rs/overview.html">Architecture Overview</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <h1 id="advanced-transaction-features">Advanced Transaction Features</h1>
+
+<h2 id="overview">Overview</h2>
+
+<p>Orbit-RS provides a sophisticated transaction system that goes beyond basic CRUD operations to support complex distributed workflows, advanced locking mechanisms, and comprehensive observability. The system is designed for production use with features like deadlock detection, saga patterns, and security audit trails.</p>
+
+<h2 id="core-transaction-system">Core Transaction System</h2>
+
+<h3 id="2-phase-commit-protocol">2-Phase Commit Protocol</h3>
+
+<p>The foundation of Orbit-RS transactions is a robust 2-phase commit implementation:</p>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">orbit_shared</span><span class="p">::{</span>
+    <span class="nn">transactions</span><span class="p">::</span><span class="o">*</span><span class="p">,</span>
+    <span class="nn">transport</span><span class="p">::</span><span class="o">*</span><span class="p">,</span>
+    <span class="n">AddressableReference</span><span class="p">,</span> <span class="n">Key</span><span class="p">,</span> <span class="n">NodeId</span><span class="p">,</span>
+<span class="p">};</span>
+<span class="k">use</span> <span class="nn">std</span><span class="p">::{</span><span class="nn">sync</span><span class="p">::</span><span class="nb">Arc</span><span class="p">,</span> <span class="nn">time</span><span class="p">::</span><span class="n">Duration</span><span class="p">};</span>
+
+<span class="nd">#[tokio::main]</span>
+<span class="k">async</span> <span class="k">fn</span> <span class="nf">main</span><span class="p">()</span> <span class="k">-&gt;</span> <span class="nb">Result</span><span class="o">&lt;</span><span class="p">(),</span> <span class="nb">Box</span><span class="o">&lt;</span><span class="k">dyn</span> <span class="nn">std</span><span class="p">::</span><span class="nn">error</span><span class="p">::</span><span class="n">Error</span><span class="o">&gt;&gt;</span> <span class="p">{</span>
+    <span class="c1">// Create transaction coordinator</span>
+    <span class="k">let</span> <span class="n">node_id</span> <span class="o">=</span> <span class="nn">NodeId</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="s">"coordinator"</span><span class="nf">.to_string</span><span class="p">(),</span> <span class="s">"cluster"</span><span class="nf">.to_string</span><span class="p">());</span>
+    <span class="k">let</span> <span class="n">config</span> <span class="o">=</span> <span class="nn">TransactionConfig</span><span class="p">::</span><span class="nf">default</span><span class="p">();</span>
+    <span class="k">let</span> <span class="n">transport</span> <span class="o">=</span> <span class="nn">Arc</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="nn">GrpcTransactionMessageSender</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="cm">/* ... */</span><span class="p">));</span>
+    
+    <span class="k">let</span> <span class="n">coordinator</span> <span class="o">=</span> <span class="nn">TransactionCoordinator</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="n">node_id</span><span class="p">,</span> <span class="n">config</span><span class="p">,</span> <span class="n">transport</span><span class="p">);</span>
+    
+    <span class="c1">// Begin distributed transaction</span>
+    <span class="k">let</span> <span class="n">tx_id</span> <span class="o">=</span> <span class="n">coordinator</span><span class="nf">.begin_transaction</span><span class="p">(</span><span class="nf">Some</span><span class="p">(</span><span class="nn">Duration</span><span class="p">::</span><span class="nf">from_secs</span><span class="p">(</span><span class="mi">30</span><span class="p">)))</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+    
+    <span class="c1">// Add banking operations</span>
+    <span class="k">let</span> <span class="n">debit_operation</span> <span class="o">=</span> <span class="nn">TransactionOperation</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span>
+        <span class="n">AddressableReference</span> <span class="p">{</span>
+            <span class="n">addressable_type</span><span class="p">:</span> <span class="s">"BankAccount"</span><span class="nf">.to_string</span><span class="p">(),</span>
+            <span class="n">key</span><span class="p">:</span> <span class="nn">Key</span><span class="p">::</span><span class="n">StringKey</span> <span class="p">{</span> <span class="n">key</span><span class="p">:</span> <span class="s">"alice"</span><span class="nf">.to_string</span><span class="p">()</span> <span class="p">},</span>
+        <span class="p">},</span>
+        <span class="s">"debit"</span><span class="nf">.to_string</span><span class="p">(),</span>
+        <span class="nn">serde_json</span><span class="p">::</span><span class="nd">json!</span><span class="p">({</span><span class="s">"amount"</span><span class="p">:</span> <span class="mi">100</span><span class="p">}),</span>
+    <span class="p">)</span><span class="nf">.with_compensation</span><span class="p">(</span><span class="nn">serde_json</span><span class="p">::</span><span class="nd">json!</span><span class="p">({</span><span class="s">"amount"</span><span class="p">:</span> <span class="mi">100</span><span class="p">,</span> <span class="s">"action"</span><span class="p">:</span> <span class="s">"credit"</span><span class="p">}));</span>
+    
+    <span class="k">let</span> <span class="n">credit_operation</span> <span class="o">=</span> <span class="nn">TransactionOperation</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span>
+        <span class="n">AddressableReference</span> <span class="p">{</span>
+            <span class="n">addressable_type</span><span class="p">:</span> <span class="s">"BankAccount"</span><span class="nf">.to_string</span><span class="p">(),</span>
+            <span class="n">key</span><span class="p">:</span> <span class="nn">Key</span><span class="p">::</span><span class="n">StringKey</span> <span class="p">{</span> <span class="n">key</span><span class="p">:</span> <span class="s">"bob"</span><span class="nf">.to_string</span><span class="p">()</span> <span class="p">},</span>
+        <span class="p">},</span>
+        <span class="s">"credit"</span><span class="nf">.to_string</span><span class="p">(),</span>
+        <span class="nn">serde_json</span><span class="p">::</span><span class="nd">json!</span><span class="p">({</span><span class="s">"amount"</span><span class="p">:</span> <span class="mi">100</span><span class="p">}),</span>
+    <span class="p">)</span><span class="nf">.with_compensation</span><span class="p">(</span><span class="nn">serde_json</span><span class="p">::</span><span class="nd">json!</span><span class="p">({</span><span class="s">"amount"</span><span class="p">:</span> <span class="mi">100</span><span class="p">,</span> <span class="s">"action"</span><span class="p">:</span> <span class="s">"debit"</span><span class="p">}));</span>
+    
+    <span class="n">coordinator</span><span class="nf">.add_operation</span><span class="p">(</span><span class="o">&amp;</span><span class="n">tx_id</span><span class="p">,</span> <span class="n">debit_operation</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+    <span class="n">coordinator</span><span class="nf">.add_operation</span><span class="p">(</span><span class="o">&amp;</span><span class="n">tx_id</span><span class="p">,</span> <span class="n">credit_operation</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+    
+    <span class="c1">// Execute 2-phase commit</span>
+    <span class="n">coordinator</span><span class="nf">.commit_transaction</span><span class="p">(</span><span class="o">&amp;</span><span class="n">tx_id</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+    
+    <span class="nd">println!</span><span class="p">(</span><span class="s">"🎉 Transaction {} committed successfully!"</span><span class="p">,</span> <span class="n">tx_id</span><span class="p">);</span>
+    <span class="nf">Ok</span><span class="p">(())</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h2 id="-distributed-locks-with-deadlock-detection">🔒 Distributed Locks with Deadlock Detection</h2>
+
+<p>Orbit-RS provides sophisticated distributed locking with automatic deadlock detection and prevention:</p>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">orbit_shared</span><span class="p">::</span><span class="nn">transactions</span><span class="p">::{</span><span class="n">DistributedLockManager</span><span class="p">,</span> <span class="n">LockMode</span><span class="p">};</span>
+
+<span class="c1">// Create lock manager</span>
+<span class="k">let</span> <span class="n">lock_manager</span> <span class="o">=</span> <span class="nn">DistributedLockManager</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="n">config</span><span class="p">);</span>
+
+<span class="c1">// Acquire exclusive lock with automatic deadlock detection</span>
+<span class="k">let</span> <span class="n">lock</span> <span class="o">=</span> <span class="n">lock_manager</span><span class="nf">.acquire_lock</span><span class="p">(</span>
+    <span class="s">"resource-123"</span><span class="p">,</span> 
+    <span class="nn">LockMode</span><span class="p">::</span><span class="n">Exclusive</span><span class="p">,</span>
+    <span class="nn">Duration</span><span class="p">::</span><span class="nf">from_secs</span><span class="p">(</span><span class="mi">30</span><span class="p">)</span>
+<span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+
+<span class="c1">// Lock automatically released when dropped</span>
+</code></pre></div></div>
+
+<h3 id="lock-management-features">Lock Management Features</h3>
+
+<ul>
+  <li><strong>Wait-for Graph Analysis</strong>: Sophisticated deadlock detection using cycle detection in wait-for graphs</li>
+  <li><strong>Lock Modes</strong>: Support for both exclusive and shared lock modes</li>
+  <li><strong>Timeout Handling</strong>: Automatic timeout and expiration handling to prevent indefinite waits</li>
+  <li><strong>Fair Acquisition</strong>: Priority-based fair lock acquisition to prevent starvation</li>
+  <li><strong>RAII Pattern</strong>: Automatic lock release when lock guards are dropped</li>
+</ul>
+
+<h3 id="deadlock-prevention">Deadlock Prevention</h3>
+
+<p>The system uses several strategies to prevent and resolve deadlocks:</p>
+
+<ol>
+  <li><strong>Proactive Detection</strong>: Continuous monitoring of lock dependency chains</li>
+  <li><strong>Victim Selection</strong>: Smart algorithms to choose which transaction to abort in deadlock scenarios</li>
+  <li><strong>Lock Ordering</strong>: Encourages consistent lock ordering to reduce deadlock probability</li>
+  <li><strong>Timeout-based Recovery</strong>: Automatic rollback of long-running lock waits</li>
+</ol>
+
+<h2 id="-prometheus-metrics-integration">📊 Prometheus Metrics Integration</h2>
+
+<p>Comprehensive observability and monitoring through Prometheus metrics:</p>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">orbit_shared</span><span class="p">::</span><span class="nn">transactions</span><span class="p">::</span><span class="n">TransactionMetrics</span><span class="p">;</span>
+
+<span class="c1">// Initialize metrics</span>
+<span class="k">let</span> <span class="n">metrics</span> <span class="o">=</span> <span class="nn">TransactionMetrics</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="n">node_id</span><span class="p">);</span>
+
+<span class="c1">// Automatic tracking of:</span>
+<span class="c1">// - Transaction start/commit/abort counts</span>
+<span class="c1">// - Active transaction gauges</span>
+<span class="c1">// - Duration histograms</span>
+<span class="c1">// - Lock acquisition metrics</span>
+<span class="c1">// - Saga step execution tracking</span>
+</code></pre></div></div>
+
+<h3 id="metrics-exported">Metrics Exported</h3>
+
+<h4 id="counters">Counters</h4>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">transaction.started.total</code> - Total number of transactions started</li>
+  <li><code class="language-plaintext highlighter-rouge">transaction.committed.total</code> - Total number of successful commits</li>
+  <li><code class="language-plaintext highlighter-rouge">transaction.aborted.total</code> - Total number of aborted transactions</li>
+  <li><code class="language-plaintext highlighter-rouge">locks.acquired.total</code> - Total number of locks acquired</li>
+  <li><code class="language-plaintext highlighter-rouge">saga.step.executed.total</code> - Total number of saga steps executed</li>
+  <li><code class="language-plaintext highlighter-rouge">deadlocks.detected.total</code> - Total number of deadlocks detected</li>
+</ul>
+
+<h4 id="gauges">Gauges</h4>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">transaction.active</code> - Current number of active transactions</li>
+  <li><code class="language-plaintext highlighter-rouge">locks.held.count</code> - Current number of locks held</li>
+  <li><code class="language-plaintext highlighter-rouge">saga.queued</code> - Current number of queued saga operations</li>
+  <li><code class="language-plaintext highlighter-rouge">coordinator.nodes.count</code> - Number of active coordinator nodes</li>
+</ul>
+
+<h4 id="histograms">Histograms</h4>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">transaction.duration.seconds</code> - Transaction execution time distribution</li>
+  <li><code class="language-plaintext highlighter-rouge">locks.wait.duration.seconds</code> - Lock acquisition wait time distribution</li>
+  <li><code class="language-plaintext highlighter-rouge">saga.step.duration.seconds</code> - Individual saga step execution times</li>
+  <li><code class="language-plaintext highlighter-rouge">commit.phase.duration.seconds</code> - 2-phase commit phase durations</li>
+</ul>
+
+<h3 id="custom-metrics">Custom Metrics</h3>
+
+<p>You can also create custom metrics for your specific use cases:</p>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">orbit_shared</span><span class="p">::</span><span class="nn">transactions</span><span class="p">::</span><span class="n">TransactionMetrics</span><span class="p">;</span>
+
+<span class="k">let</span> <span class="n">metrics</span> <span class="o">=</span> <span class="nn">TransactionMetrics</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="n">node_id</span><span class="p">);</span>
+
+<span class="c1">// Custom counter for business operations</span>
+<span class="n">metrics</span><span class="nf">.increment_counter</span><span class="p">(</span><span class="s">"business.orders.processed"</span><span class="p">,</span> <span class="o">&amp;</span><span class="p">[</span>
+    <span class="p">(</span><span class="s">"region"</span><span class="p">,</span> <span class="s">"us-west"</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">"type"</span><span class="p">,</span> <span class="s">"premium"</span><span class="p">),</span>
+<span class="p">]);</span>
+
+<span class="c1">// Custom histogram for operation latency</span>
+<span class="n">metrics</span><span class="nf">.record_histogram</span><span class="p">(</span><span class="s">"business.operation.duration"</span><span class="p">,</span> 
+    <span class="n">operation_duration</span><span class="nf">.as_secs_f64</span><span class="p">(),</span>
+    <span class="o">&amp;</span><span class="p">[(</span><span class="s">"operation_type"</span><span class="p">,</span> <span class="s">"payment"</span><span class="p">)]);</span>
+</code></pre></div></div>
+
+<h2 id="️-security--audit-logging">🛡️ Security &amp; Audit Logging</h2>
+
+<p>Enterprise-grade security features with comprehensive audit trails:</p>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">orbit_shared</span><span class="p">::</span><span class="nn">transactions</span><span class="p">::{</span><span class="n">TransactionSecurityManager</span><span class="p">,</span> <span class="n">TransactionPermission</span><span class="p">};</span>
+
+<span class="c1">// Initialize security manager</span>
+<span class="k">let</span> <span class="n">security_mgr</span> <span class="o">=</span> <span class="nn">TransactionSecurityManager</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="n">config</span><span class="p">);</span>
+
+<span class="c1">// Authenticate and authorize</span>
+<span class="n">security_mgr</span><span class="nf">.authenticate</span><span class="p">(</span><span class="o">&amp;</span><span class="n">token</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+<span class="n">security_mgr</span><span class="nf">.authorize</span><span class="p">(</span><span class="o">&amp;</span><span class="n">token</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">tx_id</span><span class="p">,</span> <span class="nn">TransactionPermission</span><span class="p">::</span><span class="n">Commit</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+
+<span class="c1">// Comprehensive audit trail</span>
+<span class="n">security_mgr</span><span class="nf">.audit_log_entry</span><span class="p">(</span><span class="n">tx_id</span><span class="p">,</span> <span class="s">"COMMIT"</span><span class="p">,</span> <span class="s">"success"</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h3 id="security-features">Security Features</h3>
+
+<h4 id="authentication">Authentication</h4>
+<ul>
+  <li><strong>Token-based Authentication</strong>: JWT-style tokens with configurable expiration</li>
+  <li><strong>Multi-factor Support</strong>: Integration with enterprise identity providers</li>
+  <li><strong>Service-to-Service</strong>: Mutual TLS and certificate-based authentication</li>
+  <li><strong>API Keys</strong>: Long-lived credentials for service accounts</li>
+</ul>
+
+<h4 id="authorization">Authorization</h4>
+<ul>
+  <li><strong>Scope-based Authorization</strong>: Fine-grained permissions with hierarchical scopes</li>
+  <li><strong>Role-based Access Control</strong>: Support for role inheritance and delegation</li>
+  <li><strong>Resource-level Permissions</strong>: Per-transaction and per-actor authorization</li>
+  <li><strong>Dynamic Policy Evaluation</strong>: Runtime policy evaluation with context awareness</li>
+</ul>
+
+<h4 id="audit-logging">Audit Logging</h4>
+<ul>
+  <li><strong>Immutable Audit Logs</strong>: Tamper-proof audit trails for compliance</li>
+  <li><strong>Comprehensive Logging</strong>: Every transaction operation is logged with context</li>
+  <li><strong>Forensic Analysis</strong>: Rich metadata for security incident investigation</li>
+  <li><strong>Compliance Support</strong>: Built-in support for SOX, PCI-DSS, and GDPR requirements</li>
+</ul>
+
+<h3 id="audit-log-example">Audit Log Example</h3>
+
+<div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span><span class="w">
+  </span><span class="nl">"timestamp"</span><span class="p">:</span><span class="w"> </span><span class="s2">"2024-01-15T10:30:00Z"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"transaction_id"</span><span class="p">:</span><span class="w"> </span><span class="s2">"tx_abc123"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"user_id"</span><span class="p">:</span><span class="w"> </span><span class="s2">"user_456"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"action"</span><span class="p">:</span><span class="w"> </span><span class="s2">"COMMIT"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"result"</span><span class="p">:</span><span class="w"> </span><span class="s2">"success"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"duration_ms"</span><span class="p">:</span><span class="w"> </span><span class="mi">150</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"participants"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"node_1"</span><span class="p">,</span><span class="w"> </span><span class="s2">"node_2"</span><span class="p">,</span><span class="w"> </span><span class="s2">"node_3"</span><span class="p">],</span><span class="w">
+  </span><span class="nl">"operations"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="w">
+    </span><span class="p">{</span><span class="w">
+      </span><span class="nl">"actor"</span><span class="p">:</span><span class="w"> </span><span class="s2">"BankAccount:alice"</span><span class="p">,</span><span class="w">
+      </span><span class="nl">"method"</span><span class="p">:</span><span class="w"> </span><span class="s2">"debit"</span><span class="p">,</span><span class="w">
+      </span><span class="nl">"amount"</span><span class="p">:</span><span class="w"> </span><span class="mi">100</span><span class="w">
+    </span><span class="p">},</span><span class="w">
+    </span><span class="p">{</span><span class="w">
+      </span><span class="nl">"actor"</span><span class="p">:</span><span class="w"> </span><span class="s2">"BankAccount:bob"</span><span class="p">,</span><span class="w"> 
+      </span><span class="nl">"method"</span><span class="p">:</span><span class="w"> </span><span class="s2">"credit"</span><span class="p">,</span><span class="w">
+      </span><span class="nl">"amount"</span><span class="p">:</span><span class="w"> </span><span class="mi">100</span><span class="w">
+    </span><span class="p">}</span><span class="w">
+  </span><span class="p">],</span><span class="w">
+  </span><span class="nl">"metadata"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">
+    </span><span class="nl">"ip_address"</span><span class="p">:</span><span class="w"> </span><span class="s2">"10.0.1.100"</span><span class="p">,</span><span class="w">
+    </span><span class="nl">"user_agent"</span><span class="p">:</span><span class="w"> </span><span class="s2">"OrbitClient/1.0"</span><span class="p">,</span><span class="w">
+    </span><span class="nl">"trace_id"</span><span class="p">:</span><span class="w"> </span><span class="s2">"trace_789"</span><span class="w">
+  </span><span class="p">}</span><span class="w">
+</span><span class="p">}</span><span class="w">
+</span></code></pre></div></div>
+
+<h2 id="-saga-pattern-for-long-running-workflows">🔄 Saga Pattern for Long-Running Workflows</h2>
+
+<p>Support for complex, long-running distributed workflows with automatic compensation:</p>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">orbit_shared</span><span class="p">::</span><span class="nn">saga</span><span class="p">::</span><span class="n">SagaOrchestrator</span><span class="p">;</span>
+
+<span class="c1">// Define saga with compensating actions</span>
+<span class="k">let</span> <span class="n">saga</span> <span class="o">=</span> <span class="nn">SagaOrchestrator</span><span class="p">::</span><span class="nf">new</span><span class="p">()</span>
+    <span class="nf">.add_step</span><span class="p">(</span><span class="s">"reserve_inventory"</span><span class="p">,</span> <span class="n">compensation</span><span class="p">:</span> <span class="s">"release_inventory"</span><span class="p">)</span>
+    <span class="nf">.add_step</span><span class="p">(</span><span class="s">"charge_payment"</span><span class="p">,</span> <span class="n">compensation</span><span class="p">:</span> <span class="s">"refund_payment"</span><span class="p">)</span>
+    <span class="nf">.add_step</span><span class="p">(</span><span class="s">"ship_order"</span><span class="p">,</span> <span class="n">compensation</span><span class="p">:</span> <span class="s">"cancel_shipment"</span><span class="p">);</span>
+
+<span class="c1">// Execute with automatic compensation on failure</span>
+<span class="n">saga</span><span class="nf">.execute</span><span class="p">()</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h3 id="saga-features">Saga Features</h3>
+
+<h4 id="workflow-management">Workflow Management</h4>
+<ul>
+  <li><strong>Automatic Compensation</strong>: Automatic rollback using compensating actions</li>
+  <li><strong>Step-by-step Execution</strong>: Granular control over workflow progression</li>
+  <li><strong>State Persistence</strong>: Durable saga state for reliability across failures</li>
+  <li><strong>Event-driven Coordination</strong>: Integration with event streaming systems</li>
+</ul>
+
+<h4 id="error-handling">Error Handling</h4>
+<ul>
+  <li><strong>Partial Failure Recovery</strong>: Smart recovery from partial execution failures</li>
+  <li><strong>Retry Mechanisms</strong>: Configurable retry policies for transient failures</li>
+  <li><strong>Circuit Breakers</strong>: Protection against cascading failures</li>
+  <li><strong>Timeout Management</strong>: Step-level timeouts with appropriate handling</li>
+</ul>
+
+<h3 id="advanced-saga-example">Advanced Saga Example</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">orbit_shared</span><span class="p">::</span><span class="nn">saga</span><span class="p">::{</span><span class="n">SagaOrchestrator</span><span class="p">,</span> <span class="n">SagaStep</span><span class="p">,</span> <span class="n">CompensationAction</span><span class="p">};</span>
+
+<span class="k">let</span> <span class="n">saga</span> <span class="o">=</span> <span class="nn">SagaOrchestrator</span><span class="p">::</span><span class="nf">new</span><span class="p">()</span>
+    <span class="nf">.add_step</span><span class="p">(</span><span class="nn">SagaStep</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="s">"validate_order"</span><span class="p">)</span>
+        <span class="nf">.with_timeout</span><span class="p">(</span><span class="nn">Duration</span><span class="p">::</span><span class="nf">from_secs</span><span class="p">(</span><span class="mi">30</span><span class="p">))</span>
+        <span class="nf">.with_retry_policy</span><span class="p">(</span><span class="nn">RetryPolicy</span><span class="p">::</span><span class="nf">exponential_backoff</span><span class="p">(</span><span class="mi">3</span><span class="p">)))</span>
+    <span class="nf">.add_step</span><span class="p">(</span><span class="nn">SagaStep</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="s">"reserve_inventory"</span><span class="p">)</span>
+        <span class="nf">.with_compensation</span><span class="p">(</span><span class="nn">CompensationAction</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="s">"release_inventory"</span><span class="p">))</span>
+        <span class="nf">.with_timeout</span><span class="p">(</span><span class="nn">Duration</span><span class="p">::</span><span class="nf">from_secs</span><span class="p">(</span><span class="mi">60</span><span class="p">)))</span>
+    <span class="nf">.add_step</span><span class="p">(</span><span class="nn">SagaStep</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="s">"charge_payment"</span><span class="p">)</span>
+        <span class="nf">.with_compensation</span><span class="p">(</span><span class="nn">CompensationAction</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="s">"refund_payment"</span><span class="p">))</span>
+        <span class="nf">.with_circuit_breaker</span><span class="p">(</span><span class="nn">CircuitBreakerConfig</span><span class="p">::</span><span class="nf">default</span><span class="p">()));</span>
+
+<span class="c1">// Execute with monitoring</span>
+<span class="k">let</span> <span class="n">result</span> <span class="o">=</span> <span class="n">saga</span>
+    <span class="nf">.with_tracing</span><span class="p">(</span><span class="n">trace_id</span><span class="p">)</span>
+    <span class="nf">.with_metrics</span><span class="p">(</span><span class="o">&amp;</span><span class="n">metrics</span><span class="p">)</span>
+    <span class="nf">.execute</span><span class="p">()</span>
+    <span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h2 id="-performance-optimizations">⚡ Performance Optimizations</h2>
+
+<p>High-performance features for demanding production workloads:</p>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">orbit_shared</span><span class="p">::</span><span class="nn">transactions</span><span class="p">::{</span><span class="n">BatchProcessor</span><span class="p">,</span> <span class="n">ConnectionPool</span><span class="p">,</span> <span class="n">ResourceManager</span><span class="p">};</span>
+
+<span class="c1">// Adaptive batch processing</span>
+<span class="k">let</span> <span class="n">batch_processor</span> <span class="o">=</span> <span class="nn">BatchProcessor</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="n">config</span><span class="p">);</span>
+<span class="n">batch_processor</span><span class="nf">.add_operation</span><span class="p">(</span><span class="n">op</span><span class="p">,</span> <span class="n">priority</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+<span class="k">let</span> <span class="n">batch</span> <span class="o">=</span> <span class="n">batch_processor</span><span class="nf">.flush</span><span class="p">()</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+
+<span class="c1">// Connection pooling with health checks</span>
+<span class="k">let</span> <span class="n">pool</span> <span class="o">=</span> <span class="nn">ConnectionPool</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="n">config</span><span class="p">,</span> <span class="n">factory</span><span class="p">);</span>
+<span class="k">let</span> <span class="n">conn</span> <span class="o">=</span> <span class="n">pool</span><span class="nf">.acquire</span><span class="p">()</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+
+<span class="c1">// Resource management with memory and concurrency limits</span>
+<span class="k">let</span> <span class="n">resource_mgr</span> <span class="o">=</span> <span class="nn">ResourceManager</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="n">max_memory</span><span class="p">,</span> <span class="n">max_concurrent</span><span class="p">);</span>
+<span class="k">let</span> <span class="n">guard</span> <span class="o">=</span> <span class="n">resource_mgr</span><span class="nf">.acquire</span><span class="p">(</span><span class="n">memory_estimate</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h3 id="optimization-features">Optimization Features</h3>
+
+<h4 id="batch-processing">Batch Processing</h4>
+<ul>
+  <li><strong>Adaptive Batch Sizing</strong>: Dynamic batch size adjustment based on system load</li>
+  <li><strong>Priority Queues</strong>: Support for prioritized operation processing</li>
+  <li><strong>Compression</strong>: Automatic compression of large batches to reduce network overhead</li>
+  <li><strong>Parallel Processing</strong>: Multi-threaded batch processing for improved throughput</li>
+</ul>
+
+<h4 id="connection-management">Connection Management</h4>
+<ul>
+  <li><strong>Generic Connection Pooling</strong>: Reusable connection pool implementation</li>
+  <li><strong>Health Checks</strong>: Continuous monitoring of connection health</li>
+  <li><strong>Load Balancing</strong>: Intelligent distribution of connections across nodes</li>
+  <li><strong>Circuit Breakers</strong>: Protection against overloaded or failed nodes</li>
+</ul>
+
+<h4 id="resource-management">Resource Management</h4>
+<ul>
+  <li><strong>Memory Limiting</strong>: Configurable memory usage limits with spill-to-disk</li>
+  <li><strong>Concurrency Control</strong>: Fine-grained control over concurrent operations</li>
+  <li><strong>RAII Resource Guards</strong>: Automatic cleanup of acquired resources</li>
+  <li><strong>Backpressure Handling</strong>: Automatic throttling under resource pressure</li>
+</ul>
+
+<h3 id="performance-tuning">Performance Tuning</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">orbit_shared</span><span class="p">::</span><span class="nn">transactions</span><span class="p">::</span><span class="n">TransactionConfig</span><span class="p">;</span>
+
+<span class="k">let</span> <span class="n">config</span> <span class="o">=</span> <span class="n">TransactionConfig</span> <span class="p">{</span>
+    <span class="c1">// Batch processing settings</span>
+    <span class="n">max_batch_size</span><span class="p">:</span> <span class="mi">1000</span><span class="p">,</span>
+    <span class="n">batch_timeout</span><span class="p">:</span> <span class="nn">Duration</span><span class="p">::</span><span class="nf">from_millis</span><span class="p">(</span><span class="mi">50</span><span class="p">),</span>
+    
+    <span class="c1">// Connection pool settings</span>
+    <span class="n">max_connections</span><span class="p">:</span> <span class="mi">100</span><span class="p">,</span>
+    <span class="n">connection_timeout</span><span class="p">:</span> <span class="nn">Duration</span><span class="p">::</span><span class="nf">from_secs</span><span class="p">(</span><span class="mi">30</span><span class="p">),</span>
+    
+    <span class="c1">// Resource limits</span>
+    <span class="n">max_memory_usage</span><span class="p">:</span> <span class="mi">1024</span> <span class="o">*</span> <span class="mi">1024</span> <span class="o">*</span> <span class="mi">1024</span><span class="p">,</span> <span class="c1">// 1GB</span>
+    <span class="n">max_concurrent_transactions</span><span class="p">:</span> <span class="mi">10000</span><span class="p">,</span>
+    
+    <span class="c1">// Performance tuning</span>
+    <span class="n">enable_parallel_commit</span><span class="p">:</span> <span class="k">true</span><span class="p">,</span>
+    <span class="n">enable_operation_batching</span><span class="p">:</span> <span class="k">true</span><span class="p">,</span>
+    <span class="n">enable_connection_multiplexing</span><span class="p">:</span> <span class="k">true</span><span class="p">,</span>
+    
+    <span class="o">..</span><span class="nn">Default</span><span class="p">::</span><span class="nf">default</span><span class="p">()</span>
+<span class="p">};</span>
+</code></pre></div></div>
+
+<h2 id="best-practices">Best Practices</h2>
+
+<h3 id="transaction-design">Transaction Design</h3>
+<ol>
+  <li><strong>Keep Transactions Short</strong>: Minimize transaction duration to reduce lock contention</li>
+  <li><strong>Batch Operations</strong>: Group related operations to reduce coordination overhead</li>
+  <li><strong>Use Saga for Long Workflows</strong>: Prefer saga pattern for operations spanning multiple services</li>
+  <li><strong>Implement Idempotency</strong>: Ensure operations can be safely retried</li>
+</ol>
+
+<h3 id="error-handling-1">Error Handling</h3>
+<ol>
+  <li><strong>Plan for Failures</strong>: Design compensating actions for all operations</li>
+  <li><strong>Use Circuit Breakers</strong>: Protect against cascading failures</li>
+  <li><strong>Implement Proper Timeouts</strong>: Set appropriate timeouts for all operations</li>
+  <li><strong>Monitor and Alert</strong>: Set up comprehensive monitoring and alerting</li>
+</ol>
+
+<h3 id="security">Security</h3>
+<ol>
+  <li><strong>Principle of Least Privilege</strong>: Grant minimal required permissions</li>
+  <li><strong>Audit Everything</strong>: Log all transaction operations for compliance</li>
+  <li><strong>Secure Communications</strong>: Use TLS for all inter-node communication</li>
+  <li><strong>Regular Security Reviews</strong>: Periodically review and update security policies</li>
+</ol>
+
+<h2 id="related-documentation">Related Documentation</h2>
+
+<ul>
+  <li><a href="../QUICK_START.md">Quick Start Guide</a> - Basic transaction usage</li>
+  <li><a href="../protocols/PROTOCOL_ADAPTERS.md">Protocol Adapters</a> - SQL transaction support</li>
+  <li><a href="/orbit-rs/deployment/DEPLOYMENT.html">Deployment Guide</a> - Production deployment considerations</li>
+  <li><a href="../development/DEVELOPMENT.md">Development Guide</a> - Contributing to transaction features</li>
+</ul>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/orbit-rs/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Orbit-RS Documentation</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">TuringWorks</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

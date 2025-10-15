@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Real-Time Live Queries &amp; Subscriptions - Feature Backlog | Orbit-RS Documentation</title>
+<meta name="generator" content="Jekyll v4.4.1" />
+<meta property="og:title" content="Real-Time Live Queries &amp; Subscriptions - Feature Backlog" />
+<meta name="author" content="TuringWorks" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<meta property="og:description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<link rel="canonical" href="https://turingworks.github.io/orbit-rs/backlog/REALTIME_LIVE_QUERIES.html" />
+<meta property="og:url" content="https://turingworks.github.io/orbit-rs/backlog/REALTIME_LIVE_QUERIES.html" />
+<meta property="og:site_name" content="Orbit-RS Documentation" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Real-Time Live Queries &amp; Subscriptions - Feature Backlog" />
+<meta name="twitter:site" content="@TuringWorksAI" />
+<meta name="twitter:creator" content="@TuringWorks" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","author":{"@type":"Person","name":"TuringWorks"},"description":"The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform","headline":"Real-Time Live Queries &amp; Subscriptions - Feature Backlog","url":"https://turingworks.github.io/orbit-rs/backlog/REALTIME_LIVE_QUERIES.html"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/orbit-rs/assets/main.css">
+  <link rel="stylesheet" href="/orbit-rs/assets/css/custom.css"><link type="application/atom+xml" rel="alternate" href="https://turingworks.github.io/orbit-rs/feed.xml" title="Orbit-RS Documentation" /></head><body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/orbit-rs/">Orbit-RS Documentation</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/orbit-rs/">Orbit-RS Documentation</a><a class="page-link" href="/orbit-rs/project_overview.html">Orbit-RS: Comprehensive Project Overview</a><a class="page-link" href="/orbit-rs/quick_start.html">Quick Start Guide - Multi-Protocol Database Server</a><a class="page-link" href="/orbit-rs/roadmap/">Development Roadmap</a><a class="page-link" href="/orbit-rs/features/">Orbit-RS Feature Index</a><a class="page-link" href="/orbit-rs/compute-acceleration/">Hardware Acceleration Guide</a><a class="page-link" href="/orbit-rs/contributing.html">Contributing Guide</a><a class="page-link" href="/orbit-rs/overview.html">Architecture Overview</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <h1 id="real-time-live-queries--subscriptions---feature-backlog">Real-Time Live Queries &amp; Subscriptions - Feature Backlog</h1>
+
+<h2 id="-epic-overview">📋 Epic Overview</h2>
+
+<p><strong>Epic ID</strong>: ORBIT-021<br />
+<strong>Epic Title</strong>: Real-Time Live Query Engine &amp; WebSocket Subscriptions<br />
+<strong>Priority</strong>: 🔥 Critical<br />
+<strong>Phase</strong>: Q2 2025<br />
+<strong>Total Effort</strong>: 12-14 weeks<br />
+<strong>Status</strong>: Planned</p>
+
+<h2 id="-epic-description">🎯 Epic Description</h2>
+
+<p>Implement a comprehensive real-time query subscription system that enables live queries, change streams, and collaborative features. Applications can subscribe to query results and receive automatic updates when underlying data changes, enabling real-time dashboards, collaborative applications, and live data synchronization.</p>
+
+<h2 id="-business-value">📈 Business Value</h2>
+
+<h3 id="primary-benefits">Primary Benefits</h3>
+<ul>
+  <li><strong>Real-time Applications</strong>: Enable reactive UIs without complex polling mechanisms</li>
+  <li><strong>Collaborative Features</strong>: Support multi-user applications with live data synchronization</li>
+  <li><strong>Reduced Infrastructure</strong>: Eliminate polling overhead and reduce server load</li>
+  <li><strong>Developer Productivity</strong>: Simplify real-time feature development with declarative subscriptions</li>
+</ul>
+
+<h3 id="target-use-cases">Target Use Cases</h3>
+<ol>
+  <li><strong>Real-time Dashboards</strong>: Live updating charts and metrics</li>
+  <li><strong>Collaborative Editing</strong>: Google Docs-style real-time collaboration</li>
+  <li><strong>Gaming Applications</strong>: Real-time game state synchronization</li>
+  <li><strong>IoT Monitoring</strong>: Live sensor data visualization</li>
+  <li><strong>Financial Trading</strong>: Real-time price feeds and portfolio updates</li>
+  <li><strong>Chat Applications</strong>: Instant messaging and presence indicators</li>
+</ol>
+
+<h2 id="️-technical-architecture">🏗️ Technical Architecture</h2>
+
+<h3 id="core-components">Core Components</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Live Query Engine</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">LiveQueryEngine</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="n">subscription_manager</span><span class="p">:</span> <span class="n">SubscriptionManager</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">change_detector</span><span class="p">:</span> <span class="n">ChangeDetector</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">notification_broker</span><span class="p">:</span> <span class="n">NotificationBroker</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">conflict_resolver</span><span class="p">:</span> <span class="n">ConflictResolver</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="k">pub</span> <span class="k">trait</span> <span class="n">LiveQueryActor</span><span class="p">:</span> <span class="n">ActorWithStringKey</span> <span class="p">{</span>
+    <span class="c1">// Subscription management</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">subscribe_query</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">query</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span> <span class="n">callback</span><span class="p">:</span> <span class="n">QueryCallback</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">SubscriptionId</span><span class="o">&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">unsubscribe</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">subscription_id</span><span class="p">:</span> <span class="n">SubscriptionId</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">list_subscriptions</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">user_id</span><span class="p">:</span> <span class="n">UserId</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="n">SubscriptionInfo</span><span class="o">&gt;&gt;</span><span class="p">;</span>
+    
+    <span class="c1">// Change streams</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">stream_changes</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">table</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span> <span class="n">filters</span><span class="p">:</span> <span class="n">QueryFilters</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">ChangeStream</span><span class="o">&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">stream_query_results</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">query</span><span class="p">:</span> <span class="nb">String</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">QueryResultStream</span><span class="o">&gt;</span><span class="p">;</span>
+    
+    <span class="c1">// Collaborative features</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">join_collaboration</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">resource_id</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span> <span class="n">user_info</span><span class="p">:</span> <span class="n">UserInfo</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">CollaborationSession</span><span class="o">&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">apply_operation</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">session_id</span><span class="p">:</span> <span class="n">SessionId</span><span class="p">,</span> <span class="n">operation</span><span class="p">:</span> <span class="n">Operation</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">OperationResult</span><span class="o">&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">get_presence_info</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">resource_id</span><span class="p">:</span> <span class="nb">String</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="n">UserPresence</span><span class="o">&gt;&gt;</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="c1">// Change Detection System</span>
+<span class="k">pub</span> <span class="k">trait</span> <span class="n">ChangeDetector</span> <span class="p">{</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">detect_changes</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">query</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">Query</span><span class="p">,</span> <span class="n">old_result</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">QueryResult</span><span class="p">,</span> <span class="n">new_result</span><span class="p">:</span> <span class="o">&amp;</span><span class="n">QueryResult</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">Change</span><span class="o">&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">register_query</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">subscription_id</span><span class="p">:</span> <span class="n">SubscriptionId</span><span class="p">,</span> <span class="n">query</span><span class="p">:</span> <span class="n">Query</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">deregister_query</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">subscription_id</span><span class="p">:</span> <span class="n">SubscriptionId</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="c1">// Notification Broker</span>
+<span class="k">pub</span> <span class="k">trait</span> <span class="n">NotificationBroker</span> <span class="p">{</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">notify_subscribers</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">changes</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">Change</span><span class="o">&gt;</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">broadcast_to_session</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">session_id</span><span class="p">:</span> <span class="n">SessionId</span><span class="p">,</span> <span class="n">event</span><span class="p">:</span> <span class="n">SessionEvent</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">send_to_user</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">user_id</span><span class="p">:</span> <span class="n">UserId</span><span class="p">,</span> <span class="n">notification</span><span class="p">:</span> <span class="n">Notification</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="real-time-query-syntax">Real-Time Query Syntax</h3>
+
+<h4 id="basic-live-subscriptions">Basic Live Subscriptions</h4>
+<div class="language-javascript highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// JavaScript/TypeScript client</span>
+<span class="kd">const</span> <span class="nx">liveQuery</span> <span class="o">=</span> <span class="nx">orbit</span><span class="p">.</span><span class="nf">subscribe</span><span class="p">(</span><span class="s2">`
+    SELECT * FROM users 
+    WHERE active = true 
+    ORDER BY last_login DESC
+`</span><span class="p">,</span> <span class="p">{</span>
+    <span class="na">onUpdate</span><span class="p">:</span> <span class="p">(</span><span class="nx">data</span><span class="p">,</span> <span class="nx">changes</span><span class="p">)</span> <span class="o">=&gt;</span> <span class="p">{</span>
+        <span class="nx">console</span><span class="p">.</span><span class="nf">log</span><span class="p">(</span><span class="dl">'</span><span class="s1">Users updated:</span><span class="dl">'</span><span class="p">,</span> <span class="nx">data</span><span class="p">);</span>
+        <span class="nx">console</span><span class="p">.</span><span class="nf">log</span><span class="p">(</span><span class="dl">'</span><span class="s1">Changes:</span><span class="dl">'</span><span class="p">,</span> <span class="nx">changes</span><span class="p">);</span>
+    <span class="p">},</span>
+    <span class="na">onError</span><span class="p">:</span> <span class="p">(</span><span class="nx">error</span><span class="p">)</span> <span class="o">=&gt;</span> <span class="p">{</span>
+        <span class="nx">console</span><span class="p">.</span><span class="nf">error</span><span class="p">(</span><span class="dl">'</span><span class="s1">Subscription error:</span><span class="dl">'</span><span class="p">,</span> <span class="nx">error</span><span class="p">);</span>
+    <span class="p">}</span>
+<span class="p">});</span>
+
+<span class="c1">// Rust client</span>
+<span class="kd">let</span> <span class="nx">subscription</span> <span class="o">=</span> <span class="nx">client</span><span class="p">.</span><span class="nf">subscribe_query</span><span class="p">(</span>
+    <span class="dl">"</span><span class="s2">SELECT * FROM products WHERE category = $category</span><span class="dl">"</span><span class="p">,</span>
+    <span class="nx">QueryParams</span><span class="p">::</span><span class="k">new</span><span class="p">().</span><span class="nf">set</span><span class="p">(</span><span class="dl">"</span><span class="s2">category</span><span class="dl">"</span><span class="p">,</span> <span class="dl">"</span><span class="s2">electronics</span><span class="dl">"</span><span class="p">),</span>
+    <span class="o">|</span><span class="nx">result</span><span class="o">|</span> <span class="p">{</span>
+        <span class="nx">match</span> <span class="nx">result</span> <span class="p">{</span>
+            <span class="nc">Ok</span><span class="p">(</span><span class="nx">update</span><span class="p">)</span> <span class="o">=&gt;</span> <span class="nx">println</span><span class="o">!</span><span class="p">(</span><span class="dl">"</span><span class="s2">Products updated: {:?}</span><span class="dl">"</span><span class="p">,</span> <span class="nx">update</span><span class="p">),</span>
+            <span class="nc">Err</span><span class="p">(</span><span class="nx">error</span><span class="p">)</span> <span class="o">=&gt;</span> <span class="nx">eprintln</span><span class="o">!</span><span class="p">(</span><span class="dl">"</span><span class="s2">Error: {:?}</span><span class="dl">"</span><span class="p">,</span> <span class="nx">error</span><span class="p">),</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+<span class="p">).</span><span class="k">await</span><span class="p">?;</span>
+</code></pre></div></div>
+
+<h4 id="change-stream-subscriptions">Change Stream Subscriptions</h4>
+<div class="language-javascript highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Monitor all changes to a table</span>
+<span class="kd">const</span> <span class="nx">changeStream</span> <span class="o">=</span> <span class="nx">orbit</span><span class="p">.</span><span class="nf">streamChanges</span><span class="p">(</span><span class="dl">'</span><span class="s1">orders</span><span class="dl">'</span><span class="p">,</span> <span class="p">{</span>
+    <span class="na">filter</span><span class="p">:</span> <span class="dl">'</span><span class="s1">status IN ["pending", "processing"]</span><span class="dl">'</span><span class="p">,</span>
+    <span class="na">includeOldValues</span><span class="p">:</span> <span class="kc">true</span>
+<span class="p">});</span>
+
+<span class="nx">changeStream</span><span class="p">.</span><span class="nf">on</span><span class="p">(</span><span class="dl">'</span><span class="s1">insert</span><span class="dl">'</span><span class="p">,</span> <span class="p">(</span><span class="nx">event</span><span class="p">)</span> <span class="o">=&gt;</span> <span class="p">{</span>
+    <span class="nx">console</span><span class="p">.</span><span class="nf">log</span><span class="p">(</span><span class="dl">'</span><span class="s1">New order:</span><span class="dl">'</span><span class="p">,</span> <span class="nx">event</span><span class="p">.</span><span class="k">new</span><span class="p">);</span>
+<span class="p">});</span>
+
+<span class="nx">changeStream</span><span class="p">.</span><span class="nf">on</span><span class="p">(</span><span class="dl">'</span><span class="s1">update</span><span class="dl">'</span><span class="p">,</span> <span class="p">(</span><span class="nx">event</span><span class="p">)</span> <span class="o">=&gt;</span> <span class="p">{</span>
+    <span class="nx">console</span><span class="p">.</span><span class="nf">log</span><span class="p">(</span><span class="dl">'</span><span class="s1">Order updated:</span><span class="dl">'</span><span class="p">,</span> <span class="nx">event</span><span class="p">.</span><span class="k">new</span><span class="p">,</span> <span class="dl">'</span><span class="s1">was:</span><span class="dl">'</span><span class="p">,</span> <span class="nx">event</span><span class="p">.</span><span class="nx">old</span><span class="p">);</span>
+<span class="p">});</span>
+
+<span class="nx">changeStream</span><span class="p">.</span><span class="nf">on</span><span class="p">(</span><span class="dl">'</span><span class="s1">delete</span><span class="dl">'</span><span class="p">,</span> <span class="p">(</span><span class="nx">event</span><span class="p">)</span> <span class="o">=&gt;</span> <span class="p">{</span>
+    <span class="nx">console</span><span class="p">.</span><span class="nf">log</span><span class="p">(</span><span class="dl">'</span><span class="s1">Order deleted:</span><span class="dl">'</span><span class="p">,</span> <span class="nx">event</span><span class="p">.</span><span class="nx">old</span><span class="p">);</span>
+<span class="p">});</span>
+</code></pre></div></div>
+
+<h4 id="collaborative-operations">Collaborative Operations</h4>
+<div class="language-javascript highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Join a collaborative editing session</span>
+<span class="kd">const</span> <span class="nx">session</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">orbit</span><span class="p">.</span><span class="nf">collaborate</span><span class="p">(</span><span class="dl">'</span><span class="s1">document:123</span><span class="dl">'</span><span class="p">,</span> <span class="p">{</span>
+    <span class="na">user</span><span class="p">:</span> <span class="p">{</span> <span class="na">id</span><span class="p">:</span> <span class="dl">'</span><span class="s1">user-456</span><span class="dl">'</span><span class="p">,</span> <span class="na">name</span><span class="p">:</span> <span class="dl">'</span><span class="s1">Alice</span><span class="dl">'</span> <span class="p">},</span>
+    <span class="na">permissions</span><span class="p">:</span> <span class="p">[</span><span class="dl">'</span><span class="s1">read</span><span class="dl">'</span><span class="p">,</span> <span class="dl">'</span><span class="s1">write</span><span class="dl">'</span><span class="p">]</span>
+<span class="p">});</span>
+
+<span class="c1">// Apply operations</span>
+<span class="nx">session</span><span class="p">.</span><span class="nf">applyOperation</span><span class="p">({</span>
+    <span class="na">type</span><span class="p">:</span> <span class="dl">'</span><span class="s1">text-insert</span><span class="dl">'</span><span class="p">,</span>
+    <span class="na">position</span><span class="p">:</span> <span class="mi">42</span><span class="p">,</span>
+    <span class="na">content</span><span class="p">:</span> <span class="dl">'</span><span class="s1">Hello, World!</span><span class="dl">'</span><span class="p">,</span>
+    <span class="na">timestamp</span><span class="p">:</span> <span class="nb">Date</span><span class="p">.</span><span class="nf">now</span><span class="p">()</span>
+<span class="p">});</span>
+
+<span class="c1">// Listen for other users' operations</span>
+<span class="nx">session</span><span class="p">.</span><span class="nf">on</span><span class="p">(</span><span class="dl">'</span><span class="s1">operation</span><span class="dl">'</span><span class="p">,</span> <span class="p">(</span><span class="nx">operation</span><span class="p">)</span> <span class="o">=&gt;</span> <span class="p">{</span>
+    <span class="c1">// Apply remote operation to local state</span>
+    <span class="nf">applyRemoteOperation</span><span class="p">(</span><span class="nx">operation</span><span class="p">);</span>
+<span class="p">});</span>
+
+<span class="c1">// Presence awareness</span>
+<span class="nx">session</span><span class="p">.</span><span class="nf">on</span><span class="p">(</span><span class="dl">'</span><span class="s1">presence</span><span class="dl">'</span><span class="p">,</span> <span class="p">(</span><span class="nx">users</span><span class="p">)</span> <span class="o">=&gt;</span> <span class="p">{</span>
+    <span class="nf">updateUserCursors</span><span class="p">(</span><span class="nx">users</span><span class="p">);</span>
+<span class="p">});</span>
+</code></pre></div></div>
+
+<h2 id="-feature-breakdown">📦 Feature Breakdown</h2>
+
+<h3 id="phase-211-live-query-foundation-5-6-weeks">Phase 21.1: Live Query Foundation (5-6 weeks)</h3>
+
+<h4 id="-user-stories">📋 User Stories</h4>
+
+<p><strong>ORBIT-021-001: Basic Live Query Subscriptions</strong></p>
+<ul>
+  <li><strong>As a</strong> frontend developer <strong>I want</strong> to subscribe to query results <strong>so that</strong> my UI updates automatically when data changes</li>
+  <li><strong>Acceptance Criteria:</strong>
+    <ul>
+      <li>WebSocket-based subscription management</li>
+      <li>Automatic query re-execution on data changes</li>
+      <li>Efficient change detection and diff computation</li>
+      <li>Client library with JavaScript/TypeScript support</li>
+      <li>Connection recovery and reconnection handling</li>
+    </ul>
+  </li>
+</ul>
+
+<p><strong>ORBIT-021-002: Change Stream Implementation</strong></p>
+<ul>
+  <li><strong>As a</strong> application developer <strong>I want</strong> to monitor table changes <strong>so that</strong> I can trigger business logic on data modifications</li>
+  <li><strong>Acceptance Criteria:</strong>
+    <ul>
+      <li>Table-level change monitoring with filtering</li>
+      <li>Insert, update, delete event notifications</li>
+      <li>Before and after value inclusion</li>
+      <li>Batch change delivery for high-throughput scenarios</li>
+      <li>Change ordering guarantees</li>
+    </ul>
+  </li>
+</ul>
+
+<p><strong>ORBIT-021-003: WebSocket Protocol &amp; Client Libraries</strong></p>
+<ul>
+  <li><strong>As a</strong> client application <strong>I want</strong> reliable WebSocket communication <strong>so that</strong> I can maintain persistent connections</li>
+  <li><strong>Acceptance Criteria:</strong>
+    <ul>
+      <li>Binary and JSON protocol support</li>
+      <li>Client libraries for JavaScript, TypeScript, Rust, Python</li>
+      <li>Connection pooling and load balancing</li>
+      <li>Heartbeat and keepalive mechanisms</li>
+      <li>Automatic reconnection with exponential backoff</li>
+    </ul>
+  </li>
+</ul>
+
+<h4 id="-technical-tasks">🔧 Technical Tasks</h4>
+
+<ul class="task-list">
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>ORBIT-021-T001</strong>: Design WebSocket protocol for live queries</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>ORBIT-021-T002</strong>: Implement subscription manager with memory-efficient storage</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>ORBIT-021-T003</strong>: Build change detection system with delta computation</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>ORBIT-021-T004</strong>: Create WebSocket server with connection management</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>ORBIT-021-T005</strong>: Implement query result caching and invalidation</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>ORBIT-021-T006</strong>: Build notification broker with message routing</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>ORBIT-021-T007</strong>: Create JavaScript/TypeScript client library</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>ORBIT-021-T008</strong>: Implement Rust client library with async support</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>ORBIT-021-T009</strong>: Add connection recovery and error handling</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>ORBIT-021-T010</strong>: Build comprehensive logging and monitoring</li>
+</ul>
+
+<h3 id="phase-212-advanced-real-time-features-4-5-weeks">Phase 21.2: Advanced Real-Time Features (4-5 weeks)</h3>
+
+<h4 id="-user-stories-1">📋 User Stories</h4>
+
+<p><strong>ORBIT-021-004: Complex Query Subscriptions</strong></p>
+<ul>
+  <li><strong>As a</strong> data analyst <strong>I want</strong> to subscribe to complex queries <strong>so that</strong> my reports update in real-time</li>
+  <li><strong>Acceptance Criteria:</strong>
+    <ul>
+      <li>Multi-table join subscription support</li>
+      <li>Aggregation query subscriptions with incremental updates</li>
+      <li>Cross-model query subscriptions (graph + document + time-series)</li>
+      <li>Parametric query subscriptions with parameter updates</li>
+      <li>Subscription dependency tracking and optimization</li>
+    </ul>
+  </li>
+</ul>
+
+<p><strong>ORBIT-021-005: Collaborative Conflict Resolution</strong></p>
+<ul>
+  <li><strong>As a</strong> collaborative application <strong>I want</strong> automatic conflict resolution <strong>so that</strong> multiple users can edit simultaneously</li>
+  <li><strong>Acceptance Criteria:</strong>
+    <ul>
+      <li>Operational Transform (OT) implementation</li>
+      <li>Conflict-free Replicated Data Types (CRDT) support</li>
+      <li>Last-writer-wins and custom resolution strategies</li>
+      <li>Branching and merging for complex conflicts</li>
+      <li>Conflict history and rollback capabilities</li>
+    </ul>
+  </li>
+</ul>
+
+<p><strong>ORBIT-021-006: Presence &amp; Awareness Features</strong></p>
+<ul>
+  <li><strong>As a</strong> collaborative user <strong>I want</strong> to see other active users <strong>so that</strong> I can coordinate my actions</li>
+  <li><strong>Acceptance Criteria:</strong>
+    <ul>
+      <li>Real-time presence indicators</li>
+      <li>User cursor and selection sharing</li>
+      <li>Activity status (typing, viewing, editing)</li>
+      <li>User session management with timeouts</li>
+      <li>Privacy controls for presence information</li>
+    </ul>
+  </li>
+</ul>
+
+<h4 id="-technical-tasks-1">🔧 Technical Tasks</h4>
+
+<ul class="task-list">
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>ORBIT-021-T011</strong>: Implement complex query subscription engine</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>ORBIT-021-T012</strong>: Build incremental aggregation updates</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>ORBIT-021-T013</strong>: Create operational transform framework</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>ORBIT-021-T014</strong>: Implement CRDT support for common data types</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>ORBIT-021-T015</strong>: Build conflict resolution algorithms</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>ORBIT-021-T016</strong>: Create presence tracking system</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>ORBIT-021-T017</strong>: Implement user session management</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>ORBIT-021-T018</strong>: Add privacy and permission controls</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>ORBIT-021-T019</strong>: Build collaboration event history</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>ORBIT-021-T020</strong>: Create performance optimization framework</li>
+</ul>
+
+<h3 id="phase-213-performance--scalability-3-4-weeks">Phase 21.3: Performance &amp; Scalability (3-4 weeks)</h3>
+
+<h4 id="-user-stories-2">📋 User Stories</h4>
+
+<p><strong>ORBIT-021-007: High-Performance Subscriptions</strong></p>
+<ul>
+  <li><strong>As a</strong> system administrator <strong>I want</strong> efficient subscription handling <strong>so that</strong> the system scales to thousands of concurrent users</li>
+  <li><strong>Acceptance Criteria:</strong>
+    <ul>
+      <li>Memory-efficient subscription storage</li>
+      <li>Batch processing for high-frequency changes</li>
+      <li>Connection pooling and load balancing</li>
+      <li>Horizontal scaling across multiple nodes</li>
+      <li>Performance monitoring and metrics</li>
+    </ul>
+  </li>
+</ul>
+
+<p><strong>ORBIT-021-008: Smart Change Detection</strong></p>
+<ul>
+  <li><strong>As a</strong> performance-conscious developer <strong>I want</strong> intelligent change detection <strong>so that</strong> only relevant updates are processed</li>
+  <li><strong>Acceptance Criteria:</strong>
+    <ul>
+      <li>Index-based change detection for fast filtering</li>
+      <li>Bloom filters for subscription matching</li>
+      <li>Hierarchical change propagation</li>
+      <li>Debouncing and throttling for high-frequency changes</li>
+      <li>Predictive prefetching for likely queries</li>
+    </ul>
+  </li>
+</ul>
+
+<h4 id="-technical-tasks-2">🔧 Technical Tasks</h4>
+
+<ul class="task-list">
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>ORBIT-021-T021</strong>: Optimize subscription storage with compressed indexes</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>ORBIT-021-T022</strong>: Implement batch change processing</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>ORBIT-021-T023</strong>: Build distributed subscription management</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>ORBIT-021-T024</strong>: Create intelligent change filtering</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>ORBIT-021-T025</strong>: Add performance monitoring and alerting</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>ORBIT-021-T026</strong>: Implement load balancing for WebSocket connections</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>ORBIT-021-T027</strong>: Create subscription analytics dashboard</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>ORBIT-021-T028</strong>: Build horizontal scaling mechanisms</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>ORBIT-021-T029</strong>: Add memory usage optimization</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>ORBIT-021-T030</strong>: Implement predictive query optimization</li>
+</ul>
+
+<h2 id="-testing-strategy">🧪 Testing Strategy</h2>
+
+<h3 id="unit-testing">Unit Testing</h3>
+<ul>
+  <li>Subscription lifecycle management</li>
+  <li>Change detection accuracy</li>
+  <li>Conflict resolution algorithms</li>
+  <li>WebSocket protocol compliance</li>
+  <li>Client library functionality</li>
+</ul>
+
+<h3 id="integration-testing">Integration Testing</h3>
+<ul>
+  <li>End-to-end subscription workflows</li>
+  <li>Multi-user collaboration scenarios</li>
+  <li>High-load subscription handling</li>
+  <li>Network partition recovery</li>
+  <li>Cross-browser compatibility</li>
+</ul>
+
+<h3 id="performance-testing">Performance Testing</h3>
+<ul>
+  <li>Concurrent subscription scalability (10k+ active subscriptions)</li>
+  <li>Change propagation latency (&lt;100ms for simple queries)</li>
+  <li>Memory usage optimization</li>
+  <li>WebSocket connection limits</li>
+  <li>Subscription cleanup efficiency</li>
+</ul>
+
+<h2 id="-success-metrics">📏 Success Metrics</h2>
+
+<h3 id="technical-metrics">Technical Metrics</h3>
+<ul>
+  <li><strong>Subscription Capacity</strong>: Support 50k concurrent subscriptions per node</li>
+  <li><strong>Change Latency</strong>: 95th percentile under 100ms for simple queries</li>
+  <li><strong>Memory Efficiency</strong>: &lt;10MB memory usage per 1000 subscriptions</li>
+  <li><strong>Connection Stability</strong>: 99.9% uptime for WebSocket connections</li>
+  <li><strong>Conflict Resolution</strong>: 99% automatic resolution success rate</li>
+</ul>
+
+<h3 id="business-metrics">Business Metrics</h3>
+<ul>
+  <li><strong>Real-time Feature Adoption</strong>: 60% of applications use live queries</li>
+  <li><strong>Developer Satisfaction</strong>: 90% positive feedback on real-time APIs</li>
+  <li><strong>Performance Improvement</strong>: 80% reduction in polling-based requests</li>
+  <li><strong>Collaboration Usage</strong>: 40% of applications implement collaborative features</li>
+</ul>
+
+<h2 id="-innovation-opportunities">🚀 Innovation Opportunities</h2>
+
+<h3 id="future-enhancements">Future Enhancements</h3>
+<ul>
+  <li><strong>Machine Learning Integration</strong>: Predictive change detection and prefetching</li>
+  <li><strong>Edge Computing</strong>: Distribute subscriptions to edge nodes for lower latency</li>
+  <li><strong>Mobile Optimization</strong>: Battery-efficient mobile client libraries</li>
+  <li><strong>AR/VR Support</strong>: Spatial collaborative editing for immersive applications</li>
+  <li><strong>Blockchain Integration</strong>: Immutable change logs for audit trails</li>
+</ul>
+
+<h3 id="research-areas">Research Areas</h3>
+<ul>
+  <li><strong>Quantum Communication</strong>: Ultra-secure collaborative communications</li>
+  <li><strong>Neural Operational Transform</strong>: AI-powered conflict resolution</li>
+  <li><strong>Holographic Presence</strong>: 3D presence indicators for spatial applications</li>
+  <li><strong>Time-Travel Debugging</strong>: Historical state inspection for collaborative debugging</li>
+</ul>
+
+<p>This real-time live query system will enable Orbit-RS to support the next generation of collaborative and reactive applications while maintaining the performance and reliability advantages of our distributed architecture.</p>
+
+<h2 id="-implementation-timeline">📅 Implementation Timeline</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>Phase</th>
+      <th>Duration</th>
+      <th>Deliverables</th>
+      <th>Dependencies</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Phase 21.1</strong></td>
+      <td>5-6 weeks</td>
+      <td>Basic subscriptions, change streams, WebSocket protocol</td>
+      <td>Existing query engines</td>
+    </tr>
+    <tr>
+      <td><strong>Phase 21.2</strong></td>
+      <td>4-5 weeks</td>
+      <td>Complex queries, collaboration, presence</td>
+      <td>Phase 21.1 completion</td>
+    </tr>
+    <tr>
+      <td><strong>Phase 21.3</strong></td>
+      <td>3-4 weeks</td>
+      <td>Performance optimization, scalability</td>
+      <td>Phase 21.2 completion</td>
+    </tr>
+  </tbody>
+</table>
+
+<p><strong>Total Timeline</strong>: 12-14 weeks<br />
+<strong>Risk Factors</strong>: WebSocket scalability, conflict resolution complexity<br />
+<strong>Mitigation</strong>: Load testing, gradual feature rollout, fallback mechanisms</p>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/orbit-rs/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Orbit-RS Documentation</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">TuringWorks</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

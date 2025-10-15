@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>AQL and Bolt GraphRAG Integration Guide | Orbit-RS Documentation</title>
+<meta name="generator" content="Jekyll v4.4.1" />
+<meta property="og:title" content="AQL and Bolt GraphRAG Integration Guide" />
+<meta name="author" content="TuringWorks" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<meta property="og:description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<link rel="canonical" href="https://turingworks.github.io/orbit-rs/aql_bolt_graphrag_integration.html" />
+<meta property="og:url" content="https://turingworks.github.io/orbit-rs/aql_bolt_graphrag_integration.html" />
+<meta property="og:site_name" content="Orbit-RS Documentation" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="AQL and Bolt GraphRAG Integration Guide" />
+<meta name="twitter:site" content="@TuringWorksAI" />
+<meta name="twitter:creator" content="@TuringWorks" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","author":{"@type":"Person","name":"TuringWorks"},"description":"The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform","headline":"AQL and Bolt GraphRAG Integration Guide","url":"https://turingworks.github.io/orbit-rs/aql_bolt_graphrag_integration.html"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/orbit-rs/assets/main.css">
+  <link rel="stylesheet" href="/orbit-rs/assets/css/custom.css"><link type="application/atom+xml" rel="alternate" href="https://turingworks.github.io/orbit-rs/feed.xml" title="Orbit-RS Documentation" /></head><body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/orbit-rs/">Orbit-RS Documentation</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/orbit-rs/">Orbit-RS Documentation</a><a class="page-link" href="/orbit-rs/project_overview.html">Orbit-RS: Comprehensive Project Overview</a><a class="page-link" href="/orbit-rs/quick_start.html">Quick Start Guide - Multi-Protocol Database Server</a><a class="page-link" href="/orbit-rs/roadmap/">Development Roadmap</a><a class="page-link" href="/orbit-rs/features/">Orbit-RS Feature Index</a><a class="page-link" href="/orbit-rs/compute-acceleration/">Hardware Acceleration Guide</a><a class="page-link" href="/orbit-rs/contributing.html">Contributing Guide</a><a class="page-link" href="/orbit-rs/overview.html">Architecture Overview</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <h1 id="aql-and-bolt-graphrag-integration-guide">AQL and Bolt GraphRAG Integration Guide</h1>
+
+<h2 id="overview">Overview</h2>
+
+<p>This document provides a comprehensive guide to using GraphRAG functionality through AQL (ArangoDB Query Language) and Bolt (Neo4j) protocols in Orbit-RS. These integrations make GraphRAG capabilities accessible through familiar graph database interfaces.</p>
+
+<h2 id="table-of-contents">Table of Contents</h2>
+
+<ul>
+  <li><a href="#aql-graphrag-integration">AQL GraphRAG Integration</a></li>
+  <li><a href="#boltcypher-graphrag-integration">Bolt/Cypher GraphRAG Integration</a></li>
+  <li><a href="#comparison-matrix">Comparison Matrix</a></li>
+  <li><a href="#best-practices">Best Practices</a></li>
+  <li><a href="#performance-optimization">Performance Optimization</a></li>
+  <li><a href="#integration-examples">Integration Examples</a></li>
+</ul>
+
+<h2 id="aql-graphrag-integration">AQL GraphRAG Integration</h2>
+
+<h3 id="architecture">Architecture</h3>
+
+<p>The AQL GraphRAG integration provides GraphRAG functionality through AQL function calls that can be used within standard ArangoDB-style queries.</p>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">orbit_protocols</span><span class="p">::</span><span class="nn">aql</span><span class="p">::{</span><span class="n">AqlQueryEngine</span><span class="p">,</span> <span class="n">AqlValue</span><span class="p">};</span>
+<span class="k">use</span> <span class="nn">orbit_client</span><span class="p">::</span><span class="n">OrbitClient</span><span class="p">;</span>
+
+<span class="c1">// Create query engine with GraphRAG support</span>
+<span class="k">let</span> <span class="n">orbit_client</span> <span class="o">=</span> <span class="nn">OrbitClient</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="cm">/* config */</span><span class="p">);</span>
+<span class="k">let</span> <span class="n">query_engine</span> <span class="o">=</span> <span class="nn">AqlQueryEngine</span><span class="p">::</span><span class="nf">new_with_graphrag</span><span class="p">(</span><span class="n">orbit_client</span><span class="p">);</span>
+</code></pre></div></div>
+
+<h3 id="core-functions">Core Functions</h3>
+
+<h4 id="1-knowledge-graph-building">1. Knowledge Graph Building</h4>
+
+<p><strong>GRAPHRAG_BUILD_KNOWLEDGE(document, options)</strong></p>
+
+<pre><code class="language-aql">// Build from document text
+FOR result IN GRAPHRAG_BUILD_KNOWLEDGE("Research paper text...", {
+    "knowledge_graph": "research_kg",
+    "extractors": ["entity_extraction", "relationship_extraction"],
+    "build_graph": true,
+    "generate_embeddings": true
+})
+RETURN result
+
+// Build from document collection with metadata
+FOR doc IN research_papers
+    FILTER doc.year &gt;= 2020
+    FOR result IN GRAPHRAG_BUILD_KNOWLEDGE(doc, {
+        "knowledge_graph": "recent_research",
+        "document_id": doc._key,
+        "metadata": {"year": doc.year, "journal": doc.journal}
+    })
+    RETURN {
+        "document": doc._key,
+        "entities_extracted": result.entities_extracted,
+        "processing_time": result.processing_time_ms
+    }
+</code></pre>
+
+<h4 id="2-rag-queries">2. RAG Queries</h4>
+
+<p><strong>GRAPHRAG_QUERY(knowledge_graph, query_text, options)</strong></p>
+
+<pre><code class="language-aql">// Simple RAG query
+FOR answer IN GRAPHRAG_QUERY(
+    "research_kg", 
+    "What are recent developments in quantum computing?", {
+    "max_hops": 3,
+    "context_size": 2048,
+    "llm_provider": "ollama",
+    "include_explanation": true
+})
+RETURN {
+    "question": "What are recent developments in quantum computing?",
+    "answer": answer.response,
+    "confidence": answer.confidence,
+    "entities_used": answer.entities_involved
+}
+
+// RAG with result filtering and aggregation
+FOR paper IN research_papers
+    FILTER paper.field == "quantum_computing"
+    FOR answer IN GRAPHRAG_QUERY("research_kg",
+        CONCAT("Summarize findings from ", paper.title), {
+        "max_hops": 2,
+        "entity_filter": {"source_document": paper._key}
+    })
+    FILTER answer.confidence &gt; 0.8
+    COLLECT field = paper.field INTO summaries = {
+        "paper": paper.title,
+        "summary": answer.response,
+        "confidence": answer.confidence
+    }
+    RETURN {
+        "field": field,
+        "high_confidence_summaries": summaries
+    }
+</code></pre>
+
+<h4 id="3-multi-hop-reasoning">3. Multi-hop Reasoning</h4>
+
+<p><strong>GRAPHRAG_FIND_PATHS(knowledge_graph, from_entity, to_entity, options)</strong></p>
+
+<pre><code class="language-aql">// Find connection paths
+FOR path IN GRAPHRAG_FIND_PATHS("tech_kg", "Apple Inc.", "iPhone", {
+    "max_hops": 4,
+    "include_explanation": true,
+    "max_results": 5
+})
+SORT path.score DESC
+RETURN {
+    "connection_path": path.path_nodes,
+    "relationships": path.relationships,
+    "confidence": path.score,
+    "explanation": path.explanation
+}
+
+// Cross-reference with existing data
+FOR company IN companies
+    FOR product IN products
+        FILTER company.industry == "technology"
+        FOR path IN GRAPHRAG_FIND_PATHS("business_kg", company.name, product.name, {
+            "relationship_types": ["PRODUCES", "DEVELOPS", "OWNS"],
+            "max_hops": 3
+        })
+        FILTER path.score &gt; 0.7
+        RETURN {
+            "company": company.name,
+            "product": product.name,
+            "connection_strength": path.score,
+            "path_length": path.length
+        }
+</code></pre>
+
+<h4 id="4-analytics-and-statistics">4. Analytics and Statistics</h4>
+
+<p><strong>GRAPHRAG_GET_STATS(knowledge_graph)</strong></p>
+
+<pre><code class="language-aql">// Knowledge graph statistics
+FOR stats IN GRAPHRAG_GET_STATS("research_kg")
+RETURN {
+    "documents_processed": stats.documents_processed,
+    "entity_density": stats.entities_extracted / stats.documents_processed,
+    "relationship_density": stats.relationships_extracted / stats.entities_extracted,
+    "processing_efficiency": stats.avg_document_processing_time_ms,
+    "query_performance": stats.avg_rag_query_time_ms
+}
+
+// Compare multiple knowledge graphs
+FOR kg_name IN ["research_kg", "business_kg", "news_kg"]
+    FOR stats IN GRAPHRAG_GET_STATS(kg_name)
+    SORT stats.entities_extracted DESC
+    RETURN {
+        "knowledge_graph": kg_name,
+        "total_entities": stats.entities_extracted,
+        "success_rate": stats.rag_success_rate,
+        "performance_score": 1000 / stats.avg_rag_query_time_ms
+    }
+</code></pre>
+
+<h3 id="aql-integration-patterns">AQL Integration Patterns</h3>
+
+<h4 id="1-document-processing-pipeline">1. Document Processing Pipeline</h4>
+
+<pre><code class="language-aql">// Multi-stage document processing
+FOR doc IN documents
+    FILTER doc.status == "pending" AND doc.language == "en"
+    
+    // Stage 1: Extract entities
+    FOR entities IN GRAPHRAG_EXTRACT_ENTITIES(doc.content, {
+        "extractors": ["named_entity", "keyword"],
+        "confidence_threshold": 0.7
+    })
+    
+    // Stage 2: Build knowledge graph
+    FOR kg_result IN GRAPHRAG_BUILD_KNOWLEDGE(doc, {
+        "knowledge_graph": CONCAT("kg_", doc.category),
+        "document_id": doc._key,
+        "build_graph": true
+    })
+    
+    // Stage 3: Update document status
+    UPDATE doc WITH {
+        "status": "processed",
+        "entities_count": LENGTH(entities),
+        "kg_nodes_created": kg_result.entities_extracted,
+        "processed_at": DATE_NOW()
+    } IN documents
+    
+    RETURN {
+        "document_id": doc._key,
+        "entities_extracted": LENGTH(entities),
+        "kg_integration": kg_result.success
+    }
+</code></pre>
+
+<h4 id="2-cross-collection-analysis">2. Cross-Collection Analysis</h4>
+
+<pre><code class="language-aql">// Analyze relationships across collections
+FOR author IN authors
+    FOR paper IN papers
+        FILTER paper.author_id == author._key
+        
+        FOR concepts IN GRAPHRAG_EXTRACT_ENTITIES(paper.abstract, {
+            "entity_types": ["CONCEPT", "METHODOLOGY", "TECHNOLOGY"]
+        })
+        
+        COLLECT author_name = author.name INTO author_concepts = concepts
+        
+        FOR concept_group IN author_concepts
+            COLLECT concept_text = concept_group.text INTO concept_papers = concept_group
+            FILTER LENGTH(concept_papers) &gt;= 3
+            
+            RETURN {
+                "author": author_name,
+                "expertise_area": concept_text,
+                "paper_count": LENGTH(concept_papers),
+                "expertise_confidence": AVG(concept_papers[*].confidence)
+            }
+</code></pre>
+
+<h2 id="boltcypher-graphrag-integration">Bolt/Cypher GraphRAG Integration</h2>
+
+<h3 id="architecture-1">Architecture</h3>
+
+<p>The Bolt GraphRAG integration provides GraphRAG functionality through Cypher stored procedures that follow Neo4j conventions.</p>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">orbit_protocols</span><span class="p">::</span><span class="nn">cypher</span><span class="p">::{</span><span class="n">CypherServer</span><span class="p">,</span> <span class="n">BoltGraphRAGProcedures</span><span class="p">};</span>
+<span class="k">use</span> <span class="nn">orbit_client</span><span class="p">::</span><span class="n">OrbitClient</span><span class="p">;</span>
+
+<span class="c1">// Create Cypher server with GraphRAG procedures</span>
+<span class="k">let</span> <span class="n">orbit_client</span> <span class="o">=</span> <span class="nn">OrbitClient</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="cm">/* config */</span><span class="p">);</span>
+<span class="k">let</span> <span class="n">procedures</span> <span class="o">=</span> <span class="nn">BoltGraphRAGProcedures</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="n">orbit_client</span><span class="p">);</span>
+<span class="k">let</span> <span class="n">server</span> <span class="o">=</span> <span class="nn">CypherServer</span><span class="p">::</span><span class="nf">new_with_graphrag</span><span class="p">(</span><span class="s">"127.0.0.1:7687"</span><span class="p">,</span> <span class="n">procedures</span><span class="p">);</span>
+</code></pre></div></div>
+
+<h3 id="core-procedures">Core Procedures</h3>
+
+<h4 id="1-knowledge-graph-building-1">1. Knowledge Graph Building</h4>
+
+<p><strong>orbit.graphrag.buildKnowledge(kg_name, document_id, text, metadata, config)</strong></p>
+
+<div class="language-cypher highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Build knowledge graph with node creation</span>
+<span class="k">MATCH</span><span class="w"> </span><span class="ss">(</span><span class="py">doc:</span><span class="n">Document</span> <span class="ss">{</span><span class="py">id:</span> <span class="s2">"paper_001"</span><span class="ss">})</span>
+<span class="k">CALL</span> <span class="n">orbit.graphrag.buildKnowledge</span><span class="ss">(</span>
+    <span class="s2">"research_kg"</span><span class="ss">,</span>
+    <span class="n">doc.id</span><span class="ss">,</span>
+    <span class="n">doc.content</span><span class="ss">,</span>
+    <span class="ss">{</span><span class="py">category:</span> <span class="n">doc.category</span><span class="ss">,</span> <span class="py">authors:</span> <span class="n">doc.authors</span><span class="ss">},</span>
+    <span class="ss">{</span><span class="py">extractors:</span> <span class="ss">[</span><span class="s2">"entity"</span><span class="ss">,</span> <span class="s2">"relationship"</span><span class="ss">],</span> <span class="py">build_graph:</span> <span class="k">true</span><span class="ss">}</span>
+<span class="ss">)</span> <span class="k">YIELD</span> <span class="n">kg_name</span><span class="ss">,</span> <span class="n">document_id</span><span class="ss">,</span> <span class="n">entities_extracted</span><span class="ss">,</span> <span class="n">relationships_extracted</span><span class="ss">,</span> <span class="n">processing_time_ms</span>
+
+<span class="c1">// Create tracking nodes</span>
+<span class="k">CREATE</span><span class="w"> </span><span class="ss">(</span><span class="py">kg:</span><span class="n">KnowledgeGraph</span> <span class="ss">{</span>
+    <span class="py">name:</span> <span class="n">kg_name</span><span class="ss">,</span>
+    <span class="py">entities_count:</span> <span class="n">entities_extracted</span><span class="ss">,</span>
+    <span class="py">relationships_count:</span> <span class="n">relationships_extracted</span><span class="ss">,</span>
+    <span class="py">last_updated:</span> <span class="n">datetime</span><span class="ss">()</span>
+<span class="ss">})</span>
+<span class="k">CREATE</span><span class="w"> </span><span class="ss">(</span><span class="n">doc</span><span class="ss">)</span><span class="o">-</span><span class="ss">[</span><span class="nc">:CONTRIBUTES_TO</span><span class="ss">]</span><span class="o">-&gt;</span><span class="ss">(</span><span class="n">kg</span><span class="ss">)</span>
+
+<span class="k">RETURN</span> <span class="n">kg_name</span><span class="ss">,</span> <span class="n">entities_extracted</span><span class="ss">,</span> <span class="n">relationships_extracted</span><span class="ss">;</span>
+</code></pre></div></div>
+
+<h4 id="2-entity-extraction-with-graph-integration">2. Entity Extraction with Graph Integration</h4>
+
+<p><strong>orbit.graphrag.extractEntities(text, config)</strong></p>
+
+<div class="language-cypher highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Extract entities and create graph nodes</span>
+<span class="k">MATCH</span><span class="w"> </span><span class="ss">(</span><span class="py">doc:</span><span class="n">Document</span><span class="ss">)</span> <span class="k">WHERE</span> <span class="n">doc.processed</span> <span class="o">=</span> <span class="k">false</span>
+<span class="k">CALL</span> <span class="n">orbit.graphrag.extractEntities</span><span class="ss">(</span>
+    <span class="n">doc.content</span><span class="ss">,</span>
+    <span class="ss">{</span><span class="py">extractors:</span> <span class="ss">[</span><span class="s2">"named_entity"</span><span class="ss">,</span> <span class="s2">"keyword"</span><span class="ss">],</span> <span class="nl">confidence_threshold</span><span class="dl">:</span><span class="w"> </span><span class="m">0.7</span><span class="ss">}</span>
+<span class="ss">)</span> <span class="k">YIELD</span> <span class="n">entity_text</span><span class="ss">,</span> <span class="n">entity_type</span><span class="ss">,</span> <span class="n">confidence</span><span class="ss">,</span> <span class="n">start_pos</span><span class="ss">,</span> <span class="n">end_pos</span>
+
+<span class="c1">// Create entity nodes and relationships</span>
+<span class="k">MERGE</span><span class="w"> </span><span class="ss">(</span><span class="py">e:</span><span class="n">Entity</span> <span class="ss">{</span><span class="py">name:</span> <span class="n">entity_text</span><span class="ss">,</span> <span class="py">type:</span> <span class="n">entity_type</span><span class="ss">})</span>
+<span class="k">SET</span> <span class="n">e.confidence</span> <span class="o">=</span> <span class="n">confidence</span><span class="ss">,</span>
+    <span class="n">e.first_mentioned</span> <span class="o">=</span> <span class="k">CASE</span> <span class="k">WHEN</span> <span class="n">e.first_mentioned</span> <span class="k">IS</span> <span class="k">NULL</span> <span class="k">THEN</span> <span class="n">datetime</span><span class="ss">()</span> <span class="k">ELSE</span> <span class="n">e.first_mentioned</span> <span class="k">END</span><span class="ss">,</span>
+    <span class="n">e.mention_count</span> <span class="o">=</span> <span class="nf">COALESCE</span><span class="ss">(</span><span class="n">e.mention_count</span><span class="ss">,</span> <span class="mi">0</span><span class="ss">)</span> <span class="o">+</span> <span class="mi">1</span>
+
+<span class="k">CREATE</span><span class="w"> </span><span class="ss">(</span><span class="n">doc</span><span class="ss">)</span><span class="o">-</span><span class="ss">[</span><span class="nc">:MENTIONS</span> <span class="ss">{</span><span class="py">position:</span> <span class="n">start_pos</span><span class="ss">,</span> <span class="py">confidence:</span> <span class="n">confidence</span><span class="ss">}]</span><span class="o">-&gt;</span><span class="ss">(</span><span class="n">e</span><span class="ss">)</span>
+<span class="k">SET</span> <span class="n">doc.processed</span> <span class="o">=</span> <span class="k">true</span>
+
+<span class="k">RETURN</span> <span class="n">doc.id</span><span class="ss">,</span> <span class="n">entity_text</span><span class="ss">,</span> <span class="n">entity_type</span><span class="ss">,</span> <span class="n">confidence</span><span class="ss">;</span>
+</code></pre></div></div>
+
+<h4 id="3-rag-queries-with-graph-context">3. RAG Queries with Graph Context</h4>
+
+<p><strong>orbit.graphrag.ragQuery(kg_name, query_text, config)</strong></p>
+
+<div class="language-cypher highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// RAG query with graph pattern context</span>
+<span class="k">MATCH</span> <span class="n">path</span> <span class="o">=</span> <span class="ss">(</span><span class="py">start:</span><span class="n">Concept</span> <span class="ss">{</span><span class="py">name:</span> <span class="s2">"Machine Learning"</span><span class="ss">})</span><span class="o">-</span><span class="ss">[</span><span class="o">*</span><span class="m">1</span><span class="o">..</span><span class="m">2</span><span class="ss">]</span><span class="o">-</span><span class="ss">(</span><span class="py">related:</span><span class="n">Concept</span><span class="ss">)</span>
+<span class="k">WITH</span> <span class="nf">collect</span><span class="ss">(</span><span class="n">related.name</span><span class="ss">)</span> <span class="k">as</span> <span class="n">context_concepts</span>
+
+<span class="k">CALL</span> <span class="n">orbit.graphrag.ragQuery</span><span class="ss">(</span>
+    <span class="s2">"research_kg"</span><span class="ss">,</span> 
+    <span class="s2">"How do these concepts relate to deep learning?"</span><span class="ss">,</span>
+    <span class="ss">{</span>
+        <span class="nl">max_hops</span><span class="dl">:</span><span class="w"> </span><span class="m">2</span><span class="ss">,</span>
+        <span class="py">context_entities:</span> <span class="n">context_concepts</span><span class="ss">,</span>
+        <span class="py">include_path_reasoning:</span> <span class="k">true</span>
+    <span class="ss">}</span>
+<span class="ss">)</span> <span class="k">YIELD</span> <span class="n">response</span><span class="ss">,</span> <span class="n">confidence</span><span class="ss">,</span> <span class="n">reasoning_paths</span>
+
+<span class="c1">// Create result nodes for further analysis</span>
+<span class="k">CREATE</span><span class="w"> </span><span class="ss">(</span><span class="py">result:</span><span class="n">QueryResult</span> <span class="ss">{</span>
+    <span class="py">query:</span> <span class="s2">"How do these concepts relate to deep learning?"</span><span class="ss">,</span>
+    <span class="py">response:</span> <span class="n">response</span><span class="ss">,</span>
+    <span class="py">confidence:</span> <span class="n">confidence</span><span class="ss">,</span>
+    <span class="py">timestamp:</span> <span class="n">datetime</span><span class="ss">()</span>
+<span class="ss">})</span>
+
+<span class="c1">// Link to reasoning paths</span>
+<span class="k">UNWIND</span> <span class="n">reasoning_paths</span> <span class="k">as</span> <span class="n">path</span>
+<span class="k">CREATE</span><span class="w"> </span><span class="ss">(</span><span class="py">reasoning:</span><span class="n">ReasoningPath</span> <span class="ss">{</span>
+    <span class="py">nodes:</span> <span class="n">path.nodes</span><span class="ss">,</span>
+    <span class="py">explanation:</span> <span class="n">path.explanation</span><span class="ss">,</span>
+    <span class="py">score:</span> <span class="n">path.score</span>
+<span class="ss">})</span>
+<span class="k">CREATE</span><span class="w"> </span><span class="ss">(</span><span class="n">result</span><span class="ss">)</span><span class="o">-</span><span class="ss">[</span><span class="nc">:BASED_ON</span><span class="ss">]</span><span class="o">-&gt;</span><span class="ss">(</span><span class="n">reasoning</span><span class="ss">)</span>
+
+<span class="k">RETURN</span> <span class="n">response</span><span class="ss">,</span> <span class="n">confidence</span><span class="ss">,</span> 
+       <span class="ss">[</span><span class="n">path</span> <span class="ow">IN</span> <span class="n">reasoning_paths</span> <span class="o">|</span> <span class="n">path.explanation</span><span class="ss">]</span> <span class="k">as</span> <span class="n">explanations</span><span class="ss">;</span>
+</code></pre></div></div>
+
+<h4 id="4-multi-hop-reasoning-with-path-creation">4. Multi-hop Reasoning with Path Creation</h4>
+
+<p><strong>orbit.graphrag.findPaths(kg_name, from_entity, to_entity, config)</strong></p>
+
+<div class="language-cypher highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Find and materialize reasoning paths</span>
+<span class="k">MATCH</span><span class="w"> </span><span class="ss">(</span><span class="py">start:</span><span class="n">Company</span> <span class="ss">{</span><span class="py">name:</span> <span class="s2">"Apple Inc."</span><span class="ss">})</span>
+<span class="k">MATCH</span><span class="w"> </span><span class="ss">(</span><span class="py">end:</span><span class="n">Product</span> <span class="ss">{</span><span class="py">name:</span> <span class="s2">"iPhone"</span><span class="ss">})</span>
+
+<span class="k">CALL</span> <span class="n">orbit.graphrag.findPaths</span><span class="ss">(</span>
+    <span class="s2">"business_kg"</span><span class="ss">,</span>
+    <span class="n">start.name</span><span class="ss">,</span>
+    <span class="n">end.name</span><span class="ss">,</span>
+    <span class="ss">{</span><span class="nl">max_hops</span><span class="dl">:</span><span class="w"> </span><span class="m">3</span><span class="ss">,</span> <span class="py">relationship_types:</span> <span class="ss">[</span><span class="s2">"PRODUCES"</span><span class="ss">,</span> <span class="s2">"DEVELOPS"</span><span class="ss">,</span> <span class="s2">"OWNS"</span><span class="ss">]}</span>
+<span class="ss">)</span> <span class="k">YIELD</span> <span class="n">path_nodes</span><span class="ss">,</span> <span class="n">relationships</span><span class="ss">,</span> <span class="n">score</span>
+
+<span class="k">WITH</span> <span class="k">start</span><span class="ss">,</span> <span class="k">end</span><span class="ss">,</span> <span class="n">path_nodes</span><span class="ss">,</span> <span class="n">relationships</span><span class="ss">,</span> <span class="n">score</span>
+<span class="k">WHERE</span> <span class="n">score</span> <span class="o">&gt;</span> <span class="mf">0.8</span>
+
+<span class="c1">// Create reasoning path in graph</span>
+<span class="k">UNWIND</span> <span class="nf">range</span><span class="ss">(</span><span class="mi">0</span><span class="ss">,</span> <span class="nf">size</span><span class="ss">(</span><span class="n">path_nodes</span><span class="ss">)</span><span class="o">-</span><span class="mi">2</span><span class="ss">)</span> <span class="k">as</span> <span class="n">i</span>
+<span class="k">WITH</span> <span class="k">start</span><span class="ss">,</span> <span class="k">end</span><span class="ss">,</span> <span class="n">path_nodes</span><span class="ss">,</span> <span class="n">relationships</span><span class="ss">,</span> <span class="n">score</span><span class="ss">,</span> <span class="n">i</span><span class="ss">,</span>
+     <span class="n">path_nodes</span><span class="ss">[</span><span class="n">i</span><span class="ss">]</span> <span class="k">as</span> <span class="n">current_node</span><span class="ss">,</span>
+     <span class="n">path_nodes</span><span class="ss">[</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="ss">]</span> <span class="k">as</span> <span class="n">next_node</span><span class="ss">,</span>
+     <span class="n">relationships</span><span class="ss">[</span><span class="n">i</span><span class="ss">]</span> <span class="k">as</span> <span class="n">rel_info</span>
+
+<span class="k">MERGE</span><span class="w"> </span><span class="ss">(</span><span class="py">c:</span><span class="n">ReasoningNode</span> <span class="ss">{</span><span class="py">name:</span> <span class="n">current_node</span><span class="ss">})</span>
+<span class="k">MERGE</span><span class="w"> </span><span class="ss">(</span><span class="py">n:</span><span class="n">ReasoningNode</span> <span class="ss">{</span><span class="py">name:</span> <span class="n">next_node</span><span class="ss">})</span>
+<span class="k">CREATE</span><span class="w"> </span><span class="ss">(</span><span class="n">c</span><span class="ss">)</span><span class="o">-</span><span class="ss">[</span><span class="nc">:REASONING_STEP</span> <span class="ss">{</span>
+    <span class="py">type:</span> <span class="n">rel_info.type</span><span class="ss">,</span>
+    <span class="py">score:</span> <span class="n">score</span><span class="ss">,</span>
+    <span class="py">step:</span> <span class="n">i</span><span class="ss">,</span>
+    <span class="py">reasoning_session:</span> <span class="n">randomUUID</span><span class="ss">()</span>
+<span class="ss">}]</span><span class="o">-&gt;</span><span class="ss">(</span><span class="n">n</span><span class="ss">)</span>
+
+<span class="k">RETURN</span> <span class="n">path_nodes</span><span class="ss">,</span> <span class="n">relationships</span><span class="ss">,</span> <span class="n">score</span>
+<span class="k">ORDER</span> <span class="k">BY</span> <span class="n">score</span> <span class="k">DESC</span><span class="ss">;</span>
+</code></pre></div></div>
+
+<h4 id="5-graph-analytics-and-statistics">5. Graph Analytics and Statistics</h4>
+
+<p><strong>orbit.graphrag.getStats(kg_name)</strong></p>
+
+<div class="language-cypher highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Knowledge graph analytics with visualization</span>
+<span class="k">CALL</span> <span class="n">orbit.graphrag.getStats</span><span class="ss">(</span><span class="s2">"research_kg"</span><span class="ss">)</span>
+<span class="k">YIELD</span> <span class="n">documents_processed</span><span class="ss">,</span> <span class="n">entities_extracted</span><span class="ss">,</span> <span class="n">relationships_extracted</span><span class="ss">,</span>
+      <span class="n">avg_document_processing_time_ms</span><span class="ss">,</span> <span class="n">rag_success_rate</span>
+
+<span class="c1">// Create analytics dashboard nodes</span>
+<span class="k">CREATE</span><span class="w"> </span><span class="ss">(</span><span class="py">dashboard:</span><span class="n">Analytics</span> <span class="ss">{</span>
+    <span class="py">knowledge_graph:</span> <span class="s2">"research_kg"</span><span class="ss">,</span>
+    <span class="py">documents_processed:</span> <span class="n">documents_processed</span><span class="ss">,</span>
+    <span class="py">entities_extracted:</span> <span class="n">entities_extracted</span><span class="ss">,</span>
+    <span class="py">relationships_extracted:</span> <span class="n">relationships_extracted</span><span class="ss">,</span>
+    <span class="py">entity_density:</span> <span class="n">entities_extracted</span> <span class="err">/</span> <span class="n">documents_processed</span><span class="ss">,</span>
+    <span class="py">relationship_density:</span> <span class="n">relationships_extracted</span> <span class="err">/</span> <span class="n">entities_extracted</span><span class="ss">,</span>
+    <span class="nl">processing_efficiency</span><span class="dl">:</span><span class="w"> </span><span class="m">1000</span> <span class="err">/</span> <span class="n">avg_document_processing_time_ms</span><span class="ss">,</span>
+    <span class="py">success_rate:</span> <span class="n">rag_success_rate</span><span class="ss">,</span>
+    <span class="py">generated_at:</span> <span class="n">datetime</span><span class="ss">()</span>
+<span class="ss">})</span>
+
+<span class="k">RETURN</span> <span class="n">dashboard</span><span class="ss">;</span>
+</code></pre></div></div>
+
+<h3 id="advanced-cypher-integration-patterns">Advanced Cypher Integration Patterns</h3>
+
+<h4 id="1-graph-augmentation-with-graphrag">1. Graph Augmentation with GraphRAG</h4>
+
+<div class="language-cypher highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Augment existing citation graph with semantic relationships</span>
+<span class="k">MATCH</span><span class="w"> </span><span class="ss">(</span><span class="py">paper1:</span><span class="n">Paper</span><span class="ss">)</span><span class="o">-</span><span class="ss">[</span><span class="nc">:CITES</span><span class="ss">]</span><span class="o">-&gt;</span><span class="ss">(</span><span class="py">paper2:</span><span class="n">Paper</span><span class="ss">)</span>
+<span class="k">WHERE</span> <span class="n">NOT</span><span class="w"> </span><span class="ss">(</span><span class="n">paper1</span><span class="ss">)</span><span class="o">-</span><span class="ss">[</span><span class="nc">:SEMANTICALLY_RELATED</span><span class="ss">]</span><span class="o">-</span><span class="ss">(</span><span class="n">paper2</span><span class="ss">)</span>
+<span class="k">WITH</span> <span class="nf">collect</span><span class="ss">(</span><span class="n">paper1.title</span> <span class="o">+</span> <span class="s2">" relates to "</span> <span class="o">+</span> <span class="n">paper2.title</span><span class="ss">)</span> <span class="k">as</span> <span class="n">relationship_texts</span>
+
+<span class="k">CALL</span> <span class="n">orbit.graphrag.ragQuery</span><span class="ss">(</span>
+    <span class="s2">"research_kg"</span><span class="ss">,</span>
+    <span class="s2">"Analyze semantic relationships between these papers"</span><span class="ss">,</span>
+    <span class="ss">{</span><span class="py">context_texts:</span> <span class="n">relationship_texts</span><span class="ss">,</span> <span class="py">derive_relationships:</span> <span class="k">true</span><span class="ss">}</span>
+<span class="ss">)</span> <span class="k">YIELD</span> <span class="n">entities_involved</span><span class="ss">,</span> <span class="n">reasoning_paths</span>
+
+<span class="c1">// Create semantic relationship edges</span>
+<span class="k">UNWIND</span> <span class="n">reasoning_paths</span> <span class="k">as</span> <span class="n">path</span>
+<span class="k">MATCH</span><span class="w"> </span><span class="ss">(</span><span class="py">p1:</span><span class="n">Paper</span> <span class="ss">{</span><span class="py">title:</span> <span class="n">path.from_entity</span><span class="ss">})</span>
+<span class="k">MATCH</span><span class="w"> </span><span class="ss">(</span><span class="py">p2:</span><span class="n">Paper</span> <span class="ss">{</span><span class="py">title:</span> <span class="n">path.to_entity</span><span class="ss">})</span>
+<span class="k">WHERE</span> <span class="n">path.score</span> <span class="o">&gt;</span> <span class="mf">0.7</span>
+<span class="k">CREATE</span><span class="w"> </span><span class="ss">(</span><span class="n">p1</span><span class="ss">)</span><span class="o">-</span><span class="ss">[</span><span class="nc">:SEMANTICALLY_RELATED</span> <span class="ss">{</span>
+    <span class="py">score:</span> <span class="n">path.score</span><span class="ss">,</span>
+    <span class="py">reasoning:</span> <span class="n">path.explanation</span><span class="ss">,</span>
+    <span class="py">discovered_by:</span> <span class="s2">"graphrag"</span><span class="ss">,</span>
+    <span class="py">discovered_at:</span> <span class="n">datetime</span><span class="ss">()</span>
+<span class="ss">}]</span><span class="o">-&gt;</span><span class="ss">(</span><span class="n">p2</span><span class="ss">);</span>
+</code></pre></div></div>
+
+<h4 id="2-real-time-knowledge-graph-updates">2. Real-time Knowledge Graph Updates</h4>
+
+<div class="language-cypher highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Stream processing with GraphRAG integration</span>
+<span class="k">CALL</span> <span class="n">orbit.graphrag.streamEntities</span><span class="ss">(</span>
+    <span class="s2">"live_news_kg"</span><span class="ss">,</span>
+    <span class="ss">{</span>
+        <span class="nl">min_confidence</span><span class="dl">:</span><span class="w"> </span><span class="m">0.8</span><span class="ss">,</span>
+        <span class="py">entity_types:</span> <span class="ss">[</span><span class="s2">"Person"</span><span class="ss">,</span> <span class="s2">"Organization"</span><span class="ss">,</span> <span class="s2">"Event"</span><span class="ss">],</span>
+        <span class="nl">stream_duration_seconds</span><span class="dl">:</span><span class="w"> </span><span class="m">3600</span>
+    <span class="ss">}</span>
+<span class="ss">)</span> <span class="k">YIELD</span> <span class="n">entity_text</span><span class="ss">,</span> <span class="n">entity_type</span><span class="ss">,</span> <span class="n">confidence</span><span class="ss">,</span> <span class="n">timestamp</span><span class="ss">,</span> <span class="n">source_document</span>
+
+<span class="c1">// Create or update entity nodes in real-time</span>
+<span class="k">MERGE</span><span class="w"> </span><span class="ss">(</span><span class="py">e:</span><span class="n">StreamedEntity</span> <span class="ss">{</span><span class="py">name:</span> <span class="n">entity_text</span><span class="ss">,</span> <span class="py">type:</span> <span class="n">entity_type</span><span class="ss">})</span>
+<span class="k">ON</span> <span class="k">CREATE</span> <span class="k">SET</span> 
+    <span class="n">e.first_seen</span> <span class="o">=</span> <span class="n">timestamp</span><span class="ss">,</span>
+    <span class="n">e.confidence</span> <span class="o">=</span> <span class="n">confidence</span><span class="ss">,</span>
+    <span class="n">e.mention_count</span> <span class="o">=</span> <span class="mi">1</span>
+<span class="k">ON</span> <span class="k">MATCH</span> <span class="k">SET</span> 
+    <span class="n">e.mention_count</span> <span class="o">=</span> <span class="n">e.mention_count</span> <span class="o">+</span> <span class="mi">1</span><span class="ss">,</span>
+    <span class="n">e.last_seen</span> <span class="o">=</span> <span class="n">timestamp</span><span class="ss">,</span>
+    <span class="n">e.confidence</span> <span class="o">=</span> <span class="ss">(</span><span class="n">e.confidence</span> <span class="o">+</span> <span class="n">confidence</span><span class="ss">)</span> <span class="err">/</span> <span class="mi">2</span>
+
+<span class="c1">// Link to source documents</span>
+<span class="k">MERGE</span><span class="w"> </span><span class="ss">(</span><span class="py">doc:</span><span class="n">Document</span> <span class="ss">{</span><span class="py">id:</span> <span class="n">source_document</span><span class="ss">})</span>
+<span class="k">CREATE</span><span class="w"> </span><span class="ss">(</span><span class="n">doc</span><span class="ss">)</span><span class="o">-</span><span class="ss">[</span><span class="nc">:MENTIONS</span> <span class="ss">{</span>
+    <span class="py">confidence:</span> <span class="n">confidence</span><span class="ss">,</span>
+    <span class="py">discovered_at:</span> <span class="n">timestamp</span>
+<span class="ss">}]</span><span class="o">-&gt;</span><span class="ss">(</span><span class="n">e</span><span class="ss">);</span>
+</code></pre></div></div>
+
+<h2 id="comparison-matrix">Comparison Matrix</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>Feature</th>
+      <th>AQL GraphRAG</th>
+      <th>Bolt/Cypher GraphRAG</th>
+      <th>PostgreSQL GraphRAG</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Query Style</strong></td>
+      <td>Functional within AQL</td>
+      <td>Stored procedures</td>
+      <td>SQL functions</td>
+    </tr>
+    <tr>
+      <td><strong>Result Format</strong></td>
+      <td>AQL objects/arrays</td>
+      <td>Cypher table rows</td>
+      <td>PostgreSQL result sets</td>
+    </tr>
+    <tr>
+      <td><strong>Graph Integration</strong></td>
+      <td>Document-oriented</td>
+      <td>Native graph patterns</td>
+      <td>Relational with JSON</td>
+    </tr>
+    <tr>
+      <td><strong>Streaming</strong></td>
+      <td>FOR loops over results</td>
+      <td>YIELD streaming</td>
+      <td>Standard SQL cursors</td>
+    </tr>
+    <tr>
+      <td><strong>Aggregation</strong></td>
+      <td>COLLECT/GROUP BY</td>
+      <td>Native Cypher aggregation</td>
+      <td>SQL GROUP BY</td>
+    </tr>
+    <tr>
+      <td><strong>Pattern Matching</strong></td>
+      <td>Filter expressions</td>
+      <td>MATCH patterns</td>
+      <td>WHERE clauses</td>
+    </tr>
+    <tr>
+      <td><strong>Transaction Support</strong></td>
+      <td>ArangoDB transactions</td>
+      <td>Neo4j transactions</td>
+      <td>PostgreSQL ACID</td>
+    </tr>
+    <tr>
+      <td><strong>Performance</strong></td>
+      <td>Document store optimized</td>
+      <td>Graph traversal optimized</td>
+      <td>Relational optimized</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="best-practices">Best Practices</h2>
+
+<h3 id="1-protocol-selection-guidelines">1. Protocol Selection Guidelines</h3>
+
+<p><strong>Use AQL GraphRAG when:</strong></p>
+<ul>
+  <li>Working with document-heavy workloads</li>
+  <li>Need complex aggregation and analytics</li>
+  <li>Integrating with existing ArangoDB infrastructure</li>
+  <li>Processing large document collections</li>
+</ul>
+
+<p><strong>Use Bolt/Cypher GraphRAG when:</strong></p>
+<ul>
+  <li>Working with highly connected data</li>
+  <li>Need complex graph pattern matching</li>
+  <li>Integrating with existing Neo4j infrastructure</li>
+  <li>Emphasis on relationship analysis</li>
+</ul>
+
+<p><strong>Use PostgreSQL GraphRAG when:</strong></p>
+<ul>
+  <li>Working with traditional relational data</li>
+  <li>Need ACID compliance and strong consistency</li>
+  <li>Integrating with existing PostgreSQL applications</li>
+  <li>Using BI tools and standard SQL interfaces</li>
+</ul>
+
+<h3 id="2-performance-optimization">2. Performance Optimization</h3>
+
+<h4 id="aql-optimization">AQL Optimization</h4>
+
+<pre><code class="language-aql">// Use indexes for filtering
+FOR doc IN documents
+    FILTER doc.category == "research" AND doc.year &gt;= 2020  // Indexed fields first
+    FOR result IN GRAPHRAG_BUILD_KNOWLEDGE(doc, {
+        "batch_mode": true,  // Enable batch processing
+        "defer_indexing": true  // Defer expensive operations
+    })
+    RETURN result
+
+// Batch operations for efficiency
+FOR batch IN RANGE(0, LENGTH(documents), 100)
+    LET batch_docs = SLICE(documents, batch, 100)
+    FOR doc IN batch_docs
+        FOR result IN GRAPHRAG_BUILD_KNOWLEDGE(doc, {
+            "parallel_processing": true
+        })
+        RETURN result
+</code></pre>
+
+<h4 id="cypher-optimization">Cypher Optimization</h4>
+
+<div class="language-cypher highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Use parameters and prepare statements</span>
+<span class="nc">:param</span> <span class="n">kg_name</span> <span class="o">=&gt;</span> <span class="s2">"research_kg"</span>
+<span class="nc">:param</span> <span class="n">min_confidence</span> <span class="o">=&gt;</span> <span class="mf">0.8</span>
+
+<span class="c1">// Create indexes for performance</span>
+<span class="k">CREATE</span> <span class="k">INDEX</span> <span class="n">entity_name_idx</span> <span class="n">FOR</span><span class="w"> </span><span class="ss">(</span><span class="py">e:</span><span class="n">Entity</span><span class="ss">)</span> <span class="k">ON</span><span class="w"> </span><span class="ss">(</span><span class="n">e.name</span><span class="ss">)</span>
+<span class="k">CREATE</span> <span class="k">INDEX</span> <span class="n">entity_type_idx</span> <span class="n">FOR</span><span class="w"> </span><span class="ss">(</span><span class="py">e:</span><span class="n">Entity</span><span class="ss">)</span> <span class="k">ON</span><span class="w"> </span><span class="ss">(</span><span class="n">e.type</span><span class="ss">)</span>
+
+<span class="c1">// Use PROFILE to analyze query performance</span>
+<span class="k">PROFILE</span>
+<span class="k">CALL</span> <span class="n">orbit.graphrag.findPaths</span><span class="ss">(</span>
+    <span class="n">$kg_name</span><span class="ss">,</span> 
+    <span class="s2">"Apple Inc."</span><span class="ss">,</span> 
+    <span class="s2">"iPhone"</span><span class="ss">,</span> 
+    <span class="ss">{</span><span class="nl">max_hops</span><span class="dl">:</span><span class="w"> </span><span class="m">3</span><span class="ss">,</span> <span class="py">min_confidence:</span> <span class="n">$min_confidence</span><span class="ss">}</span>
+<span class="ss">)</span> <span class="k">YIELD</span> <span class="n">path_nodes</span><span class="ss">,</span> <span class="n">score</span>
+<span class="k">RETURN</span> <span class="n">path_nodes</span><span class="ss">,</span> <span class="n">score</span>
+<span class="k">ORDER</span> <span class="k">BY</span> <span class="n">score</span> <span class="k">DESC</span>
+<span class="k">LIMIT</span> <span class="mi">10</span><span class="ss">;</span>
+</code></pre></div></div>
+
+<h3 id="3-error-handling">3. Error Handling</h3>
+
+<h4 id="aql-error-handling">AQL Error Handling</h4>
+
+<pre><code class="language-aql">// Graceful error handling with fallbacks
+FOR doc IN documents
+    FOR result IN GRAPHRAG_BUILD_KNOWLEDGE(doc, {}) 
+    FILTER result.success == true
+    RETURN result.result
+
+// Handle warnings and partial failures
+FOR result IN GRAPHRAG_BUILD_KNOWLEDGE(doc, {})
+    FILTER LENGTH(result.warnings) &gt; 0
+    INSERT {
+        "document_id": doc._key,
+        "warnings": result.warnings,
+        "timestamp": DATE_NOW()
+    } INTO processing_warnings
+    RETURN result
+</code></pre>
+
+<h4 id="cypher-error-handling">Cypher Error Handling</h4>
+
+<div class="language-cypher highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Use APOC for conditional processing</span>
+<span class="k">CALL</span> <span class="n">orbit.graphrag.buildKnowledge</span><span class="ss">(</span><span class="s2">"kg"</span><span class="ss">,</span> <span class="s2">"doc1"</span><span class="ss">,</span> <span class="s2">"text"</span><span class="ss">,</span> <span class="ss">{},</span> <span class="ss">{})</span>
+<span class="k">YIELD</span> <span class="n">success</span><span class="ss">,</span> <span class="n">errors</span><span class="ss">,</span> <span class="n">warnings</span>
+<span class="k">FOREACH</span><span class="w"> </span><span class="ss">(</span><span class="n">error</span> <span class="ow">IN</span> <span class="k">CASE</span> <span class="k">WHEN</span> <span class="ow">NOT</span> <span class="n">success</span> <span class="k">THEN</span> <span class="n">errors</span> <span class="k">ELSE</span> <span class="ss">[]</span> <span class="k">END</span> <span class="o">|</span>
+    <span class="k">CREATE</span><span class="w"> </span><span class="ss">(</span><span class="py">err:</span><span class="n">ProcessingError</span> <span class="ss">{</span>
+        <span class="py">message:</span> <span class="n">error</span><span class="ss">,</span>
+        <span class="py">timestamp:</span> <span class="n">datetime</span><span class="ss">(),</span>
+        <span class="py">procedure:</span> <span class="s2">"buildKnowledge"</span>
+    <span class="ss">})</span>
+<span class="ss">)</span>
+<span class="k">RETURN</span> <span class="n">success</span><span class="ss">,</span> <span class="nf">size</span><span class="ss">(</span><span class="n">errors</span><span class="ss">)</span> <span class="k">as</span> <span class="n">error_count</span><span class="ss">;</span>
+</code></pre></div></div>
+
+<h2 id="integration-examples">Integration Examples</h2>
+
+<h3 id="multi-protocol-knowledge-discovery">Multi-Protocol Knowledge Discovery</h3>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c1"># Python application using multiple protocols
+</span><span class="kn">import</span> <span class="n">psycopg2</span>
+<span class="kn">import</span> <span class="n">neo4j</span>
+<span class="kn">import</span> <span class="n">requests</span>
+
+<span class="k">class</span> <span class="nc">MultiProtocolGraphRAG</span><span class="p">:</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="n">self</span><span class="p">):</span>
+        <span class="c1"># PostgreSQL for structured queries and BI integration
+</span>        <span class="n">self</span><span class="p">.</span><span class="n">pg_conn</span> <span class="o">=</span> <span class="n">psycopg2</span><span class="p">.</span><span class="nf">connect</span><span class="p">(</span><span class="sh">"</span><span class="s">host=localhost port=5433 dbname=orbit</span><span class="sh">"</span><span class="p">)</span>
+        
+        <span class="c1"># Neo4j for graph pattern matching
+</span>        <span class="n">self</span><span class="p">.</span><span class="n">neo4j_driver</span> <span class="o">=</span> <span class="n">neo4j</span><span class="p">.</span><span class="n">GraphDatabase</span><span class="p">.</span><span class="nf">driver</span><span class="p">(</span><span class="sh">"</span><span class="s">bolt://localhost:7687</span><span class="sh">"</span><span class="p">)</span>
+        
+        <span class="c1"># ArangoDB for document processing (via REST)
+</span>        <span class="n">self</span><span class="p">.</span><span class="n">arango_url</span> <span class="o">=</span> <span class="sh">"</span><span class="s">http://localhost:8529</span><span class="sh">"</span>
+    
+    <span class="k">def</span> <span class="nf">build_knowledge_graph</span><span class="p">(</span><span class="n">self</span><span class="p">,</span> <span class="n">documents</span><span class="p">):</span>
+        <span class="sh">"""</span><span class="s">Build knowledge graph using optimal protocol per task</span><span class="sh">"""</span>
+        
+        <span class="c1"># Use ArangoDB/AQL for document processing
+</span>        <span class="k">for</span> <span class="n">doc</span> <span class="ow">in</span> <span class="n">documents</span><span class="p">:</span>
+            <span class="n">aql_query</span> <span class="o">=</span> <span class="sh">"""</span><span class="s">
+            FOR result IN GRAPHRAG_BUILD_KNOWLEDGE(@doc, {
+                </span><span class="sh">"</span><span class="s">knowledge_graph</span><span class="sh">"</span><span class="s">: @kg_name,
+                </span><span class="sh">"</span><span class="s">extractors</span><span class="sh">"</span><span class="s">: [</span><span class="sh">"</span><span class="s">entity</span><span class="sh">"</span><span class="s">, </span><span class="sh">"</span><span class="s">relationship</span><span class="sh">"</span><span class="s">]
+            })
+            RETURN result
+            </span><span class="sh">"""</span>
+            <span class="c1"># Execute AQL query...
+</span>        
+        <span class="c1"># Use Neo4j for relationship analysis
+</span>        <span class="k">with</span> <span class="n">self</span><span class="p">.</span><span class="n">neo4j_driver</span><span class="p">.</span><span class="nf">session</span><span class="p">()</span> <span class="k">as</span> <span class="n">session</span><span class="p">:</span>
+            <span class="n">session</span><span class="p">.</span><span class="nf">run</span><span class="p">(</span><span class="sh">"""</span><span class="s">
+                CALL orbit.graphrag.findPaths($kg_name, $entity1, $entity2, {
+                    max_hops: 3,
+                    include_explanation: true
+                })
+            </span><span class="sh">"""</span><span class="p">,</span> <span class="n">kg_name</span><span class="o">=</span><span class="sh">"</span><span class="s">main_kg</span><span class="sh">"</span><span class="p">,</span> <span class="n">entity1</span><span class="o">=</span><span class="sh">"</span><span class="s">concept1</span><span class="sh">"</span><span class="p">,</span> <span class="n">entity2</span><span class="o">=</span><span class="sh">"</span><span class="s">concept2</span><span class="sh">"</span><span class="p">)</span>
+        
+        <span class="c1"># Use PostgreSQL for analytics and reporting
+</span>        <span class="k">with</span> <span class="n">self</span><span class="p">.</span><span class="n">pg_conn</span><span class="p">.</span><span class="nf">cursor</span><span class="p">()</span> <span class="k">as</span> <span class="n">cur</span><span class="p">:</span>
+            <span class="n">cur</span><span class="p">.</span><span class="nf">execute</span><span class="p">(</span><span class="sh">"""</span><span class="s">
+                SELECT kg_name, documents_processed, rag_success_rate
+                FROM GRAPHRAG_STATS(%s)
+                WHERE rag_success_rate &gt; 0.8
+            </span><span class="sh">"""</span><span class="p">,</span> <span class="p">(</span><span class="sh">"</span><span class="s">main_kg</span><span class="sh">"</span><span class="p">,))</span>
+    
+    <span class="k">def</span> <span class="nf">query_knowledge_graph</span><span class="p">(</span><span class="n">self</span><span class="p">,</span> <span class="n">query_text</span><span class="p">):</span>
+        <span class="sh">"""</span><span class="s">Query using best protocol for the query type</span><span class="sh">"""</span>
+        
+        <span class="c1"># Use PostgreSQL for simple Q&amp;A
+</span>        <span class="k">with</span> <span class="n">self</span><span class="p">.</span><span class="n">pg_conn</span><span class="p">.</span><span class="nf">cursor</span><span class="p">()</span> <span class="k">as</span> <span class="n">cur</span><span class="p">:</span>
+            <span class="n">cur</span><span class="p">.</span><span class="nf">execute</span><span class="p">(</span><span class="sh">"""</span><span class="s">
+                SELECT response, confidence 
+                FROM GRAPHRAG_QUERY(%s, %s, 3, 2048, </span><span class="sh">'</span><span class="s">ollama</span><span class="sh">'</span><span class="s">, false)
+            </span><span class="sh">"""</span><span class="p">,</span> <span class="p">(</span><span class="sh">"</span><span class="s">main_kg</span><span class="sh">"</span><span class="p">,</span> <span class="n">query_text</span><span class="p">))</span>
+            <span class="k">return</span> <span class="n">cur</span><span class="p">.</span><span class="nf">fetchone</span><span class="p">()</span>
+</code></pre></div></div>
+
+<p>This comprehensive integration demonstrates how GraphRAG functionality can be accessed through multiple query languages and protocols, each optimized for different use cases while maintaining consistency in the underlying GraphRAG operations.</p>
+
+<function_calls>
+<invoke name="mark_todo_as_done">
+<parameter name="todo_ids">["88aae352-05bd-4cb4-8d71-b64dbf0f82b8"]
+</parameter></invoke></function_calls>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/orbit-rs/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Orbit-RS Documentation</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">TuringWorks</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

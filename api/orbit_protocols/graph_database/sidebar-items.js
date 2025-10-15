@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["ExecutionPlan","GraphActor","GraphConfig","GraphManager","GraphStats","PlanStep","ProfileMetrics","QueryProfile","SlowQuery"]};

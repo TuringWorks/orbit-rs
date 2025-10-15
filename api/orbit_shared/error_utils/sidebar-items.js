@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Error"],"fn":["app_error","app_error_with_context","wrap_std_error"],"trait":["ErrorContext"],"type":["Result"]};

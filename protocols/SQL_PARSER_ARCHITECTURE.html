@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>SQL Parser Architecture Design | Orbit-RS Documentation</title>
+<meta name="generator" content="Jekyll v4.4.1" />
+<meta property="og:title" content="SQL Parser Architecture Design" />
+<meta name="author" content="TuringWorks" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<meta property="og:description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<link rel="canonical" href="https://turingworks.github.io/orbit-rs/protocols/SQL_PARSER_ARCHITECTURE.html" />
+<meta property="og:url" content="https://turingworks.github.io/orbit-rs/protocols/SQL_PARSER_ARCHITECTURE.html" />
+<meta property="og:site_name" content="Orbit-RS Documentation" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="SQL Parser Architecture Design" />
+<meta name="twitter:site" content="@TuringWorksAI" />
+<meta name="twitter:creator" content="@TuringWorks" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","author":{"@type":"Person","name":"TuringWorks"},"description":"The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform","headline":"SQL Parser Architecture Design","url":"https://turingworks.github.io/orbit-rs/protocols/SQL_PARSER_ARCHITECTURE.html"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/orbit-rs/assets/main.css">
+  <link rel="stylesheet" href="/orbit-rs/assets/css/custom.css"><link type="application/atom+xml" rel="alternate" href="https://turingworks.github.io/orbit-rs/feed.xml" title="Orbit-RS Documentation" /></head><body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/orbit-rs/">Orbit-RS Documentation</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/orbit-rs/">Orbit-RS Documentation</a><a class="page-link" href="/orbit-rs/project_overview.html">Orbit-RS: Comprehensive Project Overview</a><a class="page-link" href="/orbit-rs/quick_start.html">Quick Start Guide - Multi-Protocol Database Server</a><a class="page-link" href="/orbit-rs/roadmap/">Development Roadmap</a><a class="page-link" href="/orbit-rs/features/">Orbit-RS Feature Index</a><a class="page-link" href="/orbit-rs/compute-acceleration/">Hardware Acceleration Guide</a><a class="page-link" href="/orbit-rs/contributing.html">Contributing Guide</a><a class="page-link" href="/orbit-rs/overview.html">Architecture Overview</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <h1 id="sql-parser-architecture-design">SQL Parser Architecture Design</h1>
+
+<h2 id="overview">Overview</h2>
+
+<p>This document outlines the comprehensive SQL parser architecture for Orbit-RS that will provide full ANSI SQL compliance while maintaining compatibility with existing vector operations and actor-based storage.</p>
+
+<h2 id="current-state-analysis">Current State Analysis</h2>
+
+<p>The current <code class="language-plaintext highlighter-rouge">query_engine.rs</code> implementation provides:</p>
+<ul>
+  <li>Basic SQL parsing for SELECT, INSERT, UPDATE, DELETE</li>
+  <li>Simple WHERE clause support with single conditions</li>
+  <li>Vector query detection and routing to VectorQueryEngine</li>
+  <li>Actor-based storage simulation</li>
+</ul>
+
+<h3 id="limitations">Limitations</h3>
+<ul>
+  <li>No support for JOINs, subqueries, or complex expressions</li>
+  <li>Limited WHERE clause parsing (single condition only)</li>
+  <li>No DDL (CREATE, ALTER, DROP) support</li>
+  <li>No DCL (GRANT, REVOKE) or TCL (BEGIN, COMMIT) support</li>
+  <li>No aggregate functions, window functions, or CTEs</li>
+  <li>Hardcoded to “actors” table only</li>
+  <li>Basic string-based parsing prone to errors</li>
+</ul>
+
+<h2 id="new-architecture-design">New Architecture Design</h2>
+
+<h3 id="1-modular-parser-architecture">1. Modular Parser Architecture</h3>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>src/postgres_wire/sql/
+├── mod.rs                    // Public API and parser factory
+├── lexer.rs                  // SQL tokenization
+├── ast.rs                    // Abstract Syntax Tree definitions
+├── parser/
+│   ├── mod.rs               // Parser orchestration
+│   ├── ddl.rs               // Data Definition Language
+│   ├── dml.rs               // Data Manipulation Language
+│   ├── dcl.rs               // Data Control Language
+│   ├── tcl.rs               // Transaction Control Language
+│   ├── expressions.rs       // Expression parsing
+│   ├── functions.rs         // Function calls and operators
+│   └── utilities.rs         // Common parsing utilities
+├── analyzer/
+│   ├── mod.rs               // Semantic analysis
+│   ├── type_checker.rs      // Type validation
+│   ├── schema_validator.rs  // Schema existence validation
+│   └── optimizer.rs         // Basic query optimization
+├── executor/
+│   ├── mod.rs               // Execution engine
+│   ├── ddl_executor.rs      // DDL execution
+│   ├── dml_executor.rs      // DML execution
+│   ├── dcl_executor.rs      // DCL execution
+│   ├── tcl_executor.rs      // TCL execution
+│   └── expression_evaluator.rs // Expression evaluation
+└── types/
+    ├── mod.rs               // SQL type system
+    ├── data_types.rs        // SQL data types
+    └── value.rs             // Runtime values
+</code></pre></div></div>
+
+<h3 id="2-abstract-syntax-tree-ast-design">2. Abstract Syntax Tree (AST) Design</h3>
+
+<p>The AST will represent all SQL constructs in a structured format:</p>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Core AST node types</span>
+<span class="k">pub</span> <span class="k">enum</span> <span class="n">Statement</span> <span class="p">{</span>
+    <span class="c1">// Data Definition Language</span>
+    <span class="nf">CreateTable</span><span class="p">(</span><span class="n">CreateTableStatement</span><span class="p">),</span>
+    <span class="nf">CreateIndex</span><span class="p">(</span><span class="n">CreateIndexStatement</span><span class="p">),</span>
+    <span class="nf">CreateView</span><span class="p">(</span><span class="n">CreateViewStatement</span><span class="p">),</span>
+    <span class="nf">CreateSchema</span><span class="p">(</span><span class="n">CreateSchemaStatement</span><span class="p">),</span>
+    <span class="nf">AlterTable</span><span class="p">(</span><span class="n">AlterTableStatement</span><span class="p">),</span>
+    <span class="nf">DropTable</span><span class="p">(</span><span class="n">DropTableStatement</span><span class="p">),</span>
+    <span class="nf">DropIndex</span><span class="p">(</span><span class="n">DropIndexStatement</span><span class="p">),</span>
+    
+    <span class="c1">// Data Manipulation Language</span>
+    <span class="nf">Select</span><span class="p">(</span><span class="n">SelectStatement</span><span class="p">),</span>
+    <span class="nf">Insert</span><span class="p">(</span><span class="n">InsertStatement</span><span class="p">),</span>
+    <span class="nf">Update</span><span class="p">(</span><span class="n">UpdateStatement</span><span class="p">),</span>
+    <span class="nf">Delete</span><span class="p">(</span><span class="n">DeleteStatement</span><span class="p">),</span>
+    
+    <span class="c1">// Data Control Language</span>
+    <span class="nf">Grant</span><span class="p">(</span><span class="n">GrantStatement</span><span class="p">),</span>
+    <span class="nf">Revoke</span><span class="p">(</span><span class="n">RevokeStatement</span><span class="p">),</span>
+    
+    <span class="c1">// Transaction Control Language</span>
+    <span class="nf">Begin</span><span class="p">(</span><span class="n">BeginStatement</span><span class="p">),</span>
+    <span class="nf">Commit</span><span class="p">(</span><span class="n">CommitStatement</span><span class="p">),</span>
+    <span class="nf">Rollback</span><span class="p">(</span><span class="n">RollbackStatement</span><span class="p">),</span>
+    <span class="nf">Savepoint</span><span class="p">(</span><span class="n">SavepointStatement</span><span class="p">),</span>
+    
+    <span class="c1">// Utility statements</span>
+    <span class="nf">Explain</span><span class="p">(</span><span class="n">ExplainStatement</span><span class="p">),</span>
+    <span class="nf">Show</span><span class="p">(</span><span class="n">ShowStatement</span><span class="p">),</span>
+    <span class="nf">Use</span><span class="p">(</span><span class="n">UseStatement</span><span class="p">),</span>
+    
+    <span class="c1">// Vector extensions (preserved)</span>
+    <span class="nf">CreateExtension</span><span class="p">(</span><span class="n">CreateExtensionStatement</span><span class="p">),</span>
+<span class="p">}</span>
+
+<span class="c1">// Enhanced SELECT statement support</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">SelectStatement</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="n">select_list</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">SelectItem</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">from_clause</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="n">FromClause</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">where_clause</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="n">Expression</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">group_by</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="n">Expression</span><span class="o">&gt;&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">having</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="n">Expression</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">order_by</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="n">OrderByItem</span><span class="o">&gt;&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">limit</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="n">LimitClause</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">offset</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="nb">u64</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">distinct</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">for_update</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="c1">// Complex FROM clause support</span>
+<span class="k">pub</span> <span class="k">enum</span> <span class="n">FromClause</span> <span class="p">{</span>
+    <span class="n">Table</span> <span class="p">{</span>
+        <span class="n">name</span><span class="p">:</span> <span class="n">TableName</span><span class="p">,</span>
+        <span class="n">alias</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="nb">String</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="p">},</span>
+    <span class="n">Join</span> <span class="p">{</span>
+        <span class="n">left</span><span class="p">:</span> <span class="nb">Box</span><span class="o">&lt;</span><span class="n">FromClause</span><span class="o">&gt;</span><span class="p">,</span>
+        <span class="n">join_type</span><span class="p">:</span> <span class="n">JoinType</span><span class="p">,</span>
+        <span class="n">right</span><span class="p">:</span> <span class="nb">Box</span><span class="o">&lt;</span><span class="n">FromClause</span><span class="o">&gt;</span><span class="p">,</span>
+        <span class="n">condition</span><span class="p">:</span> <span class="n">JoinCondition</span><span class="p">,</span>
+    <span class="p">},</span>
+    <span class="n">Subquery</span> <span class="p">{</span>
+        <span class="n">query</span><span class="p">:</span> <span class="nb">Box</span><span class="o">&lt;</span><span class="n">SelectStatement</span><span class="o">&gt;</span><span class="p">,</span>
+        <span class="n">alias</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span>
+    <span class="p">},</span>
+    <span class="n">Values</span> <span class="p">{</span>
+        <span class="n">values</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="n">Expression</span><span class="o">&gt;&gt;</span><span class="p">,</span>
+        <span class="n">alias</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="nb">String</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="p">},</span>
+<span class="p">}</span>
+
+<span class="c1">// Expression system for complex queries</span>
+<span class="k">pub</span> <span class="k">enum</span> <span class="n">Expression</span> <span class="p">{</span>
+    <span class="nf">Column</span><span class="p">(</span><span class="n">ColumnRef</span><span class="p">),</span>
+    <span class="nf">Literal</span><span class="p">(</span><span class="n">LiteralValue</span><span class="p">),</span>
+    <span class="nf">Function</span><span class="p">(</span><span class="n">FunctionCall</span><span class="p">),</span>
+    <span class="n">Binary</span> <span class="p">{</span>
+        <span class="n">left</span><span class="p">:</span> <span class="nb">Box</span><span class="o">&lt;</span><span class="n">Expression</span><span class="o">&gt;</span><span class="p">,</span>
+        <span class="n">operator</span><span class="p">:</span> <span class="n">BinaryOperator</span><span class="p">,</span>
+        <span class="n">right</span><span class="p">:</span> <span class="nb">Box</span><span class="o">&lt;</span><span class="n">Expression</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="p">},</span>
+    <span class="n">Unary</span> <span class="p">{</span>
+        <span class="n">operator</span><span class="p">:</span> <span class="n">UnaryOperator</span><span class="p">,</span>
+        <span class="n">operand</span><span class="p">:</span> <span class="nb">Box</span><span class="o">&lt;</span><span class="n">Expression</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="p">},</span>
+    <span class="nf">Case</span><span class="p">(</span><span class="n">CaseExpression</span><span class="p">),</span>
+    <span class="nf">Subquery</span><span class="p">(</span><span class="nb">Box</span><span class="o">&lt;</span><span class="n">SelectStatement</span><span class="o">&gt;</span><span class="p">),</span>
+    <span class="n">In</span> <span class="p">{</span>
+        <span class="n">expr</span><span class="p">:</span> <span class="nb">Box</span><span class="o">&lt;</span><span class="n">Expression</span><span class="o">&gt;</span><span class="p">,</span>
+        <span class="n">list</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">Expression</span><span class="o">&gt;</span><span class="p">,</span>
+        <span class="n">negated</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
+    <span class="p">},</span>
+    <span class="n">Between</span> <span class="p">{</span>
+        <span class="n">expr</span><span class="p">:</span> <span class="nb">Box</span><span class="o">&lt;</span><span class="n">Expression</span><span class="o">&gt;</span><span class="p">,</span>
+        <span class="n">low</span><span class="p">:</span> <span class="nb">Box</span><span class="o">&lt;</span><span class="n">Expression</span><span class="o">&gt;</span><span class="p">,</span>
+        <span class="n">high</span><span class="p">:</span> <span class="nb">Box</span><span class="o">&lt;</span><span class="n">Expression</span><span class="o">&gt;</span><span class="p">,</span>
+        <span class="n">negated</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
+    <span class="p">},</span>
+    <span class="nf">Exists</span><span class="p">(</span><span class="nb">Box</span><span class="o">&lt;</span><span class="n">SelectStatement</span><span class="o">&gt;</span><span class="p">),</span>
+    <span class="c1">// Vector extensions</span>
+    <span class="n">VectorSimilarity</span> <span class="p">{</span>
+        <span class="n">left</span><span class="p">:</span> <span class="nb">Box</span><span class="o">&lt;</span><span class="n">Expression</span><span class="o">&gt;</span><span class="p">,</span>
+        <span class="n">operator</span><span class="p">:</span> <span class="n">VectorOperator</span><span class="p">,</span>
+        <span class="n">right</span><span class="p">:</span> <span class="nb">Box</span><span class="o">&lt;</span><span class="n">Expression</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="p">},</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="3-lexical-analysis-tokenizer">3. Lexical Analysis (Tokenizer)</h3>
+
+<p>A robust tokenizer that handles:</p>
+<ul>
+  <li>SQL keywords (case-insensitive)</li>
+  <li>Identifiers (quoted and unquoted)</li>
+  <li>String literals (with proper escaping)</li>
+  <li>Numeric literals (integers, decimals, scientific notation)</li>
+  <li>Operators and punctuation</li>
+  <li>Comments (single-line and multi-line)</li>
+  <li>Vector-specific operators (&lt;-&gt;, &lt;#&gt;, &lt;=&gt;)</li>
+</ul>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">pub</span> <span class="k">enum</span> <span class="n">Token</span> <span class="p">{</span>
+    <span class="c1">// Keywords</span>
+    <span class="n">Select</span><span class="p">,</span> <span class="nb">From</span><span class="p">,</span> <span class="n">Where</span><span class="p">,</span> <span class="n">Insert</span><span class="p">,</span> <span class="n">Update</span><span class="p">,</span> <span class="n">Delete</span><span class="p">,</span> <span class="n">Create</span><span class="p">,</span> <span class="n">Alter</span><span class="p">,</span> <span class="nb">Drop</span><span class="p">,</span>
+    <span class="n">Join</span><span class="p">,</span> <span class="n">Inner</span><span class="p">,</span> <span class="n">Left</span><span class="p">,</span> <span class="n">Right</span><span class="p">,</span> <span class="n">Full</span><span class="p">,</span> <span class="n">Outer</span><span class="p">,</span> <span class="n">On</span><span class="p">,</span> <span class="n">Using</span><span class="p">,</span>
+    <span class="n">Group</span><span class="p">,</span> <span class="n">By</span><span class="p">,</span> <span class="n">Order</span><span class="p">,</span> <span class="n">Having</span><span class="p">,</span> <span class="n">Distinct</span><span class="p">,</span> <span class="n">Limit</span><span class="p">,</span> <span class="n">Offset</span><span class="p">,</span>
+    <span class="n">Begin</span><span class="p">,</span> <span class="n">Commit</span><span class="p">,</span> <span class="n">Rollback</span><span class="p">,</span> <span class="n">Savepoint</span><span class="p">,</span>
+    <span class="n">And</span><span class="p">,</span> <span class="n">Or</span><span class="p">,</span> <span class="n">Not</span><span class="p">,</span> <span class="n">In</span><span class="p">,</span> <span class="n">Between</span><span class="p">,</span> <span class="n">Like</span><span class="p">,</span> <span class="n">Is</span><span class="p">,</span> <span class="n">Null</span><span class="p">,</span>
+    
+    <span class="c1">// Identifiers and literals</span>
+    <span class="nf">Identifier</span><span class="p">(</span><span class="nb">String</span><span class="p">),</span>
+    <span class="nf">QuotedIdentifier</span><span class="p">(</span><span class="nb">String</span><span class="p">),</span>
+    <span class="nf">StringLiteral</span><span class="p">(</span><span class="nb">String</span><span class="p">),</span>
+    <span class="nf">NumericLiteral</span><span class="p">(</span><span class="nb">String</span><span class="p">),</span>
+    
+    <span class="c1">// Operators</span>
+    <span class="n">Equal</span><span class="p">,</span> <span class="n">NotEqual</span><span class="p">,</span> <span class="n">LessThan</span><span class="p">,</span> <span class="n">LessThanOrEqual</span><span class="p">,</span>
+    <span class="n">GreaterThan</span><span class="p">,</span> <span class="n">GreaterThanOrEqual</span><span class="p">,</span>
+    <span class="n">Plus</span><span class="p">,</span> <span class="n">Minus</span><span class="p">,</span> <span class="n">Multiply</span><span class="p">,</span> <span class="n">Divide</span><span class="p">,</span> <span class="n">Modulo</span><span class="p">,</span>
+    
+    <span class="c1">// Vector operators</span>
+    <span class="n">VectorDistance</span><span class="p">,</span>     <span class="c1">// &lt;-&gt;</span>
+    <span class="n">VectorInnerProduct</span><span class="p">,</span> <span class="c1">// &lt;#&gt;</span>
+    <span class="n">VectorCosineDistance</span><span class="p">,</span> <span class="c1">// &lt;=&gt;</span>
+    
+    <span class="c1">// Punctuation</span>
+    <span class="n">LeftParen</span><span class="p">,</span> <span class="n">RightParen</span><span class="p">,</span> <span class="n">Comma</span><span class="p">,</span> <span class="n">Semicolon</span><span class="p">,</span> <span class="n">Dot</span><span class="p">,</span>
+    
+    <span class="c1">// Special</span>
+    <span class="n">Eof</span><span class="p">,</span> <span class="n">Whitespace</span><span class="p">,</span> <span class="n">Comment</span><span class="p">,</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="4-parser-implementation-strategy">4. Parser Implementation Strategy</h3>
+
+<h4 id="recursive-descent-parser">Recursive Descent Parser</h4>
+<p>Use a recursive descent parser with:</p>
+<ul>
+  <li>Precedence climbing for expressions</li>
+  <li>Look-ahead for disambiguation</li>
+  <li>Error recovery and detailed error messages</li>
+  <li>Support for PostgreSQL-specific syntax extensions</li>
+</ul>
+
+<h4 id="key-parser-components">Key Parser Components</h4>
+
+<ol>
+  <li><strong>Statement Parser</strong>: Top-level SQL statement parsing</li>
+  <li><strong>Expression Parser</strong>: Complex expression parsing with operator precedence</li>
+  <li><strong>Type Parser</strong>: SQL data type parsing</li>
+  <li><strong>Identifier Parser</strong>: Table names, column names, aliases</li>
+  <li><strong>Function Parser</strong>: SQL functions and aggregates</li>
+  <li><strong>Subquery Parser</strong>: Nested query support</li>
+</ol>
+
+<h3 id="5-semantic-analysis">5. Semantic Analysis</h3>
+
+<h4 id="schema-integration">Schema Integration</h4>
+<ul>
+  <li>Interface with Orbit’s actor-based schema</li>
+  <li>Virtual table definitions for actors, vector stores</li>
+  <li>Type checking and validation</li>
+  <li>Dependency resolution</li>
+</ul>
+
+<h4 id="query-planning">Query Planning</h4>
+<ul>
+  <li>Basic query optimization</li>
+  <li>Join order optimization</li>
+  <li>Index usage recommendations</li>
+  <li>Vector query optimization</li>
+</ul>
+
+<h3 id="6-execution-engine-integration">6. Execution Engine Integration</h3>
+
+<h4 id="actor-storage-mapping">Actor Storage Mapping</h4>
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Map SQL tables to actor types</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">SchemaMapping</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="n">tables</span><span class="p">:</span> <span class="n">HashMap</span><span class="o">&lt;</span><span class="nb">String</span><span class="p">,</span> <span class="n">TableDefinition</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">actor_types</span><span class="p">:</span> <span class="n">HashMap</span><span class="o">&lt;</span><span class="nb">String</span><span class="p">,</span> <span class="n">ActorTypeMapping</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">vector_collections</span><span class="p">:</span> <span class="n">HashMap</span><span class="o">&lt;</span><span class="nb">String</span><span class="p">,</span> <span class="n">VectorCollection</span><span class="o">&gt;</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">TableDefinition</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="n">name</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">columns</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">ColumnDefinition</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">primary_key</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="nb">String</span><span class="o">&gt;&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">indexes</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">IndexDefinition</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">table_type</span><span class="p">:</span> <span class="n">TableType</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="k">pub</span> <span class="k">enum</span> <span class="n">TableType</span> <span class="p">{</span>
+    <span class="n">ActorTable</span> <span class="p">{</span> <span class="n">actor_type</span><span class="p">:</span> <span class="nb">String</span> <span class="p">},</span>
+    <span class="n">VectorTable</span> <span class="p">{</span> <span class="n">collection</span><span class="p">:</span> <span class="nb">String</span> <span class="p">},</span>
+    <span class="n">SystemTable</span><span class="p">,</span>
+    <span class="n">VirtualTable</span><span class="p">,</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h4 id="query-execution-pipeline">Query Execution Pipeline</h4>
+<ol>
+  <li><strong>Parse</strong> → AST</li>
+  <li><strong>Analyze</strong> → Validated AST + Query Plan</li>
+  <li><strong>Execute</strong> → Interact with OrbitClient/VectorEngine</li>
+  <li><strong>Format</strong> → PostgreSQL wire protocol response</li>
+</ol>
+
+<h3 id="7-ansi-sql-compliance-features">7. ANSI SQL Compliance Features</h3>
+
+<h4 id="ddl-support">DDL Support</h4>
+<ul>
+  <li>CREATE/ALTER/DROP TABLE with constraints</li>
+  <li>CREATE/DROP INDEX with various types</li>
+  <li>CREATE/DROP VIEW and materialized views</li>
+  <li>CREATE/DROP SCHEMA</li>
+  <li>CREATE/DROP USER and roles</li>
+</ul>
+
+<h4 id="advanced-dml-support">Advanced DML Support</h4>
+<ul>
+  <li>Complex SELECT with multiple JOINs</li>
+  <li>Common Table Expressions (WITH clause)</li>
+  <li>Window functions (ROW_NUMBER, RANK, etc.)</li>
+  <li>Aggregate functions (COUNT, SUM, AVG, etc.)</li>
+  <li>Set operations (UNION, INTERSECT, EXCEPT)</li>
+  <li>Subqueries in all contexts</li>
+</ul>
+
+<h4 id="dcl-support">DCL Support</h4>
+<ul>
+  <li>GRANT/REVOKE permissions on tables and schemas</li>
+  <li>Role-based access control</li>
+  <li>Integration with Orbit’s security model</li>
+</ul>
+
+<h4 id="tcl-support">TCL Support</h4>
+<ul>
+  <li>BEGIN/COMMIT/ROLLBACK transactions</li>
+  <li>SAVEPOINT and nested transactions</li>
+  <li>Transaction isolation levels</li>
+  <li>Deadlock detection and resolution</li>
+</ul>
+
+<h3 id="8-vector-query-integration">8. Vector Query Integration</h3>
+
+<h4 id="seamless-integration">Seamless Integration</h4>
+<p>The new parser will seamlessly integrate vector operations:</p>
+<ul>
+  <li>Detect vector data types in DDL</li>
+  <li>Parse vector similarity operators in expressions</li>
+  <li>Route vector queries to VectorQueryEngine</li>
+  <li>Support hybrid SQL + vector queries</li>
+</ul>
+
+<h4 id="enhanced-vector-features">Enhanced Vector Features</h4>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Vector similarity in complex queries</span>
+<span class="k">SELECT</span> <span class="n">a</span><span class="p">.</span><span class="o">*</span><span class="p">,</span> <span class="n">similarity_score</span>
+<span class="k">FROM</span> <span class="n">articles</span> <span class="n">a</span><span class="p">,</span>
+     <span class="k">LATERAL</span> <span class="p">(</span><span class="k">SELECT</span> <span class="n">embedding</span> <span class="o">&lt;-&gt;</span> <span class="err">$</span><span class="mi">1</span> <span class="k">as</span> <span class="n">similarity_score</span> 
+              <span class="k">FROM</span> <span class="n">vector_store</span> <span class="n">v</span> 
+              <span class="k">WHERE</span> <span class="n">v</span><span class="p">.</span><span class="n">article_id</span> <span class="o">=</span> <span class="n">a</span><span class="p">.</span><span class="n">id</span><span class="p">)</span> <span class="n">s</span>
+<span class="k">ORDER</span> <span class="k">BY</span> <span class="n">s</span><span class="p">.</span><span class="n">similarity_score</span>
+<span class="k">LIMIT</span> <span class="mi">10</span><span class="p">;</span>
+
+<span class="c1">-- Vector operations in joins</span>
+<span class="k">SELECT</span> <span class="n">a</span><span class="p">.</span><span class="n">title</span><span class="p">,</span> <span class="n">b</span><span class="p">.</span><span class="n">title</span><span class="p">,</span> <span class="n">a</span><span class="p">.</span><span class="n">embedding</span> <span class="o">&lt;-&gt;</span> <span class="n">b</span><span class="p">.</span><span class="n">embedding</span> <span class="k">as</span> <span class="n">distance</span>
+<span class="k">FROM</span> <span class="n">articles</span> <span class="n">a</span>
+<span class="k">JOIN</span> <span class="n">articles</span> <span class="n">b</span> <span class="k">ON</span> <span class="n">a</span><span class="p">.</span><span class="n">category</span> <span class="o">=</span> <span class="n">b</span><span class="p">.</span><span class="n">category</span>
+<span class="k">WHERE</span> <span class="n">a</span><span class="p">.</span><span class="n">embedding</span> <span class="o">&lt;-&gt;</span> <span class="n">b</span><span class="p">.</span><span class="n">embedding</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">.</span><span class="mi">8</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h3 id="9-error-handling-and-recovery">9. Error Handling and Recovery</h3>
+
+<h4 id="comprehensive-error-messages">Comprehensive Error Messages</h4>
+<ul>
+  <li>Syntax error location with line/column numbers</li>
+  <li>Suggestion for common mistakes</li>
+  <li>Context-aware error messages</li>
+  <li>Recovery strategies for partial parsing</li>
+</ul>
+
+<h4 id="error-types">Error Types</h4>
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">pub</span> <span class="k">enum</span> <span class="n">SqlError</span> <span class="p">{</span>
+    <span class="n">SyntaxError</span> <span class="p">{</span> <span class="n">message</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span> <span class="n">location</span><span class="p">:</span> <span class="n">Location</span> <span class="p">},</span>
+    <span class="n">SemanticError</span> <span class="p">{</span> <span class="n">message</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="nb">String</span> <span class="p">},</span>
+    <span class="n">TypeMismatch</span> <span class="p">{</span> <span class="n">expected</span><span class="p">:</span> <span class="n">SqlType</span><span class="p">,</span> <span class="n">found</span><span class="p">:</span> <span class="n">SqlType</span> <span class="p">},</span>
+    <span class="n">UnknownTable</span> <span class="p">{</span> <span class="n">table</span><span class="p">:</span> <span class="nb">String</span> <span class="p">},</span>
+    <span class="n">UnknownColumn</span> <span class="p">{</span> <span class="n">column</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span> <span class="n">table</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="nb">String</span><span class="o">&gt;</span> <span class="p">},</span>
+    <span class="n">PermissionDenied</span> <span class="p">{</span> <span class="n">operation</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span> <span class="n">resource</span><span class="p">:</span> <span class="nb">String</span> <span class="p">},</span>
+    <span class="n">TransactionError</span> <span class="p">{</span> <span class="n">message</span><span class="p">:</span> <span class="nb">String</span> <span class="p">},</span>
+    <span class="n">VectorError</span> <span class="p">{</span> <span class="n">message</span><span class="p">:</span> <span class="nb">String</span> <span class="p">},</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="10-performance-considerations">10. Performance Considerations</h3>
+
+<h4 id="optimization-strategies">Optimization Strategies</h4>
+<ul>
+  <li>Prepared statement caching</li>
+  <li>Query plan caching</li>
+  <li>Lazy evaluation of complex expressions</li>
+  <li>Parallel execution for independent operations</li>
+  <li>Efficient memory management for large result sets</li>
+</ul>
+
+<h4 id="benchmarking-framework">Benchmarking Framework</h4>
+<ul>
+  <li>Performance tests for all SQL constructs</li>
+  <li>Comparison with PostgreSQL reference implementation</li>
+  <li>Memory usage profiling</li>
+  <li>Scalability testing with large datasets</li>
+</ul>
+
+<h3 id="11-testing-strategy">11. Testing Strategy</h3>
+
+<h4 id="test-categories">Test Categories</h4>
+<ol>
+  <li><strong>Unit Tests</strong>: Parser components, AST nodes, expression evaluation</li>
+  <li><strong>Integration Tests</strong>: Full SQL statement parsing and execution</li>
+  <li><strong>Compatibility Tests</strong>: PostgreSQL client compatibility</li>
+  <li><strong>Performance Tests</strong>: Query execution benchmarks</li>
+  <li><strong>Regression Tests</strong>: Ensure vector functionality remains intact</li>
+</ol>
+
+<h4 id="test-data">Test Data</h4>
+<ul>
+  <li>Comprehensive SQL statement test suite</li>
+  <li>Edge cases and error conditions</li>
+  <li>Complex real-world queries</li>
+  <li>Vector + SQL hybrid queries</li>
+  <li>Large dataset performance tests</li>
+</ul>
+
+<h2 id="implementation-phases">Implementation Phases</h2>
+
+<h3 id="phase-1-foundation-weeks-1-2">Phase 1: Foundation (Weeks 1-2)</h3>
+<ul>
+  <li>Lexer implementation</li>
+  <li>Basic AST definitions</li>
+  <li>Core parser infrastructure</li>
+  <li>Simple statement parsing</li>
+</ul>
+
+<h3 id="phase-2-dml-enhancement-weeks-3-4">Phase 2: DML Enhancement (Weeks 3-4)</h3>
+<ul>
+  <li>Enhanced SELECT with JOINs</li>
+  <li>Complex WHERE clauses</li>
+  <li>Subquery support</li>
+  <li>Expression evaluation engine</li>
+</ul>
+
+<h3 id="phase-3-ddl-implementation-weeks-5-6">Phase 3: DDL Implementation (Weeks 5-6)</h3>
+<ul>
+  <li>CREATE/ALTER/DROP TABLE</li>
+  <li>Index management</li>
+  <li>Schema operations</li>
+  <li>Constraint handling</li>
+</ul>
+
+<h3 id="phase-4-advanced-features-weeks-7-8">Phase 4: Advanced Features (Weeks 7-8)</h3>
+<ul>
+  <li>Aggregate functions and GROUP BY</li>
+  <li>Window functions</li>
+  <li>Common Table Expressions</li>
+  <li>Set operations</li>
+</ul>
+
+<h3 id="phase-5-control-languages-weeks-9-10">Phase 5: Control Languages (Weeks 9-10)</h3>
+<ul>
+  <li>DCL implementation (GRANT/REVOKE)</li>
+  <li>TCL implementation (transactions)</li>
+  <li>Security integration</li>
+  <li>Permission checking</li>
+</ul>
+
+<h3 id="phase-6-integration--testing-weeks-11-12">Phase 6: Integration &amp; Testing (Weeks 11-12)</h3>
+<ul>
+  <li>Vector query integration</li>
+  <li>Comprehensive testing</li>
+  <li>Performance optimization</li>
+  <li>Documentation</li>
+</ul>
+
+<h2 id="migration-strategy">Migration Strategy</h2>
+
+<h3 id="backward-compatibility">Backward Compatibility</h3>
+<ul>
+  <li>Existing vector operations continue to work</li>
+  <li>Current basic SQL queries remain functional</li>
+  <li>Gradual migration of functionality to new parser</li>
+  <li>Feature flags for new capabilities</li>
+</ul>
+
+<h3 id="integration-points">Integration Points</h3>
+<ul>
+  <li>Maintain existing QueryEngine interface</li>
+  <li>Extend with new capabilities</li>
+  <li>Preserve VectorQueryEngine integration</li>
+  <li>Keep PostgreSQL wire protocol unchanged</li>
+</ul>
+
+<h2 id="success-metrics">Success Metrics</h2>
+
+<h3 id="compliance">Compliance</h3>
+<ul>
+  <li>Support for 95% of common ANSI SQL constructs</li>
+  <li>Pass PostgreSQL compatibility test suite</li>
+  <li>Support complex real-world queries</li>
+  <li>Maintain vector operation performance</li>
+</ul>
+
+<h3 id="performance">Performance</h3>
+<ul>
+  <li>Parse 1000+ SQL statements per second</li>
+  <li>Execute simple queries within 1ms</li>
+  <li>Handle result sets up to 100MB</li>
+  <li>Support 1000+ concurrent connections</li>
+</ul>
+
+<h3 id="quality">Quality</h3>
+<ul>
+  <li>95%+ test coverage</li>
+  <li>Zero memory leaks</li>
+  <li>Detailed error messages</li>
+  <li>Comprehensive documentation</li>
+</ul>
+
+<p>This architecture provides a solid foundation for building a comprehensive SQL parser that maintains the excellent vector capabilities while adding full ANSI SQL compliance to Orbit-RS.</p>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/orbit-rs/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Orbit-RS Documentation</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">TuringWorks</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

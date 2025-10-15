@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Code-Complete Steps Playbook — For LLM Execution | Orbit-RS Documentation</title>
+<meta name="generator" content="Jekyll v4.4.1" />
+<meta property="og:title" content="Code-Complete Steps Playbook — For LLM Execution" />
+<meta name="author" content="TuringWorks" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<meta property="og:description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<link rel="canonical" href="https://turingworks.github.io/orbit-rs/guidelines/code_complete_llm_playbook.html" />
+<meta property="og:url" content="https://turingworks.github.io/orbit-rs/guidelines/code_complete_llm_playbook.html" />
+<meta property="og:site_name" content="Orbit-RS Documentation" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Code-Complete Steps Playbook — For LLM Execution" />
+<meta name="twitter:site" content="@TuringWorksAI" />
+<meta name="twitter:creator" content="@TuringWorks" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","author":{"@type":"Person","name":"TuringWorks"},"description":"The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform","headline":"Code-Complete Steps Playbook — For LLM Execution","url":"https://turingworks.github.io/orbit-rs/guidelines/code_complete_llm_playbook.html"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/orbit-rs/assets/main.css">
+  <link rel="stylesheet" href="/orbit-rs/assets/css/custom.css"><link type="application/atom+xml" rel="alternate" href="https://turingworks.github.io/orbit-rs/feed.xml" title="Orbit-RS Documentation" /></head><body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/orbit-rs/">Orbit-RS Documentation</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/orbit-rs/">Orbit-RS Documentation</a><a class="page-link" href="/orbit-rs/project_overview.html">Orbit-RS: Comprehensive Project Overview</a><a class="page-link" href="/orbit-rs/quick_start.html">Quick Start Guide - Multi-Protocol Database Server</a><a class="page-link" href="/orbit-rs/roadmap/">Development Roadmap</a><a class="page-link" href="/orbit-rs/features/">Orbit-RS Feature Index</a><a class="page-link" href="/orbit-rs/compute-acceleration/">Hardware Acceleration Guide</a><a class="page-link" href="/orbit-rs/contributing.html">Contributing Guide</a><a class="page-link" href="/orbit-rs/overview.html">Architecture Overview</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <h1 id="code-complete-steps-playbook--for-llm-execution">Code-Complete Steps Playbook — For LLM Execution</h1>
+
+<blockquote>
+  <p>Purpose: a deterministic, end-to-end checklist that a Large Language Model (LLM) or bot can follow to deliver <strong>production-grade code</strong> from spec to release. All steps are <strong>idempotent</strong> and include machine-checkable gates.</p>
+</blockquote>
+
+<hr />
+
+<h2 id="0-inputs--non-goals-must-read">0) Inputs &amp; Non-Goals (MUST READ)</h2>
+<ul>
+  <li><strong>Inputs</strong>: problem brief/PRD, target stack (e.g., Rust, Python, Node, Flutter), acceptance criteria, performance/SLOs, security/policy constraints, Git hosting URL, CI provider.</li>
+  <li><strong>Non-Goals</strong>: long-running background tasks, decisions outside spec. If a required input is missing, <strong>fail early</strong> with a clear message and a stub TODO.</li>
+</ul>
+
+<hr />
+
+<h2 id="1-repo-bootstrap-idempotent">1) Repo Bootstrap (Idempotent)</h2>
+<p><strong>Given</strong>: organization Git URL, chosen license, GitFlow policy.</p>
+
+<p><strong>Steps</strong>:</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">set</span> <span class="nt">-euo</span> pipefail
+<span class="nv">REPO_NAME</span><span class="o">=</span>my-project
+<span class="nv">GIT_URL</span><span class="o">=</span>git@github.com:org/<span class="k">${</span><span class="nv">REPO_NAME</span><span class="k">}</span>.git
+
+<span class="c"># Create if absent</span>
+<span class="o">[</span> <span class="nt">-d</span> <span class="k">${</span><span class="nv">REPO_NAME</span><span class="k">}</span> <span class="o">]</span> <span class="o">||</span> git init <span class="k">${</span><span class="nv">REPO_NAME</span><span class="k">}</span>
+<span class="nb">cd</span> <span class="k">${</span><span class="nv">REPO_NAME</span><span class="k">}</span>
+
+<span class="c"># Standard scaffolding</span>
+<span class="nb">mkdir</span> <span class="nt">-p</span> .github/workflows .config scripts docs
+<span class="o">[</span> <span class="nt">-f</span> README.md <span class="o">]</span> <span class="o">||</span> <span class="nb">echo</span> <span class="s2">"# </span><span class="k">${</span><span class="nv">REPO_NAME</span><span class="k">}</span><span class="s2">"</span> <span class="o">&gt;</span> README.md
+<span class="o">[</span> <span class="nt">-f</span> LICENSE <span class="o">]</span> <span class="o">||</span> <span class="nb">echo</span> <span class="s2">"MIT"</span> <span class="o">&gt;</span> LICENSE
+
+<span class="c"># GitFlow baselines</span>
+<span class="o">[</span> <span class="nt">-d</span> .git <span class="o">]</span> <span class="o">||</span> git init
+<span class="o">(</span>git rev-parse <span class="nt">--verify</span> develop <span class="o">&gt;</span>/dev/null 2&gt;&amp;1<span class="o">)</span> <span class="o">||</span> git checkout <span class="nt">-b</span> develop
+<span class="o">[</span> <span class="nt">-f</span> .gitattributes <span class="o">]</span> <span class="o">||</span> <span class="nb">echo</span> <span class="s2">"* text=auto eol=lf"</span> <span class="o">&gt;</span> .gitattributes
+
+<span class="c"># Commit baseline</span>
+git add <span class="nb">.</span>
+git commit <span class="nt">-m</span> <span class="s2">"chore: repo bootstrap"</span>
+</code></pre></div></div>
+
+<p><strong>Files to create/update</strong>:</p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">README.md</code>, <code class="language-plaintext highlighter-rouge">CONTRIBUTING.md</code>, <code class="language-plaintext highlighter-rouge">CODE_OF_CONDUCT.md</code></li>
+  <li><code class="language-plaintext highlighter-rouge">.editorconfig</code>, <code class="language-plaintext highlighter-rouge">.gitattributes</code>, <code class="language-plaintext highlighter-rouge">.gitignore</code></li>
+  <li><code class="language-plaintext highlighter-rouge">.github/PULL_REQUEST_TEMPLATE.md</code>, <code class="language-plaintext highlighter-rouge">.github/ISSUE_TEMPLATE/bug.md</code>, <code class="language-plaintext highlighter-rouge">.github/ISSUE_TEMPLATE/feature.md</code></li>
+</ul>
+
+<hr />
+
+<h2 id="2-environment-contract-must">2) Environment Contract (MUST)</h2>
+<p>Provide a deterministic dev/run setup. Prefer <strong>containerized</strong> tooling (Podman or Docker) and <code class="language-plaintext highlighter-rouge">taskfile</code>/<code class="language-plaintext highlighter-rouge">make</code> wrappers.</p>
+
+<p><strong>Example <code class="language-plaintext highlighter-rouge">Taskfile.yml</code></strong>:</p>
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">version</span><span class="pi">:</span> <span class="s1">'</span><span class="s">3'</span>
+
+<span class="na">vars</span><span class="pi">:</span>
+  <span class="na">RUST_MSrv</span><span class="pi">:</span> <span class="s1">'</span><span class="s">1.79.0'</span>
+
+<span class="na">tasks</span><span class="pi">:</span>
+  <span class="na">setup</span><span class="pi">:</span>
+    <span class="na">desc</span><span class="pi">:</span> <span class="s">Install toolchain</span>
+    <span class="na">cmds</span><span class="pi">:</span>
+      <span class="pi">-</span> <span class="s">rustup toolchain install</span> 
+      <span class="pi">-</span> <span class="s">rustup component add clippy rustfmt --toolchain</span> 
+  <span class="na">fmt</span><span class="pi">:</span>
+    <span class="na">cmds</span><span class="pi">:</span> <span class="pi">[</span><span class="s2">"</span><span class="s">cargo</span><span class="nv"> </span><span class="s">fmt</span><span class="nv"> </span><span class="s">--all"</span><span class="pi">]</span>
+  <span class="na">lint</span><span class="pi">:</span>
+    <span class="na">cmds</span><span class="pi">:</span> <span class="pi">[</span><span class="s2">"</span><span class="s">cargo</span><span class="nv"> </span><span class="s">clippy</span><span class="nv"> </span><span class="s">--workspace</span><span class="nv"> </span><span class="s">--all-targets</span><span class="nv"> </span><span class="s">--all-features</span><span class="nv"> </span><span class="s">--</span><span class="nv"> </span><span class="s">-D</span><span class="nv"> </span><span class="s">warnings"</span><span class="pi">]</span>
+  <span class="na">test</span><span class="pi">:</span>
+    <span class="na">cmds</span><span class="pi">:</span> <span class="pi">[</span><span class="s2">"</span><span class="s">cargo</span><span class="nv"> </span><span class="s">test</span><span class="nv"> </span><span class="s">--workspace</span><span class="nv"> </span><span class="s">--all-features"</span><span class="pi">]</span>
+  <span class="na">doc</span><span class="pi">:</span>
+    <span class="na">cmds</span><span class="pi">:</span> <span class="pi">[</span><span class="s2">"</span><span class="s">cargo</span><span class="nv"> </span><span class="s">doc</span><span class="nv"> </span><span class="s">--no-deps"</span><span class="pi">]</span>
+  <span class="na">audit</span><span class="pi">:</span>
+    <span class="na">cmds</span><span class="pi">:</span> <span class="pi">[</span><span class="s2">"</span><span class="s">cargo</span><span class="nv"> </span><span class="s">audit</span><span class="nv"> </span><span class="s">||</span><span class="nv"> </span><span class="s">true"</span><span class="pi">,</span> <span class="s2">"</span><span class="s">cargo</span><span class="nv"> </span><span class="s">deny</span><span class="nv"> </span><span class="s">check</span><span class="nv"> </span><span class="s">||</span><span class="nv"> </span><span class="s">true"</span><span class="pi">]</span>
+</code></pre></div></div>
+
+<p><strong>Container (Podman) dev shell</strong>:</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>podman build <span class="nt">-t</span> <span class="k">${</span><span class="nv">REPO_NAME</span><span class="k">}</span><span class="nt">-dev</span> <span class="nt">-f</span> - <span class="o">&lt;&lt;</span><span class="sh">'</span><span class="no">EOF</span><span class="sh">'
+FROM rust:1.79
+RUN apt-get update &amp;&amp; apt-get install -y make git pkg-config libssl-dev &amp;&amp; rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+</span><span class="no">EOF
+</span>podman run <span class="nt">--rm</span> <span class="nt">-it</span> <span class="nt">-v</span> <span class="s2">"</span><span class="si">$(</span><span class="nb">pwd</span><span class="si">)</span><span class="s2">"</span>:/app <span class="nt">-w</span> /app <span class="k">${</span><span class="nv">REPO_NAME</span><span class="k">}</span><span class="nt">-dev</span> bash
+</code></pre></div></div>
+
+<hr />
+
+<h2 id="3-project-scaffolding-language-agnostic-with-examples">3) Project Scaffolding (Language-Agnostic with Examples)</h2>
+<p>Pick one or more stacks; generate baseline code + tests + CI in one commit.</p>
+
+<h3 id="rust-workspace">Rust (workspace)</h3>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Workspace</span>
+<span class="nb">cat</span> <span class="o">&gt;</span> Cargo.toml <span class="o">&lt;&lt;</span><span class="sh">'</span><span class="no">TOML</span><span class="sh">'
+[workspace]
+resolver = "2"
+members = ["crates/app", "crates/core", "crates/infra"]
+</span><span class="no">TOML
+
+</span><span class="nb">mkdir</span> <span class="nt">-p</span> crates/app/src crates/core/src crates/infra/src
+
+<span class="nb">cat</span> <span class="o">&gt;</span> crates/core/src/lib.rs <span class="o">&lt;&lt;</span><span class="sh">'</span><span class="no">RS</span><span class="sh">'
+//! Core domain logic
+pub fn add(a:i32,b:i32)-&gt;i32{a+b}
+
+#[cfg(test)]
+mod tests{use super::*;#[test]fn adds(){assert_eq!(add(2,3),5);}}
+</span><span class="no">RS
+
+</span><span class="nb">cat</span> <span class="o">&gt;</span> crates/app/src/main.rs <span class="o">&lt;&lt;</span><span class="sh">'</span><span class="no">RS</span><span class="sh">'
+fn main(){println!("ok");}
+</span><span class="no">RS
+
+</span>git add <span class="nb">.</span> <span class="o">&amp;&amp;</span> git commit <span class="nt">-m</span> <span class="s2">"feat(rust): scaffold workspace with app/core/infra"</span>
+</code></pre></div></div>
+
+<h3 id="python-package">Python (package)</h3>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>python <span class="nt">-m</span> venv .venv <span class="o">&amp;&amp;</span> <span class="nb">.</span> .venv/bin/activate
+pip <span class="nb">install</span> <span class="nt">--upgrade</span> pip wheel build pytest mypy ruff
+<span class="nb">mkdir</span> <span class="nt">-p</span> src/pkg tests
+<span class="nb">cat</span> <span class="o">&gt;</span> pyproject.toml <span class="o">&lt;&lt;</span><span class="sh">'</span><span class="no">TOML</span><span class="sh">'
+[project]
+name = "pkg"
+version = "0.1.0"
+requires-python = "&gt;=3.11"
+
+[tool.ruff]
+line-length = 100
+
+[tool.pytest.ini_options]
+addopts = "-q"
+</span><span class="no">TOML
+</span><span class="nb">cat</span> <span class="o">&gt;</span> src/pkg/__init__.py <span class="o">&lt;&lt;</span><span class="sh">'</span><span class="no">PY</span><span class="sh">'
+def add(a:int,b:int)-&gt;int:
+    return a+b
+</span><span class="no">PY
+</span><span class="nb">cat</span> <span class="o">&gt;</span> tests/test_add.py <span class="o">&lt;&lt;</span><span class="sh">'</span><span class="no">PY</span><span class="sh">'
+from pkg import add
+def test_add():
+    assert add(2,3)==5
+</span><span class="no">PY
+
+</span>pip <span class="nb">install</span> <span class="nt">-e</span> <span class="nb">.</span>
+pytest
+
+git add <span class="nb">.</span> <span class="o">&amp;&amp;</span> git commit <span class="nt">-m</span> <span class="s2">"feat(py): scaffold package with tests and lint"</span>
+</code></pre></div></div>
+
+<h3 id="nodetypescript-service">Node/TypeScript (service)</h3>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>npm init <span class="nt">-y</span>
+npm i <span class="nt">-D</span> typescript ts-node vitest @types/node eslint
+npx tsc <span class="nt">--init</span> <span class="nt">--rootDir</span> src <span class="nt">--outDir</span> dist <span class="nt">--esModuleInterop</span> <span class="nb">true
+mkdir</span> <span class="nt">-p</span> src
+<span class="nb">cat</span> <span class="o">&gt;</span> src/add.ts <span class="o">&lt;&lt;</span><span class="sh">'</span><span class="no">TS</span><span class="sh">'
+export const add=(a:number,b:number)=&gt;a+b;
+</span><span class="no">TS
+</span><span class="nb">cat</span> <span class="o">&gt;</span> src/add.test.ts <span class="o">&lt;&lt;</span><span class="sh">'</span><span class="no">TS</span><span class="sh">'
+import {describe,it,expect} from 'vitest';
+import {add} from './add';
+describe('add',()=&gt;{it('adds',()=&gt;{expect(add(2,3)).toBe(5)});});
+</span><span class="no">TS
+</span>npx vitest run
+
+git add <span class="nb">.</span> <span class="o">&amp;&amp;</span> git commit <span class="nt">-m</span> <span class="s2">"feat(ts): scaffold service with tests"</span>
+</code></pre></div></div>
+
+<h3 id="flutter-app">Flutter (app)</h3>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>flutter create app <span class="o">&amp;&amp;</span> <span class="nb">cd </span>app
+flutter <span class="nb">test
+cd</span> ..
+
+git add <span class="nb">.</span> <span class="o">&amp;&amp;</span> git commit <span class="nt">-m</span> <span class="s2">"feat(flutter): scaffold app"</span>
+</code></pre></div></div>
+
+<hr />
+
+<h2 id="4-branching--issue-flow-gitflow-compatible">4) Branching &amp; Issue Flow (GitFlow-compatible)</h2>
+<ul>
+  <li>Create <strong>feature</strong> branches from <code class="language-plaintext highlighter-rouge">develop</code>: <code class="language-plaintext highlighter-rouge">feature/ABC-123-short-slug</code>.</li>
+  <li>Commit with <strong>Conventional Commits</strong> (machine-parsable).</li>
+  <li>Open PRs against <code class="language-plaintext highlighter-rouge">develop</code> (features) and <code class="language-plaintext highlighter-rouge">main</code> (release/hotfix). Enforce CI gates.</li>
+</ul>
+
+<hr />
+
+<h2 id="5-implementation-loop-llm-checkpoints">5) Implementation Loop (LLM Checkpoints)</h2>
+<p>Repeat until acceptance criteria are met.</p>
+
+<ol>
+  <li><strong>Plan</strong>: generate a task list; annotate each with <em>owner</em>, <em>effort</em>, <em>risk</em>.</li>
+  <li><strong>Code</strong>: implement smallest vertical slice. Keep files &lt; 400 lines; extract helpers.</li>
+  <li><strong>Tests</strong>: add unit + integration for slice. Aim for &gt;80% relevant coverage.</li>
+  <li><strong>Static analysis</strong>: format + lint + type-check.</li>
+  <li><strong>Run</strong>: local smoke (CLI/HTTP endpoint/demo screen).</li>
+  <li><strong>Docs</strong>: update README/USAGE, crate/module docs, and changelog fragment.</li>
+  <li><strong>Commit</strong>: one coherent commit message.</li>
+</ol>
+
+<p><strong>Idempotent gate</strong>:</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>make <span class="nt">-q</span> <span class="nb">fmt </span>lint <span class="nb">test</span> <span class="o">||</span> task <span class="nb">fmt </span>lint <span class="nb">test</span> <span class="o">||</span> <span class="nb">true</span>
+</code></pre></div></div>
+
+<hr />
+
+<h2 id="6-observability--security-hooks-must">6) Observability &amp; Security Hooks (MUST)</h2>
+<ul>
+  <li>Add <code class="language-plaintext highlighter-rouge">tracing</code> / structured logs on public entry points and hot paths (no secrets).</li>
+  <li>Add health/ready endpoints for services.</li>
+  <li>Run <code class="language-plaintext highlighter-rouge">cargo audit</code> / <code class="language-plaintext highlighter-rouge">cargo deny</code>, <code class="language-plaintext highlighter-rouge">npm audit</code> or <code class="language-plaintext highlighter-rouge">pip-audit</code> per stack.</li>
+  <li>Add basic rate limits / timeouts for network calls.</li>
+</ul>
+
+<hr />
+
+<h2 id="7-cicd-pipeline-minimal-but-strong">7) CI/CD Pipeline (Minimal but Strong)</h2>
+<p><strong>GitHub Actions example</strong> (<code class="language-plaintext highlighter-rouge">.github/workflows/ci.yml</code>):</p>
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">name</span><span class="pi">:</span> <span class="s">ci</span>
+<span class="na">on</span><span class="pi">:</span>
+  <span class="na">pull_request</span><span class="pi">:</span>
+  <span class="na">push</span><span class="pi">:</span>
+    <span class="na">branches</span><span class="pi">:</span> <span class="pi">[</span><span class="nv">develop</span><span class="pi">,</span> <span class="nv">main</span><span class="pi">]</span>
+<span class="na">jobs</span><span class="pi">:</span>
+  <span class="na">rust</span><span class="pi">:</span>
+    <span class="na">runs-on</span><span class="pi">:</span> <span class="s">ubuntu-latest</span>
+    <span class="na">steps</span><span class="pi">:</span>
+      <span class="pi">-</span> <span class="na">uses</span><span class="pi">:</span> <span class="s">actions/checkout@v4</span>
+      <span class="pi">-</span> <span class="na">uses</span><span class="pi">:</span> <span class="s">dtolnay/rust-toolchain@stable</span>
+        <span class="na">with</span><span class="pi">:</span> <span class="pi">{</span> <span class="nv">components</span><span class="pi">:</span> <span class="nv">clippy</span><span class="pi">,</span> <span class="nv">rustfmt</span> <span class="pi">}</span>
+      <span class="pi">-</span> <span class="na">run</span><span class="pi">:</span> <span class="s">cargo fmt --all -- --check</span>
+      <span class="pi">-</span> <span class="na">run</span><span class="pi">:</span> <span class="s">cargo clippy --workspace --all-targets --all-features -- -D warnings</span>
+      <span class="pi">-</span> <span class="na">run</span><span class="pi">:</span> <span class="s">cargo test --workspace --all-features</span>
+      <span class="pi">-</span> <span class="na">run</span><span class="pi">:</span> <span class="s">cargo doc --no-deps</span>
+      <span class="pi">-</span> <span class="na">run</span><span class="pi">:</span> <span class="s">cargo install cargo-audit &amp;&amp; cargo audit || </span><span class="kc">true</span>
+  <span class="na">node</span><span class="pi">:</span>
+    <span class="na">runs-on</span><span class="pi">:</span> <span class="s">ubuntu-latest</span>
+    <span class="na">steps</span><span class="pi">:</span>
+      <span class="pi">-</span> <span class="na">uses</span><span class="pi">:</span> <span class="s">actions/checkout@v4</span>
+      <span class="pi">-</span> <span class="na">uses</span><span class="pi">:</span> <span class="s">actions/setup-node@v4</span>
+        <span class="na">with</span><span class="pi">:</span> <span class="pi">{</span> <span class="nv">node-version</span><span class="pi">:</span> <span class="s1">'</span><span class="s">20'</span> <span class="pi">}</span>
+      <span class="pi">-</span> <span class="na">run</span><span class="pi">:</span> <span class="s">npm ci || </span><span class="kc">true</span>
+      <span class="pi">-</span> <span class="na">run</span><span class="pi">:</span> <span class="s">npx vitest run || </span><span class="kc">true</span>
+</code></pre></div></div>
+
+<hr />
+
+<h2 id="8-pr-checklist-llm-must-verify-before-requesting-review">8) PR Checklist (LLM must verify before requesting review)</h2>
+<ul class="task-list">
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Title uses Conventional Commits and includes ticket ID.</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />CI green: format, lint, tests, docs, basic security checks.</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />No <code class="language-plaintext highlighter-rouge">unwrap/expect/panic</code> in library code; errors typed.</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Logs structured; no secrets.</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />README/docs updated; examples runnable.</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Changelog fragment added.</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Feature flagging or config documented.</li>
+</ul>
+
+<hr />
+
+<h2 id="9-release-steps-gitflow-aligned">9) Release Steps (GitFlow-aligned)</h2>
+<p><strong>When <code class="language-plaintext highlighter-rouge">develop</code> is stable</strong>:</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">VERSION</span><span class="o">=</span>1.0.0
+
+<span class="c"># Start release</span>
+git checkout develop <span class="o">&amp;&amp;</span> git pull
+git checkout <span class="nt">-b</span> release/<span class="k">${</span><span class="nv">VERSION</span><span class="k">}</span>
+
+<span class="c"># Update versions/CHANGELOG</span>
+<span class="c"># Commit</span>
+git commit <span class="nt">-am</span> <span class="s2">"chore(release): prepare v</span><span class="k">${</span><span class="nv">VERSION</span><span class="k">}</span><span class="s2">"</span>
+
+<span class="c"># PR: base main -&gt; merge -&gt; tag</span>
+git checkout main <span class="o">&amp;&amp;</span> git merge <span class="nt">--no-ff</span> release/<span class="k">${</span><span class="nv">VERSION</span><span class="k">}</span>
+git tag <span class="nt">-a</span> v<span class="k">${</span><span class="nv">VERSION</span><span class="k">}</span> <span class="nt">-m</span> <span class="s2">"Release v</span><span class="k">${</span><span class="nv">VERSION</span><span class="k">}</span><span class="s2">"</span> <span class="o">&amp;&amp;</span> git push <span class="nt">--tags</span>
+
+<span class="c"># Back-merge</span>
+git checkout develop <span class="o">&amp;&amp;</span> git merge <span class="nt">--no-ff</span> release/<span class="k">${</span><span class="nv">VERSION</span><span class="k">}</span>
+
+<span class="c"># Cleanup</span>
+git branch <span class="nt">-d</span> release/<span class="k">${</span><span class="nv">VERSION</span><span class="k">}</span>
+</code></pre></div></div>
+
+<hr />
+
+<h2 id="10-hotfix-steps-production-incident">10) Hotfix Steps (Production Incident)</h2>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">VERSION</span><span class="o">=</span>1.0.1
+
+<span class="c"># Branch from main</span>
+git checkout main <span class="o">&amp;&amp;</span> git pull
+git checkout <span class="nt">-b</span> hotfix/<span class="k">${</span><span class="nv">VERSION</span><span class="k">}</span>
+
+<span class="c"># Apply minimal fix + tests</span>
+<span class="c"># Merge to main and tag</span>
+git checkout main <span class="o">&amp;&amp;</span> git merge <span class="nt">--no-ff</span> hotfix/<span class="k">${</span><span class="nv">VERSION</span><span class="k">}</span>
+git tag <span class="nt">-a</span> v<span class="k">${</span><span class="nv">VERSION</span><span class="k">}</span> <span class="nt">-m</span> <span class="s2">"Hotfix v</span><span class="k">${</span><span class="nv">VERSION</span><span class="k">}</span><span class="s2">"</span> <span class="o">&amp;&amp;</span> git push <span class="nt">--tags</span>
+
+<span class="c"># Back-merge to develop (and release/* if open)</span>
+git checkout develop <span class="o">&amp;&amp;</span> git merge <span class="nt">--no-ff</span> hotfix/<span class="k">${</span><span class="nv">VERSION</span><span class="k">}</span>
+</code></pre></div></div>
+
+<hr />
+
+<h2 id="11-acceptance--handover">11) Acceptance &amp; Handover</h2>
+<ul>
+  <li>Provide <strong>artifact list</strong>: binaries/images, SBOM, docs link, changelog.</li>
+  <li>Provide <strong>runbook</strong>: start/stop, env vars, health checks, on-call notes.</li>
+  <li>Provide <strong>coverage &amp; test report</strong> summary.</li>
+</ul>
+
+<hr />
+
+<h2 id="12-defaults-when-unsure">12) Defaults (When Unsure)</h2>
+<ul>
+  <li>Prefer <strong>typed errors</strong> and <code class="language-plaintext highlighter-rouge">Result</code> over panics; document invariants.</li>
+  <li>Prefer <strong>borrowing</strong> over cloning; justify heavy allocations.</li>
+  <li>Add <strong>observability</strong> first on new public APIs.</li>
+  <li>Keep changes <strong>small and vertical</strong>; merge frequently behind flags.</li>
+  <li>If a step fails, <strong>stop</strong> and output a clear error plus a fix suggestion.</li>
+</ul>
+
+<hr />
+
+<h2 id="13-machine-readable-policy-yaml-for-bots">13) Machine-Readable Policy (YAML for Bots)</h2>
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">playbook</span><span class="pi">:</span>
+  <span class="na">branching</span><span class="pi">:</span> <span class="s">gitflow</span>
+  <span class="na">require</span><span class="pi">:</span>
+    <span class="pi">-</span> <span class="s">ci_green</span>
+    <span class="pi">-</span> <span class="s">formatted</span>
+    <span class="pi">-</span> <span class="s">lint_clean</span>
+    <span class="pi">-</span> <span class="s">tests_pass</span>
+    <span class="pi">-</span> <span class="s">docs_build</span>
+  <span class="na">checks</span><span class="pi">:</span>
+    <span class="na">disallow_panic_in_library</span><span class="pi">:</span> <span class="kc">true</span>
+    <span class="na">typed_errors</span><span class="pi">:</span> <span class="kc">true</span>
+    <span class="na">structured_logging</span><span class="pi">:</span> <span class="kc">true</span>
+  <span class="na">gates</span><span class="pi">:</span>
+    <span class="na">pr</span><span class="pi">:</span>
+      <span class="pi">-</span> <span class="s">checklist_completed</span>
+      <span class="pi">-</span> <span class="s">coverage_threshold&gt;=0.75</span>
+    <span class="na">release</span><span class="pi">:</span>
+      <span class="pi">-</span> <span class="s">semver_tag</span>
+      <span class="pi">-</span> <span class="s">changelog_updated</span>
+      <span class="pi">-</span> <span class="s">backmerge_to_develop</span>
+</code></pre></div></div>
+
+<hr />
+
+<h2 id="14-minimal-command-index-copypaste">14) Minimal Command Index (copy/paste)</h2>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Run full local gate (Rust example)</span>
+cargo <span class="nb">fmt</span> <span class="nt">--all</span> <span class="o">&amp;&amp;</span> cargo clippy <span class="nt">--workspace</span> <span class="nt">--all-targets</span> <span class="nt">--all-features</span> <span class="nt">--</span> <span class="nt">-D</span> warnings <span class="o">&amp;&amp;</span> cargo <span class="nb">test</span> <span class="nt">--workspace</span> <span class="nt">--all-features</span> <span class="o">&amp;&amp;</span> cargo doc <span class="nt">--no-deps</span>
+
+<span class="c"># Security sanity</span>
+cargo <span class="nb">install </span>cargo-audit cargo-deny <span class="o">||</span> <span class="nb">true
+</span>cargo audit <span class="o">||</span> <span class="nb">true
+</span>cargo deny check <span class="o">||</span> <span class="nb">true</span>
+
+<span class="c"># Node tests</span>
+npm ci <span class="o">&amp;&amp;</span> npx vitest run <span class="o">||</span> <span class="nb">true</span>
+
+<span class="c"># Python tests</span>
+pytest <span class="nt">-q</span> <span class="o">||</span> <span class="nb">true</span>
+</code></pre></div></div>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/orbit-rs/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Orbit-RS Documentation</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">TuringWorks</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

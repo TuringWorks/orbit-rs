@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Redis Time Series Compatibility Implementation | Orbit-RS Documentation</title>
+<meta name="generator" content="Jekyll v4.4.1" />
+<meta property="og:title" content="Redis Time Series Compatibility Implementation" />
+<meta name="author" content="TuringWorks" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<meta property="og:description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<link rel="canonical" href="https://turingworks.github.io/orbit-rs/issues/REDIS_TIMESERIES_ISSUE.html" />
+<meta property="og:url" content="https://turingworks.github.io/orbit-rs/issues/REDIS_TIMESERIES_ISSUE.html" />
+<meta property="og:site_name" content="Orbit-RS Documentation" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Redis Time Series Compatibility Implementation" />
+<meta name="twitter:site" content="@TuringWorksAI" />
+<meta name="twitter:creator" content="@TuringWorks" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","author":{"@type":"Person","name":"TuringWorks"},"description":"The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform","headline":"Redis Time Series Compatibility Implementation","url":"https://turingworks.github.io/orbit-rs/issues/REDIS_TIMESERIES_ISSUE.html"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/orbit-rs/assets/main.css">
+  <link rel="stylesheet" href="/orbit-rs/assets/css/custom.css"><link type="application/atom+xml" rel="alternate" href="https://turingworks.github.io/orbit-rs/feed.xml" title="Orbit-RS Documentation" /></head><body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/orbit-rs/">Orbit-RS Documentation</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/orbit-rs/">Orbit-RS Documentation</a><a class="page-link" href="/orbit-rs/project_overview.html">Orbit-RS: Comprehensive Project Overview</a><a class="page-link" href="/orbit-rs/quick_start.html">Quick Start Guide - Multi-Protocol Database Server</a><a class="page-link" href="/orbit-rs/roadmap/">Development Roadmap</a><a class="page-link" href="/orbit-rs/features/">Orbit-RS Feature Index</a><a class="page-link" href="/orbit-rs/compute-acceleration/">Hardware Acceleration Guide</a><a class="page-link" href="/orbit-rs/contributing.html">Contributing Guide</a><a class="page-link" href="/orbit-rs/overview.html">Architecture Overview</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <h1 id="redis-time-series-compatibility-implementation">Redis Time Series Compatibility Implementation</h1>
+
+<p><strong>Feature Type:</strong> Protocol Adapter<br />
+<strong>Priority:</strong> High<br />
+<strong>Estimated Effort:</strong> 8-10 weeks<br />
+<strong>Phase:</strong> 12<br />
+<strong>Target Release:</strong> Q1 2025</p>
+
+<h2 id="overview">Overview</h2>
+
+<p>Implement full Redis Time Series (RedisTimeSeries) module compatibility for Orbit-RS, enabling time-series data storage and analysis capabilities through the Redis protocol. This will allow existing applications using RedisTimeSeries to seamlessly migrate to Orbit’s distributed actor system.</p>
+
+<h2 id="motivation">Motivation</h2>
+
+<p>Time-series databases are critical for IoT applications, financial systems, monitoring, and analytics. By providing Redis Time Series compatibility, Orbit-RS will:</p>
+
+<ol>
+  <li><strong>Expand Use Cases</strong>: Support time-series workloads alongside existing Redis and PostgreSQL capabilities</li>
+  <li><strong>Ease Migration</strong>: Allow seamless migration from existing RedisTimeSeries deployments</li>
+  <li><strong>Distributed Advantage</strong>: Provide distributed time-series capabilities with Orbit’s actor system</li>
+  <li><strong>Ecosystem Integration</strong>: Work with existing Redis clients and time-series tools</li>
+</ol>
+
+<h2 id="technical-requirements">Technical Requirements</h2>
+
+<h3 id="core-actor-implementation">Core Actor Implementation</h3>
+
+<h4 id="timeseriesactor">TimeSeriesActor</h4>
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="nd">#[async_trait]</span>
+<span class="k">pub</span> <span class="k">trait</span> <span class="n">TimeSeriesActor</span><span class="p">:</span> <span class="n">ActorWithStringKey</span> <span class="p">{</span>
+    <span class="c1">// Core operations</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">add_sample</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">timestamp</span><span class="p">:</span> <span class="nb">u64</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="nb">f64</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="nb">u64</span><span class="o">&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">get_sample</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">timestamp</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="nb">u64</span><span class="o">&gt;</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="nb">Option</span><span class="o">&lt;</span><span class="p">(</span><span class="nb">u64</span><span class="p">,</span> <span class="nb">f64</span><span class="p">)</span><span class="o">&gt;&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">range_query</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">from</span><span class="p">:</span> <span class="nb">u64</span><span class="p">,</span> <span class="n">to</span><span class="p">:</span> <span class="nb">u64</span><span class="p">,</span> <span class="n">aggregation</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="n">Aggregation</span><span class="o">&gt;</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="p">(</span><span class="nb">u64</span><span class="p">,</span> <span class="nb">f64</span><span class="p">)</span><span class="o">&gt;&gt;</span><span class="p">;</span>
+    
+    <span class="c1">// Metadata operations</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">create_series</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">config</span><span class="p">:</span> <span class="n">TimeSeriesConfig</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">add_label</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="nb">String</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">get_info</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">TimeSeriesInfo</span><span class="o">&gt;</span><span class="p">;</span>
+    
+    <span class="c1">// Aggregation rules</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">create_rule</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">dest_key</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span> <span class="n">aggregation</span><span class="p">:</span> <span class="n">Aggregation</span><span class="p">,</span> <span class="n">bucket_duration</span><span class="p">:</span> <span class="nb">u64</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">delete_rule</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">dest_key</span><span class="p">:</span> <span class="nb">String</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="nb">bool</span><span class="o">&gt;</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="command-implementation">Command Implementation</h3>
+
+<h4 id="phase-121-basic-commands-2-3-weeks">Phase 12.1: Basic Commands (2-3 weeks)</h4>
+<ul class="task-list">
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>TS.CREATE</strong> - Create time series with metadata and retention policy</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>TS.ADD</strong> - Add timestamp-value pairs to time series</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>TS.GET</strong> - Get the latest or specific timestamp value</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>TS.RANGE</strong> - Query data within time ranges</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>TS.REVRANGE</strong> - Query data in reverse chronological order</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>TS.INFO</strong> - Get time series metadata and statistics</li>
+</ul>
+
+<h4 id="phase-122-aggregation-and-multi-series-3-4-weeks">Phase 12.2: Aggregation and Multi-Series (3-4 weeks)</h4>
+<ul class="task-list">
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>TS.CREATERULE</strong> - Create aggregation rules between time series</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>TS.DELETERULE</strong> - Delete aggregation rules</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>TS.MRANGE</strong> - Multi-series range queries with filters</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>TS.MREVRANGE</strong> - Multi-series reverse range queries</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>TS.MGET</strong> - Get latest values from multiple time series</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>TS.QUERYINDEX</strong> - Query time series by labels and filters</li>
+</ul>
+
+<h4 id="phase-123-advanced-features-2-3-weeks">Phase 12.3: Advanced Features (2-3 weeks)</h4>
+<ul class="task-list">
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>Statistical Functions</strong>: AVG, SUM, MIN, MAX, COUNT, STDDEV, VAR</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>Time-window aggregations</strong>: Configurable time windows (1s, 1m, 1h, 1d)</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>Downsampling</strong>: Automatic data reduction for long-term storage</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>Labeling system</strong>: Multi-dimensional time series organization</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><strong>Compaction</strong>: Automatic data compaction with configurable policies</li>
+</ul>
+
+<h3 id="data-structures">Data Structures</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="nd">#[derive(Debug,</span> <span class="nd">Clone,</span> <span class="nd">Serialize,</span> <span class="nd">Deserialize)]</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">TimeSeriesConfig</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="n">retention_ms</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="nb">u64</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">chunk_size</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="nb">usize</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">duplicate_policy</span><span class="p">:</span> <span class="n">DuplicatePolicy</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">labels</span><span class="p">:</span> <span class="n">HashMap</span><span class="o">&lt;</span><span class="nb">String</span><span class="p">,</span> <span class="nb">String</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">uncompressed</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="nd">#[derive(Debug,</span> <span class="nd">Clone,</span> <span class="nd">Serialize,</span> <span class="nd">Deserialize)]</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">TimeSeriesSample</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="n">timestamp</span><span class="p">:</span> <span class="nb">u64</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">value</span><span class="p">:</span> <span class="nb">f64</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="nd">#[derive(Debug,</span> <span class="nd">Clone,</span> <span class="nd">Serialize,</span> <span class="nd">Deserialize)]</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">AggregationRule</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="n">dest_key</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">aggregation</span><span class="p">:</span> <span class="n">Aggregation</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">bucket_duration</span><span class="p">:</span> <span class="nb">u64</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">alignment_timestamp</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="nb">u64</span><span class="o">&gt;</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="nd">#[derive(Debug,</span> <span class="nd">Clone,</span> <span class="nd">Serialize,</span> <span class="nd">Deserialize)]</span>
+<span class="k">pub</span> <span class="k">enum</span> <span class="n">Aggregation</span> <span class="p">{</span>
+    <span class="n">Avg</span><span class="p">,</span> <span class="n">Sum</span><span class="p">,</span> <span class="n">Min</span><span class="p">,</span> <span class="n">Max</span><span class="p">,</span> <span class="n">Range</span><span class="p">,</span> <span class="n">Count</span><span class="p">,</span> <span class="n">Std</span><span class="p">,</span> <span class="n">Var</span><span class="p">,</span> <span class="n">First</span><span class="p">,</span> <span class="n">Last</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="nd">#[derive(Debug,</span> <span class="nd">Clone,</span> <span class="nd">Serialize,</span> <span class="nd">Deserialize)]</span>
+<span class="k">pub</span> <span class="k">enum</span> <span class="n">DuplicatePolicy</span> <span class="p">{</span>
+    <span class="n">Block</span><span class="p">,</span> <span class="n">Last</span><span class="p">,</span> <span class="n">First</span><span class="p">,</span> <span class="n">Min</span><span class="p">,</span> <span class="n">Max</span><span class="p">,</span> <span class="n">Sum</span><span class="p">,</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h2 id="implementation-tasks">Implementation Tasks</h2>
+
+<h3 id="1-core-infrastructure-week-1-2">1. Core Infrastructure (Week 1-2)</h3>
+<ul class="task-list">
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Create <code class="language-plaintext highlighter-rouge">TimeSeriesActor</code> trait and implementation</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Implement basic data structures (<code class="language-plaintext highlighter-rouge">TimeSeriesConfig</code>, <code class="language-plaintext highlighter-rouge">TimeSeriesSample</code>, etc.)</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Add time-series storage backend with compression</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Implement time-based partitioning for distributed storage</li>
+</ul>
+
+<h3 id="2-basic-commands-week-3-4">2. Basic Commands (Week 3-4)</h3>
+<ul class="task-list">
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Implement TS.CREATE command with full parameter support</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Implement TS.ADD with duplicate policy handling</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Implement TS.GET for latest and specific timestamp queries</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Implement TS.RANGE and TS.REVRANGE with filtering</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Add comprehensive error handling and validation</li>
+</ul>
+
+<h3 id="3-aggregation-system-week-5-6">3. Aggregation System (Week 5-6)</h3>
+<ul class="task-list">
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Implement aggregation rule engine</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Add TS.CREATERULE and TS.DELETERULE commands</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Implement automatic downsampling background tasks</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Add statistical functions (AVG, SUM, MIN, MAX, etc.)</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Implement time-window aggregation logic</li>
+</ul>
+
+<h3 id="4-multi-series-operations-week-7-8">4. Multi-Series Operations (Week 7-8)</h3>
+<ul class="task-list">
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Implement TS.MRANGE and TS.MREVRANGE commands</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Add TS.MGET for multiple time series queries</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Implement label-based filtering and indexing</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Add TS.QUERYINDEX for label-based queries</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Optimize multi-series query performance</li>
+</ul>
+
+<h3 id="5-performance--integration-week-9-10">5. Performance &amp; Integration (Week 9-10)</h3>
+<ul class="task-list">
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Add SIMD optimizations for aggregation functions</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Implement intelligent chunk placement across cluster nodes</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Add comprehensive metrics and monitoring</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Create migration tools from RedisTimeSeries</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Add Grafana integration and dashboards</li>
+</ul>
+
+<h2 id="testing-requirements">Testing Requirements</h2>
+
+<h3 id="unit-tests">Unit Tests</h3>
+<ul class="task-list">
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />TimeSeriesActor functionality tests</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Command parsing and validation tests</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Aggregation rule engine tests</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Data compression and storage tests</li>
+</ul>
+
+<h3 id="integration-tests">Integration Tests</h3>
+<ul class="task-list">
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Redis client compatibility tests</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Multi-node distribution tests</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Performance benchmarks</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Migration tool validation tests</li>
+</ul>
+
+<h3 id="load-tests">Load Tests</h3>
+<ul class="task-list">
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />High-throughput ingestion (1M+ samples/second)</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Concurrent multi-series queries</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Long-term retention and compaction</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Memory and disk usage optimization</li>
+</ul>
+
+<h2 id="performance-targets">Performance Targets</h2>
+
+<ul>
+  <li><strong>Ingestion Rate</strong>: 1M+ samples/second per core</li>
+  <li><strong>Query Latency</strong>: &lt;10ms for range queries up to 1M samples</li>
+  <li><strong>Compression Ratio</strong>: 10:1 for typical time-series data</li>
+  <li><strong>Memory Efficiency</strong>: &lt;100MB overhead per 1M samples</li>
+  <li><strong>Retention</strong>: Support for years of historical data</li>
+</ul>
+
+<h2 id="compatibility-requirements">Compatibility Requirements</h2>
+
+<h3 id="redis-time-series-api-compatibility">Redis Time Series API Compatibility</h3>
+<ul class="task-list">
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />100% command compatibility with RedisTimeSeries</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Compatible data formats and serialization</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Error messages matching RedisTimeSeries behavior</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Performance characteristics comparable to RedisTimeSeries</li>
+</ul>
+
+<h3 id="client-support">Client Support</h3>
+<ul class="task-list">
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Compatible with existing Redis clients (redis-py, node-redis, etc.)</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Works with RedisTimeSeries client libraries</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Support for Redis Cluster protocol extensions</li>
+</ul>
+
+<h2 id="documentation-requirements">Documentation Requirements</h2>
+
+<ul class="task-list">
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Complete command reference documentation</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Usage examples for common patterns (IoT, financial, monitoring)</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Migration guide from RedisTimeSeries</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Performance tuning guide</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Integration examples with popular tools (Grafana, Prometheus)</li>
+</ul>
+
+<h2 id="success-criteria">Success Criteria</h2>
+
+<ol>
+  <li><strong>Functional</strong>: All RedisTimeSeries commands implemented and tested</li>
+  <li><strong>Performance</strong>: Meets or exceeds RedisTimeSeries performance benchmarks</li>
+  <li><strong>Compatibility</strong>: 100% compatibility with existing Redis clients</li>
+  <li><strong>Reliability</strong>: Passes comprehensive load and stress tests</li>
+  <li><strong>Documentation</strong>: Complete documentation and examples</li>
+</ol>
+
+<h2 id="dependencies">Dependencies</h2>
+
+<ul>
+  <li>Redis RESP protocol implementation (already complete)</li>
+  <li>Actor system foundation (already complete)</li>
+  <li>Distributed storage backend (part of this feature)</li>
+  <li>SIMD optimization libraries (optional but recommended)</li>
+</ul>
+
+<h2 id="risk-mitigation">Risk Mitigation</h2>
+
+<ol>
+  <li><strong>Complexity Risk</strong>: Break implementation into clear phases with incremental delivery</li>
+  <li><strong>Performance Risk</strong>: Implement comprehensive benchmarking from early phases</li>
+  <li><strong>Compatibility Risk</strong>: Extensive testing with real Redis clients and applications</li>
+  <li><strong>Integration Risk</strong>: Early integration testing with popular time-series tools</li>
+</ol>
+
+<h2 id="related-issues">Related Issues</h2>
+
+<ul class="task-list">
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />PostgreSQL TimescaleDB compatibility (parallel development)</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />SIMD optimization framework (dependency)</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Grafana integration (related)</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Performance monitoring improvements (related)</li>
+</ul>
+
+<hr />
+
+<p><strong>Assignees:</strong> TBD<br />
+<strong>Labels:</strong> <code class="language-plaintext highlighter-rouge">enhancement</code>, <code class="language-plaintext highlighter-rouge">phase-12</code>, <code class="language-plaintext highlighter-rouge">time-series</code>, <code class="language-plaintext highlighter-rouge">redis-protocol</code><br />
+<strong>Milestone:</strong> Phase 12 - Time Series Database Features</p>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/orbit-rs/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Orbit-RS Documentation</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">TuringWorks</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

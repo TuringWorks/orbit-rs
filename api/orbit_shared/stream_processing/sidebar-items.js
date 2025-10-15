@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["AggregationFunction","WindowType"],"struct":["StreamEvent","StreamProcessor","StreamStats","WindowResult","WindowState"]};

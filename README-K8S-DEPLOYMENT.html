@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Orbit-RS Kubernetes Deployment Optimization | Orbit-RS Documentation</title>
+<meta name="generator" content="Jekyll v4.4.1" />
+<meta property="og:title" content="Orbit-RS Kubernetes Deployment Optimization" />
+<meta name="author" content="TuringWorks" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<meta property="og:description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<link rel="canonical" href="https://turingworks.github.io/orbit-rs/README-K8S-DEPLOYMENT.html" />
+<meta property="og:url" content="https://turingworks.github.io/orbit-rs/README-K8S-DEPLOYMENT.html" />
+<meta property="og:site_name" content="Orbit-RS Documentation" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Orbit-RS Kubernetes Deployment Optimization" />
+<meta name="twitter:site" content="@TuringWorksAI" />
+<meta name="twitter:creator" content="@TuringWorks" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","author":{"@type":"Person","name":"TuringWorks"},"description":"The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform","headline":"Orbit-RS Kubernetes Deployment Optimization","url":"https://turingworks.github.io/orbit-rs/README-K8S-DEPLOYMENT.html"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/orbit-rs/assets/main.css">
+  <link rel="stylesheet" href="/orbit-rs/assets/css/custom.css"><link type="application/atom+xml" rel="alternate" href="https://turingworks.github.io/orbit-rs/feed.xml" title="Orbit-RS Documentation" /></head><body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/orbit-rs/">Orbit-RS Documentation</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/orbit-rs/">Orbit-RS Documentation</a><a class="page-link" href="/orbit-rs/project_overview.html">Orbit-RS: Comprehensive Project Overview</a><a class="page-link" href="/orbit-rs/quick_start.html">Quick Start Guide - Multi-Protocol Database Server</a><a class="page-link" href="/orbit-rs/roadmap/">Development Roadmap</a><a class="page-link" href="/orbit-rs/features/">Orbit-RS Feature Index</a><a class="page-link" href="/orbit-rs/compute-acceleration/">Hardware Acceleration Guide</a><a class="page-link" href="/orbit-rs/contributing.html">Contributing Guide</a><a class="page-link" href="/orbit-rs/overview.html">Architecture Overview</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <h1 id="orbit-rs-kubernetes-deployment-optimization">Orbit-RS Kubernetes Deployment Optimization</h1>
+
+<p>This document provides comprehensive guidance for deploying Orbit-RS in Kubernetes environments with optimized resource allocation, GPU acceleration, and various workload profiles.</p>
+
+<h2 id="-quick-start">🚀 Quick Start</h2>
+
+<h3 id="prerequisites">Prerequisites</h3>
+
+<ul>
+  <li>Kubernetes cluster (v1.24+)</li>
+  <li>Helm 3.x</li>
+  <li>kubectl</li>
+  <li>Podman or Docker (for local testing)</li>
+</ul>
+
+<h3 id="basic-deployment">Basic Deployment</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Add the Orbit-RS Helm repository (when available)</span>
+helm repo add orbit-rs https://turingworks.github.io/orbit-rs
+
+<span class="c"># Deploy with small profile (development)</span>
+helm <span class="nb">install </span>orbit-rs orbit-rs/orbit-rs <span class="nt">-f</span> helm/orbit-rs/values-small.yaml
+
+<span class="c"># Deploy with enterprise profile (production)</span>
+helm <span class="nb">install </span>orbit-rs orbit-rs/orbit-rs <span class="nt">-f</span> helm/orbit-rs/values-enterprise.yaml
+</code></pre></div></div>
+
+<h2 id="-workload-profiles">📊 Workload Profiles</h2>
+
+<h3 id="small-profile-developmenttesting">Small Profile (Development/Testing)</h3>
+<ul>
+  <li><strong>Use Case</strong>: Development, testing, small demos</li>
+  <li><strong>Data Scale</strong>: &lt; 10GB</li>
+  <li><strong>Concurrent Users</strong>: 1-10</li>
+  <li><strong>Expected Throughput</strong>: &lt; 1,000 ops/sec</li>
+  <li><strong>Resources</strong>: 500m CPU, 1Gi Memory</li>
+</ul>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>helm <span class="nb">install </span>orbit-rs-dev orbit-rs/orbit-rs <span class="nt">-f</span> values-small.yaml
+</code></pre></div></div>
+
+<h3 id="medium-profile-productionstaging">Medium Profile (Production/Staging)</h3>
+<ul>
+  <li><strong>Use Case</strong>: Production workloads, staging environments</li>
+  <li><strong>Data Scale</strong>: 10GB - 1TB</li>
+  <li><strong>Concurrent Users</strong>: 10-100</li>
+  <li><strong>Expected Throughput</strong>: 1,000 - 50,000 ops/sec</li>
+  <li><strong>Resources</strong>: 2-8 CPU, 8-32Gi Memory</li>
+</ul>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>helm <span class="nb">install </span>orbit-rs-prod orbit-rs/orbit-rs <span class="nt">-f</span> values-medium.yaml
+</code></pre></div></div>
+
+<h3 id="large-profile-enterprise-production">Large Profile (Enterprise Production)</h3>
+<ul>
+  <li><strong>Use Case</strong>: Enterprise production, high-availability</li>
+  <li><strong>Data Scale</strong>: 1TB - 100TB</li>
+  <li><strong>Concurrent Users</strong>: 100-1,000</li>
+  <li><strong>Expected Throughput</strong>: 50,000 - 500,000 ops/sec</li>
+  <li><strong>Resources</strong>: 8-32 CPU, 32-128Gi Memory</li>
+</ul>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>helm <span class="nb">install </span>orbit-rs-enterprise orbit-rs/orbit-rs <span class="nt">-f</span> values-large.yaml
+</code></pre></div></div>
+
+<h3 id="enterprise-profile-hyperscale">Enterprise Profile (Hyperscale)</h3>
+<ul>
+  <li><strong>Use Case</strong>: Hyperscale deployments, petabyte-scale</li>
+  <li><strong>Data Scale</strong>: &gt; 100TB</li>
+  <li><strong>Concurrent Users</strong>: &gt; 1,000</li>
+  <li><strong>Expected Throughput</strong>: &gt; 500,000 ops/sec</li>
+  <li><strong>Resources</strong>: 32-64 CPU, 128-512Gi Memory</li>
+  <li><strong>Features</strong>: GPU acceleration, multi-region, auto-scaling</li>
+</ul>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>helm <span class="nb">install </span>orbit-rs-hyperscale orbit-rs/orbit-rs <span class="nt">-f</span> values-enterprise.yaml
+</code></pre></div></div>
+
+<h2 id="️-gpu-acceleration-support">🖥️ GPU Acceleration Support</h2>
+
+<p>Orbit-RS provides comprehensive compute acceleration through the <a href="docs/COMPUTE_ACCELERATION_GUIDE.md">orbit-compute framework</a> supporting various workload types:</p>
+
+<h3 id="gpu-accelerated-database-workloads">GPU-Accelerated Database Workloads</h3>
+<ul>
+  <li><strong>Vector Operations</strong>: Similarity search, embeddings, vector aggregations (8-15x speedup)</li>
+  <li><strong>Matrix Operations</strong>: Large JOINs, linear algebra, ML workloads (8-15x speedup)</li>
+  <li><strong>Time Series Analytics</strong>: Aggregations, moving averages (5-12x speedup)</li>
+  <li><strong>Graph Operations</strong>: Traversals, community detection (4-10x speedup)</li>
+  <li><strong>Text Processing</strong>: Search, NLP, regex operations (2-8x speedup)</li>
+</ul>
+
+<p>📖 <strong>See the <a href="docs/COMPUTE_ACCELERATION_GUIDE.md">Compute Acceleration Guide</a> for detailed workload types, client configuration options, and performance tuning.</strong></p>
+
+<h3 id="supported-gpu-types">Supported GPU Types</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>Vendor</th>
+      <th>Architecture</th>
+      <th>Models</th>
+      <th>Support Status</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>NVIDIA</td>
+      <td>Ampere</td>
+      <td>A100, A40, RTX 4090</td>
+      <td>✅ Full</td>
+    </tr>
+    <tr>
+      <td>NVIDIA</td>
+      <td>Ada Lovelace</td>
+      <td>RTX 4080, RTX 4070</td>
+      <td>✅ Full</td>
+    </tr>
+    <tr>
+      <td>NVIDIA</td>
+      <td>Hopper</td>
+      <td>H100, H200</td>
+      <td>✅ Full</td>
+    </tr>
+    <tr>
+      <td>AMD</td>
+      <td>RDNA3</td>
+      <td>RX 7900 XTX</td>
+      <td>🚧 Experimental</td>
+    </tr>
+    <tr>
+      <td>AMD</td>
+      <td>CDNA2</td>
+      <td>MI250X, MI210</td>
+      <td>🚧 Experimental</td>
+    </tr>
+    <tr>
+      <td>Apple</td>
+      <td>M1/M2/M3</td>
+      <td>Mac Studio, MacBook Pro</td>
+      <td>🚧 Metal Support</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 id="gpu-enabled-deployment">GPU-Enabled Deployment</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Deploy with GPU support (enterprise profile)</span>
+helm <span class="nb">install </span>orbit-rs-gpu orbit-rs/orbit-rs <span class="se">\</span>
+  <span class="nt">-f</span> values-enterprise.yaml <span class="se">\</span>
+  <span class="nt">--set</span> orbitCompute.gpu.enabled<span class="o">=</span><span class="nb">true</span> <span class="se">\</span>
+  <span class="nt">--set</span> orbitCompute.gpu.count<span class="o">=</span>4 <span class="se">\</span>
+  <span class="nt">--set</span> orbitCompute.gpu.vendor<span class="o">=</span>nvidia
+</code></pre></div></div>
+
+<h3 id="container-images">Container Images</h3>
+
+<p>The pipeline automatically builds GPU-enabled variants:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Pull GPU-enabled orbit-compute image</span>
+podman pull ghcr.io/turingworks/orbit-rs/orbit-compute:latest-release-gpu-linux-amd64
+
+<span class="c"># Run with GPU support</span>
+podman run <span class="nt">-d</span> <span class="nt">--gpus</span> all <span class="nt">-p</span> 8080:8080 <span class="se">\</span>
+  ghcr.io/turingworks/orbit-rs/orbit-compute:latest-release-gpu-linux-amd64
+</code></pre></div></div>
+
+<h2 id="-storage-configuration">💾 Storage Configuration</h2>
+
+<h3 id="storage-classes">Storage Classes</h3>
+
+<p>Create appropriate storage classes for different workload types:</p>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c1"># Fast NVMe storage for production</span>
+<span class="na">apiVersion</span><span class="pi">:</span> <span class="s">storage.k8s.io/v1</span>
+<span class="na">kind</span><span class="pi">:</span> <span class="s">StorageClass</span>
+<span class="na">metadata</span><span class="pi">:</span>
+  <span class="na">name</span><span class="pi">:</span> <span class="s">fast-nvme</span>
+<span class="na">provisioner</span><span class="pi">:</span> <span class="s">kubernetes.io/aws-ebs</span>  <span class="c1"># or your cloud provider</span>
+<span class="na">parameters</span><span class="pi">:</span>
+  <span class="na">type</span><span class="pi">:</span> <span class="s">io2</span>
+  <span class="na">iopsPerGB</span><span class="pi">:</span> <span class="s2">"</span><span class="s">50"</span>
+  <span class="na">encrypted</span><span class="pi">:</span> <span class="s2">"</span><span class="s">true"</span>
+<span class="na">allowVolumeExpansion</span><span class="pi">:</span> <span class="kc">true</span>
+</code></pre></div></div>
+
+<h3 id="memory-mapped-files">Memory-Mapped Files</h3>
+
+<p>For high-performance workloads, configure memory-mapped file storage:</p>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c1"># RAM disk for ultra-fast access</span>
+<span class="na">orbitServer</span><span class="pi">:</span>
+  <span class="na">mmapStorage</span><span class="pi">:</span>
+    <span class="na">enabled</span><span class="pi">:</span> <span class="kc">true</span>
+    <span class="na">storageClass</span><span class="pi">:</span> <span class="s2">"</span><span class="s">memory"</span>
+    <span class="na">size</span><span class="pi">:</span> <span class="s2">"</span><span class="s">32Gi"</span>
+    <span class="na">mountPath</span><span class="pi">:</span> <span class="s2">"</span><span class="s">/mmap-cache"</span>
+</code></pre></div></div>
+
+<h2 id="-monitoring-and-autoscaling">📈 Monitoring and Autoscaling</h2>
+
+<h3 id="horizontal-pod-autoscaling-hpa">Horizontal Pod Autoscaling (HPA)</h3>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">autoscaling</span><span class="pi">:</span>
+  <span class="na">enabled</span><span class="pi">:</span> <span class="kc">true</span>
+  <span class="na">hpa</span><span class="pi">:</span>
+    <span class="na">enabled</span><span class="pi">:</span> <span class="kc">true</span>
+    <span class="na">minReplicas</span><span class="pi">:</span> <span class="m">3</span>
+    <span class="na">maxReplicas</span><span class="pi">:</span> <span class="m">20</span>
+    <span class="na">metrics</span><span class="pi">:</span>
+    <span class="pi">-</span> <span class="na">type</span><span class="pi">:</span> <span class="s">Resource</span>
+      <span class="na">resource</span><span class="pi">:</span>
+        <span class="na">name</span><span class="pi">:</span> <span class="s">cpu</span>
+        <span class="na">target</span><span class="pi">:</span>
+          <span class="na">type</span><span class="pi">:</span> <span class="s">Utilization</span>
+          <span class="na">averageUtilization</span><span class="pi">:</span> <span class="m">70</span>
+</code></pre></div></div>
+
+<h3 id="custom-metrics">Custom Metrics</h3>
+
+<p>For GPU workloads, configure GPU utilization metrics:</p>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c1"># Custom GPU metrics</span>
+<span class="pi">-</span> <span class="na">type</span><span class="pi">:</span> <span class="s">Pods</span>
+  <span class="na">pods</span><span class="pi">:</span>
+    <span class="na">metric</span><span class="pi">:</span>
+      <span class="na">name</span><span class="pi">:</span> <span class="s">gpu_utilization</span>
+    <span class="na">target</span><span class="pi">:</span>
+      <span class="na">type</span><span class="pi">:</span> <span class="s">AverageValue</span>
+      <span class="na">averageValue</span><span class="pi">:</span> <span class="s2">"</span><span class="s">80"</span>
+</code></pre></div></div>
+
+<h2 id="-security-configuration">🔒 Security Configuration</h2>
+
+<h3 id="pod-security-standards">Pod Security Standards</h3>
+
+<p>Enterprise deployments use restricted security policies:</p>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">securityContext</span><span class="pi">:</span>
+  <span class="na">allowPrivilegeEscalation</span><span class="pi">:</span> <span class="kc">false</span>
+  <span class="na">capabilities</span><span class="pi">:</span>
+    <span class="na">drop</span><span class="pi">:</span>
+    <span class="pi">-</span> <span class="s">ALL</span>
+  <span class="na">readOnlyRootFilesystem</span><span class="pi">:</span> <span class="kc">true</span>
+  <span class="na">runAsNonRoot</span><span class="pi">:</span> <span class="kc">true</span>
+  <span class="na">runAsUser</span><span class="pi">:</span> <span class="m">1000</span>
+</code></pre></div></div>
+
+<h3 id="network-policies">Network Policies</h3>
+
+<p>Control network access between components:</p>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">networkPolicy</span><span class="pi">:</span>
+  <span class="na">enabled</span><span class="pi">:</span> <span class="kc">true</span>
+  <span class="na">policyTypes</span><span class="pi">:</span>
+  <span class="pi">-</span> <span class="s">Ingress</span>
+  <span class="pi">-</span> <span class="s">Egress</span>
+  <span class="na">ingress</span><span class="pi">:</span>
+  <span class="pi">-</span> <span class="na">from</span><span class="pi">:</span>
+    <span class="pi">-</span> <span class="na">namespaceSelector</span><span class="pi">:</span>
+        <span class="na">matchLabels</span><span class="pi">:</span>
+          <span class="na">name</span><span class="pi">:</span> <span class="s">orbit-clients</span>
+</code></pre></div></div>
+
+<h2 id="️-deployment-validation">🛠️ Deployment Validation</h2>
+
+<p>Use the validation script to check your configuration:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Run validation script</span>
+./scripts/validate-k8s-deployments.sh
+
+<span class="c"># Dry-run validation</span>
+./scripts/validate-k8s-deployments.sh <span class="nt">--dry-run</span>
+</code></pre></div></div>
+
+<h2 id="-container-image-download-page">📋 Container Image Download Page</h2>
+
+<p>Visit the automatically generated container image page for easy access to all available images:</p>
+
+<ul>
+  <li><strong>GitHub Pages</strong>: <code class="language-plaintext highlighter-rouge">https://turingworks.github.io/orbit-rs/container-images/</code></li>
+  <li><strong>Features</strong>: Click-to-copy pull commands, GPU variants, multi-platform support</li>
+</ul>
+
+<h2 id="-troubleshooting">🔧 Troubleshooting</h2>
+
+<h3 id="common-issues">Common Issues</h3>
+
+<h4 id="gpu-not-detected">GPU Not Detected</h4>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Check GPU device plugin</span>
+kubectl get pods <span class="nt">-n</span> kube-system | <span class="nb">grep </span>nvidia-device-plugin
+
+<span class="c"># Verify GPU nodes</span>
+kubectl get nodes <span class="nt">-l</span> <span class="nv">accelerator</span><span class="o">=</span>nvidia-tesla-v100
+
+<span class="c"># Check GPU resources</span>
+kubectl describe node &lt;gpu-node-name&gt;
+</code></pre></div></div>
+
+<h4 id="storage-issues">Storage Issues</h4>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Check storage class</span>
+kubectl get storageclass
+
+<span class="c"># Verify PVC status</span>
+kubectl get pvc <span class="nt">-n</span> &lt;namespace&gt;
+
+<span class="c"># Check volume mounting</span>
+kubectl describe pod &lt;pod-name&gt; <span class="nt">-n</span> &lt;namespace&gt;
+</code></pre></div></div>
+
+<h4 id="performance-issues">Performance Issues</h4>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Check resource usage</span>
+kubectl top pods <span class="nt">-n</span> &lt;namespace&gt;
+
+<span class="c"># Monitor HPA status</span>
+kubectl get hpa <span class="nt">-n</span> &lt;namespace&gt;
+
+<span class="c"># Check custom metrics</span>
+kubectl get <span class="nt">--raw</span> /apis/custom.metrics.k8s.io/v1beta1
+</code></pre></div></div>
+
+<h2 id="-performance-tuning">🚀 Performance Tuning</h2>
+
+<h3 id="cpu-optimization">CPU Optimization</h3>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c1"># CPU pinning and NUMA awareness</span>
+<span class="na">orbitServer</span><span class="pi">:</span>
+  <span class="na">env</span><span class="pi">:</span>
+    <span class="na">ORBIT_NUMA_AWARE</span><span class="pi">:</span> <span class="s2">"</span><span class="s">true"</span>
+    <span class="na">ORBIT_CPU_AFFINITY</span><span class="pi">:</span> <span class="s2">"</span><span class="s">0-31"</span>
+  <span class="na">resources</span><span class="pi">:</span>
+    <span class="na">requests</span><span class="pi">:</span>
+      <span class="na">hugepages-2Mi</span><span class="pi">:</span> <span class="s2">"</span><span class="s">32Gi"</span>
+</code></pre></div></div>
+
+<h3 id="memory-optimization">Memory Optimization</h3>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c1"># Huge pages and memory-mapped files</span>
+<span class="na">orbitServer</span><span class="pi">:</span>
+  <span class="na">env</span><span class="pi">:</span>
+    <span class="na">ORBIT_USE_HUGEPAGES</span><span class="pi">:</span> <span class="s2">"</span><span class="s">true"</span>
+    <span class="na">ORBIT_MMAP_SIZE</span><span class="pi">:</span> <span class="s2">"</span><span class="s">64GB"</span>
+  <span class="na">volumes</span><span class="pi">:</span>
+  <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">hugepages</span>
+    <span class="na">emptyDir</span><span class="pi">:</span>
+      <span class="na">medium</span><span class="pi">:</span> <span class="s">HugePages-2Mi</span>
+</code></pre></div></div>
+
+<h3 id="gpu-optimization">GPU Optimization</h3>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c1"># Multi-GPU configuration</span>
+<span class="na">orbitCompute</span><span class="pi">:</span>
+  <span class="na">gpu</span><span class="pi">:</span>
+    <span class="na">count</span><span class="pi">:</span> <span class="m">4</span>
+    <span class="na">strategy</span><span class="pi">:</span> <span class="s2">"</span><span class="s">model_parallel"</span>
+    <span class="na">peerAccess</span><span class="pi">:</span> <span class="kc">true</span>
+    <span class="na">nvlink</span><span class="pi">:</span> <span class="kc">true</span>
+  <span class="na">env</span><span class="pi">:</span>
+    <span class="na">NCCL_DEBUG</span><span class="pi">:</span> <span class="s2">"</span><span class="s">INFO"</span>
+    <span class="na">ORBIT_GPU_PEER_ACCESS</span><span class="pi">:</span> <span class="s2">"</span><span class="s">true"</span>
+</code></pre></div></div>
+
+<h2 id="-additional-resources">📚 Additional Resources</h2>
+
+<ul>
+  <li><a href="docs/k8s-deployment-sizing-guide.md">Kubernetes Deployment Sizing Guide</a></li>
+  <li><a href="https://turingworks.github.io/orbit-rs/container-images/">Container Images Page</a></li>
+  <li><a href="docs/gpu-acceleration.md">GPU Support Documentation</a></li>
+  <li><a href="docs/performance-tuning.md">Performance Tuning Guide</a></li>
+</ul>
+
+<h2 id="-contributing">🤝 Contributing</h2>
+
+<p>When adding new deployment configurations:</p>
+
+<ol>
+  <li>Update the appropriate values file</li>
+  <li>Run the validation script</li>
+  <li>Test with different workload profiles</li>
+  <li>Update documentation</li>
+</ol>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Run validation before submitting PR</span>
+./scripts/validate-k8s-deployments.sh
+
+<span class="c"># Format code</span>
+cargo <span class="nb">fmt</span> <span class="nt">--all</span>
+</code></pre></div></div>
+
+<h2 id="-license">📄 License</h2>
+
+<p>This project is licensed under the BSD-3-Clause OR MIT license - see the <a href="LICENSE">LICENSE</a> file for details.</p>
+
+<hr />
+
+<p>For questions or support, please open an issue in the <a href="https://github.com/TuringWorks/orbit-rs/issues">GitHub repository</a>.</p>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/orbit-rs/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Orbit-RS Documentation</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">TuringWorks</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

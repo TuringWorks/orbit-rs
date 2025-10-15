@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["SchemaType"],"struct":["JsonSchema","JsonSchemaBuilder","ValidationError","ValidationResult"]};

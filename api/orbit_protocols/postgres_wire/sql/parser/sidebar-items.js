@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["dcl","ddl","dml","expressions","select","tcl","utilities"],"struct":["ParseError","SqlParser"],"type":["ParseResult"]};

@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Cypher GraphRAG Procedures Design | Orbit-RS Documentation</title>
+<meta name="generator" content="Jekyll v4.4.1" />
+<meta property="og:title" content="Cypher GraphRAG Procedures Design" />
+<meta name="author" content="TuringWorks" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<meta property="og:description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<link rel="canonical" href="https://turingworks.github.io/orbit-rs/cypher_graphrag_design.html" />
+<meta property="og:url" content="https://turingworks.github.io/orbit-rs/cypher_graphrag_design.html" />
+<meta property="og:site_name" content="Orbit-RS Documentation" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Cypher GraphRAG Procedures Design" />
+<meta name="twitter:site" content="@TuringWorksAI" />
+<meta name="twitter:creator" content="@TuringWorks" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","author":{"@type":"Person","name":"TuringWorks"},"description":"The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform","headline":"Cypher GraphRAG Procedures Design","url":"https://turingworks.github.io/orbit-rs/cypher_graphrag_design.html"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/orbit-rs/assets/main.css">
+  <link rel="stylesheet" href="/orbit-rs/assets/css/custom.css"><link type="application/atom+xml" rel="alternate" href="https://turingworks.github.io/orbit-rs/feed.xml" title="Orbit-RS Documentation" /></head><body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/orbit-rs/">Orbit-RS Documentation</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/orbit-rs/">Orbit-RS Documentation</a><a class="page-link" href="/orbit-rs/project_overview.html">Orbit-RS: Comprehensive Project Overview</a><a class="page-link" href="/orbit-rs/quick_start.html">Quick Start Guide - Multi-Protocol Database Server</a><a class="page-link" href="/orbit-rs/roadmap/">Development Roadmap</a><a class="page-link" href="/orbit-rs/features/">Orbit-RS Feature Index</a><a class="page-link" href="/orbit-rs/compute-acceleration/">Hardware Acceleration Guide</a><a class="page-link" href="/orbit-rs/contributing.html">Contributing Guide</a><a class="page-link" href="/orbit-rs/overview.html">Architecture Overview</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <h1 id="cypher-graphrag-procedures-design">Cypher GraphRAG Procedures Design</h1>
+
+<h2 id="overview">Overview</h2>
+
+<p>This document defines Cypher stored procedures for GraphRAG operations that integrate with Orbit’s GraphRAG capabilities through the Bolt protocol. These procedures follow Neo4j conventions and provide natural integration with Cypher queries.</p>
+
+<h2 id="procedure-categories">Procedure Categories</h2>
+
+<h3 id="1-knowledge-graph-building-procedures">1. Knowledge Graph Building Procedures</h3>
+
+<h4 id="orbitgraphragbuildknowledgekg_name-document_id-text-metadata-config"><code class="language-plaintext highlighter-rouge">orbit.graphrag.buildKnowledge(kg_name, document_id, text, metadata, config)</code></h4>
+<p>Builds knowledge graphs from document text with extracted entities and relationships.</p>
+
+<div class="language-cypher highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Build knowledge graph from document</span>
+<span class="k">CALL</span> <span class="n">orbit.graphrag.buildKnowledge</span><span class="ss">(</span>
+    <span class="s2">"scientific_papers"</span><span class="ss">,</span>
+    <span class="s2">"paper_001"</span><span class="ss">,</span> 
+    <span class="s2">"Machine learning is a subset of artificial intelligence..."</span><span class="ss">,</span>
+    <span class="ss">{</span><span class="py">author:</span> <span class="s2">"John Doe"</span><span class="ss">,</span> <span class="nl">year</span><span class="dl">:</span><span class="w"> </span><span class="m">2023</span><span class="ss">,</span> <span class="py">journal:</span> <span class="s2">"AI Review"</span><span class="ss">},</span>
+    <span class="ss">{</span><span class="py">extractors:</span> <span class="ss">[</span><span class="s2">"entity"</span><span class="ss">,</span> <span class="s2">"relationship"</span><span class="ss">],</span> <span class="py">build_graph:</span> <span class="k">true</span><span class="ss">}</span>
+<span class="ss">)</span> <span class="k">YIELD</span> <span class="n">kg_name</span><span class="ss">,</span> <span class="n">document_id</span><span class="ss">,</span> <span class="n">entities_extracted</span><span class="ss">,</span> <span class="n">relationships_extracted</span><span class="ss">,</span> <span class="n">processing_time_ms</span>
+<span class="k">RETURN</span> <span class="n">kg_name</span><span class="ss">,</span> <span class="n">entities_extracted</span><span class="ss">,</span> <span class="n">relationships_extracted</span><span class="ss">;</span>
+
+<span class="c1">// Build with existing graph nodes as context</span>
+<span class="k">MATCH</span><span class="w"> </span><span class="ss">(</span><span class="py">doc:</span><span class="n">Document</span> <span class="ss">{</span><span class="py">id:</span> <span class="s2">"paper_001"</span><span class="ss">})</span>
+<span class="k">CALL</span> <span class="n">orbit.graphrag.buildKnowledge</span><span class="ss">(</span>
+    <span class="s2">"research_kg"</span><span class="ss">,</span>
+    <span class="n">doc.id</span><span class="ss">,</span>
+    <span class="n">doc.content</span><span class="ss">,</span>
+    <span class="ss">{</span><span class="py">category:</span> <span class="n">doc.category</span><span class="ss">,</span> <span class="py">authors:</span> <span class="n">doc.authors</span><span class="ss">},</span>
+    <span class="ss">{</span><span class="py">context_nodes:</span> <span class="ss">[</span><span class="n">doc.id</span><span class="ss">],</span> <span class="py">link_to_existing:</span> <span class="k">true</span><span class="ss">}</span>
+<span class="ss">)</span> <span class="k">YIELD</span> <span class="n">kg_name</span><span class="ss">,</span> <span class="n">entities_extracted</span><span class="ss">,</span> <span class="n">relationships_extracted</span><span class="ss">,</span> <span class="n">graph_nodes_created</span>
+<span class="k">CREATE</span><span class="w"> </span><span class="ss">(</span><span class="n">doc</span><span class="ss">)</span><span class="o">-</span><span class="ss">[</span><span class="nc">:HAS_KNOWLEDGE_GRAPH</span><span class="ss">]</span><span class="o">-&gt;</span><span class="ss">(</span><span class="py">kg:</span><span class="n">KnowledgeGraph</span> <span class="ss">{</span><span class="py">name:</span> <span class="n">kg_name</span><span class="ss">})</span>
+<span class="k">SET</span> <span class="n">kg.entities_count</span> <span class="o">=</span> <span class="n">entities_extracted</span><span class="ss">,</span>
+    <span class="n">kg.relationships_count</span> <span class="o">=</span> <span class="n">relationships_extracted</span><span class="ss">,</span>
+    <span class="n">kg.nodes_created</span> <span class="o">=</span> <span class="n">graph_nodes_created</span><span class="ss">;</span>
+</code></pre></div></div>
+
+<h4 id="orbitgraphragextractentitiestext-config"><code class="language-plaintext highlighter-rouge">orbit.graphrag.extractEntities(text, config)</code></h4>
+<p>Extracts entities from text without building the full knowledge graph.</p>
+
+<div class="language-cypher highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Extract entities from multiple documents</span>
+<span class="k">MATCH</span><span class="w"> </span><span class="ss">(</span><span class="py">doc:</span><span class="n">Document</span><span class="ss">)</span> <span class="k">WHERE</span> <span class="n">doc.processed</span> <span class="o">=</span> <span class="k">false</span>
+<span class="k">CALL</span> <span class="n">orbit.graphrag.extractEntities</span><span class="ss">(</span>
+    <span class="n">doc.content</span><span class="ss">,</span>
+    <span class="ss">{</span><span class="py">extractors:</span> <span class="ss">[</span><span class="s2">"named_entity"</span><span class="ss">,</span> <span class="s2">"keyword"</span><span class="ss">],</span> <span class="nl">confidence_threshold</span><span class="dl">:</span><span class="w"> </span><span class="m">0.7</span><span class="ss">}</span>
+<span class="ss">)</span> <span class="k">YIELD</span> <span class="n">entity_text</span><span class="ss">,</span> <span class="n">entity_type</span><span class="ss">,</span> <span class="n">confidence</span><span class="ss">,</span> <span class="n">start_pos</span><span class="ss">,</span> <span class="n">end_pos</span>
+<span class="k">CREATE</span><span class="w"> </span><span class="ss">(</span><span class="py">e:</span><span class="n">Entity</span> <span class="ss">{</span>
+    <span class="py">text:</span> <span class="n">entity_text</span><span class="ss">,</span> 
+    <span class="py">type:</span> <span class="n">entity_type</span><span class="ss">,</span> 
+    <span class="py">confidence:</span> <span class="n">confidence</span><span class="ss">,</span>
+    <span class="py">source_document:</span> <span class="n">doc.id</span>
+<span class="ss">})</span>
+<span class="k">CREATE</span><span class="w"> </span><span class="ss">(</span><span class="n">doc</span><span class="ss">)</span><span class="o">-</span><span class="ss">[</span><span class="nc">:CONTAINS_ENTITY</span><span class="ss">]</span><span class="o">-&gt;</span><span class="ss">(</span><span class="n">e</span><span class="ss">)</span>
+<span class="k">SET</span> <span class="n">doc.processed</span> <span class="o">=</span> <span class="k">true</span><span class="ss">;</span>
+
+<span class="c1">// Extract entities with relationship to existing graph</span>
+<span class="k">MATCH</span><span class="w"> </span><span class="ss">(</span><span class="py">person:</span><span class="n">Person</span> <span class="ss">{</span><span class="py">name:</span> <span class="s2">"Alice"</span><span class="ss">})</span>
+<span class="k">CALL</span> <span class="n">orbit.graphrag.extractEntities</span><span class="ss">(</span>
+    <span class="s2">"Alice works at OpenAI on language models with GPT architecture"</span><span class="ss">,</span>
+    <span class="ss">{</span><span class="py">focus_entity:</span> <span class="n">person.name</span><span class="ss">,</span> <span class="py">extract_relationships:</span> <span class="k">true</span><span class="ss">}</span>
+<span class="ss">)</span> <span class="k">YIELD</span> <span class="n">entity_text</span><span class="ss">,</span> <span class="n">entity_type</span><span class="ss">,</span> <span class="n">relationships</span>
+<span class="k">FOREACH</span><span class="w"> </span><span class="ss">(</span><span class="n">rel</span> <span class="ow">IN</span> <span class="n">relationships</span> <span class="o">|</span> 
+    <span class="k">MERGE</span><span class="w"> </span><span class="ss">(</span><span class="py">target:</span><span class="n">Entity</span> <span class="ss">{</span><span class="py">text:</span> <span class="n">rel.target_entity</span><span class="ss">})</span>
+    <span class="k">CREATE</span><span class="w"> </span><span class="ss">(</span><span class="n">person</span><span class="ss">)</span><span class="o">-</span><span class="ss">[</span><span class="nc">:rel</span><span class="n">.relationship_type</span><span class="ss">]</span><span class="o">-&gt;</span><span class="ss">(</span><span class="n">target</span><span class="ss">)</span>
+<span class="ss">);</span>
+</code></pre></div></div>
+
+<h3 id="2-query-and-retrieval-procedures">2. Query and Retrieval Procedures</h3>
+
+<h4 id="orbitgraphragragquerykg_name-query_text-config"><code class="language-plaintext highlighter-rouge">orbit.graphrag.ragQuery(kg_name, query_text, config)</code></h4>
+<p>Performs Retrieval-Augmented Generation queries against knowledge graphs.</p>
+
+<div class="language-cypher highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Simple RAG query</span>
+<span class="k">CALL</span> <span class="n">orbit.graphrag.ragQuery</span><span class="ss">(</span>
+    <span class="s2">"scientific_papers"</span><span class="ss">,</span>
+    <span class="s2">"What are the main applications of machine learning?"</span><span class="ss">,</span>
+    <span class="ss">{</span>
+        <span class="nl">max_hops</span><span class="dl">:</span><span class="w"> </span><span class="m">3</span><span class="ss">,</span>
+        <span class="nl">context_size</span><span class="dl">:</span><span class="w"> </span><span class="m">2048</span><span class="ss">,</span>
+        <span class="py">llm_provider:</span> <span class="s2">"ollama"</span><span class="ss">,</span>
+        <span class="py">include_explanation:</span> <span class="k">true</span>
+    <span class="ss">}</span>
+<span class="ss">)</span> <span class="k">YIELD</span> <span class="n">response</span><span class="ss">,</span> <span class="n">confidence</span><span class="ss">,</span> <span class="n">processing_time_ms</span><span class="ss">,</span> <span class="n">entities_involved</span><span class="ss">,</span> <span class="n">citations</span>
+<span class="k">RETURN</span> <span class="n">response</span><span class="ss">,</span> <span class="n">confidence</span><span class="ss">,</span> <span class="n">entities_involved</span><span class="ss">;</span>
+
+<span class="c1">// RAG query with graph context</span>
+<span class="k">MATCH</span> <span class="n">path</span> <span class="o">=</span> <span class="ss">(</span><span class="py">start:</span><span class="n">Concept</span> <span class="ss">{</span><span class="py">name:</span> <span class="s2">"Machine Learning"</span><span class="ss">})</span><span class="o">-</span><span class="ss">[</span><span class="o">*</span><span class="m">1</span><span class="o">..</span><span class="m">2</span><span class="ss">]</span><span class="o">-</span><span class="ss">(</span><span class="py">related:</span><span class="n">Concept</span><span class="ss">)</span>
+<span class="k">WITH</span> <span class="nf">collect</span><span class="ss">(</span><span class="n">related.name</span><span class="ss">)</span> <span class="k">as</span> <span class="n">context_concepts</span>
+<span class="k">CALL</span> <span class="n">orbit.graphrag.ragQuery</span><span class="ss">(</span>
+    <span class="s2">"research_kg"</span><span class="ss">,</span> 
+    <span class="s2">"How do these concepts relate to deep learning?"</span><span class="ss">,</span>
+    <span class="ss">{</span>
+        <span class="nl">max_hops</span><span class="dl">:</span><span class="w"> </span><span class="m">2</span><span class="ss">,</span>
+        <span class="py">context_entities:</span> <span class="n">context_concepts</span><span class="ss">,</span>
+        <span class="py">include_path_reasoning:</span> <span class="k">true</span>
+    <span class="ss">}</span>
+<span class="ss">)</span> <span class="k">YIELD</span> <span class="n">response</span><span class="ss">,</span> <span class="n">confidence</span><span class="ss">,</span> <span class="n">reasoning_paths</span>
+<span class="k">RETURN</span> <span class="n">response</span><span class="ss">,</span> <span class="n">confidence</span><span class="ss">,</span> 
+       <span class="ss">[</span><span class="n">path</span> <span class="ow">IN</span> <span class="n">reasoning_paths</span> <span class="o">|</span> <span class="n">path.explanation</span><span class="ss">]</span> <span class="k">as</span> <span class="n">explanations</span><span class="ss">;</span>
+</code></pre></div></div>
+
+<h4 id="orbitgraphragfindpathskg_name-from_entity-to_entity-config"><code class="language-plaintext highlighter-rouge">orbit.graphrag.findPaths(kg_name, from_entity, to_entity, config)</code></h4>
+<p>Finds reasoning paths between entities using multi-hop reasoning.</p>
+
+<div class="language-cypher highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Find connection paths between entities</span>
+<span class="k">CALL</span> <span class="n">orbit.graphrag.findPaths</span><span class="ss">(</span>
+    <span class="s2">"tech_companies"</span><span class="ss">,</span>
+    <span class="s2">"Apple Inc."</span><span class="ss">,</span>
+    <span class="s2">"iPhone"</span><span class="ss">,</span>
+    <span class="ss">{</span><span class="nl">max_hops</span><span class="dl">:</span><span class="w"> </span><span class="m">4</span><span class="ss">,</span> <span class="py">include_explanation:</span> <span class="k">true</span><span class="ss">,</span> <span class="nl">max_results</span><span class="dl">:</span><span class="w"> </span><span class="m">5</span><span class="ss">}</span>
+<span class="ss">)</span> <span class="k">YIELD</span> <span class="n">path_nodes</span><span class="ss">,</span> <span class="n">relationships</span><span class="ss">,</span> <span class="n">score</span><span class="ss">,</span> <span class="n">length</span><span class="ss">,</span> <span class="n">explanation</span>
+<span class="k">RETURN</span> <span class="n">path_nodes</span><span class="ss">,</span> <span class="n">relationships</span><span class="ss">,</span> <span class="n">score</span><span class="ss">,</span> <span class="n">explanation</span>
+<span class="k">ORDER</span> <span class="k">BY</span> <span class="n">score</span> <span class="k">DESC</span><span class="ss">;</span>
+
+<span class="c1">// Find paths and create graph representation</span>
+<span class="k">MATCH</span><span class="w"> </span><span class="ss">(</span><span class="py">start:</span><span class="n">Company</span> <span class="ss">{</span><span class="py">name:</span> <span class="s2">"Apple Inc."</span><span class="ss">})</span>
+<span class="k">MATCH</span><span class="w"> </span><span class="ss">(</span><span class="py">end:</span><span class="n">Product</span> <span class="ss">{</span><span class="py">name:</span> <span class="s2">"iPhone"</span><span class="ss">})</span>
+<span class="k">CALL</span> <span class="n">orbit.graphrag.findPaths</span><span class="ss">(</span>
+    <span class="s2">"business_kg"</span><span class="ss">,</span>
+    <span class="n">start.name</span><span class="ss">,</span>
+    <span class="n">end.name</span><span class="ss">,</span>
+    <span class="ss">{</span><span class="nl">max_hops</span><span class="dl">:</span><span class="w"> </span><span class="m">3</span><span class="ss">,</span> <span class="py">relationship_types:</span> <span class="ss">[</span><span class="s2">"PRODUCES"</span><span class="ss">,</span> <span class="s2">"DEVELOPS"</span><span class="ss">,</span> <span class="s2">"OWNS"</span><span class="ss">]}</span>
+<span class="ss">)</span> <span class="k">YIELD</span> <span class="n">path_nodes</span><span class="ss">,</span> <span class="n">relationships</span><span class="ss">,</span> <span class="n">score</span>
+<span class="k">WITH</span> <span class="k">start</span><span class="ss">,</span> <span class="k">end</span><span class="ss">,</span> <span class="n">path_nodes</span><span class="ss">,</span> <span class="n">relationships</span><span class="ss">,</span> <span class="n">score</span>
+<span class="k">WHERE</span> <span class="n">score</span> <span class="o">&gt;</span> <span class="mf">0.8</span>
+<span class="k">FOREACH</span><span class="w"> </span><span class="ss">(</span><span class="n">i</span> <span class="ow">IN</span> <span class="nf">range</span><span class="ss">(</span><span class="mi">0</span><span class="ss">,</span> <span class="nf">length</span><span class="ss">(</span><span class="n">path_nodes</span><span class="ss">)</span><span class="o">-</span><span class="mi">2</span><span class="ss">)</span> <span class="o">|</span>
+    <span class="k">FOREACH</span><span class="w"> </span><span class="ss">(</span><span class="n">current_node</span> <span class="ow">IN</span> <span class="ss">[</span><span class="n">path_nodes</span><span class="ss">[</span><span class="n">i</span><span class="ss">]]</span> <span class="o">|</span>
+        <span class="k">FOREACH</span><span class="w"> </span><span class="ss">(</span><span class="n">next_node</span> <span class="ow">IN</span> <span class="ss">[</span><span class="n">path_nodes</span><span class="ss">[</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="ss">]]</span> <span class="o">|</span>
+            <span class="k">FOREACH</span><span class="w"> </span><span class="ss">(</span><span class="n">rel_type</span> <span class="ow">IN</span> <span class="ss">[</span><span class="n">relationships</span><span class="ss">[</span><span class="n">i</span><span class="ss">]</span><span class="n">.type</span><span class="ss">]</span> <span class="o">|</span>
+                <span class="k">MERGE</span><span class="w"> </span><span class="ss">(</span><span class="py">c:</span><span class="n">PathNode</span> <span class="ss">{</span><span class="py">name:</span> <span class="n">current_node</span><span class="ss">})</span>
+                <span class="k">MERGE</span><span class="w"> </span><span class="ss">(</span><span class="py">n:</span><span class="n">PathNode</span> <span class="ss">{</span><span class="py">name:</span> <span class="n">next_node</span><span class="ss">})</span>
+                <span class="k">CREATE</span><span class="w"> </span><span class="ss">(</span><span class="n">c</span><span class="ss">)</span><span class="o">-</span><span class="ss">[</span><span class="nc">:rel_type</span> <span class="ss">{</span><span class="py">score:</span> <span class="n">score</span><span class="ss">,</span> <span class="py">from_reasoning:</span> <span class="k">true</span><span class="ss">}]</span><span class="o">-&gt;</span><span class="ss">(</span><span class="n">n</span><span class="ss">)</span>
+            <span class="ss">)</span>
+        <span class="ss">)</span>
+    <span class="ss">)</span>
+<span class="ss">);</span>
+</code></pre></div></div>
+
+<h3 id="3-similarity-and-search-procedures">3. Similarity and Search Procedures</h3>
+
+<h4 id="orbitgraphragfindsimilarkg_name-entity-config"><code class="language-plaintext highlighter-rouge">orbit.graphrag.findSimilar(kg_name, entity, config)</code></h4>
+<p>Finds entities similar to a given entity using vector similarity.</p>
+
+<div class="language-cypher highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Find similar companies</span>
+<span class="k">CALL</span> <span class="n">orbit.graphrag.findSimilar</span><span class="ss">(</span>
+    <span class="s2">"business_kg"</span><span class="ss">,</span>
+    <span class="s2">"Apple Inc."</span><span class="ss">,</span>
+    <span class="ss">{</span><span class="nl">limit</span><span class="dl">:</span><span class="w"> </span><span class="m">10</span><span class="ss">,</span> <span class="nl">threshold</span><span class="dl">:</span><span class="w"> </span><span class="m">0.8</span><span class="ss">,</span> <span class="py">entity_types:</span> <span class="ss">[</span><span class="s2">"Company"</span><span class="ss">]}</span>
+<span class="ss">)</span> <span class="k">YIELD</span> <span class="n">entity_name</span><span class="ss">,</span> <span class="n">similarity_score</span><span class="ss">,</span> <span class="n">shared_properties</span>
+<span class="k">RETURN</span> <span class="n">entity_name</span><span class="ss">,</span> <span class="n">similarity_score</span><span class="ss">,</span> <span class="n">shared_properties</span>
+<span class="k">ORDER</span> <span class="k">BY</span> <span class="n">similarity_score</span> <span class="k">DESC</span><span class="ss">;</span>
+
+<span class="c1">// Find similar entities and connect them in graph</span>
+<span class="k">MATCH</span><span class="w"> </span><span class="ss">(</span><span class="py">company:</span><span class="n">Company</span> <span class="ss">{</span><span class="py">name:</span> <span class="s2">"Apple Inc."</span><span class="ss">})</span>
+<span class="k">CALL</span> <span class="n">orbit.graphrag.findSimilar</span><span class="ss">(</span>
+    <span class="s2">"business_kg"</span><span class="ss">,</span>
+    <span class="n">company.name</span><span class="ss">,</span>
+    <span class="ss">{</span><span class="nl">limit</span><span class="dl">:</span><span class="w"> </span><span class="m">5</span><span class="ss">,</span> <span class="nl">threshold</span><span class="dl">:</span><span class="w"> </span><span class="m">0.7</span><span class="ss">,</span> <span class="py">return_properties:</span> <span class="k">true</span><span class="ss">}</span>
+<span class="ss">)</span> <span class="k">YIELD</span> <span class="n">entity_name</span><span class="ss">,</span> <span class="n">similarity_score</span><span class="ss">,</span> <span class="n">shared_properties</span>
+<span class="k">MERGE</span><span class="w"> </span><span class="ss">(</span><span class="py">similar:</span><span class="n">Company</span> <span class="ss">{</span><span class="py">name:</span> <span class="n">entity_name</span><span class="ss">})</span>
+<span class="k">CREATE</span><span class="w"> </span><span class="ss">(</span><span class="n">company</span><span class="ss">)</span><span class="o">-</span><span class="ss">[</span><span class="nc">:SIMILAR_TO</span> <span class="ss">{</span><span class="py">score:</span> <span class="n">similarity_score</span><span class="ss">,</span> <span class="py">shared:</span> <span class="n">shared_properties</span><span class="ss">}]</span><span class="o">-&gt;</span><span class="ss">(</span><span class="n">similar</span><span class="ss">);</span>
+</code></pre></div></div>
+
+<h4 id="orbitgraphragsemanticsearchkg_name-query_text-config"><code class="language-plaintext highlighter-rouge">orbit.graphrag.semanticSearch(kg_name, query_text, config)</code></h4>
+<p>Performs semantic search across the knowledge graph.</p>
+
+<div class="language-cypher highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Semantic search for concepts</span>
+<span class="k">CALL</span> <span class="n">orbit.graphrag.semanticSearch</span><span class="ss">(</span>
+    <span class="s2">"research_kg"</span><span class="ss">,</span>
+    <span class="s2">"quantum computing applications"</span><span class="ss">,</span>
+    <span class="ss">{</span><span class="nl">limit</span><span class="dl">:</span><span class="w"> </span><span class="m">20</span><span class="ss">,</span> <span class="nl">min_relevance</span><span class="dl">:</span><span class="w"> </span><span class="m">0.6</span><span class="ss">,</span> <span class="py">include_context:</span> <span class="k">true</span><span class="ss">}</span>
+<span class="ss">)</span> <span class="k">YIELD</span> <span class="n">entity_name</span><span class="ss">,</span> <span class="n">entity_type</span><span class="ss">,</span> <span class="n">relevance_score</span><span class="ss">,</span> <span class="n">context_snippet</span>
+<span class="k">RETURN</span> <span class="n">entity_name</span><span class="ss">,</span> <span class="n">entity_type</span><span class="ss">,</span> <span class="n">relevance_score</span><span class="ss">,</span> <span class="n">context_snippet</span>
+<span class="k">ORDER</span> <span class="k">BY</span> <span class="n">relevance_score</span> <span class="k">DESC</span><span class="ss">;</span>
+
+<span class="c1">// Create semantic clusters from search results</span>
+<span class="k">CALL</span> <span class="n">orbit.graphrag.semanticSearch</span><span class="ss">(</span>
+    <span class="s2">"research_kg"</span><span class="ss">,</span>
+    <span class="s2">"artificial intelligence techniques"</span><span class="ss">,</span>
+    <span class="ss">{</span><span class="nl">limit</span><span class="dl">:</span><span class="w"> </span><span class="m">50</span><span class="ss">,</span> <span class="py">cluster_results:</span> <span class="k">true</span><span class="ss">}</span>
+<span class="ss">)</span> <span class="k">YIELD</span> <span class="n">entity_name</span><span class="ss">,</span> <span class="n">entity_type</span><span class="ss">,</span> <span class="n">relevance_score</span><span class="ss">,</span> <span class="n">cluster_id</span>
+<span class="k">WITH</span> <span class="n">cluster_id</span><span class="ss">,</span> <span class="nf">collect</span><span class="ss">({</span><span class="py">name:</span> <span class="n">entity_name</span><span class="ss">,</span> <span class="py">type:</span> <span class="n">entity_type</span><span class="ss">,</span> <span class="py">score:</span> <span class="n">relevance_score</span><span class="ss">})</span> <span class="k">as</span> <span class="n">cluster_entities</span>
+<span class="k">FOREACH</span><span class="w"> </span><span class="ss">(</span><span class="n">entity</span> <span class="ow">IN</span> <span class="n">cluster_entities</span> <span class="o">|</span>
+    <span class="k">MERGE</span><span class="w"> </span><span class="ss">(</span><span class="py">e:</span><span class="n">Concept</span> <span class="ss">{</span><span class="py">name:</span> <span class="n">entity.name</span><span class="ss">,</span> <span class="py">type:</span> <span class="n">entity.type</span><span class="ss">})</span>
+    <span class="k">MERGE</span><span class="w"> </span><span class="ss">(</span><span class="py">cluster:</span><span class="n">SemanticCluster</span> <span class="ss">{</span><span class="py">id:</span> <span class="n">cluster_id</span><span class="ss">})</span>
+    <span class="k">CREATE</span><span class="w"> </span><span class="ss">(</span><span class="n">e</span><span class="ss">)</span><span class="o">-</span><span class="ss">[</span><span class="nc">:BELONGS_TO_CLUSTER</span> <span class="ss">{</span><span class="py">relevance:</span> <span class="n">entity.score</span><span class="ss">}]</span><span class="o">-&gt;</span><span class="ss">(</span><span class="n">cluster</span><span class="ss">)</span>
+<span class="ss">);</span>
+</code></pre></div></div>
+
+<h3 id="4-knowledge-graph-analytics-procedures">4. Knowledge Graph Analytics Procedures</h3>
+
+<h4 id="orbitgraphraggetstatskg_name"><code class="language-plaintext highlighter-rouge">orbit.graphrag.getStats(kg_name)</code></h4>
+<p>Retrieves comprehensive statistics about a knowledge graph.</p>
+
+<div class="language-cypher highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Get knowledge graph statistics</span>
+<span class="k">CALL</span> <span class="n">orbit.graphrag.getStats</span><span class="ss">(</span><span class="s2">"research_kg"</span><span class="ss">)</span>
+<span class="k">YIELD</span> <span class="n">documents_processed</span><span class="ss">,</span> <span class="n">entities_extracted</span><span class="ss">,</span> <span class="n">relationships_extracted</span><span class="ss">,</span>
+      <span class="n">avg_document_processing_time_ms</span><span class="ss">,</span> <span class="n">avg_rag_query_time_ms</span><span class="ss">,</span> <span class="n">rag_success_rate</span>
+<span class="k">RETURN</span> <span class="n">documents_processed</span><span class="ss">,</span> <span class="n">entities_extracted</span><span class="ss">,</span> <span class="n">relationships_extracted</span><span class="ss">,</span>
+       <span class="n">avg_document_processing_time_ms</span><span class="ss">,</span> <span class="n">rag_success_rate</span><span class="ss">;</span>
+
+<span class="c1">// Compare stats across multiple knowledge graphs</span>
+<span class="k">UNWIND</span> <span class="ss">[</span><span class="s2">"research_kg"</span><span class="ss">,</span> <span class="s2">"business_kg"</span><span class="ss">,</span> <span class="s2">"news_kg"</span><span class="ss">]</span> <span class="k">as</span> <span class="n">kg_name</span>
+<span class="k">CALL</span> <span class="n">orbit.graphrag.getStats</span><span class="ss">(</span><span class="n">kg_name</span><span class="ss">)</span>
+<span class="k">YIELD</span> <span class="n">documents_processed</span><span class="ss">,</span> <span class="n">entities_extracted</span><span class="ss">,</span> <span class="n">relationships_extracted</span>
+<span class="k">RETURN</span> <span class="n">kg_name</span><span class="ss">,</span> 
+       <span class="n">entities_extracted</span> <span class="err">/</span> <span class="n">documents_processed</span> <span class="k">as</span> <span class="n">entity_density</span><span class="ss">,</span>
+       <span class="n">relationships_extracted</span> <span class="err">/</span> <span class="n">entities_extracted</span> <span class="k">as</span> <span class="n">relationship_density</span>
+<span class="k">ORDER</span> <span class="k">BY</span> <span class="n">entity_density</span> <span class="k">DESC</span><span class="ss">;</span>
+</code></pre></div></div>
+
+<h4 id="orbitgraphraglistentitieskg_name-config"><code class="language-plaintext highlighter-rouge">orbit.graphrag.listEntities(kg_name, config)</code></h4>
+<p>Lists entities from a knowledge graph with filtering and pagination.</p>
+
+<div class="language-cypher highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// List entities with filtering</span>
+<span class="k">CALL</span> <span class="n">orbit.graphrag.listEntities</span><span class="ss">(</span>
+    <span class="s2">"news_kg"</span><span class="ss">,</span>
+    <span class="ss">{</span>
+        <span class="py">entity_type:</span> <span class="s2">"Person"</span><span class="ss">,</span>
+        <span class="nl">limit</span><span class="dl">:</span><span class="w"> </span><span class="m">100</span><span class="ss">,</span>
+        <span class="nl">offset</span><span class="dl">:</span><span class="w"> </span><span class="m">0</span><span class="ss">,</span>
+        <span class="py">sort_by:</span> <span class="s2">"confidence"</span><span class="ss">,</span>
+        <span class="py">sort_order:</span> <span class="s2">"DESC"</span><span class="ss">,</span>
+        <span class="py">property_filters:</span> <span class="ss">{</span><span class="py">nationality:</span> <span class="s2">"American"</span><span class="ss">}</span>
+    <span class="ss">}</span>
+<span class="ss">)</span> <span class="k">YIELD</span> <span class="n">entity_text</span><span class="ss">,</span> <span class="n">entity_type</span><span class="ss">,</span> <span class="n">confidence</span><span class="ss">,</span> <span class="n">properties</span><span class="ss">,</span> <span class="n">aliases</span>
+<span class="k">RETURN</span> <span class="n">entity_text</span><span class="ss">,</span> <span class="n">entity_type</span><span class="ss">,</span> <span class="n">confidence</span><span class="ss">,</span> <span class="n">properties</span><span class="ss">;</span>
+
+<span class="c1">// Create graph nodes from listed entities</span>
+<span class="k">CALL</span> <span class="n">orbit.graphrag.listEntities</span><span class="ss">(</span>
+    <span class="s2">"business_kg"</span><span class="ss">,</span>
+    <span class="ss">{</span><span class="py">entity_type:</span> <span class="s2">"Company"</span><span class="ss">,</span> <span class="py">property_filters:</span> <span class="ss">{</span><span class="py">industry:</span> <span class="s2">"technology"</span><span class="ss">}}</span>
+<span class="ss">)</span> <span class="k">YIELD</span> <span class="n">entity_text</span><span class="ss">,</span> <span class="n">entity_type</span><span class="ss">,</span> <span class="n">properties</span>
+<span class="k">MERGE</span><span class="w"> </span><span class="ss">(</span><span class="py">c:</span><span class="n">Company</span> <span class="ss">{</span><span class="py">name:</span> <span class="n">entity_text</span><span class="ss">})</span>
+<span class="k">SET</span> <span class="n">c</span> <span class="o">+=</span> <span class="n">properties</span><span class="ss">,</span>
+    <span class="n">c.from_graphrag</span> <span class="o">=</span> <span class="k">true</span><span class="ss">,</span>
+    <span class="n">c.confidence</span> <span class="o">=</span> <span class="n">properties.confidence</span><span class="ss">;</span>
+</code></pre></div></div>
+
+<h3 id="5-advanced-analytics-procedures">5. Advanced Analytics Procedures</h3>
+
+<h4 id="orbitgraphraganalyzetrendskg_name-concept-config"><code class="language-plaintext highlighter-rouge">orbit.graphrag.analyzeTrends(kg_name, concept, config)</code></h4>
+<p>Analyzes trends and patterns around specific concepts.</p>
+
+<div class="language-cypher highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Analyze research trends over time</span>
+<span class="k">CALL</span> <span class="n">orbit.graphrag.analyzeTrends</span><span class="ss">(</span>
+    <span class="s2">"research_kg"</span><span class="ss">,</span>
+    <span class="s2">"artificial intelligence"</span><span class="ss">,</span>
+    <span class="ss">{</span>
+        <span class="py">time_grouping:</span> <span class="s2">"year"</span><span class="ss">,</span>
+        <span class="py">metrics:</span> <span class="ss">[</span><span class="s2">"mention_frequency"</span><span class="ss">,</span> <span class="s2">"sentiment"</span><span class="ss">,</span> <span class="s2">"innovation_score"</span><span class="ss">],</span>
+        <span class="py">time_range:</span> <span class="ss">{</span><span class="py">start:</span> <span class="s2">"2020-01-01"</span><span class="ss">,</span> <span class="py">end:</span> <span class="s2">"2024-01-01"</span><span class="ss">}</span>
+    <span class="ss">}</span>
+<span class="ss">)</span> <span class="k">YIELD</span> <span class="n">period</span><span class="ss">,</span> <span class="n">mention_frequency</span><span class="ss">,</span> <span class="n">sentiment</span><span class="ss">,</span> <span class="n">innovation_score</span>
+<span class="k">WITH</span> <span class="n">period</span><span class="ss">,</span> <span class="n">mention_frequency</span><span class="ss">,</span> <span class="n">sentiment</span><span class="ss">,</span> <span class="n">innovation_score</span>
+<span class="k">ORDER</span> <span class="k">BY</span> <span class="n">period</span>
+<span class="k">CREATE</span><span class="w"> </span><span class="ss">(</span><span class="py">trend:</span><span class="n">ResearchTrend</span> <span class="ss">{</span>
+    <span class="py">concept:</span> <span class="s2">"artificial intelligence"</span><span class="ss">,</span>
+    <span class="py">year:</span> <span class="n">period</span><span class="ss">,</span>
+    <span class="py">mentions:</span> <span class="n">mention_frequency</span><span class="ss">,</span>
+    <span class="py">sentiment:</span> <span class="n">sentiment</span><span class="ss">,</span>
+    <span class="py">innovation:</span> <span class="n">innovation_score</span>
+<span class="ss">});</span>
+
+<span class="c1">// Compare trends between related concepts</span>
+<span class="k">UNWIND</span> <span class="ss">[</span><span class="s2">"machine learning"</span><span class="ss">,</span> <span class="s2">"deep learning"</span><span class="ss">,</span> <span class="s2">"neural networks"</span><span class="ss">]</span> <span class="k">as</span> <span class="n">concept</span>
+<span class="k">CALL</span> <span class="n">orbit.graphrag.analyzeTrends</span><span class="ss">(</span>
+    <span class="s2">"research_kg"</span><span class="ss">,</span>
+    <span class="n">concept</span><span class="ss">,</span>
+    <span class="ss">{</span><span class="py">time_grouping:</span> <span class="s2">"quarter"</span><span class="ss">,</span> <span class="py">normalize:</span> <span class="k">true</span><span class="ss">}</span>
+<span class="ss">)</span> <span class="k">YIELD</span> <span class="n">period</span><span class="ss">,</span> <span class="n">normalized_growth</span>
+<span class="k">RETURN</span> <span class="n">concept</span><span class="ss">,</span> <span class="n">period</span><span class="ss">,</span> <span class="n">normalized_growth</span>
+<span class="k">ORDER</span> <span class="k">BY</span> <span class="n">period</span><span class="ss">,</span> <span class="n">normalized_growth</span> <span class="k">DESC</span><span class="ss">;</span>
+</code></pre></div></div>
+
+<h4 id="orbitgraphragdetectcommunitieskg_name-config"><code class="language-plaintext highlighter-rouge">orbit.graphrag.detectCommunities(kg_name, config)</code></h4>
+<p>Detects communities and clusters within the knowledge graph.</p>
+
+<div class="language-cypher highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Detect communities in research topics</span>
+<span class="k">CALL</span> <span class="n">orbit.graphrag.detectCommunities</span><span class="ss">(</span>
+    <span class="s2">"research_kg"</span><span class="ss">,</span>
+    <span class="ss">{</span>
+        <span class="py">algorithm:</span> <span class="s2">"louvain"</span><span class="ss">,</span>
+        <span class="nl">min_community_size</span><span class="dl">:</span><span class="w"> </span><span class="m">5</span><span class="ss">,</span>
+        <span class="nl">edge_weight_threshold</span><span class="dl">:</span><span class="w"> </span><span class="m">0.5</span><span class="ss">,</span>
+        <span class="nl">resolution</span><span class="dl">:</span><span class="w"> </span><span class="m">1.0</span>
+    <span class="ss">}</span>
+<span class="ss">)</span> <span class="k">YIELD</span> <span class="n">community_id</span><span class="ss">,</span> <span class="n">entities</span><span class="ss">,</span> <span class="n">dominant_concepts</span><span class="ss">,</span> <span class="n">internal_density</span>
+<span class="k">WITH</span> <span class="n">community_id</span><span class="ss">,</span> <span class="n">entities</span><span class="ss">,</span> <span class="n">dominant_concepts</span><span class="ss">,</span> <span class="n">internal_density</span>
+<span class="k">FOREACH</span><span class="w"> </span><span class="ss">(</span><span class="n">entity_name</span> <span class="ow">IN</span> <span class="n">entities</span> <span class="o">|</span>
+    <span class="k">MERGE</span><span class="w"> </span><span class="ss">(</span><span class="py">e:</span><span class="n">ResearchConcept</span> <span class="ss">{</span><span class="py">name:</span> <span class="n">entity_name</span><span class="ss">})</span>
+    <span class="k">MERGE</span><span class="w"> </span><span class="ss">(</span><span class="py">community:</span><span class="n">ResearchCommunity</span> <span class="ss">{</span><span class="py">id:</span> <span class="n">community_id</span><span class="ss">})</span>
+    <span class="k">SET</span> <span class="n">community.dominant_concepts</span> <span class="o">=</span> <span class="n">dominant_concepts</span><span class="ss">,</span>
+        <span class="n">community.internal_density</span> <span class="o">=</span> <span class="n">internal_density</span>
+    <span class="k">CREATE</span><span class="w"> </span><span class="ss">(</span><span class="n">e</span><span class="ss">)</span><span class="o">-</span><span class="ss">[</span><span class="nc">:MEMBER_OF</span><span class="ss">]</span><span class="o">-&gt;</span><span class="ss">(</span><span class="n">community</span><span class="ss">)</span>
+<span class="ss">);</span>
+</code></pre></div></div>
+
+<h3 id="6-graph-integration-procedures">6. Graph Integration Procedures</h3>
+
+<h4 id="orbitgraphragaugmentgraphkg_name-config"><code class="language-plaintext highlighter-rouge">orbit.graphrag.augmentGraph(kg_name, config)</code></h4>
+<p>Augments existing Cypher graph with GraphRAG-derived insights.</p>
+
+<div class="language-cypher highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Augment paper citation graph with semantic relationships</span>
+<span class="k">MATCH</span><span class="w"> </span><span class="ss">(</span><span class="py">paper1:</span><span class="n">Paper</span><span class="ss">)</span><span class="o">-</span><span class="ss">[</span><span class="nc">:CITES</span><span class="ss">]</span><span class="o">-&gt;</span><span class="ss">(</span><span class="py">paper2:</span><span class="n">Paper</span><span class="ss">)</span>
+<span class="k">WITH</span> <span class="nf">collect</span><span class="ss">(</span><span class="n">paper1.title</span> <span class="o">+</span> <span class="s2">" cites "</span> <span class="o">+</span> <span class="n">paper2.title</span><span class="ss">)</span> <span class="k">as</span> <span class="n">citation_texts</span>
+<span class="k">CALL</span> <span class="n">orbit.graphrag.augmentGraph</span><span class="ss">(</span>
+    <span class="s2">"research_kg"</span><span class="ss">,</span>
+    <span class="ss">{</span>
+        <span class="py">source_texts:</span> <span class="n">citation_texts</span><span class="ss">,</span>
+        <span class="py">derive_relationships:</span> <span class="k">true</span><span class="ss">,</span>
+        <span class="nl">confidence_threshold</span><span class="dl">:</span><span class="w"> </span><span class="m">0.8</span>
+    <span class="ss">}</span>
+<span class="ss">)</span> <span class="k">YIELD</span> <span class="n">source_entity</span><span class="ss">,</span> <span class="n">target_entity</span><span class="ss">,</span> <span class="n">relationship_type</span><span class="ss">,</span> <span class="n">confidence</span>
+<span class="k">MATCH</span><span class="w"> </span><span class="ss">(</span><span class="py">p1:</span><span class="n">Paper</span> <span class="ss">{</span><span class="py">title:</span> <span class="n">source_entity</span><span class="ss">})</span>
+<span class="k">MATCH</span><span class="w"> </span><span class="ss">(</span><span class="py">p2:</span><span class="n">Paper</span> <span class="ss">{</span><span class="py">title:</span> <span class="n">target_entity</span><span class="ss">})</span>
+<span class="k">CREATE</span><span class="w"> </span><span class="ss">(</span><span class="n">p1</span><span class="ss">)</span><span class="o">-</span><span class="ss">[</span><span class="nc">:rel_name</span> <span class="ss">{</span><span class="py">confidence:</span> <span class="n">confidence</span><span class="ss">,</span> <span class="py">derived:</span> <span class="k">true</span><span class="ss">}]</span><span class="o">-&gt;</span><span class="ss">(</span><span class="n">p2</span><span class="ss">)</span>
+<span class="k">WHERE</span> <span class="n">relationship_type</span> <span class="o">=</span> <span class="n">rel_name</span><span class="ss">;</span>
+
+<span class="c1">// Enrich existing nodes with GraphRAG entity information</span>
+<span class="k">MATCH</span><span class="w"> </span><span class="ss">(</span><span class="py">company:</span><span class="n">Company</span><span class="ss">)</span>
+<span class="k">CALL</span> <span class="n">orbit.graphrag.augmentGraph</span><span class="ss">(</span>
+    <span class="s2">"business_kg"</span><span class="ss">,</span>
+    <span class="ss">{</span>
+        <span class="py">enrich_nodes:</span> <span class="ss">[</span><span class="n">company.name</span><span class="ss">],</span>
+        <span class="py">extract_properties:</span> <span class="k">true</span><span class="ss">,</span>
+        <span class="py">find_aliases:</span> <span class="k">true</span>
+    <span class="ss">}</span>
+<span class="ss">)</span> <span class="k">YIELD</span> <span class="n">entity_name</span><span class="ss">,</span> <span class="n">enriched_properties</span><span class="ss">,</span> <span class="n">aliases</span>
+<span class="k">WHERE</span> <span class="n">entity_name</span> <span class="o">=</span> <span class="n">company.name</span>
+<span class="k">SET</span> <span class="n">company</span> <span class="o">+=</span> <span class="n">enriched_properties</span><span class="ss">,</span>
+    <span class="n">company.aliases</span> <span class="o">=</span> <span class="n">aliases</span><span class="ss">,</span>
+    <span class="n">company.graphrag_enriched</span> <span class="o">=</span> <span class="k">true</span><span class="ss">;</span>
+</code></pre></div></div>
+
+<h3 id="7-streaming-and-batch-procedures">7. Streaming and Batch Procedures</h3>
+
+<h4 id="orbitgraphragprocessdocumentsdocuments-kg_name-config"><code class="language-plaintext highlighter-rouge">orbit.graphrag.processDocuments(documents, kg_name, config)</code></h4>
+<p>Batch processes multiple documents for knowledge graph building.</p>
+
+<div class="language-cypher highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Batch process documents from the graph</span>
+<span class="k">MATCH</span><span class="w"> </span><span class="ss">(</span><span class="py">doc:</span><span class="n">Document</span><span class="ss">)</span> <span class="k">WHERE</span> <span class="n">doc.status</span> <span class="o">=</span> <span class="s2">"pending"</span>
+<span class="k">WITH</span> <span class="nf">collect</span><span class="ss">({</span><span class="py">id:</span> <span class="n">doc.id</span><span class="ss">,</span> <span class="py">text:</span> <span class="n">doc.content</span><span class="ss">,</span> <span class="py">metadata:</span> <span class="n">doc.metadata</span><span class="ss">})</span> <span class="k">as</span> <span class="n">docs</span>
+<span class="k">CALL</span> <span class="n">orbit.graphrag.processDocuments</span><span class="ss">(</span>
+    <span class="n">docs</span><span class="ss">,</span>
+    <span class="s2">"document_kg"</span><span class="ss">,</span>
+    <span class="ss">{</span><span class="nl">batch_size</span><span class="dl">:</span><span class="w"> </span><span class="m">50</span><span class="ss">,</span> <span class="py">parallel_processing:</span> <span class="k">true</span><span class="ss">}</span>
+<span class="ss">)</span> <span class="k">YIELD</span> <span class="n">document_id</span><span class="ss">,</span> <span class="n">success</span><span class="ss">,</span> <span class="n">entities_extracted</span><span class="ss">,</span> <span class="n">processing_time_ms</span><span class="ss">,</span> <span class="n">errors</span>
+<span class="k">MATCH</span><span class="w"> </span><span class="ss">(</span><span class="py">doc:</span><span class="n">Document</span> <span class="ss">{</span><span class="py">id:</span> <span class="n">document_id</span><span class="ss">})</span>
+<span class="k">SET</span> <span class="n">doc.status</span> <span class="o">=</span> <span class="k">CASE</span> <span class="k">WHEN</span> <span class="n">success</span> <span class="k">THEN</span> <span class="s2">"processed"</span> <span class="k">ELSE</span> <span class="s2">"error"</span> <span class="k">END</span><span class="ss">,</span>
+    <span class="n">doc.entities_count</span> <span class="o">=</span> <span class="n">entities_extracted</span><span class="ss">,</span>
+    <span class="n">doc.processing_time</span> <span class="o">=</span> <span class="n">processing_time_ms</span><span class="ss">,</span>
+    <span class="n">doc.errors</span> <span class="o">=</span> <span class="n">errors</span><span class="ss">;</span>
+</code></pre></div></div>
+
+<h3 id="8-real-time-streaming-procedures">8. Real-time Streaming Procedures</h3>
+
+<h4 id="orbitgraphragstreamentitieskg_name-config"><code class="language-plaintext highlighter-rouge">orbit.graphrag.streamEntities(kg_name, config)</code></h4>
+<p>Streams entities from the knowledge graph in real-time.</p>
+
+<div class="language-cypher highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Stream new entities as they're discovered</span>
+<span class="k">CALL</span> <span class="n">orbit.graphrag.streamEntities</span><span class="ss">(</span>
+    <span class="s2">"live_news_kg"</span><span class="ss">,</span>
+    <span class="ss">{</span>
+        <span class="nl">min_confidence</span><span class="dl">:</span><span class="w"> </span><span class="m">0.8</span><span class="ss">,</span>
+        <span class="py">entity_types:</span> <span class="ss">[</span><span class="s2">"Person"</span><span class="ss">,</span> <span class="s2">"Organization"</span><span class="ss">,</span> <span class="s2">"Event"</span><span class="ss">],</span>
+        <span class="nl">stream_duration_seconds</span><span class="dl">:</span><span class="w"> </span><span class="m">3600</span>
+    <span class="ss">}</span>
+<span class="ss">)</span> <span class="k">YIELD</span> <span class="n">entity_text</span><span class="ss">,</span> <span class="n">entity_type</span><span class="ss">,</span> <span class="n">confidence</span><span class="ss">,</span> <span class="n">timestamp</span><span class="ss">,</span> <span class="n">source_document</span>
+<span class="k">CREATE</span><span class="w"> </span><span class="ss">(</span><span class="py">e:</span><span class="n">StreamedEntity</span> <span class="ss">{</span>
+    <span class="py">text:</span> <span class="n">entity_text</span><span class="ss">,</span>
+    <span class="py">type:</span> <span class="n">entity_type</span><span class="ss">,</span>
+    <span class="py">confidence:</span> <span class="n">confidence</span><span class="ss">,</span>
+    <span class="py">discovered_at:</span> <span class="n">timestamp</span><span class="ss">,</span>
+    <span class="py">source:</span> <span class="n">source_document</span>
+<span class="ss">});</span>
+</code></pre></div></div>
+
+<h2 id="integration-with-cypher-patterns">Integration with Cypher Patterns</h2>
+
+<h3 id="1-pattern-matching-with-graphrag">1. Pattern Matching with GraphRAG</h3>
+
+<div class="language-cypher highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Combine pattern matching with GraphRAG reasoning</span>
+<span class="k">MATCH</span> <span class="n">path</span> <span class="o">=</span> <span class="ss">(</span><span class="py">person:</span><span class="n">Person</span><span class="ss">)</span><span class="o">-</span><span class="ss">[</span><span class="nc">:WORKS_FOR</span><span class="o">*</span><span class="m">1</span><span class="o">..</span><span class="m">2</span><span class="ss">]</span><span class="o">-</span><span class="ss">(</span><span class="py">company:</span><span class="n">Company</span><span class="ss">)</span>
+<span class="k">WHERE</span> <span class="n">person.name</span> <span class="o">=</span> <span class="s2">"Alice"</span>
+<span class="k">WITH</span> <span class="n">person</span><span class="ss">,</span> <span class="n">company</span><span class="ss">,</span> <span class="nf">length</span><span class="ss">(</span><span class="n">path</span><span class="ss">)</span> <span class="k">as</span> <span class="n">connection_distance</span>
+<span class="k">CALL</span> <span class="n">orbit.graphrag.findPaths</span><span class="ss">(</span><span class="s2">"business_kg"</span><span class="ss">,</span> <span class="n">person.name</span><span class="ss">,</span> <span class="n">company.name</span><span class="ss">,</span> <span class="ss">{</span><span class="nl">max_hops</span><span class="dl">:</span><span class="w"> </span><span class="m">3</span><span class="ss">})</span>
+<span class="k">YIELD</span> <span class="n">path_nodes</span><span class="ss">,</span> <span class="n">relationships</span><span class="ss">,</span> <span class="n">score</span><span class="ss">,</span> <span class="n">explanation</span>
+<span class="k">RETURN</span> <span class="n">person.name</span><span class="ss">,</span> <span class="n">company.name</span><span class="ss">,</span> <span class="n">connection_distance</span><span class="ss">,</span> <span class="n">score</span><span class="ss">,</span> <span class="n">explanation</span><span class="ss">;</span>
+
+<span class="c1">// Use GraphRAG to find missing relationships</span>
+<span class="k">MATCH</span><span class="w"> </span><span class="ss">(</span><span class="py">p1:</span><span class="n">Paper</span><span class="ss">),</span> <span class="ss">(</span><span class="py">p2:</span><span class="n">Paper</span><span class="ss">)</span>
+<span class="k">WHERE</span> <span class="n">NOT</span><span class="w"> </span><span class="ss">(</span><span class="n">p1</span><span class="ss">)</span><span class="o">-</span><span class="ss">[</span><span class="nc">:CITES</span><span class="ss">]</span><span class="o">-</span><span class="ss">(</span><span class="n">p2</span><span class="ss">)</span> <span class="ow">AND</span> <span class="n">p1.field</span> <span class="o">=</span> <span class="n">p2.field</span>
+<span class="k">CALL</span> <span class="n">orbit.graphrag.findPaths</span><span class="ss">(</span><span class="s2">"research_kg"</span><span class="ss">,</span> <span class="n">p1.title</span><span class="ss">,</span> <span class="n">p2.title</span><span class="ss">,</span> <span class="ss">{</span><span class="nl">max_hops</span><span class="dl">:</span><span class="w"> </span><span class="m">2</span><span class="ss">})</span>
+<span class="k">YIELD</span> <span class="n">score</span>
+<span class="k">WHERE</span> <span class="n">score</span> <span class="o">&gt;</span> <span class="mf">0.8</span>
+<span class="k">CREATE</span><span class="w"> </span><span class="ss">(</span><span class="n">p1</span><span class="ss">)</span><span class="o">-</span><span class="ss">[</span><span class="nc">:SEMANTICALLY_RELATED</span> <span class="ss">{</span><span class="py">score:</span> <span class="n">score</span><span class="ss">,</span> <span class="py">inferred:</span> <span class="k">true</span><span class="ss">}]</span><span class="o">-&gt;</span><span class="ss">(</span><span class="n">p2</span><span class="ss">);</span>
+</code></pre></div></div>
+
+<h3 id="2-aggregation-with-graphrag-results">2. Aggregation with GraphRAG Results</h3>
+
+<div class="language-cypher highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Aggregate GraphRAG results by entity type</span>
+<span class="k">CALL</span> <span class="n">orbit.graphrag.listEntities</span><span class="ss">(</span><span class="s2">"news_kg"</span><span class="ss">,</span> <span class="ss">{</span><span class="nl">limit</span><span class="dl">:</span><span class="w"> </span><span class="m">1000</span><span class="ss">})</span>
+<span class="k">YIELD</span> <span class="n">entity_text</span><span class="ss">,</span> <span class="n">entity_type</span><span class="ss">,</span> <span class="n">confidence</span>
+<span class="k">WITH</span> <span class="n">entity_type</span><span class="ss">,</span> <span class="nf">collect</span><span class="ss">({</span><span class="py">text:</span> <span class="n">entity_text</span><span class="ss">,</span> <span class="py">conf:</span> <span class="n">confidence</span><span class="ss">})</span> <span class="k">as</span> <span class="n">entities</span>
+<span class="k">RETURN</span> <span class="n">entity_type</span><span class="ss">,</span>
+       <span class="nf">size</span><span class="ss">(</span><span class="n">entities</span><span class="ss">)</span> <span class="k">as</span> <span class="n">total_count</span><span class="ss">,</span>
+       <span class="nf">avg</span><span class="ss">([</span><span class="n">e</span> <span class="ow">IN</span> <span class="n">entities</span> <span class="o">|</span> <span class="n">e.conf</span><span class="ss">])</span> <span class="k">as</span> <span class="n">avg_confidence</span><span class="ss">,</span>
+       <span class="ss">[</span><span class="n">e</span> <span class="ow">IN</span> <span class="n">entities</span> <span class="o">|</span> <span class="n">e.text</span><span class="ss">][</span><span class="m">0</span><span class="o">..</span><span class="m">5</span><span class="ss">]</span> <span class="k">as</span> <span class="n">sample_entities</span><span class="ss">;</span>
+</code></pre></div></div>
+
+<h3 id="3-conditional-processing">3. Conditional Processing</h3>
+
+<div class="language-cypher highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Conditional GraphRAG processing based on graph state</span>
+<span class="k">MATCH</span><span class="w"> </span><span class="ss">(</span><span class="py">kg:</span><span class="n">KnowledgeGraph</span> <span class="ss">{</span><span class="py">name:</span> <span class="s2">"research_kg"</span><span class="ss">})</span>
+<span class="k">WHERE</span> <span class="n">kg.last_updated</span> <span class="o">&lt;</span> <span class="n">datetime</span><span class="ss">()</span> <span class="o">-</span> <span class="n">duration</span><span class="ss">({</span><span class="nl">days</span><span class="dl">:</span><span class="w"> </span><span class="m">1</span><span class="ss">})</span>
+<span class="k">CALL</span> <span class="n">orbit.graphrag.getStats</span><span class="ss">(</span><span class="n">kg.name</span><span class="ss">)</span>
+<span class="k">YIELD</span> <span class="n">documents_processed</span><span class="ss">,</span> <span class="n">entities_extracted</span>
+<span class="k">CALL</span> <span class="n">apoc.when</span><span class="ss">(</span>
+    <span class="n">entities_extracted</span> <span class="o">&lt;</span> <span class="mi">1000</span><span class="ss">,</span>
+    <span class="s2">"CALL orbit.graphrag.buildKnowledge($kg_name, $doc_id, $text, {}, {}) 
+     YIELD entities_extracted RETURN entities_extracted"</span><span class="ss">,</span>
+    <span class="s2">""</span><span class="ss">,</span>
+    <span class="ss">{</span><span class="py">kg_name:</span> <span class="n">kg.name</span><span class="ss">,</span> <span class="py">doc_id:</span> <span class="s2">"update_doc"</span><span class="ss">,</span> <span class="py">text:</span> <span class="s2">"Recent research updates..."</span><span class="ss">}</span>
+<span class="ss">)</span> <span class="k">YIELD</span> <span class="n">value</span>
+<span class="k">RETURN</span> <span class="n">value</span><span class="ss">;</span>
+</code></pre></div></div>
+
+<h2 id="result-types-and-error-handling">Result Types and Error Handling</h2>
+
+<h3 id="standard-procedure-results">Standard Procedure Results</h3>
+<p>All GraphRAG procedures return consistent metadata:</p>
+
+<div class="language-cypher highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">CALL</span> <span class="n">orbit.graphrag.ragQuery</span><span class="ss">(</span><span class="s2">"research_kg"</span><span class="ss">,</span> <span class="s2">"test query"</span><span class="ss">,</span> <span class="ss">{})</span>
+<span class="k">YIELD</span> <span class="n">response</span><span class="ss">,</span> <span class="n">confidence</span><span class="ss">,</span> <span class="n">processing_time_ms</span><span class="ss">,</span> <span class="n">success</span><span class="ss">,</span> <span class="n">errors</span><span class="ss">,</span> <span class="n">warnings</span>
+<span class="k">WHERE</span> <span class="n">success</span> <span class="o">=</span> <span class="k">true</span> <span class="ow">AND</span> <span class="nf">size</span><span class="ss">(</span><span class="n">errors</span><span class="ss">)</span> <span class="o">=</span> <span class="mi">0</span>
+<span class="k">RETURN</span> <span class="n">response</span><span class="ss">,</span> <span class="n">confidence</span><span class="ss">;</span>
+</code></pre></div></div>
+
+<h3 id="error-handling-patterns">Error Handling Patterns</h3>
+
+<div class="language-cypher highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Handle GraphRAG procedure errors gracefully</span>
+<span class="k">CALL</span> <span class="n">orbit.graphrag.buildKnowledge</span><span class="ss">(</span><span class="s2">"invalid_kg"</span><span class="ss">,</span> <span class="s2">"doc1"</span><span class="ss">,</span> <span class="s2">"text"</span><span class="ss">,</span> <span class="ss">{},</span> <span class="ss">{})</span>
+<span class="k">YIELD</span> <span class="n">success</span><span class="ss">,</span> <span class="n">errors</span><span class="ss">,</span> <span class="n">warnings</span>
+<span class="k">FOREACH</span><span class="w"> </span><span class="ss">(</span><span class="n">error</span> <span class="ow">IN</span> <span class="k">CASE</span> <span class="k">WHEN</span> <span class="ow">NOT</span> <span class="n">success</span> <span class="k">THEN</span> <span class="n">errors</span> <span class="k">ELSE</span> <span class="ss">[]</span> <span class="k">END</span> <span class="o">|</span>
+    <span class="k">CREATE</span><span class="w"> </span><span class="ss">(</span><span class="py">err:</span><span class="n">ProcessingError</span> <span class="ss">{</span>
+        <span class="py">message:</span> <span class="n">error</span><span class="ss">,</span>
+        <span class="py">timestamp:</span> <span class="n">datetime</span><span class="ss">(),</span>
+        <span class="py">procedure:</span> <span class="s2">"buildKnowledge"</span>
+    <span class="ss">})</span>
+<span class="ss">);</span>
+</code></pre></div></div>
+
+<h3 id="performance-monitoring">Performance Monitoring</h3>
+
+<div class="language-cypher highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Monitor GraphRAG procedure performance</span>
+<span class="k">CALL</span> <span class="n">orbit.graphrag.ragQuery</span><span class="ss">(</span><span class="s2">"research_kg"</span><span class="ss">,</span> <span class="s2">"complex query"</span><span class="ss">,</span> <span class="ss">{})</span>
+<span class="k">YIELD</span> <span class="n">response</span><span class="ss">,</span> <span class="n">processing_time_ms</span><span class="ss">,</span> <span class="n">entities_involved</span>
+<span class="k">WITH</span> <span class="n">response</span><span class="ss">,</span> <span class="n">processing_time_ms</span><span class="ss">,</span> <span class="nf">size</span><span class="ss">(</span><span class="n">entities_involved</span><span class="ss">)</span> <span class="k">as</span> <span class="n">entities_count</span>
+<span class="k">WHERE</span> <span class="n">processing_time_ms</span> <span class="o">&gt;</span> <span class="mi">5000</span>  <span class="c1">// Flag slow queries</span>
+<span class="k">CREATE</span><span class="w"> </span><span class="ss">(</span><span class="py">perf:</span><span class="n">PerformanceLog</span> <span class="ss">{</span>
+    <span class="py">query_type:</span> <span class="s2">"rag_query"</span><span class="ss">,</span>
+    <span class="py">processing_time:</span> <span class="n">processing_time_ms</span><span class="ss">,</span>
+    <span class="py">entities_involved:</span> <span class="n">entities_count</span><span class="ss">,</span>
+    <span class="py">timestamp:</span> <span class="n">datetime</span><span class="ss">(),</span>
+    <span class="py">slow_query_flag:</span> <span class="k">true</span>
+<span class="ss">});</span>
+</code></pre></div></div>
+
+<p>This design provides comprehensive GraphRAG integration with Cypher through stored procedures while maintaining Neo4j conventions and graph-native patterns.</p>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/orbit-rs/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Orbit-RS Documentation</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">TuringWorks</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

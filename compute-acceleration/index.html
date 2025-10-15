@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Hardware Acceleration Guide | Orbit-RS Documentation</title>
+<meta name="generator" content="Jekyll v4.4.1" />
+<meta property="og:title" content="Hardware Acceleration Guide" />
+<meta name="author" content="TuringWorks" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<meta property="og:description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<link rel="canonical" href="https://turingworks.github.io/orbit-rs/compute-acceleration/" />
+<meta property="og:url" content="https://turingworks.github.io/orbit-rs/compute-acceleration/" />
+<meta property="og:site_name" content="Orbit-RS Documentation" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Hardware Acceleration Guide" />
+<meta name="twitter:site" content="@TuringWorksAI" />
+<meta name="twitter:creator" content="@TuringWorks" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","author":{"@type":"Person","name":"TuringWorks"},"description":"The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform","headline":"Hardware Acceleration Guide","url":"https://turingworks.github.io/orbit-rs/compute-acceleration/"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/orbit-rs/assets/main.css">
+  <link rel="stylesheet" href="/orbit-rs/assets/css/custom.css"><link type="application/atom+xml" rel="alternate" href="https://turingworks.github.io/orbit-rs/feed.xml" title="Orbit-RS Documentation" /></head><body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/orbit-rs/">Orbit-RS Documentation</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/orbit-rs/">Orbit-RS Documentation</a><a class="page-link" href="/orbit-rs/project_overview.html">Orbit-RS: Comprehensive Project Overview</a><a class="page-link" href="/orbit-rs/quick_start.html">Quick Start Guide - Multi-Protocol Database Server</a><a class="page-link" href="/orbit-rs/roadmap/">Development Roadmap</a><a class="page-link" href="/orbit-rs/features/">Orbit-RS Feature Index</a><a class="page-link" href="/orbit-rs/compute-acceleration/">Hardware Acceleration Guide</a><a class="page-link" href="/orbit-rs/contributing.html">Contributing Guide</a><a class="page-link" href="/orbit-rs/overview.html">Architecture Overview</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <h1 id="hardware-acceleration-guide">Hardware Acceleration Guide</h1>
+<p><strong>Orbit-Compute: Heterogeneous Computing for Maximum Performance</strong></p>
+
+<p><strong>Status</strong>: ✅ Production Ready<br />
+<strong>Updated</strong>: 2025-10-09<br />
+<strong>Applies to</strong>: orbit-compute v1.0+</p>
+
+<h2 id="overview">Overview</h2>
+
+<p>Orbit-RS includes a sophisticated heterogeneous compute acceleration framework (<code class="language-plaintext highlighter-rouge">orbit-compute</code>) that automatically detects and leverages diverse hardware including CPUs with SIMD, GPUs, and specialized AI accelerators to accelerate database workloads. This guide explains which operations benefit from acceleration and how to configure clients and queries to use or disable acceleration.</p>
+
+<h2 id="accelerated-workload-types">Accelerated Workload Types</h2>
+
+<h3 id="1-vector-operations-simdbatch--gpucompute">1. Vector Operations (<code class="language-plaintext highlighter-rouge">SIMDBatch</code> + <code class="language-plaintext highlighter-rouge">GPUCompute</code>)</h3>
+
+<p><strong>Workload Classification</strong>: High Priority for GPU Acceleration</p>
+
+<p><strong>Operations</strong>:</p>
+<ul>
+  <li>Vector similarity search (<code class="language-plaintext highlighter-rouge">&lt;-&gt;</code>, <code class="language-plaintext highlighter-rouge">&lt;=&gt;</code>, <code class="language-plaintext highlighter-rouge">&lt;#&gt;</code> operators)</li>
+  <li>Vector aggregations (SUM, AVG on vector columns)</li>
+  <li>Matrix multiplications for embeddings</li>
+  <li>Vector normalization and distance calculations</li>
+  <li>Batch vector operations on large datasets</li>
+</ul>
+
+<p><strong>Hardware Acceleration</strong>:</p>
+<ul>
+  <li><strong>GPU</strong>: 8-15x speedup for large vector datasets (&gt;1K vectors)</li>
+  <li><strong>CPU SIMD</strong>: 3-5x speedup with AVX-512/NEON</li>
+  <li><strong>Neural Engine</strong>: 10-50x speedup for ML inference on vectors</li>
+</ul>
+
+<p><strong>Example Queries</strong>:</p>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Vector similarity search (GPU accelerated)</span>
+<span class="k">SELECT</span> <span class="n">content</span><span class="p">,</span> <span class="n">embedding</span> <span class="o">&lt;-&gt;</span> <span class="s1">'[0.1, 0.2, 0.3]'</span> <span class="k">AS</span> <span class="n">distance</span> 
+<span class="k">FROM</span> <span class="n">documents</span> 
+<span class="k">ORDER</span> <span class="k">BY</span> <span class="n">distance</span> <span class="k">LIMIT</span> <span class="mi">10</span><span class="p">;</span>
+
+<span class="c1">-- Vector aggregations (SIMD accelerated)  </span>
+<span class="k">SELECT</span> <span class="k">AVG</span><span class="p">(</span><span class="n">embedding</span><span class="p">)</span> <span class="k">FROM</span> <span class="n">documents</span> <span class="k">WHERE</span> <span class="n">category</span> <span class="o">=</span> <span class="s1">'science'</span><span class="p">;</span>
+
+<span class="c1">-- Batch vector operations (GPU preferred)</span>
+<span class="k">SELECT</span> <span class="n">id</span><span class="p">,</span> <span class="n">VECTOR_NORM</span><span class="p">(</span><span class="n">embedding</span><span class="p">)</span> <span class="k">FROM</span> <span class="n">documents</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h3 id="2-matrix-operations-simdbatchmatrixops">2. Matrix Operations (<code class="language-plaintext highlighter-rouge">SIMDBatch::MatrixOps</code>)</h3>
+
+<p><strong>Workload Classification</strong>: High Priority for GPU/Neural Engine</p>
+
+<p><strong>Operations</strong>:</p>
+<ul>
+  <li>JOIN operations on large tables with numeric keys</li>
+  <li>Matrix-based analytical queries</li>
+  <li>Linear algebra operations in SQL functions</li>
+  <li>Tensor operations for ML workloads</li>
+</ul>
+
+<p><strong>Hardware Acceleration</strong>:</p>
+<ul>
+  <li><strong>GPU</strong>: 8-15x speedup for matrix operations</li>
+  <li><strong>Neural Engine</strong>: 10-50x speedup for ML-specific matrix ops</li>
+  <li><strong>CPU SIMD</strong>: 3-8x speedup with optimized BLAS</li>
+</ul>
+
+<p><strong>Example Queries</strong>:</p>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Large JOIN operations (GPU accelerated)</span>
+<span class="k">SELECT</span> <span class="o">*</span> <span class="k">FROM</span> <span class="n">orders</span> <span class="n">o</span> <span class="k">JOIN</span> <span class="n">customers</span> <span class="k">c</span> <span class="k">ON</span> <span class="n">o</span><span class="p">.</span><span class="n">customer_id</span> <span class="o">=</span> <span class="k">c</span><span class="p">.</span><span class="n">id</span> 
+<span class="k">WHERE</span> <span class="n">o</span><span class="p">.</span><span class="n">order_date</span> <span class="o">&gt;</span> <span class="s1">'2024-01-01'</span><span class="p">;</span>
+
+<span class="c1">-- Matrix-based analytics (Neural Engine preferred)</span>
+<span class="k">SELECT</span> <span class="n">ML_MATRIX_MULTIPLY</span><span class="p">(</span><span class="n">features</span><span class="p">,</span> <span class="n">weights</span><span class="p">)</span> <span class="k">FROM</span> <span class="n">ml_models</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h3 id="3-aggregation-operations-simdbatchreduction">3. Aggregation Operations (<code class="language-plaintext highlighter-rouge">SIMDBatch::Reduction</code>)</h3>
+
+<p><strong>Workload Classification</strong>: Medium Priority for SIMD/GPU</p>
+
+<p><strong>Operations</strong>:</p>
+<ul>
+  <li>COUNT, SUM, AVG, MIN, MAX on large datasets</li>
+  <li>GROUP BY operations with numeric aggregations</li>
+  <li>Window functions over large partitions</li>
+  <li>Statistical functions (STDDEV, VARIANCE)</li>
+</ul>
+
+<p><strong>Hardware Acceleration</strong>:</p>
+<ul>
+  <li><strong>CPU SIMD</strong>: 3-8x speedup for numeric aggregations</li>
+  <li><strong>GPU</strong>: 5-12x speedup for massive datasets (&gt;1M rows)</li>
+  <li><strong>Specialized reductions</strong>: Custom kernels for common patterns</li>
+</ul>
+
+<p><strong>Example Queries</strong>:</p>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Aggregations on large datasets (SIMD/GPU accelerated)</span>
+<span class="k">SELECT</span> <span class="n">category</span><span class="p">,</span> <span class="k">COUNT</span><span class="p">(</span><span class="o">*</span><span class="p">),</span> <span class="k">AVG</span><span class="p">(</span><span class="n">price</span><span class="p">),</span> <span class="k">MAX</span><span class="p">(</span><span class="n">price</span><span class="p">)</span> 
+<span class="k">FROM</span> <span class="n">products</span> <span class="k">GROUP</span> <span class="k">BY</span> <span class="n">category</span><span class="p">;</span>
+
+<span class="c1">-- Window functions (SIMD preferred)</span>
+<span class="k">SELECT</span> <span class="o">*</span><span class="p">,</span> <span class="k">AVG</span><span class="p">(</span><span class="n">salary</span><span class="p">)</span> <span class="n">OVER</span> <span class="p">(</span><span class="k">PARTITION</span> <span class="k">BY</span> <span class="n">department</span><span class="p">)</span> <span class="k">FROM</span> <span class="n">employees</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h3 id="4-time-series-operations-gpucomputememorybound">4. Time Series Operations (<code class="language-plaintext highlighter-rouge">GPUCompute::MemoryBound</code>)</h3>
+
+<p><strong>Workload Classification</strong>: Medium Priority for GPU</p>
+
+<p><strong>Operations</strong>:</p>
+<ul>
+  <li>Time series aggregations and rollups</li>
+  <li>Moving averages and trend analysis</li>
+  <li>Seasonal decomposition</li>
+  <li>Time-based JOINs and correlations</li>
+</ul>
+
+<p><strong>Hardware Acceleration</strong>:</p>
+<ul>
+  <li><strong>GPU</strong>: 5-12x speedup for time series analytics</li>
+  <li><strong>CPU SIMD</strong>: 2-5x speedup for sequential processing</li>
+  <li><strong>Memory optimization</strong>: Fast NVMe for time series data</li>
+</ul>
+
+<p><strong>Example Queries</strong>:</p>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Time series aggregations (GPU preferred)</span>
+<span class="k">SELECT</span> <span class="n">date_trunc</span><span class="p">(</span><span class="s1">'hour'</span><span class="p">,</span> <span class="nb">timestamp</span><span class="p">),</span> <span class="k">AVG</span><span class="p">(</span><span class="n">value</span><span class="p">),</span> <span class="k">COUNT</span><span class="p">(</span><span class="o">*</span><span class="p">)</span>
+<span class="k">FROM</span> <span class="n">sensor_data</span> <span class="k">WHERE</span> <span class="nb">timestamp</span> <span class="o">&gt;</span> <span class="n">NOW</span><span class="p">()</span> <span class="o">-</span> <span class="n">INTERVAL</span> <span class="s1">'7 days'</span>
+<span class="k">GROUP</span> <span class="k">BY</span> <span class="mi">1</span> <span class="k">ORDER</span> <span class="k">BY</span> <span class="mi">1</span><span class="p">;</span>
+
+<span class="c1">-- Moving averages (SIMD accelerated)</span>
+<span class="k">SELECT</span> <span class="nb">timestamp</span><span class="p">,</span> <span class="k">AVG</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="n">OVER</span> <span class="p">(</span>
+    <span class="k">ORDER</span> <span class="k">BY</span> <span class="nb">timestamp</span> <span class="k">ROWS</span> <span class="k">BETWEEN</span> <span class="mi">10</span> <span class="k">PRECEDING</span> <span class="k">AND</span> <span class="k">CURRENT</span> <span class="k">ROW</span>
+<span class="p">)</span> <span class="k">FROM</span> <span class="n">metrics</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h3 id="5-graph-operations-neuralinference">5. Graph Operations (<code class="language-plaintext highlighter-rouge">NeuralInference</code>)</h3>
+
+<p><strong>Workload Classification</strong>: High Priority for Neural Engine</p>
+
+<p><strong>Operations</strong>:</p>
+<ul>
+  <li>Graph traversals and path finding</li>
+  <li>Community detection algorithms</li>
+  <li>Graph neural network inference</li>
+  <li>Knowledge graph reasoning</li>
+</ul>
+
+<p><strong>Hardware Acceleration</strong>:</p>
+<ul>
+  <li><strong>Neural Engine</strong>: 10-50x speedup for graph ML</li>
+  <li><strong>GPU</strong>: 4-10x speedup for parallel graph algorithms</li>
+  <li><strong>Specialized DSPs</strong>: Optimal for graph signal processing</li>
+</ul>
+
+<p><strong>Example Queries</strong>:</p>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Graph traversals (Neural Engine preferred)</span>
+<span class="n">GRAPH</span> <span class="k">MATCH</span> <span class="p">(</span><span class="n">a</span><span class="p">)</span><span class="o">-</span><span class="p">[:</span><span class="n">CONNECTS</span><span class="o">*</span><span class="mi">1</span><span class="p">..</span><span class="mi">3</span><span class="p">]</span><span class="o">-</span><span class="p">(</span><span class="n">b</span><span class="p">)</span> 
+<span class="k">WHERE</span> <span class="n">a</span><span class="p">.</span><span class="k">type</span> <span class="o">=</span> <span class="s1">'user'</span> <span class="k">AND</span> <span class="n">b</span><span class="p">.</span><span class="k">type</span> <span class="o">=</span> <span class="s1">'product'</span>
+<span class="k">RETURN</span> <span class="n">a</span><span class="p">.</span><span class="n">id</span><span class="p">,</span> <span class="n">b</span><span class="p">.</span><span class="n">id</span><span class="p">,</span> <span class="n">path_length</span><span class="p">;</span>
+
+<span class="c1">-- Graph analytics (GPU accelerated)</span>
+<span class="k">SELECT</span> <span class="n">community_detection</span><span class="p">(</span><span class="n">graph_data</span><span class="p">)</span> <span class="k">FROM</span> <span class="n">social_network</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h3 id="6-full-text-search-gpucomputecomputebound">6. Full-Text Search (<code class="language-plaintext highlighter-rouge">GPUCompute::ComputeBound</code>)</h3>
+
+<p><strong>Workload Classification</strong>: Medium Priority for GPU</p>
+
+<p><strong>Operations</strong>:</p>
+<ul>
+  <li>Text similarity and fuzzy matching</li>
+  <li>Regular expression operations on large text</li>
+  <li>Natural language processing functions</li>
+  <li>Search result ranking and scoring</li>
+</ul>
+
+<p><strong>Hardware Acceleration</strong>:</p>
+<ul>
+  <li><strong>GPU</strong>: 2-8x speedup for parallel text processing</li>
+  <li><strong>Neural Engine</strong>: 10-50x speedup for semantic search</li>
+  <li><strong>CPU SIMD</strong>: 2-4x speedup for string operations</li>
+</ul>
+
+<p><strong>Example Queries</strong>:</p>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Text similarity (GPU/Neural Engine preferred)</span>
+<span class="k">SELECT</span> <span class="n">id</span><span class="p">,</span> <span class="n">content</span><span class="p">,</span> <span class="n">SIMILARITY</span><span class="p">(</span><span class="n">content</span><span class="p">,</span> <span class="s1">'search query'</span><span class="p">)</span> <span class="k">as</span> <span class="n">score</span>
+<span class="k">FROM</span> <span class="n">documents</span> <span class="k">WHERE</span> <span class="n">score</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">.</span><span class="mi">7</span> <span class="k">ORDER</span> <span class="k">BY</span> <span class="n">score</span> <span class="k">DESC</span><span class="p">;</span>
+
+<span class="c1">-- Regex operations (GPU accelerated for large datasets)</span>
+<span class="k">SELECT</span> <span class="o">*</span> <span class="k">FROM</span> <span class="n">logs</span> <span class="k">WHERE</span> <span class="n">content</span> <span class="o">~</span> <span class="s1">'ERROR.*[0-9]{4}-[0-9]{2}-[0-9]{2}'</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h2 id="hardware-selection-strategy">Hardware Selection Strategy</h2>
+
+<p>The orbit-compute scheduler uses the following priority order for workload assignment:</p>
+
+<h3 id="decision-matrix">Decision Matrix</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>Workload Type</th>
+      <th>Primary Target</th>
+      <th>Fallback 1</th>
+      <th>Fallback 2</th>
+      <th>Fallback 3</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Vector Ops</strong></td>
+      <td>GPU (Metal/CUDA)</td>
+      <td>Neural Engine</td>
+      <td>CPU SIMD</td>
+      <td>CPU Scalar</td>
+    </tr>
+    <tr>
+      <td><strong>Matrix Ops</strong></td>
+      <td>Neural Engine</td>
+      <td>GPU</td>
+      <td>CPU SIMD</td>
+      <td>CPU Scalar</td>
+    </tr>
+    <tr>
+      <td><strong>Aggregations</strong></td>
+      <td>CPU SIMD</td>
+      <td>GPU</td>
+      <td>Specialized CPU</td>
+      <td>CPU Scalar</td>
+    </tr>
+    <tr>
+      <td><strong>Time Series</strong></td>
+      <td>GPU</td>
+      <td>CPU SIMD</td>
+      <td>Specialized Storage</td>
+      <td>CPU Scalar</td>
+    </tr>
+    <tr>
+      <td><strong>Graph ML</strong></td>
+      <td>Neural Engine</td>
+      <td>GPU</td>
+      <td>CPU Parallel</td>
+      <td>CPU Scalar</td>
+    </tr>
+    <tr>
+      <td><strong>Text Search</strong></td>
+      <td>Neural Engine</td>
+      <td>GPU</td>
+      <td>CPU SIMD</td>
+      <td>CPU Scalar</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 id="performance-thresholds">Performance Thresholds</h3>
+
+<p>Workloads are automatically routed based on data size:</p>
+
+<ul>
+  <li><strong>Small</strong> (&lt; 1K rows): CPU SIMD preferred</li>
+  <li><strong>Medium</strong> (1K-100K rows): GPU considered</li>
+  <li><strong>Large</strong> (100K-1M rows): GPU preferred</li>
+  <li><strong>Extra Large</strong> (&gt; 1M rows): GPU required, with CPU fallback</li>
+</ul>
+
+<h2 id="client-configuration-options">Client Configuration Options</h2>
+
+<h3 id="1-orbitclient-configuration">1. OrbitClient Configuration</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">orbit_client</span><span class="p">::{</span><span class="n">OrbitClient</span><span class="p">,</span> <span class="n">OrbitClientConfig</span><span class="p">};</span>
+<span class="k">use</span> <span class="nn">orbit_compute</span><span class="p">::</span><span class="n">EngineConfig</span><span class="p">;</span>
+
+<span class="c1">// Enable all acceleration features (default)</span>
+<span class="k">let</span> <span class="n">client</span> <span class="o">=</span> <span class="nn">OrbitClient</span><span class="p">::</span><span class="nf">builder</span><span class="p">()</span>
+    <span class="nf">.with_compute_acceleration</span><span class="p">(</span><span class="k">true</span><span class="p">)</span>           <span class="c1">// Enable GPU/Neural acceleration</span>
+    <span class="nf">.with_simd_acceleration</span><span class="p">(</span><span class="k">true</span><span class="p">)</span>              <span class="c1">// Enable CPU SIMD optimization</span>
+    <span class="nf">.with_adaptive_scheduling</span><span class="p">(</span><span class="k">true</span><span class="p">)</span>            <span class="c1">// Enable smart workload routing</span>
+    <span class="nf">.with_fallback_enabled</span><span class="p">(</span><span class="k">true</span><span class="p">)</span>               <span class="c1">// Enable graceful degradation</span>
+    <span class="nf">.build</span><span class="p">()</span>
+    <span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+
+<span class="c1">// CPU-only mode (disable GPU/Neural acceleration)</span>
+<span class="k">let</span> <span class="n">cpu_client</span> <span class="o">=</span> <span class="nn">OrbitClient</span><span class="p">::</span><span class="nf">builder</span><span class="p">()</span>
+    <span class="nf">.with_compute_acceleration</span><span class="p">(</span><span class="k">false</span><span class="p">)</span>          <span class="c1">// Disable GPU/Neural acceleration</span>
+    <span class="nf">.with_simd_acceleration</span><span class="p">(</span><span class="k">true</span><span class="p">)</span>              <span class="c1">// Keep CPU SIMD enabled</span>
+    <span class="nf">.with_max_compute_threads</span><span class="p">(</span><span class="mi">8</span><span class="p">)</span>               <span class="c1">// Limit CPU threads</span>
+    <span class="nf">.build</span><span class="p">()</span>
+    <span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+
+<span class="c1">// Performance-focused configuration</span>
+<span class="k">let</span> <span class="n">performance_client</span> <span class="o">=</span> <span class="nn">OrbitClient</span><span class="p">::</span><span class="nf">builder</span><span class="p">()</span>
+    <span class="nf">.with_compute_acceleration</span><span class="p">(</span><span class="k">true</span><span class="p">)</span>
+    <span class="nf">.with_preferred_compute_unit</span><span class="p">(</span><span class="nn">ComputeUnit</span><span class="p">::</span><span class="n">GPU</span> <span class="p">{</span> <span class="n">device_id</span><span class="p">:</span> <span class="mi">0</span> <span class="p">})</span>
+    <span class="nf">.with_compute_timeout_ms</span><span class="p">(</span><span class="mi">10000</span><span class="p">)</span>            <span class="c1">// 10 second timeout</span>
+    <span class="nf">.with_memory_optimization</span><span class="p">(</span><span class="k">true</span><span class="p">)</span>            <span class="c1">// Enable unified memory</span>
+    <span class="nf">.build</span><span class="p">()</span>
+    <span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h3 id="2-connection-string-configuration">2. Connection String Configuration</h3>
+
+<p>You can control acceleration through connection parameters:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Enable all acceleration (default)</span>
+postgres://user:pass@localhost:5432/db?compute_acceleration<span class="o">=</span><span class="nb">true</span>&amp;simd_acceleration<span class="o">=</span><span class="nb">true</span>
+
+<span class="c"># CPU-only mode</span>
+postgres://user:pass@localhost:5432/db?compute_acceleration<span class="o">=</span><span class="nb">false</span>&amp;simd_acceleration<span class="o">=</span><span class="nb">true</span>
+
+<span class="c"># Specific GPU device</span>
+postgres://user:pass@localhost:5432/db?preferred_gpu<span class="o">=</span>0&amp;gpu_memory_limit<span class="o">=</span>4GB
+
+<span class="c"># Performance tuning</span>
+postgres://user:pass@localhost:5432/db?compute_timeout<span class="o">=</span>5000&amp;adaptive_scheduling<span class="o">=</span><span class="nb">true</span>
+</code></pre></div></div>
+
+<h3 id="3-environment-variables">3. Environment Variables</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Global acceleration settings</span>
+<span class="nb">export </span><span class="nv">ORBIT_COMPUTE_ACCELERATION</span><span class="o">=</span><span class="nb">true</span>        <span class="c"># Enable GPU/Neural acceleration</span>
+<span class="nb">export </span><span class="nv">ORBIT_SIMD_ACCELERATION</span><span class="o">=</span><span class="nb">true</span>           <span class="c"># Enable CPU SIMD</span>
+<span class="nb">export </span><span class="nv">ORBIT_ADAPTIVE_SCHEDULING</span><span class="o">=</span><span class="nb">true</span>         <span class="c"># Enable smart scheduling</span>
+<span class="nb">export </span><span class="nv">ORBIT_COMPUTE_TIMEOUT</span><span class="o">=</span>10000            <span class="c"># Timeout in milliseconds</span>
+
+<span class="c"># Hardware preferences</span>
+<span class="nb">export </span><span class="nv">ORBIT_PREFERRED_GPU</span><span class="o">=</span>0                  <span class="c"># Select specific GPU</span>
+<span class="nb">export </span><span class="nv">ORBIT_GPU_MEMORY_LIMIT</span><span class="o">=</span>8GB            <span class="c"># Limit GPU memory usage</span>
+<span class="nb">export </span><span class="nv">ORBIT_CPU_THREADS</span><span class="o">=</span>16                  <span class="c"># Maximum CPU threads</span>
+<span class="nb">export </span><span class="nv">ORBIT_ENABLE_NEURAL_ENGINE</span><span class="o">=</span><span class="nb">true</span>       <span class="c"># Enable Neural Engine (Apple/Qualcomm)</span>
+
+<span class="c"># Performance tuning</span>
+<span class="nb">export </span><span class="nv">ORBIT_UNIFIED_MEMORY</span><span class="o">=</span><span class="nb">true</span>             <span class="c"># Use unified memory (Apple Silicon)</span>
+<span class="nb">export </span><span class="nv">ORBIT_MEMORY_ALIGNMENT</span><span class="o">=</span>64             <span class="c"># SIMD alignment (bytes)</span>
+<span class="nb">export </span><span class="nv">ORBIT_WORKLOAD_PROFILING</span><span class="o">=</span><span class="nb">true</span>         <span class="c"># Enable performance learning</span>
+</code></pre></div></div>
+
+<h3 id="4-per-query-configuration">4. Per-Query Configuration</h3>
+
+<p>You can control acceleration on a per-query basis using SQL comments:</p>
+
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Force GPU acceleration</span>
+<span class="cm">/*+ GPU_COMPUTE */</span> 
+<span class="k">SELECT</span> <span class="n">embedding</span> <span class="o">&lt;-&gt;</span> <span class="s1">'[0.1, 0.2, 0.3]'</span> <span class="k">AS</span> <span class="n">distance</span> <span class="k">FROM</span> <span class="n">documents</span><span class="p">;</span>
+
+<span class="c1">-- Force CPU-only execution</span>
+<span class="cm">/*+ CPU_ONLY */</span>
+<span class="k">SELECT</span> <span class="k">COUNT</span><span class="p">(</span><span class="o">*</span><span class="p">)</span> <span class="k">FROM</span> <span class="n">large_table</span> <span class="k">GROUP</span> <span class="k">BY</span> <span class="n">category</span><span class="p">;</span>
+
+<span class="c1">-- Specify compute preferences</span>
+<span class="cm">/*+ PREFERRED_COMPUTE=NEURAL_ENGINE */</span>
+<span class="k">SELECT</span> <span class="n">ML_INFERENCE</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">features</span><span class="p">)</span> <span class="k">FROM</span> <span class="k">data</span><span class="p">;</span>
+
+<span class="c1">-- Disable acceleration for debugging</span>
+<span class="cm">/*+ NO_ACCELERATION */</span>
+<span class="k">SELECT</span> <span class="o">*</span> <span class="k">FROM</span> <span class="n">debug_table</span> <span class="k">WHERE</span> <span class="n">complex_condition</span> <span class="o">=</span> <span class="k">true</span><span class="p">;</span>
+
+<span class="c1">-- Set resource limits</span>
+<span class="cm">/*+ MAX_MEMORY=2GB, TIMEOUT=5000 */</span>
+<span class="k">SELECT</span> <span class="o">*</span> <span class="k">FROM</span> <span class="n">huge_table</span> <span class="k">JOIN</span> <span class="n">another_huge_table</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h3 id="5-programmatic-configuration">5. Programmatic Configuration</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">use</span> <span class="nn">orbit_client</span><span class="p">::</span><span class="nn">query</span><span class="p">::{</span><span class="n">QueryBuilder</span><span class="p">,</span> <span class="n">ComputeHint</span><span class="p">};</span>
+
+<span class="c1">// Query with compute hints</span>
+<span class="k">let</span> <span class="n">query</span> <span class="o">=</span> <span class="nn">QueryBuilder</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="s">"SELECT * FROM vectors"</span><span class="p">)</span>
+    <span class="nf">.with_compute_hint</span><span class="p">(</span><span class="nn">ComputeHint</span><span class="p">::</span><span class="n">PreferGPU</span><span class="p">)</span>
+    <span class="nf">.with_memory_limit_gb</span><span class="p">(</span><span class="mf">4.0</span><span class="p">)</span>
+    <span class="nf">.with_timeout_ms</span><span class="p">(</span><span class="mi">10000</span><span class="p">)</span>
+    <span class="nf">.build</span><span class="p">();</span>
+
+<span class="k">let</span> <span class="n">results</span> <span class="o">=</span> <span class="n">client</span><span class="nf">.execute_query</span><span class="p">(</span><span class="n">query</span><span class="p">)</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+
+<span class="c1">// Disable acceleration for specific query</span>
+<span class="k">let</span> <span class="n">cpu_query</span> <span class="o">=</span> <span class="nn">QueryBuilder</span><span class="p">::</span><span class="nf">new</span><span class="p">(</span><span class="s">"SELECT COUNT(*) FROM small_table"</span><span class="p">)</span>
+    <span class="nf">.with_compute_hint</span><span class="p">(</span><span class="nn">ComputeHint</span><span class="p">::</span><span class="n">CPUOnly</span><span class="p">)</span>
+    <span class="nf">.build</span><span class="p">();</span>
+</code></pre></div></div>
+
+<h2 id="monitoring-acceleration-usage">Monitoring Acceleration Usage</h2>
+
+<h3 id="1-query-performance-metrics">1. Query Performance Metrics</h3>
+
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Check query execution statistics</span>
+<span class="k">SELECT</span> 
+    <span class="n">query_hash</span><span class="p">,</span>
+    <span class="n">compute_unit_used</span><span class="p">,</span>
+    <span class="n">execution_time_ms</span><span class="p">,</span>
+    <span class="n">acceleration_speedup</span><span class="p">,</span>
+    <span class="n">fallback_occurred</span>
+<span class="k">FROM</span> <span class="n">orbit_query_stats</span> 
+<span class="k">WHERE</span> <span class="nb">timestamp</span> <span class="o">&gt;</span> <span class="n">NOW</span><span class="p">()</span> <span class="o">-</span> <span class="n">INTERVAL</span> <span class="s1">'1 hour'</span><span class="p">;</span>
+
+<span class="c1">-- Monitor compute unit utilization</span>
+<span class="k">SELECT</span> 
+    <span class="n">compute_unit</span><span class="p">,</span>
+    <span class="n">utilization_percent</span><span class="p">,</span>
+    <span class="n">active_queries</span><span class="p">,</span>
+    <span class="n">queue_depth</span>
+<span class="k">FROM</span> <span class="n">orbit_compute_status</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h3 id="2-client-status-api">2. Client Status API</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// Get acceleration status</span>
+<span class="k">let</span> <span class="n">status</span> <span class="o">=</span> <span class="n">client</span><span class="nf">.get_compute_status</span><span class="p">()</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+<span class="nd">println!</span><span class="p">(</span><span class="s">"Available GPUs: {}"</span><span class="p">,</span> <span class="n">status</span><span class="py">.available_gpus</span><span class="p">);</span>
+<span class="nd">println!</span><span class="p">(</span><span class="s">"Neural Engine: {}"</span><span class="p">,</span> <span class="n">status</span><span class="py">.neural_engine_available</span><span class="p">);</span>
+<span class="nd">println!</span><span class="p">(</span><span class="s">"SIMD Support: {}"</span><span class="p">,</span> <span class="n">status</span><span class="py">.simd_capabilities</span><span class="p">);</span>
+
+<span class="c1">// Get performance statistics</span>
+<span class="k">let</span> <span class="n">stats</span> <span class="o">=</span> <span class="n">client</span><span class="nf">.get_performance_stats</span><span class="p">()</span><span class="k">.await</span><span class="o">?</span><span class="p">;</span>
+<span class="nd">println!</span><span class="p">(</span><span class="s">"GPU queries: {} ({:.1}x avg speedup)"</span><span class="p">,</span> 
+         <span class="n">stats</span><span class="py">.gpu_query_count</span><span class="p">,</span> <span class="n">stats</span><span class="py">.gpu_avg_speedup</span><span class="p">);</span>
+</code></pre></div></div>
+
+<h3 id="3-kubernetes-monitoring">3. Kubernetes Monitoring</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Check GPU utilization in pods</span>
+kubectl top pod <span class="nt">-l</span> <span class="nv">app</span><span class="o">=</span>orbit-compute <span class="nt">--containers</span>
+
+<span class="c"># Monitor acceleration metrics</span>
+kubectl logs <span class="nt">-f</span> deployment/orbit-server | <span class="nb">grep</span> <span class="s2">"ACCELERATION"</span>
+
+<span class="c"># Check compute resource allocation</span>
+kubectl describe pod <span class="nt">-l</span> <span class="nv">app</span><span class="o">=</span>orbit-server | <span class="nb">grep</span> <span class="nt">-A</span> 10 <span class="s2">"Requests</span><span class="se">\|</span><span class="s2">Limits"</span>
+</code></pre></div></div>
+
+<h2 id="performance-tuning-guidelines">Performance Tuning Guidelines</h2>
+
+<h3 id="1-data-size-thresholds">1. Data Size Thresholds</h3>
+
+<ul>
+  <li><strong>Enable GPU acceleration</strong> for datasets &gt; 100K rows</li>
+  <li><strong>Use SIMD acceleration</strong> for all numeric operations</li>
+  <li><strong>Neural Engine</strong> for ML inference and graph operations</li>
+  <li><strong>CPU fallback</strong> for small datasets (&lt; 1K rows)</li>
+</ul>
+
+<h3 id="2-memory-considerations">2. Memory Considerations</h3>
+
+<ul>
+  <li><strong>Unified Memory</strong> (Apple Silicon): Optimal for GPU-CPU data sharing</li>
+  <li><strong>GPU Memory Limit</strong>: Set to 70-80% of available GPU memory</li>
+  <li><strong>Memory Alignment</strong>: Use 64-byte alignment for optimal SIMD performance</li>
+</ul>
+
+<h3 id="3-query-optimization">3. Query Optimization</h3>
+
+<ul>
+  <li><strong>Vector Operations</strong>: Ensure indexes on vector columns</li>
+  <li><strong>Batch Operations</strong>: Group similar operations together</li>
+  <li><strong>Avoid Frequent Fallbacks</strong>: Profile queries to understand acceleration patterns</li>
+</ul>
+
+<h3 id="4-hardware-specific-tuning">4. Hardware-Specific Tuning</h3>
+
+<h4 id="apple-silicon-m1m2m3m4">Apple Silicon (M1/M2/M3/M4)</h4>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">export </span><span class="nv">ORBIT_UNIFIED_MEMORY</span><span class="o">=</span><span class="nb">true
+export </span><span class="nv">ORBIT_ENABLE_NEURAL_ENGINE</span><span class="o">=</span><span class="nb">true
+export </span><span class="nv">ORBIT_METAL_OPTIMIZATION</span><span class="o">=</span><span class="nb">true</span>
+</code></pre></div></div>
+
+<h4 id="nvidia-gpus">NVIDIA GPUs</h4>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">export </span><span class="nv">ORBIT_CUDA_OPTIMIZATION</span><span class="o">=</span><span class="nb">true
+export </span><span class="nv">ORBIT_TENSOR_CORES</span><span class="o">=</span><span class="nb">true
+export </span><span class="nv">ORBIT_GPU_MEMORY_POOL</span><span class="o">=</span><span class="nb">true</span>
+</code></pre></div></div>
+
+<h4 id="intelamd-cpus">Intel/AMD CPUs</h4>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">export </span><span class="nv">ORBIT_AVX512_OPTIMIZATION</span><span class="o">=</span><span class="nb">true
+export </span><span class="nv">ORBIT_NUMA_AWARENESS</span><span class="o">=</span><span class="nb">true
+export </span><span class="nv">ORBIT_HYPER_THREADING</span><span class="o">=</span><span class="nb">true</span>
+</code></pre></div></div>
+
+<h2 id="troubleshooting">Troubleshooting</h2>
+
+<h3 id="common-issues">Common Issues</h3>
+
+<ol>
+  <li><strong>GPU Not Detected</strong>
+    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Check GPU availability</span>
+orbit-compute <span class="nt">--check-gpu</span>
+   
+<span class="c"># Verify drivers</span>
+nvidia-smi  <span class="c"># NVIDIA</span>
+system_profiler SPDisplaysDataType  <span class="c"># macOS</span>
+</code></pre></div>    </div>
+  </li>
+  <li><strong>Acceleration Not Working</strong>
+    <div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Check if acceleration is enabled</span>
+<span class="k">SHOW</span> <span class="n">orbit_compute_acceleration</span><span class="p">;</span>
+   
+<span class="c1">-- Verify query uses acceleration</span>
+<span class="k">EXPLAIN</span> <span class="p">(</span><span class="k">ANALYZE</span><span class="p">,</span> <span class="n">BUFFERS</span><span class="p">)</span> <span class="k">SELECT</span> <span class="o">*</span> <span class="k">FROM</span> <span class="n">vectors</span><span class="p">;</span>
+</code></pre></div>    </div>
+  </li>
+  <li><strong>Performance Regression</strong>
+    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Enable profiling</span>
+<span class="nb">export </span><span class="nv">ORBIT_WORKLOAD_PROFILING</span><span class="o">=</span><span class="nb">true</span>
+   
+<span class="c"># Check query plans</span>
+SET orbit_log_query_plans <span class="o">=</span> <span class="s1">'on'</span><span class="p">;</span>
+</code></pre></div>    </div>
+  </li>
+</ol>
+
+<h3 id="debug-configuration">Debug Configuration</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="c"># Enable detailed logging</span>
+<span class="nb">export </span><span class="nv">RUST_LOG</span><span class="o">=</span><span class="nv">orbit_compute</span><span class="o">=</span>debug,orbit_scheduler<span class="o">=</span>debug
+
+<span class="c"># Disable acceleration for debugging</span>
+<span class="nb">export </span><span class="nv">ORBIT_COMPUTE_ACCELERATION</span><span class="o">=</span><span class="nb">false</span>
+
+<span class="c"># Force CPU execution</span>
+<span class="nb">export </span><span class="nv">ORBIT_FORCE_CPU_FALLBACK</span><span class="o">=</span><span class="nb">true</span>
+</code></pre></div></div>
+
+<h2 id="best-practices">Best Practices</h2>
+
+<h3 id="1-development-environment">1. Development Environment</h3>
+<ul>
+  <li>Start with acceleration <strong>enabled</strong> but with conservative timeouts</li>
+  <li>Use <strong>profiling</strong> to understand query patterns</li>
+  <li>Test both <strong>accelerated and CPU-only</strong> execution paths</li>
+</ul>
+
+<h3 id="2-production-deployment">2. Production Deployment</h3>
+<ul>
+  <li>Enable <strong>all acceleration features</strong> by default</li>
+  <li>Set appropriate <strong>GPU memory limits</strong> (70-80% of available)</li>
+  <li>Monitor <strong>fallback rates</strong> and <strong>performance metrics</strong></li>
+  <li>Use <strong>Kubernetes resource limits</strong> to prevent resource contention</li>
+</ul>
+
+<h3 id="3-query-development">3. Query Development</h3>
+<ul>
+  <li>Use <strong>query hints</strong> for fine-tuning critical queries</li>
+  <li><strong>Batch similar operations</strong> to maximize GPU utilization</li>
+  <li><strong>Profile vector operations</strong> to ensure index usage</li>
+  <li>Test <strong>large dataset performance</strong> with GPU acceleration</li>
+</ul>
+
+<h3 id="4-monitoring-and-alerting">4. Monitoring and Alerting</h3>
+<ul>
+  <li>Alert on high <strong>fallback rates</strong> (&gt;10%)</li>
+  <li>Monitor <strong>GPU memory usage</strong> and <strong>temperature</strong></li>
+  <li>Track <strong>query performance trends</strong> over time</li>
+  <li>Set alerts for <strong>compute unit failures</strong></li>
+</ul>
+
+<h2 id="conclusion">Conclusion</h2>
+
+<p>The orbit-compute acceleration framework provides transparent performance improvements for database workloads while maintaining compatibility and reliability through graceful degradation. By understanding the workload types that benefit from acceleration and properly configuring clients and queries, you can achieve 5-50x performance improvements for compute-intensive database operations.</p>
+
+<p>For workloads involving large datasets, vector operations, matrix computations, or AI/ML inference, GPU and Neural Engine acceleration can provide substantial performance benefits. The system automatically handles hardware detection, workload scheduling, and fallback to ensure optimal performance across diverse deployment environments.</p>
+
+<hr />
+
+<p><strong>See Also</strong>:</p>
+<ul>
+  <li><a href="../README-K8S-DEPLOYMENT.md">README-K8S-DEPLOYMENT.md</a> - Kubernetes deployment with GPU support</li>
+  <li><a href="/orbit-rs/rfcs/heterogeneous-compute/">RFC Heterogeneous Compute</a> - Technical architecture details</li>
+  <li><a href="/orbit-rs/k8s-deployment-sizing-guide.html">Kubernetes Deployment Sizing Guide</a> - Hardware sizing recommendations</li>
+</ul>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/orbit-rs/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Orbit-RS Documentation</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">TuringWorks</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

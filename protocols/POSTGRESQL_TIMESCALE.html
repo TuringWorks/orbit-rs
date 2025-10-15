@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>PostgreSQL TimescaleDB Compatibility | Orbit-RS Documentation</title>
+<meta name="generator" content="Jekyll v4.4.1" />
+<meta property="og:title" content="PostgreSQL TimescaleDB Compatibility" />
+<meta name="author" content="TuringWorks" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<meta property="og:description" content="The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform" />
+<link rel="canonical" href="https://turingworks.github.io/orbit-rs/protocols/POSTGRESQL_TIMESCALE.html" />
+<meta property="og:url" content="https://turingworks.github.io/orbit-rs/protocols/POSTGRESQL_TIMESCALE.html" />
+<meta property="og:site_name" content="Orbit-RS Documentation" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="PostgreSQL TimescaleDB Compatibility" />
+<meta name="twitter:site" content="@TuringWorksAI" />
+<meta name="twitter:creator" content="@TuringWorks" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","author":{"@type":"Person","name":"TuringWorks"},"description":"The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform","headline":"PostgreSQL TimescaleDB Compatibility","url":"https://turingworks.github.io/orbit-rs/protocols/POSTGRESQL_TIMESCALE.html"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/orbit-rs/assets/main.css">
+  <link rel="stylesheet" href="/orbit-rs/assets/css/custom.css"><link type="application/atom+xml" rel="alternate" href="https://turingworks.github.io/orbit-rs/feed.xml" title="Orbit-RS Documentation" /></head><body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/orbit-rs/">Orbit-RS Documentation</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"><a class="page-link" href="/orbit-rs/">Orbit-RS Documentation</a><a class="page-link" href="/orbit-rs/project_overview.html">Orbit-RS: Comprehensive Project Overview</a><a class="page-link" href="/orbit-rs/quick_start.html">Quick Start Guide - Multi-Protocol Database Server</a><a class="page-link" href="/orbit-rs/roadmap/">Development Roadmap</a><a class="page-link" href="/orbit-rs/features/">Orbit-RS Feature Index</a><a class="page-link" href="/orbit-rs/compute-acceleration/">Hardware Acceleration Guide</a><a class="page-link" href="/orbit-rs/contributing.html">Contributing Guide</a><a class="page-link" href="/orbit-rs/overview.html">Architecture Overview</a></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <h1 id="postgresql-timescaledb-compatibility">PostgreSQL TimescaleDB Compatibility</h1>
+
+<h2 id="overview">Overview</h2>
+
+<p>TimescaleDB is a PostgreSQL extension that transforms PostgreSQL into a scalable time-series database. Orbit-RS will provide native compatibility with TimescaleDB functions and features, allowing existing applications to seamlessly migrate from TimescaleDB to Orbit’s distributed architecture.</p>
+
+<h2 id="planned-features">Planned Features</h2>
+
+<h3 id="-phase-12-timescaledb-foundation">🎯 <strong>Phase 12: TimescaleDB Foundation</strong></h3>
+
+<h4 id="core-time-series-tables">Core Time Series Tables</h4>
+<ul>
+  <li><strong>Hypertables</strong>: Distributed time-partitioned tables</li>
+  <li><strong>Chunks</strong>: Automatic time-based table partitioning</li>
+  <li><strong>Time partitioning</strong>: Automatic data partitioning by time intervals</li>
+  <li><strong>Space partitioning</strong>: Additional partitioning by space dimensions</li>
+</ul>
+
+<h4 id="basic-functions">Basic Functions</h4>
+<ul>
+  <li><strong>CREATE EXTENSION timescaledb</strong>: Enable TimescaleDB compatibility</li>
+  <li><strong>create_hypertable()</strong>: Convert regular tables to hypertables</li>
+  <li><strong>drop_chunks()</strong>: Remove old data based on time intervals</li>
+  <li><strong>show_chunks()</strong>: Display chunk information</li>
+  <li><strong>chunk_relation_size()</strong>: Get chunk storage information</li>
+</ul>
+
+<h3 id="-phase-13-advanced-timescaledb-features">🚀 <strong>Phase 13: Advanced TimescaleDB Features</strong></h3>
+
+<h4 id="continuous-aggregates">Continuous Aggregates</h4>
+<ul>
+  <li><strong>CREATE MATERIALIZED VIEW</strong>: Time-based materialized views</li>
+  <li><strong>refresh_continuous_aggregate()</strong>: Manual refresh of aggregates</li>
+  <li><strong>Automatic refresh</strong>: Background refresh of continuous aggregates</li>
+  <li><strong>Real-time aggregation</strong>: Combine historical and real-time data</li>
+</ul>
+
+<h4 id="advanced-analytics">Advanced Analytics</h4>
+<ul>
+  <li><strong>time_bucket()</strong>: Group data into time intervals</li>
+  <li><strong>time_bucket_gapfill()</strong>: Fill gaps in time series data</li>
+  <li><strong>locf()</strong>: Last observation carried forward</li>
+  <li><strong>interpolate()</strong>: Linear interpolation for missing values</li>
+  <li><strong>Hyperfunctions</strong>: Advanced time-series analytical functions</li>
+</ul>
+
+<h3 id="-phase-14-enterprise-timescaledb-features">📊 <strong>Phase 14: Enterprise TimescaleDB Features</strong></h3>
+
+<h4 id="data-retention-and-compression">Data Retention and Compression</h4>
+<ul>
+  <li><strong>Data retention policies</strong>: Automatic data expiration</li>
+  <li><strong>Native compression</strong>: Column-store compression for historical data</li>
+  <li><strong>Compression policies</strong>: Automatic compression based on age</li>
+  <li><strong>Decompression</strong>: Transparent decompression for queries</li>
+</ul>
+
+<h4 id="multi-node-and-clustering">Multi-Node and Clustering</h4>
+<ul>
+  <li><strong>Distributed hypertables</strong>: Scale across multiple Orbit nodes</li>
+  <li><strong>Data nodes</strong>: Distribute chunks across cluster</li>
+  <li><strong>Query planning</strong>: Distributed query execution</li>
+  <li><strong>Replication</strong>: Cross-node data replication</li>
+</ul>
+
+<h2 id="technical-implementation">Technical Implementation</h2>
+
+<h3 id="sql-extensions">SQL Extensions</h3>
+
+<h4 id="hypertable-management">Hypertable Management</h4>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Create extension</span>
+<span class="k">CREATE</span> <span class="n">EXTENSION</span> <span class="n">IF</span> <span class="k">NOT</span> <span class="k">EXISTS</span> <span class="n">timescaledb</span> <span class="k">CASCADE</span><span class="p">;</span>
+
+<span class="c1">-- Create hypertable from existing table</span>
+<span class="k">SELECT</span> <span class="n">create_hypertable</span><span class="p">(</span><span class="s1">'sensor_data'</span><span class="p">,</span> <span class="s1">'timestamp'</span><span class="p">,</span> 
+    <span class="n">chunk_time_interval</span> <span class="o">=&gt;</span> <span class="n">INTERVAL</span> <span class="s1">'1 hour'</span><span class="p">,</span>
+    <span class="n">partitioning_column</span> <span class="o">=&gt;</span> <span class="s1">'sensor_id'</span><span class="p">,</span>
+    <span class="n">number_partitions</span> <span class="o">=&gt;</span> <span class="mi">4</span><span class="p">);</span>
+
+<span class="c1">-- Create retention policy</span>
+<span class="k">SELECT</span> <span class="n">add_retention_policy</span><span class="p">(</span><span class="s1">'sensor_data'</span><span class="p">,</span> <span class="n">INTERVAL</span> <span class="s1">'30 days'</span><span class="p">);</span>
+
+<span class="c1">-- Create compression policy</span>
+<span class="k">SELECT</span> <span class="n">add_compression_policy</span><span class="p">(</span><span class="s1">'sensor_data'</span><span class="p">,</span> <span class="n">INTERVAL</span> <span class="s1">'7 days'</span><span class="p">);</span>
+</code></pre></div></div>
+
+<h4 id="time-series-queries">Time-Series Queries</h4>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Time bucket aggregation</span>
+<span class="k">SELECT</span> 
+    <span class="n">time_bucket</span><span class="p">(</span><span class="s1">'1 hour'</span><span class="p">,</span> <span class="nb">timestamp</span><span class="p">)</span> <span class="k">AS</span> <span class="n">hour</span><span class="p">,</span>
+    <span class="n">sensor_id</span><span class="p">,</span>
+    <span class="k">AVG</span><span class="p">(</span><span class="n">temperature</span><span class="p">)</span> <span class="k">as</span> <span class="n">avg_temp</span><span class="p">,</span>
+    <span class="k">MAX</span><span class="p">(</span><span class="n">temperature</span><span class="p">)</span> <span class="k">as</span> <span class="n">max_temp</span><span class="p">,</span>
+    <span class="k">MIN</span><span class="p">(</span><span class="n">temperature</span><span class="p">)</span> <span class="k">as</span> <span class="n">min_temp</span>
+<span class="k">FROM</span> <span class="n">sensor_data</span> 
+<span class="k">WHERE</span> <span class="nb">timestamp</span> <span class="o">&gt;=</span> <span class="n">NOW</span><span class="p">()</span> <span class="o">-</span> <span class="n">INTERVAL</span> <span class="s1">'1 day'</span>
+<span class="k">GROUP</span> <span class="k">BY</span> <span class="n">hour</span><span class="p">,</span> <span class="n">sensor_id</span>
+<span class="k">ORDER</span> <span class="k">BY</span> <span class="n">hour</span> <span class="k">DESC</span><span class="p">;</span>
+
+<span class="c1">-- Gap filling with interpolation</span>
+<span class="k">SELECT</span> 
+    <span class="n">time_bucket_gapfill</span><span class="p">(</span><span class="s1">'15 minutes'</span><span class="p">,</span> <span class="nb">timestamp</span><span class="p">)</span> <span class="k">AS</span> <span class="n">bucket</span><span class="p">,</span>
+    <span class="n">sensor_id</span><span class="p">,</span>
+    <span class="k">AVG</span><span class="p">(</span><span class="n">temperature</span><span class="p">)</span> <span class="k">as</span> <span class="n">avg_temp</span><span class="p">,</span>
+    <span class="n">interpolate</span><span class="p">(</span><span class="k">AVG</span><span class="p">(</span><span class="n">temperature</span><span class="p">))</span> <span class="k">as</span> <span class="n">interpolated_temp</span>
+<span class="k">FROM</span> <span class="n">sensor_data</span> 
+<span class="k">WHERE</span> <span class="nb">timestamp</span> <span class="o">&gt;=</span> <span class="n">NOW</span><span class="p">()</span> <span class="o">-</span> <span class="n">INTERVAL</span> <span class="s1">'4 hours'</span>
+  <span class="k">AND</span> <span class="n">sensor_id</span> <span class="o">=</span> <span class="s1">'temp_001'</span>
+<span class="k">GROUP</span> <span class="k">BY</span> <span class="n">bucket</span><span class="p">,</span> <span class="n">sensor_id</span>
+<span class="k">ORDER</span> <span class="k">BY</span> <span class="n">bucket</span><span class="p">;</span>
+
+<span class="c1">-- Continuous aggregate (materialized view)</span>
+<span class="k">CREATE</span> <span class="n">MATERIALIZED</span> <span class="k">VIEW</span> <span class="n">sensor_data_hourly</span>
+<span class="k">WITH</span> <span class="p">(</span><span class="n">timescaledb</span><span class="p">.</span><span class="n">continuous</span><span class="p">)</span> <span class="k">AS</span>
+<span class="k">SELECT</span> 
+    <span class="n">time_bucket</span><span class="p">(</span><span class="s1">'1 hour'</span><span class="p">,</span> <span class="nb">timestamp</span><span class="p">)</span> <span class="k">AS</span> <span class="n">hour</span><span class="p">,</span>
+    <span class="n">sensor_id</span><span class="p">,</span>
+    <span class="k">AVG</span><span class="p">(</span><span class="n">temperature</span><span class="p">)</span> <span class="k">as</span> <span class="n">avg_temp</span><span class="p">,</span>
+    <span class="k">COUNT</span><span class="p">(</span><span class="o">*</span><span class="p">)</span> <span class="k">as</span> <span class="n">sample_count</span>
+<span class="k">FROM</span> <span class="n">sensor_data</span>
+<span class="k">GROUP</span> <span class="k">BY</span> <span class="n">hour</span><span class="p">,</span> <span class="n">sensor_id</span><span class="p">;</span>
+
+<span class="c1">-- Refresh continuous aggregate</span>
+<span class="k">CALL</span> <span class="n">refresh_continuous_aggregate</span><span class="p">(</span><span class="s1">'sensor_data_hourly'</span><span class="p">,</span> 
+    <span class="n">start_time</span> <span class="o">=&gt;</span> <span class="n">NOW</span><span class="p">()</span> <span class="o">-</span> <span class="n">INTERVAL</span> <span class="s1">'1 day'</span><span class="p">,</span>
+    <span class="n">end_time</span> <span class="o">=&gt;</span> <span class="n">NOW</span><span class="p">());</span>
+</code></pre></div></div>
+
+<h3 id="actor-architecture">Actor Architecture</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="nd">#[async_trait]</span>
+<span class="k">pub</span> <span class="k">trait</span> <span class="n">HypertableActor</span><span class="p">:</span> <span class="n">ActorWithStringKey</span> <span class="p">{</span>
+    <span class="c1">// Hypertable management</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">create_hypertable</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">config</span><span class="p">:</span> <span class="n">HypertableConfig</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">drop_hypertable</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">get_hypertable_info</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="n">HypertableInfo</span><span class="o">&gt;</span><span class="p">;</span>
+    
+    <span class="c1">// Chunk management</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">show_chunks</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">time_range</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="n">TimeRange</span><span class="o">&gt;</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="n">ChunkInfo</span><span class="o">&gt;&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">drop_chunks</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">older_than</span><span class="p">:</span> <span class="n">SystemTime</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="nb">String</span><span class="o">&gt;&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">compress_chunk</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">chunk_id</span><span class="p">:</span> <span class="nb">String</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span><span class="p">;</span>
+    
+    <span class="c1">// Time-series operations</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">time_bucket_query</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">params</span><span class="p">:</span> <span class="n">TimeBucketParams</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="n">TimeBucketResult</span><span class="o">&gt;&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">gapfill_query</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">params</span><span class="p">:</span> <span class="n">GapfillParams</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="nb">Vec</span><span class="o">&lt;</span><span class="n">GapfillResult</span><span class="o">&gt;&gt;</span><span class="p">;</span>
+    
+    <span class="c1">// Continuous aggregates</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">create_continuous_aggregate</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">config</span><span class="p">:</span> <span class="n">ContinuousAggregateConfig</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span><span class="p">;</span>
+    <span class="k">async</span> <span class="k">fn</span> <span class="nf">refresh_continuous_aggregate</span><span class="p">(</span><span class="o">&amp;</span><span class="k">self</span><span class="p">,</span> <span class="n">time_range</span><span class="p">:</span> <span class="n">TimeRange</span><span class="p">)</span> <span class="k">-&gt;</span> <span class="n">OrbitResult</span><span class="o">&lt;</span><span class="p">()</span><span class="o">&gt;</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="data-structures">Data Structures</h3>
+
+<div class="language-rust highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="nd">#[derive(Debug,</span> <span class="nd">Clone,</span> <span class="nd">Serialize,</span> <span class="nd">Deserialize)]</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">HypertableConfig</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">time_column</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">chunk_time_interval</span><span class="p">:</span> <span class="n">Duration</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">partitioning_column</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="nb">String</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">number_partitions</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="nb">u32</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">replication_factor</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="nb">u16</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">data_retention</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="n">Duration</span><span class="o">&gt;</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="nd">#[derive(Debug,</span> <span class="nd">Clone,</span> <span class="nd">Serialize,</span> <span class="nd">Deserialize)]</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">ChunkInfo</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="n">chunk_id</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">chunk_name</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">start_time</span><span class="p">:</span> <span class="n">SystemTime</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">end_time</span><span class="p">:</span> <span class="n">SystemTime</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">size_bytes</span><span class="p">:</span> <span class="nb">u64</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">compressed</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">node_id</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="nb">String</span><span class="o">&gt;</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="nd">#[derive(Debug,</span> <span class="nd">Clone,</span> <span class="nd">Serialize,</span> <span class="nd">Deserialize)]</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">TimeBucketParams</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="n">bucket_size</span><span class="p">:</span> <span class="n">Duration</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">time_column</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">group_by</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="nb">String</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">aggregates</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">AggregateFunction</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">time_range</span><span class="p">:</span> <span class="n">TimeRange</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">filters</span><span class="p">:</span> <span class="nb">Vec</span><span class="o">&lt;</span><span class="n">Filter</span><span class="o">&gt;</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="nd">#[derive(Debug,</span> <span class="nd">Clone,</span> <span class="nd">Serialize,</span> <span class="nd">Deserialize)]</span>
+<span class="k">pub</span> <span class="k">struct</span> <span class="n">ContinuousAggregateConfig</span> <span class="p">{</span>
+    <span class="k">pub</span> <span class="n">view_name</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">source_table</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">refresh_policy</span><span class="p">:</span> <span class="n">RefreshPolicy</span><span class="p">,</span>
+    <span class="k">pub</span> <span class="n">materialization_hypertable_config</span><span class="p">:</span> <span class="nb">Option</span><span class="o">&lt;</span><span class="n">HypertableConfig</span><span class="o">&gt;</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="nd">#[derive(Debug,</span> <span class="nd">Clone,</span> <span class="nd">Serialize,</span> <span class="nd">Deserialize)]</span>
+<span class="k">pub</span> <span class="k">enum</span> <span class="n">RefreshPolicy</span> <span class="p">{</span>
+    <span class="n">Manual</span><span class="p">,</span>
+    <span class="n">Automatic</span> <span class="p">{</span> 
+        <span class="n">refresh_interval</span><span class="p">:</span> <span class="n">Duration</span><span class="p">,</span>
+        <span class="n">max_interval_per_job</span><span class="p">:</span> <span class="n">Duration</span><span class="p">,</span>
+    <span class="p">},</span>
+    <span class="n">RealTime</span> <span class="p">{</span> 
+        <span class="n">max_interval_per_job</span><span class="p">:</span> <span class="n">Duration</span><span class="p">,</span>
+        <span class="n">materialized_only</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
+    <span class="p">},</span>
+<span class="p">}</span>
+
+<span class="nd">#[derive(Debug,</span> <span class="nd">Clone,</span> <span class="nd">Serialize,</span> <span class="nd">Deserialize)]</span>
+<span class="k">pub</span> <span class="k">enum</span> <span class="n">AggregateFunction</span> <span class="p">{</span>
+    <span class="n">Count</span><span class="p">,</span>
+    <span class="nf">Sum</span><span class="p">(</span><span class="nb">String</span><span class="p">),</span>
+    <span class="nf">Avg</span><span class="p">(</span><span class="nb">String</span><span class="p">),</span>
+    <span class="nf">Min</span><span class="p">(</span><span class="nb">String</span><span class="p">),</span>
+    <span class="nf">Max</span><span class="p">(</span><span class="nb">String</span><span class="p">),</span>
+    <span class="nf">StdDev</span><span class="p">(</span><span class="nb">String</span><span class="p">),</span>
+    <span class="nf">Variance</span><span class="p">(</span><span class="nb">String</span><span class="p">),</span>
+    <span class="n">Percentile</span> <span class="p">{</span> <span class="n">column</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span> <span class="n">percentile</span><span class="p">:</span> <span class="nb">f64</span> <span class="p">},</span>
+    <span class="n">First</span> <span class="p">{</span> <span class="n">column</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span> <span class="n">order_by</span><span class="p">:</span> <span class="nb">String</span> <span class="p">},</span>
+    <span class="n">Last</span> <span class="p">{</span> <span class="n">column</span><span class="p">:</span> <span class="nb">String</span><span class="p">,</span> <span class="n">order_by</span><span class="p">:</span> <span class="nb">String</span> <span class="p">},</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h2 id="timescaledb-functions-reference">TimescaleDB Functions Reference</h2>
+
+<h3 id="hypertable-functions">Hypertable Functions</h3>
+<ul>
+  <li><strong>create_hypertable(table_name, time_column, …)</strong> - Convert table to hypertable</li>
+  <li><strong>drop_chunks(hypertable, older_than, …)</strong> - Remove old chunks</li>
+  <li><strong>show_chunks(hypertable, …)</strong> - Display chunk information</li>
+  <li><strong>add_dimension(hypertable, column_name, …)</strong> - Add space partition</li>
+  <li><strong>set_chunk_time_interval(hypertable, interval)</strong> - Change chunk interval</li>
+</ul>
+
+<h3 id="time-functions">Time Functions</h3>
+<ul>
+  <li><strong>time_bucket(bucket_width, ts, …)</strong> - Group timestamps into buckets</li>
+  <li><strong>time_bucket_gapfill(bucket_width, ts, …)</strong> - Fill gaps in time buckets</li>
+  <li><strong>locf(value)</strong> - Last observation carried forward</li>
+  <li><strong>interpolate(value)</strong> - Linear interpolation</li>
+</ul>
+
+<h3 id="analytics-functions">Analytics Functions</h3>
+<ul>
+  <li><strong>first(value, time)</strong> - First value in time order</li>
+  <li><strong>last(value, time)</strong> - Last value in time order</li>
+  <li><strong>histogram(value, min, max, nbuckets)</strong> - Create histogram</li>
+  <li><strong>percentile_agg(percentile)</strong> - Percentile aggregation</li>
+</ul>
+
+<h3 id="compression-functions">Compression Functions</h3>
+<ul>
+  <li><strong>add_compression_policy(hypertable, compress_after)</strong> - Add compression policy</li>
+  <li><strong>remove_compression_policy(hypertable)</strong> - Remove compression policy</li>
+  <li><strong>compress_chunk(chunk)</strong> - Manually compress chunk</li>
+  <li><strong>decompress_chunk(chunk)</strong> - Manually decompress chunk</li>
+</ul>
+
+<h2 id="usage-examples">Usage Examples</h2>
+
+<h3 id="iot-sensor-data-management">IoT Sensor Data Management</h3>
+
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Create sensors table</span>
+<span class="k">CREATE</span> <span class="k">TABLE</span> <span class="n">sensor_readings</span> <span class="p">(</span>
+    <span class="nb">timestamp</span> <span class="n">TIMESTAMPTZ</span> <span class="k">NOT</span> <span class="k">NULL</span><span class="p">,</span>
+    <span class="n">sensor_id</span> <span class="nb">TEXT</span> <span class="k">NOT</span> <span class="k">NULL</span><span class="p">,</span>
+    <span class="k">location</span> <span class="nb">TEXT</span> <span class="k">NOT</span> <span class="k">NULL</span><span class="p">,</span>
+    <span class="n">temperature</span> <span class="nb">DOUBLE</span> <span class="nb">PRECISION</span><span class="p">,</span>
+    <span class="n">humidity</span> <span class="nb">DOUBLE</span> <span class="nb">PRECISION</span><span class="p">,</span>
+    <span class="n">pressure</span> <span class="nb">DOUBLE</span> <span class="nb">PRECISION</span><span class="p">,</span>
+    <span class="n">battery_level</span> <span class="nb">INTEGER</span>
+<span class="p">);</span>
+
+<span class="c1">-- Convert to hypertable with 1-hour chunks, partitioned by sensor_id</span>
+<span class="k">SELECT</span> <span class="n">create_hypertable</span><span class="p">(</span><span class="s1">'sensor_readings'</span><span class="p">,</span> <span class="s1">'timestamp'</span><span class="p">,</span>
+    <span class="n">chunk_time_interval</span> <span class="o">=&gt;</span> <span class="n">INTERVAL</span> <span class="s1">'1 hour'</span><span class="p">,</span>
+    <span class="n">partitioning_column</span> <span class="o">=&gt;</span> <span class="s1">'sensor_id'</span><span class="p">,</span>
+    <span class="n">number_partitions</span> <span class="o">=&gt;</span> <span class="mi">8</span><span class="p">);</span>
+
+<span class="c1">-- Create index for efficient queries</span>
+<span class="k">CREATE</span> <span class="k">INDEX</span> <span class="k">ON</span> <span class="n">sensor_readings</span> <span class="p">(</span><span class="n">sensor_id</span><span class="p">,</span> <span class="nb">timestamp</span> <span class="k">DESC</span><span class="p">);</span>
+
+<span class="c1">-- Set up data retention (keep data for 90 days)</span>
+<span class="k">SELECT</span> <span class="n">add_retention_policy</span><span class="p">(</span><span class="s1">'sensor_readings'</span><span class="p">,</span> <span class="n">INTERVAL</span> <span class="s1">'90 days'</span><span class="p">);</span>
+
+<span class="c1">-- Set up compression (compress data older than 1 day)</span>
+<span class="k">SELECT</span> <span class="n">add_compression_policy</span><span class="p">(</span><span class="s1">'sensor_readings'</span><span class="p">,</span> <span class="n">INTERVAL</span> <span class="s1">'1 day'</span><span class="p">);</span>
+
+<span class="c1">-- Insert sample data</span>
+<span class="k">INSERT</span> <span class="k">INTO</span> <span class="n">sensor_readings</span> <span class="k">VALUES</span> 
+<span class="p">(</span><span class="s1">'2024-01-01 10:00:00'</span><span class="p">,</span> <span class="s1">'temp_001'</span><span class="p">,</span> <span class="s1">'building_a'</span><span class="p">,</span> <span class="mi">23</span><span class="p">.</span><span class="mi">5</span><span class="p">,</span> <span class="mi">45</span><span class="p">.</span><span class="mi">2</span><span class="p">,</span> <span class="mi">1013</span><span class="p">.</span><span class="mi">25</span><span class="p">,</span> <span class="mi">87</span><span class="p">),</span>
+<span class="p">(</span><span class="s1">'2024-01-01 10:01:00'</span><span class="p">,</span> <span class="s1">'temp_001'</span><span class="p">,</span> <span class="s1">'building_a'</span><span class="p">,</span> <span class="mi">23</span><span class="p">.</span><span class="mi">6</span><span class="p">,</span> <span class="mi">45</span><span class="p">.</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1013</span><span class="p">.</span><span class="mi">30</span><span class="p">,</span> <span class="mi">87</span><span class="p">),</span>
+<span class="p">(</span><span class="s1">'2024-01-01 10:02:00'</span><span class="p">,</span> <span class="s1">'temp_001'</span><span class="p">,</span> <span class="s1">'building_a'</span><span class="p">,</span> <span class="mi">23</span><span class="p">.</span><span class="mi">4</span><span class="p">,</span> <span class="mi">45</span><span class="p">.</span><span class="mi">3</span><span class="p">,</span> <span class="mi">1013</span><span class="p">.</span><span class="mi">20</span><span class="p">,</span> <span class="mi">86</span><span class="p">);</span>
+
+<span class="c1">-- Query with time bucketing</span>
+<span class="k">SELECT</span> 
+    <span class="n">time_bucket</span><span class="p">(</span><span class="s1">'15 minutes'</span><span class="p">,</span> <span class="nb">timestamp</span><span class="p">)</span> <span class="k">AS</span> <span class="n">fifteen_min_bucket</span><span class="p">,</span>
+    <span class="n">sensor_id</span><span class="p">,</span>
+    <span class="k">location</span><span class="p">,</span>
+    <span class="k">AVG</span><span class="p">(</span><span class="n">temperature</span><span class="p">)</span> <span class="k">as</span> <span class="n">avg_temp</span><span class="p">,</span>
+    <span class="k">MAX</span><span class="p">(</span><span class="n">temperature</span><span class="p">)</span> <span class="o">-</span> <span class="k">MIN</span><span class="p">(</span><span class="n">temperature</span><span class="p">)</span> <span class="k">as</span> <span class="n">temp_range</span><span class="p">,</span>
+    <span class="k">AVG</span><span class="p">(</span><span class="n">humidity</span><span class="p">)</span> <span class="k">as</span> <span class="n">avg_humidity</span>
+<span class="k">FROM</span> <span class="n">sensor_readings</span>
+<span class="k">WHERE</span> <span class="nb">timestamp</span> <span class="o">&gt;=</span> <span class="n">NOW</span><span class="p">()</span> <span class="o">-</span> <span class="n">INTERVAL</span> <span class="s1">'4 hours'</span>
+<span class="k">GROUP</span> <span class="k">BY</span> <span class="n">fifteen_min_bucket</span><span class="p">,</span> <span class="n">sensor_id</span><span class="p">,</span> <span class="k">location</span>
+<span class="k">ORDER</span> <span class="k">BY</span> <span class="n">fifteen_min_bucket</span> <span class="k">DESC</span><span class="p">,</span> <span class="n">sensor_id</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h3 id="financial-time-series">Financial Time Series</h3>
+
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Create stock prices table</span>
+<span class="k">CREATE</span> <span class="k">TABLE</span> <span class="n">stock_prices</span> <span class="p">(</span>
+    <span class="nb">timestamp</span> <span class="n">TIMESTAMPTZ</span> <span class="k">NOT</span> <span class="k">NULL</span><span class="p">,</span>
+    <span class="n">symbol</span> <span class="nb">TEXT</span> <span class="k">NOT</span> <span class="k">NULL</span><span class="p">,</span>
+    <span class="n">price</span> <span class="nb">DOUBLE</span> <span class="nb">PRECISION</span> <span class="k">NOT</span> <span class="k">NULL</span><span class="p">,</span>
+    <span class="n">volume</span> <span class="nb">BIGINT</span><span class="p">,</span>
+    <span class="n">market_cap</span> <span class="nb">DOUBLE</span> <span class="nb">PRECISION</span>
+<span class="p">);</span>
+
+<span class="c1">-- Create hypertable for stock data</span>
+<span class="k">SELECT</span> <span class="n">create_hypertable</span><span class="p">(</span><span class="s1">'stock_prices'</span><span class="p">,</span> <span class="s1">'timestamp'</span><span class="p">,</span>
+    <span class="n">chunk_time_interval</span> <span class="o">=&gt;</span> <span class="n">INTERVAL</span> <span class="s1">'1 day'</span><span class="p">,</span>
+    <span class="n">partitioning_column</span> <span class="o">=&gt;</span> <span class="s1">'symbol'</span><span class="p">,</span>
+    <span class="n">number_partitions</span> <span class="o">=&gt;</span> <span class="mi">16</span><span class="p">);</span>
+
+<span class="c1">-- Create continuous aggregate for OHLCV data</span>
+<span class="k">CREATE</span> <span class="n">MATERIALIZED</span> <span class="k">VIEW</span> <span class="n">stock_ohlcv_1min</span>
+<span class="k">WITH</span> <span class="p">(</span><span class="n">timescaledb</span><span class="p">.</span><span class="n">continuous</span><span class="p">)</span> <span class="k">AS</span>
+<span class="k">SELECT</span> 
+    <span class="n">time_bucket</span><span class="p">(</span><span class="s1">'1 minute'</span><span class="p">,</span> <span class="nb">timestamp</span><span class="p">)</span> <span class="k">AS</span> <span class="n">bucket</span><span class="p">,</span>
+    <span class="n">symbol</span><span class="p">,</span>
+    <span class="k">first</span><span class="p">(</span><span class="n">price</span><span class="p">,</span> <span class="nb">timestamp</span><span class="p">)</span> <span class="k">AS</span> <span class="k">open</span><span class="p">,</span>
+    <span class="k">max</span><span class="p">(</span><span class="n">price</span><span class="p">)</span> <span class="k">AS</span> <span class="n">high</span><span class="p">,</span>
+    <span class="k">min</span><span class="p">(</span><span class="n">price</span><span class="p">)</span> <span class="k">AS</span> <span class="n">low</span><span class="p">,</span>
+    <span class="k">last</span><span class="p">(</span><span class="n">price</span><span class="p">,</span> <span class="nb">timestamp</span><span class="p">)</span> <span class="k">AS</span> <span class="k">close</span><span class="p">,</span>
+    <span class="k">sum</span><span class="p">(</span><span class="n">volume</span><span class="p">)</span> <span class="k">AS</span> <span class="n">volume</span>
+<span class="k">FROM</span> <span class="n">stock_prices</span>
+<span class="k">GROUP</span> <span class="k">BY</span> <span class="n">bucket</span><span class="p">,</span> <span class="n">symbol</span><span class="p">;</span>
+
+<span class="c1">-- Add automatic refresh policy</span>
+<span class="k">SELECT</span> <span class="n">add_continuous_aggregate_policy</span><span class="p">(</span><span class="s1">'stock_ohlcv_1min'</span><span class="p">,</span>
+    <span class="n">start_offset</span> <span class="o">=&gt;</span> <span class="n">INTERVAL</span> <span class="s1">'1 hour'</span><span class="p">,</span>
+    <span class="n">end_offset</span> <span class="o">=&gt;</span> <span class="n">INTERVAL</span> <span class="s1">'1 minute'</span><span class="p">,</span>
+    <span class="n">schedule_interval</span> <span class="o">=&gt;</span> <span class="n">INTERVAL</span> <span class="s1">'1 minute'</span><span class="p">);</span>
+
+<span class="c1">-- Query OHLCV data with gap filling</span>
+<span class="k">SELECT</span> 
+    <span class="n">time_bucket_gapfill</span><span class="p">(</span><span class="s1">'1 minute'</span><span class="p">,</span> <span class="n">bucket</span><span class="p">,</span> <span class="n">NOW</span><span class="p">()</span> <span class="o">-</span> <span class="n">INTERVAL</span> <span class="s1">'2 hours'</span><span class="p">,</span> <span class="n">NOW</span><span class="p">())</span> <span class="k">AS</span> <span class="nb">time</span><span class="p">,</span>
+    <span class="n">symbol</span><span class="p">,</span>
+    <span class="n">locf</span><span class="p">(</span><span class="k">open</span><span class="p">)</span> <span class="k">AS</span> <span class="k">open</span><span class="p">,</span>
+    <span class="n">locf</span><span class="p">(</span><span class="n">high</span><span class="p">)</span> <span class="k">AS</span> <span class="n">high</span><span class="p">,</span>
+    <span class="n">locf</span><span class="p">(</span><span class="n">low</span><span class="p">)</span> <span class="k">AS</span> <span class="n">low</span><span class="p">,</span>
+    <span class="n">locf</span><span class="p">(</span><span class="k">close</span><span class="p">)</span> <span class="k">AS</span> <span class="k">close</span><span class="p">,</span>
+    <span class="n">coalesce</span><span class="p">(</span><span class="n">volume</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span> <span class="k">AS</span> <span class="n">volume</span>
+<span class="k">FROM</span> <span class="n">stock_ohlcv_1min</span>
+<span class="k">WHERE</span> <span class="n">bucket</span> <span class="o">&gt;=</span> <span class="n">NOW</span><span class="p">()</span> <span class="o">-</span> <span class="n">INTERVAL</span> <span class="s1">'2 hours'</span>
+  <span class="k">AND</span> <span class="n">symbol</span> <span class="o">=</span> <span class="s1">'AAPL'</span>
+<span class="k">GROUP</span> <span class="k">BY</span> <span class="nb">time</span><span class="p">,</span> <span class="n">symbol</span>
+<span class="k">ORDER</span> <span class="k">BY</span> <span class="nb">time</span> <span class="k">DESC</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h3 id="application-performance-monitoring">Application Performance Monitoring</h3>
+
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Create metrics table for APM data</span>
+<span class="k">CREATE</span> <span class="k">TABLE</span> <span class="n">app_metrics</span> <span class="p">(</span>
+    <span class="nb">timestamp</span> <span class="n">TIMESTAMPTZ</span> <span class="k">NOT</span> <span class="k">NULL</span><span class="p">,</span>
+    <span class="n">service_name</span> <span class="nb">TEXT</span> <span class="k">NOT</span> <span class="k">NULL</span><span class="p">,</span>
+    <span class="n">instance_id</span> <span class="nb">TEXT</span> <span class="k">NOT</span> <span class="k">NULL</span><span class="p">,</span>
+    <span class="n">metric_name</span> <span class="nb">TEXT</span> <span class="k">NOT</span> <span class="k">NULL</span><span class="p">,</span>
+    <span class="n">metric_value</span> <span class="nb">DOUBLE</span> <span class="nb">PRECISION</span> <span class="k">NOT</span> <span class="k">NULL</span><span class="p">,</span>
+    <span class="n">tags</span> <span class="n">JSONB</span>
+<span class="p">);</span>
+
+<span class="c1">-- Create hypertable</span>
+<span class="k">SELECT</span> <span class="n">create_hypertable</span><span class="p">(</span><span class="s1">'app_metrics'</span><span class="p">,</span> <span class="s1">'timestamp'</span><span class="p">,</span>
+    <span class="n">chunk_time_interval</span> <span class="o">=&gt;</span> <span class="n">INTERVAL</span> <span class="s1">'6 hours'</span><span class="p">,</span>
+    <span class="n">partitioning_column</span> <span class="o">=&gt;</span> <span class="s1">'service_name'</span><span class="p">,</span>
+    <span class="n">number_partitions</span> <span class="o">=&gt;</span> <span class="mi">4</span><span class="p">);</span>
+
+<span class="c1">-- Create index for efficient tag queries</span>
+<span class="k">CREATE</span> <span class="k">INDEX</span> <span class="k">ON</span> <span class="n">app_metrics</span> <span class="k">USING</span> <span class="n">GIN</span> <span class="p">(</span><span class="n">tags</span><span class="p">);</span>
+
+<span class="c1">-- Continuous aggregate for service health dashboard</span>
+<span class="k">CREATE</span> <span class="n">MATERIALIZED</span> <span class="k">VIEW</span> <span class="n">service_health_5min</span>
+<span class="k">WITH</span> <span class="p">(</span><span class="n">timescaledb</span><span class="p">.</span><span class="n">continuous</span><span class="p">)</span> <span class="k">AS</span>
+<span class="k">SELECT</span> 
+    <span class="n">time_bucket</span><span class="p">(</span><span class="s1">'5 minutes'</span><span class="p">,</span> <span class="nb">timestamp</span><span class="p">)</span> <span class="k">AS</span> <span class="n">bucket</span><span class="p">,</span>
+    <span class="n">service_name</span><span class="p">,</span>
+    <span class="n">metric_name</span><span class="p">,</span>
+    <span class="k">AVG</span><span class="p">(</span><span class="n">metric_value</span><span class="p">)</span> <span class="k">as</span> <span class="n">avg_value</span><span class="p">,</span>
+    <span class="n">percentile_agg</span><span class="p">(</span><span class="mi">0</span><span class="p">.</span><span class="mi">95</span><span class="p">)</span> <span class="k">as</span> <span class="n">p95_value</span><span class="p">,</span>
+    <span class="n">percentile_agg</span><span class="p">(</span><span class="mi">0</span><span class="p">.</span><span class="mi">99</span><span class="p">)</span> <span class="k">as</span> <span class="n">p99_value</span><span class="p">,</span>
+    <span class="k">COUNT</span><span class="p">(</span><span class="o">*</span><span class="p">)</span> <span class="k">as</span> <span class="n">sample_count</span>
+<span class="k">FROM</span> <span class="n">app_metrics</span>
+<span class="k">WHERE</span> <span class="n">metric_name</span> <span class="k">IN</span> <span class="p">(</span><span class="s1">'response_time'</span><span class="p">,</span> <span class="s1">'cpu_usage'</span><span class="p">,</span> <span class="s1">'memory_usage'</span><span class="p">,</span> <span class="s1">'error_rate'</span><span class="p">)</span>
+<span class="k">GROUP</span> <span class="k">BY</span> <span class="n">bucket</span><span class="p">,</span> <span class="n">service_name</span><span class="p">,</span> <span class="n">metric_name</span><span class="p">;</span>
+
+<span class="c1">-- Query service performance trends</span>
+<span class="k">SELECT</span> 
+    <span class="n">bucket</span><span class="p">,</span>
+    <span class="n">service_name</span><span class="p">,</span>
+    <span class="n">metric_name</span><span class="p">,</span>
+    <span class="n">avg_value</span><span class="p">,</span>
+    <span class="n">percentile</span><span class="p">(</span><span class="n">p95_value</span><span class="p">,</span> <span class="mi">0</span><span class="p">.</span><span class="mi">95</span><span class="p">)</span> <span class="n">OVER</span> <span class="p">(</span>
+        <span class="k">PARTITION</span> <span class="k">BY</span> <span class="n">service_name</span><span class="p">,</span> <span class="n">metric_name</span> 
+        <span class="k">ORDER</span> <span class="k">BY</span> <span class="n">bucket</span> 
+        <span class="k">ROWS</span> <span class="k">BETWEEN</span> <span class="mi">11</span> <span class="k">PRECEDING</span> <span class="k">AND</span> <span class="k">CURRENT</span> <span class="k">ROW</span>
+    <span class="p">)</span> <span class="k">as</span> <span class="n">rolling_p95</span>
+<span class="k">FROM</span> <span class="n">service_health_5min</span>
+<span class="k">WHERE</span> <span class="n">bucket</span> <span class="o">&gt;=</span> <span class="n">NOW</span><span class="p">()</span> <span class="o">-</span> <span class="n">INTERVAL</span> <span class="s1">'1 hour'</span>
+  <span class="k">AND</span> <span class="n">service_name</span> <span class="o">=</span> <span class="s1">'user-service'</span>
+<span class="k">ORDER</span> <span class="k">BY</span> <span class="n">bucket</span> <span class="k">DESC</span><span class="p">,</span> <span class="n">metric_name</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h2 id="integration-with-orbit-features">Integration with Orbit Features</h2>
+
+<h3 id="distributed-architecture">Distributed Architecture</h3>
+<ul>
+  <li><strong>Actor-based hypertables</strong>: Each hypertable managed by dedicated actors</li>
+  <li><strong>Chunk distribution</strong>: Intelligent chunk placement across cluster nodes</li>
+  <li><strong>Query coordination</strong>: Distributed query execution and result aggregation</li>
+  <li><strong>Fault tolerance</strong>: Automatic failover and chunk replication</li>
+</ul>
+
+<h3 id="performance-optimization">Performance Optimization</h3>
+<ul>
+  <li><strong>Vectorized execution</strong>: SIMD-optimized time-series functions</li>
+  <li><strong>Parallel chunk processing</strong>: Multi-threaded chunk operations</li>
+  <li><strong>Smart caching</strong>: Cache frequently accessed chunks and aggregates</li>
+  <li><strong>Query optimization</strong>: Advanced query planning for time-series workloads</li>
+</ul>
+
+<h3 id="advanced-features">Advanced Features</h3>
+<ul>
+  <li><strong>Real-time analytics</strong>: Stream processing integration</li>
+  <li><strong>Machine learning</strong>: Built-in time-series ML functions</li>
+  <li><strong>Alerting</strong>: Pattern detection and anomaly alerting</li>
+  <li><strong>Data lineage</strong>: Track data transformations and aggregations</li>
+</ul>
+
+<h2 id="monitoring-and-observability">Monitoring and Observability</h2>
+
+<h3 id="timescaledb-specific-metrics">TimescaleDB-specific Metrics</h3>
+<ul>
+  <li>Hypertable and chunk statistics</li>
+  <li>Compression ratios and storage efficiency</li>
+  <li>Continuous aggregate refresh performance</li>
+  <li>Query performance across time ranges</li>
+</ul>
+
+<h3 id="grafana-integration">Grafana Integration</h3>
+<ul>
+  <li>TimescaleDB data source compatibility</li>
+  <li>Pre-built dashboards for monitoring hypertables</li>
+  <li>Custom time-series visualization components</li>
+  <li>Real-time alerting based on continuous aggregates</li>
+</ul>
+
+<h2 id="development-timeline">Development Timeline</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>Phase</th>
+      <th>Duration</th>
+      <th>Features</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Phase 12</strong></td>
+      <td>10-12 weeks</td>
+      <td>Core hypertable functionality, basic time functions</td>
+    </tr>
+    <tr>
+      <td><strong>Phase 13</strong></td>
+      <td>8-10 weeks</td>
+      <td>Continuous aggregates, advanced analytics functions</td>
+    </tr>
+    <tr>
+      <td><strong>Phase 14</strong></td>
+      <td>10-12 weeks</td>
+      <td>Compression, multi-node features, enterprise analytics</td>
+    </tr>
+  </tbody>
+</table>
+
+<p><strong>Total Estimated Effort</strong>: 28-34 weeks</p>
+
+<h2 id="compatibility-and-migration">Compatibility and Migration</h2>
+
+<h3 id="timescaledb-compatibility">TimescaleDB Compatibility</h3>
+<ul>
+  <li><strong>SQL compatibility</strong>: 100% compatibility with TimescaleDB SQL extensions</li>
+  <li><strong>Function compatibility</strong>: All TimescaleDB functions supported</li>
+  <li><strong>Client compatibility</strong>: Works with existing PostgreSQL clients and ORMs</li>
+  <li><strong>Schema compatibility</strong>: Compatible with TimescaleDB table structures</li>
+</ul>
+
+<h3 id="migration-tools">Migration Tools</h3>
+<ul>
+  <li><strong>pg_dump/pg_restore</strong>: Standard PostgreSQL migration tools</li>
+  <li><strong>Parallel migration</strong>: Multi-threaded data migration from TimescaleDB</li>
+  <li><strong>Schema conversion</strong>: Automated conversion of TimescaleDB schemas</li>
+  <li><strong>Validation tools</strong>: Verify data integrity after migration</li>
+</ul>
+
+<h3 id="integration-ecosystem">Integration Ecosystem</h3>
+<ul>
+  <li><strong>Grafana</strong>: Native TimescaleDB data source support</li>
+  <li><strong>Prometheus</strong>: TimescaleDB-compatible metrics ingestion</li>
+  <li><strong>Apache Kafka</strong>: Stream processing integration</li>
+  <li><strong>Machine Learning</strong>: Integration with popular ML frameworks</li>
+</ul>
+
+<p>This comprehensive TimescaleDB implementation will establish Orbit-RS as a powerful alternative to TimescaleDB while providing enhanced distributed capabilities and maintaining full PostgreSQL compatibility.</p>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/orbit-rs/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Orbit-RS Documentation</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">TuringWorks</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>The Next-Generation Distributed Database System - Production-Ready Multi-Model Platform</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>
