@@ -19,6 +19,7 @@ orbit-client = { path = "../orbit-client" }
 tokio.workspace = true
 tokio-stream.workspace = true
 tonic.workspace = true
+tonic-reflection = "0.12"
 futures.workspace = true
 dashmap.workspace = true
 serde.workspace = true

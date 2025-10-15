@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::time::{interval, Duration};
 use tonic::transport::Server;
+use tonic_reflection::server::Builder as ReflectionBuilder;
 
 /// Configuration for protocol servers
 #[derive(Debug, Clone)]
@@ -311,6 +312,14 @@ impl OrbitServer {
 
         tracing::info!("Starting Orbit gRPC server on {}", grpc_addr);
 
+        // Build reflection service
+        let reflection_service = ReflectionBuilder::configure()
+            .register_encoded_file_descriptor_set(orbit_proto::FILE_DESCRIPTOR_SET)
+            .build_v1()
+            .map_err(|e| {
+                OrbitError::configuration(format!("Failed to build reflection service: {}", e))
+            })?;
+
         let grpc_server = Server::builder()
             .add_service(connection_service_server::ConnectionServiceServer::new(
                 self.connection_service.clone(),
@@ -318,6 +327,7 @@ impl OrbitServer {
             .add_service(health_service_server::HealthServiceServer::new(
                 self.health_service.clone(),
             ))
+            .add_service(reflection_service)
             .serve(grpc_addr);
 
         server_tasks.push(tokio::spawn(async move {
