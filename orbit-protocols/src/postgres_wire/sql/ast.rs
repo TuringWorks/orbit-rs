@@ -261,6 +261,33 @@ pub struct SelectStatement {
     pub limit: Option<LimitClause>,
     pub offset: Option<u64>,
     pub for_clause: Option<ForClause>,
+    pub hints: Vec<QueryHint>,
+}
+
+/// Query optimizer hints for index usage and execution control
+#[derive(Debug, Clone, PartialEq)]
+pub enum QueryHint {
+    /// Force use of specific index(es) for a table
+    UseIndex {
+        table: String,
+        indexes: Vec<String>,
+    },
+    /// Force use of specific index(es), ignore others
+    ForceIndex {
+        table: String,
+        indexes: Vec<String>,
+    },
+    /// Explicitly ignore specific index(es)
+    IgnoreIndex {
+        table: String,
+        indexes: Vec<String>,
+    },
+    /// Force specific join order
+    Ordered,
+    /// Enable parallel execution
+    Parallel { degree: Option<u32> },
+    /// Disable parallel execution
+    NoParallel,
 }
 
 #[derive(Debug, Clone, PartialEq)]
