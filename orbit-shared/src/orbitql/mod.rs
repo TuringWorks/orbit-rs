@@ -452,6 +452,7 @@ impl Default for OrbitQLEngine {
 #[cfg(test)]
 mod tests {
     pub mod integration_tests;
+    pub mod parallel_execution_integration_tests;
 
     // Original unit tests
     use super::*;
