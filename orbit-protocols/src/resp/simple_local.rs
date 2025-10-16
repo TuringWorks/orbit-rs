@@ -372,16 +372,61 @@ impl SimpleLocalRegistry {
 
         match method {
             "zadd" => {
-                if args.len() != 2 {
+                if args.len() != 1 {
                     return Err(OrbitError::InvocationFailed {
                         addressable_type: "SortedSetActor".to_string(),
                         method: method.to_string(),
-                        reason: "Expected 2 arguments".to_string(),
+                        reason: "Expected 1 argument (JSON params)".to_string(),
                     });
                 }
-                let member: String = serde_json::from_value(args[0].clone())?;
-                let score: f64 = serde_json::from_value(args[1].clone())?;
-                let result = actor.zadd(member, score);
+
+                // Extract complex zadd parameters
+                let params = &args[0];
+                let score_members: Vec<(f64, String)> = serde_json::from_value(
+                    params
+                        .get("score_members")
+                        .cloned()
+                        .unwrap_or(serde_json::Value::Null),
+                )?;
+                let nx: bool = params.get("nx").and_then(|v| v.as_bool()).unwrap_or(false);
+                let xx: bool = params.get("xx").and_then(|v| v.as_bool()).unwrap_or(false);
+                let ch: bool = params.get("ch").and_then(|v| v.as_bool()).unwrap_or(false);
+                let incr: bool = params
+                    .get("incr")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
+
+                let result = if nx || xx || ch || incr {
+                    actor
+                        .zadd_with_options(score_members, nx, xx, ch, incr)
+                        .map_err(|e| OrbitError::InvocationFailed {
+                            addressable_type: "SortedSetActor".to_string(),
+                            method: method.to_string(),
+                            reason: e,
+                        })?
+                } else {
+                    // Simple zadd - count added elements
+                    let mut added = 0i64;
+                    for (score, member) in score_members {
+                        if actor.zadd(member, score) {
+                            added += 1;
+                        }
+                    }
+                    serde_json::to_value(added).unwrap()
+                };
+
+                Ok(result)
+            }
+            "zrem" => {
+                if args.len() != 1 {
+                    return Err(OrbitError::InvocationFailed {
+                        addressable_type: "SortedSetActor".to_string(),
+                        method: method.to_string(),
+                        reason: "Expected 1 argument".to_string(),
+                    });
+                }
+                let members: Vec<String> = serde_json::from_value(args[0].clone())?;
+                let result = actor.zrem(members);
                 Ok(serde_json::to_value(result)?)
             }
             "zcard" => {
@@ -400,44 +445,198 @@ impl SimpleLocalRegistry {
                 let result = actor.zscore(&member);
                 Ok(serde_json::to_value(result)?)
             }
-            "zrange" => {
-                if args.len() != 3 {
-                    return Err(OrbitError::InvocationFailed {
-                        addressable_type: "SortedSetActor".to_string(),
-                        method: method.to_string(),
-                        reason: "Expected 3 arguments".to_string(),
-                    });
-                }
-                let start: i64 = serde_json::from_value(args[0].clone())?;
-                let stop: i64 = serde_json::from_value(args[1].clone())?;
-                let with_scores: bool = serde_json::from_value(args[2].clone())?;
-                let result = actor.zrange(start, stop, with_scores);
-                Ok(serde_json::to_value(result)?)
-            }
             "zincrby" => {
-                if args.len() != 2 {
-                    return Err(OrbitError::InvocationFailed {
-                        addressable_type: "SortedSetActor".to_string(),
-                        method: method.to_string(),
-                        reason: "Expected 2 arguments".to_string(),
-                    });
-                }
-                let member: String = serde_json::from_value(args[0].clone())?;
-                let increment: f64 = serde_json::from_value(args[1].clone())?;
-                let result = actor.zincrby(member, increment);
-                Ok(serde_json::to_value(result)?)
-            }
-            "zrem" => {
                 if args.len() != 1 {
                     return Err(OrbitError::InvocationFailed {
                         addressable_type: "SortedSetActor".to_string(),
                         method: method.to_string(),
-                        reason: "Expected 1 argument".to_string(),
+                        reason: "Expected 1 argument (JSON params)".to_string(),
                     });
                 }
-                let members: Vec<String> = serde_json::from_value(args[0].clone())?;
-                let result = actor.zrem(members);
+
+                let params = &args[0];
+                let increment: f64 = serde_json::from_value(
+                    params
+                        .get("increment")
+                        .cloned()
+                        .unwrap_or(serde_json::Value::Null),
+                )?;
+                let member: String = serde_json::from_value(
+                    params
+                        .get("member")
+                        .cloned()
+                        .unwrap_or(serde_json::Value::Null),
+                )?;
+
+                let result = actor.zincrby(member, increment);
                 Ok(serde_json::to_value(result)?)
+            }
+            "zrange" => {
+                if args.len() != 1 {
+                    return Err(OrbitError::InvocationFailed {
+                        addressable_type: "SortedSetActor".to_string(),
+                        method: method.to_string(),
+                        reason: "Expected 1 argument (JSON params)".to_string(),
+                    });
+                }
+
+                let params = &args[0];
+                let start: i64 = serde_json::from_value(
+                    params
+                        .get("start")
+                        .cloned()
+                        .unwrap_or(serde_json::Value::Null),
+                )?;
+                let stop: i64 = serde_json::from_value(
+                    params
+                        .get("stop")
+                        .cloned()
+                        .unwrap_or(serde_json::Value::Null),
+                )?;
+                let withscores: bool = params
+                    .get("withscores")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
+                let rev: bool = params.get("rev").and_then(|v| v.as_bool()).unwrap_or(false);
+
+                let result = if rev || withscores {
+                    actor.zrange_with_options(start, stop, withscores, rev)
+                } else {
+                    actor.zrange(start, stop, withscores)
+                };
+
+                // Convert result based on withscores
+                if withscores {
+                    // Return Vec<(String, f64)> for withscores
+                    let with_scores: Vec<(String, f64)> = result
+                        .into_iter()
+                        .map(|(member, score)| (member, score.unwrap_or(0.0)))
+                        .collect();
+                    Ok(serde_json::to_value(with_scores)?)
+                } else {
+                    // Return Vec<String> for members only
+                    let members: Vec<String> =
+                        result.into_iter().map(|(member, _)| member).collect();
+                    Ok(serde_json::to_value(members)?)
+                }
+            }
+            "zrangebyscore" => {
+                if args.len() != 1 {
+                    return Err(OrbitError::InvocationFailed {
+                        addressable_type: "SortedSetActor".to_string(),
+                        method: method.to_string(),
+                        reason: "Expected 1 argument (JSON params)".to_string(),
+                    });
+                }
+
+                let params = &args[0];
+                let min: String = serde_json::from_value(
+                    params
+                        .get("min")
+                        .cloned()
+                        .unwrap_or(serde_json::Value::Null),
+                )?;
+                let max: String = serde_json::from_value(
+                    params
+                        .get("max")
+                        .cloned()
+                        .unwrap_or(serde_json::Value::Null),
+                )?;
+                let withscores: bool = params
+                    .get("withscores")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
+                let limit: Option<(i64, i64)> = params
+                    .get("limit")
+                    .and_then(|v| serde_json::from_value(v.clone()).ok());
+
+                let result = actor
+                    .zrangebyscore_with_options(&min, &max, withscores, limit)
+                    .map_err(|e| OrbitError::InvocationFailed {
+                        addressable_type: "SortedSetActor".to_string(),
+                        method: method.to_string(),
+                        reason: e,
+                    })?;
+
+                // Convert result based on withscores
+                if withscores {
+                    // Return Vec<(String, f64)> for withscores
+                    let with_scores: Vec<(String, f64)> = result
+                        .into_iter()
+                        .map(|(member, score)| (member, score.unwrap_or(0.0)))
+                        .collect();
+                    Ok(serde_json::to_value(with_scores)?)
+                } else {
+                    // Return Vec<String> for members only
+                    let members: Vec<String> =
+                        result.into_iter().map(|(member, _)| member).collect();
+                    Ok(serde_json::to_value(members)?)
+                }
+            }
+            "zcount" => {
+                if args.len() != 1 {
+                    return Err(OrbitError::InvocationFailed {
+                        addressable_type: "SortedSetActor".to_string(),
+                        method: method.to_string(),
+                        reason: "Expected 1 argument (JSON params)".to_string(),
+                    });
+                }
+
+                let params = &args[0];
+                let min: String = serde_json::from_value(
+                    params
+                        .get("min")
+                        .cloned()
+                        .unwrap_or(serde_json::Value::Null),
+                )?;
+                let max: String = serde_json::from_value(
+                    params
+                        .get("max")
+                        .cloned()
+                        .unwrap_or(serde_json::Value::Null),
+                )?;
+
+                let result = actor.zcount_with_bounds(&min, &max).map_err(|e| {
+                    OrbitError::InvocationFailed {
+                        addressable_type: "SortedSetActor".to_string(),
+                        method: method.to_string(),
+                        reason: e,
+                    }
+                })?;
+
+                Ok(serde_json::to_value(result)?)
+            }
+            "zrank" => {
+                if args.len() != 1 {
+                    return Err(OrbitError::InvocationFailed {
+                        addressable_type: "SortedSetActor".to_string(),
+                        method: method.to_string(),
+                        reason: "Expected 1 argument (JSON params)".to_string(),
+                    });
+                }
+
+                let params = &args[0];
+                let member: String = serde_json::from_value(
+                    params
+                        .get("member")
+                        .cloned()
+                        .unwrap_or(serde_json::Value::Null),
+                )?;
+                let withscore: bool = params
+                    .get("withscore")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
+
+                if withscore {
+                    let result = match actor.zrank_with_score(&member, true) {
+                        Some((rank, score)) => Some((rank as i64, score)),
+                        None => None,
+                    };
+                    Ok(serde_json::to_value(result)?)
+                } else {
+                    let result = actor.zrank(&member).map(|rank| rank as i64);
+                    Ok(serde_json::to_value(result)?)
+                }
             }
             _ => Err(OrbitError::InvocationFailed {
                 addressable_type: "SortedSetActor".to_string(),

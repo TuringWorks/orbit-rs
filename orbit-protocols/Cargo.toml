@@ -81,3 +81,7 @@ cypher = []
 rest = []
 # Enable integration tests that require network access
 integration = []
+
+[[example]]
+name = "database_example"
+path = "examples/database_example.rs"

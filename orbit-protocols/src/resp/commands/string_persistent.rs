@@ -79,12 +79,31 @@ impl PersistentStringCommands {
         index: usize,
         command_name: &str,
     ) -> ProtocolResult<i64> {
-        args.get(index).and_then(|v| v.as_integer()).ok_or_else(|| {
-            ProtocolError::RespError(format!(
-                "ERR invalid integer argument for '{}' command",
+        match args.get(index) {
+            Some(v) => {
+                // Try to get as integer first
+                if let Some(int_val) = v.as_integer() {
+                    Ok(int_val)
+                } else if let Some(str_val) = v.as_string() {
+                    // Try to parse string as integer
+                    str_val.parse::<i64>().map_err(|_| {
+                        ProtocolError::RespError(format!(
+                            "ERR invalid integer argument for '{}' command",
+                            command_name.to_lowercase()
+                        ))
+                    })
+                } else {
+                    Err(ProtocolError::RespError(format!(
+                        "ERR invalid integer argument for '{}' command",
+                        command_name.to_lowercase()
+                    )))
+                }
+            }
+            None => Err(ProtocolError::RespError(format!(
+                "ERR missing argument for '{}' command",
                 command_name.to_lowercase()
-            ))
-        })
+            ))),
+        }
     }
 
     // Parse SET command options (EX, PX, NX, XX)
@@ -454,6 +473,82 @@ impl PersistentStringCommands {
             Err(e) => Err(ProtocolError::RespError(format!("ERR {}", e))),
         }
     }
+
+    async fn cmd_ttl(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        self.validate_arg_count("TTL", args, 1)?;
+
+        let key = self.get_string_arg(args, 0, "TTL")?;
+
+        match self.redis_provider.get(&key).await {
+            Ok(Some(redis_value)) => {
+                let ttl = redis_value.ttl();
+                debug!("TTL {} -> {}", key, ttl);
+                Ok(RespValue::Integer(ttl))
+            }
+            Ok(None) => {
+                debug!("TTL {} -> -2 (key does not exist)", key);
+                Ok(RespValue::Integer(-2)) // Key does not exist
+            }
+            Err(e) => Err(ProtocolError::RespError(format!("ERR {}", e))),
+        }
+    }
+
+    async fn cmd_expire(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        self.validate_arg_count("EXPIRE", args, 2)?;
+
+        let key = self.get_string_arg(args, 0, "EXPIRE")?;
+        let ttl_seconds = self.get_int_arg(args, 1, "EXPIRE")?;
+
+        if ttl_seconds <= 0 {
+            return Err(ProtocolError::RespError(
+                "ERR invalid expire time".to_string(),
+            ));
+        }
+
+        // Get the current value first
+        match self.redis_provider.get(&key).await {
+            Ok(Some(mut redis_value)) => {
+                redis_value.set_ttl(ttl_seconds as u64);
+                match self.redis_provider.set(&key, redis_value).await {
+                    Ok(()) => {
+                        debug!("EXPIRE {} {} -> 1", key, ttl_seconds);
+                        Ok(RespValue::Integer(1))
+                    }
+                    Err(e) => Err(ProtocolError::RespError(format!("ERR {}", e))),
+                }
+            }
+            Ok(None) => {
+                debug!("EXPIRE {} {} -> 0 (key does not exist)", key, ttl_seconds);
+                Ok(RespValue::Integer(0))
+            }
+            Err(e) => Err(ProtocolError::RespError(format!("ERR {}", e))),
+        }
+    }
+
+    async fn cmd_persist(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        self.validate_arg_count("PERSIST", args, 1)?;
+
+        let key = self.get_string_arg(args, 0, "PERSIST")?;
+
+        // Get the current value first
+        match self.redis_provider.get(&key).await {
+            Ok(Some(mut redis_value)) => {
+                let had_expiration = redis_value.persist();
+                match self.redis_provider.set(&key, redis_value).await {
+                    Ok(()) => {
+                        debug!("PERSIST {} -> {}", key, if had_expiration { 1 } else { 0 });
+                        Ok(RespValue::Integer(if had_expiration { 1 } else { 0 }))
+                    }
+                    Err(e) => Err(ProtocolError::RespError(format!("ERR {}", e))),
+                }
+            }
+            Ok(None) => {
+                debug!("PERSIST {} -> 0 (key does not exist)", key);
+                Ok(RespValue::Integer(0))
+            }
+            Err(e) => Err(ProtocolError::RespError(format!("ERR {}", e))),
+        }
+    }
 }
 
 #[async_trait]
@@ -461,7 +556,7 @@ impl CommandHandler for PersistentStringCommands {
     fn supported_commands(&self) -> &[&'static str] {
         &[
             "GET", "SET", "DEL", "EXISTS", "STRLEN", "MGET", "MSET", "INCR", "DECR", "INCRBY",
-            "DECRBY", "APPEND", "GETSET", "SETEX", "SETNX",
+            "DECRBY", "APPEND", "GETSET", "SETEX", "SETNX", "TTL", "EXPIRE", "PERSIST",
         ]
     }
 
@@ -482,6 +577,9 @@ impl CommandHandler for PersistentStringCommands {
             "GETSET" => self.cmd_getset(args).await,
             "SETEX" => self.cmd_setex(args).await,
             "SETNX" => self.cmd_setnx(args).await,
+            "TTL" => self.cmd_ttl(args).await,
+            "EXPIRE" => self.cmd_expire(args).await,
+            "PERSIST" => self.cmd_persist(args).await,
             _ => Err(ProtocolError::RespError(format!(
                 "ERR unknown string command '{}'",
                 command_name

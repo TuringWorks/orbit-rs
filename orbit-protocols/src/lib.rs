@@ -20,6 +20,7 @@ pub mod aql;
 pub mod arangodb;
 pub mod bolt;
 pub mod cypher;
+pub mod database; // Database actors module
 pub mod error;
 pub mod graph_database;
 pub mod graphrag;

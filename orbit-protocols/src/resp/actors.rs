@@ -1076,6 +1076,256 @@ impl SortedSetActor {
         }
         None
     }
+
+    /// ZADD with options (NX, XX, CH, INCR support)
+    /// For INCR mode, returns the new score as an f64, otherwise returns count as i64
+    pub fn zadd_with_options(
+        &mut self,
+        score_members: Vec<(f64, String)>,
+        nx: bool,
+        xx: bool,
+        ch: bool,
+        incr: bool,
+    ) -> Result<serde_json::Value, String> {
+        if nx && xx {
+            return Err("ERR NX and XX cannot be used together".to_string());
+        }
+
+        if incr && score_members.len() != 1 {
+            return Err("ERR INCR option supports a single increment-element pair".to_string());
+        }
+
+        let mut added_count = 0i64;
+        let mut changed_count = 0i64;
+
+        for (score, member) in score_members {
+            let member_exists = self.member_scores.contains_key(&member);
+
+            if nx && member_exists {
+                continue; // Skip existing members when NX is set
+            }
+            if xx && !member_exists {
+                continue; // Skip non-existing members when XX is set
+            }
+
+            if incr {
+                // For INCR, we add to existing score or start from 0
+                let new_score = self.zincrby(member.clone(), score);
+                return Ok(serde_json::to_value(new_score).unwrap()); // Return the new score for INCR
+            }
+
+            let old_score = self.member_scores.get(&member).copied();
+            let was_added = self.zadd(member, score);
+
+            if was_added {
+                added_count += 1;
+            } else if ch && old_score.is_some() && old_score.unwrap() != score {
+                changed_count += 1;
+            }
+        }
+
+        if ch {
+            Ok(serde_json::to_value(added_count + changed_count).unwrap())
+        } else {
+            Ok(serde_json::to_value(added_count).unwrap())
+        }
+    }
+
+    /// Parse score string (supports -inf, +inf, (exclusive bounds)
+    fn parse_score_bound(score_str: &str, _is_min: bool) -> Result<f64, String> {
+        match score_str {
+            "-inf" => Ok(f64::NEG_INFINITY),
+            "+inf" | "inf" => Ok(f64::INFINITY),
+            s if s.starts_with('(') => {
+                // Exclusive bound - we'll handle this in the caller
+                let num_str = &s[1..];
+                num_str
+                    .parse::<f64>()
+                    .map_err(|_| format!("ERR min or max is not a float"))
+            }
+            s => s
+                .parse::<f64>()
+                .map_err(|_| format!("ERR min or max is not a float")),
+        }
+    }
+
+    /// ZRANGEBYSCORE with string bounds and limit support
+    pub fn zrangebyscore_with_options(
+        &self,
+        min_str: &str,
+        max_str: &str,
+        with_scores: bool,
+        limit: Option<(i64, i64)>,
+    ) -> Result<Vec<(String, Option<f64>)>, String> {
+        let min_score = Self::parse_score_bound(min_str, true)?;
+        let max_score = Self::parse_score_bound(max_str, false)?;
+
+        let min_exclusive = min_str.starts_with('(');
+        let max_exclusive = max_str.starts_with('(');
+
+        let mut result = Vec::new();
+
+        for (score_ordered, members_set) in &self.score_members {
+            let score_val = score_ordered.0;
+
+            // Check bounds
+            let in_range = if min_exclusive && max_exclusive {
+                score_val > min_score && score_val < max_score
+            } else if min_exclusive {
+                score_val > min_score && score_val <= max_score
+            } else if max_exclusive {
+                score_val >= min_score && score_val < max_score
+            } else {
+                score_val >= min_score && score_val <= max_score
+            };
+
+            if in_range {
+                let mut sorted_members: Vec<_> = members_set.iter().cloned().collect();
+                sorted_members.sort();
+
+                for member in sorted_members {
+                    if with_scores {
+                        result.push((member, Some(score_val)));
+                    } else {
+                        result.push((member, None));
+                    }
+                }
+            }
+        }
+
+        // Apply LIMIT if specified
+        if let Some((offset, count)) = limit {
+            let start = offset.max(0) as usize;
+            let end = if count < 0 {
+                result.len()
+            } else {
+                (start + count as usize).min(result.len())
+            };
+
+            if start < result.len() {
+                result = result[start..end].to_vec();
+            } else {
+                result.clear();
+            }
+        }
+
+        Ok(result)
+    }
+
+    /// ZCOUNT with string bounds
+    pub fn zcount_with_bounds(&self, min_str: &str, max_str: &str) -> Result<usize, String> {
+        let min_score = Self::parse_score_bound(min_str, true)?;
+        let max_score = Self::parse_score_bound(max_str, false)?;
+
+        let min_exclusive = min_str.starts_with('(');
+        let max_exclusive = max_str.starts_with('(');
+
+        let mut count = 0;
+
+        for (score_ordered, members_set) in &self.score_members {
+            let score_val = score_ordered.0;
+
+            let in_range = if min_exclusive && max_exclusive {
+                score_val > min_score && score_val < max_score
+            } else if min_exclusive {
+                score_val > min_score && score_val <= max_score
+            } else if max_exclusive {
+                score_val >= min_score && score_val < max_score
+            } else {
+                score_val >= min_score && score_val <= max_score
+            };
+
+            if in_range {
+                count += members_set.len();
+            }
+        }
+
+        Ok(count)
+    }
+
+    /// ZRANGE with options (REV, WITHSCORES)
+    pub fn zrange_with_options(
+        &self,
+        start: i64,
+        stop: i64,
+        with_scores: bool,
+        rev: bool,
+    ) -> Vec<(String, Option<f64>)> {
+        let members: Vec<_> = if rev {
+            self.score_members
+                .iter()
+                .rev()
+                .flat_map(|(score, members_set)| {
+                    let score_val = score.0;
+                    let mut sorted_members: Vec<_> = members_set.iter().cloned().collect();
+                    sorted_members.sort();
+                    sorted_members.reverse(); // Reverse lexicographic order too
+                    sorted_members
+                        .into_iter()
+                        .map(move |member| (member, score_val))
+                })
+                .collect()
+        } else {
+            self.score_members
+                .iter()
+                .flat_map(|(score, members_set)| {
+                    let score_val = score.0;
+                    let mut sorted_members: Vec<_> = members_set.iter().cloned().collect();
+                    sorted_members.sort();
+                    sorted_members
+                        .into_iter()
+                        .map(move |member| (member, score_val))
+                })
+                .collect()
+        };
+
+        let len = members.len() as i64;
+        if len == 0 {
+            return Vec::new();
+        }
+
+        // Convert negative indices
+        let start_idx = if start < 0 {
+            (len + start).max(0)
+        } else {
+            start.min(len)
+        } as usize;
+
+        let stop_idx = if stop < 0 {
+            (len + stop + 1).max(0)
+        } else {
+            (stop + 1).min(len)
+        } as usize;
+
+        if start_idx >= members.len() || start_idx >= stop_idx {
+            return Vec::new();
+        }
+
+        members[start_idx..stop_idx]
+            .iter()
+            .map(|(member, score)| {
+                if with_scores {
+                    (member.clone(), Some(*score))
+                } else {
+                    (member.clone(), None)
+                }
+            })
+            .collect()
+    }
+
+    /// ZRANK with WITHSCORE option
+    pub fn zrank_with_score(&self, member: &str, with_score: bool) -> Option<(usize, Option<f64>)> {
+        if let Some(rank) = self.zrank(member) {
+            if with_score {
+                let score = self.zscore(member);
+                Some((rank, score))
+            } else {
+                Some((rank, None))
+            }
+        } else {
+            None
+        }
+    }
 }
 
 impl Default for SortedSetActor {

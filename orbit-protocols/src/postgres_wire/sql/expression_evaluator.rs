@@ -670,8 +670,11 @@ impl ExpressionEvaluator {
     // Aggregate function implementations
     fn evaluate_count(&self, args: &[SqlValue], _distinct: bool) -> ProtocolResult<SqlValue> {
         if args.is_empty() {
-            // COUNT(*)
-            Ok(SqlValue::BigInt(1)) // This would be accumulated by the query engine
+            // COUNT(*) - return 1 for each row, to be aggregated by the query engine
+            Ok(SqlValue::BigInt(1))
+        } else if args.len() == 1 && matches!(&args[0], SqlValue::Text(s) if s == "*") {
+            // COUNT(*) with * parsed as text
+            Ok(SqlValue::BigInt(1))
         } else {
             // COUNT(expr) - only count non-null values
             let count = if args[0].is_null() { 0 } else { 1 };

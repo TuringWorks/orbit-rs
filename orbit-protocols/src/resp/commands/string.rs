@@ -92,6 +92,97 @@ impl StringCommands {
         let key = self.get_string_arg(args, 0, "SET")?;
         let value = self.get_string_arg(args, 1, "SET")?;
 
+        // Parse SET options (EX, PX, NX, XX)
+        let mut ttl_seconds: Option<u64> = None;
+        let mut nx = false;
+        let mut xx = false;
+        let mut i = 2;
+
+        while i < args.len() {
+            let option = self.get_string_arg(args, i, "SET")?.to_uppercase();
+            match option.as_str() {
+                "EX" => {
+                    if i + 1 >= args.len() {
+                        return Err(ProtocolError::RespError("ERR syntax error".to_string()));
+                    }
+                    let seconds = self.get_int_arg(args, i + 1, "SET")?;
+                    if seconds <= 0 {
+                        return Err(ProtocolError::RespError(
+                            "ERR invalid expire time in set".to_string(),
+                        ));
+                    }
+                    ttl_seconds = Some(seconds as u64);
+                    i += 2;
+                }
+                "PX" => {
+                    if i + 1 >= args.len() {
+                        return Err(ProtocolError::RespError("ERR syntax error".to_string()));
+                    }
+                    let milliseconds = self.get_int_arg(args, i + 1, "SET")?;
+                    if milliseconds <= 0 {
+                        return Err(ProtocolError::RespError(
+                            "ERR invalid expire time in set".to_string(),
+                        ));
+                    }
+                    ttl_seconds = Some((milliseconds as u64 + 999) / 1000); // Round up to seconds
+                    i += 2;
+                }
+                "NX" => {
+                    nx = true;
+                    i += 1;
+                }
+                "XX" => {
+                    xx = true;
+                    i += 1;
+                }
+                _ => {
+                    return Err(ProtocolError::RespError("ERR syntax error".to_string()));
+                }
+            }
+        }
+
+        if nx && xx {
+            return Err(ProtocolError::RespError("ERR syntax error".to_string()));
+        }
+
+        // Handle NX option
+        if nx {
+            let exists_result = self
+                .base
+                .local_registry
+                .execute_keyvalue(&key, "exists", &[])
+                .await
+                .map_err(|e| {
+                    ProtocolError::RespError(format!("ERR actor invocation failed: {}", e))
+                })?;
+
+            let exists: bool = serde_json::from_value(exists_result)
+                .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))?;
+
+            if exists {
+                return Ok(RespValue::null());
+            }
+        }
+
+        // Handle XX option
+        if xx {
+            let exists_result = self
+                .base
+                .local_registry
+                .execute_keyvalue(&key, "exists", &[])
+                .await
+                .map_err(|e| {
+                    ProtocolError::RespError(format!("ERR actor invocation failed: {}", e))
+                })?;
+
+            let exists: bool = serde_json::from_value(exists_result)
+                .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))?;
+
+            if !exists {
+                return Ok(RespValue::null());
+            }
+        }
+
         let _result = self
             .base
             .local_registry
@@ -107,6 +198,22 @@ impl StringCommands {
                     e
                 ))
             })?;
+
+        // Set expiration if specified
+        if let Some(ttl) = ttl_seconds {
+            let _result = self
+                .base
+                .local_registry
+                .execute_keyvalue(
+                    &key,
+                    "set_expiration",
+                    &[serde_json::Value::Number(serde_json::Number::from(ttl))],
+                )
+                .await
+                .map_err(|e| {
+                    ProtocolError::RespError(format!("ERR actor invocation failed: {}", e))
+                })?;
+        }
 
         debug!("SET {} {}", key, value);
 
@@ -461,6 +568,121 @@ impl StringCommands {
         Ok(old_value)
     }
 
+    async fn cmd_ttl(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        self.validate_arg_count("TTL", args, 1)?;
+
+        let key = self.get_string_arg(args, 0, "TTL")?;
+
+        // Check if key exists first
+        let exists_result = self
+            .base
+            .local_registry
+            .execute_keyvalue(&key, "exists", &[])
+            .await
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+
+        let exists: bool = serde_json::from_value(exists_result)
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))?;
+
+        if !exists {
+            return Ok(RespValue::Integer(-2)); // Key does not exist
+        }
+
+        // Get TTL
+        let ttl_result = self
+            .base
+            .local_registry
+            .execute_keyvalue(&key, "get_ttl", &[])
+            .await
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+
+        let ttl: i64 = serde_json::from_value(ttl_result)
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))?;
+
+        debug!("TTL {} -> {}", key, ttl);
+        Ok(RespValue::Integer(ttl))
+    }
+
+    async fn cmd_expire(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        self.validate_arg_count("EXPIRE", args, 2)?;
+
+        let key = self.get_string_arg(args, 0, "EXPIRE")?;
+        let ttl_seconds = self.get_int_arg(args, 1, "EXPIRE")?;
+
+        if ttl_seconds <= 0 {
+            return Err(ProtocolError::RespError(
+                "ERR invalid expire time".to_string(),
+            ));
+        }
+
+        // Check if key exists first
+        let exists_result = self
+            .base
+            .local_registry
+            .execute_keyvalue(&key, "exists", &[])
+            .await
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+
+        let exists: bool = serde_json::from_value(exists_result)
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))?;
+
+        if !exists {
+            return Ok(RespValue::Integer(0)); // Key does not exist
+        }
+
+        // Set expiration
+        let _result = self
+            .base
+            .local_registry
+            .execute_keyvalue(
+                &key,
+                "set_expiration",
+                &[serde_json::Value::Number(serde_json::Number::from(
+                    ttl_seconds as u64,
+                ))],
+            )
+            .await
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+
+        debug!("EXPIRE {} {} -> 1", key, ttl_seconds);
+        Ok(RespValue::Integer(1))
+    }
+
+    async fn cmd_persist(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        self.validate_arg_count("PERSIST", args, 1)?;
+
+        let key = self.get_string_arg(args, 0, "PERSIST")?;
+
+        // Check if key exists first
+        let exists_result = self
+            .base
+            .local_registry
+            .execute_keyvalue(&key, "exists", &[])
+            .await
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+
+        let exists: bool = serde_json::from_value(exists_result)
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))?;
+
+        if !exists {
+            return Ok(RespValue::Integer(0)); // Key does not exist
+        }
+
+        // Remove expiration
+        let result = self
+            .base
+            .local_registry
+            .execute_keyvalue(&key, "persist", &[])
+            .await
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+
+        let had_expiration: bool = serde_json::from_value(result)
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))?;
+
+        debug!("PERSIST {} -> {}", key, if had_expiration { 1 } else { 0 });
+        Ok(RespValue::Integer(if had_expiration { 1 } else { 0 }))
+    }
+
     // Helper method to get integer argument
     fn get_int_arg(
         &self,
@@ -482,7 +704,7 @@ impl CommandHandler for StringCommands {
     fn supported_commands(&self) -> &[&'static str] {
         &[
             "GET", "SET", "DEL", "EXISTS", "STRLEN", "MGET", "MSET", "INCR", "DECR", "INCRBY",
-            "DECRBY", "APPEND", "GETSET", "SETEX", "SETNX",
+            "DECRBY", "APPEND", "GETSET", "SETEX", "SETNX", "TTL", "EXPIRE", "PERSIST",
         ]
     }
 
@@ -503,6 +725,9 @@ impl CommandHandler for StringCommands {
             "GETSET" => self.cmd_getset(args).await,
             "SETEX" => self.cmd_setex(args).await,
             "SETNX" => self.cmd_setnx(args).await,
+            "TTL" => self.cmd_ttl(args).await,
+            "EXPIRE" => self.cmd_expire(args).await,
+            "PERSIST" => self.cmd_persist(args).await,
             _ => Err(ProtocolError::RespError(format!(
                 "ERR unknown string command '{}'",
                 command_name

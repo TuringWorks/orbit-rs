@@ -450,6 +450,24 @@ impl QueryEngine {
 
         // Parse columns
         let columns_str = parts[1..from_idx].join(" ");
+
+        // Check if this contains aggregate functions - if so, fail parsing so it goes to comprehensive engine
+        let columns_upper = columns_str.to_uppercase();
+        if columns_upper.contains("COUNT(")
+            || columns_upper.contains("SUM(")
+            || columns_upper.contains("AVG(")
+            || columns_upper.contains("MIN(")
+            || columns_upper.contains("MAX(")
+            || columns_upper.contains("<->")
+            || columns_upper.contains("<=>")
+            || columns_upper.contains("<#>")
+        {
+            return Err(ProtocolError::PostgresError(
+                "Aggregate functions and vector operators require comprehensive SQL engine"
+                    .to_string(),
+            ));
+        }
+
         let columns: Vec<String> = if columns_str == "*" {
             vec!["*".to_string()]
         } else {

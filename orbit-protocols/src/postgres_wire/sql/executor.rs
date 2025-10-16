@@ -806,11 +806,22 @@ impl SqlExecutor {
         self.build_result_columns(&stmt.select_list, &stmt.from_clause, &mut columns)
             .await?;
 
+        // Check if this is an aggregate query
+        let has_aggregates = self.has_aggregate_functions(&stmt.select_list);
+
         // Execute query based on FROM clause type
         if let Some(from_clause) = &stmt.from_clause {
-            rows = self
-                .execute_from_clause(from_clause, &stmt.where_clause, &columns)
-                .await?;
+            if has_aggregates {
+                // Handle aggregate query
+                rows = self
+                    .execute_aggregate_query(&stmt, from_clause, &columns)
+                    .await?;
+            } else {
+                // Handle regular query
+                rows = self
+                    .execute_from_clause(from_clause, &stmt.where_clause, &columns)
+                    .await?;
+            }
         } else {
             // SELECT without FROM clause - single row with expressions
             let mut result_row = Vec::new();
@@ -862,11 +873,24 @@ impl SqlExecutor {
 
             // First, validate column count vs values count for each row
             // If columns were explicitly specified, the count should match exactly
+            // For implicit column lists, we're more lenient to handle auto-generated columns
             if columns_explicitly_specified {
                 for values in &values_list {
                     if values.len() != insert_columns.len() {
                         return Err(ProtocolError::PostgresError(format!(
                             "Column count doesn't match value count: expected {} columns but got {} values",
+                            insert_columns.len(),
+                            values.len()
+                        )));
+                    }
+                }
+            } else {
+                // For implicit column lists, allow fewer values than columns
+                // (missing values will be handled as NULLs or auto-generated)
+                for values in &values_list {
+                    if values.len() > insert_columns.len() {
+                        return Err(ProtocolError::PostgresError(format!(
+                            "Too many values: expected at most {} columns but got {} values",
                             insert_columns.len(),
                             values.len()
                         )));
@@ -1056,6 +1080,238 @@ impl SqlExecutor {
     ) -> ProtocolResult<SqlValue> {
         let mut evaluator = self.expression_evaluator.write().await;
         evaluator.evaluate(expr, context)
+    }
+
+    /// Check if SELECT list contains aggregate functions
+    fn has_aggregate_functions(&self, select_list: &[SelectItem]) -> bool {
+        for item in select_list {
+            if let SelectItem::Expression { expr, .. } = item {
+                if self.expression_contains_aggregate(expr) {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    /// Check if an expression contains aggregate functions
+    fn expression_contains_aggregate(&self, expr: &Expression) -> bool {
+        match expr {
+            Expression::Function(func_call) => {
+                let func_name = match &func_call.name {
+                    crate::postgres_wire::sql::ast::FunctionName::Simple(name) => {
+                        name.to_uppercase()
+                    }
+                    crate::postgres_wire::sql::ast::FunctionName::Qualified { name, .. } => {
+                        name.to_uppercase()
+                    }
+                };
+                matches!(func_name.as_str(), "COUNT" | "SUM" | "AVG" | "MIN" | "MAX")
+            }
+            Expression::Binary { left, right, .. } => {
+                self.expression_contains_aggregate(left)
+                    || self.expression_contains_aggregate(right)
+            }
+            Expression::Unary { operand, .. } => self.expression_contains_aggregate(operand),
+            _ => false,
+        }
+    }
+
+    /// Execute aggregate query
+    async fn execute_aggregate_query(
+        &self,
+        stmt: &SelectStatement,
+        from_clause: &FromClause,
+        columns: &[String],
+    ) -> ProtocolResult<Vec<Vec<Option<String>>>> {
+        // First, get all rows that match the WHERE clause
+        let all_rows = self
+            .get_filtered_rows(from_clause, &stmt.where_clause)
+            .await?;
+
+        // If there are no rows, aggregates should still return one row (with appropriate defaults)
+        if all_rows.is_empty() && self.has_count_star(&stmt.select_list) {
+            return Ok(vec![vec![Some("0".to_string())]]);
+        }
+
+        if all_rows.is_empty() {
+            return Ok(vec![vec![Some("".to_string()); columns.len()]]);
+        }
+
+        // Compute aggregates
+        let mut result_row = Vec::new();
+        for item in &stmt.select_list {
+            match item {
+                SelectItem::Expression { expr, .. } => {
+                    let aggregate_result = self.compute_aggregate(expr, &all_rows).await?;
+                    result_row.push(Some(aggregate_result.to_postgres_string()));
+                }
+                _ => result_row.push(Some("".to_string())),
+            }
+        }
+
+        Ok(vec![result_row])
+    }
+
+    /// Check if SELECT list has COUNT(*)
+    fn has_count_star(&self, select_list: &[SelectItem]) -> bool {
+        for item in select_list {
+            if let SelectItem::Expression { expr, .. } = item {
+                if let Expression::Function(func_call) = expr {
+                    let func_name = match &func_call.name {
+                        crate::postgres_wire::sql::ast::FunctionName::Simple(name) => {
+                            name.to_uppercase()
+                        }
+                        crate::postgres_wire::sql::ast::FunctionName::Qualified {
+                            name, ..
+                        } => name.to_uppercase(),
+                    };
+                    if func_name == "COUNT" {
+                        return true;
+                    }
+                }
+            }
+        }
+        false
+    }
+
+    /// Get filtered rows from FROM clause
+    async fn get_filtered_rows(
+        &self,
+        from_clause: &FromClause,
+        where_clause: &Option<Expression>,
+    ) -> ProtocolResult<Vec<HashMap<String, SqlValue>>> {
+        match from_clause {
+            FromClause::Table { name, .. } => {
+                let table_name_str = name.full_name();
+                let mut filtered_rows = Vec::new();
+
+                let table_data = self.table_data.read().await;
+                if let Some(data) = table_data.get(&table_name_str) {
+                    for row in data {
+                        let should_include = if let Some(where_expr) = where_clause {
+                            let context = EvaluationContext::with_row_and_table(
+                                row.clone(),
+                                table_name_str.clone(),
+                            );
+                            match self.evaluate_where_condition(where_expr, &context).await {
+                                Ok(SqlValue::Boolean(b)) => b,
+                                Ok(SqlValue::Null) => false,
+                                Ok(_) => false,
+                                Err(_) => false,
+                            }
+                        } else {
+                            true
+                        };
+
+                        if should_include {
+                            filtered_rows.push(row.clone());
+                        }
+                    }
+                }
+                Ok(filtered_rows)
+            }
+            _ => Ok(Vec::new()), // TODO: Handle other FROM clause types
+        }
+    }
+
+    /// Compute aggregate function result
+    async fn compute_aggregate(
+        &self,
+        expr: &Expression,
+        rows: &[HashMap<String, SqlValue>],
+    ) -> ProtocolResult<SqlValue> {
+        match expr {
+            Expression::Function(func_call) => {
+                let func_name = match &func_call.name {
+                    crate::postgres_wire::sql::ast::FunctionName::Simple(name) => {
+                        name.to_uppercase()
+                    }
+                    crate::postgres_wire::sql::ast::FunctionName::Qualified { name, .. } => {
+                        name.to_uppercase()
+                    }
+                };
+
+                match func_name.as_str() {
+                    "COUNT" => {
+                        // COUNT(*) or COUNT(expr)
+                        if func_call.args.is_empty() {
+                            // COUNT(*)
+                            Ok(SqlValue::BigInt(rows.len() as i64))
+                        } else {
+                            // COUNT(expr) - count non-null values
+                            let mut count = 0i64;
+                            for row in rows {
+                                let context = EvaluationContext::with_row(row.clone());
+                                let mut evaluator = self.expression_evaluator.write().await;
+                                if let Ok(value) = evaluator.evaluate(&func_call.args[0], &context)
+                                {
+                                    if !value.is_null() {
+                                        count += 1;
+                                    }
+                                }
+                            }
+                            Ok(SqlValue::BigInt(count))
+                        }
+                    }
+                    "SUM" => {
+                        if func_call.args.is_empty() {
+                            return Err(ProtocolError::PostgresError(
+                                "SUM requires an argument".to_string(),
+                            ));
+                        }
+                        let mut sum = SqlValue::Null;
+                        for row in rows {
+                            let context = EvaluationContext::with_row(row.clone());
+                            let mut evaluator = self.expression_evaluator.write().await;
+                            if let Ok(value) = evaluator.evaluate(&func_call.args[0], &context) {
+                                if !value.is_null() {
+                                    sum = if sum.is_null() {
+                                        value
+                                    } else {
+                                        // Add values together
+                                        match (&sum, &value) {
+                                            (SqlValue::Integer(a), SqlValue::Integer(b)) => {
+                                                SqlValue::Integer(a + b)
+                                            }
+                                            (SqlValue::BigInt(a), SqlValue::BigInt(b)) => {
+                                                SqlValue::BigInt(a + b)
+                                            }
+                                            (
+                                                SqlValue::DoublePrecision(a),
+                                                SqlValue::DoublePrecision(b),
+                                            ) => SqlValue::DoublePrecision(a + b),
+                                            _ => value, // Simplified - use most recent value
+                                        }
+                                    };
+                                }
+                            }
+                        }
+                        Ok(sum)
+                    }
+                    _ => {
+                        // For other aggregates, just evaluate normally for now
+                        if !rows.is_empty() {
+                            let context = EvaluationContext::with_row(rows[0].clone());
+                            let mut evaluator = self.expression_evaluator.write().await;
+                            evaluator.evaluate(expr, &context)
+                        } else {
+                            Ok(SqlValue::Null)
+                        }
+                    }
+                }
+            }
+            _ => {
+                // Non-aggregate expression in aggregate query - use first row
+                if !rows.is_empty() {
+                    let context = EvaluationContext::with_row(rows[0].clone());
+                    let mut evaluator = self.expression_evaluator.write().await;
+                    evaluator.evaluate(expr, &context)
+                } else {
+                    Ok(SqlValue::Null)
+                }
+            }
+        }
     }
 
     /// Build result columns from SELECT list

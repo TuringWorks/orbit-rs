@@ -69,12 +69,17 @@ pub trait CommandHandler: Send + Sync {
         index: usize,
         command_name: &str,
     ) -> ProtocolResult<i64> {
-        args.get(index).and_then(|v| v.as_integer()).ok_or_else(|| {
-            crate::error::ProtocolError::RespError(format!(
-                "ERR invalid integer argument for '{}' command",
-                command_name.to_lowercase()
-            ))
-        })
+        args.get(index)
+            .and_then(|v| {
+                v.as_integer()
+                    .or_else(|| v.as_string().and_then(|s| s.parse::<i64>().ok()))
+            })
+            .ok_or_else(|| {
+                crate::error::ProtocolError::RespError(format!(
+                    "ERR invalid integer argument for '{}' command",
+                    command_name.to_lowercase()
+                ))
+            })
     }
 
     /// Extract float argument at index with error handling  
