@@ -4,4 +4,5 @@
 
 pub mod redis_data;
 pub mod rocksdb_redis_provider;
+#[cfg(feature = "tikv")]
 pub mod tikv_redis_provider;

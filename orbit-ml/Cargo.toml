@@ -102,16 +102,16 @@ pyo3 = { workspace = true, optional = true }
 
 [dev-dependencies]
 # Testing dependencies
-mockall.workspace = true
-tokio-test.workspace = true
-proptest.workspace = true
-cucumber.workspace = true
+mockall = "0.13"
+cucumber = "0.21"
+proptest = "1.4"
+tokio-test = "0.4"
 criterion = "0.7"
 tempfile = "3.0"
 approx = "0.5"
 
 [build-dependencies]
-tonic-build = "0.12"
+tonic-build = "0.14"
 prost-build = "0.13"
 
 # [[bin]]

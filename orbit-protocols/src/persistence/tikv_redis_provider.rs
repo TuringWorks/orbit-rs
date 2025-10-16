@@ -1,3 +1,4 @@
+#![cfg(feature = "tikv")]
 //! TiKV-based Redis data persistence provider implementation
 //!
 //! This implementation uses TiKV for distributed persistent storage of Redis key-value data
