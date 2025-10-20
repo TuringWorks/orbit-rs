@@ -36,7 +36,7 @@ thiserror.workspace = true
 
 # Time and scheduling
 chrono.workspace = true
-tokio-cron-scheduler = "0.9"
+tokio-cron-scheduler = "0.15"
 
 # Metrics and telemetry
 metrics.workspace = true
