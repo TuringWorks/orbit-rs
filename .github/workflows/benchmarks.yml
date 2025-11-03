@@ -150,7 +150,7 @@ jobs:
 
     - name: Create benchmark report comment (for PRs)
       if: github.event_name == 'pull_request' && inputs.upload_results
-      uses: actions/github-script@v7
+      uses: actions/github-script@v8
       with:
         github-token: ${{ secrets.GITHUB_TOKEN }}
         script: |
@@ -193,7 +193,7 @@ jobs:
 
     - name: Create issue on benchmark failure
       if: needs.benchmark.result == 'failure' && github.ref == 'refs/heads/main'
-      uses: actions/github-script@v7
+      uses: actions/github-script@v8
       with:
         github-token: ${{ secrets.GITHUB_TOKEN }}
         script: |
