@@ -74,7 +74,7 @@ jobs:
       platforms: ${{ steps.platforms.outputs.platforms }}
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       with:
         fetch-depth: 0
 
@@ -179,7 +179,7 @@ jobs:
     
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       with:
         # Use sparse checkout to reduce disk usage
         sparse-checkout: |
@@ -617,7 +617,7 @@ jobs:
     
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -926,7 +926,7 @@ jobs:
     
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
 
     - name: Set up kubectl
       uses: azure/setup-kubectl@v3
