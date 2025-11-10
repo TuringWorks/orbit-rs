@@ -622,7 +622,7 @@ jobs:
         token: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Download all image metadata
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v6
       with:
         pattern: image-metadata-*
         path: ./metadata
