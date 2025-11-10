@@ -3461,16 +3461,6 @@ dependencies = [
 
 [[package]]
 name = "metrics"
-version = "0.22.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "56d05972e8cbac2671e85aa9d04d9160d193f8bebd1a5c1a2f4542c62e65d1d0"
-dependencies = [
- "ahash 0.8.12",
- "portable-atomic",
-]
-
-[[package]]
-name = "metrics"
 version = "0.23.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3045b4193fbdc5b5681f32f11070da9be3609f189a79f3390706d42587f46bb5"
@@ -3492,7 +3482,7 @@ dependencies = [
  "hyper-util",
  "indexmap 2.11.4",
  "ipnet",
- "metrics 0.23.1",
+ "metrics",
  "metrics-util",
  "quanta",
  "thiserror 1.0.69",
@@ -3509,7 +3499,7 @@ dependencies = [
  "crossbeam-epoch",
  "crossbeam-utils",
  "hashbrown 0.14.5",
- "metrics 0.23.1",
+ "metrics",
  "num_cpus",
  "quanta",
  "sketches-ddsketch",
@@ -3942,7 +3932,7 @@ dependencies = [
  "futures",
  "hyper 0.14.32",
  "libloading",
- "metrics 0.23.1",
+ "metrics",
  "once_cell",
  "orbit-client",
  "orbit-server",
@@ -4028,7 +4018,7 @@ dependencies = [
  "futures",
  "libc",
  "memmap2",
- "metrics 0.22.4",
+ "metrics",
  "nalgebra",
  "ndarray",
  "num-complex",
@@ -4128,7 +4118,7 @@ dependencies = [
  "hyper 0.14.32",
  "k8s-openapi",
  "kube",
- "metrics 0.23.1",
+ "metrics",
  "orbit-proto",
  "orbit-shared",
  "schemars",
@@ -4224,7 +4214,7 @@ dependencies = [
  "fastbloom-rs",
  "flate2",
  "futures",
- "metrics 0.23.1",
+ "metrics",
  "mockall",
  "orbit-client",
  "orbit-proto",
@@ -4284,7 +4274,7 @@ dependencies = [
  "chrono",
  "dashmap 5.5.3",
  "hyper 1.7.0",
- "metrics 0.23.1",
+ "metrics",
  "metrics-exporter-prometheus",
  "once_cell",
  "orbit-server",
@@ -4317,7 +4307,7 @@ dependencies = [
  "futures",
  "hyper 0.14.32",
  "md5",
- "metrics 0.23.1",
+ "metrics",
  "orbit-util",
  "paste",
  "prost 0.13.5",
@@ -4350,7 +4340,7 @@ dependencies = [
  "async-trait",
  "chrono",
  "dashmap 6.1.0",
- "metrics 0.23.1",
+ "metrics",
  "rand 0.8.5",
  "serde",
  "serde_json",
