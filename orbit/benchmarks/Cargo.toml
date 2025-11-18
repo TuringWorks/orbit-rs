@@ -66,6 +66,10 @@ harness = false
 name = "persistence_comparison"
 harness = false
 
+[[bench]]
+name = "phase9_performance"
+harness = false
+
 [[example]]
 name = "cow_btree_demo"
 path = "examples/cow_btree_demo.rs"
