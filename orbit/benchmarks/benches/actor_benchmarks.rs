@@ -1,5 +1,4 @@
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use orbit_client::addressable::Addressable;
 use orbit_server::persistence::config::PersistenceProviderConfig;
 use orbit_server::OrbitServer;
 use serde::{Deserialize, Serialize};
@@ -312,7 +311,7 @@ fn bench_parallel_actor_init(c: &mut Criterion) {
             num_actors,
             |b, &num_actors| {
                 b.to_async(&rt).iter(|| async {
-                    let handles: Vec<_> = (0..*num_actors)
+                    let handles: Vec<_> = (0..num_actors)
                         .map(|i| {
                             tokio::spawn(async move {
                                 let actor_id = format!("actor_{}", i);
