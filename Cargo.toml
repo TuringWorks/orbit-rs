@@ -54,7 +54,7 @@ cognitive-complexity-threshold = 15
 [workspace.dependencies]
 pyo3 = "0.24.1"
 # Kubernetes operator dependencies  
-kube = "0.95"
+kube = "0.99"
 k8s-openapi = "0.22"
 controller-rs = "0.1"
 serde_yaml = "0.9"
