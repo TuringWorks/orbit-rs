@@ -4,12 +4,12 @@
 //! orbit-shared/src/transactions/performance.rs, moved here to centralize
 //! all benchmark-related functionality.
 
+use orbit_shared::LegacyOrbitError;
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::{Mutex, RwLock, Semaphore};
-use tokio::time::timeout;
 
 /// Performance benchmark error type
 #[derive(Debug, thiserror::Error)]
@@ -18,6 +18,12 @@ pub enum PerformanceError {
     Timeout(String),
     #[error("Internal error: {0}")]
     Internal(String),
+}
+
+impl From<LegacyOrbitError> for PerformanceError {
+    fn from(err: LegacyOrbitError) -> Self {
+        PerformanceError::Internal(err.to_string())
+    }
 }
 
 pub type PerformanceResult<T> = Result<T, PerformanceError>;
@@ -467,15 +473,15 @@ impl PerformanceBenchmarkSuite {
 
         for &pool_size in &[5, 10, 20] {
             let config = ConnectionPoolConfig {
-                max_size: pool_size,
-                min_idle: pool_size / 2,
+                max_connections: pool_size,
+                min_connections: pool_size / 2,
                 ..Default::default()
             };
 
-            let pool = ConnectionPool::new(config, || {
-                Box::pin(async {
+            let pool = ConnectionPool::new(config, |node_id: String| {
+                Box::pin(async move {
                     tokio::time::sleep(Duration::from_millis(10)).await;
-                    Ok(format!("connection_{}", uuid::Uuid::new_v4()))
+                    Ok(format!("connection_{}_{}", node_id, uuid::Uuid::new_v4()))
                 })
             });
 
@@ -488,7 +494,7 @@ impl PerformanceBenchmarkSuite {
             for _ in 0..self.config.iterations {
                 let pool_clone = pool.clone();
                 handles.push(tokio::spawn(async move {
-                    let _conn = pool_clone.get().await?;
+                    let _conn = pool_clone.acquire().await?;
                     tokio::time::sleep(Duration::from_micros(100)).await;
                     Ok::<(), PerformanceError>(())
                 }));
@@ -502,19 +508,19 @@ impl PerformanceBenchmarkSuite {
             }
 
             let elapsed = start.elapsed();
-            let stats = pool.get_stats().await;
+            let metrics = pool.get_metrics().await;
 
             results.push(PerformanceBenchmarkResult {
                 name: format!("ConnectionPool_Size_{}", pool_size),
                 batch_size: 1,
                 concurrent_operations: pool_size,
-                avg_latency_ms: stats.average_create_time_ms,
+                avg_latency_ms: metrics.avg_acquisition_time_ms,
                 throughput_ops_per_sec: self.config.iterations as f64 / elapsed.as_secs_f64(),
                 success_rate: 1.0, // Simplified
                 resource_utilization: ResourceUtilization {
                     memory_usage_mb: 5.0 * pool_size as f64,
                     cpu_usage_percent: 30.0,
-                    connection_pool_utilization: stats.current_active as f64 / pool_size as f64,
+                    connection_pool_utilization: metrics.current_active as f64 / pool_size as f64,
                 },
             });
         }

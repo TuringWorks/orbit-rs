@@ -21,12 +21,10 @@ pub mod persistence;
 // pub mod compute;
 
 /// Performance benchmarks for transactions and batch processing (moved from orbit-shared)
-// TODO: Fix compilation errors related to AdvancedConnectionPool API changes
-// pub mod performance;
+pub mod performance;
 
 /// OrbitQL query language benchmarks (moved from orbit-shared)
-// TODO: Fix compilation errors related to OrbitQL AST types
-// pub mod orbitql;
+pub mod orbitql;
 
 // Re-export commonly used items
 // pub use compute::{
