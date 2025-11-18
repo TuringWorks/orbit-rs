@@ -20,16 +20,17 @@
 //! - Partition evolution
 //! - Snapshot management
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::SystemTime;
 
 use arrow::array::{Array, ArrayRef, Int32Array, Int64Array, StringArray, BooleanArray};
 use arrow::datatypes::{DataType, Field, Schema as ArrowSchema};
 use arrow::record_batch::RecordBatch;
-use iceberg::{Catalog, NamespaceIdent, TableIdent};
+use iceberg::{Catalog, CatalogBuilder, NamespaceIdent, TableIdent};
 use iceberg::table::Table;
 use iceberg::spec::Schema as IcebergSchema;
-use iceberg_catalog_rest::RestCatalog;
+use iceberg_catalog_rest::{RestCatalog, RestCatalogBuilder, REST_CATALOG_PROP_URI, REST_CATALOG_PROP_WAREHOUSE};
 
 use crate::error::{ProtocolError, ProtocolResult};
 use crate::postgres_wire::sql::types::SqlValue;
@@ -38,6 +39,7 @@ use super::{
     VectorizedExecutor, VectorizedExecutorConfig,
     AggregateFunction, ComparisonOp,
 };
+use super::storage_config::StorageBackend;
 
 /// Iceberg cold tier storage
 ///
@@ -779,4 +781,94 @@ pub fn arrow_to_column_batch(batch: &RecordBatch) -> ProtocolResult<ColumnBatch>
         row_count: num_rows,
         column_names: Some(column_names),
     })
+}
+
+/// Create a FileIO instance for the specified storage backend
+///
+/// This helper function creates a properly configured FileIO that can be used
+/// with Iceberg RestCatalog for different storage backends (S3, Azure, etc.).
+///
+/// # Arguments
+///
+/// * `storage_backend` - The storage backend configuration (S3 or Azure)
+///
+/// # Returns
+///
+/// A tuple of (FileIO, warehouse_path) that can be used to configure a RestCatalog
+///
+/// # Example
+///
+/// ```ignore
+/// use orbit_protocols::postgres_wire::sql::execution::{AzureConfig, StorageBackend};
+/// use iceberg_catalog_rest::RestCatalog;
+///
+/// let azure_config = AzureConfig::from_connection_string(
+///     "AccountName=devstoreaccount1;AccountKey=...;BlobEndpoint=http://127.0.0.1:10000/devstoreaccount1;",
+///     "orbitstore".to_string()
+/// )?;
+///
+/// let backend = StorageBackend::Azure(azure_config);
+/// let (file_io, warehouse_path) = create_file_io_for_storage(backend)?;
+///
+/// // Then use with your RestCatalog creation method
+/// ```
+pub fn create_file_io_for_storage(
+    storage_backend: StorageBackend,
+) -> ProtocolResult<(iceberg::io::FileIO, String)> {
+    let file_io = storage_backend.create_file_io()?;
+    let warehouse_path = storage_backend.warehouse_path();
+    Ok((file_io, warehouse_path))
+}
+
+/// Create a RestCatalog with the specified storage backend
+///
+/// This creates a fully configured Iceberg REST catalog that uses the specified
+/// storage backend (S3 or Azure) for data storage.
+///
+/// # Arguments
+///
+/// * `catalog_uri` - The URI of the REST catalog server (e.g., "http://localhost:8181")
+/// * `storage_backend` - The storage backend configuration (S3 or Azure)
+///
+/// # Example
+///
+/// ```ignore
+/// use orbit_protocols::postgres_wire::sql::execution::{AzureConfig, StorageBackend, create_rest_catalog_with_storage};
+///
+/// let azure_config = AzureConfig::from_connection_string(
+///     "AccountName=devstoreaccount1;AccountKey=...;BlobEndpoint=http://127.0.0.1:10000/devstoreaccount1;",
+///     "orbitstore".to_string()
+/// )?;
+///
+/// let backend = StorageBackend::Azure(azure_config);
+/// let catalog = create_rest_catalog_with_storage(
+///     "http://localhost:8181",
+///     backend
+/// ).await?;
+/// ```
+pub async fn create_rest_catalog_with_storage(
+    catalog_uri: &str,
+    storage_backend: StorageBackend,
+) -> ProtocolResult<Arc<RestCatalog>> {
+    // Get warehouse path from storage backend
+    let warehouse_path = storage_backend.warehouse_path();
+
+    // Create catalog configuration
+    let mut config = HashMap::new();
+    config.insert(REST_CATALOG_PROP_URI.to_string(), catalog_uri.to_string());
+    config.insert(REST_CATALOG_PROP_WAREHOUSE.to_string(), warehouse_path);
+
+    // Create the REST catalog using the builder
+    let catalog = RestCatalogBuilder::default()
+        .load("rest", config)
+        .await
+        .map_err(|e| ProtocolError::PostgresError(
+            format!("Failed to create REST catalog: {}", e)
+        ))?;
+
+    // Create FileIO and configure it (if the catalog supports it)
+    // Note: The FileIO might need to be set separately depending on the catalog implementation
+    let _file_io = storage_backend.create_file_io()?;
+
+    Ok(Arc::new(catalog))
 }

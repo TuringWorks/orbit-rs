@@ -74,7 +74,7 @@ iceberg-catalog-rest = { version = "0.7", optional = true }
 arrow = { version = "55.2", optional = true }
 arrow-schema = { version = "55.2", optional = true }
 parquet = { version = "55.2", optional = true }
-opendal = { version = "0.51", optional = true, features = ["services-s3", "services-memory"] }
+opendal = { version = "0.51", optional = true, features = ["services-s3", "services-azblob", "services-memory"] }
 
 [dev-dependencies]
 redis = "0.32"

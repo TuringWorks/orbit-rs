@@ -715,7 +715,7 @@ impl HybridStorageManager {
         #[cfg(feature = "iceberg-cold")]
         if let Some(ref cold_store) = self.cold_store {
             // Use IcebergColdStore's aggregate method (combines metadata pruning + SIMD)
-            let result = cold_store.aggregate(&column, function, filter.as_ref()).await?;
+            let result = cold_store.aggregate(&column, function, _filter.as_ref()).await?;
             return Ok(QueryResult::Scalar { value: result });
         }
 
