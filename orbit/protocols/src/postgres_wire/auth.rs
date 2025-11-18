@@ -242,7 +242,9 @@ pub fn compute_md5_hash(password: &str, username: &str, salt: &[u8; 4]) -> Strin
 /// SCRAM-SHA-256 authentication state
 #[allow(dead_code)]
 pub struct ScramAuth {
+    #[allow(dead_code)]
     username: String,
+    #[allow(dead_code)]
     client_nonce: String,
     server_nonce: String,
     salt: Vec<u8>,
