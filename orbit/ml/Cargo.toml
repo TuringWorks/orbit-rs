@@ -63,7 +63,7 @@ ndarray = { version = "0.15", features = ["serde"] }
 # hf-hub = { version = "0.3", optional = true }
 
 # Graph Processing
-petgraph = "0.7"
+petgraph = "0.6"
 
 # Multi-language Support (commented out for initial build)
 # pyo3 = { version = "0.22", features = ["auto-initialize"], optional = true }
@@ -80,8 +80,8 @@ petgraph = "0.7"
 # arrow = "52.0"
 
 # Statistical Computing
-statrs = "0.17"
-rand = "0.9"
+statrs = "0.18"
+rand = "0.8"
 rand_distr = "0.4"
 
 # Performance
