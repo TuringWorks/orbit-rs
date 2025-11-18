@@ -89,7 +89,7 @@ Orbit-RS provides comprehensive compute acceleration through the [orbit-compute 
 ### GPU-Accelerated Database Workloads
 
 - **Vector Operations**: Similarity search, embeddings, vector aggregations (8-15x speedup)
-- **Matrix Operations**: Large JOINs, linear algebra, ML workloads (8-15x speedup) 
+- **Matrix Operations**: Large JOINs, linear algebra, ML workloads (8-15x speedup)
 - **Time Series Analytics**: Aggregations, moving averages (5-12x speedup)
 - **Graph Operations**: Traversals, community detection (4-10x speedup)
 - **Text Processing**: Search, NLP, regex operations (2-8x speedup)

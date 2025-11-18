@@ -4,7 +4,7 @@ title: TiKV Persistence Layer Integration
 category: architecture
 ---
 
-# TiKV Storage Provider Integration for Orbit-RS
+## TiKV Storage Provider Integration for Orbit-RS
 
 **Date**: October 13, 2025  
 **Author**: AI Assistant  
@@ -16,6 +16,7 @@ category: architecture
 This document outlines the integration of TiKV as a distributed storage provider for Orbit-RS, alongside RocksDB and other storage engines. TiKV provides an excellent storage option for Orbit-RS actors requiring distributed storage capabilities, leveraging its Rust implementation, ACID compliance, and proven Raft consensus algorithm.
 
 **Key Benefits:**
+
 - **Storage Provider Option**: Distributed storage choice alongside RocksDB
 - **Native Rust Integration**: Optimal performance and memory safety
 - **Distributed ACID**: Strong consistency for multi-actor scenarios
@@ -38,7 +39,8 @@ This document outlines the integration of TiKV as a distributed storage provider
 ## Architecture Overview
 
 ### Current Orbit-RS Architecture
-```
+
+```text
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
 │   Protocol      │    │   Query         │    │   Multi-Model   │
 │   Adapters      │    │   Engines       │    │   Processors    │
@@ -50,24 +52,25 @@ This document outlines the integration of TiKV as a distributed storage provider
 └─────────────────┘    └─────────────────┘    └─────────────────┘
                                                         │
                               ┌─────────────────────────▼─────────────────────────┐
-                              │                Actor System                        │
-                              │                                                    │
-                              │  ┌───────────┐  ┌───────────┐  ┌───────────┐     │
-                              │  │  Actor A  │  │  Actor B  │  │  Actor C  │     │
-                              │  │           │  │           │  │           │     │
-                              │  └───────────┘  └───────────┘  └───────────┘     │
+                              │                Actor System                       │
+                              │                                                   │
+                              │  ┌───────────┐  ┌───────────┐  ┌───────────┐      │
+                              │  │  Actor A  │  │  Actor B  │  │  Actor C  │      │
+                              │  │           │  │           │  │           │      │
+                              │  └───────────┘  └───────────┘  └───────────┘      │
                               └─────────────────────────┬─────────────────────────┘
                                                         │
-                              ┌─────────────────────────▼─────────────────────────┐
+                              ┌─────────────────────────▼──────────────────-───────┐
                               │             Storage Backend (Current)              │
                               │                                                    │
-                              │              • Local Storage                      │
-                              │              • Limited Distribution               │
+                              │              • Local Storage                       │
+                              │              • Limited Distribution                │
                               └────────────────────────────────────────────────────┘
 ```
 
 ### Proposed Storage Provider Architecture
-```
+
+```text
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
 │   Protocol      │    │   Query         │    │   Multi-Model   │
 │   Adapters      │    │   Engines       │    │   Processors    │
@@ -79,24 +82,24 @@ This document outlines the integration of TiKV as a distributed storage provider
 └─────────────────┘    └─────────────────┘    └─────────────────┘
                                                         │
                               ┌─────────────────────────▼─────────────────────────┐
-                              │                Actor System                        │
-                              │                                                    │
-                              │  ┌───────────┐  ┌───────────┐  ┌───────────┐     │
-                              │  │  Actor A  │  │  Actor B  │  │  Actor C  │     │
-                              │  │ RocksDB   │  │   TiKV    │  │ RocksDB   │     │
-                              │  └───────────┘  └───────────┘  └───────────┘     │
+                              │                Actor System                       │
+                              │                                                   │
+                              │  ┌───────────┐  ┌───────────┐  ┌───────────┐      │
+                              │  │  Actor A  │  │  Actor B  │  │  Actor C  │      │
+                              │  │ RocksDB   │  │   TiKV    │  │ RocksDB   │      │
+                              │  └───────────┘  └───────────┘  └───────────┘      │
                               └─────────────────────────┬─────────────────────────┘
                                                         │
                               ┌─────────────────────────▼─────────────────────────┐
                               │              Storage Provider Layer               │
-                              │                                                    │
+                              │                                                   │
                               │  • Unified Storage Interface  • Provider Selection│
-                              │  • Multi-Model Abstraction   • Configuration Mgmt│
-                              │  • Transaction Coordination  • Performance Tuning│
+                              │  • Multi-Model Abstraction   • Configuration Mgmt │
+                              │  • Transaction Coordination  • Performance Tuning │
                               └─────────────────────────┬─────────────────────────┘
                                                         │
-                    ┌───────────────────────────────────┼───────────────────────────────────┐
-                    │                                   │                                   │
+                    ┌───────────────────────────────────┼─────────────────────────────────┐
+                    │                                   │                                 │
           ┌─────────▼─────────┐                ┌────────▼────────┐                ┌───────▼───────┐
           │   RocksDB         │                │     TiKV        │                │    Future     │
           │   Provider        │                │    Provider     │                │   Providers   │
@@ -1119,18 +1122,22 @@ impl TiKVCacheManager {
 ### Phase 1: Foundation (Months 1-2)
 
 #### Month 1: Storage Provider Interface
+
 **Objectives:**
+
 - Design unified storage provider trait
 - Implement TiKV storage provider
 - Create storage manager for provider selection
 
 **Deliverables:**
+
 - `StorageProvider` trait definition
 - `TiKVProvider` implementation
 - `RocksDBProvider` implementation
 - `StorageManager` with provider selection
 
 **Technical Tasks:**
+
 ```rust
 // Week 1-2: Provider Interface Design
 - Define StorageProvider trait
@@ -1146,18 +1153,22 @@ impl TiKVCacheManager {
 ```
 
 #### Month 2: Multi-Model Storage
+
 **Objectives:**
+
 - Implement multi-model key design patterns
 - Create storage format specifications
 - Build data serialization/deserialization
 
 **Deliverables:**
+
 - `MultiModelKeyBuilder` implementation
 - Storage format definitions
 - Serialization benchmarks
 - Multi-model unit tests
 
 **Technical Tasks:**
+
 ```rust
 // Week 5-6: Key Design
 - Implement key building patterns for all data models
@@ -1173,18 +1184,22 @@ impl TiKVCacheManager {
 ```
 
 #### Month 3: Transaction Integration
+
 **Objectives:**
+
 - Integrate TiKV transactions with Orbit-RS
 - Implement cross-model ACID guarantees
 - Create transaction management layer
 
 **Deliverables:**
+
 - `OrbitTransaction` implementation
 - Cross-model constraint validation
 - Transaction timeout and retry logic
 - Performance benchmarks
 
 **Technical Tasks:**
+
 ```rust
 // Week 9-10: Transaction Layer
 - Implement OrbitTransaction wrapper
@@ -1202,36 +1217,45 @@ impl TiKVCacheManager {
 ### Phase 2: Optimization (Months 4-6)
 
 #### Month 4: Query Optimization
+
 **Objectives:**
+
 - Build TiKV-specific query optimizer
 - Implement coprocessor pushdown
 - Create region-aware execution plans
 
 **Deliverables:**
+
 - `TiKVQueryOptimizer` implementation
 - Coprocessor integration
 - Execution plan generation
 - Performance benchmarks
 
 #### Month 5: Caching and Performance
+
 **Objectives:**
+
 - Implement multi-level caching
 - Optimize data locality
 - Build performance monitoring
 
 **Deliverables:**
+
 - `TiKVCacheManager` implementation
 - Data locality optimizer
 - Metrics collection system
 - Performance dashboard
 
 #### Month 6: Advanced Features
+
 **Objectives:**
+
 - Implement advanced TiKV features
 - Add backup and recovery
 - Create monitoring and alerting
 
 **Deliverables:**
+
 - Point-in-time recovery
 - Distributed backup system
 - Comprehensive monitoring
@@ -1240,36 +1264,45 @@ impl TiKVCacheManager {
 ### Phase 3: Production Readiness (Months 7-9)
 
 #### Month 7: Scalability Testing
+
 **Objectives:**
+
 - Large-scale performance testing
 - Auto-scaling implementation
 - Load balancing optimization
 
 **Deliverables:**
+
 - Performance benchmarks at scale
 - Auto-scaling algorithms
 - Load testing results
 - Capacity planning tools
 
 #### Month 8: Operations and Monitoring
+
 **Objectives:**
+
 - Production monitoring system
 - Alerting and incident response
 - Operational automation
 
 **Deliverables:**
+
 - Comprehensive monitoring dashboard
 - Alerting rules and runbooks
 - Automated deployment scripts
 - Disaster recovery procedures
 
 #### Month 9: Documentation and Training
+
 **Objectives:**
+
 - Complete documentation
 - Training materials
 - Migration tools
 
 **Deliverables:**
+
 - Technical documentation
 - Operational guides
 - Training workshops
