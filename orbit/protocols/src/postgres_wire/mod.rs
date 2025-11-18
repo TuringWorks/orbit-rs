@@ -24,12 +24,15 @@
 //! ## Features
 //! - ✅ Startup message handling
 //! - ✅ Trust authentication (no password)
+//! - ✅ MD5 password authentication
+//! - ✅ SCRAM-SHA-256 authentication
 //! - ✅ Simple query protocol
 //! - ✅ Extended query protocol (Parse, Bind, Execute)
 //! - ✅ Result set encoding (DataRow, RowDescription)
 //! - ✅ Prepared statements
 //! - ✅ SQL parsing (SELECT, INSERT, UPDATE, DELETE)
 
+pub mod auth;
 pub mod graphrag_engine;
 pub mod jsonb;
 pub mod messages;
@@ -41,6 +44,7 @@ pub mod sql;
 pub mod storage;
 pub mod vector_engine;
 
+pub use auth::{AuthManager, AuthMethod, ScramAuth, UserCredentials, UserStore, compute_md5_hash};
 pub use graphrag_engine::GraphRAGQueryEngine;
 pub use messages::{BackendMessage, FieldDescription, FrontendMessage, TransactionStatus};
 pub use persistent_storage::{
