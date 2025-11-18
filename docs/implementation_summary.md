@@ -4,7 +4,7 @@ title: GraphRAG PostgreSQL Integration - Implementation Summary
 category: documentation
 ---
 
-# GraphRAG PostgreSQL Integration - Implementation Summary
+## GraphRAG PostgreSQL Integration - Implementation Summary
 
 ## Overview
 
@@ -156,7 +156,7 @@ cur.execute("SELECT response FROM GRAPHRAG_QUERY(%s, %s, 3, 2048, 'ollama', true
 
 ### Code Structure
 
-```
+```text
 orbit-protocols/src/
 ├── postgres_wire/
 │   ├── graphrag_engine.rs      # PostgreSQL GraphRAG function engine

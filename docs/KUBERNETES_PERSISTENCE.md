@@ -4,7 +4,7 @@ title: Kubernetes Persistence Guide for Orbit-RS
 category: documentation
 ---
 
-# Kubernetes Persistence Guide for Orbit-RS
+## Kubernetes Persistence Guide for Orbit-RS
 
 This guide explains how to configure Orbit-RS persistence backends when deploying on Kubernetes, using either the raw manifests, the Helm chart, or the Operator (CRDs).
 
@@ -54,7 +54,7 @@ To add cloud/local backend support via values:
 
 values.yaml overrides example:
 
-```
+```text
 orbitServer:
   env:
     - name: ORBIT_PERSISTENCE_BACKEND
@@ -71,7 +71,7 @@ persistence:
 
 For S3:
 
-```
+```text
 orbitServer:
   env:
     - name: ORBIT_PERSISTENCE_BACKEND
@@ -94,7 +94,7 @@ Also create a secret named orbit-server-secrets with keys s3-access-key-id and s
 
 The OrbitCluster CRD now supports a persistence section:
 
-```
+```text
 apiVersion: orbit.turingworks.com/v1
 kind: OrbitCluster
 metadata:

@@ -4,7 +4,7 @@ title: GPU Architecture Support in Orbit-RS
 category: deployment
 ---
 
-# GPU Architecture Support in Orbit-RS
+## GPU Architecture Support in Orbit-RS
 
 **Date**: 2025-01-09  
 **Version**: 2.0.0  
@@ -19,6 +19,7 @@ Orbit-RS provides comprehensive support for the latest GPU architectures across 
 ### NVIDIA GPUs
 
 #### 🚀 Blackwell Architecture (2024+) - Next Generation
+
 **Status**: Early Support / Preview  
 **Use Cases**: Large-scale AI training, foundation models, multi-modal AI
 
@@ -30,6 +31,7 @@ Orbit-RS provides comprehensive support for the latest GPU architectures across 
 | **B40** | 48GB GDDR6X | Blackwell | Mid-range inference | Standard instances |
 
 **Blackwell-Specific Features:**
+
 - **FP4 Precision**: Revolutionary 4-bit floating point for extreme efficiency
 - **FP6 Precision**: 6-bit precision for specific AI workloads
 - **Enhanced FP8**: Improved transformer engine with better accuracy
@@ -38,6 +40,7 @@ Orbit-RS provides comprehensive support for the latest GPU architectures across 
 - **Transformer Engine V2**: Advanced sparse and mixed precision
 
 **Configuration Example:**
+
 ```yaml
 gpu_config:
   driver_version: "550.90.07"
@@ -54,6 +57,7 @@ gpu_config:
 ```
 
 #### ⚡ Hopper Architecture (Current Gen)
+
 **Status**: Full Production Support  
 **Use Cases**: AI training, large language models, scientific computing
 
@@ -65,6 +69,7 @@ gpu_config:
 | **H100 NVL** | 94GB HBM3 | 60 TFLOPS (FP16) | Specialized deployments |
 
 **Hopper Features:**
+
 - **Transformer Engine**: Native FP8 support for transformers
 - **DPX Instructions**: Dynamic programming acceleration
 - **Thread Block Clusters**: Advanced GPU thread management
@@ -72,6 +77,7 @@ gpu_config:
 - **4th Gen NVLink**: 900 GB/s inter-GPU bandwidth
 
 #### 🔥 Ampere Architecture (Mainstream)
+
 **Status**: Full Production Support  
 **Use Cases**: ML training/inference, HPC, graphics workloads
 
@@ -83,6 +89,7 @@ gpu_config:
 | **A10** | 24GB GDDR6 | 31.2 TFLOPS (FP16) | Professional workstations |
 
 #### ⚙️ Turing Architecture (Inference Optimized)
+
 **Status**: Full Production Support  
 **Use Cases**: Cost-effective inference, edge deployment
 
@@ -94,6 +101,7 @@ gpu_config:
 ### AMD GPUs
 
 #### 🔴 CDNA 3 Architecture (Latest Data Center)
+
 **Status**: Full Production Support  
 **Use Cases**: AI training, HPC, large-scale inference
 
@@ -104,6 +112,7 @@ gpu_config:
 | **MI300C** | 192GB HBM3 | Cloud-optimized | Multi-tenant workloads |
 
 **CDNA3 Features:**
+
 - **Infinity Cache**: Large on-chip cache for bandwidth amplification
 - **Matrix Cores**: Dedicated AI acceleration units
 - **XGMI**: High-speed inter-GPU communication (up to 896 GB/s)
@@ -111,6 +120,7 @@ gpu_config:
 - **Unified Memory**: Coherent CPU-GPU memory access (MI300A)
 
 **Configuration Example:**
+
 ```yaml
 gpu_config:
   rocm_version: "6.0"
@@ -127,6 +137,7 @@ gpu_config:
 ```
 
 #### 🔴 CDNA 2 Architecture
+
 **Status**: Full Production Support  
 **Use Cases**: AI training, scientific computing
 
@@ -137,6 +148,7 @@ gpu_config:
 | **MI210** | 64GB HBM2e | 45 TFLOPS (FP16) | Entry-level CDNA2 |
 
 #### 🎮 RDNA 4 Architecture (2024+)
+
 **Status**: Early Support  
 **Use Cases**: Graphics, consumer AI, edge computing
 
@@ -149,6 +161,7 @@ gpu_config:
 ### CPU Architectures
 
 #### 🔥 AMD EPYC Processors
+
 **Status**: Full Production Support  
 **Use Cases**: High-performance computing, database workloads, CPU-intensive AI
 
@@ -160,6 +173,7 @@ gpu_config:
 | **EPYC 7002 "Rome"** | Zen 2 | up to 64 | DDR4-3200 | Cost-effective option |
 
 **EPYC Optimization Features:**
+
 - **AVX-512**: Advanced vector extensions for compute acceleration
 - **3D V-Cache**: Additional cache for database and analytics workloads
 - **CCD/IOD Design**: Scalable chiplet architecture
@@ -167,6 +181,7 @@ gpu_config:
 - **SMT**: Simultaneous multithreading (2 threads per core)
 
 **Configuration Example:**
+
 ```yaml
 epyc_optimizations:
   compiler_flags: "-march=znver4 -mtune=znver4"
@@ -177,6 +192,7 @@ epyc_optimizations:
 ```
 
 #### 🌿 ARM Graviton Processors
+
 **Status**: Full Production Support  
 **Use Cases**: Energy-efficient computing, cost optimization
 
@@ -188,6 +204,7 @@ epyc_optimizations:
 ### Intel GPUs
 
 #### ⚡ Intel Arc & Xe Architecture
+
 **Status**: Early Support  
 **Use Cases**: Development, testing, specialized workloads
 
@@ -236,6 +253,7 @@ epyc_optimizations:
 ### NVIDIA GPU Optimization
 
 #### Blackwell B100/B200 Optimization
+
 ```bash
 # Enable all Blackwell features
 export CUDA_VERSION=12.4
@@ -255,6 +273,7 @@ export NCCL_ALGO=Tree
 ```
 
 #### H100 Optimization
+
 ```bash
 # H100-specific settings
 export CUDA_VERSION=12.2
@@ -271,6 +290,7 @@ nvidia-smi -pl 700  # Power limit
 ### AMD GPU Optimization
 
 #### MI300X Optimization
+
 ```bash
 # ROCm environment
 export ROCM_VERSION=6.0
@@ -290,6 +310,7 @@ rocm-smi --setpowerplay 0  # Performance mode
 ### AMD EPYC Optimization
 
 #### Zen 4 (Genoa) Optimization
+
 ```bash
 # Compiler optimizations
 export CC=clang
@@ -322,24 +343,28 @@ images:
 ## Workload-Specific Recommendations
 
 ### Large Language Model Training
+
 - **Best Choice**: Blackwell B200 (8x) > H100 (8x) > MI300X (8x)
 - **Memory Requirements**: 192GB+ for 70B+ parameter models
 - **Network**: NVLink/XGMI topology essential
 - **Storage**: NVMe SSD, 10TB+ for datasets
 
 ### AI Inference at Scale
+
 - **Best Choice**: H100 > A100 > T4 (cost-effective)
 - **Batch Size**: Optimize for throughput vs latency
 - **Precision**: FP16/INT8 for production, FP8 on H100+
 - **Auto-scaling**: Based on request queue length
 
 ### Scientific Computing
+
 - **Best Choice**: MI300A (unified memory) > H100 > A100
 - **Memory**: Large memory crucial for simulations
 - **Precision**: FP64 for scientific accuracy
 - **Network**: High-bandwidth interconnect required
 
 ### Database Analytics
+
 - **Best Choice**: EPYC 9004 Genoa > Graviton3 > Intel Xeon
 - **Memory**: DDR5 with large capacity
 - **Storage**: NVMe with high IOPS
@@ -348,12 +373,14 @@ images:
 ## Cost Optimization Strategies
 
 ### GPU Cost Optimization
+
 1. **Right-sizing**: Match GPU to workload requirements
 2. **Spot Instances**: 60-80% cost reduction for training
 3. **Reserved Instances**: 30-60% savings for predictable workloads
 4. **Mixed Workloads**: Inference + training on same hardware
 
 ### CPU Cost Optimization
+
 1. **EPYC vs Intel**: Up to 30% better price/performance
 2. **Graviton**: 20% cost savings vs x86-64
 3. **Instance Families**: Choose compute-optimized vs general purpose
@@ -361,6 +388,7 @@ images:
 ## Monitoring and Observability
 
 ### GPU Metrics
+
 ```bash
 # NVIDIA GPU monitoring
 nvidia-smi dmon -s pucvmet -i 0 -d 1
@@ -373,6 +401,7 @@ orbit-rs monitor --gpu-metrics --interval=1s
 ```
 
 ### Key Metrics to Monitor
+
 - **GPU Utilization**: Target 80-95%
 - **GPU Memory Usage**: Monitor memory pressure
 - **Temperature**: Keep below thermal limits
@@ -382,6 +411,7 @@ orbit-rs monitor --gpu-metrics --interval=1s
 ## Troubleshooting Common Issues
 
 ### NVIDIA GPU Issues
+
 ```bash
 # Driver issues
 nvidia-smi  # Check driver status
@@ -394,6 +424,7 @@ export CUDA_LAUNCH_BLOCKING=1  # Debug CUDA errors
 ```
 
 ### AMD GPU Issues
+
 ```bash
 # ROCm issues
 rocm-smi  # Check GPU status
@@ -406,6 +437,7 @@ dmesg | grep amdgpu
 ```
 
 ### Performance Issues
+
 1. **Check GPU utilization**: Should be >80% for training
 2. **Memory bottlenecks**: Monitor memory bandwidth
 3. **CPU bottlenecks**: Ensure adequate CPU resources
@@ -415,6 +447,7 @@ dmesg | grep amdgpu
 ## Best Practices
 
 ### GPU Deployment
+
 1. **Use placement groups** for multi-GPU instances
 2. **Enable persistence mode** for NVIDIA GPUs
 3. **Set appropriate power limits** for thermal management
@@ -422,6 +455,7 @@ dmesg | grep amdgpu
 5. **Monitor temperatures** and throttling
 
 ### Container Optimization
+
 1. **Use GPU-optimized base images**
 2. **Pre-install drivers and runtimes**
 3. **Set appropriate resource limits**
@@ -429,6 +463,7 @@ dmesg | grep amdgpu
 5. **Enable GPU sharing** where appropriate
 
 ### Cost Management
+
 1. **Implement auto-scaling** based on workload
 2. **Use spot instances** for non-critical workloads  
 3. **Monitor unused resources** and right-size

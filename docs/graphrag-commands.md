@@ -4,7 +4,7 @@ title: GraphRAG Commands Reference
 category: documentation
 ---
 
-# GraphRAG Commands Reference
+## GraphRAG Commands Reference
 
 This document describes the GraphRAG (Graph-enhanced Retrieval-Augmented Generation) commands available in Orbit-RS via the RESP protocol.
 
@@ -28,7 +28,7 @@ Build a knowledge graph from a document by extracting entities and relationships
 
 **Syntax:**
 
-```
+```text
 GRAPHRAG.BUILD <kg_name> <document_id> <text> [metadata key value ...]
 ```
 
@@ -58,7 +58,7 @@ Execute a RAG query that combines graph traversal with LLM generation.
 
 **Syntax:**
 
-```
+```text
 GRAPHRAG.QUERY <kg_name> <query_text> [MAX_HOPS <hops>] [CONTEXT_SIZE <size>] [LLM_PROVIDER <provider>] [INCLUDE_EXPLANATION]
 ```
 
@@ -92,7 +92,7 @@ Extract entities and relationships from text without building the knowledge grap
 
 **Syntax:**
 
-```
+```text
 GRAPHRAG.EXTRACT <kg_name> <document_id> <text> [EXTRACTORS extractor1 extractor2 ...]
 ```
 
@@ -122,7 +122,7 @@ Find reasoning paths between two specific entities in the knowledge graph.
 
 **Syntax:**
 
-```
+```text
 GRAPHRAG.REASON <kg_name> <from_entity> <to_entity> [MAX_HOPS <hops>] [INCLUDE_EXPLANATION]
 ```
 
@@ -153,7 +153,7 @@ Get comprehensive statistics about a knowledge graph.
 
 **Syntax:**
 
-```
+```text
 GRAPHRAG.STATS <kg_name>
 ```
 
@@ -186,7 +186,7 @@ List entities in the knowledge graph with optional filtering.
 
 **Syntax:**
 
-```
+```text
 GRAPHRAG.ENTITIES <kg_name> [LIMIT <limit>] [ENTITY_TYPE <type>]
 ```
 
@@ -214,7 +214,7 @@ Find entities similar to a given entity using vector embeddings.
 
 **Syntax:**
 
-```
+```text
 GRAPHRAG.SIMILAR <kg_name> <entity_name> [LIMIT <limit>] [THRESHOLD <threshold>]
 ```
 
@@ -249,7 +249,7 @@ GRAPHRAG.BUILD my_kg doc1 "Your document content here..."
 GRAPHRAG.BUILD my_kg doc2 "More document content..."
 ```
 
-2. Check statistics:
+1. Check statistics:
 
 ```redis
 GRAPHRAG.STATS my_kg
@@ -263,7 +263,7 @@ GRAPHRAG.STATS my_kg
 GRAPHRAG.QUERY my_kg "What are the main relationships in the data?" INCLUDE_EXPLANATION
 ```
 
-2. Find specific connections:
+1. Find specific connections:
 
 ```redis
 GRAPHRAG.REASON my_kg "Entity A" "Entity B" MAX_HOPS 3
@@ -277,7 +277,7 @@ GRAPHRAG.REASON my_kg "Entity A" "Entity B" MAX_HOPS 3
 GRAPHRAG.ENTITIES my_kg ENTITY_TYPE person LIMIT 20
 ```
 
-2. Find similar entities:
+1. Find similar entities:
 
 ```redis
 GRAPHRAG.SIMILAR my_kg "Important Entity" THRESHOLD 0.7

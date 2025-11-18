@@ -4,7 +4,7 @@ title: Orbit-RS Java Spring Boot Integration Implementation Summary
 category: documentation
 ---
 
-# Orbit-RS Java Spring Boot Integration Implementation Summary
+## Orbit-RS Java Spring Boot Integration Implementation Summary
 
 ## Overview
 
@@ -93,28 +93,28 @@ I have successfully implemented a comprehensive Java Spring Boot integration for
 
 ## Technical Architecture
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────┐
-│                    Java Spring Boot Application                  │
+│                    Java Spring Boot Application                 │
 ├─────────────────┬─────────────────┬─────────────────────────────┤
-│  HTTP Client    │  gRPC Client    │  JNI Direct Calls          │
-│  (REST API)     │  (Protocol      │  (Native Methods)          │
+│  HTTP Client    │  gRPC Client    │  JNI Direct Calls           │
+│  (REST API)     │  (Protocol      │  (Native Methods)           │
 │                 │   Buffers)      │                             │
 └─────────────────┼─────────────────┼─────────────────────────────┘
                   │                 │                             
-                  ▼                 ▼                             ▼
+                  ▼                 ▼                             
 ┌─────────────────────────────────────────────────────────────────┐
-│                     Orbit-RS Rust Layer                        │
+│                     Orbit-RS Rust Layer                         │
 ├─────────────────┬─────────────────┬─────────────────────────────┤
-│  HTTP Server    │  gRPC Server    │  JNI Bindings              │
-│  (Axum)         │  (Tonic)        │  (liborbit_client_spring)  │
+│  HTTP Server    │  gRPC Server    │  JNI Bindings               │
+│  (Axum)         │  (Tonic)        │  (liborbit_client_spring)   │
 └─────────────────┼─────────────────┼─────────────────────────────┘
                   │                 │                             │
                   └─────────────────┼─────────────────────────────┘
                                     ▼                             
                   ┌─────────────────────────────────────────────┐
                   │         ApplicationContext                  │
-                  │         (Spring-like IoC)                  │
+                  │         (Spring-like IoC)                   │
                   └─────────────────────────────────────────────┘
 ```
 

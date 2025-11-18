@@ -4,7 +4,7 @@ title: RFC: Virtual Actor Memory Management Integration
 category: rfcs
 ---
 
-# RFC: Virtual Actor Memory Management Integration
+<!-- Removed duplicate H1 heading to comply with MD025 -->
 
 **Document**: RFC_ACTOR_MEMORY_INTEGRATION  
 **Status**: Draft  
@@ -21,6 +21,7 @@ This RFC defines how Orbit-RS's advanced memory management system integrates wit
 ### 1.1 Problem Statement
 
 Traditional database systems struggle to provide consistent low latencies because:
+
 - Memory management is disconnected from application logic boundaries
 - No automatic coordination between data placement and computation placement
 - Manual memory tuning required for optimal performance
@@ -85,6 +86,7 @@ pub struct MemoryFootprint {
 ### 2.2 Profile-Based Memory Strategies
 
 **Hot Profile Actors:**
+
 ```rust
 impl ActorMemoryBehavior for RealTimeAnalyticsActor {
     fn get_memory_profile(&self) -> ActorMemoryProfile {
@@ -112,6 +114,7 @@ let pin_opts = PinOpts {
 ```
 
 **Warm Profile Actors:**
+
 ```rust
 impl ActorMemoryBehavior for SessionCacheActor {
     fn get_memory_profile(&self) -> ActorMemoryProfile {
@@ -1009,24 +1012,28 @@ impl ActorMemoryBehavior for TradingSignalActor {
 ## 10. Implementation Roadmap
 
 ### 10.1 Phase 1: Core Integration (Weeks 1-4)
+
 - [ ] Implement `ActorMemoryManager` trait and basic integration
 - [ ] Add memory profile classification to actor traits
 - [ ] Create actor lifecycle hooks for memory management
 - [ ] Basic pin/unpin on activate/deactivate
 
 ### 10.2 Phase 2: Smart Optimization (Weeks 5-8)
+
 - [ ] Implement memory hint messaging system
 - [ ] Add NUMA-aware actor placement
 - [ ] Implement cross-actor prefetching
 - [ ] Memory pressure-based priority adjustment
 
 ### 10.3 Phase 3: Distributed Coordination (Weeks 9-12)
+
 - [ ] Cross-node memory management coordination
 - [ ] Actor migration with memory pre-warming
 - [ ] Replication-aware memory management
 - [ ] Cluster-wide memory budgeting
 
 ### 10.4 Phase 4: SLA and Monitoring (Weeks 13-16)
+
 - [ ] Actor-level SLA definition and monitoring
 - [ ] Automatic remediation for SLA violations
 - [ ] Performance telemetry and dashboards

@@ -4,7 +4,7 @@ title: PostgreSQL Wire Protocol Implementation
 category: protocols
 ---
 
-# PostgreSQL Wire Protocol Implementation
+## PostgreSQL Wire Protocol Implementation
 
 ## Overview
 
@@ -15,6 +15,7 @@ This implementation provides a **complete PostgreSQL wire protocol adapter** for
 ### Completed Features
 
 #### 1. **Protocol Message Types** (`messages.rs` - 577 lines)
+
 - ✅ All frontend message types (Query, Parse, Bind, Execute, Describe, Close, Sync, Terminate)
 - ✅ All backend message types (Authentication, RowDescription, DataRow, CommandComplete, ErrorResponse, etc.)
 - ✅ Complete message encoding/decoding with proper length prefixing
@@ -24,6 +25,7 @@ This implementation provides a **complete PostgreSQL wire protocol adapter** for
 - ✅ PostgreSQL type OIDs (TEXT, INT4, JSONB, UUID, TIMESTAMP, etc.)
 
 #### 2. **Authentication** (`protocol.rs`)
+
 - ✅ Trust authentication (no password required for development)
 - ✅ Backend key data for connection identification
 - ✅ Parameter status messages (server_version, encoding, etc.)
@@ -31,6 +33,7 @@ This implementation provides a **complete PostgreSQL wire protocol adapter** for
 - 📝 MD5 and SCRAM-SHA-256 authentication stubs (not yet implemented)
 
 #### 3. **Protocol Handler** (`protocol.rs` - 391 lines)
+
 - ✅ Full connection lifecycle management
 - ✅ Message parsing and routing
 - ✅ Simple query protocol (Query message)
@@ -41,6 +44,7 @@ This implementation provides a **complete PostgreSQL wire protocol adapter** for
 - ✅ Transaction status tracking
 
 #### 4. **SQL Query Engine** (`query_engine.rs` - 448 lines)
+
 - ✅ SELECT queries with WHERE clauses
 - ✅ INSERT queries with multiple columns
 - ✅ UPDATE queries with SET clauses and WHERE conditions
@@ -50,12 +54,14 @@ This implementation provides a **complete PostgreSQL wire protocol adapter** for
 - ✅ Column name mapping (actor_id, actor_type, state)
 
 #### 5. **TCP Server** (`server.rs`)
+
 - ✅ Async TCP listener with tokio
 - ✅ Connection handling in separate tasks
 - ✅ Graceful error handling
 - ✅ Configurable bind address
 
 #### 6. **Testing** (`tests/postgres_integration_tests.rs` - 383 lines)
+
 - ✅ 9 comprehensive integration tests
 - ✅ Connection and startup handshake test
 - ✅ INSERT and SELECT operations test
@@ -70,26 +76,27 @@ This implementation provides a **complete PostgreSQL wire protocol adapter** for
 **Test Results**: ✅ **9/9 passing (100%)**
 
 #### 7. **Example** (`examples/postgres-server.rs`)
+
 - ✅ Standalone server example
 - ✅ Usage instructions for psql
 - ✅ Example SQL queries
 
 ## Architecture
 
-```
+```text
 ┌─────────────────────────────────────────────────────────┐
-│                    PostgreSQL Client                     │
+│                    PostgreSQL Client                    │
 │              (psql, pgAdmin, DataGrip, etc.)            │
 └──────────────────────┬──────────────────────────────────┘
                        │ PostgreSQL Wire Protocol (TCP)
                        │
 ┌──────────────────────▼──────────────────────────────────┐
-│                 PostgresServer (server.rs)               │
-│          Listens on TCP, accepts connections             │
+│                 PostgresServer (server.rs)              │
+│          Listens on TCP, accepts connections            │
 └──────────────────────┬──────────────────────────────────┘
                        │
 ┌──────────────────────▼──────────────────────────────────┐
-│          PostgresWireProtocol (protocol.rs)              │
+│          PostgresWireProtocol (protocol.rs)             │
 │    ┌────────────────────────────────────────┐           │
 │    │  1. Parse Frontend Messages            │           │
 │    │  2. Handle Authentication              │           │
@@ -100,7 +107,7 @@ This implementation provides a **complete PostgreSQL wire protocol adapter** for
 └─────────────────────┼───────────────────────────────────┘
                       │
 ┌─────────────────────▼───────────────────────────────────┐
-│            QueryEngine (query_engine.rs)                 │
+│            QueryEngine (query_engine.rs)                │
 │    ┌────────────────────────────────────────┐           │
 │    │  1. Parse SQL (SELECT/INSERT/UPDATE)   │           │
 │    │  2. Execute against actor storage      │           │
@@ -109,9 +116,9 @@ This implementation provides a **complete PostgreSQL wire protocol adapter** for
 └─────────────────────┼───────────────────────────────────┘
                       │
 ┌─────────────────────▼───────────────────────────────────┐
-│           In-Memory Actor Storage (HashMap)              │
-│              (TODO: Replace with OrbitClient)            │
-└──────────────────────────────────────────────────────────┘
+│           In-Memory Actor Storage (HashMap)             │
+│              (TODO: Replace with OrbitClient)           │
+└─────────────────────────────────────────────────────────┘
 ```
 
 ## Supported SQL Operations
@@ -294,6 +301,7 @@ cargo test --package orbit-protocols --test postgres_integration_tests test_inse
 ### Message Types Implemented
 
 **Frontend (Client → Server)**:
+
 - ✅ Startup (no type byte)
 - ✅ Query (Q)
 - ✅ Parse (P)
@@ -307,6 +315,7 @@ cargo test --package orbit-protocols --test postgres_integration_tests test_inse
 - ✅ Password (p)
 
 **Backend (Server → Client)**:
+
 - ✅ Authentication (R)
 - ✅ BackendKeyData (K)
 - ✅ BindComplete (2)
@@ -326,18 +335,21 @@ cargo test --package orbit-protocols --test postgres_integration_tests test_inse
 ## Future Enhancements
 
 ### 1. Actor Integration (High Priority)
+
 - [ ] Replace in-memory HashMap with OrbitClient
 - [ ] Map SQL queries to actor invocations
 - [ ] Support actor namespaces
 - [ ] Add actor lifecycle operations
 
 ### 2. Advanced Authentication
+
 - [ ] Implement MD5 password authentication
 - [ ] Implement SCRAM-SHA-256 authentication
 - [ ] Add user management
 - [ ] Support SSL/TLS connections
 
 ### 3. Enhanced SQL Support
+
 - [ ] LIKE pattern matching in WHERE clauses
 - [ ] ORDER BY clause
 - [ ] LIMIT and OFFSET
@@ -347,12 +359,14 @@ cargo test --package orbit-protocols --test postgres_integration_tests test_inse
 - [ ] Subqueries
 
 ### 4. Transaction Support
+
 - [ ] BEGIN/COMMIT/ROLLBACK commands
 - [ ] Integration with Orbit's TransactionCoordinator
 - [ ] Savepoints
 - [ ] Isolation levels
 
 ### 5. Extended Protocol Features
+
 - [ ] Binary data format support
 - [ ] COPY protocol for bulk operations
 - [ ] Cursors for large result sets
@@ -360,12 +374,14 @@ cargo test --package orbit-protocols --test postgres_integration_tests test_inse
 - [ ] Function calls
 
 ### 6. Performance
+
 - [ ] Connection pooling
 - [ ] Query result caching
 - [ ] Prepared statement caching
 - [ ] Batch operations
 
 ### 7. Monitoring & Observability
+
 - [ ] Query metrics (execution time, row counts)
 - [ ] Connection metrics
 - [ ] Slow query logging
@@ -385,6 +401,7 @@ The implementation uses a buffered approach:
 6. **Parse message** based on type byte
 
 This approach ensures:
+
 - ✅ Partial messages are handled correctly
 - ✅ No data corruption from incomplete reads
 - ✅ Proper buffer management
@@ -393,6 +410,7 @@ This approach ensures:
 ### SQL Parsing Approach
 
 Simple recursive descent parser:
+
 - **Tokenize** by whitespace
 - **Identify** SQL command (SELECT/INSERT/UPDATE/DELETE)
 - **Extract** clauses (FROM, WHERE, SET, VALUES)
@@ -404,11 +422,13 @@ This approach is sufficient for actor operations and can be extended with a full
 ### Error Handling
 
 All errors are propagated using `ProtocolError` enum:
+
 - `PostgresError` for protocol-specific errors
 - `IoError` for network errors
 - `SerializationError` for JSON parsing errors
 
 Errors are sent to client as PostgreSQL ErrorResponse messages with:
+
 - Severity (ERROR)
 - SQL State code (XX000 for internal error)
 - Message text
@@ -448,6 +468,7 @@ RUST_LOG=debug cargo run --example postgres-server
 ```
 
 This shows:
+
 - Connection events
 - Message parsing
 - Query execution
@@ -489,6 +510,7 @@ The implementation is ready for integration with OrbitClient to provide SQL acce
 | **Total** | **1,513** | **Complete implementation** |
 
 Plus:
+
 - `tests/postgres_integration_tests.rs`: 383 lines (9 tests)
 - `examples/postgres-server.rs`: 60 lines
 

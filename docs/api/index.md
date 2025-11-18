@@ -6,9 +6,7 @@ category: "api"
 permalink: /api/
 ---
 
-# Orbit-RS API Reference
-
-**Complete API documentation for Orbit-RS distributed database system**
+## Complete API documentation for Orbit-RS distributed database system
 
 ---
 
@@ -17,14 +15,16 @@ permalink: /api/
 Orbit-RS provides multiple API interfaces for different use cases:
 
 ### Client APIs
-- **[Orbit Client API](#orbit-client-api)** - Primary Rust client library
-- **[Actor System API](#actor-system-api)** - Distributed actor interactions
-- **[Transaction API](#transaction-api)** - Distributed transaction management
+
+- **[Orbit Client API](#-orbit-client-api)** - Primary Rust client library
+- **[Actor System API](#-actor-system-api)** - Distributed actor interactions
+- **[Transaction API](#-transaction-api)** - Distributed transaction management
 
 ### Protocol APIs  
-- **[PostgreSQL Wire Protocol](#postgresql-api)** - SQL database compatibility
-- **[Redis RESP Protocol](#redis-api)** - Key-value and caching operations
-- **[Model Context Protocol (MCP)](#mcp-api)** - AI agent integration
+
+- **[PostgreSQL Wire Protocol](#-postgresql-api)** - SQL database compatibility
+- **[Redis RESP Protocol](#-redis-api)** - Key-value and caching operations
+- **[Model Context Protocol (MCP)](#-mcp-api)** - AI agent integration
 
 ---
 
@@ -51,6 +51,7 @@ let actor_ref = client.actor_reference::<MyActor>(
 ```
 
 **Key Features:**
+
 - Type-safe actor references
 - Connection pooling and load balancing
 - Automatic retries and failover
@@ -72,6 +73,7 @@ trait MyActor: Addressable {
 ```
 
 **Key Features:**
+
 - Location-transparent actor addressing
 - Automatic actor lifecycle management
 - Cross-cluster message routing
@@ -95,6 +97,7 @@ coordinator.commit_transaction(&tx_id).await?;
 ```
 
 **Key Features:**
+
 - Two-phase commit (2PC) protocol
 - Saga pattern for long-running transactions
 - Automatic compensation and rollback
@@ -120,6 +123,7 @@ SELECT content FROM documents ORDER BY embedding <-> '[0.1, 0.2, 0.3]' LIMIT 5;
 ```
 
 **Supported Features:**
+
 - Full ANSI SQL compatibility
 - PostgreSQL-specific extensions
 - Vector similarity search
@@ -150,6 +154,7 @@ FT.SEARCH idx "*=>[KNN 5 @embedding $query]" PARAMS 2 query "[0.1, 0.2, 0.3]"
 ```
 
 **Supported Commands:**
+
 - 50+ Redis commands
 - Redis Stack vector operations  
 - Clustering support
@@ -173,6 +178,7 @@ Model Context Protocol for AI agent integration.
 ```
 
 **Key Features:**
+
 - Standardized AI agent communication
 - Tool calling for database operations
 - Resource management and discovery
@@ -271,21 +277,25 @@ export ORBIT_TRACE_TRANSACTIONS=true
 ## 🌐 Language Bindings
 
 ### 🦀 Rust (Native)
+
 - **Status**: ✅ Complete
 - **Crate**: [`orbit-client`](https://crates.io/crates/orbit-client)
 - **Documentation**: [docs.rs](https://docs.rs/orbit-client)
 
 ### ☕ Java/Spring Boot
+
 - **Status**: ✅ Complete  
 - **Package**: [`orbit-client-spring`](../JAVA_SPRING_INTEGRATION_SUMMARY.md)
 - **Integration**: Native JNI bindings with Spring Boot auto-configuration
 
 ### 🐍 Python (Planned)
+
 - **Status**: 🔄 In Development
 - **Package**: `orbit-client-py`
 - **Timeline**: Q2 2025
 
 ### 🟦 TypeScript/Node.js (Planned)
+
 - **Status**: 📋 Planned
 - **Package**: `@orbit-rs/client`
 - **Timeline**: Q3 2025
@@ -295,16 +305,19 @@ export ORBIT_TRACE_TRANSACTIONS=true
 ## 📈 Performance Characteristics
 
 ### Throughput
+
 - **Actor Messages**: 500K+ messages/second per core
 - **SQL Queries**: 100K+ queries/second with connection pooling
 - **Transactions**: 50K+ distributed transactions/second
 
 ### Latency  
+
 - **Local Actor Calls**: <1ms average
 - **Remote Actor Calls**: <10ms average (same datacenter)
 - **Transaction Commit**: <50ms average (2-phase commit)
 
 ### Scalability
+
 - **Cluster Size**: Up to 1000 nodes tested
 - **Concurrent Connections**: 100K+ simultaneous connections
 - **Data Scale**: Petabyte-scale storage with LSM-tree backend
@@ -314,16 +327,19 @@ export ORBIT_TRACE_TRANSACTIONS=true
 ## 🤝 Support & Community
 
 ### 📖 Documentation
+
 - **[Quick Start Guide](../quick_start.md)** - Get started in 5 minutes
 - **[Architecture Overview](../overview.md)** - System design principles
 - **[Deployment Guide](../kubernetes_deployment.md)** - Production deployment
 
 ### 💬 Community  
+
 - **[Discord](https://discord.gg/orbit-rs)** - Real-time chat and support
 - **[GitHub Discussions](https://github.com/TuringWorks/orbit-rs/discussions)** - Q&A and feature requests
 - **[Stack Overflow](https://stackoverflow.com/questions/tagged/orbit-rs)** - Technical questions
 
 ### 🐛 Issue Reporting
+
 - **[Bug Reports](https://github.com/TuringWorks/orbit-rs/issues/new?template=bug_report.md)**
 - **[Feature Requests](https://github.com/TuringWorks/orbit-rs/issues/new?template=feature_request.md)**  
 - **[Security Issues](mailto:security@turingworks.com)** - Responsible disclosure

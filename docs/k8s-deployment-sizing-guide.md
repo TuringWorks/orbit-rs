@@ -4,7 +4,7 @@ title: Kubernetes Deployment Sizing Guide
 category: documentation
 ---
 
-# Kubernetes Deployment Sizing Guide
+## Kubernetes Deployment Sizing Guide
 
 ## Table of Contents
 
@@ -60,7 +60,7 @@ Orbit-RS is designed for various workload intensities, from small development en
 
 ### Orbit-Server (Core Database Engine)
 
-#### Small Workload
+#### Orbit-Server: Small Workload
 
 ```yaml
 resources:
@@ -83,7 +83,7 @@ env:
     value: "64MB"
 ```
 
-#### Medium Workload
+#### Orbit-Server: Medium Workload
 
 ```yaml
 resources:
@@ -107,7 +107,7 @@ env:
     value: "1000"
 ```
 
-#### Large Workload
+#### Orbit-Server: Large Workload
 
 ```yaml
 resources:
@@ -163,7 +163,7 @@ env:
 
 ### Orbit-Compute (GPU/Acceleration Engine)
 
-#### Small Workload
+#### Orbit-Compute: Small Workload
 
 ```yaml
 resources:
@@ -180,7 +180,7 @@ resources:
 # amd.com/gpu: 1
 ```
 
-#### Medium Workload
+#### Orbit-Compute: Medium Workload
 
 ```yaml
 resources:
@@ -200,7 +200,7 @@ env:
     value: "4:1"  # 4 CPU cores per GPU
 ```
 
-#### Large Workload
+#### Orbit-Compute: Large Workload
 
 ```yaml
 resources:

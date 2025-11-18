@@ -4,7 +4,7 @@ title: RFC-002: Unified Multi-Modal Query Engine for Orbit-RS
 category: rfcs
 ---
 
-# RFC-002: Unified Multi-Modal Query Engine for Orbit-RS
+## RFC-002: Unified Multi-Modal Query Engine for Orbit-RS
 
 **Date**: October 9, 2025  
 **Author**: AI Assistant  
@@ -29,12 +29,14 @@ Current database systems force users to choose between different data models and
 ## Design Goals
 
 ### Primary Goals
+
 1. **Unified Query Language**: Single query syntax that operates across all data models
 2. **Performance**: Near-native performance for each data model within unified queries
 3. **Semantic Correctness**: Preserve the semantics and capabilities of each data model
 4. **Developer Experience**: Intuitive query syntax that feels natural for each data type
 
 ### Secondary Goals
+
 1. **Query Optimization**: Cross-modal query optimization to minimize data movement
 2. **Scalability**: Distributed execution across actor cluster
 3. **Extensibility**: Pluggable data model support for future extensions
@@ -44,32 +46,32 @@ Current database systems force users to choose between different data models and
 
 ### Architecture Overview
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────┐
-│                  Unified Query Interface                       │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐           │
-│  │Extended SQL │  │   OrbitQL   │  │  GraphQL+   │           │  
-│  │with modal   │  │Multi-Modal  │  │  VectorQL   │           │
-│  │extensions   │  │   Syntax    │  │   TSQuery   │           │
-│  └─────────────┘  └─────────────┘  └─────────────┘           │
+│                  Unified Query Interface                        │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐              │
+│  │Extended SQL │  │   OrbitQL   │  │  GraphQL+   │              │  
+│  │with modal   │  │Multi-Modal  │  │  VectorQL   │              │
+│  │extensions   │  │   Syntax    │  │   TSQuery   │              │
+│  └─────────────┘  └─────────────┘  └─────────────┘              │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                   Query Analysis & Planning                    │
-│  ┌─────────────────────────────────────────────────────────────┐ │
+│                   Query Analysis & Planning                     │
+│  ┌────────────────────────────────────────────────────────────┐ │
 │  │              Multi-Modal Query Planner                     │ │
 │  │ • Data model detection     • Cross-modal join planning     │ │
 │  │ • Query decomposition      • Optimization opportunities    │ │
 │  │ • Execution ordering       • Data locality analysis        │ │
-│  └─────────────────────────────────────────────────────────────┘ │
+│  └────────────────────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                  Execution Orchestration                       │
+│                  Execution Orchestration                        │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────┐ │
-│  │ Relational  │  │   Graph     │  │Time Series │  │ Vector  │ │
+│  │ Relational  │  │   Graph     │  │Time Series  │  │ Vector  │ │
 │  │  Executor   │  │  Executor   │  │  Executor   │  │Executor │ │
 │  │             │  │             │  │             │  │         │ │
 │  │ • SQL ops   │  │ • Traversal │  │ • Aggreg.   │  │ • Sim.  │ │
@@ -80,13 +82,13 @@ Current database systems force users to choose between different data models and
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                      Result Integration                        │
-│  ┌─────────────────────────────────────────────────────────────┐ │
+│                      Result Integration                         │
+│  ┌────────────────────────────────────────────────────────────┐ │
 │  │           Cross-Modal Result Merger                        │ │
-│  │ • Schema unification      • Type coercion                 │ │
-│  │ • Result streaming        • Memory management             │ │
-│  │ • Format conversion       • Error handling                │ │
-│  └─────────────────────────────────────────────────────────────┘ │
+│  │ • Schema unification      • Type coercion                  │ │
+│  │ • Result streaming        • Memory management              │ │
+│  │ • Format conversion       • Error handling                 │ │
+│  └────────────────────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -791,24 +793,28 @@ impl AdaptiveMultiModalExecutor {
 ## Implementation Plan
 
 ### Phase 1: Foundation (10-12 weeks)
+
 1. **Week 1-3**: Extended SQL parser with multi-modal syntax
 2. **Week 4-6**: Basic AST and query analysis infrastructure
 3. **Week 7-9**: Simple multi-modal query decomposition
 4. **Week 10-12**: Basic cross-modal result integration
 
 ### Phase 2: Core Execution (12-14 weeks)
+
 1. **Week 13-16**: Multi-modal query planner and optimizer
 2. **Week 17-20**: Individual modality executors integration
 3. **Week 21-24**: Cross-modal join operations
 4. **Week 25-26**: Performance optimization and tuning
 
 ### Phase 3: Advanced Features (10-12 weeks)
+
 1. **Week 27-30**: Adaptive query execution
 2. **Week 31-34**: Data locality optimization
 3. **Week 35-38**: Advanced cross-modal operations
 4. **Week 39-40**: Streaming and real-time integration
 
 ### Phase 4: Production Ready (8-10 weeks)
+
 1. **Week 41-44**: Error handling and fault tolerance
 2. **Week 45-46**: Performance benchmarking
 3. **Week 47-48**: Documentation and examples
@@ -817,6 +823,7 @@ impl AdaptiveMultiModalExecutor {
 ## Use Cases & Examples
 
 ### 1. Social Media Analytics
+
 ```sql
 -- Find influential users in a topic with engagement patterns
 SELECT 
@@ -842,6 +849,7 @@ LIMIT 50;
 ```
 
 ### 2. Supply Chain Optimization
+
 ```sql
 -- Optimize supply chain with multi-modal analysis
 SELECT 
@@ -868,6 +876,7 @@ ORDER BY estimated_cost ASC, risk_score ASC;
 ```
 
 ### 3. Smart City Infrastructure
+
 ```sql
 -- Optimize city services with multi-modal data
 SELECT 
@@ -904,12 +913,14 @@ ORDER BY optimal_allocation.priority DESC;
 ## Performance Targets
 
 ### Query Performance
+
 - **Simple multi-modal queries**: < 100ms (e.g., graph + relational)
 - **Complex multi-modal queries**: < 5s (e.g., all 4 modalities)
 - **Cross-modal joins**: 90% efficiency of single-modality joins
 - **Streaming queries**: < 10ms latency for real-time scenarios
 
 ### Scalability
+
 - **Distributed execution**: Linear scaling across 100+ nodes
 - **Data volume**: Handle petabyte-scale data across modalities
 - **Concurrent queries**: 1000+ concurrent multi-modal queries
@@ -918,12 +929,14 @@ ORDER BY optimal_allocation.priority DESC;
 ## Testing Strategy
 
 ### Correctness Testing
+
 - **Query semantics**: Verify multi-modal queries produce correct results
 - **Type consistency**: Ensure type conversions preserve data integrity
 - **Join correctness**: Test cross-modal joins against reference implementations
 - **Edge cases**: Handle schema mismatches and data inconsistencies
 
 ### Performance Testing
+
 - **Benchmark suite**: Custom multi-modal benchmarks
 - **Scalability testing**: Test with varying data sizes and cluster sizes
 - **Regression testing**: Ensure performance doesn't degrade over time
@@ -932,6 +945,7 @@ ORDER BY optimal_allocation.priority DESC;
 ## Risks and Mitigations
 
 ### Technical Risks
+
 1. **Query Planning Complexity**: Multi-modal optimization is computationally complex
    - *Mitigation*: Implement heuristic-based planning with optional cost-based optimization
 
@@ -942,6 +956,7 @@ ORDER BY optimal_allocation.priority DESC;
    - *Mitigation*: Schema versioning and backward compatibility guarantees
 
 ### Performance Risks
+
 1. **Cross-Modal Join Performance**: Joins across modalities may be slow
    - *Mitigation*: Intelligent caching and pre-computation of common join patterns
 
@@ -951,16 +966,19 @@ ORDER BY optimal_allocation.priority DESC;
 ## Future Extensions
 
 ### Advanced Query Features
+
 - **Multi-modal window functions**: Analytical functions spanning modalities
 - **Recursive multi-modal queries**: Complex graph-time series patterns
 - **Approximate query processing**: Fast approximate results for exploratory analytics
 
 ### AI Integration
+
 - **Automated query optimization**: ML-based query plan optimization
 - **Semantic query understanding**: Natural language to multi-modal SQL
 - **Intelligent caching**: AI-powered prediction of query patterns for caching
 
 ### Edge Computing
+
 - **Federated multi-modal queries**: Queries spanning edge and cloud
 - **Partial result computation**: Handle network partitions gracefully
 - **Context-aware optimization**: Adapt queries based on device capabilities
@@ -970,6 +988,7 @@ ORDER BY optimal_allocation.priority DESC;
 The Unified Multi-Modal Query Engine represents a fundamental advancement in database technology, enabling unprecedented analytical capabilities that span traditional data silos. This unique capability positions Orbit-RS as a category-defining database system that can address the complex, multi-faceted data challenges of modern applications.
 
 Key benefits:
+
 1. **Simplification**: Replace multiple specialized systems with unified platform
 2. **Performance**: Near-native performance for each data model within unified queries
 3. **Innovation**: Enable new types of analytics previously impossible

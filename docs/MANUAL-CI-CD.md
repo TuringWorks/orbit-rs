@@ -116,7 +116,7 @@ The manual CI/CD script performs the same checks as the disabled GitHub Actions:
 
 After a successful run, you'll find:
 
-```
+```text
 target/
 ├── doc/                          # Generated API documentation
 │   └── index.html               # Open this in your browser

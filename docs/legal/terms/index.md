@@ -6,9 +6,9 @@ category: "legal"
 permalink: /legal/terms/
 ---
 
-# Terms of Service
+## Terms of Service
 
-*Last Updated: October 2024*
+### Last Updated: October 2024
 
 ---
 
@@ -21,10 +21,12 @@ These Terms of Service ("Terms") govern your use of Orbit-RS software and servic
 ## 🔓 Open Source License
 
 Orbit-RS is licensed under the **Apache License 2.0**. The full license text is available at:
+
 - [GitHub Repository License](https://github.com/TuringWorks/orbit-rs/blob/main/LICENSE)
 - [Apache License 2.0 Official Text](https://www.apache.org/licenses/LICENSE-2.0)
 
 ### Key License Terms
+
 - **Permission**: Commercial use, modification, distribution, patent use
 - **Conditions**: License and copyright notice, state changes  
 - **Limitations**: Trademark use, liability, warranty
@@ -52,6 +54,7 @@ For enterprise support, consulting, or custom development services, separate com
 ## 📧 Contact
 
 For questions about these terms:
+
 - **Email**: [legal@turingworks.com](mailto:legal@turingworks.com)
 - **Address**: TuringWorks, Inc. [Address on file]
 

@@ -6,9 +6,9 @@ category: "home"
 permalink: /
 ---
 
-# Orbit-RS Documentation
+## Orbit-RS Documentation
 
-**The Next-Generation Distributed Database System**
+### The Next-Generation Distributed Database System
 
 [![Version](https://img.shields.io/badge/version-0.1.0-blue.svg)](https://github.com/TuringWorks/orbit-rs)
 [![License](https://img.shields.io/badge/license-Apache%202.0-green.svg)](LICENSE)
@@ -99,8 +99,6 @@ Project status, roadmap, and community information.
 
 Orbit-RS has reached **Phase 8** completion with a fully functional SQL engine and multi-protocol support:
 
-<div class="status-grid" markdown="1">
-
 | Component | Status | Features |
 |-----------|--------|----------|
 | **🎭 Actor System** | ✅ **Complete** | Distributed actors, proxy generation, lifecycle management |
@@ -111,8 +109,6 @@ Orbit-RS has reached **Phase 8** completion with a fully functional SQL engine a
 | **☸️ Kubernetes** | ✅ **Complete** | Operator, Helm charts, production deployment |
 | **📈 Performance** | 🟡 **Planned** | Query optimization, vectorization, parallel processing |
 | **🕸️ Graph Database** | 🟡 **Planned** | Neo4j Bolt protocol, Cypher language support |
-
-</div>
 
 **Performance Metrics:**
 
@@ -127,7 +123,7 @@ Orbit-RS has reached **Phase 8** completion with a fully functional SQL engine a
 
 ## 🌟 Key Features
 
-<div class="features-grid" markdown="1">
+<!-- features-grid START -->
 
 ### 🎭 **Distributed Actor System**
 
@@ -175,7 +171,7 @@ Powerful heterogeneous compute engine for maximum performance.
 - **Auto-Detection:** Intelligent hardware discovery and workload routing
 - **Cross-Platform:** macOS, Windows, Linux, Android, iOS support
 
-</div>
+<!-- features-grid END -->
 
 ---
 
@@ -204,8 +200,6 @@ Orbit-RS follows a structured development approach with clearly defined phases:
 
 ## 🎓 Learning Resources
 
-<div class="resources-grid" markdown="1">
-
 ### 📖 **Tutorials**
 
 - [🚀 **Getting Started Tutorial**](quick_start.md) - Your first Orbit-RS application
@@ -225,13 +219,7 @@ Orbit-RS follows a structured development approach with clearly defined phases:
 - [🔄 **Migration Guide**](MIGRATION_GUIDE.md) - Moving from other databases
 - [🔒 **Security Guide**](SECURITY.md) - Security best practices
 
-</div>
-
----
-
 ## 🤝 Community & Support
-
-<div class="community-grid" markdown="1">
 
 ### 💬 **Get Help**
 
@@ -252,10 +240,6 @@ Orbit-RS follows a structured development approach with clearly defined phases:
 - [📝 **Documentation**](README.md) - Documentation structure and guides
 - [🧪 **Testing**](contributing.md#testing) - Adding tests and benchmarks
 - [🎨 **Development**](contributing.md) - Development workflow
-
-</div>
-
----
 
 ## 📄 License & Legal
 

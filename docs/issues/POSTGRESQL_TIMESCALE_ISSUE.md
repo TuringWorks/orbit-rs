@@ -30,6 +30,7 @@ TimescaleDB is one of the most popular time-series databases, widely used in IoT
 ### Core Actor Implementation
 
 #### HypertableActor
+
 ```rust
 
 #[async_trait]
@@ -57,6 +58,7 @@ pub trait HypertableActor: ActorWithStringKey {
 ### Implementation Phases
 
 #### Phase 12.1: Core Hypertables (3-4 weeks)
+
 - [ ] **CREATE EXTENSION timescaledb** - Enable TimescaleDB compatibility mode
 - [ ] **create_hypertable()** - Convert regular tables to hypertables with partitioning
 - [ ] **drop_chunks()** - Remove old data based on time intervals
@@ -65,6 +67,7 @@ pub trait HypertableActor: ActorWithStringKey {
 - [ ] **add_dimension()** - Add space partitioning dimensions
 
 #### Phase 12.2: Time Functions & Analytics (3-4 weeks)
+
 - [ ] **time_bucket()** - Group data into time intervals with timezone support
 - [ ] **time_bucket_gapfill()** - Fill gaps in time series data
 - [ ] **locf()** - Last observation carried forward interpolation
@@ -73,6 +76,7 @@ pub trait HypertableActor: ActorWithStringKey {
 - [ ] **last()** - Last value in time order aggregation
 
 #### Phase 12.3: Continuous Aggregates (2-3 weeks)
+
 - [ ] **CREATE MATERIALIZED VIEW** - Time-based materialized views
 - [ ] **refresh_continuous_aggregate()** - Manual refresh of aggregates
 - [ ] **Automatic refresh policies** - Background refresh of continuous aggregates
@@ -80,6 +84,7 @@ pub trait HypertableActor: ActorWithStringKey {
 - [ ] **add_continuous_aggregate_policy()** - Configure automatic refresh
 
 #### Phase 12.4: Compression & Retention (2 weeks)
+
 - [ ] **add_compression_policy()** - Automatic compression based on age
 - [ ] **compress_chunk()** - Manual chunk compression
 - [ ] **decompress_chunk()** - Manual chunk decompression
@@ -137,6 +142,7 @@ pub enum RefreshPolicy {
 ## Implementation Tasks
 
 ### 1. Extension Infrastructure (Week 1-2)
+
 - [ ] Implement TimescaleDB extension loading system
 - [ ] Add hypertable metadata management
 - [ ] Create chunk partitioning algorithms
@@ -144,6 +150,7 @@ pub enum RefreshPolicy {
 - [ ] Add time-series specific query planning
 
 ### 2. Hypertable Operations (Week 3-4)
+
 - [ ] Implement create_hypertable() with all parameters
 - [ ] Add automatic chunk creation and management
 - [ ] Implement space partitioning support
@@ -151,6 +158,7 @@ pub enum RefreshPolicy {
 - [ ] Create chunk lifecycle management
 
 ### 3. Time Functions (Week 5-6)
+
 - [ ] Implement time_bucket() with timezone support
 - [ ] Add time_bucket_gapfill() with interpolation
 - [ ] Implement locf() and interpolate() functions
@@ -158,6 +166,7 @@ pub enum RefreshPolicy {
 - [ ] Create histogram() and percentile functions
 
 ### 4. Continuous Aggregates (Week 7-8)
+
 - [ ] Implement materialized view creation
 - [ ] Add automatic refresh system
 - [ ] Implement real-time aggregation
@@ -165,6 +174,7 @@ pub enum RefreshPolicy {
 - [ ] Create aggregate invalidation system
 
 ### 5. Compression & Performance (Week 9-10)
+
 - [ ] Implement column-store compression
 - [ ] Add automatic compression policies
 - [ ] Create retention policy system
@@ -172,6 +182,7 @@ pub enum RefreshPolicy {
 - [ ] Add performance optimization for time queries
 
 ### 6. Advanced Features & Integration (Week 11-12)
+
 - [ ] Add multi-node chunk distribution
 - [ ] Implement cross-node query execution
 - [ ] Add TimescaleDB-specific statistics
@@ -181,6 +192,7 @@ pub enum RefreshPolicy {
 ## SQL Function Implementation
 
 ### Hypertable Management Functions
+
 ```sql
 -- Create hypertable with partitioning
 SELECT create_hypertable('sensor_data', 'timestamp',
@@ -198,6 +210,7 @@ SELECT add_compression_policy('sensor_data', INTERVAL '7 days');
 ```
 
 ### Time-Series Analytics
+
 ```sql
 -- Time bucket aggregation
 SELECT 
@@ -223,18 +236,21 @@ GROUP BY bucket, sensor_id;
 ## Testing Requirements
 
 ### Unit Tests
+
 - [ ] Hypertable creation and management tests
 - [ ] Time function accuracy tests
 - [ ] Compression algorithm tests
 - [ ] Continuous aggregate functionality tests
 
 ### Integration Tests
+
 - [ ] PostgreSQL client compatibility tests
 - [ ] Complex query execution tests
 - [ ] Multi-node chunk distribution tests
 - [ ] Performance comparison with TimescaleDB
 
 ### Load Tests
+
 - [ ] High-volume data ingestion (100K+ inserts/second)
 - [ ] Complex analytical queries
 - [ ] Long-term retention scenarios
@@ -251,12 +267,14 @@ GROUP BY bucket, sensor_id;
 ## Compatibility Requirements
 
 ### TimescaleDB API Compatibility
+
 - [ ] 100% SQL function compatibility
 - [ ] Compatible with TimescaleDB client applications
 - [ ] Standard PostgreSQL protocol compliance
 - [ ] Compatible with existing ORMs (Django, Rails, etc.)
 
 ### Migration Support
+
 - [ ] pg_dump/pg_restore compatibility
 - [ ] Schema migration tools
 - [ ] Data validation utilities

@@ -4,7 +4,7 @@ title: PostgreSQL TimescaleDB Compatibility
 category: protocols
 ---
 
-# PostgreSQL TimescaleDB Compatibility
+## PostgreSQL TimescaleDB Compatibility
 
 ## Overview
 
@@ -15,12 +15,14 @@ TimescaleDB is a PostgreSQL extension that transforms PostgreSQL into a scalable
 ### 🎯 **Phase 12: TimescaleDB Foundation**
 
 #### Core Time Series Tables
+
 - **Hypertables**: Distributed time-partitioned tables
 - **Chunks**: Automatic time-based table partitioning
 - **Time partitioning**: Automatic data partitioning by time intervals
 - **Space partitioning**: Additional partitioning by space dimensions
 
 #### Basic Functions
+
 - **CREATE EXTENSION timescaledb**: Enable TimescaleDB compatibility
 - **create_hypertable()**: Convert regular tables to hypertables
 - **drop_chunks()**: Remove old data based on time intervals
@@ -30,12 +32,14 @@ TimescaleDB is a PostgreSQL extension that transforms PostgreSQL into a scalable
 ### 🚀 **Phase 13: Advanced TimescaleDB Features**
 
 #### Continuous Aggregates
+
 - **CREATE MATERIALIZED VIEW**: Time-based materialized views
 - **refresh_continuous_aggregate()**: Manual refresh of aggregates
 - **Automatic refresh**: Background refresh of continuous aggregates
 - **Real-time aggregation**: Combine historical and real-time data
 
 #### Advanced Analytics
+
 - **time_bucket()**: Group data into time intervals
 - **time_bucket_gapfill()**: Fill gaps in time series data
 - **locf()**: Last observation carried forward
@@ -45,12 +49,14 @@ TimescaleDB is a PostgreSQL extension that transforms PostgreSQL into a scalable
 ### 📊 **Phase 14: Enterprise TimescaleDB Features**
 
 #### Data Retention and Compression
+
 - **Data retention policies**: Automatic data expiration
 - **Native compression**: Column-store compression for historical data
 - **Compression policies**: Automatic compression based on age
 - **Decompression**: Transparent decompression for queries
 
 #### Multi-Node and Clustering
+
 - **Distributed hypertables**: Scale across multiple Orbit nodes
 - **Data nodes**: Distribute chunks across cluster
 - **Query planning**: Distributed query execution
@@ -61,6 +67,7 @@ TimescaleDB is a PostgreSQL extension that transforms PostgreSQL into a scalable
 ### SQL Extensions
 
 #### Hypertable Management
+
 ```sql
 -- Create extension
 CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;
@@ -79,6 +86,7 @@ SELECT add_compression_policy('sensor_data', INTERVAL '7 days');
 ```
 
 #### Time-Series Queries
+
 ```sql
 -- Time bucket aggregation
 SELECT 
@@ -222,6 +230,7 @@ pub enum AggregateFunction {
 ## TimescaleDB Functions Reference
 
 ### Hypertable Functions
+
 - **create_hypertable(table_name, time_column, ...)** - Convert table to hypertable
 - **drop_chunks(hypertable, older_than, ...)** - Remove old chunks
 - **show_chunks(hypertable, ...)** - Display chunk information
@@ -229,18 +238,21 @@ pub enum AggregateFunction {
 - **set_chunk_time_interval(hypertable, interval)** - Change chunk interval
 
 ### Time Functions
+
 - **time_bucket(bucket_width, ts, ...)** - Group timestamps into buckets
 - **time_bucket_gapfill(bucket_width, ts, ...)** - Fill gaps in time buckets
 - **locf(value)** - Last observation carried forward
 - **interpolate(value)** - Linear interpolation
 
 ### Analytics Functions
+
 - **first(value, time)** - First value in time order
 - **last(value, time)** - Last value in time order
 - **histogram(value, min, max, nbuckets)** - Create histogram
 - **percentile_agg(percentile)** - Percentile aggregation
 
 ### Compression Functions
+
 - **add_compression_policy(hypertable, compress_after)** - Add compression policy
 - **remove_compression_policy(hypertable)** - Remove compression policy
 - **compress_chunk(chunk)** - Manually compress chunk
@@ -408,18 +420,21 @@ ORDER BY bucket DESC, metric_name;
 ## Integration with Orbit Features
 
 ### Distributed Architecture
+
 - **Actor-based hypertables**: Each hypertable managed by dedicated actors
 - **Chunk distribution**: Intelligent chunk placement across cluster nodes
 - **Query coordination**: Distributed query execution and result aggregation
 - **Fault tolerance**: Automatic failover and chunk replication
 
 ### Performance Optimization
+
 - **Vectorized execution**: SIMD-optimized time-series functions
 - **Parallel chunk processing**: Multi-threaded chunk operations
 - **Smart caching**: Cache frequently accessed chunks and aggregates
 - **Query optimization**: Advanced query planning for time-series workloads
 
 ### Advanced Features
+
 - **Real-time analytics**: Stream processing integration
 - **Machine learning**: Built-in time-series ML functions
 - **Alerting**: Pattern detection and anomaly alerting
@@ -428,12 +443,14 @@ ORDER BY bucket DESC, metric_name;
 ## Monitoring and Observability
 
 ### TimescaleDB-specific Metrics
+
 - Hypertable and chunk statistics
 - Compression ratios and storage efficiency
 - Continuous aggregate refresh performance
 - Query performance across time ranges
 
 ### Grafana Integration
+
 - TimescaleDB data source compatibility
 - Pre-built dashboards for monitoring hypertables
 - Custom time-series visualization components
@@ -452,18 +469,21 @@ ORDER BY bucket DESC, metric_name;
 ## Compatibility and Migration
 
 ### TimescaleDB Compatibility
+
 - **SQL compatibility**: 100% compatibility with TimescaleDB SQL extensions
 - **Function compatibility**: All TimescaleDB functions supported
 - **Client compatibility**: Works with existing PostgreSQL clients and ORMs
 - **Schema compatibility**: Compatible with TimescaleDB table structures
 
 ### Migration Tools
+
 - **pg_dump/pg_restore**: Standard PostgreSQL migration tools
 - **Parallel migration**: Multi-threaded data migration from TimescaleDB
 - **Schema conversion**: Automated conversion of TimescaleDB schemas
 - **Validation tools**: Verify data integrity after migration
 
 ### Integration Ecosystem
+
 - **Grafana**: Native TimescaleDB data source support
 - **Prometheus**: TimescaleDB-compatible metrics ingestion
 - **Apache Kafka**: Stream processing integration

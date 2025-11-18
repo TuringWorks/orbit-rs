@@ -4,7 +4,7 @@ title: RFC-001: Columnar Analytics Engine for Orbit-RS
 category: rfcs
 ---
 
-# RFC-001: Columnar Analytics Engine for Orbit-RS
+## RFC-001: Columnar Analytics Engine for Orbit-RS
 
 **Date**: October 9, 2025  
 **Author**: AI Assistant  
@@ -29,12 +29,14 @@ Current Orbit-RS architecture uses row-based storage which limits analytical que
 ## Design Goals
 
 ### Primary Goals
+
 1. **Performance**: Match ClickHouse analytical performance (sub-second complex queries on billions of rows)
 2. **Compatibility**: Seamless integration with existing actor system and multi-modal data
 3. **Resource Efficiency**: Memory-efficient columnar processing suitable for edge deployment
 4. **Developer Experience**: Transparent columnar optimization without breaking existing APIs
 
 ### Secondary Goals  
+
 1. **Compression**: Achieve 5-20x compression ratios with specialized columnar algorithms
 2. **Vectorization**: SIMD-accelerated processing for numerical operations
 3. **Scalability**: Distributed columnar processing across actor cluster
@@ -44,41 +46,41 @@ Current Orbit-RS architecture uses row-based storage which limits analytical que
 
 ### Architecture Overview
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────┐
-│                    Query Planning Layer                        │
+│                    Query Planning Layer                         │
 │  ┌─────────────────┐    ┌─────────────────────────────────────┐ │
-│  │ OrbitQL Parser  │    │     Query Optimizer                │ │
-│  │                 │───▶│ • Cost-based optimization          │ │
-│  │ • SQL           │    │ • Columnar pushdown                │ │  
-│  │ • Multi-modal   │    │ • Vectorization planning          │ │
+│  │ OrbitQL Parser  │    │     Query Optimizer                 │ │
+│  │                 │───▶│ • Cost-based optimization           │ │
+│  │ • SQL           │    │ • Columnar pushdown                 │ │  
+│  │ • Multi-modal   │    │ • Vectorization planning            │ │
 │  └─────────────────┘    └─────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────────┘
                                      │
                                      ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                   Execution Engine                             │
+│                   Execution Engine                              │
 │  ┌─────────────────┐    ┌─────────────────────────────────────┐ │
-│  │ Vectorized      │    │      Actor Integration             │ │
+│  │ Vectorized      │    │      Actor Integration              │ │
 │  │ Operators       │    │                                     │ │
-│  │                 │    │ • Actor-aware partitioning         │ │
-│  │ • SIMD Scan     │───▶│ • Distributed execution            │ │
-│  │ • Vectorized    │    │ • Load balancing                   │ │
-│  │   Aggregation   │    │ • Fault tolerance                  │ │
+│  │                 │    │ • Actor-aware partitioning          │ │
+│  │ • SIMD Scan     │───▶│ • Distributed execution             │ │
+│  │ • Vectorized    │    │ • Load balancing                    │ │
+│  │   Aggregation   │    │ • Fault tolerance                   │ │
 │  │ • Join          │    │                                     │ │
 │  └─────────────────┘    └─────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────────┘
                                      │
                                      ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                   Storage Layer                                │
+│                   Storage Layer                                 │
 │  ┌─────────────────┐    ┌─────────────────────────────────────┐ │
-│  │ Columnar Store  │    │      Hybrid Row/Column             │ │
+│  │ Columnar Store  │    │      Hybrid Row/Column              │ │
 │  │                 │    │                                     │ │
-│  │ • Arrow format  │───▶│ • Hot data (row-based)             │ │
-│  │ • Compression   │    │ • Cold data (columnar)             │ │
-│  │ • Partitioning  │    │ • Automatic tiering                │ │
-│  │ • Indexing      │    │ • Actor lease integration          │ │
+│  │ • Arrow format  │───▶│ • Hot data (row-based)              │ │
+│  │ • Compression   │    │ • Cold data (columnar)              │ │
+│  │ • Partitioning  │    │ • Automatic tiering                 │ │
+│  │ • Indexing      │    │ • Actor lease integration           │ │
 │  └─────────────────┘    └─────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -573,6 +575,7 @@ impl MultiModalQueryEngine {
 ## Implementation Plan
 
 ### Phase 1: Foundation (8-10 weeks)
+
 1. **Week 1-2**: Columnar storage format design and basic column reading
 2. **Week 3-4**: Compression algorithms implementation (Delta, RLE, Dictionary)
 3. **Week 5-6**: SIMD-accelerated scan operators
@@ -580,18 +583,21 @@ impl MultiModalQueryEngine {
 5. **Week 9-10**: Actor system integration and testing
 
 ### Phase 2: Advanced Features (10-12 weeks)  
+
 1. **Week 11-13**: Advanced compression (Gorilla, DoubleDelta, LZ4/Zstd)
 2. **Week 14-16**: Vectorized joins and complex operators
 3. **Week 17-19**: Query optimization and cost-based planning
 4. **Week 20-22**: Hybrid row/column storage and automatic tiering
 
 ### Phase 3: Distributed Processing (8-10 weeks)
+
 1. **Week 23-25**: Distributed query planning and execution
 2. **Week 26-28**: Load balancing and fault tolerance
 3. **Week 29-30**: Performance optimization and tuning
 4. **Week 31-32**: Multi-modal query integration
 
 ### Phase 4: Production Ready (6-8 weeks)
+
 1. **Week 33-35**: Enterprise features (security, governance, monitoring)
 2. **Week 36-37**: Benchmarking and performance validation
 3. **Week 38-40**: Documentation, examples, and ecosystem integration
@@ -599,18 +605,21 @@ impl MultiModalQueryEngine {
 ## Performance Targets
 
 ### Analytical Query Performance
+
 - **TPC-H Q1 (1GB)**: < 100ms (target: match DuckDB performance)  
 - **TPC-H Q1 (100GB)**: < 10s (target: match ClickHouse performance)
 - **Complex aggregations**: 10-100x improvement over current row-based queries
 - **Memory usage**: < 2x data size for typical analytical workloads
 
 ### Compression Ratios
+
 - **Integer columns**: 5-10x compression with Delta/RLE
 - **Float columns**: 10-20x compression with Gorilla  
 - **String columns**: 3-8x compression with Dictionary encoding
 - **Time series**: 20-50x compression with specialized algorithms
 
 ### Resource Usage
+
 - **Memory overhead**: < 20% for columnar metadata and statistics
 - **CPU utilization**: 80%+ utilization with SIMD vectorization
 - **Storage overhead**: < 10% for indexes and metadata
@@ -618,24 +627,28 @@ impl MultiModalQueryEngine {
 ## Testing Strategy
 
 ### Unit Tests
+
 - Compression/decompression correctness for all algorithms
 - SIMD operations accuracy and performance  
 - Column statistics computation
 - Memory management and leak detection
 
 ### Integration Tests  
+
 - Actor system integration with columnar storage
 - Multi-modal query execution
 - Distributed query processing
 - Data tiering and hybrid storage
 
 ### Performance Tests
+
 - TPC-H benchmark suite
 - Custom analytical workload benchmarks  
 - Memory usage and leak testing
 - Scalability testing with varying cluster sizes
 
 ### Compatibility Tests
+
 - Existing OrbitQL query compatibility
 - Actor lifecycle integration
 - Protocol adapter integration (Redis, PostgreSQL)
@@ -643,6 +656,7 @@ impl MultiModalQueryEngine {
 ## Risks and Mitigations
 
 ### Technical Risks
+
 1. **SIMD Portability**: Different CPU architectures require different SIMD implementations
    - *Mitigation*: Use portable SIMD libraries (like `packed_simd`) with fallbacks
 
@@ -653,6 +667,7 @@ impl MultiModalQueryEngine {
    - *Mitigation*: Start with heuristic optimization, evolve to cost-based
 
 ### Performance Risks  
+
 1. **Actor Overhead**: Actor boundaries may limit columnar query performance
    - *Mitigation*: Implement actor-aware partitioning and batch processing
 
@@ -660,6 +675,7 @@ impl MultiModalQueryEngine {
    - *Mitigation*: Asynchronous conversion and intelligent tiering policies
 
 ### Integration Risks
+
 1. **Existing API Compatibility**: Changes might break existing applications  
    - *Mitigation*: Maintain backward compatibility with automatic format detection
 
@@ -669,16 +685,19 @@ impl MultiModalQueryEngine {
 ## Future Extensions
 
 ### Advanced Analytics
+
 - **Machine Learning Integration**: Native ML training on columnar data
 - **Window Functions**: Advanced analytical SQL functions
 - **Approximate Queries**: Probabilistic data structures for fast approximate results
 
 ### Specialized Encodings
+
 - **Geospatial Compression**: Specialized compression for geographic data
 - **Graph Compression**: Compressed graph adjacency matrices  
 - **Time Series Forecasting**: Predictive compression based on time series patterns
 
 ### Hardware Acceleration
+
 - **GPU Processing**: CUDA/OpenCL for massive parallel processing
 - **Vector Extensions**: Support for ARM SVE and newer x86 vector instructions
 - **Storage Acceleration**: NVMe and persistent memory optimizations
@@ -688,6 +707,7 @@ impl MultiModalQueryEngine {
 The Columnar Analytics Engine will position Orbit-RS as a credible competitor to ClickHouse and DuckDB while maintaining its unique multi-modal and actor-based advantages. This represents a significant architectural evolution that could establish Orbit-RS as a leader in the next generation of analytical databases.
 
 The implementation focuses on:
+
 1. **Performance**: Matching best-in-class analytical query performance
 2. **Integration**: Seamless integration with existing actor system
 3. **Differentiation**: Unique multi-modal and distributed capabilities  

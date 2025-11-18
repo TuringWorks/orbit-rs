@@ -3,16 +3,19 @@
 ## Quick Reference
 
 ### Emergency Scripts
+
 - `/usr/local/bin/orbit-emergency-response.sh` - First response
 - `/usr/local/bin/orbit-data-recovery.sh` - Data recovery
 - `/usr/local/bin/orbit-disk-cleanup.sh` - Disk space recovery
 
 ### Health Endpoints
+
 - `GET /health` - Basic health check
 - `GET /metrics` - Prometheus metrics
 - `GET /ready` - Readiness probe
 
 ### Key Commands
+
 ```bash
 
 # Check service status
@@ -34,6 +37,7 @@ orbit-cli replay-wal --data-dir=/var/lib/orbit
 ## Common Scenarios
 
 ### 1. Service Won't Start
+
 ```bash
 
 # Check logs for errors
@@ -50,6 +54,7 @@ systemctl start orbit-rs --config=/etc/orbit/safe-mode.json
 ```
 
 ### 2. High Latency
+
 ```bash
 
 # Check current performance
@@ -66,6 +71,7 @@ orbit-cli reduce-cache --block-cache-mb=128
 ```
 
 ### 3. Data Corruption
+
 ```bash
 
 # Stop service
@@ -84,6 +90,7 @@ orbit-cli validate --data-dir=/var/lib/orbit
 ## Configuration Switching
 
 ### Environment Variables
+
 ```bash
 
 # Switch to COW B+ Tree
@@ -100,6 +107,7 @@ systemctl restart orbit-rs
 ```
 
 ### Performance Tuning
+
 ```bash
 
 # Low memory configuration
@@ -128,12 +136,14 @@ EOF
 ## Monitoring Alerts
 
 ### Critical (P0)
+
 - Service down > 30s
 - Disk usage > 95%
 - Memory usage > 95%
 - Error rate > 1%
 
 ### Warning (P1)
+
 - Write latency > 100ms
 - Read latency > 50ms
 - Disk usage > 85%
@@ -142,6 +152,7 @@ EOF
 ## Backup & Recovery
 
 ### Daily Backup
+
 ```bash
 
 # Automated via cron: 0 2 * * *
@@ -152,6 +163,7 @@ orbit-cli backup --output=/backup/manual-$(date +%s).tar.gz
 ```
 
 ### Recovery Process
+
 1. Stop service: `systemctl stop orbit-rs`
 2. Backup corrupt data: `cp -r /var/lib/orbit /backup/corrupt/`
 3. Run recovery: `/usr/local/bin/orbit-data-recovery.sh`
@@ -167,6 +179,7 @@ orbit-cli backup --output=/backup/manual-$(date +%s).tar.gz
 | RocksDB | 53 | 19 | 1024 |
 
 ## Emergency Contacts
+
 - **Primary**: DevOps (+1-555-0100)
 - **Secondary**: SRE (+1-555-0101)  
 - **Escalation**: Eng Manager (+1-555-0102)

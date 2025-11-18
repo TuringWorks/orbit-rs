@@ -4,7 +4,7 @@ title: Redis Time Series Compatibility
 category: protocols
 ---
 
-# Redis Time Series Compatibility
+## Redis Time Series Compatibility
 
 ## Overview
 
@@ -15,12 +15,14 @@ Redis Time Series is a Redis module that adds time-series data structure support
 ### 🎯 **Phase 12: Time Series Foundation**
 
 #### Core Time Series Actor
+
 - **TimeSeriesActor**: Distributed time-series data management
 - **Time-based partitioning**: Automatic data partitioning by time windows
 - **Compression**: Built-in data compression for storage efficiency
 - **Retention policies**: Automatic data expiration and cleanup
 
 #### Basic Commands
+
 - **TS.CREATE**: Create time series with metadata and retention policy
 - **TS.ADD**: Add timestamp-value pairs to time series
 - **TS.GET**: Get the latest or specific timestamp value
@@ -30,6 +32,7 @@ Redis Time Series is a Redis module that adds time-series data structure support
 ### 🚀 **Phase 13: Advanced Time Series Operations**
 
 #### Aggregation Commands
+
 - **TS.CREATERULE**: Create aggregation rules between time series
 - **TS.DELETERULE**: Delete aggregation rules
 - **TS.MRANGE**: Multi-series range queries with filters
@@ -37,6 +40,7 @@ Redis Time Series is a Redis module that adds time-series data structure support
 - **TS.MGET**: Get latest values from multiple time series
 
 #### Statistical Functions
+
 - **Built-in aggregators**: AVG, SUM, MIN, MAX, COUNT, STDDEV, VAR
 - **Time-window aggregations**: Configurable time windows (1s, 1m, 1h, 1d)
 - **Downsampling**: Automatic data reduction for long-term storage
@@ -44,12 +48,14 @@ Redis Time Series is a Redis module that adds time-series data structure support
 ### 📊 **Phase 14: Enterprise Time Series Features**
 
 #### Advanced Analytics
+
 - **TS.QUERYINDEX**: Query time series by labels and filters
 - **TS.INFO**: Get comprehensive time series metadata
 - **Labeling system**: Multi-dimensional time series organization
 - **Compaction**: Automatic data compaction with configurable policies
 
 #### Performance Optimizations
+
 - **Chunk-based storage**: Efficient memory and disk usage
 - **Indexing**: Fast time-based and label-based queries
 - **Caching**: Intelligent caching for frequently accessed data
@@ -134,26 +140,31 @@ pub enum DuplicatePolicy {
 ## Command Reference
 
 ### TS.CREATE
+
 ```redis
 TS.CREATE key [RETENTION retentionTime] [UNCOMPRESSED] [CHUNK_SIZE size] [DUPLICATE_POLICY policy] [LABELS label value...]
 ```
 
 ### TS.ADD
+
 ```redis
 TS.ADD key timestamp value [RETENTION retentionTime] [UNCOMPRESSED] [CHUNK_SIZE size] [ON_DUPLICATE policy] [LABELS label value...]
 ```
 
 ### TS.RANGE
+
 ```redis
 TS.RANGE key fromTimestamp toTimestamp [LATEST] [FILTER_BY_TS ts...] [FILTER_BY_VALUE min max] [COUNT count] [AGGREGATION aggregator bucketDuration [alignTimestamp]] [SELECTED_LABELS label...]
 ```
 
 ### TS.MRANGE
+
 ```redis
 TS.MRANGE fromTimestamp toTimestamp [LATEST] [FILTER_BY_TS ts...] [FILTER_BY_VALUE min max] [WITHLABELS | SELECTED_LABELS label...] [COUNT count] [AGGREGATION aggregator bucketDuration [alignTimestamp]] FILTER filter...
 ```
 
 ### TS.CREATERULE
+
 ```redis
 TS.CREATERULE sourceKey destKey AGGREGATION aggregator bucketDuration [alignTimestamp]
 ```
@@ -261,17 +272,20 @@ ingest_sensor_data('device_002', 'pressure', 1013.25)
 ## Integration with Orbit Features
 
 ### Distributed Time Series
+
 - **Actor partitioning**: Time series data distributed across cluster nodes
 - **Consistent hashing**: Deterministic placement of time series actors
 - **Replication**: Configurable replication for high availability
 - **Failover**: Automatic failover for time series actors
 
 ### Transaction Support
+
 - **ACID compliance**: Ensure data consistency across time series operations
 - **Bulk operations**: Efficient batch insertion of time series data
 - **Cross-series transactions**: Atomic operations across multiple time series
 
 ### Performance Optimization
+
 - **Vectorized operations**: SIMD-optimized aggregation functions
 - **Parallel queries**: Multi-threaded range and aggregation queries
 - **Caching**: Intelligent caching of frequently accessed time windows
@@ -280,12 +294,14 @@ ingest_sensor_data('device_002', 'pressure', 1013.25)
 ## Monitoring and Observability
 
 ### Metrics
+
 - Time series operation latency and throughput
 - Storage efficiency and compression ratios
 - Query performance across different time ranges
 - Actor distribution and load balancing
 
 ### Grafana Integration
+
 - Pre-built dashboards for time series monitoring
 - Custom query builder for Orbit time series data
 - Real-time alerting based on time series patterns
@@ -303,13 +319,15 @@ ingest_sensor_data('device_002', 'pressure', 1013.25)
 
 ## Compatibility
 
-### Redis Time Series Compatibility
+### Redis Time Series Protocol Compatibility
+
 - **API compatibility**: 100% command compatibility with RedisTimeSeries
 - **Data format**: Compatible time series data structures
 - **Client support**: Works with existing Redis time series clients
 - **Migration**: Tools for migrating from RedisTimeSeries to Orbit-RS
 
 ### Integration Points
+
 - **Grafana**: Native data source plugin
 - **Prometheus**: Export time series data to Prometheus
 - **InfluxDB**: Migration and compatibility tools

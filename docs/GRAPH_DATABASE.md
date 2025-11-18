@@ -4,7 +4,7 @@ title: Orbit-RS Graph Database
 category: documentation
 ---
 
-# Orbit-RS Graph Database
+## Orbit-RS Graph Database
 
 The Orbit-RS graph database provides a comprehensive, distributed graph data management system with support for multiple query languages and protocol adapters. This documentation covers all aspects of the graph database functionality.
 
@@ -35,7 +35,7 @@ Orbit-RS implements a full-featured graph database with:
 
 The graph database is built on several key components:
 
-```
+```text
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
 │   Query Layer   │    │  Protocol Layer │    │   ML Pipeline   │
 │  ┌───────────┐  │    │  ┌───────────┐  │    │  ┌───────────┐  │
@@ -50,8 +50,8 @@ The graph database is built on several key components:
 │                    Graph Engine                             │
 │  ┌─────────────────────────────────────────────────────┐    │
 │  │              Query Execution Engine                 │    │
-│  │  • Pattern Matching  • Traversal Optimization      │    │
-│  │  • Join Processing   • Memory Management           │    │
+│  │  • Pattern Matching  • Traversal Optimization       │    │
+│  │  • Join Processing   • Memory Management            │    │
 │  └─────────────────────────────────────────────────────┘    │
 └─────────────────────────────────────────────────────────────┘
          │

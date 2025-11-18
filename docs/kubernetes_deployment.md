@@ -4,7 +4,7 @@ title: Orbit-RS Kubernetes Deployment Guide
 category: documentation
 ---
 
-# Orbit-RS Kubernetes Deployment Guide
+## Orbit-RS Kubernetes Deployment Guide
 
 This guide provides comprehensive instructions for deploying Orbit-RS on Kubernetes in production environments.
 
@@ -100,24 +100,24 @@ helm install orbit-rs helm/orbit-rs \
 
 ## Architecture Overview
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────┐
-│                         Internet                              │
+│                         Internet                            │
 └─────────────────────┬───────────────────────────────────────┘
                       │
 ┌─────────────────────▼───────────────────────────────────────┐
-│                 Load Balancer                                │
-│            (Kubernetes Service)                              │
+│                 Load Balancer                               │
+│            (Kubernetes Service)                             │
 └─────────────────────┬───────────────────────────────────────┘
                       │
 ┌─────────────────────▼───────────────────────────────────────┐
-│                   Ingress Controller                         │
+│                   Ingress Controller                        │
 │              (nginx/traefik/istio)                          │
 └─────────────────────┬───────────────────────────────────────┘
                       │
         ┌─────────────┼─────────────┐
         │             │             │
-┌───────▼──────┬──────▼──────┬──────▼──────┐
+┌───────▼──────┬──────▼──────┬──────▼────--──┐
 │ orbit-server │ orbit-server │ orbit-server │
 │    Pod 1     │    Pod 2     │    Pod 3     │
 │              │              │              │
@@ -136,10 +136,10 @@ helm install orbit-rs helm/orbit-rs \
 └─────────────┴──────────────┴──────────────┘
 
 ┌─────────────────────────────────────────────────────────────┐
-│                    Monitoring Stack                          │
-│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐           │
-│  │ Prometheus  │ │   Grafana   │ │  AlertMgr   │           │
-│  └─────────────┘ └─────────────┘ └─────────────┘           │
+│                    Monitoring Stack                         │
+│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐            │
+│  │ Prometheus  │ │   Grafana   │ │  AlertMgr   │            │
+│  └─────────────┘ └─────────────┘ └─────────────┘            │
 └─────────────────────────────────────────────────────────────┘
 ```
 
