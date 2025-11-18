@@ -15,6 +15,7 @@ struct PingMessage {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)]
 struct PongMessage {
     count: u64,
 }
