@@ -167,7 +167,7 @@ impl IcebergColdStore {
     }
 
     /// Get table schema
-    pub fn schema(&self) -> ProtocolResult<IcebergSchema> {
+    pub fn schema(&self) -> ProtocolResult<Arc<IcebergSchema>> {
         Ok(self.table.metadata().current_schema().clone())
     }
 
@@ -293,6 +293,34 @@ pub fn column_batch_to_arrow(batch: &ColumnBatch) -> ProtocolResult<RecordBatch>
         let null_bitmap = &batch.null_bitmaps[col_idx];
 
         match column {
+            Column::Bool(values) => {
+                let field = Field::new(column_name, DataType::Boolean, true);
+                fields.push(field);
+
+                let mut builder = arrow::array::BooleanBuilder::with_capacity(values.len());
+                for (i, &value) in values.iter().enumerate() {
+                    if null_bitmap.is_null(i) {
+                        builder.append_null();
+                    } else {
+                        builder.append_value(value);
+                    }
+                }
+                arrays.push(Arc::new(builder.finish()));
+            }
+            Column::Int16(values) => {
+                let field = Field::new(column_name, DataType::Int16, true);
+                fields.push(field);
+
+                let mut builder = arrow::array::Int16Builder::with_capacity(values.len());
+                for (i, &value) in values.iter().enumerate() {
+                    if null_bitmap.is_null(i) {
+                        builder.append_null();
+                    } else {
+                        builder.append_value(value);
+                    }
+                }
+                arrays.push(Arc::new(builder.finish()));
+            }
             Column::Int32(values) => {
                 let field = Field::new(column_name, DataType::Int32, true);
                 fields.push(field);
@@ -350,12 +378,15 @@ pub fn column_batch_to_arrow(batch: &ColumnBatch) -> ProtocolResult<RecordBatch>
                 }
                 arrays.push(Arc::new(builder.finish()));
             }
-            Column::Bool(values) => {
-                let field = Field::new(column_name, DataType::Boolean, true);
+            Column::String(values) => {
+                let field = Field::new(column_name, DataType::Utf8, true);
                 fields.push(field);
 
-                let mut builder = arrow::array::BooleanBuilder::with_capacity(values.len());
-                for (i, &value) in values.iter().enumerate() {
+                let mut builder = arrow::array::StringBuilder::with_capacity(
+                    values.len(),
+                    values.iter().map(|s| s.len()).sum(),
+                );
+                for (i, value) in values.iter().enumerate() {
                     if null_bitmap.is_null(i) {
                         builder.append_null();
                     } else {
@@ -364,13 +395,13 @@ pub fn column_batch_to_arrow(batch: &ColumnBatch) -> ProtocolResult<RecordBatch>
                 }
                 arrays.push(Arc::new(builder.finish()));
             }
-            Column::String(values) => {
-                let field = Field::new(column_name, DataType::Utf8, true);
+            Column::Binary(values) => {
+                let field = Field::new(column_name, DataType::Binary, true);
                 fields.push(field);
 
-                let mut builder = arrow::array::StringBuilder::with_capacity(
+                let mut builder = arrow::array::BinaryBuilder::with_capacity(
                     values.len(),
-                    values.iter().map(|s| s.len()).sum(),
+                    values.iter().map(|v| v.len()).sum(),
                 );
                 for (i, value) in values.iter().enumerate() {
                     if null_bitmap.is_null(i) {
