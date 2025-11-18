@@ -57,7 +57,7 @@ jobs:
       deploy-to-do: ${{ steps.should-deploy.outputs.should-deploy }}
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
 
     - name: Determine deployment environment
       id: environment
@@ -177,7 +177,7 @@ jobs:
       gpu-droplet-ids: ${{ steps.gpu-droplets.outputs.gpu-droplet-ids }}
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
 
     - name: Install doctl (Digital Ocean CLI)
       uses: digitalocean/action-doctl@v2
@@ -486,7 +486,7 @@ jobs:
     environment: ${{ needs.validate-deployment.outputs.deployment-environment }}
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
 
     - name: Install doctl
       uses: digitalocean/action-doctl@v2
