@@ -4,30 +4,36 @@ title: RESP Protocol Actor Integration - COMPLETE
 category: protocols
 ---
 
-# RESP Protocol Actor Integration - COMPLETE
+## RESP Protocol Actor Integration - COMPLETE
 
 ## Overview
+
 Successfully completed the integration of Redis-compatible RESP protocol commands with the Orbit actor system. The implementation allows Redis clients to interact with Orbit actors through familiar Redis commands.
 
 ## What Was Completed
 
 ### 1. Actor Integration for Key Redis Commands
 
-#### Key-Value Commands:
+#### Key-Value Commands
+
 - **GET**: Retrieves values from `KeyValueActor` instances
 - **SET**: Sets values on `KeyValueActor` instances (with expiration support)
 
-#### Hash Commands:
+#### Hash Commands
+
 - **HGET**: Retrieves hash field values from `HashActor` instances  
 - **HSET**: Sets hash field values on `HashActor` instances
 
-#### List Commands:
+#### List Commands
+
 - **LPUSH**: Pushes values to the left of `ListActor` instances
 
-#### Pub/Sub Commands:
+#### Pub/Sub Commands
+
 - **PUBLISH**: Publishes messages through `PubSubActor` instances
 
 ### 2. Actor Method Invocation Pattern
+
 All commands now use the OrbitClient's `actor_reference()` method to get typed actor references, followed by `invoke()` calls to execute actor methods:
 
 ```rust
@@ -40,11 +46,13 @@ let result = actor_ref.invoke("method_name", vec![args...]).await?;
 ```
 
 ### 3. Error Handling
+
 - Proper error handling with conversion to RESP protocol errors
 - Informative error messages for debugging actor integration issues
 - Graceful fallbacks for unsupported operations
 
 ### 4. Memory Management
+
 - Fixed borrowing issues by cloning values before `.into()` conversions
 - Proper lifetime management for strings and collections
 - No memory leaks or dangling references
@@ -56,13 +64,14 @@ let result = actor_ref.invoke("method_name", vec![args...]).await?;
    - Added proper imports for all actor types
    - Fixed compilation issues with borrowing and cloning
 
-2. **Example Server**: 
+2. **Example Server**:
    - `examples/resp-server/` continues to work with the new actor integration
    - Clients can now perform Redis operations that interact with real Orbit actors
 
 ## Current Status
 
 ✅ **COMPLETED**: RESP Protocol Actor Integration
+
 - All key Redis commands now invoke corresponding Orbit actor methods
 - Full compilation without errors
 - Ready for testing with Redis clients
@@ -78,11 +87,13 @@ let result = actor_ref.invoke("method_name", vec![args...]).await?;
 ## Testing the Integration
 
 Run the RESP server example:
+
 ```bash
 cargo run --example resp-server
 ```
 
 Connect with redis-cli:
+
 ```bash
 redis-cli -h 127.0.0.1 -p 6380
 > SET mykey "hello world"

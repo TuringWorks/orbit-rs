@@ -4,7 +4,7 @@ title: RFC: Alternative Persistence Implementations for orbit-rs
 category: rfcs
 ---
 
-# RFC: Alternative Persistence Implementations for orbit-rs
+## RFC: Alternative Persistence Implementations for orbit-rs
 
 **Status**: Draft  
 **Date**: 2025-10-06  
@@ -53,6 +53,7 @@ We evaluated five alternative persistence implementations:
 ### 1. 🥇 **Copy-on-Write B+ Trees** (RECOMMENDED)
 
 **Architecture:**
+
 ```rust
 pub struct CowBTreePersistence {
     root: Arc<RwLock<BTreeNode>>,
@@ -69,6 +70,7 @@ pub struct BTreeNode {
 ```
 
 **Key Benefits:**
+
 - **Write Performance**: 5-20μs latency (COW only modified path)
 - **Memory Efficiency**: Shared pages between tree versions
 - **Range Queries**: Native B+ tree performance
@@ -76,6 +78,7 @@ pub struct BTreeNode {
 - **Snapshots**: Instant via version references
 
 **Implementation Prototype:**
+
 ```rust
 impl CowBTreePersistence {
     async fn store_lease(&self, lease: &ActorLease) -> Result<PersistenceMetrics, PersistenceError> {
@@ -96,6 +99,7 @@ impl CowBTreePersistence {
 ### 2. 🥈 **Memory-Mapped Files + WAL**
 
 **Architecture:**
+
 ```rust
 pub struct MMapPersistence {
     mmap_region: MMapRegion,
@@ -105,12 +109,14 @@ pub struct MMapPersistence {
 ```
 
 **Benefits:**
+
 - **Fastest Writes**: 2-8μs (direct memory access)
 - **Zero-copy Reads**: Memory-mapped access
 - **Simple Recovery**: WAL replay + memory map
 - **OS Integration**: Leverage kernel page cache
 
 **Trade-offs:**
+
 - Limited to single-machine deployments
 - Complex memory layout management
 - Platform-specific optimizations needed
@@ -118,17 +124,20 @@ pub struct MMapPersistence {
 ### 3. 🥉 **Append-Only Log + Snapshots**
 
 **Benefits:**
+
 - **Simplest Implementation**: Easy to get right
 - **Predictable Performance**: No compaction surprises
 - **Natural Audit Trail**: All changes preserved
 
 **Trade-offs:**
+
 - **Read Amplification**: Multiple log entries per key
 - **Storage Growth**: Requires periodic cleanup
 
 ### 4. 🔄 **RocksDB with orbit-rs Optimizations**
 
 **Configuration:**
+
 ```rust
 let mut opts = rocksdb::Options::default();
 opts.set_write_buffer_size(64 * 1024 * 1024);  // Large memtables
@@ -137,11 +146,13 @@ opts.set_bloom_filter(10.0, false);  // Fast negative lookups
 ```
 
 **Benefits:**
+
 - **Battle-tested**: Production-proven reliability
 - **Rich Ecosystem**: Monitoring, backup tools
 - **Automatic Tuning**: Self-optimizing compaction
 
 **Trade-offs:**
+
 - **Write Latency**: 10-50μs (LSM tree overhead)
 - **Memory Usage**: High for optimal performance
 - **Compaction Stalls**: Occasional latency spikes
@@ -163,12 +174,14 @@ Based on algorithmic analysis and prototype development:
 ### COW B+ Tree Implementation
 
 **Core Algorithm:**
+
 1. **Insertion**: Clone only the path from root to modified leaf
 2. **Splitting**: Create new nodes only when necessary
 3. **Memory Management**: Reference counting for shared nodes
 4. **Durability**: WAL for crash recovery
 
 **Example Implementation:**
+
 ```rust
 fn cow_insert(&self, key: ActorKey, lease: ActorLease) -> Result<BTreeNode, Error> {
     let mut path = self.find_path(&key);
@@ -194,7 +207,8 @@ fn cow_insert(&self, key: ActorKey, lease: ActorLease) -> Result<BTreeNode, Erro
 ```
 
 **Memory Layout:**
-```
+
+```text
 Version 1:     [Root] -> [Internal] -> [Leaf A] -> [Leaf B]
                  |
 Version 2:     [Root'] -> [Internal'] -> [Leaf A] -> [Leaf B']
@@ -209,6 +223,7 @@ Version 2:     [Root'] -> [Internal'] -> [Leaf A] -> [Leaf B']
 4. **Cleanup**: Remove orphaned nodes
 
 **Recovery Code:**
+
 ```rust
 async fn recover(&mut self) -> Result<(), Error> {
     // 1. Load last consistent tree state
@@ -237,7 +252,8 @@ async fn recover(&mut self) -> Result<(), Error> {
 ### Write Performance
 
 **COW B+ Tree Advantages:**
-```
+
+```text
 Operation: Actor lease renewal
 ├── WAL append: 1-2μs
 ├── Find leaf path: 1-2μs (log n)
@@ -247,7 +263,8 @@ Total: ~5-10μs vs 20-50μs for LSM
 ```
 
 **Memory Efficiency:**
-```
+
+```text
 100,000 actors, 5 minute renewals:
 ├── Shared tree structure: 90% of nodes unchanged
 ├── Memory amplification: 1.2x vs 3-5x for LSM
@@ -271,21 +288,25 @@ let actors = persistence.range_query(start_key, end_key).await?;
 ## Migration Strategy
 
 ### Phase 1: Prototype Development (4 weeks)
+
 - [ ] Core COW B+ Tree implementation
 - [ ] Basic WAL and recovery
 - [ ] Unit tests and correctness verification
 
 ### Phase 2: Integration (2 weeks)  
+
 - [ ] orbit-rs PersistenceProvider trait implementation
 - [ ] Benchmarking against current Memory provider
 - [ ] Performance optimization
 
 ### Phase 3: Production Readiness (2 weeks)
+
 - [ ] Comprehensive error handling
 - [ ] Monitoring and metrics
 - [ ] Documentation and examples
 
 ### Phase 4: Deployment (2 weeks)
+
 - [ ] Feature flag rollout
 - [ ] Performance monitoring
 - [ ] Migration tooling
@@ -326,6 +347,7 @@ pub struct SimpleMMapPersistence {
 ### RocksDB Alternative
 
 If implementation risks are too high:
+
 - **Proven Reliability**: Battle-tested in production
 - **Rich Ecosystem**: Monitoring, backup, tuning tools
 - **Performance Trade-off**: 2-3x slower writes, but still acceptable
@@ -333,12 +355,14 @@ If implementation risks are too high:
 ## Success Criteria
 
 ### Performance Targets
+
 - [ ] Write latency P95 < 15μs (vs 50μs target for LSM)
 - [ ] Read latency P95 < 5μs
 - [ ] Recovery time < 5 seconds for 1M actors
 - [ ] Memory efficiency > 90% (shared tree nodes)
 
 ### Functional Requirements
+
 - [ ] Data durability guarantees (WAL + checksums)
 - [ ] Crash recovery within 5 seconds
 - [ ] Support for 10M+ concurrent actors
@@ -347,9 +371,9 @@ If implementation risks are too high:
 
 ## Conclusion
 
-**Recommendation: Implement COW B+ Trees for orbit-rs persistence layer**
+### Recommendation: Implement COW B+ Trees for orbit-rs persistence layer
 
-### Key Decision Factors:
+### Key Decision Factors
 
 1. **Perfect Fit for Actor Systems**: COW semantics align with lease update patterns
 2. **Superior Performance**: 3-5x faster writes than LSM alternatives  
@@ -357,7 +381,7 @@ If implementation risks are too high:
 4. **Predictable Latency**: No compaction stalls or background operations
 5. **Natural Snapshots**: Version-based snapshots for backup and testing
 
-### Implementation Path:
+### Implementation Path
 
 1. **Start with COW B+ Tree prototype** (recommended path)
 2. **Benchmark against RocksDB baseline** (for comparison)
@@ -368,6 +392,7 @@ The actor lease management use case is uniquely suited to COW B+ Trees, making t
 ---
 
 **Next Steps:**
+
 1. Approve RFC and technical approach
 2. Begin COW B+ Tree prototype development  
 3. Establish benchmarking framework for validation

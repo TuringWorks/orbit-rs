@@ -4,13 +4,13 @@ title: Orbit-RS Development Roadmap - Current State & Future Vision
 category: documentation
 ---
 
-# Orbit-RS Development Roadmap - Current State & Future Vision
+<!-- Removed duplicate H1 to resolve MD025/single-title/single-h1 -->
 
-**Multi-Model Distributed Database Platform**
+## Multi-Model Distributed Database Platform
 
-[![Current Phase Complete](https://img.shields.io/badge/Phase-Multi%20Model%20Complete-brightgreen.svg)](#current-achievements)
-[![92% Core Complete](https://img.shields.io/badge/Core%20Features-92%25-brightgreen.svg)](#completed-features)
-[![Production Ready](https://img.shields.io/badge/Status-Production%20Ready-success.svg)](#production-readiness)
+[![Current Phase Complete](https://img.shields.io/badge/Phase-Multi%20Model%20Complete-brightgreen.svg)](#-current-status-overview)
+[![92% Core Complete](https://img.shields.io/badge/Core%20Features-92%25-brightgreen.svg)](#-completed-core-features)
+[![Production Ready](https://img.shields.io/badge/Status-Production%20Ready-success.svg)](#-current-status-overview)
 
 ---
 
@@ -98,7 +98,7 @@ Orbit-RS has evolved into a comprehensive distributed multi-model database syste
 
 **Focus**: Production-scale performance and enterprise readiness
 
-#### Key Deliverables
+#### Key Deliverables (Performance & Optimization)
 
 - **🔥 Query Performance Optimization**
   - Vectorized execution engine with SIMD optimization
@@ -122,7 +122,7 @@ Orbit-RS has evolved into a comprehensive distributed multi-model database syste
 
 **Focus**: Enterprise deployment and operational excellence
 
-#### Key Deliverables
+#### Key Deliverables (Enterprise Features)
 
 - **🔐 Advanced Security**
   - RBAC with fine-grained permissions
@@ -194,7 +194,7 @@ Orbit-RS has evolved into a comprehensive distributed multi-model database syste
 
 ### **Architecture Scalability**
 
-```
+```text
 Current Deployment Patterns:
 ├── Single Node: Development & testing
 ├── Small Cluster (3-5 nodes): Production workloads

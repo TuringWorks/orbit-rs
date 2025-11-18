@@ -39,6 +39,7 @@
 
 pub mod analyzer;
 pub mod ast;
+pub mod execution;
 pub mod execution_strategy;
 pub mod executor;
 pub mod expression_evaluator;

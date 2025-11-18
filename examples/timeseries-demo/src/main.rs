@@ -134,7 +134,7 @@ async fn ingest_sample_data(
     series_ids: &[SeriesId],
     points_per_series: usize,
 ) -> Result<()> {
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
     let start_time = Utc::now() - ChronoDuration::hours(1);
 
     for &series_id in series_ids {
@@ -143,10 +143,10 @@ async fn ingest_sample_data(
         for i in 0..points_per_series {
             let timestamp =
                 datetime_to_timestamp(start_time + ChronoDuration::seconds(i as i64 * 3));
-            let value = match rng.gen_range(0..3) {
-                0 => TimeSeriesValue::Float(rng.gen_range(0.0..100.0)), // CPU/Memory percentage
-                1 => TimeSeriesValue::Float(rng.gen_range(0.0..1000.0)), // Network throughput
-                _ => TimeSeriesValue::Float(rng.gen_range(20.0..80.0)), // Stable metric
+            let value = match rng.random_range(0..3) {
+                0 => TimeSeriesValue::Float(rng.random_range(0.0..100.0)), // CPU/Memory percentage
+                1 => TimeSeriesValue::Float(rng.random_range(0.0..1000.0)), // Network throughput
+                _ => TimeSeriesValue::Float(rng.random_range(20.0..80.0)), // Stable metric
             };
 
             data_points.push(DataPoint {

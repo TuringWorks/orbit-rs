@@ -4,7 +4,7 @@ title: Redis Time Series Compatibility Implementation
 category: issues
 ---
 
-# Redis Time Series Compatibility Implementation
+## Redis Time Series Compatibility Implementation
 
 **Feature Type:** Protocol Adapter  
 **Priority:** High  
@@ -30,6 +30,7 @@ Time-series databases are critical for IoT applications, financial systems, moni
 ### Core Actor Implementation
 
 #### TimeSeriesActor
+
 ```rust
 
 #[async_trait]
@@ -53,6 +54,7 @@ pub trait TimeSeriesActor: ActorWithStringKey {
 ### Command Implementation
 
 #### Phase 12.1: Basic Commands (2-3 weeks)
+
 - [ ] **TS.CREATE** - Create time series with metadata and retention policy
 - [ ] **TS.ADD** - Add timestamp-value pairs to time series  
 - [ ] **TS.GET** - Get the latest or specific timestamp value
@@ -61,6 +63,7 @@ pub trait TimeSeriesActor: ActorWithStringKey {
 - [ ] **TS.INFO** - Get time series metadata and statistics
 
 #### Phase 12.2: Aggregation and Multi-Series (3-4 weeks)
+
 - [ ] **TS.CREATERULE** - Create aggregation rules between time series
 - [ ] **TS.DELETERULE** - Delete aggregation rules
 - [ ] **TS.MRANGE** - Multi-series range queries with filters
@@ -69,6 +72,7 @@ pub trait TimeSeriesActor: ActorWithStringKey {
 - [ ] **TS.QUERYINDEX** - Query time series by labels and filters
 
 #### Phase 12.3: Advanced Features (2-3 weeks)
+
 - [ ] **Statistical Functions**: AVG, SUM, MIN, MAX, COUNT, STDDEV, VAR
 - [ ] **Time-window aggregations**: Configurable time windows (1s, 1m, 1h, 1d)
 - [ ] **Downsampling**: Automatic data reduction for long-term storage
@@ -116,12 +120,14 @@ pub enum DuplicatePolicy {
 ## Implementation Tasks
 
 ### 1. Core Infrastructure (Week 1-2)
+
 - [ ] Create `TimeSeriesActor` trait and implementation
 - [ ] Implement basic data structures (`TimeSeriesConfig`, `TimeSeriesSample`, etc.)
 - [ ] Add time-series storage backend with compression
 - [ ] Implement time-based partitioning for distributed storage
 
 ### 2. Basic Commands (Week 3-4)
+
 - [ ] Implement TS.CREATE command with full parameter support
 - [ ] Implement TS.ADD with duplicate policy handling
 - [ ] Implement TS.GET for latest and specific timestamp queries
@@ -129,6 +135,7 @@ pub enum DuplicatePolicy {
 - [ ] Add comprehensive error handling and validation
 
 ### 3. Aggregation System (Week 5-6)
+
 - [ ] Implement aggregation rule engine
 - [ ] Add TS.CREATERULE and TS.DELETERULE commands
 - [ ] Implement automatic downsampling background tasks
@@ -136,6 +143,7 @@ pub enum DuplicatePolicy {
 - [ ] Implement time-window aggregation logic
 
 ### 4. Multi-Series Operations (Week 7-8)
+
 - [ ] Implement TS.MRANGE and TS.MREVRANGE commands
 - [ ] Add TS.MGET for multiple time series queries
 - [ ] Implement label-based filtering and indexing
@@ -143,6 +151,7 @@ pub enum DuplicatePolicy {
 - [ ] Optimize multi-series query performance
 
 ### 5. Performance & Integration (Week 9-10)
+
 - [ ] Add SIMD optimizations for aggregation functions
 - [ ] Implement intelligent chunk placement across cluster nodes
 - [ ] Add comprehensive metrics and monitoring
@@ -152,18 +161,21 @@ pub enum DuplicatePolicy {
 ## Testing Requirements
 
 ### Unit Tests
+
 - [ ] TimeSeriesActor functionality tests
 - [ ] Command parsing and validation tests
 - [ ] Aggregation rule engine tests
 - [ ] Data compression and storage tests
 
 ### Integration Tests
+
 - [ ] Redis client compatibility tests
 - [ ] Multi-node distribution tests
 - [ ] Performance benchmarks
 - [ ] Migration tool validation tests
 
 ### Load Tests
+
 - [ ] High-throughput ingestion (1M+ samples/second)
 - [ ] Concurrent multi-series queries
 - [ ] Long-term retention and compaction
@@ -180,12 +192,14 @@ pub enum DuplicatePolicy {
 ## Compatibility Requirements
 
 ### Redis Time Series API Compatibility
+
 - [ ] 100% command compatibility with RedisTimeSeries
 - [ ] Compatible data formats and serialization
 - [ ] Error messages matching RedisTimeSeries behavior
 - [ ] Performance characteristics comparable to RedisTimeSeries
 
 ### Client Support
+
 - [ ] Compatible with existing Redis clients (redis-py, node-redis, etc.)
 - [ ] Works with RedisTimeSeries client libraries
 - [ ] Support for Redis Cluster protocol extensions

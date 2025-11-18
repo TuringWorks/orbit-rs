@@ -4,7 +4,7 @@ title: Unified Multi-Model Query Language - Feature Backlog
 category: backlog
 ---
 
-# Unified Multi-Model Query Language - Feature Backlog
+## Unified Multi-Model Query Language - Feature Backlog
 
 ## 📋 Epic Overview
 
@@ -22,12 +22,14 @@ Implement a unified query language (OrbitQL) that combines document, graph, time
 ## 📈 Business Value
 
 ### Primary Benefits
+
 - **Developer Experience**: Single language for all data models eliminates cognitive overhead
 - **Query Efficiency**: Cross-model joins and operations in one query execution
 - **Market Differentiation**: First distributed database with true multi-model query unification
 - **Cost Reduction**: Simplified application architecture reduces development and maintenance costs
 
 ### Target Use Cases
+
 1. **Real-time Dashboards**: Combine metrics, relationships, and documents
 2. **IoT Analytics**: Time-series data with device relationships and metadata
 3. **Social Platforms**: User data, connections, content, and activity metrics
@@ -64,6 +66,7 @@ pub trait OrbitQLActor: ActorWithStringKey {
 ### Query Language Syntax
 
 #### Cross-Model Operations
+
 ```sql
 -- Document + Graph + TimeSeries in single query
 SELECT 
@@ -79,6 +82,7 @@ FETCH friends, liked_posts, recent_cpu;
 ```
 
 #### Time-Series Integration
+
 ```sql
 -- Combine user data with their activity metrics
 SELECT 
@@ -94,6 +98,7 @@ WHERE user.subscription = 'premium';
 ```
 
 #### Graph Traversals with Documents
+
 ```sql
 -- Find influencers and their content performance
 FOR user IN users
@@ -108,13 +113,14 @@ FOR user IN users
         }
 ```
 
-## 📦 Feature Breakdown
+## Feature Breakdown
 
 ### Phase 20.1: Query Language Foundation (6-8 weeks)
 
-#### 📋 User Stories
+#### User Stories - Phase 20.1
 
-**ORBIT-020-001: OrbitQL Parser Implementation**
+#### ORBIT-020-001: OrbitQL Parser Implementation
+
 - **As a** developer **I want** a unified query parser **so that** I can write queries spanning multiple data models
 - **Acceptance Criteria:**
   - Complete lexer supporting all OrbitQL keywords and operators
@@ -123,7 +129,8 @@ FOR user IN users
   - Support for parameterized queries with type checking
   - Query validation before execution
 
-**ORBIT-020-002: Cross-Model Query Planning**
+#### ORBIT-020-002: Cross-Model Query Planning
+
 - **As a** query optimizer **I want** intelligent query planning **so that** cross-model operations are efficient
 - **Acceptance Criteria:**
   - Cost-based optimizer for multi-model queries
@@ -132,7 +139,8 @@ FOR user IN users
   - Distributed execution planning with data locality optimization
   - Query rewriting for performance improvements
 
-**ORBIT-020-003: Result Unification Engine**
+#### ORBIT-020-003: Result Unification Engine
+
 - **As a** application developer **I want** unified result formats **so that** I can handle all query results consistently
 - **Acceptance Criteria:**
   - Consistent JSON result format across all data models
@@ -141,7 +149,7 @@ FOR user IN users
   - Pagination support for cross-model queries
   - Error result standardization
 
-#### 🔧 Technical Tasks
+#### Technical Tasks - Phase 20.1
 
 - [ ] **ORBIT-020-T001**: Design OrbitQL grammar and language specification
 - [ ] **ORBIT-020-T002**: Implement lexer with support for all operators and keywords
@@ -156,9 +164,10 @@ FOR user IN users
 
 ### Phase 20.2: Advanced Query Operations (5-6 weeks)
 
-#### 📋 User Stories
+#### User Stories - Phase 20.2
 
-**ORBIT-020-004: Advanced JOIN Operations**
+#### ORBIT-020-004: Advanced JOIN Operations
+
 - **As a** data analyst **I want** advanced join operations **so that** I can relate data across different models
 - **Acceptance Criteria:**
   - Document-Graph joins with relationship traversal
@@ -167,7 +176,8 @@ FOR user IN users
   - Multi-way joins across all data models
   - Outer joins with null handling across models
 
-**ORBIT-020-005: Aggregation Across Models**
+#### ORBIT-020-005: Aggregation Across Models
+
 - **As a** business intelligence user **I want** aggregations across data models **so that** I can generate comprehensive reports
 - **Acceptance Criteria:**
   - COUNT, SUM, AVG across different data models
@@ -176,7 +186,8 @@ FOR user IN users
   - Custom aggregation functions for specific use cases
   - Hierarchical aggregations with graph structure
 
-**ORBIT-020-006: Transaction Support**
+#### ORBIT-020-006: Transaction Support
+
 - **As a** application developer **I want** ACID transactions across models **so that** I can maintain data consistency
 - **Acceptance Criteria:**
   - Multi-model transactions with 2PC protocol
@@ -185,7 +196,7 @@ FOR user IN users
   - Rollback support for partial transaction failures
   - Nested transaction support
 
-#### 🔧 Technical Tasks
+#### Technical Tasks - Phase 20.2
 
 - [ ] **ORBIT-020-T011**: Implement document-graph join algorithms
 - [ ] **ORBIT-020-T012**: Build temporal alignment for time-series joins
@@ -200,9 +211,10 @@ FOR user IN users
 
 ### Phase 20.3: Query Optimization & Performance (5-6 weeks)
 
-#### 📋 User Stories
+#### User Stories - Phase 20.3
 
-**ORBIT-020-007: Intelligent Query Optimization**
+#### ORBIT-020-007: Intelligent Query Optimization
+
 - **As a** system administrator **I want** automatic query optimization **so that** complex queries perform efficiently
 - **Acceptance Criteria:**
   - Statistics collection across all data models
@@ -211,7 +223,8 @@ FOR user IN users
   - Automatic materialized view creation for common patterns
   - Query caching with intelligent invalidation
 
-**ORBIT-020-008: Distributed Execution Engine**
+#### ORBIT-020-008: Distributed Execution Engine
+
 - **As a** DevOps engineer **I want** distributed query execution **so that** large queries scale across the cluster
 - **Acceptance Criteria:**
   - Parallel execution across multiple actor nodes
@@ -220,7 +233,7 @@ FOR user IN users
   - Fault tolerance with partial result recovery
   - Resource usage monitoring and throttling
 
-#### 🔧 Technical Tasks
+#### Technical Tasks - Phase 20.3
 
 - [ ] **ORBIT-020-T021**: Implement statistics collection framework
 - [ ] **ORBIT-020-T022**: Build adaptive query planner with machine learning
@@ -233,9 +246,10 @@ FOR user IN users
 - [ ] **ORBIT-020-T029**: Build fault tolerance and recovery mechanisms
 - [ ] **ORBIT-020-T030**: Add comprehensive performance monitoring
 
-## 🧪 Testing Strategy
+## Testing Strategy
 
 ### Unit Testing
+
 - Query parser with invalid syntax edge cases
 - AST generation and validation
 - Cross-model join algorithms
@@ -243,6 +257,7 @@ FOR user IN users
 - Optimization rule verification
 
 ### Integration Testing
+
 - End-to-end query execution across all models
 - Performance benchmarks vs individual model queries
 - Concurrent multi-model transaction testing
@@ -250,15 +265,17 @@ FOR user IN users
 - Error propagation and recovery testing
 
 ### Performance Testing
+
 - Large-scale cross-model joins (1M+ records)
 - Complex query optimization verification
 - Distributed execution scalability
 - Memory usage optimization
 - Query response time SLA validation
 
-## 📏 Success Metrics
+## Success Metrics
 
 ### Technical Metrics
+
 - **Query Performance**: 90% of cross-model queries complete within 2x single-model equivalent
 - **Parser Accuracy**: 100% compatibility with OrbitQL specification
 - **Transaction Success**: 99.9% ACID compliance across models
@@ -266,6 +283,7 @@ FOR user IN users
 - **Distributed Scalability**: Linear scaling up to 10 nodes
 
 ### Business Metrics
+
 - **Developer Adoption**: 80% of new applications use OrbitQL
 - **Query Complexity Reduction**: 60% fewer lines of code for multi-model operations
 - **Development Velocity**: 40% faster feature development for cross-model use cases
@@ -274,6 +292,7 @@ FOR user IN users
 ## 🚀 Innovation Opportunities
 
 ### Future Enhancements
+
 - **Natural Language Interface**: AI-powered query generation from English descriptions
 - **Visual Query Builder**: Drag-and-drop interface for complex multi-model queries
 - **Real-time Query Adaptation**: Automatic query rewriting based on data pattern changes
@@ -281,6 +300,7 @@ FOR user IN users
 - **Edge Query Distribution**: Push query execution to edge nodes for latency optimization
 
 ### Research Areas
+
 - **Quantum-Resistant Cryptography**: Secure cross-model queries for sensitive data
 - **Federated Learning Integration**: In-database ML model training across models
 - **Blockchain Integration**: Immutable query audit trails
@@ -288,7 +308,7 @@ FOR user IN users
 
 This unified multi-model query language will establish Orbit-RS as the premier choice for applications requiring sophisticated data relationships while maintaining the performance and scalability advantages of our distributed actor architecture.
 
-## 📅 Implementation Timeline
+## Implementation Timeline
 
 | Phase | Duration | Deliverables | Dependencies |
 |-------|----------|--------------|--------------|

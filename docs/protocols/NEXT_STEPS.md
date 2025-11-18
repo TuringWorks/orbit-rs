@@ -4,7 +4,7 @@ title: Next Steps: Orbit Protocol Adapters Integration
 category: protocols
 ---
 
-# Next Steps: Orbit Protocol Adapters Integration
+## Next Steps: Orbit Protocol Adapters Integration
 
 This document outlines the concrete steps needed to complete the protocol adapter implementation.
 
@@ -40,6 +40,7 @@ async fn cmd_get(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
 ```
 
 **Required Changes**:
+
 1. Define `KVActor` trait in `orbit-shared` for key-value operations
 2. Implement `get_value()` and `set_value()` methods
 3. Update all 30+ commands to use actual actor operations
@@ -120,6 +121,7 @@ pub async fn get_actor(
 ```
 
 **Required Changes**:
+
 1. Add `actor_reference_dynamic()` method to `OrbitClient`
 2. Implement `get_state_json()` for state reflection
 3. Add actor creation/deactivation support
@@ -430,11 +432,13 @@ let app = Router::new()
 ## Dependencies Needed
 
 Add to `orbit-shared/Cargo.toml`:
+
 ```toml
 async-trait = "0.1"
 ```
 
 Add to `orbit-client/Cargo.toml`:
+
 ```toml
 
 # For dynamic actor references
@@ -442,6 +446,7 @@ downcast-rs = "1.2"
 ```
 
 Add to `orbit-protocols/Cargo.toml`:
+
 ```toml
 
 # For SQL parsing
@@ -456,6 +461,7 @@ deadpool = "0.12"
 ## Required OrbitClient Enhancements
 
 1. **Dynamic Actor References**:
+
    ```rust
    pub async fn actor_reference_dynamic(
        &self,
@@ -465,16 +471,19 @@ deadpool = "0.12"
    ```
 
 2. **State Reflection**:
+
    ```rust
    pub async fn get_actor_state_json(&self, actor_ref: &dyn Addressable) -> OrbitResult<serde_json::Value>
    ```
 
 3. **Event Subscriptions**:
+
    ```rust
    pub async fn subscribe_to_events(&self) -> OrbitResult<EventStream>
    ```
 
 4. **Transaction Coordinator Access**:
+
    ```rust
    pub async fn transaction_coordinator(&self) -> OrbitResult<Arc<TransactionCoordinator>>
    ```

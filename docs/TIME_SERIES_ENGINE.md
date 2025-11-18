@@ -4,7 +4,7 @@ title: Orbit-RS Time Series Engine
 category: documentation
 ---
 
-# Orbit-RS Time Series Engine
+## Orbit-RS Time Series Engine
 
 ## Table of Contents
 
@@ -35,7 +35,7 @@ The Orbit-RS Time Series Engine is designed for high-throughput, low-latency tim
 
 The time series engine follows a layered architecture:
 
-```
+```text
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
 │   Query Layer   │    │ Analytics Layer │    │  Ingestion      │
 │  ┌───────────┐  │    │  ┌───────────┐  │    │  ┌───────────┐  │
@@ -104,6 +104,7 @@ let engine = TimeSeriesEngine::with_memory_storage(config).await?;
 ```
 
 **Features:**
+
 - **Memory-mapped storage**: Efficient memory usage with OS-level caching
 - **Configurable limits**: Memory and series count limits
 - **Fast queries**: O(log n) lookups with skip-list indexing
@@ -129,6 +130,7 @@ let engine = TimeSeriesEngine::with_redis_storage(config).await?;
 ```
 
 **Features:**
+
 - **Redis native**: Uses Redis TimeSeries module
 - **High availability**: Redis clustering support
 - **Persistence**: RDB and AOF persistence options
@@ -154,6 +156,7 @@ let engine = TimeSeriesEngine::with_postgresql_storage(config).await?;
 ```
 
 **Features:**
+
 - **Hypertables**: Automatic table partitioning
 - **Native compression**: TimescaleDB compression
 - **SQL queries**: Full SQL query support

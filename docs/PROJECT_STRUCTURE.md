@@ -4,7 +4,7 @@ title: Project Structure
 category: documentation
 ---
 
-# Project Structure
+## Project Structure
 
 This document provides a comprehensive overview of the Orbit-RS project structure, including module organization, dependencies, and architectural layers.
 
@@ -46,12 +46,16 @@ orbit-rs/
 │   └── mcp-*/                    # Model Context Protocol examples
 │
 ├── docs/                         # Comprehensive documentation (reorganized)
-│   ├── rfc/                      # Request for Comments documents
+│   ├── rfcs/                     # Request for Comments documents
 │   ├── architecture/             # Architecture documentation
 │   ├── development/              # Development guides
 │   ├── deployment/               # Deployment documentation
 │   ├── protocols/                # Protocol adapter docs
-│   └── wip/                      # Work-in-progress documents
+│   ├── operations/               # Operations and runbooks
+│   ├── planning/                 # Strategic planning and roadmaps
+│   ├── backlog/                  # Feature backlog and proposals
+│   ├── issues/                   # Issue tracking and resolutions
+│   └── verification/             # Verification and validation
 │
 ├── orbit-benchmarks/             # Consolidated performance benchmarks
 ├── verification/                 # Verification and formal methods
@@ -255,6 +259,7 @@ orbit-protocols/
 ├── Cargo.toml
 └── src/
     ├── lib.rs                  # Protocol adapter exports
+    ├── error.rs                # Protocol error types
     ├── redis/                  # Redis RESP protocol
     │   ├── mod.rs
     │   ├── server.rs           # RESP server implementation
@@ -264,14 +269,23 @@ orbit-protocols/
     ├── postgres_wire/          # PostgreSQL wire protocol
     │   ├── mod.rs
     │   ├── server.rs           # PostgreSQL server implementation
+    │   ├── protocol.rs         # Wire protocol implementation
+    │   ├── messages.rs         # Frontend/Backend message types
+    │   ├── auth.rs             # Authentication (MD5, SCRAM-SHA-256)
     │   ├── sql/                # SQL parsing and execution
+    │   │   ├── mod.rs
     │   │   ├── lexer.rs        # SQL lexer
     │   │   ├── parser.rs       # SQL parser
     │   │   ├── ast.rs          # Abstract syntax tree
     │   │   ├── executor.rs     # Query executor
     │   │   └── optimizer.rs    # Query optimizer
-    │   ├── types.rs            # PostgreSQL data types
-    │   └── vector.rs           # Vector operations (pgvector)
+    │   ├── query_engine.rs     # Query execution engine
+    │   ├── storage.rs          # Actor state storage
+    │   ├── persistent_storage.rs # RocksDB/TiKV table storage
+    │   ├── vector_engine.rs    # Vector operations (pgvector)
+    │   ├── graphrag_engine.rs  # GraphRAG query engine
+    │   ├── jsonb.rs            # JSONB data type support
+    │   └── types.rs            # PostgreSQL data types
     ├── mcp/                    # Model Context Protocol
     │   ├── mod.rs
     │   ├── server.rs           # MCP server implementation
@@ -286,12 +300,16 @@ orbit-protocols/
 
 **Key Features**:
 
-- Redis RESP protocol with 50+ commands
-- PostgreSQL wire protocol with full SQL support
-- Vector database capabilities (pgvector compatible)
-- Model Context Protocol for AI agents
-- Comprehensive SQL parser and executor
-- Multi-protocol client compatibility
+- **Redis RESP Protocol**: 50+ Redis commands with full compatibility
+- **PostgreSQL Wire Protocol**: Complete SQL support with authentication
+- **Authentication Methods**: Trust, Password, MD5, SCRAM-SHA-256 (RFC 5802, RFC 7677)
+- **SQL Engine**: Comprehensive parser, executor, and query optimizer
+- **Vector Database**: pgvector-compatible vector operations and similarity search
+- **GraphRAG**: Graph-based Retrieval-Augmented Generation queries
+- **Persistent Storage**: RocksDB and TiKV backends for table storage
+- **Model Context Protocol**: AI agent integration for LLM workflows
+- **JSONB Support**: Full PostgreSQL JSONB data type compatibility
+- **Multi-protocol Compatibility**: psql, Redis clients, AI agents
 
 ### orbit-operator
 
@@ -500,6 +518,14 @@ orbit-operator (orchestration)
 - **bloom**: Bloom filter implementation for LSM-Tree
 - **base64**: Binary encoding for WAL operations
 - **redis**: Redis client (for protocol adapter)
+
+#### Cryptography and Security
+
+- **md5**: MD5 hashing for PostgreSQL authentication
+- **sha2**: SHA-256 hashing for SCRAM authentication
+- **hmac**: HMAC-SHA-256 for SCRAM message authentication
+- **pbkdf2**: Password-based key derivation (PBKDF2-HMAC-SHA256)
+- **base64**: Base64 encoding for SCRAM protocol messages
 
 #### Kubernetes Integration
 

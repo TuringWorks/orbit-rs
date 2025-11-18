@@ -4,13 +4,13 @@ title: Orbit Time Series Commands
 category: documentation
 ---
 
-# Orbit Time Series Commands
+## Orbit Time Series Commands
 
 ## Table of Contents
 
 - [Overview](#overview)
 - [Time Series Creation](#time-series-creation)
-- [Data Ingestion](#data-ingestion) 
+- [Data Ingestion](#data-ingestion)
 - [Data Retrieval](#data-retrieval)
 - [Data Management](#data-management)
 - [Aggregation and Analytics](#aggregation-and-analytics)
@@ -37,11 +37,12 @@ Orbit's time series implementation provides:
 
 Creates a new time series with optional configuration.
 
-```
+```redis
 TS.CREATE key [RETENTION retentionTime] [CHUNK_SIZE size] [DUPLICATE_POLICY policy] [LABELS label value ...]
 ```
 
 **Parameters:**
+
 - `key`: Time series identifier
 - `RETENTION`: Data retention time in milliseconds (optional)
 - `CHUNK_SIZE`: Maximum samples per chunk (optional, default: 4096)
@@ -55,6 +56,7 @@ TS.CREATE key [RETENTION retentionTime] [CHUNK_SIZE size] [DUPLICATE_POLICY poli
 - `LABELS`: Key-value pairs for metadata (optional)
 
 **Examples:**
+
 ```redis
 
 # Basic time series
@@ -71,11 +73,12 @@ TS.CREATE cpu:usage RETENTION 3600000 CHUNK_SIZE 2048 DUPLICATE_POLICY LAST LABE
 
 Modifies an existing time series configuration.
 
-```
+```redis
 TS.ALTER key [RETENTION retentionTime] [CHUNK_SIZE size] [DUPLICATE_POLICY policy] [LABELS label value ...]
 ```
 
 **Example:**
+
 ```redis
 TS.ALTER temperature:sensor1 RETENTION 7200000 LABELS environment production
 ```
@@ -86,15 +89,17 @@ TS.ALTER temperature:sensor1 RETENTION 7200000 LABELS environment production
 
 Adds a single sample to a time series.
 
-```
+```redis
 TS.ADD key timestamp value [RETENTION retentionTime] [CHUNK_SIZE size] [DUPLICATE_POLICY policy] [LABELS label value ...]
 ```
 
 **Parameters:**
+
 - `timestamp`: Unix timestamp in milliseconds, or `*` for current time
 - `value`: Numeric value to store
 
 **Examples:**
+
 ```redis
 
 # Add sample with specific timestamp
@@ -111,11 +116,12 @@ TS.ADD cpu:usage * 75.2 RETENTION 3600000 LABELS server web01
 
 Adds multiple samples to multiple time series in a single command.
 
-```
+```redis
 TS.MADD key1 timestamp1 value1 [key2 timestamp2 value2 ...]
 ```
 
 **Example:**
+
 ```redis
 TS.MADD temperature:sensor1 1609459200000 23.5 temperature:sensor2 1609459200000 22.8 cpu:usage 1609459200000 45.2
 ```
@@ -124,12 +130,13 @@ TS.MADD temperature:sensor1 1609459200000 23.5 temperature:sensor2 1609459200000
 
 Increments or decrements the value at a timestamp.
 
-```
+```redis
 TS.INCRBY key value [TIMESTAMP timestamp] [RETENTION retentionTime] [CHUNK_SIZE size] [DUPLICATE_POLICY policy] [LABELS label value ...]
 TS.DECRBY key value [TIMESTAMP timestamp] [RETENTION retentionTime] [CHUNK_SIZE size] [DUPLICATE_POLICY policy] [LABELS label value ...]
 ```
 
 **Examples:**
+
 ```redis
 
 # Increment counter
@@ -148,11 +155,12 @@ TS.DECRBY active:connections 1
 
 Retrieves the latest sample from a time series.
 
-```
+```redis
 TS.GET key
 ```
 
 **Example:**
+
 ```redis
 TS.GET temperature:sensor1
 
@@ -163,11 +171,12 @@ TS.GET temperature:sensor1
 
 Retrieves the latest samples from multiple time series.
 
-```
+```redis
 TS.MGET [FILTER label=value ...] key1 [key2 ...]
 ```
 
 **Example:**
+
 ```redis
 
 # Get latest from specific series
@@ -181,12 +190,13 @@ TS.MGET temperature:sensor1 temperature:sensor2
 
 Retrieves samples within a time range.
 
-```
+```redis
 TS.RANGE key fromTimestamp toTimestamp [AGGREGATION aggregation bucketDuration]
 TS.REVRANGE key fromTimestamp toTimestamp [AGGREGATION aggregation bucketDuration]
 ```
 
 **Aggregation types:**
+
 - `AVG`: Average value
 - `SUM`: Sum of values
 - `MIN`: Minimum value
@@ -198,6 +208,7 @@ TS.REVRANGE key fromTimestamp toTimestamp [AGGREGATION aggregation bucketDuratio
 - `STD`: Standard deviation
 
 **Examples:**
+
 ```redis
 
 # Get all samples in range
@@ -214,12 +225,13 @@ TS.REVRANGE temperature:sensor1 1609459200000 1609462800000
 
 Retrieves samples from multiple time series within a time range.
 
-```
+```redis
 TS.MRANGE fromTimestamp toTimestamp [AGGREGATION aggregation bucketDuration] [FILTER label=value ...] key1 [key2 ...]
 TS.MREVRANGE fromTimestamp toTimestamp [AGGREGATION aggregation bucketDuration] [FILTER label=value ...] key1 [key2 ...]
 ```
 
 **Example:**
+
 ```redis
 TS.MRANGE 1609459200000 1609462800000 temperature:sensor1 temperature:sensor2
 ```
@@ -230,11 +242,12 @@ TS.MRANGE 1609459200000 1609462800000 temperature:sensor1 temperature:sensor2
 
 Deletes samples within a time range.
 
-```
+```redis
 TS.DEL key fromTimestamp toTimestamp
 ```
 
 **Example:**
+
 ```redis
 
 # Delete samples from last hour
@@ -245,11 +258,12 @@ TS.DEL temperature:sensor1 1609459200000 1609462800000
 
 Returns information about a time series.
 
-```
+```redis
 TS.INFO key
 ```
 
 **Returns:**
+
 - `totalSamples`: Number of samples
 - `memoryUsage`: Memory consumption in bytes
 - `firstTimestamp`: Timestamp of first sample
@@ -260,6 +274,7 @@ TS.INFO key
 - `labels`: Associated labels
 
 **Example:**
+
 ```redis
 TS.INFO temperature:sensor1
 ```
@@ -301,11 +316,12 @@ Compaction rules automatically downsample high-resolution data to lower-resoluti
 
 Creates an automatic compaction rule.
 
-```
+```redis
 TS.CREATERULE sourceKey destKey AGGREGATION aggregation bucketDuration [retention]
 ```
 
 **Example:**
+
 ```redis
 
 # Create hourly averages from minute data
@@ -319,11 +335,12 @@ TS.CREATERULE temperature:raw temperature:hourly AGGREGATION AVG 3600000 2592000
 
 Removes a compaction rule.
 
-```
+```redis
 TS.DELETERULE sourceKey destKey
 ```
 
 **Example:**
+
 ```redis
 TS.DELETERULE metrics:cpu:1min metrics:cpu:1hour
 ```
@@ -333,7 +350,6 @@ TS.DELETERULE metrics:cpu:1min metrics:cpu:1hour
 Time series can be tagged with labels for organization and filtering:
 
 ```redis
-
 # Create series with labels
 TS.CREATE metrics:cpu LABELS server web01 datacenter us-east region production
 
@@ -342,6 +358,7 @@ TS.MGET FILTER server=web01
 ```
 
 Labels are key-value pairs that help:
+
 - Organize related time series
 - Enable multi-dimensional queries
 - Support monitoring and alerting systems
@@ -359,7 +376,7 @@ Labels are key-value pairs that help:
 
 ### Error Messages
 
-```
+```redis
 ERR wrong number of arguments for 'TS.ADD' command
 ERR invalid timestamp format  
 ERR actor error: [specific error]
@@ -442,21 +459,25 @@ TS.RANGE stock:AAPL:price 1609459200000 1609545600000 AGGREGATION MIN 86400000
 ## Performance Considerations
 
 ### Write Performance
+
 - Batch operations with `TS.MADD` for better throughput
 - Use appropriate chunk sizes (default 4096 is usually optimal)
 - Consider retention policies to limit memory usage
 
 ### Read Performance  
+
 - Use aggregation for large time ranges
 - Leverage compaction rules for pre-computed aggregates
 - Index series with meaningful labels
 
 ### Memory Management
+
 - Set appropriate retention periods
 - Use compaction to reduce raw data storage
 - Monitor memory usage with `TS.INFO`
 
 ### Scaling
+
 - Distribute time series across multiple Orbit nodes
 - Use consistent labeling for cross-node queries
 - Consider data locality for related time series

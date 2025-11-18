@@ -4,7 +4,7 @@ title: SQL Parser Architecture Design
 category: protocols
 ---
 
-# SQL Parser Architecture Design
+## SQL Parser Architecture Design
 
 ## Overview
 
@@ -13,12 +13,14 @@ This document outlines the comprehensive SQL parser architecture for Orbit-RS th
 ## Current State Analysis
 
 The current `query_engine.rs` implementation provides:
+
 - Basic SQL parsing for SELECT, INSERT, UPDATE, DELETE
 - Simple WHERE clause support with single conditions
 - Vector query detection and routing to VectorQueryEngine
 - Actor-based storage simulation
 
 ### Limitations
+
 - No support for JOINs, subqueries, or complex expressions
 - Limited WHERE clause parsing (single condition only)
 - No DDL (CREATE, ALTER, DROP) support
@@ -31,7 +33,7 @@ The current `query_engine.rs` implementation provides:
 
 ### 1. Modular Parser Architecture
 
-```
+```text
 src/postgres_wire/sql/
 ├── mod.rs                    // Public API and parser factory
 ├── lexer.rs                  // SQL tokenization
@@ -180,6 +182,7 @@ pub enum Expression {
 ### 3. Lexical Analysis (Tokenizer)
 
 A robust tokenizer that handles:
+
 - SQL keywords (case-insensitive)
 - Identifiers (quoted and unquoted)
 - String literals (with proper escaping)
@@ -224,7 +227,9 @@ pub enum Token {
 ### 4. Parser Implementation Strategy
 
 #### Recursive Descent Parser
+
 Use a recursive descent parser with:
+
 - Precedence climbing for expressions
 - Look-ahead for disambiguation
 - Error recovery and detailed error messages
@@ -242,12 +247,14 @@ Use a recursive descent parser with:
 ### 5. Semantic Analysis
 
 #### Schema Integration
+
 - Interface with Orbit's actor-based schema
 - Virtual table definitions for actors, vector stores
 - Type checking and validation
 - Dependency resolution
 
 #### Query Planning
+
 - Basic query optimization
 - Join order optimization
 - Index usage recommendations
@@ -256,6 +263,7 @@ Use a recursive descent parser with:
 ### 6. Execution Engine Integration
 
 #### Actor Storage Mapping
+
 ```rust
 // Map SQL tables to actor types
 pub struct SchemaMapping {
@@ -281,6 +289,7 @@ pub enum TableType {
 ```
 
 #### Query Execution Pipeline
+
 1. **Parse** → AST
 2. **Analyze** → Validated AST + Query Plan
 3. **Execute** → Interact with OrbitClient/VectorEngine
@@ -289,6 +298,7 @@ pub enum TableType {
 ### 7. ANSI SQL Compliance Features
 
 #### DDL Support
+
 - CREATE/ALTER/DROP TABLE with constraints
 - CREATE/DROP INDEX with various types
 - CREATE/DROP VIEW and materialized views
@@ -296,6 +306,7 @@ pub enum TableType {
 - CREATE/DROP USER and roles
 
 #### Advanced DML Support
+
 - Complex SELECT with multiple JOINs
 - Common Table Expressions (WITH clause)
 - Window functions (ROW_NUMBER, RANK, etc.)
@@ -304,11 +315,13 @@ pub enum TableType {
 - Subqueries in all contexts
 
 #### DCL Support
+
 - GRANT/REVOKE permissions on tables and schemas
 - Role-based access control
 - Integration with Orbit's security model
 
 #### TCL Support
+
 - BEGIN/COMMIT/ROLLBACK transactions
 - SAVEPOINT and nested transactions
 - Transaction isolation levels
@@ -317,13 +330,16 @@ pub enum TableType {
 ### 8. Vector Query Integration
 
 #### Seamless Integration
+
 The new parser will seamlessly integrate vector operations:
+
 - Detect vector data types in DDL
 - Parse vector similarity operators in expressions
 - Route vector queries to VectorQueryEngine
 - Support hybrid SQL + vector queries
 
 #### Enhanced Vector Features
+
 ```sql
 -- Vector similarity in complex queries
 SELECT a.*, similarity_score
@@ -344,12 +360,14 @@ WHERE a.embedding <-> b.embedding < 0.8;
 ### 9. Error Handling and Recovery
 
 #### Comprehensive Error Messages
+
 - Syntax error location with line/column numbers
 - Suggestion for common mistakes
 - Context-aware error messages
 - Recovery strategies for partial parsing
 
 #### Error Types
+
 ```rust
 pub enum SqlError {
     SyntaxError { message: String, location: Location },
@@ -366,6 +384,7 @@ pub enum SqlError {
 ### 10. Performance Considerations
 
 #### Optimization Strategies
+
 - Prepared statement caching
 - Query plan caching
 - Lazy evaluation of complex expressions
@@ -373,6 +392,7 @@ pub enum SqlError {
 - Efficient memory management for large result sets
 
 #### Benchmarking Framework
+
 - Performance tests for all SQL constructs
 - Comparison with PostgreSQL reference implementation
 - Memory usage profiling
@@ -381,6 +401,7 @@ pub enum SqlError {
 ### 11. Testing Strategy
 
 #### Test Categories
+
 1. **Unit Tests**: Parser components, AST nodes, expression evaluation
 2. **Integration Tests**: Full SQL statement parsing and execution
 3. **Compatibility Tests**: PostgreSQL client compatibility
@@ -388,6 +409,7 @@ pub enum SqlError {
 5. **Regression Tests**: Ensure vector functionality remains intact
 
 #### Test Data
+
 - Comprehensive SQL statement test suite
 - Edge cases and error conditions
 - Complex real-world queries
@@ -397,36 +419,42 @@ pub enum SqlError {
 ## Implementation Phases
 
 ### Phase 1: Foundation (Weeks 1-2)
+
 - Lexer implementation
 - Basic AST definitions
 - Core parser infrastructure
 - Simple statement parsing
 
 ### Phase 2: DML Enhancement (Weeks 3-4)
+
 - Enhanced SELECT with JOINs
 - Complex WHERE clauses
 - Subquery support
 - Expression evaluation engine
 
 ### Phase 3: DDL Implementation (Weeks 5-6)
+
 - CREATE/ALTER/DROP TABLE
 - Index management
 - Schema operations
 - Constraint handling
 
 ### Phase 4: Advanced Features (Weeks 7-8)
+
 - Aggregate functions and GROUP BY
 - Window functions
 - Common Table Expressions
 - Set operations
 
 ### Phase 5: Control Languages (Weeks 9-10)
+
 - DCL implementation (GRANT/REVOKE)
 - TCL implementation (transactions)
 - Security integration
 - Permission checking
 
 ### Phase 6: Integration & Testing (Weeks 11-12)
+
 - Vector query integration
 - Comprehensive testing
 - Performance optimization
@@ -435,12 +463,14 @@ pub enum SqlError {
 ## Migration Strategy
 
 ### Backward Compatibility
+
 - Existing vector operations continue to work
 - Current basic SQL queries remain functional
 - Gradual migration of functionality to new parser
 - Feature flags for new capabilities
 
 ### Integration Points
+
 - Maintain existing QueryEngine interface
 - Extend with new capabilities
 - Preserve VectorQueryEngine integration
@@ -449,18 +479,21 @@ pub enum SqlError {
 ## Success Metrics
 
 ### Compliance
+
 - Support for 95% of common ANSI SQL constructs
 - Pass PostgreSQL compatibility test suite
 - Support complex real-world queries
 - Maintain vector operation performance
 
 ### Performance
+
 - Parse 1000+ SQL statements per second
 - Execute simple queries within 1ms
 - Handle result sets up to 100MB
 - Support 1000+ concurrent connections
 
 ### Quality
+
 - 95%+ test coverage
 - Zero memory leaks
 - Detailed error messages

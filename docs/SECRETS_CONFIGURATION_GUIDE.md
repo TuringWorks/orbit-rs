@@ -4,7 +4,7 @@ title: GitHub Secrets Configuration Guide
 category: documentation
 ---
 
-# GitHub Secrets Configuration Guide
+## GitHub Secrets Configuration Guide
 
 **Repository:** orbit-rs  
 **Date:** 2025-10-03  

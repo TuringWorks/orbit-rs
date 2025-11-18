@@ -4,8 +4,6 @@ title: ArangoDB Multi-Model Database Compatibility
 category: protocols
 ---
 
-# ArangoDB Multi-Model Database Compatibility
-
 ## Overview
 
 ArangoDB is a multi-model NoSQL database that combines graph, document, and key-value data models in a single system. Orbit-RS will provide full ArangoDB compatibility, allowing applications to leverage the power of multiple data models through a unified query language (AQL) while gaining enhanced scalability, fault tolerance, and performance through Orbit's distributed actor system.
@@ -15,6 +13,7 @@ ArangoDB is a multi-model NoSQL database that combines graph, document, and key-
 ### 🎯 **Phase 18: ArangoDB Foundation**
 
 #### Multi-Model Core Actors
+
 - **DocumentCollectionActor**: JSON document storage and retrieval with schema-less flexibility
 - **GraphActor**: Property graph management with vertices and edges
 - **KeyValueActor**: High-performance key-value storage with TTL support
@@ -22,6 +21,7 @@ ArangoDB is a multi-model NoSQL database that combines graph, document, and key-
 - **GeospatialActor**: Location-based data with spatial indexing
 
 #### AQL Query Engine
+
 - **AQL Parser**: Complete ArangoDB Query Language parsing and optimization
 - **Query Planner**: Multi-model query execution planning
 - **Result Streaming**: Efficient cursor-based result pagination
@@ -30,6 +30,7 @@ ArangoDB is a multi-model NoSQL database that combines graph, document, and key-
 ### 🚀 **Phase 19: Advanced Multi-Model Operations**
 
 #### Document Database Features
+
 - **Schema-less Documents**: Flexible JSON document storage
 - **Document Validation**: JSON Schema-based validation rules
 - **Nested Object Indexing**: Deep indexing of document properties
@@ -37,6 +38,7 @@ ArangoDB is a multi-model NoSQL database that combines graph, document, and key-
 - **Document Versioning**: Revision tracking and conflict resolution
 
 #### Graph Database Features
+
 - **Property Graphs**: Vertices and edges with arbitrary properties
 - **Graph Traversals**: Flexible traversal patterns with pruning
 - **Path Finding**: Shortest path, K-paths, and all paths algorithms
@@ -44,6 +46,7 @@ ArangoDB is a multi-model NoSQL database that combines graph, document, and key-
 - **Smart Graphs**: Enterprise-grade graph sharding and distribution
 
 #### Full-Text Search
+
 - **Text Analyzers**: Multiple language analyzers with stemming
 - **Search Views**: Materialized search indexes with real-time updates
 - **Ranking Algorithms**: TF-IDF, BM25, and custom scoring
@@ -53,6 +56,7 @@ ArangoDB is a multi-model NoSQL database that combines graph, document, and key-
 ### 📊 **Phase 20: Enterprise Multi-Model Features**
 
 #### Geospatial Capabilities
+
 - **GeoJSON Support**: Points, lines, polygons, and multi-geometries
 - **Spatial Indexes**: R-tree and geohash indexing
 - **Proximity Queries**: Near, within, and intersects operations
@@ -60,6 +64,7 @@ ArangoDB is a multi-model NoSQL database that combines graph, document, and key-
 - **Geofencing**: Real-time location-based alerts
 
 #### Advanced Analytics
+
 - **AQL User Functions**: Custom JavaScript functions in queries
 - **Streaming Analytics**: Real-time data processing pipelines
 - **Machine Learning**: In-database ML with graph neural networks
@@ -67,6 +72,7 @@ ArangoDB is a multi-model NoSQL database that combines graph, document, and key-
 - **Graph Machine Learning**: Node embeddings, link prediction, anomaly detection
 
 #### Performance & Scalability
+
 - **Smart Graphs**: Automatic graph sharding across cluster
 - **OneShard Databases**: Single-shard performance optimization
 - **Satellite Collections**: Distributed reference data
@@ -78,6 +84,7 @@ ArangoDB is a multi-model NoSQL database that combines graph, document, and key-
 ### Actor Architecture
 
 #### Document Collection Actor
+
 ```rust
 
 #[async_trait]
@@ -101,6 +108,7 @@ pub trait DocumentCollectionActor: ActorWithStringKey {
 ```
 
 #### Graph Actor
+
 ```rust
 
 #[async_trait]
@@ -124,6 +132,7 @@ pub trait GraphActor: ActorWithStringKey {
 ```
 
 #### AQL Query Actor
+
 ```rust
 
 #[async_trait]
@@ -149,6 +158,7 @@ pub trait AQLQueryActor: ActorWithStringKey {
 ```
 
 #### Search Index Actor
+
 ```rust
 
 #[async_trait]
@@ -241,6 +251,7 @@ pub enum Value {
 ### Document Operations
 
 #### Basic Document Queries
+
 ```aql
 // Insert documents
 FOR doc IN [
@@ -276,6 +287,7 @@ FOR user IN users
 ```
 
 #### Advanced Document Operations
+
 ```aql
 // Complex filtering with nested objects
 FOR product IN products
@@ -317,6 +329,7 @@ FOR user IN users
 ### Graph Traversal Operations
 
 #### Basic Graph Traversals
+
 ```aql
 // Simple outbound traversal
 FOR v, e, p IN 1..3 OUTBOUND "users/alice" GRAPH "social"
@@ -343,6 +356,7 @@ FOR v, e, p IN 1..5 OUTBOUND "users/alice" friends, colleagues
 ```
 
 #### Advanced Graph Operations
+
 ```aql
 // Shortest path
 FOR path IN OUTBOUND SHORTEST_PATH "users/alice" TO "users/bob" GRAPH "social"
@@ -374,6 +388,7 @@ FOR v, e, p IN 1..10 OUTBOUND "users/alice" GRAPH "social"
 ### Full-Text Search Operations
 
 #### Basic Search Queries
+
 ```aql
 // Simple text search
 FOR doc IN articles
@@ -397,6 +412,7 @@ FOR doc IN articles
 ```
 
 #### Advanced Search Features
+
 ```aql
 // Search with facets
 FOR doc IN products
@@ -429,6 +445,7 @@ FOR doc IN products
 ### Geospatial Operations
 
 #### Basic Geospatial Queries
+
 ```aql
 // Points within radius
 FOR location IN locations
@@ -460,6 +477,7 @@ FOR location IN NEAR(locations, 40.7128, -74.0060, 10, "distance")
 ```
 
 #### Advanced Geospatial Features
+
 ```aql
 // Route calculation
 FOR route IN OUTBOUND SHORTEST_PATH 
@@ -499,6 +517,7 @@ FOR location IN locations
 ### Multi-Model Queries
 
 #### Document-Graph Hybrid Queries
+
 ```aql
 // Join documents with graph relationships
 FOR user IN users
@@ -529,6 +548,7 @@ FOR company IN companies
 ```
 
 #### Search-Graph Integration
+
 ```aql
 // Find experts through social network
 FOR expert IN experts
@@ -565,6 +585,7 @@ FOR user IN users
 ## Advanced Features Implementation
 
 ### Smart Graphs & Distribution
+
 ```rust
 pub struct SmartGraph {
     pub name: String,
@@ -619,6 +640,7 @@ impl SmartGraph {
 ```
 
 ### AQL Query Optimizer
+
 ```rust
 pub struct AQLOptimizer {
     statistics: StatisticsCollector,
@@ -665,6 +687,7 @@ impl AQLOptimizer {
 ```
 
 ### Multi-Model Transaction Support
+
 ```rust
 
 #[async_trait]
@@ -731,6 +754,7 @@ impl MultiModelTransactionManager {
 ## Integration with ArangoGraph Cloud Features
 
 ### Managed Service Integration
+
 - **Auto-scaling**: Dynamic cluster scaling based on workload
 - **Backup & Recovery**: Automated backups with point-in-time recovery
 - **Monitoring**: Comprehensive metrics and alerting
@@ -738,6 +762,7 @@ impl MultiModelTransactionManager {
 - **Multi-cloud**: Support for AWS, Azure, and Google Cloud
 
 ### Performance Optimization
+
 - **OneShard Optimization**: Single-shard collections for improved performance
 - **Satellite Collections**: Distributed reference data replication
 - **Query Caching**: Intelligent result caching with invalidation
@@ -746,12 +771,14 @@ impl MultiModelTransactionManager {
 ## Migration and Compatibility
 
 ### ArangoDB Compatibility
+
 - **HTTP API**: Full REST API compatibility
 - **Drivers**: Support for all official ArangoDB drivers (JavaScript, Python, Java, Go, C#, PHP)
 - **AQL Language**: 100% AQL query language compatibility
 - **Data Import/Export**: Compatible import/export tools and formats
 
 ### Migration Tools
+
 - **Schema Migration**: Tools for migrating database structures
 - **Data Migration**: Bulk data import from existing ArangoDB instances  
 - **Query Migration**: AQL query compatibility validation

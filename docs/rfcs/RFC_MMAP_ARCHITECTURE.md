@@ -4,7 +4,7 @@ title: RFC: Memory-Mapped File Architecture for Orbit-RS
 category: rfcs
 ---
 
-# RFC: Memory-Mapped File Architecture for Orbit-RS
+## RFC: Memory-Mapped File Architecture for Orbit-RS
 
 **RFC ID**: RFC-2024-001  
 **Title**: Memory-Mapped File Persistence Architecture  
@@ -55,13 +55,13 @@ Memory-mapped files offer significant advantages:
 
 ### Architecture Components
 
-```rust
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                    Application Layer                        │
 ├─────────────────────────────────────────────────────────────┤
-│           Orbit-RS Actor System & Virtual Actors           │
+│           Orbit-RS Actor System & Virtual Actors            │
 ├─────────────────────────────────────────────────────────────┤
-│              Memory-Mapped Persistence Layer               │
+│              Memory-Mapped Persistence Layer                │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
 │  │ MMap        │  │ Page        │  │ NUMA & THP          │  │
 │  │ Provider    │  │ Manager     │  │ Optimization        │  │
@@ -512,7 +512,7 @@ pub struct IoRingConfig {
 }
 ```
 
-#### Configuration Files
+#### Default Configuration Files
 
 **Complete TOML Configuration Example:**
 
@@ -606,6 +606,7 @@ data:
 ### Phase 1: Core Infrastructure (Weeks 1-4)
 
 #### Week 1-2: Basic MMap Provider
+
 - [ ] Implement `MMapPersistenceProvider` struct
 - [ ] Basic memory mapping functionality
 - [ ] File creation and management
@@ -613,6 +614,7 @@ data:
 - [ ] Integration with existing persistence traits
 
 #### Week 3-4: Configuration System
+
 - [ ] Complete `MMapConfig` structure
 - [ ] TOML configuration parsing
 - [ ] Environment variable overrides
@@ -622,6 +624,7 @@ data:
 ### Phase 2: Advanced Features (Weeks 5-8)
 
 #### Week 5-6: Transparent Huge Page Support
+
 - [ ] `HugePageManager` implementation
 - [ ] THP detection and configuration
 - [ ] 2MB huge page support
@@ -629,6 +632,7 @@ data:
 - [ ] THP monitoring and statistics
 
 #### Week 7-8: NUMA Optimization
+
 - [ ] `NumaTopology` detection
 - [ ] NUMA-aware memory allocation
 - [ ] CPU affinity management
@@ -638,6 +642,7 @@ data:
 ### Phase 3: I/O Optimization (Weeks 9-12)
 
 #### Week 9-10: I/O Ring Integration
+
 - [ ] `IoRingManager` implementation
 - [ ] Async read/write operations
 - [ ] Polling mode support
@@ -645,6 +650,7 @@ data:
 - [ ] Performance benchmarking
 
 #### Week 11-12: Performance Tuning
+
 - [ ] Page access tracking
 - [ ] Adaptive prefetching
 - [ ] Memory pressure handling
@@ -654,6 +660,7 @@ data:
 ### Phase 4: Deployment & Operations (Weeks 13-16)
 
 #### Week 13-14: Kubernetes Integration
+
 - [ ] Optimized StatefulSet configurations
 - [ ] Node preparation scripts
 - [ ] Storage class definitions
@@ -661,6 +668,7 @@ data:
 - [ ] Auto-scaling configurations
 
 #### Week 15-16: Production Readiness
+
 - [ ] Comprehensive testing
 - [ ] Performance benchmarks
 - [ ] Documentation
@@ -672,6 +680,7 @@ data:
 ### 1. Kubernetes Deployment
 
 **Node Requirements:**
+
 ```yaml
 nodeRequirements:
   cpu: "16-32 cores"
@@ -682,6 +691,7 @@ nodeRequirements:
 ```
 
 **Example Deployment:**
+
 ```bash
 
 # Label nodes for mmap optimization
@@ -722,6 +732,7 @@ worker_threads = 8  # Match available cores
 ```
 
 **Setup Commands:**
+
 ```bash
 
 # Prepare the system
@@ -741,6 +752,7 @@ sudo chown $USER:$USER /data/orbit-mmap
 For traditional VM deployments (AWS EC2, Azure VMs, GCP Compute):
 
 **Terraform Configuration:**
+
 ```hcl
 resource "aws_instance" "orbit_mmap_nodes" {
   count = 30  # Reduced from traditional 100+ nodes
@@ -774,6 +786,7 @@ resource "aws_instance" "orbit_mmap_nodes" {
 ```
 
 **VM Initialization Script:**
+
 ```bash
 
 #!/bin/bash
@@ -812,6 +825,7 @@ chmod +x orbit-server
 ```
 
 **Cluster Configuration:**
+
 ```toml
 
 # mmap-cluster.toml
@@ -868,6 +882,7 @@ ultra_dense_node_specs:
 #### Configuration Files
 
 **Storage Configuration (`k8s/3-node-petabyte/01-storage-ultra-dense.yaml`)**
+
 ```yaml
 
 # Ultra-high density storage class
@@ -901,6 +916,7 @@ spec:
 ```
 
 **Application Configuration (`k8s/3-node-petabyte/02-configmap-3node.yaml`)**
+
 ```yaml
 apiVersion: v1
 kind: ConfigMap
@@ -951,6 +967,7 @@ kubectl apply -f k8s/3-node-petabyte/03-statefulset-3node.yaml
 ```
 
 **StatefulSet Configuration (`k8s/3-node-petabyte/03-statefulset-3node.yaml`)**
+
 ```yaml
 apiVersion: apps/v1
 kind: StatefulSet
@@ -1090,6 +1107,7 @@ spec:
 ```
 
 **Service Configuration (`k8s/3-node-petabyte/04-services.yaml`)**
+
 ```yaml
 ---
 
@@ -1157,6 +1175,7 @@ spec:
 ```
 
 **Health Check Script (`scripts/ultra-dense-health-check.sh`)**
+
 ```bash
 
 #!/bin/bash
@@ -1222,6 +1241,7 @@ echo "\n=== Health Check Complete ==="
 For ultra-low latency data operations, orbit-rs implements advanced memory management techniques including **object pinning**, **fragmentation strategies**, and **lifetime-aware garbage collection**. These optimizations are critical for maintaining sub-10μs tail latencies in petabyte-scale deployments.
 
 **Core Concepts:**
+
 - **Hot Object Pinning**: Keep frequently accessed tables, graph nodes, and virtual objects resident in memory
 - **Intelligent Fragmentation**: Break large objects into connected slices with independent lifetime management
 - **NUMA-Aware Placement**: Optimize memory placement based on CPU topology and access patterns
@@ -1255,6 +1275,7 @@ pin_management:
 #### 7.2.2 Pinning Techniques
 
 **Page-Level Pinning:**
+
 ```rust
 // Linux: mlock2(MLOCK_ONFAULT) - pin on first access
 // macOS: mlock() fallback for development
@@ -1271,6 +1292,7 @@ pub fn pin_slice_lazy(addr: *mut u8, len: usize) -> Result<(), PinError> {
 ```
 
 **NUMA-Aware Placement:**
+
 ```yaml
 numa_policies:
   hot_tables: "bind_local"           # Bind to local NUMA node
@@ -1284,6 +1306,7 @@ numa_policies:
 ```
 
 **Huge Page Optimization:**
+
 ```yaml
 huge_pages:
   transparent_huge_pages: "madvise" # THP only on explicit hint
@@ -1301,6 +1324,7 @@ huge_pages:
 #### 7.3.1 Extent-Based Storage
 
 **Tables - Column-Oriented Slicing:**
+
 ```yaml
 table_slicing:
   extent_size: "64MB"              # Base extent size
@@ -1318,6 +1342,7 @@ table_slicing:
 ```
 
 **Graphs - Community-Based Partitioning:**
+
 ```yaml
 graph_slicing:
   partition_strategy: "community_detection"
@@ -1336,6 +1361,7 @@ graph_slicing:
 #### 7.3.2 Extent Indices and Connection Graph
 
 **Extent Mapping Structure:**
+
 ```rust
 
 #[derive(Clone, Copy)]
@@ -1358,6 +1384,7 @@ pub enum ExtentFlags {
 ```
 
 **Connection and Prefetch Hints:**
+
 ```rust
 pub struct ExtentConnections {
     pub forward_extents: Vec<ExtentRef>,   // Next extents in sequence
@@ -1535,6 +1562,7 @@ pub enum AccessType {
 #### 7.6.1 Planner Hints and Prefetching
 
 **SQL Query Planning:**
+
 ```rust
 pub struct QueryPlanHints {
     pub predicted_rowgroups: Vec<u64>,     // Rowgroups likely to be accessed
@@ -1577,6 +1605,7 @@ impl QueryPlanner {
 ```
 
 **Graph Traversal Optimization:**
+
 ```rust
 pub struct GraphTraversalHints {
     pub start_partitions: Vec<u64>,        // Starting graph partitions
@@ -1635,6 +1664,7 @@ performance_monitoring:
 ```
 
 **Adaptive Pin Controller:**
+
 ```rust
 pub struct AdaptivePinController {
     pin_manager: Arc<dyn PinManager>,
@@ -1691,6 +1721,7 @@ impl AdaptivePinController {
 The advanced memory management system integrates seamlessly with Orbit-RS's virtual actor model, where **actors become the fundamental unit of memory locality and pinning decisions**.
 
 **Actor Memory Ownership:**
+
 ```rust
 pub trait ActorMemoryManager {
     /// Pin memory for an actor's persistent state
@@ -1719,6 +1750,7 @@ pub struct ActorMemoryStats {
 #### 7.7.2 Actor Lifecycle Integration
 
 **OnActivate - Intelligent Warming:**
+
 ```rust
 use orbit_shared::addressable::{Addressable, AddressableReference};
 
@@ -1771,6 +1803,7 @@ pub enum ActorMemoryProfile {
 #### 7.7.3 Actor Type-Specific Memory Strategies
 
 **Graph Database Actors:**
+
 ```rust
 use orbit_protocols::graph_database::GraphDatabaseActor;
 
@@ -1810,6 +1843,7 @@ impl GraphDatabaseActor {
 ```
 
 **Time Series Actors:**
+
 ```rust
 use orbit_protocols::time_series::TimeSeriesActor;
 
@@ -1850,6 +1884,7 @@ impl TimeSeriesActor {
 #### 7.7.4 Actor Communication and Memory Locality
 
 **Message-Based Memory Hints:**
+
 ```rust
 use orbit_shared::actor_communication::{Message, MessageContent};
 
@@ -1891,6 +1926,7 @@ impl ActorCommunication {
 ```
 
 **NUMA-Aware Actor Placement:**
+
 ```rust
 pub struct ActorPlacementStrategy {
     pin_manager: Arc<dyn PinManager>,
@@ -1928,6 +1964,7 @@ impl ActorPlacementStrategy {
 #### 7.7.5 Distributed Memory Coordination
 
 **Cross-Node Memory Management:**
+
 ```rust
 pub struct DistributedMemoryCoordinator {
     local_pin_manager: Arc<dyn PinManager>,
@@ -2019,27 +2056,32 @@ impl DistributedMemoryCoordinator {
 #### 7.7.6 Benefits of Actor-Memory Integration
 
 **1. Natural Locality Boundaries:**
+
 - Actors define clear ownership boundaries for memory regions
 - Pin/unpin decisions align with actor lifecycle (activate/deactivate)
 - Actor relationships guide prefetching strategies
 
 **2. Workload-Aware Optimization:**
+
 - Different actor types get different memory profiles (hot/warm/cold)
 - Graph actors optimize for traversal locality
 - Time series actors optimize for temporal locality
 - Document actors optimize for key-based access
 
 **3. Distributed Coordination:**
+
 - Actor migration triggers coordinated memory management across nodes
 - Replication-aware pinning reduces cross-node data access
 - Message-based memory hints enable predictive optimization
 
 **4. Resource Management:**
+
 - Pin budgets can be allocated per actor type or priority class
 - Actor deactivation automatically frees associated memory
 - NUMA-aware placement reduces memory access latency
 
 **5. Performance Guarantees:**
+
 - Critical path actors get guaranteed memory pinning
 - Tail latency SLAs can be enforced at the actor level
 - Memory pressure triggers predictable eviction based on actor priorities
@@ -2064,6 +2106,7 @@ impl DistributedMemoryCoordinator {
 | Traditional 100-Node | 100 | $73K | Reference |
 
 **Benefits of 3-Node Approach:**
+
 - **94% fewer nodes** than traditional 50-node deployment
 - **$55K/month savings** vs 50-node cluster
 - **Simplified operations** with only 3 nodes to manage
@@ -2075,6 +2118,7 @@ impl DistributedMemoryCoordinator {
 For maximum performance on dedicated hardware:
 
 **Hardware Specifications:**
+
 ```yaml
 recommendedHardware:
   cpu: "AMD EPYC 7763 or Intel Xeon Gold 6338"
@@ -2086,6 +2130,7 @@ recommendedHardware:
 ```
 
 **System Preparation:**
+
 ```bash
 
 #!/bin/bash
@@ -2140,6 +2185,7 @@ mount -o noatime,nodiratime,data=writeback /dev/md0 /mnt/orbit-data
 ### Benchmark Scenarios
 
 #### 1. Actor Lease Operations
+
 ```rust
 // Benchmark configuration
 const OPERATIONS: usize = 1_000_000;
@@ -2152,6 +2198,7 @@ const LEASE_SIZE: usize = 256; // bytes
 ```
 
 #### 2. Large Dataset Scans
+
 ```rust
 // Scanning 1TB dataset
 const DATASET_SIZE: usize = 1_000_000_000_000; // 1TB
@@ -2163,6 +2210,7 @@ const SCAN_PATTERN: ScanPattern = ScanPattern::Sequential;
 ```
 
 #### 3. Memory Pressure Tests
+
 ```rust
 // Simulate memory pressure
 const TOTAL_DATA: usize = 10_000_000_000_000; // 10TB
@@ -2214,6 +2262,7 @@ pub enum MemoryEncryption {
 ## Testing Strategy
 
 ### 1. Unit Tests
+
 - Memory mapping operations
 - Configuration parsing
 - NUMA topology detection
@@ -2221,18 +2270,21 @@ pub enum MemoryEncryption {
 - I/O ring operations
 
 ### 2. Integration Tests
+
 - Full persistence provider functionality
 - Kubernetes deployment validation
 - Performance regression tests
 - Failure recovery scenarios
 
 ### 3. Performance Tests
+
 - Throughput benchmarks
 - Latency measurements
 - Memory usage profiling
 - Scalability testing
 
 ### 4. Stress Tests
+
 - Memory pressure scenarios
 - High concurrency loads
 - Network partition handling
@@ -2295,11 +2347,13 @@ mod tests {
 ### From Existing Backends
 
 #### 1. Assessment Phase
+
 - Analyze current data size and access patterns
 - Estimate resource requirements for mmap deployment
 - Plan migration timeline and rollback procedures
 
 #### 2. Parallel Deployment
+
 ```rust
 /// Migration configuration
 
@@ -2342,6 +2396,7 @@ impl MigrationOrchestrator {
 ```
 
 #### 3. Validation and Cutover
+
 - Data integrity verification
 - Performance validation
 - Gradual traffic migration
@@ -2377,6 +2432,7 @@ The memory-mapped file architecture represents a significant opportunity to impr
 The proposed implementation plan balances ambitious performance goals with practical development milestones. The extensive configuration system ensures the architecture can adapt to various deployment scenarios while maintaining operational simplicity.
 
 Success metrics for this RFC include:
+
 - 50-75% reduction in infrastructure costs
 - 3x reduction in required nodes for petabyte-scale deployments
 - Improved performance across all key metrics

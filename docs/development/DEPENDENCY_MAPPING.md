@@ -4,7 +4,7 @@ title: Kotlin/JVM to Rust Dependency Mapping
 category: development
 ---
 
-# Kotlin/JVM to Rust Dependency Mapping
+## Kotlin/JVM to Rust Dependency Mapping
 
 ## Core Runtime Dependencies
 
@@ -111,13 +111,14 @@ The original Kotlin implementation uses Java's dynamic proxy mechanism for actor
 ### From Kotlin Coroutines to Rust Async/Await
 
 - **Suspend functions** → **async fn**
-- **Deferred<T>** → **Future<Output = T>**
+- **Deferred< T>** → **Future<Output = T>**
 - **GlobalScope.launch** → **tokio::spawn**
 - **runBlocking** → **tokio::runtime::Runtime::block_on**
 
 ### From Reflection to Code Generation
 
 Kotlin's runtime reflection is replaced with:
+
 - **Procedural macros** for actor trait generation
 - **build.rs** scripts for protocol buffer compilation
 - **Compile-time trait resolution** instead of runtime class scanning

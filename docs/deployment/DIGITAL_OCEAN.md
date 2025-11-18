@@ -4,7 +4,7 @@ title: Digital Ocean Deployment Guide
 category: deployment
 ---
 
-# Digital Ocean Deployment Guide
+## Digital Ocean Deployment Guide
 
 This guide provides comprehensive instructions for deploying Orbit-RS to Digital Ocean using droplets with optional GPU support and Digital Ocean Spaces for object storage.
 
@@ -35,7 +35,7 @@ Orbit-RS supports deployment to Digital Ocean using:
 
 ### Architecture Diagram
 
-```
+```text
 ┌─────────────────┐    ┌─────────────────┐
 │   Load Balancer │────│   Firewall      │
 └─────────────────┘    └─────────────────┘
@@ -52,11 +52,11 @@ Orbit-RS supports deployment to Digital Ocean using:
           └───────────────────────┘
                       │
                       ▼
-          ┌─────────────────┐
-          │ Digital Ocean   │
-          │ Spaces          │
-          │ (Object Storage)│
-          └─────────────────┘
+            ┌─────────────────┐
+            │ Digital Ocean   │
+            │ Spaces          │
+            │ (Object Storage)│
+            └─────────────────┘
 ```
 
 ## Prerequisites
@@ -69,6 +69,7 @@ Orbit-RS supports deployment to Digital Ocean using:
    - Verify your email
 
 2. **Generate API Token**
+
    ```bash
    # Go to Digital Ocean Control Panel > API > Tokens
    # Generate a new Personal Access Token with read/write permissions
@@ -76,6 +77,7 @@ Orbit-RS supports deployment to Digital Ocean using:
    ```
 
 3. **Create SSH Key**
+
    ```bash
    # Generate SSH key pair
    ssh-keygen -t ed25519 -C "your_email@example.com" -f ~/.ssh/orbit-rs-do
@@ -92,6 +94,7 @@ Orbit-RS supports deployment to Digital Ocean using:
 ### Local Environment
 
 1. **Install Required Tools**
+
    ```bash
    # Install doctl (Digital Ocean CLI)
    # macOS
@@ -107,12 +110,14 @@ Orbit-RS supports deployment to Digital Ocean using:
    ```
 
 2. **Install Docker**
+
    ```bash
    # Required for local container operations
    curl -fsSL https://get.docker.com | sh
    ```
 
 3. **Clone Repository**
+
    ```bash
    git clone https://github.com/your-org/orbit-rs.git
    cd orbit-rs
@@ -340,7 +345,7 @@ Digital Ocean offers several GPU droplet types:
 | `gd-8vcpu-32gb-nvidia-h100x1` | 8 | 32 GB | H100 | 80 GB | 800 GB SSD | ~$3.00 |
 | `gd-16vcpu-64gb-nvidia-h100x2` | 16 | 64 GB | 2x H100 | 160 GB | 1.6 TB SSD | ~$6.00 |
 
-*Prices are approximate and vary by region*
+> **Note:** Prices are approximate and vary by region
 
 ### GPU Droplet Configuration
 
@@ -945,7 +950,7 @@ After successful deployment:
 
 ## Support
 
-- **Digital Ocean Documentation**: https://docs.digitalocean.com/
+- **Digital Ocean Documentation**: <https://docs.digitalocean.com/>
 - **Orbit-RS Documentation**: [Link to main docs]
 - **Community Support**: [Link to community forum/Discord]
 - **Professional Support**: [Contact information]

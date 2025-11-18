@@ -5,6 +5,7 @@ This directory contains scripts that replicate all the checks from the GitHub Ac
 ## 🎯 Overview
 
 The verification system mirrors the following GitHub Actions workflows:
+
 - `.github/workflows/ci.yml` - Basic Continuous Integration
 - `.github/workflows/ci-cd-enhanced.yml` - **Enhanced CI/CD Pipeline** (Primary)
 - `.github/workflows/ci-cd.yml` - Legacy CI/CD Pipeline (Renamed)
@@ -12,7 +13,7 @@ The verification system mirrors the following GitHub Actions workflows:
 
 ## 📁 Structure
 
-```
+```text
 verification/
 ├── README.md              # This file
 ├── verify_all.sh          # Main script - runs all checks
@@ -37,31 +38,37 @@ verification/
 ## 🚀 Quick Start
 
 ### Run All Checks
+
 ```bash
 ./verification/verify_all.sh
 ```
 
 ### Quick Development Check (Fastest)
+
 ```bash
 ./verification/quick_check.sh
 ```
 
 ### Fast Mode (Skip Slow Checks with Timeouts)
+
 ```bash
 ./verification/verify_all.sh --fast
 ```
 
 ### Run Only Essential Checks (Skip Slow Ones)
+
 ```bash
 ./verification/verify_all.sh --skip-optional
 ```
 
 ### Run with Custom Timeout
+
 ```bash
 ./verification/verify_all.sh --timeout=600  # 10 minutes
 ```
 
 ### Run Specific Stage
+
 ```bash
 ./verification/verify_all.sh --stage rust
 ./verification/verify_all.sh --stage quality  
@@ -69,6 +76,7 @@ verification/
 ```
 
 ### Run with Verbose Output
+
 ```bash
 ./verification/verify_all.sh --verbose
 ```
@@ -76,17 +84,20 @@ verification/
 ## 🔧 Prerequisites
 
 ### Required (macOS)
+
 - **Rust**: Install via [rustup.rs](https://rustup.rs/)
 - **Protocol Buffers**: `brew install protobuf`
 - **GNU coreutils** (for timeout support): `brew install coreutils`
 
 ### Required Rust Components
+
 ```bash
 rustup component add rustfmt
 rustup component add clippy
 ```
 
 ### Optional Tools (Auto-installed)
+
 - **cargo-tarpaulin**: For code coverage (comprehensive mode)
 - **cargo-llvm-cov**: Alternative coverage tool (comprehensive mode)
 - **cargo-audit**: For security vulnerability scanning
@@ -94,11 +105,13 @@ rustup component add clippy
 - **cargo-benchmarks**: For performance testing (if orbit-benchmarks package exists)
 
 ### System Tools
+
 - **Helm**: For Kubernetes chart validation (optional)
 
 ## 📊 Check Details
 
 ### Rust Checks (Stage 1)
+
 | Check | Command | Purpose |
 |-------|---------|---------|
 | Formatting | `cargo fmt --all -- --check` | Code style consistency |
@@ -109,6 +122,7 @@ rustup component add clippy
 | Examples | `cargo build --package <example>` | Example project builds |
 
 ### Quality Checks (Stage 2)
+
 | Check | Command | Purpose |
 |-------|---------|---------|
 | Documentation | `cargo doc --no-deps --features="..."` | API documentation |
@@ -116,6 +130,7 @@ rustup component add clippy
 | Benchmarks | `cargo bench --package orbit-benchmarks` | Performance testing |
 
 ### Infrastructure Checks (Stage 3)
+
 | Check | Command | Purpose |
 |-------|---------|---------|
 | Helm | `helm lint && helm template` | Kubernetes deployment validation |
@@ -123,6 +138,7 @@ rustup component add clippy
 ## 💡 Usage Examples
 
 ### Development Workflow
+
 ```bash
 
 # Quick check during development (1-3 minutes)
@@ -139,7 +155,9 @@ rustup component add clippy
 ```
 
 ### Pre-commit Hook
+
 Add to `.git/hooks/pre-commit`:
+
 ```bash
 
 #!/bin/bash
@@ -147,6 +165,7 @@ Add to `.git/hooks/pre-commit`:
 ```
 
 ### CI/CD Troubleshooting
+
 ```bash
 
 # Run only the failing stage with verbose output
@@ -157,6 +176,7 @@ Add to `.git/hooks/pre-commit`:
 ```
 
 ### Coverage Analysis
+
 ```bash
 
 # Use tarpaulin (default)
@@ -170,6 +190,7 @@ COVERAGE_METHOD=both ./verification/checks/check_coverage.sh
 ```
 
 ### Individual Check
+
 ```bash
 
 # Run just formatting check
@@ -183,6 +204,7 @@ CHECK_TIMEOUT=600 ./verification/checks/check_security.sh
 ```
 
 ### Before Release
+
 ```bash
 
 # Run complete validation including all optional checks
@@ -196,55 +218,65 @@ CHECK_TIMEOUT=600 ./verification/checks/check_security.sh
 
 ### Common Issues
 
-**"rustfmt not found"**
+#### "rustfmt not found"
+
 ```bash
 rustup component add rustfmt
 ```
 
 **"clippy not found"**  
+
 ```bash
 rustup component add clippy
 ```
 
-**"protoc not found" (macOS)**
+#### "protoc not found" (macOS)
+
 ```bash
 brew install protobuf
 ```
 
 **Timeout errors (macOS)**
 Install GNU coreutils for proper timeout support:
+
 ```bash
 brew install coreutils
 ```
 
-**Formatting issues**
+#### Formatting issues
+
 ```bash
 cargo fmt --all
 ```
 
 **Clippy warnings**
+
 ```bash
 cargo clippy --fix --all-targets --features="resp,postgres-wire,cypher,rest"
 ```
 
-**Test failures**
+#### Test failures
+
 ```bash
 cargo test --workspace -- --nocapture
 ```
 
 **Vulnerability check failures**
 Update `config/deny.toml` or run:
+
 ```bash
 cargo deny check
 ```
 
 **Coverage generation fails**
 Try alternative coverage tool:
+
 ```bash
 COVERAGE_METHOD=llvm-cov ./verification/checks/check_coverage.sh
 ```
 
 **Helm checks fail**
+
 - Install Helm: [helm.sh/docs/intro/install](https://helm.sh/docs/intro/install/)
 - Install chart-testing plugin: `helm plugin install https://github.com/helm/chart-testing`
 
@@ -280,6 +312,7 @@ COVERAGE_METHOD=llvm-cov ./verification/checks/check_coverage.sh
 ### Configuration Files
 
 Validation behavior is controlled by:
+
 - `config/deny.toml` - cargo-deny configuration for dependency/license checks
 - `Cargo.toml` - Package features and dependencies
 - `.github/workflows/` - CI workflow definitions (mirrored by verification scripts)

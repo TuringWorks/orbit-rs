@@ -4,7 +4,7 @@ title: Storage Backend Independence in Orbit-RS
 category: documentation
 ---
 
-# Storage Backend Independence in Orbit-RS
+## Storage Backend Independence in Orbit-RS
 
 ## Quick Answer
 
@@ -14,7 +14,7 @@ Each storage backend is a complete, self-contained persistence solution. You cho
 
 ## Architecture Overview
 
-```
+```text
 ┌─────────────────────────────────────────────────────────┐
 │                 Orbit-RS Framework                      │
 │            (AddressableDirectoryProvider)               │
@@ -39,24 +39,28 @@ Each storage backend is a complete, self-contained persistence solution. You cho
 ## Storage Backend Types
 
 ### Cloud Backends (Object Storage)
+
 - **S3, Azure Blob, Google Cloud Storage, MinIO**
 - **How they work**: Direct HTTP REST API calls to cloud services
 - **Data format**: JSON objects with metadata stored as blobs/objects
 - **No local storage**: Completely cloud-based, no local files
 
 **Example**: S3 stores actor leases as objects like:
-```
+
+```text
 s3://my-bucket/orbit/leases/UserActor/user-123
 ```
 
 ### Local Backends (Embedded Storage)
+
 - **LSM-Tree, RocksDB, B+Tree, Memory**
 - **How they work**: Complete storage engines with local data structures
 - **Data format**: Custom binary formats optimized for each engine
 - **Local files only**: No cloud dependencies
 
 **Example**: LSM-Tree stores data in local files:
-```
+
+```text
 /data/orbit_lsm_data/
 ├── memtable_001.sst
 ├── memtable_002.sst
@@ -66,6 +70,7 @@ s3://my-bucket/orbit/leases/UserActor/user-123
 ## Code Evidence
 
 **S3 Provider** - Direct REST API:
+
 ```rust
 impl S3AddressableDirectoryProvider {
     async fn store_lease(&self, lease: &AddressableLease) -> OrbitResult<()> {
@@ -77,6 +82,7 @@ impl S3AddressableDirectoryProvider {
 ```
 
 **LSM-Tree Provider** - Local data structures:
+
 ```rust
 impl LsmTreeAddressableProvider {
     async fn store_lease(&self, lease: &AddressableLease) -> OrbitResult<()> {
@@ -98,6 +104,7 @@ impl LsmTreeAddressableProvider {
 You configure **exactly one** backend per Orbit-RS deployment:
 
 ### Option 1: Pure Cloud (S3)
+
 ```toml
 [server]
 persistence_backend = "s3"
@@ -110,6 +117,7 @@ bucket = "orbit-production-state"
 ```
 
 ### Option 2: Pure Local (LSM-Tree)
+
 ```toml
 [server]
 persistence_backend = "lsm_tree"
@@ -122,6 +130,7 @@ memtable_size_limit = 67108864  # 64MB
 ```
 
 ### Option 3: Pure Local (RocksDB)
+
 ```toml
 [server]
 persistence_backend = "rocksdb"

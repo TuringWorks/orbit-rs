@@ -59,7 +59,8 @@ sequenceDiagram
 ## File Structure
 
 ### COW B+ Tree
-```
+
+```text
 data/
 ├── orbit.wal              # Write-Ahead Log
 ├── snapshots/             # Periodic snapshots
@@ -69,7 +70,8 @@ data/
 ```
 
 ### LSM-Tree
-```
+
+```text
 data/
 ├── wal.log                # Write-Ahead Log
 ├── sstables/              # Sorted String Tables
@@ -80,7 +82,8 @@ data/
 ```
 
 ### RocksDB
-```
+
+```text
 data/
 ├── CURRENT                # Current manifest pointer
 ├── MANIFEST-000001        # Database metadata

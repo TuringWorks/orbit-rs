@@ -122,28 +122,34 @@ OK
 ## 📊 Supported Commands (Complete List)
 
 ### String Operations (15+ commands)
-- `GET`, `SET`, `DEL`, `EXISTS`, `TTL`, `EXPIRE` 
+
+- `GET`, `SET`, `DEL`, `EXISTS`, `TTL`, `EXPIRE`
 - `APPEND`, `GETRANGE`, `SETRANGE`, `STRLEN`
 - `MGET`, `MSET`, `GETSET`, `SETEX`, `PEXPIRE`, `PTTL`
 
-### Hash Operations (11+ commands) 
+### Hash Operations (11+ commands)
+
 - `HGET`, `HSET`, `HGETALL`, `HDEL`, `HEXISTS`
 - `HKEYS`, `HVALS`, `HLEN`, `HMGET`, `HMSET`, `HINCRBY`
 
 ### List Operations (12+ commands)
+
 - `LPUSH`, `RPUSH`, `LPOP`, `RPOP`, `LRANGE`, `LLEN`
 - `LINDEX`, `LSET`, `LREM`, `LTRIM`, `LINSERT`
 - `BLPOP`, `BRPOP` (non-blocking implementation)
 
 ### Set Operations (8+ commands)
+
 - `SADD`, `SREM`, `SMEMBERS`, `SCARD`, `SISMEMBER`
 - `SUNION`, `SINTER`, `SDIFF`
 
 ### Sorted Set Operations (10+ commands)
+
 - `ZADD`, `ZREM`, `ZCARD`, `ZSCORE`, `ZINCRBY`
 - `ZRANGE`, `ZREVRANGE`, `ZRANGEBYSCORE`, `ZCOUNT`, `ZRANK`
 
 ### Connection & Server Commands (10+ commands)
+
 - `PING`, `ECHO`, `SELECT`, `AUTH`, `QUIT`
 - `INFO`, `DBSIZE`, `COMMAND`, `FLUSHDB`, `KEYS`
 
@@ -151,8 +157,8 @@ OK
 
 ### System Components
 
-```
-┌─────────────────┐    RESP     ┌──────────────────┐    gRPC    ┌─────────────────┐
+```text
+┌─────────────────┐    RESP     ┌──────────────────┐    gRPC     ┌─────────────────┐
 │   Redis Client  │ ◄────────── │  RESP Server     │ ◄────────── │  Orbit Server   │
 │   (redis-cli)   │   Port 6379 │  (Port 6379)     │  Port 50056 │  (Port 50056)   │
 └─────────────────┘             └──────────────────┘             └─────────────────┘
@@ -299,6 +305,7 @@ done
 ### Common Issues
 
 **Problem**: `redis-cli` hangs on connection
+
 ```bash
 # Solution: Ensure orbit-server is running first
 ./target/release/orbit-server --grpc-port 50056 --dev-mode &
@@ -307,6 +314,7 @@ sleep 3
 ```
 
 **Problem**: "Address already in use" error  
+
 ```bash
 # Solution: Kill existing processes
 pkill -f "resp-server"
@@ -315,12 +323,14 @@ lsof -ti:6379 | xargs kill  # Kill anything on port 6379
 ```
 
 **Problem**: Commands return "Hello from actor!" mock responses
+
 ```bash
 # Solution: Restart RESP server (orbit-server connection issue)
 # Check orbit-server logs for gRPC connectivity
 ```
 
 **Problem**: High memory usage
+
 ```bash
 # Monitor actor count
 curl http://localhost:8080/metrics | grep orbit_actor_count
@@ -520,6 +530,7 @@ Orbit-RS provides a **production-ready Redis server** with:
 **Ready to replace Redis in production!** 🚀
 
 For support, questions, or contributions:
+
 - 📖 [Full Documentation](../../README.md)
 - 🐛 [Issue Tracker](https://github.com/TuringWorks/orbit-rs/issues)  
 - 💬 [Community Discussions](https://github.com/TuringWorks/orbit-rs/discussions)

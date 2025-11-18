@@ -7,6 +7,7 @@ pub mod cluster_manager;
 pub mod config;
 pub mod config_utils;
 pub mod consensus;
+pub mod election_metrics;
 pub mod election_state;
 // Unified error module - use this for all error handling
 pub mod error;

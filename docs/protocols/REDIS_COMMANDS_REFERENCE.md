@@ -4,11 +4,12 @@ title: Redis Commands Reference - Orbit-RS RESP Protocol
 category: protocols
 ---
 
-# Redis Commands Reference - Orbit-RS RESP Protocol
+## Redis Commands Reference - Orbit-RS RESP Protocol
 
 ## Overview
 
 Orbit-RS provides full Redis compatibility through the RESP (Redis Serialization Protocol) adapter, supporting:
+
 - ✅ **Standard Redis Commands** - All core Redis functionality
 - ✅ **Vector Operations** - AI/ML vector search with multiple similarity metrics
 - ✅ **Time Series** - Complete RedisTimeSeries compatibility
@@ -18,7 +19,9 @@ Orbit-RS provides full Redis compatibility through the RESP (Redis Serialization
 ## Connection Commands
 
 ### PING [message]
+
 Test server connection and optionally echo message.
+
 ```redis
 PING
 
@@ -30,7 +33,9 @@ PING "hello world"
 ```
 
 ### ECHO message
+
 Echo the given message back to client.
+
 ```redis
 ECHO "Hello Redis!"
 
@@ -38,7 +43,9 @@ ECHO "Hello Redis!"
 ```
 
 ### SELECT db
+
 Select database (logical separation, no-op for compatibility).
+
 ```redis
 SELECT 0
 
@@ -46,7 +53,9 @@ SELECT 0
 ```
 
 ### AUTH [username] password
+
 Authenticate with server (placeholder implementation).
+
 ```redis
 AUTH mypassword
 
@@ -58,7 +67,9 @@ AUTH myuser mypassword
 ```
 
 ### QUIT
+
 Close connection gracefully.
+
 ```redis
 QUIT
 
@@ -68,7 +79,9 @@ QUIT
 ## String/Key Commands
 
 ### GET key
+
 Retrieve value by key from KeyValueActor.
+
 ```redis
 SET mykey "hello world"
 GET mykey
@@ -77,7 +90,9 @@ GET mykey
 ```
 
 ### SET key value [EX seconds] [PX milliseconds]
+
 Set key to value with optional expiration.
+
 ```redis
 SET mykey "value"
 
@@ -93,7 +108,9 @@ SET mykey "value" PX 60000
 ```
 
 ### DEL key [key ...]
+
 Delete one or more keys.
+
 ```redis
 DEL key1 key2 key3
 
@@ -101,7 +118,9 @@ DEL key1 key2 key3
 ```
 
 ### EXISTS key [key ...]
+
 Check if keys exist.
+
 ```redis
 EXISTS key1 key2
 
@@ -109,7 +128,9 @@ EXISTS key1 key2
 ```
 
 ### TTL key
+
 Get time-to-live in seconds (-1 = no expiration, -2 = key doesn't exist).
+
 ```redis
 TTL mykey
 
@@ -117,7 +138,9 @@ TTL mykey
 ```
 
 ### EXPIRE key seconds
+
 Set expiration time in seconds.
+
 ```redis
 EXPIRE mykey 300
 
@@ -127,7 +150,9 @@ EXPIRE mykey 300
 ### Extended String Commands
 
 #### APPEND key value
+
 Append value to existing string.
+
 ```redis
 SET mykey "Hello"
 APPEND mykey " World"
@@ -139,7 +164,9 @@ GET mykey
 ```
 
 #### GETRANGE key start end
+
 Get substring by byte range.
+
 ```redis
 SET mykey "Hello World"
 GETRANGE mykey 0 4
@@ -148,7 +175,9 @@ GETRANGE mykey 0 4
 ```
 
 #### GETSET key value
+
 Set new value and return old value atomically.
+
 ```redis
 SET mykey "old"
 GETSET mykey "new"
@@ -157,7 +186,9 @@ GETSET mykey "new"
 ```
 
 #### MGET key [key ...]
+
 Get multiple keys at once.
+
 ```redis
 MSET key1 "value1" key2 "value2" key3 "value3"
 MGET key1 key2 key3
@@ -168,7 +199,9 @@ MGET key1 key2 key3
 ```
 
 #### MSET key value [key value ...]
+
 Set multiple key-value pairs.
+
 ```redis
 MSET key1 "value1" key2 "value2" key3 "value3"
 
@@ -176,7 +209,9 @@ MSET key1 "value1" key2 "value2" key3 "value3"
 ```
 
 #### SETEX key seconds value
+
 Set key with expiration time.
+
 ```redis
 SETEX mykey 60 "temporary value"
 
@@ -184,7 +219,9 @@ SETEX mykey 60 "temporary value"
 ```
 
 #### SETRANGE key offset value
+
 Overwrite string at specific offset.
+
 ```redis
 SET mykey "Hello World"
 SETRANGE mykey 6 "Redis"
@@ -196,7 +233,9 @@ GET mykey
 ```
 
 #### STRLEN key
+
 Get string length.
+
 ```redis
 SET mykey "Hello World"
 STRLEN mykey
@@ -207,7 +246,9 @@ STRLEN mykey
 ## Hash Commands
 
 ### HGET key field
+
 Get field value from hash.
+
 ```redis
 HSET user:1 name "Alice" age "30"
 HGET user:1 name
@@ -216,7 +257,9 @@ HGET user:1 name
 ```
 
 ### HSET key field value [field value ...]
+
 Set field values in hash.
+
 ```redis
 HSET user:1 name "Alice" age "30" city "NYC"
 
@@ -224,7 +267,9 @@ HSET user:1 name "Alice" age "30" city "NYC"
 ```
 
 ### HGETALL key
+
 Get all field-value pairs from hash.
+
 ```redis
 HGETALL user:1
 
@@ -237,7 +282,9 @@ HGETALL user:1
 ```
 
 ### HDEL key field [field ...]
+
 Delete fields from hash.
+
 ```redis
 HDEL user:1 age city
 
@@ -245,7 +292,9 @@ HDEL user:1 age city
 ```
 
 ### HEXISTS key field
+
 Check if field exists in hash.
+
 ```redis
 HEXISTS user:1 name
 
@@ -253,7 +302,9 @@ HEXISTS user:1 name
 ```
 
 ### HKEYS key
+
 Get all field names from hash.
+
 ```redis
 HKEYS user:1
 
@@ -263,7 +314,9 @@ HKEYS user:1
 ```
 
 ### HVALS key
+
 Get all values from hash.
+
 ```redis
 HVALS user:1
 
@@ -273,7 +326,9 @@ HVALS user:1
 ```
 
 ### HLEN key
+
 Get number of fields in hash.
+
 ```redis
 HLEN user:1
 
@@ -283,7 +338,9 @@ HLEN user:1
 ### Extended Hash Commands
 
 #### HMGET key field [field ...]
+
 Get multiple field values.
+
 ```redis
 HMGET user:1 name age city
 
@@ -293,7 +350,9 @@ HMGET user:1 name age city
 ```
 
 #### HMSET key field value [field value ...]
+
 Set multiple field values (legacy, use HSET).
+
 ```redis
 HMSET user:1 name "Alice" age "30"
 
@@ -301,7 +360,9 @@ HMSET user:1 name "Alice" age "30"
 ```
 
 #### HINCRBY key field increment
+
 Increment field by integer value.
+
 ```redis
 HSET user:1 score 100
 HINCRBY user:1 score 50
@@ -312,7 +373,9 @@ HINCRBY user:1 score 50
 ## List Commands
 
 ### LPUSH key element [element ...]
+
 Push elements to left (head) of list.
+
 ```redis
 LPUSH mylist "world" "hello"
 
@@ -320,7 +383,9 @@ LPUSH mylist "world" "hello"
 ```
 
 ### RPUSH key element [element ...]
+
 Push elements to right (tail) of list.
+
 ```redis
 RPUSH mylist "foo" "bar"
 
@@ -328,7 +393,9 @@ RPUSH mylist "foo" "bar"
 ```
 
 ### LPOP key [count]
+
 Pop element(s) from left (head) of list.
+
 ```redis
 LPOP mylist
 
@@ -341,7 +408,9 @@ LPOP mylist 2
 ```
 
 ### RPOP key [count]
+
 Pop element(s) from right (tail) of list.
+
 ```redis
 RPOP mylist
 
@@ -354,7 +423,9 @@ RPOP mylist 2
 ```
 
 ### LRANGE key start stop
+
 Get range of elements from list.
+
 ```redis
 LRANGE mylist 0 -1
 
@@ -370,7 +441,9 @@ LRANGE mylist 1 2
 ```
 
 ### LLEN key
+
 Get length of list.
+
 ```redis
 LLEN mylist
 
@@ -380,7 +453,9 @@ LLEN mylist
 ### Extended List Commands
 
 #### LINDEX key index
+
 Get element at index.
+
 ```redis
 LINDEX mylist 0
 
@@ -392,7 +467,9 @@ LINDEX mylist -1
 ```
 
 #### LSET key index element
+
 Set element at index.
+
 ```redis
 LSET mylist 0 "hi"
 
@@ -400,7 +477,9 @@ LSET mylist 0 "hi"
 ```
 
 #### LREM key count element
+
 Remove elements equal to element.
+
 ```redis
 LREM mylist 2 "foo"
 
@@ -408,7 +487,9 @@ LREM mylist 2 "foo"
 ```
 
 #### LTRIM key start stop
+
 Trim list to specified range.
+
 ```redis
 LTRIM mylist 1 -1
 
@@ -416,7 +497,9 @@ LTRIM mylist 1 -1
 ```
 
 #### LINSERT key BEFORE|AFTER pivot element
+
 Insert element before or after pivot.
+
 ```redis
 LINSERT mylist BEFORE "world" "beautiful"
 
@@ -424,7 +507,9 @@ LINSERT mylist BEFORE "world" "beautiful"
 ```
 
 #### BLPOP key [key ...] timeout
+
 Blocking left pop (non-blocking in current implementation).
+
 ```redis
 BLPOP mylist 10
 
@@ -433,7 +518,9 @@ BLPOP mylist 10
 ```
 
 #### BRPOP key [key ...] timeout
+
 Blocking right pop (non-blocking in current implementation).
+
 ```redis
 BRPOP mylist 10
 
@@ -444,7 +531,9 @@ BRPOP mylist 10
 ## Set Commands
 
 ### SADD key member [member ...]
+
 Add members to set.
+
 ```redis
 SADD myset "apple" "banana" "cherry"
 
@@ -452,7 +541,9 @@ SADD myset "apple" "banana" "cherry"
 ```
 
 ### SREM key member [member ...]
+
 Remove members from set.
+
 ```redis
 SREM myset "banana"
 
@@ -460,7 +551,9 @@ SREM myset "banana"
 ```
 
 ### SMEMBERS key
+
 Get all members of set.
+
 ```redis
 SMEMBERS myset
 
@@ -469,7 +562,9 @@ SMEMBERS myset
 ```
 
 ### SCARD key
+
 Get cardinality (size) of set.
+
 ```redis
 SCARD myset
 
@@ -477,7 +572,9 @@ SCARD myset
 ```
 
 ### SISMEMBER key member
+
 Check if member exists in set.
+
 ```redis
 SISMEMBER myset "apple"
 
@@ -485,7 +582,9 @@ SISMEMBER myset "apple"
 ```
 
 ### SUNION key [key ...]
+
 Return union of sets.
+
 ```redis
 SADD set1 "a" "b" "c"
 SADD set2 "c" "d" "e"
@@ -499,7 +598,9 @@ SUNION set1 set2
 ```
 
 ### SINTER key [key ...]
+
 Return intersection of sets.
+
 ```redis
 SINTER set1 set2
 
@@ -507,7 +608,9 @@ SINTER set1 set2
 ```
 
 ### SDIFF key [key ...]
+
 Return difference of sets.
+
 ```redis
 SDIFF set1 set2
 
@@ -518,7 +621,9 @@ SDIFF set1 set2
 ## Sorted Set Commands
 
 ### ZADD key score member [score member ...]
+
 Add members with scores to sorted set.
+
 ```redis
 ZADD leaderboard 100 "alice" 85 "bob" 92 "charlie"
 
@@ -526,7 +631,9 @@ ZADD leaderboard 100 "alice" 85 "bob" 92 "charlie"
 ```
 
 ### ZREM key member [member ...]
+
 Remove members from sorted set.
+
 ```redis
 ZREM leaderboard "bob"
 
@@ -534,7 +641,9 @@ ZREM leaderboard "bob"
 ```
 
 ### ZCARD key
+
 Get cardinality of sorted set.
+
 ```redis
 ZCARD leaderboard
 
@@ -542,7 +651,9 @@ ZCARD leaderboard
 ```
 
 ### ZSCORE key member
+
 Get score of member.
+
 ```redis
 ZSCORE leaderboard "alice"
 
@@ -550,7 +661,9 @@ ZSCORE leaderboard "alice"
 ```
 
 ### ZINCRBY key increment member
+
 Increment score of member.
+
 ```redis
 ZINCRBY leaderboard 10 "charlie"
 
@@ -558,7 +671,9 @@ ZINCRBY leaderboard 10 "charlie"
 ```
 
 ### ZRANGE key start stop [WITHSCORES]
+
 Get members by rank range.
+
 ```redis
 ZRANGE leaderboard 0 -1 WITHSCORES
 
@@ -569,7 +684,9 @@ ZRANGE leaderboard 0 -1 WITHSCORES
 ```
 
 ### ZRANGEBYSCORE key min max [WITHSCORES]
+
 Get members by score range.
+
 ```redis
 ZRANGEBYSCORE leaderboard 90 110 WITHSCORES
 
@@ -580,7 +697,9 @@ ZRANGEBYSCORE leaderboard 90 110 WITHSCORES
 ```
 
 ### ZCOUNT key min max
+
 Count members in score range.
+
 ```redis
 ZCOUNT leaderboard 90 110
 
@@ -588,7 +707,9 @@ ZCOUNT leaderboard 90 110
 ```
 
 ### ZRANK key member
+
 Get rank of member (0-based).
+
 ```redis
 ZRANK leaderboard "alice"
 
@@ -598,7 +719,9 @@ ZRANK leaderboard "alice"
 ## Pub/Sub Commands
 
 ### PUBLISH channel message
+
 Publish message to channel.
+
 ```redis
 PUBLISH news "Breaking news!"
 
@@ -606,7 +729,9 @@ PUBLISH news "Breaking news!"
 ```
 
 ### SUBSCRIBE channel [channel ...]
+
 Subscribe to channels.
+
 ```redis
 SUBSCRIBE news weather sports
 
@@ -616,7 +741,9 @@ SUBSCRIBE news weather sports
 ```
 
 ### UNSUBSCRIBE [channel [channel ...]]
+
 Unsubscribe from channels.
+
 ```redis
 UNSUBSCRIBE news
 
@@ -626,7 +753,9 @@ UNSUBSCRIBE news
 ```
 
 ### PSUBSCRIBE pattern [pattern ...]
+
 Subscribe to channel patterns.
+
 ```redis
 PSUBSCRIBE news.*
 
@@ -636,7 +765,9 @@ PSUBSCRIBE news.*
 ```
 
 ### PUNSUBSCRIBE [pattern [pattern ...]]
+
 Unsubscribe from channel patterns.
+
 ```redis
 PUNSUBSCRIBE news.*
 
@@ -646,7 +777,9 @@ PUNSUBSCRIBE news.*
 ```
 
 ### PUBSUB subcommand [argument [argument ...]]
+
 Introspect pub/sub system.
+
 ```redis
 PUBSUB CHANNELS
 
@@ -664,7 +797,9 @@ PUBSUB NUMSUB news weather
 ## Vector Operations (VECTOR.* namespace)
 
 ### VECTOR.ADD index id vector [key value ...]
+
 Add vector with optional metadata to index.
+
 ```redis
 VECTOR.ADD doc_embeddings doc1 "0.1,0.2,0.3,0.4" title "First Document" category "tech"
 
@@ -672,7 +807,9 @@ VECTOR.ADD doc_embeddings doc1 "0.1,0.2,0.3,0.4" title "First Document" category
 ```
 
 ### VECTOR.GET index id
+
 Get vector and metadata by ID.
+
 ```redis
 VECTOR.GET doc_embeddings doc1
 
@@ -685,7 +822,9 @@ VECTOR.GET doc_embeddings doc1
 ```
 
 ### VECTOR.DEL index id
+
 Delete vector from index.
+
 ```redis
 VECTOR.DEL doc_embeddings doc1
 
@@ -693,7 +832,9 @@ VECTOR.DEL doc_embeddings doc1
 ```
 
 ### VECTOR.STATS index
+
 Get statistics for vector index.
+
 ```redis
 VECTOR.STATS doc_embeddings
 
@@ -706,7 +847,9 @@ VECTOR.STATS doc_embeddings
 ```
 
 ### VECTOR.LIST index
+
 List all vector IDs in index.
+
 ```redis
 VECTOR.LIST doc_embeddings
 
@@ -716,7 +859,9 @@ VECTOR.LIST doc_embeddings
 ```
 
 ### VECTOR.COUNT index
+
 Get count of vectors in index.
+
 ```redis
 VECTOR.COUNT doc_embeddings
 
@@ -724,7 +869,9 @@ VECTOR.COUNT doc_embeddings
 ```
 
 ### VECTOR.SEARCH index vector limit [METRIC metric] [THRESHOLD threshold] [key value ...]
+
 Perform vector similarity search.
+
 ```redis
 VECTOR.SEARCH doc_embeddings "0.1,0.2,0.3,0.4" 5 METRIC COSINE THRESHOLD 0.8 category "tech"
 
@@ -739,7 +886,9 @@ VECTOR.SEARCH doc_embeddings "0.1,0.2,0.3,0.4" 5 METRIC COSINE THRESHOLD 0.8 cat
 ```
 
 ### VECTOR.KNN index vector k [METRIC metric]
+
 K-nearest neighbors search.
+
 ```redis
 VECTOR.KNN doc_embeddings "0.1,0.2,0.3,0.4" 3 METRIC EUCLIDEAN
 
@@ -752,7 +901,9 @@ VECTOR.KNN doc_embeddings "0.1,0.2,0.3,0.4" 3 METRIC EUCLIDEAN
 ## RedisSearch Compatible Commands (FT.* namespace)
 
 ### FT.CREATE index DIM dimension [DISTANCE_METRIC metric]
+
 Create vector index.
+
 ```redis
 FT.CREATE doc_index DIM 768 DISTANCE_METRIC COSINE
 
@@ -760,7 +911,9 @@ FT.CREATE doc_index DIM 768 DISTANCE_METRIC COSINE
 ```
 
 ### FT.ADD index id vector [key value ...]
+
 Add document to index (alias for VECTOR.ADD).
+
 ```redis
 FT.ADD doc_index doc1 "0.1,0.2,0.3,..." title "Document"
 
@@ -768,7 +921,9 @@ FT.ADD doc_index doc1 "0.1,0.2,0.3,..." title "Document"
 ```
 
 ### FT.DEL index id
+
 Delete document from index.
+
 ```redis
 FT.DEL doc_index doc1
 
@@ -776,7 +931,9 @@ FT.DEL doc_index doc1
 ```
 
 ### FT.SEARCH index vector limit [DISTANCE_METRIC metric] [key value ...]
+
 Search index (converted to VECTOR.SEARCH format).
+
 ```redis
 FT.SEARCH doc_index "0.1,0.2,0.3,..." 10 DISTANCE_METRIC COSINE
 
@@ -784,7 +941,9 @@ FT.SEARCH doc_index "0.1,0.2,0.3,..." 10 DISTANCE_METRIC COSINE
 ```
 
 ### FT.INFO index
+
 Get index information.
+
 ```redis
 FT.INFO doc_index
 
@@ -797,7 +956,9 @@ FT.INFO doc_index
 ## Time Series Commands (TS.* namespace)
 
 ### TS.CREATE key [RETENTION retentionTime] [CHUNK_SIZE size] [DUPLICATE_POLICY policy] [LABELS label value ...]
+
 Create time series.
+
 ```redis
 TS.CREATE temperature:sensor1 RETENTION 3600000 CHUNK_SIZE 4096 LABELS sensor_id "001" location "office"
 
@@ -805,7 +966,9 @@ TS.CREATE temperature:sensor1 RETENTION 3600000 CHUNK_SIZE 4096 LABELS sensor_id
 ```
 
 ### TS.ALTER key [RETENTION retentionTime] [CHUNK_SIZE size] [DUPLICATE_POLICY policy] [LABELS label value ...]
+
 Alter time series configuration.
+
 ```redis
 TS.ALTER temperature:sensor1 RETENTION 7200000
 
@@ -813,7 +976,9 @@ TS.ALTER temperature:sensor1 RETENTION 7200000
 ```
 
 ### TS.ADD key timestamp value [RETENTION retentionTime] [CHUNK_SIZE size] [DUPLICATE_POLICY policy] [LABELS label value ...]
+
 Add sample to time series.
+
 ```redis
 TS.ADD temperature:sensor1 1609459200000 23.5
 
@@ -825,7 +990,9 @@ TS.ADD temperature:sensor1 * 24.1
 ```
 
 ### TS.MADD key1 timestamp1 value1 [key2 timestamp2 value2 ...]
+
 Add multiple samples.
+
 ```redis
 TS.MADD temperature:sensor1 1609459200000 23.5 temperature:sensor2 1609459200000 22.8
 
@@ -834,7 +1001,9 @@ TS.MADD temperature:sensor1 1609459200000 23.5 temperature:sensor2 1609459200000
 ```
 
 ### TS.INCRBY key value [TIMESTAMP timestamp] [RETENTION retentionTime] [CHUNK_SIZE size] [DUPLICATE_POLICY policy] [LABELS label value ...]
+
 Increment time series by value.
+
 ```redis
 TS.INCRBY counter:requests 1 TIMESTAMP 1609459200000
 
@@ -842,7 +1011,9 @@ TS.INCRBY counter:requests 1 TIMESTAMP 1609459200000
 ```
 
 ### TS.DECRBY key value [TIMESTAMP timestamp] [RETENTION retentionTime] [CHUNK_SIZE size] [DUPLICATE_POLICY policy] [LABELS label value ...]
+
 Decrement time series by value.
+
 ```redis
 TS.DECRBY counter:requests 1 TIMESTAMP 1609459200000
 
@@ -850,7 +1021,9 @@ TS.DECRBY counter:requests 1 TIMESTAMP 1609459200000
 ```
 
 ### TS.DEL key fromTimestamp toTimestamp
+
 Delete samples in time range.
+
 ```redis
 TS.DEL temperature:sensor1 1609459200000 1609459260000
 
@@ -858,7 +1031,9 @@ TS.DEL temperature:sensor1 1609459200000 1609459260000
 ```
 
 ### TS.GET key
+
 Get latest sample.
+
 ```redis
 TS.GET temperature:sensor1
 
@@ -867,7 +1042,9 @@ TS.GET temperature:sensor1
 ```
 
 ### TS.MGET [FILTER label=value ...] key1 [key2 ...]
+
 Get latest samples from multiple time series.
+
 ```redis
 TS.MGET temperature:sensor1 temperature:sensor2
 
@@ -880,7 +1057,9 @@ TS.MGET temperature:sensor1 temperature:sensor2
 ```
 
 ### TS.INFO key
+
 Get time series information.
+
 ```redis
 TS.INFO temperature:sensor1
 
@@ -895,7 +1074,9 @@ TS.INFO temperature:sensor1
 ```
 
 ### TS.RANGE key fromTimestamp toTimestamp [AGGREGATION aggregation bucketDuration]
+
 Get samples in time range.
+
 ```redis
 TS.RANGE temperature:sensor1 1609459200000 1609459260000
 
@@ -911,7 +1092,9 @@ TS.RANGE temperature:sensor1 1609459200000 1609459260000 AGGREGATION AVG 60000
 ```
 
 ### TS.REVRANGE key fromTimestamp toTimestamp [AGGREGATION aggregation bucketDuration]
+
 Get samples in reverse time order.
+
 ```redis
 TS.REVRANGE temperature:sensor1 1609459200000 1609459260000
 
@@ -922,7 +1105,9 @@ TS.REVRANGE temperature:sensor1 1609459200000 1609459260000
 ```
 
 ### TS.MRANGE fromTimestamp toTimestamp [AGGREGATION aggregation bucketDuration] [FILTER label=value ...] key1 [key2 ...]
+
 Get range from multiple time series.
+
 ```redis
 TS.MRANGE 1609459200000 1609459260000 temperature:sensor1 temperature:sensor2
 
@@ -935,7 +1120,9 @@ TS.MRANGE 1609459200000 1609459260000 temperature:sensor1 temperature:sensor2
 ```
 
 ### TS.MREVRANGE fromTimestamp toTimestamp [AGGREGATION aggregation bucketDuration] [FILTER label=value ...] key1 [key2 ...]
+
 Get reverse range from multiple time series.
+
 ```redis
 TS.MREVRANGE 1609459200000 1609459260000 temperature:sensor1 temperature:sensor2
 
@@ -943,7 +1130,9 @@ TS.MREVRANGE 1609459200000 1609459260000 temperature:sensor1 temperature:sensor2
 ```
 
 ### TS.QUERYINDEX [FILTER label=value ...]
+
 Query time series index (placeholder).
+
 ```redis
 TS.QUERYINDEX
 
@@ -951,7 +1140,9 @@ TS.QUERYINDEX
 ```
 
 ### TS.CREATERULE sourceKey destKey AGGREGATION aggregation bucketDuration [retention]
+
 Create compaction rule.
+
 ```redis
 TS.CREATERULE temperature:sensor1 temperature:sensor1:hourly AGGREGATION AVG 3600000
 
@@ -959,7 +1150,9 @@ TS.CREATERULE temperature:sensor1 temperature:sensor1:hourly AGGREGATION AVG 360
 ```
 
 ### TS.DELETERULE sourceKey destKey
+
 Delete compaction rule.
+
 ```redis
 TS.DELETERULE temperature:sensor1 temperature:sensor1:hourly
 
@@ -969,7 +1162,9 @@ TS.DELETERULE temperature:sensor1 temperature:sensor1:hourly
 ## Graph Database Commands (GRAPH.* namespace)
 
 ### GRAPH.QUERY graph_name query
+
 Execute graph query.
+
 ```redis
 GRAPH.QUERY social "MATCH (p:Person) RETURN p.name"
 
@@ -982,7 +1177,9 @@ GRAPH.QUERY social "MATCH (p:Person) RETURN p.name"
 ```
 
 ### GRAPH.RO_QUERY graph_name query
+
 Execute read-only graph query.
+
 ```redis
 GRAPH.RO_QUERY social "MATCH (p:Person) WHERE p.age > 25 RETURN p"
 
@@ -990,7 +1187,9 @@ GRAPH.RO_QUERY social "MATCH (p:Person) WHERE p.age > 25 RETURN p"
 ```
 
 ### GRAPH.DELETE graph_name
+
 Delete entire graph.
+
 ```redis
 GRAPH.DELETE social
 
@@ -998,7 +1197,9 @@ GRAPH.DELETE social
 ```
 
 ### GRAPH.LIST
+
 List all graphs.
+
 ```redis
 GRAPH.LIST
 
@@ -1007,7 +1208,9 @@ GRAPH.LIST
 ```
 
 ### GRAPH.EXPLAIN graph_name query
+
 Get execution plan for query.
+
 ```redis
 GRAPH.EXPLAIN social "MATCH (p:Person) RETURN p"
 
@@ -1019,7 +1222,9 @@ GRAPH.EXPLAIN social "MATCH (p:Person) RETURN p"
 ```
 
 ### GRAPH.PROFILE graph_name query
+
 Profile query execution.
+
 ```redis
 GRAPH.PROFILE social "MATCH (p:Person) RETURN p"
 
@@ -1033,7 +1238,9 @@ GRAPH.PROFILE social "MATCH (p:Person) RETURN p"
 ```
 
 ### GRAPH.SLOWLOG graph_name
+
 Get slow query log.
+
 ```redis
 GRAPH.SLOWLOG social
 
@@ -1046,7 +1253,9 @@ GRAPH.SLOWLOG social
 ```
 
 ### GRAPH.CONFIG GET|SET parameter [value]
+
 Configure graph settings.
+
 ```redis
 GRAPH.CONFIG GET timeout
 
@@ -1061,7 +1270,9 @@ GRAPH.CONFIG SET timeout 2000
 ## Server Commands
 
 ### INFO [section]
+
 Get server information with Orbit-specific details.
+
 ```redis
 INFO
 
@@ -1082,7 +1293,9 @@ INFO
 ```
 
 ### DBSIZE
+
 Get number of keys (placeholder implementation).
+
 ```redis
 DBSIZE
 
@@ -1090,7 +1303,9 @@ DBSIZE
 ```
 
 ### FLUSHDB
+
 Clear current database (placeholder implementation).
+
 ```redis
 FLUSHDB
 
@@ -1098,7 +1313,9 @@ FLUSHDB
 ```
 
 ### FLUSHALL
+
 Clear all databases (placeholder implementation).
+
 ```redis
 FLUSHALL
 
@@ -1106,7 +1323,9 @@ FLUSHALL
 ```
 
 ### COMMAND
+
 Get list of available commands.
+
 ```redis
 COMMAND
 
@@ -1126,7 +1345,9 @@ COMMAND
 ## Additional String Commands
 
 ### PERSIST key
+
 Remove expiration from key.
+
 ```redis
 EXPIRE mykey 60
 PERSIST mykey
@@ -1138,7 +1359,9 @@ TTL mykey
 ```
 
 ### PEXPIRE key milliseconds
+
 Set expiration in milliseconds.
+
 ```redis
 PEXPIRE mykey 60000
 
@@ -1146,7 +1369,9 @@ PEXPIRE mykey 60000
 ```
 
 ### PTTL key
+
 Get TTL in milliseconds.
+
 ```redis
 PTTL mykey
 
@@ -1154,7 +1379,9 @@ PTTL mykey
 ```
 
 ### RANDOMKEY
+
 Get random key (placeholder implementation).
+
 ```redis
 RANDOMKEY
 
@@ -1162,7 +1389,9 @@ RANDOMKEY
 ```
 
 ### RENAME oldkey newkey
+
 Rename key.
+
 ```redis
 SET oldkey "value"
 RENAME oldkey newkey
@@ -1174,7 +1403,9 @@ GET newkey
 ```
 
 ### TYPE key
+
 Get type of key.
+
 ```redis
 SET mystring "value"
 HSET myhash field value
@@ -1191,7 +1422,9 @@ TYPE mylist
 ```
 
 ### UNLINK key [key ...]
+
 Asynchronous delete (same as DEL in current implementation).
+
 ```redis
 UNLINK key1 key2 key3
 

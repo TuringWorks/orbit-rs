@@ -6,11 +6,11 @@ category: "legal"
 permalink: /legal/privacy/
 ---
 
-# Privacy Policy
+## Privacy Policy
 
-**TuringWorks Privacy Policy for Orbit-RS Services**
+## TuringWorks Privacy Policy for Orbit-RS Services
 
-*Last Updated: October 2024*
+### Last Updated: October 2024
 
 ---
 
@@ -36,11 +36,13 @@ Orbit-RS is open source software. When you download and use the software directl
 When you visit our documentation website (turingworks.github.io/orbit-rs):
 
 ### Information We Collect
+
 - **Usage Analytics**: Via GitHub Pages (anonymized traffic data)
 - **Browser Information**: Standard web server logs
 - **No Personal Data**: We do not collect names, emails, or personal information
 
 ### Third-Party Services
+
 - **GitHub Pages**: Hosting provided by GitHub (subject to GitHub's privacy policy)
 - **No Additional Tracking**: We do not use additional analytics or tracking services
 
@@ -50,12 +52,14 @@ When you visit our documentation website (turingworks.github.io/orbit-rs):
 
 When you contact us for support:
 
-### Information We Collect
+### Information We Collect from Support Requests
+
 - **Contact Information**: Email address and name (when provided)
 - **Support Inquiries**: Technical questions and issue descriptions
 - **System Information**: Only if voluntarily shared for troubleshooting
 
 ### How We Use This Information
+
 - **Support Response**: To answer your questions and provide assistance
 - **Service Improvement**: To improve our documentation and software
 - **No Marketing**: We do not use contact information for marketing purposes
@@ -75,11 +79,13 @@ For enterprise customers with commercial agreements:
 ## 🛡️ Data Protection
 
 ### Security Measures
+
 - **Minimal Data Collection**: We collect only necessary information
 - **Industry Standards**: Standard security practices for any data we do collect
 - **Local Processing**: Orbit-RS software processes data locally on your systems
 
 ### Data Retention
+
 - **Support Emails**: Retained for reasonable support purposes
 - **No User Profiles**: We do not build or maintain user profiles
 - **No Sale of Data**: We do not sell or share personal data with third parties

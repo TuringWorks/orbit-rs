@@ -49,27 +49,33 @@ Successfully implemented TiKV as a distributed persistence provider for Orbit-RS
 ## Key Features
 
 ### 1. **Multi-Provider Architecture**
+
 TiKV integrates seamlessly with the existing provider system, allowing:
+
 - Mixed deployments (e.g., TiKV for distributed data, RocksDB for local caching)
 - Easy switching between providers
 - Provider-specific optimizations
 
 ### 2. **Production-Ready Configuration**
+
 - **TLS Support**: Full mTLS configuration for secure cluster communication
 - **Performance Tuning**: Configurable batch sizes, connection pooling, and caching
 - **Operational Features**: Health checks, metrics, automatic retries, and timeout handling
 
 ### 3. **ACID Transactions**
+
 - Support for both optimistic and pessimistic transactions
 - Async commit and one-phase commit optimizations
 - Cross-model transaction support (planned for future enhancement)
 
 ### 4. **Scalability Features**
+
 - Distributed data storage across TiKV regions
 - Bulk operations for efficient data transfer
 - Key prefix organization for multi-tenant scenarios
 
 ### 5. **Observability**
+
 - Comprehensive metrics collection (operations count, latency, error tracking)
 - Health status monitoring
 - Detailed logging with structured tracing
@@ -134,20 +140,20 @@ max_retries = 3
 
 The TiKV provider fits into Orbit-RS's existing architecture:
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                    Orbit-RS Application                     │
 ├─────────────────────────────────────────────────────────────┤
-│              Persistence Provider Registry                   │
-│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐           │
-│  │   Memory    │ │   RocksDB   │ │    TiKV     │ ← NEW     │
-│  │  Provider   │ │  Provider   │ │  Provider   │           │
-│  └─────────────┘ └─────────────┘ └─────────────┘           │
+│              Persistence Provider Registry                  │
+│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐            │
+│  │   Memory    │ │   RocksDB   │ │    TiKV     │ ← NEW      │
+│  │  Provider   │ │  Provider   │ │  Provider   │            │
+│  └─────────────┘ └─────────────┘ └─────────────┘            │
 ├─────────────────────────────────────────────────────────────┤
 │                  Storage Backend Layer                      │
 │  ┌─────────────┐ ┌─────────────┐ ┌─────────────────────────┐│
-│  │  In-Memory  │ │   Local     │ │   Distributed TiKV     ││
-│  │   HashMap   │ │  RocksDB    │ │      Cluster           ││
+│  │  In-Memory  │ │   Local     │ │   Distributed TiKV      ││
+│  │   HashMap   │ │  RocksDB    │ │      Cluster            ││
 │  └─────────────┘ └─────────────┘ └─────────────────────────┘│
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -178,12 +184,14 @@ All tests pass and the code compiles successfully with proper error handling.
 The TiKV integration supports various deployment patterns:
 
 ### Development
+
 ```bash
 # Use TiKV with default local settings
 export ORBIT_PERSISTENCE_BACKEND=tikv
 ```
 
 ### Production Cluster
+
 ```bash
 # Multi-node TiKV cluster with TLS
 export ORBIT_PERSISTENCE_BACKEND=tikv
@@ -195,6 +203,7 @@ export ORBIT_TIKV_CLIENT_KEY_PATH=/etc/tikv/certs/client.key
 ```
 
 ### Hybrid Deployment
+
 ```toml
 # Use TiKV for persistence, RocksDB for caching
 [defaults]

@@ -17,7 +17,8 @@
 pub mod persistence;
 
 /// Heterogeneous compute benchmarks (moved from orbit-compute)
-pub mod compute;
+// TODO: Fix compilation errors
+// pub mod compute;
 
 /// Performance benchmarks for transactions and batch processing (moved from orbit-shared)
 pub mod performance;
@@ -26,15 +27,15 @@ pub mod performance;
 pub mod orbitql;
 
 // Re-export commonly used items
-pub use compute::{
-    quick_compute_benchmark, ComputeBenchmarkReport, ComputeBenchmarkResult, ComputeBenchmarkSuite,
-};
-pub use orbitql::{
-    BenchmarkConfig, BenchmarkFramework, BenchmarkResults, ComprehensiveBenchmark,
-    ComprehensiveBenchmarkConfig, CustomWorkloadResults, OrbitQLComponents, QueryBenchmarkResult,
-    TpcCResults, TpcDsResults, TpcHResults,
-};
-pub use performance::{
-    quick_performance_benchmark, PerformanceBenchmarkResult, PerformanceBenchmarkSuite,
-};
+// pub use compute::{
+//     quick_compute_benchmark, ComputeBenchmarkReport, ComputeBenchmarkResult, ComputeBenchmarkSuite,
+// };
+// pub use orbitql::{
+//     BenchmarkConfig, BenchmarkFramework, BenchmarkResults, ComprehensiveBenchmark,
+//     ComprehensiveBenchmarkConfig, CustomWorkloadResults, OrbitQLComponents, QueryBenchmarkResult,
+//     TpcCResults, TpcDsResults, TpcHResults,
+// };
+// pub use performance::{
+//     quick_performance_benchmark, PerformanceBenchmarkResult, PerformanceBenchmarkSuite,
+// };
 pub use persistence::{config::*, metrics::*, workload::*};

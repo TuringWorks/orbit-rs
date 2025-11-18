@@ -4,7 +4,7 @@ title: Neo4j Bolt Protocol Compatibility
 category: protocols
 ---
 
-# Neo4j Bolt Protocol Compatibility
+## Neo4j Bolt Protocol Compatibility
 
 ## Overview
 
@@ -15,12 +15,14 @@ Neo4j is the world's leading graph database, using the Bolt protocol for client-
 ### 🎯 **Phase 13: Neo4j Foundation**
 
 #### Core Graph Actors
+
 - **GraphNodeActor**: Distributed graph node management with properties and labels
 - **RelationshipActor**: Graph relationship management with types and properties  
 - **GraphClusterActor**: Graph cluster coordination and topology management
 - **CypherQueryActor**: Distributed Cypher query execution and optimization
 
 #### Bolt Protocol Implementation
+
 - **Bolt v4.4 Protocol**: Full protocol compatibility with handshake, authentication, and streaming
 - **Connection Management**: Connection pooling, session management, and transaction handling
 - **Message Types**: All Bolt message types (HELLO, RUN, PULL, DISCARD, etc.)
@@ -29,12 +31,14 @@ Neo4j is the world's leading graph database, using the Bolt protocol for client-
 ### 🚀 **Phase 14: Advanced Graph Operations**
 
 #### Cypher Query Language
+
 - **Complete Cypher Support**: All Cypher constructs (MATCH, CREATE, MERGE, DELETE, etc.)
 - **Graph Algorithms**: Built-in graph algorithms (PageRank, Community Detection, etc.)
 - **Pattern Matching**: Advanced pattern matching with variable-length paths
 - **Aggregation Functions**: Graph-specific aggregations and statistical functions
 
 #### Graph Storage & Indexing
+
 - **Native Graph Storage**: Property graph storage optimized for traversals
 - **Graph Indexes**: Node and relationship indexes for fast lookups
 - **Constraint Support**: Uniqueness and existence constraints
@@ -42,7 +46,8 @@ Neo4j is the world's leading graph database, using the Bolt protocol for client-
 
 ### 📊 **Phase 15: Enterprise Graph Features**
 
-#### Advanced Analytics
+#### Advanced Analytics Queries
+
 - **Graph Data Science**: Machine learning on graphs, embeddings, and predictions
 - **Centrality Algorithms**: Betweenness, closeness, eigenvector centrality
 - **Community Detection**: Label propagation, Louvain, connected components
@@ -50,6 +55,7 @@ Neo4j is the world's leading graph database, using the Bolt protocol for client-
 - **Similarity Algorithms**: Node similarity, link prediction
 
 #### Performance & Scalability
+
 - **Distributed Graph Storage**: Graph partitioning across cluster nodes
 - **Query Optimization**: Cost-based query planning for graph traversals
 - **Parallel Processing**: Multi-threaded graph algorithm execution
@@ -60,6 +66,7 @@ Neo4j is the world's leading graph database, using the Bolt protocol for client-
 ### Actor Architecture
 
 #### Graph Node Actor
+
 ```rust
 
 #[async_trait]
@@ -82,6 +89,7 @@ pub trait GraphNodeActor: ActorWithStringKey {
 ```
 
 #### Relationship Actor
+
 ```rust
 
 #[async_trait]
@@ -99,6 +107,7 @@ pub trait RelationshipActor: ActorWithStringKey {
 ```
 
 #### Cypher Query Actor
+
 ```rust
 
 #[async_trait]
@@ -191,6 +200,7 @@ pub enum Value {
 ### Basic Operations
 
 #### Node Operations
+
 ```cypher
 // Create nodes
 CREATE (p:Person {name: 'Alice', age: 30})
@@ -207,6 +217,7 @@ MATCH (p:Person {name: 'Alice'}) DELETE p
 ```
 
 #### Relationship Operations
+
 ```cypher
 // Create relationships
 MATCH (p:Person {name: 'Alice'}), (c:Company {name: 'TechCorp'})
@@ -231,6 +242,7 @@ DELETE r
 ### Advanced Cypher Features
 
 #### Pattern Matching
+
 ```cypher
 // Variable length paths
 MATCH (p1:Person)-[:KNOWS*1..3]-(p2:Person)
@@ -249,6 +261,7 @@ RETURN p
 ```
 
 #### Aggregations and Functions
+
 ```cypher
 // Graph aggregations
 MATCH (p:Person)-[:WORKS_FOR]->(c:Company)
@@ -265,6 +278,7 @@ RETURN p.name, id(p), labels(p), keys(p), properties(p)
 ```
 
 #### Advanced Analytics
+
 ```cypher
 // PageRank algorithm
 CALL gds.pageRank.stream('myGraph')
@@ -284,9 +298,10 @@ RETURN gds.util.asNode(nodeId).name AS name, score
 ORDER BY score DESC
 ```
 
-## Bolt Protocol Implementation
+## Bolt Protocol Connection Details
 
 ### Connection Handshake
+
 ```rust
 pub struct BoltConnection {
     stream: TcpStream,
@@ -333,6 +348,7 @@ impl BoltConnection {
 ```
 
 ### Message Types
+
 ```rust
 
 #[derive(Debug, Clone)]
@@ -385,6 +401,7 @@ pub enum BoltMessage {
 ### Built-in Graph Algorithms
 
 #### Centrality Algorithms
+
 ```rust
 pub struct GraphAlgorithms;
 
@@ -421,6 +438,7 @@ impl GraphAlgorithms {
 ```
 
 #### Community Detection
+
 ```rust
 impl GraphAlgorithms {
     pub async fn louvain_community_detection(
@@ -453,6 +471,7 @@ impl GraphAlgorithms {
 ```
 
 #### Path Finding
+
 ```rust
 impl GraphAlgorithms {
     pub async fn shortest_path(
@@ -531,7 +550,7 @@ with driver.session() as session:
     print(f"Alice's friends of friends: {friends_of_friends}")
 ```
 
-### Advanced Analytics
+### Advanced Analytics Example
 
 ```python
 def analyze_social_network(tx):
@@ -626,18 +645,21 @@ def process_graph_updates():
 ## Integration with Orbit Features
 
 ### Distributed Graph Storage
+
 - **Actor-based partitioning**: Graph nodes and relationships distributed across cluster
 - **Consistent hashing**: Deterministic placement of graph elements
 - **Cross-node relationships**: Efficient handling of relationships spanning multiple nodes
 - **Graph replication**: Configurable replication for high availability
 
 ### Transaction Support
+
 - **ACID compliance**: Full transactional support for graph operations
 - **Distributed transactions**: Cross-node graph modifications
 - **Optimistic locking**: Concurrent graph modifications with conflict resolution
 - **Saga patterns**: Long-running graph workflows
 
 ### Performance Optimization
+
 - **Graph-aware indexing**: Specialized indexes for graph traversals
 - **Query optimization**: Cost-based planning for graph queries
 - **Parallel execution**: Multi-threaded graph algorithm processing
@@ -646,12 +668,14 @@ def process_graph_updates():
 ## Monitoring and Observability
 
 ### Graph-specific Metrics
+
 - Graph topology statistics (nodes, relationships, density)
 - Query performance (traversal depth, pattern complexity)
 - Algorithm execution times and resource usage
 - Cache hit rates for graph patterns
 
 ### Neo4j Ecosystem Integration
+
 - **Neo4j Desktop**: Compatible connection and visualization
 - **Neo4j Browser**: Full browser compatibility for interactive queries
 - **APOC procedures**: Support for Neo4j's procedure library
@@ -670,18 +694,21 @@ def process_graph_updates():
 ## Compatibility and Migration
 
 ### Neo4j Compatibility
+
 - **Bolt protocol**: 100% compatibility with Neo4j drivers
 - **Cypher language**: Full Cypher query language support
 - **Data model**: Compatible property graph model
 - **Client libraries**: Works with all Neo4j client libraries
 
 ### Migration Tools
+
 - **Graph export/import**: Tools for migrating from Neo4j
 - **Schema validation**: Verify graph structure after migration
 - **Performance comparison**: Benchmark tools for validation
 - **Incremental migration**: Support for gradual migration
 
 ### Ecosystem Integration
+
 - **Graph visualization**: Compatible with Neo4j visualization tools
 - **BI tools**: Integration with popular business intelligence platforms
 - **Machine learning**: Graph ML pipeline integration

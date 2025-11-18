@@ -40,6 +40,8 @@ md5 = "0.7"
 sha2 = "0.10"
 hex = "0.4"
 base64 = "0.21"
+hmac = "0.12"
+pbkdf2 = "0.12"
 
 # Tracing and logging
 tracing = "0.1"
@@ -66,6 +68,14 @@ ordered-float = { version = "4.2", features = ["serde"] }
 rocksdb = "0.22"
 tikv-client = "0.3"
 
+# Apache Iceberg integration for warm/cold tiers (optional feature)
+iceberg = { version = "0.7", optional = true, features = ["storage-s3", "storage-memory"] }
+iceberg-catalog-rest = { version = "0.7", optional = true }
+arrow = { version = "55.2", optional = true }
+arrow-schema = { version = "55.2", optional = true }
+parquet = { version = "55.2", optional = true }
+opendal = { version = "0.51", optional = true, features = ["services-s3", "services-memory"] }
+
 [dev-dependencies]
 redis = "0.32"
 tokio-postgres = "0.7"
@@ -81,3 +91,5 @@ cypher = []
 rest = []
 # Enable integration tests that require network access
 integration = []
+# Enable Apache Iceberg cold tier storage
+iceberg-cold = ["iceberg", "iceberg-catalog-rest", "arrow", "arrow-schema", "parquet", "opendal"]

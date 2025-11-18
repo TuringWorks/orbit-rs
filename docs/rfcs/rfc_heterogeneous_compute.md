@@ -6,7 +6,7 @@ category: "rfc"
 permalink: /rfcs/heterogeneous-compute/
 ---
 
-# RFC: Heterogeneous Compute Engine for Orbit-RS
+## RFC: Heterogeneous Compute Engine for Orbit-RS
 
 **Status**: ✅ Implemented  
 **Date**: 2025-10-08  
@@ -38,27 +38,27 @@ Traditional database systems fail to leverage this hardware diversity, leaving s
 
 The Heterogeneous Compute Engine follows a layered architecture:
 
-```
+```text
 ┌─────────────────────────────────────────────────────┐
 │                Application Layer                    │
-│  ┌─────────────────┐ ┌─────────────────────────────┐ │
+│  ┌─────────────────┐ ┌────────────────────────────┐ │
 │  │   Query Engine  │ │    Transaction Engine      │ │
-│  └─────────────────┘ └─────────────────────────────┘ │
+│  └─────────────────┘ └────────────────────────────┘ │
 └─────────────────────────────────────────────────────┘
 ┌─────────────────────────────────────────────────────┐
 │            Heterogeneous Engine Layer               │
-│  ┌─────────────────┐ ┌─────────────────────────────┐ │
-│  │ Workload Scheduler│ │  Execution Engine         │ │
-│  └─────────────────┘ └─────────────────────────────┘ │
+│  ┌─────────────--────┐ ┌──────────────────────────┐ │
+│  │ Workload Scheduler│ │  Execution Engine        │ │
+│  └───────────────--──┘ └──────────────────────────┘ │
 └─────────────────────────────────────────────────────┘
 ┌─────────────────────────────────────────────────────┐
 │              Capability Detection                   │
-│  ┌─────────────────┐ ┌─────────────────────────────┐ │
+│  ┌───────────---──────┐ ┌─────────────────────────┐ │
 │  │  Hardware Discovery│ │   Performance Profiling │ │
-│  └─────────────────┘ └─────────────────────────────┘ │
+│  └──────────────---───┘ └─────────────────────────┘ │
 └─────────────────────────────────────────────────────┘
 ┌─────────────────────────────────────────────────────┐
-│               Hardware Abstraction                 │
+│               Hardware Abstraction                  │
 │ ┌─────┐ ┌─────┐ ┌─────┐ ┌─────┐ ┌─────────────────┐ │
 │ │ CPU │ │ GPU │ │ NPU │ │Metal│ │     Others      │ │
 │ │SIMD │ │CUDA │ │ ANE │ │     │ │ OpenCL, Vulkan  │ │
@@ -84,6 +84,7 @@ pub struct UniversalComputeCapabilities {
 ```
 
 **Detection Strategy**:
+
 - **CPU**: Feature detection via CPUID (x86) or system calls (ARM)
 - **GPU**: Driver enumeration and capability querying
 - **Neural**: Platform-specific API probing (Core ML, NNAPI, etc.)
@@ -113,6 +114,7 @@ pub struct AdaptiveWorkloadScheduler {
 ```
 
 **Scheduling Algorithm**:
+
 1. **Workload Classification**: Categorize operations (SIMD, GPU-compute, Neural inference)
 2. **Hardware Matching**: Match workload characteristics to hardware capabilities
 3. **Performance Prediction**: Use historical data to estimate execution time
@@ -144,6 +146,7 @@ pub struct HeterogeneousEngine {
 ```
 
 **Execution Flow**:
+
 1. **Request Analysis**: Parse workload requirements and constraints
 2. **Hardware Selection**: Use scheduler to select optimal compute unit
 3. **Execution Attempt**: Dispatch to selected hardware with timeout
@@ -151,10 +154,11 @@ pub struct HeterogeneousEngine {
 5. **Performance Tracking**: Update performance database with results
 
 **Graceful Degradation Strategy**:
-```
+
+```text
 Preferred GPU → Fallback GPU → CPU SIMD → CPU Scalar → Error
      ↓              ↓             ↓           ↓
-   <10ms          <50ms        <200ms      <1s
+   <10ms          <50ms        <200ms        <1s
 ```
 
 #### 4. Memory Management Subsystem
@@ -170,6 +174,7 @@ pub struct AcceleratedMemoryAllocator {
 ```
 
 **Features**:
+
 - **Unified Memory**: Leverage Apple Silicon unified memory architecture
 - **Large Pages**: Use 2MB/1GB pages on supporting platforms for reduced TLB misses
 - **NUMA Awareness**: Allocate memory close to target compute units
@@ -191,6 +196,7 @@ pub enum SystemMonitor {
 ```
 
 **Monitoring Metrics**:
+
 - **CPU Load**: Current utilization and thermal state
 - **GPU Load**: Device utilization and memory usage
 - **Power State**: Battery level and power constraints (mobile)
@@ -211,6 +217,7 @@ pub enum AppleChip {
 ```
 
 **Optimizations**:
+
 - **Unified Memory**: Zero-copy data sharing between CPU/GPU/Neural Engine
 - **AMX Instructions**: Advanced Matrix Extensions for large matrix operations
 - **Neural Engine**: 15.8-34.5 TOPS dedicated neural processing
@@ -227,6 +234,7 @@ pub enum SnapdragonChip {
 ```
 
 **Optimizations**:
+
 - **Heterogeneous Cores**: Prime/Performance/Efficiency core scheduling
 - **Adreno GPU**: OpenCL compute with optimized memory hierarchy
 - **Hexagon DSP**: AI acceleration with up to 35 TOPS performance
@@ -242,6 +250,7 @@ pub enum X86Microarch {
 ```
 
 **Optimizations**:
+
 - **AVX-512**: 512-bit SIMD for high-throughput vector operations
 - **Intel DL Boost**: VNNI instructions for AI inference acceleration
 - **AMD SME/SVE**: Scalable matrix/vector extensions (future)
@@ -261,6 +270,7 @@ pub enum ComputeError {
 ```
 
 **Error Mitigation Strategies**:
+
 1. **Hardware Failures**: Automatic fallback to alternative compute units
 2. **Driver Issues**: Version compatibility checking and graceful degradation
 3. **Resource Exhaustion**: Dynamic resource management and workload balancing
@@ -269,6 +279,7 @@ pub enum ComputeError {
 ### Performance Benchmarking Framework
 
 **Built-in Benchmarking**:
+
 ```rust
 pub struct BenchmarkConfig {
     pub iterations: usize,
@@ -280,6 +291,7 @@ pub struct BenchmarkConfig {
 ```
 
 **Benchmark Categories**:
+
 - **SIMD Operations**: Element-wise, matrix ops, reductions, convolutions
 - **GPU Compute**: General compute, ML operations, memory-bound workloads
 - **Neural Engine**: CNN, transformer, RNN inference across precisions
@@ -290,6 +302,7 @@ pub struct BenchmarkConfig {
 The Heterogeneous Compute Engine has been **implemented** with the following components:
 
 ### ✅ Completed Features
+
 - **Capability Detection**: Full cross-platform hardware discovery
 - **Workload Scheduling**: Adaptive scheduler with performance learning
 - **Execution Engine**: Multi-compute-unit orchestration with fallbacks
@@ -298,9 +311,9 @@ The Heterogeneous Compute Engine has been **implemented** with the following com
 - **Error Handling**: Comprehensive error types and graceful degradation
 - **Benchmarking**: Performance validation framework
 
-### 🏗️ Implementation Architecture
+### Implementation Architecture
 
-```
+```text
 orbit-compute/
 ├── src/
 │   ├── lib.rs                    # Public API and module exports
@@ -405,11 +418,13 @@ Based on the implemented architecture and micro-benchmarks:
 ## Security and Privacy Considerations
 
 ### Data Protection
+
 - **Memory Isolation**: Separate memory pools for different security contexts
 - **Hardware Sandboxing**: Leverage GPU/Neural Engine hardware isolation
 - **Secure Enclaves**: Integration with platform secure execution environments
 
 ### Privacy Safeguards
+
 - **Local Processing**: All acceleration happens on-device
 - **No Cloud Dependencies**: No data transmitted to external services
 - **Audit Logging**: Comprehensive logging of compute unit access
@@ -417,17 +432,20 @@ Based on the implemented architecture and micro-benchmarks:
 ## Testing Strategy
 
 ### Unit Testing
+
 - **Capability Detection**: Mock hardware for consistent testing
 - **Scheduling Logic**: Synthetic workloads with known optimal assignments
 - **Error Handling**: Fault injection across all failure modes
 - **Memory Management**: Leak detection and alignment validation
 
 ### Integration Testing
+
 - **Cross-Platform**: CI/CD testing across macOS, Windows, Linux, Android
 - **Hardware Variants**: Testing matrix covering major CPU/GPU combinations
 - **Performance Regression**: Automated benchmarking on every commit
 
 ### Real-World Validation
+
 - **Database Workloads**: TPC-H query performance on different hardware
 - **Mobile Deployment**: Power consumption and thermal behavior testing
 - **Cloud Environments**: Validation in containerized and VM environments
@@ -435,22 +453,28 @@ Based on the implemented architecture and micro-benchmarks:
 ## Alternatives Considered
 
 ### Alternative 1: Single-Hardware Specialization
+
 **Approach**: Optimize for one specific hardware type (e.g., GPU-only)
-**Rejected Because**: 
+**Rejected Because**:
+
 - Limited deployment flexibility
 - Poor fallback behavior in constrained environments
 - Misses optimization opportunities on heterogeneous platforms
 
 ### Alternative 2: External Acceleration Libraries
+
 **Approach**: Use libraries like Intel MKL, cuDNN, etc.
 **Rejected Because**:
+
 - External dependencies complicate deployment
 - Limited customization for database-specific workloads
 - Licensing and distribution concerns
 
 ### Alternative 3: JIT Compilation Approach
+
 **Approach**: Generate optimized code at runtime for detected hardware
 **Rejected Because**:
+
 - Complex implementation with long development timeline
 - Runtime compilation overhead
 - Security implications of code generation
@@ -458,6 +482,7 @@ Based on the implemented architecture and micro-benchmarks:
 ## Implementation Plan
 
 ### ✅ Phase 1: Foundation (Completed)
+
 - [x] Core architecture design and module structure
 - [x] Capability detection system for major platforms
 - [x] Basic workload scheduling framework
@@ -465,12 +490,14 @@ Based on the implemented architecture and micro-benchmarks:
 - [x] Initial benchmarking framework
 
 ### 🎯 Phase 2: Integration (Current)
+
 - [ ] Integration with Orbit-RS query engine
 - [ ] Database-specific workload optimizations
 - [ ] Production monitoring and observability
 - [ ] Performance tuning based on real workloads
 
 ### 🔮 Phase 3: Advanced Features (Future)
+
 - [ ] Machine learning-based scheduling optimization
 - [ ] Dynamic workload partitioning across multiple compute units
 - [ ] Advanced memory management (NUMA, unified memory)
@@ -479,7 +506,7 @@ Based on the implemented architecture and micro-benchmarks:
 ## Timeline
 
 - **Foundation**: Q4 2024 ✅ **Completed**
-- **Integration**: Q1 2025 🏗️ **In Progress** 
+- **Integration**: Q1 2025 🏗️ **In Progress**
 - **Production Ready**: Q2 2025
 - **Advanced Features**: Q3-Q4 2025
 
@@ -488,6 +515,7 @@ Based on the implemented architecture and micro-benchmarks:
 The Heterogeneous Compute Engine provides Orbit-RS with a comprehensive acceleration framework that can automatically leverage diverse computing hardware while maintaining reliability and cross-platform compatibility. The implementation is complete and ready for integration with the broader Orbit-RS ecosystem.
 
 **Key Benefits Delivered**:
+
 - **5-50x Performance Improvements** for acceleratable workloads
 - **Universal Compatibility** across all major platforms and hardware
 - **Zero-Configuration Operation** with automatic hardware detection

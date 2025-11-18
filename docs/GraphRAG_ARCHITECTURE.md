@@ -4,7 +4,7 @@ title: GraphRAG Architecture Design for Orbit-RS
 category: documentation
 ---
 
-# GraphRAG Architecture Design for Orbit-RS
+## GraphRAG Architecture Design for Orbit-RS
 
 ## 🎯 Executive Summary
 
@@ -56,13 +56,13 @@ From our analysis, Orbit-RS provides an excellent foundation for GraphRAG:
 
 ### GraphRAG Actor Ecosystem
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────┐
-│                     GraphRAG Orchestrator                      │
-│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐ │
-│  │ Knowledge Graph │  │   RAG Pipeline  │  │ Query Processor │ │
-│  │   Constructor   │  │     Manager     │  │    & Router     │ │
-│  └─────────────────┘  └─────────────────┘  └─────────────────┘ │
+│                     GraphRAG Orchestrator                       │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐  │
+│  │ Knowledge Graph │  │   RAG Pipeline  │  │ Query Processor │  │
+│  │   Constructor   │  │     Manager     │  │    & Router     │  │
+│  └─────────────────┘  └─────────────────┘  └─────────────────┘  │
 └─────────────────────────────────────────────────────────────────┘
                                 │
                 ┌───────────────┼───────────────┐
@@ -265,7 +265,7 @@ GRAPHRAG.RECOMMEND <kg_name> <entity_id> [ALGORITHM <pagerank|centrality|similar
 
 ### 1. Knowledge Graph Construction Flow
 
-```
+```text
 Document Text
       ↓
 [EntityExtractionActor]
@@ -283,7 +283,7 @@ Entity/Relationship Candidates
 
 ### 2. RAG Query Processing Flow
 
-```
+```text
 User Query
     ↓
 [GraphRAGActor.query_rag()]
@@ -305,7 +305,7 @@ Enhanced Response with Citations
 
 ### 3. Multi-Hop Reasoning Flow
 
-```
+```text
 Source Entity
      ↓
 [MultiHopReasoningEngine]

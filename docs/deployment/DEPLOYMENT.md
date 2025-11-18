@@ -4,7 +4,7 @@ title: Deployment Guide
 category: deployment
 ---
 
-# Deployment Guide
+## Deployment Guide
 
 This guide covers deploying Orbit-RS in production environments, including Kubernetes deployment, CI/CD pipelines, and operational best practices.
 
@@ -15,16 +15,19 @@ Orbit-RS is designed for production deployment with enterprise-grade features in
 ## Deployment Options
 
 ### 1. Docker Deployment
+
 - **Single Node**: Quick setup for development and testing
 - **Docker Compose**: Multi-service orchestration for local clusters
 - **Container Registry**: Production-ready container images
 
 ### 2. Kubernetes Deployment
+
 - **Native Operator**: Custom Kubernetes operator with CRDs
 - **Helm Charts**: Production-ready Helm charts
 - **Multi-platform Support**: linux/amd64 and linux/arm64
 
 ### 3. Bare Metal Deployment
+
 - **Binary Installation**: Static binaries for direct deployment
 - **Service Management**: systemd integration for Linux systems
 - **Process Management**: PM2 or similar for Node.js-style deployment
@@ -77,6 +80,7 @@ helm install orbit-cluster orbit-rs/orbit-rs \
 Orbit-RS provides several CRDs for managing clusters and components:
 
 #### OrbitCluster CRD
+
 ```yaml
 apiVersion: orbit.turingworks.com/v1alpha1
 kind: OrbitCluster
@@ -106,6 +110,7 @@ spec:
 ```
 
 #### OrbitActor CRD
+
 ```yaml
 apiVersion: orbit.turingworks.com/v1alpha1
 kind: OrbitActor
@@ -250,6 +255,7 @@ Use the provided script to prepare secrets for GitHub Actions:
 ```
 
 This generates the following files:
+
 - `staging-kubeconfig-base64.txt`
 - `production-kubeconfig-base64.txt`
 - Environment-specific configuration files
@@ -634,18 +640,21 @@ kubectl patch orbitcluster production-cluster \
 ### Common Issues
 
 1. **Pod Startup Issues**
+
    ```bash
    kubectl describe pod <pod-name>
    kubectl logs <pod-name> --previous
    ```
 
 2. **Network Connectivity**
+
    ```bash
    kubectl exec -it <pod-name> -- netstat -tlnp
    kubectl get svc,ep
    ```
 
 3. **Resource Constraints**
+
    ```bash
    kubectl top pods
    kubectl describe node <node-name>

@@ -4,7 +4,7 @@ title: Protocol Adapters
 category: protocols
 ---
 
-# Protocol Adapters
+## Protocol Adapters
 
 Orbit-RS provides multiple protocol adapters enabling clients to interact with the actor system using familiar protocols. This allows existing applications to integrate with Orbit-RS without requiring significant code changes.
 
@@ -100,6 +100,7 @@ OK
 **📚 [Complete Command Reference](REDIS_COMMANDS_REFERENCE.md)** - Detailed documentation for all 50+ commands
 
 #### Key-Value Operations (15+ commands)
+
 - **GET** - Retrieve value by key
 - **SET** - Set key to value (with optional expiration: `SET key value EX 3600`)
 - **DEL** - Delete one or more keys
@@ -123,6 +124,7 @@ OK
 - **UNLINK** - Asynchronous delete
 
 #### Hash Operations (10+ commands)
+
 - **HGET** - Get field value from hash
 - **HSET** - Set field value in hash
 - **HGETALL** - Get all field-value pairs from hash
@@ -136,6 +138,7 @@ OK
 - **HINCRBY** - Increment field by integer value
 
 #### List Operations (12+ commands)
+
 - **LPUSH** - Push elements to left of list
 - **RPUSH** - Push elements to right of list
 - **LPOP** - Pop element from left of list
@@ -151,6 +154,7 @@ OK
 - **BRPOP** - Blocking right pop (non-blocking implementation)
 
 #### Set Operations (7+ commands)
+
 - **SADD** - Add members to set
 - **SREM** - Remove members from set
 - **SMEMBERS** - Get all members of set
@@ -161,6 +165,7 @@ OK
 - **SDIFF** - Return difference of sets
 
 #### Sorted Set Operations (8+ commands)
+
 - **ZADD** - Add members with scores to sorted set
 - **ZREM** - Remove members from sorted set
 - **ZCARD** - Get cardinality of sorted set
@@ -172,6 +177,7 @@ OK
 - **ZRANK** - Get rank of member
 
 #### Pub/Sub Operations (6+ commands)
+
 - **PUBLISH** - Publish message to channel
 - **SUBSCRIBE** - Subscribe to channels
 - **UNSUBSCRIBE** - Unsubscribe from channels
@@ -180,6 +186,7 @@ OK
 - **PUBSUB** - Introspect pub/sub system
 
 #### Connection Commands (5+ commands)
+
 - **PING** - Test connection
 - **ECHO** - Echo message
 - **SELECT** - Select database (logical separation)
@@ -187,6 +194,7 @@ OK
 - **QUIT** - Close connection
 
 #### Server Commands (5+ commands)
+
 - **INFO** - Get server information with Orbit-specific details
 - **DBSIZE** - Get number of keys
 - **FLUSHDB** - Clear current database
@@ -198,6 +206,7 @@ OK
 Orbit-RS will extend Redis with enterprise-grade features for AI/ML, time series, and graph database workloads in future releases.
 
 ### Vector Operations (VECTOR.* namespace) 📋 PLANNED
+
 **AI/ML vector search with multiple similarity metrics** - *Coming Soon*
 
 - **VECTOR.ADD** index id vector [metadata...] - Add vector with optional metadata
@@ -217,6 +226,7 @@ VECTOR.SEARCH embeddings "0.1,0.2,0.3,0.4" 5 METRIC COSINE THRESHOLD 0.8
 ```
 
 ### RedisSearch Compatible (FT.* namespace) 📋 PLANNED
+
 **Full-text and vector search engine compatibility** - *Coming Soon*
 
 - **FT.CREATE** index DIM dimension [options] - Create vector search index
@@ -226,6 +236,7 @@ VECTOR.SEARCH embeddings "0.1,0.2,0.3,0.4" 5 METRIC COSINE THRESHOLD 0.8
 - **FT.INFO** index - Get index information and statistics
 
 ### Time Series (TS.* namespace) 📋 PLANNED
+
 **Complete RedisTimeSeries compatibility for IoT and monitoring** - *Coming Soon*
 
 - **TS.CREATE** key [options] - Create time series with retention policies
@@ -251,6 +262,7 @@ TS.RANGE temperature:sensor1 - + AGGREGATION AVG 60000
 ```
 
 ### Graph Database (GRAPH.* namespace) 📋 PLANNED
+
 **Cypher-like graph queries with execution planning** - *Coming Soon*
 
 - **GRAPH.QUERY** graph_name query - Execute graph query with write operations
@@ -272,6 +284,7 @@ GRAPH.EXPLAIN social "MATCH (p:Person) WHERE p.age > 25 RETURN p.name"
 Each Redis command family maps to corresponding Orbit actor operations:
 
 #### Core Data Types
+
 - **String commands** → `KeyValueActor` - TTL-aware key-value pairs with expiration
 - **Hash commands** → `HashActor` - Hash maps with field-value operations
 - **List commands** → `ListActor` - Ordered lists with push/pop/range operations
@@ -280,6 +293,7 @@ Each Redis command family maps to corresponding Orbit actor operations:
 - **Pub/Sub commands** → `PubSubActor` - Message channels with pattern matching
 
 #### Advanced Extensions
+
 - **Vector commands** → `VectorActor` - AI/ML vector operations with similarity search
 - **Time Series commands** → `TimeSeriesActor` - Time-series data with aggregation
 - **Graph commands** → `GraphActor` - Graph database with Cypher-like queries
@@ -427,6 +441,7 @@ Orbit-RS supports a comprehensive set of SQL keywords for actor operations. All 
 #### SQL Statement Keywords
 
 ##### INSERT - Create New Actors
+
 Add new actors to the system with JSON state data.
 
 ```sql
@@ -451,6 +466,7 @@ INSERT INTO actors (actor_id, actor_type, state) VALUES
 ```
 
 ##### SELECT - Query Actor Data
+
 Retrieve actors and their state information.
 
 ```sql
@@ -474,6 +490,7 @@ WHERE (actor_type = 'ProductActor' OR actor_type = 'UserActor')
 ```
 
 ##### UPDATE - Modify Actor State
+
 Update existing actors with new state data.
 
 ```sql
@@ -500,6 +517,7 @@ WHERE actor_type = 'OrderActor' AND actor_id = 'order:12345';
 ```
 
 ##### DELETE - Remove Actors
+
 Remove actors from the system.
 
 ```sql
@@ -517,6 +535,7 @@ WHERE actor_type = 'CacheActor' AND actor_id LIKE 'temp:%';
 #### SQL Clause Keywords
 
 ##### FROM - Specify Data Source
+
 ```sql
 -- Basic table reference
 SELECT actor_id, actor_type FROM actors;
@@ -526,6 +545,7 @@ SELECT COUNT(*) as total_actors FROM actors;
 ```
 
 ##### WHERE - Filter Results
+
 Supports multiple operators for flexible filtering.
 
 ```sql
@@ -542,6 +562,7 @@ WHERE (actor_type = 'ProductActor' OR actor_type = 'ServiceActor')
 ```
 
 ##### SET - Update Values
+
 ```sql
 -- Simple value assignment
 UPDATE actors SET state = '{"active": true}' WHERE actor_id = 'service:auth';
@@ -558,6 +579,7 @@ UPDATE actors SET state = '{
 ```
 
 ##### INTO - Target Table Specification
+
 ```sql
 -- Standard insertion syntax
 INSERT INTO actors (actor_id, actor_type, state) 
@@ -569,6 +591,7 @@ VALUES ('service:payment', 'PaymentServiceActor', '{
 ```
 
 ##### VALUES - Data Specification
+
 ```sql
 -- Single row insertion
 INSERT INTO actors (actor_id, actor_type, state) 
@@ -584,6 +607,7 @@ INSERT INTO actors (actor_id, actor_type, state) VALUES
 #### WHERE Clause Operators
 
 ##### = (Equality)
+
 ```sql
 -- Exact match
 SELECT * FROM actors WHERE actor_type = 'UserActor';
@@ -591,6 +615,7 @@ SELECT * FROM actors WHERE actor_id = 'user:alice';
 ```
 
 ##### != (Not Equal)
+
 ```sql
 -- Exclude specific types
 SELECT actor_id, actor_type FROM actors WHERE actor_type != 'TempActor';
@@ -598,6 +623,7 @@ SELECT * FROM actors WHERE actor_id != 'system:internal';
 ```
 
 ##### <> (Not Equal Alternative)
+
 ```sql
 -- Alternative not-equal syntax
 SELECT * FROM actors WHERE actor_type <> 'CacheActor';
@@ -607,6 +633,7 @@ SELECT actor_id FROM actors WHERE actor_type <> 'SystemActor';
 #### Table Support
 
 ##### actors - The Primary Table
+
 All actor operations use the `actors` table.
 
 ```sql
@@ -625,6 +652,7 @@ SELECT DISTINCT actor_type FROM actors;
 #### Column Support
 
 ##### actor_id - Primary Identifier
+
 ```sql
 -- Query by specific ID
 SELECT * FROM actors WHERE actor_id = 'user:alice';
@@ -638,6 +666,7 @@ DELETE FROM actors WHERE actor_id = 'temp:session:12345';
 ```
 
 ##### actor_type - Actor Classification
+
 ```sql
 -- Filter by actor type
 SELECT * FROM actors WHERE actor_type = 'UserActor';
@@ -651,6 +680,7 @@ WHERE actor_type IN ('UserActor', 'ServiceActor', 'ProductActor');
 ```
 
 ##### state - JSON State Data
+
 ```sql
 -- Retrieve state information
 SELECT actor_id, state FROM actors WHERE actor_type = 'UserActor';
@@ -660,6 +690,7 @@ SELECT * FROM actors WHERE actor_id LIKE 'config:%';
 ```
 
 ##### * (All Columns)
+
 ```sql
 -- Retrieve complete records
 SELECT * FROM actors;
@@ -668,6 +699,7 @@ SELECT * FROM actors WHERE actor_id LIKE 'service:%';
 ```
 
 ##### Multiple Column Selection
+
 ```sql
 -- Specific column combinations
 SELECT actor_id, actor_type FROM actors;
@@ -682,6 +714,7 @@ SELECT actor_type, actor_id, state FROM actors ORDER BY actor_type, actor_id;
 Orbit-RS provides robust JSON support for complex actor state management.
 
 ##### Simple JSON
+
 ```sql
 -- Basic key-value pairs
 INSERT INTO actors (actor_id, actor_type, state) 
@@ -693,6 +726,7 @@ VALUES ('config:app', 'ConfigActor', '{
 ```
 
 ##### Nested JSON Objects
+
 ```sql
 -- Complex nested structures
 INSERT INTO actors (actor_id, actor_type, state) 
@@ -710,6 +744,7 @@ VALUES ('user:profile', 'UserProfileActor', '{
 ```
 
 ##### JSON Arrays
+
 ```sql
 -- Arrays and collections
 INSERT INTO actors (actor_id, actor_type, state) 
@@ -725,6 +760,7 @@ VALUES ('playlist:favorites', 'PlaylistActor', '{
 ```
 
 ##### JSON with Special Characters
+
 ```sql
 -- Handling quotes and special characters
 INSERT INTO actors (actor_id, actor_type, state) 
@@ -736,6 +772,7 @@ VALUES ('message:welcome', 'MessageActor', '{
 ```
 
 ##### Unicode and International Support
+
 ```sql
 -- International characters and emoji
 INSERT INTO actors (actor_id, actor_type, state) 
@@ -751,6 +788,7 @@ VALUES ('greeting:international', 'GreetingActor', '{
 ```
 
 ##### Empty JSON Objects
+
 ```sql
 -- Minimal state initialization
 INSERT INTO actors (actor_id, actor_type, state) 
@@ -783,6 +821,7 @@ WHERE actor_id = 'test:lowercase';
 Orbit-RS handles various edge cases and special characters gracefully.
 
 ##### Extra Whitespace
+
 ```sql
 -- Handles multiple spaces and formatting
    SELECT   actor_id   ,   actor_type   
@@ -791,6 +830,7 @@ Orbit-RS handles various edge cases and special characters gracefully.
 ```
 
 ##### Special Characters in Identifiers
+
 ```sql
 -- Email-like identifiers
 INSERT INTO actors (actor_id, actor_type, state) 
@@ -809,6 +849,7 @@ VALUES ('api:v1/users/:id/profile', 'ApiEndpointActor', '{
 ```
 
 ##### Semicolon Handling
+
 ```sql
 -- Proper query termination
 SELECT actor_id FROM actors WHERE actor_id = 'user:john.doe@company.com';
@@ -819,6 +860,7 @@ SELECT actor_id FROM actors WHERE actor_id = 'user:john.doe@company.com';
 Real-world usage patterns combining multiple SQL operations.
 
 ##### Vector Database Workflow - Complete Implementation
+
 ```sql
 -- 1. Enable pgvector extension
 CREATE EXTENSION IF NOT EXISTS vector;
@@ -878,6 +920,7 @@ WHERE rank <= 10;
 ```
 
 ##### Advanced Analytics with Window Functions
+
 ```sql
 -- Complex time-series analysis with multiple window functions
 WITH sales_analytics AS (
@@ -937,6 +980,7 @@ ORDER BY sale_date;
 ```
 
 ##### Enterprise Schema Management with Permissions
+
 ```sql
 -- 1. Create organizational schemas
 BEGIN;
@@ -996,6 +1040,7 @@ COMMIT;
 ```
 
 ##### Transaction Management with Savepoints
+
 ```sql
 -- Complex transaction with multiple savepoints
 BEGIN ISOLATION LEVEL READ COMMITTED;
@@ -1054,6 +1099,7 @@ COMMIT;
 ```
 
 ##### E-commerce Order Processing
+
 ```sql
 -- Create customer
 INSERT INTO actors (actor_id, actor_type, state) 
@@ -1092,6 +1138,7 @@ WHERE actor_type = 'OrderActor' AND actor_id LIKE 'order:%';
 ```
 
 ##### Service Configuration Management
+
 ```sql
 -- Create service configurations
 INSERT INTO actors (actor_id, actor_type, state) VALUES
@@ -1132,12 +1179,14 @@ WHERE actor_id = 'config:logging';
 Future releases will expand PostgreSQL compatibility with advanced SQL features:
 
 #### Core SQL Operations (Planned)
+
 - **SELECT** - Complete query support with JOINs, subqueries, window functions, CTEs
 - **INSERT** - Multi-row inserts, INSERT...SELECT, ON CONFLICT handling
 - **UPDATE** - Complex updates with FROM clauses, correlated subqueries
 - **DELETE** - Cascading deletes, EXISTS/NOT EXISTS conditions
 
 #### DDL Operations (Planned)
+
 - **CREATE/ALTER/DROP TABLE** - Complete table lifecycle management
 - **CREATE/DROP INDEX** - B-tree, Hash, GiST, GIN, IVFFLAT, HNSW indexes
 - **CREATE/DROP VIEW** - Regular and materialized views
@@ -1145,18 +1194,21 @@ Future releases will expand PostgreSQL compatibility with advanced SQL features:
 - **CREATE/DROP EXTENSION** - Extension management (including pgvector)
 
 #### DCL Operations (Planned)
+
 - **GRANT/REVOKE** - Comprehensive permission management
 - **Role-based Access Control** - User and role management
 - **Schema-level Permissions** - Fine-grained access control
 - **Object-level Security** - Table, view, function permissions
 
 #### TCL Operations (Planned)
+
 - **BEGIN/COMMIT/ROLLBACK** - Full transaction support
 - **SAVEPOINT** - Nested transaction points
 - **Isolation Levels** - READ COMMITTED, REPEATABLE READ, SERIALIZABLE
 - **Access Modes** - READ ONLY, READ WRITE transaction control
 
 #### Advanced SQL Features (Planned)
+
 - **Window Functions** - ROW_NUMBER, RANK, DENSE_RANK, LAG, LEAD, FIRST_VALUE, LAST_VALUE, NTILE
 - **Common Table Expressions** - WITH clauses including recursive CTEs
 - **Complex Expressions** - Full operator precedence, CASE statements
@@ -1165,6 +1217,7 @@ Future releases will expand PostgreSQL compatibility with advanced SQL features:
 - **JOIN Operations** - INNER, LEFT, RIGHT, FULL OUTER, CROSS joins
 
 #### Vector Database Support (Planned)
+
 - **pgvector Extension** - CREATE EXTENSION vector support
 - **Vector Data Types** - VECTOR(n), HALFVEC(n), SPARSEVEC(n)
 - **Vector Indexes** - IVFFLAT and HNSW for similarity search
@@ -1176,6 +1229,7 @@ Future releases will expand PostgreSQL compatibility with advanced SQL features:
 Potential areas for further enhancement:
 
 #### Performance Optimizations
+
 - **Query Optimizer** - Cost-based query planning and optimization
 - **Index Recommendations** - Automatic index suggestion based on query patterns
 - **Parallel Query Execution** - Multi-threaded query processing
@@ -1183,6 +1237,7 @@ Potential areas for further enhancement:
 - **Caching Layer** - Query result and metadata caching
 
 #### Enterprise Features
+
 - **Advanced Authentication** - LDAP, Kerberos, OAuth integration
 - **Audit Logging** - Comprehensive audit trail and compliance features
 - **Backup and Recovery** - Point-in-time recovery and backup automation
@@ -1190,6 +1245,7 @@ Potential areas for further enhancement:
 - **Monitoring and Metrics** - Performance monitoring and alerting
 
 #### Advanced Vector Features
+
 - **Approximate Nearest Neighbor** - Advanced ANN algorithms
 - **Vector Quantization** - Memory-efficient vector storage
 - **Multi-modal Embeddings** - Support for text, image, audio vectors
@@ -1197,6 +1253,7 @@ Potential areas for further enhancement:
 - **Real-time Vector Updates** - Streaming vector updates and search
 
 #### Extended SQL Compliance
+
 - **MERGE Statement** - UPSERT operations with complex logic
 - **Recursive CTEs** - Advanced hierarchical query support
 - **Table Functions** - User-defined table-valued functions
@@ -1204,6 +1261,7 @@ Potential areas for further enhancement:
 - **Triggers** - Row and statement-level trigger support
 
 #### Integration Features
+
 - **Foreign Data Wrappers** - External data source connectivity
 - **Logical Replication** - Change data capture and streaming
 - **GraphQL Interface** - Direct GraphQL query support
@@ -1266,6 +1324,7 @@ let expression = parser.parse_expression(&tokens, &mut pos)?;
 ```
 
 #### Operator Precedence (lowest to highest)
+
 1. **OR** - Logical disjunction
 2. **AND** - Logical conjunction  
 3. **Equality** - `=`, `!=`, `<>`, `IS`, `IS NOT`
@@ -1276,6 +1335,7 @@ let expression = parser.parse_expression(&tokens, &mut pos)?;
 8. **Primary** - Literals, identifiers, function calls, parenthesized expressions
 
 #### Supported Expression Types
+
 - **Literals**: Strings, numbers, booleans, NULL
 - **Identifiers**: Column references with optional table qualification
 - **Function Calls**: `COALESCE(a, b)`, `GREATEST(x, y)`, `COUNT(*)` with argument parsing
@@ -1353,16 +1413,19 @@ Through MCP, AI agents can:
 ## Architecture Highlights
 
 ### Modular Design
+
 - **Pluggable Protocols**: Easy to add new protocol adapters
 - **Consistent Actor Mapping**: All protocols map to the same underlying actor system
 - **Performance Optimized**: Each adapter optimized for its specific protocol
 
 ### Protocol Integration
+
 - **Wire Protocol Compatibility**: Full compatibility with existing clients
 - **Type Safety**: Strong typing across protocol boundaries
 - **Error Handling**: Consistent error handling and reporting
 
 ### Distributed Features
+
 - **Actor Distribution**: Protocols can access actors across the cluster
 - **Load Balancing**: Automatic load distribution for protocol endpoints
 - **High Availability**: Fault tolerance at the protocol level
@@ -1406,9 +1469,11 @@ capabilities = ["tools", "resources", "prompts"]
 Orbit-RS will add comprehensive time-series database capabilities in **Phase 12 (Q1 2025)**, providing compatibility with two major time-series ecosystems.
 
 ### Redis Time Series Compatibility
+
 **Full RedisTimeSeries module compatibility** - [📖 Detailed Documentation](REDIS_TIMESERIES.md)
 
-#### Key Features
+#### Redis Time Series Key Features
+
 - **TimeSeriesActor**: Distributed time-series management with automatic partitioning
 - **Core Commands**: TS.CREATE, TS.ADD, TS.GET, TS.RANGE, TS.REVRANGE
 - **Aggregation Rules**: TS.CREATERULE, TS.DELETERULE with automated downsampling
@@ -1417,7 +1482,8 @@ Orbit-RS will add comprehensive time-series database capabilities in **Phase 12 
 - **Retention Policies**: Automatic data expiration and compression
 - **Labeling System**: Multi-dimensional time series organization
 
-#### Example Usage
+#### Redis Time Series Example Usage
+
 ```python
 import redis
 r = redis.Redis(host='localhost', port=6380)  # Orbit-RS RESP server
@@ -1441,9 +1507,11 @@ print(f"1-minute averages: {results}")
 ```
 
 ### PostgreSQL TimescaleDB Compatibility
+
 **Complete TimescaleDB extension compatibility** - [📖 Detailed Documentation](POSTGRESQL_TIMESCALE.md)
 
 #### Key Features
+
 - **Hypertables**: Distributed time-partitioned tables with automatic chunking
 - **Time Functions**: time_bucket(), time_bucket_gapfill(), locf(), interpolate()
 - **Continuous Aggregates**: Materialized views with automatic refresh policies
@@ -1453,6 +1521,7 @@ print(f"1-minute averages: {results}")
 - **Advanced Analytics**: Hyperfunctions for time-series analysis
 
 #### Example Usage
+
 ```sql
 -- Enable TimescaleDB extension
 CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;
@@ -1481,6 +1550,7 @@ ORDER BY bucket DESC;
 ```
 
 ### Integration Benefits
+
 - **Distributed Architecture**: Time series data distributed across cluster nodes
 - **ACID Transactions**: Full transaction support for time series operations
 - **Vector Integration**: Combine time series with vector similarity search
@@ -1491,20 +1561,25 @@ ORDER BY bucket DESC;
 ## Future Protocols 🚧
 
 ### REST API
+
 HTTP/JSON interface for web applications with:
+
 - RESTful actor endpoints
 - OpenAPI/Swagger documentation
 - Authentication integration
 - Rate limiting and throttling
 
 ### Neo4j Bolt Protocol
+
 Graph database compatibility featuring:
+
 - Cypher query language support
 - Graph traversal algorithms
 - Relationship mapping to actors
 - Property graph model
 
 ### Additional Protocols Under Consideration
+
 - **Apache Kafka Protocol** - Event streaming integration
 - **MQTT** - IoT device communication
 - **WebSocket** - Real-time web applications
@@ -1514,18 +1589,21 @@ Graph database compatibility featuring:
 ## Best Practices
 
 ### Protocol Selection
+
 1. **Redis**: Ideal for caching, session storage, and pub/sub messaging
 2. **PostgreSQL**: Best for complex queries, ACID transactions, and vector operations
 3. **MCP**: Perfect for AI agent integration and programmatic access
 4. **REST**: Great for web applications and microservices integration
 
 ### Performance Optimization
+
 1. **Connection Pooling**: Use connection pools for high-throughput scenarios
 2. **Batch Operations**: Group operations when possible to reduce overhead
 3. **Index Strategy**: Create appropriate indexes for your query patterns
 4. **Monitor Metrics**: Use built-in metrics to identify performance bottlenecks
 
 ### Security Considerations
+
 1. **Network Security**: Use TLS for production deployments
 2. **Authentication**: Implement proper authentication for each protocol
 3. **Authorization**: Configure fine-grained access controls
