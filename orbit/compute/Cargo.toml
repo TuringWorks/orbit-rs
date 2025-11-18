@@ -106,7 +106,7 @@ aligned-vec = "0.5"
 # System monitoring
 libc = "0.2"
 num_cpus = "1.16"
-rand = "0.9"
+rand = "0.8"
 
 # Benchmarking
 criterion = { version = "0.7", features = ["html_reports"], optional = true }

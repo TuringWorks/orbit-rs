@@ -27,7 +27,7 @@ tokio-util = "0.7"
 md5 = "0.7"
 tempfile = "3.0"
 tonic = "0.12"
-prost = "0.14"
+prost = "0.13"
 futures.workspace = true
 tower = { version = "0.5", features = ["limit", "load-shed", "timeout"] }
 hyper = "0.14"
@@ -57,5 +57,5 @@ name = "orbitql-lsp-simple"
 path = "src/bin/orbitql-lsp-simple.rs"
 
 [build-dependencies]
-tonic-build = "0.14"
+tonic-build = "0.12"
 prost-build = "0.13"
