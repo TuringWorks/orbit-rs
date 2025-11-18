@@ -5,6 +5,7 @@ category: documentation
 ---
 
 # Orbit-RS Master Documentation
+
 **Single Source of Truth for Current State and Planned Development**
 
 *Last Updated: January 5, 2025*
@@ -29,6 +30,7 @@ category: documentation
 ## 📊 Current Status Overview
 
 ### Project State: Phase 8 Complete ✅
+
 **Orbit-RS** is a distributed actor system with advanced database capabilities, currently at **Phase 8** completion with comprehensive SQL engine and PostgreSQL compatibility.
 
 | Component | Status | Version | Notes |
@@ -43,6 +45,7 @@ category: documentation
 | **SQL Query Engine** | ✅ Complete | v0.1.0 | DDL/DML/DCL/TCL, JOINs, aggregates, vector ops |
 
 ### Performance Metrics (Phase 8)
+
 - **Lines of Code**: 150,000+ lines of production-ready Rust code
 - **Test Coverage**: 79 passing tests with comprehensive coverage  
 - **Throughput**: Up to 500k+ messages/second per core
@@ -54,39 +57,41 @@ category: documentation
 ## 🏗️ Project Architecture
 
 ### High-Level Architecture
-```
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                    Orbit-RS Distributed System                  │
 ├─────────────────────────────────────────────────────────────────┤
-│                      Protocol Layer                            │
-│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌──────────┐  │
-│  │   Redis     │ │PostgreSQL   │ │    Neo4j    │ │ ArangoDB │  │
-│  │    RESP     │ │Wire Protocol│ │    Bolt     │ │   HTTP   │  │
-│  └─────────────┘ └─────────────┘ └─────────────┘ └──────────┘  │
+│                      Protocol Layer                             │
+│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌──────────┐   │
+│  │   Redis     │ │PostgreSQL   │ │    Neo4j    │ │ ArangoDB │   │
+│  │    RESP     │ │Wire Protocol│ │    Bolt     │ │   HTTP   │   │
+│  └─────────────┘ └─────────────┘ └─────────────┘ └──────────┘   │
 ├─────────────────────────────────────────────────────────────────┤
-│                      Query Engines                             │
-│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌──────────┐  │
-│  │     SQL     │ │   Cypher    │ │     AQL     │ │GraphRAG  │  │
-│  │   Engine    │ │   Parser    │ │   Parser    │ │  Engine  │  │
-│  └─────────────┘ └─────────────┘ └─────────────┘ └──────────┘  │
+│                      Query Engines                              │
+│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌──────────┐   │
+│  │     SQL     │ │   Cypher    │ │     AQL     │ │GraphRAG  │   │
+│  │   Engine    │ │   Parser    │ │   Parser    │ │  Engine  │   │
+│  └─────────────┘ └─────────────┘ └─────────────┘ └──────────┘   │
 ├─────────────────────────────────────────────────────────────────┤
-│                     Actor System Core                          │
-│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌──────────┐  │
-│  │ SQL Actors  │ │Graph Actors │ │Document     │ │   AI     │  │
-│  │             │ │             │ │ Actors      │ │ Actors   │  │
-│  └─────────────┘ └─────────────┘ └─────────────┘ └──────────┘  │
+│                     Actor System Core                           │
+│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌──────────┐   │
+│  │ SQL Actors  │ │Graph Actors │ │Document     │ │   AI     │   │
+│  │             │ │             │ │ Actors      │ │ Actors   │   │
+│  └─────────────┘ └─────────────┘ └─────────────┘ └──────────┘   │
 ├─────────────────────────────────────────────────────────────────┤
-│                   Distributed Runtime                          │
-│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌──────────┐  │
-│  │Transaction  │ │   Cluster   │ │   Message   │ │ Storage  │  │
-│  │Coordinator  │ │ Management  │ │   Routing   │ │ Layer    │  │
-│  └─────────────┘ └─────────────┘ └─────────────┘ └──────────┘  │
+│                   Distributed Runtime                           │
+│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌──────────┐   │
+│  │Transaction  │ │   Cluster   │ │   Message   │ │ Storage  │   │
+│  │Coordinator  │ │ Management  │ │   Routing   │ │ Layer    │   │
+│  └─────────────┘ └─────────────┘ └─────────────┘ └──────────┘   │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
 ### Core Components
 
 #### 1. Actor System Foundation
+
 - **ActorWithStringKey/UuidKey**: Base traits for addressable actors
 - **Actor Lifecycle**: Registration, activation, deactivation, cleanup
 - **Proxy Generation**: Client-side actor references and invocation
@@ -94,6 +99,7 @@ category: documentation
 - **Lease Management**: Time-based actor lease system for resource management
 
 #### 2. Network & Cluster Layer
+
 - **gRPC Services**: Actor invocation and cluster management services
 - **Protocol Buffers**: Efficient binary serialization for all messages
 - **Service Discovery**: DNS-based and etcd-based node discovery
@@ -101,6 +107,7 @@ category: documentation
 - **Load Balancing**: Multiple strategies (round-robin, least connections, resource-aware)
 
 #### 3. Transaction System
+
 - **2-Phase Commit**: ACID-compliant distributed transactions
 - **Saga Pattern**: Long-running workflows with compensating actions
 - **Distributed Locks**: Deadlock detection and prevention
@@ -112,6 +119,7 @@ category: documentation
 ## ✅ Completed Features
 
 ### Phase 1: Foundation (Complete)
+
 - [x] Multi-crate workspace with proper module organization
 - [x] Cargo workspace configuration with cross-platform support
 - [x] Shared data structures, error handling, and utilities
@@ -120,6 +128,7 @@ category: documentation
 - [x] CI/CD pipeline with automated testing and security scanning
 
 ### Phase 2: Core Actor System (Complete)
+
 - [x] Actor traits with string and UUID key addressing
 - [x] Complete actor lifecycle management
 - [x] Client-side proxy generation and invocation
@@ -128,6 +137,7 @@ category: documentation
 - [x] Comprehensive error types and propagation
 
 ### Phase 3: Network Layer (Complete)
+
 - [x] gRPC service definitions and message types
 - [x] Actor invocation and cluster management services
 - [x] Efficient Protocol Buffer serialization
@@ -136,6 +146,7 @@ category: documentation
 - [x] DNS and etcd-based service discovery
 
 ### Phase 4: Cluster Management (Complete)
+
 - [x] Automatic cluster node registration and discovery
 - [x] Dynamic cluster membership management
 - [x] Health monitoring with configurable failure detection
@@ -144,6 +155,7 @@ category: documentation
 - [x] Automatic failover and recovery mechanisms
 
 ### Phase 5: Advanced Transaction System (Complete)
+
 - [x] ACID-compliant 2-Phase commit protocol
 - [x] Multi-participant transaction coordination
 - [x] Persistent SQLite-based audit trail
@@ -154,6 +166,7 @@ category: documentation
 - [x] Comprehensive Prometheus metrics integration
 
 ### Phase 6: Protocol Adapters (Complete)
+
 - [x] **Redis RESP Protocol**: 50+ commands with full compatibility
 - [x] **PostgreSQL Wire Protocol**: Complete DDL support with ANSI SQL
 - [x] **SQL Parser Infrastructure**: Lexer, AST, and expression parsing
@@ -162,6 +175,7 @@ category: documentation
 - [x] **Vector Indexing**: IVFFLAT and HNSW index implementations
 
 ### Phase 7: Kubernetes Integration (Complete)
+
 - [x] Custom Kubernetes operator with CRDs
 - [x] Production-ready Helm charts for deployment
 - [x] Multi-platform Docker images (linux/amd64, linux/arm64)
@@ -170,6 +184,7 @@ category: documentation
 - [x] Complete monitoring stack with Prometheus and Grafana
 
 ### Phase 7.5: AI Integration (Complete)
+
 - [x] Model Context Protocol (MCP) server implementation
 - [x] Complete MCP protocol types and message handling
 - [x] Request routing and response formatting for AI agents
@@ -178,6 +193,7 @@ category: documentation
 - [x] Actor management through MCP for AI-driven operations
 
 ### Phase 8: SQL Query Engine (Complete) 🎉
+
 - [x] **DDL Operations**: CREATE/ALTER/DROP TABLE, INDEX, VIEW, SCHEMA, EXTENSION
 - [x] **DCL Operations**: GRANT/REVOKE with comprehensive privilege management
 - [x] **TCL Operations**: BEGIN/COMMIT/ROLLBACK with isolation levels and savepoints
@@ -196,9 +212,11 @@ category: documentation
 ## 🚀 Development Roadmap
 
 ### Phase 9: Query Optimization & Performance (Q2 2024)
+
 **Estimated Effort**: 19-25 weeks | **Status**: Planned
 
 #### Major Features
+
 - **Query Planner**: Cost-based query optimization with statistics
 - **Index Usage**: Automatic index selection and recommendation system
 - **Vectorized Execution**: SIMD optimizations for vector operations
@@ -208,9 +226,11 @@ category: documentation
 #### GitHub Issues: 5 issues tracked
 
 ### Phase 10: Production Readiness (Q3 2024)
+
 **Estimated Effort**: 21-29 weeks | **Status**: Planned
 
 #### Major Features
+
 - **Advanced Connection Pooling**: Multi-tier pooling with health monitoring
 - **Monitoring & Metrics**: Production observability with comprehensive dashboards
 - **Backup & Recovery**: Point-in-time recovery with cross-region replication
@@ -220,9 +240,11 @@ category: documentation
 #### GitHub Issues: 5 issues tracked
 
 ### Phase 11: Advanced Features (Q4 2024)
+
 **Estimated Effort**: 25-31 weeks | **Status**: Planned
 
 #### Major Features
+
 - **Stored Procedures**: PL/pgSQL procedural language support
 - **Database Triggers**: Event-driven actions with cascading support
 - **Full-Text Search**: Advanced text search with multiple languages
@@ -232,9 +254,11 @@ category: documentation
 #### GitHub Issues: 5 issues tracked
 
 ### Phase 12: Time Series Database Features (Q1 2025)
+
 **Estimated Effort**: 22-34 weeks | **Status**: Documented
 
 #### Redis TimeSeries Compatibility
+
 - **TimeSeriesActor**: Distributed time-series data management
 - **Core Commands**: TS.CREATE, TS.ADD, TS.GET, TS.RANGE, TS.REVRANGE
 - **Aggregation Rules**: TS.CREATERULE, TS.DELETERULE with downsampling
@@ -242,6 +266,7 @@ category: documentation
 - **Statistical Functions**: Built-in aggregators (AVG, SUM, MIN, MAX, STDDEV)
 
 #### PostgreSQL TimescaleDB Compatibility  
+
 - **Hypertables**: Distributed time-partitioned tables
 - **Time Functions**: time_bucket(), time_bucket_gapfill(), locf(), interpolate()
 - **Continuous Aggregates**: Materialized views with refresh policies
@@ -251,21 +276,25 @@ category: documentation
 #### GitHub Issues: 5 issues tracked
 
 ### Phase 13: Neo4j Bolt Protocol Compatibility (Q2 2025)
+
 **Estimated Effort**: 30-36 weeks | **Status**: Fully Documented
 
 #### Neo4j Foundation (12-14 weeks)
+
 - **Core Graph Actors**: GraphNodeActor, RelationshipActor, GraphClusterActor, CypherQueryActor
 - **Bolt Protocol v4.4**: Full protocol compatibility with handshake and authentication
 - **Connection Management**: Pooling, session management, transaction handling
 - **Basic Cypher Support**: CREATE, MATCH, MERGE, DELETE operations
 
 #### Advanced Graph Operations (10-12 weeks)
+
 - **Complete Cypher Language**: All constructs with advanced pattern matching
 - **Graph Algorithms**: Built-in algorithms (PageRank, Community Detection, Centrality)
 - **Graph Storage**: Native graph storage optimized for traversals
 - **Schema Management**: Node labels, relationship types, constraints
 
 #### Enterprise Graph Features (8-10 weeks)
+
 - **Graph Data Science**: Machine learning on graphs, embeddings, predictions
 - **Advanced Analytics**: Centrality algorithms, community detection, path finding
 - **Performance & Scalability**: Distributed storage, query optimization, parallel processing
@@ -274,9 +303,11 @@ category: documentation
 #### GitHub Issues: 6 issues tracked
 
 ### Phase 14: Distributed Query Processing (Q3 2025)
+
 **Estimated Effort**: 18-24 weeks | **Status**: Planned
 
 #### Major Features
+
 - **Distributed Query Engine**: Cost-based optimization with cross-node execution
 - **Advanced Time Series Analytics**: Real-time processing with ML integration
 - **Master-Slave Replication**: Time-series aware replication with chunk synchronization
@@ -286,21 +317,25 @@ category: documentation
 #### GitHub Issues: 5 issues tracked
 
 ### Phase 15: ArangoDB Multi-Model Database (Q3 2025)
+
 **Estimated Effort**: 36-42 weeks | **Status**: Fully Documented
 
 #### ArangoDB Foundation (14-16 weeks)
+
 - **Multi-Model Core Actors**: DocumentCollectionActor, GraphActor, KeyValueActor, SearchIndexActor, GeospatialActor
 - **AQL Query Engine**: Complete ArangoDB Query Language parsing and optimization
 - **Result Streaming**: Efficient cursor-based result pagination
 - **Transaction Support**: ACID transactions across multiple data models
 
 #### Advanced Multi-Model Operations (12-14 weeks)
+
 - **Document Database**: Schema-less documents, validation, nested indexing, versioning
 - **Graph Database**: Property graphs, traversals, path finding, analytics, smart graphs
 - **Full-Text Search**: Multi-language analyzers, search views, ranking, faceted search
 - **Advanced AQL**: Complex queries, subqueries, aggregations, joins
 
 #### Enterprise Multi-Model Features (10-12 weeks)
+
 - **Geospatial**: Complete GeoJSON support, spatial indexes, routing, geofencing
 - **Advanced Analytics**: User functions, streaming analytics, ML, time series
 - **Performance**: Smart graphs, OneShard optimization, satellite collections
@@ -309,9 +344,11 @@ category: documentation
 #### GitHub Issues: 7 issues tracked
 
 ### Phase 16: GraphML, GraphRAG, and Advanced Graph Analytics (Q4 2025 - Q1 2026)
+
 **Estimated Effort**: 28-34 weeks | **Status**: Fully Documented
 
 #### GraphML & Advanced Analytics (14-16 weeks)
+
 - **Node Embeddings**: Node2Vec, GraphSAGE, FastRP algorithms with distributed training
 - **Graph Neural Networks**: GCN, GAT, Graph Transformer implementations
 - **Link Prediction**: Advanced ML-based algorithms for relationship prediction
@@ -319,6 +356,7 @@ category: documentation
 - **Anomaly Detection**: Statistical and ML-based graph anomaly detection
 
 #### GraphRAG & Knowledge Reasoning (14-18 weeks)
+
 - **Knowledge Graph Construction**: Entity/relation extraction from text documents
 - **Semantic Search**: Vector-based and hybrid search with graph context
 - **Graph-Augmented Generation**: Context-aware AI response generation
@@ -329,9 +367,11 @@ category: documentation
 #### GitHub Issues: 9 issues tracked
 
 ### Phase 17: Additional Protocol Support (Q1 2026)
+
 **Estimated Effort**: 16-20 weeks | **Status**: Planned
 
 #### Protocol Implementations
+
 - **REST API**: OpenAPI/Swagger documentation with comprehensive endpoints
 - **GraphQL API**: Schema introspection with real-time subscriptions
 - **WebSocket Support**: Real-time bidirectional communication
@@ -342,9 +382,11 @@ category: documentation
 #### GitHub Issues: 6 issues tracked
 
 ### Phase 18: Cloud-Native Features (Q2 2026)
+
 **Estimated Effort**: 14-18 weeks | **Status**: Planned
 
 #### Cloud Platform Integrations
+
 - **Multi-Cloud Support**: AWS, Azure, Google Cloud deployment templates
 - **Auto-scaling**: Dynamic cluster scaling based on workload metrics
 - **Serverless Integration**: AWS Lambda, Azure Functions compatibility
@@ -354,9 +396,11 @@ category: documentation
 #### GitHub Issues: 5 issues tracked
 
 ### Phase 19: Enterprise Features (Q3 2026)
+
 **Estimated Effort**: 12-16 weeks | **Status**: Planned
 
 #### Enterprise Integrations
+
 - **Advanced Security**: Enterprise-grade security with compliance features
 - **Identity Integration**: LDAP, SAML, OAuth2, Active Directory support
 - **Compliance**: SOC2, GDPR, HIPAA compliance frameworks
@@ -366,6 +410,7 @@ category: documentation
 #### GitHub Issues: 5 issues tracked
 
 ### 📊 Total Project Scope
+
 - **Total GitHub Issues**: 68+ issues across 11 development phases
 - **Total Development Time**: 239-309 weeks (~4.6-5.9 years)
 - **Current Progress**: Phase 8 complete (8/19 phases = 42% complete)
@@ -377,6 +422,7 @@ category: documentation
 ### Current (Implemented) ✅
 
 #### Redis RESP Protocol
+
 - **Status**: ✅ Complete with 50+ commands
 - **Commands**: GET, SET, HGET, HSET, LPUSH, RPOP, SADD, ZADD, etc.
 - **Features**: Connection pooling, pipelining, pub/sub support
@@ -384,6 +430,7 @@ category: documentation
 - **Compatibility**: Full Redis client compatibility
 
 #### PostgreSQL Wire Protocol  
+
 - **Status**: ✅ Complete with full SQL engine
 - **DDL Support**: CREATE/ALTER/DROP TABLE, INDEX, VIEW, SCHEMA
 - **DML Support**: SELECT, INSERT, UPDATE, DELETE with full JOIN support
@@ -394,6 +441,7 @@ category: documentation
 ### Planned (Documentation Complete) 📋
 
 #### Neo4j Bolt Protocol v4.4
+
 - **Documentation**: ✅ Complete ([NEO4J_BOLT.md](protocols/NEO4J_BOLT.md))
 - **Scope**: Full Cypher language, graph algorithms, Neo4j ecosystem compatibility
 - **Features**: Property graphs, traversals, built-in algorithms, distributed storage
@@ -401,6 +449,7 @@ category: documentation
 - **Performance Targets**: 50K+ queries/sec, linear scaling, 100M+ nodes support
 
 #### ArangoDB Multi-Model HTTP API
+
 - **Documentation**: ✅ Complete ([ARANGODB_MULTI_MODEL.md](protocols/ARANGODB_MULTI_MODEL.md))
 - **Scope**: Document, Graph, Key-Value, Search, Geospatial unified through AQL
 - **Features**: Multi-model transactions, smart graphs, full-text search, geospatial
@@ -408,6 +457,7 @@ category: documentation
 - **Performance Targets**: 100K+ document ops/sec, 10K+ graph traversals/sec
 
 #### Redis TimeSeries Protocol
+
 - **Documentation**: ✅ Complete ([REDIS_TIMESERIES.md](protocols/REDIS_TIMESERIES.md))
 - **Scope**: Time-series data management with Redis TS compatibility
 - **Features**: Aggregation rules, retention policies, multi-series operations
@@ -415,6 +465,7 @@ category: documentation
 - **Performance Targets**: 1M+ samples/second ingestion
 
 #### PostgreSQL TimescaleDB Extensions
+
 - **Documentation**: ✅ Complete ([POSTGRESQL_TIMESCALE.md](protocols/POSTGRESQL_TIMESCALE.md))
 - **Scope**: Time-series SQL extensions with hypertables
 - **Features**: Continuous aggregates, compression, time functions
@@ -432,38 +483,47 @@ Orbit-RS implements a comprehensive testing strategy using feature flags to enab
 #### Test Categories
 
 1. **Mock Tests (Always Available)**
+
    ```bash
    ./scripts/run-tests.sh mock
    ```
+
    - ✅ Validate API design and contracts
    - ✅ Enable TDD before implementation exists
    - ✅ Serve as executable documentation
 
 2. **BDD/Cucumber Tests (User-Focused)**
+
    ```bash
    ./scripts/run-tests.sh bdd
    ```
+
    - ✅ Feature files for Neo4j Cypher, ArangoDB AQL, GraphML
    - ✅ User story validation and regression testing
    - ✅ Stakeholder communication bridge
 
 3. **Property-Based Tests (Edge Case Discovery)**
+
    ```bash
    ./scripts/run-tests.sh property
    ```
+
    - ✅ Automatic edge case generation
    - ✅ Mathematical property validation
    - ✅ Large input range testing
 
 4. **Performance Tests (Benchmark Validation)**
+
    ```bash
    ./scripts/run-tests.sh performance
    ```
+
    - ✅ Performance requirement validation
    - ✅ Regression detection
    - ✅ Scalability target verification
 
 #### Feature Flag System
+
 ```toml
 [features]
 
@@ -480,6 +540,7 @@ graphrag-features = []
 ```
 
 #### Test Organization
+
 ```
 tests/
 ├── features/                     # BDD feature files
@@ -497,6 +558,7 @@ tests/
 ```
 
 #### Quality Metrics & Gates
+
 - **Unit Tests**: 95% line coverage target
 - **Integration Tests**: 90% feature coverage  
 - **BDD Tests**: 100% user story coverage
@@ -528,6 +590,7 @@ tests/
 | **Phase 19** | 5 | Enterprise security, compliance | Medium |
 
 #### Issue Creation Automation
+
 ```bash
 
 # Create all GitHub issues
@@ -541,6 +604,7 @@ gh issue create --title "[FEATURE] Neo4j Core Graph Actors" \
 ```
 
 #### Labels & Milestones
+
 - **Priority**: `critical`, `high`, `medium`, `low`
 - **Category**: `enhancement`, `optimization`, `production`, `advanced`
 - **Technology**: `neo4j`, `arangodb`, `graphml`, `graph-rag`, `timeseries`
@@ -551,6 +615,7 @@ gh issue create --title "[FEATURE] Neo4j Core Graph Actors" \
 ## 💻 Development Workflow
 
 ### Setup & Prerequisites
+
 ```bash
 
 # Clone repository
@@ -578,6 +643,7 @@ cargo test
 7. **Integration**: Merge after approval and CI success
 
 ### Code Organization
+
 ```
 orbit-rs/
 ├── orbit-shared/          # Shared types and utilities
@@ -591,6 +657,7 @@ orbit-rs/
 ```
 
 ### Testing Commands
+
 ```bash
 
 # Run all available tests
@@ -615,6 +682,7 @@ orbit-rs/
 ### Kubernetes Deployment (Recommended)
 
 #### Using Helm Chart
+
 ```bash
 
 # Add Orbit-RS Helm repository
@@ -629,6 +697,7 @@ helm install orbit-cluster orbit-rs/orbit-rs \
 ```
 
 #### Using Kubernetes Operator
+
 ```yaml
 
 # orbit-cluster.yaml
@@ -659,6 +728,7 @@ kubectl apply -f orbit-cluster.yaml
 ```
 
 ### Docker Deployment
+
 ```bash
 
 # Pull latest image
@@ -677,6 +747,7 @@ docker-compose up -d
 ```
 
 ### Configuration
+
 ```toml
 
 # orbit-config.toml
@@ -729,6 +800,7 @@ log_level = "info"
 10. **Merge**: Integration after approval and CI success
 
 ### Code Standards
+
 - **Language**: Rust with 2021 edition
 - **Testing**: Comprehensive test coverage (95%+ target)
 - **Documentation**: Inline docs for all public APIs
@@ -736,6 +808,7 @@ log_level = "info"
 - **Error Handling**: Comprehensive error types and handling
 
 ### Getting Help
+
 - **Discord**: Join our development Discord server
 - **GitHub Issues**: Use issue templates for bug reports
 - **Documentation**: Check docs/ directory for detailed guides
@@ -746,6 +819,7 @@ log_level = "info"
 ## 📚 Additional Resources
 
 ### Documentation Files
+
 - **[Architecture Overview](OVERVIEW.md)**: Detailed system architecture
 - **[Quick Start Guide](QUICK_START.md)**: Getting started tutorial
 - **[Development Guide](development/DEVELOPMENT.md)**: Contribution workflow
@@ -754,14 +828,16 @@ log_level = "info"
 - **[Deployment Guide](deployment/DEPLOYMENT.md)**: Production deployment instructions
 
 ### External Links
-- **GitHub Repository**: https://github.com/TuringWorks/orbit-rs
-- **Docker Hub**: https://hub.docker.com/r/turingworks/orbit-rs
-- **Helm Charts**: https://turingworks.github.io/orbit-rs-helm
-- **Live Roadmap**: https://github.com/orgs/TuringWorks/projects/1
+
+- **GitHub Repository**: <https://github.com/TuringWorks/orbit-rs>
+- **Docker Hub**: <https://hub.docker.com/r/turingworks/orbit-rs>
+- **Helm Charts**: <https://turingworks.github.io/orbit-rs-helm>
+- **Live Roadmap**: <https://github.com/orgs/TuringWorks/projects/1>
 - **Discord Community**: [Join Development Discussion]
 - **Documentation Site**: [Complete Documentation Portal]
 
 ### Performance Benchmarks
+
 - **Current Throughput**: 500k+ messages/second per core
 - **Target Throughput**: 1M+ operations/second (Phase 9)
 - **Scalability**: Linear scaling demonstrated up to 100 nodes

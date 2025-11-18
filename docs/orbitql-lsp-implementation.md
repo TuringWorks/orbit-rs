@@ -77,6 +77,7 @@ FETCH friends, recent_cpu;
 ```
 
 Provides completion for:
+
 - Document field access (`user.profile.*`)
 - Graph traversal operators (`->follows->`)
 - Time-series access (`metrics[...]`)
@@ -87,17 +88,20 @@ Provides completion for:
 Real-time diagnostics for:
 
 **Syntax Errors**:
+
 ```orbitql
 SELECT * FORM users; -- "FORM" should be "FROM"
 ```
 
 **Semantic Errors**:
+
 ```orbitql
 SELECT * FROM non_existent_table; -- Unknown table warning
 SELECT invalid_column FROM users; -- Unknown column warning
 ```
 
 **Type Mismatches**:
+
 ```orbitql
 SELECT COUNT(*) + 'string'; -- Type incompatibility
 ```
@@ -107,6 +111,7 @@ SELECT COUNT(*) + 'string'; -- Type incompatibility
 Contextual information on hover:
 
 **Tables**:
+
 ```
 **users** (Document table)
 
@@ -125,6 +130,7 @@ User accounts and profile information
 ```
 
 **Functions**:
+
 ```
 **time::now**() -> datetime
 
@@ -158,6 +164,7 @@ WHERE user.active = true;
 The VS Code extension (`tools/vscode-orbitql/`) provides seamless integration:
 
 #### Features
+
 - File association for `.oql` and `.orbitql` files
 - Syntax highlighting with OrbitQL-specific grammar
 - LSP client integration for all language features
@@ -165,6 +172,7 @@ The VS Code extension (`tools/vscode-orbitql/`) provides seamless integration:
 - Command palette integration
 
 #### Installation
+
 ```bash
 
 # Build the language server
@@ -181,6 +189,7 @@ code --install-extension orbitql-0.1.0.vsix
 ```
 
 #### Configuration
+
 ```json
 {
   "orbitql.server.path": "orbitql-lsp",
@@ -196,6 +205,7 @@ code --install-extension orbitql-0.1.0.vsix
 The LSP implementation is IDE-agnostic and can be integrated with:
 
 #### Neovim/Vim
+
 ```lua
 require'lspconfig'.orbitql.setup{
   cmd = {"orbitql-lsp"},
@@ -205,6 +215,7 @@ require'lspconfig'.orbitql.setup{
 ```
 
 #### Emacs
+
 ```elisp
 (add-to-list 'lsp-language-id-configuration '(orbitql-mode . "orbitql"))
 (lsp-register-client
@@ -214,6 +225,7 @@ require'lspconfig'.orbitql.setup{
 ```
 
 #### Sublime Text
+
 ```json
 {
   "clients": {
@@ -248,16 +260,19 @@ The implementation supports the following LSP features:
 ### Performance Optimizations
 
 #### Query Parsing
+
 - Incremental parsing for changed documents
 - Cached AST trees with invalidation
 - Parallel processing for large files
 
 #### Completion Performance
+
 - Schema information cached in memory
 - Completion results limited to prevent UI lag
 - Context analysis optimized for responsiveness
 
 #### Memory Management
+
 - Document content stored only for open files
 - Configurable cache limits
 - Garbage collection of unused schema data
@@ -399,6 +414,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ### Advanced Features
 
 #### Live Schema Updates
+
 ```rust
 // Watch for schema changes and update LSP in real-time
 let schema_watcher = SchemaWatcher::new(db_connection);
@@ -408,6 +424,7 @@ schema_watcher.on_change(|new_schema| {
 ```
 
 #### Query Performance Analysis
+
 ```rust
 // Analyze query performance and suggest optimizations
 let performance_analyzer = QueryPerformanceAnalyzer::new();
@@ -416,6 +433,7 @@ lsp_server.publish_hints(suggestions).await;
 ```
 
 #### Multi-Database Support
+
 ```rust
 // Support multiple database connections with different schemas
 let multi_schema = MultiSchemaManager::new();
@@ -426,12 +444,14 @@ multi_schema.add_database("analytics", analytics_schema);
 ## Testing and Quality Assurance
 
 ### Unit Tests
+
 - Query parsing and validation
 - Completion generation
 - Hover information accuracy
 - Diagnostic reporting
 
 ### Integration Tests
+
 - LSP protocol compliance
 - IDE integration testing
 - Performance benchmarks

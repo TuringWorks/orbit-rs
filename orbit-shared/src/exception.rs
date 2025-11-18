@@ -1,81 +1,8 @@
-use thiserror::Error;
+//! Deprecated: This module is maintained for backward compatibility only.
+//! Please use the `error` module instead.
 
-/// Orbit-specific error types
-#[derive(Debug, Error)]
-pub enum OrbitError {
-    #[error("Node not found: {node_id}")]
-    NodeNotFound { node_id: String },
-
-    #[error("Addressable not found: {reference}")]
-    AddressableNotFound { reference: String },
-
-    #[error("Lease expired: {details}")]
-    LeaseExpired { details: String },
-
-    #[error("Invocation failed: {method} on {addressable_type} - {reason}")]
-    InvocationFailed {
-        addressable_type: String,
-        method: String,
-        reason: String,
-    },
-
-    #[error("Serialization error: {0}")]
-    SerializationError(#[from] serde_json::Error),
-
-    #[error("Network error: {0}")]
-    NetworkError(String),
-
-    #[error("Timeout: {operation}")]
-    Timeout { operation: String },
-
-    #[error("Configuration error: {0}")]
-    ConfigurationError(String),
-
-    #[error("Cluster error: {0}")]
-    ClusterError(String),
-
-    #[error("Internal error: {0}")]
-    Internal(String),
-}
-
-impl From<String> for OrbitError {
-    fn from(msg: String) -> Self {
-        OrbitError::Internal(msg)
-    }
-}
-
-impl From<&str> for OrbitError {
-    fn from(msg: &str) -> Self {
-        OrbitError::Internal(msg.to_string())
-    }
-}
-
-impl OrbitError {
-    pub fn network<S: Into<String>>(msg: S) -> Self {
-        OrbitError::NetworkError(msg.into())
-    }
-
-    pub fn timeout<S: Into<String>>(operation: S) -> Self {
-        OrbitError::Timeout {
-            operation: operation.into(),
-        }
-    }
-
-    pub fn configuration<S: Into<String>>(msg: S) -> Self {
-        OrbitError::ConfigurationError(msg.into())
-    }
-
-    pub fn cluster<S: Into<String>>(msg: S) -> Self {
-        OrbitError::ClusterError(msg.into())
-    }
-
-    pub fn internal<S: Into<String>>(msg: S) -> Self {
-        OrbitError::Internal(msg.into())
-    }
-}
-
-/// Result type for Orbit operations
-pub type OrbitResult<T> = Result<T, OrbitError>;
+// Re-export everything from the new unified error module
+pub use crate::error::{OrbitError, OrbitResult};
 
 #[cfg(test)]
 mod tests {
@@ -107,21 +34,21 @@ mod tests {
         assert_eq!(timeout_error.to_string(), "Timeout: operation_timeout");
 
         let config_error = OrbitError::configuration("Invalid config");
-        assert!(matches!(config_error, OrbitError::ConfigurationError(_)));
+        assert!(matches!(config_error, OrbitError::ConfigurationError { .. }));
         assert_eq!(
             config_error.to_string(),
             "Configuration error: Invalid config"
         );
 
         let cluster_error = OrbitError::cluster("Cluster unreachable");
-        assert!(matches!(cluster_error, OrbitError::ClusterError(_)));
+        assert!(matches!(cluster_error, OrbitError::ClusterError { .. }));
         assert_eq!(
             cluster_error.to_string(),
             "Cluster error: Cluster unreachable"
         );
 
         let internal_error = OrbitError::internal("Internal fault");
-        assert!(matches!(internal_error, OrbitError::Internal(_)));
+        assert!(matches!(internal_error, OrbitError::Internal { .. }));
         assert_eq!(internal_error.to_string(), "Internal error: Internal fault");
     }
 
@@ -226,9 +153,9 @@ mod tests {
             OrbitError::Timeout {
                 operation: "test".to_string(),
             },
-            OrbitError::ConfigurationError("test".to_string()),
-            OrbitError::ClusterError("test".to_string()),
-            OrbitError::Internal("test".to_string()),
+            OrbitError::configuration("test"),
+            OrbitError::cluster("test"),
+            OrbitError::internal("test"),
         ];
 
         for error in errors {
@@ -250,11 +177,15 @@ mod tests {
                 }
                 OrbitError::NetworkError(_) => assert!(error_string.contains("Network error")),
                 OrbitError::Timeout { .. } => assert!(error_string.contains("Timeout")),
-                OrbitError::ConfigurationError(_) => {
+                OrbitError::ConfigurationError { .. } => {
                     assert!(error_string.contains("Configuration error"))
                 }
-                OrbitError::ClusterError(_) => assert!(error_string.contains("Cluster error")),
-                OrbitError::Internal(_) => assert!(error_string.contains("Internal error")),
+                OrbitError::ClusterError { .. } => assert!(error_string.contains("Cluster error")),
+                OrbitError::Internal { .. } => assert!(error_string.contains("Internal error")),
+                OrbitError::IoError { .. } => assert!(error_string.contains("IO error")),
+                OrbitError::ParseError { .. } => assert!(error_string.contains("Parse error")),
+                OrbitError::StorageError { .. } => assert!(error_string.contains("Storage error")),
+                OrbitError::AuthError { .. } => assert!(error_string.contains("Auth error")),
             }
         }
     }

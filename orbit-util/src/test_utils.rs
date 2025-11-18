@@ -1,54 +1,11 @@
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
-use thiserror::Error;
 use tokio::time::{sleep, Duration};
 
-// Minimal test types (to avoid circular dependency with orbit-shared)
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum Key {
-    StringKey { key: String },
-    Int32Key { key: i32 },
-    Int64Key { key: i64 },
-    NoKey,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct AddressableReference {
-    pub addressable_type: String,
-    pub key: Key,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct NodeId(pub String);
-
-#[derive(Debug, Error)]
-pub enum OrbitError {
-    #[error("Network error: {0}")]
-    NetworkError(String),
-    #[error("Timeout: {operation}")]
-    Timeout { operation: String },
-    #[error("Internal error: {0}")]
-    Internal(String),
-}
-
-impl OrbitError {
-    pub fn network<S: Into<String>>(msg: S) -> Self {
-        OrbitError::NetworkError(msg.into())
-    }
-
-    pub fn timeout<S: Into<String>>(operation: S) -> Self {
-        OrbitError::Timeout {
-            operation: operation.into(),
-        }
-    }
-
-    pub fn internal<S: Into<String>>(msg: S) -> Self {
-        OrbitError::Internal(msg.into())
-    }
-}
-
-pub type OrbitResult<T> = Result<T, OrbitError>;
+// Re-use types from orbit-shared to avoid duplication
+pub use orbit_shared::error::{OrbitError, OrbitResult};
+pub use orbit_shared::{AddressableReference, Key, NodeId};
 
 /// Test utilities for CI-friendly testing without external dependencies
 pub struct TestUtils;

@@ -19,6 +19,7 @@ This guide helps you migrate from in-memory PostgreSQL to persistent RocksDB-bac
 ### What Changes with PostgreSQL Persistence
 
 #### Before (In-Memory)
+
 ```
 ✅ Fast read/write operations
 ❌ Data lost on server restart
@@ -28,6 +29,7 @@ This guide helps you migrate from in-memory PostgreSQL to persistent RocksDB-bac
 ```
 
 #### After (RocksDB Persistent)
+
 ```
 ✅ Fast read/write operations (LSM-tree optimized)
 ✅ Data survives server restarts
@@ -794,11 +796,13 @@ ls -la /tmp/backup_inspect
 ### Getting Help
 
 1. **Enable Debug Logging**:
+
    ```bash
    RUST_LOG=debug cargo run --package orbit-server --example integrated-server
    ```
 
 2. **Check System Resources**:
+
    ```bash
    # Memory usage
    free -h

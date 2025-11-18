@@ -4,14 +4,22 @@ pub mod benchmarks;
 pub mod builder_pattern;
 pub mod cdc;
 pub mod cluster_manager;
+pub mod config;
 pub mod config_utils;
 pub mod consensus;
 pub mod election_state;
+// Unified error module - use this for all error handling
+pub mod error;
+// Deprecated: Use error module instead
+#[deprecated(since = "0.1.0", note = "Use error module instead")]
 pub mod error_handling;
+#[deprecated(since = "0.1.0", note = "Use error module instead")]
 pub mod error_utils;
-pub mod event_sourcing;
+#[deprecated(since = "0.1.0", note = "Use error module instead")]
 pub mod exception;
+pub mod event_sourcing;
 pub mod execution_utils;
+pub mod extensions;
 pub mod graph;
 pub mod graphrag;
 pub mod integrated_recovery;
@@ -38,13 +46,21 @@ pub mod transaction_log;
 pub mod transactions;
 pub mod transport;
 pub mod triggers;
+pub mod types;
+pub mod validation;
 
 pub use addressable::{
     ActorWithInt32Key, ActorWithInt64Key, ActorWithNoKey, ActorWithStringKey, Addressable,
     AddressableInvocation, AddressableInvocationArgument, AddressableInvocationArguments,
     AddressableLease, AddressableReference, AddressableType, Key, NamespacedAddressableReference,
 };
-pub use exception::{OrbitError, OrbitResult};
+// Re-export from unified error module
+pub use error::{
+    ErrorContext, ErrorConverter, ErrorLog, OrbitError, OrbitResult, Result, SecurityValidator,
+};
+// Backward compatibility re-exports
+#[allow(deprecated)]
+pub use exception::{OrbitError as LegacyOrbitError, OrbitResult as LegacyOrbitResult};
 // Re-export specific graph types to avoid conflicts
 pub use graph::{Direction, GraphNode, GraphRelationship, GraphStorage, InMemoryGraphStorage};
 pub use graph::{NodeId as GraphNodeId, RelationshipId as GraphRelationshipId};

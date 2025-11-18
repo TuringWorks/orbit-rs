@@ -15,6 +15,7 @@ This document defines Cypher stored procedures for GraphRAG operations that inte
 ### 1. Knowledge Graph Building Procedures
 
 #### `orbit.graphrag.buildKnowledge(kg_name, document_id, text, metadata, config)`
+
 Builds knowledge graphs from document text with extracted entities and relationships.
 
 ```cypher
@@ -44,6 +45,7 @@ SET kg.entities_count = entities_extracted,
 ```
 
 #### `orbit.graphrag.extractEntities(text, config)`
+
 Extracts entities from text without building the full knowledge graph.
 
 ```cypher
@@ -77,6 +79,7 @@ FOREACH (rel IN relationships |
 ### 2. Query and Retrieval Procedures
 
 #### `orbit.graphrag.ragQuery(kg_name, query_text, config)`
+
 Performs Retrieval-Augmented Generation queries against knowledge graphs.
 
 ```cypher
@@ -110,6 +113,7 @@ RETURN response, confidence,
 ```
 
 #### `orbit.graphrag.findPaths(kg_name, from_entity, to_entity, config)`
+
 Finds reasoning paths between entities using multi-hop reasoning.
 
 ```cypher
@@ -150,6 +154,7 @@ FOREACH (i IN range(0, length(path_nodes)-2) |
 ### 3. Similarity and Search Procedures
 
 #### `orbit.graphrag.findSimilar(kg_name, entity, config)`
+
 Finds entities similar to a given entity using vector similarity.
 
 ```cypher
@@ -174,6 +179,7 @@ CREATE (company)-[:SIMILAR_TO {score: similarity_score, shared: shared_propertie
 ```
 
 #### `orbit.graphrag.semanticSearch(kg_name, query_text, config)`
+
 Performs semantic search across the knowledge graph.
 
 ```cypher
@@ -203,6 +209,7 @@ FOREACH (entity IN cluster_entities |
 ### 4. Knowledge Graph Analytics Procedures
 
 #### `orbit.graphrag.getStats(kg_name)`
+
 Retrieves comprehensive statistics about a knowledge graph.
 
 ```cypher
@@ -224,6 +231,7 @@ ORDER BY entity_density DESC;
 ```
 
 #### `orbit.graphrag.listEntities(kg_name, config)`
+
 Lists entities from a knowledge graph with filtering and pagination.
 
 ```cypher
@@ -255,6 +263,7 @@ SET c += properties,
 ### 5. Advanced Analytics Procedures
 
 #### `orbit.graphrag.analyzeTrends(kg_name, concept, config)`
+
 Analyzes trends and patterns around specific concepts.
 
 ```cypher
@@ -290,6 +299,7 @@ ORDER BY period, normalized_growth DESC;
 ```
 
 #### `orbit.graphrag.detectCommunities(kg_name, config)`
+
 Detects communities and clusters within the knowledge graph.
 
 ```cypher
@@ -316,6 +326,7 @@ FOREACH (entity_name IN entities |
 ### 6. Graph Integration Procedures
 
 #### `orbit.graphrag.augmentGraph(kg_name, config)`
+
 Augments existing Cypher graph with GraphRAG-derived insights.
 
 ```cypher
@@ -354,6 +365,7 @@ SET company += enriched_properties,
 ### 7. Streaming and Batch Procedures
 
 #### `orbit.graphrag.processDocuments(documents, kg_name, config)`
+
 Batch processes multiple documents for knowledge graph building.
 
 ```cypher
@@ -375,6 +387,7 @@ SET doc.status = CASE WHEN success THEN "processed" ELSE "error" END,
 ### 8. Real-time Streaming Procedures
 
 #### `orbit.graphrag.streamEntities(kg_name, config)`
+
 Streams entities from the knowledge graph in real-time.
 
 ```cypher
@@ -452,6 +465,7 @@ RETURN value;
 ## Result Types and Error Handling
 
 ### Standard Procedure Results
+
 All GraphRAG procedures return consistent metadata:
 
 ```cypher

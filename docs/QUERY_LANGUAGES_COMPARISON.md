@@ -211,9 +211,10 @@ LIMIT 20;
 
 ## Use Case Recommendations
 
-### Choose Cypher When:
+### Choose Cypher When
 
 ✅ **Primary focus is graph operations**
+
 ```cypher
 // Complex graph pattern matching
 MATCH (a:Person)-[:KNOWS]->(b:Person)-[:WORKS_AT]->(c:Company)
@@ -226,9 +227,10 @@ RETURN a, b, c
 ✅ **Analyzing social networks**
 ✅ **Need Neo4j tool compatibility**
 
-### Choose AQL When:
+### Choose AQL When
 
 ✅ **Document-heavy workloads with graph relationships**
+
 ```aql
 FOR user IN users
   FILTER user.profile.preferences.notifications == true
@@ -241,9 +243,10 @@ FOR user IN users
 ✅ **Need flexible document manipulation**
 ✅ **Working with varied data structures**
 
-### Choose OrbitQL When:
+### Choose OrbitQL When
 
 ✅ **Multi-model applications**
+
 ```orbitql
 SELECT u.name, ts.avg_value, COUNT(f.id) as friends
 FROM users u
@@ -263,12 +266,14 @@ GROUP BY u.id, u.name, ts.avg_value;
 ### Basic Node Selection
 
 **Cypher**
+
 ```cypher
 MATCH (user:Person {age: 30})
 RETURN user.name
 ```
 
 **AQL**
+
 ```aql
 FOR user IN users
   FILTER user.age == 30
@@ -276,6 +281,7 @@ FOR user IN users
 ```
 
 **OrbitQL**
+
 ```orbitql
 SELECT name 
 FROM users 
@@ -285,6 +291,7 @@ WHERE age = 30
 ### Graph Traversal
 
 **Cypher**
+
 ```cypher
 MATCH (user:Person)-[:FOLLOWS*1..3]->(friend:Person)
 WHERE user.name = 'Alice'
@@ -292,12 +299,14 @@ RETURN friend.name
 ```
 
 **AQL**
+
 ```aql
 FOR friend IN 1..3 OUTBOUND 'users/alice' follows
   RETURN friend.name
 ```
 
 **OrbitQL**
+
 ```orbitql
 SELECT friend.name
 FROM users user
@@ -308,6 +317,7 @@ WHERE user.name = 'Alice'
 ### Aggregations
 
 **Cypher**
+
 ```cypher
 MATCH (user:Person)-[:PURCHASED]->(product:Product)
 RETURN product.category, count(*) as purchases, avg(product.price) as avg_price
@@ -315,6 +325,7 @@ ORDER BY purchases DESC
 ```
 
 **AQL**
+
 ```aql
 FOR user IN users
   FOR product IN products
@@ -326,6 +337,7 @@ FOR user IN users
 ```
 
 **OrbitQL**
+
 ```orbitql
 SELECT 
     p.category,
@@ -341,6 +353,7 @@ ORDER BY purchases DESC
 ### Time Series Operations
 
 **Cypher** (Limited support)
+
 ```cypher
 // Not natively supported, requires custom functions
 MATCH (sensor:Sensor)
@@ -349,6 +362,7 @@ RETURN sensor.name, avg(value)
 ```
 
 **AQL**
+
 ```aql
 FOR point IN timeseries
   FILTER point.series_id == "sensor_01"
@@ -359,6 +373,7 @@ FOR point IN timeseries
 ```
 
 **OrbitQL**
+
 ```orbitql
 SELECT 
     series_id,
@@ -472,6 +487,7 @@ GROUP BY u.id, u.name
 ### Performance Optimization
 
 #### Cypher Optimization
+
 ```cypher
 // Use specific labels and properties for efficient filtering
 MATCH (u:User {active: true})-[:FOLLOWS]->(f:User)
@@ -480,6 +496,7 @@ RETURN u, f
 ```
 
 #### AQL Optimization
+
 ```aql
 // Filter early and use indexes
 FOR user IN users
@@ -489,6 +506,7 @@ FOR user IN users
 ```
 
 #### OrbitQL Optimization
+
 ```orbitql
 -- Use appropriate indexes and limit result sets
 SELECT /*+ INDEX(users, idx_active_created) */ u.name, f.name

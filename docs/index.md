@@ -7,6 +7,7 @@ permalink: /
 ---
 
 # Orbit-RS Documentation
+
 **The Next-Generation Distributed Database System**
 
 [![Version](https://img.shields.io/badge/version-0.1.0-blue.svg)](https://github.com/TuringWorks/orbit-rs)
@@ -39,6 +40,7 @@ psql -h localhost -p 5432 -U orbit
 ## 📚 Documentation Sections
 
 ### 🏗️ **Getting Started**
+
 Perfect for developers new to Orbit-RS or distributed databases.
 
 - [🚀 **Quick Start Guide**](quick_start.md) - Get running in 5 minutes
@@ -48,6 +50,7 @@ Perfect for developers new to Orbit-RS or distributed databases.
 - [⚙️ **Development Guide**](contributing.md) - Setup and configuration
 
 ### 🛠️ **Development & API**
+
 For developers building applications with Orbit-RS.
 
 - [📝 **API Reference**](https://turingworks.github.io/orbit-rs/api/) - Complete API documentation
@@ -57,6 +60,7 @@ For developers building applications with Orbit-RS.
 - [⚙️ **Development Setup**](contributing.md) - Setting up development environment
 
 ### 🚢 **Operations & Deployment**
+
 For system administrators and DevOps engineers.
 
 - [☸️ **Kubernetes Deployment**](kubernetes_deployment.md) - Production Kubernetes setup
@@ -67,6 +71,7 @@ For system administrators and DevOps engineers.
 - [⚡ **Performance**](LSM_TREE_IMPLEMENTATION.md) - Storage performance optimization
 
 ### 🎯 **Feature Guides**
+
 Deep dives into Orbit-RS capabilities.
 
 - [🗓️ **SQL Engine**](ORBITQL_REFERENCE.md) - OrbitQL and SQL capabilities
@@ -79,6 +84,7 @@ Deep dives into Orbit-RS capabilities.
 - [🤖 **GraphRAG Integration**](GraphRAG_ARCHITECTURE.md) - AI and graph analytics
 
 ### 📋 **Project Information**
+
 Project status, roadmap, and community information.
 
 - [🗺️ **Roadmap**](roadmap.md) - Development roadmap and upcoming features
@@ -109,6 +115,7 @@ Orbit-RS has reached **Phase 8** completion with a fully functional SQL engine a
 </div>
 
 **Performance Metrics:**
+
 - **Throughput:** 500K+ messages/second per core
 - **SQL Compatibility:** Full ANSI SQL with PostgreSQL extensions  
 - **Test Coverage:** 79 passing tests with comprehensive scenarios
@@ -123,35 +130,45 @@ Orbit-RS has reached **Phase 8** completion with a fully functional SQL engine a
 <div class="features-grid" markdown="1">
 
 ### 🎭 **Distributed Actor System**
+
 Built on a powerful actor model for scalable, fault-tolerant distributed computing.
+
 - **Addressable Actors:** String and UUID-based actor addressing
 - **Lifecycle Management:** Automatic registration, activation, and cleanup
 - **Proxy Generation:** Type-safe client-side actor references
 - **Message Routing:** Transparent cross-cluster message routing
 
 ### 🔌 **Multi-Protocol Support**
+
 Native support for multiple database protocols and query languages.
+
 - **PostgreSQL Wire Protocol:** Full compatibility with PostgreSQL clients
 - **Redis RESP Protocol:** 50+ Redis commands with clustering support
 - **Model Context Protocol:** AI agent integration for autonomous operations
 - **Vector Operations:** pgvector compatibility with similarity search
 
 ### 📊 **Advanced SQL Engine**
+
 Enterprise-grade SQL engine with modern capabilities.
+
 - **Complete SQL Support:** DDL, DML, DCL, TCL operations
 - **Vector Database:** High-performance similarity search with HNSW/IVFFLAT
 - **Complex Queries:** JOINs, subqueries, CTEs, window functions
 - **Transaction Support:** ACID compliance with distributed transactions
 
 ### ☁️ **Cloud-Native**
+
 Designed for modern cloud and Kubernetes deployments.
+
 - **Kubernetes Operator:** Custom resources for cluster management
 - **Helm Charts:** Production-ready deployment templates
 - **Auto-scaling:** Dynamic cluster scaling based on workload
 - **Multi-platform:** Support for linux/amd64 and linux/arm64
 
 ### ⚡ **Hardware Acceleration** 🆕
+
 Powerful heterogeneous compute engine for maximum performance.
+
 - **CPU SIMD:** AVX-512, NEON optimization with 3-8x speedups
 - **GPU Acceleration:** Metal, CUDA, OpenCL with 5-50x speedups  
 - **Neural Engines:** Apple ANE, Snapdragon DSP for AI workloads
@@ -167,6 +184,7 @@ Powerful heterogeneous compute engine for maximum performance.
 Orbit-RS follows a structured development approach with clearly defined phases:
 
 ### 🎯 **Next Up: Phase 9 - Query Optimization** *(Q2 2024)*
+
 - **Cost-Based Query Planner:** Intelligent query optimization
 - **Vectorized Execution:** SIMD-optimized batch processing  
 - **Parallel Processing:** Multi-threaded query execution
@@ -174,6 +192,7 @@ Orbit-RS follows a structured development approach with clearly defined phases:
 - **Query Caching:** Multi-level intelligent caching
 
 ### 🔮 **Coming Soon**
+
 - **Phase 10:** Production readiness with HA, monitoring, backup/recovery
 - **Phase 11:** Advanced features with stored procedures and full-text search
 - **Phase 12:** Time-series database with Redis TimeSeries compatibility
@@ -188,17 +207,20 @@ Orbit-RS follows a structured development approach with clearly defined phases:
 <div class="resources-grid" markdown="1">
 
 ### 📖 **Tutorials**
+
 - [🚀 **Getting Started Tutorial**](quick_start.md) - Your first Orbit-RS application
 - [🔍 **SQL Tutorial**](ORBITQL_REFERENCE.md) - OrbitQL features and vector operations
 - [🎭 **Transaction Programming**](advanced_transaction_features.md) - Building with distributed transactions
 - [☸️ **Kubernetes Deployment**](kubernetes_deployment.md) - Production deployment guide
 
 ### 📚 **Documentation**
+
 - [🗺️ **Architecture Overview**](project_overview.md) - Understanding Orbit-RS design principles
 - [⚡ **Performance Guide**](LSM_TREE_IMPLEMENTATION.md) - Storage optimization and tuning  
 - [📈 **Implementation Tracking**](ORBITQL_IMPLEMENTATION_TRACKING.md) - Development progress
 
 ### 🔧 **Development Resources**
+
 - [📝 **Project Structure**](PROJECT_STRUCTURE.md) - Understanding the codebase
 - [🔄 **Migration Guide**](MIGRATION_GUIDE.md) - Moving from other databases
 - [🔒 **Security Guide**](SECURITY.md) - Security best practices
@@ -212,17 +234,20 @@ Orbit-RS follows a structured development approach with clearly defined phases:
 <div class="community-grid" markdown="1">
 
 ### 💬 **Get Help**
+
 - [💬 **GitHub Issues**](https://github.com/TuringWorks/orbit-rs/issues) - Bug reports and questions
 - [💡 **GitHub Discussions**](https://github.com/TuringWorks/orbit-rs/discussions) - Community Q&A (Enable in repository settings)
 - [📧 **Contact Email**](mailto:contact@turingworks.com) - General inquiries
 - [🆘 **Support Portal**](support/) - Enterprise support options
 
 ### 🐛 **Report Issues**
+
 - [🐞 **Bug Reports**](https://github.com/TuringWorks/orbit-rs/issues/new?template=bug_report.md)
 - [💡 **Feature Requests**](https://github.com/TuringWorks/orbit-rs/issues/new?template=feature_request.md)
 - [🔒 **Security Issues**](mailto:security@turingworks.com) - Responsible disclosure
 
 ### 📝 **Contributing**
+
 - [📋 **Contribution Guide**](contributing.md) - How to contribute code
 - [📝 **Documentation**](README.md) - Documentation structure and guides
 - [🧪 **Testing**](contributing.md#testing) - Adding tests and benchmarks
@@ -234,7 +259,7 @@ Orbit-RS follows a structured development approach with clearly defined phases:
 
 ## 📄 License & Legal
 
-Orbit-RS is released under the **Apache License 2.0**. 
+Orbit-RS is released under the **Apache License 2.0**.
 
 - [📜 **License**](https://github.com/TuringWorks/orbit-rs/blob/main/LICENSE)
 - [🔒 **Security Policy**](https://github.com/TuringWorks/orbit-rs/security/policy)  
@@ -249,16 +274,19 @@ Orbit-RS is released under the **Apache License 2.0**.
 <div class="quick-links" markdown="1">
 
 **For Developers:**
-- [📖 API Documentation](https://turingworks.github.io/orbit-rs/api/) 
+
+- [📖 API Documentation](https://turingworks.github.io/orbit-rs/api/)
 - [🔧 Development Setup](contributing.md)
 - [🧪 **Testing Guide**](contributing.md) - Adding tests and benchmarks
 
 **For Operators:**  
+
 - [☘️ Kubernetes Guide](KUBERNETES_STORAGE_GUIDE.md)
 - [📉 Storage Setup](KUBERNETES_STORAGE_GUIDE.md)
 - [🔒 Security Configuration](SECURITY.md)
 
 **For Decision Makers:**
+
 - [📉 Project Status](features.md)
 - [🗺️ Roadmap & Timeline](roadmap.md)
 - [💼 Architecture Overview](project_overview.md)
@@ -276,4 +304,3 @@ Orbit-RS is released under the **Apache License 2.0**.
 **💼 Enterprise?** Contact us at [enterprise@turingworks.com](mailto:enterprise@turingworks.com)
 
 </div>
-

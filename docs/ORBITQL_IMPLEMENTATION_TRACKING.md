@@ -9,7 +9,7 @@ category: documentation
 **Unified Multi-Model Query Language for Orbit-RS**
 
 [![Implementation Status](https://img.shields.io/badge/Status-Production%20Ready-brightgreen.svg)](#implementation-status)
-[![Documentation](https://img.shields.io/badge/Docs-Complete-blue.svg)](#documentation-status) 
+[![Documentation](https://img.shields.io/badge/Docs-Complete-blue.svg)](#documentation-status)
 [![Test Coverage](https://img.shields.io/badge/Tests-90%25-brightgreen.svg)](#testing-status)
 
 ---
@@ -223,6 +223,7 @@ impl OrbitQLEngine {
 ### **Sample Data & Working Examples**
 
 The implementation includes realistic sample data for testing:
+
 - **Users**: Document data with profiles and metadata
 - **Follows**: Graph relationships between users  
 - **Metrics**: Time-series data with timestamps and tags
@@ -230,6 +231,7 @@ The implementation includes realistic sample data for testing:
 ### **VS Code Integration**
 
 Full IDE support with:
+
 - **Syntax Highlighting**: Complete grammar for OrbitQL
 - **Error Detection**: Real-time syntax validation
 - **Autocomplete**: Intelligent code completion
@@ -333,18 +335,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ## 📞 **Getting Started**
 
 ### **For Developers**
+
 1. **Build**: `cargo build` - Clean compilation guaranteed
-2. **Test**: `cargo test` - 90%+ test coverage 
+2. **Test**: `cargo test` - 90%+ test coverage
 3. **Example**: `cargo run --example orbitql-example` - Working demonstrations
 4. **IDE**: Install VS Code extension for full language support
 
 ### **For Contributors**
+
 1. **Core Engine**: `/orbit-shared/src/orbitql/` - Main implementation
 2. **Documentation**: `/docs/ORBITQL_REFERENCE.md` - Language specification
 3. **Tests**: `/orbit-shared/src/orbitql/tests/` - Comprehensive test suite
 4. **Examples**: `/examples/orbitql-example/` - Usage demonstrations
 
 ### **Resources**
+
 - **[Language Reference](./ORBITQL_REFERENCE.md)**: Complete syntax guide
 - **[Implementation Status](./orbitql-implementation-status.md)**: Detailed progress report
 - **[Query Comparison](./QUERY_LANGUAGES_COMPARISON.md)**: OrbitQL vs other languages

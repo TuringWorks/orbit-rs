@@ -13,6 +13,7 @@ category: documentation
 ## 🤖 Implemented Algorithms
 
 ### 1. **Gradient Boosting Machine (GBM)**
+
 - **Implementation**: `GradientBoostingModel`
 - **Features**:
   - Sequential weak learner training
@@ -23,6 +24,7 @@ category: documentation
   - Configurable tree depth and subsampling
 
 ### 2. **AdaBoost (Adaptive Boosting)**
+
 - **Implementation**: `AdaBoostModel`  
 - **Features**:
   - Sample weight adaptation
@@ -33,6 +35,7 @@ category: documentation
   - Configurable learning rate
 
 ### 3. **LightGBM (Light Gradient Boosting Machine)**
+
 - **Implementation**: `LightGBMModel`
 - **Features**:
   - Leaf-wise tree growth (vs level-wise)
@@ -43,6 +46,7 @@ category: documentation
   - Configurable number of leaves
 
 ### 4. **CatBoost (Categorical Boosting)**
+
 - **Implementation**: `CatBoostModel`
 - **Features**:
   - Oblivious decision trees (symmetric)
@@ -53,6 +57,7 @@ category: documentation
   - Multiple bootstrap types
 
 ### 5. **XGBoost (eXtreme Gradient Boosting)**
+
 - **Implementation**: `XGBoostModel`
 - **Features**:
   - Second-order gradient optimization (Hessian)
@@ -63,6 +68,7 @@ category: documentation
   - Multiple objective functions (squared error, absolute error, etc.)
 
 ### 6. **Boosting Ensemble**
+
 - **Implementation**: `BoostingEnsemble`
 - **Features**:
   - Meta-ensemble combining all boosting algorithms
@@ -158,16 +164,19 @@ let predictions = [
 ## 🔧 Integration with OrbitQL
 
 ### Cost-Based Query Optimization
+
 - ML models integrated with query planner
 - Real-time cost estimation during query planning
 - Adaptive model selection based on query patterns
 
 ### Distributed Execution Support  
+
 - Models trained across cluster nodes
 - Distributed feature extraction
 - Cross-node model synchronization
 
 ### Production Deployment
+
 - Model versioning and rollback
 - A/B testing for algorithm selection
 - Monitoring and performance tracking
@@ -176,18 +185,21 @@ let predictions = [
 ## ⚡ Advanced Features
 
 ### Hyperparameter Optimization
+
 - Grid search and random search
 - Bayesian optimization
 - Early stopping with validation
 - Cross-validation and holdout testing
 
 ### Ensemble Methods
+
 - Weighted averaging of predictions  
 - Stacking with meta-learners
 - Blending techniques
 - Dynamic model selection
 
 ### Performance Optimizations
+
 - Vectorized computation
 - Multi-threading support
 - Memory-efficient data structures
@@ -205,16 +217,19 @@ let predictions = [
 ## 🔮 Future Enhancements
 
 ### Deep Learning Integration
+
 - Neural network-based cost models
 - Transformer architectures for query understanding
 - Graph neural networks for query plan optimization
 
 ### AutoML Capabilities  
+
 - Automatic algorithm selection
 - Neural architecture search
 - Automated feature engineering
 
 ### Cloud-Native Features
+
 - Serverless model serving
 - Distributed training on Kubernetes
 - Multi-cloud model deployment

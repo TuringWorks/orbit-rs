@@ -29,11 +29,14 @@ By participating in this project, you agree to abide by our Code of Conduct. Ple
 
 1. **Fork the repository** on GitHub
 2. **Clone your fork** locally:
+
    ```bash
    git clone https://github.com/yourusername/orbit-rs.git
    cd orbit-rs
    ```
+
 3. **Add the upstream remote**:
+
    ```bash
    git remote add upstream https://github.com/original/orbit-rs.git
    ```
@@ -44,6 +47,7 @@ By participating in this project, you agree to abide by our Code of Conduct. Ple
 
 - **Rust 1.70+**: Install via [rustup](https://rustup.rs/)
 - **Protocol Buffers Compiler**: Install `protoc`
+
   ```bash
   # macOS
   brew install protobuf
@@ -54,6 +58,7 @@ By participating in this project, you agree to abide by our Code of Conduct. Ple
   # Windows
   # Download from https://github.com/protocolbuffers/protobuf/releases
   ```
+
 - **SQLite development libraries** (for transaction logging)
 
 ### Building the Project
@@ -114,6 +119,7 @@ git checkout -b feature/your-feature-name
 ```
 
 Branch naming conventions:
+
 - `feature/feature-name` - New features
 - `fix/issue-description` - Bug fixes
 - `docs/documentation-update` - Documentation changes
@@ -148,6 +154,7 @@ git commit -m "feat: add distributed transaction recovery mechanism
 ```
 
 Commit message format:
+
 - `feat:` - New features
 - `fix:` - Bug fixes
 - `docs:` - Documentation changes
@@ -230,6 +237,7 @@ When working on transaction-related code:
 - **Error conditions**: Document when functions return errors
 
 Example:
+
 ```rust
 /// Begins a new distributed transaction across multiple participants.
 ///
@@ -402,6 +410,7 @@ Brief description of changes.
 ## Recognition
 
 Contributors will be recognized in:
+
 - CHANGELOG.md for significant contributions
 - README.md contributors section
 - GitHub contributors page

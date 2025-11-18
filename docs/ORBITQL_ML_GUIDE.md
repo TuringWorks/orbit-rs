@@ -15,6 +15,7 @@ OrbitQL now supports comprehensive machine learning capabilities directly in SQL
 ## 🏗️ **Quick Start**
 
 ### Basic ML Query
+
 ```sql
 -- Train a customer segmentation model using XGBoost
 SELECT ML_XGBOOST(
@@ -26,6 +27,7 @@ WHERE created_at > NOW() - INTERVAL '1 year';
 ```
 
 ### Model Management
+
 ```sql
 -- Train and save a model
 SELECT ML_TRAIN_MODEL(
@@ -78,6 +80,7 @@ SELECT ML_TRAIN_MODEL(
 ```
 
 **Parameters:**
+
 - `n_estimators`: Number of boosting rounds (default: 100)
 - `learning_rate`: Step size shrinkage (default: 0.3)
 - `max_depth`: Maximum tree depth (default: 6)
@@ -680,18 +683,21 @@ GROUP BY assigned_model;
 The Orbit Desktop application provides a rich UI for interacting with ML models:
 
 ### Model Management Interface
+
 - **Visual Model Training**: Drag-and-drop interface for feature selection
 - **Performance Dashboard**: Real-time model metrics and performance charts
 - **Hyperparameter Tuning**: GUI for parameter optimization
 - **Model Versioning**: Track model evolution and rollbacks
 
 ### Query Builder
+
 - **ML Query Templates**: Pre-built templates for common ML tasks
 - **Syntax Highlighting**: OrbitQL ML function highlighting
 - **Auto-completion**: IntelliSense for ML functions and parameters
 - **Result Visualization**: Charts and graphs for ML results
 
-### Example Desktop Usage:
+### Example Desktop Usage
+
 ```javascript
 // In Orbit Desktop - Execute ML query
 const mlQuery = `
@@ -709,6 +715,7 @@ const result = await orbitDesktop.executeQuery(mlQuery);
 ## 🚀 **Best Practices**
 
 ### 1. **Data Preparation**
+
 ```sql
 -- Always check data quality before training
 SELECT 
@@ -730,6 +737,7 @@ FROM customer_data;
 ```
 
 ### 2. **Model Selection Strategy**
+
 ```sql
 -- Use cross-validation for model selection
 WITH fold_results AS (
@@ -759,6 +767,7 @@ ORDER BY mean_cv_score DESC;
 ```
 
 ### 3. **Production Monitoring**
+
 ```sql
 -- Set up model monitoring
 CREATE TABLE model_performance_log (

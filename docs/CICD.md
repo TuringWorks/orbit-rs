@@ -24,6 +24,7 @@ Orbit-RS uses a comprehensive CI/CD pipeline that provides:
 **Primary production pipeline** that handles all aspects of building, testing, and releasing Orbit-RS.
 
 #### Triggers
+
 - **Push** to `main` or `develop` branches
 - **Tags** matching `v*` pattern
 - **Pull Requests** to `main` or `develop`
@@ -32,11 +33,13 @@ Orbit-RS uses a comprehensive CI/CD pipeline that provides:
 #### Jobs
 
 ##### Security & Quality Checks
+
 - **Rust checks**: Format, lint, test, security audit
 - **Helm checks**: Chart validation and templating
 - **Security scans**: Cargo audit and vulnerability scanning
 
 ##### Multi-Platform Builds
+
 Builds both debug and release binaries for:
 
 | Platform | Architecture | Package Format |
@@ -49,7 +52,9 @@ Builds both debug and release binaries for:
 | **Windows** | ARM64 | `.zip` |
 
 ##### Release Creation
+
 Automatically creates GitHub releases with:
+
 - All platform binaries (debug + release)
 - SHA256 checksums
 - Comprehensive changelog
@@ -58,12 +63,14 @@ Automatically creates GitHub releases with:
 #### Usage Examples
 
 **Trigger a release:**
+
 ```bash
 git tag v1.0.0
 git push origin v1.0.0
 ```
 
 **Manual dispatch with options:**
+
 1. Go to Actions → Enhanced CI/CD Pipeline
 2. Click "Run workflow"
 3. Select branch and options
@@ -73,12 +80,14 @@ git push origin v1.0.0
 **Development/testing pipeline** for validating builds without creating official releases.
 
 #### Features
+
 - Manual platform selection
 - Test tag creation and cleanup
 - Focused testing on specific targets
 - 7-day artifact retention
 
 #### Usage
+
 1. Go to Actions → Test Release
 2. Click "Run workflow"
 3. Configure:
@@ -94,12 +103,14 @@ Original pipeline renamed to avoid conflicts. Can be disabled or removed after m
 ### Build Configurations
 
 **Debug Builds:**
+
 - Include debug symbols
 - Faster compilation
 - Larger binary size
 - Useful for development and troubleshooting
 
 **Release Builds:**
+
 - Optimized performance
 - Smaller binary size
 - Production-ready
@@ -119,7 +130,7 @@ Original pipeline renamed to avoid conflicts. Can be disabled or removed after m
 
 Each release includes:
 
-```
+```text
 📦 Release Assets
 ├── 🍎 macOS
 │   ├── orbit-rs-v1.0.0-aarch64-apple-darwin-release.tar.gz (Apple Silicon)
@@ -140,6 +151,7 @@ Each release includes:
 ```
 
 Each package contains:
+
 - `orbit-server` binary
 - `orbit-client` binary (if available)
 - `README.md`
@@ -156,17 +168,20 @@ Each package contains:
 Set these in your repository settings under Settings → Secrets and Variables → Actions:
 
 #### Required Secrets
+
 ```env
 GITHUB_TOKEN=<automatic>  # Provided by GitHub
 ```
 
 #### Optional Secrets (for Kubernetes deployment)
+
 ```env
 KUBE_CONFIG_STAGING=<base64-encoded-kubeconfig>
 KUBE_CONFIG_PRODUCTION=<base64-encoded-kubeconfig>
 ```
 
 #### Optional Variables
+
 ```env
 RUST_BACKTRACE=1  # Enable Rust backtraces
 ```
@@ -184,6 +199,7 @@ The pipeline auto-creates basic Helm charts if they don't exist. For custom depl
 ### Testing the Pipeline Locally
 
 **1. Run individual checks:**
+
 ```bash
 
 # Format check
@@ -203,6 +219,7 @@ helm lint helm/orbit-rs
 ```
 
 **2. Cross-compilation testing:**
+
 ```bash
 
 # Install target
@@ -212,21 +229,24 @@ rustup target add aarch64-apple-darwin
 cargo build --target aarch64-apple-darwin --release
 ```
 
-
 ### Creating Releases
 
 #### Development Releases
+
 1. Use the Test Release workflow for validation
 2. Select specific platforms to reduce build time
 3. Review artifacts before creating official releases
 
 #### Official Releases
+
 1. Ensure all tests pass on `main` branch
 2. Create and push a version tag:
+
    ```bash
    git tag v1.0.0
    git push origin v1.0.0
    ```
+
 3. Monitor the Enhanced CI/CD Pipeline
 4. Review the created release on GitHub
 
@@ -245,16 +265,19 @@ cargo build --target aarch64-apple-darwin --release
 ### Common Issues
 
 **1. Build failures**
+
 - Check Rust toolchain compatibility
 - Verify all features are available on target platform
 - Review dependency issues in logs
 
 **2. Helm validation failures**
+
 - Ensure `helm/orbit-rs/` directory exists
 - Validate Chart.yaml syntax
 - Check template rendering
 
 **3. Security scan failures**
+
 - Review cargo-audit output
 - Update vulnerable dependencies
 - Add exceptions for known false positives
@@ -262,9 +285,11 @@ cargo build --target aarch64-apple-darwin --release
 **4. Kubernetes Container Pipeline failures**
 
 *Issue: "no targets specified in the manifest" error*
+
 - **Cause**: The sparse checkout in `.github/workflows/k8s-container-pipeline.yml` is missing required workspace members
 - **Symptom**: Build fails with error like `failed to load manifest for workspace member`
 - **Solution**: Ensure all workspace member dependencies are included in the sparse-checkout configuration
+
   ```yaml
   sparse-checkout: |
     orbit-server/
@@ -277,8 +302,8 @@ cargo build --target aarch64-apple-darwin --release
     Cargo.toml
     Cargo.lock
   ```
-- **Verification**: Run `cargo metadata --no-deps` to ensure all workspace members are visible
 
+- **Verification**: Run `cargo metadata --no-deps` to ensure all workspace members are visible
 
 ### Debugging Steps
 

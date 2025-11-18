@@ -8,6 +8,7 @@
 ## 📚 Documentation
 
 **Complete documentation is available in the [docs/](docs/) directory:**
+
 - **[📚 Documentation Index](docs/README.md)** - Navigate all documentation
 - **[🏆 Feature Index](docs/features.md)** - Complete feature list with implementation status
 - **[🎯 Overview](docs/overview.md)** - Architecture, features, and key benefits  
@@ -30,12 +31,14 @@
 ### 🌟 **Multi-Protocol Database Server**
 
 **Native Protocol Support** - Single server, multiple interfaces:
+
 - 🐘 **PostgreSQL Wire Protocol** (port 5432) - Full SQL with pgvector support
 - 🔴 **Redis RESP Protocol** (port 6379) - Key-value + vector operations  
 - 🌍 **HTTP REST API** (port 8080) - Web-friendly JSON interface
 - 📡 **gRPC API** (port 50051) - High-performance actor management
 
 ### 🚀 **Core Features**
+
 - ✨ **One Server, All Protocols**: Replace PostgreSQL + Redis with single process
 - 🔄 **Cross-Protocol Consistency**: Write via SQL, read via Redis - instant consistency
 - 🎯 **Zero Data Duplication**: Shared storage across all protocols
@@ -146,12 +149,14 @@ WITH (lists = 100);
 **✨ Same Vector Data, Multiple Interfaces**: Vectors stored via PostgreSQL are immediately accessible via Redis and REST APIs!
 
 ### Manual Installation
+
 ```bash
 cargo build --release
 cargo test
 ```
 
 ### Basic Actor Example
+
 ```rust
 use orbit_client::OrbitClient;
 use orbit_shared::{ActorWithStringKey, Key};
@@ -180,12 +185,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ## Current Status: Multi-Protocol Server Ready! 🎉
 
 **🎆 BREAKTHROUGH**: **Native Multi-Protocol Database Server**
+
 - ✨ **Single Process**: PostgreSQL + Redis + REST + gRPC in one server  
 - 🔄 **Cross-Protocol Consistency**: Write via SQL, read via Redis, query via REST
 - 💫 **Zero Data Duplication**: Shared storage across all protocols
 - 🏢 **Enterprise Ready**: Replace separate PostgreSQL and Redis deployments
 
 **✅ Production-Ready Multi-Protocol Features:**
+
 - 🐘 **PostgreSQL Wire Protocol** - **🆕 PERSISTENT!** Complete PostgreSQL server with full pgvector support + RocksDB persistence
 - 🔴 **Redis RESP Protocol** - **100% Production-Ready** with full redis-cli compatibility + vector operations
 - 🌍 **HTTP REST API** - **🆕 NEW!** Web-friendly JSON interface for all operations including vectors
@@ -195,6 +202,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 - 📊 **Cross-Protocol Monitoring** - Unified metrics for all protocols including vector operations
 
 **✅ Core Infrastructure:**
+
 - ✅ **Virtual Actor System** - Automatic lifecycle management and distribution
 - ✅ **Distributed Transactions** - ACID compliance across all protocols
 - ✅ **Performance Benchmarking** - Statistical analysis and regression detection  
@@ -205,6 +213,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 - ✅ **Observability** - Prometheus metrics, Grafana dashboards, comprehensive monitoring
 
 **🚀 NEW Phase 12 Features - Production-Ready RocksDB Persistence:**
+
 - ✅ **RocksDB Integration** - **🆕 COMPLETE!** LSM-tree storage for high-performance persistence
 - ✅ **Redis Data Persistence** - All Redis commands with TTL support persist across restarts
 - ✅ **PostgreSQL Data Persistence** - SQL tables and data survive server restarts
@@ -216,6 +225,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 - ✅ **Production Configuration** - Tuned write buffers, caching, and compression settings
 
 **🤖 NEW Phase 13 Features - Complete pgvector Support:**
+
 - ✅ **Vector Data Types** - **🆕 COMPLETE!** Full vector(n), halfvec(n), sparsevec(n) support
 - ✅ **Vector Literals** - Parse vector strings '[1,2,3]' in SQL statements
 - ✅ **Distance Operators** - <-> (L2), <=> (cosine), <#> (inner product) in all SQL contexts  
@@ -226,6 +236,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 - ✅ **25+ Vector Tests** - Comprehensive test coverage for all pgvector features
 
 **🎉 NEW Phase 11 Features - Advanced JSON/JSONB:**
+
 - ✅ **Complete JSONB Implementation** - **🆕 COMPLETE!** Full PostgreSQL-compatible JSON Binary format
 - ✅ **JSON Path Expressions** - PostgreSQL-compatible path syntax ($.key[0].nested)
 - ✅ **JSON/JSONB Operators** - All PostgreSQL operators (->, ->>, #>, @>, ?, ||, etc.)
@@ -236,11 +247,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 - ✅ **43+ Comprehensive Tests** - Full test coverage with PostgreSQL compatibility
 
 **🚀 What's Next:**
-- **Phase 14**: Advanced SQL Query Optimization & Vector Performance Tuning 
+
+- **Phase 14**: Advanced SQL Query Optimization & Vector Performance Tuning
 - **Phase 15**: Multi-Cloud Federation & Vector Replication
 - **Phase 16**: AI/ML Workload Acceleration & GPU Vector Operations
 
 **🔬 Performance Benchmarks:**
+
 - **Built-in Benchmarking System**: **🆕 NEW!** Comprehensive performance measurement with statistical analysis:
   - **Security Benchmarks**: Rate limiting, attack detection, input validation performance
   - **Statistical Metrics**: Mean, median, std deviation, operations per second
@@ -289,6 +302,7 @@ We welcome contributions! See our **[Development Guide](DEVELOPMENT.md)** for se
 5. Submit a pull request
 
 **Priority areas for contributors:**
+
 - Query optimization algorithms ([Phase 9 issues](https://github.com/TuringWorks/orbit-rs/issues?q=label%3Aphase-9))
 - Production readiness features ([Phase 10 issues](https://github.com/TuringWorks/orbit-rs/issues?q=label%3Aphase-10))
 - Advanced SQL features ([Phase 11 issues](https://github.com/TuringWorks/orbit-rs/issues?q=label%3Aphase-11))
@@ -297,8 +311,8 @@ We welcome contributions! See our **[Development Guide](DEVELOPMENT.md)** for se
 
 This project is dual licensed under your choice of:
 
-* **[MIT License](LICENSE-MIT)** - Very permissive, widely compatible
-* **[BSD 3-Clause License](LICENSE-BSD)** - Also permissive with endorsement clause
+- **[MIT License](LICENSE-MIT)** - Very permissive, widely compatible
+- **[BSD 3-Clause License](LICENSE-BSD)** - Also permissive with endorsement clause
 
 Choose the license that best fits your project's needs.
 
@@ -318,4 +332,3 @@ Choose the license that best fits your project's needs.
 ---
 
 **Built with ❤️ in Rust for production-scale distributed systems.**
-

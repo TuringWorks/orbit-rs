@@ -1,21 +1,25 @@
 # Cognitive Complexity Analysis and Refactoring Plan
 
 ## Overview
+
 This document identifies functions with high cognitive complexity (>15) in the orbit-rs codebase and provides refactoring recommendations to improve maintainability and readability.
 
 ## Identified High Complexity Functions
 
 ### 1. `CommandHandler::handle_command()` - **CRITICAL PRIORITY**
+
 **File**: `orbit-protocols/src/resp/commands.rs` (lines 51-237)
 **Estimated Cognitive Complexity**: ~80
 
 **Issues**:
+
 - Massive match statement with 70+ command cases
 - Single function handling all Redis protocol commands
 - No grouping or modularization of related commands
 - Linear complexity growth as new commands are added
 
 **Refactoring Plan**:
+
 ```rust
 // Break down into command groups with separate handlers
 impl CommandHandler {
@@ -41,16 +45,19 @@ impl CommandHandler {
 ```
 
 ### 2. `MultiHopReasoningEngine::find_paths()` - **HIGH PRIORITY**
+
 **File**: `orbit-protocols/src/graphrag/multi_hop_reasoning.rs` (lines 249-398)
 **Estimated Cognitive Complexity**: ~35
 
 **Issues**:
+
 - Complex nested control flow with multiple levels of conditions
 - Large while loop with nested match statements
 - Mix of graph traversal logic with result management
 - Multiple nested loops and conditionals
 
 **Refactoring Plan**:
+
 ```rust
 impl MultiHopReasoningEngine {
     pub async fn find_paths(&mut self, /* params */) -> OrbitResult<Vec<ReasoningPath>> {
@@ -78,16 +85,19 @@ impl MultiHopReasoningEngine {
 ```
 
 ### 3. `create_stateful_set()` - **MEDIUM PRIORITY**
+
 **File**: `orbit-operator/src/cluster_controller.rs` (lines 456-685)  
 **Estimated Cognitive Complexity**: ~25
 
 **Issues**:
+
 - Extremely long function (230 lines)
 - Complex nested struct initialization
 - Multiple embedded conditional logic
 - Mixed concerns: environment setup + Kubernetes resource creation
 
 **Refactoring Plan**:
+
 ```rust
 async fn create_stateful_set(/* params */) -> Result<()> {
     let statefulsets: Api<StatefulSet> = Api::namespaced(client.clone(), ns);
@@ -107,16 +117,19 @@ async fn deploy_statefulset(api: &Api<StatefulSet>, statefulset: &StatefulSet, n
 ```
 
 ### 4. Time Series Functions - **LOW-MEDIUM PRIORITY**
+
 **File**: `orbit-protocols/src/time_series.rs`
 **Functions**: `add_sample()`, `increment_by()`, `apply_retention()`
 **Estimated Cognitive Complexity**: 15-20 each
 
 **Issues**:
+
 - Multiple nested conditional branches
 - Complex policy application logic
 - Mixed validation and business logic
 
 **Refactoring Plan**:
+
 - Extract policy handlers into separate methods
 - Create validation helper functions
 - Separate timestamp handling logic
@@ -131,24 +144,28 @@ async fn deploy_statefulset(api: &Api<StatefulSet>, statefulset: &StatefulSet, n
 ## Implementation Guidelines
 
 ### For Command Handlers
+
 - Use the Command Pattern to encapsulate each command type
 - Create command category traits for shared behavior
 - Implement command registry for dynamic dispatch
 - Add command validation middleware
 
 ### For Graph Algorithms
+
 - Separate search state management from algorithm logic
 - Extract path scoring into strategy pattern
 - Create separate classes for different search strategies
 - Use builder pattern for complex search configurations
 
 ### For Kubernetes Resources
+
 - Create builder pattern for complex resource construction
 - Extract repeated patterns into helper functions
 - Use configuration objects instead of parameter passing
 - Implement resource template system
 
 ### General Principles
+
 - **Single Responsibility**: Each function should have one clear purpose
 - **Extract Method**: When a function has multiple logical sections, extract them
 - **Strategy Pattern**: For complex conditional logic based on types/modes
@@ -158,13 +175,16 @@ async fn deploy_statefulset(api: &Api<StatefulSet>, statefulset: &StatefulSet, n
 ## Tooling Setup
 
 ### Clippy Configuration
+
 Add to `Cargo.toml`:
+
 ```toml
 [package.metadata.clippy]
 cognitive-complexity-threshold = 15
 ```
 
 ### Pre-commit Hook
+
 ```rust
 #!/bin/bash
 # Check cognitive complexity before commit

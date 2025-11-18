@@ -7,21 +7,7 @@
 use crate::orbitql::executor::{QueryExecutor, QueryResult};
 use crate::orbitql::planner::{ExecutionPlan, PlanNode};
 use crate::orbitql::{QueryContext, QueryParams};
-
-// Add placeholder types for OrbitResult and OrbitError
-type OrbitResult<T> = Result<T, OrbitError>;
-
-#[derive(Debug, thiserror::Error)]
-pub enum OrbitError {
-    #[error("Execution error: {0}")]
-    Execution(String),
-}
-
-impl OrbitError {
-    pub fn execution(msg: String) -> Self {
-        OrbitError::Execution(msg)
-    }
-}
+use crate::error::{OrbitError, OrbitResult};
 use futures::Stream;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

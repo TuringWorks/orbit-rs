@@ -9,6 +9,7 @@ category: documentation
 ## Executive Summary
 
 Implementing a Log Structured Merge Tree (LSM Tree) for orbit-rs will provide:
+
 - **10x faster writes** for actor state updates and lease renewals
 - **Guaranteed durability** through Write-Ahead Logging (WAL)
 - **Efficient space utilization** through compaction
@@ -85,6 +86,7 @@ impl Serializable for OrbitValue { /* ... */ }
 ### Phase 1: Core LSM Engine (4-6 weeks)
 
 #### Week 1-2: MemTable & WAL
+
 ```rust
 // orbit-server/src/persistence/lsm/memtable.rs
 pub struct MemTable {
@@ -120,6 +122,7 @@ impl WriteAheadLog {
 ```
 
 #### Week 3-4: SSTable Implementation
+
 ```rust
 // orbit-server/src/persistence/lsm/sstable.rs
 pub struct SSTable {
@@ -163,6 +166,7 @@ impl SSTableWriter {
 ```
 
 #### Week 5-6: Read Path & Bloom Filters
+
 ```rust
 impl OrbitLSMTree {
     pub async fn get(&self, key: &OrbitKey) -> Result<Option<OrbitValue>> {
@@ -200,6 +204,7 @@ impl OrbitLSMTree {
 ### Phase 2: Compaction & Space Management (3-4 weeks)
 
 #### Week 1-2: Level-Based Compaction
+
 ```rust
 // orbit-server/src/persistence/lsm/compaction.rs
 pub struct CompactionScheduler {
@@ -251,6 +256,7 @@ impl CompactionScheduler {
 ```
 
 #### Week 3-4: Background Tasks & Metrics
+
 ```rust
 impl OrbitLSMTree {
     pub async fn start_background_tasks(&self) {
@@ -286,6 +292,7 @@ impl OrbitLSMTree {
 ### Phase 3: Advanced Features (2-3 weeks)
 
 #### Week 1: Point-in-Time Recovery
+
 ```rust
 pub struct SnapshotManager {
     snapshot_dir: PathBuf,
@@ -325,6 +332,7 @@ impl SnapshotManager {
 ```
 
 #### Week 2-3: Performance Optimization
+
 ```rust
 // Specialized optimizations for orbit-rs workloads
 pub struct OrbitOptimizations {
@@ -383,6 +391,7 @@ impl OrbitLSMTree {
 ## Integration with Existing Persistence Layer
 
 ### New LSM Provider Configuration
+
 ```rust
 // Add to orbit-server/src/persistence/mod.rs
 
@@ -425,6 +434,7 @@ impl Default for LSMTreeConfig {
 ```
 
 ### Provider Implementation
+
 ```rust
 // orbit-server/src/persistence/lsm_provider.rs
 pub struct LSMTreeProvider {
@@ -492,12 +502,14 @@ impl AddressableDirectoryProvider for LSMTreeProvider {
 | Storage efficiency | 100% | 100% | 60-80% |
 
 ### Memory Usage
+
 - **MemTable**: 64MB default (configurable)
 - **Block Cache**: 256MB default (configurable)  
 - **Bloom Filters**: ~10 bits per key
 - **Index**: ~1% of data size
 
 ### Disk Usage  
+
 - **WAL**: ~2x write amplification during normal operation
 - **SSTables**: 1.2-1.5x storage amplification after compaction
 - **Snapshots**: Hard links (minimal extra space)
@@ -505,6 +517,7 @@ impl AddressableDirectoryProvider for LSMTreeProvider {
 ## Deployment Scenarios
 
 ### Scenario 1: High-Performance Development
+
 ```toml
 [providers.lsm]
 type = "LSMTree"
@@ -515,6 +528,7 @@ enable_snapshots = false        # Skip snapshots for dev
 ```
 
 ### Scenario 2: Production with High Durability
+
 ```toml
 [providers.lsm]
 type = "LSMTree"  
@@ -527,6 +541,7 @@ compaction_strategy = { type = "Leveled", size_ratio = 10.0 }
 ```
 
 ### Scenario 3: Write-Heavy Actor Systems
+
 ```toml
 [providers.lsm]
 type = "LSMTree"
@@ -540,12 +555,14 @@ compression = "Lz4"            # Fast compression
 ## Migration Strategy
 
 ### Phase 1: Parallel Operation
+
 1. Deploy LSM provider alongside existing provider
 2. Write to both providers (dual-write mode)
 3. Compare results and performance metrics
 4. Gradually shift read traffic to LSM provider
 
 ### Phase 2: Data Migration
+
 ```rust
 // Migration utility
 pub struct LSMMigration {
@@ -580,6 +597,7 @@ impl LSMMigration {
 ## Testing Strategy
 
 ### Unit Tests
+
 - MemTable operations and overflow handling
 - WAL write/recovery scenarios  
 - SSTable read/write/compaction
@@ -587,6 +605,7 @@ impl LSMMigration {
 - Key serialization/deserialization
 
 ### Integration Tests  
+
 - End-to-end write/read cycles
 - Compaction correctness
 - Crash recovery scenarios
@@ -594,6 +613,7 @@ impl LSMMigration {
 - Multi-threaded access patterns
 
 ### Load Testing
+
 - Sustained write loads (actor lease updates)
 - Mixed read/write workloads  
 - Memory pressure scenarios
@@ -603,6 +623,7 @@ impl LSMMigration {
 ## Success Metrics
 
 ### Performance Targets
+
 - **Write latency**: <50μs p99 for actor lease updates
 - **Read latency**: <10μs p99 for single key lookups
 - **Write throughput**: >100K actor lease updates/sec
@@ -610,6 +631,7 @@ impl LSMMigration {
 - **Space amplification**: <2x after compaction
 
 ### Reliability Targets  
+
 - **Durability**: Zero data loss with PerWrite sync mode
 - **Availability**: 99.99% uptime during compaction
 - **Recovery**: 100% data recovery from WAL+SSTables
@@ -618,18 +640,19 @@ impl LSMMigration {
 ## Future Enhancements
 
 ### Phase 4: Advanced Features (Future)
-1. **Multi-Version Concurrency Control (MVCC)** 
+
+1. **Multi-Version Concurrency Control (MVCC)**
    - Snapshot isolation for consistent reads
    - Time-travel queries for audit trails
-   
+
 2. **Distributed LSM Trees**
    - Consistent hashing across multiple nodes
    - Cross-node compaction coordination
-   
+
 3. **Adaptive Compaction**
    - Machine learning-based compaction scheduling
    - Workload-aware level sizing
-   
+
 4. **Specialized Data Types**
    - Native time-series compression (Delta-of-Delta, Gorilla)
    - Graph-specific storage layouts

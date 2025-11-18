@@ -12,6 +12,7 @@ category: "getting-started"
 ## 🎯 What You'll Get
 
 **Single `orbit-server` command gives you:**
+
 - 🐘 **PostgreSQL server** (port 15432) - Full SQL with pgvector support + **RocksDB persistence**
 - 🔴 **Redis server** (port 6379) - Key-value + TTL operations + **RocksDB persistence**
 - 🌍 **HTTP REST API** (port 8080) - Web-friendly JSON interface  
@@ -33,18 +34,22 @@ Before you begin, ensure you have the following installed:
 ### Installing Protocol Buffers
 
 #### macOS
+
 ```bash
 brew install protobuf
 ```
 
 #### Ubuntu/Debian
+
 ```bash
 sudo apt update
 sudo apt install protobuf-compiler
 ```
 
 #### Windows
+
 Download from [Protocol Buffers releases](https://github.com/protocolbuffers/protobuf/releases) or use:
+
 ```powershell
 choco install protoc
 ```
@@ -88,16 +93,19 @@ cargo run --example resp-server
 ### 3. Connect with Standard Clients
 
 **PostgreSQL** - Use any PostgreSQL client:
+
 ```bash
 psql -h localhost -p 15432 -U orbit -d actors
 ```
 
 **Redis** - Use redis-cli or any Redis client:
+
 ```bash
 redis-cli -h localhost -p 6379
 ```
 
 **gRPC** - Use OrbitClient or grpcurl:
+
 ```bash
 # List gRPC services
 grpcurl -plaintext localhost:50051 list
@@ -320,6 +328,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 Orbit-RS includes several working examples to demonstrate different features:
 
 ### Integrated Multi-Protocol Server (RECOMMENDED)
+
 ```bash
 # Run the full integrated server with all protocols
 cargo run --package orbit-server --example integrated-server
@@ -332,24 +341,28 @@ cargo run --package orbit-server --example integrated-server
 
 ### Individual Protocol Examples
 
-**Hello World (Basic Actor System)**
+### Hello World (Basic Actor System)
+
 ```bash
 cargo run --example hello-world
 ```
 
-**PostgreSQL Server Only**
+#### PostgreSQL Server Only
+
 ```bash
 cargo run --package orbit-server --example postgres-server
 # Connect: psql -h localhost -p 5433 -U orbit -d actors
 ```
 
-**Redis Server Only**
+#### Redis Server Only
+
 ```bash
 cargo run --example resp-server
 # Connect: redis-cli -h localhost -p 6379
 ```
 
-**Other Demos**
+#### Other Demos
+
 ```bash
 # Storage architecture demo
 cargo run --example postgres_storage_demo
@@ -366,6 +379,7 @@ cargo run --example distributed_counter
 ### Development vs Production Modes
 
 **Development Mode** (`--dev-mode`):
+
 - All protocols enabled automatically
 - Verbose debug logging
 - Development-friendly defaults
@@ -377,6 +391,7 @@ orbit-server --dev-mode
 ```
 
 **Production Mode**:
+
 - Uses configuration file
 - Controlled protocol activation
 - Production logging levels
@@ -492,12 +507,15 @@ orbit-server \
 ### IDE Setup
 
 #### VS Code
+
 Recommended extensions:
+
 - `rust-analyzer` - Rust language server
 - `CodeLLDB` - Debugger for Rust
 - `crates` - Cargo dependency management
 
 #### IntelliJ IDEA
+
 - Install the Rust plugin
 - Configure the Rust toolchain in settings
 
@@ -543,21 +561,27 @@ cargo tarpaulin --out Html
 ### Common Issues
 
 #### Protocol Buffers Not Found
-```
+
+```text
 error: Could not find `protoc` installation
 ```
+
 **Solution**: Install Protocol Buffers compiler as described in prerequisites.
 
 #### Rust Version Too Old
-```
+
+```text
 error: package requires Rust 1.70 or newer
 ```
+
 **Solution**: Update Rust using `rustup update`
 
 #### Port Already in Use
-```
+
+```text
 error: Address already in use (os error 48)
 ```
+
 **Solution**: Use a different port or stop the conflicting service.
 
 ### Getting Help
@@ -571,30 +595,35 @@ error: Address already in use (os error 48)
 Now that you have Orbit-RS multi-protocol server running, explore these guides:
 
 ### **Multi-Protocol Features**
+
 - 🌟 **[Native Multi-Protocol Guide](NATIVE_MULTIPROTOCOL.md)** - Complete multi-protocol documentation
 - 🔄 **[Multi-Protocol Demo](../examples/multiprotocol-demo/)** - Interactive demonstration
 - ⚙️ **[Configuration Reference](CONFIGURATION.md)** - Complete configuration guide
 - 📊 **[Performance Tuning](PERFORMANCE_TUNING.md)** - Optimize for your workload
 
 ### **Protocol-Specific Guides**  
+
 - 🐘 **[PostgreSQL Compatibility](postgres/POSTGRESQL_GUIDE.md)** - SQL features and pgvector
 - 🔴 **[Redis Compatibility](redis/REDIS_GUIDE.md)** - Key-value and vector operations
 - 🌍 **[REST API Reference](rest/REST_API.md)** - HTTP endpoints and usage
 - 🔢 **[Vector Operations Guide](VECTOR_OPERATIONS.md)** - Cross-protocol vector search
 
 ### **Advanced Features**
+
 - 💎 **[Transaction Features](features/transaction_features.md)** - Distributed ACID transactions
 - 📊 **[Real-time Streaming](streaming/STREAMING_GUIDE.md)** - CDC and event sourcing
 - ☘️ **[Kubernetes Deployment](kubernetes_deployment.md)** - Production deployment
 - 🚀 **[Actor System Guide](actors/ACTOR_GUIDE.md)** - Virtual actors and distribution
 
 ### **Development & Operations**
+
 - 👩‍💻 **[Development Guide](../DEVELOPMENT.md)** - Contributing to Orbit-RS
 - 🛡️ **[Security Guide](security/SECURITY_GUIDE.md)** - Authentication and authorization
 - 📊 **[Monitoring Guide](monitoring/MONITORING_GUIDE.md)** - Metrics and observability
 - 🐛 **[Troubleshooting](troubleshooting/TROUBLESHOOTING.md)** - Common issues and solutions
 
 ### **Migration Guides**
+
 - 🔄 **[PostgreSQL Migration](migration/FROM_POSTGRESQL.md)** - Migrate from PostgreSQL
 - 🔄 **[Redis Migration](migration/FROM_REDIS.md)** - Migrate from Redis
 - 🔄 **[Multi-Database Migration](migration/MULTI_DATABASE.md)** - Consolidate multiple databases

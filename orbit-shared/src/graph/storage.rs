@@ -450,7 +450,7 @@ impl GraphStorage for InMemoryGraphStorage {
             }
             None => {
                 warn!(rel_id = %rel_id, "Attempted to update non-existent relationship");
-                Err(OrbitError::Internal(format!(
+                Err(OrbitError::internal(format!(
                     "Relationship {rel_id} not found"
                 )))
             }

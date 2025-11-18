@@ -1,3 +1,5 @@
+<!-- markdownlint-disable MD024 -->
+
 # Phase 11: Real-time Data Streaming & Change Data Capture
 
 ## Overview
@@ -6,44 +8,44 @@ This document describes the implementation of Phase 11 features for the Orbit di
 
 ## Architecture
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────┐
-│                     CDC Coordinator                          │
+│                     CDC Coordinator                         │
 │  - Event capture and validation                             │
-│  - LSN assignment and ordering                               │
-│  - Broadcast to all subscribers                              │
-└─────────────────┬───────────────────────────────────────────┘
-                  │
-         ┌────────┴────────┐
-         │                 │
-         ▼                 ▼
-┌─────────────────┐ ┌─────────────────┐
-│   CDC Streams   │ │  Integrations   │
-│   - WebSocket   │ │  - Kafka        │
-│   - SSE         │ │  - RabbitMQ     │
-│   - Direct      │ │  - Webhooks     │
-└────────┬────────┘ └────────┬────────┘
-         │                   │
-         └────────┬──────────┘
-                  │
-         ┌────────┴────────┐
-         │                 │
-         ▼                 ▼
-┌─────────────────┐ ┌─────────────────┐
-│ Stream Process  │ │ Event Sourcing  │
-│ - Windowing     │ │ - Event Store   │
-│ - Aggregation   │ │ - Snapshots     │
-└─────────────────┘ └─────────────────┘
-         │                   │
-         └────────┬──────────┘
-                  │
-                  ▼
-         ┌─────────────────┐
-         │ Replication     │
-         │ Slots           │
-         │ - Position      │
-         │ - Lag Monitor   │
-         └─────────────────┘
+│  - LSN assignment and ordering                              │
+│  - Broadcast to all subscribers                             │
+└────────────────--------─┬───────────────────────────────────┘
+                          │
+                 ┌────────┴────────┐
+                 │                 │
+                 ▼                 ▼
+        ┌─────────────────┐ ┌─────────────────┐
+        │   CDC Streams   │ │  Integrations   │
+        │   - WebSocket   │ │  - Kafka        │
+        │   - SSE         │ │  - RabbitMQ     │
+        │   - Direct      │ │  - Webhooks     │
+        └────────┬────────┘ └────────┬────────┘
+                 │                   │
+                 └────────┬──────────┘
+                          │
+                 ┌────────┴────────┐
+                 │                 │
+                 ▼                 ▼
+        ┌─────────────────┐ ┌─────────────────┐
+        │ Stream Process  │ │ Event Sourcing  │
+        │ - Windowing     │ │ - Event Store   │
+        │ - Aggregation   │ │ - Snapshots     │
+        └─────────────────┘ └─────────────────┘
+                │                   │
+                └────────┬──────────┘
+                         │
+                         ▼
+                ┌─────────────────┐
+                │ Replication     │
+                │ Slots           │
+                │ - Position      │
+                │ - Lag Monitor   │
+                └─────────────────┘
 ```
 
 ## Components
@@ -54,7 +56,7 @@ This document describes the implementation of Phase 11 features for the Orbit di
 
 The CDC module captures all data modifications (INSERT, UPDATE, DELETE, TRUNCATE) and distributes them to interested consumers.
 
-#### Key Types:
+#### Key Types
 
 ```rust
 pub struct CdcEvent {
@@ -70,7 +72,7 @@ pub struct CdcEvent {
 }
 ```
 
-#### Usage Example:
+#### Usage Example
 
 ```rust
 use orbit_shared::cdc::{CdcCoordinator, CdcEvent, CdcSubscription};
@@ -101,12 +103,12 @@ coordinator.capture_event(event).await?;
 
 SSE provides a lightweight HTTP-based streaming protocol for browser clients.
 
-#### Endpoints:
+#### Endpoints
 
 - `GET /api/v1/sse/cdc?tables=users,orders&operations=insert,update`
 - `GET /api/v1/sse/query?query=SELECT...`
 
-#### Message Format:
+#### Message Format
 
 ```json
 {
@@ -144,6 +146,7 @@ consumer.process_event(&cdc_event).await?;
 ```
 
 **Features:**
+
 - Configurable compression (gzip, snappy, lz4, zstd)
 - Batching for throughput
 - Idempotence for exactly-once delivery
@@ -167,6 +170,7 @@ let consumer = RabbitMqCdcConsumer::new(config).await?;
 ```
 
 **Features:**
+
 - Exchange types: direct, topic, fanout, headers
 - Dynamic routing keys
 - Persistent messages
@@ -194,6 +198,7 @@ let consumer = WebhookCdcConsumer::new(config).await?;
 ```
 
 **Features:**
+
 - Configurable retry with exponential backoff
 - Custom headers
 - Timeout control
@@ -205,7 +210,7 @@ let consumer = WebhookCdcConsumer::new(config).await?;
 
 Real-time stream processing with windowing and aggregation.
 
-#### Window Types:
+#### Window Types
 
 ```rust
 pub enum WindowType {
@@ -216,7 +221,7 @@ pub enum WindowType {
 }
 ```
 
-#### Aggregation Functions:
+#### Aggregation Functions
 
 - Count
 - Sum, Avg
@@ -225,7 +230,7 @@ pub enum WindowType {
 - Collect (array)
 - CountDistinct
 
-#### Usage Example:
+#### Usage Example
 
 ```rust
 use orbit_shared::stream_processing::{
@@ -250,7 +255,7 @@ for value in sensor_readings {
 }
 ```
 
-#### Tumbling Window Example:
+#### Tumbling Window Example
 
 ```rust
 // 1-second tumbling window counting events
@@ -266,7 +271,7 @@ let processor = StreamProcessor::new(
 
 Event sourcing stores all state changes as a sequence of immutable events.
 
-#### Key Concepts:
+#### Key Concepts
 
 ```rust
 pub struct DomainEvent {
@@ -281,7 +286,7 @@ pub struct DomainEvent {
 }
 ```
 
-#### Usage Example:
+#### Usage Example
 
 ```rust
 use orbit_shared::event_sourcing::{EventStore, DomainEvent, EventStoreConfig};
@@ -316,7 +321,7 @@ let state = store.rebuild_state(
 ).await?;
 ```
 
-#### Snapshots:
+#### Snapshots
 
 ```rust
 // Create snapshot
@@ -336,7 +341,7 @@ store.save_snapshot(snapshot).await?;
 
 Replication slots track consumer position in the event stream, inspired by PostgreSQL's logical replication.
 
-#### Key Concepts:
+#### Key Concepts
 
 ```rust
 pub struct ReplicationSlot {
@@ -348,7 +353,7 @@ pub struct ReplicationSlot {
 }
 ```
 
-#### Usage Example:
+#### Usage Example
 
 ```rust
 use orbit_shared::replication::{ReplicationSlotManager, ReplicationConfig};
@@ -372,7 +377,7 @@ let lag = manager.get_slot_lag("consumer1").await?;
 println!("Consumer is {} events behind", lag);
 ```
 
-#### Features:
+#### Features
 
 - Position tracking with LSN
 - Lag monitoring
@@ -416,6 +421,7 @@ cargo run --example cdc-streaming-example
 ```
 
 The example demonstrates:
+
 1. CDC event capture and subscription
 2. Kafka integration
 3. Stream processing with windows

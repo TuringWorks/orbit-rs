@@ -15,14 +15,16 @@ category: documentation
 ## 📋 **Storage Backend Overview**
 
 ### **Local Storage Backends** (Require PersistentVolumes)
+
 - **Memory** (with disk backup)
 - **Copy-on-Write B+ Tree**
-- **LSM-Tree** 
+- **LSM-Tree**
 - **RocksDB**
 
 **Kubernetes Requirements**: StatefulSet + PVC + SSD StorageClass
 
 ### **Cloud Storage Backends** (No PersistentVolumes)
+
 - **S3** (AWS, MinIO)
 - **Azure Blob Storage**
 - **Google Cloud Storage**
@@ -36,12 +38,14 @@ category: documentation
 **File**: [`k8s/01-configmap-enhanced.yaml`](file:///Users/ravindraboddipalli/sources/orbit-rs/k8s/01-configmap-enhanced.yaml)
 
 **Key Features**:
+
 - ✅ Environment variable-driven backend selection
 - ✅ Configuration sections for all persistence backends
 - ✅ Intelligent entrypoint script that creates directories based on backend
 - ✅ Health checks that vary by backend type
 
 **Example Environment Variables**:
+
 ```bash
 
 # Backend Selection
@@ -63,6 +67,7 @@ ORBIT_S3_ACCESS_KEY_ID=<from-secret>
 **File**: [`k8s/03-statefulset-enhanced.yaml`](file:///Users/ravindraboddipalli/sources/orbit-rs/k8s/03-statefulset-enhanced.yaml)
 
 **Key Features**:
+
 - ✅ All persistence backend environment variables pre-configured
 - ✅ Secrets integration for cloud backends
 - ✅ Flexible volume mounts
@@ -73,6 +78,7 @@ ORBIT_S3_ACCESS_KEY_ID=<from-secret>
 **File**: [`orbit-operator/src/crd.rs`](file:///Users/ravindraboddipalli/sources/orbit-rs/orbit-operator/src/crd.rs)
 
 **Key Features**:
+
 - ✅ PersistenceConfig added to OrbitCluster CRD
 - ✅ Support for memory, local, and cloud storage configurations
 - ✅ Type-safe configuration with defaults
@@ -337,6 +343,7 @@ rules:
 ### **Common Issues**
 
 1. **PVC not binding**
+
    ```bash
    kubectl get pv,pvc -n orbit-rs
    # Check StorageClass availability
@@ -344,6 +351,7 @@ rules:
    ```
 
 2. **Backend not starting**
+
    ```bash
    # Check logs
    kubectl logs -n orbit-rs orbit-server-0
@@ -351,6 +359,7 @@ rules:
    ```
 
 3. **Cloud authentication failures**
+
    ```bash
    # Verify secrets exist
    kubectl get secrets -n orbit-rs orbit-server-secrets -o yaml
@@ -375,6 +384,7 @@ curl http://pod-ip:8080/health/ready
 ### **Local Storage Backends**
 
 **LSM-Tree**: High write throughput
+
 ```yaml
 env:
 - name: ORBIT_LSM_MEMTABLE_SIZE
@@ -386,6 +396,7 @@ env:
 ```
 
 **RocksDB**: Balanced read/write performance
+
 ```yaml
 env:
 - name: ORBIT_ROCKSDB_WRITE_BUFFER_SIZE
@@ -421,13 +432,16 @@ resources:
 ## 📚 **Files Reference**
 
 **Enhanced Kubernetes Manifests**:
+
 - [`k8s/01-configmap-enhanced.yaml`](file:///Users/ravindraboddipalli/sources/orbit-rs/k8s/01-configmap-enhanced.yaml) - Configuration with all backends
 - [`k8s/03-statefulset-enhanced.yaml`](file:///Users/ravindraboddipalli/sources/orbit-rs/k8s/03-statefulset-enhanced.yaml) - StatefulSet + Deployment variants
 
 **Operator Updates**:
+
 - [`orbit-operator/src/crd.rs`](file:///Users/ravindraboddipalli/sources/orbit-rs/orbit-operator/src/crd.rs) - Enhanced CRD with persistence config
 
 **Documentation**:
+
 - [`docs/KUBERNETES_PERSISTENCE.md`](KUBERNETES_PERSISTENCE.md) - Quick setup guide
 - [`docs/VIRTUAL_ACTOR_PERSISTENCE.md`](VIRTUAL_ACTOR_PERSISTENCE.md) - Complete persistence architecture
 - [`docs/STORAGE_BACKEND_INDEPENDENCE.md`](STORAGE_BACKEND_INDEPENDENCE.md) - Backend independence explanation

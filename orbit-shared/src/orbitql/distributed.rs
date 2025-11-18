@@ -7,24 +7,11 @@
 use crate::orbitql::ast::AggregateFunction;
 use crate::orbitql::executor::QueryResult;
 use crate::orbitql::planner::{ExecutionPlan, PlanNode, QueryPlanner};
+use crate::error::{OrbitError, OrbitResult};
 // Temporarily disable ActorId since it's not defined in this crate yet
 // use crate::ActorId;
 type ActorId = String; // Placeholder
 
-// Add placeholder types for OrbitResult and OrbitError
-type OrbitResult<T> = Result<T, OrbitError>;
-
-#[derive(Debug, thiserror::Error)]
-pub enum OrbitError {
-    #[error("Execution error: {0}")]
-    Execution(String),
-}
-
-impl OrbitError {
-    pub fn execution(msg: String) -> Self {
-        OrbitError::Execution(msg)
-    }
-}
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;

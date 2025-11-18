@@ -562,7 +562,7 @@ r = redis.Redis(host='orbit-server', port=6379)
 ## 📖 Further Reading
 
 - [Vector Operations Guide](./VECTOR_OPERATIONS.md)
-- [SQL Compatibility Reference](./SQL_REFERENCE.md) 
+- [SQL Compatibility Reference](./SQL_REFERENCE.md)
 - [Redis Commands Reference](./REDIS_COMMANDS.md)
 - [REST API Documentation](./REST_API.md)
 - [Configuration Reference](./CONFIGURATION.md)
@@ -570,10 +570,10 @@ r = redis.Redis(host='orbit-server', port=6379)
 
 ## 🤝 Community
 
-- **GitHub**: https://github.com/orbit-rs/orbit-rs
+- **GitHub**: <https://github.com/orbit-rs/orbit-rs>
 - **Discord**: [Join our community](https://discord.gg/orbit-rs)
-- **Docs**: https://docs.orbit-rs.dev
-- **Examples**: https://github.com/orbit-rs/orbit-rs/tree/main/examples
+- **Docs**: <https://docs.orbit-rs.dev>
+- **Examples**: <https://github.com/orbit-rs/orbit-rs/tree/main/examples>
 
 ---
 

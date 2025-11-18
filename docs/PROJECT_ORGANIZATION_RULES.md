@@ -15,6 +15,7 @@ This document establishes clear guidelines for where different types of files sh
 **Rule**: All documentation files MUST be placed in the `docs/` directory or its subdirectories.
 
 **Applies to**:
+
 - `*.md` files (except README.md in package roots)
 - Architecture documents
 - API documentation
@@ -24,6 +25,7 @@ This document establishes clear guidelines for where different types of files sh
 - RFCs (Request for Comments)
 
 **Directory Structure**:
+
 ```
 docs/
 ├── README.md                    # Documentation index
@@ -39,7 +41,8 @@ docs/
 ```
 
 **Examples**:
-- ✅ `docs/DEVELOPMENT.md` 
+
+- ✅ `docs/DEVELOPMENT.md`
 - ✅ `docs/architecture/SYSTEM_DESIGN.md`
 - ✅ `docs/rfcs/RFC-001-NEW_FEATURE.md`
 - ❌ `DEVELOPMENT.md` (root level - should be in docs/)
@@ -50,6 +53,7 @@ docs/
 **Rule**: All benchmark-related files MUST be placed in the `orbit-benchmarks/` package directory structure.
 
 **Applies to**:
+
 - Performance benchmarks
 - Load testing code
 - Benchmark configurations
@@ -57,7 +61,8 @@ docs/
 - Industry-standard benchmark implementations (TPC-H, TPC-C, TPC-DS)
 
 **Directory Structure**:
-```
+
+```text
 orbit-benchmarks/
 ├── Cargo.toml                  # Benchmark package configuration
 ├── README.md                   # Benchmark documentation
@@ -81,6 +86,7 @@ orbit-benchmarks/
 ```
 
 **Examples**:
+
 - ✅ `orbit-benchmarks/src/orbitql/benchmark.rs`
 - ✅ `orbit-benchmarks/benches/new_benchmark.rs`  
 - ✅ `orbit-benchmarks/scripts/performance_test.sh`
@@ -92,8 +98,9 @@ orbit-benchmarks/
 **Rule**: Test files should follow Rust conventions and be co-located with the code they test.
 
 **Examples**:
+
 - ✅ `orbit-shared/src/lib.rs` with `#[cfg(test)]` modules
-- ✅ `orbit-shared/tests/integration_tests.rs` 
+- ✅ `orbit-shared/tests/integration_tests.rs`
 - ✅ `tests/` (workspace-level integration tests)
 
 ### 🔧 Configuration Files
@@ -101,6 +108,7 @@ orbit-benchmarks/
 **Rule**: Configuration files should be at the appropriate scope level.
 
 **Examples**:
+
 - ✅ `Cargo.toml` (workspace root)
 - ✅ `orbit-shared/Cargo.toml` (package level)
 - ✅ `.github/workflows/` (CI/CD configurations)
@@ -110,7 +118,8 @@ orbit-benchmarks/
 **Rule**: Scripts should be organized by purpose and scope.
 
 **Directory Structure**:
-```
+
+```text
 ├── scripts/                    # Workspace-level scripts
 ├── orbit-benchmarks/scripts/   # Benchmark-specific scripts  
 └── .github/workflows/          # CI/CD workflow scripts
@@ -119,16 +128,19 @@ orbit-benchmarks/
 ## 🚫 Anti-Patterns to Avoid
 
 ### Documentation Anti-Patterns
+
 - ❌ Placing `.md` files in package root directories (except package README.md)
 - ❌ Creating documentation in random locations
 - ❌ Mixing documentation with source code in inappropriate places
 
 ### Benchmark Anti-Patterns  
+
 - ❌ Placing benchmark code in regular source packages
 - ❌ Creating benchmark files outside the orbit-benchmarks package
 - ❌ Including performance tests in unit test directories
 
 ### General Anti-Patterns
+
 - ❌ Creating files at project root that should be organized in subdirectories
 - ❌ Mixing different types of files in inappropriate locations
 - ❌ Not following established directory hierarchies
@@ -136,6 +148,7 @@ orbit-benchmarks/
 ## 🔄 Migration Guidelines
 
 ### When Moving Files
+
 1. Use `git mv` to preserve file history
 2. Update all references and imports
 3. Update documentation links
@@ -143,6 +156,7 @@ orbit-benchmarks/
 5. Update CI/CD pipelines if necessary
 
 ### For New Files
+
 1. Determine the correct location based on these rules
 2. Create files in the appropriate directory from the start
 3. Follow naming conventions for the target directory
@@ -150,13 +164,17 @@ orbit-benchmarks/
 ## ✅ Enforcement
 
 ### Pre-commit Hooks
+
 Consider implementing pre-commit hooks to enforce these rules:
-- Check that new `.md` files are in `docs/` 
+
+- Check that new `.md` files are in `docs/`
 - Check that benchmark files are in `orbit-benchmarks/`
 - Warn about files in inappropriate locations
 
 ### Code Review Guidelines
+
 Reviewers should verify:
+
 - New files are placed according to these rules
 - File moves preserve git history using `git mv`
 - Documentation links are updated after moves
@@ -165,7 +183,8 @@ Reviewers should verify:
 ## 📝 Examples of Correct Organization
 
 ### Documentation Example
-```
+
+```text
 ✅ Correct:
 docs/
 ├── development/
@@ -178,7 +197,8 @@ docs/
 ```
 
 ### Benchmark Example  
-```
+
+```text
 ✅ Correct:
 orbit-benchmarks/
 ├── src/

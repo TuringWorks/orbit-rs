@@ -21,6 +21,7 @@ This document outlines the complete migration process from the original Orbit im
 ## Project Structure Comparison
 
 ### Original Kotlin Structure
+
 ```
 src/
 ├── orbit-util/               # Utilities and base functionality
@@ -36,6 +37,7 @@ src/
 ```
 
 ### Rust Structure
+
 ```
 ├── orbit-util/               # Utilities and base functionality
 ├── orbit-shared/             # Shared data structures  
@@ -52,17 +54,21 @@ src/
 ## Key Architectural Changes
 
 ### 1. Memory Management
+
 **Kotlin/JVM**: Garbage Collection
 **Rust**: RAII (Resource Acquisition Is Initialization) with compile-time ownership tracking
 
 **Benefits:**
+
 - Predictable memory usage
 - No GC pauses
 - Zero-cost memory safety
 - Better cache locality
 
 ### 2. Error Handling
+
 **Kotlin/JVM**: Exception-based error handling
+
 ```kotlin
 fun risky_operation(): String {
     if (condition) throw Exception("Error occurred")
@@ -71,6 +77,7 @@ fun risky_operation(): String {
 ```
 
 **Rust**: Result-based error handling
+
 ```rust
 fn risky_operation() -> Result<String, OrbitError> {
     if condition {
@@ -82,7 +89,9 @@ fn risky_operation() -> Result<String, OrbitError> {
 ```
 
 ### 3. Async Programming Model
+
 **Kotlin/JVM**: Coroutines with suspend functions
+
 ```kotlin
 suspend fun processMessage(): Deferred<String> {
     delay(100)
@@ -91,6 +100,7 @@ suspend fun processMessage(): Deferred<String> {
 ```
 
 **Rust**: async/await with Future trait
+
 ```rust
 async fn process_message() -> Result<String, OrbitError> {
     tokio::time::sleep(Duration::from_millis(100)).await;
@@ -99,7 +109,9 @@ async fn process_message() -> Result<String, OrbitError> {
 ```
 
 ### 4. Actor System Design
+
 **Kotlin/JVM**: Dynamic proxy-based invocation
+
 ```kotlin
 interface GreeterActor : ActorWithStringKey {
     suspend fun greet(name: String): String
@@ -110,6 +122,7 @@ val actor = client.actorReference(GreeterActor::class, "key")
 ```
 
 **Rust**: Trait-based with compile-time dispatch
+
 ```rust
 
 #[async_trait]
@@ -139,7 +152,9 @@ let actor = client.actor_reference::<dyn GreeterActor>("key").await?;
 ### Orbit-Specific Types
 
 #### AddressableReference
+
 **Kotlin**:
+
 ```kotlin
 data class AddressableReference(
     val type: AddressableType,
@@ -148,6 +163,7 @@ data class AddressableReference(
 ```
 
 **Rust**:
+
 ```rust
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -158,7 +174,9 @@ pub struct AddressableReference {
 ```
 
 #### Key Enum
+
 **Kotlin**: Sealed class hierarchy
+
 ```kotlin
 sealed class Key {
     data class StringKey(val key: String) : Key()
@@ -169,6 +187,7 @@ sealed class Key {
 ```
 
 **Rust**: Enum with associated data
+
 ```rust
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -181,7 +200,9 @@ pub enum Key {
 ```
 
 #### NodeId
+
 **Kotlin**:
+
 ```kotlin
 data class NodeId(val key: NodeKey, val namespace: Namespace) {
     companion object {
@@ -193,6 +214,7 @@ data class NodeId(val key: NodeKey, val namespace: Namespace) {
 ```
 
 **Rust**:
+
 ```rust
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -214,19 +236,24 @@ impl NodeId {
 ## Concurrency Model Migration
 
 ### Thread Safety
-**Kotlin/JVM**: 
+
+**Kotlin/JVM**:
+
 - `@Volatile` annotations
 - `AtomicReference`, `ConcurrentHashMap`
 - Synchronized blocks
 
 **Rust**:
+
 - `Arc<T>` for shared ownership
 - `Mutex<T>`, `RwLock<T>` for thread-safe access
 - `DashMap` for concurrent hash maps
 - Compile-time data race prevention
 
 ### Async Primitives
-**Kotlin/JVM**: 
+
+**Kotlin/JVM**:
+
 ```kotlin
 val deferred = GlobalScope.async {
     processMessage()
@@ -235,6 +262,7 @@ val result = deferred.await()
 ```
 
 **Rust**:
+
 ```rust
 let handle = tokio::spawn(async {
     process_message().await
@@ -245,7 +273,9 @@ let result = handle.await??;
 ## Testing Migration
 
 ### Test Framework
+
 **Kotlin/JVM**: Kotest + Mockito
+
 ```kotlin
 class ActorTest : StringSpec({
     "should greet user" {
@@ -258,6 +288,7 @@ class ActorTest : StringSpec({
 ```
 
 **Rust**: Built-in testing + Mockall
+
 ```rust
 
 #[cfg(test)]
@@ -282,21 +313,25 @@ mod tests {
 ## Performance Improvements
 
 ### Memory Usage
+
 - **Kotlin/JVM**: ~300MB heap for basic cluster node
 - **Rust**: ~50MB total memory usage (estimated)
 - **Improvement**: ~80% reduction in memory usage
 
 ### Latency
+
 - **Kotlin/JVM**: 1-5ms GC pauses periodically
 - **Rust**: Consistent sub-microsecond allocation/deallocation
 - **Improvement**: Elimination of GC pauses
 
 ### Throughput
+
 - **Kotlin/JVM**: ~100k messages/second/core
 - **Rust**: ~500k+ messages/second/core (estimated)
 - **Improvement**: 5x+ throughput increase
 
 ### Binary Size
+
 - **Kotlin/JVM**: ~100MB (JVM + application JAR)
 - **Rust**: ~10MB statically linked binary
 - **Improvement**: 90% reduction in deployment size
@@ -304,17 +339,20 @@ mod tests {
 ## Migration Strategies
 
 ### 1. Incremental Migration
+
 - Start with utility modules (`orbit-util`, `orbit-shared`)
 - Migrate core data structures first
 - Add gRPC layer compatibility for interoperability
 - Gradually migrate client and server components
 
 ### 2. Protocol Compatibility
+
 - Maintain Protocol Buffer definitions
 - Ensure wire format compatibility
 - Support gradual cluster migration (mixed Kotlin/Rust nodes)
 
 ### 3. API Compatibility
+
 - Preserve public interfaces where possible
 - Use similar naming conventions
 - Maintain behavioral compatibility
@@ -322,18 +360,23 @@ mod tests {
 ## Deployment Considerations
 
 ### Build Process
+
 **Kotlin/JVM**: Gradle-based builds
+
 ```gradle
 ./gradlew build
 ```
 
 **Rust**: Cargo-based builds
+
 ```bash
 cargo build --release
 ```
 
 ### Containerization
-**Kotlin/JVM**: 
+
+**Kotlin/JVM**:
+
 ```dockerfile
 FROM openjdk:11-jre-slim
 COPY app.jar /app.jar
@@ -341,6 +384,7 @@ ENTRYPOINT ["java", "-jar", "/app.jar"]
 ```
 
 **Rust**:
+
 ```dockerfile
 FROM scratch
 COPY target/release/orbit-server /orbit-server
@@ -348,6 +392,7 @@ ENTRYPOINT ["/orbit-server"]
 ```
 
 ### Resource Requirements
+
 - **Kotlin/JVM**: 2GB RAM minimum, 4 CPU cores
 - **Rust**: 256MB RAM minimum, 1 CPU core
 - **Improvement**: 8x reduction in resource requirements
@@ -355,6 +400,7 @@ ENTRYPOINT ["/orbit-server"]
 ## Migration Timeline
 
 ### Phase 1: Foundation (Completed)
+
 - ✅ Project structure setup
 - ✅ Core data structures migration
 - ✅ Shared types and utilities
@@ -362,30 +408,35 @@ ENTRYPOINT ["/orbit-server"]
 - ✅ Testing framework setup
 
 ### Phase 2: Network Layer (Next)
+
 - Protocol Buffer integration
 - gRPC service definitions
 - Message serialization/deserialization
 - Network transport layer
 
 ### Phase 3: Actor System Core
+
 - Addressable trait system
 - Actor lifecycle management
 - Proxy generation and invocation
 - Lease management
 
 ### Phase 4: Cluster Management
+
 - Node discovery and registration
 - Cluster membership
 - Health checking and monitoring
 - Load balancing algorithms
 
 ### Phase 5: Extensions and Integrations
+
 - etcd integration
 - Prometheus metrics
 - Web framework integration
 - Advanced features
 
 ### Phase 6: Performance Optimization
+
 - Zero-copy optimizations
 - Memory pool management
 - CPU-specific optimizations
@@ -394,24 +445,28 @@ ENTRYPOINT ["/orbit-server"]
 ## Expected Benefits
 
 ### Performance
+
 - 5-10x throughput improvement
 - 80%+ memory usage reduction
 - Elimination of GC pauses
 - Better resource utilization
 
 ### Safety
+
 - Elimination of null pointer exceptions
 - Memory safety guarantees
 - Thread safety at compile time
 - Reduced production issues
 
 ### Operational
+
 - Smaller deployment artifacts
 - Lower resource requirements
 - Faster cold start times
 - Simplified dependencies
 
 ### Developer Experience
+
 - Compile-time error detection
 - Better IDE support and tooling
 - Comprehensive documentation

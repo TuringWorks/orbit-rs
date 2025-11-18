@@ -19,21 +19,25 @@ The CI/CD pipeline (`.github/workflows/ci-cd.yml`) requires secrets to be config
 ## Required Secrets
 
 ### 1. KUBE_CONFIG_STAGING
+
 **Purpose:** Kubernetes configuration for staging environment  
 **Used by:** `deploy-staging` job (runs on `develop` branch)  
 **Format:** Base64-encoded kubeconfig file
 
 ### 2. KUBE_CONFIG_PRODUCTION  
+
 **Purpose:** Kubernetes configuration for production environment  
 **Used by:** `deploy-production` job (runs on `v*` tags)  
 **Format:** Base64-encoded kubeconfig file
 
 ### 3. DOCKER_USERNAME (Optional)
+
 **Purpose:** Docker Hub authentication for pushing images  
 **Used by:** `docker-build` job  
 **Format:** Docker Hub username string
 
 ### 4. DOCKER_PASSWORD (Optional)
+
 **Purpose:** Docker Hub authentication token  
 **Used by:** `docker-build` job  
 **Format:** Docker Hub access token or password
@@ -53,6 +57,7 @@ The CI/CD pipeline (`.github/workflows/ci-cd.yml`) requires secrets to be config
 #### For Staging Environment
 
 1. **Get your kubeconfig file:**
+
    ```bash
    # If using kubectl, your config is typically at:
    cat ~/.kube/config
@@ -62,6 +67,7 @@ The CI/CD pipeline (`.github/workflows/ci-cd.yml`) requires secrets to be config
    ```
 
 2. **Encode the kubeconfig:**
+
    ```bash
    # macOS/Linux:
    base64 < staging-kubeconfig.yaml | tr -d '\n' > staging-kubeconfig-base64.txt
@@ -103,7 +109,7 @@ base64 < production-kubeconfig.yaml | tr -d '\n' > production-kubeconfig-base64.
 If you want to push images to Docker Hub:
 
 1. **Get Docker Hub Access Token:**
-   - Go to https://hub.docker.com/settings/security
+   - Go to <https://hub.docker.com/settings/security>
    - Click **New Access Token**
    - Name it `orbit-rs-ci-cd`
    - Copy the token (you won't be able to see it again)
@@ -256,6 +262,7 @@ After adding secrets, verify they work:
 #### Issue: "error: You must be logged in to the server (Unauthorized)"
 
 **Solution:**
+
 - Token expired - regenerate service account token
 - Wrong token format - ensure base64 encoding is correct
 - Insufficient permissions - verify RBAC role has needed permissions
@@ -263,6 +270,7 @@ After adding secrets, verify they work:
 #### Issue: "Secret KUBE_CONFIG_STAGING is not set"
 
 **Solution:**
+
 - Ensure secret name matches exactly (case-sensitive)
 - Secret must be in the repository where workflow runs
 - Organization secrets need proper access configuration
@@ -270,6 +278,7 @@ After adding secrets, verify they work:
 #### Issue: Deployment fails with "connection refused"
 
 **Solution:**
+
 - Verify cluster server URL is accessible from GitHub Actions
 - Check if cluster requires VPN or allowlisting GitHub IPs
 - Consider using GitHub Actions self-hosted runners within your network
@@ -279,26 +288,31 @@ After adding secrets, verify they work:
 ## Security Best Practices
 
 ### 1. Use Service Accounts
+
 ✅ Create dedicated service accounts for CI/CD  
 ✅ Grant minimal required permissions (principle of least privilege)  
 ✅ Rotate tokens regularly (every 90 days recommended)
 
 ### 2. Separate Environments
+
 ✅ Use different secrets for staging and production  
 ✅ Use different namespaces or clusters  
 ✅ Never use production credentials in staging
 
 ### 3. Audit Access
+
 ✅ Enable audit logging in Kubernetes  
 ✅ Monitor secret access in GitHub (Settings → Security log)  
 ✅ Review who has access to secrets regularly
 
 ### 4. Environment Protection
+
 ✅ Require manual approval for production deployments  
 ✅ Limit deployment branches/tags  
 ✅ Add wait timers for production changes
 
 ### 5. Secret Rotation
+
 ✅ Set expiration dates for service account tokens  
 ✅ Document rotation schedule  
 ✅ Automate rotation where possible
@@ -316,6 +330,7 @@ Instead of repository secrets, use environment-specific secrets:
 3. Workflow automatically uses environment secrets when deploying to that environment
 
 **Benefits:**
+
 - Automatic secret scoping by environment
 - Better access control
 - Clear separation between staging/production
@@ -336,11 +351,13 @@ These can be integrated with GitHub Actions using official actions or custom scr
 Deploy runners in your private network:
 
 **Benefits:**
+
 - Direct cluster access without exposing credentials
 - Better security for sensitive environments
 - Compliance with corporate policies
 
 **Setup:**
+
 1. Settings → Actions → Runners → New self-hosted runner
 2. Follow installation instructions for your OS
 3. Runner can access Kubernetes cluster directly
@@ -381,11 +398,13 @@ kubectl get secret <secret-name> -n orbit-rs-staging -o jsonpath='{.data.token}'
 ## Support and Troubleshooting
 
 ### GitHub Documentation
+
 - [Encrypted Secrets](https://docs.github.com/en/actions/security-guides/encrypted-secrets)
 - [Using Environments](https://docs.github.com/en/actions/deployment/targeting-different-environments/using-environments-for-deployment)
 - [Security Hardening](https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions)
 
 ### Kubernetes Documentation
+
 - [Service Accounts](https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/)
 - [RBAC Authorization](https://kubernetes.io/docs/reference/access-authn-authz/rbac/)
 - [Managing Service Accounts](https://kubernetes.io/docs/reference/access-authn-authz/service-accounts-admin/)

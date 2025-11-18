@@ -11,6 +11,7 @@ category: documentation
 ## 🎯 **Vision & Objectives**
 
 Transform Orbit-RS into a **"Database + ML Engine"** that provides:
+
 - **In-database ML functions** accessible via SQL
 - **Zero-copy ML operations** on data without ETL
 - **Distributed ML training** across actor clusters  
@@ -20,6 +21,7 @@ Transform Orbit-RS into a **"Database + ML Engine"** that provides:
 ## 🏗️ **Architecture Overview**
 
 ### **1. SQL Function Registry**
+
 ```sql
 -- Linear Regression
 SELECT name, ML_LINEAR_REGRESSION(features, target) OVER (PARTITION BY category) 
@@ -41,6 +43,7 @@ FROM documents;
 ### **2. ML Function Categories**
 
 #### **🔢 Statistical Functions**
+
 - `ML_LINEAR_REGRESSION(features, target)` - Linear regression training/prediction
 - `ML_LOGISTIC_REGRESSION(features, target)` - Logistic regression
 - `ML_CORRELATION(x, y)` - Pearson correlation coefficient
@@ -48,6 +51,7 @@ FROM documents;
 - `ML_ZSCORE(value, mean, std)` - Z-score normalization
 
 #### **🧠 Machine Learning Models**
+
 - `ML_KMEANS(features, k)` - K-means clustering
 - `ML_SVM(features, target)` - Support Vector Machine
 - `ML_DECISION_TREE(features, target)` - Decision tree
@@ -55,12 +59,14 @@ FROM documents;
 - `ML_NEURAL_NETWORK(features, target, layers)` - Neural network
 
 #### **🎯 Model Management**
+
 - `ML_TRAIN_MODEL(name, algorithm, features, target)` - Train and save model
 - `ML_PREDICT(model_name, features)` - Prediction using saved model
 - `ML_EVALUATE_MODEL(model_name, test_features, test_target)` - Model evaluation
 - `ML_UPDATE_MODEL(model_name, new_features, new_target)` - Online learning
 
 #### **📊 Feature Engineering**
+
 - `ML_NORMALIZE(values, method)` - Min-max, z-score, robust scaling
 - `ML_ENCODE_CATEGORICAL(category, method)` - One-hot, label encoding
 - `ML_POLYNOMIAL_FEATURES(features, degree)` - Polynomial feature expansion
@@ -68,6 +74,7 @@ FROM documents;
 - `ML_FEATURE_SELECTION(features, target, method)` - Feature selection
 
 #### **🔍 Vector & Embedding Operations**
+
 - `ML_EMBED_TEXT(text, model)` - Text to vector embedding
 - `ML_EMBED_IMAGE(image_url, model)` - Image to vector embedding
 - `ML_SIMILARITY_SEARCH(query_vector, target_vectors, k)` - Advanced similarity
@@ -75,12 +82,14 @@ FROM documents;
 - `ML_DIMENSIONALITY_REDUCTION(vectors, method, dims)` - UMAP, t-SNE
 
 #### **🕰️ Time Series Functions**
+
 - `ML_FORECAST(timeseries, periods)` - Time series forecasting
 - `ML_SEASONALITY_DECOMPOSE(timeseries)` - Seasonal decomposition
 - `ML_ANOMALY_DETECTION(timeseries)` - Anomaly detection
 - `ML_CHANGEPOINT_DETECTION(timeseries)` - Change point detection
 
 #### **🗣️ Natural Language Processing**
+
 - `ML_SENTIMENT_ANALYSIS(text)` - Sentiment classification
 - `ML_EXTRACT_ENTITIES(text)` - Named entity recognition
 - `ML_SUMMARIZE_TEXT(text, max_length)` - Text summarization
@@ -174,18 +183,21 @@ pub struct DistributedTrainer {
 ## 🚀 **Scalability Features**
 
 ### **1. Distributed Training**
+
 - **Parameter Server Architecture**: Central parameter coordination
 - **Federated Learning**: Train across multiple nodes without data movement
 - **Gradient Aggregation**: Efficient distributed gradient computation
 - **Model Parallelism**: Split large models across cluster nodes
 
 ### **2. Query-Time Inference**  
+
 - **Model Caching**: Hot models cached in memory across cluster
 - **Batch Processing**: Automatically batch inference requests
 - **Streaming ML**: Real-time inference on streaming data
 - **Approximate Algorithms**: Fast approximate ML for interactive queries
 
 ### **3. Vector Database Integration**
+
 - **ML-Enhanced Indexing**: Use ML models to improve vector indexes
 - **Learned Indexes**: Neural network-based indexing structures
 - **Adaptive Similarity**: ML-learned similarity metrics
@@ -194,6 +206,7 @@ pub struct DistributedTrainer {
 ## 🧪 **ML Libraries Integration**
 
 ### **Primary: Candle (Rust-Native)**
+
 ```toml
 [dependencies]
 candle-core = "0.6"
@@ -203,16 +216,19 @@ candle-datasets = "0.6"
 ```
 
 ### **Secondary: ONNX Runtime**
+
 ```toml
 ort = "2.0"  # ONNX Runtime for pre-trained models
 ```
 
 ### **Statistics: Statrs**
+
 ```toml
 statrs = "0.16"  # Statistical functions
 ```
 
 ### **Linear Algebra: Ndarray**  
+
 ```toml
 ndarray = "0.15"
 ndarray-linalg = "0.16"
@@ -221,18 +237,21 @@ ndarray-linalg = "0.16"
 ## 📊 **Performance Optimizations**
 
 ### **1. Vectorized Operations**
+
 - **SIMD Instructions**: Use AVX/AVX-512 for vector operations
 - **GPU Acceleration**: CUDA/ROCm for ML computations
 - **Batched Inference**: Process multiple rows simultaneously
 - **Columnar Storage**: Column-oriented ML processing
 
 ### **2. Memory Management**
+
 - **Zero-Copy Operations**: Direct ML on stored data
 - **Memory Pools**: Pre-allocated memory for ML operations
 - **Lazy Evaluation**: Defer ML computations until needed
 - **Result Caching**: Cache ML results for repeated queries
 
 ### **3. Query Optimization**
+
 - **ML Predicate Pushdown**: Push ML filters down to storage
 - **Feature Pre-computation**: Cache expensive feature engineering
 - **Model-Aware Optimization**: Optimize queries based on model characteristics
@@ -241,6 +260,7 @@ ndarray-linalg = "0.16"
 ## 🎯 **Use Cases & Examples**
 
 ### **Real-Time Analytics**
+
 ```sql
 -- Real-time fraud detection
 SELECT 
@@ -255,6 +275,7 @@ WHERE timestamp > NOW() - INTERVAL '1 hour'
 ```
 
 ### **Customer Analytics**
+
 ```sql  
 -- Customer segmentation and lifetime value
 WITH customer_features AS (
@@ -271,6 +292,7 @@ FROM customer_features;
 ```
 
 ### **Content Recommendation**
+
 ```sql
 -- Semantic content recommendations
 SELECT 
@@ -291,6 +313,7 @@ ORDER BY similarity_score DESC;
 ```
 
 ### **Time Series Forecasting**
+
 ```sql
 -- Sales forecasting with seasonality
 SELECT 
@@ -310,12 +333,14 @@ ORDER BY date;
 ## 🛡️ **Security & Privacy**
 
 ### **Model Security**
+
 - **Model Encryption**: Encrypt stored models
 - **Access Control**: Role-based access to ML functions
 - **Audit Logging**: Log all ML operations
 - **Model Versioning**: Track model changes and rollbacks
 
 ### **Data Privacy**  
+
 - **Differential Privacy**: Add noise to protect sensitive data
 - **Federated Learning**: Train without centralizing data
 - **Secure Aggregation**: Private gradient aggregation
@@ -324,6 +349,7 @@ ORDER BY date;
 ## 🗺️ **Implementation Roadmap**
 
 ### **Phase 1: Foundation (4-6 weeks)**
+
 - [ ] ML function registry and SQL integration
 - [ ] Basic statistical functions (mean, std, correlation)
 - [ ] Simple linear/logistic regression
@@ -331,6 +357,7 @@ ORDER BY date;
 - [ ] Model storage and retrieval
 
 ### **Phase 2: Core ML (6-8 weeks)**  
+
 - [ ] K-means clustering and DBSCAN
 - [ ] Decision trees and random forest
 - [ ] Feature engineering functions
@@ -338,6 +365,7 @@ ORDER BY date;
 - [ ] Model evaluation metrics
 
 ### **Phase 3: Advanced ML (8-10 weeks)**
+
 - [ ] Neural network support via Candle
 - [ ] NLP functions (sentiment, NER)
 - [ ] Time series forecasting
@@ -345,6 +373,7 @@ ORDER BY date;
 - [ ] Distributed training coordination
 
 ### **Phase 4: Production Features (6-8 weeks)**
+
 - [ ] Model versioning and A/B testing
 - [ ] GPU acceleration
 - [ ] Streaming ML inference  
@@ -354,12 +383,14 @@ ORDER BY date;
 ## 🎯 **Success Metrics**
 
 ### **Performance Targets**
+
 - **Inference Latency**: < 10ms for simple models, < 100ms for complex models
 - **Training Speed**: 10x faster than traditional ETL → ML pipeline
 - **Memory Efficiency**: < 20% overhead for ML-enabled queries
 - **Scalability**: Linear scaling to 100+ nodes for distributed training
 
 ### **Functionality Goals**
+
 - **SQL Compatibility**: 95% compatibility with existing PostgreSQL ML extensions
 - **Model Support**: 20+ ML algorithms implemented natively
 - **Integration**: Seamless integration with existing vector operations
