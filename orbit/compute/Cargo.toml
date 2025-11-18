@@ -145,7 +145,7 @@ windows = { version = "0.52", features = [
     "Win32_System_ProcessStatus",
     "Win32_System_SystemServices",
 ] }
-wmi = "0.13"
+wmi = "0.18"
 sysinfo = "0.30"
 
 [dev-dependencies]
