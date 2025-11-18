@@ -4,7 +4,7 @@ title: Orbit Kotlin/JVM to Rust Migration Guide
 category: documentation
 ---
 
-# Orbit Kotlin/JVM to Rust Migration Guide
+## Orbit Kotlin/JVM to Rust Migration Guide
 
 ## Overview
 
@@ -22,7 +22,7 @@ This document outlines the complete migration process from the original Orbit im
 
 ### Original Kotlin Structure
 
-```
+```text
 src/
 ├── orbit-util/               # Utilities and base functionality
 ├── orbit-shared/             # Shared data structures
@@ -38,18 +38,106 @@ src/
 
 ### Rust Structure
 
+```text
+orbit-rs/
+├── orbit/                    # Core workspace containing all Orbit crates
+│   ├── application/          # Application utilities and helpers
+│   ├── benchmarks/           # Performance benchmarks (Criterion)
+│   ├── client/               # Client-side actor system
+│   ├── client-spring/        # Spring/web framework integration
+│   ├── compute/              # Heterogeneous compute acceleration
+│   ├── desktop/              # Desktop application framework (Tauri)
+│   ├── ml/                   # Machine learning integrations
+│   ├── operator/             # Kubernetes operator implementation
+│   ├── proto/                # Protocol Buffer definitions
+│   ├── protocols/            # Multi-protocol support (gRPC, PostgreSQL wire)
+│   ├── server/               # Server-side cluster management
+│   ├── server-etcd/          # etcd integration for distributed consensus
+│   ├── server-prometheus/    # Prometheus metrics exporter
+│   ├── shared/               # Shared data structures and utilities
+│   └── util/                 # Low-level utilities and base functionality
+├── examples/                 # Example applications and demos
+├── tests/                    # Integration and end-to-end tests
+├── docs/                     # Comprehensive documentation
+├── config/                   # Configuration files and templates
+├── containerfiles/           # Containerization (Docker, Podman)
+├── deploy/                   # Deployment configurations
+├── helm/                     # Kubernetes Helm charts
+├── k8s/                      # Kubernetes manifests
+├── scripts/                  # Build and utility scripts
+└── tools/                    # Development and debugging tools
 ```
-├── orbit-util/               # Utilities and base functionality
-├── orbit-shared/             # Shared data structures  
-├── orbit-proto/              # Protocol Buffer definitions
-├── orbit-client/             # Client-side actor system
-├── orbit-server/             # Server-side cluster management
-├── orbit-server-etcd/        # etcd integration
-├── orbit-server-prometheus/  # Prometheus metrics
-├── orbit-client-spring/      # Web framework integration
-├── orbit-application/        # Application utilities
-└── orbit-benchmarks/         # Criterion benchmarks
-```
+
+## New Features in Rust Implementation
+
+The Rust implementation includes several new features and modules not present in the original Kotlin/JVM version:
+
+### 1. Multi-Protocol Support (`orbit-protocols`)
+
+- **PostgreSQL Wire Protocol**: Full PostgreSQL wire protocol compatibility for SQL-like queries
+- **gRPC Protocol**: High-performance gRPC support for inter-service communication
+- **HTTP/REST APIs**: RESTful endpoints for external integrations
+- Enables Orbit to act as a PostgreSQL-compatible database server
+
+### 2. Heterogeneous Compute (`orbit-compute`)
+
+- **GPU Acceleration**: CUDA and OpenCL support for compute-intensive operations
+- **FPGA Integration**: Hardware acceleration for specialized workloads
+- **Compute Pipelines**: Async compute task scheduling and execution
+- Significant performance improvements for data-intensive applications
+
+### 3. Machine Learning Integration (`orbit-ml`)
+
+- **Model Serving**: Deploy and serve ML models as actors
+- **Training Pipeline**: Distributed training capabilities
+- **Feature Store**: Built-in feature storage and retrieval
+- **Model Registry**: Version control for ML models
+
+### 4. Kubernetes Operator (`orbit-operator`)
+
+- **Custom Resource Definitions (CRDs)**: Native Kubernetes integration
+- **Auto-scaling**: Dynamic cluster scaling based on load
+- **Health Management**: Automated health checks and recovery
+- **Multi-tenancy**: Namespace isolation and resource quotas
+
+### 5. Desktop Application Framework (`orbit-desktop`)
+
+- **Tauri-based UI**: Cross-platform desktop applications
+- **Local Development**: Run Orbit clusters locally for development
+- **Monitoring Dashboard**: Real-time cluster visualization
+- **Administration Tools**: Cluster management interface
+
+### 6. Advanced Features
+
+#### Time Series Database
+- Native time series data storage and querying
+- Automatic downsampling and retention policies
+- Compression algorithms (Delta, Gorilla)
+- High-throughput ingestion (millions of points/sec)
+
+#### OrbitQL Query Language
+- SQL-like query language for distributed data
+- Query optimization and execution planning
+- Vectorized query execution
+- Support for complex joins and aggregations
+
+#### Connection Pooling
+- Advanced connection pool with health monitoring
+- Multiple load balancing strategies (RoundRobin, LeastConnections, etc.)
+- Circuit breaker pattern for fault tolerance
+- Automatic connection recovery and retry logic
+
+#### Graph Database Capabilities
+- Native graph data structures
+- Graph query language (Cypher-like)
+- Graph algorithms (shortest path, PageRank, etc.)
+- GraphRAG (Retrieval-Augmented Generation) support
+
+#### Event Sourcing & CQRS
+- Built-in event sourcing framework
+- Command Query Responsibility Segregation (CQRS) patterns
+- Event replay and time-travel debugging
+- Snapshot management for performance
 
 ## Key Architectural Changes
 
@@ -357,6 +445,84 @@ mod tests {
 - Use similar naming conventions
 - Maintain behavioral compatibility
 
+## Workspace and Build System
+
+### Cargo Workspace Structure
+
+The Rust implementation uses Cargo workspaces for efficient dependency management and build orchestration:
+
+```toml
+[workspace]
+members = [
+    "orbit/util",
+    "orbit/shared",
+    "orbit/proto",
+    "orbit/client",
+    "orbit/server",
+    "orbit/protocols",
+    "orbit/compute",
+    "orbit/ml",
+    "orbit/operator",
+    "orbit/desktop",
+    "orbit/benchmarks",
+    # ... and more
+]
+```
+
+**Benefits:**
+- Shared dependencies across all crates
+- Single `Cargo.lock` for reproducible builds
+- Parallel compilation of independent crates
+- Easy dependency management with `cargo update`
+
+### Build Targets
+
+```bash
+# Build entire workspace
+cargo build --release
+
+# Build specific crate
+cargo build -p orbit-server --release
+
+# Run tests across workspace
+cargo test --workspace
+
+# Run benchmarks
+cargo bench -p orbit-benchmarks
+
+# Build examples
+cargo build --examples
+
+# Check code without building
+cargo check --workspace
+```
+
+### Feature Flags
+
+The implementation uses Cargo features for optional functionality:
+
+```toml
+[features]
+default = ["postgres", "redis"]
+postgres = ["sqlx/postgres"]
+redis = ["redis-rs"]
+gpu-compute = ["cuda", "opencl"]
+desktop-ui = ["tauri"]
+k8s-operator = ["kube", "k8s-openapi"]
+```
+
+**Usage:**
+```bash
+# Build with all features
+cargo build --all-features
+
+# Build without default features
+cargo build --no-default-features
+
+# Build with specific features
+cargo build --features "postgres,redis,gpu-compute"
+```
+
 ## Deployment Considerations
 
 ### Build Process
@@ -399,48 +565,81 @@ ENTRYPOINT ["/orbit-server"]
 
 ## Migration Timeline
 
-### Phase 1: Foundation (Completed)
+### Phase 1: Foundation ✅ (Completed)
 
-- ✅ Project structure setup
+- ✅ Project structure setup with monorepo workspace
 - ✅ Core data structures migration
-- ✅ Shared types and utilities
-- ✅ Basic error handling
-- ✅ Testing framework setup
+- ✅ Shared types and utilities (orbit-util, orbit-shared)
+- ✅ Unified error handling module
+- ✅ Testing framework setup (unit + integration tests)
+- ✅ CI/CD pipeline configuration
 
-### Phase 2: Network Layer (Next)
+### Phase 2: Network Layer ✅ (Completed)
 
-- Protocol Buffer integration
-- gRPC service definitions
-- Message serialization/deserialization
-- Network transport layer
+- ✅ Protocol Buffer integration (orbit-proto)
+- ✅ gRPC service definitions and code generation
+- ✅ Message serialization/deserialization
+- ✅ Network transport layer with Tonic
+- ✅ PostgreSQL wire protocol implementation
+- ✅ Multi-protocol support framework (orbit-protocols)
 
-### Phase 3: Actor System Core
+### Phase 3: Actor System Core ✅ (Completed)
 
-- Addressable trait system
-- Actor lifecycle management
-- Proxy generation and invocation
-- Lease management
+- ✅ Addressable trait system
+- ✅ Actor lifecycle management
+- ✅ Message routing and invocation
+- ✅ Lease management and TTL
+- ✅ Actor state persistence
+- ✅ Multiple persistence backends (Memory, RocksDB, PostgreSQL, Redis)
 
-### Phase 4: Cluster Management
+### Phase 4: Cluster Management ✅ (Completed)
 
-- Node discovery and registration
-- Cluster membership
-- Health checking and monitoring
-- Load balancing algorithms
+- ✅ Node discovery and registration
+- ✅ Cluster membership with gossip protocol
+- ✅ Health checking and monitoring
+- ✅ Load balancing algorithms (RoundRobin, LeastConnections, etc.)
+- ✅ Leader election (Raft consensus)
+- ✅ Distributed state synchronization
 
-### Phase 5: Extensions and Integrations
+### Phase 5: Extensions and Integrations ✅ (Completed)
 
-- etcd integration
-- Prometheus metrics
-- Web framework integration
-- Advanced features
+- ✅ etcd integration (orbit-server-etcd)
+- ✅ Prometheus metrics exporter (orbit-server-prometheus)
+- ✅ Web framework integration (orbit-client-spring)
+- ✅ Kubernetes operator (orbit-operator)
+- ✅ Desktop application framework (orbit-desktop)
 
-### Phase 6: Performance Optimization
+### Phase 6: Advanced Features ✅ (Completed)
 
-- Zero-copy optimizations
-- Memory pool management
-- CPU-specific optimizations
-- Benchmarking and profiling
+- ✅ Time series database with compression
+- ✅ OrbitQL query language and execution engine
+- ✅ Graph database capabilities with GraphRAG
+- ✅ Event sourcing and CQRS patterns
+- ✅ Connection pooling with health monitoring
+- ✅ Heterogeneous compute acceleration (orbit-compute)
+- ✅ Machine learning integration (orbit-ml)
+
+### Phase 7: Performance Optimization 🔄 (Ongoing)
+
+- ✅ Comprehensive benchmarking suite (Criterion)
+- ✅ Actor system benchmarks
+- ✅ Leader election benchmarks
+- ✅ Persistence layer benchmarks
+- ✅ Memory pool management
+- 🔄 Zero-copy optimizations (in progress)
+- 🔄 SIMD and CPU-specific optimizations (in progress)
+- 🔄 Advanced profiling and tuning (in progress)
+
+### Phase 8: Production Readiness 🔄 (In Progress)
+
+- ✅ Comprehensive documentation
+- ✅ Example applications and demos
+- ✅ Docker/Podman containerization
+- ✅ Kubernetes manifests and Helm charts
+- ✅ Deployment automation scripts
+- 🔄 Security hardening and audit (in progress)
+- 🔄 Performance testing at scale (in progress)
+- 📋 Production deployment guides (planned)
 
 ## Expected Benefits
 
