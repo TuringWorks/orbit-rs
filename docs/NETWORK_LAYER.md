@@ -30,7 +30,7 @@ orbit-proto/              # Protocol Buffer definitions and gRPC services
     ├── converters.rs   # Rust ↔ Protobuf converters
     └── services.rs     # gRPC service implementations
 
-orbit-shared/src/
+orbit/shared/src/
 ├── transport.rs         # Transaction transport layer
 └── raft_transport.rs    # Raft consensus transport
 ```
@@ -258,7 +258,7 @@ match response.into_inner().status {
 
 ## Transport Layer
 
-### Transaction Transport (`orbit-shared/src/transport.rs`)
+### Transaction Transport (`orbit/shared/src/transport.rs`)
 
 High-performance gRPC transport for distributed transactions with connection pooling, retry logic, and metrics.
 
@@ -374,7 +374,7 @@ impl NodeResolver for EtcdNodeResolver {
 }
 ```
 
-### Raft Consensus Transport (`orbit-shared/src/raft_transport.rs`)
+### Raft Consensus Transport (`orbit/shared/src/raft_transport.rs`)
 
 Specialized gRPC transport for Raft consensus protocol.
 

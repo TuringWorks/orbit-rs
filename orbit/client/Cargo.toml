@@ -7,9 +7,9 @@ license.workspace = true
 description = "Orbit client-side actor system implementation"
 
 [dependencies]
-orbit-util = { path = "../orbit-util" }
-orbit-shared = { path = "../orbit-shared" }
-orbit-proto = { path = "../orbit-proto" }
+orbit-util = { path = "../util" }
+orbit-shared = { path = "../shared" }
+orbit-proto = { path = "../proto" }
 tokio.workspace = true
 tokio-stream.workspace = true
 tonic.workspace = true

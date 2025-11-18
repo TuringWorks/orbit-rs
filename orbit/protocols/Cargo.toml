@@ -9,8 +9,8 @@ repository = "https://github.com/TuringWorks/orbit-rs"
 
 [dependencies]
 # Core Orbit dependencies
-orbit-shared = { path = "../orbit-shared" }
-orbit-client = { path = "../orbit-client" }
+orbit-shared = { path = "../shared" }
+orbit-client = { path = "../client" }
 
 # Async runtime
 tokio = { version = "1.40", features = ["full"] }
@@ -71,7 +71,7 @@ redis = "0.32"
 tokio-postgres = "0.7"
 neo4rs = "0.7"
 reqwest = { version = "0.12", features = ["json"] }
-orbit-util = { path = "../orbit-util" }
+orbit-util = { path = "../util" }
 
 [features]
 default = ["resp", "postgres-wire", "cypher", "rest"]

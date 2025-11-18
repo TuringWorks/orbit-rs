@@ -15,8 +15,8 @@ This document summarizes the comprehensive updates made to Orbit-RS to support *
 
 ### **Core Implementation**
 
-- `orbit-server/src/config.rs` - **NEW** - Comprehensive configuration system for multi-protocol setup
-- `orbit-server/src/main_multiprotocol.rs` - **NEW** - Enhanced server with native protocol support
+- `orbit/server/src/config.rs` - **NEW** - Comprehensive configuration system for multi-protocol setup
+- `orbit/server/src/main_multiprotocol.rs` - **NEW** - Enhanced server with native protocol support
 - `config/orbit-server.toml` - **NEW** - Production-ready configuration template
 
 ### **Examples & Demos**

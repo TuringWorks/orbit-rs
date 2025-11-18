@@ -88,7 +88,7 @@ impl Serializable for OrbitValue { /* ... */ }
 #### Week 1-2: MemTable & WAL
 
 ```rust
-// orbit-server/src/persistence/lsm/memtable.rs
+// orbit/server/src/persistence/lsm/memtable.rs
 pub struct MemTable {
     data: SkipMap<OrbitKey, OrbitValue>,
     size_bytes: AtomicUsize,
@@ -96,7 +96,7 @@ pub struct MemTable {
     sealed: AtomicBool,
 }
 
-// orbit-server/src/persistence/lsm/wal.rs
+// orbit/server/src/persistence/lsm/wal.rs
 pub struct WriteAheadLog {
     writer: BufWriter<File>,
     sequence_number: AtomicU64,
@@ -124,7 +124,7 @@ impl WriteAheadLog {
 #### Week 3-4: SSTable Implementation
 
 ```rust
-// orbit-server/src/persistence/lsm/sstable.rs
+// orbit/server/src/persistence/lsm/sstable.rs
 pub struct SSTable {
     file_path: PathBuf,
     metadata: SSTableMetadata,
@@ -206,7 +206,7 @@ impl OrbitLSMTree {
 #### Week 1-2: Level-Based Compaction
 
 ```rust
-// orbit-server/src/persistence/lsm/compaction.rs
+// orbit/server/src/persistence/lsm/compaction.rs
 pub struct CompactionScheduler {
     strategy: CompactionStrategy,
     running_compactions: Arc<RwLock<HashSet<CompactionTask>>>,
@@ -393,7 +393,7 @@ impl OrbitLSMTree {
 ### New LSM Provider Configuration
 
 ```rust
-// Add to orbit-server/src/persistence/mod.rs
+// Add to orbit/server/src/persistence/mod.rs
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum PersistenceConfig {
@@ -436,7 +436,7 @@ impl Default for LSMTreeConfig {
 ### Provider Implementation
 
 ```rust
-// orbit-server/src/persistence/lsm_provider.rs
+// orbit/server/src/persistence/lsm_provider.rs
 pub struct LSMTreeProvider {
     lsm_tree: Arc<OrbitLSMTree>,
     config: LSMTreeConfig,

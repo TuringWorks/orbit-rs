@@ -10,10 +10,10 @@ path = "src/main.rs"
 doc = false
 
 [dependencies]
-orbit-client = { path = "../../orbit-client" }
-orbit-server = { path = "../../orbit-server" }
-orbit-shared = { path = "../../orbit-shared" }
-orbit-proto = { path = "../../orbit-proto" }
+orbit-client = { path = "../../orbit/client" }
+orbit-server = { path = "../../orbit/server" }
+orbit-shared = { path = "../../orbit/shared" }
+orbit-proto = { path = "../../orbit/proto" }
 tokio = { version = "1.0", features = ["full"] }
 tracing = "0.1"
 tracing-subscriber = "0.3"

@@ -21,7 +21,7 @@ The OrbitQL LSP implementation provides rich IDE support for OrbitQL developers,
 
 ### Core Components
 
-#### 1. OrbitQLLanguageServer (`orbit-shared/src/orbitql/lsp.rs`)
+#### 1. OrbitQLLanguageServer (`orbit/shared/src/orbitql/lsp.rs`)
 
 The main language server implementation that handles LSP protocol messages and maintains document state. Key features:
 

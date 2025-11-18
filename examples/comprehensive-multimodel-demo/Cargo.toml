@@ -14,9 +14,9 @@ path = "src/main.rs"
 
 [dependencies]
 # Core Orbit dependencies
-orbit-client = { path = "../../orbit-client" }
-orbit-shared = { path = "../../orbit-shared" }
-orbit-protocols = { path = "../../orbit-protocols" }
+orbit-client = { path = "../../orbit/client" }
+orbit-shared = { path = "../../orbit/shared" }
+orbit-protocols = { path = "../../orbit/protocols" }
 
 # Async runtime
 tokio = { version = "1.0", features = ["full"] }

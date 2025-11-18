@@ -46,8 +46,8 @@ benchmarks = [] # Enable benchmarking functionality
 
 [dependencies]
 # Core dependencies
-orbit-shared = { path = "../orbit-shared" }
-orbit-util = { path = "../orbit-util" }
+orbit-shared = { path = "../shared" }
+orbit-util = { path = "../util" }
 
 # Async runtime
 tokio = { workspace = true, features = ["full"] }

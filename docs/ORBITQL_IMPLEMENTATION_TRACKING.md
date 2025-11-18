@@ -20,12 +20,12 @@ category: documentation
 
 | Component | Status | Completion | Location |
 |-----------|---------|------------|----------|
-| **Core Language** | ✅ Complete | 100% | `/orbit-shared/src/orbitql/` |
-| **Query Engine** | ✅ Complete | 95% | `/orbit-shared/src/orbitql/executor.rs` |
-| **Parser & AST** | ✅ Complete | 100% | `/orbit-shared/src/orbitql/{parser.rs,ast.rs}` |
-| **Query Optimizer** | ✅ Complete | 90% | `/orbit-shared/src/orbitql/optimizer.rs` |
-| **Caching System** | ✅ Complete | 95% | `/orbit-shared/src/orbitql/cache.rs` |
-| **LSP/IDE Support** | ✅ Complete | 95% | `/orbit-shared/src/orbitql/lsp.rs` |
+| **Core Language** | ✅ Complete | 100% | `/orbit/shared/src/orbitql/` |
+| **Query Engine** | ✅ Complete | 95% | `/orbit/shared/src/orbitql/executor.rs` |
+| **Parser & AST** | ✅ Complete | 100% | `/orbit/shared/src/orbitql/{parser.rs,ast.rs}` |
+| **Query Optimizer** | ✅ Complete | 90% | `/orbit/shared/src/orbitql/optimizer.rs` |
+| **Caching System** | ✅ Complete | 95% | `/orbit/shared/src/orbitql/cache.rs` |
+| **LSP/IDE Support** | ✅ Complete | 95% | `/orbit/shared/src/orbitql/lsp.rs` |
 | **VS Code Extension** | ✅ Complete | 100% | `/tools/vscode-orbitql/` |
 | **Documentation** | ✅ Complete | 95% | `/docs/ORBITQL_REFERENCE.md` |
 
@@ -33,10 +33,10 @@ category: documentation
 
 ## 🗂️ **SOURCE CODE STRUCTURE**
 
-### **Core Implementation** `/orbit-shared/src/orbitql/`
+### **Core Implementation** `/orbit/shared/src/orbitql/`
 
 ```
-📁 orbit-shared/src/orbitql/
+📁 orbit/shared/src/orbitql/
 ├── 📄 mod.rs                    # Main module with OrbitQLEngine
 ├── 📄 ast.rs                    # Abstract Syntax Tree definitions
 ├── 📄 lexer.rs                  # Token lexer and tokenization
@@ -58,7 +58,7 @@ category: documentation
 ### **Language Server & IDE Support**
 
 ```
-📁 orbit-shared/src/bin/
+📁 orbit/shared/src/bin/
 ├── 📄 orbitql-lsp.rs           # Full LSP server implementation
 └── 📄 orbitql-lsp-simple.rs    # Simplified LSP server
 
@@ -108,7 +108,7 @@ category: documentation
 | Component | Status | Location | Coverage |
 |-----------|---------|----------|----------|
 | **VS Code Extension** | ✅ Complete | `/tools/vscode-orbitql/README.md` | Installation & usage |
-| **LSP Protocol** | ✅ Complete | `/orbit-shared/src/orbitql/lsp/README.md` | Server implementation |
+| **LSP Protocol** | ✅ Complete | `/orbit/shared/src/orbitql/lsp/README.md` | Server implementation |
 | **Syntax Highlighting** | ✅ Complete | `/tools/vscode-orbitql/syntaxes/` | Grammar definitions |
 
 ---
@@ -119,10 +119,10 @@ category: documentation
 
 | Test Type | Location | Coverage | Status |
 |-----------|----------|----------|---------|
-| **Unit Tests** | `/orbit-shared/src/orbitql/mod.rs` | 85% | ✅ Complete |
-| **Integration Tests** | `/orbit-shared/src/orbitql/tests/integration_tests.rs` | 90% | ✅ Complete |
+| **Unit Tests** | `/orbit/shared/src/orbitql/mod.rs` | 85% | ✅ Complete |
+| **Integration Tests** | `/orbit/shared/src/orbitql/tests/integration_tests.rs` | 90% | ✅ Complete |
 | **Example Validation** | `/examples/orbitql-example/src/main.rs` | 100% | ✅ Complete |
-| **LSP Tests** | `/orbit-shared/src/orbitql/lsp.rs` | 80% | ✅ Complete |
+| **LSP Tests** | `/orbit/shared/src/orbitql/lsp.rs` | 80% | ✅ Complete |
 
 ### **Functional Test Coverage**
 
@@ -202,7 +202,7 @@ category: documentation
 ### **Real Query Execution Engine**
 
 ```rust
-// From orbit-shared/src/orbitql/mod.rs
+// From orbit/shared/src/orbitql/mod.rs
 impl OrbitQLEngine {
     pub async fn execute(
         &mut self,
@@ -287,7 +287,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 | Integration | Status | Location | Notes |
 |-------------|---------|----------|-------|
-| **Orbit Actor System** | ✅ Ready | `/orbit-shared/src/lib.rs` | Exposed via main crate |
+| **Orbit Actor System** | ✅ Ready | `/orbit/shared/src/lib.rs` | Exposed via main crate |
 | **Graph Database** | ✅ Working | Cross-references with graph engine | Seamless integration |
 | **Time Series Engine** | ✅ Working | Native time-series queries | Direct data access |
 | **Cargo Workspace** | ✅ Complete | `/Cargo.toml` | Proper dependency management |
@@ -343,9 +343,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ### **For Contributors**
 
-1. **Core Engine**: `/orbit-shared/src/orbitql/` - Main implementation
+1. **Core Engine**: `/orbit/shared/src/orbitql/` - Main implementation
 2. **Documentation**: `/docs/ORBITQL_REFERENCE.md` - Language specification
-3. **Tests**: `/orbit-shared/src/orbitql/tests/` - Comprehensive test suite
+3. **Tests**: `/orbit/shared/src/orbitql/tests/` - Comprehensive test suite
 4. **Examples**: `/examples/orbitql-example/` - Usage demonstrations
 
 ### **Resources**

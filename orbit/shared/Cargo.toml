@@ -8,7 +8,7 @@ description = "Orbit shared data structures and interfaces"
 
 
 [dependencies]
-orbit-util = { path = "../orbit-util" }
+orbit-util = { path = "../util" }
 serde.workspace = true
 serde_json.workspace = true
 bincode = "1.3"

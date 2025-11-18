@@ -111,12 +111,12 @@ orbit-protocols/src/aql/mod.rs:
 #### Critical Missing Features
 
 ```
-orbit-shared/src/orbitql/executor.rs:
+orbit/shared/src/orbitql/executor.rs:
 - Line 267: todo!("Implement distributed joins")
 - Line 464: todo!("Implement window functions")
 - Line 516: todo!("Implement recursive CTEs")
 
-orbit-shared/src/orbitql/optimizer.rs:
+orbit/shared/src/orbitql/optimizer.rs:
 - Line 655: todo!("Implement cost-based optimization")
 - Line 783: todo!("Implement join reordering")
 - Line 925: todo!("Implement predicate pushdown")
@@ -131,7 +131,7 @@ orbit-shared/src/orbitql/optimizer.rs:
 3. **Memory Backend**: Basic implementation only
 
 ```
-orbit-server/src/persistence/cloud.rs:
+orbit/server/src/persistence/cloud.rs:
 - Lines 632-675: 8 todo!() statements for core operations
 - Lines 1260-1309: 8 more todo!() statements
 ```

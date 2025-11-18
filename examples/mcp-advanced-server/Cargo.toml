@@ -9,9 +9,9 @@ name = "advanced_server"
 path = "src/main.rs"
 
 [dependencies]
-orbit-protocols = { path = "../../orbit-protocols" }
-orbit-shared = { path = "../../orbit-shared" }
-orbit-client = { path = "../../orbit-client" }
+orbit-protocols = { path = "../../orbit/protocols" }
+orbit-shared = { path = "../../orbit/shared" }
+orbit-client = { path = "../../orbit/client" }
 tokio = { version = "1.0", features = ["full"] }
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }

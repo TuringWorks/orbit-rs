@@ -7,9 +7,9 @@ license.workspace = true
 description = "Orbit Prometheus metrics integration"
 
 [dependencies]
-orbit-util = { path = "../orbit-util" }
-orbit-shared = { path = "../orbit-shared" }
-orbit-server = { path = "../orbit-server" }
+orbit-util = { path = "../util" }
+orbit-shared = { path = "../shared" }
+orbit-server = { path = "../server" }
 metrics = "0.23"
 metrics-exporter-prometheus = "0.15"
 tokio = { workspace = true, features = ["full"] }

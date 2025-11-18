@@ -41,9 +41,9 @@ Updated `.github/workflows/k8s-container-pipeline.yml` to only build components 
 
 - ✅ YAML syntax validated successfully
 - ✅ Confirmed package structure:
-  - `orbit-client/src/lib.rs` - library only
+  - `orbit/client/src/lib.rs` - library only
   - `orbit-compute/src/lib.rs` - library only  
-  - `orbit-server/src/main.rs` - has binary
+  - `orbit/server/src/main.rs` - has binary
   - `orbit-operator/src/main.rs` - has binary
 
 ## Impact

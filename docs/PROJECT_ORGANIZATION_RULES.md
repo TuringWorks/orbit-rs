@@ -87,10 +87,10 @@ orbit-benchmarks/
 
 **Examples**:
 
-- ✅ `orbit-benchmarks/src/orbitql/benchmark.rs`
+- ✅ `orbit/benchmarks/src/orbitql/benchmark.rs`
 - ✅ `orbit-benchmarks/benches/new_benchmark.rs`  
 - ✅ `orbit-benchmarks/scripts/performance_test.sh`
-- ❌ `orbit-shared/src/benchmarks/` (should be in orbit-benchmarks)
+- ❌ `orbit/shared/src/benchmarks/` (should be in orbit-benchmarks)
 - ❌ `benchmarks/` (root level - should be in orbit-benchmarks package)
 
 ### 🧪 Test Files
@@ -99,7 +99,7 @@ orbit-benchmarks/
 
 **Examples**:
 
-- ✅ `orbit-shared/src/lib.rs` with `#[cfg(test)]` modules
+- ✅ `orbit/shared/src/lib.rs` with `#[cfg(test)]` modules
 - ✅ `orbit-shared/tests/integration_tests.rs`
 - ✅ `tests/` (workspace-level integration tests)
 

@@ -9,8 +9,8 @@ repository.workspace = true
 
 [dependencies]
 # Workspace dependencies
-orbit-shared = { path = "../orbit-shared" }
-orbit-proto = { path = "../orbit-proto" }
+orbit-shared = { path = "../shared" }
+orbit-proto = { path = "../proto" }
 
 # Kubernetes operator dependencies
 kube = { version = "0.95", features = ["runtime", "derive", "client", "rustls-tls", "ws"] }

@@ -15,7 +15,7 @@ This roadmap outlines a comprehensive security enhancement strategy for Orbit-RS
 
 ### Existing Security Foundation ✅
 
-- **Transaction Security**: Basic authentication and authorization framework in `orbit-shared/src/transactions/security.rs`
+- **Transaction Security**: Basic authentication and authorization framework in `orbit/shared/src/transactions/security.rs`
 - **Token-Based Auth**: AuthToken system with scopes and expiration
 - **Audit Logging**: Basic audit trail with in-memory logger
 - **Security Context**: Transaction-level security context management

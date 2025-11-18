@@ -40,17 +40,21 @@ category: documentation
 
 ```
 orbit-rs/
-├── orbit-util/           # Utilities, RNG, metrics
-├── orbit-shared/         # Core types, errors, communication
-├── orbit-proto/          # Protocol Buffers (7+ .proto files)
-├── orbit-client/         # Client-side actor management
-├── orbit-server/         # Server-side cluster management
-├── orbit-protocols/      # Protocol adapters (RESP, PostgreSQL, MCP)
-├── orbit-operator/       # Kubernetes operator (7+ controllers)
-├── orbit-application/    # Application framework
-├── orbit-server-etcd/    # etcd integration
-├── orbit-server-prometheus/ # Metrics integration
-└── examples/            # 13+ working examples
+├── orbit/
+│   ├── util/            # Utilities, RNG, metrics
+│   ├── shared/          # Core types, errors, communication
+│   ├── proto/           # Protocol Buffers (7+ .proto files)
+│   ├── client/          # Client-side actor management
+│   ├── server/          # Server-side cluster management
+│   ├── protocols/       # Protocol adapters (RESP, PostgreSQL, MCP)
+│   ├── operator/        # Kubernetes operator (7+ controllers)
+│   ├── application/     # Application framework
+│   ├── server-etcd/     # etcd integration
+│   └── server-prometheus/ # Metrics integration
+├── examples/            # 13+ working examples
+├── scripts/             # Build and startup scripts
+├── config/              # Configuration files
+└── docs/                # Documentation
 ```
 
 ### **Protocol Support Matrix**

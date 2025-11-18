@@ -8,10 +8,10 @@ description = "Orbit performance benchmarks"
 
 [dependencies]
 # Orbit crates
-orbit-util = { path = "../orbit-util" }
-orbit-shared = { path = "../orbit-shared" }
-orbit-client = { path = "../orbit-client" }
-orbit-server = { path = "../orbit-server" }
+orbit-util = { path = "../util" }
+orbit-shared = { path = "../shared" }
+orbit-client = { path = "../client" }
+orbit-server = { path = "../server" }
 
 # Benchmarking
 criterion = { version = "0.5", features = ["html_reports"] }

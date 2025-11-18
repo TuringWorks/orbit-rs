@@ -12,7 +12,7 @@ The CI/CD pipeline run #65 failed on October 3, 2025 at commit `7e9a268f2d65edcb
 
 ```
 Error writing files: failed to resolve mod `core`: 
-/home/runner/work/orbit-rs/orbit-rs/orbit-shared/src/transactions/core.rs does not exist
+/home/runner/work/orbit-rs/orbit-rs/orbit/shared/src/transactions/core.rs does not exist
 ```
 
 **Workflow:** CI/CD Pipeline (later renamed to "Enhanced CI/CD Pipeline")  
@@ -25,7 +25,7 @@ Error writing files: failed to resolve mod `core`:
 
 ## Root Cause Analysis
 
-The file `orbit-shared/src/transactions/core.rs` was missing from the repository at the time of the failure. This was caused by a `.gitignore` pattern that was too broad:
+The file `orbit/shared/src/transactions/core.rs` was missing from the repository at the time of the failure. This was caused by a `.gitignore` pattern that was too broad:
 
 ### Original `.gitignore` Pattern (Line 175)
 ```gitignore
@@ -42,10 +42,10 @@ core.*
 ### Detection Process
 
 1. ✅ Verified file exists locally but not in git
-2. ✅ Checked git tracking: `git ls-files orbit-shared/src/transactions/core.rs` (empty output)
-3. ✅ Identified the issue: `git check-ignore -v orbit-shared/src/transactions/core.rs`
+2. ✅ Checked git tracking: `git ls-files orbit/shared/src/transactions/core.rs` (empty output)
+3. ✅ Identified the issue: `git check-ignore -v orbit/shared/src/transactions/core.rs`
    ```
-   .gitignore:175:core.*   orbit-shared/src/transactions/core.rs
+   .gitignore:175:core.*   orbit/shared/src/transactions/core.rs
    ```
 
 ---
@@ -72,7 +72,7 @@ core.[0-9]*
 
 The file was force-added to the repository:
 ```bash
-git add -f orbit-shared/src/transactions/core.rs
+git add -f orbit/shared/src/transactions/core.rs
 ```
 
 ### Fix #3: Update Workflow Cache Key
@@ -90,8 +90,8 @@ This ensures stale caches don't cause issues with missing files.
 
 ### File Status
 - ✅ `core.rs` exists on current main branch (commit b97f966)
-- ✅ File is tracked in git: `git ls-files orbit-shared/src/transactions/core.rs`
-- ✅ File is not ignored: `git check-ignore -v orbit-shared/src/transactions/core.rs` (empty)
+- ✅ File is tracked in git: `git ls-files orbit/shared/src/transactions/core.rs`
+- ✅ File is not ignored: `git check-ignore -v orbit/shared/src/transactions/core.rs` (empty)
 - ✅ `.gitignore` pattern correctly updated
 
 ### Build Status
@@ -102,8 +102,8 @@ This ensures stale caches don't cause issues with missing files.
 ### Additional Fixes Applied
 Applied code formatting fixes to meet current CI/CD standards:
 - `orbit-ml/src/engine/mod.rs` - Removed trailing whitespace
-- `orbit-shared/src/orbitql/distributed_execution.rs` - Fixed import ordering
-- `orbit-shared/src/orbitql/query_cache.rs` - Fixed import ordering
+- `orbit/shared/src/orbitql/distributed_execution.rs` - Fixed import ordering
+- `orbit/shared/src/orbitql/query_cache.rs` - Fixed import ordering
 
 ---
 

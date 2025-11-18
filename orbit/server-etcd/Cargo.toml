@@ -7,9 +7,9 @@ license.workspace = true
 description = "Orbit etcd-based distributed directory implementation"
 
 [dependencies]
-orbit-util = { path = "../orbit-util" }
-orbit-shared = { path = "../orbit-shared" }
-orbit-server = { path = "../orbit-server" }
+orbit-util = { path = "../util" }
+orbit-shared = { path = "../shared" }
+orbit-server = { path = "../server" }
 etcd-client = "0.14"
 tokio = { workspace = true, features = ["full"] }
 serde = { workspace = true, features = ["derive"] }

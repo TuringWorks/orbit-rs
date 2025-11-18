@@ -2,19 +2,19 @@
 resolver = "2"
 
 members = [
-    "orbit-util",
-    "orbit-shared", 
-    "orbit-proto",
-    "orbit-client",
-    "orbit-client-spring",
-    "orbit-server",
-    "orbit-server-etcd", 
-    "orbit-server-prometheus",
-    "orbit-protocols",
-    "orbit-application",
-    "orbit-operator",
-    "orbit-compute",
-    "orbit-ml",
+    "orbit/util",
+    "orbit/shared",
+    "orbit/proto",
+    "orbit/client",
+    "orbit/client-spring",
+    "orbit/server",
+    "orbit/server-etcd",
+    "orbit/server-prometheus",
+    "orbit/protocols",
+    "orbit/application",
+    "orbit/operator",
+    "orbit/compute",
+    "orbit/ml",
     "tests",
     "examples/hello-world",
     "examples/distributed-counter-example",
@@ -36,8 +36,8 @@ members = [
 #   - Storage backend comparison benchmarks (with known WAL issues)
 #   - Heterogeneous compute acceleration benchmarks
 exclude = [
-    "orbit-benchmarks",
-    "orbit-desktop",
+    "orbit/benchmarks",
+    "orbit/desktop",
 ]
 
 [workspace.package]

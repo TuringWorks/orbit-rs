@@ -248,9 +248,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **Files Modified:**
 
-- `orbit-server/src/persistence/config.rs` - Added DigitalOceanSpaces to PersistenceConfig
-- `orbit-server/src/persistence/cloud.rs` - Digital Ocean provider implementation
-- `orbit-server/src/persistence/mod.rs` - Provider registration and validation
+- `orbit/server/src/persistence/config.rs` - Added DigitalOceanSpaces to PersistenceConfig
+- `orbit/server/src/persistence/cloud.rs` - Digital Ocean provider implementation
+- `orbit/server/src/persistence/mod.rs` - Provider registration and validation
 - `config/deployment-config.yaml` - GPU droplet configuration parameters
 - `deploy/config/deployment-config.yaml` - Production deployment settings
 
@@ -381,7 +381,7 @@ This implementation establishes Orbit-RS as a cloud-native distributed system wi
 **Files Modified:**
 
 - `orbit-ml/src/transformers/mod.rs` - Complete transformer architecture (600+ lines)
-- `orbit-shared/src/orbitql/` - Multiple modules fixed for compilation (1000+ lines total)
+- `orbit/shared/src/orbitql/` - Multiple modules fixed for compilation (1000+ lines total)
 - Core ML framework modules updated with proper error handling and type safety
 
 **Impact:**

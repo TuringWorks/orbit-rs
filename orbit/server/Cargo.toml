@@ -11,11 +11,11 @@ name = "orbit-server"
 path = "src/main.rs"
 
 [dependencies]
-orbit-util = { path = "../orbit-util" }
-orbit-shared = { path = "../orbit-shared" }
-orbit-proto = { path = "../orbit-proto" }
-orbit-protocols = { path = "../orbit-protocols" }
-orbit-client = { path = "../orbit-client" }
+orbit-util = { path = "../util" }
+orbit-shared = { path = "../shared" }
+orbit-proto = { path = "../proto" }
+orbit-protocols = { path = "../protocols" }
+orbit-client = { path = "../client" }
 tokio.workspace = true
 tokio-stream.workspace = true
 tonic.workspace = true

@@ -25,5 +25,5 @@ path = "src/stress_test.rs"
 tokio = { version = "1.0", features = ["full"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-orbit-client = { path = "../../orbit-client" }
-orbit-protocols = { path = "../../orbit-protocols" }
+orbit-client = { path = "../../orbit/client" }
+orbit-protocols = { path = "../../orbit/protocols" }

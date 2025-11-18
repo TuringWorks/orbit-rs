@@ -10,9 +10,9 @@ description = "Orbit integration with Spring-like frameworks (Rust equivalent)"
 crate-type = ["cdylib", "lib"]
 
 [dependencies]
-orbit-util = { path = "../orbit-util" }
-orbit-shared = { path = "../orbit-shared" }
-orbit-client = { path = "../orbit-client" }
+orbit-util = { path = "../util" }
+orbit-shared = { path = "../shared" }
+orbit-client = { path = "../client" }
 tokio = { workspace = true, features = ["full"] }
 serde = { workspace = true, features = ["derive"] }
 anyhow.workspace = true

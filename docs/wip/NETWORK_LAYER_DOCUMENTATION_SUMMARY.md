@@ -32,8 +32,8 @@ The Network Layer (Phase 2) was **already fully implemented** in the codebase wi
 - **Services:**
   - ConnectionService (bidirectional streaming)
   - HealthService (health checks)
-  - RaftConsensusService (in `orbit-shared/src/raft_transport.rs`)
-  - TransactionService (in `orbit-shared/src/transport.rs`)
+  - RaftConsensusService (in `orbit/shared/src/raft_transport.rs`)
+  - TransactionService (in `orbit/shared/src/transport.rs`)
 
 ### 3. Message Serialization ✅
 - **Location:** `orbit-proto/src/converters.rs` (~150 lines)
@@ -41,7 +41,7 @@ The Network Layer (Phase 2) was **already fully implemented** in the codebase wi
 - **Coverage:** Keys, NodeIds, AddressableReferences, Timestamps, InvocationReasons, NodeStatus
 
 ### 4. Network Transport Layer ✅
-- **Location:** `orbit-shared/src/transport.rs` (~700 lines)
+- **Location:** `orbit/shared/src/transport.rs` (~700 lines)
 - **Features:**
   - Connection pooling with automatic cleanup
   - Retry logic with exponential backoff
@@ -51,7 +51,7 @@ The Network Layer (Phase 2) was **already fully implemented** in the codebase wi
   - Background maintenance tasks
 
 ### 5. Raft Consensus Transport ✅
-- **Location:** `orbit-shared/src/raft_transport.rs` (~400 lines)
+- **Location:** `orbit/shared/src/raft_transport.rs` (~400 lines)
 - **Features:**
   - Vote request/response handling
   - Log replication via append entries

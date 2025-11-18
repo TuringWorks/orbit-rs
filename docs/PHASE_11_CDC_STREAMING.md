@@ -52,7 +52,7 @@ This document describes the implementation of Phase 11 features for the Orbit di
 
 ### 1. Change Data Capture (CDC)
 
-**Location:** `orbit-shared/src/cdc.rs`
+**Location:** `orbit/shared/src/cdc.rs`
 
 The CDC module captures all data modifications (INSERT, UPDATE, DELETE, TRUNCATE) and distributes them to interested consumers.
 
@@ -126,7 +126,7 @@ SSE provides a lightweight HTTP-based streaming protocol for browser clients.
 
 ### 3. Message Broker Integrations
 
-**Location:** `orbit-shared/src/streaming_integrations.rs`
+**Location:** `orbit/shared/src/streaming_integrations.rs`
 
 #### Kafka Integration
 
@@ -206,7 +206,7 @@ let consumer = WebhookCdcConsumer::new(config).await?;
 
 ### 4. Stream Processing
 
-**Location:** `orbit-shared/src/stream_processing.rs`
+**Location:** `orbit/shared/src/stream_processing.rs`
 
 Real-time stream processing with windowing and aggregation.
 
@@ -267,7 +267,7 @@ let processor = StreamProcessor::new(
 
 ### 5. Event Sourcing
 
-**Location:** `orbit-shared/src/event_sourcing.rs`
+**Location:** `orbit/shared/src/event_sourcing.rs`
 
 Event sourcing stores all state changes as a sequence of immutable events.
 
@@ -337,7 +337,7 @@ store.save_snapshot(snapshot).await?;
 
 ### 6. Replication Slots
 
-**Location:** `orbit-shared/src/replication.rs`
+**Location:** `orbit/shared/src/replication.rs`
 
 Replication slots track consumer position in the event stream, inspired by PostgreSQL's logical replication.
 

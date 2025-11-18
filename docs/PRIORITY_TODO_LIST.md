@@ -144,12 +144,12 @@
 ### **🏗️ Core Systems Completion**
 
 - [ ] **Complete OrbitQL optimizer**
-  - File: `orbit-shared/src/orbitql/optimizer.rs`
+  - File: `orbit/shared/src/orbitql/optimizer.rs`
   - Focus: cost-based optimization basics (lines 655, 783, 925)
   - Skip: Advanced optimizations for now
 
 - [ ] **Stabilize persistence layer**
-  - File: `orbit-server/src/persistence/cloud.rs`
+  - File: `orbit/server/src/persistence/cloud.rs`
   - Complete: Core operations (lines 632-675)
   - Test: All backends work consistently
 
@@ -194,7 +194,7 @@
   - Add SQL ML functions
 
 - [ ] **Spatial and Vector Features**
-  - Complete spatial indexing (orbit-shared/src/spatial/index.rs:480,485)
+  - Complete spatial indexing (orbit/shared/src/spatial/index.rs:480,485)
   - Add vector similarity search
   - Implement geospatial queries
 
@@ -207,14 +207,14 @@
 1. `orbit-protocols/src/postgres_wire/sql/executor.rs` - 18 TODOs
 2. `orbit-protocols/src/postgres_wire/sql/expression_evaluator.rs` - 17 TODOs  
 3. `orbit-protocols/src/postgres_wire/sql/tests.rs` - 40+ disabled tests
-4. `orbit-shared/src/orbitql/optimizer.rs` - 12 optimization TODOs
-5. `orbit-server/src/persistence/cloud.rs` - 16 storage TODOs
+4. `orbit/shared/src/orbitql/optimizer.rs` - 12 optimization TODOs
+5. `orbit/server/src/persistence/cloud.rs` - 16 storage TODOs
 
 ### **⚠️ HIGH PRIORITY FILES**
 
-1. `orbit-shared/src/orbitql/distributed.rs` - 21 distributed processing TODOs
-2. `orbit-shared/src/timeseries/storage.rs` - 16 time-series TODOs
-3. `orbit-shared/src/orbitql/streaming.rs` - 9 streaming query TODOs
+1. `orbit/shared/src/orbitql/distributed.rs` - 21 distributed processing TODOs
+2. `orbit/shared/src/timeseries/storage.rs` - 16 time-series TODOs
+3. `orbit/shared/src/orbitql/streaming.rs` - 9 streaming query TODOs
 4. `orbit-protocols/src/resp/commands.rs` - 15 Redis extension TODOs
 5. `orbit-ml/src/neural_networks/layers.rs` - ML layer TODOs
 

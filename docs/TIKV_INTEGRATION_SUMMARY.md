@@ -6,7 +6,7 @@ Successfully implemented TiKV as a distributed persistence provider for Orbit-RS
 
 ## What Was Implemented
 
-### 1. Core Configuration (in `orbit-server/src/persistence/mod.rs`)
+### 1. Core Configuration (in `orbit/server/src/persistence/mod.rs`)
 
 - **TiKVConfig Structure**: Comprehensive configuration with 20+ parameters including:
   - PD endpoints configuration for cluster discovery
@@ -19,7 +19,7 @@ Successfully implemented TiKV as a distributed persistence provider for Orbit-RS
 
 - **PersistenceConfig Enum**: Added `TiKV(TiKVConfig)` variant to the existing configuration system
 
-### 2. TiKV Provider Implementation (in `orbit-server/src/persistence/tikv.rs`)
+### 2. TiKV Provider Implementation (in `orbit/server/src/persistence/tikv.rs`)
 
 - **TiKVClient**: Abstraction layer for TiKV operations with placeholder implementation ready for actual `tikv-client` integration
 - **TiKVAddressableProvider**: Implements `AddressableDirectoryProvider` trait for lease management
@@ -29,13 +29,13 @@ Successfully implemented TiKV as a distributed persistence provider for Orbit-RS
 - **Metrics Collection**: Comprehensive operation metrics with latency tracking
 - **Health Checking**: Provider health monitoring and status reporting
 
-### 3. Factory Integration (in `orbit-server/src/persistence/factory.rs`)
+### 3. Factory Integration (in `orbit/server/src/persistence/factory.rs`)
 
 - **Provider Creation**: Factory methods to create TiKV addressable and cluster providers
 - **Environment Configuration**: Load TiKV config from environment variables with prefix `ORBIT_TIKV_*`
 - **Builder Pattern**: Integration with programmatic configuration builder
 
-### 4. Configuration System (in `orbit-server/src/persistence/config.rs`)
+### 4. Configuration System (in `orbit/server/src/persistence/config.rs`)
 
 - **Builder Integration**: Added `with_tikv()` method to `PersistenceConfigBuilder`
 - **Validation**: Comprehensive validation for TiKV configuration including:

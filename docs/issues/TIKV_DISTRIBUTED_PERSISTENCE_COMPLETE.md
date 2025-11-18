@@ -100,16 +100,16 @@ match config {
 ## Files Delivered
 
 ### ✅ Core Implementation
-- **`orbit-server/src/persistence/tikv.rs`** (1,200+ lines)
+- **`orbit/server/src/persistence/tikv.rs`** (1,200+ lines)
   - Complete TiKV provider implementations
   - CRUD operations for all data models
   - Performance monitoring and metrics
   - Error handling and recovery
 
 ### ✅ Configuration Integration
-- **`orbit-server/src/persistence/mod.rs`** - TiKV configuration enums
-- **`orbit-server/src/persistence/config.rs`** - Configuration builders and validation
-- **`orbit-server/src/persistence/factory.rs`** - Factory instantiation logic
+- **`orbit/server/src/persistence/mod.rs`** - TiKV configuration enums
+- **`orbit/server/src/persistence/config.rs`** - Configuration builders and validation
+- **`orbit/server/src/persistence/factory.rs`** - Factory instantiation logic
 
 ### ✅ Documentation Complete
 - **`docs/TIKV_PERSISTENCE_INTEGRATION.md`** (500+ lines)
