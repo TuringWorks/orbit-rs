@@ -97,7 +97,7 @@ raw-cpuid = { version = "11.0", optional = true }
 
 # Logging and metrics
 tracing = { workspace = true }
-metrics = "0.22"
+metrics = "0.23"
 
 # Memory management
 memmap2 = "0.9"
