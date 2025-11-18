@@ -10,7 +10,7 @@ We successfully updated all documentation to reflect the **production-ready Redi
 
 - ✅ Added prominent Redis quick start section
 - ✅ Updated feature highlights to show production-ready Redis compatibility
-- ✅ Added one-command setup with `./start-orbit-redis.sh`
+- ✅ Added one-command setup with `./scripts/start-orbit-redis.sh`
 - ✅ Updated status section to highlight 100% Redis compatibility achievements
 - ✅ Added link to comprehensive RESP production guide
 
@@ -73,7 +73,7 @@ We successfully updated all documentation to reflect the **production-ready Redi
 ```bash
 # Before: Multiple complex steps, different ports, partial functionality
 # After: One command gets you a full Redis server
-./start-orbit-redis.sh
+./scripts/start-orbit-redis.sh
 ```
 
 ### Redis CLI Experience
@@ -115,7 +115,7 @@ All documentation updates have been tested and verified:
 
 **Users can now:**
 
-1. **Get started in 30 seconds** with `./start-orbit-redis.sh`
+1. **Get started in 30 seconds** with `./scripts/start-orbit-redis.sh`
 2. **Use any Redis client** with full compatibility
 3. **Deploy to production** with confidence using our comprehensive guide
 4. **Monitor and troubleshoot** with detailed observability docs

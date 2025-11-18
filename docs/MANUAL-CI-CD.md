@@ -31,10 +31,10 @@ jq --version
 
 ```bash
 # Run complete CI/CD pipeline (debug + release builds, tests, examples)
-./run-ci.sh
+./scripts/run-ci.sh
 
 # View help and options
-./run-ci.sh --help
+./scripts/run-ci.sh --help
 ```
 
 #### Option 2: Direct Script Execution
@@ -64,16 +64,16 @@ You can customize the CI/CD run using environment variables:
 
 ```bash
 # Quick debug-only build and test
-BUILD_TYPE=debug ./run-ci.sh
+BUILD_TYPE=debug ./scripts/run-ci.sh
 
 # Release build only, no tests (for packaging)
-BUILD_TYPE=release SKIP_TESTS=true ./run-ci.sh
+BUILD_TYPE=release SKIP_TESTS=true ./scripts/run-ci.sh
 
 # Fast CI check (skip examples and tests)
-SKIP_TESTS=true SKIP_EXAMPLES=true ./run-ci.sh
+SKIP_TESTS=true SKIP_EXAMPLES=true ./scripts/run-ci.sh
 
 # High-performance build (more parallel jobs)
-JOBS=8 ./run-ci.sh
+JOBS=8 ./scripts/run-ci.sh
 ```
 
 ## What the Manual CI/CD Does
