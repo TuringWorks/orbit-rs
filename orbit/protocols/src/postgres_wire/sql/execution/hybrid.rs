@@ -25,6 +25,68 @@ use super::{
     AggregateFunction, ComparisonOp,
 };
 
+/// Primary key value that can be hashed and compared
+///
+/// Wraps SqlValue variants that are safe for use as primary keys
+/// (excludes floating point types which don't have total ordering)
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum PrimaryKey {
+    Null,
+    Boolean(bool),
+    SmallInt(i16),
+    Integer(i32),
+    BigInt(i64),
+    Text(String),
+    Bytea(Vec<u8>),
+}
+
+impl PrimaryKey {
+    /// Convert from SqlValue (if it's a valid primary key type)
+    pub fn from_sql_value(value: &SqlValue) -> ProtocolResult<Self> {
+        match value {
+            SqlValue::Null => Ok(PrimaryKey::Null),
+            SqlValue::Boolean(b) => Ok(PrimaryKey::Boolean(*b)),
+            SqlValue::SmallInt(i) => Ok(PrimaryKey::SmallInt(*i)),
+            SqlValue::Integer(i) => Ok(PrimaryKey::Integer(*i)),
+            SqlValue::BigInt(i) => Ok(PrimaryKey::BigInt(*i)),
+            SqlValue::Text(s) | SqlValue::Varchar(s) | SqlValue::Char(s) => {
+                Ok(PrimaryKey::Text(s.clone()))
+            }
+            SqlValue::Bytea(b) => Ok(PrimaryKey::Bytea(b.clone())),
+
+            // Reject types that can't be primary keys
+            SqlValue::Real(_) | SqlValue::DoublePrecision(_) => {
+                Err(ProtocolError::PostgresError(
+                    "Floating point types cannot be used as primary keys".to_string()
+                ))
+            }
+            SqlValue::Decimal(_) => {
+                Err(ProtocolError::PostgresError(
+                    "Decimal type not yet supported as primary key".to_string()
+                ))
+            }
+            _ => {
+                Err(ProtocolError::PostgresError(
+                    format!("Type {:?} cannot be used as primary key", value)
+                ))
+            }
+        }
+    }
+
+    /// Convert to SqlValue
+    pub fn to_sql_value(&self) -> SqlValue {
+        match self {
+            PrimaryKey::Null => SqlValue::Null,
+            PrimaryKey::Boolean(b) => SqlValue::Boolean(*b),
+            PrimaryKey::SmallInt(i) => SqlValue::SmallInt(*i),
+            PrimaryKey::Integer(i) => SqlValue::Integer(*i),
+            PrimaryKey::BigInt(i) => SqlValue::BigInt(*i),
+            PrimaryKey::Text(s) => SqlValue::Text(s.clone()),
+            PrimaryKey::Bytea(b) => SqlValue::Bytea(b.clone()),
+        }
+    }
+}
+
 /// Storage tier types
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum StorageTier {
@@ -171,8 +233,8 @@ pub struct RowBasedStore {
     /// Column schema
     schema: Vec<ColumnSchema>,
 
-    /// Primary key index (simplified - using string representation)
-    primary_index: HashMap<String, usize>,
+    /// Primary key index
+    primary_index: HashMap<PrimaryKey, usize>,
 
     /// Creation timestamp
     created_at: SystemTime,
@@ -220,7 +282,7 @@ impl RowBasedStore {
         // Add to primary index (assuming first column is primary key)
         let row_idx = self.rows.len();
         if !values.is_empty() {
-            let key = format!("{:?}", values[0]);
+            let key = PrimaryKey::from_sql_value(&values[0])?;
             self.primary_index.insert(key, row_idx);
         }
 
@@ -230,8 +292,8 @@ impl RowBasedStore {
 
     /// Get row by primary key
     pub fn get(&self, key: &SqlValue) -> Option<&Row> {
-        let key_str = format!("{:?}", key);
-        self.primary_index.get(&key_str).and_then(|&idx| self.rows.get(idx))
+        let pk = PrimaryKey::from_sql_value(key).ok()?;
+        self.primary_index.get(&pk).and_then(|&idx| self.rows.get(idx))
     }
 
     /// Update rows matching filter
@@ -389,8 +451,9 @@ impl RowBasedStore {
         self.primary_index.clear();
         for (idx, row) in self.rows.iter().enumerate() {
             if !row.values.is_empty() {
-                let key = format!("{:?}", row.values[0]);
-                self.primary_index.insert(key, idx);
+                if let Ok(key) = PrimaryKey::from_sql_value(&row.values[0]) {
+                    self.primary_index.insert(key, idx);
+                }
             }
         }
     }
