@@ -68,6 +68,13 @@ ordered-float = { version = "4.2", features = ["serde"] }
 rocksdb = "0.22"
 tikv-client = "0.3"
 
+# Apache Iceberg integration for warm/cold tiers (optional feature)
+iceberg = { version = "0.7", optional = true }
+iceberg-catalog-rest = { version = "0.7", optional = true }
+arrow = { version = "55.2", optional = true }
+arrow-schema = { version = "55.2", optional = true }
+parquet = { version = "55.2", optional = true }
+
 [dev-dependencies]
 redis = "0.32"
 tokio-postgres = "0.7"
@@ -83,3 +90,5 @@ cypher = []
 rest = []
 # Enable integration tests that require network access
 integration = []
+# Enable Apache Iceberg cold tier storage
+iceberg-cold = ["iceberg", "iceberg-catalog-rest", "arrow", "arrow-schema", "parquet"]

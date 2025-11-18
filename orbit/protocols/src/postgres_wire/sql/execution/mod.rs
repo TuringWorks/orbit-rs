@@ -17,6 +17,9 @@ pub mod simd;
 pub mod vectorized;
 pub mod hybrid;
 
+#[cfg(feature = "iceberg-cold")]
+pub mod iceberg_cold;
+
 // Parallel execution will be added last
 // pub mod parallel;
 
@@ -31,3 +34,6 @@ pub use hybrid::{
     AccessPattern, TimeRange, FilterPredicate, QueryResult, MigrationStats,
     RowBasedStore, ColumnSchema, Row,
 };
+
+#[cfg(feature = "iceberg-cold")]
+pub use iceberg_cold::{IcebergColdStore, column_batch_to_arrow};
