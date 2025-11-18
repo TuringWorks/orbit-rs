@@ -6,7 +6,7 @@ description = "Example demonstrating orbit-shared benchmarking capabilities"
 
 [dependencies]
 orbit-shared = { path = "../../orbit/shared" }
-tokio = { version = "1.41", features = ["full"] }
+tokio = { version = "1.48", features = ["full"] }
 tracing = "0.1"
 tracing-subscriber = "0.3"
 

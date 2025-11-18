@@ -14,7 +14,7 @@ orbit-client = { path = "../../orbit/client" }
 orbit-server = { path = "../../orbit/server" }
 orbit-shared = { path = "../../orbit/shared" }
 orbit-proto = { path = "../../orbit/proto" }
-tokio = { version = "1.0", features = ["full"] }
+tokio = { version = "1.48", features = ["full"] }
 tracing = "0.1"
 tracing-subscriber = "0.3"
 async-trait = "0.1"
