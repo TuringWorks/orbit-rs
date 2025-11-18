@@ -16,6 +16,7 @@ pub mod costs;
 pub mod planner;
 pub mod rules;
 pub mod stats;
+pub mod stats_enhanced;
 
 use crate::error::ProtocolResult;
 use crate::postgres_wire::sql::ast::Statement;
