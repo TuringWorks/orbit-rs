@@ -69,11 +69,12 @@ rocksdb = "0.22"
 tikv-client = "0.3"
 
 # Apache Iceberg integration for warm/cold tiers (optional feature)
-iceberg = { version = "0.7", optional = true }
+iceberg = { version = "0.7", optional = true, features = ["storage-s3", "storage-memory"] }
 iceberg-catalog-rest = { version = "0.7", optional = true }
 arrow = { version = "55.2", optional = true }
 arrow-schema = { version = "55.2", optional = true }
 parquet = { version = "55.2", optional = true }
+opendal = { version = "0.51", optional = true, features = ["services-s3", "services-memory"] }
 
 [dev-dependencies]
 redis = "0.32"
@@ -91,4 +92,4 @@ rest = []
 # Enable integration tests that require network access
 integration = []
 # Enable Apache Iceberg cold tier storage
-iceberg-cold = ["iceberg", "iceberg-catalog-rest", "arrow", "arrow-schema", "parquet"]
+iceberg-cold = ["iceberg", "iceberg-catalog-rest", "arrow", "arrow-schema", "parquet", "opendal"]
