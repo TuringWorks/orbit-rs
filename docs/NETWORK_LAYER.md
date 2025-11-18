@@ -7,6 +7,7 @@ category: documentation
 # Orbit-RS Network Layer Documentation
 
 ## Overview
+
 The Orbit-RS network layer provides a comprehensive gRPC-based communication infrastructure for distributed actor systems. Built on `tonic` and Protocol Buffers, it enables reliable, high-performance inter-node communication with automatic connection management, retry logic, and health monitoring.
 
 ---
@@ -29,7 +30,7 @@ orbit-proto/              # Protocol Buffer definitions and gRPC services
     ├── converters.rs   # Rust ↔ Protobuf converters
     └── services.rs     # gRPC service implementations
 
-orbit-shared/src/
+orbit/shared/src/
 ├── transport.rs         # Transaction transport layer
 └── raft_transport.rs    # Raft consensus transport
 ```
@@ -71,6 +72,7 @@ message MessageContentProto {
 ```
 
 **Key Features:**
+
 - Message routing (unicast, routed unicast)
 - Request/response pattern support
 - Error propagation
@@ -104,6 +106,7 @@ enum NodeStatusProto {
 ```
 
 **Use Cases:**
+
 - Node discovery and registration
 - Capability negotiation
 - Health monitoring
@@ -137,6 +140,7 @@ message AddressableLeaseProto {
 ```
 
 **Features:**
+
 - Type-safe actor keys (String, Int32, Int64, NoKey)
 - Actor lease management
 - Namespace support
@@ -157,6 +161,7 @@ service ConnectionService {
 ```
 
 **Implementation** (`orbit-proto/src/services.rs`):
+
 ```rust
 pub struct OrbitConnectionService {
     connections: Arc<Mutex<HashMap<String, mpsc::UnboundedSender<MessageProto>>>>,
@@ -182,6 +187,7 @@ impl connection_service_server::ConnectionService for OrbitConnectionService {
 ```
 
 **Usage:**
+
 ```rust
 use orbit_proto::connection_service_client::ConnectionServiceClient;
 
@@ -219,6 +225,7 @@ enum ServingStatus {
 ```
 
 **Implementation:**
+
 ```rust
 pub struct OrbitHealthService {
     status: Arc<Mutex<health_check_response::ServingStatus>>,
@@ -233,6 +240,7 @@ impl OrbitHealthService {
 ```
 
 **Usage:**
+
 ```rust
 use orbit_proto::health_service_client::HealthServiceClient;
 
@@ -250,7 +258,7 @@ match response.into_inner().status {
 
 ## Transport Layer
 
-### Transaction Transport (`orbit-shared/src/transport.rs`)
+### Transaction Transport (`orbit/shared/src/transport.rs`)
 
 High-performance gRPC transport for distributed transactions with connection pooling, retry logic, and metrics.
 
@@ -299,6 +307,7 @@ println!("Avg Latency: {}ms", stats.average_latency_ms);
 ```
 
 **Connection Metrics:**
+
 - Creation time tracking
 - Last used timestamp
 - Request count
@@ -331,6 +340,7 @@ let stats = sender.get_stats().await;
 ```
 
 **Features:**
+
 - Automatic retry with exponential backoff
 - Request timeout enforcement
 - Node resolution integration
@@ -364,7 +374,7 @@ impl NodeResolver for EtcdNodeResolver {
 }
 ```
 
-### Raft Consensus Transport (`orbit-shared/src/raft_transport.rs`)
+### Raft Consensus Transport (`orbit/shared/src/raft_transport.rs`)
 
 Specialized gRPC transport for Raft consensus protocol.
 
@@ -448,6 +458,7 @@ tokio::spawn(async move {
 ```
 
 **Features:**
+
 - Automatic client connection management
 - Connection failure handling and reconnection
 - Concurrent heartbeat broadcasting
@@ -519,6 +530,7 @@ let proto_message = convert_message_to_proto(tx_message)?;
 ```
 
 **Supported Message Types:**
+
 - **Prepare**: Transaction initiation with operations
 - **Vote**: Participant vote (Yes, No, Uncertain)
 - **Commit**: Commit decision
@@ -550,6 +562,7 @@ pool.cleanup_idle_connections(Duration::from_secs(600)).await?;
 ```
 
 **Benefits:**
+
 - Eliminates connection establishment overhead
 - Reduces TCP handshake latency
 - Maintains persistent HTTP/2 connections
@@ -573,6 +586,7 @@ let config = TransportConfig {
 ```
 
 **Retry Strategy:**
+
 - Exponential backoff prevents thundering herd
 - Non-retryable errors exit immediately (InvalidArgument, NotFound, PermissionDenied)
 - Timeout errors trigger retry
@@ -591,6 +605,7 @@ let config = TransportConfig {
 ```
 
 **Benefits:**
+
 - Detects dead connections quickly
 - Prevents firewall connection drops
 - Maintains connection health
@@ -625,6 +640,7 @@ println!("Average latency: {}ms", stats.average_latency_ms);
 ```
 
 **Metrics Tracked:**
+
 - Connection creation time
 - Last used timestamp
 - Request count per connection
@@ -675,6 +691,7 @@ info!("Broadcast completed: {} successful sends", total_successful);
 ```
 
 **Log Levels:**
+
 - **debug**: Connection lifecycle, message routing details
 - **info**: Connection creation, broadcast completion, successful operations
 - **warn**: Request failures, timeouts (with automatic retry)
@@ -706,11 +723,13 @@ OrbitError::configuration("Invalid bind address")
 ### Retry Classification
 
 **Retryable Errors:**
+
 - Network connection failures
 - Timeout errors
 - Transient gRPC errors (Unavailable, DeadlineExceeded)
 
 **Non-Retryable Errors:**
+
 - `Code::InvalidArgument` - Invalid request format
 - `Code::NotFound` - Resource doesn't exist
 - `Code::PermissionDenied` - Authorization failure
@@ -872,6 +891,7 @@ let config = TransportConfig {
 ```
 
 **Recommendations:**
+
 - **Development**: 2-5 connections per endpoint
 - **Production**: 10-20 connections per endpoint
 - **High throughput**: 20-50 connections per endpoint
@@ -1026,6 +1046,7 @@ async fn test_full_transaction_flow() {
 **Symptom:** `OrbitError::Network("Connection failed")`
 
 **Solutions:**
+
 1. Verify endpoint URL format: `http://hostname:port`
 2. Check network connectivity: `telnet hostname port`
 3. Verify DNS resolution
@@ -1037,6 +1058,7 @@ async fn test_full_transaction_flow() {
 **Symptom:** `OrbitError::Timeout("Request timeout")`
 
 **Solutions:**
+
 1. Increase `request_timeout` in config
 2. Check server health and load
 3. Enable detailed tracing: `RUST_LOG=debug`
@@ -1048,6 +1070,7 @@ async fn test_full_transaction_flow() {
 **Symptom:** Slow request processing
 
 **Solutions:**
+
 1. Check connection pool configuration
 2. Enable HTTP/2 adaptive window
 3. Tune TCP keepalive settings
@@ -1059,6 +1082,7 @@ async fn test_full_transaction_flow() {
 **Symptom:** Growing memory usage
 
 **Solutions:**
+
 1. Enable connection cleanup background task
 2. Reduce `max_connections_per_endpoint`
 3. Decrease connection idle timeout
@@ -1083,6 +1107,7 @@ Common gRPC errors and their meanings:
 ### Throughput
 
 **Expected Performance:**
+
 - Single connection: 10,000-50,000 RPS
 - Connection pool (10 connections): 100,000-500,000 RPS
 - Network-bound at 1Gbps: ~80,000 RPS for 1KB messages
@@ -1090,11 +1115,13 @@ Common gRPC errors and their meanings:
 ### Latency
 
 **P50 Latency:**
+
 - Local network: 0.5-1ms
 - Same datacenter: 1-5ms
 - Cross-region: 50-200ms
 
 **P99 Latency:**
+
 - Local network: 2-5ms
 - Same datacenter: 5-20ms
 - Cross-region: 200-500ms
@@ -1102,11 +1129,13 @@ Common gRPC errors and their meanings:
 ### Resource Usage
 
 **Per Connection:**
+
 - Memory: ~100KB-500KB
 - File descriptors: 1
 - Threads: Shared tokio runtime
 
 **Connection Pool (10 connections):**
+
 - Memory: ~1-5MB
 - File descriptors: 10
 - CPU: <1% idle, 10-50% under load

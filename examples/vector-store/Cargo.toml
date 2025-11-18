@@ -9,10 +9,10 @@ name = "vector-store"
 path = "src/main.rs"
 
 [dependencies]
-orbit-client = { path = "../../orbit-client" }
-orbit-shared = { path = "../../orbit-shared" }
-orbit-protocols = { path = "../../orbit-protocols" }
-tokio = { version = "1.0", features = ["full"] }
+orbit-client = { path = "../../orbit/client" }
+orbit-shared = { path = "../../orbit/shared" }
+orbit-protocols = { path = "../../orbit/protocols" }
+tokio = { version = "1.48", features = ["full"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 serde_json = "1.0"

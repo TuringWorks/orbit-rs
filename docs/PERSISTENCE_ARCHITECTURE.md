@@ -19,20 +19,26 @@ The Orbit server has been upgraded with a comprehensive provider-based persisten
 The persistence system is built around several key traits:
 
 #### `PersistenceProvider`
+
 Base trait for all providers with common functionality:
+
 - **Lifecycle Management**: `initialize()`, `shutdown()`
 - **Health Monitoring**: `health_check()`, `metrics()`
 - **Transaction Support**: `begin_transaction()`, `commit_transaction()`, `rollback_transaction()`
 
 #### `AddressableDirectoryProvider`
+
 Specialized trait for storing addressable (actor) lease information:
+
 - Store, retrieve, update, and remove leases
 - List leases by node or globally
 - Cleanup expired leases
 - Bulk operations for efficiency
 
 #### `ClusterNodeProvider`
+
 Specialized trait for storing cluster node information:
+
 - Store, retrieve, update, and remove node information
 - List active and all nodes
 - Cleanup expired nodes
@@ -41,6 +47,7 @@ Specialized trait for storing cluster node information:
 ### Provider Registry
 
 The `PersistenceProviderRegistry` manages multiple providers and provides:
+
 - Registration of providers with names
 - Default provider management
 - Provider lookup by name
@@ -53,6 +60,7 @@ The `PersistenceProviderRegistry` manages multiple providers and provides:
 **Best for**: Development, testing, high-performance scenarios with limited data
 
 **Features**:
+
 - Ultra-fast in-memory storage using concurrent data structures (`DashMap`)
 - Optional disk backup with compression support (Gzip, LZ4, Zstd)
 - Automatic periodic backup and restore on startup
@@ -60,6 +68,7 @@ The `PersistenceProviderRegistry` manages multiple providers and provides:
 - Full metrics and transaction support
 
 **Configuration**:
+
 ```toml
 [providers.memory]
 type = "Memory"
@@ -72,6 +81,7 @@ disk_backup = { path = "/data/orbit-backup.json", sync_interval = 300, compressi
 **Best for**: AWS environments, MinIO deployments, high durability requirements
 
 **Features**:
+
 - Compatible with AWS S3, MinIO, and other S3-compatible services
 - Configurable endpoints and regions
 - SSL/TLS support
@@ -80,6 +90,7 @@ disk_backup = { path = "/data/orbit-backup.json", sync_interval = 300, compressi
 - Object versioning and metadata
 
 **Configuration**:
+
 ```toml
 [providers.s3]
 type = "S3"
@@ -99,12 +110,14 @@ retry_count = 3
 **Best for**: Microsoft Azure environments
 
 **Features**:
+
 - Native Azure Blob Storage integration
 - Container-based organization
 - Configurable endpoints and retry policies
 - Built-in health monitoring
 
 **Configuration**:
+
 ```toml
 [providers.azure]
 type = "Azure"
@@ -121,12 +134,14 @@ retry_count = 3
 **Best for**: Google Cloud Platform environments
 
 **Features**:
+
 - Native GCS integration
 - Service account authentication
 - Project-based organization
 - Configurable retry policies
 
 **Configuration**:
+
 ```toml
 [providers.gcp]
 type = "GoogleCloud"
@@ -143,6 +158,7 @@ retry_count = 3
 **Best for**: Kubernetes environments, distributed systems requiring consistency
 
 **Features**:
+
 - Distributed key-value storage
 - Strong consistency guarantees
 - Native lease support with TTL
@@ -150,6 +166,7 @@ retry_count = 3
 - TLS/mTLS authentication support
 
 **Configuration**:
+
 ```toml
 [providers.etcd]
 type = "Etcd"
@@ -168,6 +185,7 @@ client_key = "/path/to/client.key"
 **Best for**: High-performance caching, pub/sub scenarios
 
 **Features**:
+
 - In-memory data structure store
 - Cluster mode support
 - Connection pooling
@@ -175,6 +193,7 @@ client_key = "/path/to/client.key"
 - TTL-based expiration
 
 **Configuration**:
+
 ```toml
 [providers.redis]
 type = "Redis"
@@ -192,12 +211,14 @@ retry_count = 3
 **Best for**: Cloud-native Kubernetes deployments
 
 **Features**:
+
 - ConfigMap and Secret storage
 - Namespace isolation
 - Native Kubernetes integration
 - RBAC support
 
 **Configuration**:
+
 ```toml
 [providers.kubernetes]
 type = "Kubernetes"
@@ -212,12 +233,14 @@ in_cluster = true
 **Best for**: Self-hosted object storage, hybrid cloud scenarios
 
 **Features**:
+
 - S3-compatible self-hosted storage
 - High performance and scalability
 - Multi-tenant support
 - Distributed deployment support
 
 **Configuration**:
+
 ```toml
 [providers.minio]
 type = "MinIO"
@@ -235,6 +258,7 @@ prefix = "orbit"
 **Best for**: High-performance scenarios with NVMe storage, multipathing requirements
 
 **Features**:
+
 - Optimized for flash storage devices
 - Multipathing support for redundancy
 - Configurable I/O depth and block sizes
@@ -242,6 +266,7 @@ prefix = "orbit"
 - Direct I/O operations
 
 **Configuration**:
+
 ```toml
 [providers.flash]
 type = "Flash"
@@ -259,6 +284,7 @@ paths = ["/nvme0/orbit", "/nvme1/orbit", "/nvme2/orbit"]
 **Best for**: High availability scenarios requiring failover
 
 **Features**:
+
 - Primary/backup provider configuration
 - Automatic health monitoring
 - Configurable failover thresholds
@@ -266,6 +292,7 @@ paths = ["/nvme0/orbit", "/nvme1/orbit", "/nvme2/orbit"]
 - Transparent failover
 
 **Configuration**:
+
 ```toml
 [providers.composite]
 type = "Composite"
@@ -303,6 +330,7 @@ let config = PersistenceProviderConfig::builder()
 ### 2. Configuration Files
 
 #### TOML Format
+
 ```toml
 [defaults]
 addressable = \"s3\"
@@ -322,6 +350,7 @@ bucket = \"orbit-data\"
 ```
 
 #### JSON Format
+
 ```json
 {
   \"defaults\": {
@@ -351,6 +380,7 @@ let s3_config = EnvironmentConfig::s3_from_env(\"ORBIT_S3\")?;
 ```
 
 Environment variables:
+
 ```bash
 ORBIT_S3_ENDPOINT=https://s3.amazonaws.com
 ORBIT_S3_REGION=us-west-2
@@ -381,6 +411,7 @@ server.start().await?;
 ### Usage Examples
 
 #### Basic Usage
+
 ```rust
 // Get the registry from server
 let registry = server.persistence_registry();
@@ -399,6 +430,7 @@ cluster_provider.store_node(&node).await?;
 ```
 
 #### Advanced Usage
+
 ```rust
 // Use specific providers
 let s3_provider = registry.get_addressable_provider(\"s3_addressable\").await?;
@@ -416,31 +448,41 @@ let metrics = s3_provider.metrics().await;
 ## Deployment Scenarios
 
 ### Scenario 1: Development Environment
+
 **Configuration**: Memory provider with disk backup
+
 - Fast development cycles
 - Data persistence across restarts
 - No external dependencies
 
 ### Scenario 2: Production on AWS
+
 **Configuration**: S3 for persistence, ElastiCache Redis for caching
+
 - High durability and availability
 - Scalable storage
 - Cross-region replication
 
 ### Scenario 3: Kubernetes Deployment
+
 **Configuration**: etcd for cluster state, ConfigMaps for configuration
+
 - Cloud-native integration
 - Automatic service discovery
 - RBAC integration
 
 ### Scenario 4: Hybrid Cloud
+
 **Configuration**: Composite provider with on-premises primary and cloud backup
+
 - Data sovereignty requirements
 - Disaster recovery
 - Cost optimization
 
 ### Scenario 5: High-Performance Computing
+
 **Configuration**: Flash-optimized storage with multipathing
+
 - Ultra-low latency
 - High throughput
 - Hardware optimization
@@ -472,6 +514,7 @@ All providers expose standard metrics:
 - **Cache Statistics**: cache_hits, cache_misses (where applicable)
 
 Health checks provide three states:
+
 - **Healthy**: Provider is operating normally
 - **Degraded**: Provider is operational but with reduced performance
 - **Unhealthy**: Provider is not operational
@@ -479,17 +522,20 @@ Health checks provide three states:
 ## Security Considerations
 
 ### Authentication
+
 - **Cloud Providers**: Use native authentication (IAM roles, service accounts)
 - **etcd**: Support for username/password and mTLS
 - **Redis**: Password authentication and SSL/TLS
 - **Kubernetes**: RBAC and service account tokens
 
 ### Encryption
+
 - **At Rest**: Leverage provider-native encryption (S3 SSE, Azure encryption, etc.)
 - **In Transit**: TLS/SSL support for all network communications
 - **Key Management**: Integration with cloud KMS services
 
 ### Access Control
+
 - **Least Privilege**: Configure minimal required permissions
 - **Network Security**: Use VPCs, security groups, network policies
 - **Audit Logging**: All operations are logged with appropriate detail
@@ -497,6 +543,7 @@ Health checks provide three states:
 ## Performance Tuning
 
 ### General Guidelines
+
 1. **Choose the Right Provider**: Match provider capabilities to your use case
 2. **Configure Timeouts**: Set appropriate connection and operation timeouts
 3. **Enable Compression**: Use compression for large objects (configurable algorithms)
@@ -504,6 +551,7 @@ Health checks provide three states:
 5. **Monitor Metrics**: Track latency and error rates
 
 ### Provider-Specific Tuning
+
 - **Memory**: Adjust max_entries and backup intervals
 - **S3**: Configure retry counts and timeout values
 - **etcd**: Tune lease TTL and watch timeout

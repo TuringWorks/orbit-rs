@@ -11,7 +11,7 @@ path = "src/main.rs"
 doc = false
 
 [dependencies]
-orbit-shared = { path = "../../orbit-shared" }
+orbit-shared = { path = "../../orbit/shared" }
 tokio.workspace = true
 serde.workspace = true
 serde_json.workspace = true

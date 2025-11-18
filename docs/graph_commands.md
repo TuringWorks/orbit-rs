@@ -41,10 +41,12 @@ GRAPH.QUERY <graph_name> <query>
 ```
 
 **Parameters:**
+
 - `graph_name`: Name of the graph to query
 - `query`: Cypher query string
 
 **Returns:** Array containing:
+
 1. Column headers
 2. Result rows
 3. Query statistics
@@ -72,6 +74,7 @@ GRAPH.RO_QUERY <graph_name> <query>
 ```
 
 **Parameters:**
+
 - `graph_name`: Name of the graph to query
 - `query`: Read-only Cypher query string
 
@@ -100,6 +103,7 @@ GRAPH.DELETE <graph_name>
 ```
 
 **Parameters:**
+
 - `graph_name`: Name of the graph to delete
 
 **Returns:** "OK" on success
@@ -139,6 +143,7 @@ GRAPH.EXPLAIN <graph_name> <query>
 ```
 
 **Parameters:**
+
 - `graph_name`: Name of the graph
 - `query`: Cypher query to explain
 
@@ -165,10 +170,12 @@ GRAPH.PROFILE <graph_name> <query>
 ```
 
 **Parameters:**
+
 - `graph_name`: Name of the graph
 - `query`: Cypher query to profile
 
 **Returns:** Array containing:
+
 1. Query results (header)
 2. Query results (rows)  
 3. Execution plan with actual performance metrics
@@ -196,9 +203,11 @@ GRAPH.SLOWLOG <graph_name>
 ```
 
 **Parameters:**
+
 - `graph_name`: Name of the graph
 
 **Returns:** Array of slow query entries, each containing:
+
 - Entry number
 - Timestamp
 - Execution time (milliseconds)
@@ -225,9 +234,11 @@ GRAPH.CONFIG GET <parameter>
 ```
 
 **Parameters:**
+
 - `parameter`: Configuration parameter name
 
 **Supported Parameters:**
+
 - `QUERY_TIMEOUT`: Query execution timeout in milliseconds
 - `MAX_NODES`: Maximum number of nodes per graph
 - `MAX_RELATIONSHIPS`: Maximum number of relationships per graph  
@@ -256,6 +267,7 @@ GRAPH.CONFIG SET <parameter> <value>
 ```
 
 **Parameters:**
+
 - `parameter`: Configuration parameter name
 - `value`: New parameter value
 
@@ -342,6 +354,7 @@ CREATE (p:Person {
 ```
 
 **Properties:**
+
 - Nodes can have multiple labels
 - Properties are key-value pairs
 - Supported types: string, integer, float, boolean
@@ -358,6 +371,7 @@ CREATE (a)-[:FRIENDS {since: 2018, strength: 0.8}]->(b)
 ```
 
 **Properties:**
+
 - Relationships have a type (e.g., FRIENDS, WORKS_FOR)
 - Relationships are directed
 - Can have properties like nodes

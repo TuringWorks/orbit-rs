@@ -2,19 +2,19 @@
 resolver = "2"
 
 members = [
-    "orbit-util",
-    "orbit-shared", 
-    "orbit-proto",
-    "orbit-client",
-    "orbit-client-spring",
-    "orbit-server",
-    "orbit-server-etcd", 
-    "orbit-server-prometheus",
-    "orbit-protocols",
-    "orbit-application",
-    "orbit-operator",
-    "orbit-compute",
-    "orbit-ml",
+    "orbit/util",
+    "orbit/shared",
+    "orbit/proto",
+    "orbit/client",
+    "orbit/client-spring",
+    "orbit/server",
+    "orbit/server-etcd",
+    "orbit/server-prometheus",
+    "orbit/protocols",
+    "orbit/application",
+    "orbit/operator",
+    "orbit/compute",
+    "orbit/ml",
     "tests",
     "examples/hello-world",
     "examples/distributed-counter-example",
@@ -36,8 +36,8 @@ members = [
 #   - Storage backend comparison benchmarks (with known WAL issues)
 #   - Heterogeneous compute acceleration benchmarks
 exclude = [
-    "orbit-benchmarks",
-    "orbit-desktop",
+    "orbit/benchmarks",
+    "orbit/desktop",
 ]
 
 [workspace.package]
@@ -62,7 +62,7 @@ clap = "4.0"
 hyper = "0.14"
 
 # Core async runtime
-tokio = { version = "1.0", features = ["full"] }
+tokio = { version = "1.48", features = ["full"] }
 tokio-stream = "0.1"
 
 # Serialization
@@ -108,4 +108,4 @@ mockall = "0.13"
 cucumber = "0.21"
 proptest = "1.4"
 tokio-test = "0.4"
-rand = "0.8"
+rand = "0.9"

@@ -1,0 +1,28 @@
+[package]
+name = "orbit-client"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Orbit client-side actor system implementation"
+
+[dependencies]
+orbit-util = { path = "../util" }
+orbit-shared = { path = "../shared" }
+orbit-proto = { path = "../proto" }
+tokio.workspace = true
+tokio-stream.workspace = true
+tonic.workspace = true
+async-trait = "0.1"
+futures.workspace = true
+dashmap.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+once_cell.workspace = true
+
+[dev-dependencies]
+mockall.workspace = true
+tokio-test = "0.4"

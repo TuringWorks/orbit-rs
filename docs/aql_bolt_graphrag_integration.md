@@ -485,18 +485,21 @@ CREATE (doc)-[:MENTIONS {
 ### 1. Protocol Selection Guidelines
 
 **Use AQL GraphRAG when:**
+
 - Working with document-heavy workloads
 - Need complex aggregation and analytics
 - Integrating with existing ArangoDB infrastructure
 - Processing large document collections
 
 **Use Bolt/Cypher GraphRAG when:**
+
 - Working with highly connected data
 - Need complex graph pattern matching
 - Integrating with existing Neo4j infrastructure
 - Emphasis on relationship analysis
 
 **Use PostgreSQL GraphRAG when:**
+
 - Working with traditional relational data
 - Need ACID compliance and strong consistency
 - Integrating with existing PostgreSQL applications

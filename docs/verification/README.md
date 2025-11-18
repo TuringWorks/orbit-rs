@@ -233,7 +233,7 @@ cargo test --workspace -- --nocapture
 ```
 
 **Vulnerability check failures**
-Update `deny.toml` or run:
+Update `config/deny.toml` or run:
 ```bash
 cargo deny check
 ```
@@ -280,7 +280,7 @@ COVERAGE_METHOD=llvm-cov ./verification/checks/check_coverage.sh
 ### Configuration Files
 
 Validation behavior is controlled by:
-- `deny.toml` - cargo-deny configuration for dependency/license checks
+- `config/deny.toml` - cargo-deny configuration for dependency/license checks
 - `Cargo.toml` - Package features and dependencies
 - `.github/workflows/` - CI workflow definitions (mirrored by verification scripts)
 

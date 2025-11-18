@@ -35,6 +35,7 @@ Based on the parser limitations discovered in our multi-model query example, we 
 ## 🛠️ **Implementation Details**
 
 ### **1. NOW() Function Support**
+
 **Files Modified**: `lexer.rs`, `parser.rs`
 
 ```rust
@@ -53,7 +54,8 @@ TokenType::Now => {
 }
 ```
 
-### **2. INTERVAL Expression Support** 
+### **2. INTERVAL Expression Support**
+
 **Files Modified**: `lexer.rs`, `parser.rs`
 
 ```rust
@@ -74,6 +76,7 @@ TokenType::Interval => {
 ```
 
 ### **3. COUNT(DISTINCT) and Aggregate Enhancements**
+
 **Files Modified**: `parser.rs`
 
 ```rust
@@ -95,6 +98,7 @@ if is_aggregate {
 ```
 
 ### **4. CASE Expression Support**
+
 **Files Modified**: `ast.rs`, `parser.rs`
 
 ```rust
@@ -122,6 +126,7 @@ fn parse_case_expression(&mut self) -> Result<Expression, ParseError> {
 ```
 
 ### **5. WITH Common Table Expressions (CTEs)**
+
 **Files Modified**: `ast.rs`, `lexer.rs`, `parser.rs`
 
 ```rust
@@ -167,6 +172,7 @@ Our enhancements were tested with complex multi-model queries from our comprehen
 ### **✅ Successfully Parsing Complex Queries:**
 
 #### **Multi-Model Analytics Query**
+
 ```sql
 SELECT 
     u.name,
@@ -204,9 +210,10 @@ ORDER BY engagement_score DESC
 LIMIT 15;
 ```
 
-**Result**: ✅ **QUERY VALIDATION: PASSED** 
+**Result**: ✅ **QUERY VALIDATION: PASSED**
 
 #### **CTE with Trend Analysis**
+
 ```sql  
 WITH recent_activity AS (
     SELECT 
@@ -271,17 +278,20 @@ ORDER BY trending_score DESC;
 ## 🏗️ **Architecture Improvements**
 
 ### **Enhanced AST Structure**
+
 - **WithClause**: Complete CTE support with optional column specifications
 - **Enhanced SelectStatement**: with_clauses field for CTE integration  
 - **Improved Expression parsing**: CASE, aggregates, functions all supported
 - **Time expression support**: NOW(), INTERVAL, temporal operations
 
 ### **Lexer Enhancements**
+
 - **New tokens**: WITH, RECURSIVE, INTERVAL, NOW
 - **Enhanced keyword recognition**: Full SQL compatibility
 - **Reserved word handling**: Proper keyword management
 
 ### **Parser Improvements**
+
 - **CTE parsing**: Full WITH clause support including RECURSIVE
 - **Advanced aggregates**: DISTINCT, complex expressions in aggregates
 - **Function call enhancement**: Special handling for time, null, and aggregate functions
@@ -292,6 +302,7 @@ ORDER BY trending_score DESC;
 ## 💡 **Real-World Applications Enabled**
 
 ### **E-commerce Analytics**
+
 ```sql
 WITH customer_segments AS (
     SELECT user_id, 
@@ -309,6 +320,7 @@ GROUP BY segment;
 ```
 
 ### **Social Media Trend Analysis**
+
 ```sql  
 WITH viral_content AS (
     SELECT post_id, COUNT(DISTINCT user_id) AS unique_engagements
@@ -326,6 +338,7 @@ JOIN viral_content vc ON p.id = vc.post_id;
 ```
 
 ### **IoT Sensor Analytics**
+
 ```sql
 SELECT device_id,
        AVG(CASE WHEN metric_type = 'temperature' THEN value END) AS avg_temp,
@@ -343,16 +356,19 @@ HAVING alert_count > 5;
 ## ✨ **Competitive Advantages Achieved**
 
 ### **vs Traditional SQL Databases**
+
 - **Multi-model native**: Documents, graphs, time-series in one query
 - **Advanced temporal operations**: Native NOW(), INTERVAL support
 - **Cross-model JOINs**: Seamless data integration across models
 
 ### **vs NoSQL Databases**  
+
 - **SQL compatibility**: Familiar syntax with advanced features
 - **Complex analytics**: CTEs, CASE expressions, advanced aggregations
 - **Type safety**: Strong parsing and validation
 
 ### **vs Graph Databases**
+
 - **Unified language**: No need to learn multiple query languages
 - **Time-series integration**: Graph + temporal data in single queries
 - **Document support**: Rich JSON/document querying capabilities
@@ -362,12 +378,14 @@ HAVING alert_count > 5;
 ## 🚀 **Next Steps & Future Enhancements**
 
 ### **Immediate Opportunities**
+
 1. **IN clause support**: Complete `field IN (list)` parsing
 2. **Window functions**: `ROW_NUMBER() OVER (PARTITION BY...)`  
 3. **Subquery expressions**: `WHERE EXISTS (SELECT...)`
 4. **Array operations**: Native array/JSON manipulation functions
 
 ### **Advanced Features**
+
 1. **Recursive CTEs**: Full `WITH RECURSIVE` implementation
 2. **Graph pattern syntax**: `->follows->user.*` expressions  
 3. **Time-series window functions**: Specialized temporal analytics
@@ -377,19 +395,22 @@ HAVING alert_count > 5;
 
 ## 📈 **Impact Assessment**
 
-### **Developer Experience** 
+### **Developer Experience**
+
 - **🎯 Exceptional**: Advanced SQL features work seamlessly
 - **🔧 Reduced complexity**: Single language for all data models
 - **⚡ High productivity**: Complex analytics in concise queries
 - **🛠️ IDE support**: Full VS Code integration with enhanced syntax
 
 ### **Production Readiness**
+
 - **✅ Query validation**: 95% success rate on complex queries  
 - **✅ Parser robustness**: Handles edge cases and error conditions
 - **✅ Performance**: Sub-100ms parsing for complex expressions
 - **✅ Compatibility**: Advanced SQL feature parity
 
 ### **Business Value**
+
 - **📊 Analytics capability**: Enterprise-grade query functionality
 - **🔄 Data unification**: Single interface to all data models  
 - **⚡ Time-to-insight**: Faster development of analytics applications

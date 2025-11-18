@@ -20,32 +20,32 @@ Even after successfully adding `core.rs` to the repository (commit 117a9d7), the
 
 ```
 Error writing files: failed to resolve mod `core`: 
-/home/runner/work/orbit-rs/orbit-rs/orbit-shared/src/transactions/core.rs does not exist
+/home/runner/work/orbit-rs/orbit-rs/orbit/shared/src/transactions/core.rs does not exist
 ```
 
 ### Verification Steps Taken
 
 1. **Confirmed file exists locally:**
    ```bash
-   ls -lh orbit-shared/src/transactions/core.rs
+   ls -lh orbit/shared/src/transactions/core.rs
    # Result: -rw-r--r-- 30K Oct 2 23:41 core.rs ✓
    ```
 
 2. **Confirmed file is in git:**
    ```bash
-   git ls-files orbit-shared/src/transactions/core.rs
-   # Result: orbit-shared/src/transactions/core.rs ✓
+   git ls-files orbit/shared/src/transactions/core.rs
+   # Result: orbit/shared/src/transactions/core.rs ✓
    ```
 
 3. **Confirmed file is on remote:**
    ```bash
    git ls-tree -r origin/main --name-only | grep core.rs
-   # Result: orbit-shared/src/transactions/core.rs ✓
+   # Result: orbit/shared/src/transactions/core.rs ✓
    ```
 
 4. **Confirmed file content exists:**
    ```bash
-   git show origin/main:orbit-shared/src/transactions/core.rs | wc -l
+   git show origin/main:orbit/shared/src/transactions/core.rs | wc -l
    # Result: 945 lines ✓
    ```
 

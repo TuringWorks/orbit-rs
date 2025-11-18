@@ -17,6 +17,7 @@ This document outlines the architecture for implementing GraphRAG (Graph-enhance
 From our analysis, Orbit-RS provides an excellent foundation for GraphRAG:
 
 #### 1. **Graph Database Layer**
+
 - **GraphActor**: Manages individual named graphs with Cypher query support
 - **CypherParser**: Parses and executes Cypher queries for graph operations  
 - **GraphEngine**: Query execution engine with MATCH, CREATE, RETURN support
@@ -24,17 +25,20 @@ From our analysis, Orbit-RS provides an excellent foundation for GraphRAG:
 - **Statistics & Profiling**: Query optimization and performance monitoring
 
 #### 2. **Vector Store Layer**
+
 - **VectorActor**: High-dimensional vector storage with metadata support
 - **Multiple Similarity Metrics**: Cosine, Euclidean, Dot Product, Manhattan
 - **Advanced Search**: KNN search, threshold filtering, metadata filtering
 - **Vector Indexing**: Configurable indices for fast similarity search
 
 #### 3. **Full-Text Search Layer**
+
 - **FT.* Commands**: RedisSearch-compatible full-text indexing and search
 - **Text Processing**: Indexing, retrieval, and ranking capabilities
 - **Metadata Integration**: Key-value metadata filtering
 
 #### 4. **Distributed Actor System**
+
 - **Actor Communication**: Message passing with async/await support
 - **Actor Discovery**: Service location and routing across nodes
 - **Performance Monitoring**: Metrics, heartbeats, and health tracking
@@ -78,6 +82,7 @@ From our analysis, Orbit-RS provides an excellent foundation for GraphRAG:
 ### New Components
 
 #### 1. GraphRAGActor
+
 **Purpose**: Orchestrates knowledge graph construction, entity extraction, and RAG operations.
 
 ```rust
@@ -106,6 +111,7 @@ pub struct GraphRAGConfig {
 ```
 
 **Key Methods**:
+
 - `process_document()` - Extract entities/relationships and build knowledge graph
 - `query_rag()` - Perform retrieval-augmented generation queries
 - `traverse_graph()` - Multi-hop reasoning across relationships
@@ -113,6 +119,7 @@ pub struct GraphRAGConfig {
 - `hybrid_search()` - Combine graph traversal, vector search, and text search
 
 #### 2. EntityExtractionActor
+
 **Purpose**: NLP pipeline for identifying entities and relationships from text.
 
 ```rust
@@ -134,6 +141,7 @@ pub enum ExtractorConfig {
 ```
 
 **Key Methods**:
+
 - `extract_entities()` - Named entity recognition
 - `extract_relationships()` - Relationship extraction
 - `deduplicate_entities()` - Entity resolution and merging
@@ -462,24 +470,28 @@ impl GraphRAGActor {
 ## 🔧 Implementation Phases
 
 ### Phase 1: Foundation (Current Sprint)
+
 1. ✅ Architecture design and planning
 2. 🔄 Extend GraphNode with vector embeddings
 3. 🔄 Implement basic EntityExtractionActor
 4. 🔄 Create GraphRAGActor scaffold
 
 ### Phase 2: Core GraphRAG Features
+
 1. Knowledge graph construction pipeline
 2. Basic RAG query processing
 3. Entity deduplication and merging
 4. Multi-hop reasoning engine
 
 ### Phase 3: Advanced Features
+
 1. Hybrid search strategies
 2. LLM provider integrations
 3. Query expansion and optimization
 4. Advanced graph algorithms
 
 ### Phase 4: Production Readiness
+
 1. Performance optimizations
 2. Distributed processing
 3. Comprehensive testing
@@ -488,18 +500,21 @@ impl GraphRAGActor {
 ## 📈 Success Metrics
 
 ### Functional Metrics
+
 - **Entity Extraction Accuracy**: >90% precision and recall
 - **Relationship Extraction Quality**: >85% accuracy  
 - **RAG Response Relevance**: >80% user satisfaction
 - **Multi-hop Reasoning Correctness**: >75% valid connections
 
 ### Performance Metrics
+
 - **Document Processing Speed**: <2 seconds per 1000 words
 - **RAG Query Response Time**: <500ms average
 - **Graph Traversal Speed**: <100ms for 3-hop queries
 - **Vector Search Performance**: <50ms for 10K entities
 
 ### Scale Metrics
+
 - **Knowledge Graph Size**: Support 1M+ entities
 - **Concurrent Users**: 1000+ simultaneous RAG queries
 - **Document Throughput**: 10K+ documents/hour processing

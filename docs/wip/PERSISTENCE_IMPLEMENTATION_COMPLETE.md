@@ -19,7 +19,7 @@ All persistence modules now compile successfully and pass tests.
 ## Features Implemented
 
 ### 1. Multiple Storage Backends ✅
-**Location:** `orbit-server/src/persistence/`
+**Location:** `orbit/server/src/persistence/`
 
 **Available Backends:**
 - **In-Memory Provider** (`memory.rs`) - HashMap-based storage for development

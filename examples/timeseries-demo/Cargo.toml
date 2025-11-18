@@ -7,7 +7,7 @@ license.workspace = true
 description = "Time series database demonstration"
 
 [dependencies]
-orbit-shared = { path = "../../orbit-shared" }
+orbit-shared = { path = "../../orbit/shared" }
 tokio.workspace = true
 anyhow.workspace = true
 chrono.workspace = true

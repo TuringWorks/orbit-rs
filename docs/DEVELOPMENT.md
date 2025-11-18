@@ -13,6 +13,7 @@ This document outlines the development workflow and best practices for contribut
 Before committing any code, **always** run the following to ensure code quality and avoid CI failures:
 
 ### Option 1: Use Make (Recommended)
+
 ```bash
 
 # Format, check, and test - all in one command
@@ -26,6 +27,7 @@ make build    # Build all packages
 ```
 
 ### Option 2: Use the Pre-commit Script
+
 ```bash
 
 # Run the comprehensive pre-commit script
@@ -33,6 +35,7 @@ make build    # Build all packages
 ```
 
 ### Option 3: Manual Commands
+
 ```bash
 
 # 1. Format code (REQUIRED before every commit)
@@ -72,7 +75,9 @@ cargo build --workspace
 Orbit-RS provides two pre-commit hook options to automatically enforce code quality:
 
 ### Full Pre-commit Hook (Recommended)
+
 Runs comprehensive checks including tests:
+
 ```bash
 
 # Enable full pre-commit hook
@@ -80,13 +85,16 @@ make pre-commit-full
 ```
 
 Checks performed:
+
 1. **Format code** using `cargo fmt --all`
 2. **Check compilation** using `cargo check --workspace`  
 3. **Run clippy** with `-D warnings` to catch linting issues
 4. **Run tests** using `cargo test --workspace --lib`
 
 ### Lightweight Pre-commit Hook (Faster)
+
 Runs essential checks only (skips tests for faster commits):
+
 ```bash
 
 # Enable lightweight pre-commit hook
@@ -94,12 +102,15 @@ make pre-commit-light
 ```
 
 Checks performed:
+
 1. **Format code** using `cargo fmt --all`
 2. **Check compilation** using `cargo check --workspace`
 3. **Run clippy** with `-D warnings` to catch linting issues
 
 ### Manual Pre-commit Checks
+
 You can also run the same checks manually without the hook:
+
 ```bash
 
 # Full checks (equivalent to pre-commit-full)
@@ -112,6 +123,7 @@ make commit-light
 ## 🚨 CI/CD Pipeline
 
 The CI/CD pipeline runs the following checks:
+
 - ✅ `cargo fmt --all -- --check` (formatting)
 - ✅ `cargo clippy --all-targets -- -D warnings` (linting)
 - ✅ `cargo test --workspace --verbose` (testing)

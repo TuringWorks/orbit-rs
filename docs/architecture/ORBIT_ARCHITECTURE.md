@@ -224,7 +224,7 @@ The Rust implementation extends the original architecture with a comprehensive t
 The transaction system is organized into specialized modules:
 
 ```
-orbit-shared/src/transactions/
+orbit/shared/src/transactions/
 ├── core.rs         - 2-Phase Commit protocol implementation
 ├── locks.rs        - Distributed locks with deadlock detection
 ├── metrics.rs      - Prometheus metrics integration

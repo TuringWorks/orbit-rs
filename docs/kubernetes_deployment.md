@@ -796,10 +796,10 @@ kubectl patch statefulset orbit-server -n orbit-rs --type='merge' -p='{
 
 ## Support and Documentation
 
-- **GitHub Issues**: https://github.com/TuringWorks/orbit-rs/issues
-- **Documentation**: https://github.com/TuringWorks/orbit-rs/docs
-- **Discussions**: https://github.com/TuringWorks/orbit-rs/discussions
-- **Wiki**: https://github.com/TuringWorks/orbit-rs/wiki
+- **GitHub Issues**: <https://github.com/TuringWorks/orbit-rs/issues>
+- **Documentation**: <https://github.com/TuringWorks/orbit-rs/docs>
+- **Discussions**: <https://github.com/TuringWorks/orbit-rs/discussions>
+- **Wiki**: <https://github.com/TuringWorks/orbit-rs/wiki>
 
 ---
 

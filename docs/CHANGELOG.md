@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.0] - 2024-10-01
 
 ### Added
+
 - **Core Actor System**: Complete distributed virtual actor implementation
   - Virtual actor lifecycle management with automatic activation/deactivation
   - Location-transparent actor references and invocation system
@@ -78,6 +79,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Inline code documentation and API references
 
 ### Technical Details
+
 - **Dependencies**: Added SQLx, Tonic, Prost, Tower, and other production-ready crates
 - **Architecture**: Modular, trait-based design with proper separation of concerns
 - **Error Handling**: Comprehensive OrbitResult/OrbitError pattern throughout
@@ -86,6 +88,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Performance**: Connection pooling, batch operations, and background processing
 
 ### Crates
+
 - `orbit-util`: Common utilities and helper functions
 - `orbit-shared`: Core data structures, transactions, persistence, and transport
 - `orbit-proto`: Protocol buffer definitions and gRPC services
@@ -97,6 +100,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `orbit-benchmarks`: Performance benchmarks
 
 ### Build System
+
 - Multi-crate Cargo workspace with shared dependencies
 - Protocol buffer build integration with tonic-build
 - Comprehensive .gitignore for Rust projects
@@ -105,6 +109,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.2.0] - 2024-12-20
 
 ### Added
+
 - **Kubernetes Operator** (`orbit-operator`): Native Kubernetes support with custom CRDs
   - `OrbitCluster` CRD for cluster deployment management
   - `OrbitActor` CRD for actor configuration and scaling policies
@@ -130,6 +135,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Raft consensus for leader election
 
 ### Changed
+
 - **Upgraded to k8s-openapi 0.23 and kube 0.95**
   - Fixed all Kubernetes API compatibility issues
   - Updated `Recorder::new` API to include `ObjectReference` parameter
@@ -149,6 +155,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Multiple working examples (hello-world, distributed-counter, distributed-transactions, saga)
 
 ### Fixed
+
 - **Kubernetes Operator Compilation Errors** (19 issues resolved)
   - Fixed `Recorder` API compatibility with k8s-openapi 0.23
   - Resolved `DateTime<Utc>` JsonSchema serialization issues
@@ -162,6 +169,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Fixed formatting issues across all modules
 
 ### Dependencies
+
 - Added `kube` v0.95 for Kubernetes client functionality
 - Added `k8s-openapi` v0.23 with v1_31 feature
 - Added `hyper` v0.14 for HTTP client functionality
@@ -222,6 +230,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Monitoring and observability setup instructions
 
 **Integration Points:**
+
 - Seamless integration with existing persistence layer via `PersistenceConfig` enum
 - Compatible with current cluster management and actor deployment architecture
 - Supports existing monitoring and observability infrastructure
@@ -229,6 +238,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Full CI/CD integration with existing GitHub Actions workflows
 
 **Files Added:**
+
 - `.github/workflows/digitalocean-deploy.yml` - Complete CI/CD pipeline for Digital Ocean
 - `deploy/scripts/standard-droplet-init.sh` - Standard droplet initialization
 - `deploy/scripts/gpu-droplet-init.sh` - GPU droplet setup with CUDA and drivers
@@ -237,9 +247,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `docs/deployment/DIGITAL_OCEAN.md` - Comprehensive deployment documentation (4000+ lines)
 
 **Files Modified:**
-- `orbit-server/src/persistence/config.rs` - Added DigitalOceanSpaces to PersistenceConfig
-- `orbit-server/src/persistence/cloud.rs` - Digital Ocean provider implementation
-- `orbit-server/src/persistence/mod.rs` - Provider registration and validation
+
+- `orbit/server/src/persistence/config.rs` - Added DigitalOceanSpaces to PersistenceConfig
+- `orbit/server/src/persistence/cloud.rs` - Digital Ocean provider implementation
+- `orbit/server/src/persistence/mod.rs` - Provider registration and validation
 - `config/deployment-config.yaml` - GPU droplet configuration parameters
 - `deploy/config/deployment-config.yaml` - Production deployment settings
 
@@ -359,6 +370,7 @@ This implementation establishes Orbit-RS as a cloud-native distributed system wi
 - **Testing Foundation**: Unit test structure for all major components
 
 **Files Added:**
+
 - `orbit-ml/src/transformers/attention.rs` - Multi-head attention implementation (400+ lines)
 - `orbit-ml/src/transformers/positional_encoding.rs` - Five positional encoding types (340+ lines)
 - `orbit-ml/src/neural_networks/layers.rs` - Core neural network layers (350+ lines)
@@ -367,8 +379,9 @@ This implementation establishes Orbit-RS as a cloud-native distributed system wi
 - Additional supporting modules for feedforward, convolutional, LSTM, GRU networks
 
 **Files Modified:**
+
 - `orbit-ml/src/transformers/mod.rs` - Complete transformer architecture (600+ lines)
-- `orbit-shared/src/orbitql/` - Multiple modules fixed for compilation (1000+ lines total)
+- `orbit/shared/src/orbitql/` - Multiple modules fixed for compilation (1000+ lines total)
 - Core ML framework modules updated with proper error handling and type safety
 
 **Impact:**
@@ -412,12 +425,14 @@ This implementation establishes Orbit-RS as a comprehensive machine learning pla
   - Connection parameter negotiation and authentication
 
 **Files Added:**
+
 - `orbit-protocols/src/postgres_wire/sql/` - Complete SQL parser module (12 files, 4000+ lines)
 - `docs/protocols/SQL_PARSER_ARCHITECTURE.md` - Comprehensive architecture documentation  
 - `docs/protocols/DDL_IMPLEMENTATION_SUMMARY.md` - Detailed implementation summary
 - `examples/pgvector-store/` - PostgreSQL+vector compatibility example
 
 **Integration Points:**
+
 - Maintains compatibility with existing vector operations and wire protocol
 - Uses existing QueryResult format for seamless client integration
 - Foundation for future DML, DCL, and TCL implementations
@@ -426,6 +441,7 @@ This implementation establishes Orbit-RS as a comprehensive machine learning pla
 This implementation establishes Orbit-RS as a full PostgreSQL-compatible database system with advanced distributed capabilities and native vector operations, positioning it as an ideal solution for AI-powered applications requiring both relational data management and vector similarity search.
 
 ### Planned Features
+
 - **PostgreSQL DML Support**: SELECT, INSERT, UPDATE, DELETE with JOINs and subqueries  
 - **Transaction Control**: BEGIN, COMMIT, ROLLBACK with proper isolation levels
 - **Access Control**: GRANT/REVOKE permissions with role-based security

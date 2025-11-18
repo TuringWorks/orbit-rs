@@ -91,12 +91,14 @@ max_mapped_size_gb = 2000        # 2TB max per node
 ```
 
 **Performance Characteristics:**
+
 - **Zero-Copy Reads**: Direct memory access to SSD data
 - **OS Page Cache Integration**: Automatic memory management
 - **Reduced RAM Usage**: Only hot pages stay in memory
 - **Near-RAM Performance**: NVMe SSDs provide <10μs latency
 
 **Benefits for Petabyte Scale:**
+
 - **10x RAM Reduction**: Only need 2-8 GB RAM per node instead of 32-128 GB
 - **3x Node Reduction**: Handle same data with fewer nodes
 - **Cost Optimization**: Cheaper high-capacity SSDs vs expensive RAM
@@ -121,6 +123,7 @@ snapshot_interval_secs = 300
 ```
 
 **Performance Characteristics:**
+
 - **Write Performance**: 10x faster writes than traditional storage
 - **Memory Usage**: 64-256MB memtables + 256-512MB block cache per node
 - **Storage Amplification**: ~1.2-1.5x after compaction
@@ -177,6 +180,7 @@ enable_server_side_encryption = true
 | **Total per Node** | **6-16 GB** | **16-48 GB** | **48-96 GB** |
 
 **Benefits vs Traditional Approach:**
+
 - **RAM Reduction**: 50-75% less RAM required per node
 - **Cost Savings**: $20K-40K less per node in cloud environments
 - **Better Utilization**: OS automatically manages hot/cold data
@@ -244,6 +248,7 @@ cluster_config:
 ```
 
 **Key Optimizations:**
+
 - **Transparent Huge Pages**: 2MB/1GB pages reduce TLB misses
 - **NUMA Optimization**: Memory-mapped regions aligned to NUMA nodes
 - **NVMe Optimizations**: Direct I/O, polling mode, multiple queues
@@ -714,6 +719,7 @@ impl MMapActorManager {
 ### Data Architecture
 
 1. **Partition Strategy**
+
    ```rust
    // Implement consistent hashing for data distribution
    pub fn hash_actor_key(key: &str) -> u64 {
@@ -727,6 +733,7 @@ impl MMapActorManager {
    ```
 
 2. **Hot/Cold Data Separation**
+
    ```toml
    [data_tiering]
    hot_data_threshold_hours = 24
@@ -737,6 +744,7 @@ impl MMapActorManager {
 ### Operational Best Practices
 
 1. **Gradual Scaling**
+
    ```bash
    # Scale up incrementally to avoid overwhelming the cluster
    kubectl scale statefulset orbit-rs-cluster --replicas=120
@@ -744,6 +752,7 @@ impl MMapActorManager {
    ```
 
 2. **Rolling Updates**
+
    ```yaml
    # Use rolling updates for zero-downtime deployments
    updateStrategy:
@@ -754,6 +763,7 @@ impl MMapActorManager {
    ```
 
 3. **Backup Strategy**
+
    ```bash
    # Automated daily backups
    0 2 * * * /opt/orbit-rs/backup-script.sh
@@ -788,6 +798,7 @@ spec:
 ### Disaster Recovery
 
 1. **Multi-Region Deployment**
+
    ```yaml
    # Deploy across multiple availability zones
    nodeAffinity:
@@ -801,6 +812,7 @@ spec:
    ```
 
 2. **Automated Failover**
+
    ```rust
    // Implement health checks and automatic failover
    pub async fn health_check_and_failover() {
@@ -840,6 +852,7 @@ The **memory-mapped file approach** offers the best balance of performance, cost
 4. **Phase 4**: Add advanced features like page access tracking
 
 With memory-mapped files and high-performance NVMe SSDs, orbit-rs can deliver:
+
 - **Write Performance**: 100K+ operations/second per node with 3x fewer nodes
 - **Read Performance**: 500K+ operations/second per node with near-RAM latency
 - **Scalability**: Linear scaling with dramatically reduced resource requirements

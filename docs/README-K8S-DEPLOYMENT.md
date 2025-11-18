@@ -4,7 +4,7 @@ title: Orbit-RS Kubernetes Deployment Optimization
 category: documentation
 ---
 
-# Orbit-RS Kubernetes Deployment Optimization
+## Orbit-RS Kubernetes Deployment Optimization
 
 This document provides comprehensive guidance for deploying Orbit-RS in Kubernetes environments with optimized resource allocation, GPU acceleration, and various workload profiles.
 
@@ -34,6 +34,7 @@ helm install orbit-rs orbit-rs/orbit-rs -f helm/orbit-rs/values-enterprise.yaml
 ## 📊 Workload Profiles
 
 ### Small Profile (Development/Testing)
+
 - **Use Case**: Development, testing, small demos
 - **Data Scale**: < 10GB
 - **Concurrent Users**: 1-10
@@ -45,6 +46,7 @@ helm install orbit-rs-dev orbit-rs/orbit-rs -f values-small.yaml
 ```
 
 ### Medium Profile (Production/Staging)  
+
 - **Use Case**: Production workloads, staging environments
 - **Data Scale**: 10GB - 1TB
 - **Concurrent Users**: 10-100
@@ -56,6 +58,7 @@ helm install orbit-rs-prod orbit-rs/orbit-rs -f values-medium.yaml
 ```
 
 ### Large Profile (Enterprise Production)
+
 - **Use Case**: Enterprise production, high-availability
 - **Data Scale**: 1TB - 100TB
 - **Concurrent Users**: 100-1,000
@@ -67,6 +70,7 @@ helm install orbit-rs-enterprise orbit-rs/orbit-rs -f values-large.yaml
 ```
 
 ### Enterprise Profile (Hyperscale)
+
 - **Use Case**: Hyperscale deployments, petabyte-scale
 - **Data Scale**: > 100TB
 - **Concurrent Users**: > 1,000
@@ -83,6 +87,7 @@ helm install orbit-rs-hyperscale orbit-rs/orbit-rs -f values-enterprise.yaml
 Orbit-RS provides comprehensive compute acceleration through the [orbit-compute framework](docs/COMPUTE_ACCELERATION_GUIDE.md) supporting various workload types:
 
 ### GPU-Accelerated Database Workloads
+
 - **Vector Operations**: Similarity search, embeddings, vector aggregations (8-15x speedup)
 - **Matrix Operations**: Large JOINs, linear algebra, ML workloads (8-15x speedup) 
 - **Time Series Analytics**: Aggregations, moving averages (5-12x speedup)
@@ -378,4 +383,4 @@ This project is licensed under the BSD-3-Clause OR MIT license - see the [LICENS
 
 ---
 
-For questions or support, please open an issue in the [GitHub repository](https://github.com/TuringWorks/orbit-rs/issues).
+For questions or support, please open an issue in the [GitHub repository](https://github.com/TuringWorks/orbit-rs/issues)

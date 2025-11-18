@@ -47,7 +47,7 @@ async fn cmd_get(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
 
 ### 1.2 Create KVActor Trait
 
-**File**: Create `orbit-shared/src/actors/kv_actor.rs`
+**File**: Create `orbit/shared/src/actors/kv_actor.rs`
 
 ```rust
 use async_trait::async_trait;
@@ -497,7 +497,7 @@ Start with **Phase 1.1** - implementing GET/SET commands in RESP protocol. This 
 ```bash
 
 # 1. Create KVActor trait
-vim orbit-shared/src/actors/kv_actor.rs
+vim orbit/shared/src/actors/kv_actor.rs
 
 # 2. Implement actor integration in RESP commands
 vim orbit-protocols/src/resp/commands.rs

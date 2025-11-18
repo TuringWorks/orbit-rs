@@ -33,6 +33,7 @@ let server = PostgresServer::new("127.0.0.1:5433", query_engine);
 Processes a document and builds knowledge graph entities and relationships.
 
 **Syntax:**
+
 ```sql
 SELECT * FROM GRAPHRAG_BUILD(
     kg_name TEXT,           -- Knowledge graph name/identifier
@@ -43,6 +44,7 @@ SELECT * FROM GRAPHRAG_BUILD(
 ```
 
 **Example:**
+
 ```sql
 -- Build knowledge graph from a research paper
 SELECT * FROM GRAPHRAG_BUILD(
@@ -54,6 +56,7 @@ SELECT * FROM GRAPHRAG_BUILD(
 ```
 
 **Returns:**
+
 - `kg_name`: Knowledge graph name
 - `document_id`: Document identifier
 - `entities_extracted`: Number of entities found
@@ -66,6 +69,7 @@ SELECT * FROM GRAPHRAG_BUILD(
 Performs Retrieval-Augmented Generation queries against the knowledge graph.
 
 **Syntax:**
+
 ```sql
 SELECT * FROM GRAPHRAG_QUERY(
     kg_name TEXT,                -- Knowledge graph name
@@ -78,6 +82,7 @@ SELECT * FROM GRAPHRAG_QUERY(
 ```
 
 **Example:**
+
 ```sql
 -- Query knowledge graph about machine learning
 SELECT * FROM GRAPHRAG_QUERY(
@@ -91,6 +96,7 @@ SELECT * FROM GRAPHRAG_QUERY(
 ```
 
 **Returns:**
+
 - `kg_name`: Knowledge graph name
 - `query_text`: Original query
 - `response`: Generated answer
@@ -104,6 +110,7 @@ SELECT * FROM GRAPHRAG_QUERY(
 Extracts entities and relationships from text without building the full knowledge graph.
 
 **Syntax:**
+
 ```sql
 SELECT * FROM GRAPHRAG_EXTRACT(
     kg_name TEXT,        -- Knowledge graph context
@@ -113,6 +120,7 @@ SELECT * FROM GRAPHRAG_EXTRACT(
 ```
 
 **Example:**
+
 ```sql
 -- Extract entities from a news article
 SELECT * FROM GRAPHRAG_EXTRACT(
@@ -123,6 +131,7 @@ SELECT * FROM GRAPHRAG_EXTRACT(
 ```
 
 **Returns:**
+
 - `kg_name`: Knowledge graph name
 - `document_id`: Document identifier
 - `entities_extracted`: Number of entities found
@@ -134,6 +143,7 @@ SELECT * FROM GRAPHRAG_EXTRACT(
 Finds reasoning paths between two entities in the knowledge graph.
 
 **Syntax:**
+
 ```sql
 SELECT * FROM GRAPHRAG_REASON(
     kg_name TEXT,                -- Knowledge graph name
@@ -145,6 +155,7 @@ SELECT * FROM GRAPHRAG_REASON(
 ```
 
 **Example:**
+
 ```sql
 -- Find connection between Apple and iPhone
 SELECT * FROM GRAPHRAG_REASON(
@@ -157,6 +168,7 @@ SELECT * FROM GRAPHRAG_REASON(
 ```
 
 **Returns (one row per path found):**
+
 - `kg_name`: Knowledge graph name
 - `from_entity`: Starting entity
 - `to_entity`: Target entity
@@ -171,17 +183,20 @@ SELECT * FROM GRAPHRAG_REASON(
 Retrieves statistics and metrics for a knowledge graph.
 
 **Syntax:**
+
 ```sql
 SELECT * FROM GRAPHRAG_STATS(kg_name TEXT);
 ```
 
 **Example:**
+
 ```sql
 -- Get statistics for research papers knowledge graph
 SELECT * FROM GRAPHRAG_STATS('research_papers');
 ```
 
 **Returns:**
+
 - `kg_name`: Knowledge graph name
 - `documents_processed`: Total documents processed
 - `rag_queries_executed`: Number of RAG queries performed
@@ -197,6 +212,7 @@ SELECT * FROM GRAPHRAG_STATS('research_papers');
 Lists entities in the knowledge graph with optional filtering.
 
 **Syntax:**
+
 ```sql
 SELECT * FROM GRAPHRAG_ENTITIES(
     kg_name TEXT,        -- Knowledge graph name
@@ -206,12 +222,14 @@ SELECT * FROM GRAPHRAG_ENTITIES(
 ```
 
 **Example:**
+
 ```sql
 -- Get all person entities, limit to 10
 SELECT * FROM GRAPHRAG_ENTITIES('news_kg', 'Person', 10);
 ```
 
 **Returns:**
+
 - `kg_name`: Knowledge graph name
 - `entity_type`: Requested entity type filter
 - `limit_requested`: Requested result limit
@@ -222,6 +240,7 @@ SELECT * FROM GRAPHRAG_ENTITIES('news_kg', 'Person', 10);
 Finds entities similar to a given entity using vector similarity.
 
 **Syntax:**
+
 ```sql
 SELECT * FROM GRAPHRAG_SIMILAR(
     kg_name TEXT,        -- Knowledge graph name
@@ -232,12 +251,14 @@ SELECT * FROM GRAPHRAG_SIMILAR(
 ```
 
 **Example:**
+
 ```sql
 -- Find entities similar to "Apple Inc."
 SELECT * FROM GRAPHRAG_SIMILAR('tech_companies', 'Apple Inc.', 5, 0.8);
 ```
 
 **Returns:**
+
 - `kg_name`: Knowledge graph name
 - `entity_name`: Reference entity
 - `limit_requested`: Requested result limit
@@ -413,6 +434,7 @@ Since GraphRAG functions return standard PostgreSQL result sets, they can be use
 - **Metabase**: Create interactive knowledge base queries
 
 Example Grafana query:
+
 ```sql
 SELECT 
     kg_name,

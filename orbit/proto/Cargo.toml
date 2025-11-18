@@ -1,0 +1,26 @@
+[package]
+name = "orbit-proto"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Orbit Protocol Buffer definitions and gRPC services"
+
+[dependencies]
+orbit-util = { path = "../util" }
+orbit-shared = { path = "../shared" }
+tonic.workspace = true
+prost.workspace = true
+prost-types.workspace = true
+tokio.workspace = true
+tokio-stream.workspace = true
+serde.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+chrono.workspace = true
+
+[dev-dependencies]
+tokio-test = "0.4"
+
+[build-dependencies]
+tonic-build = "0.12"

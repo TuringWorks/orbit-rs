@@ -8,7 +8,7 @@ category: wip
 
 **Date:** 2025-10-03  
 **Issue:** CI/CD failure - `cargo fmt --check` error  
-**Error Message:** `failed to resolve mod core: /home/runner/work/orbit-rs/orbit-rs/orbit-shared/src/transactions/core.rs does not exist`  
+**Error Message:** `failed to resolve mod core: /home/runner/work/orbit-rs/orbit-rs/orbit/shared/src/transactions/core.rs does not exist`  
 **Status:** ✅ Fixed
 
 ---
@@ -19,12 +19,12 @@ The CI/CD pipeline was failing during the `cargo fmt --check` step with the erro
 
 ```
 Error writing files: failed to resolve mod `core`: 
-/home/runner/work/orbit-rs/orbit-rs/orbit-shared/src/transactions/core.rs does not exist
+/home/runner/work/orbit-rs/orbit-rs/orbit/shared/src/transactions/core.rs does not exist
 ```
 
 ### Root Cause
 
-The file `orbit-shared/src/transactions/core.rs` existed locally but was **not tracked in git** because it was being ignored by the `.gitignore` pattern at line 175:
+The file `orbit/shared/src/transactions/core.rs` existed locally but was **not tracked in git** because it was being ignored by the `.gitignore` pattern at line 175:
 
 ```gitignore
 
@@ -36,12 +36,12 @@ This pattern was intended to ignore core dump files (which are created when prog
 
 ### Detection Process
 
-1. Verified file exists locally: `ls orbit-shared/src/transactions/core.rs` ✓
-2. Checked if file was tracked in git: `git ls-files orbit-shared/src/transactions/core.rs` ✗ (empty output)
-3. Checked git history: `git log --all -- orbit-shared/src/transactions/core.rs` ✗ (no commits)
-4. **Found the issue**: `git check-ignore -v orbit-shared/src/transactions/core.rs`
+1. Verified file exists locally: `ls orbit/shared/src/transactions/core.rs` ✓
+2. Checked if file was tracked in git: `git ls-files orbit/shared/src/transactions/core.rs` ✗ (empty output)
+3. Checked git history: `git log --all -- orbit/shared/src/transactions/core.rs` ✗ (no commits)
+4. **Found the issue**: `git check-ignore -v orbit/shared/src/transactions/core.rs`
    ```
-   .gitignore:175:core.*   orbit-shared/src/transactions/core.rs
+   .gitignore:175:core.*   orbit/shared/src/transactions/core.rs
    ```
 
 ---
@@ -75,10 +75,10 @@ core.[0-9]*
 ```bash
 
 # Force add the file (was previously ignored)
-git add -f orbit-shared/src/transactions/core.rs
+git add -f orbit/shared/src/transactions/core.rs
 
 # Verify it's now tracked
-git ls-files orbit-shared/src/transactions/core.rs
+git ls-files orbit/shared/src/transactions/core.rs
 ```
 
 ### Fix #3: Apply Formatting
@@ -90,10 +90,10 @@ cargo fmt --all
 ```
 
 Files formatted:
-- `orbit-shared/src/transactions/locks.rs`
-- `orbit-shared/src/transactions/metrics.rs`
-- `orbit-shared/src/transactions/performance.rs`
-- `orbit-shared/src/transactions/security.rs`
+- `orbit/shared/src/transactions/locks.rs`
+- `orbit/shared/src/transactions/metrics.rs`
+- `orbit/shared/src/transactions/performance.rs`
+- `orbit/shared/src/transactions/security.rs`
 
 ---
 
@@ -105,14 +105,14 @@ commit c197d7a
 fix: update .gitignore to not ignore core.rs source files
 
 - Changed core.* pattern to core and core.[0-9]* to only ignore core dumps
-- Added orbit-shared/src/transactions/core.rs (946 lines) that was previously ignored
+- Added orbit/shared/src/transactions/core.rs (946 lines) that was previously ignored
 - Fixes CI/CD cargo fmt error: 'failed to resolve mod core'
 ```
 
 ### Commit 2: Add core.rs File
 ```
 commit 117a9d7
-(added orbit-shared/src/transactions/core.rs)
+(added orbit/shared/src/transactions/core.rs)
 ```
 
 ### Commit 3: Format Transaction Modules
@@ -129,7 +129,7 @@ style: apply cargo fmt to transaction modules
 
 ## File Details: core.rs
 
-**Path:** `orbit-shared/src/transactions/core.rs`  
+**Path:** `orbit/shared/src/transactions/core.rs`  
 **Size:** 946 lines  
 **Purpose:** Core transaction implementation for distributed transactions
 
@@ -156,9 +156,9 @@ style: apply cargo fmt to transaction modules
 ```bash
 
 # 1. Check file is tracked
-git ls-files orbit-shared/src/transactions/core.rs
+git ls-files orbit/shared/src/transactions/core.rs
 
-# Output: orbit-shared/src/transactions/core.rs ✓
+# Output: orbit/shared/src/transactions/core.rs ✓
 
 # 2. Verify formatting
 cargo fmt --all -- --check
@@ -166,7 +166,7 @@ cargo fmt --all -- --check
 # Output: (no errors) ✓
 
 # 3. Check file is no longer ignored
-git check-ignore orbit-shared/src/transactions/core.rs
+git check-ignore orbit/shared/src/transactions/core.rs
 
 # Output: (empty) ✓
 
@@ -264,16 +264,16 @@ Watch out for these patterns that might catch source files:
 
 ### Modified
 - `.gitignore` - Updated core dump pattern (line 175)
-- `orbit-shared/src/transactions/locks.rs` - Formatting fixes
-- `orbit-shared/src/transactions/metrics.rs` - Formatting fixes  
-- `orbit-shared/src/transactions/performance.rs` - Formatting fixes
-- `orbit-shared/src/transactions/security.rs` - Formatting fixes
+- `orbit/shared/src/transactions/locks.rs` - Formatting fixes
+- `orbit/shared/src/transactions/metrics.rs` - Formatting fixes  
+- `orbit/shared/src/transactions/performance.rs` - Formatting fixes
+- `orbit/shared/src/transactions/security.rs` - Formatting fixes
 
 ### Added
-- `orbit-shared/src/transactions/core.rs` - 946 lines (now tracked)
+- `orbit/shared/src/transactions/core.rs` - 946 lines (now tracked)
 
 ### Referenced By
-- `orbit-shared/src/transactions/mod.rs` - Declares `mod core;`
+- `orbit/shared/src/transactions/mod.rs` - Declares `mod core;`
 - `.github/workflows/ci-cd.yml` - Runs `cargo fmt --check`
 
 ---

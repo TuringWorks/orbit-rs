@@ -75,6 +75,7 @@ The graph database is built on several key components:
 ### Core Data Structures
 
 #### GraphNode
+
 ```rust
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -88,6 +89,7 @@ pub struct GraphNode {
 ```
 
 #### GraphRelationship
+
 ```rust
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -152,6 +154,7 @@ The `InMemoryGraphStorage` provides high-performance graph operations:
 Orbit-RS supports a subset of Cypher with the following features:
 
 #### Basic Pattern Matching
+
 ```cypher
 // Find all Person nodes
 MATCH (p:Person) RETURN p
@@ -164,6 +167,7 @@ MATCH (p:Person {name: 'Alice'}) RETURN p
 ```
 
 #### Node Creation
+
 ```cypher
 // Create a node
 CREATE (p:Person {name: 'Alice', age: 30}) RETURN p
@@ -173,6 +177,7 @@ CREATE (a:Person {name: 'Alice'})-[r:KNOWS {since: '2020'}]->(b:Person {name: 'B
 ```
 
 #### Complex Patterns
+
 ```cypher
 // Multiple hops
 MATCH (a:Person)-[:KNOWS*1..3]-(b:Person) WHERE a.name = 'Alice' RETURN b
@@ -186,6 +191,7 @@ MATCH (p:Person) OPTIONAL MATCH (p)-[r:WORKS_FOR]->(c:Company) RETURN p, r, c
 AQL provides document-oriented querying with graph capabilities:
 
 #### Basic Queries
+
 ```aql
 // Find documents
 FOR person IN Person
@@ -198,6 +204,7 @@ FOR vertex, edge, path IN 1..3 OUTBOUND 'Person/alice' KNOWS
 ```
 
 #### Aggregations
+
 ```aql
 // Count and group
 FOR person IN Person
@@ -219,6 +226,7 @@ FOR person IN Person
 OrbitQL is the native query language with multi-model support:
 
 #### Unified Queries
+
 ```orbitql
 // Graph and time-series in one query
 SELECT person.name, ts.value 
@@ -242,6 +250,7 @@ server.listen("127.0.0.1:7687").await?;
 ```
 
 #### Supported Features
+
 - **Authentication**: Username/password authentication
 - **Transactions**: ACID transaction support
 - **Streaming**: Efficient result streaming
@@ -265,6 +274,7 @@ let embeddings = NodeEmbeddings::new()
 ### Graph Analytics
 
 #### Centrality Measures
+
 ```rust
 // Betweenness centrality
 let centrality = graph_storage.betweenness_centrality().await?;
@@ -274,6 +284,7 @@ let pagerank = graph_storage.pagerank(0.85, 100).await?;
 ```
 
 #### Community Detection
+
 ```rust
 // Louvain community detection
 let communities = graph_storage.louvain_communities().await?;

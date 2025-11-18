@@ -59,14 +59,14 @@ We take security vulnerabilities seriously. If you discover a security issue, pl
 
 - **Initial Response**: Within 48 hours of your report
 - **Status Updates**: Every 5-7 days during investigation
-- **Resolution Timeline**: 
+- **Resolution Timeline**:
   - Critical vulnerabilities: 7-14 days
   - High severity: 14-30 days
   - Medium/Low severity: 30-90 days
 
 ### After Reporting
 
-- **Accepted Vulnerabilities**: 
+- **Accepted Vulnerabilities**:
   - We will work with you to understand and reproduce the issue
   - You will be credited in the security advisory (unless you prefer anonymity)
   - We will coordinate disclosure timeline with you
@@ -91,6 +91,7 @@ When deploying Orbit-RS:
 ## Security Advisories
 
 Security advisories will be published on:
+
 - GitHub Security Advisories page
 - Project release notes
 - Security mailing list (if you want to be notified, contact us)

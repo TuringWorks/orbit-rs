@@ -14,7 +14,7 @@ Orbit-RS is organized as a Rust workspace with multiple crates, each serving a s
 
 ## Workspace Structure
 
-```
+```text
 orbit-rs/
 ├── Cargo.toml                    # Workspace configuration and dependencies
 ├── README.md                     # Project overview and quick start
@@ -67,9 +67,10 @@ orbit-rs/
 ## Core Crates
 
 ### orbit-util
+
 **Purpose**: Foundational utilities and common functionality
 
-```
+```text
 orbit-util/
 ├── Cargo.toml
 └── src/
@@ -83,6 +84,7 @@ orbit-util/
 ```
 
 **Key Features**:
+
 - Configuration loading and validation
 - Structured logging with tracing
 - Metrics collection abstractions
@@ -90,9 +92,10 @@ orbit-util/
 - Network and time helpers
 
 ### orbit-shared
+
 **Purpose**: Shared data structures, types, and core abstractions
 
-```
+```text
 orbit-shared/
 ├── Cargo.toml
 └── src/
@@ -130,6 +133,7 @@ orbit-shared/
 ```
 
 **Key Features**:
+
 - Actor trait system with lifecycle management
 - Comprehensive error handling
 - Transaction system with 2PC and Saga patterns
@@ -141,9 +145,10 @@ orbit-shared/
 - Multi-backend storage configuration
 
 ### orbit-proto
+
 **Purpose**: Protocol Buffer definitions and gRPC service specifications
 
-```
+```text
 orbit-proto/
 ├── Cargo.toml
 ├── build.rs                     # Protocol Buffer compilation
@@ -163,6 +168,7 @@ orbit-proto/
 ```
 
 **Key Features**:
+
 - Cross-language type definitions
 - gRPC service specifications
 - Efficient binary serialization
@@ -170,9 +176,10 @@ orbit-proto/
 - Service versioning
 
 ### orbit-client
+
 **Purpose**: Client-side actor system implementation
 
-```
+```text
 orbit-client/
 ├── Cargo.toml
 └── src/
@@ -189,6 +196,7 @@ orbit-client/
 ```
 
 **Key Features**:
+
 - Actor proxy generation and management
 - Connection pooling and management
 - Client-side load balancing
@@ -197,9 +205,10 @@ orbit-client/
 - Retry and circuit breaker patterns
 
 ### orbit-server
+
 **Purpose**: Server-side cluster management and actor hosting
 
-```
+```text
 orbit-server/
 ├── Cargo.toml
 └── src/
@@ -225,6 +234,7 @@ orbit-server/
 ```
 
 **Key Features**:
+
 - Actor lifecycle and state management with persistence
 - Multiple storage backends (Memory, COW B+Tree, LSM-Tree, RocksDB)
 - Cluster membership and coordination
@@ -237,9 +247,10 @@ orbit-server/
 ## Protocol and Integration Crates
 
 ### orbit-protocols
+
 **Purpose**: Multi-protocol adapters for different client interfaces
 
-```
+```text
 orbit-protocols/
 ├── Cargo.toml
 └── src/
@@ -274,6 +285,7 @@ orbit-protocols/
 ```
 
 **Key Features**:
+
 - Redis RESP protocol with 50+ commands
 - PostgreSQL wire protocol with full SQL support
 - Vector database capabilities (pgvector compatible)
@@ -282,9 +294,10 @@ orbit-protocols/
 - Multi-protocol client compatibility
 
 ### orbit-operator
+
 **Purpose**: Kubernetes operator for automated deployment and management
 
-```
+```text
 orbit-operator/
 ├── Cargo.toml
 ├── deploy/                     # Kubernetes deployment manifests
@@ -306,6 +319,7 @@ orbit-operator/
 ```
 
 **Key Features**:
+
 - Custom Resource Definitions for Orbit resources
 - Automated cluster deployment and scaling with persistence
 - Actor lifecycle management in Kubernetes
@@ -316,9 +330,10 @@ orbit-operator/
 - Production-ready deployment automation
 
 ### orbit-benchmarks
+
 **Purpose**: Comprehensive performance benchmarking and testing framework
 
-```
+```text
 orbit-benchmarks/                 # Performance benchmarks (excluded from workspace)
 ├── Cargo.toml                   # Independent crate configuration
 ├── README.md                    # Benchmark documentation and usage
@@ -358,6 +373,7 @@ orbit-benchmarks/                 # Performance benchmarks (excluded from worksp
 ```
 
 **Key Features**:
+
 - **OrbitQL Benchmarks**: TPC-H, TPC-C, TPC-DS industry-standard query benchmarks
 - **Query Performance**: Comprehensive query optimization, vectorization, and parallelization testing
 - **Actor System**: Virtual actor performance and message throughput benchmarks
@@ -369,6 +385,7 @@ orbit-benchmarks/                 # Performance benchmarks (excluded from worksp
 - **Independent Execution**: Excluded from workspace to prevent build interference
 
 **Recent Changes**:
+
 - ✅ **OrbitQL Benchmarks Moved**: Comprehensive query benchmarks relocated from `orbit-shared`
 - ✅ **TPC Workloads**: Industry-standard TPC-H, TPC-C, TPC-DS benchmark implementations
 - ✅ **Performance Framework**: Complete benchmark framework for query optimization validation
@@ -377,9 +394,10 @@ orbit-benchmarks/                 # Performance benchmarks (excluded from worksp
 ## Supporting Infrastructure
 
 ### examples/
+
 **Purpose**: Example applications and integration tests
 
-```
+```text
 examples/
 ├── hello-world/               # Basic actor example
 │   ├── Cargo.toml
@@ -406,9 +424,10 @@ examples/
 ```
 
 ### docs/
+
 **Purpose**: Comprehensive project documentation
 
-```
+```text
 docs/
 ├── README.md                  # Documentation index
 ├── OVERVIEW.md                # Project overview and architecture
@@ -426,9 +445,10 @@ docs/
 ```
 
 ### scripts/
+
 **Purpose**: Development and operational scripts
 
-```
+```text
 scripts/
 ├── prepare-secrets.sh         # CI/CD secret preparation
 ├── build-docker.sh           # Docker image building
@@ -441,7 +461,8 @@ scripts/
 ## Dependency Relationships
 
 ### Core Dependencies
-```
+
+```text
 orbit-util (foundation)
     ↓
 orbit-shared (core types)
@@ -458,6 +479,7 @@ orbit-operator (orchestration)
 ### Key External Dependencies
 
 #### Core Dependencies
+
 - **tokio**: Async runtime and utilities
 - **serde**: Serialization framework
 - **tracing**: Structured logging and instrumentation
@@ -465,12 +487,14 @@ orbit-operator (orchestration)
 - **uuid**: UUID generation and handling
 
 #### Networking and Communication
+
 - **tonic**: gRPC implementation
 - **prost**: Protocol Buffer implementation
 - **hyper**: HTTP client and server
 - **tower**: Service abstractions and middleware
 
 #### Storage and Persistence
+
 - **rocksdb**: High-performance key-value store
 - **sqlx**: Async SQL database driver
 - **bloom**: Bloom filter implementation for LSM-Tree
@@ -478,11 +502,13 @@ orbit-operator (orchestration)
 - **redis**: Redis client (for protocol adapter)
 
 #### Kubernetes Integration
+
 - **kube**: Kubernetes client library
 - **k8s-openapi**: Kubernetes API types
 - **schemars**: JSON schema generation
 
 #### Testing and Development
+
 - **tokio-test**: Async testing utilities
 - **criterion**: Benchmarking framework
 - **cucumber**: BDD testing framework
@@ -491,6 +517,7 @@ orbit-operator (orchestration)
 ## Build Configuration
 
 ### Workspace Cargo.toml
+
 The root `Cargo.toml` defines the workspace and shared dependencies:
 
 ```toml
@@ -519,6 +546,7 @@ nursery = "warn"
 ```
 
 ### Feature Flags
+
 Conditional compilation features for different use cases:
 
 ```toml
@@ -536,30 +564,35 @@ integration-tests = ["tokio-test"]
 ## Architecture Layers
 
 ### Layer 1: Foundation (orbit-util, orbit-shared)
+
 - Core utilities and common functionality
 - Shared types and abstractions
 - Error handling and configuration
 - No external service dependencies
 
 ### Layer 2: Communication (orbit-proto)
+
 - Protocol definitions and code generation
 - gRPC service specifications
 - Cross-language compatibility
 - Network serialization protocols
 
 ### Layer 3: Core Services (orbit-client, orbit-server)
+
 - Actor system implementation
 - Cluster management and coordination
 - Client-server communication
 - Service discovery and load balancing
 
 ### Layer 4: Protocol Adapters (orbit-protocols)
+
 - Multi-protocol client support
 - Redis, PostgreSQL, and MCP compatibility
 - SQL parsing and execution
 - Protocol-specific optimizations
 
 ### Layer 5: Orchestration (orbit-operator)
+
 - Kubernetes integration
 - Automated deployment and scaling
 - Resource management

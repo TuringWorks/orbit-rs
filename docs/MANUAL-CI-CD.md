@@ -28,15 +28,17 @@ jq --version
 ### Running CI/CD
 
 #### Option 1: Simple Launcher (Recommended)
+
 ```bash
 # Run complete CI/CD pipeline (debug + release builds, tests, examples)
-./run-ci.sh
+./scripts/run-ci.sh
 
 # View help and options
-./run-ci.sh --help
+./scripts/run-ci.sh --help
 ```
 
 #### Option 2: Direct Script Execution
+
 ```bash
 # Run complete CI/CD pipeline
 ./scripts/manual-ci-cd.sh
@@ -62,16 +64,16 @@ You can customize the CI/CD run using environment variables:
 
 ```bash
 # Quick debug-only build and test
-BUILD_TYPE=debug ./run-ci.sh
+BUILD_TYPE=debug ./scripts/run-ci.sh
 
 # Release build only, no tests (for packaging)
-BUILD_TYPE=release SKIP_TESTS=true ./run-ci.sh
+BUILD_TYPE=release SKIP_TESTS=true ./scripts/run-ci.sh
 
 # Fast CI check (skip examples and tests)
-SKIP_TESTS=true SKIP_EXAMPLES=true ./run-ci.sh
+SKIP_TESTS=true SKIP_EXAMPLES=true ./scripts/run-ci.sh
 
 # High-performance build (more parallel jobs)
-JOBS=8 ./run-ci.sh
+JOBS=8 ./scripts/run-ci.sh
 ```
 
 ## What the Manual CI/CD Does
@@ -79,28 +81,33 @@ JOBS=8 ./run-ci.sh
 The manual CI/CD script performs the same checks as the disabled GitHub Actions:
 
 ### 🔍 **Quality Checks**
+
 - ✅ Code formatting (`cargo fmt --all -- --check`)
 - ✅ Linting with Clippy (`cargo clippy --all-targets -- -D warnings`)  
 - ✅ Security audit (`cargo audit`)
 
 ### 🔨 **Build Process**
+
 - ✅ Build libraries (`cargo build --workspace --lib`)
 - ✅ Build binaries (`cargo build --workspace --bins`)
 - ✅ Build examples (hello-world, distributed-transactions, etc.)
 - ✅ Support for both debug and release builds
 
 ### 🧪 **Testing**
+
 - ✅ Run comprehensive test suite (`cargo test --workspace`)
 - ✅ Tests for both debug and release builds
 - ✅ Memory-optimized for local execution
 
 ### 📦 **Artifacts & Documentation**
+
 - ✅ Generate API documentation (`cargo doc`)
 - ✅ Create distributable packages with version info
 - ✅ Generate SHA256 checksums
 - ✅ Include configuration files, Helm charts, K8s manifests
 
 ### 🎯 **macOS Optimizations**
+
 - ✅ macOS-specific linker optimizations
 - ✅ Reduced memory usage for local builds
 - ✅ Proper handling of macOS development environment
@@ -135,6 +142,7 @@ If you want to re-enable automated workflows in the future:
 
 1. Edit the workflow files in `.github/workflows/`
 2. Uncomment the `on:` trigger sections:
+
    ```yaml
    on:
      push:
@@ -142,6 +150,7 @@ If you want to re-enable automated workflows in the future:
      pull_request:
        branches: [ main, develop ]
    ```
+
 3. Commit and push the changes
 
 ## Manual GitHub Actions (If Needed)
@@ -159,16 +168,19 @@ You can still trigger the workflows manually via GitHub's web interface:
 ### Common Issues
 
 **"protoc not found":**
+
 ```bash
 brew install protobuf
 ```
 
-**"jq not found":** 
+**"jq not found":**
+
 ```bash
 brew install jq
 ```
 
 **Memory issues during build:**
+
 ```bash
 # Reduce parallel jobs
 JOBS=1 ./run-ci.sh
@@ -178,6 +190,7 @@ SKIP_EXAMPLES=true ./run-ci.sh
 ```
 
 **Permission denied:**
+
 ```bash
 chmod +x run-ci.sh scripts/manual-ci-cd.sh
 ```
@@ -213,6 +226,7 @@ git push
 ---
 
 **Next Steps:**
+
 1. Run `./run-ci.sh` to verify everything works
 2. Integrate into your development workflow
 3. Customize options as needed for different scenarios

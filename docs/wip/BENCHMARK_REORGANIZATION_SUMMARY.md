@@ -105,7 +105,7 @@ This update comprehensively refreshes all project documentation to reflect the r
 ## 🔄 Related Changes
 
 ### **Previous Work**
-- **Phase 1**: OrbitQL benchmarks moved from `orbit-shared/src/orbitql/` to `orbit-benchmarks/src/orbitql/`
+- **Phase 1**: OrbitQL benchmarks moved from `orbit/shared/src/orbitql/` to `orbit/benchmarks/src/orbitql/`
 - **Phase 2**: Import statements updated to reference `orbit_shared::orbitql`
 - **Phase 3**: Module exports corrected and library interface established
 

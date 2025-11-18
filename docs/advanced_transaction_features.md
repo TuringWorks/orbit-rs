@@ -61,6 +61,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ### Lock Modes
 
 #### Exclusive Lock
+
 Prevents all other access (read or write) to the resource.
 
 ```rust
@@ -72,6 +73,7 @@ let exclusive_lock = lock_manager.acquire_lock(
 ```
 
 #### Shared Lock
+
 Multiple readers can hold shared locks simultaneously, but writers must wait.
 
 ```rust
@@ -702,6 +704,7 @@ if failed_auths.len() > threshold {
 ## Support
 
 For questions or issues:
-- GitHub Issues: https://github.com/TuringWorks/orbit-rs/issues
-- Documentation: https://turingworks.github.io/orbit-rs/api/
+
+- GitHub Issues: <https://github.com/TuringWorks/orbit-rs/issues>
+- Documentation: <https://turingworks.github.io/orbit-rs/api/>
 - Examples: See the `examples/` directory

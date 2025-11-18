@@ -12,7 +12,7 @@ path = "src/main.rs"
 
 [dependencies]
 # Orbit dependencies
-orbit-shared = { path = "../../orbit-shared" }
+orbit-shared = { path = "../../orbit/shared" }
 
 # Async runtime
 tokio = { workspace = true }

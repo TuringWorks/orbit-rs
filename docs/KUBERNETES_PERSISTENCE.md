@@ -22,11 +22,13 @@ Set the persistence backend using one of these methods:
 - In TOML config: [server] persistence_backend = "lsm_tree"
 
 Supported values:
+
 - memory, cow_btree, lsm_tree, rocksdb, s3, azure, gcp
 
 ## Manifests (k8s/)
 
 Use the enhanced files:
+
 - 01-configmap-enhanced.yaml: Adds persistence config sections and envsubst
 - 03-statefulset-enhanced.yaml: Adds env vars and secrets for all backends
 
@@ -68,6 +70,7 @@ persistence:
 ```
 
 For S3:
+
 ```
 orbitServer:
   env:
@@ -84,6 +87,7 @@ orbitServer:
     - name: ORBIT_S3_ENABLE_SSL
       value: "true"
 ```
+
 Also create a secret named orbit-server-secrets with keys s3-access-key-id and s3-secret-access-key.
 
 ## Operator (CRDs)

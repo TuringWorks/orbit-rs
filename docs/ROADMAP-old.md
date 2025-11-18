@@ -18,6 +18,7 @@ The development roadmap is actively tracked in our GitHub project:
 **[📋 Orbit-RS Development Roadmap](https://github.com/orgs/TuringWorks/projects/1)**
 
 ### Upcoming Phases (GitHub Issues)
+
 - **Phase 9:** [Query Optimization & Performance](https://github.com/TuringWorks/orbit-rs/issues?q=label%3Aphase-9) (5 issues)
 - **Phase 10:** [Production Readiness](https://github.com/TuringWorks/orbit-rs/issues?q=label%3Aphase-10) (5 issues)  
 - **Phase 11:** [Advanced Features](https://github.com/TuringWorks/orbit-rs/issues?q=label%3Aphase-11) (5 issues)
@@ -25,6 +26,7 @@ The development roadmap is actively tracked in our GitHub project:
 ## Completed Phases ✅
 
 ### Phase 1: Foundation (Complete)
+
 - [x] **Project Structure**: Multi-crate workspace with proper module organization
 - [x] **Build System**: Cargo workspace configuration with cross-platform support
 - [x] **Core Types**: Shared data structures, error handling, and utilities
@@ -33,6 +35,7 @@ The development roadmap is actively tracked in our GitHub project:
 - [x] **CI/CD Pipeline**: GitHub Actions with automated testing, linting, and security scanning
 
 ### Phase 2: Core Actor System (Complete)
+
 - [x] **Actor Traits**: Addressable trait system with string and UUID keys
 - [x] **Actor Lifecycle**: Registration, activation, deactivation, and cleanup
 - [x] **Proxy Generation**: Client-side actor references and invocation
@@ -41,6 +44,7 @@ The development roadmap is actively tracked in our GitHub project:
 - [x] **Error Handling**: Comprehensive error types and propagation
 
 ### Phase 3: Network Layer (Complete)
+
 - [x] **Protocol Buffers**: gRPC service definitions and message types
 - [x] **gRPC Services**: Actor invocation and cluster management services
 - [x] **Message Serialization**: Efficient binary serialization with Protocol Buffers
@@ -49,6 +53,7 @@ The development roadmap is actively tracked in our GitHub project:
 - [x] **Service Discovery**: DNS-based and etcd-based node discovery
 
 ### Phase 4: Cluster Management (Complete)
+
 - [x] **Node Discovery**: Automatic cluster node registration and discovery
 - [x] **Cluster Membership**: Dynamic cluster membership management
 - [x] **Health Checking**: Comprehensive health monitoring and failure detection
@@ -57,6 +62,7 @@ The development roadmap is actively tracked in our GitHub project:
 - [x] **Fault Tolerance**: Automatic failover and recovery mechanisms
 
 ### Phase 5: Advanced Transaction System (Complete)
+
 - [x] **2-Phase Commit**: ACID-compliant distributed transactions
 - [x] **Transaction Coordinator**: Multi-participant transaction management
 - [x] **Persistent Logging**: Durable SQLite-based transaction audit trail
@@ -67,6 +73,7 @@ The development roadmap is actively tracked in our GitHub project:
 - [x] **Metrics Integration**: Comprehensive Prometheus monitoring
 
 ### Phase 6: Protocol Adapters (Complete)
+
 - [x] **Redis RESP Protocol**: Complete Redis compatibility with 50+ commands
 - [x] **PostgreSQL Wire Protocol**: Full DDL support with ANSI SQL compliance
 - [x] **SQL Parser Infrastructure**: Lexer, AST, and expression parser
@@ -76,6 +83,7 @@ The development roadmap is actively tracked in our GitHub project:
 - [x] **Vector Indexing**: IVFFLAT and HNSW index support
 
 ### Phase 7: Kubernetes Integration (Complete)
+
 - [x] **Kubernetes Operator**: Custom CRDs for cluster, actor, and transaction management
 - [x] **Helm Charts**: Production-ready Kubernetes deployment
 - [x] **Docker Images**: Multi-platform container builds (linux/amd64, linux/arm64)
@@ -84,6 +92,7 @@ The development roadmap is actively tracked in our GitHub project:
 - [x] **Monitoring Stack**: Prometheus, Grafana, and alerting integration
 
 ### Phase 7.5: AI Integration (Complete)
+
 - [x] **MCP Server**: Model Context Protocol server implementation
 - [x] **MCP Types**: Complete MCP protocol types and message handling
 - [x] **MCP Handlers**: Request routing and response formatting
@@ -92,6 +101,7 @@ The development roadmap is actively tracked in our GitHub project:
 - [x] **Actor Management**: AI agents can manage actor lifecycles through MCP
 
 ### Phase 8: SQL Query Engine (Complete) 🎉
+
 - [x] **DDL Operations**: CREATE/ALTER/DROP TABLE, INDEX, VIEW, SCHEMA, EXTENSION
 - [x] **DCL Operations**: GRANT/REVOKE permissions with privilege management
 - [x] **TCL Operations**: BEGIN/COMMIT/ROLLBACK with isolation levels and savepoints
@@ -108,9 +118,11 @@ The development roadmap is actively tracked in our GitHub project:
 ## Upcoming Phases 🚀
 
 ### Phase 9: Query Optimization & Performance
+
 **Target:** Q2 2024 | **Estimated Effort:** 19-25 weeks
 
 #### [#6 Query Planner - Cost-based Query Optimization](https://github.com/TuringWorks/orbit-rs/issues/6) (4-6 weeks)
+
 - Query execution plan generation
 - Cost estimation algorithms
 - Statistics collection for tables and indexes
@@ -118,90 +130,106 @@ The development roadmap is actively tracked in our GitHub project:
 - Query hint system for manual optimization
 
 #### [#7 Index Usage Optimization](https://github.com/TuringWorks/orbit-rs/issues/7) (3-4 weeks)
+
 - Automatic index selection based on query patterns
 - Index recommendation system
 - Query optimization hints (FORCE INDEX, USE INDEX, IGNORE INDEX)
 - Index usage statistics and monitoring
 
 #### [#8 Vectorized Execution - SIMD Optimizations](https://github.com/TuringWorks/orbit-rs/issues/8) (4-5 weeks)
+
 - SIMD-optimized vector distance calculations
 - Vectorized batch processing for large datasets
 - Parallel column scanning and filtering
 - SIMD-optimized aggregation functions
 
 #### [#9 Parallel Query Processing](https://github.com/TuringWorks/orbit-rs/issues/9) (5-6 weeks)
+
 - Multi-threaded query execution engine
 - Worker thread pool management
 - Parallel table scans and joins
 - Dynamic work stealing for load balancing
 
 #### [#10 Query Caching - Prepared Statements & Results](https://github.com/TuringWorks/orbit-rs/issues/10) (3-4 weeks)
+
 - Prepared statement compilation and caching
 - Query result caching with TTL and invalidation
 - Cache eviction policies (LRU, LFU, TTL)
 - Cache hit/miss metrics and monitoring
 
 ### Phase 10: Production Readiness
+
 **Target:** Q3 2024 | **Estimated Effort:** 21-29 weeks
 
 #### [#11 Advanced Connection Pooling](https://github.com/TuringWorks/orbit-rs/issues/11) (3-4 weeks)
+
 - Multi-tier connection pooling
 - Connection health monitoring and automatic recovery
 - Dynamic pool sizing based on load
 - Connection multiplexing support
 
 #### [#12 Monitoring & Metrics - Production Observability](https://github.com/TuringWorks/orbit-rs/issues/12) (4-5 weeks)
+
 - Query performance tracking and monitoring
 - Database-level metrics (connections, transactions, locks)
 - Slow query logging and analysis
 - Grafana dashboards and Prometheus integration
 
 #### [#13 Backup & Recovery System](https://github.com/TuringWorks/orbit-rs/issues/13) (5-6 weeks)
+
 - Point-in-time recovery (PITR) capabilities
 - Incremental and full backup strategies
 - Cross-region backup replication
 - Disaster recovery procedures and testing
 
 #### [#14 High Availability - Clustering & Replication](https://github.com/TuringWorks/orbit-rs/issues/14) (6-8 weeks)
+
 - Master-slave replication with automatic failover
 - Multi-master clustering for write scalability
 - Consensus-based leader election
 - Split-brain prevention and network partition handling
 
 #### [#15 Advanced Security - Authentication, Encryption & Audit](https://github.com/TuringWorks/orbit-rs/issues/15) (5-6 weeks)
+
 - Advanced authentication mechanisms (LDAP, SAML, OAuth2)
 - Role-based access control (RBAC) with fine-grained permissions
 - Data encryption at rest and in transit (TLS 1.3)
 - Comprehensive audit logging for compliance
 
 ### Phase 11: Advanced Features
+
 **Target:** Q4 2024 | **Estimated Effort:** 25-31 weeks
 
 #### [#16 Stored Procedures & User-Defined Functions](https://github.com/TuringWorks/orbit-rs/issues/16) (6-8 weeks)
+
 - PL/pgSQL procedural language support
 - User-defined function creation and execution
 - Function overloading and polymorphism
 - Function security and sandboxing
 
 #### [#17 Database Triggers - Event-Driven Actions](https://github.com/TuringWorks/orbit-rs/issues/17) (4-5 weeks)
+
 - BEFORE/AFTER INSERT/UPDATE/DELETE triggers
 - Row-level and statement-level triggers
 - Trigger condition evaluation (WHEN clauses)
 - Cascading trigger support
 
 #### [#18 Full-Text Search - Advanced Text Search](https://github.com/TuringWorks/orbit-rs/issues/18) (5-6 weeks)
+
 - Text search vectors (tsvector) and queries (tsquery)
 - Multiple language support with stemming and stop words
 - Ranking and relevance scoring algorithms
 - Integration with vector search for hybrid search
 
 #### [#19 Enhanced JSON/JSONB Processing](https://github.com/TuringWorks/orbit-rs/issues/19) (4-5 weeks)
+
 - JSONB data type with efficient binary storage
 - JSON path expressions and operators (->>, #>, @>, etc.)
 - JSON aggregation functions (json_agg, jsonb_agg)
 - JSON schema validation and constraints
 
 #### [#20 Streaming - Real-time Data & Change Data Capture](https://github.com/TuringWorks/orbit-rs/issues/20) (6-7 weeks)
+
 - Change data capture for all DML operations
 - Real-time data streaming with WebSocket and Server-Sent Events
 - Kafka integration for event streaming
@@ -210,9 +238,11 @@ The development roadmap is actively tracked in our GitHub project:
 ## Future Phases (2025+)
 
 ### Phase 12: Time Series Database Features
+
 **Target:** Q1 2025 | **Estimated Effort:** 22-34 weeks
 
 #### [Redis Time Series Compatibility](protocols/REDIS_TIMESERIES.md) (8-10 weeks)
+
 - **TimeSeriesActor**: Distributed time-series data management with actor-based partitioning
 - **Core commands**: TS.CREATE, TS.ADD, TS.GET, TS.RANGE, TS.REVRANGE
 - **Aggregation rules**: TS.CREATERULE, TS.DELETERULE with automated downsampling
@@ -222,6 +252,7 @@ The development roadmap is actively tracked in our GitHub project:
 - **Labeling system**: Multi-dimensional time series organization
 
 #### [PostgreSQL TimescaleDB Compatibility](protocols/POSTGRESQL_TIMESCALE.md) (10-12 weeks)
+
 - **Hypertables**: Distributed time-partitioned tables with automatic chunking
 - **Time functions**: time_bucket(), time_bucket_gapfill(), locf(), interpolate()
 - **Continuous aggregates**: Materialized views with automatic refresh policies
@@ -231,6 +262,7 @@ The development roadmap is actively tracked in our GitHub project:
 - **Multi-dimensional partitioning**: Time and space partitioning
 
 #### Performance & Integration (4-6 weeks)
+
 - **SIMD optimizations**: Vectorized time-series operations and aggregations
 - **Distributed chunks**: Intelligent chunk placement across cluster nodes
 - **Query optimization**: Time-series specific query planning and execution
@@ -238,9 +270,11 @@ The development roadmap is actively tracked in our GitHub project:
 - **Migration tools**: Automated migration from RedisTimeSeries and TimescaleDB
 
 ### Phase 14: Distributed Query Processing & Advanced Analytics
+
 **Target:** Q3 2025 | **Estimated Effort:** 18-24 weeks
 
 #### Distributed Query Engine (8-10 weeks)
+
 - Cost-based query optimization with time-series aware planning
 - Cross-node query execution with intelligent chunk routing
 - Data sharding and rebalancing with time-aware partitioning
@@ -248,6 +282,7 @@ The development roadmap is actively tracked in our GitHub project:
 - Intelligent query result caching for time-series workloads
 
 #### Advanced Time Series Analytics (6-8 weeks)
+
 - **Real-time analytics**: Stream processing integration with Apache Kafka
 - **Machine learning**: Built-in time-series ML functions (forecasting, anomaly detection)
 - **Pattern detection**: Automatic pattern recognition and alerting
@@ -255,14 +290,17 @@ The development roadmap is actively tracked in our GitHub project:
 - **Window functions**: Advanced sliding window operations
 
 #### Master-Slave Replication (4-6 weeks)
+
 - Time-series aware replication with chunk-level synchronization
 - Multi-master clustering for write scalability
 - Consensus-based leader election for time series coordination
 
 ### Phase 13: Neo4j Bolt Protocol Compatibility
+
 **Target:** Q2 2025 | **Estimated Effort:** 30-36 weeks
 
 #### [Neo4j Foundation](protocols/NEO4J_BOLT.md) (12-14 weeks)
+
 - **Core Graph Actors**: GraphNodeActor, RelationshipActor, GraphClusterActor, CypherQueryActor
 - **Bolt Protocol v4.4**: Full protocol compatibility with handshake, authentication, and streaming
 - **Connection Management**: Connection pooling, session management, and transaction handling
@@ -270,6 +308,7 @@ The development roadmap is actively tracked in our GitHub project:
 - **Basic Cypher Support**: CREATE, MATCH, MERGE, DELETE operations
 
 #### [Advanced Graph Operations](protocols/NEO4J_BOLT.md) (10-12 weeks)
+
 - **Complete Cypher Language**: All Cypher constructs with advanced pattern matching
 - **Graph Algorithms**: Built-in algorithms (PageRank, Community Detection, Centrality)
 - **Graph Storage & Indexing**: Native graph storage optimized for traversals
@@ -277,15 +316,18 @@ The development roadmap is actively tracked in our GitHub project:
 - **Schema Management**: Node labels and relationship types
 
 #### [Enterprise Graph Features](protocols/NEO4J_BOLT.md) (8-10 weeks)
+
 - **Graph Data Science**: Machine learning on graphs, embeddings, and predictions
 - **Advanced Analytics**: Centrality algorithms, community detection, path finding
 - **Performance & Scalability**: Distributed graph storage, query optimization, parallel processing
 - **Neo4j Ecosystem**: Compatible with Neo4j Desktop, Browser, and client libraries
 
 ### Phase 15: ArangoDB Multi-Model Database Compatibility
+
 **Target:** Q3 2025 | **Estimated Effort:** 36-42 weeks
 
 #### [ArangoDB Foundation](protocols/ARANGODB_MULTI_MODEL.md) (14-16 weeks)
+
 - **Multi-Model Core Actors**: DocumentCollectionActor, GraphActor, KeyValueActor, SearchIndexActor, GeospatialActor
 - **AQL Query Engine**: Complete ArangoDB Query Language parsing and optimization
 - **Result Streaming**: Efficient cursor-based result pagination
@@ -293,21 +335,25 @@ The development roadmap is actively tracked in our GitHub project:
 - **Basic Operations**: Document CRUD, graph traversals, key-value operations
 
 #### [Advanced Multi-Model Operations](protocols/ARANGODB_MULTI_MODEL.md) (12-14 weeks)
+
 - **Document Database**: Schema-less documents, validation, nested indexing, versioning
 - **Graph Database**: Property graphs, traversals, path finding, analytics, smart graphs
 - **Full-Text Search**: Multi-language analyzers, search views, ranking, faceted search
 - **Advanced AQL**: Complex queries, subqueries, aggregations, joins
 
 #### [Enterprise Multi-Model Features](protocols/ARANGODB_MULTI_MODEL.md) (10-12 weeks)
+
 - **Geospatial**: GeoJSON support, spatial indexes, routing, geofencing
 - **Advanced Analytics**: User functions, streaming analytics, ML, time series
 - **Performance**: Smart graphs, OneShard optimization, satellite collections
 - **ArangoDB Ecosystem**: Full driver compatibility and REST API support
 
 ### Phase 16: GraphML, GraphRAG, and Advanced Graph Analytics
+
 **Target:** Q4 2025 - Q1 2026 | **Estimated Effort:** 28-34 weeks
 
 #### [GraphML & Advanced Analytics](backlog/GRAPH_AI_ANALYTICS.md) (14-16 weeks)
+
 - **Graph Machine Learning**: Node2Vec, GraphSAGE, FastRP embeddings
 - **Graph Neural Networks**: GCN, GAT, Graph Transformer implementations
 - **Link Prediction**: Advanced ML-based link prediction algorithms
@@ -317,6 +363,7 @@ The development roadmap is actively tracked in our GitHub project:
 - **Temporal Analysis**: Dynamic graph analysis and evolution tracking
 
 #### [GraphRAG & Knowledge Reasoning](backlog/GRAPH_AI_ANALYTICS.md) (14-18 weeks)
+
 - **Knowledge Graph Construction**: Entity/relation extraction from text
 - **Semantic Search**: Vector-based and hybrid search with graph context
 - **Graph-Augmented Generation**: Context-aware AI response generation
@@ -326,6 +373,7 @@ The development roadmap is actively tracked in our GitHub project:
 - **Fact Verification**: Automated fact-checking against graph knowledge
 
 ### Phase 17: Additional Protocol Support
+
 **Target:** Q1 2026 | **Estimated Effort:** 16-20 weeks
 
 - REST API with OpenAPI/Swagger documentation
@@ -336,7 +384,9 @@ The development roadmap is actively tracked in our GitHub project:
 - MongoDB Wire Protocol for document database compatibility
 
 ### Phase 18: Cloud-Native Features
+
 **Target:** Q2 2026 | **Estimated Effort:** 14-18 weeks
+
 - AWS, Azure, and GCP integrations
 - Multi-cloud deployment and replication
 - Serverless function support
@@ -344,7 +394,9 @@ The development roadmap is actively tracked in our GitHub project:
 - Auto-scaling and cost optimization
 
 ### Phase 19: Enterprise Features
+
 **Target:** Q3 2026 | **Estimated Effort:** 12-16 weeks
+
 - Spring Boot integration
 - Enterprise security (LDAP, SAML, OAuth2)
 - Compliance features (SOC2, GDPR, HIPAA)
@@ -354,6 +406,7 @@ The development roadmap is actively tracked in our GitHub project:
 ## Development Metrics
 
 ### Phase 8 Achievements
+
 - **Lines of Code**: 150,000+ lines of production-ready Rust code
 - **Test Coverage**: 79 passing tests with comprehensive coverage
 - **Performance**: Up to 500k+ messages/second per core
@@ -361,6 +414,7 @@ The development roadmap is actively tracked in our GitHub project:
 - **SQL Compatibility**: Full ANSI SQL compliance with PostgreSQL extensions
 
 ### Target Metrics for Phase 9-11
+
 - **Query Performance**: 2-5x improvement with optimization
 - **Throughput**: 1M+ operations/second with parallel processing
 - **Availability**: 99.9% uptime with high availability features
@@ -377,6 +431,7 @@ We welcome contributions to help achieve these roadmap goals:
 4. **Submit PRs**: Contribute code following our development guidelines
 
 ### Priority Areas for Contributors
+
 - Query optimization algorithms
 - SIMD/vectorization optimizations
 - Distributed systems expertise
@@ -398,6 +453,7 @@ We welcome contributions to help achieve these roadmap goals:
 - **Phase 19** (Q3 2026): Enterprise Features - 12-16 weeks
 
 **Total Development Estimate**:
+
 - **Phases 9-11** (2024): 65-85 weeks
 - **Phases 12-16** (2025-2026): 132-170 weeks
 - **Phases 17-19** (2026): 42-54 weeks

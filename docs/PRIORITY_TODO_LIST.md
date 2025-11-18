@@ -1,10 +1,11 @@
 # 🎯 Priority TODO List - Orbit-RS Development Roadmap
 
-*Generated: October 12, 2025*
+> Generated: October 12, 2025
 
 ## 🚨 **SPRINT 1 - IMMEDIATE FIXES (Week 1-2)**
 
 ### **🏗️ Testing Infrastructure - CRITICAL**
+
 **Impact**: Blocks all development and CI/CD
 
 - [ ] **Fix hanging tests** in cargo test suite
@@ -23,6 +24,7 @@
   - Add benchmark tests category
 
 ### **📚 Documentation Accuracy - HIGH**
+
 **Impact**: Misleading users and contributors  
 
 - [ ] **Update main README.md**
@@ -36,6 +38,7 @@
   - Add completion percentages
 
 - [ ] **Create honest feature matrix**
+
   ```markdown
   | Protocol | Status | Completeness | Production Ready |
   |----------|--------|--------------|------------------|
@@ -81,21 +84,24 @@
 
 ## 🚀 **SPRINT 3-4 - STABILIZE ONE PROTOCOL (Week 5-8)**
 
-### **Option A: Complete PostgreSQL Wire Protocol** 
+### **Option A: Complete PostgreSQL Wire Protocol**
+
 **Rationale**: Most mature after RESP server
 
 #### **Phase 1 - Parser Completion**
+
 - [ ] **Fix SQL parser gaps**
   - File: `orbit-protocols/src/postgres_wire/sql/parser/`
   - Action: Complete SELECT/INSERT/UPDATE/DELETE parsing
   - Test: All basic SQL should parse without errors
 
 - [ ] **Implement expression evaluator basics**
-  - File: `orbit-protocols/src/postgres_wire/sql/expression_evaluator.rs` 
+  - File: `orbit-protocols/src/postgres_wire/sql/expression_evaluator.rs`
   - Priority functions: arithmetic, comparison, logical operators
   - Skip: window functions, complex aggregates (Phase 2)
 
 #### **Phase 2 - Execution Engine**  
+
 - [ ] **Complete SQL executor core**
   - File: `orbit-protocols/src/postgres_wire/sql/executor.rs`
   - Action: Implement data insertion, selection, modification
@@ -106,12 +112,14 @@
   - Skip: Savepoints, isolation levels (Phase 3)
 
 #### **Phase 3 - Integration**
+
 - [ ] **Connect to actor system**  
   - Replace in-memory HashMap with actor storage
   - Integrate with OrbitClient
   - Test: Data persists across connections
 
 ### **Option B: Focus on RESP Server Excellence**
+
 **Rationale**: Build on existing success
 
 - [ ] **Add Redis Cluster support**
@@ -136,12 +144,12 @@
 ### **🏗️ Core Systems Completion**
 
 - [ ] **Complete OrbitQL optimizer**
-  - File: `orbit-shared/src/orbitql/optimizer.rs`
+  - File: `orbit/shared/src/orbitql/optimizer.rs`
   - Focus: cost-based optimization basics (lines 655, 783, 925)
   - Skip: Advanced optimizations for now
 
 - [ ] **Stabilize persistence layer**
-  - File: `orbit-server/src/persistence/cloud.rs` 
+  - File: `orbit/server/src/persistence/cloud.rs`
   - Complete: Core operations (lines 632-675)
   - Test: All backends work consistently
 
@@ -186,7 +194,7 @@
   - Add SQL ML functions
 
 - [ ] **Spatial and Vector Features**
-  - Complete spatial indexing (orbit-shared/src/spatial/index.rs:480,485)
+  - Complete spatial indexing (orbit/shared/src/spatial/index.rs:480,485)
   - Add vector similarity search
   - Implement geospatial queries
 
@@ -195,42 +203,48 @@
 ## 📋 **FILE-SPECIFIC TODO PRIORITIES**
 
 ### **🚨 CRITICAL FILES** (Fix First)
+
 1. `orbit-protocols/src/postgres_wire/sql/executor.rs` - 18 TODOs
 2. `orbit-protocols/src/postgres_wire/sql/expression_evaluator.rs` - 17 TODOs  
 3. `orbit-protocols/src/postgres_wire/sql/tests.rs` - 40+ disabled tests
-4. `orbit-shared/src/orbitql/optimizer.rs` - 12 optimization TODOs
-5. `orbit-server/src/persistence/cloud.rs` - 16 storage TODOs
+4. `orbit/shared/src/orbitql/optimizer.rs` - 12 optimization TODOs
+5. `orbit/server/src/persistence/cloud.rs` - 16 storage TODOs
 
 ### **⚠️ HIGH PRIORITY FILES**
-6. `orbit-shared/src/orbitql/distributed.rs` - 21 distributed processing TODOs
-7. `orbit-shared/src/timeseries/storage.rs` - 16 time-series TODOs
-8. `orbit-shared/src/orbitql/streaming.rs` - 9 streaming query TODOs
-9. `orbit-protocols/src/resp/commands.rs` - 15 Redis extension TODOs
-10. `orbit-ml/src/neural_networks/layers.rs` - ML layer TODOs
+
+1. `orbit/shared/src/orbitql/distributed.rs` - 21 distributed processing TODOs
+2. `orbit/shared/src/timeseries/storage.rs` - 16 time-series TODOs
+3. `orbit/shared/src/orbitql/streaming.rs` - 9 streaming query TODOs
+4. `orbit-protocols/src/resp/commands.rs` - 15 Redis extension TODOs
+5. `orbit-ml/src/neural_networks/layers.rs` - ML layer TODOs
 
 ---
 
 ## 🎯 **SUCCESS METRICS**
 
 ### **Sprint 1-2 (Month 1)**
+
 - [ ] `cargo test` passes completely (0 failures)
 - [ ] Documentation reflects reality (no false claims)
 - [ ] CI/CD pipeline is stable
 - [ ] All examples work as documented
 
-### **Sprint 3-4 (Month 2)** 
+### **Sprint 3-4 (Month 2)**
+
 - [ ] One protocol (PostgreSQL or enhanced RESP) is fully functional
 - [ ] Integration tests cover end-to-end scenarios  
 - [ ] Performance benchmarks are established
 - [ ] Production deployment guide exists
 
 ### **Sprint 5-6 (Month 3)**
+
 - [ ] Core infrastructure is complete and tested
 - [ ] Security and authentication work
 - [ ] Monitoring and observability are functional
 - [ ] Multiple storage backends are stable
 
 ### **Long-term (Month 4+)**
+
 - [ ] 2+ protocols are production-ready
 - [ ] Advanced features (ML, spatial) are functional
 - [ ] Performance targets are met

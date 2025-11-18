@@ -15,6 +15,7 @@ This document defines the AQL (ArangoDB Query Language) GraphRAG functions that 
 ### 1. Document Processing Functions
 
 #### GRAPHRAG_BUILD_KNOWLEDGE(collection, options)
+
 Builds knowledge graphs from documents in a collection.
 
 ```aql
@@ -39,6 +40,7 @@ FOR doc IN research_papers
 ```
 
 #### GRAPHRAG_EXTRACT_ENTITIES(text, options)
+
 Extracts entities from text without building full knowledge graph.
 
 ```aql
@@ -59,6 +61,7 @@ FOR doc IN news_articles
 ### 2. Query and Retrieval Functions
 
 #### GRAPHRAG_QUERY(knowledge_graph, query_text, options)
+
 Performs RAG queries against knowledge graphs.
 
 ```aql
@@ -88,6 +91,7 @@ FOR paper IN research_papers
 ```
 
 #### GRAPHRAG_FIND_PATHS(knowledge_graph, from_entity, to_entity, options)
+
 Finds reasoning paths between entities using multi-hop reasoning.
 
 ```aql
@@ -123,6 +127,7 @@ FOR entity1 IN entities
 ### 3. Similarity and Search Functions
 
 #### GRAPHRAG_FIND_SIMILAR(knowledge_graph, entity, options)
+
 Finds entities similar to a given entity using vector similarity.
 
 ```aql
@@ -155,6 +160,7 @@ FOR concept IN concepts
 ### 4. Knowledge Graph Management Functions
 
 #### GRAPHRAG_GET_STATS(knowledge_graph)
+
 Retrieves statistics about a knowledge graph.
 
 ```aql
@@ -179,6 +185,7 @@ FOR kg_name IN ["research_kg", "business_kg", "news_kg"]
 ```
 
 #### GRAPHRAG_LIST_ENTITIES(knowledge_graph, options)
+
 Lists entities from a knowledge graph with optional filtering.
 
 ```aql
@@ -205,6 +212,7 @@ RETURN entity
 ### 5. Advanced Analytics Functions
 
 #### GRAPHRAG_ANALYZE_TRENDS(knowledge_graph, concept, options)
+
 Analyzes trends and patterns around a specific concept.
 
 ```aql
@@ -231,6 +239,7 @@ FOR concept IN ["machine learning", "deep learning", "neural networks"]
 ```
 
 #### GRAPHRAG_DETECT_COMMUNITIES(knowledge_graph, options)
+
 Detects communities and clusters within the knowledge graph.
 
 ```aql
@@ -320,6 +329,7 @@ FOR paper IN research_papers
 ## Function Return Types
 
 ### Standard Result Structure
+
 All GraphRAG functions return objects with consistent structure:
 
 ```json

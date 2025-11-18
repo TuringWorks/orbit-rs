@@ -1,0 +1,1149 @@
+# Kubernetes Container Pipeline with Podman
+# Purpose: Build secure container images using Podman, scan for vulnerabilities, 
+# push to GitHub Container Registry, and provide downloadable image lists
+# Features: Multi-platform builds, security scanning, release/debug variants, GitHub Pages integration
+
+name: Kubernetes Container Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'orbit-server/**'
+      - 'orbit-operator/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/k8s-container-pipeline.yml'
+      - 'containerfiles/**'
+    tags: [ 'v*' ]
+  # Only run on PRs that are NOT from Dependabot to avoid disk space issues
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'orbit-server/**'
+      - 'orbit-operator/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/k8s-container-pipeline.yml'
+      - 'containerfiles/**'
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: 'Build type'
+        required: false
+        default: 'both'
+        type: choice
+        options:
+        - debug
+        - release
+        - both
+      platforms:
+        description: 'Target platforms'
+        required: false
+        default: 'linux/amd64,linux/arm64'
+        type: string
+      push_images:
+        description: 'Push images to registry'
+        required: false
+        default: true
+        type: boolean
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  REGISTRY: ghcr.io
+  # Repository owner must be lowercase for container registry compatibility
+  IMAGE_NAMESPACE_OWNER: ${{ github.repository_owner }}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  # ============================================================================
+  # PREPARATION AND SETUP
+  # ============================================================================
+  
+  setup:
+    name: Setup and Validation
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      should-push: ${{ steps.should-push.outputs.should-push }}
+      build-types: ${{ steps.build-types.outputs.build-types }}
+      platforms: ${{ steps.platforms.outputs.platforms }}
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v5
+      with:
+        fetch-depth: 0
+
+    - name: Determine version
+      id: version
+      run: |
+        if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+          VERSION=${GITHUB_REF#refs/tags/}
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+        else
+          VERSION=$(grep '^version' Cargo.toml | head -1 | cut -d'"' -f2)
+          COMMIT_SHA=$(echo ${{ github.sha }} | cut -c1-8)
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            VERSION="${VERSION}-${COMMIT_SHA}"
+          else
+            BRANCH=$(echo ${{ github.ref }} | sed 's/refs\/heads\///' | sed 's/[^a-zA-Z0-9.-]/-/g')
+            VERSION="${VERSION}-${BRANCH}-${COMMIT_SHA}"
+          fi
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+        fi
+        echo "Determined version: ${VERSION}"
+
+    - name: Determine if should push
+      id: should-push
+      run: |
+        if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.push_images }}" == "true" ]]; then
+          echo "should-push=true" >> $GITHUB_OUTPUT
+        elif [[ "${{ github.ref }}" == "refs/heads/main" || "${{ github.ref }}" == "refs/heads/develop" || "${{ github.ref }}" == refs/tags/* ]]; then
+          echo "should-push=true" >> $GITHUB_OUTPUT
+        else
+          echo "should-push=false" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Determine build types
+      id: build-types
+      run: |
+        if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          BUILD_TYPE="${{ inputs.build_type }}"
+        else
+          BUILD_TYPE="both"
+        fi
+        
+        case $BUILD_TYPE in
+          "debug")
+            echo "build-types=[\"debug\"]" >> $GITHUB_OUTPUT
+            ;;
+          "release")
+            echo "build-types=[\"release\"]" >> $GITHUB_OUTPUT
+            ;;
+          "both"|*)
+            echo "build-types=[\"debug\", \"release\"]" >> $GITHUB_OUTPUT
+            ;;
+        esac
+
+    - name: Determine platforms
+      id: platforms
+      run: |
+        if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ inputs.platforms }}" ]]; then
+          PLATFORMS="${{ inputs.platforms }}"
+        else
+          PLATFORMS="linux/amd64,linux/arm64"
+        fi
+        echo "platforms=${PLATFORMS}" >> $GITHUB_OUTPUT
+
+  # ============================================================================
+  # CONTAINER IMAGE BUILDS
+  # ============================================================================
+
+  build-images:
+    name: Build ${{ matrix.component }}-${{ matrix.build-type }} (${{ matrix.platform }})${{ matrix.gpu-enabled && '-gpu' || '' }}
+    runs-on: ubuntu-latest
+    needs: setup
+    # Skip container builds for Dependabot PRs to avoid disk space issues
+    if: success() && github.actor != 'dependabot[bot]'
+    strategy:
+      fail-fast: false
+      # Reduce parallelism to avoid disk space issues
+      max-parallel: 2
+      matrix:
+        component: ["orbit-server", "orbit-operator"]
+        build-type: ${{ fromJson(needs.setup.outputs.build-types) }}
+        platform: ["linux/amd64", "linux/arm64"]
+        gpu-enabled: [false, true]
+        include:
+          - platform: "linux/amd64"
+            runner-arch: "amd64"
+          - platform: "linux/arm64"
+            runner-arch: "arm64"
+        exclude:
+          # Disable GPU variants for all components (GPU support not implemented yet)
+          - component: "orbit-server"
+            gpu-enabled: true
+          - component: "orbit-operator"
+            gpu-enabled: true
+          # No ARM64 GPU support for now (can be enabled later)
+          - platform: "linux/arm64"
+            gpu-enabled: true
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v5
+      with:
+        # Use sparse checkout to reduce disk usage
+        sparse-checkout: |
+          orbit-server/
+          orbit-client/
+          orbit-operator/
+          orbit-compute/
+          orbit-util/
+          orbit-shared/
+          orbit-proto/
+          Cargo.toml
+          Cargo.lock
+          .github/workflows/k8s-container-pipeline.yml
+          containerfiles/
+          config/
+        sparse-checkout-cone-mode: false
+
+    - name: Free up disk space for container builds
+      run: |
+        echo "=== Initial disk usage ==="
+        df -h
+        
+        echo "=== Cleaning up to free disk space ==="
+        # Remove large unused packages and files
+        sudo apt-get clean
+        sudo apt-get autoremove -y
+        
+        # Remove large directories that aren't needed for our builds
+        sudo rm -rf /usr/share/dotnet
+        sudo rm -rf /usr/local/share/boost
+        sudo rm -rf /opt/ghc
+        sudo rm -rf /usr/local/share/powershell
+        sudo rm -rf /usr/share/swift
+        sudo rm -rf /usr/local/lib/android
+        
+        # Clean Docker if it exists
+        docker system prune -af 2>/dev/null || true
+        
+        # Clean package cache
+        sudo apt-get clean
+        sudo rm -rf /var/lib/apt/lists/*
+        
+        echo "=== Final disk usage ==="
+        df -h
+
+    - name: Set up QEMU for cross-platform builds
+      uses: docker/setup-qemu-action@v3
+      with:
+        platforms: all
+
+    - name: Install Podman
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y podman buildah skopeo
+        
+        # Configure Podman for rootless operation
+        echo "$USER:100000:65536" | sudo tee -a /etc/subuid
+        echo "$USER:100000:65536" | sudo tee -a /etc/subgid
+        
+        # Configure registries
+        mkdir -p ~/.config/containers
+        cat > ~/.config/containers/registries.conf << EOF
+        [registries.search]
+        registries = ['docker.io', 'quay.io']
+        
+        [registries.insecure]
+        registries = []
+        
+        [registries.block]
+        registries = []
+        EOF
+
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: |
+          ${{ matrix.platform == 'linux/amd64' && 'x86_64-unknown-linux-gnu' || 'aarch64-unknown-linux-gnu' }}
+
+    - name: Install cross-compilation tools
+      if: matrix.platform == 'linux/arm64'
+      run: |
+        sudo apt-get install -y gcc-aarch64-linux-gnu
+        echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
+
+    - name: Cache Rust dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-${{ matrix.platform }}-cargo-${{ matrix.build-type }}-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ matrix.platform }}-cargo-${{ matrix.build-type }}-
+          ${{ runner.os }}-${{ matrix.platform }}-cargo-
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get install -y pkg-config libssl-dev libsqlite3-dev protobuf-compiler
+
+    - name: Build binary
+      run: |
+        TARGET="${{ matrix.platform == 'linux/amd64' && 'x86_64-unknown-linux-gnu' || 'aarch64-unknown-linux-gnu' }}"
+        
+        BUILD_FLAGS=""
+        if [ "${{ matrix.build-type }}" = "release" ]; then
+          BUILD_FLAGS="--release"
+        fi
+        
+        # Set environment variables to reduce memory usage
+        export CARGO_NET_RETRY=10
+        export CARGO_HTTP_TIMEOUT=300
+        export RUSTFLAGS="-C link-arg=-Wl,--no-keep-memory -C codegen-units=1"
+        
+        # Build the specific component with reduced parallelism to save memory/disk
+        cargo build $BUILD_FLAGS --target $TARGET --package ${{ matrix.component }} --bin ${{ matrix.component }} --jobs 1
+        
+        # Clean up build artifacts for other components to save disk space
+        find target -name "*.rlib" -not -path "*/deps/*" -delete 2>/dev/null || true
+        find target -name "*.rmeta" -not -path "*/deps/*" -delete 2>/dev/null || true
+
+    - name: Create Containerfile
+      run: |
+        TARGET="${{ matrix.platform == 'linux/amd64' && 'x86_64-unknown-linux-gnu' || 'aarch64-unknown-linux-gnu' }}"
+        BINARY_PATH="target/${TARGET}/${{ matrix.build-type }}/${{ matrix.component }}"
+        GPU_ENABLED="${{ matrix.gpu-enabled }}"
+        GPU_SUFFIX="${{ matrix.gpu-enabled && '-gpu' || '' }}"
+        
+        # Create containerfiles directory if it doesn't exist
+        mkdir -p containerfiles
+        
+        # Create component-specific Containerfile
+        cat > containerfiles/Containerfile.${{ matrix.component }}${GPU_SUFFIX} << EOF
+        # Multi-stage build for ${{ matrix.component }}
+        FROM docker.io/library/debian:bookworm-slim as runtime
+        
+        # Install runtime dependencies
+        RUN apt-get update && \\
+            apt-get install -y \\
+                ca-certificates \\
+                libssl3 \\
+                libsqlite3-0 \\
+                tzdata \\
+                curl \\
+                tini \\
+        EOF
+        
+        # Add GPU-specific dependencies if GPU is enabled
+        if [[ "${GPU_ENABLED}" == "true" ]]; then
+          cat >> containerfiles/Containerfile.${{ matrix.component }}${GPU_SUFFIX} << 'EOF_GPU'
+                # GPU runtime dependencies
+                wget \\
+                gnupg \\
+                software-properties-common \\
+        EOF_GPU
+        fi
+        
+        cat >> containerfiles/Containerfile.${{ matrix.component }}${GPU_SUFFIX} << EOF
+            && rm -rf /var/lib/apt/lists/*
+        
+        # Install GPU runtime if enabled
+        EOF
+        
+        if [[ "${GPU_ENABLED}" == "true" ]]; then
+          cat >> containerfiles/Containerfile.${{ matrix.component }}${GPU_SUFFIX} << 'EOF_GPU'
+        RUN wget -qO - https://developer.download.nvidia.com/compute/cuda/repos/debian12/x86_64/3bf863cc.pub | apt-key add - && \\
+            echo "deb https://developer.download.nvidia.com/compute/cuda/repos/debian12/x86_64 /" > /etc/apt/sources.list.d/cuda.list && \\
+            apt-get update && \\
+            apt-get install -y \\
+                cuda-runtime-12-2 \\
+                libcudnn8 \\
+                libnccl2 \\
+            && rm -rf /var/lib/apt/lists/*
+        
+        # Set GPU environment variables
+        ENV NVIDIA_VISIBLE_DEVICES=all
+        ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility
+        ENV CUDA_VERSION=12.2
+        EOF_GPU
+        fi
+        
+        cat >> containerfiles/Containerfile.${{ matrix.component }}${GPU_SUFFIX} << EOF
+        
+        # Create non-root user
+        RUN groupadd -r orbit && useradd -r -g orbit orbit
+        
+        # Create necessary directories
+        RUN mkdir -p /app/config /app/data /app/logs && \\
+            chown -R orbit:orbit /app
+        
+        # Copy binary
+        COPY ${BINARY_PATH} /app/${{ matrix.component }}
+        RUN chmod +x /app/${{ matrix.component }} && \\
+            chown orbit:orbit /app/${{ matrix.component }}
+        
+        # Copy configuration files
+        COPY config/ /app/config/
+        RUN chown -R orbit:orbit /app/config
+        
+        # Set working directory and user
+        WORKDIR /app
+        USER orbit
+        
+        # Health check
+        HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \\
+            CMD curl -f http://localhost:8080/health || exit 1
+        
+        # Expose default port
+        EXPOSE 8080
+        
+        # Set entrypoint
+        ENTRYPOINT ["/app/${{ matrix.component }}"]
+        EOF
+
+    - name: Build container image with Podman
+      run: |
+        TARGET="${{ matrix.platform == 'linux/amd64' && 'x86_64-unknown-linux-gnu' || 'aarch64-unknown-linux-gnu' }}"
+        PLATFORM="${{ matrix.platform }}"
+        VERSION="${{ needs.setup.outputs.version }}"
+        BUILD_TYPE="${{ matrix.build-type }}"
+        COMPONENT="${{ matrix.component }}"
+        GPU_ENABLED="${{ matrix.gpu-enabled }}"
+        GPU_SUFFIX="${{ matrix.gpu-enabled && '-gpu' || '' }}"
+        
+        # Convert repository owner to lowercase for container registry compatibility
+        IMAGE_NAMESPACE=$(echo "${IMAGE_NAMESPACE_OWNER}/orbit-rs" | tr '[:upper:]' '[:lower:]')
+        
+        # Build image
+        podman build \
+          --platform=${PLATFORM} \
+          --file=containerfiles/Containerfile.${COMPONENT}${GPU_SUFFIX} \
+          --tag=${REGISTRY}/${IMAGE_NAMESPACE}/${COMPONENT}:${VERSION}-${BUILD_TYPE}${GPU_SUFFIX}-${PLATFORM//\//-} \
+          --tag=${REGISTRY}/${IMAGE_NAMESPACE}/${COMPONENT}:${BUILD_TYPE}${GPU_SUFFIX}-${PLATFORM//\//-} \
+          --label="org.opencontainers.image.source=https://github.com/${{ github.repository }}" \
+          --label="org.opencontainers.image.description=Orbit-RS ${COMPONENT} (${BUILD_TYPE})" \
+          --label="org.opencontainers.image.version=${VERSION}" \
+          --label="org.opencontainers.image.created=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
+          --label="org.opencontainers.image.revision=${{ github.sha }}" \
+          --label="org.opencontainers.image.licenses=BSD-3-Clause OR MIT" \
+          .
+        
+        # Clean up build context and intermediate files to save disk space
+        rm -rf containerfiles/Containerfile.${COMPONENT}${GPU_SUFFIX} || true
+        podman system prune -f || true
+        
+        echo "=== Post-build disk usage ==="
+        df -h
+
+    - name: Run container security scan with Trivy
+      run: |
+        # Install Trivy
+        sudo apt-get install wget apt-transport-https gnupg lsb-release
+        wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
+        echo "deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee -a /etc/sources.list.d/trivy.list
+        sudo apt-get update
+        sudo apt-get install trivy
+        
+        # Convert repository owner to lowercase for container registry compatibility
+        IMAGE_NAMESPACE=$(echo "${IMAGE_NAMESPACE_OWNER}/orbit-rs" | tr '[:upper:]' '[:lower:]')
+        
+        # Scan the image
+        PLATFORM="${{ matrix.platform }}"
+        VERSION="${{ needs.setup.outputs.version }}"
+        BUILD_TYPE="${{ matrix.build-type }}"
+        COMPONENT="${{ matrix.component }}"
+        IMAGE_TAG="${REGISTRY}/${IMAGE_NAMESPACE}/${COMPONENT}:${VERSION}-${BUILD_TYPE}-${PLATFORM//\//-}"
+        
+        # Export image for scanning (Podman doesn't directly support Trivy)
+        podman save --format=docker-archive ${IMAGE_TAG} > /tmp/${COMPONENT}-${BUILD_TYPE}-${PLATFORM//\//-}.tar
+        
+        # Run security scan
+        trivy image --input /tmp/${COMPONENT}-${BUILD_TYPE}-${PLATFORM//\//-}.tar \
+          --format sarif \
+          --output ${COMPONENT}-${BUILD_TYPE}-${PLATFORM//\//-}-trivy-results.sarif \
+          --severity HIGH,CRITICAL \
+          --exit-code 0
+        
+        # Run security scan (table format for logs)
+        trivy image --input /tmp/${COMPONENT}-${BUILD_TYPE}-${PLATFORM//\//-}.tar \
+          --format table \
+          --severity HIGH,CRITICAL \
+          --exit-code 0 || echo "Security scan completed with vulnerabilities"
+
+    - name: Upload security scan results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: security-scan-${{ matrix.component }}-${{ matrix.build-type }}-${{ matrix.platform }}
+        path: "*-trivy-results.sarif"
+        retention-days: 30
+
+    - name: Log in to Container Registry
+      if: needs.setup.outputs.should-push == 'true'
+      run: |
+        echo "${{ secrets.GITHUB_TOKEN }}" | podman login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin
+
+    - name: Push container image
+      if: needs.setup.outputs.should-push == 'true'
+      run: |
+        # Convert repository owner to lowercase for container registry compatibility
+        IMAGE_NAMESPACE=$(echo "${IMAGE_NAMESPACE_OWNER}/orbit-rs" | tr '[:upper:]' '[:lower:]')
+        
+        PLATFORM="${{ matrix.platform }}"
+        VERSION="${{ needs.setup.outputs.version }}"
+        BUILD_TYPE="${{ matrix.build-type }}"
+        COMPONENT="${{ matrix.component }}"
+        
+        # Push with version tag
+        podman push ${REGISTRY}/${IMAGE_NAMESPACE}/${COMPONENT}:${VERSION}-${BUILD_TYPE}-${PLATFORM//\//-}
+        
+        # Push with build type tag  
+        podman push ${REGISTRY}/${IMAGE_NAMESPACE}/${COMPONENT}:${BUILD_TYPE}-${PLATFORM//\//-}
+
+    - name: Generate image metadata
+      run: |
+        # Convert repository owner to lowercase for container registry compatibility
+        IMAGE_NAMESPACE=$(echo "${IMAGE_NAMESPACE_OWNER}/orbit-rs" | tr '[:upper:]' '[:lower:]')
+        
+        PLATFORM="${{ matrix.platform }}"
+        VERSION="${{ needs.setup.outputs.version }}"
+        BUILD_TYPE="${{ matrix.build-type }}"
+        COMPONENT="${{ matrix.component }}"
+        GPU_ENABLED="${{ matrix.gpu-enabled }}"
+        GPU_SUFFIX="${{ matrix.gpu-enabled && '-gpu' || '' }}"
+        IMAGE_TAG="${REGISTRY}/${IMAGE_NAMESPACE}/${COMPONENT}:${VERSION}-${BUILD_TYPE}${GPU_SUFFIX}-${PLATFORM//\//-}"
+        
+        # Get image info
+        IMAGE_ID=$(podman images --format="{{.ID}}" ${IMAGE_TAG})
+        IMAGE_SIZE=$(podman images --format="{{.Size}}" ${IMAGE_TAG})
+        
+        # Create metadata file
+        mkdir -p image-metadata
+        cat > image-metadata/${COMPONENT}-${BUILD_TYPE}${GPU_SUFFIX}-${PLATFORM//\//-}.json << EOF
+        {
+          "component": "${COMPONENT}",
+          "version": "${VERSION}",
+          "build_type": "${BUILD_TYPE}",
+          "platform": "${PLATFORM}",
+          "gpu_enabled": ${GPU_ENABLED},
+          "image_tag": "${IMAGE_TAG}",
+          "image_id": "${IMAGE_ID}",
+          "image_size": "${IMAGE_SIZE}",
+          "created": "$(date -u +'%Y-%m-%dT%H:%M:%SZ')",
+          "commit_sha": "${{ github.sha }}",
+          "registry": "${REGISTRY}",
+          "pull_command": "podman pull ${IMAGE_TAG}",
+          "run_command": "podman run -d -p 8080:8080 ${IMAGE_TAG}${{ matrix.gpu-enabled && ' --gpus all' || '' }}"
+        }
+        EOF
+
+    - name: Upload image metadata
+      uses: actions/upload-artifact@v4
+      with:
+        name: image-metadata-${{ matrix.component }}-${{ matrix.build-type }}-${{ matrix.platform }}
+        path: image-metadata/
+        retention-days: 90
+
+  # ============================================================================
+  # CREATE MULTI-PLATFORM MANIFESTS
+  # ============================================================================
+
+  create-manifests:
+    name: Create Multi-Platform Manifests
+    runs-on: ubuntu-latest
+    needs: [setup, build-images]
+    if: needs.setup.outputs.should-push == 'true'
+    strategy:
+      matrix:
+        component: ["orbit-server", "orbit-client", "orbit-operator", "orbit-compute"]
+        build-type: ${{ fromJson(needs.setup.outputs.build-types) }}
+    permissions:
+      contents: read
+      packages: write
+    
+    steps:
+    - name: Install Podman and manifest tools
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y podman buildah skopeo
+
+    - name: Log in to Container Registry
+      run: |
+        echo "${{ secrets.GITHUB_TOKEN }}" | podman login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin
+
+    - name: Create and push multi-platform manifest
+      run: |
+        # Convert repository owner to lowercase for container registry compatibility
+        IMAGE_NAMESPACE=$(echo "${IMAGE_NAMESPACE_OWNER}/orbit-rs" | tr '[:upper:]' '[:lower:]')
+        
+        VERSION="${{ needs.setup.outputs.version }}"
+        BUILD_TYPE="${{ matrix.build-type }}"
+        COMPONENT="${{ matrix.component }}"
+        
+        # Create manifest list
+        podman manifest create ${REGISTRY}/${IMAGE_NAMESPACE}/${COMPONENT}:${VERSION}-${BUILD_TYPE}
+        
+        # Add platform-specific images to manifest
+        for PLATFORM in linux/amd64 linux/arm64; do
+          PLATFORM_TAG=${PLATFORM//\//-}
+          podman manifest add ${REGISTRY}/${IMAGE_NAMESPACE}/${COMPONENT}:${VERSION}-${BUILD_TYPE} \
+            ${REGISTRY}/${IMAGE_NAMESPACE}/${COMPONENT}:${VERSION}-${BUILD_TYPE}-${PLATFORM_TAG}
+        done
+        
+        # Push manifest
+        podman manifest push ${REGISTRY}/${IMAGE_NAMESPACE}/${COMPONENT}:${VERSION}-${BUILD_TYPE} \
+          ${REGISTRY}/${IMAGE_NAMESPACE}/${COMPONENT}:${VERSION}-${BUILD_TYPE}
+        
+        # Create and push latest tags for main branch releases
+        if [[ "${{ github.ref }}" == "refs/heads/main" || "${{ github.ref }}" == refs/tags/* ]]; then
+          podman manifest create ${REGISTRY}/${IMAGE_NAMESPACE}/${COMPONENT}:${BUILD_TYPE}
+          
+          for PLATFORM in linux/amd64 linux/arm64; do
+            PLATFORM_TAG=${PLATFORM//\//-}
+            podman manifest add ${REGISTRY}/${IMAGE_NAMESPACE}/${COMPONENT}:${BUILD_TYPE} \
+              ${REGISTRY}/${IMAGE_NAMESPACE}/${COMPONENT}:${VERSION}-${BUILD_TYPE}-${PLATFORM_TAG}
+          done
+          
+          podman manifest push ${REGISTRY}/${IMAGE_NAMESPACE}/${COMPONENT}:${BUILD_TYPE} \
+            ${REGISTRY}/${IMAGE_NAMESPACE}/${COMPONENT}:${BUILD_TYPE}
+        fi
+
+  # ============================================================================
+  # GENERATE DOWNLOAD PAGE
+  # ============================================================================
+
+  generate-download-page:
+    name: Generate Container Images Download Page
+    runs-on: ubuntu-latest
+    needs: [setup, build-images, create-manifests]
+    if: always() && (needs.setup.outputs.should-push == 'true' || github.event_name == 'workflow_dispatch')
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v5
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Download all image metadata
+      uses: actions/download-artifact@v4
+      with:
+        pattern: image-metadata-*
+        path: ./metadata
+        merge-multiple: true
+
+    - name: Generate download page
+      run: |
+        VERSION="${{ needs.setup.outputs.version }}"
+        
+        # Create docs directory if it doesn't exist
+        mkdir -p docs/container-images
+        
+        # Generate HTML page
+        cat > docs/container-images/index.html << 'EOF'
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Orbit-RS Container Images</title>
+            <style>
+                body {
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+                    line-height: 1.6;
+                    color: #333;
+                    max-width: 1200px;
+                    margin: 0 auto;
+                    padding: 20px;
+                    background-color: #f5f5f5;
+                }
+                .header {
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    color: white;
+                    padding: 2rem;
+                    border-radius: 10px;
+                    margin-bottom: 2rem;
+                    text-align: center;
+                }
+                .container {
+                    background: white;
+                    padding: 2rem;
+                    border-radius: 10px;
+                    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                    margin-bottom: 2rem;
+                }
+                .component-grid {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+                    gap: 1.5rem;
+                    margin-top: 2rem;
+                }
+                .component-card {
+                    border: 1px solid #ddd;
+                    border-radius: 8px;
+                    padding: 1.5rem;
+                    background: #fafafa;
+                }
+                .component-title {
+                    color: #667eea;
+                    border-bottom: 2px solid #667eea;
+                    padding-bottom: 0.5rem;
+                    margin-bottom: 1rem;
+                }
+                .image-list {
+                    list-style: none;
+                    padding: 0;
+                }
+                .image-item {
+                    background: white;
+                    margin: 0.5rem 0;
+                    padding: 1rem;
+                    border-radius: 5px;
+                    border-left: 4px solid #667eea;
+                }
+                .image-tag {
+                    font-family: 'Monaco', 'Menlo', monospace;
+                    font-size: 0.9rem;
+                    color: #2d3748;
+                    background: #f7fafc;
+                    padding: 0.25rem 0.5rem;
+                    border-radius: 3px;
+                    display: inline-block;
+                    margin: 0.25rem 0;
+                }
+                .pull-command {
+                    background: #1a202c;
+                    color: #e2e8f0;
+                    padding: 0.5rem;
+                    border-radius: 3px;
+                    font-family: 'Monaco', 'Menlo', monospace;
+                    font-size: 0.8rem;
+                    margin: 0.5rem 0;
+                    overflow-x: auto;
+                }
+                .metadata {
+                    font-size: 0.8rem;
+                    color: #666;
+                    margin-top: 0.5rem;
+                }
+                .security-info {
+                    background: #e6fffa;
+                    border: 1px solid #4fd1c7;
+                    border-radius: 5px;
+                    padding: 1rem;
+                    margin: 1rem 0;
+                }
+                .instructions {
+                    background: #f0f9ff;
+                    border: 1px solid #0ea5e9;
+                    border-radius: 5px;
+                    padding: 1rem;
+                    margin: 1rem 0;
+                }
+                .build-types {
+                    display: flex;
+                    gap: 1rem;
+                    margin: 1rem 0;
+                }
+                .build-type {
+                    padding: 0.5rem 1rem;
+                    border-radius: 20px;
+                    font-size: 0.8rem;
+                    font-weight: bold;
+                }
+                .build-type.release {
+                    background: #dcfdf7;
+                    color: #065f46;
+                }
+                .build-type.debug {
+                    background: #fef3c7;
+                    color: #92400e;
+                }
+        EOF
+
+        # Add JavaScript and complete the page
+        cat >> docs/container-images/index.html << 'EOF'
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <h1>🚀 Orbit-RS Container Images</h1>
+                <p>Production-ready container images built with Podman and scanned for security vulnerabilities</p>
+        EOF
+
+        echo "                <p>Version: <strong>${VERSION}</strong> | Built: $(date -u +'%Y-%m-%d %H:%M:%S UTC')</p>" >> docs/container-images/index.html
+
+        cat >> docs/container-images/index.html << 'EOF'
+            </div>
+
+            <div class="container">
+                <h2>📋 Quick Start</h2>
+                <div class="instructions">
+                    <p><strong>Prerequisites:</strong> Install <a href="https://podman.io/getting-started/installation">Podman</a> or Docker</p>
+                    <p><strong>Usage:</strong> Click on any image tag below to copy the pull command</p>
+                </div>
+
+                <div class="security-info">
+                    <h3>🔒 Security Features</h3>
+                    <ul>
+                        <li>All images scanned with Trivy for vulnerabilities</li>
+                        <li>Built from minimal Debian base images</li>
+                        <li>Non-root user execution</li>
+                        <li>Health checks included</li>
+                        <li>Signed and verified builds</li>
+                    </ul>
+                </div>
+
+                <h2>📦 Available Images</h2>
+                <div id="component-grid" class="component-grid">
+                    <!-- Images will be populated by JavaScript -->
+                </div>
+            </div>
+
+            <script>
+                const imageData = [
+        EOF
+
+        # Process metadata files to generate JavaScript data
+        if ls ./metadata/*.json 1> /dev/null 2>&1; then
+            first_file=true
+            for metadata_file in ./metadata/*.json; do
+                if [ "$first_file" = true ]; then
+                    first_file=false
+                else
+                    echo "," >> docs/container-images/index.html
+                fi
+                cat "$metadata_file" >> docs/container-images/index.html
+            done
+        fi
+
+        cat >> docs/container-images/index.html << 'EOF'
+                ];
+
+                function groupByComponent(data) {
+                    return data.reduce((groups, image) => {
+                        const key = image.component;
+                        if (!groups[key]) {
+                            groups[key] = [];
+                        }
+                        groups[key].push(image);
+                        return groups;
+                    }, {});
+                }
+
+                function renderImages() {
+                    const componentGrid = document.getElementById('component-grid');
+                    const groupedImages = groupByComponent(imageData);
+
+                    Object.keys(groupedImages).forEach(component => {
+                        const images = groupedImages[component];
+                        const componentCard = document.createElement('div');
+                        componentCard.className = 'component-card';
+
+                        const buildTypes = [...new Set(images.map(img => img.build_type))];
+                        const buildTypeTags = buildTypes.map(type => 
+                            `<span class="build-type ${type}">${type.toUpperCase()}</span>`
+                        ).join('');
+
+                        componentCard.innerHTML = `
+                            <h3 class="component-title">${component}</h3>
+                            <div class="build-types">${buildTypeTags}</div>
+                            <ul class="image-list">
+                                ${images.map(image => `
+                                    <li class="image-item">
+                                        <div class="image-tag" onclick="copyToClipboard('${image.pull_command}')" title="Click to copy pull command">
+                                            ${image.image_tag.split('/').pop()}
+                                        </div>
+                                        <div class="pull-command" onclick="copyToClipboard('${image.pull_command}')" title="Click to copy">
+                                            ${image.pull_command}
+                                        </div>
+                                        <div class="metadata">
+                                            Platform: ${image.platform} | Size: ${image.image_size} | Built: ${image.created}
+                                        </div>
+                                    </li>
+                                `).join('')}
+                            </ul>
+                        `;
+
+                        componentGrid.appendChild(componentCard);
+                    });
+                }
+
+                function copyToClipboard(text) {
+                    navigator.clipboard.writeText(text).then(() => {
+                        // Show temporary feedback
+                        const originalBg = event.target.style.backgroundColor;
+                        event.target.style.backgroundColor = '#4ade80';
+                        setTimeout(() => {
+                            event.target.style.backgroundColor = originalBg;
+                        }, 200);
+                    });
+                }
+
+                // Initialize the page
+                document.addEventListener('DOMContentLoaded', renderImages);
+            </script>
+        </body>
+        </html>
+        EOF
+
+    - name: Commit and push download page
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        
+        # Add the generated files
+        git add docs/container-images/
+        
+        # Check if there are changes to commit
+        if git diff --staged --quiet; then
+          echo "No changes to commit"
+        else
+          git commit -m "Update container images download page [skip ci]"
+          git push
+        fi
+
+    - name: Setup Pages
+      if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
+      uses: actions/configure-pages@v4
+
+    - name: Upload Pages artifact
+      if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
+      uses: actions/upload-pages-artifact@v4
+      with:
+        path: ./docs
+
+    - name: Deploy to GitHub Pages
+      if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
+      id: deployment
+      uses: actions/deploy-pages@v4
+
+  # ============================================================================
+  # KUBERNETES DEPLOYMENT VALIDATION
+  # ============================================================================
+
+  validate-k8s-deployment:
+    name: Validate Kubernetes Deployment
+    runs-on: ubuntu-latest
+    needs: [setup, create-manifests]
+    if: needs.setup.outputs.should-push == 'true'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v5
+
+    - name: Set up kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'v1.28.0'
+
+    - name: Set up Helm
+      uses: azure/setup-helm@v4
+      with:
+        version: '3.15.0'
+
+    - name: Create test namespace manifest
+      run: |
+        # Convert repository owner to lowercase for container registry compatibility
+        IMAGE_NAMESPACE=$(echo "${IMAGE_NAMESPACE_OWNER}/orbit-rs" | tr '[:upper:]' '[:lower:]')
+        
+        VERSION="${{ needs.setup.outputs.version }}"
+        
+        # Update Kubernetes manifests with new image tags
+        mkdir -p k8s/test-deployment
+        
+        for component in orbit-server orbit-client orbit-operator orbit-compute; do
+          cat > k8s/test-deployment/${component}-deployment.yaml << EOF
+        apiVersion: apps/v1
+        kind: Deployment
+        metadata:
+          name: ${component}
+          namespace: orbit-system
+          labels:
+            app.kubernetes.io/name: ${component}
+            app.kubernetes.io/version: "${VERSION}"
+            app.kubernetes.io/component: ${component}
+        spec:
+          replicas: 1
+          selector:
+            matchLabels:
+              app.kubernetes.io/name: ${component}
+          template:
+            metadata:
+              labels:
+                app.kubernetes.io/name: ${component}
+            spec:
+              containers:
+              - name: ${component}
+                image: ${REGISTRY}/${IMAGE_NAMESPACE}/${component}:${VERSION}-release
+                ports:
+                - containerPort: 8080
+                  name: http
+                env:
+                - name: RUST_LOG
+                  value: "info"
+                resources:
+                  requests:
+                    memory: "256Mi"
+                    cpu: "100m"
+                  limits:
+                    memory: "512Mi"
+                    cpu: "500m"
+                livenessProbe:
+                  httpGet:
+                    path: /health
+                    port: 8080
+                  initialDelaySeconds: 30
+                  periodSeconds: 10
+                readinessProbe:
+                  httpGet:
+                    path: /ready
+                    port: 8080
+                  initialDelaySeconds: 5
+                  periodSeconds: 5
+                securityContext:
+                  allowPrivilegeEscalation: false
+                  runAsNonRoot: true
+                  runAsUser: 1000
+                  readOnlyRootFilesystem: true
+                  capabilities:
+                    drop:
+                    - ALL
+        ---
+        apiVersion: v1
+        kind: Service
+        metadata:
+          name: ${component}
+          namespace: orbit-system
+        spec:
+          selector:
+            app.kubernetes.io/name: ${component}
+          ports:
+          - port: 8080
+            targetPort: 8080
+            name: http
+          type: ClusterIP
+        EOF
+        done
+
+    - name: Validate Kubernetes manifests
+      run: |
+        # Validate all YAML files
+        for file in k8s/test-deployment/*.yaml; do
+          echo "Validating $file..."
+          kubectl --dry-run=client --validate=true apply -f "$file"
+        done
+        echo "✅ All Kubernetes manifests are valid"
+
+    - name: Test Helm chart with new images
+      run: |
+        # Convert repository owner to lowercase for container registry compatibility
+        IMAGE_NAMESPACE=$(echo "${IMAGE_NAMESPACE_OWNER}/orbit-rs" | tr '[:upper:]' '[:lower:]')
+        
+        VERSION="${{ needs.setup.outputs.version }}"
+        
+        # Update Helm values for testing
+        cat > helm/orbit-rs/values-test.yaml << EOF
+        orbitServer:
+          image:
+            repository: ${REGISTRY}/${IMAGE_NAMESPACE}/orbit-server
+            tag: ${VERSION}-release
+            pullPolicy: IfNotPresent
+          replicaCount: 1
+          
+        orbitClient:
+          image:
+            repository: ${REGISTRY}/${IMAGE_NAMESPACE}/orbit-client
+            tag: ${VERSION}-release
+            pullPolicy: IfNotPresent
+            
+        orbitOperator:
+          image:
+            repository: ${REGISTRY}/${IMAGE_NAMESPACE}/orbit-operator
+            tag: ${VERSION}-release
+            pullPolicy: IfNotPresent
+            
+        orbitCompute:
+          image:
+            repository: ${REGISTRY}/${IMAGE_NAMESPACE}/orbit-compute
+            tag: ${VERSION}-release
+            pullPolicy: IfNotPresent
+        EOF
+        
+        # Test Helm chart rendering
+        helm template orbit-rs helm/orbit-rs -f helm/orbit-rs/values-test.yaml > /tmp/helm-output.yaml
+        
+        # Validate rendered templates
+        kubectl --dry-run=client --validate=true apply -f /tmp/helm-output.yaml
+        echo "✅ Helm chart validation successful"
+
+  # ============================================================================
+  # NOTIFICATIONS AND REPORTING
+  # ============================================================================
+
+  notify-success:
+    name: Success Notification
+    runs-on: ubuntu-latest
+    needs: [setup, build-images, create-manifests, generate-download-page, validate-k8s-deployment]
+    if: success()
+    steps:
+    - name: Report success
+      run: |
+        echo "🎉 Kubernetes Container Pipeline completed successfully!"
+        echo "✅ Container images built and scanned"
+        echo "✅ Multi-platform manifests created"
+        echo "✅ Security scans completed"
+        echo "✅ Kubernetes deployments validated"
+        if [[ "${{ needs.setup.outputs.should-push }}" == "true" ]]; then
+          echo "✅ Images pushed to registry"
+          echo "✅ Download page updated"
+        fi
+        echo ""
+        echo "📦 Built images for components: orbit-server, orbit-client, orbit-operator, orbit-compute"
+        echo "🏗️ Build types: ${{ needs.setup.outputs.build-types }}"
+        echo "🖥️ Platforms: ${{ needs.setup.outputs.platforms }}"
+        echo "📝 Version: ${{ needs.setup.outputs.version }}"
+
+  notify-failure:
+    name: Failure Notification  
+    runs-on: ubuntu-latest
+    needs: [setup, build-images, create-manifests, generate-download-page, validate-k8s-deployment]
+    if: failure()
+    permissions:
+      issues: write
+    steps:
+    - name: Create failure issue
+      uses: actions/github-script@v8
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          const title = `🚨 Kubernetes Container Pipeline Failed - ${context.workflow}`;
+          const body = `## 🚨 Kubernetes Container Pipeline Failure
+          
+          **Workflow:** ${context.workflow}
+          **Run:** [#${context.runNumber}](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})
+          **Commit:** ${context.sha}
+          **Branch/Tag:** ${context.ref}
+          **Author:** @${context.actor}
+          **Timestamp:** ${new Date().toISOString()}
+          
+          ### 🔍 Failed Components
+          Please check the workflow run for detailed error logs.
+          
+          ### 🛠 Quick Debugging
+          \`\`\`bash
+          # Test Podman build locally
+          podman --version
+          podman build --help
+          
+          # Check container registry access
+          podman login ghcr.io
+          
+          # Validate Kubernetes manifests
+          kubectl apply --dry-run=client -f k8s/
+          helm template orbit-rs helm/orbit-rs
+          \`\`\``;
+          
+          await github.rest.issues.create({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            title: title,
+            body: body,
+            labels: ['ci-failure', 'containers', 'kubernetes']
+          });

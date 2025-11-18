@@ -11,7 +11,7 @@ category: documentation
 After analyzing orbit-rs's specific requirements for actor lease management, cluster coordination, and catastrophic failure recovery, there are several alternatives to LSM Trees that may be **superior** for this use case:
 
 1. **🥇 Copy-on-Write B+ Trees** - Best overall fit
-2. **🥈 Hybrid WAL + Memory-Mapped Files** - Excellent performance 
+2. **🥈 Hybrid WAL + Memory-Mapped Files** - Excellent performance
 3. **🥉 Append-Only Log with Periodic Snapshots** - Simplest implementation
 4. **🔄 Actor-Specific Persistence Layer** - Most specialized
 5. **🏗️ RocksDB/LevelDB Integration** - Proven solution
@@ -33,14 +33,16 @@ pub struct CowBTreePersistence {
 }
 ```
 
-#### Why Perfect for orbit-rs:
+#### Why Perfect for orbit-rs
+
 - **Actor lease updates** → Single node modifications with COW
 - **Point-in-time snapshots** → Natural with immutable trees  
 - **Range queries** → Native B+ tree strength
 - **Memory efficiency** → Share unchanged pages between versions
 - **Crash recovery** → WAL replay onto last consistent tree
 
-#### Performance Characteristics:
+#### Performance Characteristics
+
 ```
 Write latency:     5-20μs (single page COW)
 Read latency:      1-3μs (cached pages)  
@@ -49,7 +51,8 @@ Recovery time:     2-5 seconds (WAL replay)
 Space efficiency:  85-95% (shared pages)
 ```
 
-#### Implementation Phases:
+#### Implementation Phases
+
 ```rust
 // Phase 1: Core COW B+ Tree
 pub struct BTreeNode {
@@ -79,7 +82,7 @@ impl CowBTreePersistence {
 
 ---
 
-### 2. 🥈 **Hybrid WAL + Memory-Mapped Files** 
+### 2. 🥈 **Hybrid WAL + Memory-Mapped Files**
 
 ```rust
 pub struct MMapPersistence {
@@ -93,14 +96,16 @@ pub struct MMapPersistence {
 }
 ```
 
-#### Why Excellent for orbit-rs:
+#### Why Excellent for orbit-rs
+
 - **Zero-copy reads** → Memory-mapped lease table
 - **Atomic writes** → WAL ensures consistency
 - **Fast recovery** → Memory map + WAL replay
 - **OS-optimized** → Leverage kernel page cache
 - **Simple implementation** → Less complexity than LSM
 
-#### Performance Characteristics:
+#### Performance Characteristics
+
 ```
 Write latency:     2-8μs (memory write + WAL)
 Read latency:      0.5-2μs (memory read)
@@ -109,7 +114,8 @@ Recovery time:     1-3 seconds
 Space efficiency:  90-98% (no amplification)
 ```
 
-#### Implementation:
+#### Implementation
+
 ```rust
 impl MMapPersistence {
     pub async fn initialize(data_file: &Path) -> Result<Self> {
@@ -161,19 +167,22 @@ pub struct AppendOnlyPersistence {
 }
 ```
 
-#### Why Great for orbit-rs:
+#### Why Great for orbit-rs
+
 - **Simplest implementation** → Easiest to get right
 - **Excellent write performance** → Pure append operations
 - **Natural audit trail** → All changes logged
 - **Easy replication** → Just stream the log
 - **Predictable performance** → No compaction stalls
 
-#### Trade-offs:
+#### Trade-offs
+
 - **Read amplification** → May need to read multiple log entries
 - **Space usage** → Grows until snapshot+cleanup
 - **Recovery time** → Proportional to log size
 
-#### Implementation:
+#### Implementation
+
 ```rust
 impl AppendOnlyPersistence {
     pub async fn store_lease(&self, lease: &ActorLease) -> Result<()> {
@@ -280,7 +289,8 @@ impl LeaseStore {
 }
 ```
 
-#### Benefits:
+#### Benefits
+
 - **Maximum optimization** for each data type
 - **Minimal overhead** - no generic abstractions
 - **Actor-aware** scheduling and batching
@@ -288,7 +298,7 @@ impl LeaseStore {
 
 ---
 
-### 5. 🏗️ **RocksDB/LevelDB Integration** 
+### 5. 🏗️ **RocksDB/LevelDB Integration**
 
 Use battle-tested LSM implementation with orbit-rs optimizations:
 
@@ -371,14 +381,16 @@ impl RocksDBPersistence {
 
 For orbit-rs, I recommend the **Copy-on-Write B+ Trees** approach because:
 
-### Perfect Fit for Actor Systems:
+### Perfect Fit for Actor Systems
+
 1. **Lease updates are localized** → COW minimizes copying
 2. **Snapshot requirements** → Natural with immutable trees
 3. **Range queries needed** → B+ trees excel here
 4. **Memory efficiency critical** → COW shares unchanged data
 5. **Fast recovery essential** → Small WAL + tree restoration
 
-### Implementation Priority:
+### Implementation Priority
+
 ```rust
 // Phase 1: Basic COW B+ Tree (4 weeks)
 // Phase 2: Actor lease optimizations (2 weeks)  
@@ -387,7 +399,8 @@ For orbit-rs, I recommend the **Copy-on-Write B+ Trees** approach because:
 // Total: 10 weeks vs 12 weeks for LSM
 ```
 
-### Fallback Option:
+### Fallback Option
+
 If development resources are limited, **MMap + WAL** provides 80% of the benefits with 40% of the complexity.
 
 ## 🚀 **Next Steps**

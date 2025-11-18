@@ -11,6 +11,7 @@ category: documentation
 ## 📊 **Verified Project Statistics**
 
 ### **Codebase Scale**
+
 - **Total Lines of Code**: 144,855 lines of Rust
 - **Source Files**: 500+ Rust source files
 - **Test Coverage**: 721+ test functions across 101+ test modules
@@ -18,6 +19,7 @@ category: documentation
 - **Examples**: 13+ working examples and demonstrations
 
 ### **Workspace Structure**
+
 - **Core Modules**: 14 primary workspace crates
 - **Examples**: 13+ complete example applications
 - **Total Projects**: 27 Cargo.toml configurations
@@ -25,6 +27,7 @@ category: documentation
 - **CI/CD**: 5 comprehensive workflows, 29+ YAML files
 
 ### **Protocol Implementation**
+
 - **Redis Commands**: 124+ fully implemented RESP commands
 - **Actor Types**: 13+ specialized actor implementations
 - **Protocols**: 4 complete protocol implementations
@@ -34,19 +37,24 @@ category: documentation
 ## 🏗️ **Architecture Overview**
 
 ### **Core Components**
+
 ```
 orbit-rs/
-├── orbit-util/           # Utilities, RNG, metrics
-├── orbit-shared/         # Core types, errors, communication
-├── orbit-proto/          # Protocol Buffers (7+ .proto files)
-├── orbit-client/         # Client-side actor management
-├── orbit-server/         # Server-side cluster management
-├── orbit-protocols/      # Protocol adapters (RESP, PostgreSQL, MCP)
-├── orbit-operator/       # Kubernetes operator (7+ controllers)
-├── orbit-application/    # Application framework
-├── orbit-server-etcd/    # etcd integration
-├── orbit-server-prometheus/ # Metrics integration
-└── examples/            # 13+ working examples
+├── orbit/
+│   ├── util/            # Utilities, RNG, metrics
+│   ├── shared/          # Core types, errors, communication
+│   ├── proto/           # Protocol Buffers (7+ .proto files)
+│   ├── client/          # Client-side actor management
+│   ├── server/          # Server-side cluster management
+│   ├── protocols/       # Protocol adapters (RESP, PostgreSQL, MCP)
+│   ├── operator/        # Kubernetes operator (7+ controllers)
+│   ├── application/     # Application framework
+│   ├── server-etcd/     # etcd integration
+│   └── server-prometheus/ # Metrics integration
+├── examples/            # 13+ working examples
+├── scripts/             # Build and startup scripts
+├── config/              # Configuration files
+└── docs/                # Documentation
 ```
 
 ### **Protocol Support Matrix**
@@ -66,6 +74,7 @@ orbit-rs/
 ## 🚀 **Performance Characteristics**
 
 ### **Throughput & Latency**
+
 - **Message Processing**: 500k+ messages/second (estimated)
 - **Memory Usage**: ~50MB typical (vs ~300MB JVM equivalent)
 - **Binary Size**: ~10MB (vs ~100MB JVM equivalent)
@@ -73,6 +82,7 @@ orbit-rs/
 - **P99 Latency**: 1-5ms (vs 10-50ms JVM)
 
 ### **Concurrency & Safety**
+
 - **Zero unsafe code** in core modules
 - **Memory safety** guaranteed by Rust type system
 - **Thread safety** via ownership and borrowing
@@ -81,6 +91,7 @@ orbit-rs/
 ## 🧪 **Testing Infrastructure**
 
 ### **Test Coverage**
+
 - **Unit Tests**: 499+ `#[test]` functions
 - **Async Tests**: 222+ `#[tokio::test]` functions  
 - **Integration Tests**: 6+ Python test suites
@@ -88,6 +99,7 @@ orbit-rs/
 - **BDD Tests**: Cucumber integration scenarios
 
 ### **Quality Assurance**
+
 - **Clippy**: Zero errors, all warnings addressed
 - **Rustfmt**: Consistent code formatting
 - **Security**: cargo-deny for dependency scanning
@@ -96,6 +108,7 @@ orbit-rs/
 ## 🗄️ **Storage & Persistence**
 
 ### **Storage Backends**
+
 1. **In-Memory** - Ultra-fast development and testing
 2. **RocksDB** - Production-ready embedded database
 3. **LSM Tree** - Custom implementation for specific workloads
@@ -107,6 +120,7 @@ orbit-rs/
 9. **Configuration-driven** - Declarative backend selection
 
 ### **Kubernetes Integration**
+
 - **Custom Resource Definitions**: 3+ CRDs (OrbitCluster, OrbitActor, OrbitTransaction)
 - **StatefulSets**: Persistent storage with PVC templates
 - **Operators**: 7+ controllers for lifecycle management
@@ -116,12 +130,14 @@ orbit-rs/
 ## 🤖 **AI & Machine Learning**
 
 ### **Vector Operations**
+
 - **Similarity Search**: COSINE, EUCLIDEAN, DOT_PRODUCT, MANHATTAN
 - **Indexing**: Automatic vector indexing for performance
 - **Embeddings**: Integration with AI embedding models
 - **pgvector**: PostgreSQL vector extension compatibility
 
 ### **Machine Learning Functions**
+
 - **Linear Regression**: Normal equation solver
 - **Correlation Analysis**: Pearson correlation coefficient
 - **Z-Score Normalization**: Statistical standardization
@@ -129,6 +145,7 @@ orbit-rs/
 - **SQL Integration**: Seamless ML function calls in SQL
 
 ### **AI Agent Integration**
+
 - **Model Context Protocol**: Tool ecosystem for AI agents
 - **GraphRAG**: Graph-based retrieval augmented generation
 - **Semantic Search**: Vector-based semantic queries
@@ -137,6 +154,7 @@ orbit-rs/
 ## 📈 **Time Series & Analytics**
 
 ### **Time Series Features**
+
 - **RedisTimeSeries Compatibility**: Full API compatibility
 - **Aggregation**: SUM, AVG, MIN, MAX, COUNT, RANGE
 - **Retention Policies**: Automatic data lifecycle management
@@ -144,6 +162,7 @@ orbit-rs/
 - **Real-time Analytics**: Stream processing capabilities
 
 ### **Graph Database**
+
 - **Cypher-like Queries**: Familiar query language
 - **Execution Planning**: Query optimization
 - **Performance Profiling**: Query performance analysis
@@ -152,12 +171,14 @@ orbit-rs/
 ## 🔐 **Security & Compliance**
 
 ### **Authentication & Authorization**
+
 - **Token-based Authentication**: Secure API access
 - **Scope-based Authorization**: Fine-grained permissions
 - **Audit Logging**: Comprehensive operation tracking
 - **RBAC**: Role-based access control in Kubernetes
 
 ### **Enterprise Features**
+
 - **Encryption**: Data encryption at rest and in transit
 - **Compliance**: Audit trails and compliance reporting
 - **Security Scanning**: Automated vulnerability detection
@@ -166,18 +187,21 @@ orbit-rs/
 ## 🚢 **Deployment & Operations**
 
 ### **Deployment Options**
+
 - **Kubernetes**: Native operator with CRDs
 - **Docker**: Multi-platform container images
 - **Standalone**: Single-node development deployment
 - **Cloud**: Integration with major cloud providers
 
 ### **Observability**
+
 - **Prometheus Metrics**: 100+ metrics exported
 - **Grafana Dashboards**: Pre-built monitoring dashboards
 - **Distributed Tracing**: OpenTelemetry integration
 - **Health Checks**: Comprehensive health monitoring
 
 ### **CI/CD Pipeline**
+
 1. **Continuous Integration**: Automated testing on every commit
 2. **Code Quality**: Clippy, rustfmt, security scanning
 3. **Security**: SBOM generation, vulnerability scanning
@@ -187,6 +211,7 @@ orbit-rs/
 ## 🎯 **Use Cases & Examples**
 
 ### **Working Examples**
+
 1. **Hello World** - Basic actor demonstration
 2. **Distributed Counter** - Multi-node coordination
 3. **Distributed Transactions** - ACID transaction patterns
@@ -204,21 +229,25 @@ orbit-rs/
 ## 🗺️ **Development Roadmap**
 
 ### **Current Phase: Production Ready** ✅
+
 - All core features implemented and tested
 - Production deployment capabilities
 - Comprehensive documentation and examples
 
 ### **Phase 9: Query Optimization** 🚧
+
 - Advanced query optimization algorithms
 - Performance tuning and benchmarking
 - Distributed query planning
 
 ### **Phase 10: Production Readiness** 📋
+
 - Enhanced monitoring and observability
 - Multi-region cluster support
 - Advanced security features
 
 ### **Future Phases**
+
 - Cloud-native integrations
 - Advanced AI/ML capabilities
 - Extended protocol support
@@ -227,17 +256,20 @@ orbit-rs/
 ## 📚 **Documentation Index**
 
 ### **Getting Started**
+
 - [Main README](../README.md)
 - [Development Guide](DEVELOPMENT.md)
 - [Contributing Guide](contributing.md)
 
 ### **Architecture**
+
 - [System Architecture](architecture/ORBIT_ARCHITECTURE.md)
 - [Master Documentation](ORBIT_MASTER_DOCUMENTATION.md)
 - [Persistence Architecture](PERSISTENCE_ARCHITECTURE.md)
 - [Network Layer](NETWORK_LAYER.md)
 
 ### **Protocols**
+
 - [Redis Commands Reference](protocols/REDIS_COMMANDS_REFERENCE.md)
 - [AQL Reference](AQL_REFERENCE.md)
 - [OrbitQL Reference](ORBITQL_REFERENCE.md)
@@ -246,6 +278,7 @@ orbit-rs/
 - [ML Functions Design](ML_SQL_FUNCTIONS_DESIGN.md)
 
 ### **Operations**
+
 - [Kubernetes Deployment](README-K8S-DEPLOYMENT.md)
 - [Kubernetes Persistence](KUBERNETES_PERSISTENCE.md)
 - [Kubernetes Storage Guide](KUBERNETES_STORAGE_GUIDE.md)
@@ -254,12 +287,14 @@ orbit-rs/
 - [Cluster Management](CLUSTER_MANAGEMENT.md)
 
 ### **Strategic Planning**
+
 - [Strategic Roadmap 2025-2026](planning/roadmap/STRATEGIC_ROADMAP_2025-2026.md)
 - [ETL Platform Specification](ETL_CONNECTOR_PLATFORM_SPECIFICATION.md)
 - [Security Enhancement Roadmap](SECURITY_ENHANCEMENT_ROADMAP.md)
 - [Issues & Development Tracking](issues/README.md)
 
 ### **Implementation Guides**
+
 - [GraphRAG Architecture](GraphRAG_ARCHITECTURE.md)
 - [Time Series Engine](TIME_SERIES_ENGINE.md)
 - [LSM Tree Implementation](LSM_TREE_IMPLEMENTATION.md)
@@ -267,6 +302,7 @@ orbit-rs/
 - [TiKV Persistence Integration](TIKV_PERSISTENCE_INTEGRATION.md)
 
 ### **Technical References**
+
 - [Query Languages Comparison](QUERY_LANGUAGES_COMPARISON.md)
 - [Comprehensive Database Comparison](COMPREHENSIVE_DATABASE_COMPARISON.md)
 - [Persistence Alternatives Analysis](PERSISTENCE_ALTERNATIVES_ANALYSIS.md)
@@ -275,18 +311,21 @@ orbit-rs/
 ## 🏆 **Key Achievements**
 
 ### **Scale & Performance**
+
 - **144,855 lines** of production-ready Rust code
 - **721+ tests** ensuring reliability and correctness
 - **124+ Redis commands** with full compatibility
 - **9+ storage backends** for diverse deployment needs
 
 ### **Protocol Completeness**
+
 - **4 complete protocols** (RESP, PostgreSQL, gRPC, MCP)
 - **Cross-protocol operations** enabling unique use cases
 - **AI/ML integration** with vector operations and statistical functions
 - **Enterprise features** for production deployment
 
 ### **Developer Experience**
+
 - **13+ working examples** demonstrating all features
 - **Comprehensive documentation** for all components
 - **Modern tooling** with Cargo, Clippy, and Rustfmt

@@ -29,24 +29,28 @@ Orbit-RS is designed for various workload intensities, from small development en
 ## Workload Classifications
 
 ### Development/Testing (Small)
+
 - **Use Case**: Development, testing, small demos
 - **Data Scale**: < 10GB
 - **Concurrent Users**: 1-10
 - **Expected Throughput**: < 1,000 ops/sec
 
 ### Production/Staging (Medium)
+
 - **Use Case**: Production workloads, staging environments
 - **Data Scale**: 10GB - 1TB
 - **Concurrent Users**: 10-100
 - **Expected Throughput**: 1,000 - 50,000 ops/sec
 
 ### Enterprise (Large)
+
 - **Use Case**: Enterprise production, high-availability
 - **Data Scale**: 1TB - 100TB
 - **Concurrent Users**: 100-1,000
 - **Expected Throughput**: 50,000 - 500,000 ops/sec
 
 ### Hyperscale (XLarge)
+
 - **Use Case**: Hyperscale deployments, petabyte-scale
 - **Data Scale**: > 100TB
 - **Concurrent Users**: > 1,000
@@ -57,6 +61,7 @@ Orbit-RS is designed for various workload intensities, from small development en
 ### Orbit-Server (Core Database Engine)
 
 #### Small Workload
+
 ```yaml
 resources:
   requests:
@@ -79,6 +84,7 @@ env:
 ```
 
 #### Medium Workload
+
 ```yaml
 resources:
   requests:
@@ -102,6 +108,7 @@ env:
 ```
 
 #### Large Workload
+
 ```yaml
 resources:
   requests:
@@ -127,6 +134,7 @@ env:
 ```
 
 #### XLarge Workload (Hyperscale)
+
 ```yaml
 resources:
   requests:
@@ -156,6 +164,7 @@ env:
 ### Orbit-Compute (GPU/Acceleration Engine)
 
 #### Small Workload
+
 ```yaml
 resources:
   requests:
@@ -172,6 +181,7 @@ resources:
 ```
 
 #### Medium Workload
+
 ```yaml
 resources:
   requests:
@@ -191,6 +201,7 @@ env:
 ```
 
 #### Large Workload
+
 ```yaml
 resources:
   requests:
@@ -211,6 +222,7 @@ env:
 ```
 
 #### XLarge Workload (GPU Cluster)
+
 ```yaml
 resources:
   requests:
@@ -244,6 +256,7 @@ env:
 ### Orbit-Client (Connection Pool)
 
 #### Small Workload
+
 ```yaml
 resources:
   requests:
@@ -261,6 +274,7 @@ env:
 ```
 
 #### Medium Workload
+
 ```yaml
 resources:
   requests:
@@ -280,6 +294,7 @@ env:
 ```
 
 #### Large Workload
+
 ```yaml
 resources:
   requests:
@@ -301,6 +316,7 @@ env:
 ### Orbit-Operator (Kubernetes Operator)
 
 #### All Workloads (Control Plane)
+
 ```yaml
 resources:
   requests:
@@ -320,6 +336,7 @@ env:
 ## Storage and Persistent Volume Configurations
 
 ### Development Storage
+
 ```yaml
 
 # Basic PVC for development
@@ -337,6 +354,7 @@ spec:
 ```
 
 ### Production Storage with Fast NVMe
+
 ```yaml
 
 # High-performance storage for production
@@ -369,6 +387,7 @@ spec:
 ```
 
 ### Enterprise Storage with Replication
+
 ```yaml
 
 # Replicated storage for enterprise
@@ -403,6 +422,7 @@ spec:
 ## GPU and Acceleration Configurations
 
 ### NVIDIA GPU Node Pool
+
 ```yaml
 apiVersion: v1
 kind: ConfigMap
@@ -431,6 +451,7 @@ volumeBindingMode: WaitForFirstConsumer
 ```
 
 ### AMD GPU Support
+
 ```yaml
 
 # AMD ROCm configuration
@@ -471,6 +492,7 @@ spec:
 ## Memory-Mapped File Storage
 
 ### Fast Storage Configuration
+
 ```yaml
 
 # Storage class for memory-mapped files
@@ -529,6 +551,7 @@ spec:
 ```
 
 ### RAM Disk Configuration
+
 ```yaml
 
 # RAM disk for ultra-fast memory mapping
@@ -568,6 +591,7 @@ spec:
 ## Monitoring and Autoscaling
 
 ### Horizontal Pod Autoscaler (HPA)
+
 ```yaml
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
@@ -629,6 +653,7 @@ spec:
 ```
 
 ### GPU Node Autoscaling
+
 ```yaml
 
 # Cluster Autoscaler configuration for GPU nodes
@@ -667,6 +692,7 @@ spec:
 ## Example Deployments
 
 ### Small Development Environment
+
 ```bash
 
 # Deploy development environment
@@ -725,6 +751,7 @@ EOF
 ```
 
 ### Production Environment with GPU
+
 ```bash
 
 # Deploy production environment with GPU acceleration
@@ -862,6 +889,7 @@ EOF
 ```
 
 ### Enterprise Hyperscale Deployment
+
 ```bash
 
 # Deploy enterprise hyperscale environment

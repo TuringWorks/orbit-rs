@@ -7,6 +7,7 @@ permalink: /compute-acceleration/
 ---
 
 # Hardware Acceleration Guide
+
 **Orbit-Compute: Heterogeneous Computing for Maximum Performance**
 
 **Status**: ✅ Production Ready  
@@ -24,6 +25,7 @@ Orbit-RS includes a sophisticated heterogeneous compute acceleration framework (
 **Workload Classification**: High Priority for GPU Acceleration
 
 **Operations**:
+
 - Vector similarity search (`<->`, `<=>`, `<#>` operators)
 - Vector aggregations (SUM, AVG on vector columns)
 - Matrix multiplications for embeddings
@@ -31,11 +33,13 @@ Orbit-RS includes a sophisticated heterogeneous compute acceleration framework (
 - Batch vector operations on large datasets
 
 **Hardware Acceleration**:
+
 - **GPU**: 8-15x speedup for large vector datasets (>1K vectors)
 - **CPU SIMD**: 3-5x speedup with AVX-512/NEON
 - **Neural Engine**: 10-50x speedup for ML inference on vectors
 
 **Example Queries**:
+
 ```sql
 -- Vector similarity search (GPU accelerated)
 SELECT content, embedding <-> '[0.1, 0.2, 0.3]' AS distance 
@@ -54,17 +58,20 @@ SELECT id, VECTOR_NORM(embedding) FROM documents;
 **Workload Classification**: High Priority for GPU/Neural Engine
 
 **Operations**:
+
 - JOIN operations on large tables with numeric keys
 - Matrix-based analytical queries
 - Linear algebra operations in SQL functions
 - Tensor operations for ML workloads
 
 **Hardware Acceleration**:
+
 - **GPU**: 8-15x speedup for matrix operations
 - **Neural Engine**: 10-50x speedup for ML-specific matrix ops
 - **CPU SIMD**: 3-8x speedup with optimized BLAS
 
 **Example Queries**:
+
 ```sql
 -- Large JOIN operations (GPU accelerated)
 SELECT * FROM orders o JOIN customers c ON o.customer_id = c.id 
@@ -79,17 +86,20 @@ SELECT ML_MATRIX_MULTIPLY(features, weights) FROM ml_models;
 **Workload Classification**: Medium Priority for SIMD/GPU
 
 **Operations**:
+
 - COUNT, SUM, AVG, MIN, MAX on large datasets
 - GROUP BY operations with numeric aggregations
 - Window functions over large partitions
 - Statistical functions (STDDEV, VARIANCE)
 
 **Hardware Acceleration**:
+
 - **CPU SIMD**: 3-8x speedup for numeric aggregations
 - **GPU**: 5-12x speedup for massive datasets (>1M rows)
 - **Specialized reductions**: Custom kernels for common patterns
 
 **Example Queries**:
+
 ```sql
 -- Aggregations on large datasets (SIMD/GPU accelerated)
 SELECT category, COUNT(*), AVG(price), MAX(price) 
@@ -104,17 +114,20 @@ SELECT *, AVG(salary) OVER (PARTITION BY department) FROM employees;
 **Workload Classification**: Medium Priority for GPU
 
 **Operations**:
+
 - Time series aggregations and rollups
 - Moving averages and trend analysis
 - Seasonal decomposition
 - Time-based JOINs and correlations
 
 **Hardware Acceleration**:
+
 - **GPU**: 5-12x speedup for time series analytics
 - **CPU SIMD**: 2-5x speedup for sequential processing
 - **Memory optimization**: Fast NVMe for time series data
 
 **Example Queries**:
+
 ```sql
 -- Time series aggregations (GPU preferred)
 SELECT date_trunc('hour', timestamp), AVG(value), COUNT(*)
@@ -132,17 +145,20 @@ SELECT timestamp, AVG(value) OVER (
 **Workload Classification**: High Priority for Neural Engine
 
 **Operations**:
+
 - Graph traversals and path finding
 - Community detection algorithms
 - Graph neural network inference
 - Knowledge graph reasoning
 
 **Hardware Acceleration**:
+
 - **Neural Engine**: 10-50x speedup for graph ML
 - **GPU**: 4-10x speedup for parallel graph algorithms
 - **Specialized DSPs**: Optimal for graph signal processing
 
 **Example Queries**:
+
 ```sql
 -- Graph traversals (Neural Engine preferred)
 GRAPH MATCH (a)-[:CONNECTS*1..3]-(b) 
@@ -158,17 +174,20 @@ SELECT community_detection(graph_data) FROM social_network;
 **Workload Classification**: Medium Priority for GPU
 
 **Operations**:
+
 - Text similarity and fuzzy matching
 - Regular expression operations on large text
 - Natural language processing functions
 - Search result ranking and scoring
 
 **Hardware Acceleration**:
+
 - **GPU**: 2-8x speedup for parallel text processing
 - **Neural Engine**: 10-50x speedup for semantic search
 - **CPU SIMD**: 2-4x speedup for string operations
 
 **Example Queries**:
+
 ```sql
 -- Text similarity (GPU/Neural Engine preferred)
 SELECT id, content, SIMILARITY(content, 'search query') as score
@@ -401,6 +420,7 @@ kubectl describe pod -l app=orbit-server | grep -A 10 "Requests\|Limits"
 ### 4. Hardware-Specific Tuning
 
 #### Apple Silicon (M1/M2/M3/M4)
+
 ```bash
 export ORBIT_UNIFIED_MEMORY=true
 export ORBIT_ENABLE_NEURAL_ENGINE=true
@@ -408,6 +428,7 @@ export ORBIT_METAL_OPTIMIZATION=true
 ```
 
 #### NVIDIA GPUs
+
 ```bash
 export ORBIT_CUDA_OPTIMIZATION=true
 export ORBIT_TENSOR_CORES=true
@@ -415,6 +436,7 @@ export ORBIT_GPU_MEMORY_POOL=true
 ```
 
 #### Intel/AMD CPUs
+
 ```bash
 export ORBIT_AVX512_OPTIMIZATION=true
 export ORBIT_NUMA_AWARENESS=true
@@ -426,6 +448,7 @@ export ORBIT_HYPER_THREADING=true
 ### Common Issues
 
 1. **GPU Not Detected**
+
    ```bash
    # Check GPU availability
    orbit-compute --check-gpu
@@ -436,6 +459,7 @@ export ORBIT_HYPER_THREADING=true
    ```
 
 2. **Acceleration Not Working**
+
    ```sql
    -- Check if acceleration is enabled
    SHOW orbit_compute_acceleration;
@@ -445,6 +469,7 @@ export ORBIT_HYPER_THREADING=true
    ```
 
 3. **Performance Regression**
+
    ```bash
    # Enable profiling
    export ORBIT_WORKLOAD_PROFILING=true
@@ -470,23 +495,27 @@ export ORBIT_FORCE_CPU_FALLBACK=true
 ## Best Practices
 
 ### 1. Development Environment
+
 - Start with acceleration **enabled** but with conservative timeouts
 - Use **profiling** to understand query patterns
 - Test both **accelerated and CPU-only** execution paths
 
 ### 2. Production Deployment
+
 - Enable **all acceleration features** by default
 - Set appropriate **GPU memory limits** (70-80% of available)
 - Monitor **fallback rates** and **performance metrics**
 - Use **Kubernetes resource limits** to prevent resource contention
 
 ### 3. Query Development
+
 - Use **query hints** for fine-tuning critical queries
 - **Batch similar operations** to maximize GPU utilization
 - **Profile vector operations** to ensure index usage
 - Test **large dataset performance** with GPU acceleration
 
 ### 4. Monitoring and Alerting
+
 - Alert on high **fallback rates** (>10%)
 - Monitor **GPU memory usage** and **temperature**
 - Track **query performance trends** over time
@@ -501,6 +530,7 @@ For workloads involving large datasets, vector operations, matrix computations, 
 ---
 
 **See Also**:
+
 - [README-K8S-DEPLOYMENT.md](../README-K8S-DEPLOYMENT.md) - Kubernetes deployment with GPU support
 - [RFC Heterogeneous Compute](rfcs/rfc_heterogeneous_compute.md) - Technical architecture details
 - [Kubernetes Deployment Sizing Guide](k8s-deployment-sizing-guide.md) - Hardware sizing recommendations

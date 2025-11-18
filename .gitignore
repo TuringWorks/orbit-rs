@@ -191,6 +191,12 @@ orbit_transactions.db*
 test.db*
 recovery_test.db*
 
+# Runtime data directories
+/data/
+demo_cow_data/
+orbit_integrated_data/
+orbit_integrated_data_cluster/
+
 # Temporary directories
 tmp/
 temp/
