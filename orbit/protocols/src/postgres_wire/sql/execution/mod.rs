@@ -14,12 +14,14 @@
 
 pub mod columnar;
 pub mod simd;
-
-// Vectorized executor will be added after SIMD
-// pub mod vectorized;
+pub mod vectorized;
 
 // Parallel execution will be added last
 // pub mod parallel;
 
 pub use columnar::{Column, ColumnBatch, ColumnBatchBuilder, NullBitmap, DEFAULT_BATCH_SIZE};
 pub use simd::{SimdCapability, SimdFilter, SimdAggregate, simd_capability};
+pub use vectorized::{
+    VectorizedExecutor, VectorizedExecutorConfig, VectorizedExecutorConfigBuilder,
+    PlanNodeType, ComparisonOp, AggregateFunction,
+};
