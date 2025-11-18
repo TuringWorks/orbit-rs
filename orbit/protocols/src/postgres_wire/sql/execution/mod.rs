@@ -36,4 +36,4 @@ pub use hybrid::{
 };
 
 #[cfg(feature = "iceberg-cold")]
-pub use iceberg_cold::{IcebergColdStore, column_batch_to_arrow};
+pub use iceberg_cold::{IcebergColdStore, column_batch_to_arrow, arrow_to_column_batch};
