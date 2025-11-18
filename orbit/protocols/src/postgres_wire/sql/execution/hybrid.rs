@@ -225,6 +225,7 @@ pub struct FilterPredicate {
 #[derive(Debug, Clone)]
 pub struct RowBasedStore {
     /// Table name
+    #[allow(dead_code)]
     table_name: String,
 
     /// Rows stored in row-major format
@@ -462,12 +463,14 @@ impl RowBasedStore {
 /// Hybrid storage manager
 pub struct HybridStorageManager {
     /// Table name
+    #[allow(dead_code)]
     table_name: String,
 
     /// Hot tier storage (row-based)
     hot_store: Arc<RwLock<RowBasedStore>>,
 
     /// Warm tier storage (hybrid - for future implementation)
+    #[allow(dead_code)]
     warm_store: Arc<RwLock<Option<ColumnBatch>>>,
 
     /// Cold tier storage (Iceberg-based for long-term archival)
@@ -706,7 +709,7 @@ impl HybridStorageManager {
         &self,
         function: AggregateFunction,
         column: String,
-        filter: Option<FilterPredicate>,
+        _filter: Option<FilterPredicate>,
     ) -> ProtocolResult<QueryResult> {
         // For aggregations, prefer cold tier (columnar + SIMD + Iceberg metadata pruning)
         #[cfg(feature = "iceberg-cold")]
