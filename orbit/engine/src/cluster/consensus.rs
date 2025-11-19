@@ -109,8 +109,9 @@ pub struct AppendEntriesResponse {
 /// Raft configuration
 #[derive(Debug, Clone)]
 pub struct RaftConfig {
-    /// Election timeout range (randomized)
+    /// Minimum election timeout (randomized)
     pub election_timeout_min: Duration,
+    /// Maximum election timeout (randomized)
     pub election_timeout_max: Duration,
     /// Heartbeat interval for leader
     pub heartbeat_interval: Duration,
@@ -165,24 +166,30 @@ pub struct RaftConsensus {
 /// Raft event handler for leadership changes
 #[async_trait]
 pub trait RaftEventHandler: Send + Sync {
+    /// Called when a new leader is elected
     async fn on_leader_elected(&self, leader_id: &NodeId, term: u64) -> EngineResult<()>;
+    /// Called when the current leader is lost
     async fn on_leader_lost(&self, former_leader_id: &NodeId, term: u64) -> EngineResult<()>;
+    /// Called when the term changes
     async fn on_term_changed(&self, old_term: u64, new_term: u64) -> EngineResult<()>;
 }
 
 /// Network transport for Raft messages
 #[async_trait]
 pub trait RaftTransport: Send + Sync {
+    /// Send vote request to target node
     async fn send_vote_request(
         &self,
         target: &NodeId,
         request: VoteRequest,
     ) -> EngineResult<VoteResponse>;
+    /// Send append entries request to target node
     async fn send_append_entries(
         &self,
         target: &NodeId,
         request: AppendEntriesRequest,
     ) -> EngineResult<AppendEntriesResponse>;
+    /// Broadcast heartbeat to all nodes
     async fn broadcast_heartbeat(
         &self,
         nodes: &[NodeId],
@@ -191,6 +198,7 @@ pub trait RaftTransport: Send + Sync {
 }
 
 impl RaftConsensus {
+    /// Create a new Raft consensus instance
     pub fn new(node_id: NodeId, cluster_nodes: Vec<NodeId>, config: RaftConfig) -> Self {
         let election_timeout = Self::random_election_timeout(&config);
 
@@ -220,6 +228,7 @@ impl RaftConsensus {
         Duration::from_millis(random_ms)
     }
 
+    /// Add an event handler for Raft events
     pub async fn add_event_handler(&self, handler: Arc<dyn RaftEventHandler>) {
         let mut handlers = self.event_handlers.write().await;
         handlers.push(handler);

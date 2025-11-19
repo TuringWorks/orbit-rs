@@ -12,6 +12,7 @@ use tracing::{debug, error, info, warn};
 /// Enhanced cluster manager with split-brain protection
 pub struct EnhancedClusterManager {
     node_id: NodeId,
+    /// Raft consensus instance
     pub raft_consensus: Arc<RaftConsensus>,
     /// Quorum configuration
     quorum_config: QuorumConfig,
@@ -23,6 +24,7 @@ pub struct EnhancedClusterManager {
     partition_detector: Arc<PartitionDetector>,
 }
 
+/// Quorum configuration for cluster consensus
 #[derive(Debug, Clone)]
 pub struct QuorumConfig {
     /// Minimum nodes required for quorum
@@ -46,13 +48,20 @@ impl Default for QuorumConfig {
     }
 }
 
+/// Node health status tracking
 #[derive(Debug, Clone)]
 pub struct NodeHealthStatus {
+    /// Node identifier
     pub node_id: NodeId,
+    /// Last time node was seen
     pub last_seen: Instant,
+    /// Number of consecutive failures
     pub consecutive_failures: u32,
+    /// Network latency to node
     pub network_latency: Option<Duration>,
+    /// Whether node is reachable
     pub is_reachable: bool,
+    /// Partition group if in network partition
     pub partition_group: Option<String>,
 }
 
@@ -67,6 +76,7 @@ pub struct SplitBrainDetector {
 }
 
 impl SplitBrainDetector {
+    /// Create a new split-brain detector
     pub fn new(min_cluster_size: usize, detection_interval: Duration) -> Self {
         Self {
             min_cluster_size,
@@ -158,6 +168,7 @@ pub struct PartitionDetector {
 }
 
 impl PartitionDetector {
+    /// Create a new partition detector
     pub fn new(ping_timeout: Duration, ping_attempts: u32) -> Self {
         Self {
             ping_timeout,
@@ -212,6 +223,7 @@ impl PartitionDetector {
 }
 
 impl EnhancedClusterManager {
+    /// Create a new enhanced cluster manager with split-brain protection
     pub fn new(
         node_id: NodeId,
         cluster_nodes: Vec<NodeId>,

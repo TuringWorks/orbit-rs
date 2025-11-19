@@ -134,6 +134,7 @@ pub struct AddressableLease {
 
 /// Trait marker for addressable actors
 pub trait Addressable: Send + Sync {
+    /// Returns the type name for this addressable
     fn addressable_type() -> &'static str
     where
         Self: Sized;
