@@ -22,7 +22,7 @@
 
 ## What is Orbit-RS?
 
-**Orbit-RS is a revolutionary multi-protocol database server** that natively implements PostgreSQL, Redis, HTTP REST, and gRPC protocols in a single process. Instead of running separate PostgreSQL and Redis servers, Orbit-RS provides one unified server that speaks all protocols while sharing the same underlying data store.
+**Orbit-RS is a revolutionary multi-protocol database server** that natively implements PostgreSQL, Redis, HTTP REST, gRPC, and OrbitQL protocols in a single process. Instead of running separate PostgreSQL and Redis servers, Orbit-RS provides one unified server that speaks all protocols while sharing the same underlying data store.
 
 **Built on Virtual Actors**: The foundation is a distributed virtual actor system where actors are objects that interact via asynchronous messages. Actors automatically activate on-demand and can be distributed across cluster nodes, providing natural horizontal scaling.
 
@@ -33,9 +33,10 @@
 **Native Protocol Support** - Single server, multiple interfaces:
 
 - 🐘 **PostgreSQL Wire Protocol** (port 5432) - Full SQL with pgvector support
-- 🔴 **Redis RESP Protocol** (port 6379) - Key-value + vector operations  
+- 🔴 **Redis RESP Protocol** (port 6379) - Key-value + vector operations
 - 🌍 **HTTP REST API** (port 8080) - Web-friendly JSON interface
 - 📡 **gRPC API** (port 50051) - High-performance actor management
+- 🔷 **OrbitQL** - Multi-model query language (documents, graphs, time-series)
 
 ### 🚀 **Core Features**
 
@@ -148,6 +149,58 @@ WITH (lists = 100);
 
 **✨ Same Vector Data, Multiple Interfaces**: Vectors stored via PostgreSQL are immediately accessible via Redis and REST APIs!
 
+### 🔷 **OrbitQL - Multi-Model Queries**
+
+**OrbitQL is a unified query language** that combines document, graph, time-series, and key-value operations in a single query. Access all data stored in orbit-engine across hot/warm/cold tiers.
+
+```rust
+use orbit_engine::adapters::{AdapterContext, OrbitQLAdapter};
+use orbit_engine::storage::HybridStorageManager;
+
+// Create storage engine and OrbitQL adapter
+let storage = Arc::new(HybridStorageManager::new_in_memory());
+let context = AdapterContext::new(storage as Arc<dyn TableStorage>);
+let adapter = OrbitQLAdapter::new(context);
+
+// Execute multi-model queries
+adapter.execute_query("SELECT * FROM users WHERE age > 18").await?;
+```
+
+**OrbitQL Query Examples:**
+
+```orbitql
+-- Document-style queries
+SELECT * FROM users WHERE age > 18 ORDER BY created_at DESC LIMIT 10;
+
+-- Graph traversals with arrow notation
+SELECT user->follows->user.name AS friends FROM users WHERE user.id = 123;
+
+-- Time-series analytics with temporal filters
+SELECT
+    server_id,
+    AVG(metrics[cpu_usage WHERE timestamp > NOW() - 1h]) AS avg_cpu
+FROM servers
+GROUP BY server_id;
+
+-- Cross-model JOINs (documents + time-series)
+SELECT
+    u.name,
+    AVG(m.cpu_usage) AS avg_cpu
+FROM users AS u
+JOIN metrics AS m ON u.server_id = m.server_id
+WHERE m.timestamp > NOW() - 1h
+GROUP BY u.id;
+```
+
+**Key Features:**
+- ✅ **Multi-Model Queries** - Documents, graphs, and time-series in one query
+- ✅ **Cross-Model JOINs** - Relate data between different models seamlessly
+- ✅ **Tiered Storage Aware** - Automatically accesses hot/warm/cold tiers
+- ✅ **Live Queries** - Real-time subscriptions with change notifications
+- ✅ **ACID Transactions** - Multi-model transaction support
+
+**📚 [Complete OrbitQL Documentation](orbit/engine/docs/ORBITQL.md)** | **[OrbitQL Examples](orbit/engine/examples/orbitql_example.rs)**
+
 ### Manual Installation
 
 ```bash
@@ -197,6 +250,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 - 🔴 **Redis RESP Protocol** - **100% Production-Ready** with full redis-cli compatibility + vector operations
 - 🌍 **HTTP REST API** - **🆕 NEW!** Web-friendly JSON interface for all operations including vectors
 - 📡 **gRPC Actor API** - High-performance actor system management with vector support
+- 🔷 **OrbitQL Multi-Model Queries** - **🆕 NEW!** Unified query language for documents, graphs, and time-series
 - 🤖 **Full pgvector Compatibility** - **🆕 COMPLETE!** Vector types, distance operators, HNSW/IVFFlat indexes
 - 🔍 **Unified Configuration** - Single TOML file configures all protocols
 - 📊 **Cross-Protocol Monitoring** - Unified metrics for all protocols including vector operations

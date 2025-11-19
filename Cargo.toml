@@ -10,6 +10,7 @@ members = [
     "orbit/server",
     "orbit/server-etcd",
     "orbit/server-prometheus",
+    "orbit/engine",
     "orbit/protocols",
     "orbit/application",
     "orbit/operator",
