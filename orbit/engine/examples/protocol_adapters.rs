@@ -13,9 +13,23 @@ use std::sync::Arc;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("=== Orbit Engine Protocol Adapters Example ===\n");
 
+    // TODO: This example needs to be updated to use a storage backend that implements TableStorage
+    // HybridStorageManager does not implement TableStorage trait.
+    // Once MemoryTableStorage is re-enabled or HybridStorageManager implements TableStorage,
+    // this example can be uncommented.
+
+    println!("⚠️  This example is currently disabled - storage backend needs updating");
+    println!("    HybridStorageManager does not implement TableStorage trait");
+    return Ok(());
+
     // Create the storage engine
+    /*
     println!("1. Creating HybridStorageManager...");
-    let storage = Arc::new(HybridStorageManager::new_in_memory());
+    let storage = Arc::new(HybridStorageManager::new(
+        "example_table".to_string(),
+        vec![],
+        orbit_engine::storage::HybridStorageConfig::default(),
+    ));
 
     // Create adapter context
     let context = AdapterContext::new(storage.clone() as Arc<dyn orbit_engine::storage::TableStorage>);
@@ -192,4 +206,5 @@ async fn redis_example(context: AdapterContext) -> Result<(), Box<dyn std::error
     println!("  EXISTS mykey => {}", exists);
 
     Ok(())
+    */
 }

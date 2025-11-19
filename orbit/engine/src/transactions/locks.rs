@@ -706,7 +706,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_lock_acquisition() {
-        let node_id = NodeId::new("test-node".to_string(), "default".to_string());
+        let node_id = "test-node".to_string();
         let config = LockManagerConfig::default();
         let manager = DistributedLockManager::new(node_id, config);
 
@@ -733,7 +733,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_shared_locks() {
-        let node_id = NodeId::new("test-node".to_string(), "default".to_string());
+        let node_id = "test-node".to_string();
         let config = LockManagerConfig::default();
         let manager = DistributedLockManager::new(node_id, config);
 

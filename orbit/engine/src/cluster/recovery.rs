@@ -991,7 +991,7 @@ mod tests {
         };
 
         let logger = Arc::new(SqliteTransactionLogger::new(log_config).await.unwrap());
-        let node_id = NodeId::new("test-node".to_string(), "default".to_string());
+        let node_id = "test-node".to_string();
         let cluster_manager = Arc::new(MockClusterManager {
             nodes: vec![node_id.clone()],
             current_leader: None,
@@ -1019,7 +1019,7 @@ mod tests {
         };
 
         let logger = Arc::new(SqliteTransactionLogger::new(log_config).await.unwrap());
-        let node_id = NodeId::new("test-node".to_string(), "default".to_string());
+        let node_id = "test-node".to_string();
         let cluster_manager = Arc::new(MockClusterManager {
             nodes: vec![node_id.clone()],
             current_leader: None,

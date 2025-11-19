@@ -24,15 +24,16 @@
 //! cargo run --example azure_iceberg_example --features iceberg-cold
 //! ```
 
-#![cfg(feature = "iceberg-cold")]
-
+#[cfg(feature = "iceberg-cold")]
 use std::sync::Arc;
 
+#[cfg(feature = "iceberg-cold")]
 use orbit_protocols::postgres_wire::sql::execution::{
     AzureConfig, StorageBackend, IcebergColdStore,
     create_file_io_for_storage, create_rest_catalog_with_storage,
 };
 
+#[cfg(feature = "iceberg-cold")]
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize tracing for debugging
@@ -63,6 +64,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 /// Example 1: Configure Azurite for local development
+#[cfg(feature = "iceberg-cold")]
 async fn example_azurite_config() -> Result<(), Box<dyn std::error::Error>> {
     // Create Azurite configuration with default development credentials
     let azure_config = AzureConfig::azurite("orbitstore".to_string());
@@ -86,6 +88,7 @@ async fn example_azurite_config() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 /// Example 2: Configure production Azure Storage
+#[cfg(feature = "iceberg-cold")]
 fn example_azure_storage_config() -> Result<(), Box<dyn std::error::Error>> {
     // In production, you would get these from environment variables or config
     let account_name = std::env::var("AZURE_STORAGE_ACCOUNT")
@@ -111,6 +114,7 @@ fn example_azure_storage_config() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 /// Example 3: Configure using connection string
+#[cfg(feature = "iceberg-cold")]
 fn example_connection_string_config() -> Result<(), Box<dyn std::error::Error>> {
     // This is the Azurite default connection string
     let connection_string = "AccountName=devstoreaccount1;\
@@ -142,6 +146,7 @@ fn example_connection_string_config() -> Result<(), Box<dyn std::error::Error>> 
 
 /// Example 4: Create an Iceberg cold store with Azure backend
 #[allow(dead_code)]
+#[cfg(feature = "iceberg-cold")]
 async fn example_create_cold_store() -> Result<(), Box<dyn std::error::Error>> {
     // Configure Azure storage
     let azure_config = AzureConfig::azurite("orbitstore".to_string());
@@ -174,6 +179,7 @@ async fn example_create_cold_store() -> Result<(), Box<dyn std::error::Error>> {
 
 /// Example 5: Complete workflow with data
 #[allow(dead_code)]
+#[cfg(feature = "iceberg-cold")]
 async fn example_complete_workflow() -> Result<(), Box<dyn std::error::Error>> {
     println!("Complete Workflow Example:");
 
@@ -215,4 +221,11 @@ async fn example_complete_workflow() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     Ok(())
+}
+
+#[cfg(not(feature = "iceberg-cold"))]
+fn main() {
+    eprintln!("This example requires the 'iceberg-cold' feature to be enabled.");
+    eprintln!("Run with: cargo run --example azure_iceberg_example --features iceberg-cold");
+    std::process::exit(1);
 }

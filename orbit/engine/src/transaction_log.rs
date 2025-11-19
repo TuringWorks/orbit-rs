@@ -772,7 +772,7 @@ mod tests {
         let logger = SqliteTransactionLogger::new(config).await.unwrap();
 
         let transaction_id =
-            TransactionId::new(NodeId::new("test".to_string(), "region".to_string()));
+            TransactionId::new("test".to_string());
         let entry = TransactionLogEntry {
             timestamp: chrono::Utc::now().timestamp_millis(),
             transaction_id: transaction_id.clone(),
@@ -802,7 +802,7 @@ mod tests {
         let logger = SqliteTransactionLogger::new(config).await.unwrap();
 
         let transaction_id =
-            TransactionId::new(NodeId::new("test".to_string(), "region".to_string()));
+            TransactionId::new("test".to_string());
         let entries: Vec<_> = (0..5)
             .map(|i| TransactionLogEntry {
                 timestamp: chrono::Utc::now().timestamp_millis() + i,

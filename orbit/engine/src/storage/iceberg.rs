@@ -24,7 +24,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::SystemTime;
 
-use arrow::array::{Array, ArrayRef, Int32Array, Int64Array};
+use arrow::array::{Array, ArrayRef, Int32Array, Int64Array, StringArray};
 use arrow::datatypes::{DataType, Field, Schema as ArrowSchema};
 use arrow::record_batch::RecordBatch;
 use iceberg::{Catalog, CatalogBuilder, NamespaceIdent, TableIdent};

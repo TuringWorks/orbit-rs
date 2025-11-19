@@ -392,7 +392,7 @@ pub async fn start_raft_server(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use super::consensus::{RaftConfig, RaftConsensus};
+    use crate::cluster::consensus::{RaftConfig, RaftConsensus};
     use tokio::time::Duration;
 
     #[tokio::test]
@@ -427,10 +427,10 @@ mod tests {
     async fn test_raft_handler_creation() {
         let node_id = "test-node".to_string();
         let cluster_nodes = vec![node_id.clone()];
-        let consensus = Arc::new(super::consensus::RaftConsensus::new(
+        let consensus = Arc::new(RaftConsensus::new(
             node_id,
             cluster_nodes,
-            super::consensus::RaftConfig::default(),
+            RaftConfig::default(),
         ));
 
         let handler = GrpcRaftHandler::new(consensus);
