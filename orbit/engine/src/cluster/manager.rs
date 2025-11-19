@@ -1,7 +1,7 @@
 use super::consensus::{RaftConfig, RaftConsensus, RaftEventHandler};
 use crate::error::{EngineError, EngineResult};
 use super::NodeId;
-use crate::recovery::{ClusterConfig, ClusterManager};
+use crate::cluster::recovery::{ClusterConfig, ClusterManager};
 use async_trait::async_trait;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -244,7 +244,7 @@ impl EnhancedClusterManager {
     /// Start the enhanced cluster manager
     pub async fn start(
         &self,
-        transport: Arc<dyn crate::consensus::RaftTransport>,
+        transport: Arc<dyn super::consensus::RaftTransport>,
     ) -> EngineResult<()> {
         info!(
             "Starting enhanced cluster manager for node: {}",
@@ -456,7 +456,7 @@ impl ClusterManager for EnhancedClusterManager {
 
         // Only this node can start its own election
         if candidate != &self.node_id {
-            return Err(EngineError::configuration(
+            return Err(EngineError::config(
                 "Can only start election for self",
             ));
         }
@@ -511,11 +511,11 @@ impl ClusterManager for EnhancedClusterManager {
 
 /// Event handler that integrates with recovery system
 pub struct RecoveryRaftEventHandler {
-    recovery_manager: Arc<crate::recovery::TransactionRecoveryManager>,
+    recovery_manager: Arc<crate::cluster::recovery::TransactionRecoveryManager>,
 }
 
 impl RecoveryRaftEventHandler {
-    pub fn new(recovery_manager: Arc<crate::recovery::TransactionRecoveryManager>) -> Self {
+    pub fn new(recovery_manager: Arc<crate::cluster::recovery::TransactionRecoveryManager>) -> Self {
         Self { recovery_manager }
     }
 
@@ -534,7 +534,7 @@ impl RecoveryRaftEventHandler {
     }
 
     /// Identify coordinators that have failed
-    async fn identify_failed_coordinators(&self) -> Vec<crate::mesh::NodeId> {
+    async fn identify_failed_coordinators(&self) -> Vec<crate::cluster::NodeId> {
         let coordinators = self.recovery_manager.coordinators.read().await;
         let mut failed_coordinators = Vec::new();
 
@@ -550,8 +550,8 @@ impl RecoveryRaftEventHandler {
     /// Collect all transactions that need recovery from failed coordinators
     async fn collect_transactions_for_recovery(
         &self,
-        failed_coordinators: &[crate::mesh::NodeId],
-    ) -> EngineResult<Vec<crate::recovery::TransactionCheckpoint>> {
+        failed_coordinators: &[crate::cluster::NodeId],
+    ) -> EngineResult<Vec<crate::cluster::recovery::TransactionCheckpoint>> {
         let mut all_transactions_to_recover = Vec::new();
 
         for failed_coordinator in failed_coordinators {
@@ -568,7 +568,7 @@ impl RecoveryRaftEventHandler {
     /// Process the collected transactions for recovery
     async fn process_recovery_transactions(
         &self,
-        transactions_to_recover: Vec<crate::recovery::TransactionCheckpoint>,
+        transactions_to_recover: Vec<crate::cluster::recovery::TransactionCheckpoint>,
         failed_coordinators_count: usize,
     ) -> EngineResult<()> {
         if !transactions_to_recover.is_empty() {

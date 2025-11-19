@@ -171,9 +171,9 @@ impl ReplicationSlotManager {
 
             Ok(())
         } else {
-            Err(EngineError::AddressableNotFound {
-                reference: format!("Replication slot '{name}'"),
-            })
+            Err(EngineError::AddressableNotFound(
+                format!("Replication slot '{name}'")
+            ))
         }
     }
 
@@ -196,9 +196,9 @@ impl ReplicationSlotManager {
             debug!("Advanced slot '{}' to LSN {}", name, lsn);
             Ok(())
         } else {
-            Err(EngineError::AddressableNotFound {
-                reference: format!("Replication slot '{name}'"),
-            })
+            Err(EngineError::AddressableNotFound(
+                format!("Replication slot '{name}'")
+            ))
         }
     }
 
@@ -223,9 +223,9 @@ impl ReplicationSlotManager {
         let slot =
             self.get_slot(slot_name)
                 .await
-                .ok_or_else(|| EngineError::AddressableNotFound {
-                    reference: format!("Replication slot '{slot_name}'"),
-                })?;
+                .ok_or_else(|| EngineError::AddressableNotFound(
+                    format!("Replication slot '{slot_name}'")
+                ))?;
 
         // Return events with LSN greater than slot's confirmed position
         let pending: Vec<_> = events
@@ -272,9 +272,9 @@ impl ReplicationSlotManager {
         let slot =
             self.get_slot(slot_name)
                 .await
-                .ok_or_else(|| EngineError::AddressableNotFound {
-                    reference: format!("Replication slot '{slot_name}'"),
-                })?;
+                .ok_or_else(|| EngineError::AddressableNotFound(
+                    format!("Replication slot '{slot_name}'")
+                ))?;
 
         let current = self.current_lsn().await;
         Ok(current.saturating_sub(slot.confirmed_flush_lsn))
