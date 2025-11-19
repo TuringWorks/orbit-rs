@@ -39,8 +39,11 @@ pub enum OrbitError {
     #[error("Network error: {0}")]
     NetworkError(String),
     /// Timeout error
-    #[error("Timeout: {0}")]
-    Timeout { details: String },
+    #[error("Timeout: {details}")]
+    Timeout {
+        /// Timeout details
+        details: String
+    },
     /// Internal error
     #[error("Internal error: {0}")]
     Internal(String),
