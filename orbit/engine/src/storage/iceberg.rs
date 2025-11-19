@@ -33,12 +33,8 @@ use iceberg::spec::Schema as IcebergSchema;
 use iceberg_catalog_rest::{RestCatalog, RestCatalogBuilder, REST_CATALOG_PROP_URI, REST_CATALOG_PROP_WAREHOUSE};
 
 use crate::error::{EngineError, EngineResult};
-use crate::storage::SqlValue;
-use super::{
-    Column, ColumnBatch, NullBitmap,
-    VectorizedExecutor, VectorizedExecutorConfig,
-    AggregateFunction, ComparisonOp,
-};
+use crate::storage::{SqlValue, Column, ColumnBatch, NullBitmap};
+use crate::query::{VectorizedExecutor, VectorizedExecutorConfig, AggregateFunction, ComparisonOp};
 use super::config::StorageBackend;
 
 /// Iceberg cold tier storage
@@ -131,10 +127,10 @@ impl IcebergColdStore {
 
         if batches.is_empty() {
             return Ok(match function {
-                AggregateFunction::Count => SqlValue::BigInt(0),
-                AggregateFunction::Sum => SqlValue::Integer(0),
+                AggregateFunction::Count => SqlValue::Int64(0),
+                AggregateFunction::Sum => SqlValue::Int32(0),
                 AggregateFunction::Min | AggregateFunction::Max => SqlValue::Null,
-                AggregateFunction::Avg => SqlValue::Real(0.0),
+                AggregateFunction::Avg => SqlValue::Float32(0.0),
             });
         }
 
@@ -263,7 +259,7 @@ impl IcebergColdStore {
         column_name: &str,
     ) -> EngineResult<ColumnBatch> {
         if batches.is_empty() {
-            return Err(EngineError::storage("No batches to convert".into()));
+            return Err(EngineError::storage("No batches to convert"));
         }
 
         let total_rows: usize = batches.iter().map(|b| b.num_rows()).sum();
@@ -289,7 +285,7 @@ impl IcebergColdStore {
             match array.data_type() {
                 DataType::Int32 => {
                     let int_array = array.as_any().downcast_ref::<Int32Array>()
-                        .ok_or_else(|| EngineError::storage("Type mismatch".into()))?;
+                        .ok_or_else(|| EngineError::storage("Type mismatch"))?;
 
                     for i in 0..int_array.len() {
                         if int_array.is_null(i) {
@@ -302,7 +298,7 @@ impl IcebergColdStore {
                 }
                 DataType::Int64 => {
                     let int_array = array.as_any().downcast_ref::<Int64Array>()
-                        .ok_or_else(|| EngineError::storage("Type mismatch".into()))?;
+                        .ok_or_else(|| EngineError::storage("Type mismatch"))?;
 
                     for i in 0..int_array.len() {
                         if int_array.is_null(i) {
@@ -340,18 +336,18 @@ pub use super::hybrid::FilterPredicate;
 /// Enables writing from our columnar format to Iceberg.
 pub fn column_batch_to_arrow(batch: &ColumnBatch) -> EngineResult<RecordBatch> {
     if batch.columns.is_empty() {
-        return Err(EngineError::storage("No columns to convert".into()));
+        return Err(EngineError::storage("No columns to convert"));
     }
 
     let column_names = batch.column_names.as_ref()
-        .ok_or_else(|| EngineError::storage("No column names".into()))?;
+        .ok_or_else(|| EngineError::storage("No column names"))?;
 
     let mut fields = Vec::new();
     let mut arrays: Vec<ArrayRef> = Vec::new();
 
     for (col_idx, column) in batch.columns.iter().enumerate() {
         let column_name = column_names.get(col_idx)
-            .ok_or_else(|| EngineError::storage("Missing column name".into()))?;
+            .ok_or_else(|| EngineError::storage("Missing column name"))?;
 
         let null_bitmap = &batch.null_bitmaps[col_idx];
 
@@ -640,7 +636,7 @@ pub fn arrow_to_column_batch(batch: &RecordBatch) -> EngineResult<ColumnBatch> {
             DataType::Boolean => {
                 let bool_array = array.as_any()
                     .downcast_ref::<BooleanArray>()
-                    .ok_or_else(|| EngineError::storage("Type mismatch".into()))?;
+                    .ok_or_else(|| EngineError::storage("Type mismatch"))?;
 
                 let mut values = Vec::with_capacity(num_rows);
                 for i in 0..num_rows {
@@ -656,7 +652,7 @@ pub fn arrow_to_column_batch(batch: &RecordBatch) -> EngineResult<ColumnBatch> {
             DataType::Int16 => {
                 let int_array = array.as_any()
                     .downcast_ref::<Int16Array>()
-                    .ok_or_else(|| EngineError::storage("Type mismatch".into()))?;
+                    .ok_or_else(|| EngineError::storage("Type mismatch"))?;
 
                 let mut values = Vec::with_capacity(num_rows);
                 for i in 0..num_rows {
@@ -672,7 +668,7 @@ pub fn arrow_to_column_batch(batch: &RecordBatch) -> EngineResult<ColumnBatch> {
             DataType::Int32 => {
                 let int_array = array.as_any()
                     .downcast_ref::<Int32Array>()
-                    .ok_or_else(|| EngineError::storage("Type mismatch".into()))?;
+                    .ok_or_else(|| EngineError::storage("Type mismatch"))?;
 
                 let mut values = Vec::with_capacity(num_rows);
                 for i in 0..num_rows {
@@ -688,7 +684,7 @@ pub fn arrow_to_column_batch(batch: &RecordBatch) -> EngineResult<ColumnBatch> {
             DataType::Int64 => {
                 let int_array = array.as_any()
                     .downcast_ref::<Int64Array>()
-                    .ok_or_else(|| EngineError::storage("Type mismatch".into()))?;
+                    .ok_or_else(|| EngineError::storage("Type mismatch"))?;
 
                 let mut values = Vec::with_capacity(num_rows);
                 for i in 0..num_rows {
@@ -704,7 +700,7 @@ pub fn arrow_to_column_batch(batch: &RecordBatch) -> EngineResult<ColumnBatch> {
             DataType::Float32 => {
                 let float_array = array.as_any()
                     .downcast_ref::<Float32Array>()
-                    .ok_or_else(|| EngineError::storage("Type mismatch".into()))?;
+                    .ok_or_else(|| EngineError::storage("Type mismatch"))?;
 
                 let mut values = Vec::with_capacity(num_rows);
                 for i in 0..num_rows {
@@ -720,7 +716,7 @@ pub fn arrow_to_column_batch(batch: &RecordBatch) -> EngineResult<ColumnBatch> {
             DataType::Float64 => {
                 let float_array = array.as_any()
                     .downcast_ref::<Float64Array>()
-                    .ok_or_else(|| EngineError::storage("Type mismatch".into()))?;
+                    .ok_or_else(|| EngineError::storage("Type mismatch"))?;
 
                 let mut values = Vec::with_capacity(num_rows);
                 for i in 0..num_rows {
@@ -736,7 +732,7 @@ pub fn arrow_to_column_batch(batch: &RecordBatch) -> EngineResult<ColumnBatch> {
             DataType::Utf8 => {
                 let str_array = array.as_any()
                     .downcast_ref::<StringArray>()
-                    .ok_or_else(|| EngineError::storage("Type mismatch".into()))?;
+                    .ok_or_else(|| EngineError::storage("Type mismatch"))?;
 
                 let mut values = Vec::with_capacity(num_rows);
                 for i in 0..num_rows {
@@ -752,7 +748,7 @@ pub fn arrow_to_column_batch(batch: &RecordBatch) -> EngineResult<ColumnBatch> {
             DataType::Binary => {
                 let bin_array = array.as_any()
                     .downcast_ref::<BinaryArray>()
-                    .ok_or_else(|| EngineError::storage("Type mismatch".into()))?;
+                    .ok_or_else(|| EngineError::storage("Type mismatch"))?;
 
                 let mut values = Vec::with_capacity(num_rows);
                 for i in 0..num_rows {

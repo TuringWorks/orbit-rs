@@ -22,7 +22,7 @@ pub mod iceberg;
 // pub mod memory;
 
 // Re-exports
-pub use config::{AzureConfig, S3Config, StorageBackend, StorageConfig};
+pub use config::{AzureConfig, S3Config, StorageBackend};
 pub use columnar::{Column, ColumnBatch, ColumnBatchBuilder, NullBitmap, DEFAULT_BATCH_SIZE};
 pub use hybrid::HybridStorageManager;
 pub use iceberg::IcebergColdStore;
@@ -59,20 +59,80 @@ pub enum SqlValue {
     Null,
     /// Boolean
     Boolean(bool),
-    /// 32-bit integer
+    /// 16-bit integer (SMALLINT in PostgreSQL)
+    Int16(i16),
+    /// 32-bit integer (INTEGER in PostgreSQL)
     Int32(i32),
-    /// 64-bit integer
+    /// 64-bit integer (BIGINT in PostgreSQL)
     Int64(i64),
-    /// 32-bit float
+    /// 32-bit float (REAL in PostgreSQL)
     Float32(f32),
-    /// 64-bit float
+    /// 64-bit float (DOUBLE PRECISION in PostgreSQL)
     Float64(f64),
-    /// String/text
+    /// String/text (TEXT/VARCHAR in PostgreSQL)
     String(String),
-    /// Binary data
+    /// Variable-length character string (VARCHAR)
+    Varchar(String),
+    /// Fixed-length character string (CHAR)
+    Char(String),
+    /// Decimal/numeric with arbitrary precision
+    Decimal(String),
+    /// Binary data (BYTEA in PostgreSQL)
     Binary(Vec<u8>),
     /// Timestamp
     Timestamp(SystemTime),
+}
+
+impl SqlValue {
+    /// PostgreSQL-compatible alias for Int16
+    pub fn small_int(val: i16) -> Self {
+        Self::Int16(val)
+    }
+
+    /// PostgreSQL-compatible alias for Int32
+    pub fn integer(val: i32) -> Self {
+        Self::Int32(val)
+    }
+
+    /// PostgreSQL-compatible alias for Int64
+    pub fn big_int(val: i64) -> Self {
+        Self::Int64(val)
+    }
+
+    /// PostgreSQL-compatible alias for Float32
+    pub fn real(val: f32) -> Self {
+        Self::Float32(val)
+    }
+
+    /// PostgreSQL-compatible alias for Float64
+    pub fn double_precision(val: f64) -> Self {
+        Self::Float64(val)
+    }
+
+    /// PostgreSQL-compatible alias for String
+    pub fn text(val: String) -> Self {
+        Self::String(val)
+    }
+
+    /// PostgreSQL-compatible alias for Binary
+    pub fn bytea(val: Vec<u8>) -> Self {
+        Self::Binary(val)
+    }
+
+    /// PostgreSQL-compatible alias for Varchar
+    pub fn varchar(val: String) -> Self {
+        Self::Varchar(val)
+    }
+
+    /// PostgreSQL-compatible alias for Char
+    pub fn char(val: String) -> Self {
+        Self::Char(val)
+    }
+
+    /// PostgreSQL-compatible alias for Decimal
+    pub fn decimal(val: String) -> Self {
+        Self::Decimal(val)
+    }
 }
 
 /// Row data structure
@@ -131,7 +191,7 @@ pub struct TimeRange {
 }
 
 /// Filter predicate for queries
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum FilterPredicate {
     /// Equality comparison
     Eq(String, SqlValue),

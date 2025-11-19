@@ -177,13 +177,13 @@ impl Column {
     pub fn get(&self, index: usize) -> Option<SqlValue> {
         match self {
             Column::Bool(v) => v.get(index).map(|&b| SqlValue::Boolean(b)),
-            Column::Int16(v) => v.get(index).map(|&i| SqlValue::SmallInt(i)),
-            Column::Int32(v) => v.get(index).map(|&i| SqlValue::Integer(i)),
-            Column::Int64(v) => v.get(index).map(|&i| SqlValue::BigInt(i)),
-            Column::Float32(v) => v.get(index).map(|&f| SqlValue::Real(f)),
-            Column::Float64(v) => v.get(index).map(|&f| SqlValue::DoublePrecision(f)),
-            Column::String(v) => v.get(index).map(|s| SqlValue::Text(s.clone())),
-            Column::Binary(v) => v.get(index).map(|b| SqlValue::Bytea(b.clone())),
+            Column::Int16(v) => v.get(index).map(|&i| SqlValue::Int16(i)),
+            Column::Int32(v) => v.get(index).map(|&i| SqlValue::Int32(i)),
+            Column::Int64(v) => v.get(index).map(|&i| SqlValue::Int64(i)),
+            Column::Float32(v) => v.get(index).map(|&f| SqlValue::Float32(f)),
+            Column::Float64(v) => v.get(index).map(|&f| SqlValue::Float64(f)),
+            Column::String(v) => v.get(index).map(|s| SqlValue::String(s.clone())),
+            Column::Binary(v) => v.get(index).map(|b| SqlValue::Binary(b.clone())),
         }
     }
 
@@ -205,51 +205,51 @@ impl Column {
                 }
                 Ok(Column::Bool(bools))
             }
-            SqlValue::Integer(_) => {
+            SqlValue::Int32(_) => {
                 let mut ints = Vec::with_capacity(values.len());
                 for val in values {
                     match val {
-                        SqlValue::Integer(i) => ints.push(i),
+                        SqlValue::Int32(i) => ints.push(i),
                         _ => return Err("Mixed types in column".to_string()),
                     }
                 }
                 Ok(Column::Int32(ints))
             }
-            SqlValue::BigInt(_) => {
+            SqlValue::Int64(_) => {
                 let mut ints = Vec::with_capacity(values.len());
                 for val in values {
                     match val {
-                        SqlValue::BigInt(i) => ints.push(i),
+                        SqlValue::Int64(i) => ints.push(i),
                         _ => return Err("Mixed types in column".to_string()),
                     }
                 }
                 Ok(Column::Int64(ints))
             }
-            SqlValue::Real(_) => {
+            SqlValue::Float32(_) => {
                 let mut floats = Vec::with_capacity(values.len());
                 for val in values {
                     match val {
-                        SqlValue::Real(f) => floats.push(f),
+                        SqlValue::Float32(f) => floats.push(f),
                         _ => return Err("Mixed types in column".to_string()),
                     }
                 }
                 Ok(Column::Float32(floats))
             }
-            SqlValue::DoublePrecision(_) => {
+            SqlValue::Float64(_) => {
                 let mut floats = Vec::with_capacity(values.len());
                 for val in values {
                     match val {
-                        SqlValue::DoublePrecision(f) => floats.push(f),
+                        SqlValue::Float64(f) => floats.push(f),
                         _ => return Err("Mixed types in column".to_string()),
                     }
                 }
                 Ok(Column::Float64(floats))
             }
-            SqlValue::Text(_) | SqlValue::Varchar(_) => {
+            SqlValue::String(_) | SqlValue::Varchar(_) => {
                 let mut strings = Vec::with_capacity(values.len());
                 for val in values {
                     match val {
-                        SqlValue::Text(s) | SqlValue::Varchar(s) => strings.push(s),
+                        SqlValue::String(s) | SqlValue::Varchar(s) => strings.push(s),
                         _ => return Err("Mixed types in column".to_string()),
                     }
                 }
@@ -579,17 +579,17 @@ mod tests {
     fn test_column_creation() {
         let col = Column::Int32(vec![1, 2, 3, 4, 5]);
         assert_eq!(col.len(), 5);
-        assert_eq!(col.get(0), Some(SqlValue::Integer(1)));
-        assert_eq!(col.get(4), Some(SqlValue::Integer(5)));
+        assert_eq!(col.get(0), Some(SqlValue::Int32(1)));
+        assert_eq!(col.get(4), Some(SqlValue::Int32(5)));
         assert_eq!(col.get(10), None);
     }
 
     #[test]
     fn test_column_from_sql_values() {
         let values = vec![
-            SqlValue::Integer(10),
-            SqlValue::Integer(20),
-            SqlValue::Integer(30),
+            SqlValue::Int32(10),
+            SqlValue::Int32(20),
+            SqlValue::Int32(30),
         ];
         let col = Column::from_sql_values(values).unwrap();
         assert_eq!(col.len(), 3);
@@ -635,12 +635,12 @@ mod tests {
             .unwrap();
 
         let row0 = batch.get_row(0).unwrap();
-        assert_eq!(row0[0], Some(SqlValue::Integer(10)));
-        assert_eq!(row0[1], Some(SqlValue::Text("foo".to_string())));
+        assert_eq!(row0[0], Some(SqlValue::Int32(10)));
+        assert_eq!(row0[1], Some(SqlValue::String("foo".to_string())));
 
         let row1 = batch.get_row(1).unwrap();
-        assert_eq!(row1[0], Some(SqlValue::Integer(20)));
-        assert_eq!(row1[1], Some(SqlValue::Text("bar".to_string())));
+        assert_eq!(row1[0], Some(SqlValue::Int32(20)));
+        assert_eq!(row1[1], Some(SqlValue::String("bar".to_string())));
     }
 
     #[test]
@@ -669,7 +669,7 @@ mod tests {
 
         let rows: Vec<_> = batch.iter_rows().collect();
         assert_eq!(rows.len(), 3);
-        assert_eq!(rows[0][0], Some(SqlValue::Integer(1)));
-        assert_eq!(rows[2][0], Some(SqlValue::Integer(3)));
+        assert_eq!(rows[0][0], Some(SqlValue::Int32(1)));
+        assert_eq!(rows[2][0], Some(SqlValue::Int32(3)));
     }
 }

@@ -13,11 +13,8 @@
 use std::collections::HashSet;
 
 use crate::error::{EngineError, EngineResult};
-use crate::storage::SqlValue;
-use super::{
-    Column, ColumnBatch, NullBitmap, DEFAULT_BATCH_SIZE,
-    simd::{SimdCapability, SimdFilter, SimdAggregate, simd_capability},
-};
+use crate::storage::{SqlValue, Column, ColumnBatch, NullBitmap, DEFAULT_BATCH_SIZE};
+use super::simd::{SimdCapability, SimdFilter, SimdAggregate, simd_capability};
 use super::simd::filters::{SimdFilterI32, SimdFilterI64, SimdFilterF64};
 use super::simd::aggregates::{SimdAggregateI32, SimdAggregateI64, SimdAggregateF64};
 
@@ -239,13 +236,13 @@ impl VectorizedExecutor {
         let mut matching_indices = Vec::new();
 
         match (column, &value) {
-            (Column::Int32(values), SqlValue::Integer(target)) => {
+            (Column::Int32(values), SqlValue::Int32(target)) => {
                 self.filter_i32(values, *target, op, &mut matching_indices)?;
             }
-            (Column::Int64(values), SqlValue::BigInt(target)) => {
+            (Column::Int64(values), SqlValue::Int64(target)) => {
                 self.filter_i64(values, *target, op, &mut matching_indices)?;
             }
-            (Column::Float64(values), SqlValue::DoublePrecision(target)) => {
+            (Column::Float64(values), SqlValue::Float64(target)) => {
                 self.filter_f64(values, *target, op, &mut matching_indices)?;
             }
             _ => {
@@ -319,51 +316,51 @@ impl VectorizedExecutor {
         match (column, function) {
             (Column::Int32(values), AggregateFunction::Sum) => {
                 let result = self.simd_aggregate_i32.sum(values, null_bitmap);
-                Ok(result.map(SqlValue::Integer).unwrap_or(SqlValue::Null))
+                Ok(result.map(SqlValue::Int32).unwrap_or(SqlValue::Null))
             }
             (Column::Int32(values), AggregateFunction::Min) => {
                 let result = self.simd_aggregate_i32.min(values, null_bitmap);
-                Ok(result.map(SqlValue::Integer).unwrap_or(SqlValue::Null))
+                Ok(result.map(SqlValue::Int32).unwrap_or(SqlValue::Null))
             }
             (Column::Int32(values), AggregateFunction::Max) => {
                 let result = self.simd_aggregate_i32.max(values, null_bitmap);
-                Ok(result.map(SqlValue::Integer).unwrap_or(SqlValue::Null))
+                Ok(result.map(SqlValue::Int32).unwrap_or(SqlValue::Null))
             }
             (Column::Int32(_), AggregateFunction::Count) => {
                 let count = self.simd_aggregate_i32.count(null_bitmap);
-                Ok(SqlValue::BigInt(count as i64))
+                Ok(SqlValue::Int64(count as i64))
             }
             (Column::Int64(values), AggregateFunction::Sum) => {
                 let result = self.simd_aggregate_i64.sum(values, null_bitmap);
-                Ok(result.map(SqlValue::BigInt).unwrap_or(SqlValue::Null))
+                Ok(result.map(SqlValue::Int64).unwrap_or(SqlValue::Null))
             }
             (Column::Int64(values), AggregateFunction::Min) => {
                 let result = self.simd_aggregate_i64.min(values, null_bitmap);
-                Ok(result.map(SqlValue::BigInt).unwrap_or(SqlValue::Null))
+                Ok(result.map(SqlValue::Int64).unwrap_or(SqlValue::Null))
             }
             (Column::Int64(values), AggregateFunction::Max) => {
                 let result = self.simd_aggregate_i64.max(values, null_bitmap);
-                Ok(result.map(SqlValue::BigInt).unwrap_or(SqlValue::Null))
+                Ok(result.map(SqlValue::Int64).unwrap_or(SqlValue::Null))
             }
             (Column::Int64(_), AggregateFunction::Count) => {
                 let count = self.simd_aggregate_i64.count(null_bitmap);
-                Ok(SqlValue::BigInt(count as i64))
+                Ok(SqlValue::Int64(count as i64))
             }
             (Column::Float64(values), AggregateFunction::Sum) => {
                 let result = self.simd_aggregate_f64.sum(values, null_bitmap);
-                Ok(result.map(SqlValue::DoublePrecision).unwrap_or(SqlValue::Null))
+                Ok(result.map(SqlValue::Float64).unwrap_or(SqlValue::Null))
             }
             (Column::Float64(values), AggregateFunction::Min) => {
                 let result = self.simd_aggregate_f64.min(values, null_bitmap);
-                Ok(result.map(SqlValue::DoublePrecision).unwrap_or(SqlValue::Null))
+                Ok(result.map(SqlValue::Float64).unwrap_or(SqlValue::Null))
             }
             (Column::Float64(values), AggregateFunction::Max) => {
                 let result = self.simd_aggregate_f64.max(values, null_bitmap);
-                Ok(result.map(SqlValue::DoublePrecision).unwrap_or(SqlValue::Null))
+                Ok(result.map(SqlValue::Float64).unwrap_or(SqlValue::Null))
             }
             (Column::Float64(_), AggregateFunction::Count) => {
                 let count = self.simd_aggregate_f64.count(null_bitmap);
-                Ok(SqlValue::BigInt(count as i64))
+                Ok(SqlValue::Int64(count as i64))
             }
             (_, AggregateFunction::Avg) => {
                 // Average requires both sum and count
@@ -516,7 +513,7 @@ impl VectorizedExecutor {
                     }
                 }
             }
-            (Column::String(values), SqlValue::Text(target_str)) => {
+            (Column::String(values), SqlValue::String(target_str)) => {
                 for (idx, value) in values.iter().enumerate() {
                     let matches = match op {
                         ComparisonOp::Equal => value == target_str,
@@ -698,7 +695,7 @@ mod tests {
             column_names: Some(vec!["value".to_string()]),
         };
 
-        let result = executor.execute_filter(&batch, 0, ComparisonOp::Equal, SqlValue::Integer(5));
+        let result = executor.execute_filter(&batch, 0, ComparisonOp::Equal, SqlValue::Int32(5));
 
         assert!(result.is_ok());
         let filtered = result.unwrap();
@@ -722,7 +719,7 @@ mod tests {
             column_names: Some(vec!["value".to_string()]),
         };
 
-        let result = executor.execute_filter(&batch, 0, ComparisonOp::GreaterThan, SqlValue::Integer(4));
+        let result = executor.execute_filter(&batch, 0, ComparisonOp::GreaterThan, SqlValue::Int32(4));
 
         assert!(result.is_ok());
         let filtered = result.unwrap();
@@ -783,7 +780,7 @@ mod tests {
         let result = executor.execute_aggregation(&batch, 0, AggregateFunction::Sum);
 
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), SqlValue::Integer(15));
+        assert_eq!(result.unwrap(), SqlValue::Int32(15));
     }
 
     #[test]
@@ -804,7 +801,7 @@ mod tests {
         let result = executor.execute_aggregation(&batch, 0, AggregateFunction::Sum);
 
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), SqlValue::Integer(9)); // 1 + 3 + 5
+        assert_eq!(result.unwrap(), SqlValue::Int32(9)); // 1 + 3 + 5
     }
 
     #[test]

@@ -18,12 +18,8 @@ use std::time::{Duration, SystemTime};
 use tokio::sync::RwLock;
 
 use crate::error::{EngineError, EngineResult};
-use crate::storage::SqlValue;
-use super::{
-    Column, ColumnBatch, NullBitmap,
-    VectorizedExecutor, VectorizedExecutorConfig,
-    AggregateFunction, ComparisonOp,
-};
+use crate::storage::{SqlValue, Column, ColumnBatch, NullBitmap};
+use crate::query::{VectorizedExecutor, VectorizedExecutorConfig, AggregateFunction, ComparisonOp};
 
 /// Primary key value that can be hashed and compared
 ///
@@ -46,16 +42,16 @@ impl PrimaryKey {
         match value {
             SqlValue::Null => Ok(PrimaryKey::Null),
             SqlValue::Boolean(b) => Ok(PrimaryKey::Boolean(*b)),
-            SqlValue::SmallInt(i) => Ok(PrimaryKey::SmallInt(*i)),
-            SqlValue::Integer(i) => Ok(PrimaryKey::Integer(*i)),
-            SqlValue::BigInt(i) => Ok(PrimaryKey::BigInt(*i)),
-            SqlValue::Text(s) | SqlValue::Varchar(s) | SqlValue::Char(s) => {
+            SqlValue::Int16(i) => Ok(PrimaryKey::SmallInt(*i)),
+            SqlValue::Int32(i) => Ok(PrimaryKey::Integer(*i)),
+            SqlValue::Int64(i) => Ok(PrimaryKey::BigInt(*i)),
+            SqlValue::String(s) | SqlValue::Varchar(s) | SqlValue::Char(s) => {
                 Ok(PrimaryKey::Text(s.clone()))
             }
-            SqlValue::Bytea(b) => Ok(PrimaryKey::Bytea(b.clone())),
+            SqlValue::Binary(b) => Ok(PrimaryKey::Bytea(b.clone())),
 
             // Reject types that can't be primary keys
-            SqlValue::Real(_) | SqlValue::DoublePrecision(_) => {
+            SqlValue::Float32(_) | SqlValue::Float64(_) => {
                 Err(EngineError::storage(
                     "Floating point types cannot be used as primary keys".to_string()
                 ))
@@ -78,11 +74,11 @@ impl PrimaryKey {
         match self {
             PrimaryKey::Null => SqlValue::Null,
             PrimaryKey::Boolean(b) => SqlValue::Boolean(*b),
-            PrimaryKey::SmallInt(i) => SqlValue::SmallInt(*i),
-            PrimaryKey::Integer(i) => SqlValue::Integer(*i),
-            PrimaryKey::BigInt(i) => SqlValue::BigInt(*i),
-            PrimaryKey::Text(s) => SqlValue::Text(s.clone()),
-            PrimaryKey::Bytea(b) => SqlValue::Bytea(b.clone()),
+            PrimaryKey::SmallInt(i) => SqlValue::Int16(*i),
+            PrimaryKey::Integer(i) => SqlValue::Int32(*i),
+            PrimaryKey::BigInt(i) => SqlValue::Int64(*i),
+            PrimaryKey::Text(s) => SqlValue::String(s.clone()),
+            PrimaryKey::Bytea(b) => SqlValue::Binary(b.clone()),
         }
     }
 }
@@ -387,8 +383,8 @@ impl RowBasedStore {
                         null_bitmap.set_null(row_idx);
                         column_values.push(0); // Placeholder
                     }
-                    SqlValue::Integer(v) => column_values.push(*v),
-                    SqlValue::BigInt(v) => column_values.push(*v as i32), // Simplified
+                    SqlValue::Int32(v) => column_values.push(*v),
+                    SqlValue::Int64(v) => column_values.push(*v as i32), // Simplified
                     _ => column_values.push(0), // Handle other types
                 }
             }
@@ -440,10 +436,10 @@ impl RowBasedStore {
 
     fn compare_values(&self, a: &SqlValue, b: &SqlValue) -> EngineResult<i32> {
         match (a, b) {
-            (SqlValue::Integer(x), SqlValue::Integer(y)) => Ok(x.cmp(y) as i32),
-            (SqlValue::BigInt(x), SqlValue::BigInt(y)) => Ok(x.cmp(y) as i32),
-            (SqlValue::SmallInt(x), SqlValue::SmallInt(y)) => Ok(x.cmp(y) as i32),
-            (SqlValue::Text(x), SqlValue::Text(y)) => Ok(x.cmp(y) as i32),
+            (SqlValue::Int32(x), SqlValue::Int32(y)) => Ok(x.cmp(y) as i32),
+            (SqlValue::Int64(x), SqlValue::Int64(y)) => Ok(x.cmp(y) as i32),
+            (SqlValue::Int16(x), SqlValue::Int16(y)) => Ok(x.cmp(y) as i32),
+            (SqlValue::String(x), SqlValue::String(y)) => Ok(x.cmp(y) as i32),
             _ => Err(EngineError::storage("Cannot compare values of different types".to_string())),
         }
     }
@@ -682,13 +678,13 @@ impl HybridStorageManager {
                             } else {
                                 let value = match column {
                                     Column::Bool(vals) => SqlValue::Boolean(vals[row_idx]),
-                                    Column::Int16(vals) => SqlValue::SmallInt(vals[row_idx]),
-                                    Column::Int32(vals) => SqlValue::Integer(vals[row_idx]),
-                                    Column::Int64(vals) => SqlValue::BigInt(vals[row_idx]),
-                                    Column::Float32(vals) => SqlValue::Real(vals[row_idx]),
-                                    Column::Float64(vals) => SqlValue::DoublePrecision(vals[row_idx]),
-                                    Column::String(vals) => SqlValue::Text(vals[row_idx].clone()),
-                                    Column::Binary(vals) => SqlValue::Bytea(vals[row_idx].clone()),
+                                    Column::Int16(vals) => SqlValue::Int16(vals[row_idx]),
+                                    Column::Int32(vals) => SqlValue::Int32(vals[row_idx]),
+                                    Column::Int64(vals) => SqlValue::Int64(vals[row_idx]),
+                                    Column::Float32(vals) => SqlValue::Float32(vals[row_idx]),
+                                    Column::Float64(vals) => SqlValue::Float64(vals[row_idx]),
+                                    Column::String(vals) => SqlValue::String(vals[row_idx].clone()),
+                                    Column::Binary(vals) => SqlValue::Binary(vals[row_idx].clone()),
                                 };
                                 row_values.push(value);
                             }
@@ -832,12 +828,12 @@ mod tests {
         let mut store = RowBasedStore::new("test_table".to_string(), schema);
 
         // Insert a row
-        let values = vec![SqlValue::Integer(1), SqlValue::Text("Alice".to_string())];
+        let values = vec![SqlValue::Int32(1), SqlValue::String("Alice".to_string())];
         assert!(store.insert(values).is_ok());
         assert_eq!(store.row_count(), 1);
 
         // Get by primary key
-        let row = store.get(&SqlValue::Integer(1));
+        let row = store.get(&SqlValue::Int32(1));
         assert!(row.is_some());
     }
 
@@ -859,15 +855,15 @@ mod tests {
         let mut store = RowBasedStore::new("users".to_string(), schema);
 
         // Insert multiple rows
-        store.insert(vec![SqlValue::Integer(1), SqlValue::Integer(25)]).unwrap();
-        store.insert(vec![SqlValue::Integer(2), SqlValue::Integer(30)]).unwrap();
-        store.insert(vec![SqlValue::Integer(3), SqlValue::Integer(35)]).unwrap();
+        store.insert(vec![SqlValue::Int32(1), SqlValue::Int32(25)]).unwrap();
+        store.insert(vec![SqlValue::Int32(2), SqlValue::Int32(30)]).unwrap();
+        store.insert(vec![SqlValue::Int32(3), SqlValue::Int32(35)]).unwrap();
 
         // Scan with filter
         let filter = FilterPredicate {
             column: "age".to_string(),
             operator: ComparisonOp::GreaterThan,
-            value: SqlValue::Integer(28),
+            value: SqlValue::Int32(28),
         };
 
         let results = store.scan(Some(&filter)).unwrap();
@@ -891,11 +887,11 @@ mod tests {
         );
 
         // Insert into hot tier
-        manager.insert(vec![SqlValue::Integer(1)]).await.unwrap();
+        manager.insert(vec![SqlValue::Int32(1)]).await.unwrap();
 
         // Point lookup
         let result = manager.execute(AccessPattern::PointLookup {
-            key: SqlValue::Integer(1),
+            key: SqlValue::Int32(1),
         }).await.unwrap();
 
         match result {

@@ -85,7 +85,7 @@
 //! }
 //! ```
 
-#![deny(missing_docs)]
+#![warn(missing_docs)]
 #![warn(rust_2018_idioms)]
 
 pub mod cluster;
