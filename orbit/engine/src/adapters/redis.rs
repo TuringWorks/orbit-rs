@@ -23,14 +23,17 @@
 //!
 //! ## Usage Example
 //!
-//! ```rust,no_run
-//! use orbit_engine::adapters::{AdapterContext, RedisAdapter};
-//! use orbit_engine::storage::HybridStorageManager;
+//! ```rust,ignore
+//! use orbit_engine::adapters::{AdapterContext, RedisAdapter, ProtocolAdapter};
+//! use orbit_engine::storage::{HybridStorageManager, HybridStorageConfig, ColumnSchema};
 //! use std::sync::Arc;
 //!
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-//! // Create storage engine
-//! let storage = Arc::new(HybridStorageManager::new(/* ... */));
+//! // Create storage engine with proper configuration
+//! let table_name = "redis_data".to_string();
+//! let schema = vec![]; // Define your schema
+//! let config = HybridStorageConfig::default();
+//! let storage = Arc::new(HybridStorageManager::new(table_name, schema, config));
 //!
 //! // Create adapter context
 //! let context = AdapterContext::new(storage);

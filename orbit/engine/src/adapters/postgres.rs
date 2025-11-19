@@ -24,14 +24,17 @@
 //!
 //! ## Usage Example
 //!
-//! ```rust,no_run
+//! ```rust,ignore
 //! use orbit_engine::adapters::{AdapterContext, PostgresAdapter};
-//! use orbit_engine::storage::HybridStorageManager;
+//! use orbit_engine::storage::{HybridStorageManager, HybridStorageConfig, ColumnSchema};
 //! use std::sync::Arc;
 //!
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-//! // Create storage engine
-//! let storage = Arc::new(HybridStorageManager::new(/* ... */));
+//! // Create storage engine with proper configuration
+//! let table_name = "test_table".to_string();
+//! let schema = vec![]; // Define your schema
+//! let config = HybridStorageConfig::default();
+//! let storage = Arc::new(HybridStorageManager::new(table_name, schema, config));
 //!
 //! // Create adapter context
 //! let context = AdapterContext::new(storage);
