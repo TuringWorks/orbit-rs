@@ -25,6 +25,7 @@ use std::collections::HashMap;
 /// Provides a unified query interface for multi-model data access
 pub struct OrbitQLAdapter {
     context: AdapterContext,
+    #[allow(dead_code)]
     transaction_adapter: TransactionAdapter,
 }
 

@@ -478,6 +478,7 @@ pub struct HybridStorageManager {
     cold_store: Arc<RwLock<Option<ColumnBatch>>>,
 
     /// Vectorized executor for columnar operations
+    #[allow(dead_code)]
     vectorized_executor: VectorizedExecutor,
 
     /// Configuration

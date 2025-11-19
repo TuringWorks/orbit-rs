@@ -48,7 +48,7 @@ use crate::error::{EngineError, EngineResult};
 use crate::storage::{ColumnDef, DataType, Row, SqlValue, TableSchema};
 use crate::transaction::IsolationLevel;
 
-use super::{AdapterContext, CommandResult, ProtocolAdapter, TransactionAdapter};
+use super::{AdapterContext, ProtocolAdapter, TransactionAdapter};
 
 /// REST API adapter
 pub struct RestAdapter {
@@ -477,7 +477,10 @@ fn sql_value_to_json(value: &SqlValue) -> EngineResult<serde_json::Value> {
         SqlValue::String(s) | SqlValue::Varchar(s) | SqlValue::Char(s) | SqlValue::Decimal(s) => {
             Ok(serde_json::Value::String(s.clone()))
         }
-        SqlValue::Binary(b) => Ok(serde_json::Value::String(base64::encode(b))),
+        SqlValue::Binary(b) => {
+            use base64::{Engine as _, engine::general_purpose};
+            Ok(serde_json::Value::String(general_purpose::STANDARD.encode(b)))
+        }
         SqlValue::Timestamp(ts) => {
             let duration = ts.duration_since(std::time::UNIX_EPOCH).map_err(|e| {
                 EngineError::internal(format!("Invalid timestamp: {}", e))

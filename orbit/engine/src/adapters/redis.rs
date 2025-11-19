@@ -51,7 +51,7 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 use crate::error::{EngineError, EngineResult};
-use crate::storage::{AccessPattern, ColumnDef, DataType, FilterPredicate, Row, SqlValue, TableSchema};
+use crate::storage::{AccessPattern, ColumnDef, DataType, FilterPredicate, SqlValue, TableSchema};
 
 use super::{AdapterContext, CommandResult, ProtocolAdapter};
 
@@ -66,6 +66,7 @@ pub struct RedisAdapter {
     /// Table name for list values
     lists_table: String,
     /// Table name for set values
+    #[allow(dead_code)]
     sets_table: String,
 }
 

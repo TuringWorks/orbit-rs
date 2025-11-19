@@ -24,7 +24,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::SystemTime;
 
-use arrow::array::{Array, ArrayRef, Int32Array, Int64Array, StringArray, BooleanArray};
+use arrow::array::{Array, ArrayRef, Int32Array, Int64Array};
 use arrow::datatypes::{DataType, Field, Schema as ArrowSchema};
 use arrow::record_batch::RecordBatch;
 use iceberg::{Catalog, CatalogBuilder, NamespaceIdent, TableIdent};
@@ -34,7 +34,7 @@ use iceberg_catalog_rest::{RestCatalog, RestCatalogBuilder, REST_CATALOG_PROP_UR
 
 use crate::error::{EngineError, EngineResult};
 use crate::storage::{SqlValue, Column, ColumnBatch, NullBitmap};
-use crate::query::{VectorizedExecutor, VectorizedExecutorConfig, AggregateFunction, ComparisonOp};
+use crate::query::{VectorizedExecutor, VectorizedExecutorConfig, AggregateFunction};
 use super::config::StorageBackend;
 
 /// Iceberg cold tier storage
@@ -46,12 +46,14 @@ pub struct IcebergColdStore {
     table: Arc<Table>,
 
     /// Table name
+    #[allow(dead_code)]
     table_name: String,
 
     /// Vectorized executor for SIMD operations
     vectorized_executor: VectorizedExecutor,
 
     /// Creation timestamp
+    #[allow(dead_code)]
     created_at: SystemTime,
 }
 
@@ -151,8 +153,8 @@ impl IcebergColdStore {
     /// Query table as of specific timestamp (time travel)
     pub async fn query_as_of(
         &self,
-        timestamp: SystemTime,
-        filter: Option<&FilterPredicate>,
+        _timestamp: SystemTime,
+        _filter: Option<&FilterPredicate>,
     ) -> EngineResult<Vec<RecordBatch>> {
         // TODO: Implement time travel
         // let snapshot = self.table.snapshot_as_of_timestamp(timestamp)
