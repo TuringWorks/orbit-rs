@@ -11,11 +11,10 @@ use crate::error::{EngineError, EngineResult};
 use crate::metrics::TransactionMetrics;
 
 // Module declarations
-// TODO: mvcc.rs has dependencies on orbit-shared - needs refactoring
-// pub mod mvcc;
+pub mod mvcc;
 
 // Re-exports
-// pub use mvcc::MvccTransactionManager;
+pub use mvcc::{MvccTable, MvccTransaction, RowVersion, TransactionSnapshot};
 
 /// Transaction identifier
 pub type TransactionId = Uuid;
@@ -31,6 +30,15 @@ pub enum IsolationLevel {
     RepeatableRead,
     /// Serializable
     Serializable,
+}
+
+/// Transaction access mode
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum AccessMode {
+    /// Read-only transaction
+    ReadOnly,
+    /// Read-write transaction
+    ReadWrite,
 }
 
 /// Transaction state

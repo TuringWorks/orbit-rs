@@ -11,10 +11,8 @@
 //! - Deadlock detection and resolution
 
 use crate::error::{EngineError, EngineResult};
-use crate::storage::{
-    ast::{AccessMode, IsolationLevel},
-    types::SqlValue,
-};
+use crate::storage::SqlValue;
+use crate::transaction::{AccessMode, IsolationLevel};
 use chrono::{DateTime, Utc};
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
@@ -631,10 +629,9 @@ impl MvccSqlExecutor {
             name: name.to_string(),
             row_versions: BTreeMap::new(),
             schema: crate::storage::TableSchema {
-                name: name.to_string(), // Use string directly
+                name: name.to_string(),
                 columns: Vec::new(),
-                constraints: Vec::new(),
-                indexes: Vec::new(),
+                primary_key: Vec::new(),
             },
         };
 
