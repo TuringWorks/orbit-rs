@@ -10,6 +10,30 @@ use tokio::time::{Duration, Instant};
 use tracing::{debug, error, info};
 use uuid::Uuid;
 
+/// Synchronous mode for transaction log
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SyncMode {
+    /// OFF - No syncing, fastest but least durable (risk of corruption)
+    Off,
+    /// NORMAL - Sync at critical moments (good balance)
+    Normal,
+    /// FULL - Sync after every write (slowest but most durable)
+    Full,
+    /// EXTRA - Even more durable than FULL (sync directory entries too)
+    Extra,
+}
+
+impl SyncMode {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            SyncMode::Off => "OFF",
+            SyncMode::Normal => "NORMAL",
+            SyncMode::Full => "FULL",
+            SyncMode::Extra => "EXTRA",
+        }
+    }
+}
+
 /// Configuration for persistent transaction log
 #[derive(Debug, Clone)]
 pub struct PersistentLogConfig {
@@ -26,7 +50,20 @@ pub struct PersistentLogConfig {
     /// Connection pool configuration
     pub max_connections: u32,
     /// Enable Write-Ahead Logging for better performance
+    /// When enabled, writes are ~3x faster but requires WAL checkpointing
     pub enable_wal: bool,
+    /// Synchronous mode - controls durability vs performance trade-off
+    /// - Normal: Good balance (default)
+    /// - Full: Maximum durability, slower writes
+    /// - Off: Fastest, risk of corruption on crash
+    pub sync_mode: SyncMode,
+    /// Cache size in pages (negative = KB, positive = pages)
+    /// Default: -10000 (~10MB cache)
+    pub cache_size: i32,
+    /// WAL checkpoint interval (in entries)
+    /// Smaller = more frequent checkpoints, less recovery time
+    /// Larger = better write performance, longer recovery
+    pub wal_checkpoint_interval: usize,
 }
 
 impl Default for PersistentLogConfig {
@@ -39,6 +76,45 @@ impl Default for PersistentLogConfig {
             batch_size: 1000,
             max_connections: 5,
             enable_wal: true,
+            sync_mode: SyncMode::Normal,
+            cache_size: -10000, // ~10MB
+            wal_checkpoint_interval: 10000,
+        }
+    }
+}
+
+impl PersistentLogConfig {
+    /// Create config optimized for maximum durability (slower performance)
+    pub fn durability_optimized() -> Self {
+        Self {
+            enable_wal: true,
+            sync_mode: SyncMode::Full,
+            cache_size: -5000, // Smaller cache for more frequent flushes
+            wal_checkpoint_interval: 1000, // More frequent checkpoints
+            ..Default::default()
+        }
+    }
+
+    /// Create config optimized for maximum performance (less durable)
+    pub fn performance_optimized() -> Self {
+        Self {
+            enable_wal: true,
+            sync_mode: SyncMode::Normal,
+            cache_size: -20000, // Larger cache (~20MB)
+            wal_checkpoint_interval: 50000, // Less frequent checkpoints
+            batch_size: 5000, // Larger batches
+            ..Default::default()
+        }
+    }
+
+    /// Create config for in-memory operation (ephemeral, fastest)
+    pub fn in_memory() -> Self {
+        Self {
+            database_path: PathBuf::from(":memory:"),
+            enable_wal: false, // WAL not needed for in-memory
+            sync_mode: SyncMode::Off,
+            cache_size: -50000, // Large cache (~50MB)
+            ..Default::default()
         }
     }
 }
@@ -221,26 +297,59 @@ impl SqliteTransactionLogger {
 
     /// Configure database settings
     async fn configure_database(&self) -> EngineResult<()> {
+        // Configure WAL mode if enabled
         if self.config.enable_wal {
             sqlx::query("PRAGMA journal_mode = WAL")
                 .execute(&self.pool)
                 .await
                 .map_err(|e| EngineError::internal(format!("Failed to enable WAL: {e}")))?;
+
+            info!("WAL mode enabled for transaction log");
+        } else {
+            sqlx::query("PRAGMA journal_mode = DELETE")
+                .execute(&self.pool)
+                .await
+                .map_err(|e| EngineError::internal(format!("Failed to set journal mode: {e}")))?;
         }
 
-        // Configure other performance settings
-        sqlx::query("PRAGMA synchronous = NORMAL")
+        // Configure synchronous mode
+        let sync_pragma = format!("PRAGMA synchronous = {}", self.config.sync_mode.as_str());
+        sqlx::query(&sync_pragma)
             .execute(&self.pool)
             .await
             .map_err(|e| EngineError::internal(format!("Failed to set synchronous mode: {e}")))?;
-        sqlx::query("PRAGMA cache_size = 10000")
+
+        debug!("Synchronous mode set to: {:?}", self.config.sync_mode);
+
+        // Configure cache size
+        let cache_pragma = format!("PRAGMA cache_size = {}", self.config.cache_size);
+        sqlx::query(&cache_pragma)
             .execute(&self.pool)
             .await
             .map_err(|e| EngineError::internal(format!("Failed to set cache size: {e}")))?;
+
+        // Configure temp store to memory for better performance
         sqlx::query("PRAGMA temp_store = memory")
             .execute(&self.pool)
             .await
             .map_err(|e| EngineError::internal(format!("Failed to set temp store: {e}")))?;
+
+        // Configure WAL autocheckpoint (number of pages before auto-checkpoint)
+        if self.config.enable_wal {
+            let checkpoint_pages = (self.config.wal_checkpoint_interval / 10).max(1000);
+            let checkpoint_pragma = format!("PRAGMA wal_autocheckpoint = {}", checkpoint_pages);
+            sqlx::query(&checkpoint_pragma)
+                .execute(&self.pool)
+                .await
+                .map_err(|e| EngineError::internal(format!("Failed to set WAL autocheckpoint: {e}")))?;
+        }
+
+        info!(
+            "Transaction log configured: WAL={}, sync={:?}, cache={}KB",
+            self.config.enable_wal,
+            self.config.sync_mode,
+            self.config.cache_size.abs() / 1024
+        );
 
         Ok(())
     }
