@@ -41,7 +41,8 @@ Orbit Engine is a unified storage engine designed to support multiple database p
 │  - PostgreSQL Wire Protocol                             │
 │  - Redis RESP Protocol                                  │
 │  - REST HTTP API                                        │
-│  - OrbitQL/AQL/Cypher (Future)                         │
+│  - OrbitQL (Multi-Model Query Language)                │
+│  - AQL/Cypher (Future)                                  │
 └─────────────────────────────────────────────────────────┘
                           ↓
 ┌─────────────────────────────────────────────────────────┐
@@ -79,7 +80,8 @@ orbit/engine/src/
 ├── adapters/         # Protocol adapters
 │   ├── postgres.rs   # PostgreSQL adapter
 │   ├── redis.rs      # Redis adapter
-│   └── rest.rs       # REST API adapter
+│   ├── rest.rs       # REST API adapter
+│   └── orbitql.rs    # OrbitQL adapter (multi-model queries)
 ├── storage/          # Storage layer
 │   ├── columnar.rs   # Columnar format
 │   ├── hybrid.rs     # Tiered storage manager
@@ -440,6 +442,89 @@ while let Some(event) = stream.next().await {
 
 ## Protocol Adapters
 
+### OrbitQL - Multi-Model Query Language
+
+**OrbitQL** is a unified query language that combines document, graph, time-series, and key-value operations in a single query. It's designed to access all data stored in orbit-engine across hot/warm/cold tiers.
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    OrbitQL Query Layer                       │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐   │
+│  │  Parser  │→│ Optimizer │→│  Planner  │→│ Executor  │   │
+│  └──────────┘  └──────────┘  └──────────┘  └──────────┘   │
+└─────────────────────────────────────────────────────────────┘
+                           ↓
+┌─────────────────────────────────────────────────────────────┐
+│                   OrbitQL Adapter                            │
+│  - Type Mapping (QueryValue ↔ SqlValue)                     │
+│  - Filter Conversion (Expression → FilterPredicate)         │
+│  - Multi-Model Support (Document/Graph/Time-Series)         │
+│  - Tier-Aware Queries (Hot/Warm/Cold)                       │
+└─────────────────────────────────────────────────────────────┘
+                           ↓
+┌─────────────────────────────────────────────────────────────┐
+│                   Unified Storage Engine                     │
+│  Storage (Hot/Warm/Cold) | Transactions | Clustering        │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Key Features:**
+- **Multi-Model Queries**: Query documents, graphs, and time-series in one query
+- **Cross-Model JOINs**: Relate data between different models seamlessly
+- **Tiered Storage Aware**: Automatically accesses hot/warm/cold tiers
+- **Live Queries**: Real-time subscriptions with change notifications
+- **ACID Transactions**: Multi-model transaction support
+
+**Example - Document Query:**
+```orbitql
+SELECT * FROM users WHERE age > 18 ORDER BY created_at DESC LIMIT 10;
+```
+
+**Example - Graph Traversal:**
+```orbitql
+SELECT user->follows->user.name AS friends FROM users WHERE user.id = 123;
+```
+
+**Example - Time-Series Analytics:**
+```orbitql
+SELECT
+    server_id,
+    AVG(metrics[cpu_usage WHERE timestamp > NOW() - 1h]) AS avg_cpu
+FROM servers
+GROUP BY server_id;
+```
+
+**Example - Cross-Model JOIN:**
+```orbitql
+SELECT
+    u.name,
+    u->follows->user.name AS friends,
+    AVG(m.cpu_usage) AS avg_cpu
+FROM users AS u
+JOIN metrics AS m ON u.server_id = m.server_id
+WHERE m.timestamp > NOW() - 1h
+GROUP BY u.id;
+```
+
+**Integration:**
+```rust
+use orbit_engine::adapters::{AdapterContext, OrbitQLAdapter};
+use orbit_engine::storage::HybridStorageManager;
+
+let storage = Arc::new(HybridStorageManager::new_in_memory());
+let context = AdapterContext::new(storage as Arc<dyn TableStorage>);
+let adapter = OrbitQLAdapter::new(context);
+
+// Execute OrbitQL query
+let result = adapter.execute_query(
+    "SELECT * FROM users WHERE age > 18"
+).await?;
+```
+
+**See Also:**
+- [OrbitQL Integration Guide](ORBITQL.md) - Complete syntax and examples
+- [orbitql_example.rs](../examples/orbitql_example.rs) - Working examples
+
 ### Adapter Pattern
 
 ```rust
@@ -481,6 +566,11 @@ impl PostgresAdapter {
 | Redis String | SqlValue::String | Stored in redis_strings table |
 | Redis Hash | Multiple rows | Stored in redis_hashes table |
 | REST JSON Number | SqlValue::Int64 or Float64 | Based on decimal point |
+| OrbitQL STRING | SqlValue::String | UTF-8 text |
+| OrbitQL INTEGER | SqlValue::Int64 | 64-bit signed |
+| OrbitQL FLOAT | SqlValue::Float64 | IEEE 754 |
+| OrbitQL BOOLEAN | SqlValue::Boolean | 1 byte |
+| OrbitQL TIMESTAMP | SqlValue::Timestamp | Unix epoch |
 
 ## Data Flow
 
@@ -490,7 +580,8 @@ impl PostgresAdapter {
 1. Client Request
    ├─ PostgreSQL: INSERT statement
    ├─ Redis: SET command
-   └─ REST: POST /tables/{name}/rows
+   ├─ REST: POST /tables/{name}/rows
+   └─ OrbitQL: INSERT INTO users VALUES (...)
 
 2. Protocol Adapter
    ├─ Parse request
@@ -522,7 +613,8 @@ impl PostgresAdapter {
 1. Client Query
    ├─ PostgreSQL: SELECT with WHERE
    ├─ Redis: GET/HGET
-   └─ REST: GET /tables/{name}/rows?filter=...
+   ├─ REST: GET /tables/{name}/rows?filter=...
+   └─ OrbitQL: SELECT * FROM users WHERE age > 18
 
 2. Protocol Adapter
    ├─ Parse query
