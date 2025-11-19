@@ -58,10 +58,12 @@ use crate::transaction::{IsolationLevel, TransactionId};
 
 pub mod postgres;
 pub mod redis;
+pub mod rest;
 
 // Re-exports
 pub use postgres::PostgresAdapter;
 pub use redis::RedisAdapter;
+pub use rest::RestAdapter;
 
 /// Protocol adapter context containing shared engine components
 #[derive(Clone)]

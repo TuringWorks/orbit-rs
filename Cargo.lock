@@ -4861,6 +4861,7 @@ dependencies = [
  "arrow",
  "arrow-schema",
  "async-trait",
+ "base64 0.22.1",
  "bytes",
  "chrono",
  "criterion 0.5.1",
