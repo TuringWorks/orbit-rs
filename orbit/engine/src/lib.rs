@@ -88,6 +88,7 @@
 #![warn(missing_docs)]
 #![warn(rust_2018_idioms)]
 
+pub mod adapters;
 pub mod addressable;
 pub mod cdc;
 pub mod cluster;
