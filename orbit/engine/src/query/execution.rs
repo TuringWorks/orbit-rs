@@ -12,8 +12,8 @@
 
 use std::collections::HashSet;
 
-use crate::error::{ProtocolError, ProtocolResult};
-use crate::postgres_wire::sql::types::SqlValue;
+use crate::error::{EngineError, EngineResult};
+use crate::storage::SqlValue;
 use super::{
     Column, ColumnBatch, NullBitmap, DEFAULT_BATCH_SIZE,
     simd::{SimdCapability, SimdFilter, SimdAggregate, simd_capability},
@@ -181,16 +181,16 @@ impl VectorizedExecutor {
         columns: Vec<Column>,
         null_bitmaps: Vec<NullBitmap>,
         column_names: Option<Vec<String>>,
-    ) -> ProtocolResult<ColumnBatch> {
+    ) -> EngineResult<ColumnBatch> {
         // Validate input
         if columns.is_empty() {
-            return Err(ProtocolError::PostgresError(
+            return Err(EngineError::storage(
                 "Table scan requires at least one column".to_string(),
             ));
         }
 
         if columns.len() != null_bitmaps.len() {
-            return Err(ProtocolError::PostgresError(
+            return Err(EngineError::storage(
                 "Column count must match null bitmap count".to_string(),
             ));
         }
@@ -201,7 +201,7 @@ impl VectorizedExecutor {
         // Verify all columns have same length
         for (idx, col) in columns.iter().enumerate() {
             if col.len() != row_count {
-                return Err(ProtocolError::PostgresError(
+                return Err(EngineError::storage(
                     format!("Column {} has mismatched length: expected {}, got {}",
                             idx, row_count, col.len()),
                 ));
@@ -225,9 +225,9 @@ impl VectorizedExecutor {
         column_index: usize,
         op: ComparisonOp,
         value: SqlValue,
-    ) -> ProtocolResult<ColumnBatch> {
+    ) -> EngineResult<ColumnBatch> {
         if column_index >= batch.columns.len() {
-            return Err(ProtocolError::PostgresError(
+            return Err(EngineError::storage(
                 format!("Column index {} out of bounds", column_index),
             ));
         }
@@ -266,14 +266,14 @@ impl VectorizedExecutor {
         &self,
         batch: &ColumnBatch,
         column_indices: &[usize],
-    ) -> ProtocolResult<ColumnBatch> {
+    ) -> EngineResult<ColumnBatch> {
         let mut new_columns = Vec::new();
         let mut new_null_bitmaps = Vec::new();
         let mut new_column_names = Vec::new();
 
         for &idx in column_indices {
             if idx >= batch.columns.len() {
-                return Err(ProtocolError::PostgresError(
+                return Err(EngineError::storage(
                     format!("Column index {} out of bounds", idx),
                 ));
             }
@@ -306,9 +306,9 @@ impl VectorizedExecutor {
         batch: &ColumnBatch,
         column_index: usize,
         function: AggregateFunction,
-    ) -> ProtocolResult<SqlValue> {
+    ) -> EngineResult<SqlValue> {
         if column_index >= batch.columns.len() {
-            return Err(ProtocolError::PostgresError(
+            return Err(EngineError::storage(
                 format!("Column index {} out of bounds", column_index),
             ));
         }
@@ -367,11 +367,11 @@ impl VectorizedExecutor {
             }
             (_, AggregateFunction::Avg) => {
                 // Average requires both sum and count
-                Err(ProtocolError::PostgresError(
+                Err(EngineError::storage(
                     "AVG aggregation not yet implemented".to_string(),
                 ))
             }
-            _ => Err(ProtocolError::PostgresError(
+            _ => Err(EngineError::storage(
                 format!("Unsupported column type for {:?}", function),
             )),
         }
@@ -382,7 +382,7 @@ impl VectorizedExecutor {
         &self,
         batch: &ColumnBatch,
         limit: usize,
-    ) -> ProtocolResult<ColumnBatch> {
+    ) -> EngineResult<ColumnBatch> {
         if limit == 0 || limit >= batch.row_count {
             return Ok(batch.clone());
         }
@@ -396,7 +396,7 @@ impl VectorizedExecutor {
         &self,
         batch: &ColumnBatch,
         offset: usize,
-    ) -> ProtocolResult<ColumnBatch> {
+    ) -> EngineResult<ColumnBatch> {
         if offset >= batch.row_count {
             // Return empty batch
             return self.select_rows(batch, &[]);
@@ -415,7 +415,7 @@ impl VectorizedExecutor {
         target: i32,
         op: ComparisonOp,
         result: &mut Vec<usize>,
-    ) -> ProtocolResult<()> {
+    ) -> EngineResult<()> {
         if self.config.use_simd {
             match op {
                 ComparisonOp::Equal => self.simd_filter_i32.filter_eq(values, target, result),
@@ -438,7 +438,7 @@ impl VectorizedExecutor {
         target: i64,
         op: ComparisonOp,
         result: &mut Vec<usize>,
-    ) -> ProtocolResult<()> {
+    ) -> EngineResult<()> {
         match op {
             ComparisonOp::Equal => self.simd_filter_i64.filter_eq(values, target, result),
             ComparisonOp::NotEqual => self.simd_filter_i64.filter_ne(values, target, result),
@@ -457,7 +457,7 @@ impl VectorizedExecutor {
         target: f64,
         op: ComparisonOp,
         result: &mut Vec<usize>,
-    ) -> ProtocolResult<()> {
+    ) -> EngineResult<()> {
         match op {
             ComparisonOp::Equal => self.simd_filter_f64.filter_eq(values, target, result),
             ComparisonOp::NotEqual => self.simd_filter_f64.filter_ne(values, target, result),
@@ -500,7 +500,7 @@ impl VectorizedExecutor {
         target: &SqlValue,
         op: ComparisonOp,
         result: &mut Vec<usize>,
-    ) -> ProtocolResult<()> {
+    ) -> EngineResult<()> {
         result.clear();
 
         match (column, target) {
@@ -532,7 +532,7 @@ impl VectorizedExecutor {
                 }
             }
             _ => {
-                return Err(ProtocolError::PostgresError(
+                return Err(EngineError::storage(
                     "Unsupported column/value type combination for filter".to_string(),
                 ));
             }
@@ -546,7 +546,7 @@ impl VectorizedExecutor {
         &self,
         batch: &ColumnBatch,
         indices: &[usize],
-    ) -> ProtocolResult<ColumnBatch> {
+    ) -> EngineResult<ColumnBatch> {
         let mut new_columns = Vec::new();
         let mut new_null_bitmaps = Vec::new();
 
@@ -574,7 +574,7 @@ impl VectorizedExecutor {
         &self,
         column: &Column,
         indices: &[usize],
-    ) -> ProtocolResult<Column> {
+    ) -> EngineResult<Column> {
         let result = match column {
             Column::Bool(values) => {
                 let selected: Vec<bool> = indices.iter().map(|&i| values[i]).collect();

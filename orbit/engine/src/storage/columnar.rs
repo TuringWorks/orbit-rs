@@ -14,7 +14,7 @@
 //! - **Iterator Pattern**: Zero-copy iteration over columns
 //! - **Visitor Pattern**: Generic column operations
 
-use crate::postgres_wire::sql::types::SqlValue;
+use crate::storage::SqlValue;
 use std::fmt;
 
 /// Default batch size for vectorized operations (optimized for L1 cache)

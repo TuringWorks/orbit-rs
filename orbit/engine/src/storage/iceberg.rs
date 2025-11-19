@@ -32,8 +32,8 @@ use iceberg::table::Table;
 use iceberg::spec::Schema as IcebergSchema;
 use iceberg_catalog_rest::{RestCatalog, RestCatalogBuilder, REST_CATALOG_PROP_URI, REST_CATALOG_PROP_WAREHOUSE};
 
-use crate::error::{ProtocolError, ProtocolResult};
-use crate::postgres_wire::sql::types::SqlValue;
+use crate::error::{EngineError, EngineResult};
+use crate::storage::SqlValue;
 use super::{
     Column, ColumnBatch, NullBitmap,
     VectorizedExecutor, VectorizedExecutorConfig,
@@ -65,14 +65,14 @@ impl IcebergColdStore {
         catalog: Arc<RestCatalog>,
         namespace: &str,
         table_name: &str,
-    ) -> ProtocolResult<Self> {
+    ) -> EngineResult<Self> {
         let namespace_ident = NamespaceIdent::new(namespace.to_string());
         let table_ident = TableIdent::new(namespace_ident, table_name.to_string());
 
         let table = catalog
             .load_table(&table_ident)
             .await
-            .map_err(|e| ProtocolError::PostgresError(
+            .map_err(|e| EngineError::storage(
                 format!("Failed to load Iceberg table: {}", e)
             ))?;
 
@@ -90,25 +90,25 @@ impl IcebergColdStore {
     pub async fn scan(
         &self,
         _filter: Option<&FilterPredicate>,
-    ) -> ProtocolResult<Vec<RecordBatch>> {
+    ) -> EngineResult<Vec<RecordBatch>> {
         // Build Iceberg table scan
         let scan = self.table.scan()
             .build()
-            .map_err(|e| ProtocolError::PostgresError(
+            .map_err(|e| EngineError::storage(
                 format!("Failed to build Iceberg scan: {}", e)
             ))?;
 
         // Execute scan and collect Arrow batches
         let mut batches = Vec::new();
         let mut stream = scan.to_arrow().await
-            .map_err(|e| ProtocolError::PostgresError(
+            .map_err(|e| EngineError::storage(
                 format!("Failed to create Arrow stream: {}", e)
             ))?;
 
         use futures::StreamExt;
         while let Some(batch_result) = stream.next().await {
             let batch = batch_result
-                .map_err(|e| ProtocolError::PostgresError(
+                .map_err(|e| EngineError::storage(
                     format!("Failed to read Arrow batch: {}", e)
                 ))?;
             batches.push(batch);
@@ -125,7 +125,7 @@ impl IcebergColdStore {
         column: &str,
         function: AggregateFunction,
         filter: Option<&FilterPredicate>,
-    ) -> ProtocolResult<SqlValue> {
+    ) -> EngineResult<SqlValue> {
         // 1. Scan with filter (Iceberg prunes partitions/files)
         let batches = self.scan(filter).await?;
 
@@ -157,10 +157,10 @@ impl IcebergColdStore {
         &self,
         timestamp: SystemTime,
         filter: Option<&FilterPredicate>,
-    ) -> ProtocolResult<Vec<RecordBatch>> {
+    ) -> EngineResult<Vec<RecordBatch>> {
         // TODO: Implement time travel
         // let snapshot = self.table.snapshot_as_of_timestamp(timestamp)
-        //     .map_err(|e| ProtocolError::PostgresError(
+        //     .map_err(|e| EngineError::storage(
         //         format!("Failed to get snapshot: {}", e)
         //     ))?;
         //
@@ -173,15 +173,15 @@ impl IcebergColdStore {
     }
 
     /// Get table schema
-    pub fn schema(&self) -> ProtocolResult<Arc<IcebergSchema>> {
+    pub fn schema(&self) -> EngineResult<Arc<IcebergSchema>> {
         Ok(self.table.metadata().current_schema().clone())
     }
 
     /// Get row count (from metadata, no file I/O)
-    pub async fn row_count(&self) -> ProtocolResult<usize> {
+    pub async fn row_count(&self) -> EngineResult<usize> {
         // TODO: Get row count from manifest metadata
         // let manifest = self.table.current_snapshot()
-        //     .ok_or_else(|| ProtocolError::PostgresError("No snapshot".into()))?;
+        //     .ok_or_else(|| EngineError::storage("No snapshot".into()))?;
         //
         // let count = manifest.summary().get("total-records")
         //     .and_then(|s| s.parse().ok())
@@ -235,7 +235,7 @@ impl IcebergColdStore {
     ///     .fast_append(data_files)
     ///     .commit().await?;
     /// ```
-    pub async fn write(&self, _batch: &ColumnBatch) -> ProtocolResult<()> {
+    pub async fn write(&self, _batch: &ColumnBatch) -> EngineResult<()> {
         // TODO Phase 3: Implement full write path
         // The complexity here involves:
         // - Correct API usage of ParquetWriterBuilder (takes 6 arguments)
@@ -247,7 +247,7 @@ impl IcebergColdStore {
         //
         // See HYBRID_ICEBERG_INTEGRATION.md for detailed implementation plan.
 
-        Err(ProtocolError::PostgresError(
+        Err(EngineError::storage(
             "Write path not yet implemented - see Phase 3 roadmap".to_string()
         ))
     }
@@ -261,9 +261,9 @@ impl IcebergColdStore {
         &self,
         batches: Vec<RecordBatch>,
         column_name: &str,
-    ) -> ProtocolResult<ColumnBatch> {
+    ) -> EngineResult<ColumnBatch> {
         if batches.is_empty() {
-            return Err(ProtocolError::PostgresError("No batches to convert".into()));
+            return Err(EngineError::storage("No batches to convert".into()));
         }
 
         let total_rows: usize = batches.iter().map(|b| b.num_rows()).sum();
@@ -274,7 +274,7 @@ impl IcebergColdStore {
             .fields()
             .iter()
             .position(|f| f.name() == column_name)
-            .ok_or_else(|| ProtocolError::PostgresError(
+            .ok_or_else(|| EngineError::storage(
                 format!("Column {} not found", column_name)
             ))?;
 
@@ -289,7 +289,7 @@ impl IcebergColdStore {
             match array.data_type() {
                 DataType::Int32 => {
                     let int_array = array.as_any().downcast_ref::<Int32Array>()
-                        .ok_or_else(|| ProtocolError::PostgresError("Type mismatch".into()))?;
+                        .ok_or_else(|| EngineError::storage("Type mismatch".into()))?;
 
                     for i in 0..int_array.len() {
                         if int_array.is_null(i) {
@@ -302,7 +302,7 @@ impl IcebergColdStore {
                 }
                 DataType::Int64 => {
                     let int_array = array.as_any().downcast_ref::<Int64Array>()
-                        .ok_or_else(|| ProtocolError::PostgresError("Type mismatch".into()))?;
+                        .ok_or_else(|| EngineError::storage("Type mismatch".into()))?;
 
                     for i in 0..int_array.len() {
                         if int_array.is_null(i) {
@@ -314,7 +314,7 @@ impl IcebergColdStore {
                     }
                 }
                 _ => {
-                    return Err(ProtocolError::PostgresError(
+                    return Err(EngineError::storage(
                         format!("Unsupported data type: {:?}", array.data_type())
                     ));
                 }
@@ -338,20 +338,20 @@ pub use super::hybrid::FilterPredicate;
 /// Convert ColumnBatch to Arrow RecordBatch
 ///
 /// Enables writing from our columnar format to Iceberg.
-pub fn column_batch_to_arrow(batch: &ColumnBatch) -> ProtocolResult<RecordBatch> {
+pub fn column_batch_to_arrow(batch: &ColumnBatch) -> EngineResult<RecordBatch> {
     if batch.columns.is_empty() {
-        return Err(ProtocolError::PostgresError("No columns to convert".into()));
+        return Err(EngineError::storage("No columns to convert".into()));
     }
 
     let column_names = batch.column_names.as_ref()
-        .ok_or_else(|| ProtocolError::PostgresError("No column names".into()))?;
+        .ok_or_else(|| EngineError::storage("No column names".into()))?;
 
     let mut fields = Vec::new();
     let mut arrays: Vec<ArrayRef> = Vec::new();
 
     for (col_idx, column) in batch.columns.iter().enumerate() {
         let column_name = column_names.get(col_idx)
-            .ok_or_else(|| ProtocolError::PostgresError("Missing column name".into()))?;
+            .ok_or_else(|| EngineError::storage("Missing column name".into()))?;
 
         let null_bitmap = &batch.null_bitmaps[col_idx];
 
@@ -480,7 +480,7 @@ pub fn column_batch_to_arrow(batch: &ColumnBatch) -> ProtocolResult<RecordBatch>
 
     let schema = Arc::new(ArrowSchema::new(fields));
     RecordBatch::try_new(schema, arrays)
-        .map_err(|e| ProtocolError::PostgresError(format!("Failed to create RecordBatch: {}", e)))
+        .map_err(|e| EngineError::storage(format!("Failed to create RecordBatch: {}", e)))
 }
 
 #[cfg(test)]
@@ -624,7 +624,7 @@ mod tests {
 /// Convert Arrow RecordBatch to ColumnBatch
 ///
 /// Enables reading from Iceberg back to our columnar format.
-pub fn arrow_to_column_batch(batch: &RecordBatch) -> ProtocolResult<ColumnBatch> {
+pub fn arrow_to_column_batch(batch: &RecordBatch) -> EngineResult<ColumnBatch> {
     use arrow::array::{Array, BooleanArray, Int16Array, Int32Array, Int64Array, Float32Array, Float64Array, StringArray, BinaryArray};
 
     let num_rows = batch.num_rows();
@@ -640,7 +640,7 @@ pub fn arrow_to_column_batch(batch: &RecordBatch) -> ProtocolResult<ColumnBatch>
             DataType::Boolean => {
                 let bool_array = array.as_any()
                     .downcast_ref::<BooleanArray>()
-                    .ok_or_else(|| ProtocolError::PostgresError("Type mismatch".into()))?;
+                    .ok_or_else(|| EngineError::storage("Type mismatch".into()))?;
 
                 let mut values = Vec::with_capacity(num_rows);
                 for i in 0..num_rows {
@@ -656,7 +656,7 @@ pub fn arrow_to_column_batch(batch: &RecordBatch) -> ProtocolResult<ColumnBatch>
             DataType::Int16 => {
                 let int_array = array.as_any()
                     .downcast_ref::<Int16Array>()
-                    .ok_or_else(|| ProtocolError::PostgresError("Type mismatch".into()))?;
+                    .ok_or_else(|| EngineError::storage("Type mismatch".into()))?;
 
                 let mut values = Vec::with_capacity(num_rows);
                 for i in 0..num_rows {
@@ -672,7 +672,7 @@ pub fn arrow_to_column_batch(batch: &RecordBatch) -> ProtocolResult<ColumnBatch>
             DataType::Int32 => {
                 let int_array = array.as_any()
                     .downcast_ref::<Int32Array>()
-                    .ok_or_else(|| ProtocolError::PostgresError("Type mismatch".into()))?;
+                    .ok_or_else(|| EngineError::storage("Type mismatch".into()))?;
 
                 let mut values = Vec::with_capacity(num_rows);
                 for i in 0..num_rows {
@@ -688,7 +688,7 @@ pub fn arrow_to_column_batch(batch: &RecordBatch) -> ProtocolResult<ColumnBatch>
             DataType::Int64 => {
                 let int_array = array.as_any()
                     .downcast_ref::<Int64Array>()
-                    .ok_or_else(|| ProtocolError::PostgresError("Type mismatch".into()))?;
+                    .ok_or_else(|| EngineError::storage("Type mismatch".into()))?;
 
                 let mut values = Vec::with_capacity(num_rows);
                 for i in 0..num_rows {
@@ -704,7 +704,7 @@ pub fn arrow_to_column_batch(batch: &RecordBatch) -> ProtocolResult<ColumnBatch>
             DataType::Float32 => {
                 let float_array = array.as_any()
                     .downcast_ref::<Float32Array>()
-                    .ok_or_else(|| ProtocolError::PostgresError("Type mismatch".into()))?;
+                    .ok_or_else(|| EngineError::storage("Type mismatch".into()))?;
 
                 let mut values = Vec::with_capacity(num_rows);
                 for i in 0..num_rows {
@@ -720,7 +720,7 @@ pub fn arrow_to_column_batch(batch: &RecordBatch) -> ProtocolResult<ColumnBatch>
             DataType::Float64 => {
                 let float_array = array.as_any()
                     .downcast_ref::<Float64Array>()
-                    .ok_or_else(|| ProtocolError::PostgresError("Type mismatch".into()))?;
+                    .ok_or_else(|| EngineError::storage("Type mismatch".into()))?;
 
                 let mut values = Vec::with_capacity(num_rows);
                 for i in 0..num_rows {
@@ -736,7 +736,7 @@ pub fn arrow_to_column_batch(batch: &RecordBatch) -> ProtocolResult<ColumnBatch>
             DataType::Utf8 => {
                 let str_array = array.as_any()
                     .downcast_ref::<StringArray>()
-                    .ok_or_else(|| ProtocolError::PostgresError("Type mismatch".into()))?;
+                    .ok_or_else(|| EngineError::storage("Type mismatch".into()))?;
 
                 let mut values = Vec::with_capacity(num_rows);
                 for i in 0..num_rows {
@@ -752,7 +752,7 @@ pub fn arrow_to_column_batch(batch: &RecordBatch) -> ProtocolResult<ColumnBatch>
             DataType::Binary => {
                 let bin_array = array.as_any()
                     .downcast_ref::<BinaryArray>()
-                    .ok_or_else(|| ProtocolError::PostgresError("Type mismatch".into()))?;
+                    .ok_or_else(|| EngineError::storage("Type mismatch".into()))?;
 
                 let mut values = Vec::with_capacity(num_rows);
                 for i in 0..num_rows {
@@ -766,7 +766,7 @@ pub fn arrow_to_column_batch(batch: &RecordBatch) -> ProtocolResult<ColumnBatch>
                 columns.push(Column::Binary(values));
             }
             _ => {
-                return Err(ProtocolError::PostgresError(
+                return Err(EngineError::storage(
                     format!("Unsupported Arrow data type: {:?}", array.data_type())
                 ));
             }
@@ -814,7 +814,7 @@ pub fn arrow_to_column_batch(batch: &RecordBatch) -> ProtocolResult<ColumnBatch>
 /// ```
 pub fn create_file_io_for_storage(
     storage_backend: StorageBackend,
-) -> ProtocolResult<(iceberg::io::FileIO, String)> {
+) -> EngineResult<(iceberg::io::FileIO, String)> {
     let file_io = storage_backend.create_file_io()?;
     let warehouse_path = storage_backend.warehouse_path();
     Ok((file_io, warehouse_path))
@@ -849,7 +849,7 @@ pub fn create_file_io_for_storage(
 pub async fn create_rest_catalog_with_storage(
     catalog_uri: &str,
     storage_backend: StorageBackend,
-) -> ProtocolResult<Arc<RestCatalog>> {
+) -> EngineResult<Arc<RestCatalog>> {
     // Get warehouse path from storage backend
     let warehouse_path = storage_backend.warehouse_path();
 
@@ -862,7 +862,7 @@ pub async fn create_rest_catalog_with_storage(
     let catalog = RestCatalogBuilder::default()
         .load("rest", config)
         .await
-        .map_err(|e| ProtocolError::PostgresError(
+        .map_err(|e| EngineError::storage(
             format!("Failed to create REST catalog: {}", e)
         ))?;
 

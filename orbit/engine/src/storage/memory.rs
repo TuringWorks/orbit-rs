@@ -4,8 +4,8 @@
 //! but non-durable. Useful for testing and development scenarios.
 
 use super::{StorageMetrics, StorageTransaction, TableStorage};
-use crate::error::ProtocolResult;
-use crate::postgres_wire::sql::{
+use crate::error::EngineResult;
+use crate::storage::{
     executor::{ExtensionDefinition, IndexSchema, SchemaDefinition, TableSchema, ViewSchema},
     types::SqlValue,
 };
@@ -127,7 +127,7 @@ impl Default for MemoryTableStorage {
 
 #[async_trait]
 impl TableStorage for MemoryTableStorage {
-    async fn initialize(&self) -> ProtocolResult<()> {
+    async fn initialize(&self) -> EngineResult<()> {
         // Initialize default settings
         let mut settings = self.settings.write().await;
         settings.insert(
@@ -143,7 +143,7 @@ impl TableStorage for MemoryTableStorage {
         Ok(())
     }
 
-    async fn shutdown(&self) -> ProtocolResult<()> {
+    async fn shutdown(&self) -> EngineResult<()> {
         // Clear all data
         self.tables.write().await.clear();
         self.table_data.write().await.clear();
@@ -160,7 +160,7 @@ impl TableStorage for MemoryTableStorage {
         metrics
     }
 
-    async fn begin_transaction(&self) -> ProtocolResult<StorageTransaction> {
+    async fn begin_transaction(&self) -> EngineResult<StorageTransaction> {
         let tx = StorageTransaction {
             id: Uuid::new_v4().to_string(),
             isolation_level: "READ COMMITTED".to_string(),
@@ -174,7 +174,7 @@ impl TableStorage for MemoryTableStorage {
         Ok(tx)
     }
 
-    async fn commit_transaction(&self, tx: &StorageTransaction) -> ProtocolResult<()> {
+    async fn commit_transaction(&self, tx: &StorageTransaction) -> EngineResult<()> {
         let mut transactions = self.transactions.write().await;
         transactions.remove(&tx.id);
 
@@ -182,7 +182,7 @@ impl TableStorage for MemoryTableStorage {
         Ok(())
     }
 
-    async fn rollback_transaction(&self, tx: &StorageTransaction) -> ProtocolResult<()> {
+    async fn rollback_transaction(&self, tx: &StorageTransaction) -> EngineResult<()> {
         let mut transactions = self.transactions.write().await;
         transactions.remove(&tx.id);
 
@@ -197,7 +197,7 @@ impl TableStorage for MemoryTableStorage {
         &self,
         schema: &TableSchema,
         _tx: Option<&StorageTransaction>,
-    ) -> ProtocolResult<()> {
+    ) -> EngineResult<()> {
         let start = std::time::Instant::now();
         let table_name = schema.name.clone();
 
@@ -212,7 +212,7 @@ impl TableStorage for MemoryTableStorage {
         Ok(())
     }
 
-    async fn get_table_schema(&self, table_name: &str) -> ProtocolResult<Option<TableSchema>> {
+    async fn get_table_schema(&self, table_name: &str) -> EngineResult<Option<TableSchema>> {
         let start = std::time::Instant::now();
         let tables = self.tables.read().await;
         let result = tables.get(table_name).cloned();
@@ -220,7 +220,7 @@ impl TableStorage for MemoryTableStorage {
         Ok(result)
     }
 
-    async fn list_table_schemas(&self) -> ProtocolResult<Vec<TableSchema>> {
+    async fn list_table_schemas(&self) -> EngineResult<Vec<TableSchema>> {
         let start = std::time::Instant::now();
         let tables = self.tables.read().await;
         let result = tables.values().cloned().collect();
@@ -232,7 +232,7 @@ impl TableStorage for MemoryTableStorage {
         &self,
         table_name: &str,
         _tx: Option<&StorageTransaction>,
-    ) -> ProtocolResult<bool> {
+    ) -> EngineResult<bool> {
         let start = std::time::Instant::now();
 
         let mut tables = self.tables.write().await;
@@ -254,16 +254,15 @@ impl TableStorage for MemoryTableStorage {
     async fn insert_row(
         &self,
         table_name: &str,
-        row: &HashMap<String, SqlValue>,
-        _tx: Option<&StorageTransaction>,
-    ) -> ProtocolResult<()> {
+        row: Row,
+    ) -> EngineResult<()> {
         let start = std::time::Instant::now();
 
         let mut table_data = self.table_data.write().await;
         let table_rows = table_data
             .entry(table_name.to_string())
             .or_insert_with(Vec::new);
-        table_rows.push(row.clone());
+        table_rows.push(row);
 
         self.update_metrics("write", start.elapsed(), true).await;
         Ok(())
@@ -272,16 +271,15 @@ impl TableStorage for MemoryTableStorage {
     async fn insert_rows(
         &self,
         table_name: &str,
-        rows: &[HashMap<String, SqlValue>],
-        _tx: Option<&StorageTransaction>,
-    ) -> ProtocolResult<()> {
+        rows: Vec<Row>,
+    ) -> EngineResult<()> {
         let start = std::time::Instant::now();
 
         let mut table_data = self.table_data.write().await;
         let table_rows = table_data
             .entry(table_name.to_string())
             .or_insert_with(Vec::new);
-        table_rows.extend_from_slice(rows);
+        table_rows.extend(rows);
 
         self.update_metrics("write", start.elapsed(), true).await;
         Ok(())
@@ -290,7 +288,7 @@ impl TableStorage for MemoryTableStorage {
     async fn get_table_data(
         &self,
         table_name: &str,
-    ) -> ProtocolResult<Vec<HashMap<String, SqlValue>>> {
+    ) -> EngineResult<Vec<HashMap<String, SqlValue>>> {
         let start = std::time::Instant::now();
 
         let table_data = self.table_data.read().await;
@@ -306,7 +304,7 @@ impl TableStorage for MemoryTableStorage {
         updates: &HashMap<String, SqlValue>,
         _condition: Option<Box<dyn Fn(&HashMap<String, SqlValue>) -> bool + Send + Sync>>,
         _tx: Option<&StorageTransaction>,
-    ) -> ProtocolResult<usize> {
+    ) -> EngineResult<usize> {
         let start = std::time::Instant::now();
         let mut count = 0;
 
@@ -332,7 +330,7 @@ impl TableStorage for MemoryTableStorage {
         table_name: &str,
         _condition: Option<Box<dyn Fn(&HashMap<String, SqlValue>) -> bool + Send + Sync>>,
         _tx: Option<&StorageTransaction>,
-    ) -> ProtocolResult<usize> {
+    ) -> EngineResult<usize> {
         let start = std::time::Instant::now();
         let mut count = 0;
 
@@ -354,7 +352,7 @@ impl TableStorage for MemoryTableStorage {
         &self,
         table_name: &str,
         _tx: Option<&StorageTransaction>,
-    ) -> ProtocolResult<()> {
+    ) -> EngineResult<()> {
         let start = std::time::Instant::now();
 
         let mut table_data = self.table_data.write().await;
@@ -372,7 +370,7 @@ impl TableStorage for MemoryTableStorage {
         &self,
         index: &IndexSchema,
         _tx: Option<&StorageTransaction>,
-    ) -> ProtocolResult<()> {
+    ) -> EngineResult<()> {
         let start = std::time::Instant::now();
 
         let mut indexes = self.indexes.write().await;
@@ -382,7 +380,7 @@ impl TableStorage for MemoryTableStorage {
         Ok(())
     }
 
-    async fn get_index(&self, index_name: &str) -> ProtocolResult<Option<IndexSchema>> {
+    async fn get_index(&self, index_name: &str) -> EngineResult<Option<IndexSchema>> {
         let start = std::time::Instant::now();
 
         let indexes = self.indexes.read().await;
@@ -392,7 +390,7 @@ impl TableStorage for MemoryTableStorage {
         Ok(result)
     }
 
-    async fn list_table_indexes(&self, table_name: &str) -> ProtocolResult<Vec<IndexSchema>> {
+    async fn list_table_indexes(&self, table_name: &str) -> EngineResult<Vec<IndexSchema>> {
         let start = std::time::Instant::now();
 
         let indexes = self.indexes.read().await;
@@ -410,7 +408,7 @@ impl TableStorage for MemoryTableStorage {
         &self,
         index_name: &str,
         _tx: Option<&StorageTransaction>,
-    ) -> ProtocolResult<bool> {
+    ) -> EngineResult<bool> {
         let start = std::time::Instant::now();
 
         let mut indexes = self.indexes.write().await;
@@ -427,7 +425,7 @@ impl TableStorage for MemoryTableStorage {
         &self,
         view: &ViewSchema,
         _tx: Option<&StorageTransaction>,
-    ) -> ProtocolResult<()> {
+    ) -> EngineResult<()> {
         let start = std::time::Instant::now();
 
         let mut views = self.views.write().await;
@@ -437,7 +435,7 @@ impl TableStorage for MemoryTableStorage {
         Ok(())
     }
 
-    async fn get_view(&self, view_name: &str) -> ProtocolResult<Option<ViewSchema>> {
+    async fn get_view(&self, view_name: &str) -> EngineResult<Option<ViewSchema>> {
         let start = std::time::Instant::now();
 
         let views = self.views.read().await;
@@ -447,7 +445,7 @@ impl TableStorage for MemoryTableStorage {
         Ok(result)
     }
 
-    async fn list_views(&self) -> ProtocolResult<Vec<ViewSchema>> {
+    async fn list_views(&self) -> EngineResult<Vec<ViewSchema>> {
         let start = std::time::Instant::now();
 
         let views = self.views.read().await;
@@ -461,7 +459,7 @@ impl TableStorage for MemoryTableStorage {
         &self,
         view_name: &str,
         _tx: Option<&StorageTransaction>,
-    ) -> ProtocolResult<bool> {
+    ) -> EngineResult<bool> {
         let start = std::time::Instant::now();
 
         let mut views = self.views.write().await;
@@ -478,7 +476,7 @@ impl TableStorage for MemoryTableStorage {
         &self,
         schema: &SchemaDefinition,
         _tx: Option<&StorageTransaction>,
-    ) -> ProtocolResult<()> {
+    ) -> EngineResult<()> {
         let start = std::time::Instant::now();
 
         let mut schemas = self.schemas.write().await;
@@ -488,7 +486,7 @@ impl TableStorage for MemoryTableStorage {
         Ok(())
     }
 
-    async fn get_schema(&self, schema_name: &str) -> ProtocolResult<Option<SchemaDefinition>> {
+    async fn get_schema(&self, schema_name: &str) -> EngineResult<Option<SchemaDefinition>> {
         let start = std::time::Instant::now();
 
         let schemas = self.schemas.read().await;
@@ -498,7 +496,7 @@ impl TableStorage for MemoryTableStorage {
         Ok(result)
     }
 
-    async fn list_schemas(&self) -> ProtocolResult<Vec<SchemaDefinition>> {
+    async fn list_schemas(&self) -> EngineResult<Vec<SchemaDefinition>> {
         let start = std::time::Instant::now();
 
         let schemas = self.schemas.read().await;
@@ -512,7 +510,7 @@ impl TableStorage for MemoryTableStorage {
         &self,
         schema_name: &str,
         _tx: Option<&StorageTransaction>,
-    ) -> ProtocolResult<bool> {
+    ) -> EngineResult<bool> {
         let start = std::time::Instant::now();
 
         let mut schemas = self.schemas.write().await;
@@ -529,7 +527,7 @@ impl TableStorage for MemoryTableStorage {
         &self,
         extension: &ExtensionDefinition,
         _tx: Option<&StorageTransaction>,
-    ) -> ProtocolResult<()> {
+    ) -> EngineResult<()> {
         let start = std::time::Instant::now();
 
         let mut extensions = self.extensions.write().await;
@@ -542,7 +540,7 @@ impl TableStorage for MemoryTableStorage {
     async fn get_extension(
         &self,
         extension_name: &str,
-    ) -> ProtocolResult<Option<ExtensionDefinition>> {
+    ) -> EngineResult<Option<ExtensionDefinition>> {
         let start = std::time::Instant::now();
 
         let extensions = self.extensions.read().await;
@@ -552,7 +550,7 @@ impl TableStorage for MemoryTableStorage {
         Ok(result)
     }
 
-    async fn list_extensions(&self) -> ProtocolResult<Vec<ExtensionDefinition>> {
+    async fn list_extensions(&self) -> EngineResult<Vec<ExtensionDefinition>> {
         let start = std::time::Instant::now();
 
         let extensions = self.extensions.read().await;
@@ -566,7 +564,7 @@ impl TableStorage for MemoryTableStorage {
         &self,
         extension_name: &str,
         _tx: Option<&StorageTransaction>,
-    ) -> ProtocolResult<bool> {
+    ) -> EngineResult<bool> {
         let start = std::time::Instant::now();
 
         let mut extensions = self.extensions.write().await;
@@ -584,7 +582,7 @@ impl TableStorage for MemoryTableStorage {
         key: &str,
         value: &str,
         _tx: Option<&StorageTransaction>,
-    ) -> ProtocolResult<()> {
+    ) -> EngineResult<()> {
         let start = std::time::Instant::now();
 
         let mut settings = self.settings.write().await;
@@ -594,7 +592,7 @@ impl TableStorage for MemoryTableStorage {
         Ok(())
     }
 
-    async fn get_setting(&self, key: &str) -> ProtocolResult<Option<String>> {
+    async fn get_setting(&self, key: &str) -> EngineResult<Option<String>> {
         let start = std::time::Instant::now();
 
         let settings = self.settings.read().await;
@@ -604,7 +602,7 @@ impl TableStorage for MemoryTableStorage {
         Ok(result)
     }
 
-    async fn list_settings(&self) -> ProtocolResult<HashMap<String, String>> {
+    async fn list_settings(&self) -> EngineResult<HashMap<String, String>> {
         let start = std::time::Instant::now();
 
         let settings = self.settings.read().await;
@@ -616,17 +614,17 @@ impl TableStorage for MemoryTableStorage {
 
     // Maintenance Operations
 
-    async fn checkpoint(&self) -> ProtocolResult<()> {
+    async fn checkpoint(&self) -> EngineResult<()> {
         // No-op for memory storage
         Ok(())
     }
 
-    async fn compact(&self) -> ProtocolResult<()> {
+    async fn compact(&self) -> EngineResult<()> {
         // No-op for memory storage
         Ok(())
     }
 
-    async fn storage_size(&self) -> ProtocolResult<u64> {
+    async fn storage_size(&self) -> EngineResult<u64> {
         Ok(self.estimate_memory_usage().await)
     }
 }

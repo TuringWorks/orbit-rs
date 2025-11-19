@@ -17,8 +17,8 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 use tokio::sync::RwLock;
 
-use crate::error::{ProtocolError, ProtocolResult};
-use crate::postgres_wire::sql::types::SqlValue;
+use crate::error::{EngineError, EngineResult};
+use crate::storage::SqlValue;
 use super::{
     Column, ColumnBatch, NullBitmap,
     VectorizedExecutor, VectorizedExecutorConfig,
@@ -42,7 +42,7 @@ pub enum PrimaryKey {
 
 impl PrimaryKey {
     /// Convert from SqlValue (if it's a valid primary key type)
-    pub fn from_sql_value(value: &SqlValue) -> ProtocolResult<Self> {
+    pub fn from_sql_value(value: &SqlValue) -> EngineResult<Self> {
         match value {
             SqlValue::Null => Ok(PrimaryKey::Null),
             SqlValue::Boolean(b) => Ok(PrimaryKey::Boolean(*b)),
@@ -56,17 +56,17 @@ impl PrimaryKey {
 
             // Reject types that can't be primary keys
             SqlValue::Real(_) | SqlValue::DoublePrecision(_) => {
-                Err(ProtocolError::PostgresError(
+                Err(EngineError::storage(
                     "Floating point types cannot be used as primary keys".to_string()
                 ))
             }
             SqlValue::Decimal(_) => {
-                Err(ProtocolError::PostgresError(
+                Err(EngineError::storage(
                     "Decimal type not yet supported as primary key".to_string()
                 ))
             }
             _ => {
-                Err(ProtocolError::PostgresError(
+                Err(EngineError::storage(
                     format!("Type {:?} cannot be used as primary key", value)
                 ))
             }
@@ -267,9 +267,9 @@ impl RowBasedStore {
     }
 
     /// Insert a row
-    pub fn insert(&mut self, values: Vec<SqlValue>) -> ProtocolResult<()> {
+    pub fn insert(&mut self, values: Vec<SqlValue>) -> EngineResult<()> {
         if values.len() != self.schema.len() {
-            return Err(ProtocolError::PostgresError(
+            return Err(EngineError::storage(
                 format!("Expected {} values, got {}", self.schema.len(), values.len()),
             ));
         }
@@ -298,7 +298,7 @@ impl RowBasedStore {
     }
 
     /// Update rows matching filter
-    pub fn update(&mut self, filter: &FilterPredicate, updates: HashMap<String, SqlValue>) -> ProtocolResult<usize> {
+    pub fn update(&mut self, filter: &FilterPredicate, updates: HashMap<String, SqlValue>) -> EngineResult<usize> {
         let mut updated_count = 0;
 
         // First, find matching row indices
@@ -326,7 +326,7 @@ impl RowBasedStore {
     }
 
     /// Delete rows matching filter
-    pub fn delete(&mut self, filter: &FilterPredicate) -> ProtocolResult<usize> {
+    pub fn delete(&mut self, filter: &FilterPredicate) -> EngineResult<usize> {
         let initial_len = self.rows.len();
 
         // Mark rows for deletion
@@ -349,7 +349,7 @@ impl RowBasedStore {
     }
 
     /// Scan all rows with optional filter
-    pub fn scan(&self, filter: Option<&FilterPredicate>) -> ProtocolResult<Vec<&Row>> {
+    pub fn scan(&self, filter: Option<&FilterPredicate>) -> EngineResult<Vec<&Row>> {
         let mut results = Vec::new();
 
         for row in &self.rows {
@@ -366,9 +366,9 @@ impl RowBasedStore {
     }
 
     /// Convert to columnar format
-    pub fn to_columnar(&self) -> ProtocolResult<ColumnBatch> {
+    pub fn to_columnar(&self) -> EngineResult<ColumnBatch> {
         if self.rows.is_empty() {
-            return Err(ProtocolError::PostgresError("No rows to convert".to_string()));
+            return Err(EngineError::storage("No rows to convert".to_string()));
         }
 
         let row_count = self.rows.len();
@@ -419,10 +419,10 @@ impl RowBasedStore {
 
     // Private helper methods
 
-    fn matches_filter(&self, row: &Row, filter: &FilterPredicate) -> ProtocolResult<bool> {
+    fn matches_filter(&self, row: &Row, filter: &FilterPredicate) -> EngineResult<bool> {
         let col_idx = self.schema.iter()
             .position(|s| s.name == filter.column)
-            .ok_or_else(|| ProtocolError::PostgresError(
+            .ok_or_else(|| EngineError::storage(
                 format!("Column {} not found", filter.column)
             ))?;
 
@@ -438,13 +438,13 @@ impl RowBasedStore {
         })
     }
 
-    fn compare_values(&self, a: &SqlValue, b: &SqlValue) -> ProtocolResult<i32> {
+    fn compare_values(&self, a: &SqlValue, b: &SqlValue) -> EngineResult<i32> {
         match (a, b) {
             (SqlValue::Integer(x), SqlValue::Integer(y)) => Ok(x.cmp(y) as i32),
             (SqlValue::BigInt(x), SqlValue::BigInt(y)) => Ok(x.cmp(y) as i32),
             (SqlValue::SmallInt(x), SqlValue::SmallInt(y)) => Ok(x.cmp(y) as i32),
             (SqlValue::Text(x), SqlValue::Text(y)) => Ok(x.cmp(y) as i32),
-            _ => Err(ProtocolError::PostgresError("Cannot compare values of different types".to_string())),
+            _ => Err(EngineError::storage("Cannot compare values of different types".to_string())),
         }
     }
 
@@ -475,7 +475,7 @@ pub struct HybridStorageManager {
 
     /// Cold tier storage (Iceberg-based for long-term archival)
     #[cfg(feature = "iceberg-cold")]
-    cold_store: Option<Arc<crate::postgres_wire::sql::execution::iceberg_cold::IcebergColdStore>>,
+    cold_store: Option<Arc<crate::storage::iceberg_cold::IcebergColdStore>>,
 
     /// Cold tier storage (simple columnar fallback when Iceberg disabled)
     #[cfg(not(feature = "iceberg-cold"))]
@@ -531,13 +531,13 @@ impl HybridStorageManager {
 
     /// Set the Iceberg cold store (optional - for archival tier)
     #[cfg(feature = "iceberg-cold")]
-    pub fn with_cold_store(mut self, cold_store: Arc<crate::postgres_wire::sql::execution::iceberg_cold::IcebergColdStore>) -> Self {
+    pub fn with_cold_store(mut self, cold_store: Arc<crate::storage::iceberg_cold::IcebergColdStore>) -> Self {
         self.cold_store = Some(cold_store);
         self
     }
 
     /// Execute a query using the appropriate storage tier(s)
-    pub async fn execute(&self, access_pattern: AccessPattern) -> ProtocolResult<QueryResult> {
+    pub async fn execute(&self, access_pattern: AccessPattern) -> EngineResult<QueryResult> {
         match access_pattern {
             AccessPattern::PointLookup { key } => {
                 self.execute_point_lookup(key).await
@@ -567,13 +567,13 @@ impl HybridStorageManager {
     }
 
     /// Insert into hot tier
-    pub async fn insert(&self, values: Vec<SqlValue>) -> ProtocolResult<()> {
+    pub async fn insert(&self, values: Vec<SqlValue>) -> EngineResult<()> {
         let mut hot = self.hot_store.write().await;
         hot.insert(values)
     }
 
     /// Migrate hot data to warm/cold tiers
-    pub async fn migrate_tiers(&self) -> ProtocolResult<MigrationStats> {
+    pub async fn migrate_tiers(&self) -> EngineResult<MigrationStats> {
         let mut stats = MigrationStats::default();
 
         // Check if hot tier needs migration
@@ -617,7 +617,7 @@ impl HybridStorageManager {
 
     // Private execution methods
 
-    async fn execute_point_lookup(&self, key: SqlValue) -> ProtocolResult<QueryResult> {
+    async fn execute_point_lookup(&self, key: SqlValue) -> EngineResult<QueryResult> {
         // Try hot tier first
         let hot = self.hot_store.read().await;
         if let Some(row) = hot.get(&key) {
@@ -639,7 +639,7 @@ impl HybridStorageManager {
         &self,
         time_range: Option<TimeRange>,
         filter: Option<FilterPredicate>,
-    ) -> ProtocolResult<QueryResult> {
+    ) -> EngineResult<QueryResult> {
         let mut all_rows = Vec::new();
         let mut column_names = Vec::new();
 
@@ -662,7 +662,7 @@ impl HybridStorageManager {
 
                 // Convert Arrow batches to rows
                 for arrow_batch in arrow_batches {
-                    let column_batch = crate::postgres_wire::sql::execution::iceberg_cold::arrow_to_column_batch(&arrow_batch)?;
+                    let column_batch = crate::storage::iceberg_cold::arrow_to_column_batch(&arrow_batch)?;
 
                     // Extract column names if not yet set
                     if column_names.is_empty() {
@@ -710,7 +710,7 @@ impl HybridStorageManager {
         function: AggregateFunction,
         column: String,
         _filter: Option<FilterPredicate>,
-    ) -> ProtocolResult<QueryResult> {
+    ) -> EngineResult<QueryResult> {
         // For aggregations, prefer cold tier (columnar + SIMD + Iceberg metadata pruning)
         #[cfg(feature = "iceberg-cold")]
         if let Some(ref cold_store) = self.cold_store {
@@ -728,7 +728,7 @@ impl HybridStorageManager {
                 // Find column index
                 let col_idx = batch.column_names.as_ref()
                     .and_then(|names| names.iter().position(|n| n == &column))
-                    .ok_or_else(|| ProtocolError::PostgresError(
+                    .ok_or_else(|| EngineError::storage(
                         format!("Column {} not found", column)
                     ))?;
 
@@ -741,10 +741,10 @@ impl HybridStorageManager {
 
         // Fallback to hot tier
         // (Would need to implement row-based aggregation)
-        Err(ProtocolError::PostgresError("Aggregation not implemented for hot tier".to_string()))
+        Err(EngineError::storage("Aggregation not implemented for hot tier".to_string()))
     }
 
-    async fn execute_update(&self, filter: FilterPredicate) -> ProtocolResult<QueryResult> {
+    async fn execute_update(&self, filter: FilterPredicate) -> EngineResult<QueryResult> {
         // Updates go to hot tier
         let mut hot = self.hot_store.write().await;
         let rows_affected = hot.update(&filter, HashMap::new())?;
@@ -752,7 +752,7 @@ impl HybridStorageManager {
         Ok(QueryResult::Modified { rows_affected })
     }
 
-    async fn execute_delete(&self, filter: FilterPredicate) -> ProtocolResult<QueryResult> {
+    async fn execute_delete(&self, filter: FilterPredicate) -> EngineResult<QueryResult> {
         // Deletes go to hot tier
         let mut hot = self.hot_store.write().await;
         let rows_affected = hot.delete(&filter)?;

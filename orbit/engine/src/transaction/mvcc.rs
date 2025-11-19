@@ -10,8 +10,8 @@
 //! - Transaction isolation with proper visibility rules
 //! - Deadlock detection and resolution
 
-use crate::error::{ProtocolError, ProtocolResult};
-use crate::postgres_wire::sql::{
+use crate::error::{EngineError, EngineResult};
+use crate::storage::{
     ast::{AccessMode, IsolationLevel},
     types::SqlValue,
 };
@@ -49,7 +49,7 @@ pub struct MvccTable {
     /// All versions of all rows, organized by primary key
     pub row_versions: BTreeMap<String, Vec<RowVersion>>,
     /// Table schema
-    pub schema: crate::postgres_wire::sql::executor::TableSchema,
+    pub schema: crate::storage::executor::TableSchema,
 }
 
 /// Transaction snapshot for MVCC reads
@@ -159,7 +159,7 @@ impl MvccSqlExecutor {
         &self,
         isolation_level: Option<IsolationLevel>,
         access_mode: Option<AccessMode>,
-    ) -> ProtocolResult<TransactionId> {
+    ) -> EngineResult<TransactionId> {
         let transaction_id = {
             let mut next_id = self.next_transaction_id.lock().await;
             let id = *next_id;
@@ -214,12 +214,12 @@ impl MvccSqlExecutor {
     }
 
     /// Commit a transaction
-    pub async fn commit_transaction(&self, transaction_id: TransactionId) -> ProtocolResult<()> {
+    pub async fn commit_transaction(&self, transaction_id: TransactionId) -> EngineResult<()> {
         let mut transactions = self.transactions.write().await;
 
         if let Some(transaction) = transactions.get_mut(&transaction_id) {
             if transaction.aborted {
-                return Err(ProtocolError::PostgresError(
+                return Err(EngineError::storage(
                     "Cannot commit aborted transaction".to_string(),
                 ));
             }
@@ -247,14 +247,14 @@ impl MvccSqlExecutor {
 
             Ok(())
         } else {
-            Err(ProtocolError::PostgresError(format!(
+            Err(EngineError::storage(format!(
                 "Transaction {transaction_id} not found"
             )))
         }
     }
 
     /// Rollback a transaction
-    pub async fn rollback_transaction(&self, transaction_id: TransactionId) -> ProtocolResult<()> {
+    pub async fn rollback_transaction(&self, transaction_id: TransactionId) -> EngineResult<()> {
         let mut transactions = self.transactions.write().await;
 
         if let Some(transaction) = transactions.get_mut(&transaction_id) {
@@ -277,7 +277,7 @@ impl MvccSqlExecutor {
 
             Ok(())
         } else {
-            Err(ProtocolError::PostgresError(format!(
+            Err(EngineError::storage(format!(
                 "Transaction {transaction_id} not found"
             )))
         }
@@ -289,16 +289,16 @@ impl MvccSqlExecutor {
         table_name: &str,
         transaction_id: TransactionId,
         predicate: RowPredicate,
-    ) -> ProtocolResult<Vec<HashMap<String, SqlValue>>> {
+    ) -> EngineResult<Vec<HashMap<String, SqlValue>>> {
         let tables = self.tables.read().await;
         let transactions = self.transactions.read().await;
 
         let transaction = transactions.get(&transaction_id).ok_or_else(|| {
-            ProtocolError::PostgresError(format!("Transaction {transaction_id} not found"))
+            EngineError::storage(format!("Transaction {transaction_id} not found"))
         })?;
 
         let table = tables.get(table_name).ok_or_else(|| {
-            ProtocolError::PostgresError(format!("Table '{table_name}' does not exist"))
+            EngineError::storage(format!("Table '{table_name}' does not exist"))
         })?;
 
         let mut result = Vec::new();
@@ -328,7 +328,7 @@ impl MvccSqlExecutor {
         table_name: &str,
         transaction_id: TransactionId,
         row_data: HashMap<String, SqlValue>,
-    ) -> ProtocolResult<()> {
+    ) -> EngineResult<()> {
         // Acquire exclusive lock on table in consistent order (by name)
         self.acquire_lock(table_name, transaction_id, LockMode::Exclusive)
             .await?;
@@ -336,7 +336,7 @@ impl MvccSqlExecutor {
         let mut tables = self.tables.write().await;
 
         let table = tables.get_mut(table_name).ok_or_else(|| {
-            ProtocolError::PostgresError(format!("Table '{table_name}' does not exist"))
+            EngineError::storage(format!("Table '{table_name}' does not exist"))
         })?;
 
         // Generate a row key (simplified - in practice would use primary key)
@@ -366,7 +366,7 @@ impl MvccSqlExecutor {
         transaction_id: TransactionId,
         updates: HashMap<String, SqlValue>,
         predicate: RowPredicate,
-    ) -> ProtocolResult<usize> {
+    ) -> EngineResult<usize> {
         // Acquire exclusive lock
         self.acquire_lock(table_name, transaction_id, LockMode::Exclusive)
             .await?;
@@ -375,11 +375,11 @@ impl MvccSqlExecutor {
         let transactions = self.transactions.read().await;
 
         let transaction = transactions.get(&transaction_id).ok_or_else(|| {
-            ProtocolError::PostgresError(format!("Transaction {transaction_id} not found"))
+            EngineError::storage(format!("Transaction {transaction_id} not found"))
         })?;
 
         let table = tables.get_mut(table_name).ok_or_else(|| {
-            ProtocolError::PostgresError(format!("Table '{table_name}' does not exist"))
+            EngineError::storage(format!("Table '{table_name}' does not exist"))
         })?;
 
         let mut updated_count = 0;
@@ -435,7 +435,7 @@ impl MvccSqlExecutor {
         table_name: &str,
         transaction_id: TransactionId,
         predicate: RowPredicate,
-    ) -> ProtocolResult<usize> {
+    ) -> EngineResult<usize> {
         // Acquire exclusive lock
         self.acquire_lock(table_name, transaction_id, LockMode::Exclusive)
             .await?;
@@ -444,11 +444,11 @@ impl MvccSqlExecutor {
         let transactions = self.transactions.read().await;
 
         let transaction = transactions.get(&transaction_id).ok_or_else(|| {
-            ProtocolError::PostgresError(format!("Transaction {transaction_id} not found"))
+            EngineError::storage(format!("Transaction {transaction_id} not found"))
         })?;
 
         let table = tables.get_mut(table_name).ok_or_else(|| {
-            ProtocolError::PostgresError(format!("Table '{table_name}' does not exist"))
+            EngineError::storage(format!("Table '{table_name}' does not exist"))
         })?;
 
         let mut deleted_count = 0;
@@ -530,7 +530,7 @@ impl MvccSqlExecutor {
         resource: &str,
         transaction_id: TransactionId,
         mode: LockMode,
-    ) -> ProtocolResult<()> {
+    ) -> EngineResult<()> {
         let mut detector = self.deadlock_detector.lock().await;
 
         // Check if lock is available
@@ -551,7 +551,7 @@ impl MvccSqlExecutor {
 
                     // Check for deadlock
                     if self.detect_deadlock(&detector, transaction_id) {
-                        return Err(ProtocolError::PostgresError(
+                        return Err(EngineError::storage(
                             "Deadlock detected - transaction aborted".to_string(),
                         ));
                     }
@@ -618,11 +618,11 @@ impl MvccSqlExecutor {
     }
 
     /// Create a new table
-    pub async fn create_table(&self, name: &str) -> ProtocolResult<()> {
+    pub async fn create_table(&self, name: &str) -> EngineResult<()> {
         let mut tables = self.tables.write().await;
 
         if tables.contains_key(name) {
-            return Err(ProtocolError::PostgresError(format!(
+            return Err(EngineError::storage(format!(
                 "Table '{name}' already exists"
             )));
         }
@@ -630,7 +630,7 @@ impl MvccSqlExecutor {
         let table = MvccTable {
             name: name.to_string(),
             row_versions: BTreeMap::new(),
-            schema: crate::postgres_wire::sql::executor::TableSchema {
+            schema: crate::storage::executor::TableSchema {
                 name: name.to_string(), // Use string directly
                 columns: Vec::new(),
                 constraints: Vec::new(),
@@ -643,7 +643,7 @@ impl MvccSqlExecutor {
     }
 
     /// Cleanup committed/aborted transactions periodically
-    pub async fn cleanup_old_transactions(&self) -> ProtocolResult<usize> {
+    pub async fn cleanup_old_transactions(&self) -> EngineResult<usize> {
         let cutoff_time = Utc::now() - chrono::Duration::minutes(5);
         let mut cleaned_count = 0;
 

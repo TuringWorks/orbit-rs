@@ -9,7 +9,7 @@
 
 use iceberg::io::{FileIO, FileIOBuilder};
 
-use crate::error::{ProtocolError, ProtocolResult};
+use crate::error::{EngineError, EngineResult};
 
 /// Storage backend type
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -158,7 +158,7 @@ impl AzureConfig {
     ///
     /// Example connection string:
     /// "AccountName=devstoreaccount1;AccountKey=...;DefaultEndpointsProtocol=http;BlobEndpoint=http://127.0.0.1:10000/devstoreaccount1;..."
-    pub fn from_connection_string(connection_string: &str, container: String) -> ProtocolResult<Self> {
+    pub fn from_connection_string(connection_string: &str, container: String) -> EngineResult<Self> {
         let mut account_name = None;
         let mut account_key = None;
         let mut blob_endpoint = None;
@@ -179,9 +179,9 @@ impl AzureConfig {
         }
 
         let account_name = account_name
-            .ok_or_else(|| ProtocolError::PostgresError("Missing AccountName in connection string".to_string()))?;
+            .ok_or_else(|| EngineError::storage("Missing AccountName in connection string".to_string()))?;
         let account_key = account_key
-            .ok_or_else(|| ProtocolError::PostgresError("Missing AccountKey in connection string".to_string()))?;
+            .ok_or_else(|| EngineError::storage("Missing AccountKey in connection string".to_string()))?;
 
         Ok(Self {
             account_name,
@@ -194,7 +194,7 @@ impl AzureConfig {
 
 impl StorageBackend {
     /// Create a FileIO instance for this storage backend
-    pub fn create_file_io(&self) -> ProtocolResult<FileIO> {
+    pub fn create_file_io(&self) -> EngineResult<FileIO> {
         match self {
             StorageBackend::S3(config) => create_s3_file_io(config),
             StorageBackend::Azure(config) => create_azure_file_io(config),
@@ -215,7 +215,7 @@ impl StorageBackend {
 }
 
 /// Create a FileIO for S3-compatible storage
-fn create_s3_file_io(config: &S3Config) -> ProtocolResult<FileIO> {
+fn create_s3_file_io(config: &S3Config) -> EngineResult<FileIO> {
     let mut builder = FileIOBuilder::new("s3");
 
     builder = builder
@@ -230,11 +230,11 @@ fn create_s3_file_io(config: &S3Config) -> ProtocolResult<FileIO> {
 
     builder
         .build()
-        .map_err(|e| ProtocolError::PostgresError(format!("Failed to create S3 FileIO: {}", e)))
+        .map_err(|e| EngineError::storage(format!("Failed to create S3 FileIO: {}", e)))
 }
 
 /// Create a FileIO for Azure Blob Storage
-fn create_azure_file_io(config: &AzureConfig) -> ProtocolResult<FileIO> {
+fn create_azure_file_io(config: &AzureConfig) -> EngineResult<FileIO> {
     let mut builder = FileIOBuilder::new("azblob");
 
     builder = builder
@@ -248,7 +248,7 @@ fn create_azure_file_io(config: &AzureConfig) -> ProtocolResult<FileIO> {
 
     builder
         .build()
-        .map_err(|e| ProtocolError::PostgresError(format!("Failed to create Azure FileIO: {}", e)))
+        .map_err(|e| EngineError::storage(format!("Failed to create Azure FileIO: {}", e)))
 }
 
 #[cfg(test)]
