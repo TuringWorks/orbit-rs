@@ -11,10 +11,11 @@ use crate::error::{EngineError, EngineResult};
 use crate::metrics::TransactionMetrics;
 
 // Module declarations
-pub mod mvcc;
+// TODO: mvcc.rs has dependencies on orbit-shared - needs refactoring
+// pub mod mvcc;
 
 // Re-exports
-pub use mvcc::MvccTransactionManager;
+// pub use mvcc::MvccTransactionManager;
 
 /// Transaction identifier
 pub type TransactionId = Uuid;

@@ -18,14 +18,15 @@ pub mod config;
 pub mod columnar;
 pub mod hybrid;
 pub mod iceberg;
-pub mod memory;
+// TODO: memory.rs needs to be decoupled from PostgreSQL protocol types
+// pub mod memory;
 
 // Re-exports
 pub use config::{AzureConfig, S3Config, StorageBackend, StorageConfig};
 pub use columnar::{Column, ColumnBatch, ColumnBatchBuilder, NullBitmap, DEFAULT_BATCH_SIZE};
 pub use hybrid::HybridStorageManager;
 pub use iceberg::IcebergColdStore;
-pub use memory::MemoryTableStorage;
+// pub use memory::MemoryTableStorage;
 
 /// Storage tier for data lifecycle management
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]

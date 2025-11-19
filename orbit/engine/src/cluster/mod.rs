@@ -10,16 +10,17 @@ use crate::metrics::ClusterMetrics;
 
 // Module declarations
 pub mod consensus;
-pub mod manager;
-pub mod recovery;
-pub mod replication;
+// TODO: These modules have dependencies on orbit-shared - need to be refactored
+// pub mod manager;
+// pub mod recovery;
+// pub mod replication;
 // TODO: Requires protobuf code generation - re-enable after adding build.rs
 // pub mod transport;
 
 // Re-exports
 pub use consensus::RaftConsensus;
-pub use manager::ClusterManager;
-pub use replication::ReplicationManager;
+// pub use manager::EnhancedClusterManager as ClusterManager;
+// pub use replication::ReplicationManager;
 
 /// Node identifier
 pub type NodeId = String;
