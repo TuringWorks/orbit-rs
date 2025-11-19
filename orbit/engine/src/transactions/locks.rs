@@ -10,11 +10,14 @@ use tracing::{debug, info, warn};
 /// Unique identifier for a distributed lock
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct LockId {
+    /// The resource being locked
     pub resource_id: String,
+    /// The lock key used for distributed coordination
     pub lock_key: String,
 }
 
 impl LockId {
+    /// Creates a new lock ID for the given resource.
     pub fn new(resource_id: String) -> Self {
         Self {
             resource_id: resource_id.clone(),
@@ -22,6 +25,7 @@ impl LockId {
         }
     }
 
+    /// Creates a lock ID from a lock key string.
     pub fn from_key(lock_key: String) -> Self {
         let resource_id = lock_key
             .strip_prefix("lock:")
@@ -43,8 +47,11 @@ impl std::fmt::Display for LockId {
 /// Owner information for a lock
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct LockOwner {
+    /// Node ID of the transaction holding the lock
     pub node_id: NodeId,
+    /// Transaction ID of the lock holder
     pub transaction_id: String,
+    /// Timestamp when the lock was acquired
     pub acquired_at: SystemTime,
 }
 
@@ -60,38 +67,59 @@ pub enum LockMode {
 /// Lock request information
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LockRequest {
+    /// ID of the lock being requested
     pub lock_id: LockId,
+    /// Owner requesting the lock
     pub owner: LockOwner,
+    /// Mode of the requested lock
     pub mode: LockMode,
+    /// Timeout duration for the lock request
     pub timeout: Duration,
+    /// Timestamp when the lock was requested
     pub requested_at: SystemTime,
 }
 
 /// Status of a lock
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum LockStatus {
-    /// Lock is available
+    /// Lock is currently available
     Available,
-    /// Lock is held exclusively
-    HeldExclusive { owner: LockOwner },
+    /// Lock is held exclusively by a single owner
+    HeldExclusive {
+        /// The owner holding the exclusive lock
+        owner: LockOwner
+    },
     /// Lock is held by one or more shared holders
-    HeldShared { owners: Vec<LockOwner> },
+    HeldShared {
+        /// The owners holding shared locks
+        owners: Vec<LockOwner>
+    },
     /// Lock request is waiting in queue
-    Waiting { position: usize },
+    Waiting {
+        /// Position in the wait queue
+        position: usize
+    },
 }
 
 /// Distributed lock with metadata
 #[derive(Debug, Clone)]
 pub struct DistributedLock {
+    /// Unique identifier for this lock
     pub lock_id: LockId,
+    /// Current mode of the lock
     pub mode: LockMode,
+    /// Current owners of the lock
     pub owners: Vec<LockOwner>,
+    /// Timestamp when the lock was acquired
     pub acquired_at: SystemTime,
+    /// Timestamp when the lock expires
     pub expires_at: SystemTime,
+    /// Queue of pending lock requests
     pub wait_queue: VecDeque<LockRequest>,
 }
 
 impl DistributedLock {
+    /// Creates a new distributed lock for the given lock ID.
     pub fn new(lock_id: LockId) -> Self {
         Self {
             lock_id,
@@ -167,16 +195,22 @@ impl DistributedLock {
 /// Wait-for graph edge representing a dependency
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct WaitForEdge {
+    /// Transaction ID waiting for a resource
     pub waiting_transaction: String,
+    /// Transaction ID holding the resource
     pub holding_transaction: String,
+    /// Resource ID being waited for
     pub resource_id: String,
 }
 
 /// Deadlock detection result
 #[derive(Debug, Clone)]
 pub struct DeadlockCycle {
+    /// Transaction IDs involved in the deadlock cycle
     pub transactions: Vec<String>,
+    /// Resource IDs involved in the cycle
     pub resources: Vec<String>,
+    /// Timestamp when the deadlock was detected
     pub detected_at: SystemTime,
 }
 
@@ -196,11 +230,12 @@ pub struct DeadlockDetector {
     transaction_resources: Arc<RwLock<HashMap<String, HashSet<String>>>>,
     /// Resource to transactions mapping
     resource_transactions: Arc<RwLock<HashMap<String, HashSet<String>>>>,
-    /// Detection interval
+    /// Detection interval for checking deadlocks
     detection_interval: Duration,
 }
 
 impl DeadlockDetector {
+    /// Creates a new deadlock detector with the given detection interval.
     pub fn new(detection_interval: Duration) -> Self {
         Self {
             edges: Arc::new(RwLock::new(HashSet::new())),
@@ -384,10 +419,15 @@ impl Clone for DeadlockDetector {
 /// Configuration for the distributed lock manager
 #[derive(Debug, Clone)]
 pub struct LockManagerConfig {
+    /// Default timeout duration for lock acquisitions
     pub default_lock_timeout: Duration,
+    /// Maximum time to wait for a lock
     pub max_wait_time: Duration,
+    /// Interval for running deadlock detection
     pub deadlock_detection_interval: Duration,
+    /// Interval for cleaning up expired locks
     pub lock_cleanup_interval: Duration,
+    /// Whether to enable automatic deadlock detection
     pub enable_deadlock_detection: bool,
 }
 
@@ -405,14 +445,20 @@ impl Default for LockManagerConfig {
 
 /// Distributed lock manager
 pub struct DistributedLockManager {
+    /// Node identifier
     node_id: NodeId,
+    /// Map of locks by lock ID
     locks: Arc<RwLock<HashMap<LockId, DistributedLock>>>,
+    /// Configuration for the lock manager
     config: LockManagerConfig,
+    /// Deadlock detector instance
     deadlock_detector: DeadlockDetector,
+    /// Notification channels for waiting transactions
     lock_waiters: Arc<Mutex<HashMap<String, tokio::sync::oneshot::Sender<bool>>>>,
 }
 
 impl DistributedLockManager {
+    /// Creates a new distributed lock manager with the given configuration.
     pub fn new(node_id: NodeId, config: LockManagerConfig) -> Self {
         let deadlock_detector = DeadlockDetector::new(config.deadlock_detection_interval);
 

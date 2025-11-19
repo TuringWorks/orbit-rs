@@ -8,10 +8,12 @@ use crate::storage::NullBitmap;
 
 /// SIMD aggregate for i32 values
 pub struct SimdAggregateI32 {
+    /// Detected SIMD capability
     capability: SimdCapability,
 }
 
 impl SimdAggregateI32 {
+    /// Create a new SIMD aggregate for i32 values
     pub fn new() -> Self {
         Self {
             capability: simd_capability(),
@@ -162,10 +164,12 @@ unsafe fn sum_i32_avx2(values: &[i32], null_bitmap: &NullBitmap) -> Option<i32> 
 
 /// SIMD aggregate for i64 values
 pub struct SimdAggregateI64 {
+    /// Detected SIMD capability
     _capability: SimdCapability,
 }
 
 impl SimdAggregateI64 {
+    /// Create a new SIMD aggregate for i64 values
     pub fn new() -> Self {
         Self {
             _capability: simd_capability(),
@@ -217,10 +221,12 @@ fn sum_i64_scalar(values: &[i64], null_bitmap: &NullBitmap) -> Option<i64> {
 
 /// SIMD aggregate for f64 values
 pub struct SimdAggregateF64 {
+    /// Detected SIMD capability
     _capability: SimdCapability,
 }
 
 impl SimdAggregateF64 {
+    /// Create a new SIMD aggregate for f64 values
     pub fn new() -> Self {
         Self {
             _capability: simd_capability(),

@@ -51,19 +51,30 @@ impl Default for RecoveryConfig {
 /// Transaction recovery checkpoint
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TransactionCheckpoint {
+    /// Transaction identifier
     pub transaction_id: TransactionId,
+    /// Node acting as coordinator
     pub coordinator_node: NodeId,
+    /// Set of participant nodes
     pub participants: HashSet<AddressableReference>,
+    /// Operations to execute
     pub operations: Vec<TransactionOperation>,
+    /// Current transaction state
     pub current_state: TransactionState,
+    /// Transaction timeout duration
     pub timeout: Duration,
+    /// Creation timestamp
     pub created_at: i64,
+    /// Last update timestamp
     pub last_updated: i64,
+    /// Votes received from participants
     pub votes_received: HashMap<AddressableReference, TransactionVote>,
+    /// Acknowledgments received from participants
     pub acknowledgments_received: HashMap<AddressableReference, bool>,
 }
 
 impl TransactionCheckpoint {
+    /// Create a checkpoint from a distributed transaction
     pub fn from_transaction(transaction: &DistributedTransaction) -> Self {
         Self {
             transaction_id: transaction.transaction_id.clone(),
@@ -83,20 +94,31 @@ impl TransactionCheckpoint {
 /// Recovery statistics
 #[derive(Debug, Clone)]
 pub struct RecoveryStats {
+    /// Total recovery attempts
     pub total_recoveries: u64,
+    /// Number of successful recoveries
     pub successful_recoveries: u64,
+    /// Number of failed recoveries
     pub failed_recoveries: u64,
+    /// Number of coordinator failures detected
     pub coordinator_failures_detected: u64,
+    /// Number of elections participated in
     pub elections_participated: u64,
+    /// Number of elections won
     pub elections_won: u64,
+    /// Number of transactions recovered
     pub transactions_recovered: u64,
+    /// Number of checkpoints created
     pub checkpoints_created: u64,
 }
 
 /// Transaction recovery manager
 pub struct TransactionRecoveryManager {
+    /// Node identifier
     pub node_id: NodeId,
+    /// Recovery configuration
     config: RecoveryConfig,
+    /// Transaction logger for persistence
     logger: Arc<dyn PersistentTransactionLogger>,
     /// Active transaction checkpoints
     checkpoints: Arc<RwLock<HashMap<TransactionId, TransactionCheckpoint>>>,
@@ -116,12 +138,18 @@ pub struct TransactionRecoveryManager {
     current_leader: Arc<RwLock<Option<NodeId>>>,
 }
 
+/// Coordinator health status
 #[derive(Debug, Clone)]
 pub struct CoordinatorHealth {
+    /// Node identifier
     pub node_id: NodeId,
+    /// Last time this coordinator was seen
     pub last_seen: Instant,
+    /// Whether the coordinator is currently healthy
     pub is_healthy: bool,
+    /// Number of consecutive failures detected
     pub consecutive_failures: u32,
+    /// Timestamp of last election participation
     pub last_election_participation: Option<Instant>,
 }
 
@@ -144,10 +172,14 @@ pub trait ClusterManager: Send + Sync {
     async fn get_cluster_config(&self) -> EngineResult<ClusterConfig>;
 }
 
+/// Cluster configuration
 #[derive(Debug, Clone)]
 pub struct ClusterConfig {
+    /// Total number of nodes in the cluster
     pub total_nodes: usize,
+    /// Number of nodes required for majority
     pub majority_threshold: usize,
+    /// Current cluster leader node
     pub current_leader: Option<NodeId>,
 }
 
@@ -172,6 +204,7 @@ pub trait RecoveryEventHandler: Send + Sync {
 }
 
 impl TransactionRecoveryManager {
+    /// Create a new transaction recovery manager
     pub fn new(
         node_id: NodeId,
         config: RecoveryConfig,

@@ -110,9 +110,11 @@ impl NullBitmap {
     }
 }
 
-/// Iterator over null bitmap
+/// Iterator over null bitmap values
 pub struct NullBitmapIter<'a> {
+    /// Reference to the null bitmap
     bitmap: &'a NullBitmap,
+    /// Current iteration index
     index: usize,
 }
 
@@ -143,13 +145,21 @@ impl<'a> ExactSizeIterator for NullBitmapIter<'a> {}
 /// for cache-friendly access and SIMD operations.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Column {
+    /// Boolean column
     Bool(Vec<bool>),
+    /// 16-bit integer column
     Int16(Vec<i16>),
+    /// 32-bit integer column
     Int32(Vec<i32>),
+    /// 64-bit integer column
     Int64(Vec<i64>),
+    /// 32-bit float column
     Float32(Vec<f32>),
+    /// 64-bit float column
     Float64(Vec<f64>),
+    /// String column
     String(Vec<String>),
+    /// Binary data column
     Binary(Vec<Vec<u8>>),
 }
 
@@ -272,7 +282,7 @@ pub struct ColumnBatch {
     pub null_bitmaps: Vec<NullBitmap>,
     /// Number of rows in the batch
     pub row_count: usize,
-    /// Column names (optional, for debugging)
+    /// Optional column names for debugging
     pub column_names: Option<Vec<String>>,
 }
 
@@ -412,7 +422,9 @@ impl ColumnBatch {
 
 /// Iterator over rows in a column batch
 pub struct RowIterator<'a> {
+    /// Reference to the column batch
     batch: &'a ColumnBatch,
+    /// Current row index
     row_index: usize,
 }
 
@@ -439,9 +451,13 @@ impl<'a> ExactSizeIterator for RowIterator<'a> {}
 
 /// Builder for constructing column batches with fluent API
 pub struct ColumnBatchBuilder {
+    /// Number of rows in the batch being built
     row_count: usize,
+    /// Columns being accumulated
     columns: Vec<Column>,
+    /// Null bitmaps for each column
     null_bitmaps: Vec<NullBitmap>,
+    /// Optional column names
     column_names: Option<Vec<String>>,
 }
 

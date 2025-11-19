@@ -13,12 +13,16 @@ use uuid::Uuid;
 /// Unique identifier for distributed transactions
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct TransactionId {
+    /// Unique transaction identifier (UUID)
     pub id: String,
+    /// Node coordinating this transaction
     pub coordinator_node: NodeId,
+    /// Unix timestamp when transaction was created
     pub created_at: i64,
 }
 
 impl TransactionId {
+    /// Create a new transaction ID for the given coordinator node
     pub fn new(coordinator_node: NodeId) -> Self {
         Self {
             id: Uuid::new_v4().to_string(),
@@ -52,7 +56,10 @@ pub enum TransactionState {
     /// Transaction timed out
     TimedOut,
     /// Transaction encountered an error
-    Failed { reason: String },
+    Failed {
+        /// Error reason
+        reason: String
+    },
 }
 
 /// Vote from a participant in the 2-phase commit protocol
@@ -61,7 +68,10 @@ pub enum TransactionVote {
     /// Participant is ready to commit
     Yes,
     /// Participant cannot commit and wants to abort
-    No { reason: String },
+    No {
+        /// Reason for voting no
+        reason: String
+    },
     /// Participant is uncertain (network issues, etc.)
     Uncertain,
 }
@@ -69,14 +79,20 @@ pub enum TransactionVote {
 /// Operation to be executed as part of a distributed transaction
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TransactionOperation {
+    /// Unique operation identifier
     pub operation_id: String,
+    /// Target actor for this operation
     pub target_actor: AddressableReference,
+    /// Type of operation to perform
     pub operation_type: String,
+    /// Data for the operation
     pub operation_data: serde_json::Value,
+    /// Optional compensation data for rollback
     pub compensation_data: Option<serde_json::Value>,
 }
 
 impl TransactionOperation {
+    /// Create a new transaction operation
     pub fn new(
         target_actor: AddressableReference,
         operation_type: String,
@@ -91,6 +107,7 @@ impl TransactionOperation {
         }
     }
 
+    /// Add compensation data for saga pattern rollback
     pub fn with_compensation(mut self, compensation_data: serde_json::Value) -> Self {
         self.compensation_data = Some(compensation_data);
         self
@@ -100,17 +117,24 @@ impl TransactionOperation {
 /// Distributed transaction containing multiple operations
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DistributedTransaction {
+    /// Unique transaction identifier
     pub transaction_id: TransactionId,
+    /// Operations to execute as part of this transaction
     pub operations: Vec<TransactionOperation>,
+    /// Current state of the transaction
     pub state: TransactionState,
+    /// Transaction timeout duration
     pub timeout: Duration,
+    /// Unix timestamp when transaction started
     pub started_at: i64,
+    /// Custom metadata for the transaction
     pub metadata: HashMap<String, String>,
     /// Participants involved in this transaction (nodes and actors)
     pub participants: HashSet<AddressableReference>,
 }
 
 impl DistributedTransaction {
+    /// Create a new distributed transaction
     pub fn new(coordinator_node: NodeId, timeout: Duration) -> Self {
         Self {
             transaction_id: TransactionId::new(coordinator_node),
@@ -123,12 +147,14 @@ impl DistributedTransaction {
         }
     }
 
+    /// Add an operation to the transaction
     pub fn add_operation(mut self, operation: TransactionOperation) -> Self {
         self.participants.insert(operation.target_actor.clone());
         self.operations.push(operation);
         self
     }
 
+    /// Add metadata to the transaction
     pub fn with_metadata(mut self, key: String, value: String) -> Self {
         self.metadata.insert(key, value);
         self
@@ -155,35 +181,55 @@ impl DistributedTransaction {
 pub enum TransactionMessage {
     /// Phase 1: Coordinator asks participants to prepare
     Prepare {
+        /// Transaction identifier
         transaction_id: TransactionId,
+        /// Operations to prepare
         operations: Vec<TransactionOperation>,
+        /// Timeout duration
         timeout: Duration,
     },
     /// Phase 1: Participant responds with vote
     Vote {
+        /// Transaction identifier
         transaction_id: TransactionId,
+        /// Participant sending the vote
         participant: AddressableReference,
+        /// Vote decision
         vote: TransactionVote,
     },
     /// Phase 2: Coordinator tells participants to commit
-    Commit { transaction_id: TransactionId },
+    Commit {
+        /// Transaction identifier
+        transaction_id: TransactionId
+    },
     /// Phase 2: Coordinator tells participants to abort
     Abort {
+        /// Transaction identifier
         transaction_id: TransactionId,
+        /// Reason for abort
         reason: String,
     },
     /// Participant acknowledges commit/abort
     Acknowledge {
+        /// Transaction identifier
         transaction_id: TransactionId,
+        /// Participant sending acknowledgment
         participant: AddressableReference,
+        /// Whether operation succeeded
         success: bool,
+        /// Error message if failed
         error: Option<String>,
     },
     /// Query transaction status
-    QueryStatus { transaction_id: TransactionId },
+    QueryStatus {
+        /// Transaction identifier
+        transaction_id: TransactionId
+    },
     /// Response to status query
     StatusResponse {
+        /// Transaction identifier
         transaction_id: TransactionId,
+        /// Current transaction state
         state: TransactionState,
     },
 }
@@ -221,31 +267,49 @@ impl Default for TransactionConfig {
 /// Transaction log entry for audit and recovery
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TransactionLogEntry {
+    /// Unix timestamp of the event
     pub timestamp: i64,
+    /// Transaction identifier
     pub transaction_id: TransactionId,
+    /// Type of transaction event
     pub event: TransactionEvent,
+    /// Optional additional details
     pub details: Option<serde_json::Value>,
 }
 
 /// Transaction events for logging
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum TransactionEvent {
+    /// Transaction started
     Started,
+    /// Prepare phase requested
     PrepareRequested,
+    /// Vote received from participant
     VoteReceived {
+        /// Participant that voted
         participant: AddressableReference,
+        /// Vote decision
         vote: TransactionVote,
     },
+    /// Commit phase requested
     CommitRequested,
+    /// Abort requested
     AbortRequested {
+        /// Reason for abort
         reason: String,
     },
+    /// Transaction committed successfully
     Committed,
+    /// Transaction aborted
     Aborted {
+        /// Reason for abort
         reason: String,
     },
+    /// Transaction timed out
     TimedOut,
+    /// Transaction failed
     Failed {
+        /// Error message
         error: String,
     },
 }
@@ -293,11 +357,13 @@ pub struct TransactionCoordinator {
 /// Trait for sending transaction messages to participants
 #[async_trait]
 pub trait TransactionMessageSender: Send + Sync {
+    /// Send a transaction message to a specific participant
     async fn send_message(
         &self,
         target: &AddressableReference,
         message: TransactionMessage,
     ) -> EngineResult<()>;
+    /// Broadcast a transaction message to multiple participants
     async fn broadcast_message(
         &self,
         targets: &[AddressableReference],
@@ -306,6 +372,7 @@ pub trait TransactionMessageSender: Send + Sync {
 }
 
 impl TransactionCoordinator {
+    /// Create a new transaction coordinator
     pub fn new(
         node_id: NodeId,
         config: TransactionConfig,
@@ -821,10 +888,15 @@ impl Clone for TransactionCoordinator {
 /// Transaction statistics for monitoring
 #[derive(Debug, Clone)]
 pub struct TransactionStats {
+    /// Number of active transactions
     pub active_transactions: usize,
+    /// Total number of log entries
     pub total_log_entries: usize,
+    /// Number of committed transactions
     pub committed_count: usize,
+    /// Number of aborted transactions
     pub aborted_count: usize,
+    /// Number of timed out transactions
     pub timed_out_count: usize,
 }
 

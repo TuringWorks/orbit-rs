@@ -14,16 +14,24 @@ type UserCredentials = HashMap<String, (String, Vec<String>)>;
 /// Authentication token for transactions
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuthToken {
+    /// Unique identifier for this token
     pub token_id: String,
+    /// Entity that issued this token
     pub issuer: String,
+    /// Subject (user/entity) this token is for
     pub subject: String,
+    /// Timestamp when the token was created
     pub issued_at: SystemTime,
+    /// Timestamp when the token expires
     pub expires_at: SystemTime,
+    /// Scopes (permissions) granted by this token
     pub scopes: Vec<String>,
+    /// Additional metadata associated with the token
     pub metadata: HashMap<String, String>,
 }
 
 impl AuthToken {
+    /// Creates a new authentication token with the given issuer, subject, scopes, and TTL.
     pub fn new(issuer: String, subject: String, scopes: Vec<String>, ttl: Duration) -> Self {
         let now = SystemTime::now();
         Self {
@@ -61,15 +69,22 @@ impl AuthToken {
 /// Transaction security context
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SecurityContext {
+    /// Authentication token for this security context
     pub auth_token: Option<AuthToken>,
+    /// Node identifier for this context
     pub node_id: NodeId,
+    /// Transaction identifier
     pub transaction_id: String,
+    /// Whether encryption is enabled for this transaction
     pub encryption_enabled: bool,
+    /// Whether signature verification is required
     pub signature_required: bool,
+    /// Whether audit logging is enabled
     pub audit_enabled: bool,
 }
 
 impl SecurityContext {
+    /// Creates a new security context for a transaction on the given node.
     pub fn new(transaction_id: String, node_id: NodeId) -> Self {
         Self {
             auth_token: None,
@@ -81,21 +96,25 @@ impl SecurityContext {
         }
     }
 
+    /// Sets the authentication token for this context.
     pub fn with_auth_token(mut self, token: AuthToken) -> Self {
         self.auth_token = Some(token);
         self
     }
 
+    /// Enables encryption for transactions in this context.
     pub fn with_encryption(mut self) -> Self {
         self.encryption_enabled = true;
         self
     }
 
+    /// Requires signature verification for transactions in this context.
     pub fn with_signature(mut self) -> Self {
         self.signature_required = true;
         self
     }
 
+    /// Sets whether audit logging is enabled for this context.
     pub fn with_audit(mut self, enabled: bool) -> Self {
         self.audit_enabled = enabled;
         self
@@ -105,23 +124,24 @@ impl SecurityContext {
 /// Required permissions for transaction operations
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum TransactionPermission {
-    /// Can initiate transactions
+    /// Permission to initiate transactions
     TransactionInitiate,
-    /// Can commit transactions
+    /// Permission to commit transactions
     TransactionCommit,
-    /// Can abort transactions
+    /// Permission to abort transactions
     TransactionAbort,
-    /// Can read transaction state
+    /// Permission to read transaction state
     TransactionRead,
-    /// Can participate in transactions
+    /// Permission to participate in transactions
     TransactionParticipate,
-    /// Can coordinate transactions
+    /// Permission to coordinate transactions
     TransactionCoordinate,
-    /// Custom permission
+    /// Custom permission with arbitrary scope
     Custom(String),
 }
 
 impl TransactionPermission {
+    /// Converts this permission to its scope string representation.
     pub fn to_scope(&self) -> String {
         match self {
             TransactionPermission::TransactionInitiate => "transaction:initiate".to_string(),
@@ -167,12 +187,16 @@ pub trait AuthorizationProvider: Send + Sync {
 
 /// Simple in-memory authentication provider (for testing/demo)
 pub struct InMemoryAuthProvider {
+    /// Stored user credentials
     users: Arc<RwLock<UserCredentials>>,
+    /// Issued tokens mapped by token ID
     tokens: Arc<RwLock<HashMap<String, AuthToken>>>,
+    /// Time-to-live duration for issued tokens
     token_ttl: Duration,
 }
 
 impl InMemoryAuthProvider {
+    /// Creates a new in-memory authentication provider with the given token TTL.
     pub fn new(token_ttl: Duration) -> Self {
         Self {
             users: Arc::new(RwLock::new(HashMap::new())),
@@ -262,6 +286,7 @@ impl AuthenticationProvider for InMemoryAuthProvider {
 pub struct ScopeBasedAuthorizationProvider {}
 
 impl ScopeBasedAuthorizationProvider {
+    /// Creates a new scope-based authorization provider.
     pub fn new() -> Self {
         Self {}
     }
@@ -315,13 +340,18 @@ impl AuthorizationProvider for ScopeBasedAuthorizationProvider {
 
 /// Transaction security manager
 pub struct TransactionSecurityManager {
+    /// Authentication provider instance
     auth_provider: Arc<dyn AuthenticationProvider>,
+    /// Authorization provider instance
     authz_provider: Arc<dyn AuthorizationProvider>,
+    /// Whether authentication is required
     require_authentication: bool,
+    /// Whether authorization is required
     require_authorization: bool,
 }
 
 impl TransactionSecurityManager {
+    /// Creates a new transaction security manager with the given providers.
     pub fn new(
         auth_provider: Arc<dyn AuthenticationProvider>,
         authz_provider: Arc<dyn AuthorizationProvider>,
@@ -334,11 +364,13 @@ impl TransactionSecurityManager {
         }
     }
 
+    /// Sets whether authentication is required.
     pub fn with_authentication(mut self, enabled: bool) -> Self {
         self.require_authentication = enabled;
         self
     }
 
+    /// Sets whether authorization is required.
     pub fn with_authorization(mut self, enabled: bool) -> Self {
         self.require_authorization = enabled;
         self
@@ -421,17 +453,26 @@ impl TransactionSecurityManager {
 /// Audit log entry for transaction operations
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuditLogEntry {
+    /// Timestamp when this operation occurred
     pub timestamp: SystemTime,
+    /// Transaction ID for this operation
     pub transaction_id: String,
+    /// Type of operation performed
     pub operation: String,
+    /// Node where the operation was performed
     pub node_id: NodeId,
+    /// User who performed the operation, if available
     pub user: Option<String>,
+    /// Whether the operation succeeded
     pub success: bool,
+    /// Error message if the operation failed
     pub error_message: Option<String>,
+    /// Additional metadata about the operation
     pub metadata: HashMap<String, String>,
 }
 
 impl AuditLogEntry {
+    /// Creates a new audit log entry for the given transaction and operation.
     pub fn new(transaction_id: String, operation: String, node_id: NodeId, success: bool) -> Self {
         Self {
             timestamp: SystemTime::now(),
@@ -445,16 +486,19 @@ impl AuditLogEntry {
         }
     }
 
+    /// Sets the user who performed the operation.
     pub fn with_user(mut self, user: String) -> Self {
         self.user = Some(user);
         self
     }
 
+    /// Sets the error message for a failed operation.
     pub fn with_error(mut self, error: String) -> Self {
         self.error_message = Some(error);
         self
     }
 
+    /// Adds metadata to this audit entry.
     pub fn with_metadata(mut self, key: String, value: String) -> Self {
         self.metadata.insert(key, value);
         self
@@ -479,11 +523,14 @@ pub trait AuditLogger: Send + Sync {
 
 /// In-memory audit logger (for testing)
 pub struct InMemoryAuditLogger {
+    /// Stored audit log entries
     entries: Arc<RwLock<Vec<AuditLogEntry>>>,
+    /// Maximum number of entries to keep
     max_entries: usize,
 }
 
 impl InMemoryAuditLogger {
+    /// Creates a new in-memory audit logger with the given maximum entry count.
     pub fn new(max_entries: usize) -> Self {
         Self {
             entries: Arc::new(RwLock::new(Vec::new())),

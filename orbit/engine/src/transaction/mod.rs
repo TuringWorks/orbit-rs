@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::time::SystemTime;
 use uuid::Uuid;
 
-use crate::error::{EngineError, EngineResult};
+use crate::error::EngineResult;
 use crate::metrics::TransactionMetrics;
 
 // Module declarations

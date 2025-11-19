@@ -19,7 +19,7 @@ pub struct BatchConfig {
     pub max_wait_time: Duration,
     /// Minimum batch size to trigger processing
     pub min_batch_size: usize,
-    /// Enable adaptive batch sizing
+    /// Enable adaptive batch sizing based on throughput
     pub adaptive_sizing: bool,
 }
 
@@ -37,12 +37,16 @@ impl Default for BatchConfig {
 /// A batched operation
 #[derive(Debug, Clone)]
 pub struct BatchedOperation<T> {
+    /// The operation to be batched
     pub operation: T,
+    /// Timestamp when the operation was enqueued
     pub timestamp: Instant,
+    /// Priority level for this operation
     pub priority: u8,
 }
 
 impl<T> BatchedOperation<T> {
+    /// Creates a new batched operation with default priority.
     pub fn new(operation: T) -> Self {
         Self {
             operation,
@@ -51,6 +55,7 @@ impl<T> BatchedOperation<T> {
         }
     }
 
+    /// Sets the priority for this operation.
     pub fn with_priority(mut self, priority: u8) -> Self {
         self.priority = priority;
         self
@@ -62,9 +67,13 @@ pub struct BatchProcessor<T>
 where
     T: Clone + Send + Sync + 'static,
 {
+    /// Configuration for batch processing
     config: BatchConfig,
+    /// Queue of pending operations
     queue: Arc<Mutex<VecDeque<BatchedOperation<T>>>>,
+    /// Processing function for batches
     processor: Arc<BatchProcessorFn<T>>,
+    /// Statistics tracking
     stats: Arc<RwLock<BatchStats>>,
 }
 
@@ -72,6 +81,7 @@ impl<T> BatchProcessor<T>
 where
     T: Clone + Send + Sync + 'static,
 {
+    /// Creates a new batch processor with the given configuration and processor function.
     pub fn new<F>(config: BatchConfig, processor: F) -> Self
     where
         F: Fn(Vec<T>) -> futures::future::BoxFuture<'static, EngineResult<Vec<bool>>>
@@ -225,12 +235,19 @@ where
 /// Statistics for batch processing
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct BatchStats {
+    /// Total number of operations enqueued
     pub total_operations: usize,
+    /// Total number of batches processed
     pub total_batches: usize,
+    /// Total number of operations processed
     pub total_processed: usize,
+    /// Number of operations that completed successfully
     pub successful_operations: usize,
+    /// Current size of the operation queue
     pub current_queue_size: usize,
+    /// Average size of processed batches
     pub average_batch_size: f64,
+    /// Average batch processing time in milliseconds
     pub average_processing_time_ms: f64,
 }
 
@@ -254,6 +271,7 @@ pub struct ResourceManager {
 }
 
 impl ResourceManager {
+    /// Creates a new resource manager with the given memory and concurrency limits.
     pub fn new(max_memory: usize, max_concurrent: usize) -> Self {
         Self {
             max_memory,
@@ -296,8 +314,11 @@ impl ResourceManager {
 
 /// RAII guard for resource usage
 pub struct ResourceGuard {
+    /// Estimated memory for this resource
     memory_estimate: usize,
+    /// Reference to current memory tracking
     current_memory: Arc<RwLock<usize>>,
+    /// Semaphore permit for concurrency limiting
     _permit: tokio::sync::OwnedSemaphorePermit,
 }
 

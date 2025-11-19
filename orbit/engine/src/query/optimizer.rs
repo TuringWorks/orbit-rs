@@ -2,7 +2,7 @@
 //!
 //! Query optimizer for improving execution performance
 
-use crate::query::{ExecutionPlan, PlanNode, Query};
+use crate::query::{ExecutionPlan, Query};
 use crate::error::EngineResult;
 
 /// Query optimizer

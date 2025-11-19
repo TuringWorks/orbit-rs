@@ -7,10 +7,9 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt;
-use std::sync::Arc;
 use std::time::SystemTime;
 
-use crate::error::{EngineError, EngineResult};
+use crate::error::EngineResult;
 use crate::metrics::StorageMetrics;
 
 // Module declarations

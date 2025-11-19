@@ -94,21 +94,21 @@ pub mod adapters;
 pub mod addressable;
 /// Change Data Capture (CDC) for real-time event streaming
 pub mod cdc;
-/// Distributed clustering with Raft consensus
+/// Distributed clustering with Raft consensus and recovery
 pub mod cluster;
 /// Error types and result handling
 pub mod error;
 /// Metrics collection and monitoring
 pub mod metrics;
-/// Query planning and execution
+/// Query planning and vectorized execution engine
 pub mod query;
-/// Tiered storage engine (hot/warm/cold)
+/// Tiered storage engine (hot/warm/cold) with multiple backends
 pub mod storage;
-/// MVCC transaction management
+/// MVCC transaction management and isolation levels
 pub mod transaction;
-/// Write-Ahead Log (WAL) for transaction durability
+/// Persistent transaction logging with SQLite backend
 pub mod transaction_log;
-/// Distributed transaction coordination
+/// Distributed transaction coordination and 2-phase commit
 pub mod transactions;
 
 // Re-export commonly used types

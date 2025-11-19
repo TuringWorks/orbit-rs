@@ -21,13 +21,21 @@ use super::simd::aggregates::{SimdAggregateI32, SimdAggregateI64, SimdAggregateF
 /// Plan node types that break pipeline execution
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PlanNodeType {
+    /// Table scan operation
     TableScan,
+    /// Filter/WHERE operation
     Filter,
+    /// Projection/SELECT operation
     Projection,
+    /// Aggregation operation (GROUP BY)
     Aggregation,
+    /// Sort/ORDER BY operation
     Sort,
+    /// Join operation
     Join,
+    /// Limit operation
     Limit,
+    /// Offset operation
     Offset,
 }
 
@@ -71,36 +79,43 @@ impl Default for VectorizedExecutorConfig {
 
 /// Builder for VectorizedExecutorConfig
 pub struct VectorizedExecutorConfigBuilder {
+    /// The configuration being built
     config: VectorizedExecutorConfig,
 }
 
 impl VectorizedExecutorConfigBuilder {
+    /// Create a new builder with default configuration
     pub fn new() -> Self {
         Self {
             config: VectorizedExecutorConfig::default(),
         }
     }
 
+    /// Set the batch size for vectorized operations
     pub fn batch_size(mut self, size: usize) -> Self {
         self.config.batch_size = size.max(1);
         self
     }
 
+    /// Enable or disable SIMD optimizations
     pub fn use_simd(mut self, enabled: bool) -> Self {
         self.config.use_simd = enabled;
         self
     }
 
+    /// Enable or disable parallel execution
     pub fn enable_parallel(mut self, enabled: bool) -> Self {
         self.config.enable_parallel = enabled;
         self
     }
 
+    /// Add a pipeline-breaking node type
     pub fn add_pipeline_breaker(mut self, node_type: PlanNodeType) -> Self {
         self.config.pipeline_breakers.insert(node_type);
         self
     }
 
+    /// Build and return the final configuration
     pub fn build(self) -> VectorizedExecutorConfig {
         self.config
     }
@@ -115,34 +130,50 @@ impl Default for VectorizedExecutorConfigBuilder {
 /// Comparison operator for filter operations
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ComparisonOp {
+    /// Equality comparison (=)
     Equal,
+    /// Not equal comparison (!=)
     NotEqual,
+    /// Less than comparison (<)
     LessThan,
+    /// Less than or equal comparison (<=)
     LessThanOrEqual,
+    /// Greater than comparison (>)
     GreaterThan,
+    /// Greater than or equal comparison (>=)
     GreaterThanOrEqual,
 }
 
 /// Aggregate function type
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AggregateFunction {
+    /// Sum aggregation
     Sum,
+    /// Minimum value aggregation
     Min,
+    /// Maximum value aggregation
     Max,
+    /// Count aggregation
     Count,
+    /// Average aggregation
     Avg,
 }
 
 /// Vectorized query executor
 pub struct VectorizedExecutor {
+    /// Executor configuration
     config: VectorizedExecutorConfig,
-    // SIMD filters
+    /// SIMD filter for i32 values
     simd_filter_i32: SimdFilterI32,
+    /// SIMD filter for i64 values
     simd_filter_i64: SimdFilterI64,
+    /// SIMD filter for f64 values
     simd_filter_f64: SimdFilterF64,
-    // SIMD aggregates
+    /// SIMD aggregate for i32 values
     simd_aggregate_i32: SimdAggregateI32,
+    /// SIMD aggregate for i64 values
     simd_aggregate_i64: SimdAggregateI64,
+    /// SIMD aggregate for f64 values
     simd_aggregate_f64: SimdAggregateF64,
 }
 
@@ -405,7 +436,7 @@ impl VectorizedExecutor {
 
     // Private helper methods
 
-    /// Filter i32 values using SIMD
+    /// Filter i32 values using SIMD when available, fallback to scalar
     fn filter_i32(
         &self,
         values: &[i32],
@@ -428,7 +459,7 @@ impl VectorizedExecutor {
         Ok(())
     }
 
-    /// Filter i64 values
+    /// Filter i64 values using SIMD
     fn filter_i64(
         &self,
         values: &[i64],
@@ -447,7 +478,7 @@ impl VectorizedExecutor {
         Ok(())
     }
 
-    /// Filter f64 values
+    /// Filter f64 values using SIMD
     fn filter_f64(
         &self,
         values: &[f64],
@@ -466,7 +497,7 @@ impl VectorizedExecutor {
         Ok(())
     }
 
-    /// Generic scalar filter for any PartialOrd + PartialEq type
+    /// Scalar filter implementation for any comparable type
     fn filter_scalar_generic<T: PartialOrd + PartialEq>(
         &self,
         values: &[T],
@@ -490,7 +521,7 @@ impl VectorizedExecutor {
         }
     }
 
-    /// Scalar filter for arbitrary column types
+    /// Scalar filter for arbitrary column types without SIMD optimization
     fn filter_scalar(
         &self,
         column: &Column,
@@ -538,7 +569,7 @@ impl VectorizedExecutor {
         Ok(())
     }
 
-    /// Select specific rows from a batch
+    /// Extract specific rows from a batch by index
     fn select_rows(
         &self,
         batch: &ColumnBatch,
@@ -566,7 +597,7 @@ impl VectorizedExecutor {
         })
     }
 
-    /// Select specific rows from a column
+    /// Extract specific rows from a single column by index
     fn select_column_rows(
         &self,
         column: &Column,
@@ -610,7 +641,7 @@ impl VectorizedExecutor {
         Ok(result)
     }
 
-    /// Select specific rows from a null bitmap
+    /// Extract specific rows from a null bitmap by index
     fn select_null_bitmap_rows(
         &self,
         null_bitmap: &NullBitmap,

@@ -24,7 +24,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::SystemTime;
 
-use arrow::array::{Array, ArrayRef, Int32Array, Int64Array, StringArray, BooleanArray};
+use arrow::array::{Array, ArrayRef, Int32Array, Int64Array};
 use arrow::datatypes::{DataType, Field, Schema as ArrowSchema};
 use arrow::record_batch::RecordBatch;
 use iceberg::{Catalog, CatalogBuilder, NamespaceIdent, TableIdent};
@@ -37,7 +37,7 @@ use crate::postgres_wire::sql::types::SqlValue;
 use super::{
     Column, ColumnBatch, NullBitmap,
     VectorizedExecutor, VectorizedExecutorConfig,
-    AggregateFunction, ComparisonOp,
+    AggregateFunction,
 };
 use super::storage_config::StorageBackend;
 

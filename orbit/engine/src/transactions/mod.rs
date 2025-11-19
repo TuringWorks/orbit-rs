@@ -8,10 +8,15 @@
 // - Performance optimizations (batching, pooling)
 // - Metrics integration for observability
 
+/// Core distributed transaction types and 2-phase commit
 pub mod core;
+/// Distributed locks with deadlock detection
 pub mod locks;
+/// Transaction and saga metrics collection
 pub mod metrics;
+/// Performance optimizations (batching, pooling)
 pub mod performance;
+/// Security features (authentication, authorization, audit)
 pub mod security;
 
 // Re-export core transaction types

@@ -10,12 +10,16 @@ use tracing::{debug, info};
 /// Transaction metrics collector
 #[derive(Clone)]
 pub struct TransactionMetrics {
+    /// Node identifier for this metrics instance
     _node_id: NodeId,
+    /// Prefix for metric names
     metrics_prefix: String,
+    /// Map of transaction IDs to their start times
     start_times: Arc<RwLock<HashMap<String, Instant>>>,
 }
 
 impl TransactionMetrics {
+    /// Creates a new transaction metrics collector for the given node.
     pub fn new(node_id: NodeId) -> Self {
         let metrics_prefix = format!("orbit.transaction.{node_id}");
 
@@ -136,12 +140,16 @@ impl TransactionMetrics {
 /// Saga metrics collector
 #[derive(Clone)]
 pub struct SagaMetrics {
+    /// Node identifier for this metrics instance
     _node_id: NodeId,
+    /// Prefix for metric names
     metrics_prefix: String,
+    /// Map of saga IDs to their start times
     start_times: Arc<RwLock<HashMap<String, Instant>>>,
 }
 
 impl SagaMetrics {
+    /// Creates a new saga metrics collector for the given node.
     pub fn new(node_id: NodeId) -> Self {
         let metrics_prefix = format!("orbit.saga.{node_id}");
 
@@ -242,11 +250,14 @@ impl SagaMetrics {
 /// Lock metrics collector
 #[derive(Clone)]
 pub struct LockMetrics {
+    /// Node identifier for this metrics instance
     _node_id: NodeId,
+    /// Prefix for metric names
     metrics_prefix: String,
 }
 
 impl LockMetrics {
+    /// Creates a new lock metrics collector for the given node.
     pub fn new(node_id: NodeId) -> Self {
         let metrics_prefix = format!("orbit.locks.{node_id}");
 
@@ -312,12 +323,16 @@ impl LockMetrics {
 /// Metrics aggregator for all transaction-related metrics
 #[derive(Clone)]
 pub struct TransactionMetricsAggregator {
+    /// Transaction metrics collector
     pub transaction_metrics: TransactionMetrics,
+    /// Saga metrics collector
     pub saga_metrics: SagaMetrics,
+    /// Lock metrics collector
     pub lock_metrics: LockMetrics,
 }
 
 impl TransactionMetricsAggregator {
+    /// Creates a new metrics aggregator combining all metric collectors for the given node.
     pub fn new(node_id: NodeId) -> Self {
         Self {
             transaction_metrics: TransactionMetrics::new(node_id.clone()),
@@ -330,44 +345,77 @@ impl TransactionMetricsAggregator {
 /// Statistics snapshot for monitoring
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TransactionStats {
+    /// Total number of transactions started
     pub total_started: u64,
+    /// Total number of transactions committed
     pub total_committed: u64,
+    /// Total number of transactions aborted
     pub total_aborted: u64,
+    /// Total number of transactions failed
     pub total_failed: u64,
+    /// Total number of transactions timed out
     pub total_timeout: u64,
+    /// Current number of active transactions
     pub active_count: u64,
+    /// Current number of queued transactions
     pub queued_count: u64,
+    /// Average transaction duration in milliseconds
     pub average_duration_ms: f64,
+    /// 50th percentile transaction duration in milliseconds
     pub p50_duration_ms: f64,
+    /// 95th percentile transaction duration in milliseconds
     pub p95_duration_ms: f64,
+    /// 99th percentile transaction duration in milliseconds
     pub p99_duration_ms: f64,
 }
 
+/// Statistics snapshot for saga operations
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SagaStats {
+    /// Total number of sagas started
     pub total_started: u64,
+    /// Total number of sagas completed
     pub total_completed: u64,
+    /// Total number of sagas failed
     pub total_failed: u64,
+    /// Total number of sagas compensated
     pub total_compensated: u64,
+    /// Current number of active sagas
     pub active_count: u64,
+    /// Current number of queued sagas
     pub queued_count: u64,
+    /// Total number of steps executed across all sagas
     pub total_steps_executed: u64,
+    /// Total number of steps compensated
     pub total_steps_compensated: u64,
+    /// Total number of steps that failed
     pub total_steps_failed: u64,
+    /// Average saga duration in milliseconds
     pub average_duration_ms: f64,
+    /// Average number of steps per saga
     pub average_steps_per_saga: f64,
 }
 
+/// Statistics snapshot for lock operations
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LockStats {
+    /// Total number of locks acquired
     pub total_acquired: u64,
+    /// Total number of locks released
     pub total_released: u64,
+    /// Total number of lock timeout events
     pub total_timeout: u64,
+    /// Total number of deadlocks detected
     pub total_deadlocks_detected: u64,
+    /// Total number of deadlocks resolved
     pub total_deadlocks_resolved: u64,
+    /// Current number of held locks
     pub currently_held: u64,
+    /// Current number of transactions waiting for locks
     pub currently_waiting: u64,
+    /// Average time waiting for locks in milliseconds
     pub average_wait_duration_ms: f64,
+    /// Average time holding locks in milliseconds
     pub average_hold_duration_ms: f64,
 }
 

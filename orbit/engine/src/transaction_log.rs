@@ -24,6 +24,7 @@ pub enum SyncMode {
 }
 
 impl SyncMode {
+    /// Get the string representation of the sync mode
     pub fn as_str(&self) -> &'static str {
         match self {
             SyncMode::Off => "OFF",
@@ -122,13 +123,21 @@ impl PersistentLogConfig {
 /// Persistent transaction log entry with additional metadata
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PersistentLogEntry {
+    /// Unique identifier for this log entry
     pub id: Uuid,
+    /// Timestamp when the event occurred
     pub timestamp: i64,
+    /// Transaction ID this entry belongs to
     pub transaction_id: TransactionId,
+    /// The transaction event that occurred
     pub event: TransactionEvent,
+    /// Additional event details in JSON format
     pub details: Option<serde_json::Value>,
+    /// Node ID that recorded this entry
     pub node_id: String,
+    /// Checksum for integrity verification
     pub checksum: String,
+    /// Whether this entry has been archived
     pub archived: bool,
 }
 
@@ -153,11 +162,17 @@ impl From<TransactionLogEntry> for PersistentLogEntry {
 /// Statistics for the persistent transaction log
 #[derive(Debug, Clone)]
 pub struct LogStats {
+    /// Total number of entries in the log
     pub total_entries: u64,
+    /// Number of active (non-archived) entries
     pub active_entries: u64,
+    /// Number of archived entries
     pub archived_entries: u64,
+    /// Size of the database in bytes
     pub database_size_bytes: u64,
+    /// Timestamp of the oldest entry in the log
     pub oldest_entry_timestamp: Option<i64>,
+    /// Timestamp of the newest entry in the log
     pub newest_entry_timestamp: Option<i64>,
 }
 
@@ -201,9 +216,13 @@ pub trait PersistentTransactionLogger: Send + Sync {
 
 /// SQLite-based persistent transaction logger
 pub struct SqliteTransactionLogger {
+    /// Connection pool to the SQLite database
     pool: SqlitePool,
+    /// Configuration for the logger
     config: PersistentLogConfig,
+    /// Cached statistics with timestamp
     stats_cache: Arc<RwLock<Option<(LogStats, Instant)>>>,
+    /// Buffer for batching write operations
     write_buffer: Arc<Mutex<Vec<TransactionLogEntry>>>,
 }
 
@@ -697,7 +716,7 @@ impl SqliteTransactionLogger {
     }
 }
 
-/// Get discriminant name for transaction event (for indexing)
+/// Extract the discriminant name from a transaction event for database indexing
 fn discriminant_name(event: &TransactionEvent) -> &'static str {
     match event {
         TransactionEvent::Started => "Started",
@@ -712,7 +731,7 @@ fn discriminant_name(event: &TransactionEvent) -> &'static str {
     }
 }
 
-/// Parse NodeId from string, handling the "(namespace:key)" format
+/// Parse a NodeId from a string representation, handling the "(namespace:key)" format
 fn parse_node_id_from_string(s: &str) -> crate::cluster::NodeId {
     let trimmed = s.trim_start_matches('(').trim_end_matches(')');
     trimmed.to_string() // NodeId is just a String

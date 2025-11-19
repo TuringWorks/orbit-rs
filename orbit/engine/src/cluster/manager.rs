@@ -11,6 +11,7 @@ use tracing::{debug, error, info, warn};
 
 /// Enhanced cluster manager with split-brain protection
 pub struct EnhancedClusterManager {
+    /// Node identifier
     node_id: NodeId,
     /// Raft consensus instance
     pub raft_consensus: Arc<RaftConsensus>,
@@ -223,7 +224,7 @@ impl PartitionDetector {
 }
 
 impl EnhancedClusterManager {
-    /// Create a new enhanced cluster manager with split-brain protection
+    /// Create a new cluster manager with Raft consensus and split-brain detection
     pub fn new(
         node_id: NodeId,
         cluster_nodes: Vec<NodeId>,
@@ -527,6 +528,7 @@ pub struct RecoveryRaftEventHandler {
 }
 
 impl RecoveryRaftEventHandler {
+    /// Create a new recovery event handler
     pub fn new(recovery_manager: Arc<crate::cluster::recovery::TransactionRecoveryManager>) -> Self {
         Self { recovery_manager }
     }

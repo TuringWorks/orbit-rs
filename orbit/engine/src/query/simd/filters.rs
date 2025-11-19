@@ -7,10 +7,12 @@ use super::{SimdFilter, simd_capability, SimdCapability};
 
 /// SIMD filter for i32 values
 pub struct SimdFilterI32 {
+    /// Detected SIMD capability
     capability: SimdCapability,
 }
 
 impl SimdFilterI32 {
+    /// Create a new SIMD filter for i32 values
     pub fn new() -> Self {
         Self {
             capability: simd_capability(),
@@ -238,11 +240,13 @@ unsafe fn filter_gt_avx2(values: &[i32], target: i32, result: &mut Vec<usize>) {
 
 /// SIMD filter for i64 values
 pub struct SimdFilterI64 {
+    /// Detected SIMD capability
     #[allow(dead_code)]
     capability: SimdCapability,
 }
 
 impl SimdFilterI64 {
+    /// Create a new SIMD filter for i64 values
     pub fn new() -> Self {
         Self {
             capability: simd_capability(),
@@ -284,11 +288,13 @@ impl SimdFilter<i64> for SimdFilterI64 {
 
 /// SIMD filter for f64 values
 pub struct SimdFilterF64 {
+    /// Detected SIMD capability
     #[allow(dead_code)]
     capability: SimdCapability,
 }
 
 impl SimdFilterF64 {
+    /// Create a new SIMD filter for f64 values
     pub fn new() -> Self {
         Self {
             capability: simd_capability(),

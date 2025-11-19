@@ -27,12 +27,19 @@ use crate::query::{VectorizedExecutor, VectorizedExecutorConfig, AggregateFuncti
 /// (excludes floating point types which don't have total ordering)
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum PrimaryKey {
+    /// Null primary key
     Null,
+    /// Boolean primary key
     Boolean(bool),
+    /// Small integer primary key
     SmallInt(i16),
+    /// Integer primary key
     Integer(i32),
+    /// Big integer primary key
     BigInt(i64),
+    /// Text primary key
     Text(String),
+    /// Binary data primary key
     Bytea(Vec<u8>),
 }
 
@@ -123,13 +130,13 @@ impl StorageTier {
 /// Workload classification
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WorkloadType {
-    /// OLTP: Point queries, writes, updates, deletes
+    /// OLTP workload: Point queries, writes, updates, deletes
     Transactional,
 
-    /// OLAP: Aggregations, scans, analytical queries
+    /// OLAP workload: Aggregations, scans, analytical queries
     Analytical,
 
-    /// Mixed: Both OLTP and OLAP patterns
+    /// Mixed workload: Both OLTP and OLAP patterns
     Mixed,
 }
 
@@ -138,36 +145,47 @@ pub enum WorkloadType {
 pub enum AccessPattern {
     /// Point lookup by primary key
     PointLookup {
+        /// Primary key value to look up
         key: SqlValue,
     },
 
     /// Sequential scan with optional filter
     Scan {
+        /// Time range to scan
         time_range: Option<TimeRange>,
+        /// Optional filter predicate
         filter: Option<FilterPredicate>,
     },
 
     /// Aggregation query
     Aggregation {
+        /// Aggregation function to apply
         function: AggregateFunction,
+        /// Column to aggregate over
         column: String,
+        /// Optional filter predicate
         filter: Option<FilterPredicate>,
     },
 
     /// Insert operation
     Insert {
+        /// Number of rows being inserted
         row_count: usize,
     },
 
     /// Update operation
     Update {
+        /// Filter to identify rows to update
         filter: FilterPredicate,
+        /// Estimated number of rows to update
         estimated_rows: usize,
     },
 
     /// Delete operation
     Delete {
+        /// Filter to identify rows to delete
         filter: FilterPredicate,
+        /// Estimated number of rows to delete
         estimated_rows: usize,
     },
 }
@@ -175,11 +193,14 @@ pub enum AccessPattern {
 /// Time range for queries
 #[derive(Debug, Clone, PartialEq)]
 pub struct TimeRange {
+    /// Start of the time range
     pub start: SystemTime,
+    /// End of the time range
     pub end: SystemTime,
 }
 
 impl TimeRange {
+    /// Create a new time range
     pub fn new(start: SystemTime, end: SystemTime) -> Self {
         Self { start, end }
     }
@@ -209,11 +230,14 @@ impl TimeRange {
     }
 }
 
-/// Filter predicate
+/// Filter predicate for row filtering
 #[derive(Debug, Clone, PartialEq)]
 pub struct FilterPredicate {
+    /// Column name to filter on
     pub column: String,
+    /// Comparison operator
     pub operator: ComparisonOp,
+    /// Value to compare against
     pub value: SqlValue,
 }
 
@@ -230,28 +254,37 @@ pub struct RowBasedStore {
     /// Column schema
     schema: Vec<ColumnSchema>,
 
-    /// Primary key index
+    /// Primary key index for fast lookups
     primary_index: HashMap<PrimaryKey, usize>,
 
     /// Creation timestamp
     created_at: SystemTime,
 }
 
+/// A single row in row-based storage
 #[derive(Debug, Clone)]
 pub struct Row {
+    /// Column values for this row
     pub values: Vec<SqlValue>,
+    /// Timestamp when the row was created
     pub created_at: SystemTime,
+    /// Timestamp when the row was last updated
     pub updated_at: SystemTime,
 }
 
+/// Column schema definition
 #[derive(Debug, Clone)]
 pub struct ColumnSchema {
+    /// Column name
     pub name: String,
+    /// SQL data type
     pub data_type: String,
+    /// Whether null values are allowed
     pub nullable: bool,
 }
 
 impl RowBasedStore {
+    /// Create a new row-based store
     pub fn new(table_name: String, schema: Vec<ColumnSchema>) -> Self {
         Self {
             table_name,
@@ -462,7 +495,7 @@ pub struct HybridStorageManager {
     #[allow(dead_code)]
     table_name: String,
 
-    /// Hot tier storage (row-based)
+    /// Hot tier storage (row-based for OLTP)
     hot_store: Arc<RwLock<RowBasedStore>>,
 
     /// Warm tier storage (hybrid - for future implementation)
@@ -481,22 +514,23 @@ pub struct HybridStorageManager {
     #[allow(dead_code)]
     vectorized_executor: VectorizedExecutor,
 
-    /// Configuration
+    /// Storage tier configuration
     config: HybridStorageConfig,
 }
 
+/// Configuration for hybrid storage manager
 #[derive(Debug, Clone)]
 pub struct HybridStorageConfig {
-    /// Hot tier age threshold (migrate to warm after this)
+    /// Duration in hot tier before migrating to warm
     pub hot_to_warm_threshold: Duration,
 
-    /// Warm tier age threshold (migrate to cold after this)
+    /// Duration in warm tier before migrating to cold
     pub warm_to_cold_threshold: Duration,
 
-    /// Enable automatic tiering
+    /// Whether automatic tier migration is enabled
     pub auto_tiering: bool,
 
-    /// Background migration enabled
+    /// Whether background migration is enabled
     pub background_migration: bool,
 }
 
@@ -512,6 +546,7 @@ impl Default for HybridStorageConfig {
 }
 
 impl HybridStorageManager {
+    /// Create a new hybrid storage manager
     pub fn new(table_name: String, schema: Vec<ColumnSchema>, config: HybridStorageConfig) -> Self {
         Self {
             table_name: table_name.clone(),
@@ -763,17 +798,21 @@ impl HybridStorageManager {
 pub enum QueryResult {
     /// Rows returned
     Rows {
+        /// Query result rows
         rows: Vec<Vec<SqlValue>>,
+        /// Column names
         column_names: Vec<String>,
     },
 
     /// Scalar result (aggregation)
     Scalar {
+        /// Aggregation result value
         value: SqlValue,
     },
 
     /// Modified rows (INSERT/UPDATE/DELETE)
     Modified {
+        /// Number of rows affected
         rows_affected: usize,
     },
 }
@@ -781,8 +820,11 @@ pub enum QueryResult {
 /// Migration statistics
 #[derive(Debug, Clone, Default)]
 pub struct MigrationStats {
+    /// Number of rows migrated
     pub rows_migrated: usize,
+    /// Number of bytes migrated
     pub bytes_migrated: usize,
+    /// Time taken for migration
     pub duration: Duration,
 }
 

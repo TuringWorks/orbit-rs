@@ -49,26 +49,26 @@ impl ReplicationSlot {
         }
     }
 
-    /// Update slot position
+    /// Update the slot's position to a new LSN
     pub fn update_position(&mut self, lsn: u64) {
         self.confirmed_flush_lsn = lsn;
         self.restart_lsn = lsn;
         self.last_activity = chrono::Utc::now().timestamp_millis();
     }
 
-    /// Mark slot as active
+    /// Mark the slot as actively being used
     pub fn activate(&mut self) {
         self.active = true;
         self.last_activity = chrono::Utc::now().timestamp_millis();
     }
 
-    /// Mark slot as inactive
+    /// Mark the slot as not being used
     pub fn deactivate(&mut self) {
         self.active = false;
         self.last_activity = chrono::Utc::now().timestamp_millis();
     }
 
-    /// Check if slot has been inactive for too long
+    /// Check if the slot has not been updated for longer than the threshold
     pub fn is_stale(&self, stale_threshold_seconds: i64) -> bool {
         let now = chrono::Utc::now().timestamp_millis();
         let age_seconds = (now - self.last_activity) / 1000;
@@ -297,16 +297,22 @@ impl ReplicationSlotManager {
 /// Replication statistics
 #[derive(Debug, Clone, Default)]
 pub struct ReplicationStats {
+    /// Number of currently active replication slots
     pub active_slots: usize,
+    /// Total number of slots created
     pub total_slots_created: u64,
+    /// Total number of slots dropped
     pub total_slots_dropped: u64,
 }
 
 /// Replication stream for consuming events from a slot
 pub struct ReplicationStream {
+    /// Name of the replication slot
     slot_name: String,
+    /// Manager for accessing slot data
     manager: Arc<ReplicationSlotManager>,
-    #[allow(dead_code)] // Buffer will be used in future streaming implementations
+    /// Buffer for events (future streaming support)
+    #[allow(dead_code)]
     buffer: Vec<CdcEvent>,
 }
 
@@ -320,7 +326,7 @@ impl ReplicationStream {
         }
     }
 
-    /// Get next batch of events
+    /// Get next batch of pending events
     pub async fn next_batch(&mut self, events: &[CdcEvent]) -> EngineResult<Vec<CdcEvent>> {
         let pending = self
             .manager
@@ -329,12 +335,12 @@ impl ReplicationStream {
         Ok(pending)
     }
 
-    /// Confirm processing up to LSN
+    /// Mark events as processed up to a specific LSN
     pub async fn confirm_lsn(&self, lsn: u64) -> EngineResult<()> {
         self.manager.advance_slot(&self.slot_name, lsn).await
     }
 
-    /// Get slot name
+    /// Get the name of the replication slot
     pub fn slot_name(&self) -> &str {
         &self.slot_name
     }

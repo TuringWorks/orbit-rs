@@ -5,9 +5,9 @@
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
-use crate::error::{EngineError, EngineResult};
+use crate::error::EngineResult;
 use crate::metrics::QueryMetrics;
-use crate::storage::{ColumnBatch, FilterPredicate, QueryResult};
+use crate::storage::{FilterPredicate, QueryResult};
 
 // Module declarations
 pub mod execution;

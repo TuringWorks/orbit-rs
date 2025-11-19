@@ -37,6 +37,7 @@ pub struct GrpcRaftTransport {
 }
 
 impl GrpcRaftTransport {
+    /// Create a new gRPC-based Raft transport
     pub fn new(
         node_id: NodeId,
         node_addresses: HashMap<NodeId, String>,
@@ -274,6 +275,7 @@ pub struct GrpcRaftHandler {
 }
 
 impl GrpcRaftHandler {
+    /// Create a new gRPC Raft handler
     pub fn new(consensus: Arc<super::consensus::RaftConsensus>) -> Self {
         Self { consensus }
     }
