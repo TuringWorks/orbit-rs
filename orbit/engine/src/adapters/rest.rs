@@ -321,28 +321,64 @@ impl QueryRequest {
 pub enum RestFilter {
     /// Equals
     #[serde(rename = "eq")]
-    Eq { field: String, value: serde_json::Value },
+    Eq {
+        /// Field name
+        field: String,
+        /// Value to compare
+        value: serde_json::Value
+    },
     /// Not equals
     #[serde(rename = "ne")]
-    Ne { field: String, value: serde_json::Value },
+    Ne {
+        /// Field name
+        field: String,
+        /// Value to compare
+        value: serde_json::Value
+    },
     /// Less than
     #[serde(rename = "lt")]
-    Lt { field: String, value: serde_json::Value },
+    Lt {
+        /// Field name
+        field: String,
+        /// Value to compare
+        value: serde_json::Value
+    },
     /// Less than or equal
     #[serde(rename = "lte")]
-    Lte { field: String, value: serde_json::Value },
+    Lte {
+        /// Field name
+        field: String,
+        /// Value to compare
+        value: serde_json::Value
+    },
     /// Greater than
     #[serde(rename = "gt")]
-    Gt { field: String, value: serde_json::Value },
+    Gt {
+        /// Field name
+        field: String,
+        /// Value to compare
+        value: serde_json::Value
+    },
     /// Greater than or equal
     #[serde(rename = "gte")]
-    Gte { field: String, value: serde_json::Value },
+    Gte {
+        /// Field name
+        field: String,
+        /// Value to compare
+        value: serde_json::Value
+    },
     /// AND
     #[serde(rename = "and")]
-    And { filters: Vec<RestFilter> },
+    And {
+        /// Filters to combine with AND
+        filters: Vec<RestFilter>
+    },
     /// OR
     #[serde(rename = "or")]
-    Or { filters: Vec<RestFilter> },
+    Or {
+        /// Filters to combine with OR
+        filters: Vec<RestFilter>
+    },
 }
 
 impl RestFilter {

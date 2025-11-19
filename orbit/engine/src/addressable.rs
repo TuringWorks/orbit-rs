@@ -20,14 +20,28 @@ impl From<i32> for InvocationReason {
     }
 }
 
+/// Type identifier for addressable entities
 pub type AddressableType = String;
 
 /// A key that uniquely identifies an addressable within its type
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Key {
-    StringKey { key: String },
-    Int32Key { key: i32 },
-    Int64Key { key: i64 },
+    /// String-based key
+    StringKey {
+        /// The string key value
+        key: String
+    },
+    /// 32-bit integer key
+    Int32Key {
+        /// The integer key value
+        key: i32
+    },
+    /// 64-bit integer key
+    Int64Key {
+        /// The integer key value
+        key: i64
+    },
+    /// No key (singleton)
     NoKey,
 }
 
@@ -45,7 +59,9 @@ impl fmt::Display for Key {
 /// Reference to an addressable (type + key)
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct AddressableReference {
+    /// The type of the addressable entity
     pub addressable_type: AddressableType,
+    /// The unique key within the type
     pub key: Key,
 }
 
@@ -58,7 +74,9 @@ impl fmt::Display for AddressableReference {
 /// Namespaced reference to an addressable
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct NamespacedAddressableReference {
+    /// The namespace for multi-tenancy
     pub namespace: String,
+    /// The addressable reference within the namespace
     pub addressable_reference: AddressableReference,
 }
 
@@ -66,9 +84,12 @@ pub struct NamespacedAddressableReference {
 /// Each argument is a tuple of (value, type_name) for serialization purposes
 pub type AddressableInvocationArguments = Vec<AddressableInvocationArgument>;
 
+/// A single argument for addressable invocation
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AddressableInvocationArgument {
+    /// The argument value as JSON
     pub value: serde_json::Value,
+    /// The type name for deserialization
     pub type_name: String,
 }
 

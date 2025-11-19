@@ -88,16 +88,27 @@
 #![warn(missing_docs)]
 #![warn(rust_2018_idioms)]
 
+/// Protocol adapters for PostgreSQL, Redis, REST, and OrbitQL
 pub mod adapters;
+/// Addressable entity traits for distributed systems
 pub mod addressable;
+/// Change Data Capture (CDC) for real-time event streaming
 pub mod cdc;
+/// Distributed clustering with Raft consensus
 pub mod cluster;
+/// Error types and result handling
 pub mod error;
+/// Metrics collection and monitoring
 pub mod metrics;
+/// Query planning and execution
 pub mod query;
+/// Tiered storage engine (hot/warm/cold)
 pub mod storage;
+/// MVCC transaction management
 pub mod transaction;
+/// Write-Ahead Log (WAL) for transaction durability
 pub mod transaction_log;
+/// Distributed transaction coordination
 pub mod transactions;
 
 // Re-export commonly used types
