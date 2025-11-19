@@ -5,10 +5,10 @@
 //! cargo run --example create_azurite_container --features iceberg-cold
 //! ```
 
-#![cfg(feature = "iceberg-cold")]
-
+#[cfg(feature = "iceberg-cold")]
 use opendal::Operator;
 
+#[cfg(feature = "iceberg-cold")]
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Creating Azurite container 'orbitstore'...");
@@ -47,4 +47,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
     }
+}
+
+#[cfg(not(feature = "iceberg-cold"))]
+fn main() {
+    eprintln!("This example requires the 'iceberg-cold' feature to be enabled.");
+    eprintln!("Run with: cargo run --example create_azurite_container --features iceberg-cold");
+    std::process::exit(1);
 }

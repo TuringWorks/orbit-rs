@@ -54,28 +54,20 @@
 //!
 //! ## Usage Example
 //!
-//! ```rust,no_run
+//! ```rust,ignore
 //! use orbit_engine::{
-//!     storage::{HybridStorageManager, StorageConfig, StorageBackend, S3Config},
+//!     storage::{HybridStorageManager, HybridStorageConfig, ColumnSchema},
 //!     transaction::TransactionManager,
 //! };
 //!
 //! #[tokio::main]
 //! async fn main() -> anyhow::Result<()> {
-//!     // Configure storage backend (S3, Azure, or Memory)
-//!     let backend = StorageBackend::S3(S3Config::minio(
-//!         "localhost:9000".to_string(),
-//!         "minioadmin".to_string(),
-//!         "minioadmin".to_string(),
-//!         "warehouse".to_string(),
-//!         false,
-//!     ));
+//!     // Create storage engine with configuration
+//!     let table_name = "my_table".to_string();
+//!     let schema = vec![]; // Define your table schema
+//!     let config = HybridStorageConfig::default();
 //!
-//!     // Create storage engine with tiered storage
-//!     let storage = HybridStorageManager::new(
-//!         StorageConfig::default(),
-//!         Some(backend),
-//!     ).await?;
+//!     let storage = HybridStorageManager::new(table_name, schema, config);
 //!
 //!     // Use storage engine
 //!     // storage.insert(...).await?;

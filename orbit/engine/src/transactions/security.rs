@@ -612,7 +612,7 @@ mod tests {
 
     #[test]
     fn test_security_context() {
-        let node_id = NodeId::new("test-node".to_string(), "default".to_string());
+        let node_id = "test-node".to_string();
         let token = AuthToken::new(
             "test-issuer".to_string(),
             "test-user".to_string(),
@@ -690,7 +690,7 @@ mod tests {
     #[tokio::test]
     async fn test_audit_logger() {
         let logger = InMemoryAuditLogger::new(100);
-        let node_id = NodeId::new("test-node".to_string(), "default".to_string());
+        let node_id = "test-node".to_string();
 
         let entry = AuditLogEntry::new(
             "test-tx".to_string(),

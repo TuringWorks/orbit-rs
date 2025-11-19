@@ -155,7 +155,6 @@ pub trait ActorWithInt64Key: Addressable {}
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cluster::NodeId;
     use chrono::Utc;
 
     #[test]
@@ -403,13 +402,13 @@ mod tests {
 
         let lease = AddressableLease {
             reference: reference.clone(),
-            node_id: NodeId::new("node-1".to_string(), "default".to_string()),
+            node_id: "node-1".to_string(),
             expires_at: expires,
             renew_at: renew,
         };
 
         assert_eq!(lease.reference, reference);
-        assert_eq!(lease.node_id.key, "node-1");
+        assert_eq!(lease.node_id, "node-1");
         assert!(lease.renew_at < lease.expires_at);
 
         // Test serialization

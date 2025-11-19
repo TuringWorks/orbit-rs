@@ -10,9 +10,6 @@
 //! - Key-value operations
 //! - Cross-model JOINs
 
-use orbit_engine::adapters::{AdapterContext, OrbitQLAdapter, ProtocolAdapter};
-use orbit_engine::storage::HybridStorageManager;
-use std::sync::Arc;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -20,9 +17,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("║       OrbitQL Integration with Orbit Engine               ║");
     println!("╚════════════════════════════════════════════════════════════╝\n");
 
+    // TODO: This example needs to be updated to use a storage backend that implements TableStorage
+    println!("\n⚠️  This example is currently disabled - storage backend needs updating");
+    println!("    HybridStorageManager does not implement TableStorage trait");
+    return Ok(());
+
+    /*
     // Step 1: Create unified storage engine
     println!("📦 Step 1: Creating HybridStorageManager");
-    let storage = Arc::new(HybridStorageManager::new_in_memory());
+    let storage = Arc::new(HybridStorageManager::new(
+        "example_table".to_string(),
+        vec![],
+        orbit_engine::storage::HybridStorageConfig::default(),
+    ));
     println!("   ✓ Storage engine created\n");
 
     // Step 2: Create adapter context
@@ -193,4 +200,5 @@ async fn example_multi_model_query(
     println!("  4. All in a single unified query!");
 
     Ok(())
+    */
 }

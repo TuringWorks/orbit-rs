@@ -211,7 +211,7 @@ mod tests {
         assert!(result.is_err());
 
         match result.unwrap_err() {
-            OrbitError::Internal(message) => {
+            OrbitError::Internal { message, .. } => {
                 assert!(message.contains("Missing key in KeyProto"));
             }
             _ => panic!("Expected Internal error"),
@@ -303,7 +303,7 @@ mod tests {
         assert!(result.is_err());
 
         match result.unwrap_err() {
-            OrbitError::Internal(message) => {
+            OrbitError::Internal { message, .. } => {
                 assert!(message.contains("Missing key in AddressableReferenceProto"));
             }
             _ => panic!("Expected Internal error"),

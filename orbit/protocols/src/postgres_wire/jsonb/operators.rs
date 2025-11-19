@@ -22,9 +22,13 @@ impl JsonbValue {
     ///
     /// # Examples
     /// ```
+    /// use orbit_protocols::postgres_wire::jsonb::JsonbValue;
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let json = JsonbValue::from_json_str(r#"{"name": "Alice", "tags": ["dev", "rust"]}"#)?;
     /// assert_eq!(json.arrow_json(&["name"])?, Some(JsonbValue::String("Alice".into())));
     /// assert_eq!(json.arrow_json(&["tags", "0"])?, Some(JsonbValue::String("dev".into())));
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn arrow_json(&self, path: &[&str]) -> JsonbResult<Option<JsonbValue>> {
         if path.is_empty() {
@@ -60,9 +64,13 @@ impl JsonbValue {
     ///
     /// # Examples
     /// ```
+    /// use orbit_protocols::postgres_wire::jsonb::JsonbValue;
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let json = JsonbValue::from_json_str(r#"{"name": "Alice", "age": 30}"#)?;
     /// assert_eq!(json.arrow_text(&["name"])?, Some("Alice".to_string()));
     /// assert_eq!(json.arrow_text(&["age"])?, Some("30".to_string()));
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn arrow_text(&self, path: &[&str]) -> JsonbResult<Option<String>> {
         match self.arrow_json(path)? {
@@ -75,9 +83,13 @@ impl JsonbValue {
     ///
     /// # Examples
     /// ```
+    /// use orbit_protocols::postgres_wire::jsonb::{JsonbValue, JsonbPath};
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let json = JsonbValue::from_json_str(r#"{"user": {"profile": {"name": "Alice"}}}"#)?;
     /// let path = JsonbPath::from_str("user.profile.name")?;
     /// assert_eq!(json.path_json(&path)?, Some(JsonbValue::String("Alice".into())));
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn path_json(&self, path: &JsonbPath) -> JsonbResult<Option<JsonbValue>> {
         match self.get_path(path)? {
@@ -88,11 +100,15 @@ impl JsonbValue {
 
     /// `#>>` operator: Get JSON object at specified path (returns text)
     ///
-    /// # Examples  
+    /// # Examples
     /// ```
+    /// use orbit_protocols::postgres_wire::jsonb::{JsonbValue, JsonbPath};
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let json = JsonbValue::from_json_str(r#"{"user": {"age": 30}}"#)?;
     /// let path = JsonbPath::from_str("user.age")?;
     /// assert_eq!(json.path_text(&path)?, Some("30".to_string()));
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn path_text(&self, path: &JsonbPath) -> JsonbResult<Option<String>> {
         match self.path_json(path)? {
@@ -105,9 +121,13 @@ impl JsonbValue {
     ///
     /// # Examples
     /// ```
+    /// use orbit_protocols::postgres_wire::jsonb::JsonbValue;
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let json1 = JsonbValue::from_json_str(r#"{"name": "Alice", "tags": ["dev", "rust"]}"#)?;
     /// let json2 = JsonbValue::from_json_str(r#"{"name": "Alice"}"#)?;
     /// assert!(json1.contains(&json2)?);
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn contains(&self, other: &JsonbValue) -> JsonbResult<bool> {
         match (self, other) {
@@ -200,9 +220,13 @@ impl JsonbValue {
     ///
     /// # Examples
     /// ```
+    /// use orbit_protocols::postgres_wire::jsonb::JsonbValue;
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let json = JsonbValue::from_json_str(r#"{"name": "Alice", "age": 30}"#)?;
     /// assert!(json.has_key("name")?);
     /// assert!(!json.has_key("email")?);
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn has_key(&self, key: &str) -> JsonbResult<bool> {
         match self {
@@ -215,9 +239,13 @@ impl JsonbValue {
     ///
     /// # Examples
     /// ```
+    /// use orbit_protocols::postgres_wire::jsonb::JsonbValue;
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let json = JsonbValue::from_json_str(r#"{"name": "Alice", "age": 30}"#)?;
     /// assert!(json.has_any_key(&["name", "email"])?);
     /// assert!(!json.has_any_key(&["email", "phone"])?);
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn has_any_key(&self, keys: &[&str]) -> JsonbResult<bool> {
         for key in keys {
@@ -232,9 +260,13 @@ impl JsonbValue {
     ///
     /// # Examples
     /// ```
+    /// use orbit_protocols::postgres_wire::jsonb::JsonbValue;
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let json = JsonbValue::from_json_str(r#"{"name": "Alice", "age": 30}"#)?;
     /// assert!(json.has_all_keys(&["name", "age"])?);
     /// assert!(!json.has_all_keys(&["name", "age", "email"])?);
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn has_all_keys(&self, keys: &[&str]) -> JsonbResult<bool> {
         for key in keys {
@@ -249,10 +281,14 @@ impl JsonbValue {
     ///
     /// # Examples
     /// ```
+    /// use orbit_protocols::postgres_wire::jsonb::JsonbValue;
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let json1 = JsonbValue::from_json_str(r#"{"name": "Alice"}"#)?;
     /// let json2 = JsonbValue::from_json_str(r#"{"age": 30}"#)?;
     /// let result = json1.concat(&json2)?;
     /// // result: {"name": "Alice", "age": 30}
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn concat(&self, other: &JsonbValue) -> JsonbResult<JsonbValue> {
         match (self, other) {
@@ -290,9 +326,13 @@ impl JsonbValue {
     ///
     /// # Examples
     /// ```
+    /// use orbit_protocols::postgres_wire::jsonb::JsonbValue;
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let json = JsonbValue::from_json_str(r#"{"name": "Alice", "age": 30}"#)?;
     /// let result = json.delete_key("age")?;
     /// // result: {"name": "Alice"}
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn delete_key(&self, key: &str) -> JsonbResult<JsonbValue> {
         match self {
@@ -321,10 +361,14 @@ impl JsonbValue {
     ///
     /// # Examples
     /// ```
+    /// use orbit_protocols::postgres_wire::jsonb::{JsonbValue, JsonbPath};
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let json = JsonbValue::from_json_str(r#"{"user": {"name": "Alice", "age": 30}}"#)?;
     /// let path = JsonbPath::from_str("user.age")?;
     /// let result = json.delete_path(&path)?;
     /// // result: {"user": {"name": "Alice"}}
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn delete_path(&self, path: &JsonbPath) -> JsonbResult<JsonbValue> {
         if path.is_empty() {

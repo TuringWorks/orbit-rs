@@ -425,7 +425,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_transaction_metrics() {
-        let node_id = NodeId::new("test-node".to_string(), "default".to_string());
+        let node_id = "test-node".to_string();
         let metrics = TransactionMetrics::new(node_id);
 
         let tx_id = "test-tx-1";
@@ -439,7 +439,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_saga_metrics() {
-        let node_id = NodeId::new("test-node".to_string(), "default".to_string());
+        let node_id = "test-node".to_string();
         let metrics = SagaMetrics::new(node_id);
 
         let saga_id = "test-saga-1";
@@ -455,7 +455,7 @@ mod tests {
 
     #[test]
     fn test_lock_metrics() {
-        let node_id = NodeId::new("test-node".to_string(), "default".to_string());
+        let node_id = "test-node".to_string();
         let metrics = LockMetrics::new(node_id);
 
         let resource_id = "test-resource";

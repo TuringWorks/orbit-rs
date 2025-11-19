@@ -525,7 +525,6 @@ macro_rules! orbit_log_error {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::error::Error;
 
     #[test]
     fn test_error_creation() {

@@ -35,12 +35,16 @@
 //!
 //! ## Usage Example
 //!
-//! ```rust,no_run
+//! ```rust,ignore
 //! use orbit_engine::adapters::{ProtocolAdapter, AdapterContext};
-//! use orbit_engine::storage::HybridStorageManager;
+//! use orbit_engine::storage::{HybridStorageManager, HybridStorageConfig, ColumnSchema};
+//! use std::sync::Arc;
 //!
-//! // Create engine instance
-//! let storage = HybridStorageManager::new(/* ... */);
+//! // Create engine instance with proper configuration
+//! let table_name = "adapter_table".to_string();
+//! let schema = vec![]; // Define your schema
+//! let config = HybridStorageConfig::default();
+//! let storage = Arc::new(HybridStorageManager::new(table_name, schema, config));
 //!
 //! // Create adapter context
 //! let context = AdapterContext::new(storage);

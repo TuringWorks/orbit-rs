@@ -945,7 +945,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_transaction_creation() {
-        let node_id = NodeId::new("test-node".to_string(), "default".to_string());
+        let node_id = "test-node".to_string();
         let message_sender = Arc::new(MockMessageSender::new());
         let coordinator = TransactionCoordinator::new(
             node_id.clone(),
@@ -972,7 +972,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_transaction_timeout() {
-        let node_id = NodeId::new("test-node".to_string(), "default".to_string());
+        let node_id = "test-node".to_string();
         let timeout = Duration::from_millis(100);
 
         let transaction = DistributedTransaction::new(node_id, timeout);
@@ -989,7 +989,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_transaction_vote_handling() {
-        let node_id = NodeId::new("test-node".to_string(), "default".to_string());
+        let node_id = "test-node".to_string();
         let message_sender = Arc::new(MockMessageSender::new());
         let coordinator = TransactionCoordinator::new(
             node_id.clone(),
