@@ -1,6 +1,6 @@
 use crate::addressable::AddressableReference;
-use crate::exception::{OrbitError, OrbitResult};
-use crate::mesh::NodeId;
+use crate::error::{EngineError, EngineResult};
+use super::NodeId;
 use crate::transaction_log::PersistentTransactionLogger;
 use crate::transactions::{
     DistributedTransaction, TransactionCoordinator, TransactionId, TransactionOperation,
@@ -129,19 +129,19 @@ pub struct CoordinatorHealth {
 #[async_trait]
 pub trait ClusterManager: Send + Sync {
     /// Get all nodes in the cluster
-    async fn get_cluster_nodes(&self) -> OrbitResult<Vec<NodeId>>;
+    async fn get_cluster_nodes(&self) -> EngineResult<Vec<NodeId>>;
 
     /// Check if a node is the current leader/coordinator
-    async fn is_leader(&self, node_id: &NodeId) -> OrbitResult<bool>;
+    async fn is_leader(&self, node_id: &NodeId) -> EngineResult<bool>;
 
     /// Start leader election
-    async fn start_election(&self, candidate: &NodeId) -> OrbitResult<bool>;
+    async fn start_election(&self, candidate: &NodeId) -> EngineResult<bool>;
 
     /// Notify cluster of coordinator failure
-    async fn report_coordinator_failure(&self, failed_coordinator: &NodeId) -> OrbitResult<()>;
+    async fn report_coordinator_failure(&self, failed_coordinator: &NodeId) -> EngineResult<()>;
 
     /// Get cluster configuration
-    async fn get_cluster_config(&self) -> OrbitResult<ClusterConfig>;
+    async fn get_cluster_config(&self) -> EngineResult<ClusterConfig>;
 }
 
 #[derive(Debug, Clone)]
@@ -155,20 +155,20 @@ pub struct ClusterConfig {
 #[async_trait]
 pub trait RecoveryEventHandler: Send + Sync {
     /// Called when a coordinator failure is detected
-    async fn on_coordinator_failure(&self, failed_coordinator: &NodeId) -> OrbitResult<()>;
+    async fn on_coordinator_failure(&self, failed_coordinator: &NodeId) -> EngineResult<()>;
 
     /// Called when recovery process starts
-    async fn on_recovery_start(&self, transaction_id: &TransactionId) -> OrbitResult<()>;
+    async fn on_recovery_start(&self, transaction_id: &TransactionId) -> EngineResult<()>;
 
     /// Called when recovery process completes
     async fn on_recovery_complete(
         &self,
         transaction_id: &TransactionId,
         success: bool,
-    ) -> OrbitResult<()>;
+    ) -> EngineResult<()>;
 
     /// Called when this node becomes coordinator
-    async fn on_coordinator_elected(&self, new_coordinator: &NodeId) -> OrbitResult<()>;
+    async fn on_coordinator_elected(&self, new_coordinator: &NodeId) -> EngineResult<()>;
 }
 
 impl TransactionRecoveryManager {
@@ -209,7 +209,7 @@ impl TransactionRecoveryManager {
     }
 
     /// Create a checkpoint for a transaction
-    pub async fn create_checkpoint(&self, transaction: &DistributedTransaction) -> OrbitResult<()> {
+    pub async fn create_checkpoint(&self, transaction: &DistributedTransaction) -> EngineResult<()> {
         let checkpoint = TransactionCheckpoint::from_transaction(transaction);
 
         // Store checkpoint in memory
@@ -220,7 +220,7 @@ impl TransactionRecoveryManager {
 
         // Persist checkpoint to log
         let _checkpoint_data = serde_json::to_value(&checkpoint)
-            .map_err(|e| OrbitError::internal(format!("Failed to serialize checkpoint: {e}")))?;
+            .map_err(|e| EngineError::internal(format!("Failed to serialize checkpoint: {e}")))?;
 
         // This would ideally be stored in a dedicated recovery log
         debug!(
@@ -244,7 +244,7 @@ impl TransactionRecoveryManager {
         state: TransactionState,
         votes: Option<HashMap<AddressableReference, TransactionVote>>,
         acks: Option<HashMap<AddressableReference, bool>>,
-    ) -> OrbitResult<()> {
+    ) -> EngineResult<()> {
         let mut checkpoints = self.checkpoints.write().await;
         if let Some(checkpoint) = checkpoints.get_mut(transaction_id) {
             checkpoint.current_state = state;
@@ -265,7 +265,7 @@ impl TransactionRecoveryManager {
     }
 
     /// Remove checkpoint after transaction completion
-    pub async fn remove_checkpoint(&self, transaction_id: &TransactionId) -> OrbitResult<()> {
+    pub async fn remove_checkpoint(&self, transaction_id: &TransactionId) -> EngineResult<()> {
         let mut checkpoints = self.checkpoints.write().await;
         checkpoints.remove(transaction_id);
         debug!("Removed checkpoint for transaction: {}", transaction_id);
@@ -273,7 +273,7 @@ impl TransactionRecoveryManager {
     }
 
     /// Start the recovery manager
-    pub async fn start(&self) -> OrbitResult<()> {
+    pub async fn start(&self) -> EngineResult<()> {
         info!("Starting transaction recovery manager");
 
         // Initialize coordinator health tracking
@@ -290,7 +290,7 @@ impl TransactionRecoveryManager {
     }
 
     /// Initialize tracking of cluster coordinators
-    async fn initialize_coordinator_tracking(&self) -> OrbitResult<()> {
+    async fn initialize_coordinator_tracking(&self) -> EngineResult<()> {
         let cluster_nodes = self.cluster_manager.get_cluster_nodes().await?;
         let mut coordinators = self.coordinators.write().await;
 
@@ -311,7 +311,7 @@ impl TransactionRecoveryManager {
     }
 
     /// Start background recovery tasks
-    async fn start_background_tasks(&self) -> OrbitResult<()> {
+    async fn start_background_tasks(&self) -> EngineResult<()> {
         let recovery_manager = self.clone();
 
         // Health checking task
@@ -360,7 +360,7 @@ impl TransactionRecoveryManager {
     }
 
     /// Check health of known coordinators
-    async fn check_coordinator_health(&self) -> OrbitResult<()> {
+    async fn check_coordinator_health(&self) -> EngineResult<()> {
         let mut coordinators = self.coordinators.write().await;
         let now = Instant::now();
         let mut failed_coordinators = Vec::new();
@@ -401,7 +401,7 @@ impl TransactionRecoveryManager {
     }
 
     /// Handle coordinator failure
-    async fn handle_coordinator_failure(&self, failed_coordinator: &NodeId) -> OrbitResult<()> {
+    async fn handle_coordinator_failure(&self, failed_coordinator: &NodeId) -> EngineResult<()> {
         info!("Handling coordinator failure: {}", failed_coordinator);
 
         // Notify event handlers
@@ -442,7 +442,7 @@ impl TransactionRecoveryManager {
     pub async fn find_transactions_needing_recovery(
         &self,
         failed_coordinator: &NodeId,
-    ) -> OrbitResult<Vec<TransactionCheckpoint>> {
+    ) -> EngineResult<Vec<TransactionCheckpoint>> {
         let checkpoints = self.checkpoints.read().await;
         let mut transactions_to_recover = Vec::new();
 
@@ -468,7 +468,7 @@ impl TransactionRecoveryManager {
     pub async fn initiate_recovery_process(
         &self,
         transactions: Vec<TransactionCheckpoint>,
-    ) -> OrbitResult<()> {
+    ) -> EngineResult<()> {
         info!(
             "Initiating recovery process for {} transactions",
             transactions.len()
@@ -499,7 +499,7 @@ impl TransactionRecoveryManager {
     }
 
     /// Check if this node should become the new coordinator
-    async fn should_become_coordinator(&self) -> OrbitResult<bool> {
+    async fn should_become_coordinator(&self) -> EngineResult<bool> {
         let cluster_config = self.cluster_manager.get_cluster_config().await?;
 
         // Simple heuristic: become coordinator if no current leader exists
@@ -511,7 +511,7 @@ impl TransactionRecoveryManager {
     pub async fn become_coordinator(
         &self,
         transactions: Vec<TransactionCheckpoint>,
-    ) -> OrbitResult<()> {
+    ) -> EngineResult<()> {
         info!(
             "Becoming new coordinator for {} transactions",
             transactions.len()
@@ -563,7 +563,7 @@ impl TransactionRecoveryManager {
     async fn handle_recovery_failure(
         &self,
         transaction_id: &TransactionId,
-        error: crate::OrbitError,
+        error: crate::EngineError,
     ) {
         error!(
             "Failed to recover transaction {}: {}",
@@ -580,7 +580,7 @@ impl TransactionRecoveryManager {
     }
 
     /// Recover a single transaction
-    async fn recover_transaction(&self, checkpoint: TransactionCheckpoint) -> OrbitResult<()> {
+    async fn recover_transaction(&self, checkpoint: TransactionCheckpoint) -> EngineResult<()> {
         info!("Recovering transaction: {}", checkpoint.transaction_id);
 
         // Notify handlers about recovery start
@@ -622,7 +622,7 @@ impl TransactionRecoveryManager {
     async fn execute_transaction_recovery_strategy(
         &self,
         checkpoint: &TransactionCheckpoint,
-    ) -> OrbitResult<bool> {
+    ) -> EngineResult<bool> {
         match checkpoint.current_state {
             TransactionState::Preparing => {
                 // Transaction was in prepare phase - need to determine if we should commit or abort
@@ -659,7 +659,7 @@ impl TransactionRecoveryManager {
     async fn recover_preparing_transaction(
         &self,
         checkpoint: &TransactionCheckpoint,
-    ) -> OrbitResult<bool> {
+    ) -> EngineResult<bool> {
         info!(
             "Recovering preparing transaction: {}",
             checkpoint.transaction_id
@@ -681,7 +681,7 @@ impl TransactionRecoveryManager {
     async fn recover_prepared_transaction(
         &self,
         checkpoint: &TransactionCheckpoint,
-    ) -> OrbitResult<bool> {
+    ) -> EngineResult<bool> {
         info!(
             "Recovering prepared transaction: {}",
             checkpoint.transaction_id
@@ -701,7 +701,7 @@ impl TransactionRecoveryManager {
     async fn recover_committing_transaction(
         &self,
         checkpoint: &TransactionCheckpoint,
-    ) -> OrbitResult<bool> {
+    ) -> EngineResult<bool> {
         info!(
             "Recovering committing transaction: {}",
             checkpoint.transaction_id
@@ -721,7 +721,7 @@ impl TransactionRecoveryManager {
     async fn recover_aborting_transaction(
         &self,
         checkpoint: &TransactionCheckpoint,
-    ) -> OrbitResult<bool> {
+    ) -> EngineResult<bool> {
         info!(
             "Recovering aborting transaction: {}",
             checkpoint.transaction_id
@@ -738,7 +738,7 @@ impl TransactionRecoveryManager {
     }
 
     /// Recover incomplete transactions on startup
-    async fn recover_incomplete_transactions(&self) -> OrbitResult<()> {
+    async fn recover_incomplete_transactions(&self) -> EngineResult<()> {
         info!("Recovering incomplete transactions on startup");
 
         // This would query the persistent log for incomplete transactions
@@ -750,7 +750,7 @@ impl TransactionRecoveryManager {
     }
 
     /// Clean up old checkpoints
-    async fn cleanup_old_checkpoints(&self) -> OrbitResult<()> {
+    async fn cleanup_old_checkpoints(&self) -> EngineResult<()> {
         let cutoff_time =
             chrono::Utc::now().timestamp_millis() - self.config.max_recovery_age.as_millis() as i64;
         let mut checkpoints = self.checkpoints.write().await;
@@ -771,7 +771,7 @@ impl TransactionRecoveryManager {
     }
 
     /// Monitor recovery progress
-    async fn monitor_recovery_progress(&self) -> OrbitResult<()> {
+    async fn monitor_recovery_progress(&self) -> EngineResult<()> {
         let checkpoints = self.checkpoints.read().await;
         let active_recoveries = checkpoints.len();
 
@@ -800,7 +800,7 @@ impl TransactionRecoveryManager {
         &self,
         transaction_id: TransactionId,
         coordinator: NodeId,
-    ) -> OrbitResult<()> {
+    ) -> EngineResult<()> {
         let mut mapping = self.transaction_coordinator_map.write().await;
         mapping.insert(transaction_id.clone(), coordinator.clone());
 
@@ -824,7 +824,7 @@ impl TransactionRecoveryManager {
     pub async fn unregister_transaction_coordinator(
         &self,
         transaction_id: &TransactionId,
-    ) -> OrbitResult<()> {
+    ) -> EngineResult<()> {
         let mut mapping = self.transaction_coordinator_map.write().await;
         mapping.remove(transaction_id);
 
@@ -836,7 +836,7 @@ impl TransactionRecoveryManager {
     }
 
     /// Update the current cluster leader
-    pub async fn update_cluster_leader(&self, leader: Option<NodeId>) -> OrbitResult<()> {
+    pub async fn update_cluster_leader(&self, leader: Option<NodeId>) -> EngineResult<()> {
         let mut current_leader = self.current_leader.write().await;
         *current_leader = leader.clone();
 
@@ -857,9 +857,9 @@ impl TransactionRecoveryManager {
     pub async fn reassign_transactions_to_leader(
         &self,
         failed_coordinator: &NodeId,
-    ) -> OrbitResult<Vec<TransactionId>> {
+    ) -> EngineResult<Vec<TransactionId>> {
         let current_leader = self.get_cluster_leader().await.ok_or_else(|| {
-            OrbitError::cluster("No current leader available for transaction reassignment")
+            EngineError::cluster("No current leader available for transaction reassignment")
         })?;
 
         let mut mapping = self.transaction_coordinator_map.write().await;
@@ -919,26 +919,26 @@ mod tests {
 
     #[async_trait]
     impl ClusterManager for MockClusterManager {
-        async fn get_cluster_nodes(&self) -> OrbitResult<Vec<NodeId>> {
+        async fn get_cluster_nodes(&self) -> EngineResult<Vec<NodeId>> {
             Ok(self.nodes.clone())
         }
 
-        async fn is_leader(&self, node_id: &NodeId) -> OrbitResult<bool> {
+        async fn is_leader(&self, node_id: &NodeId) -> EngineResult<bool> {
             Ok(self.current_leader.as_ref() == Some(node_id))
         }
 
-        async fn start_election(&self, _candidate: &NodeId) -> OrbitResult<bool> {
+        async fn start_election(&self, _candidate: &NodeId) -> EngineResult<bool> {
             Ok(true) // Always win elections in tests
         }
 
         async fn report_coordinator_failure(
             &self,
             _failed_coordinator: &NodeId,
-        ) -> OrbitResult<()> {
+        ) -> EngineResult<()> {
             Ok(())
         }
 
-        async fn get_cluster_config(&self) -> OrbitResult<ClusterConfig> {
+        async fn get_cluster_config(&self) -> EngineResult<ClusterConfig> {
             Ok(ClusterConfig {
                 total_nodes: self.nodes.len(),
                 majority_threshold: self.nodes.len() / 2 + 1,

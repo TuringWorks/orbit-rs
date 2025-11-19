@@ -49,7 +49,7 @@ pub struct MvccTable {
     /// All versions of all rows, organized by primary key
     pub row_versions: BTreeMap<String, Vec<RowVersion>>,
     /// Table schema
-    pub schema: crate::storage::executor::TableSchema,
+    pub schema: crate::storage::TableSchema,
 }
 
 /// Transaction snapshot for MVCC reads
@@ -630,7 +630,7 @@ impl MvccSqlExecutor {
         let table = MvccTable {
             name: name.to_string(),
             row_versions: BTreeMap::new(),
-            schema: crate::storage::executor::TableSchema {
+            schema: crate::storage::TableSchema {
                 name: name.to_string(), // Use string directly
                 columns: Vec::new(),
                 constraints: Vec::new(),

@@ -5,7 +5,7 @@
 //! CDC stream and ensure they don't miss any events.
 
 use crate::cdc::CdcEvent;
-use crate::exception::{OrbitError, OrbitResult};
+use crate::error::{EngineError, EngineResult};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -124,17 +124,17 @@ impl ReplicationSlotManager {
     }
 
     /// Create a new replication slot
-    pub async fn create_slot(&self, name: String, plugin: String) -> OrbitResult<ReplicationSlot> {
+    pub async fn create_slot(&self, name: String, plugin: String) -> EngineResult<ReplicationSlot> {
         let mut slots = self.slots.write().await;
 
         if slots.contains_key(&name) {
-            return Err(OrbitError::internal(format!(
+            return Err(EngineError::internal(format!(
                 "Replication slot '{name}' already exists"
             )));
         }
 
         if slots.len() >= self.config.max_slots {
-            return Err(OrbitError::internal(format!(
+            return Err(EngineError::internal(format!(
                 "Maximum number of replication slots ({}) reached",
                 self.config.max_slots
             )));
@@ -156,7 +156,7 @@ impl ReplicationSlotManager {
     }
 
     /// Drop a replication slot
-    pub async fn drop_slot(&self, name: &str) -> OrbitResult<()> {
+    pub async fn drop_slot(&self, name: &str) -> EngineResult<()> {
         let mut slots = self.slots.write().await;
 
         if slots.remove(name).is_some() {
@@ -171,7 +171,7 @@ impl ReplicationSlotManager {
 
             Ok(())
         } else {
-            Err(OrbitError::AddressableNotFound {
+            Err(EngineError::AddressableNotFound {
                 reference: format!("Replication slot '{name}'"),
             })
         }
@@ -188,7 +188,7 @@ impl ReplicationSlotManager {
     }
 
     /// Advance slot position (consumer confirms processing)
-    pub async fn advance_slot(&self, name: &str, lsn: u64) -> OrbitResult<()> {
+    pub async fn advance_slot(&self, name: &str, lsn: u64) -> EngineResult<()> {
         let mut slots = self.slots.write().await;
 
         if let Some(slot) = slots.get_mut(name) {
@@ -196,7 +196,7 @@ impl ReplicationSlotManager {
             debug!("Advanced slot '{}' to LSN {}", name, lsn);
             Ok(())
         } else {
-            Err(OrbitError::AddressableNotFound {
+            Err(EngineError::AddressableNotFound {
                 reference: format!("Replication slot '{name}'"),
             })
         }
@@ -219,11 +219,11 @@ impl ReplicationSlotManager {
         &self,
         slot_name: &str,
         events: &[CdcEvent],
-    ) -> OrbitResult<Vec<CdcEvent>> {
+    ) -> EngineResult<Vec<CdcEvent>> {
         let slot =
             self.get_slot(slot_name)
                 .await
-                .ok_or_else(|| OrbitError::AddressableNotFound {
+                .ok_or_else(|| EngineError::AddressableNotFound {
                     reference: format!("Replication slot '{slot_name}'"),
                 })?;
 
@@ -268,11 +268,11 @@ impl ReplicationSlotManager {
     }
 
     /// Check slot lag
-    pub async fn get_slot_lag(&self, slot_name: &str) -> OrbitResult<u64> {
+    pub async fn get_slot_lag(&self, slot_name: &str) -> EngineResult<u64> {
         let slot =
             self.get_slot(slot_name)
                 .await
-                .ok_or_else(|| OrbitError::AddressableNotFound {
+                .ok_or_else(|| EngineError::AddressableNotFound {
                     reference: format!("Replication slot '{slot_name}'"),
                 })?;
 
@@ -281,7 +281,7 @@ impl ReplicationSlotManager {
     }
 
     /// Check if slot is lagging too much
-    pub async fn is_slot_lagging(&self, slot_name: &str) -> OrbitResult<bool> {
+    pub async fn is_slot_lagging(&self, slot_name: &str) -> EngineResult<bool> {
         let lag = self.get_slot_lag(slot_name).await?;
         Ok(lag > self.config.max_lag)
     }
@@ -321,7 +321,7 @@ impl ReplicationStream {
     }
 
     /// Get next batch of events
-    pub async fn next_batch(&mut self, events: &[CdcEvent]) -> OrbitResult<Vec<CdcEvent>> {
+    pub async fn next_batch(&mut self, events: &[CdcEvent]) -> EngineResult<Vec<CdcEvent>> {
         let pending = self
             .manager
             .get_pending_events(&self.slot_name, events)
@@ -330,7 +330,7 @@ impl ReplicationStream {
     }
 
     /// Confirm processing up to LSN
-    pub async fn confirm_lsn(&self, lsn: u64) -> OrbitResult<()> {
+    pub async fn confirm_lsn(&self, lsn: u64) -> EngineResult<()> {
         self.manager.advance_slot(&self.slot_name, lsn).await
     }
 

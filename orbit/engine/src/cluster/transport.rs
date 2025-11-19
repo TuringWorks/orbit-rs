@@ -1,8 +1,8 @@
-use crate::consensus::{
+use super::consensus::{
     AppendEntriesRequest, AppendEntriesResponse, RaftTransport, VoteRequest, VoteResponse,
 };
-use crate::exception::{OrbitError, OrbitResult};
-use crate::mesh::NodeId;
+use crate::error::{EngineError, EngineResult};
+use super::NodeId;
 use async_trait::async_trait;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -56,7 +56,7 @@ impl GrpcRaftTransport {
     async fn get_client(
         &self,
         target_node: &NodeId,
-    ) -> OrbitResult<RaftConsensusClient<tonic::transport::Channel>> {
+    ) -> EngineResult<RaftConsensusClient<tonic::transport::Channel>> {
         // Check if we already have a client
         {
             let clients = self.clients.read().await;
@@ -69,7 +69,7 @@ impl GrpcRaftTransport {
         let address = {
             let addresses = self.node_addresses.read().await;
             addresses.get(target_node).cloned().ok_or_else(|| {
-                OrbitError::cluster(format!("Address not found for node: {target_node}"))
+                EngineError::cluster(format!("Address not found for node: {target_node}"))
             })?
         };
 
@@ -79,12 +79,12 @@ impl GrpcRaftTransport {
         let channel = tokio::time::timeout(
             self.connection_timeout,
             tonic::transport::Endpoint::from_shared(address.clone())
-                .map_err(|e| OrbitError::internal(format!("Invalid endpoint: {e}")))?
+                .map_err(|e| EngineError::internal(format!("Invalid endpoint: {e}")))?
                 .connect(),
         )
         .await
-        .map_err(|_| OrbitError::timeout(format!("Connection timeout to {address}")))?
-        .map_err(|e| OrbitError::network(format!("Connection failed to {address}: {e}")))?;
+        .map_err(|_| EngineError::timeout(format!("Connection timeout to {address}")))?
+        .map_err(|e| EngineError::network(format!("Connection failed to {address}: {e}")))?;
 
         let client = RaftConsensusClient::new(channel);
 
@@ -123,7 +123,7 @@ impl RaftTransport for GrpcRaftTransport {
         &self,
         target: &NodeId,
         request: VoteRequest,
-    ) -> OrbitResult<VoteResponse> {
+    ) -> EngineResult<VoteResponse> {
         let mut client = self.get_client(target).await?;
 
         let proto_request = VoteRequestProto {
@@ -150,14 +150,14 @@ impl RaftTransport for GrpcRaftTransport {
             Ok(Err(status)) => {
                 warn!("Vote request to {} failed: {}", target, status);
                 self.remove_client(target).await;
-                Err(OrbitError::network(format!(
+                Err(EngineError::network(format!(
                     "Vote request failed: {status}"
                 )))
             }
             Err(_) => {
                 warn!("Vote request to {} timed out", target);
                 self.remove_client(target).await;
-                Err(OrbitError::timeout(format!(
+                Err(EngineError::timeout(format!(
                     "Vote request timeout to {target}"
                 )))
             }
@@ -168,7 +168,7 @@ impl RaftTransport for GrpcRaftTransport {
         &self,
         target: &NodeId,
         request: AppendEntriesRequest,
-    ) -> OrbitResult<AppendEntriesResponse> {
+    ) -> EngineResult<AppendEntriesResponse> {
         let mut client = self.get_client(target).await?;
 
         let proto_request = AppendEntriesRequestProto {
@@ -207,14 +207,14 @@ impl RaftTransport for GrpcRaftTransport {
             Ok(Err(status)) => {
                 warn!("Append entries to {} failed: {}", target, status);
                 self.remove_client(target).await;
-                Err(OrbitError::network(format!(
+                Err(EngineError::network(format!(
                     "Append entries failed: {status}"
                 )))
             }
             Err(_) => {
                 warn!("Append entries to {} timed out", target);
                 self.remove_client(target).await;
-                Err(OrbitError::timeout(format!(
+                Err(EngineError::timeout(format!(
                     "Append entries timeout to {target}"
                 )))
             }
@@ -225,7 +225,7 @@ impl RaftTransport for GrpcRaftTransport {
         &self,
         nodes: &[NodeId],
         request: AppendEntriesRequest,
-    ) -> OrbitResult<Vec<AppendEntriesResponse>> {
+    ) -> EngineResult<Vec<AppendEntriesResponse>> {
         let tasks: Vec<_> = nodes
             .iter()
             .map(|node| {
@@ -368,13 +368,13 @@ impl RaftConsensusService for GrpcRaftHandler {
 pub async fn start_raft_server(
     consensus: Arc<crate::consensus::RaftConsensus>,
     bind_address: &str,
-) -> OrbitResult<()> {
+) -> EngineResult<()> {
     let handler = GrpcRaftHandler::new(consensus);
     let server = handler.into_server();
 
     let addr = bind_address
         .parse()
-        .map_err(|e| OrbitError::configuration(format!("Invalid bind address: {e}")))?;
+        .map_err(|e| EngineError::configuration(format!("Invalid bind address: {e}")))?;
 
     info!("Starting Raft gRPC server on {}", addr);
 
@@ -382,7 +382,7 @@ pub async fn start_raft_server(
         .add_service(server)
         .serve(addr)
         .await
-        .map_err(|e| OrbitError::network(format!("Failed to start Raft server: {e}")))?;
+        .map_err(|e| EngineError::network(format!("Failed to start Raft server: {e}")))?;
 
     Ok(())
 }
@@ -390,7 +390,7 @@ pub async fn start_raft_server(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::consensus::{RaftConfig, RaftConsensus};
+    use super::consensus::{RaftConfig, RaftConsensus};
     use tokio::time::Duration;
 
     #[tokio::test]

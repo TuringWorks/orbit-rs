@@ -1,6 +1,6 @@
-use crate::consensus::{RaftConfig, RaftConsensus, RaftEventHandler};
-use crate::exception::{OrbitError, OrbitResult};
-use crate::mesh::NodeId;
+use super::consensus::{RaftConfig, RaftConsensus, RaftEventHandler};
+use crate::error::{EngineError, EngineResult};
+use super::NodeId;
 use crate::recovery::{ClusterConfig, ClusterManager};
 use async_trait::async_trait;
 use std::collections::HashMap;
@@ -245,7 +245,7 @@ impl EnhancedClusterManager {
     pub async fn start(
         &self,
         transport: Arc<dyn crate::consensus::RaftTransport>,
-    ) -> OrbitResult<()> {
+    ) -> EngineResult<()> {
         info!(
             "Starting enhanced cluster manager for node: {}",
             self.node_id
@@ -264,7 +264,7 @@ impl EnhancedClusterManager {
     }
 
     /// Start health monitoring background task
-    async fn start_health_monitoring(&self) -> OrbitResult<()> {
+    async fn start_health_monitoring(&self) -> EngineResult<()> {
         let cluster_manager = self.clone();
 
         tokio::spawn(async move {
@@ -283,7 +283,7 @@ impl EnhancedClusterManager {
     }
 
     /// Start split-brain monitoring
-    async fn start_split_brain_monitoring(&self) -> OrbitResult<()> {
+    async fn start_split_brain_monitoring(&self) -> EngineResult<()> {
         let cluster_manager = self.clone();
 
         tokio::spawn(async move {
@@ -302,7 +302,7 @@ impl EnhancedClusterManager {
     }
 
     /// Update health status of all cluster nodes
-    async fn update_node_health(&self) -> OrbitResult<()> {
+    async fn update_node_health(&self) -> EngineResult<()> {
         let cluster_nodes = self.get_cluster_nodes().await?;
         let connectivity = self
             .partition_detector
@@ -342,7 +342,7 @@ impl EnhancedClusterManager {
     }
 
     /// Check overall cluster health and split-brain risk
-    async fn check_cluster_health(&self) -> OrbitResult<()> {
+    async fn check_cluster_health(&self) -> EngineResult<()> {
         let cluster_nodes = self.get_cluster_nodes().await?;
         let health_map = self.node_health.read().await;
 
@@ -384,7 +384,7 @@ impl EnhancedClusterManager {
     }
 
     /// Check if current node has quorum
-    pub async fn has_quorum(&self) -> OrbitResult<bool> {
+    pub async fn has_quorum(&self) -> EngineResult<bool> {
         let cluster_nodes = self.get_cluster_nodes().await?;
         let health_map = self.node_health.read().await;
 
@@ -401,7 +401,7 @@ impl EnhancedClusterManager {
     }
 
     /// Get nodes in the same partition as this node
-    pub async fn get_partition_nodes(&self) -> OrbitResult<Vec<NodeId>> {
+    pub async fn get_partition_nodes(&self) -> EngineResult<Vec<NodeId>> {
         let health_map = self.node_health.read().await;
 
         let mut partition_nodes = vec![self.node_id.clone()]; // Include self
@@ -431,13 +431,13 @@ impl Clone for EnhancedClusterManager {
 
 #[async_trait]
 impl ClusterManager for EnhancedClusterManager {
-    async fn get_cluster_nodes(&self) -> OrbitResult<Vec<NodeId>> {
+    async fn get_cluster_nodes(&self) -> EngineResult<Vec<NodeId>> {
         // Get nodes from Raft consensus
         let cluster_nodes = self.raft_consensus.get_cluster_nodes().await;
         Ok(cluster_nodes.clone())
     }
 
-    async fn is_leader(&self, node_id: &NodeId) -> OrbitResult<bool> {
+    async fn is_leader(&self, node_id: &NodeId) -> EngineResult<bool> {
         if node_id == &self.node_id {
             Ok(self.raft_consensus.is_leader().await)
         } else {
@@ -447,7 +447,7 @@ impl ClusterManager for EnhancedClusterManager {
         }
     }
 
-    async fn start_election(&self, candidate: &NodeId) -> OrbitResult<bool> {
+    async fn start_election(&self, candidate: &NodeId) -> EngineResult<bool> {
         // Only allow election if we have quorum
         if !self.has_quorum().await? {
             warn!("Cannot start election: no quorum available");
@@ -456,7 +456,7 @@ impl ClusterManager for EnhancedClusterManager {
 
         // Only this node can start its own election
         if candidate != &self.node_id {
-            return Err(OrbitError::configuration(
+            return Err(EngineError::configuration(
                 "Can only start election for self",
             ));
         }
@@ -471,7 +471,7 @@ impl ClusterManager for EnhancedClusterManager {
         Ok(true)
     }
 
-    async fn report_coordinator_failure(&self, failed_coordinator: &NodeId) -> OrbitResult<()> {
+    async fn report_coordinator_failure(&self, failed_coordinator: &NodeId) -> EngineResult<()> {
         info!("Reporting coordinator failure: {}", failed_coordinator);
 
         // Update health status
@@ -494,7 +494,7 @@ impl ClusterManager for EnhancedClusterManager {
         Ok(())
     }
 
-    async fn get_cluster_config(&self) -> OrbitResult<ClusterConfig> {
+    async fn get_cluster_config(&self) -> EngineResult<ClusterConfig> {
         let cluster_nodes = self.get_cluster_nodes().await?;
         let current_leader = self.raft_consensus.get_leader().await;
 
@@ -520,7 +520,7 @@ impl RecoveryRaftEventHandler {
     }
 
     /// Initiate a comprehensive recovery scan when this node becomes leader
-    async fn initiate_leader_recovery_scan(&self) -> OrbitResult<()> {
+    async fn initiate_leader_recovery_scan(&self) -> EngineResult<()> {
         info!("Starting leader recovery scan for orphaned transactions");
 
         let failed_coordinators = self.identify_failed_coordinators().await;
@@ -551,7 +551,7 @@ impl RecoveryRaftEventHandler {
     async fn collect_transactions_for_recovery(
         &self,
         failed_coordinators: &[crate::mesh::NodeId],
-    ) -> OrbitResult<Vec<crate::recovery::TransactionCheckpoint>> {
+    ) -> EngineResult<Vec<crate::recovery::TransactionCheckpoint>> {
         let mut all_transactions_to_recover = Vec::new();
 
         for failed_coordinator in failed_coordinators {
@@ -570,7 +570,7 @@ impl RecoveryRaftEventHandler {
         &self,
         transactions_to_recover: Vec<crate::recovery::TransactionCheckpoint>,
         failed_coordinators_count: usize,
-    ) -> OrbitResult<()> {
+    ) -> EngineResult<()> {
         if !transactions_to_recover.is_empty() {
             info!(
                 "Found {} total transactions needing recovery from {} failed coordinators",
@@ -592,7 +592,7 @@ impl RecoveryRaftEventHandler {
 
 #[async_trait]
 impl RaftEventHandler for RecoveryRaftEventHandler {
-    async fn on_leader_elected(&self, leader_id: &NodeId, term: u64) -> OrbitResult<()> {
+    async fn on_leader_elected(&self, leader_id: &NodeId, term: u64) -> EngineResult<()> {
         info!("New leader elected: {} (term: {})", leader_id, term);
 
         // Notify recovery manager about the new leader
@@ -624,7 +624,7 @@ impl RaftEventHandler for RecoveryRaftEventHandler {
         Ok(())
     }
 
-    async fn on_leader_lost(&self, former_leader_id: &NodeId, term: u64) -> OrbitResult<()> {
+    async fn on_leader_lost(&self, former_leader_id: &NodeId, term: u64) -> EngineResult<()> {
         warn!("Leader lost: {} (term: {})", former_leader_id, term);
 
         // Report coordinator failure to trigger recovery process
@@ -659,7 +659,7 @@ impl RaftEventHandler for RecoveryRaftEventHandler {
         Ok(())
     }
 
-    async fn on_term_changed(&self, old_term: u64, new_term: u64) -> OrbitResult<()> {
+    async fn on_term_changed(&self, old_term: u64, new_term: u64) -> EngineResult<()> {
         info!(
             "Raft term changed: {} -> {} - updating recovery state",
             old_term, new_term

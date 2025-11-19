@@ -1,5 +1,5 @@
-use crate::exception::OrbitResult;
-use crate::mesh::NodeId;
+use crate::error::EngineResult;
+use super::NodeId;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -134,9 +134,9 @@ pub struct RaftConsensus {
 /// Raft event handler for leadership changes
 #[async_trait]
 pub trait RaftEventHandler: Send + Sync {
-    async fn on_leader_elected(&self, leader_id: &NodeId, term: u64) -> OrbitResult<()>;
-    async fn on_leader_lost(&self, former_leader_id: &NodeId, term: u64) -> OrbitResult<()>;
-    async fn on_term_changed(&self, old_term: u64, new_term: u64) -> OrbitResult<()>;
+    async fn on_leader_elected(&self, leader_id: &NodeId, term: u64) -> EngineResult<()>;
+    async fn on_leader_lost(&self, former_leader_id: &NodeId, term: u64) -> EngineResult<()>;
+    async fn on_term_changed(&self, old_term: u64, new_term: u64) -> EngineResult<()>;
 }
 
 /// Network transport for Raft messages
@@ -146,17 +146,17 @@ pub trait RaftTransport: Send + Sync {
         &self,
         target: &NodeId,
         request: VoteRequest,
-    ) -> OrbitResult<VoteResponse>;
+    ) -> EngineResult<VoteResponse>;
     async fn send_append_entries(
         &self,
         target: &NodeId,
         request: AppendEntriesRequest,
-    ) -> OrbitResult<AppendEntriesResponse>;
+    ) -> EngineResult<AppendEntriesResponse>;
     async fn broadcast_heartbeat(
         &self,
         nodes: &[NodeId],
         request: AppendEntriesRequest,
-    ) -> OrbitResult<Vec<AppendEntriesResponse>>;
+    ) -> EngineResult<Vec<AppendEntriesResponse>>;
 }
 
 impl RaftConsensus {
@@ -195,7 +195,7 @@ impl RaftConsensus {
     }
 
     /// Start the Raft consensus algorithm
-    pub async fn start(&self, transport: Arc<dyn RaftTransport>) -> OrbitResult<()> {
+    pub async fn start(&self, transport: Arc<dyn RaftTransport>) -> EngineResult<()> {
         info!("Starting Raft consensus for node: {}", self.node_id);
 
         // Start election timer
@@ -288,7 +288,7 @@ impl RaftConsensus {
     }
 
     /// Start election process
-    async fn start_election(&self, transport: Arc<dyn RaftTransport>) -> OrbitResult<()> {
+    async fn start_election(&self, transport: Arc<dyn RaftTransport>) -> EngineResult<()> {
         let new_term = self.prepare_for_election().await;
         info!("Starting election for term: {}", new_term);
 
@@ -399,7 +399,7 @@ impl RaftConsensus {
         &self,
         vote_results: Vec<(NodeId, VoteResponse)>,
         new_term: u64,
-    ) -> OrbitResult<usize> {
+    ) -> EngineResult<usize> {
         let mut vote_count = 1; // Self vote
 
         for (node_id, response) in vote_results {
@@ -420,7 +420,7 @@ impl RaftConsensus {
     }
 
     /// Finalize election based on vote count
-    async fn finalize_election(&self, vote_count: usize, new_term: u64) -> OrbitResult<()> {
+    async fn finalize_election(&self, vote_count: usize, new_term: u64) -> EngineResult<()> {
         let cluster_nodes = self.cluster_nodes.read().await;
         let cluster_size = cluster_nodes.len();
         let majority = cluster_size / 2 + 1;
@@ -437,7 +437,7 @@ impl RaftConsensus {
     }
 
     /// Become leader
-    async fn become_leader(&self) -> OrbitResult<()> {
+    async fn become_leader(&self) -> EngineResult<()> {
         let current_term = self.get_current_term().await;
         info!("Becoming leader for term: {}", current_term);
 
@@ -484,7 +484,7 @@ impl RaftConsensus {
     }
 
     /// Step down from candidate/leader to follower
-    async fn step_down(&self, new_term: u64) -> OrbitResult<()> {
+    async fn step_down(&self, new_term: u64) -> EngineResult<()> {
         let old_term = {
             let mut term = self.current_term.write().await;
             let old = *term;
@@ -516,7 +516,7 @@ impl RaftConsensus {
     }
 
     /// Send heartbeats to all followers
-    async fn send_heartbeats(&self, transport: Arc<dyn RaftTransport>) -> OrbitResult<()> {
+    async fn send_heartbeats(&self, transport: Arc<dyn RaftTransport>) -> EngineResult<()> {
         let cluster_nodes = self.cluster_nodes.read().await;
         let current_term = self.get_current_term().await;
         let commit_index = *self.commit_index.read().await;
@@ -561,7 +561,7 @@ impl RaftConsensus {
     }
 
     /// Handle incoming vote request
-    pub async fn handle_vote_request(&self, request: VoteRequest) -> OrbitResult<VoteResponse> {
+    pub async fn handle_vote_request(&self, request: VoteRequest) -> EngineResult<VoteResponse> {
         let current_term = self.get_current_term().await;
         let voted_for = self.voted_for.read().await.clone();
 
@@ -612,7 +612,7 @@ impl RaftConsensus {
     pub async fn handle_append_entries(
         &self,
         request: AppendEntriesRequest,
-    ) -> OrbitResult<AppendEntriesResponse> {
+    ) -> EngineResult<AppendEntriesResponse> {
         let current_term = self.get_current_term().await;
 
         // Reply false if term < currentTerm

@@ -15,7 +15,10 @@ pub mod optimizer;
 pub mod simd;
 
 // Re-exports
-pub use execution::VectorizedExecutor;
+pub use execution::{
+    AggregateFunction, ComparisonOp, VectorizedExecutor, VectorizedExecutorConfig,
+    VectorizedExecutorConfigBuilder,
+};
 
 /// Query executor trait
 #[async_trait]

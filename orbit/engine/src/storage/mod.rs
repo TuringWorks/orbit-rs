@@ -22,7 +22,7 @@ pub mod memory;
 
 // Re-exports
 pub use config::{AzureConfig, S3Config, StorageBackend, StorageConfig};
-pub use columnar::{Column, ColumnBatch, NullBitmap};
+pub use columnar::{Column, ColumnBatch, ColumnBatchBuilder, NullBitmap, DEFAULT_BATCH_SIZE};
 pub use hybrid::HybridStorageManager;
 pub use iceberg::IcebergColdStore;
 pub use memory::MemoryTableStorage;

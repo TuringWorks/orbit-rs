@@ -39,7 +39,7 @@ use super::{
     VectorizedExecutor, VectorizedExecutorConfig,
     AggregateFunction, ComparisonOp,
 };
-use super::storage_config::StorageBackend;
+use super::config::StorageBackend;
 
 /// Iceberg cold tier storage
 ///

@@ -475,7 +475,7 @@ pub struct HybridStorageManager {
 
     /// Cold tier storage (Iceberg-based for long-term archival)
     #[cfg(feature = "iceberg-cold")]
-    cold_store: Option<Arc<crate::storage::iceberg_cold::IcebergColdStore>>,
+    cold_store: Option<Arc<crate::storage::iceberg::IcebergColdStore>>,
 
     /// Cold tier storage (simple columnar fallback when Iceberg disabled)
     #[cfg(not(feature = "iceberg-cold"))]
@@ -531,7 +531,7 @@ impl HybridStorageManager {
 
     /// Set the Iceberg cold store (optional - for archival tier)
     #[cfg(feature = "iceberg-cold")]
-    pub fn with_cold_store(mut self, cold_store: Arc<crate::storage::iceberg_cold::IcebergColdStore>) -> Self {
+    pub fn with_cold_store(mut self, cold_store: Arc<crate::storage::iceberg::IcebergColdStore>) -> Self {
         self.cold_store = Some(cold_store);
         self
     }
@@ -662,7 +662,7 @@ impl HybridStorageManager {
 
                 // Convert Arrow batches to rows
                 for arrow_batch in arrow_batches {
-                    let column_batch = crate::storage::iceberg_cold::arrow_to_column_batch(&arrow_batch)?;
+                    let column_batch = crate::storage::iceberg::arrow_to_column_batch(&arrow_batch)?;
 
                     // Extract column names if not yet set
                     if column_names.is_empty() {
