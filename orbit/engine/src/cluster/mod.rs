@@ -5,14 +5,19 @@
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
-use crate::error::{EngineError, EngineResult};
+use crate::error::EngineResult;
 use crate::metrics::ClusterMetrics;
 
 // Module declarations
+/// Raft consensus implementation
 pub mod consensus;
+/// Cluster management and membership
 pub mod manager;
+/// Transaction recovery after failures
 pub mod recovery;
+/// Replication slot management
 pub mod replication;
+/// Network transport for cluster communication
 pub mod transport;
 
 // Re-exports

@@ -122,9 +122,13 @@ impl PartialEq for AddressableInvocation {
 /// A lease for an addressable indicating its current location and lifetime
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AddressableLease {
+    /// Reference to the addressable entity
     pub reference: AddressableReference,
+    /// ID of the node holding the lease
     pub node_id: crate::cluster::NodeId,
+    /// When the lease expires
     pub expires_at: chrono::DateTime<chrono::Utc>,
+    /// When the lease should be renewed
     pub renew_at: chrono::DateTime<chrono::Utc>,
 }
 

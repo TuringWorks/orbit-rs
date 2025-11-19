@@ -11,67 +11,98 @@ use tracing::{error, info, warn};
 /// Raft node states
 #[derive(Debug, Clone, PartialEq)]
 pub enum RaftState {
+    /// Node is following the leader
     Follower,
+    /// Node is campaigning to become leader
     Candidate,
+    /// Node is the elected leader
     Leader,
 }
 
 /// Raft log entry
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LogEntry {
+    /// Current term number
     pub term: u64,
+    /// Index in the log
     pub index: u64,
+    /// The command to replicate
     pub command: RaftCommand,
+    /// Unix timestamp when entry was created
     pub timestamp: i64,
 }
 
 /// Raft commands that can be replicated
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum RaftCommand {
+    /// Elect a new leader
     ElectLeader(NodeId),
+    /// Heartbeat to maintain leadership
     HeartBeat,
+    /// Assign transaction coordinator
     CoordinatorAssignment {
+        /// Transaction identifier
         transaction_id: String,
+        /// Coordinator node ID
         coordinator: NodeId,
     },
+    /// Node joining the cluster
     NodeJoin(NodeId),
+    /// Node leaving the cluster
     NodeLeave(NodeId),
 }
 
 /// Vote request message
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VoteRequest {
+    /// Current term
     pub term: u64,
+    /// Candidate requesting vote
     pub candidate_id: NodeId,
+    /// Index of candidate's last log entry
     pub last_log_index: u64,
+    /// Term of candidate's last log entry
     pub last_log_term: u64,
 }
 
 /// Vote response message
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VoteResponse {
+    /// Current term for candidate to update itself
     pub term: u64,
+    /// True if candidate received vote
     pub vote_granted: bool,
+    /// ID of the voting node
     pub voter_id: NodeId,
 }
 
 /// Append entries request
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppendEntriesRequest {
+    /// Leader's term
     pub term: u64,
+    /// Leader's node ID
     pub leader_id: NodeId,
+    /// Index of log entry immediately preceding new ones
     pub prev_log_index: u64,
+    /// Term of prev_log_index entry
     pub prev_log_term: u64,
+    /// Log entries to store (empty for heartbeat)
     pub entries: Vec<LogEntry>,
+    /// Leader's commit index
     pub leader_commit: u64,
 }
 
 /// Append entries response
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppendEntriesResponse {
+    /// Current term for leader to update itself
     pub term: u64,
+    /// True if follower contained entry matching prev_log_index/term
     pub success: bool,
+    /// ID of the responding follower
     pub follower_id: NodeId,
+    /// Index of follower's last log entry
     pub last_log_index: u64,
 }
 
