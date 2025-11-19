@@ -144,7 +144,7 @@ impl RaftTransport for GrpcRaftTransport {
                 Ok(VoteResponse {
                     term: proto_response.term,
                     vote_granted: proto_response.vote_granted,
-                    voter_id: NodeId::from_string(&proto_response.voter_id),
+                    voter_id: proto_response.voter_id,
                 })
             }
             Ok(Err(status)) => {
@@ -183,7 +183,7 @@ impl RaftTransport for GrpcRaftTransport {
                     term: entry.term,
                     index: entry.index,
                     command: serde_json::to_string(&entry.command).unwrap_or_default(),
-                    timestamp: entry.timestamp,
+                    timestamp: entry.timestamp as u64,
                 })
                 .collect(),
             leader_commit: request.leader_commit,
@@ -200,7 +200,7 @@ impl RaftTransport for GrpcRaftTransport {
                 Ok(AppendEntriesResponse {
                     term: proto_response.term,
                     success: proto_response.success,
-                    follower_id: NodeId::from_string(&proto_response.follower_id),
+                    follower_id: proto_response.follower_id,
                     last_log_index: proto_response.last_log_index,
                 })
             }
@@ -270,11 +270,11 @@ impl Clone for GrpcRaftTransport {
 
 /// gRPC service handler for Raft consensus
 pub struct GrpcRaftHandler {
-    consensus: Arc<crate::consensus::RaftConsensus>,
+    consensus: Arc<super::consensus::RaftConsensus>,
 }
 
 impl GrpcRaftHandler {
-    pub fn new(consensus: Arc<crate::consensus::RaftConsensus>) -> Self {
+    pub fn new(consensus: Arc<super::consensus::RaftConsensus>) -> Self {
         Self { consensus }
     }
 
@@ -294,7 +294,7 @@ impl RaftConsensusService for GrpcRaftHandler {
 
         let vote_request = VoteRequest {
             term: proto_request.term,
-            candidate_id: NodeId::from_string(&proto_request.candidate_id),
+            candidate_id: proto_request.candidate_id,
             last_log_index: proto_request.last_log_index,
             last_log_term: proto_request.last_log_term,
         };
@@ -321,25 +321,25 @@ impl RaftConsensusService for GrpcRaftHandler {
     ) -> Result<Response<AppendEntriesResponseProto>, Status> {
         let proto_request = request.into_inner();
 
-        let entries: Vec<crate::consensus::LogEntry> = proto_request
+        let entries: Vec<super::consensus::LogEntry> = proto_request
             .entries
             .into_iter()
             .map(|entry| {
                 let command = serde_json::from_str(&entry.command)
-                    .unwrap_or(crate::consensus::RaftCommand::HeartBeat);
+                    .unwrap_or(super::consensus::RaftCommand::HeartBeat);
 
-                crate::consensus::LogEntry {
+                super::consensus::LogEntry {
                     term: entry.term,
                     index: entry.index,
                     command,
-                    timestamp: entry.timestamp,
+                    timestamp: entry.timestamp as i64,
                 }
             })
             .collect();
 
         let append_request = AppendEntriesRequest {
             term: proto_request.term,
-            leader_id: NodeId::from_string(&proto_request.leader_id),
+            leader_id: proto_request.leader_id,
             prev_log_index: proto_request.prev_log_index,
             prev_log_term: proto_request.prev_log_term,
             entries,
@@ -366,7 +366,7 @@ impl RaftConsensusService for GrpcRaftHandler {
 
 /// Helper function to start a Raft gRPC server
 pub async fn start_raft_server(
-    consensus: Arc<crate::consensus::RaftConsensus>,
+    consensus: Arc<super::consensus::RaftConsensus>,
     bind_address: &str,
 ) -> EngineResult<()> {
     let handler = GrpcRaftHandler::new(consensus);
@@ -395,10 +395,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_grpc_transport_creation() {
-        let node_id = NodeId::new("test-node".to_string(), "default".to_string());
+        let node_id = "test-node".to_string();
         let mut node_addresses = HashMap::new();
         node_addresses.insert(
-            NodeId::new("peer-1".to_string(), "default".to_string()),
+            "peer-1".to_string(),
             "http://localhost:50051".to_string(),
         );
 
@@ -412,7 +412,7 @@ mod tests {
         // Test address update
         transport
             .update_node_address(
-                NodeId::new("peer-2".to_string(), "default".to_string()),
+                "peer-2".to_string(),
                 "http://localhost:50052".to_string(),
             )
             .await;
@@ -423,12 +423,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_raft_handler_creation() {
-        let node_id = NodeId::new("test-node".to_string(), "default".to_string());
+        let node_id = "test-node".to_string();
         let cluster_nodes = vec![node_id.clone()];
-        let consensus = Arc::new(RaftConsensus::new(
+        let consensus = Arc::new(super::consensus::RaftConsensus::new(
             node_id,
             cluster_nodes,
-            RaftConfig::default(),
+            super::consensus::RaftConfig::default(),
         ));
 
         let handler = GrpcRaftHandler::new(consensus);

@@ -13,8 +13,7 @@ pub mod consensus;
 pub mod manager;
 pub mod recovery;
 pub mod replication;
-// TODO: Requires protobuf code generation - re-enable after adding build.rs
-// pub mod transport;
+pub mod transport;
 
 // Re-exports
 pub use consensus::RaftConsensus;

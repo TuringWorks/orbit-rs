@@ -129,6 +129,31 @@ impl EngineError {
     pub fn timeout(msg: impl Into<String>) -> Self {
         Self::Timeout(msg.into())
     }
+
+    /// Create a serialization error
+    pub fn serialization(msg: impl Into<String>) -> Self {
+        Self::Serialization(msg.into())
+    }
+
+    /// Create a network error (maps to Cluster)
+    pub fn network(msg: impl Into<String>) -> Self {
+        Self::Cluster(msg.into())
+    }
+
+    /// Create a configuration error
+    pub fn configuration(msg: impl Into<String>) -> Self {
+        Self::Config(msg.into())
+    }
+
+    /// Create a conversion error (maps to InvalidInput)
+    pub fn conversion(msg: impl Into<String>) -> Self {
+        Self::InvalidInput(msg.into())
+    }
+
+    /// Create a not supported error (maps to NotImplemented)
+    pub fn not_supported(msg: impl Into<String>) -> Self {
+        Self::NotImplemented(msg.into())
+    }
 }
 
 // Convert from anyhow::Error
