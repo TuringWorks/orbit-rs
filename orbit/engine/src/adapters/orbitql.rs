@@ -19,7 +19,6 @@ use orbit_shared::orbitql::{
     Lexer, Parser, QueryValue,
 };
 use std::collections::HashMap;
-use std::sync::Arc;
 
 /// OrbitQL adapter for orbit-engine
 ///
@@ -56,14 +55,14 @@ impl OrbitQLAdapter {
 
     /// Parse OrbitQL query string into AST
     fn parse_query(&self, query: &str) -> EngineResult<Statement> {
-        let mut lexer = Lexer::new(query);
+        let lexer = Lexer::new();
         let tokens = lexer
-            .tokenize()
+            .tokenize(query)
             .map_err(|e| EngineError::query(format!("Lexer error: {}", e)))?;
 
-        let mut parser = Parser::new(tokens);
+        let mut parser = Parser::new();
         parser
-            .parse()
+            .parse(tokens)
             .map_err(|e| EngineError::query(format!("Parse error: {}", e)))
     }
 
@@ -415,9 +414,9 @@ impl OrbitQLAdapter {
                     .map_err(|e| EngineError::serialization(e.to_string()))?;
                 Ok(SqlValue::String(json))
             }
-            QueryValue::Timestamp(ts) => Ok(SqlValue::Timestamp(
+            QueryValue::DateTime(dt) => Ok(SqlValue::Timestamp(
                 std::time::SystemTime::UNIX_EPOCH
-                    + std::time::Duration::from_secs(ts.timestamp() as u64),
+                    + std::time::Duration::from_secs(dt.timestamp() as u64),
             )),
             _ => Err(EngineError::not_supported(format!(
                 "QueryValue type not supported: {:?}",
@@ -434,12 +433,11 @@ impl OrbitQLAdapter {
         use orbit_shared::orbitql::ast::DataType as OQL;
 
         match orbitql_type {
-            OQL::String => DataType::String,
+            OQL::String { .. } => DataType::String,
             OQL::Integer => DataType::Int64,
             OQL::Float => DataType::Float64,
             OQL::Boolean => DataType::Boolean,
-            OQL::Timestamp => DataType::Timestamp,
-            OQL::Binary => DataType::Binary,
+            OQL::DateTime => DataType::Timestamp,
             _ => DataType::String, // Default to string for complex types
         }
     }

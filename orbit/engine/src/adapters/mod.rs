@@ -53,7 +53,7 @@ use async_trait::async_trait;
 use std::sync::Arc;
 
 use crate::error::{EngineError, EngineResult};
-use crate::storage::{Row, SqlValue, TableSchema};
+use crate::storage::{Row, SqlValue};
 use crate::transaction::{IsolationLevel, TransactionId};
 
 pub mod postgres;
