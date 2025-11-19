@@ -740,7 +740,6 @@ fn parse_node_id_from_string(s: &str) -> crate::cluster::NodeId {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cluster::NodeId;
     use tempfile::tempdir;
 
     #[tokio::test]

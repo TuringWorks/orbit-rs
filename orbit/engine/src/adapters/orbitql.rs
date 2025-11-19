@@ -463,8 +463,6 @@ impl ProtocolAdapter for OrbitQLAdapter {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
     fn test_orbitql_protocol_name() {
         // TODO: This test needs to be updated once a storage backend implementing TableStorage is available

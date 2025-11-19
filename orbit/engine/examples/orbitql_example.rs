@@ -10,9 +10,6 @@
 //! - Key-value operations
 //! - Cross-model JOINs
 
-use orbit_engine::adapters::{AdapterContext, OrbitQLAdapter, ProtocolAdapter};
-use orbit_engine::storage::HybridStorageManager;
-use std::sync::Arc;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

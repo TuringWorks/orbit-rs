@@ -3,11 +3,6 @@
 //! This example demonstrates how to use the protocol adapters to bridge
 //! different protocols (PostgreSQL, Redis) to the unified orbit-engine.
 
-use orbit_engine::adapters::{AdapterContext, PostgresAdapter, RedisAdapter};
-use orbit_engine::adapters::postgres::{PostgresColumnDef, PostgresDataType, PostgresFilter};
-use orbit_engine::storage::{HybridStorageManager, SqlValue};
-use std::collections::HashMap;
-use std::sync::Arc;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

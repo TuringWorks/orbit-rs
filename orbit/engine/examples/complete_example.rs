@@ -8,14 +8,6 @@
 //!
 //! This example shows how all components work together.
 
-use orbit_engine::adapters::{
-    AdapterContext, PostgresAdapter, RedisAdapter, RestAdapter, ProtocolAdapter,
-};
-use orbit_engine::adapters::postgres::{PostgresColumnDef, PostgresDataType, PostgresFilter, PostgresIsolationLevel};
-use orbit_engine::adapters::rest::{CreateTableRequest, RestColumnDef, QueryRequest, InsertRequest};
-use orbit_engine::storage::{HybridStorageManager, SqlValue, StorageTier};
-use std::collections::HashMap;
-use std::sync::Arc;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

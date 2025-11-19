@@ -155,7 +155,6 @@ pub trait ActorWithInt64Key: Addressable {}
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cluster::NodeId;
     use chrono::Utc;
 
     #[test]
