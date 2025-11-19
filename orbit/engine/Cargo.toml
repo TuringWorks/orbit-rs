@@ -35,9 +35,12 @@ rand = "0.8"
 fastrand = "2.0"
 parking_lot = "0.12"
 crossbeam = "0.8"
+md5 = "0.7"
+metrics = "0.24"
 
 # Persistence
 rocksdb = "0.22"
+sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "sqlite"] }
 
 # Apache Iceberg for cold tier storage
 iceberg = { version = "0.7", features = ["storage-s3", "storage-memory"] }

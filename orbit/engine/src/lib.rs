@@ -88,12 +88,16 @@
 #![warn(missing_docs)]
 #![warn(rust_2018_idioms)]
 
+pub mod addressable;
+pub mod cdc;
 pub mod cluster;
 pub mod error;
 pub mod metrics;
 pub mod query;
 pub mod storage;
 pub mod transaction;
+pub mod transaction_log;
+pub mod transactions;
 
 // Re-export commonly used types
 pub use error::{EngineError, EngineResult};

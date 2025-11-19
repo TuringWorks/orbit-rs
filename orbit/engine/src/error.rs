@@ -40,6 +40,10 @@ pub enum EngineError {
     #[error("Not found: {0}")]
     NotFound(String),
 
+    /// Addressable not found errors
+    #[error("Addressable not found: {0}")]
+    AddressableNotFound(String),
+
     /// Already exists errors
     #[error("Already exists: {0}")]
     AlreadyExists(String),
@@ -119,6 +123,11 @@ impl EngineError {
     /// Create an internal error
     pub fn internal(msg: impl Into<String>) -> Self {
         Self::Internal(msg.into())
+    }
+
+    /// Create a timeout error
+    pub fn timeout(msg: impl Into<String>) -> Self {
+        Self::Timeout(msg.into())
     }
 }
 
