@@ -99,6 +99,10 @@ pub mod gpu_backend;
 #[cfg(target_os = "macos")]
 pub mod gpu_metal;
 
+/// Vulkan GPU acceleration (cross-platform)
+#[cfg(feature = "gpu-vulkan")]
+pub mod gpu_vulkan;
+
 /// Neural engine acceleration implementations  
 #[cfg(feature = "neural-acceleration")]
 pub mod neural;

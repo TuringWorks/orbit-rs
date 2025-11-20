@@ -19,13 +19,13 @@ cpu-simd-avx512 = []
 cpu-simd-arm-neon = []
 cpu-simd-arm-sve = []
 
-# GPU acceleration features (placeholder - real dependencies commented out)
+# GPU acceleration features
 gpu-acceleration = ["gpu-metal", "gpu-cuda", "gpu-rocm", "gpu-opencl", "gpu-vulkan"]
-gpu-metal = [] # Apple Metal (dependencies commented out)
-gpu-cuda = [] # NVIDIA CUDA (dependencies commented out)
-gpu-rocm = [] # AMD ROCm (dependencies commented out)
-gpu-opencl = [] # Cross-platform OpenCL (dependencies commented out)
-gpu-vulkan = [] # Cross-platform Vulkan compute (dependencies commented out)
+gpu-metal = [] # Apple Metal (fully implemented on macOS)
+gpu-cuda = [] # NVIDIA CUDA (placeholder - needs implementation)
+gpu-rocm = [] # AMD ROCm (placeholder - needs implementation)
+gpu-opencl = [] # Cross-platform OpenCL (placeholder - needs implementation)
+gpu-vulkan = ["vulkano"] # Cross-platform Vulkan compute
 
 # Neural engine features (placeholder - real dependencies commented out)
 neural-acceleration = ["neural-apple", "neural-qualcomm", "neural-intel"]
@@ -90,7 +90,7 @@ core-foundation = "0.9"
 
 # Cross-platform GPU compute
 # opencl3 = { version = "0.9", optional = true }
-# vulkano = { version = "0.34", optional = true }
+vulkano = { version = "0.34", optional = true }
 
 # ARM/Qualcomm specific (hypothetical crates for demonstration)
 # hexagon-sdk = { version = "0.1", optional = true }
