@@ -59,7 +59,7 @@ pub use capabilities::{
 pub use engine::{EngineConfig, EngineStatus, HeterogeneousEngine};
 pub use errors::{ComputeError, ComputeResult};
 pub use monitoring::{MockSystemMonitorState, SystemInfo, SystemMonitor};
-pub use query::{AccelerationStrategy, QueryAnalysis};
+pub use query::{AccelerationStrategy, OperationType, QueryAnalysis, QueryAnalyzer};
 pub use scheduler::{AdaptiveWorkloadScheduler, ComputeUnit, WorkloadType};
 
 #[cfg(feature = "benchmarks")]
@@ -91,6 +91,10 @@ pub mod cpu;
 /// GPU acceleration implementations
 #[cfg(feature = "gpu-acceleration")]
 pub mod gpu;
+
+/// Apple Metal GPU acceleration (macOS only)
+#[cfg(target_os = "macos")]
+pub mod gpu_metal;
 
 /// Neural engine acceleration implementations  
 #[cfg(feature = "neural-acceleration")]

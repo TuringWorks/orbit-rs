@@ -18,6 +18,7 @@ pub use execution::{
     AggregateFunction, ComparisonOp, VectorizedExecutor, VectorizedExecutorConfig,
     VectorizedExecutorConfigBuilder,
 };
+pub use optimizer::QueryOptimizer;
 
 /// Query executor trait
 #[async_trait]
@@ -54,8 +55,14 @@ pub struct ExecutionPlan {
     pub nodes: Vec<PlanNode>,
     /// Estimated cost
     pub estimated_cost: f64,
-    /// Whether SIMD is used
+    /// Whether SIMD is used (deprecated - use acceleration_strategy instead)
     pub uses_simd: bool,
+    /// Recommended acceleration strategy from QueryAnalyzer
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub acceleration_strategy: Option<orbit_compute::AccelerationStrategy>,
+    /// Query analysis result with workload classification
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub query_analysis: Option<orbit_compute::QueryAnalysis>,
 }
 
 /// Execution plan node
@@ -82,6 +89,8 @@ pub enum PlanNodeType {
     Projection,
     /// Aggregation
     Aggregation,
+    /// Group by operation
+    GroupBy,
     /// Join operation
     Join,
     /// Sort operation

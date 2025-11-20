@@ -6,27 +6,60 @@
 //! - **Projection Pushdown**: Select only required columns early
 //! - **Predicate Simplification**: Simplify and eliminate redundant predicates
 //! - **Cost-Based Selection**: Choose optimal scan strategy (index vs table scan)
+//! - **Hardware Acceleration**: Analyze and recommend optimal acceleration strategy
 //! - **SIMD Enablement**: Identify operations that benefit from vectorization
 
 use crate::query::{ExecutionPlan, PlanNode, PlanNodeType, Query};
 use crate::error::EngineResult;
 use crate::storage::FilterPredicate;
+use orbit_compute::{QueryAnalyzer, OperationType, UniversalComputeCapabilities};
 
-/// Query optimizer
+/// Query optimizer with hardware acceleration awareness
 pub struct QueryOptimizer {
     /// Optimization level (0-3)
     /// - 0: No optimization
     /// - 1: Basic optimizations (filter pushdown, projection)
     /// - 2: Level 1 + predicate simplification
-    /// - 3: Level 2 + cost-based optimization
+    /// - 3: Level 2 + cost-based optimization + hardware acceleration
     pub optimization_level: u8,
+    /// Query analyzer for hardware acceleration recommendations
+    query_analyzer: Option<QueryAnalyzer>,
 }
 
 impl QueryOptimizer {
-    /// Create a new optimizer
+    /// Create a new optimizer without hardware acceleration
     pub fn new(optimization_level: u8) -> Self {
         Self {
             optimization_level: optimization_level.min(3),
+            query_analyzer: None,
+        }
+    }
+
+    /// Create a new optimizer with hardware acceleration support
+    ///
+    /// Detects available compute capabilities and creates a QueryAnalyzer
+    /// for intelligent acceleration recommendations.
+    pub async fn new_with_acceleration(
+        optimization_level: u8,
+    ) -> EngineResult<Self> {
+        let capabilities = orbit_compute::init_heterogeneous_compute()
+            .await
+            .map_err(|e| crate::error::EngineError::Internal(format!("Failed to detect compute capabilities: {}", e)))?;
+
+        Ok(Self {
+            optimization_level: optimization_level.min(3),
+            query_analyzer: Some(QueryAnalyzer::new(capabilities)),
+        })
+    }
+
+    /// Create optimizer with explicit capabilities
+    pub fn new_with_capabilities(
+        optimization_level: u8,
+        capabilities: UniversalComputeCapabilities,
+    ) -> Self {
+        Self {
+            optimization_level: optimization_level.min(3),
+            query_analyzer: Some(QueryAnalyzer::new(capabilities)),
         }
     }
 
@@ -51,12 +84,48 @@ impl QueryOptimizer {
             plan = self.simplify_predicates(plan, query);
         }
 
-        // Level 3: Cost-based optimizations
+        // Level 3: Cost-based optimizations + hardware acceleration
         if self.optimization_level >= 3 {
             plan = self.apply_cost_based_optimization(plan, query);
+
+            // Analyze query for hardware acceleration opportunities
+            if let Some(ref analyzer) = self.query_analyzer {
+                let operations = self.query_to_operations(query, &plan);
+                match analyzer.analyze_operations(&operations) {
+                    Ok(analysis) => {
+                        let old_cost = plan.estimated_cost;
+
+                        tracing::debug!(
+                            "Query analysis: complexity={:.2}, strategy={:?}, confidence={:.2}",
+                            analysis.complexity_score,
+                            analysis.recommended_strategy,
+                            analysis.confidence
+                        );
+
+                        plan.acceleration_strategy = Some(analysis.recommended_strategy);
+                        plan.query_analysis = Some(analysis);
+
+                        // Recalculate cost with acceleration strategy
+                        plan.estimated_cost = self.estimate_cost_with_strategy(
+                            &plan.nodes,
+                            plan.acceleration_strategy,
+                        );
+
+                        tracing::debug!(
+                            "Cost estimate updated: {:.2} -> {:.2} ({}x speedup)",
+                            old_cost,
+                            plan.estimated_cost,
+                            old_cost / plan.estimated_cost.max(0.001)
+                        );
+                    }
+                    Err(e) => {
+                        tracing::warn!("Failed to analyze query for acceleration: {}", e);
+                    }
+                }
+            }
         }
 
-        // Always check for SIMD opportunities
+        // Always check for SIMD opportunities (deprecated path)
         plan.uses_simd = self.can_use_simd(query);
 
         Ok(plan)
@@ -101,6 +170,8 @@ impl QueryOptimizer {
             nodes,
             estimated_cost,
             uses_simd: false,
+            acceleration_strategy: None,
+            query_analysis: None,
         }
     }
 
@@ -265,12 +336,28 @@ impl QueryOptimizer {
         }
     }
 
-    /// Estimate execution cost based on plan nodes
+    /// Estimate execution cost based on plan nodes (without acceleration)
     fn estimate_cost(&self, nodes: &[PlanNode]) -> f64 {
-        let mut cost = 0.0;
+        self.estimate_cost_with_strategy(nodes, None)
+    }
 
+    /// Estimate execution cost with acceleration strategy
+    ///
+    /// Adjusts cost estimates based on the acceleration strategy:
+    /// - CPU SIMD: 2-3x speedup for numeric operations
+    /// - GPU: 5-10x speedup for large datasets with parallel operations
+    /// - Neural Engine: 3-5x speedup for ML-like operations
+    /// - Hybrid: 4-8x speedup combining multiple accelerators
+    fn estimate_cost_with_strategy(
+        &self,
+        nodes: &[PlanNode],
+        strategy: Option<orbit_compute::AccelerationStrategy>,
+    ) -> f64 {
+        let mut base_cost = 0.0;
+
+        // Calculate base cost for each operation
         for node in nodes {
-            cost += match node.node_type {
+            base_cost += match node.node_type {
                 // Table scan is expensive (full table read)
                 PlanNodeType::TableScan => node.estimated_rows as f64 * 1.0,
                 // Index scan is cheaper (targeted read)
@@ -281,6 +368,8 @@ impl QueryOptimizer {
                 PlanNodeType::Projection => node.estimated_rows as f64 * 0.1,
                 // Aggregation requires full pass
                 PlanNodeType::Aggregation => node.estimated_rows as f64 * 0.8,
+                // GroupBy requires grouping + aggregation
+                PlanNodeType::GroupBy => node.estimated_rows as f64 * 1.2,
                 // Join is very expensive
                 PlanNodeType::Join => node.estimated_rows as f64 * 2.0,
                 // Sort is expensive
@@ -288,6 +377,60 @@ impl QueryOptimizer {
             };
         }
 
-        cost
+        // Apply acceleration multiplier
+        let acceleration_factor = match strategy {
+            Some(orbit_compute::AccelerationStrategy::CpuSimd) => {
+                // CPU SIMD provides 2-3x speedup for numeric operations
+                0.4 // 40% of base cost (2.5x speedup)
+            }
+            Some(orbit_compute::AccelerationStrategy::Gpu) => {
+                // GPU provides 5-10x speedup for large parallel workloads
+                0.15 // 15% of base cost (6.7x speedup)
+            }
+            Some(orbit_compute::AccelerationStrategy::NeuralEngine) => {
+                // Neural Engine provides 3-5x speedup for tensor operations
+                0.25 // 25% of base cost (4x speedup)
+            }
+            Some(orbit_compute::AccelerationStrategy::Hybrid) => {
+                // Hybrid combines multiple accelerators for optimal performance
+                0.2 // 20% of base cost (5x speedup)
+            }
+            Some(orbit_compute::AccelerationStrategy::None) | None => {
+                // No acceleration
+                1.0 // 100% of base cost
+            }
+        };
+
+        base_cost * acceleration_factor
+    }
+
+    /// Convert Query and ExecutionPlan to OperationType vector for QueryAnalyzer
+    ///
+    /// Maps database query operations to acceleration-aware operation types.
+    fn query_to_operations(&self, query: &Query, plan: &ExecutionPlan) -> Vec<OperationType> {
+        let mut operations = Vec::new();
+
+        // Always start with scan
+        operations.push(OperationType::Scan);
+
+        // Add operations based on plan nodes
+        for node in &plan.nodes {
+            match node.node_type {
+                PlanNodeType::Filter => operations.push(OperationType::Filter),
+                PlanNodeType::Projection => operations.push(OperationType::Project),
+                PlanNodeType::Aggregation => operations.push(OperationType::Aggregate),
+                PlanNodeType::GroupBy => operations.push(OperationType::GroupBy),
+                PlanNodeType::Sort => operations.push(OperationType::Sort),
+                PlanNodeType::Join => operations.push(OperationType::Join),
+                _ => {} // TableScan and IndexScan already covered by initial Scan
+            }
+        }
+
+        // Add limit if present
+        if query.limit.is_some() {
+            operations.push(OperationType::Limit);
+        }
+
+        operations
     }
 }
