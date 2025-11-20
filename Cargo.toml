@@ -110,3 +110,7 @@ cucumber = "0.21"
 proptest = "1.4"
 tokio-test = "0.4"
 rand = "0.9"
+
+# Security patches
+# Note: tikv-client has been removed from dependencies due to unresolved protobuf vulnerabilities
+# See orbit/protocols/src/persistence/mod.rs for details
