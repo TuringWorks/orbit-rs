@@ -4673,6 +4673,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "multi-protocol-server"
+version = "0.1.0"
+dependencies = [
+ "orbit-protocols",
+ "tokio",
+]
+
+[[package]]
 name = "multimap"
 version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

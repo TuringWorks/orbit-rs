@@ -28,6 +28,7 @@ members = [
     "examples/orbitql-example",
     "examples/multi-model-query-example",
     "examples/benchmarks-demo",
+    "examples/multi-protocol-server",
 ]
 
 # Exclude benchmarks from default workspace build due to WAL replay issues

@@ -28,7 +28,7 @@ The CQL protocol adapter provides Cassandra-compatible wire protocol support for
 
 ## Architecture
 
-```
+```text
 ┌─────────────────────────────────────────┐
 │   Cassandra Clients                     │
 │   (cqlsh, drivers, tools)               │
@@ -193,10 +193,10 @@ DELETE FROM users WHERE user_id = <uuid>;
 
 | CQL Type | Orbit Type | Example |
 |----------|------------|---------|
-| LIST<type> | JSON | `['a', 'b', 'c']` |
-| SET<type> | JSON | `{'a', 'b', 'c'}` |
+| LIST< type> | JSON | `['a', 'b', 'c']` |
+| SET< type> | JSON | `{'a', 'b', 'c'}` |
 | MAP<k,v> | JSON | `{'key1': 'val1', 'key2': 'val2'}` |
-| TUPLE<types> | JSON | `(1, 'text', true)` |
+| TUPLE< types> | JSON | `(1, 'text', true)` |
 
 ### User-Defined Types (UDT)
 
@@ -327,6 +327,7 @@ APPLY BATCH;
 ### Connection Strings
 
 **Python (cassandra-driver)**:
+
 ```python
 from cassandra.cluster import Cluster
 
@@ -335,6 +336,7 @@ session = cluster.connect()
 ```
 
 **Java (DataStax)**:
+
 ```java
 Cluster cluster = Cluster.builder()
     .addContactPoint("127.0.0.1")
@@ -344,6 +346,7 @@ Session session = cluster.connect();
 ```
 
 **Go (gocql)**:
+
 ```go
 cluster := gocql.NewCluster("127.0.0.1")
 cluster.Port = 9042
@@ -351,6 +354,7 @@ session, _ := cluster.CreateSession()
 ```
 
 **Rust (cassandra-rs)**:
+
 ```rust
 let mut cluster = Cluster::default();
 cluster.set_contact_points("127.0.0.1:9042").unwrap();
@@ -414,6 +418,7 @@ tail -f orbit-cql.log
 ### Authentication Errors
 
 If authentication is enabled:
+
 ```bash
 cqlsh localhost 9042 -u cassandra -p cassandra
 ```
@@ -421,6 +426,7 @@ cqlsh localhost 9042 -u cassandra -p cassandra
 ### Protocol Version Mismatch
 
 Orbit CQL supports protocol version 4. If your client requires a different version:
+
 ```rust
 let config = CqlConfig {
     protocol_version: 4,  // Try 3 if needed
@@ -431,6 +437,7 @@ let config = CqlConfig {
 ### Query Errors
 
 Enable query logging:
+
 ```rust
 tracing_subscriber::fmt()
     .with_max_level(tracing::Level::DEBUG)
@@ -456,4 +463,4 @@ Contributions are welcome! Areas needing help:
 
 ---
 
-**Questions?** Open an issue at https://github.com/orbit-rs/orbit/issues
+**Questions?** Open an issue at <https://github.com/orbit-rs/orbit/issues>
