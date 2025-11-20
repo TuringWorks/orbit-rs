@@ -19,6 +19,7 @@
 pub mod aql;
 pub mod arangodb;
 pub mod bolt;
+pub mod cql; // Cassandra Query Language
 pub mod cypher;
 pub mod error;
 pub mod graph_database;

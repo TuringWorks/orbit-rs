@@ -54,11 +54,49 @@ pub enum ProtocolError {
 
     /// I/O error
     #[error("I/O error: {0}")]
-    IoError(#[from] std::io::Error),
+    IoError(String),
+
+    /// CQL protocol error
+    #[error("CQL protocol error: {0}")]
+    CqlError(String),
+
+    /// Type conversion error
+    #[error("Type conversion error: {0}")]
+    ConversionError(String),
+
+    /// Unsupported type
+    #[error("Unsupported type: {0}")]
+    UnsupportedType(String),
+
+    /// Invalid opcode
+    #[error("Invalid opcode: {0}")]
+    InvalidOpcode(u8),
+
+    /// Invalid consistency level
+    #[error("Invalid consistency level: {0}")]
+    InvalidConsistencyLevel(u16),
+
+    /// Incomplete frame
+    #[error("Incomplete frame")]
+    IncompleteFrame,
+
+    /// Invalid UTF-8
+    #[error("Invalid UTF-8: {0}")]
+    InvalidUtf8(String),
+
+    /// Invalid statement
+    #[error("Invalid statement: {0}")]
+    InvalidStatement(String),
 
     /// Generic error
     #[error("{0}")]
     Other(String),
+}
+
+impl From<std::io::Error> for ProtocolError {
+    fn from(err: std::io::Error) -> Self {
+        ProtocolError::IoError(err.to_string())
+    }
 }
 
 impl From<orbit_shared::exception::OrbitError> for ProtocolError {
