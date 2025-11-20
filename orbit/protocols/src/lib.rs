@@ -26,6 +26,7 @@ pub mod graph_database;
 pub mod graphrag;
 pub mod mcp;
 pub mod ml; // New ML module
+pub mod mysql; // MySQL Wire Protocol
 pub mod neo4j;
 pub mod orbitql;
 pub mod persistence;

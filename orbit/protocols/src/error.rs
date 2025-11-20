@@ -88,6 +88,14 @@ pub enum ProtocolError {
     #[error("Invalid statement: {0}")]
     InvalidStatement(String),
 
+    /// Connection closed
+    #[error("Connection closed")]
+    ConnectionClosed,
+
+    /// Invalid state
+    #[error("Invalid state")]
+    InvalidState,
+
     /// Generic error
     #[error("{0}")]
     Other(String),
