@@ -8,7 +8,7 @@ Azure Blob Storage support has been added to Orbit's Iceberg cold tier integrati
 
 The implementation supports parsing Azure connection strings exactly as you provided:
 
-```
+```text
 AccountName=devstoreaccount1;
 AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;
 DefaultEndpointsProtocol=http;
@@ -134,11 +134,13 @@ let batches = cold_store.scan(None).await?;
 To use the full Iceberg integration, you need:
 
 1. **Azurite** (for local development):
+
    ```bash
    docker run -p 10000:10000 mcr.microsoft.com/azure-storage/azurite
    ```
 
 2. **Iceberg REST Catalog**:
+
    ```bash
    docker run -p 8181:8181 tabulario/iceberg-rest:latest
    ```
@@ -146,6 +148,7 @@ To use the full Iceberg integration, you need:
 ## Next Steps
 
 The implementation is complete! You can now:
+
 1. Start the required services (Azurite + REST catalog)
 2. Use `create_rest_catalog_with_storage()` to create a catalog with Azure backend
 3. Create an `IcebergColdStore` for table operations
@@ -154,5 +157,6 @@ The implementation is complete! You can now:
 ---
 
 For detailed information, see the comprehensive documentation in:
+
 - `protocols/docs/AZURE_ICEBERG_SETUP.md` - Full setup guide
 - `protocols/docs/AZURE_IMPLEMENTATION_SUMMARY.md` - Implementation details

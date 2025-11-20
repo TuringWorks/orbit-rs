@@ -4,7 +4,7 @@ title: AQL and Bolt GraphRAG Integration Guide
 category: documentation
 ---
 
-# AQL and Bolt GraphRAG Integration Guide
+## AQL and Bolt GraphRAG Integration Guide
 
 ## Overview
 
@@ -21,7 +21,7 @@ This document provides a comprehensive guide to using GraphRAG functionality thr
 
 ## AQL GraphRAG Integration
 
-### Architecture
+### AQL Integration Architecture
 
 The AQL GraphRAG integration provides GraphRAG functionality through AQL function calls that can be used within standard ArangoDB-style queries.
 
@@ -36,9 +36,9 @@ let query_engine = AqlQueryEngine::new_with_graphrag(orbit_client);
 
 ### Core Functions
 
-#### 1. Knowledge Graph Building
+#### 1. Knowledge Graph Construction (Cypher)
 
-**GRAPHRAG_BUILD_KNOWLEDGE(document, options)**
+##### GRAPHRAG_BUILD_KNOWLEDGE(document, options)
 
 ```aql
 // Build from document text
@@ -67,7 +67,7 @@ FOR doc IN research_papers
 
 #### 2. RAG Queries
 
-**GRAPHRAG_QUERY(knowledge_graph, query_text, options)**
+##### GRAPHRAG_QUERY(knowledge_graph, query_text, options)
 
 ```aql
 // Simple RAG query
@@ -108,7 +108,7 @@ FOR paper IN research_papers
 
 #### 3. Multi-hop Reasoning
 
-**GRAPHRAG_FIND_PATHS(knowledge_graph, from_entity, to_entity, options)**
+#### GRAPHRAG_FIND_PATHS(knowledge_graph, from_entity, to_entity, options)
 
 ```aql
 // Find connection paths
@@ -144,7 +144,7 @@ FOR company IN companies
 
 #### 4. Analytics and Statistics
 
-**GRAPHRAG_GET_STATS(knowledge_graph)**
+##### GRAPHRAG_GET_STATS(knowledge_graph)
 
 ```aql
 // Knowledge graph statistics
@@ -234,7 +234,7 @@ FOR author IN authors
 
 ## Bolt/Cypher GraphRAG Integration
 
-### Architecture
+### Bolt/Cypher Integration Architecture
 
 The Bolt GraphRAG integration provides GraphRAG functionality through Cypher stored procedures that follow Neo4j conventions.
 
@@ -252,7 +252,7 @@ let server = CypherServer::new_with_graphrag("127.0.0.1:7687", procedures);
 
 #### 1. Knowledge Graph Building
 
-**orbit.graphrag.buildKnowledge(kg_name, document_id, text, metadata, config)**
+##### orbit.graphrag.buildKnowledge(kg_name, document_id, text, metadata, config)
 
 ```cypher
 // Build knowledge graph with node creation
@@ -279,7 +279,7 @@ RETURN kg_name, entities_extracted, relationships_extracted;
 
 #### 2. Entity Extraction with Graph Integration
 
-**orbit.graphrag.extractEntities(text, config)**
+##### orbit.graphrag.extractEntities(text, config)
 
 ```cypher
 // Extract entities and create graph nodes
@@ -303,7 +303,7 @@ RETURN doc.id, entity_text, entity_type, confidence;
 
 #### 3. RAG Queries with Graph Context
 
-**orbit.graphrag.ragQuery(kg_name, query_text, config)**
+##### orbit.graphrag.ragQuery(kg_name, query_text, config)
 
 ```cypher
 // RAG query with graph pattern context
@@ -343,7 +343,7 @@ RETURN response, confidence,
 
 #### 4. Multi-hop Reasoning with Path Creation
 
-**orbit.graphrag.findPaths(kg_name, from_entity, to_entity, config)**
+##### orbit.graphrag.findPaths(kg_name, from_entity, to_entity, config)
 
 ```cypher
 // Find and materialize reasoning paths
@@ -382,7 +382,7 @@ ORDER BY score DESC;
 
 #### 5. Graph Analytics and Statistics
 
-**orbit.graphrag.getStats(kg_name)**
+##### orbit.graphrag.getStats(kg_name)
 
 ```cypher
 // Knowledge graph analytics with visualization
@@ -657,7 +657,3 @@ class MultiProtocolGraphRAG:
 ```
 
 This comprehensive integration demonstrates how GraphRAG functionality can be accessed through multiple query languages and protocols, each optimized for different use cases while maintaining consistency in the underlying GraphRAG operations.
-
-<function_calls>
-<invoke name="mark_todo_as_done">
-<parameter name="todo_ids">["88aae352-05bd-4cb4-8d71-b64dbf0f82b8"]

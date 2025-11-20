@@ -35,13 +35,13 @@ Orbit Engine is a unified storage engine designed to support multiple database p
 
 ### Component Hierarchy
 
-```
+```text
 ┌─────────────────────────────────────────────────────────┐
 │  Layer 1: Protocol Layer (User-Facing)                  │
 │  - PostgreSQL Wire Protocol                             │
 │  - Redis RESP Protocol                                  │
 │  - REST HTTP API                                        │
-│  - OrbitQL (Multi-Model Query Language)                │
+│  - OrbitQL (Multi-Model Query Language)                 │
 │  - AQL/Cypher (Future)                                  │
 └─────────────────────────────────────────────────────────┘
                           ↓
@@ -55,27 +55,27 @@ Orbit Engine is a unified storage engine designed to support multiple database p
                           ↓
 ┌─────────────────────────────────────────────────────────┐
 │  Layer 3: Engine Core (Unified Backend)                 │
-│                                                          │
-│  ┌──────────┐  ┌────────────┐  ┌────────┐  ┌────────┐ │
-│  │ Storage  │  │Transaction │  │ Query  │  │Cluster │ │
-│  │          │  │            │  │        │  │        │ │
-│  │ Hot      │  │ MVCC       │  │ Vector │  │ Raft   │ │
-│  │ Warm     │  │ 2PC        │  │ SIMD   │  │ Replic │ │
-│  │ Cold     │  │ Locks      │  │ Optim  │  │ CDC    │ │
-│  └──────────┘  └────────────┘  └────────┘  └────────┘ │
+│                                                         │
+│  ┌──────────┐  ┌────────────┐  ┌────────┐  ┌────────┐   │
+│  │ Storage  │  │Transaction │  │ Query  │  │Cluster │   │
+│  │          │  │            │  │        │  │        │   │
+│  │ Hot      │  │ MVCC       │  │ Vector │  │ Raft   │   │
+│  │ Warm     │  │ 2PC        │  │ SIMD   │  │ Replic │   │
+│  │ Cold     │  │ Locks      │  │ Optim  │  │ CDC    │   │
+│  └──────────┘  └────────────┘  └────────┘  └────────┘   │
 └─────────────────────────────────────────────────────────┘
                           ↓
 ┌─────────────────────────────────────────────────────────┐
 │  Layer 4: Storage Backends (Physical Storage)           │
 │  - Memory (Hot)                                         │
 │  - RocksDB (Warm)                                       │
-│  - S3/Azure/MinIO (Cold)                               │
+│  - S3/Azure/MinIO (Cold)                                │
 └─────────────────────────────────────────────────────────┘
 ```
 
 ### Module Organization
 
-```
+```text
 orbit/engine/src/
 ├── adapters/         # Protocol adapters
 │   ├── postgres.rs   # PostgreSQL adapter
@@ -110,9 +110,9 @@ orbit/engine/src/
 
 ### Tiered Storage Architecture
 
-```
+```text
 ┌─────────────────────────────────────────────────────────┐
-│                    Hot Tier (Memory)                     │
+│                    Hot Tier (Memory)                    │
 │  - Last 24-48 hours                                     │
 │  - Row-based format                                     │
 │  - OLTP optimized                                       │
@@ -121,7 +121,7 @@ orbit/engine/src/
 └─────────────────────────────────────────────────────────┘
               ↓ (Age-based migration)
 ┌─────────────────────────────────────────────────────────┐
-│                   Warm Tier (RocksDB)                    │
+│                   Warm Tier (RocksDB)                   │
 │  - 2-30 days                                            │
 │  - Hybrid format                                        │
 │  - Mixed workload                                       │
@@ -130,7 +130,7 @@ orbit/engine/src/
 └─────────────────────────────────────────────────────────┘
               ↓ (Age-based migration)
 ┌─────────────────────────────────────────────────────────┐
-│              Cold Tier (Iceberg/Parquet)                 │
+│              Cold Tier (Iceberg/Parquet)                │
 │  - >30 days                                             │
 │  - Columnar format                                      │
 │  - Analytics optimized                                  │
@@ -174,12 +174,14 @@ pub trait TieredStorage: TableStorage {
 ### Data Migration Strategy
 
 **Automatic Migration**:
+
 - Background process evaluates data age
 - Migrates data between tiers based on configured thresholds
 - Uses timestamp columns for age determination
 - Batch migration to minimize overhead
 
 **Manual Migration**:
+
 - API for explicit tier migration
 - Useful for data lifecycle policies
 - Supports partial migrations with filters
@@ -188,7 +190,7 @@ pub trait TieredStorage: TableStorage {
 
 ### MVCC (Multi-Version Concurrency Control)
 
-```
+```text
 Transaction Timeline:
 
 T1: BEGIN (snapshot_id=100)
@@ -232,7 +234,7 @@ fn is_visible(version: &RowVersion, snapshot: SnapshotId) -> bool {
 
 ### Distributed Transactions (2PC)
 
-```
+```text
 Coordinator                    Participant A              Participant B
     │                              │                          │
     ├─ BEGIN                       │                          │
@@ -241,13 +243,13 @@ Coordinator                    Participant A              Participant B
     │                          PREPARE                    PREPARE
     │                              │                          │
     │                          Vote YES                   Vote YES
-    │  ◄─────────────────────────┼──────────────────────────┤
+    │  ◄─────────────────. ────────┼───────────────────--─────┤
     │                              │                          │
     ├─ Decision: COMMIT            │                          │
     ├─ Commit ─────────────────────┼──────────────────────────┤
     │                              │                          │
     │                          COMMIT                     COMMIT
-    │  ◄─────────────────────────┼──────────────────────────┤
+    │  ◄─────────────────────--────┼───────────────────--─────┤
     │                              │                          │
     ├─ DONE                        │                          │
 ```
@@ -279,16 +281,16 @@ impl DeadlockDetector {
 
 ### Vectorized Execution
 
-```
+```text
 Traditional Row-at-a-Time:
-┌─────┐    ┌─────┐    ┌─────┐
-│ Row │ → │Filter│ → │ Agg │
-└─────┘    └─────┘    └─────┘
+┌─────┐    ┌───-──┐   ┌─────┐
+│ Row │ →  │Filter│ → │ Agg │
+└─────┘    └────-─┘   └─────┘
   1 row      1 row     1 row
 
 Vectorized Batch-at-a-Time:
 ┌──────────┐    ┌──────────┐    ┌──────────┐
-│ Batch    │ → │ Filter   │ → │   Agg    │
+│ Batch    │ →  │ Filter   │ →  │   Agg    │
 │ 1024 rows│    │ 1024 rows│    │ 1024 rows│
 └──────────┘    └──────────┘    └──────────┘
 ```
@@ -313,13 +315,14 @@ for chunk in values.chunks(8) {
 ```
 
 **Performance Gains**:
+
 - 5-10x faster aggregations
 - 3-5x faster filters
 - 2-3x better compression
 
 ### Columnar Format
 
-```
+```text
 Row-Based Storage:
 ┌────┬──────┬───────┐
 │ id │ name │ price │
@@ -354,6 +357,7 @@ Columnar Storage:
 ```
 
 **Benefits**:
+
 - Better compression (similar values together)
 - Cache-friendly for column scans
 - Skip irrelevant columns
@@ -363,7 +367,7 @@ Columnar Storage:
 
 ### Raft Consensus
 
-```
+```text
 Leader Election:
 
 Node A (Leader)     Node B (Follower)   Node C (Follower)
@@ -389,7 +393,7 @@ Node A (Leader)     Node B (Follower)   Node C (Follower)
 
 ### Replication
 
-```
+```text
 Write Path with Replication:
 
 Client
@@ -446,16 +450,16 @@ while let Some(event) = stream.next().await {
 
 **OrbitQL** is a unified query language that combines document, graph, time-series, and key-value operations in a single query. It's designed to access all data stored in orbit-engine across hot/warm/cold tiers.
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────┐
-│                    OrbitQL Query Layer                       │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐   │
-│  │  Parser  │→│ Optimizer │→│  Planner  │→│ Executor  │   │
-│  └──────────┘  └──────────┘  └──────────┘  └──────────┘   │
+│                    OrbitQL Query Layer                      │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐     │
+│  │  Parser  │→│ Optimizer │→│  Planner  │→│ Executor  │     │
+│  └──────────┘  └──────────┘  └──────────┘  └──────────┘     │
 └─────────────────────────────────────────────────────────────┘
                            ↓
 ┌─────────────────────────────────────────────────────────────┐
-│                   OrbitQL Adapter                            │
+│                   OrbitQL Adapter                           │
 │  - Type Mapping (QueryValue ↔ SqlValue)                     │
 │  - Filter Conversion (Expression → FilterPredicate)         │
 │  - Multi-Model Support (Document/Graph/Time-Series)         │
@@ -463,12 +467,13 @@ while let Some(event) = stream.next().await {
 └─────────────────────────────────────────────────────────────┘
                            ↓
 ┌─────────────────────────────────────────────────────────────┐
-│                   Unified Storage Engine                     │
+│                   Unified Storage Engine                    │
 │  Storage (Hot/Warm/Cold) | Transactions | Clustering        │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 **Key Features:**
+
 - **Multi-Model Queries**: Query documents, graphs, and time-series in one query
 - **Cross-Model JOINs**: Relate data between different models seamlessly
 - **Tiered Storage Aware**: Automatically accesses hot/warm/cold tiers
@@ -476,16 +481,19 @@ while let Some(event) = stream.next().await {
 - **ACID Transactions**: Multi-model transaction support
 
 **Example - Document Query:**
+
 ```orbitql
 SELECT * FROM users WHERE age > 18 ORDER BY created_at DESC LIMIT 10;
 ```
 
 **Example - Graph Traversal:**
+
 ```orbitql
 SELECT user->follows->user.name AS friends FROM users WHERE user.id = 123;
 ```
 
 **Example - Time-Series Analytics:**
+
 ```orbitql
 SELECT
     server_id,
@@ -495,6 +503,7 @@ GROUP BY server_id;
 ```
 
 **Example - Cross-Model JOIN:**
+
 ```orbitql
 SELECT
     u.name,
@@ -507,6 +516,7 @@ GROUP BY u.id;
 ```
 
 **Integration:**
+
 ```rust
 use orbit_engine::adapters::{AdapterContext, OrbitQLAdapter};
 use orbit_engine::storage::HybridStorageManager;
@@ -522,6 +532,7 @@ let result = adapter.execute_query(
 ```
 
 **See Also:**
+
 - [OrbitQL Integration Guide](ORBITQL.md) - Complete syntax and examples
 - [orbitql_example.rs](../examples/orbitql_example.rs) - Working examples
 
@@ -576,7 +587,7 @@ impl PostgresAdapter {
 
 ### Write Path
 
-```
+```text
 1. Client Request
    ├─ PostgreSQL: INSERT statement
    ├─ Redis: SET command
@@ -609,7 +620,7 @@ impl PostgresAdapter {
 
 ### Read Path
 
-```
+```text
 1. Client Query
    ├─ PostgreSQL: SELECT with WHERE
    ├─ Redis: GET/HGET
@@ -679,12 +690,14 @@ impl PostgresAdapter {
 **Decision**: Implement automatic tiered storage (hot/warm/cold)
 
 **Rationale**:
+
 - Recent data needs low latency (hot tier)
 - Historical data accessed less frequently (cold tier)
 - Cost optimization: memory expensive, object storage cheap
 - Performance optimization: different formats for different workloads
 
 **Trade-offs**:
+
 - ✅ Lower storage costs (10-100x cheaper for cold tier)
 - ✅ Better query performance (SIMD on columnar)
 - ❌ Additional complexity in migration logic
@@ -695,12 +708,14 @@ impl PostgresAdapter {
 **Decision**: Use Multi-Version Concurrency Control
 
 **Rationale**:
+
 - Readers never block writers
 - Writers never block readers
 - Snapshot isolation provides consistency
 - Better concurrency than 2PL (Two-Phase Locking)
 
 **Trade-offs**:
+
 - ✅ Higher concurrency
 - ✅ No deadlocks between readers/writers
 - ❌ Higher storage overhead (multiple versions)
@@ -711,12 +726,14 @@ impl PostgresAdapter {
 **Decision**: Separate adapter layer instead of native multi-protocol
 
 **Rationale**:
+
 - Clean separation of concerns
 - Easy to add new protocols
 - Unified engine optimizations benefit all protocols
 - Shared transaction/storage layer
 
 **Trade-offs**:
+
 - ✅ Single engine to maintain
 - ✅ Consistent behavior across protocols
 - ✅ Easy protocol extensions
@@ -728,12 +745,14 @@ impl PostgresAdapter {
 **Decision**: Use Raft for distributed consensus
 
 **Rationale**:
+
 - Easier to understand and implement
 - Strong leader simplifies design
 - Well-tested implementations available
 - Better debugging and monitoring
 
 **Trade-offs**:
+
 - ✅ Simpler to reason about
 - ✅ Better tooling and documentation
 - ❌ Slightly lower throughput than Multi-Paxos
@@ -744,6 +763,7 @@ impl PostgresAdapter {
 **Decision**: Use Apache Iceberg for cold tier table format
 
 **Rationale**:
+
 - Schema evolution without rewriting data
 - Time travel queries (snapshot isolation)
 - Hidden partitioning (optimized queries)
@@ -751,6 +771,7 @@ impl PostgresAdapter {
 - Metadata-based query optimization
 
 **Trade-offs**:
+
 - ✅ Production-proven at scale
 - ✅ Advanced features (time travel, schema evolution)
 - ✅ Ecosystem integration

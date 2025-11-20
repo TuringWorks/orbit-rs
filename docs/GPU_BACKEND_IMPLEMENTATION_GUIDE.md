@@ -6,7 +6,7 @@ This guide explains how to implement GPU backends for CUDA (NVIDIA), ROCm (AMD),
 
 The unified GPU backend architecture provides a platform-agnostic interface for GPU acceleration:
 
-```
+```text
 ┌─────────────────────────────────────────────────────────┐
 │           GpuDeviceManager (Auto-Detection)             │
 │  - Detects available GPU APIs on the system             │
@@ -27,7 +27,7 @@ The unified GPU backend architecture provides a platform-agnostic interface for 
 ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
 │MetalDevice   │     │VulkanDevice  │     │CudaDevice    │
 │(macOS)       │     │(All OSs)     │     │(Linux/Win)   │
-│✅ IMPLEMENTED│     │✅ IMPLEMENTED│     │📋 TO DO      │
+│ IMPLEMENTE   │     │ IMPLEMENTED  │     │ TO DO        | 
 └──────────────┘     └──────────────┘     └──────────────┘
 ```
 
@@ -47,6 +47,7 @@ The system auto-selects the best available GPU backend in this order:
 **Location**: `orbit/compute/src/gpu_metal.rs`
 
 **Features**:
+
 - Real device enumeration
 - 24 compute kernels for database operations
 - Zero-copy unified memory
@@ -54,6 +55,7 @@ The system auto-selects the best available GPU backend in this order:
 - Comprehensive test coverage
 
 **Key Implementation Details**:
+
 - Uses `metal` crate (0.29) for Metal framework access
 - Compiles shaders from embedded `.metal` source
 - Thread groups: 256 threads (optimal for Apple GPUs)
@@ -68,6 +70,7 @@ The system auto-selects the best available GPU backend in this order:
 **Platforms**: Linux, Windows, macOS (all platforms)
 
 **Features**:
+
 - Cross-platform GPU support via Vulkan compute API
 - Works on NVIDIA, AMD, and Intel GPUs
 - Implements GpuDevice trait for unified interface
@@ -76,6 +79,7 @@ The system auto-selects the best available GPU backend in this order:
 - 6 GLSL compute shaders with compiled SPIR-V bytecode
 
 **Key Implementation Details**:
+
 - Uses `vulkano` crate (0.34) for safe Vulkan bindings
 - Compiles shaders from GLSL to SPIR-V bytecode
 - Thread groups: 256 threads (optimal for most GPUs)
@@ -84,6 +88,7 @@ The system auto-selects the best available GPU backend in this order:
 
 **GLSL Compute Shaders**:
 Located in `orbit/compute/src/shaders/vulkan/`:
+
 1. `filter_i32.comp` / `.spv` - i32 filter operations (2.8 KB)
 2. `filter_i64.comp` / `.spv` - i64 filter operations (2.9 KB)
 3. `filter_f64.comp` / `.spv` - f64 filter operations (3.4 KB)
@@ -92,17 +97,20 @@ Located in `orbit/compute/src/shaders/vulkan/`:
 6. `aggregate_count.comp` / `.spv` - Parallel count reduction (2.4 KB)
 
 **Shader Compilation**:
+
 ```bash
 # Compile GLSL to SPIR-V using glslangValidator
 glslangValidator -V filter_i32.comp -o filter_i32.spv
 ```
 
 **Current Status**: ✅ Fully implemented with CPU fallback
+
 - VulkanDevice created and tested
 - GLSL shaders written and compiled to SPIR-V
 - Ready for GPU pipeline integration
 
 **Next Steps for GPU Execution**:
+
 1. Load SPIR-V bytecode using `include_bytes!`
 2. Create ShaderModule instances
 3. Build ComputePipeline for each operation
@@ -116,11 +124,13 @@ glslangValidator -V filter_i32.comp -o filter_i32.spv
 **Target Platforms**: Linux, Windows
 
 **Recommended Crates**:
+
 - `cudarc` - Rust CUDA bindings (version 0.11+)
 - `cuda-std` - CUDA standard library for kernel compilation
 
 **File Structure**:
-```
+
+```text
 orbit/compute/src/
 ├── gpu_cuda.rs           # CudaDevice implementation
 └── cuda_kernels/
@@ -132,12 +142,14 @@ orbit/compute/src/
 **Implementation Steps**:
 
 1. **Add Dependencies** (Cargo.toml):
+
 ```toml
 [target.'cfg(any(target_os = "linux", target_os = "windows"))'.dependencies]
 cudarc = { version = "0.11", features = ["std", "f16"], optional = true }
 ```
 
 2. **Create CudaDevice Structure**:
+
 ```rust
 pub struct CudaDevice {
     device: cudarc::driver::CudaDevice,
@@ -147,6 +159,7 @@ pub struct CudaDevice {
 ```
 
 3. **Implement Device Detection**:
+
 ```rust
 pub fn new() -> Result<Self, ComputeError> {
     let device = cudarc::driver::CudaDevice::new(0)?; // First GPU
@@ -161,6 +174,7 @@ pub fn new() -> Result<Self, ComputeError> {
 ```
 
 4. **Write CUDA Kernels** (`filters.cu`):
+
 ```cuda
 extern "C" __global__ void filter_i32_eq(
     const int* data,
@@ -176,6 +190,7 @@ extern "C" __global__ void filter_i32_eq(
 ```
 
 5. **Implement GpuDevice Trait**:
+
 ```rust
 impl GpuDevice for CudaDevice {
     fn execute_filter_i32(&self, data: &[i32], value: i32, op: FilterOp)
@@ -208,6 +223,7 @@ impl GpuDevice for CudaDevice {
 ```
 
 **Performance Optimization Tips**:
+
 - Use `cuBLAS` for aggregations
 - Implement kernel fusion for complex predicates
 - Use shared memory for bitmap operations
@@ -220,11 +236,13 @@ impl GpuDevice for CudaDevice {
 **Target Platforms**: Linux, Windows, macOS (fallback)
 
 **Recommended Crates**:
+
 - `vulkano` - Safe Vulkan bindings (version 0.34+)
 - `ash` - Alternative: Lower-level Vulkan bindings
 
 **File Structure**:
-```
+
+```text
 orbit/compute/src/
 ├── gpu_vulkan.rs          # VulkanDevice implementation
 └── vulkan_shaders/
@@ -236,12 +254,14 @@ orbit/compute/src/
 **Implementation Steps**:
 
 1. **Add Dependencies**:
+
 ```toml
 [dependencies]
 vulkano = { version = "0.34", optional = true }
 ```
 
 2. **Create VulkanDevice Structure**:
+
 ```rust
 pub struct VulkanDevice {
     instance: Arc<Instance>,
@@ -253,6 +273,7 @@ pub struct VulkanDevice {
 ```
 
 3. **Implement Device Detection**:
+
 ```rust
 pub fn new() -> Result<Self, ComputeError> {
     let library = VulkanLibrary::new()?;
@@ -283,6 +304,7 @@ pub fn new() -> Result<Self, ComputeError> {
 ```
 
 4. **Write Compute Shaders** (`filters.comp`):
+
 ```glsl
 #version 450
 
@@ -309,6 +331,7 @@ void main() {
 ```
 
 5. **Implement GpuDevice Trait**:
+
 ```rust
 impl GpuDevice for VulkanDevice {
     fn execute_filter_i32(&self, data: &[i32], value: i32, op: FilterOp)
@@ -385,11 +408,13 @@ impl GpuDevice for VulkanDevice {
 **Target Platform**: Linux with AMD GPUs
 
 **Recommended Approach**:
+
 - Use Vulkan backend as primary AMD support (works on all AMD GPUs)
 - ROCm-specific optimization can come later for HPC scenarios
 - ROCm is primarily for compute-intensive workloads (ML/HPC)
 
 **If Implementing Native ROCm**:
+
 ```rust
 // Use HIP (C++ API) via FFI bindings
 // Similar to CUDA implementation but with HIP runtime
@@ -484,6 +509,7 @@ gpu-all = ["gpu-cuda", "gpu-vulkan"]
 ```
 
 Build for specific GPU:
+
 ```bash
 # NVIDIA GPU (Linux/Windows)
 cargo build --features gpu-cuda
@@ -516,21 +542,21 @@ cargo build --features gpu-all
 
 To add a new backend:
 
-1. Create `orbit/compute/src/gpu_<backend>.rs`
-2. Implement `GpuDevice` trait
-3. Add backend detection to `GpuDeviceManager::is_<backend>_available()`
-4. Add backend creation to `GpuDeviceManager::create_device_for_backend()`
-5. Add shader/kernel source files
-6. Write unit tests matching Metal's test suite
-7. Update Cargo.toml with feature flags and dependencies
+- Create `orbit/compute/src/gpu_<backend>.rs`
+- Implement `GpuDevice` trait
+- Add backend detection to `GpuDeviceManager::is_<backend>_available()`
+- Add backend creation to `GpuDeviceManager::create_device_for_backend()`
+- Add shader/kernel source files
+- Write unit tests matching Metal's test suite
+- Update Cargo.toml with feature flags and dependencies
 
 ---
 
 ## Resources
 
-- **Metal**: https://developer.apple.com/metal/
-- **CUDA**: https://docs.nvidia.com/cuda/
-- **Vulkan**: https://www.khronos.org/vulkan/
-- **ROCm**: https://rocm.docs.amd.com/
-- **cudarc**: https://github.com/coreylowman/cudarc
-- **vulkano**: https://github.com/vulkano-rs/vulkano
+- **Metal**: <https://developer.apple.com/metal/>
+- **CUDA**: <https://docs.nvidia.com/cuda/>
+- **Vulkan**: <https://www.khronos.org/vulkan/>
+- **ROCm**: <https://rocm.docs.amd.com/>
+- **cudarc**: <https://github.com/coreylowman/cudarc>
+- **vulkano**: <https://github.com/vulkano-rs/vulkano>

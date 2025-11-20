@@ -4,9 +4,9 @@ title: OrbitQL Implementation & Documentation Tracking
 category: documentation
 ---
 
-# OrbitQL Implementation & Documentation Tracking
+## OrbitQL Implementation & Documentation Tracking
 
-**Unified Multi-Model Query Language for Orbit-RS**
+## Unified Multi-Model Query Language for Orbit-RS
 
 [![Implementation Status](https://img.shields.io/badge/Status-Production%20Ready-brightgreen.svg)](#implementation-status)
 [![Documentation](https://img.shields.io/badge/Docs-Complete-blue.svg)](#documentation-status)
@@ -35,7 +35,7 @@ category: documentation
 
 ### **Core Implementation** `/orbit/shared/src/orbitql/`
 
-```
+```text
 📁 orbit/shared/src/orbitql/
 ├── 📄 mod.rs                    # Main module with OrbitQLEngine
 ├── 📄 ast.rs                    # Abstract Syntax Tree definitions
@@ -57,7 +57,7 @@ category: documentation
 
 ### **Language Server & IDE Support**
 
-```
+```text
 📁 orbit/shared/src/bin/
 ├── 📄 orbitql-lsp.rs           # Full LSP server implementation
 └── 📄 orbitql-lsp-simple.rs    # Simplified LSP server
@@ -73,7 +73,7 @@ category: documentation
 
 ### **Examples & Demonstrations**
 
-```
+```text
 📁 examples/
 ├── 📄 test.oql                 # Sample OrbitQL queries
 └── 📁 orbitql-example/         # Comprehensive example app

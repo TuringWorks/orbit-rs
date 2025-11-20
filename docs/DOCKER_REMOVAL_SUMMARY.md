@@ -4,7 +4,7 @@ title: Docker Removal Summary
 category: documentation
 ---
 
-# Docker Removal Summary
+## Docker Removal Summary
 
 ## Changes Made
 

@@ -6,9 +6,9 @@ category: "performance"
 permalink: /compute-acceleration/
 ---
 
-# Hardware Acceleration Guide
+## Hardware Acceleration Guide
 
-**Orbit-Compute: Heterogeneous Computing for Maximum Performance**
+### Orbit-Compute: Heterogeneous Computing for Maximum Performance
 
 **Status**: ✅ Production Ready  
 **Updated**: 2025-10-09  

@@ -21,6 +21,7 @@ Protocol adapters bridge protocol-specific requests to Orbit Engine's unified st
 ### Why Protocol Adapters?
 
 **Problem**: Different database protocols have:
+
 - Different data types (PostgreSQL SMALLINT vs Redis strings)
 - Different command semantics (SQL INSERT vs Redis SET)
 - Different transaction models (ACID vs eventual consistency)
@@ -33,7 +34,7 @@ Protocol adapters bridge protocol-specific requests to Orbit Engine's unified st
 ```text
 ┌─────────────────────────────────────────────────────────────┐
 │              Client Applications                            │
-│   psql │ redis-cli │ mongo shell │ cqlsh │ custom          │
+│   psql │ redis-cli │ mongo shell │ cqlsh │ custom           │
 └─────────────────────────────────────────────────────────────┘
                            │
                            ▼
@@ -45,15 +46,15 @@ Protocol adapters bridge protocol-specific requests to Orbit Engine's unified st
                            ▼
 ┌─────────────────────────────────────────────────────────────┐
 │           Protocol Adapters (orbit/engine/adapters)         │
-│  ┌────────────┐  ┌────────────┐  ┌────────────┐            │
-│  │ PostgreSQL │  │   Redis    │  │  MongoDB   │  ...       │
-│  │  Adapter   │  │  Adapter   │  │  Adapter   │            │
-│  └────────────┘  └────────────┘  └────────────┘            │
+│  ┌────────────┐  ┌────────────┐  ┌────────────┐             │
+│  │ PostgreSQL │  │   Redis    │  │  MongoDB   │  ...        │
+│  │  Adapter   │  │  Adapter   │  │  Adapter   │             │
+│  └────────────┘  └────────────┘  └────────────┘             │
 └─────────────────────────────────────────────────────────────┘
                            │
                            ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                    Orbit Engine Core                         │
+│                    Orbit Engine Core                        │
 │  Storage | Transactions | Clustering | Query Execution      │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -703,4 +704,4 @@ When creating a new adapter:
 
 ---
 
-**Questions?** Open an issue at https://github.com/orbit-rs/orbit/issues
+**Questions?** Open an issue at <https://github.com/orbit-rs/orbit/issues>

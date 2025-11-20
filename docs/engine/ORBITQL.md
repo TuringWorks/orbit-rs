@@ -47,9 +47,9 @@ OrbitQL provides a **unified query interface** for all data stored in Orbit, reg
                            ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                    OrbitQL Layer                            │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐  │
-│  │  Parser  │→│ Optimizer │→│  Planner  │→│ Executor  │  │
-│  └──────────┘  └──────────┘  └──────────┘  └──────────┘  │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐     │
+│  │  Parser  │-→│ Optimizer│-→│  Planner │-→│ Executor │     │
+│  └──────────┘  └──────────┘  └──────────┘  └──────────┘     │
 └─────────────────────────────────────────────────────────────┘
                            │
                            ▼
@@ -60,7 +60,7 @@ OrbitQL provides a **unified query interface** for all data stored in Orbit, reg
                            │
                            ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                    Orbit Engine Core                         │
+│                    Orbit Engine Core                        │
 │  Storage (Hot/Warm/Cold) | Transactions | Clustering        │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -455,7 +455,8 @@ EVERY 10s;
 
 ### Optimization Tips
 
-**1. Use Appropriate Filters**
+#### 1. Use Appropriate Filters
+
 ```orbitql
 -- Good: Filter pushdown to storage tier
 SELECT * FROM orders WHERE created_at > NOW() - 1d;
@@ -464,7 +465,8 @@ SELECT * FROM orders WHERE created_at > NOW() - 1d;
 SELECT * FROM orders;  -- Then filter in app
 ```
 
-**2. Leverage Indexes**
+#### 2. Leverage Indexes
+
 ```orbitql
 -- Create index for frequent queries
 CREATE INDEX idx_orders_customer ON orders(customer_id, created_at);
@@ -473,7 +475,8 @@ CREATE INDEX idx_orders_customer ON orders(customer_id, created_at);
 SELECT * FROM orders WHERE customer_id = 123;
 ```
 
-**3. Use Projections**
+#### 3. Use Projections
+
 ```orbitql
 -- Good: Select only needed columns
 SELECT id, name, email FROM users;
@@ -482,7 +485,8 @@ SELECT id, name, email FROM users;
 SELECT * FROM users;
 ```
 
-**4. Batch Operations**
+#### 4. Batch Operations
+
 ```orbitql
 -- Good: Single batch insert
 INSERT INTO users VALUES (1, "A"), (2, "B"), (3, "C");
@@ -558,6 +562,7 @@ A: Yes, through the OrbitQL wire protocol (orbit/protocols) or REST API.
 ---
 
 **Related Documentation:**
+
 - [Protocol Adapters Guide](ADAPTERS.md)
 - [Deployment Guide](DEPLOYMENT.md)
 - [Architecture Overview](ARCHITECTURE.md)

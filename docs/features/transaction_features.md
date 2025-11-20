@@ -4,7 +4,7 @@ title: Advanced Transaction Features
 category: features
 ---
 
-# Advanced Transaction Features
+## Advanced Transaction Features
 
 ## Overview
 
@@ -124,6 +124,7 @@ let metrics = TransactionMetrics::new(node_id);
 ### Metrics Exported
 
 #### Counters
+
 - `transaction.started.total` - Total number of transactions started
 - `transaction.committed.total` - Total number of successful commits
 - `transaction.aborted.total` - Total number of aborted transactions
@@ -132,12 +133,14 @@ let metrics = TransactionMetrics::new(node_id);
 - `deadlocks.detected.total` - Total number of deadlocks detected
 
 #### Gauges
+
 - `transaction.active` - Current number of active transactions
 - `locks.held.count` - Current number of locks held
 - `saga.queued` - Current number of queued saga operations
 - `coordinator.nodes.count` - Number of active coordinator nodes
 
 #### Histograms
+
 - `transaction.duration.seconds` - Transaction execution time distribution
 - `locks.wait.duration.seconds` - Lock acquisition wait time distribution
 - `saga.step.duration.seconds` - Individual saga step execution times
@@ -185,18 +188,21 @@ security_mgr.audit_log_entry(tx_id, "COMMIT", "success").await?;
 ### Security Features
 
 #### Authentication
+
 - **Token-based Authentication**: JWT-style tokens with configurable expiration
 - **Multi-factor Support**: Integration with enterprise identity providers
 - **Service-to-Service**: Mutual TLS and certificate-based authentication
 - **API Keys**: Long-lived credentials for service accounts
 
 #### Authorization
+
 - **Scope-based Authorization**: Fine-grained permissions with hierarchical scopes
 - **Role-based Access Control**: Support for role inheritance and delegation
 - **Resource-level Permissions**: Per-transaction and per-actor authorization
 - **Dynamic Policy Evaluation**: Runtime policy evaluation with context awareness
 
 #### Audit Logging
+
 - **Immutable Audit Logs**: Tamper-proof audit trails for compliance
 - **Comprehensive Logging**: Every transaction operation is logged with context
 - **Forensic Analysis**: Rich metadata for security incident investigation
@@ -253,12 +259,14 @@ saga.execute().await?;
 ### Saga Features
 
 #### Workflow Management
+
 - **Automatic Compensation**: Automatic rollback using compensating actions
 - **Step-by-step Execution**: Granular control over workflow progression
 - **State Persistence**: Durable saga state for reliability across failures
 - **Event-driven Coordination**: Integration with event streaming systems
 
 #### Error Handling
+
 - **Partial Failure Recovery**: Smart recovery from partial execution failures
 - **Retry Mechanisms**: Configurable retry policies for transient failures
 - **Circuit Breakers**: Protection against cascading failures
@@ -312,18 +320,21 @@ let guard = resource_mgr.acquire(memory_estimate).await?;
 ### Optimization Features
 
 #### Batch Processing
+
 - **Adaptive Batch Sizing**: Dynamic batch size adjustment based on system load
 - **Priority Queues**: Support for prioritized operation processing
 - **Compression**: Automatic compression of large batches to reduce network overhead
 - **Parallel Processing**: Multi-threaded batch processing for improved throughput
 
 #### Connection Management
+
 - **Generic Connection Pooling**: Reusable connection pool implementation
 - **Health Checks**: Continuous monitoring of connection health
 - **Load Balancing**: Intelligent distribution of connections across nodes
 - **Circuit Breakers**: Protection against overloaded or failed nodes
 
 #### Resource Management
+
 - **Memory Limiting**: Configurable memory usage limits with spill-to-disk
 - **Concurrency Control**: Fine-grained control over concurrent operations
 - **RAII Resource Guards**: Automatic cleanup of acquired resources
@@ -359,18 +370,21 @@ let config = TransactionConfig {
 ## Best Practices
 
 ### Transaction Design
+
 1. **Keep Transactions Short**: Minimize transaction duration to reduce lock contention
 2. **Batch Operations**: Group related operations to reduce coordination overhead
 3. **Use Saga for Long Workflows**: Prefer saga pattern for operations spanning multiple services
 4. **Implement Idempotency**: Ensure operations can be safely retried
 
-### Error Handling
+### Transaction Error Handling
+
 1. **Plan for Failures**: Design compensating actions for all operations
 2. **Use Circuit Breakers**: Protect against cascading failures
 3. **Implement Proper Timeouts**: Set appropriate timeouts for all operations
 4. **Monitor and Alert**: Set up comprehensive monitoring and alerting
 
 ### Security
+
 1. **Principle of Least Privilege**: Grant minimal required permissions
 2. **Audit Everything**: Log all transaction operations for compliance
 3. **Secure Communications**: Use TLS for all inter-node communication

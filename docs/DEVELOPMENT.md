@@ -4,7 +4,7 @@ title: Orbit-RS Development Workflow
 category: documentation
 ---
 
-# Orbit-RS Development Workflow
+## Orbit-RS Development Workflow
 
 This document outlines the development workflow and best practices for contributing to Orbit-RS.
 

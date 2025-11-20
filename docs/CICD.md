@@ -4,7 +4,7 @@ title: CI/CD Pipeline Documentation
 category: documentation
 ---
 
-# CI/CD Pipeline Documentation
+## CI/CD Pipeline Documentation
 
 ## Overview
 
@@ -264,27 +264,27 @@ cargo build --target aarch64-apple-darwin --release
 
 ### Common Issues
 
-**1. Build failures**
+#### 1. Build failures
 
 - Check Rust toolchain compatibility
 - Verify all features are available on target platform
 - Review dependency issues in logs
 
-**2. Helm validation failures**
+#### 2. Helm validation failures
 
 - Ensure `helm/orbit-rs/` directory exists
 - Validate Chart.yaml syntax
 - Check template rendering
 
-**3. Security scan failures**
+#### 3. Security scan failures
 
 - Review cargo-audit output
 - Update vulnerable dependencies
 - Add exceptions for known false positives
 
-**4. Kubernetes Container Pipeline failures**
+#### 4. Kubernetes Container Pipeline failures
 
-*Issue: "no targets specified in the manifest" error*
+#### Issue: "no targets specified in the manifest" error
 
 - **Cause**: The sparse checkout in `.github/workflows/k8s-container-pipeline.yml` is missing required workspace members
 - **Symptom**: Build fails with error like `failed to load manifest for workspace member`

@@ -4,9 +4,9 @@ title: OrbitQL Machine Learning Guide
 category: documentation
 ---
 
-# OrbitQL Machine Learning Guide
+## OrbitQL Machine Learning Guide
 
-**Complete guide to using ML functions and boosting algorithms in OrbitQL**
+### Complete guide to using ML functions and boosting algorithms in OrbitQL
 
 ## 🎯 **Overview**
 

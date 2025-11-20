@@ -17,6 +17,7 @@ This guide explains how to migrate existing protocol implementations from `orbit
 ### What's Changing?
 
 **Before** (orbit/protocols):
+
 ```text
 orbit/protocols/src/
 ├── postgres_wire/
@@ -34,6 +35,7 @@ orbit/protocols/src/
 ```
 
 **After** (orbit/engine):
+
 ```text
 orbit/engine/src/
 ├── storage/                # Core storage (hot/warm/cold tiers)
@@ -49,6 +51,7 @@ orbit/engine/src/
 ### Why Migrate?
 
 **Benefits**:
+
 - ✅ **Unified storage**: All protocols use the same storage engine
 - ✅ **Tiered storage**: Automatic hot/warm/cold tier management
 - ✅ **Better transactions**: Shared MVCC implementation
@@ -473,6 +476,7 @@ pub async fn handle_connection(stream: TcpStream) -> Result<()> {
 ### 1. Storage API Changes
 
 **Old API** (orbit/protocols):
+
 ```rust
 // Before
 let storage = MemoryTableStorage::new();
@@ -480,6 +484,7 @@ storage.insert("users", row).await?;
 ```
 
 **New API** (orbit/engine):
+
 ```rust
 // After
 let storage = HybridStorageManager::new_in_memory();
@@ -491,11 +496,13 @@ storage.insert_row("users", row).await?;
 ### 2. Error Types
 
 **Old API**:
+
 ```rust
 use crate::postgres_wire::error::ProtocolError;
 ```
 
 **New API**:
+
 ```rust
 use orbit_engine::error::EngineError;
 ```
@@ -516,12 +523,14 @@ pub fn engine_error_to_protocol_error(error: EngineError) -> ProtocolError {
 ### 3. Transaction IDs
 
 **Old API**:
+
 ```rust
 // Before: numeric transaction IDs
 let tx_id: u64 = executor.begin_transaction().await?;
 ```
 
 **New API**:
+
 ```rust
 // After: UUID-based transaction IDs
 let tx_id: String = adapter.begin_transaction(isolation_level).await?;
@@ -532,6 +541,7 @@ let tx_id: String = adapter.begin_transaction(isolation_level).await?;
 ### 4. Filter/Predicate API
 
 **Old API**:
+
 ```rust
 // Before
 pub enum Filter {
@@ -542,6 +552,7 @@ pub enum Filter {
 ```
 
 **New API**:
+
 ```rust
 // After
 use orbit_engine::storage::FilterPredicate;
@@ -674,6 +685,7 @@ orbit/protocols/src/
 ## Migration Checklist
 
 ### PostgreSQL Protocol
+
 - [ ] Update Cargo.toml dependencies
 - [ ] Create adapter integration module
 - [ ] Update wire protocol handler to use PostgresAdapter
@@ -685,6 +697,7 @@ orbit/protocols/src/
 - [ ] Remove old storage code (after verification)
 
 ### Redis Protocol
+
 - [ ] Update Cargo.toml dependencies
 - [ ] Create adapter integration module
 - [ ] Update RESP handler to use RedisAdapter
@@ -696,12 +709,14 @@ orbit/protocols/src/
 - [ ] Remove old in-memory HashMap storage
 
 ### OrbitQL Protocol
+
 - [ ] Create OrbitQLAdapter
 - [ ] Update query parser
 - [ ] Update execution engine
 - [ ] Run integration tests
 
 ### Documentation
+
 - [ ] Update protocol README files
 - [ ] Update API documentation
 - [ ] Add migration examples
@@ -750,4 +765,4 @@ Remove old dependencies from `orbit/protocols/Cargo.toml`:
 
 ---
 
-**Questions?** Open an issue at https://github.com/orbit-rs/orbit/issues
+**Questions?** Open an issue at <https://github.com/orbit-rs/orbit/issues>

@@ -4,7 +4,7 @@ title: Complete GraphRAG Integration Summary
 category: documentation
 ---
 
-# Complete GraphRAG Integration Summary
+## Complete GraphRAG Integration Summary
 
 ## Overview
 

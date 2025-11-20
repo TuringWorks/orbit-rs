@@ -5,7 +5,7 @@ subtitle: "How to contribute to the Orbit-RS project"
 category: "contributing"
 ---
 
-# Contributing to Orbit-RS
+## Contributing to Orbit-RS
 
 Thank you for your interest in contributing to Orbit-RS! This document provides guidelines and information about contributing to the project.
 

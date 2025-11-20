@@ -4,7 +4,7 @@ title: Orbit-RS Testing Strategy
 category: development
 ---
 
-# Orbit-RS Testing Strategy
+## Orbit-RS Testing Strategy
 
 This document outlines the comprehensive testing strategy for Orbit-RS, including Test-Driven Development (TDD), Behavior-Driven Development (BDD), and feature-gated testing approach.
 
@@ -43,6 +43,7 @@ graphrag-features = []
 ### Test Categories
 
 #### 1. Mock Tests (Always Available)
+
 ```bash
 
 # Run all mock tests
@@ -53,13 +54,15 @@ cargo test --features "neo4j-features" --lib neo4j::
 cargo test --features "graphml-features" --lib graphml::
 ```
 
-**Purpose**: 
+**Purpose**:
+
 - Validate API design and contracts
 - Enable TDD before implementation exists
 - Serve as executable documentation
 - Provide immediate feedback during development
 
 #### 2. Unit Tests (Implementation-Gated)
+
 ```bash
 
 # Run when implementation is ready
@@ -67,12 +70,14 @@ cargo test --features "neo4j-features" --test neo4j_integration
 ```
 
 **Purpose**:
+
 - Test individual components in isolation
 - Validate business logic correctness
 - Ensure error handling robustness
 - Drive implementation through failing tests
 
 #### 3. BDD/Cucumber Tests (User-Focused)
+
 ```bash
 
 # Run BDD feature tests
@@ -80,12 +85,14 @@ cargo test --features "neo4j-features" --test neo4j_integration
 ```
 
 **Purpose**:
+
 - Validate user-facing behavior
 - Ensure feature completeness
 - Bridge communication between stakeholders
 - Regression testing for user workflows
 
 #### 4. Property-Based Tests (Edge Case Discovery)
+
 ```bash
 
 # Run property-based tests
@@ -93,12 +100,14 @@ cargo test --features "neo4j-features" --test neo4j_integration
 ```
 
 **Purpose**:
+
 - Automatically discover edge cases
 - Validate invariants and properties
 - Test with large input ranges
 - Catch subtle bugs missed by example-based tests
 
 #### 5. Performance Tests (Benchmark Validation)
+
 ```bash
 
 # Run performance benchmarks
@@ -106,6 +115,7 @@ cargo test --features "neo4j-features" --test neo4j_integration
 ```
 
 **Purpose**:
+
 - Validate performance requirements
 - Detect performance regressions
 - Compare algorithm implementations
@@ -113,7 +123,7 @@ cargo test --features "neo4j-features" --test neo4j_integration
 
 ## 📂 Test Organization
 
-```
+```text
 tests/
 ├── Cargo.toml                    # Feature flags and dependencies
 ├── features/                     # BDD feature files

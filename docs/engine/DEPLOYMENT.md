@@ -27,10 +27,10 @@ Orbit Engine consists of several layers that can be deployed and scaled independ
                            ▼
 ┌─────────────────────────────────────────────────────────────┐
 │              Orbit Engine Cluster Nodes                     │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐                 │
-│  │  Node 1  │  │  Node 2  │  │  Node 3  │  (Raft)         │
-│  │ (Leader) │  │(Follower)│  │(Follower)│                 │
-│  └──────────┘  └──────────┘  └──────────┘                 │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐                   │
+│  │  Node 1  │  │  Node 2  │  │  Node 3  │  (Raft)           │
+│  │ (Leader) │  │(Follower)│  │(Follower)│                   │
+│  └──────────┘  └──────────┘  └──────────┘                   │
 └─────────────────────────────────────────────────────────────┘
                            │
                            ▼
@@ -67,11 +67,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ```
 
 **Pros**:
+
 - Simple setup
 - Low resource requirements
 - Fast for development
 
 **Cons**:
+
 - No high availability
 - Limited by single node resources
 - Data loss if node fails
@@ -136,16 +138,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ```
 
 **Recommended Setup**:
+
 - 3-5 nodes for optimal Raft consensus
 - Odd number of nodes to avoid split-brain
 - Nodes distributed across availability zones
 
 **Pros**:
+
 - High availability
 - Automatic failover
 - Horizontal scalability
 
 **Cons**:
+
 - More complex setup
 - Higher resource requirements
 
@@ -161,8 +166,8 @@ Region 1 (us-east-1)          Region 2 (eu-west-1)
 └─────────────────┘          └─────────────────┘
         │                             │
         ▼                             ▼
-    S3 Bucket                  S3 Bucket
-   (us-east-1)                (eu-west-1)
+    S3 Bucket                    S3 Bucket
+   (us-east-1)                  (eu-west-1)
 ```
 
 **Configuration**:
@@ -185,11 +190,13 @@ cdc_publisher.start().await?;
 ```
 
 **Pros**:
+
 - Low latency globally
 - Disaster recovery
 - Data sovereignty compliance
 
 **Cons**:
+
 - Complex setup
 - Network latency between regions
 - Higher costs
@@ -296,6 +303,7 @@ tracing_endpoint = "http://jaeger:14268/api/traces"
 ### AWS S3
 
 **Prerequisites**:
+
 - AWS account with S3 access
 - IAM role or access keys with S3 permissions
 
@@ -323,6 +331,7 @@ tracing_endpoint = "http://jaeger:14268/api/traces"
 ```
 
 **Best Practices**:
+
 - Use IAM roles for EC2 instances instead of access keys
 - Enable versioning for disaster recovery
 - Configure lifecycle policies for archival
@@ -331,6 +340,7 @@ tracing_endpoint = "http://jaeger:14268/api/traces"
 ### Azure Blob Storage
 
 **Prerequisites**:
+
 - Azure Storage Account
 - Container created for Iceberg tables
 
@@ -347,6 +357,7 @@ let backend = StorageBackend::Azure(AzureConfig {
 ```
 
 **Best Practices**:
+
 - Use Cool or Archive tier for historical data
 - Enable soft delete for disaster recovery
 - Use Azure Private Link for security
@@ -355,6 +366,7 @@ let backend = StorageBackend::Azure(AzureConfig {
 ### MinIO (Self-Hosted)
 
 **Prerequisites**:
+
 - MinIO server running
 - Bucket created
 
@@ -429,7 +441,7 @@ curl http://node-1:9090/cluster/status
 
 **HAProxy Configuration** (haproxy.cfg):
 
-```
+```text
 frontend postgres_frontend
     bind *:5432
     mode tcp
@@ -522,6 +534,7 @@ scrape_configs:
 Import the Orbit Engine dashboard (dashboard.json):
 
 **Key Panels**:
+
 - Storage tier distribution
 - Transaction throughput
 - Query latency (p50, p95, p99)
@@ -716,7 +729,7 @@ systemctl start orbit-engine
 
 ### Common Issues
 
-**Issue: High replication lag**
+#### Issue: High replication lag
 
 ```bash
 # Check replication status
@@ -726,7 +739,7 @@ curl http://node-1:9090/cluster/replication
 CDC_BATCH_SIZE=5000
 ```
 
-**Issue: Slow queries**
+#### Issue: Slow queries
 
 ```bash
 # Enable query logging
@@ -740,7 +753,7 @@ SIMD_ENABLED=true
 QUERY_EXECUTOR_THREADS=16
 ```
 
-**Issue: Leader election failures**
+#### Issue: Leader election failures
 
 ```bash
 # Increase election timeout

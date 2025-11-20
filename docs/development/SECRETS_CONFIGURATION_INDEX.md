@@ -4,9 +4,9 @@ title: GitHub Secrets Configuration - Complete Index
 category: development
 ---
 
-# GitHub Secrets Configuration - Complete Index
+## GitHub Secrets Configuration - Complete Index
 
-**Quick Navigation Guide for Configuring GitHub Actions Secrets**
+### Quick Navigation Guide for Configuring GitHub Actions Secrets
 
 ---
 
@@ -15,13 +15,14 @@ category: development
 **If you just want to configure secrets quickly:**
 
 1. **Run the automated script:**
+
    ```bash
    ./scripts/prepare-secrets.sh staging
    ./scripts/prepare-secrets.sh production
    ```
 
 2. **Add to GitHub:**
-   - Go to: https://github.com/TuringWorks/orbit-rs/settings/secrets/actions
+   - Go to: <https://github.com/TuringWorks/orbit-rs/settings/secrets/actions>
    - Add `KUBE_CONFIG_STAGING` (paste from `staging-kubeconfig-base64.txt`)
    - Add `KUBE_CONFIG_PRODUCTION` (paste from `production-kubeconfig-base64.txt`)
 
@@ -34,9 +35,11 @@ category: development
 ### Main Documents
 
 #### 1. Secrets Configuration Guide (Comprehensive)
+
 **File:** `docs/SECRETS_CONFIGURATION_GUIDE.md` (~500 lines)
 
 **Read this for:**
+
 - Complete step-by-step walkthrough
 - Understanding what secrets are needed
 - Manual configuration instructions
@@ -44,6 +47,7 @@ category: development
 - Troubleshooting help
 
 **Key sections:**
+
 - Required secrets overview
 - Kubeconfig preparation methods
 - Service account creation (recommended)
@@ -57,9 +61,11 @@ category: development
 ---
 
 #### 2. Implementation Summary (Overview)
+
 **File:** `SECRETS_CONFIGURATION_IMPLEMENTATION_SUMMARY.md` (~400 lines)
 
 **Read this for:**
+
 - Complete overview of what was implemented
 - Quick start checklist
 - Verification steps
@@ -67,6 +73,7 @@ category: development
 - Summary statistics
 
 **Key sections:**
+
 - What can/cannot be automated
 - Required secrets reference
 - Quick start guide
@@ -80,15 +87,18 @@ category: development
 ---
 
 #### 3. Workflow Fix Documentation
+
 **File:** `WORKFLOW_FIX_SUMMARY.md` (~230 lines)
 
 **Read this for:**
+
 - Understanding the workflow syntax error
 - Why secrets can't be checked in conditionals
 - Alternative approaches
 - Technical details
 
 **Key sections:**
+
 - Problem description
 - Root cause analysis
 - Solution implementation
@@ -102,9 +112,11 @@ category: development
 ### Supporting Documentation
 
 #### 4. Scripts Documentation
+
 **File:** `scripts/README.md`
 
 **Read this for:**
+
 - Overview of available scripts
 - Usage examples
 - Best practices for scripts
@@ -114,9 +126,11 @@ category: development
 ---
 
 #### 5. Main Documentation Index
+
 **File:** `docs/README.md`
 
 **Read this for:**
+
 - Complete project documentation index
 - Links to all guides
 
@@ -129,15 +143,18 @@ category: development
 ## 🛠️ Automation Tools
 
 ### prepare-secrets.sh
+
 **Location:** `scripts/prepare-secrets.sh`
 
 **What it does:**
+
 - Interactively prepares kubeconfig files for GitHub secrets
 - Creates Kubernetes service accounts with minimal RBAC
 - Tests connection and permissions
 - Outputs base64-encoded kubeconfig ready for GitHub
 
 **Usage:**
+
 ```bash
 
 # Interactive mode (recommended)
@@ -148,6 +165,7 @@ category: development
 ```
 
 **Features:**
+
 - ✅ Interactive kubectl context selection
 - ✅ Two methods: simple (existing config) or secure (service account)
 - ✅ Automatic service account creation
@@ -157,11 +175,13 @@ category: development
 - ✅ Security validations
 
 **Output:**
+
 - `{environment}-kubeconfig-base64.txt` file
 - Step-by-step instructions
 - Verification commands
 
 **Requirements:**
+
 - `kubectl` installed and configured
 - Access to target Kubernetes cluster
 - Permissions to create service accounts (for secure method)
@@ -173,9 +193,11 @@ category: development
 ## 🎯 By Use Case
 
 ### Use Case 1: First Time Setup
-**I'm setting up secrets for the first time**
+
+#### I'm setting up secrets for the first time
 
 → **Start here:**
+
 1. Read: [Secrets Configuration Guide - Prerequisites](docs/SECRETS_CONFIGURATION_GUIDE.md#prerequisites)
 2. Run: `./scripts/prepare-secrets.sh staging`
 3. Follow: [Quick Start Guide](../wip/SECRETS_CONFIGURATION_IMPLEMENTATION_SUMMARY.md#quick-start-guide)
@@ -184,9 +206,11 @@ category: development
 ---
 
 ### Use Case 2: Understanding the Workflow Fix
-**I want to know what was changed in the workflow**
+
+#### I want to know what was changed in the workflow
 
 → **Start here:**
+
 1. Read: [Workflow Fix Summary](../wip/WORKFLOW_FIX_SUMMARY.md)
 2. Review: [CI/CD Workflow](.github/workflows/ci-cd.yml) lines 183, 223
 3. Understand: [Why secrets can't be in conditionals](../wip/WORKFLOW_FIX_SUMMARY.md#root-cause)
@@ -194,9 +218,11 @@ category: development
 ---
 
 ### Use Case 3: Security Best Practices
-**I want to configure secrets securely**
+
+#### I want to configure secrets securely
 
 → **Start here:**
+
 1. Read: [Security Best Practices](docs/SECRETS_CONFIGURATION_GUIDE.md#security-best-practices)
 2. Use: [Service Account Method](docs/SECRETS_CONFIGURATION_GUIDE.md#method-2-service-account-recommended)
 3. Review: [Security Features](SECRETS_CONFIGURATION_IMPLEMENTATION_SUMMARY.md#security-features)
@@ -205,9 +231,11 @@ category: development
 ---
 
 ### Use Case 4: Troubleshooting
-**Something isn't working**
+
+#### Something isn't working
 
 → **Start here:**
+
 1. Check: [Common Issues](SECRETS_CONFIGURATION_IMPLEMENTATION_SUMMARY.md#common-issues-and-solutions)
 2. Review: [Troubleshooting Guide](docs/SECRETS_CONFIGURATION_GUIDE.md#troubleshooting)
 3. Verify: [Verification Steps](SECRETS_CONFIGURATION_IMPLEMENTATION_SUMMARY.md#verification-steps)
@@ -215,9 +243,11 @@ category: development
 ---
 
 ### Use Case 5: Production Deployment
-**I'm ready to deploy to production**
+
+#### I'm ready to deploy to production
 
 → **Start here:**
+
 1. Prepare: `./scripts/prepare-secrets.sh production`
 2. Configure: [Production Secret](docs/SECRETS_CONFIGURATION_GUIDE.md#2-add-kube_config_production)
 3. Set up: [Environment Protection](docs/SECRETS_CONFIGURATION_GUIDE.md#environment-protection-rules)
@@ -228,6 +258,7 @@ category: development
 ## 📋 Checklists
 
 ### Pre-Configuration Checklist
+
 Before configuring secrets:
 
 - [ ] `kubectl` installed and configured
@@ -238,6 +269,7 @@ Before configuring secrets:
 - [ ] Read [Security Best Practices](docs/SECRETS_CONFIGURATION_GUIDE.md#security-best-practices)
 
 ### Configuration Checklist
+
 During configuration:
 
 - [ ] Run `./scripts/prepare-secrets.sh staging`
@@ -250,6 +282,7 @@ During configuration:
 - [ ] Delete sensitive files: `rm *-kubeconfig-base64.txt`
 
 ### Post-Configuration Checklist
+
 After configuration:
 
 - [ ] Verify secrets appear in GitHub UI
@@ -307,6 +340,7 @@ After configuration:
 ## 🎓 Learning Path
 
 ### Beginner Path (30 minutes)
+
 If you're new to GitHub Actions secrets and Kubernetes:
 
 1. **Understand the basics** (10 min)
@@ -323,6 +357,7 @@ If you're new to GitHub Actions secrets and Kubernetes:
 ---
 
 ### Intermediate Path (1 hour)
+
 If you want to understand security best practices:
 
 1. **Deep dive on security** (20 min)
@@ -341,6 +376,7 @@ If you want to understand security best practices:
 ---
 
 ### Advanced Path (2 hours)
+
 If you want to customize or extend the setup:
 
 1. **Workflow internals** (30 min)
@@ -395,7 +431,7 @@ If you want to customize or extend the setup:
 
 ## 🗺️ Document Relationships
 
-```
+```text
 SECRETS_CONFIGURATION_INDEX.md (you are here)
 │
 ├── Quick Start → SECRETS_CONFIGURATION_IMPLEMENTATION_SUMMARY.md
@@ -427,6 +463,7 @@ SECRETS_CONFIGURATION_INDEX.md (you are here)
 ## ✅ Next Actions
 
 **Immediate (Required):**
+
 1. Run `./scripts/prepare-secrets.sh staging`
 2. Add `KUBE_CONFIG_STAGING` to GitHub
 3. Run `./scripts/prepare-secrets.sh production`
@@ -434,12 +471,14 @@ SECRETS_CONFIGURATION_INDEX.md (you are here)
 5. Test deployment
 
 **Soon (Recommended):**
+
 1. Set up environment protection for production
 2. Add required reviewers
 3. Configure deployment notifications
 4. Document rollback procedures
 
 **Later (Maintenance):**
+
 1. Schedule secret rotation (every 90 days)
 2. Review RBAC permissions (quarterly)
 3. Update documentation as needed
