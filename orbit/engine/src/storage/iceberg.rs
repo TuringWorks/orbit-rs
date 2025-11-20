@@ -162,9 +162,18 @@ impl IcebergColdStore {
     /// does not currently expose a `snapshot_by_timestamp()` or `snapshots()` method
     /// to iterate through historical snapshots.
     ///
+    /// ## Alternative Implementations
+    ///
+    /// See `orbit/engine/ICEBERG_ALTERNATIVES.md` for detailed analysis of:
+    /// - **Icelake**: Complete Rust Iceberg implementation (likely has snapshot API)
+    /// - **Lakekeeper**: Rust-native REST catalog for metadata management
+    /// - **Query Engine Integration**: Trino/Dremio/StarRocks for time travel
+    ///
+    /// **Recommendation**: Evaluate Icelake as potential replacement for iceberg-rust.
+    ///
     /// # Future Implementation
     ///
-    /// When the iceberg-rust API provides snapshot access, implement as follows:
+    /// When the iceberg-rust API (or Icelake) provides snapshot access, implement as follows:
     ///
     /// ```rust,ignore
     /// // 1. Convert timestamp to milliseconds

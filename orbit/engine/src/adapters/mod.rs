@@ -147,11 +147,19 @@
 //! **Fallback Behavior**: Time travel queries currently return the latest snapshot (current data)
 //! until the upstream Iceberg API provides snapshot access.
 //!
-//! **Future Implementation**: When the iceberg-rust API adds:
+//! **Future Implementation**: When the iceberg-rust API adds snapshot support, or when
+//! we migrate to an alternative implementation (see `orbit/engine/ICEBERG_ALTERNATIVES.md`):
 //! - `TableMetadata::snapshots()` - List all snapshots
 //! - `TableMetadata::snapshot_by_timestamp(i64)` - Get snapshot at timestamp
 //! - `TableMetadata::snapshot_by_id(i64)` - Get specific snapshot
 //! - Tag/branch management methods
+//!
+//! **Alternative Solutions**:
+//! - **Icelake**: Native Rust Iceberg implementation (likely has required APIs)
+//! - **Lakekeeper**: REST catalog for centralized metadata management
+//! - **Query Engines**: Trino/Dremio/StarRocks integration
+//!
+//! See detailed analysis in `ICEBERG_ALTERNATIVES.md` for implementation recommendations.
 //!
 //! Then time travel will work as documented above with full historical query support.
 //!
