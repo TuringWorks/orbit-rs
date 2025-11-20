@@ -17,6 +17,7 @@ pub mod config;
 pub mod columnar;
 pub mod hybrid;
 pub mod iceberg;
+pub mod iceberg_ext;
 // TODO: memory.rs needs to be decoupled from PostgreSQL protocol types
 // pub mod memory;
 
