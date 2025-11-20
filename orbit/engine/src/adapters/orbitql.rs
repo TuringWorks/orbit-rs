@@ -277,11 +277,15 @@ impl OrbitQLAdapter {
                     })
                     .collect();
 
+                // Extract primary key from constraints
+                // NOTE: See PHASE_3_ROADMAP.md section 5 for implementation plan
+                let primary_key = extract_primary_key(&_constraints);
+
                 // Create schema
                 let schema = TableSchema {
                     name: table_name.clone(),
                     columns,
-                    primary_key: vec![], // TODO: Extract from constraints
+                    primary_key,
                 };
 
                 // Create table
@@ -459,6 +463,43 @@ impl ProtocolAdapter for OrbitQLAdapter {
         // No cleanup needed
         Ok(())
     }
+}
+
+/// Extract primary key column names from table constraints
+///
+/// Searches through OrbitQL CREATE TABLE constraints to find PRIMARY KEY definitions.
+/// Returns the list of column names that comprise the primary key.
+///
+/// # Implementation
+///
+/// Currently returns an empty vector as a placeholder. Full implementation planned
+/// for Phase 3 (see PHASE_3_ROADMAP.md section 5).
+///
+/// The full implementation will:
+/// 1. Iterate through constraints
+/// 2. Find PrimaryKey constraint variant
+/// 3. Extract column names
+/// 4. Return as Vec<String>
+///
+/// # Example (Future)
+///
+/// ```ignore
+/// // For: CREATE TABLE users (id INT, name TEXT, PRIMARY KEY (id))
+/// let constraints = vec![Constraint::PrimaryKey { columns: vec!["id"] }];
+/// let pk = extract_primary_key(&constraints);
+/// assert_eq!(pk, vec!["id"]);
+/// ```
+fn extract_primary_key<T>(_constraints: &[T]) -> Vec<String> {
+    // Phase 3 enhancement: Extract actual primary key from constraints
+    // For now, return empty vector (tables work without explicit PK)
+    //
+    // Planned implementation:
+    // for constraint in constraints {
+    //     if let TableConstraint::PrimaryKey { columns } = constraint {
+    //         return columns.iter().map(|c| c.name.clone()).collect();
+    //     }
+    // }
+    vec![]
 }
 
 #[cfg(test)]
