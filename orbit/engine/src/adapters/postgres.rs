@@ -128,12 +128,48 @@ impl PostgresAdapter {
                 };
                 Ok(CommandResult::Rows(projected_rows))
             }
-            crate::storage::QueryResult::ColumnBatch(_) => {
+            crate::storage::QueryResult::ColumnBatch(batch) => {
                 // Convert column batch to rows
-                // TODO: Implement column batch to row conversion
-                Err(EngineError::not_implemented(
-                    "Column batch to rows conversion",
-                ))
+                let mut rows = Vec::new();
+
+                // Get column names
+                let col_names = batch.column_names.clone().unwrap_or_else(|| {
+                    // Generate default column names if not provided
+                    (0..batch.columns.len())
+                        .map(|i| format!("column_{}", i))
+                        .collect()
+                });
+
+                // Transpose columnar data to row format
+                for row_idx in 0..batch.row_count {
+                    let mut row = HashMap::new();
+
+                    for (col_idx, column) in batch.columns.iter().enumerate() {
+                        let col_name = &col_names[col_idx];
+                        let null_bitmap = &batch.null_bitmaps[col_idx];
+
+                        let value = if null_bitmap.is_null(row_idx) {
+                            SqlValue::Null
+                        } else {
+                            match column {
+                                crate::storage::Column::Bool(vals) => SqlValue::Boolean(vals[row_idx]),
+                                crate::storage::Column::Int16(vals) => SqlValue::Int16(vals[row_idx]),
+                                crate::storage::Column::Int32(vals) => SqlValue::Int32(vals[row_idx]),
+                                crate::storage::Column::Int64(vals) => SqlValue::Int64(vals[row_idx]),
+                                crate::storage::Column::Float32(vals) => SqlValue::Float32(vals[row_idx]),
+                                crate::storage::Column::Float64(vals) => SqlValue::Float64(vals[row_idx]),
+                                crate::storage::Column::String(vals) => SqlValue::String(vals[row_idx].clone()),
+                                crate::storage::Column::Binary(vals) => SqlValue::Binary(vals[row_idx].clone()),
+                            }
+                        };
+
+                        row.insert(col_name.clone(), value);
+                    }
+
+                    rows.push(row);
+                }
+
+                Ok(CommandResult::Rows(rows))
             }
             crate::storage::QueryResult::Aggregate(value) => {
                 // Return single aggregate value as a row
