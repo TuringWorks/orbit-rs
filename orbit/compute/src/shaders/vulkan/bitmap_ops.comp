@@ -1,0 +1,48 @@
+#version 450
+
+// Bitmap operations (AND, OR, NOT)
+layout(local_size_x = 256) in;
+
+// First input mask
+layout(set = 0, binding = 0) buffer InputMaskA {
+    int mask_a[];
+};
+
+// Second input mask (not used for NOT operation)
+layout(set = 0, binding = 1) buffer InputMaskB {
+    int mask_b[];
+};
+
+// Operation type (0=AND, 1=OR, 2=NOT)
+layout(set = 0, binding = 2) buffer Operation {
+    int op;
+};
+
+// Output buffer
+layout(set = 0, binding = 3) buffer Output {
+    int output[];
+};
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+
+    if (idx >= mask_a.length()) {
+        return;
+    }
+
+    int operation = op;
+    int result = 0;
+
+    if (operation == 0) {
+        // AND operation
+        result = ((mask_a[idx] != 0) && (mask_b[idx] != 0)) ? 1 : 0;
+    } else if (operation == 1) {
+        // OR operation
+        result = ((mask_a[idx] != 0) || (mask_b[idx] != 0)) ? 1 : 0;
+    } else if (operation == 2) {
+        // NOT operation
+        result = (mask_a[idx] == 0) ? 1 : 0;
+    }
+
+    output[idx] = result;
+}

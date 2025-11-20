@@ -1,0 +1,47 @@
+#version 450
+
+// Parallel count reduction for mask data
+// Counts the number of non-zero elements
+
+layout(local_size_x = 256) in;
+
+// Input mask buffer (0 or 1 values)
+layout(set = 0, binding = 0) buffer InputMask {
+    int mask[];
+};
+
+// Output buffer (partial counts from each workgroup)
+layout(set = 0, binding = 1) buffer Output {
+    uint partial_counts[];
+};
+
+// Shared memory for reduction within workgroup
+shared uint shared_data[256];
+
+void main() {
+    uint global_idx = gl_GlobalInvocationID.x;
+    uint local_idx = gl_LocalInvocationID.x;
+    uint workgroup_idx = gl_WorkGroupID.x;
+
+    // Load data into shared memory (count non-zero elements)
+    if (global_idx < mask.length()) {
+        shared_data[local_idx] = (mask[global_idx] != 0) ? 1u : 0u;
+    } else {
+        shared_data[local_idx] = 0u;
+    }
+
+    barrier();
+
+    // Parallel reduction in shared memory
+    for (uint stride = 128; stride > 0; stride >>= 1) {
+        if (local_idx < stride) {
+            shared_data[local_idx] += shared_data[local_idx + stride];
+        }
+        barrier();
+    }
+
+    // Write workgroup result
+    if (local_idx == 0) {
+        partial_counts[workgroup_idx] = shared_data[0];
+    }
+}

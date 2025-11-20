@@ -1,0 +1,57 @@
+#version 450
+
+// Filter operations for i64 data
+// Requires GL_ARB_gpu_shader_int64 extension
+#extension GL_ARB_gpu_shader_int64 : require
+
+layout(local_size_x = 256) in;
+
+// Input data buffer (i64)
+layout(set = 0, binding = 0) buffer InputData {
+    int64_t data[];
+};
+
+// Filter value buffer (i64)
+layout(set = 0, binding = 1) buffer FilterValue {
+    int64_t value;
+};
+
+// Operation type buffer
+layout(set = 0, binding = 2) buffer Operation {
+    int op;
+};
+
+// Output buffer
+layout(set = 0, binding = 3) buffer Output {
+    int output[];
+};
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+
+    if (idx >= data.length()) {
+        return;
+    }
+
+    int64_t element = data[idx];
+    int64_t filter_value = value;
+    int operation = op;
+
+    bool matches = false;
+
+    if (operation == 0) {
+        matches = (element == filter_value);
+    } else if (operation == 1) {
+        matches = (element > filter_value);
+    } else if (operation == 2) {
+        matches = (element >= filter_value);
+    } else if (operation == 3) {
+        matches = (element < filter_value);
+    } else if (operation == 4) {
+        matches = (element <= filter_value);
+    } else if (operation == 5) {
+        matches = (element != filter_value);
+    }
+
+    output[idx] = matches ? 1 : 0;
+}

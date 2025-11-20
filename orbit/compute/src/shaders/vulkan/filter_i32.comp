@@ -1,0 +1,64 @@
+#version 450
+
+// Filter operations for i32 data
+// Workgroup size: 256 threads (optimal for most GPUs)
+layout(local_size_x = 256) in;
+
+// Input data buffer
+layout(set = 0, binding = 0) buffer InputData {
+    int data[];
+};
+
+// Filter value buffer
+layout(set = 0, binding = 1) buffer FilterValue {
+    int value;
+};
+
+// Operation type buffer (0=eq, 1=gt, 2=gte, 3=lt, 4=lte, 5=neq)
+layout(set = 0, binding = 2) buffer Operation {
+    int op;
+};
+
+// Output buffer (0 or 1 for each element)
+layout(set = 0, binding = 3) buffer Output {
+    int output[];
+};
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+
+    // Bounds check
+    if (idx >= data.length()) {
+        return;
+    }
+
+    int element = data[idx];
+    int filter_value = value;
+    int operation = op;
+
+    bool matches = false;
+
+    // Perform comparison based on operation type
+    if (operation == 0) {
+        // Equal
+        matches = (element == filter_value);
+    } else if (operation == 1) {
+        // Greater than
+        matches = (element > filter_value);
+    } else if (operation == 2) {
+        // Greater or equal
+        matches = (element >= filter_value);
+    } else if (operation == 3) {
+        // Less than
+        matches = (element < filter_value);
+    } else if (operation == 4) {
+        // Less or equal
+        matches = (element <= filter_value);
+    } else if (operation == 5) {
+        // Not equal
+        matches = (element != filter_value);
+    }
+
+    // Write result (1 if matches, 0 if not)
+    output[idx] = matches ? 1 : 0;
+}

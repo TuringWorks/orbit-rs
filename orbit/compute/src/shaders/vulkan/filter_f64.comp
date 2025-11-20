@@ -1,0 +1,66 @@
+#version 450
+
+// Filter operations for f64 (double precision) data
+// Requires GL_ARB_gpu_shader_fp64 extension
+#extension GL_ARB_gpu_shader_fp64 : require
+
+layout(local_size_x = 256) in;
+
+// Input data buffer (f64/double)
+layout(set = 0, binding = 0) buffer InputData {
+    double data[];
+};
+
+// Filter value buffer (f64/double)
+layout(set = 0, binding = 1) buffer FilterValue {
+    double value;
+};
+
+// Operation type buffer
+layout(set = 0, binding = 2) buffer Operation {
+    int op;
+};
+
+// Output buffer
+layout(set = 0, binding = 3) buffer Output {
+    int output[];
+};
+
+// Epsilon for floating point comparison
+const double EPSILON = 1e-10;
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+
+    if (idx >= data.length()) {
+        return;
+    }
+
+    double element = data[idx];
+    double filter_value = value;
+    int operation = op;
+
+    bool matches = false;
+
+    if (operation == 0) {
+        // Equal (with epsilon tolerance)
+        matches = abs(element - filter_value) < EPSILON;
+    } else if (operation == 1) {
+        // Greater than
+        matches = (element > filter_value);
+    } else if (operation == 2) {
+        // Greater or equal
+        matches = (element >= filter_value) || (abs(element - filter_value) < EPSILON);
+    } else if (operation == 3) {
+        // Less than
+        matches = (element < filter_value);
+    } else if (operation == 4) {
+        // Less or equal
+        matches = (element <= filter_value) || (abs(element - filter_value) < EPSILON);
+    } else if (operation == 5) {
+        // Not equal
+        matches = abs(element - filter_value) >= EPSILON;
+    }
+
+    output[idx] = matches ? 1 : 0;
+}
