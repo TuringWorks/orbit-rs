@@ -1,60 +1,32 @@
 # Orbit Multi-Protocol Server Configuration
-# This configuration enables orbit-rs to natively serve as:
-# - PostgreSQL server (port 5432) with full SQL and pgvector support
-# - Redis server (port 6379) with vector operations and modules
-# - gRPC server (port 50051) for actor system management
-# - REST API server (port 8080) for web applications
+# All database protocols enabled by default for zero-configuration deployment
 
 [server]
-# Unique node identifier (auto-generated if not provided)
-# node_id = "orbit-node-01"
-
-# Bind address for all servers
+node_id = "orbit-node-1"
 bind_address = "0.0.0.0"
-
-# Environment: "Development", "Testing", "Staging", "Production"
-environment = "Development"
-
-# Data and configuration directories
+environment = "Production"
 data_dir = "./data"
 config_dir = "./config"
 
 [actor_system]
-# Maximum number of actors per node
 max_actors = 10000
-
-# Actor mailbox size
 mailbox_size = 1000
-
-# Supervision strategy: "OneForOne", "OneForAll", "RestForOne"
 supervision_strategy = "OneForOne"
 
-# Optional cluster configuration
-# [actor_system.cluster]
-# seed_nodes = ["node1.example.com:7946", "node2.example.com:7946"]
-# gossip_port = 7946
-# heartbeat_interval_ms = 5000
-# failure_timeout_ms = 30000
+# Protocol Servers - All enabled by default
 
-# ================================
-# PROTOCOL SERVER CONFIGURATIONS
-# ================================
-
-# gRPC Actor Management Server
 [protocols.grpc]
 enabled = true
 port = 50051
 max_concurrent_streams = 1000
-max_message_size = 4194304  # 4MB
+max_message_size = 4194304
 
-# PostgreSQL Wire Protocol Server
 [protocols.postgresql]
 enabled = true
-port = 15432
+port = 5432
 max_connections = 1000
 connection_timeout_secs = 30
 
-# SQL Engine Configuration
 [protocols.postgresql.sql_engine]
 max_query_complexity = 1000
 query_timeout_secs = 30
@@ -62,232 +34,100 @@ enable_optimization = true
 enable_caching = true
 cache_size_mb = 256
 
-# Vector Operations for PostgreSQL
 [protocols.postgresql.vector_ops]
 default_metric = "cosine"
 max_dimensions = 4096
 batch_size = 1000
 enable_simd = true
 
-[protocols.postgresql.vector_ops.indexing]
-default_algorithm = "hnsw"
-
-[protocols.postgresql.vector_ops.indexing.hnsw]
-m = 16
-ef_construction = 200
-ef_search = 50
-
-[protocols.postgresql.vector_ops.indexing.ivf]
-nlist = 100
-nprobe = 10
-
-# PostgreSQL-specific features
 [protocols.postgresql.features]
-enable_pgvector = true        # pgvector extension compatibility
-enable_postgis = false        # PostGIS compatibility (future)
-enable_json = true           # JSON/JSONB operations
-enable_fulltext = true       # Full-text search
-enable_prepared_statements = true
-enable_transactions = true
+enable_pgvector = true
+enable_extensions = true
+enable_full_text_search = true
 
-# Redis RESP Protocol Server
+[protocols.mysql]
+enabled = true
+port = 3306
+max_connections = 1000
+connection_timeout_secs = 30
+server_version = "8.0.0-Orbit"
+authentication_enabled = false
+
+[protocols.cql]
+enabled = true
+port = 9042
+max_connections = 1000
+connection_timeout_secs = 30
+protocol_version = 4
+authentication_enabled = false
+
 [protocols.redis]
 enabled = true
 port = 6379
 max_connections = 1000
 connection_timeout_secs = 30
 
-# Redis Command Configuration
-[protocols.redis.commands]
-enabled_groups = [
-    "generic", "string", "list", "hash", "set", "zset",
-    "vector", "search", "json", "graph", "stream", "pubsub"
-]
-disabled_commands = []
-command_timeout_secs = 30
-max_pipeline_size = 1000
-
-# Vector Operations for Redis
-[protocols.redis.vector_ops]
-default_metric = "cosine"
-max_dimensions = 4096
-batch_size = 1000
-enable_simd = true
-
-[protocols.redis.vector_ops.indexing]
-default_algorithm = "hnsw"
-
-[protocols.redis.vector_ops.indexing.hnsw]
-m = 16
-ef_construction = 200
-ef_search = 50
-
-[protocols.redis.vector_ops.indexing.ivf]
-nlist = 100
-nprobe = 10
-
-# Redis-specific features
-[protocols.redis.features]
-enable_streams = true         # Redis Streams
-enable_pubsub = true         # Pub/Sub messaging
-enable_modules = false       # Redis Modules (experimental)
-enable_redisearch = true     # RedisSearch compatibility
-enable_redisjson = true      # RedisJSON compatibility
-enable_redisgraph = true     # RedisGraph compatibility
-enable_cluster = false       # Redis Cluster mode
-
-# HTTP REST API Server
 [protocols.rest]
 enabled = true
 port = 8080
 max_connections = 1000
 request_timeout_secs = 30
 
-# Optional CORS configuration
-# [protocols.rest.cors]
-# allowed_origins = ["*"]
-# allowed_methods = ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
-# allowed_headers = ["*"]
-# max_age_secs = 3600
+[protocols.cypher]
+enabled = true
+port = 7687
+max_connections = 1000
 
-# Optional rate limiting
-# [protocols.rest.rate_limit]
-# requests_per_minute = 1000
-# burst_capacity = 100
+[protocols.orbitql]
+enabled = true
+port = 8081
+max_connections = 1000
 
-# Cypher (Neo4j-compatible) Server (disabled by default)
-# [protocols.cypher]
-# enabled = false
-# port = 7474
-# max_connections = 1000
-
-# [protocols.cypher.graph_engine]
-# max_query_complexity = 1000
-# query_timeout_secs = 30
-# enable_optimization = true
-# storage_backend = "memory"
-
-# MCP (Model Context Protocol) Server (disabled by default)
-# [protocols.mcp]
-# enabled = false
-# port = 8765
-# version = "1.0"
-
-# [protocols.mcp.tools]
-# available_tools = ["query", "vector_search", "graph_query"]
-
-# ================================
-# SECURITY CONFIGURATION
-# ================================
+[protocols.aql]
+enabled = true
+port = 8529
+max_connections = 1000
 
 [security.authentication]
 enabled = false
-methods = ["Basic"]
 
-# [security.authentication.jwt]
-# secret_key = "your-secret-key"
-# expiration_secs = 3600
-# algorithm = "HS256"
-
-[security.authorization]
-enabled = false
-model = "rbac"
-default_permissions = ["read", "write"]
-
-# ================================
-# PERFORMANCE CONFIGURATION
-# ================================
-
-[performance.memory]
-max_memory_mb = 4096
-
-[performance.memory.pool_config]
-initial_size_mb = 256
-max_size_mb = 2048
-growth_factor = 1.5
-
-[performance.memory.gc_settings]
-auto_gc = true
-interval_secs = 300
-memory_threshold_pct = 80.0
-
-[performance.io]
-max_concurrent_ops = 1000
-timeout_secs = 30
-buffer_size_kb = 64
-enable_direct_io = false
-
-[performance.network]
-tcp_nodelay = true
-keep_alive = true
-
-[performance.cpu]
-enable_simd = true
-
-# ================================
-# LOGGING CONFIGURATION
-# ================================
+[performance]
+worker_threads = 0
+max_blocking_threads = 512
+thread_stack_size_mb = 2
 
 [logging]
 level = "info"
-format = "plain"
-
-[[logging.outputs]]
-output_type = "stdout"
-
-# Component-specific log levels
-[logging.component_levels]
-"orbit_protocols" = "info"
-"orbit_server" = "info"
-"orbit_shared" = "warn"
-
-# ================================
-# MONITORING CONFIGURATION
-# ================================
+format = "json"
+output = "stdout"
 
 [monitoring.metrics]
 enabled = true
 port = 9090
-format = "prometheus"
-collection_interval_secs = 30
-retention_days = 7
+path = "/metrics"
 
 [monitoring.health_checks]
 enabled = true
-port = 8081
-interval_secs = 30
-timeout_secs = 5
+port = 9091
+path = "/health"
 
-[monitoring.tracing]
-enabled = false
-backend = "jaeger"
-sampling_rate = 0.1
-# endpoint = "http://jaeger:14268/api/traces"
+[pooling]
+enabled = true
+min_connections = 10
+max_connections = 1000
+connection_timeout_secs = 30
+idle_timeout_secs = 300
+max_lifetime_secs = 3600
+health_check_interval_secs = 60
+load_balancing_strategy = "RoundRobin"
+tier = "Standard"
+enable_dynamic_sizing = true
+target_utilization = 0.75
 
-# ================================
-# EXAMPLE USAGE INSTRUCTIONS
-# ================================
-
-# Start the server with this configuration:
-# orbit-server --config ./config/orbit-server.toml
-
-# Development mode (all protocols enabled):
-# orbit-server --dev-mode
-
-# Enable specific protocols:
-# orbit-server --enable-postgresql --enable-redis --enable-rest
-
-# Custom ports:
-# orbit-server --enable-postgresql --postgres-port 5433 --enable-redis --redis-port 6380
-
-# Connect to PostgreSQL:
-# psql -h localhost -p 5432 -U postgres
-
-# Connect to Redis:
-# redis-cli -h localhost -p 6379
-
-# Access REST API:
-# curl http://localhost:8080/api/health
-
-# Generate example config:
-# orbit-server --generate-config > orbit-server.toml
+[pooling.circuit_breaker]
+enabled = true
+failure_threshold = 5
+failure_window_secs = 60
+recovery_timeout_secs = 30
+success_threshold = 2
+half_open_max_calls = 3

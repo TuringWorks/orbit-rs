@@ -237,6 +237,12 @@ pub struct ProtocolsConfig {
 
     /// MySQL wire protocol server
     pub mysql: Option<MySqlConfig>,
+
+    /// AQL (ArangoDB Query Language) server
+    pub aql: Option<AqlConfig>,
+
+    /// OrbitQL query language server
+    pub orbitql: Option<OrbitQLConfig>,
 }
 
 /// gRPC server configuration
@@ -404,6 +410,44 @@ pub struct MySqlConfig {
 
     /// Server version string
     pub server_version: String,
+
+    /// Enable authentication
+    pub authentication_enabled: bool,
+}
+
+/// AQL (ArangoDB Query Language) server configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AqlConfig {
+    /// Enable AQL server
+    pub enabled: bool,
+
+    /// AQL server port (default: 8529)
+    pub port: u16,
+
+    /// Maximum concurrent connections
+    pub max_connections: usize,
+
+    /// Connection timeout in seconds
+    pub connection_timeout_secs: u64,
+
+    /// Enable authentication
+    pub authentication_enabled: bool,
+}
+
+/// OrbitQL query language server configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OrbitQLConfig {
+    /// Enable OrbitQL server
+    pub enabled: bool,
+
+    /// OrbitQL server port (default: 8081)
+    pub port: u16,
+
+    /// Maximum concurrent connections
+    pub max_connections: usize,
+
+    /// Connection timeout in seconds
+    pub connection_timeout_secs: u64,
 
     /// Enable authentication
     pub authentication_enabled: bool,
@@ -1009,6 +1053,8 @@ impl Default for ProtocolsConfig {
             mcp: None,
             cql: Some(CqlConfig::default()),
             mysql: Some(MySqlConfig::default()),
+            aql: Some(AqlConfig::default()),
+            orbitql: Some(OrbitQLConfig::default()),
         }
     }
 }
@@ -1088,6 +1134,30 @@ impl Default for MySqlConfig {
             max_connections: 1000,
             connection_timeout_secs: 30,
             server_version: "8.0.0-Orbit".to_string(),
+            authentication_enabled: false,
+        }
+    }
+}
+
+impl Default for AqlConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            port: 8529,
+            max_connections: 1000,
+            connection_timeout_secs: 30,
+            authentication_enabled: false,
+        }
+    }
+}
+
+impl Default for OrbitQLConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            port: 8081,
+            max_connections: 1000,
+            connection_timeout_secs: 30,
             authentication_enabled: false,
         }
     }
