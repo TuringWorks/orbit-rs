@@ -49,7 +49,7 @@ use config::OrbitServerConfig;
     name = "orbit-server",
     version = env!("CARGO_PKG_VERSION"),
     about = "Orbit Server - Multi-Protocol Distributed Actor System",
-    long_about = "The Orbit server provides a unified runtime that natively supports multiple protocols:\n\
+    long_about = "The Orbit server provides a unified runtime that natively supports multiple protocols (all enabled by default):\n\
     • PostgreSQL wire protocol (port 5432) - Full SQL compatibility with pgvector support\n\
     • MySQL wire protocol (port 3306) - MySQL-compatible SQL interface\n\
     • CQL protocol (port 9042) - Cassandra Query Language for wide-column access\n\
@@ -57,7 +57,8 @@ use config::OrbitServerConfig;
     • gRPC API (port 50051) - Actor system management\n\
     • HTTP REST API (port 8080) - Web-friendly interface\n\
     \n\
-    This single server replaces the need for separate PostgreSQL, MySQL, Cassandra, and Redis instances."
+    Simply run 'cargo run --bin orbit-server' to start all protocols.\n\
+    This single server replaces PostgreSQL, MySQL, Cassandra, and Redis instances."
 )]
 struct Args {
     /// Configuration file path
@@ -90,10 +91,10 @@ struct Args {
     )]
     grpc_port: u16,
 
-    /// Enable PostgreSQL server
+    /// Enable PostgreSQL server (enabled by default)
     #[arg(
         long,
-        help = "Enable PostgreSQL wire protocol server"
+        help = "Explicitly enable PostgreSQL wire protocol server (enabled by default)"
     )]
     enable_postgresql: bool,
 
@@ -105,10 +106,10 @@ struct Args {
     )]
     postgres_port: Option<u16>,
 
-    /// Enable Redis server
+    /// Enable Redis server (enabled by default)
     #[arg(
         long,
-        help = "Enable Redis RESP protocol server"
+        help = "Explicitly enable Redis RESP protocol server (enabled by default)"
     )]
     enable_redis: bool,
 
@@ -120,10 +121,10 @@ struct Args {
     )]
     redis_port: Option<u16>,
 
-    /// Enable REST API server
+    /// Enable REST API server (enabled by default)
     #[arg(
         long,
-        help = "Enable HTTP REST API server"
+        help = "Explicitly enable HTTP REST API server (enabled by default)"
     )]
     enable_rest: bool,
 
@@ -135,10 +136,10 @@ struct Args {
     )]
     rest_port: Option<u16>,
 
-    /// Enable CQL server
+    /// Enable CQL server (enabled by default)
     #[arg(
         long,
-        help = "Enable CQL (Cassandra Query Language) protocol server"
+        help = "Explicitly enable CQL (Cassandra Query Language) protocol server (enabled by default)"
     )]
     enable_cql: bool,
 
@@ -150,10 +151,10 @@ struct Args {
     )]
     cql_port: Option<u16>,
 
-    /// Enable MySQL server
+    /// Enable MySQL server (enabled by default)
     #[arg(
         long,
-        help = "Enable MySQL wire protocol server"
+        help = "Explicitly enable MySQL wire protocol server (enabled by default)"
     )]
     enable_mysql: bool,
 
@@ -610,11 +611,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     // Print startup banner
     info!("🚀 Orbit Multi-Protocol Server Starting...");
-    info!("Version: {}", env!(("CARGO_PKG_VERSION")));
-    info!("🎯 Single server providing PostgreSQL, Redis, gRPC, and REST APIs");
-    
+    info!("Version: {}", env!("CARGO_PKG_VERSION"));
+    info!("🎯 All database protocols enabled by default");
+    info!("   PostgreSQL • MySQL • CQL • Redis • gRPC • REST");
+
     if args.dev_mode {
-        warn!("🔧 Development mode enabled - all protocols active");
+        warn!("🔧 Development mode enabled - verbose logging active");
     }
 
     // Load configuration
@@ -750,38 +752,29 @@ fn apply_cli_overrides(config: &mut OrbitServerConfig, args: &Args) {
         }
     }
 
-    // Development mode overrides - enable all protocols
+    // Development mode overrides - ensure all protocols are enabled
     if args.dev_mode {
+        // In dev mode, ensure everything is definitely enabled (they should be by default)
         if let Some(grpc_config) = &mut config.protocols.grpc {
             grpc_config.enabled = true;
         }
         if let Some(pg_config) = &mut config.protocols.postgresql {
             pg_config.enabled = true;
-        } else {
-            config.protocols.postgresql = Some(config::PostgresqlConfig::default());
         }
         if let Some(redis_config) = &mut config.protocols.redis {
             redis_config.enabled = true;
-        } else {
-            config.protocols.redis = Some(config::RedisConfig::default());
         }
         if let Some(rest_config) = &mut config.protocols.rest {
             rest_config.enabled = true;
-        } else {
-            config.protocols.rest = Some(config::RestConfig::default());
         }
         if let Some(cql_config) = &mut config.protocols.cql {
             cql_config.enabled = true;
-        } else {
-            config.protocols.cql = Some(config::CqlConfig::default());
         }
         if let Some(mysql_config) = &mut config.protocols.mysql {
             mysql_config.enabled = true;
-        } else {
-            config.protocols.mysql = Some(config::MySqlConfig::default());
         }
 
-        info!("🔧 Development mode: All protocols enabled");
+        info!("🔧 Development mode: Verbose logging and monitoring enabled");
     }
 
     // Clustering overrides

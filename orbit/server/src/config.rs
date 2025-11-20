@@ -1007,8 +1007,8 @@ impl Default for ProtocolsConfig {
             rest: Some(RestConfig::default()),
             cypher: None,
             mcp: None,
-            cql: None,
-            mysql: None,
+            cql: Some(CqlConfig::default()),
+            mysql: Some(MySqlConfig::default()),
         }
     }
 }
@@ -1070,7 +1070,7 @@ impl Default for RestConfig {
 impl Default for CqlConfig {
     fn default() -> Self {
         Self {
-            enabled: false,
+            enabled: true,
             port: 9042,
             max_connections: 1000,
             connection_timeout_secs: 30,
@@ -1083,7 +1083,7 @@ impl Default for CqlConfig {
 impl Default for MySqlConfig {
     fn default() -> Self {
         Self {
-            enabled: false,
+            enabled: true,
             port: 3306,
             max_connections: 1000,
             connection_timeout_secs: 30,
