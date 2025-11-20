@@ -33,9 +33,9 @@ pub enum PlanNodeType {
     Sort,
     /// Join operation
     Join,
-    /// Limit operation
+    /// Limit operation (LIMIT clause)
     Limit,
-    /// Offset operation
+    /// Offset operation (OFFSET clause)
     Offset,
 }
 
@@ -130,32 +130,32 @@ impl Default for VectorizedExecutorConfigBuilder {
 /// Comparison operator for filter operations
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ComparisonOp {
-    /// Equality comparison (=)
+    /// Equality comparison operator (=)
     Equal,
-    /// Not equal comparison (!=)
+    /// Not equal comparison operator (!=)
     NotEqual,
-    /// Less than comparison (<)
+    /// Less than comparison operator (<)
     LessThan,
-    /// Less than or equal comparison (<=)
+    /// Less than or equal comparison operator (<=)
     LessThanOrEqual,
-    /// Greater than comparison (>)
+    /// Greater than comparison operator (>)
     GreaterThan,
-    /// Greater than or equal comparison (>=)
+    /// Greater than or equal comparison operator (>=)
     GreaterThanOrEqual,
 }
 
-/// Aggregate function type
+/// Aggregate function type for column operations
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AggregateFunction {
-    /// Sum aggregation
+    /// Sum aggregation function (SUM)
     Sum,
-    /// Minimum value aggregation
+    /// Minimum value aggregation function (MIN)
     Min,
-    /// Maximum value aggregation
+    /// Maximum value aggregation function (MAX)
     Max,
-    /// Count aggregation
+    /// Count aggregation function (COUNT)
     Count,
-    /// Average aggregation
+    /// Average aggregation function (AVG)
     Avg,
 }
 
