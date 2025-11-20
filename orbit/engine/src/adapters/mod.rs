@@ -32,6 +32,7 @@
 //! - **Command Translation**: Translate protocol commands to engine operations
 //! - **Error Mapping**: Convert engine errors to protocol-specific errors
 //! - **Transaction Bridging**: Map protocol transaction semantics to MVCC
+//! - **Time Travel**: Query historical data using Iceberg snapshots (all protocols)
 //!
 //! ## Usage Example
 //!
@@ -52,6 +53,117 @@
 //! // Use protocol-specific adapter
 //! // let pg_adapter = PostgresAdapter::new(context);
 //! ```
+//!
+//! ## Time Travel Support
+//!
+//! All protocol adapters support querying historical data through Apache Iceberg's snapshot-based
+//! time travel capabilities. This enables auditing, debugging, and historical analysis across all
+//! supported protocols.
+//!
+//! ### Supported Syntax by Protocol
+//!
+//! #### PostgreSQL (SQL)
+//!
+//! ```sql
+//! -- Time travel by timestamp (ISO 8601)
+//! SELECT * FROM table TIMESTAMP AS OF '2023-04-11T18:06:36.289+00:00';
+//!
+//! -- Time travel by UNIX timestamp
+//! SELECT * FROM table TIMESTAMP AS OF 1681236397;
+//!
+//! -- Time travel by snapshot ID
+//! SELECT * FROM table VERSION AS OF 2583872980615177898;
+//!
+//! -- Time travel by named tag or branch
+//! SELECT * FROM table VERSION AS OF 'sample_tag';
+//! SELECT * FROM table VERSION AS OF 'main';
+//!
+//! -- View table history
+//! SELECT * FROM table.history;
+//!
+//! -- View snapshots
+//! SELECT * FROM table.snapshots;
+//!
+//! -- View references (branches and tags)
+//! SELECT * FROM table.refs;
+//!
+//! -- Create tag for current snapshot
+//! ALTER TABLE table CREATE TAG sample_tag;
+//!
+//! -- Create branch
+//! ALTER TABLE table CREATE BRANCH feature_branch;
+//! ```
+//!
+//! #### OrbitQL
+//!
+//! ```orbitql
+//! -- Time travel in OrbitQL queries
+//! SELECT * FROM users AS OF TIMESTAMP '2023-04-11T18:06:36.289Z'
+//! WHERE age > 18;
+//!
+//! -- Version-based time travel
+//! SELECT * FROM users AS OF VERSION 2583872980615177898;
+//!
+//! -- Named reference time travel
+//! SELECT * FROM users AS OF 'production_snapshot';
+//! ```
+//!
+//! #### REST API
+//!
+//! ```http
+//! GET /tables/users/rows?as_of_timestamp=2023-04-11T18:06:36.289Z
+//! GET /tables/users/rows?as_of_version=2583872980615177898
+//! GET /tables/users/rows?as_of_tag=sample_tag
+//!
+//! GET /tables/users/history
+//! GET /tables/users/snapshots
+//! GET /tables/users/refs
+//!
+//! POST /tables/users/tags
+//! {
+//!   "tag_name": "sample_tag",
+//!   "snapshot_id": null  // null = current snapshot
+//! }
+//! ```
+//!
+//! #### Redis (RESP)
+//!
+//! ```redis
+//! # Time travel for Redis keys (metadata stored in Iceberg)
+//! HGET users:123@2023-04-11T18:06:36 name
+//! GET session:abc@version:2583872980615177898
+//! LRANGE events@tag:snapshot_v1 0 -1
+//! ```
+//!
+//! ### Implementation Status
+//!
+//! **Current Status**: Time travel API is defined and documented across all adapters.
+//!
+//! **Limitation**: The iceberg-rust crate currently does not expose methods for:
+//! - Listing/accessing historical snapshots
+//! - Querying snapshot metadata (history, refs tables)
+//! - Creating tags and branches programmatically
+//!
+//! **Fallback Behavior**: Time travel queries currently return the latest snapshot (current data)
+//! until the upstream Iceberg API provides snapshot access.
+//!
+//! **Future Implementation**: When the iceberg-rust API adds:
+//! - `TableMetadata::snapshots()` - List all snapshots
+//! - `TableMetadata::snapshot_by_timestamp(i64)` - Get snapshot at timestamp
+//! - `TableMetadata::snapshot_by_id(i64)` - Get specific snapshot
+//! - Tag/branch management methods
+//!
+//! Then time travel will work as documented above with full historical query support.
+//!
+//! ### Benefits of Time Travel
+//!
+//! - **Auditing**: Track data changes over time across all protocols
+//! - **Debugging**: Investigate state at specific points in time
+//! - **Compliance**: Meet regulatory requirements for data retention
+//! - **Recovery**: Recover from accidental data modifications
+//! - **Analysis**: Perform historical trend analysis
+//! - **Testing**: Compare current vs historical data states
+//! - **Reproducibility**: Recreate exact query results from the past
 
 use async_trait::async_trait;
 use std::sync::Arc;

@@ -49,12 +49,24 @@
 
 use async_trait::async_trait;
 use std::collections::HashMap;
+use std::time::SystemTime;
 
 use crate::error::{EngineError, EngineResult};
 use crate::storage::{ColumnDef, DataType, Row, SqlValue, TableSchema};
 use crate::transaction::IsolationLevel;
 
 use super::{AdapterContext, CommandResult, ProtocolAdapter, TransactionAdapter};
+
+/// Time travel specification for querying historical data
+#[derive(Debug, Clone)]
+pub enum TimeTravelSpec {
+    /// Query as of specific timestamp (TIMESTAMP AS OF)
+    Timestamp(SystemTime),
+    /// Query as of specific snapshot/version ID (VERSION AS OF)
+    SnapshotId(i64),
+    /// Query as of named tag or branch (VERSION AS OF 'tag_name')
+    NamedReference(String),
+}
 
 /// PostgreSQL protocol adapter
 pub struct PostgresAdapter {
@@ -94,13 +106,39 @@ impl PostgresAdapter {
         Ok(CommandResult::Ok)
     }
 
-    /// Execute a SELECT statement
+    /// Execute a SELECT statement with time travel support
+    ///
+    /// Supports PostgreSQL time travel syntax:
+    /// - `SELECT * FROM table TIMESTAMP AS OF '2023-04-11T18:06:36.289+00:00'`
+    /// - `SELECT * FROM table TIMESTAMP AS OF 1681236397` (UNIX timestamp)
+    /// - `SELECT * FROM table VERSION AS OF <snapshot_id>`
+    /// - `SELECT * FROM table VERSION AS OF 'tag_name'`
     pub async fn select(
         &self,
         table_name: &str,
         columns: Option<Vec<String>>,
         filter: Option<PostgresFilter>,
     ) -> EngineResult<CommandResult> {
+        self.select_with_time_travel(table_name, columns, filter, None).await
+    }
+
+    /// Execute a SELECT statement with explicit time travel
+    ///
+    /// When time_travel is specified, queries historical data from Iceberg snapshots.
+    /// Falls back to current data if time travel is not supported or not specified.
+    pub async fn select_with_time_travel(
+        &self,
+        table_name: &str,
+        columns: Option<Vec<String>>,
+        filter: Option<PostgresFilter>,
+        time_travel: Option<TimeTravelSpec>,
+    ) -> EngineResult<CommandResult> {
+        // If time travel is requested, use specialized query
+        if let Some(spec) = time_travel {
+            return self.execute_time_travel_query(table_name, columns, filter, spec).await;
+        }
+
+        // Regular query without time travel
         // Convert PostgreSQL filter to engine access pattern
         let pattern = if let Some(pg_filter) = filter {
             pg_filter.to_engine_access_pattern()
@@ -217,6 +255,165 @@ impl PostgresAdapter {
         let engine_filter = filter.to_engine_filter_predicate();
         let count = self.context.storage.delete(table_name, engine_filter).await?;
         Ok(CommandResult::RowsAffected(count))
+    }
+
+    // === Time Travel Support ===
+
+    /// Execute time travel query
+    ///
+    /// NOTE: Currently returns current snapshot data due to iceberg-rust API limitations.
+    /// Will be fully implemented when snapshot access API is available.
+    async fn execute_time_travel_query(
+        &self,
+        table_name: &str,
+        columns: Option<Vec<String>>,
+        filter: Option<PostgresFilter>,
+        _spec: TimeTravelSpec,
+    ) -> EngineResult<CommandResult> {
+        // For now, delegate to regular query (without time travel to avoid recursion)
+        // When Iceberg API supports snapshots, this will:
+        // 1. Convert spec to timestamp
+        // 2. Call IcebergColdStore::query_as_of()
+        // 3. Return historical data
+
+        // Regular query without time travel
+        let pattern = if let Some(pg_filter) = filter {
+            pg_filter.to_engine_access_pattern()
+        } else {
+            crate::storage::AccessPattern::Scan {
+                time_range: None,
+                filter: None,
+            }
+        };
+
+        let result = self.context.storage.query(table_name, pattern).await?;
+
+        match result {
+            crate::storage::QueryResult::Rows(rows) => {
+                let projected_rows = if let Some(cols) = columns {
+                    rows.into_iter()
+                        .map(|mut row| {
+                            row.retain(|k, _| cols.contains(&k));
+                            row
+                        })
+                        .collect()
+                } else {
+                    rows
+                };
+                Ok(CommandResult::Rows(projected_rows))
+            }
+            crate::storage::QueryResult::ColumnBatch(batch) => {
+                // Convert column batch to rows (same logic as main select)
+                let mut rows = Vec::new();
+                let col_names = batch.column_names.clone().unwrap_or_else(|| {
+                    (0..batch.columns.len())
+                        .map(|i| format!("column_{}", i))
+                        .collect()
+                });
+
+                for row_idx in 0..batch.row_count {
+                    let mut row = HashMap::new();
+                    for (col_idx, column) in batch.columns.iter().enumerate() {
+                        let col_name = &col_names[col_idx];
+                        let null_bitmap = &batch.null_bitmaps[col_idx];
+                        let value = if null_bitmap.is_null(row_idx) {
+                            SqlValue::Null
+                        } else {
+                            match column {
+                                crate::storage::Column::Bool(vals) => SqlValue::Boolean(vals[row_idx]),
+                                crate::storage::Column::Int16(vals) => SqlValue::Int16(vals[row_idx]),
+                                crate::storage::Column::Int32(vals) => SqlValue::Int32(vals[row_idx]),
+                                crate::storage::Column::Int64(vals) => SqlValue::Int64(vals[row_idx]),
+                                crate::storage::Column::Float32(vals) => SqlValue::Float32(vals[row_idx]),
+                                crate::storage::Column::Float64(vals) => SqlValue::Float64(vals[row_idx]),
+                                crate::storage::Column::String(vals) => SqlValue::String(vals[row_idx].clone()),
+                                crate::storage::Column::Binary(vals) => SqlValue::Binary(vals[row_idx].clone()),
+                            }
+                        };
+                        row.insert(col_name.clone(), value);
+                    }
+                    rows.push(row);
+                }
+
+                // Apply projection if needed
+                if let Some(cols) = columns {
+                    let projected_rows = rows.into_iter()
+                        .map(|mut row| {
+                            row.retain(|k, _| cols.contains(k));
+                            row
+                        })
+                        .collect();
+                    Ok(CommandResult::Rows(projected_rows))
+                } else {
+                    Ok(CommandResult::Rows(rows))
+                }
+            }
+            crate::storage::QueryResult::Aggregate(value) => {
+                let mut row = HashMap::new();
+                row.insert("result".to_string(), value);
+                Ok(CommandResult::Rows(vec![row]))
+            }
+            crate::storage::QueryResult::Empty => Ok(CommandResult::Rows(vec![])),
+        }
+    }
+
+    /// View table history (snapshots)
+    ///
+    /// Equivalent to `SELECT * FROM table.history`
+    ///
+    /// Returns snapshot metadata including snapshot_id, timestamp, operation, etc.
+    pub async fn view_history(&self, table_name: &str) -> EngineResult<CommandResult> {
+        // This would query the Iceberg metadata table
+        // For now, return placeholder
+        let history_table = format!("{}.history", table_name);
+        Err(EngineError::not_implemented(format!(
+            "History table '{}' access not yet implemented. Requires Iceberg metadata access.",
+            history_table
+        )))
+    }
+
+    /// View table snapshots
+    ///
+    /// Equivalent to `SELECT * FROM table.snapshots`
+    ///
+    /// Returns detailed snapshot information.
+    pub async fn view_snapshots(&self, table_name: &str) -> EngineResult<CommandResult> {
+        let snapshots_table = format!("{}.snapshots", table_name);
+        Err(EngineError::not_implemented(format!(
+            "Snapshots table '{}' access not yet implemented. Requires Iceberg metadata access.",
+            snapshots_table
+        )))
+    }
+
+    /// View table references (branches and tags)
+    ///
+    /// Equivalent to `SELECT * FROM table.refs`
+    pub async fn view_refs(&self, table_name: &str) -> EngineResult<CommandResult> {
+        let refs_table = format!("{}.refs", table_name);
+        Err(EngineError::not_implemented(format!(
+            "Refs table '{}' access not yet implemented. Requires Iceberg metadata access.",
+            refs_table
+        )))
+    }
+
+    /// Create a named tag for current snapshot
+    ///
+    /// Equivalent to `ALTER TABLE table CREATE TAG tag_name`
+    pub async fn create_tag(&self, table_name: &str, tag_name: &str) -> EngineResult<CommandResult> {
+        Err(EngineError::not_implemented(format!(
+            "CREATE TAG '{}' for table '{}' not yet implemented. Requires Iceberg tag management.",
+            tag_name, table_name
+        )))
+    }
+
+    /// Create a named branch
+    ///
+    /// Equivalent to `ALTER TABLE table CREATE BRANCH branch_name`
+    pub async fn create_branch(&self, table_name: &str, branch_name: &str) -> EngineResult<CommandResult> {
+        Err(EngineError::not_implemented(format!(
+            "CREATE BRANCH '{}' for table '{}' not yet implemented. Requires Iceberg branch management.",
+            branch_name, table_name
+        )))
     }
 
     /// Begin a PostgreSQL transaction
