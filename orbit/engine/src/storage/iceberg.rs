@@ -36,6 +36,7 @@ use iceberg_catalog_rest::{RestCatalog, RestCatalogBuilder, REST_CATALOG_PROP_UR
 
 use crate::error::{EngineError, EngineResult};
 use crate::storage::{SqlValue, Column, ColumnBatch, NullBitmap};
+use crate::storage::iceberg_ext::{TableMetadataExt, system_time_to_millis};
 use crate::query::{VectorizedExecutor, VectorizedExecutorConfig, AggregateFunction};
 use super::config::StorageBackend;
 
@@ -158,54 +159,160 @@ impl IcebergColdStore {
     ///
     /// # Implementation Status
     ///
-    /// This is a placeholder implementation. The iceberg-rust crate's TableMetadata
-    /// does not currently expose a `snapshot_by_timestamp()` or `snapshots()` method
-    /// to iterate through historical snapshots.
+    /// **NOW IMPLEMENTED** using extension trait stopgap (see `storage::iceberg_ext`).
+    ///
+    /// This implementation uses the `TableMetadataExt` trait which provides snapshot
+    /// access methods that are missing from the iceberg-rust crate. This is a temporary
+    /// stopgap solution until iceberg-rust adds official snapshot APIs.
+    ///
+    /// ## Stopgap Pattern
+    ///
+    /// We use an extension trait to add the missing methods without modifying upstream:
+    /// - `snapshots_ext()` - Access all snapshots
+    /// - `snapshot_by_timestamp_ext(i64)` - Find snapshot by timestamp
+    /// - `snapshot_by_id_ext(i64)` - Find snapshot by ID
+    ///
+    /// When iceberg-rust adds official support, we simply remove the `_ext` suffix
+    /// and delete the extension trait module. See `storage::iceberg_ext` for details.
     ///
     /// ## Alternative Implementations
     ///
     /// See `orbit/engine/ICEBERG_ALTERNATIVES.md` for detailed analysis of:
-    /// - **Icelake**: Complete Rust Iceberg implementation (likely has snapshot API)
+    /// - **Icelake**: Evaluated, found to have compilation issues (not viable)
     /// - **Lakekeeper**: Rust-native REST catalog for metadata management
     /// - **Query Engine Integration**: Trino/Dremio/StarRocks for time travel
     ///
-    /// **Recommendation**: Evaluate Icelake as potential replacement for iceberg-rust.
-    ///
-    /// # Future Implementation
-    ///
-    /// When the iceberg-rust API (or Icelake) provides snapshot access, implement as follows:
-    ///
-    /// ```rust,ignore
-    /// // 1. Convert timestamp to milliseconds
-    /// let timestamp_ms = timestamp.duration_since(UNIX_EPOCH)?.as_millis() as i64;
-    ///
-    /// // 2. Find snapshot at or before timestamp
-    /// let snapshot = self.table.metadata()
-    ///     .snapshots()  // Need API support
-    ///     .iter()
-    ///     .filter(|s| s.timestamp_ms() <= timestamp_ms)
-    ///     .max_by_key(|s| s.timestamp_ms())
-    ///     .ok_or_else(|| EngineError::not_found("No snapshot found"))?;
-    ///
-    /// // 3. Build scan from historical snapshot
-    /// let scan = self.table.scan()
-    ///     .snapshot_id(snapshot.snapshot_id())
-    ///     .build()?;
-    ///
-    /// // 4. Execute scan as normal
-    /// ```
-    ///
-    /// # Workaround
-    ///
-    /// For now, time travel queries will return the current snapshot (latest state).
+    /// **Evaluation Results**: See `orbit/engine/ICELAKE_EVALUATION_RESULTS.md`
     pub async fn query_as_of(
         &self,
-        _timestamp: SystemTime,
-        filter: Option<&FilterPredicate>,
+        timestamp: SystemTime,
+        _filter: Option<&FilterPredicate>,
     ) -> EngineResult<Vec<RecordBatch>> {
-        // Fallback to regular scan of current snapshot
-        // This provides correct functionality but without historical point-in-time capability
-        self.scan(filter).await
+        // 1. Convert timestamp to milliseconds
+        let timestamp_ms = system_time_to_millis(timestamp)?;
+
+        // 2. Find snapshot at or before timestamp using extension trait
+        let snapshot = self.table
+            .metadata()
+            .snapshot_by_timestamp_ext(timestamp_ms)?
+            .ok_or_else(|| EngineError::not_found(
+                format!("No snapshot found at or before timestamp: {}", timestamp_ms)
+            ))?;
+
+        // 3. Build scan from historical snapshot
+        let scan = self.table
+            .scan()
+            .snapshot_id(snapshot.snapshot_id())
+            .build()
+            .map_err(|e| EngineError::storage(
+                format!("Failed to build scan from snapshot {}: {}", snapshot.snapshot_id(), e)
+            ))?;
+
+        // 4. Execute scan and collect Arrow batches
+        let mut batches = Vec::new();
+        let mut stream = scan.to_arrow().await
+            .map_err(|e| EngineError::storage(
+                format!("Failed to create Arrow stream from snapshot: {}", e)
+            ))?;
+
+        use futures::StreamExt;
+        while let Some(batch_result) = stream.next().await {
+            let batch = batch_result
+                .map_err(|e| EngineError::storage(
+                    format!("Failed to read Arrow batch from snapshot: {}", e)
+                ))?;
+            batches.push(batch);
+        }
+
+        Ok(batches)
+    }
+
+    /// Query table by snapshot ID (version-based time travel)
+    ///
+    /// Enables querying specific table versions using snapshot IDs.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// // Query table at snapshot ID 2583872980615177898
+    /// let batches = store.query_by_snapshot_id(2583872980615177898, None).await?;
+    /// ```
+    pub async fn query_by_snapshot_id(
+        &self,
+        snapshot_id: i64,
+        _filter: Option<&FilterPredicate>,
+    ) -> EngineResult<Vec<RecordBatch>> {
+        // Find snapshot by ID using extension trait
+        let snapshot = self.table
+            .metadata()
+            .snapshot_by_id_ext(snapshot_id)?
+            .ok_or_else(|| EngineError::not_found(
+                format!("Snapshot with ID {} not found", snapshot_id)
+            ))?;
+
+        // Build scan from specified snapshot
+        let scan = self.table
+            .scan()
+            .snapshot_id(snapshot.snapshot_id())
+            .build()
+            .map_err(|e| EngineError::storage(
+                format!("Failed to build scan from snapshot {}: {}", snapshot_id, e)
+            ))?;
+
+        // Execute scan and collect Arrow batches
+        let mut batches = Vec::new();
+        let mut stream = scan.to_arrow().await
+            .map_err(|e| EngineError::storage(
+                format!("Failed to create Arrow stream from snapshot: {}", e)
+            ))?;
+
+        use futures::StreamExt;
+        while let Some(batch_result) = stream.next().await {
+            let batch = batch_result
+                .map_err(|e| EngineError::storage(
+                    format!("Failed to read Arrow batch from snapshot: {}", e)
+                ))?;
+            batches.push(batch);
+        }
+
+        Ok(batches)
+    }
+
+    /// Get all snapshots for this table
+    ///
+    /// Returns snapshot metadata for time travel and history queries.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// let snapshots = store.list_snapshots()?;
+    /// for snapshot in snapshots {
+    ///     println!("Snapshot {}: timestamp {}",
+    ///         snapshot.snapshot_id(),
+    ///         snapshot.timestamp_ms());
+    /// }
+    /// ```
+    pub fn list_snapshots(&self) -> EngineResult<Vec<(i64, i64)>> {
+        let snapshots = self.table
+            .metadata()
+            .snapshots_ext()
+            .iter()
+            .map(|s| (s.snapshot_id(), s.timestamp_ms()))
+            .collect();
+
+        Ok(snapshots)
+    }
+
+    /// Get current snapshot
+    ///
+    /// Returns the latest snapshot (most recent commit).
+    pub fn current_snapshot(&self) -> EngineResult<Option<(i64, i64)>> {
+        let snapshot = self.table
+            .metadata()
+            .current_snapshot_ext()?
+            .map(|s| (s.snapshot_id(), s.timestamp_ms()));
+
+        Ok(snapshot)
     }
 
     /// Get table schema
