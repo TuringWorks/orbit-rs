@@ -86,7 +86,6 @@ pub mod monitoring;
 pub mod engine;
 
 /// CPU SIMD acceleration implementations
-#[cfg(feature = "cpu-simd")]
 pub mod cpu;
 
 /// GPU acceleration implementations

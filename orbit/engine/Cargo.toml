@@ -11,6 +11,7 @@ repository = "https://github.com/TuringWorks/orbit-rs"
 # Core Orbit dependencies
 orbit-shared = { path = "../shared" }
 orbit-client = { path = "../client" }
+orbit-compute = { path = "../compute" }
 
 # Async runtime
 tokio = { version = "1.48", features = ["full"] }

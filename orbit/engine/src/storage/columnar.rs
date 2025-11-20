@@ -20,124 +20,8 @@ use std::fmt;
 /// Default batch size for vectorized operations (optimized for L1 cache)
 pub const DEFAULT_BATCH_SIZE: usize = 1024;
 
-/// Null bitmap for efficient null tracking
-///
-/// Uses bit-packing to minimize memory overhead (1 bit per value)
-#[derive(Debug, Clone, PartialEq)]
-pub struct NullBitmap {
-    bits: Vec<u64>,
-    len: usize,
-}
-
-impl NullBitmap {
-    /// Get the length of the null bitmap
-    pub fn len(&self) -> usize {
-        self.len
-    }
-
-    /// Check if the bitmap is empty
-    pub fn is_empty(&self) -> bool {
-        self.len == 0
-    }
-
-    /// Create a new null bitmap with all values non-null
-    pub fn new_all_valid(len: usize) -> Self {
-        let num_words = (len + 63) / 64;
-        Self {
-            bits: vec![u64::MAX; num_words],
-            len,
-        }
-    }
-
-    /// Create a new null bitmap with all values null
-    pub fn new_all_null(len: usize) -> Self {
-        let num_words = (len + 63) / 64;
-        Self {
-            bits: vec![0; num_words],
-            len,
-        }
-    }
-
-    /// Check if value at index is null
-    #[inline]
-    pub fn is_null(&self, index: usize) -> bool {
-        debug_assert!(index < self.len, "Index out of bounds");
-        let word_index = index / 64;
-        let bit_index = index % 64;
-        (self.bits[word_index] & (1u64 << bit_index)) == 0
-    }
-
-    /// Check if value at index is valid (not null)
-    #[inline]
-    pub fn is_valid(&self, index: usize) -> bool {
-        !self.is_null(index)
-    }
-
-    /// Set value at index to null
-    pub fn set_null(&mut self, index: usize) {
-        debug_assert!(index < self.len);
-        let word_index = index / 64;
-        let bit_index = index % 64;
-        self.bits[word_index] &= !(1u64 << bit_index);
-    }
-
-    /// Set value at index to valid (not null)
-    pub fn set_valid(&mut self, index: usize) {
-        debug_assert!(index < self.len);
-        let word_index = index / 64;
-        let bit_index = index % 64;
-        self.bits[word_index] |= 1u64 << bit_index;
-    }
-
-    /// Count the number of null values
-    pub fn null_count(&self) -> usize {
-        // Count only the bits that correspond to actual values (not padding)
-        let mut count = 0;
-        for index in 0..self.len {
-            if self.is_null(index) {
-                count += 1;
-            }
-        }
-        count
-    }
-
-    /// Iterator over null/valid states
-    pub fn iter(&self) -> NullBitmapIter<'_> {
-        NullBitmapIter {
-            bitmap: self,
-            index: 0,
-        }
-    }
-}
-
-/// Iterator over null bitmap values
-pub struct NullBitmapIter<'a> {
-    /// Reference to the null bitmap
-    bitmap: &'a NullBitmap,
-    /// Current iteration index
-    index: usize,
-}
-
-impl<'a> Iterator for NullBitmapIter<'a> {
-    type Item = bool;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.index < self.bitmap.len {
-            let is_null = self.bitmap.is_null(self.index);
-            self.index += 1;
-            Some(is_null)
-        } else {
-            None
-        }
-    }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        let remaining = self.bitmap.len - self.index;
-        (remaining, Some(remaining))
-    }
-}
-
-impl<'a> ExactSizeIterator for NullBitmapIter<'a> {}
+/// Re-export NullBitmap from orbit-compute for consistency
+pub use orbit_compute::cpu::simd::NullBitmap;
 
 /// Typed column storage with type safety
 ///
@@ -306,10 +190,10 @@ impl ColumnBatch {
                 self.row_count
             ));
         }
-        if null_bitmap.len != self.row_count {
+        if null_bitmap.len() != self.row_count {
             return Err(format!(
                 "Null bitmap length {} does not match batch row count {}",
-                null_bitmap.len, self.row_count
+                null_bitmap.len(), self.row_count
             ));
         }
         self.columns.push(column);
@@ -565,7 +449,7 @@ mod tests {
     #[test]
     fn test_null_bitmap() {
         let mut bitmap = NullBitmap::new_all_valid(100);
-        assert_eq!(bitmap.len, 100);
+        assert_eq!(bitmap.len(), 100);
         assert!(bitmap.is_valid(0));
         assert!(bitmap.is_valid(99));
 
@@ -584,7 +468,7 @@ mod tests {
         bitmap.set_null(3);
         bitmap.set_null(7);
 
-        let nulls: Vec<bool> = bitmap.iter().collect();
+        let nulls: Vec<bool> = bitmap.iter().map(|(_, is_null)| is_null).collect();
         assert_eq!(nulls.len(), 10);
         assert!(!nulls[0]); // is_null returns false for valid
         assert!(nulls[3]); // is_null returns true for null

@@ -14,9 +14,9 @@ use std::collections::HashSet;
 
 use crate::error::{EngineError, EngineResult};
 use crate::storage::{SqlValue, Column, ColumnBatch, NullBitmap, DEFAULT_BATCH_SIZE};
-use super::simd::{SimdCapability, SimdFilter, SimdAggregate, simd_capability};
-use super::simd::filters::{SimdFilterI32, SimdFilterI64, SimdFilterF64};
-use super::simd::aggregates::{SimdAggregateI32, SimdAggregateI64, SimdAggregateF64};
+use orbit_compute::cpu::simd::{SimdCapability, SimdFilter, SimdAggregate, simd_capability};
+use orbit_compute::cpu::simd::filters::{SimdFilterI32, SimdFilterI64, SimdFilterF64};
+use orbit_compute::cpu::simd::aggregates::{SimdAggregateI32, SimdAggregateI64, SimdAggregateF64};
 
 /// Plan node types that break pipeline execution
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

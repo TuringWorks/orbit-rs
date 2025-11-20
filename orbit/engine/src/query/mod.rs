@@ -12,7 +12,6 @@ use crate::storage::{FilterPredicate, QueryResult};
 // Module declarations
 pub mod execution;
 pub mod optimizer;
-pub mod simd;
 
 // Re-exports
 pub use execution::{

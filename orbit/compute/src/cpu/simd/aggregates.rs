@@ -4,7 +4,7 @@
 //! Uses SIMD instructions when available with automatic fallback.
 
 use super::{SimdAggregate, simd_capability, SimdCapability};
-use crate::storage::NullBitmap;
+use super::types::NullBitmap;
 
 /// SIMD aggregate for i32 values
 pub struct SimdAggregateI32 {

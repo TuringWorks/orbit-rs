@@ -17,8 +17,9 @@
 
 pub mod filters;
 pub mod aggregates;
+pub mod types;
 
-use crate::storage::NullBitmap;
+pub use types::NullBitmap;
 
 /// Trait for SIMD-capable filter operations
 ///

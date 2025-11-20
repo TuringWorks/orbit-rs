@@ -5155,6 +5155,7 @@ dependencies = [
  "metrics 0.24.2",
  "opendal 0.51.2",
  "orbit-client",
+ "orbit-compute",
  "orbit-shared",
  "parking_lot",
  "parquet 55.2.0",
