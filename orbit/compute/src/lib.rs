@@ -92,6 +92,9 @@ pub mod cpu;
 #[cfg(feature = "gpu-acceleration")]
 pub mod gpu;
 
+/// Unified GPU backend abstraction
+pub mod gpu_backend;
+
 /// Apple Metal GPU acceleration (macOS only)
 #[cfg(target_os = "macos")]
 pub mod gpu_metal;

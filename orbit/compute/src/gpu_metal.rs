@@ -6,6 +6,7 @@
 #![cfg(target_os = "macos")]
 
 use crate::errors::ComputeError;
+use crate::gpu_backend::{FilterOp, GpuBackendType, GpuDevice};
 use metal::*;
 use std::mem;
 
@@ -405,15 +406,66 @@ impl MetalDevice {
     }
 }
 
-/// Filter comparison operations
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum FilterOp {
-    Equal,
-    GreaterThan,
-    GreaterOrEqual,
-    LessThan,
-    LessOrEqual,
-    NotEqual,
+// Implement GpuDevice trait for MetalDevice
+impl GpuDevice for MetalDevice {
+    fn backend_type(&self) -> GpuBackendType {
+        GpuBackendType::Metal
+    }
+
+    fn device_name(&self) -> String {
+        self.device.name().to_string()
+    }
+
+    fn is_available(&self) -> bool {
+        true // If we created the device, it's available
+    }
+
+    fn execute_filter_i32(
+        &self,
+        data: &[i32],
+        value: i32,
+        operation: FilterOp,
+    ) -> Result<Vec<i32>, ComputeError> {
+        MetalDevice::execute_filter_i32(self, data, value, operation)
+    }
+
+    fn execute_filter_i64(
+        &self,
+        data: &[i64],
+        value: i64,
+        operation: FilterOp,
+    ) -> Result<Vec<i32>, ComputeError> {
+        MetalDevice::execute_filter_i64(self, data, value, operation)
+    }
+
+    fn execute_filter_f64(
+        &self,
+        data: &[f64],
+        value: f64,
+        operation: FilterOp,
+    ) -> Result<Vec<i32>, ComputeError> {
+        MetalDevice::execute_filter_f64(self, data, value, operation)
+    }
+
+    fn bitmap_and(&self, mask_a: &[i32], mask_b: &[i32]) -> Result<Vec<i32>, ComputeError> {
+        MetalDevice::bitmap_and(self, mask_a, mask_b)
+    }
+
+    fn bitmap_or(&self, mask_a: &[i32], mask_b: &[i32]) -> Result<Vec<i32>, ComputeError> {
+        MetalDevice::bitmap_or(self, mask_a, mask_b)
+    }
+
+    fn bitmap_not(&self, mask: &[i32]) -> Result<Vec<i32>, ComputeError> {
+        MetalDevice::bitmap_not(self, mask)
+    }
+
+    fn aggregate_sum_i32(&self, data: &[i32]) -> Result<i64, ComputeError> {
+        MetalDevice::aggregate_sum_i32(self, data)
+    }
+
+    fn aggregate_count(&self, mask: &[i32]) -> Result<usize, ComputeError> {
+        MetalDevice::aggregate_count(self, mask)
+    }
 }
 
 /// Metal device information

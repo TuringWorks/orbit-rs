@@ -110,6 +110,7 @@ aligned-vec = "0.5"
 libc = "0.2"
 num_cpus = "1.16"
 rand = "0.8"
+which = "6.0"
 
 # Benchmarking
 criterion = { version = "0.7", features = ["html_reports"], optional = true }
