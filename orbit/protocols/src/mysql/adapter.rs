@@ -4,6 +4,7 @@ use super::auth::{AuthPlugin, AuthState, HandshakeResponse, MySqlAuth};
 use super::packet::MySqlPacket;
 use super::protocol::{build_handshake, MySqlCommand, MySqlPacket as MySqlPacketBuilder};
 use super::types::MySqlType;
+use super::MySqlConfig;
 use crate::error::{ProtocolError, ProtocolResult};
 use crate::postgres_wire::sql::types::{SqlType, SqlValue};
 use crate::postgres_wire::storage::memory::MemoryTableStorage;
@@ -14,30 +15,6 @@ use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::RwLock;
-
-/// MySQL adapter configuration
-#[derive(Debug, Clone)]
-pub struct MySqlConfig {
-    /// Address to listen on
-    pub listen_addr: std::net::SocketAddr,
-    /// Maximum concurrent connections
-    pub max_connections: usize,
-    /// Enable authentication
-    pub authentication_enabled: bool,
-    /// Server version string
-    pub server_version: String,
-}
-
-impl Default for MySqlConfig {
-    fn default() -> Self {
-        Self {
-            listen_addr: "127.0.0.1:3306".parse().unwrap(),
-            max_connections: 1000,
-            authentication_enabled: false,
-            server_version: "8.0.0-Orbit".to_string(),
-        }
-    }
-}
 
 /// Prepared statement information
 #[derive(Debug, Clone)]
