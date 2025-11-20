@@ -2,6 +2,8 @@
 
 // Parallel sum reduction for i32 data
 // Uses shared memory for efficient reduction within workgroups
+// Requires GL_ARB_gpu_shader_int64 extension
+#extension GL_ARB_gpu_shader_int64 : require
 
 layout(local_size_x = 256) in;
 

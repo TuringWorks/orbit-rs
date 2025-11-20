@@ -19,8 +19,8 @@ layout(set = 0, binding = 2) buffer Operation {
 };
 
 // Output buffer
-layout(set = 0, binding = 3) buffer Output {
-    int output[];
+layout(set = 0, binding = 3) buffer OutputBuffer {
+    int result[];
 };
 
 void main() {
@@ -31,18 +31,18 @@ void main() {
     }
 
     int operation = op;
-    int result = 0;
+    int res = 0;
 
     if (operation == 0) {
         // AND operation
-        result = ((mask_a[idx] != 0) && (mask_b[idx] != 0)) ? 1 : 0;
+        res = ((mask_a[idx] != 0) && (mask_b[idx] != 0)) ? 1 : 0;
     } else if (operation == 1) {
         // OR operation
-        result = ((mask_a[idx] != 0) || (mask_b[idx] != 0)) ? 1 : 0;
+        res = ((mask_a[idx] != 0) || (mask_b[idx] != 0)) ? 1 : 0;
     } else if (operation == 2) {
         // NOT operation
-        result = (mask_a[idx] == 0) ? 1 : 0;
+        res = (mask_a[idx] == 0) ? 1 : 0;
     }
 
-    output[idx] = result;
+    result[idx] = res;
 }

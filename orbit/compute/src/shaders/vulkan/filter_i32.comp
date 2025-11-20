@@ -20,8 +20,8 @@ layout(set = 0, binding = 2) buffer Operation {
 };
 
 // Output buffer (0 or 1 for each element)
-layout(set = 0, binding = 3) buffer Output {
-    int output[];
+layout(set = 0, binding = 3) buffer OutputBuffer {
+    int result[];
 };
 
 void main() {
@@ -60,5 +60,5 @@ void main() {
     }
 
     // Write result (1 if matches, 0 if not)
-    output[idx] = matches ? 1 : 0;
+    result[idx] = matches ? 1 : 0;
 }

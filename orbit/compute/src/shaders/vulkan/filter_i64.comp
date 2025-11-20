@@ -22,8 +22,8 @@ layout(set = 0, binding = 2) buffer Operation {
 };
 
 // Output buffer
-layout(set = 0, binding = 3) buffer Output {
-    int output[];
+layout(set = 0, binding = 3) buffer OutputBuffer {
+    int result[];
 };
 
 void main() {
@@ -53,5 +53,5 @@ void main() {
         matches = (element != filter_value);
     }
 
-    output[idx] = matches ? 1 : 0;
+    result[idx] = matches ? 1 : 0;
 }
