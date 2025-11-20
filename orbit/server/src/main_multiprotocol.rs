@@ -5,11 +5,13 @@
 //! - PostgreSQL wire protocol for SQL access
 //! - Redis RESP protocol for key-value and vector operations
 //! - HTTP REST API for web access
+//! - CQL (Cassandra Query Language) protocol for wide-column access
+//! - MySQL wire protocol for MySQL-compatible SQL access
 //! - Cluster membership and node discovery
 //! - Load balancing and routing
 //! - Health monitoring and metrics
 //!
-//! This is a single binary that replaces separate PostgreSQL and Redis servers
+//! This is a single binary that replaces separate database servers (PostgreSQL, Redis, Cassandra, MySQL)
 //! while providing full compatibility with their respective protocols.
 
 use clap::Parser;
@@ -33,6 +35,8 @@ use orbit_protocols::{
     postgres_wire::{PostgresServer, query_engine::QueryEngine},
     resp::RespServer,
     rest::RestServer,
+    cql::{CqlAdapter, CqlConfig},
+    mysql::{MySqlAdapter, MySqlConfig},
 };
 
 // Import configuration
@@ -47,11 +51,13 @@ use config::OrbitServerConfig;
     about = "Orbit Server - Multi-Protocol Distributed Actor System",
     long_about = "The Orbit server provides a unified runtime that natively supports multiple protocols:\n\
     • PostgreSQL wire protocol (port 5432) - Full SQL compatibility with pgvector support\n\
+    • MySQL wire protocol (port 3306) - MySQL-compatible SQL interface\n\
+    • CQL protocol (port 9042) - Cassandra Query Language for wide-column access\n\
     • Redis RESP protocol (port 6379) - Key-value storage with vector operations\n\
     • gRPC API (port 50051) - Actor system management\n\
     • HTTP REST API (port 8080) - Web-friendly interface\n\
     \n\
-    This single server replaces the need for separate PostgreSQL and Redis instances."
+    This single server replaces the need for separate PostgreSQL, MySQL, Cassandra, and Redis instances."
 )]
 struct Args {
     /// Configuration file path
@@ -129,6 +135,36 @@ struct Args {
     )]
     rest_port: Option<u16>,
 
+    /// Enable CQL server
+    #[arg(
+        long,
+        help = "Enable CQL (Cassandra Query Language) protocol server"
+    )]
+    enable_cql: bool,
+
+    /// CQL port
+    #[arg(
+        long,
+        value_name = "PORT",
+        help = "CQL server port (default: 9042)"
+    )]
+    cql_port: Option<u16>,
+
+    /// Enable MySQL server
+    #[arg(
+        long,
+        help = "Enable MySQL wire protocol server"
+    )]
+    enable_mysql: bool,
+
+    /// MySQL port
+    #[arg(
+        long,
+        value_name = "PORT",
+        help = "MySQL server port (default: 3306)"
+    )]
+    mysql_port: Option<u16>,
+
     /// Metrics port
     #[arg(
         short = 'm',
@@ -200,6 +236,8 @@ struct MultiProtocolServer {
     postgres_server: Option<PostgresServer>,
     redis_server: Option<RespServer>,
     rest_server: Option<RestServer>,
+    cql_server: Option<CqlAdapter>,
+    mysql_server: Option<MySqlAdapter>,
 }
 
 impl MultiProtocolServer {
@@ -223,6 +261,8 @@ impl MultiProtocolServer {
             postgres_server: None,
             redis_server: None,
             rest_server: None,
+            cql_server: None,
+            mysql_server: None,
         })
     }
     
@@ -385,17 +425,55 @@ impl MultiProtocolServer {
         if let Some(rest_config) = &self.config.protocols.rest {
             if rest_config.enabled {
                 info!("  🌍 Setting up HTTP REST API server...");
-                
+
                 let rest_server = RestServer::new(
                     format!("{}:{}", self.config.server.bind_address, rest_config.port),
                     self.orbit_client.clone(),
                 );
-                
+
                 self.rest_server = Some(rest_server);
                 info!("    ✅ REST server initialized on port {}", rest_config.port);
             }
         }
-        
+
+        // Initialize CQL server
+        if let Some(cql_config) = &self.config.protocols.cql {
+            if cql_config.enabled {
+                info!("  🗂️  Setting up CQL (Cassandra) protocol server...");
+
+                let cql_adapter_config = CqlConfig {
+                    listen_addr: format!("{}:{}", self.config.server.bind_address, cql_config.port).parse()?,
+                    max_connections: cql_config.max_connections,
+                    authentication_enabled: cql_config.authentication_enabled,
+                    protocol_version: cql_config.protocol_version,
+                };
+
+                let cql_server = CqlAdapter::new(cql_adapter_config).await?;
+
+                self.cql_server = Some(cql_server);
+                info!("    ✅ CQL server initialized on port {}", cql_config.port);
+            }
+        }
+
+        // Initialize MySQL server
+        if let Some(mysql_config) = &self.config.protocols.mysql {
+            if mysql_config.enabled {
+                info!("  🐬 Setting up MySQL wire protocol server...");
+
+                let mysql_adapter_config = MySqlConfig {
+                    listen_addr: format!("{}:{}", self.config.server.bind_address, mysql_config.port).parse()?,
+                    max_connections: mysql_config.max_connections,
+                    authentication_enabled: mysql_config.authentication_enabled,
+                    server_version: mysql_config.server_version.clone(),
+                };
+
+                let mysql_server = MySqlAdapter::new(mysql_adapter_config).await?;
+
+                self.mysql_server = Some(mysql_server);
+                info!("    ✅ MySQL server initialized on port {}", mysql_config.port);
+            }
+        }
+
         info!("✅ All protocol servers initialized");
         Ok(())
     }
@@ -438,7 +516,29 @@ impl MultiProtocolServer {
             });
             handles.push(handle);
         }
-        
+
+        // Start CQL server
+        if let Some(cql_server) = self.cql_server {
+            let handle = tokio::spawn(async move {
+                info!("🗂️  CQL server starting...");
+                if let Err(e) = cql_server.start().await {
+                    error!("CQL server error: {}", e);
+                }
+            });
+            handles.push(handle);
+        }
+
+        // Start MySQL server
+        if let Some(mysql_server) = self.mysql_server {
+            let handle = tokio::spawn(async move {
+                info!("🐬 MySQL server starting...");
+                if let Err(e) = mysql_server.start().await {
+                    error!("MySQL server error: {}", e);
+                }
+            });
+            handles.push(handle);
+        }
+
         // Start gRPC actor system server
         let grpc_config = self.config.protocols.grpc.as_ref().unwrap();
         if grpc_config.enabled {
@@ -618,6 +718,38 @@ fn apply_cli_overrides(config: &mut OrbitServerConfig, args: &Args) {
         }
     }
 
+    // CQL overrides
+    if args.enable_cql {
+        if let Some(cql_config) = &mut config.protocols.cql {
+            cql_config.enabled = true;
+            if let Some(port) = args.cql_port {
+                cql_config.port = port;
+            }
+        } else {
+            config.protocols.cql = Some(config::CqlConfig {
+                enabled: true,
+                port: args.cql_port.unwrap_or(9042),
+                ..Default::default()
+            });
+        }
+    }
+
+    // MySQL overrides
+    if args.enable_mysql {
+        if let Some(mysql_config) = &mut config.protocols.mysql {
+            mysql_config.enabled = true;
+            if let Some(port) = args.mysql_port {
+                mysql_config.port = port;
+            }
+        } else {
+            config.protocols.mysql = Some(config::MySqlConfig {
+                enabled: true,
+                port: args.mysql_port.unwrap_or(3306),
+                ..Default::default()
+            });
+        }
+    }
+
     // Development mode overrides - enable all protocols
     if args.dev_mode {
         if let Some(grpc_config) = &mut config.protocols.grpc {
@@ -638,7 +770,17 @@ fn apply_cli_overrides(config: &mut OrbitServerConfig, args: &Args) {
         } else {
             config.protocols.rest = Some(config::RestConfig::default());
         }
-        
+        if let Some(cql_config) = &mut config.protocols.cql {
+            cql_config.enabled = true;
+        } else {
+            config.protocols.cql = Some(config::CqlConfig::default());
+        }
+        if let Some(mysql_config) = &mut config.protocols.mysql {
+            mysql_config.enabled = true;
+        } else {
+            config.protocols.mysql = Some(config::MySqlConfig::default());
+        }
+
         info!("🔧 Development mode: All protocols enabled");
     }
 
@@ -684,7 +826,17 @@ fn print_enabled_protocols(config: &OrbitServerConfig, args: &Args) {
         let port = config.protocols.rest.as_ref().unwrap().port;
         info!("  🌍 HTTP REST API:         {}:{}", args.bind, port);
     }
-    
+
+    if enabled.contains(&"cql") {
+        let port = config.protocols.cql.as_ref().unwrap().port;
+        info!("  🗂️  CQL (Cassandra):      {}:{} (cqlsh compatible)", args.bind, port);
+    }
+
+    if enabled.contains(&"mysql") {
+        let port = config.protocols.mysql.as_ref().unwrap().port;
+        info!("  🐬 MySQL Wire:            {}:{} (mysql compatible)", args.bind, port);
+    }
+
     info!("  📊 Prometheus Metrics:    {}:{}", args.bind, args.metrics_port);
     
     if !args.seed_nodes.is_empty() {
@@ -695,7 +847,9 @@ fn print_enabled_protocols(config: &OrbitServerConfig, args: &Args) {
     
     info!(""); // Empty line for readability
     info!("🎉 Ready to serve multi-protocol database workloads!");
-    info!("   • Connect with psql for SQL queries and pgvector operations");  
+    info!("   • Connect with psql for SQL queries and pgvector operations");
+    info!("   • Connect with mysql for MySQL-compatible SQL queries");
+    info!("   • Connect with cqlsh for Cassandra Query Language");
     info!("   • Connect with redis-cli for key-value and vector operations");
     info!("   • Use gRPC clients for actor system management");
     info!("   • Use HTTP REST for web applications");

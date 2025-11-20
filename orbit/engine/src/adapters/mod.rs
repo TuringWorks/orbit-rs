@@ -184,12 +184,16 @@ pub mod postgres;
 pub mod redis;
 pub mod rest;
 pub mod orbitql;
+pub mod cql;
+pub mod mysql;
 
 // Re-exports
 pub use postgres::PostgresAdapter;
 pub use redis::RedisAdapter;
 pub use rest::RestAdapter;
 pub use orbitql::OrbitQLAdapter;
+pub use cql::CqlAdapter;
+pub use mysql::MySqlAdapter;
 
 /// Protocol adapter context containing shared engine components
 #[derive(Clone)]

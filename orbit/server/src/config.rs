@@ -228,9 +228,15 @@ pub struct ProtocolsConfig {
     
     /// Cypher (Neo4j-compatible) server
     pub cypher: Option<CypherConfig>,
-    
+
     /// MCP (Model Context Protocol) server
     pub mcp: Option<McpConfig>,
+
+    /// CQL (Cassandra Query Language) server
+    pub cql: Option<CqlConfig>,
+
+    /// MySQL wire protocol server
+    pub mysql: Option<MySqlConfig>,
 }
 
 /// gRPC server configuration
@@ -348,15 +354,59 @@ pub struct CypherConfig {
 pub struct McpConfig {
     /// Enable MCP server
     pub enabled: bool,
-    
+
     /// MCP server port
     pub port: u16,
-    
+
     /// Supported MCP version
     pub version: String,
-    
+
     /// Available tools configuration
     pub tools: McpToolsConfig,
+}
+
+/// CQL (Cassandra Query Language) server configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CqlConfig {
+    /// Enable CQL server
+    pub enabled: bool,
+
+    /// CQL server port (default: 9042)
+    pub port: u16,
+
+    /// Maximum concurrent connections
+    pub max_connections: usize,
+
+    /// Connection timeout in seconds
+    pub connection_timeout_secs: u64,
+
+    /// CQL protocol version (default: 4)
+    pub protocol_version: u8,
+
+    /// Enable authentication
+    pub authentication_enabled: bool,
+}
+
+/// MySQL wire protocol server configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MySqlConfig {
+    /// Enable MySQL server
+    pub enabled: bool,
+
+    /// MySQL server port (default: 3306)
+    pub port: u16,
+
+    /// Maximum concurrent connections
+    pub max_connections: usize,
+
+    /// Connection timeout in seconds
+    pub connection_timeout_secs: u64,
+
+    /// Server version string
+    pub server_version: String,
+
+    /// Enable authentication
+    pub authentication_enabled: bool,
 }
 
 /// SQL engine specific configuration
@@ -957,6 +1007,8 @@ impl Default for ProtocolsConfig {
             rest: Some(RestConfig::default()),
             cypher: None,
             mcp: None,
+            cql: None,
+            mysql: None,
         }
     }
 }
@@ -1011,6 +1063,32 @@ impl Default for RestConfig {
             request_timeout_secs: 30,
             cors: None,
             rate_limit: None,
+        }
+    }
+}
+
+impl Default for CqlConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            port: 9042,
+            max_connections: 1000,
+            connection_timeout_secs: 30,
+            protocol_version: 4,
+            authentication_enabled: false,
+        }
+    }
+}
+
+impl Default for MySqlConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            port: 3306,
+            max_connections: 1000,
+            connection_timeout_secs: 30,
+            server_version: "8.0.0-Orbit".to_string(),
+            authentication_enabled: false,
         }
     }
 }
@@ -1369,7 +1447,19 @@ impl OrbitServerConfig {
                 return Err(format!("Port {} is used by multiple services", rest.port).into());
             }
         }
-        
+
+        if let Some(cql) = &self.protocols.cql {
+            if cql.enabled && !used_ports.insert(cql.port) {
+                return Err(format!("Port {} is used by multiple services", cql.port).into());
+            }
+        }
+
+        if let Some(mysql) = &self.protocols.mysql {
+            if mysql.enabled && !used_ports.insert(mysql.port) {
+                return Err(format!("Port {} is used by multiple services", mysql.port).into());
+            }
+        }
+
         if !used_ports.insert(self.monitoring.metrics.port) {
             return Err(format!("Metrics port {} is used by another service", self.monitoring.metrics.port).into());
         }
@@ -1402,6 +1492,12 @@ impl OrbitServerConfig {
         }
         if self.protocols.mcp.as_ref().map_or(false, |c| c.enabled) {
             protocols.push("mcp");
+        }
+        if self.protocols.cql.as_ref().map_or(false, |c| c.enabled) {
+            protocols.push("cql");
+        }
+        if self.protocols.mysql.as_ref().map_or(false, |c| c.enabled) {
+            protocols.push("mysql");
         }
         
         protocols
