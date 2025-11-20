@@ -14,7 +14,8 @@ use std::collections::HashSet;
 
 use crate::error::{EngineError, EngineResult};
 use crate::storage::{SqlValue, Column, ColumnBatch, NullBitmap, DEFAULT_BATCH_SIZE};
-use orbit_compute::cpu::simd::{SimdCapability, SimdFilter, SimdAggregate, simd_capability};
+use orbit_compute::cpu::{CPUEngine, SimdLevel};
+use orbit_compute::cpu::simd::{SimdFilter, SimdAggregate, SimdCapability, simd_capability};
 use orbit_compute::cpu::simd::filters::{SimdFilterI32, SimdFilterI64, SimdFilterF64};
 use orbit_compute::cpu::simd::aggregates::{SimdAggregateI32, SimdAggregateI64, SimdAggregateF64};
 
@@ -163,6 +164,8 @@ pub enum AggregateFunction {
 pub struct VectorizedExecutor {
     /// Executor configuration
     config: VectorizedExecutorConfig,
+    /// CPU compute engine for SIMD operations
+    cpu_engine: CPUEngine,
     /// SIMD filter for i32 values
     simd_filter_i32: SimdFilterI32,
     /// SIMD filter for i64 values
@@ -187,6 +190,7 @@ impl VectorizedExecutor {
     pub fn with_config(config: VectorizedExecutorConfig) -> Self {
         Self {
             config,
+            cpu_engine: CPUEngine::new(),
             simd_filter_i32: SimdFilterI32::new(),
             simd_filter_i64: SimdFilterI64::new(),
             simd_filter_f64: SimdFilterF64::new(),
@@ -199,6 +203,16 @@ impl VectorizedExecutor {
     /// Get executor configuration
     pub fn config(&self) -> &VectorizedExecutorConfig {
         &self.config
+    }
+
+    /// Get CPU engine reference
+    pub fn cpu_engine(&self) -> &CPUEngine {
+        &self.cpu_engine
+    }
+
+    /// Get detected SIMD level
+    pub fn simd_level(&self) -> SimdLevel {
+        self.cpu_engine.simd_level()
     }
 
     /// Execute a vectorized table scan
