@@ -23,6 +23,7 @@
 //!     listen_addr: "127.0.0.1:3306".parse()?,
 //!     max_connections: 1000,
 //!     authentication_enabled: false,
+//!     server_version: "8.0.0-Orbit".to_string(),
 //! };
 //!
 //! let adapter = MySqlAdapter::new(config).await?;

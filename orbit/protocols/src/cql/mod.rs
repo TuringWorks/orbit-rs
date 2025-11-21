@@ -23,6 +23,7 @@
 //!     listen_addr: "127.0.0.1:9042".parse()?,
 //!     max_connections: 1000,
 //!     authentication_enabled: false,
+//!     protocol_version: 4,
 //! };
 //!
 //! let adapter = CqlAdapter::new(config).await?;
