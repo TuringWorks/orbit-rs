@@ -4,11 +4,11 @@ title: ML SQL Functions Design for Orbit-RS
 category: documentation
 ---
 
-# ML SQL Functions Design for Orbit-RS
+## ML SQL Functions Design for Orbit-RS
 
-**Machine Learning capabilities integrated directly into the SQL engine for scalable data processing**
+## Machine Learning capabilities integrated directly into the SQL engine for scalable data processing
 
-## 🎯 **Vision & Objectives**
+## 🎯 Vision & Objectives
 
 Transform Orbit-RS into a **"Database + ML Engine"** that provides:
 
@@ -18,7 +18,7 @@ Transform Orbit-RS into a **"Database + ML Engine"** that provides:
 - **Real-time inference** at query time
 - **Vector similarity** with advanced ML algorithms
 
-## 🏗️ **Architecture Overview**
+## Architecture Overview
 
 ### **1. SQL Function Registry**
 

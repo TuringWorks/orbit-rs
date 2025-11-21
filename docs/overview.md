@@ -6,9 +6,7 @@ category: "architecture"
 permalink: /overview.html
 ---
 
-# Orbit-RS: Architecture Overview
-
-**Production-Ready Multi-Model Distributed Database Platform**
+## Production-Ready Multi-Model Distributed Database Platform
 
 Orbit-RS is a high-performance, distributed multi-model database system written in Rust that combines virtual actor architecture with comprehensive database capabilities including SQL, vector operations, time-series, graph data, and AI/ML integration.
 
@@ -96,7 +94,7 @@ Orbit-RS has successfully completed its Phase 8 milestone, delivering a **compre
 
 Orbit-RS is built as a **comprehensive workspace** with **14 core modules** and **20+ example applications**:
 
-```
+```text
 orbit-rs/
 ├── 💭 Core Framework
 │   ├── orbit-client/         # Client-side actor proxies and invocation

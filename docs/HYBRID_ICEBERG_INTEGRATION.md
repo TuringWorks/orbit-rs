@@ -15,6 +15,7 @@ Successfully integrated `IcebergColdStore` into `HybridStorageManager`, creating
 - **Cold Tier**: Iceberg tables on S3 (long-term archival) ✅ NEW
 
 The integration enables:
+
 - ✅ **Automatic tier routing**: Queries automatically target the appropriate tier
 - ✅ **Iceberg scan integration**: Cold tier queries use metadata pruning
 - ✅ **SIMD aggregations**: 14.8x speedup preserved through Iceberg
@@ -30,6 +31,7 @@ The integration enables:
 **File**: `orbit/protocols/src/postgres_wire/sql/execution/hybrid.rs`
 
 #### Before (Phase 1)
+
 ```rust
 pub struct HybridStorageManager {
     hot_store: Arc<RwLock<RowBasedStore>>,
@@ -41,6 +43,7 @@ pub struct HybridStorageManager {
 ```
 
 #### After (Phase 2) ✅
+
 ```rust
 pub struct HybridStorageManager {
     hot_store: Arc<RwLock<RowBasedStore>>,
@@ -59,6 +62,7 @@ pub struct HybridStorageManager {
 ```
 
 **Key Changes**:
+
 - `cold_store` now uses `IcebergColdStore` when feature enabled
 - Maintains backward compatibility with simple columnar fallback
 - No `RwLock` needed (Iceberg handles concurrency internally)
@@ -91,6 +95,7 @@ impl HybridStorageManager {
 ```
 
 **Usage Example**:
+
 ```rust
 // Create Iceberg cold store
 let iceberg_store = Arc::new(
@@ -150,6 +155,7 @@ async fn execute_scan(
 ```
 
 **Benefits**:
+
 - ✅ Metadata pruning reduces S3 requests (100-1000x faster planning)
 - ✅ Only scans relevant partitions based on time range
 - ✅ Seamlessly combines data from multiple tiers
@@ -191,11 +197,13 @@ async fn execute_aggregation(
 ```
 
 **Performance Stack**:
+
 1. **Iceberg**: Metadata pruning → 100-1000x faster query planning
 2. **Parquet**: Column selection → Read only needed columns (I/O reduction)
 3. **SIMD**: Vectorized aggregation → 14.8x faster computation
 
 **Measured Performance** (100K rows, SUM aggregation):
+
 - Without Iceberg: ~20ms (columnar + SIMD)
 - With Iceberg: ~2ms query planning + ~18ms execution = **~20ms total** (metadata overhead minimal for small datasets)
 - **At scale (1TB+)**: Query planning dominates, Iceberg provides 100-1000x improvement
@@ -264,6 +272,7 @@ pub async fn migrate_tiers(&self) -> ProtocolResult<MigrationStats> {
 ```
 
 **Phase 3 Goal**: Implement actual Iceberg write path
+
 - Convert `ColumnBatch` → Arrow `RecordBatch`
 - Write to Parquet files
 - Generate manifest files
@@ -273,7 +282,7 @@ pub async fn migrate_tiers(&self) -> ProtocolResult<MigrationStats> {
 
 ## Architecture Diagram
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                   PostgreSQL Wire Protocol                  │
 │              (Query Parser & Execution Planner)             │
@@ -281,7 +290,7 @@ pub async fn migrate_tiers(&self) -> ProtocolResult<MigrationStats> {
                              │
                              ▼
 ┌─────────────────────────────────────────────────────────────┐
-│              HybridStorageManager ✅ UPDATED                │
+│              HybridStorageManager                           │
 │  • Route queries to appropriate tier(s)                     │
 │  • Combine results from multiple tiers                      │
 │  • Manage tier migrations                                   │
@@ -291,7 +300,7 @@ pub async fn migrate_tiers(&self) -> ProtocolResult<MigrationStats> {
          ▼                 ▼                 ▼
    ┌──────────┐     ┌───────────┐     ┌──────────────────┐
    │   HOT    │     │   WARM    │     │      COLD        │
-   │  TIER    │     │   TIER    │     │  (Iceberg) ✅    │
+   │  TIER    │     │   TIER    │     │  (Iceberg)       │
    │          │     │           │     │                  │
    │ Row-     │     │ Hybrid    │     │ • Metadata       │
    │ Based    │     │ Columnar  │     │   Pruning        │
@@ -310,7 +319,7 @@ pub async fn migrate_tiers(&self) -> ProtocolResult<MigrationStats> {
 
 ### Example 1: Full Table Scan (SELECT * FROM events)
 
-```
+```text
 User Query: SELECT * FROM events WHERE timestamp > '2025-01-01'
 
 1. HybridStorageManager.execute_scan()
@@ -337,12 +346,14 @@ User Query: SELECT * FROM events WHERE timestamp > '2025-01-01'
 ```
 
 **Performance**:
+
 - Hot tier scan: ~1ms (1K rows)
 - Warm tier scan: ~50ms (50K rows)
 - Cold tier scan: ~100ms query planning + ~5s data read (1M rows)
 - **Total**: ~5.15s for 1M rows
 
 **With Iceberg Metadata Pruning**:
+
 - Hot tier scan: ~1ms
 - Warm tier scan: ~50ms
 - Cold tier scan: **~10ms query planning** (100x faster) + ~5s data read
@@ -353,7 +364,7 @@ User Query: SELECT * FROM events WHERE timestamp > '2025-01-01'
 
 ### Example 2: Aggregation Query (SELECT SUM(value) FROM events)
 
-```
+```text
 User Query: SELECT SUM(value) FROM events WHERE region = 'us-west'
 
 1. HybridStorageManager.execute_aggregation()
@@ -370,6 +381,7 @@ User Query: SELECT SUM(value) FROM events WHERE region = 'us-west'
 ```
 
 **Performance Stack**:
+
 1. Metadata pruning: 100-1000x faster query planning
 2. Column selection: Read only "value" column (4x I/O reduction for 4-column table)
 3. SIMD aggregation: 14.8x faster than scalar
@@ -388,6 +400,7 @@ cargo test -p orbit-protocols --features iceberg-cold --lib hybrid
 ```
 
 **Results**:
+
 - `test_storage_tier_age_suitability` ✅
 - `test_row_based_store_insert` ✅
 - `test_hybrid_storage_manager` ✅
@@ -401,6 +414,7 @@ cargo test -p orbit-protocols --features iceberg-cold --lib iceberg_cold
 ```
 
 **Results**:
+
 - `test_column_batch_to_arrow_with_nulls` ✅
 - `test_column_batch_to_arrow_int32` ✅
 - `test_column_batch_to_arrow_multiple_types` ✅
@@ -467,6 +481,7 @@ Both configurations compile successfully!
 | **Cold (Iceberg)** | **Metadata + SIMD** | **~22ms** | **Best of all** |
 
 **Iceberg Advantage**:
+
 - Metadata pruning: Skip irrelevant files
 - Column selection: Read only needed columns
 - SIMD execution: 14.8x aggregation speedup
@@ -484,6 +499,7 @@ cargo build -p orbit-protocols
 ```
 
 **Behavior**:
+
 - `cold_store` uses simple `Arc<RwLock<Option<ColumnBatch>>>`
 - `with_cold_store()` method not available
 - `execute_scan()` and `execute_aggregation()` use fallback paths
@@ -497,6 +513,7 @@ cargo build -p orbit-protocols --features iceberg-cold
 ```
 
 **Behavior**:
+
 - `cold_store` uses `Option<Arc<IcebergColdStore>>`
 - `with_cold_store()` method available for injection
 - Query execution uses Iceberg path when available
@@ -532,6 +549,7 @@ impl IcebergColdStore {
 ```
 
 **Enables**:
+
 - Automatic hot → cold migration
 - Background archival processes
 - Complete tier lifecycle
@@ -556,6 +574,7 @@ pub async fn scan(
 ```
 
 **Enables**:
+
 - Partition pruning (100-1000x speedup)
 - File-level filtering
 - Row group skipping
@@ -575,6 +594,7 @@ pub async fn query_as_of(
 ```
 
 **Enables**:
+
 - Historical queries (SELECT * FROM events AS OF '2025-01-01')
 - Audit trails
 - Rollback capabilities
@@ -584,6 +604,7 @@ pub async fn query_as_of(
 **Goal**: Use Iceberg for warm tier as well
 
 **Benefits**:
+
 - Unified storage format
 - Better compression
 - Metadata-based queries
@@ -598,6 +619,7 @@ pub async fn query_as_of(
 Phase 2 successfully integrated IcebergColdStore into HybridStorageManager, creating a production-ready three-tier storage architecture:
 
 ✅ **Completed**:
+
 - Iceberg cold tier integration
 - Query routing logic (scan + aggregation)
 - Conditional compilation (feature flags)
@@ -606,18 +628,21 @@ Phase 2 successfully integrated IcebergColdStore into HybridStorageManager, crea
 - Build verification successful
 
 🎯 **Ready for Phase 3**:
+
 - Write path implementation
 - Filter pushdown
 - Time travel queries
 - Production deployment
 
 **Performance Delivered**:
+
 - 100-1000x query planning speedup (via metadata pruning)
 - 14.8x aggregation speedup (via SIMD, preserved)
 - 2.51x storage compression (via Parquet ZSTD)
 - Seamless multi-tier query execution
 
 **Code Quality**:
+
 - Clean separation of concerns
 - Feature-flagged dependencies
 - No breaking changes

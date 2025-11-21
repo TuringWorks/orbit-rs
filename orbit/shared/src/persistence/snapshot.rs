@@ -1,12 +1,13 @@
 use crate::addressable::AddressableReference;
 use crate::exception::{OrbitError, OrbitResult};
+use crate::security::encryption::{EncryptionManager, KeyManagementSystem, KeyRotationPolicy, KeyStoreType};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio::time::{Duration, Instant};
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
 /// Actor state snapshot containing serialized state and metadata
@@ -400,6 +401,213 @@ impl PersistenceBackend for MemoryPersistenceBackend {
     }
 }
 
+/// Encrypted snapshot for storing encrypted state data
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EncryptedSnapshot {
+    /// Actor reference this snapshot belongs to
+    pub actor_reference: AddressableReference,
+    /// Unique identifier for this snapshot
+    pub snapshot_id: String,
+    /// Version number for optimistic concurrency control
+    pub version: u64,
+    /// Encrypted state data (ciphertext)
+    pub encrypted_data: Vec<u8>,
+    /// Key ID used for encryption (needed for decryption)
+    pub key_id: String,
+    /// Timestamp when snapshot was created
+    pub created_at: i64,
+    /// Timestamp when snapshot was last updated
+    pub updated_at: i64,
+    /// Hash of the original (plaintext) state data for integrity checking
+    pub state_hash: String,
+    /// Tags for categorizing snapshots
+    pub tags: HashMap<String, String>,
+    /// TTL for automatic cleanup (in seconds)
+    pub ttl_seconds: Option<u64>,
+}
+
+/// Encrypted persistence backend that wraps another backend with AES-256-GCM encryption
+pub struct EncryptedPersistenceBackend {
+    inner: Arc<dyn PersistenceBackend>,
+    encryption_manager: Arc<EncryptionManager>,
+}
+
+impl EncryptedPersistenceBackend {
+    /// Create a new encrypted persistence backend
+    pub fn new(inner: Arc<dyn PersistenceBackend>, encryption_manager: Arc<EncryptionManager>) -> Self {
+        Self {
+            inner,
+            encryption_manager,
+        }
+    }
+
+    /// Create with auto-initialized key management
+    pub async fn with_auto_key_management(inner: Arc<dyn PersistenceBackend>) -> OrbitResult<Self> {
+        let kms = Arc::new(KeyManagementSystem::new(
+            KeyRotationPolicy::default(),
+            KeyStoreType::Memory,
+        ));
+
+        // Generate and set initial key
+        kms.rotate_keys().await?;
+
+        let encryption_manager = Arc::new(EncryptionManager::new(kms, None));
+
+        Ok(Self {
+            inner,
+            encryption_manager,
+        })
+    }
+
+    /// Encrypt a snapshot's state data
+    async fn encrypt_snapshot(&self, snapshot: &ActorSnapshot) -> OrbitResult<EncryptedSnapshot> {
+        // Serialize state data to JSON bytes
+        let state_bytes = serde_json::to_vec(&snapshot.state_data)
+            .map_err(|e| OrbitError::internal(format!("Failed to serialize state: {}", e)))?;
+
+        // Encrypt with key ID tracking
+        let (encrypted_data, key_id) = self.encryption_manager.encrypt_with_key_id(&state_bytes).await?;
+
+        Ok(EncryptedSnapshot {
+            actor_reference: snapshot.actor_reference.clone(),
+            snapshot_id: snapshot.snapshot_id.clone(),
+            version: snapshot.version,
+            encrypted_data,
+            key_id,
+            created_at: snapshot.created_at,
+            updated_at: snapshot.updated_at,
+            state_hash: snapshot.state_hash.clone(),
+            tags: snapshot.tags.clone(),
+            ttl_seconds: snapshot.ttl_seconds,
+        })
+    }
+
+    /// Decrypt an encrypted snapshot back to original
+    async fn decrypt_snapshot(&self, encrypted: &EncryptedSnapshot) -> OrbitResult<ActorSnapshot> {
+        // Decrypt the data
+        let decrypted_bytes = self.encryption_manager
+            .decrypt(&encrypted.encrypted_data, &encrypted.key_id)
+            .await?;
+
+        // Deserialize state data
+        let state_data: serde_json::Value = serde_json::from_slice(&decrypted_bytes)
+            .map_err(|e| OrbitError::internal(format!("Failed to deserialize decrypted state: {}", e)))?;
+
+        Ok(ActorSnapshot {
+            actor_reference: encrypted.actor_reference.clone(),
+            snapshot_id: encrypted.snapshot_id.clone(),
+            version: encrypted.version,
+            state_data,
+            created_at: encrypted.created_at,
+            updated_at: encrypted.updated_at,
+            state_hash: encrypted.state_hash.clone(),
+            tags: encrypted.tags.clone(),
+            ttl_seconds: encrypted.ttl_seconds,
+        })
+    }
+}
+
+#[async_trait]
+impl PersistenceBackend for EncryptedPersistenceBackend {
+    async fn save_snapshot(&self, snapshot: &ActorSnapshot) -> OrbitResult<()> {
+        // Encrypt the snapshot
+        let encrypted = self.encrypt_snapshot(snapshot).await?;
+
+        // Store encrypted data as the state_data in a wrapper ActorSnapshot
+        // This allows us to use the existing backend without changes
+        let wrapper_state = serde_json::to_value(&encrypted)
+            .map_err(|e| OrbitError::internal(format!("Failed to serialize encrypted snapshot: {}", e)))?;
+
+        let wrapper_snapshot = ActorSnapshot {
+            actor_reference: snapshot.actor_reference.clone(),
+            snapshot_id: snapshot.snapshot_id.clone(),
+            version: snapshot.version,
+            state_data: wrapper_state,
+            created_at: snapshot.created_at,
+            updated_at: snapshot.updated_at,
+            state_hash: snapshot.state_hash.clone(),
+            tags: snapshot.tags.clone(),
+            ttl_seconds: snapshot.ttl_seconds,
+        };
+
+        self.inner.save_snapshot(&wrapper_snapshot).await?;
+        debug!("Saved encrypted snapshot for actor: {}", snapshot.actor_reference);
+        Ok(())
+    }
+
+    async fn load_snapshot(&self, actor_ref: &AddressableReference) -> OrbitResult<Option<ActorSnapshot>> {
+        if let Some(wrapper_snapshot) = self.inner.load_snapshot(actor_ref).await? {
+            // Deserialize the encrypted snapshot from the wrapper
+            let encrypted: EncryptedSnapshot = serde_json::from_value(wrapper_snapshot.state_data)
+                .map_err(|e| OrbitError::internal(format!("Failed to deserialize encrypted snapshot: {}", e)))?;
+
+            // Decrypt and return
+            let decrypted = self.decrypt_snapshot(&encrypted).await?;
+            debug!("Loaded and decrypted snapshot for actor: {}", actor_ref);
+            Ok(Some(decrypted))
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn load_snapshot_version(
+        &self,
+        actor_ref: &AddressableReference,
+        version: u64,
+    ) -> OrbitResult<Option<ActorSnapshot>> {
+        if let Some(wrapper_snapshot) = self.inner.load_snapshot_version(actor_ref, version).await? {
+            let encrypted: EncryptedSnapshot = serde_json::from_value(wrapper_snapshot.state_data)
+                .map_err(|e| OrbitError::internal(format!("Failed to deserialize encrypted snapshot: {}", e)))?;
+
+            let decrypted = self.decrypt_snapshot(&encrypted).await?;
+            Ok(Some(decrypted))
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn list_snapshots(&self, actor_ref: &AddressableReference) -> OrbitResult<Vec<ActorSnapshot>> {
+        let wrapper_snapshots = self.inner.list_snapshots(actor_ref).await?;
+        let mut decrypted_snapshots = Vec::with_capacity(wrapper_snapshots.len());
+
+        for wrapper in wrapper_snapshots {
+            match serde_json::from_value::<EncryptedSnapshot>(wrapper.state_data) {
+                Ok(encrypted) => match self.decrypt_snapshot(&encrypted).await {
+                    Ok(decrypted) => decrypted_snapshots.push(decrypted),
+                    Err(e) => {
+                        warn!("Failed to decrypt snapshot {}: {}", wrapper.snapshot_id, e);
+                    }
+                },
+                Err(e) => {
+                    warn!("Failed to deserialize encrypted snapshot {}: {}", wrapper.snapshot_id, e);
+                }
+            }
+        }
+
+        Ok(decrypted_snapshots)
+    }
+
+    async fn delete_snapshot(&self, actor_ref: &AddressableReference, snapshot_id: &str) -> OrbitResult<()> {
+        self.inner.delete_snapshot(actor_ref, snapshot_id).await
+    }
+
+    async fn delete_all_snapshots(&self, actor_ref: &AddressableReference) -> OrbitResult<()> {
+        self.inner.delete_all_snapshots(actor_ref).await
+    }
+
+    async fn cleanup_expired_snapshots(&self) -> OrbitResult<u64> {
+        self.inner.cleanup_expired_snapshots().await
+    }
+
+    async fn health_check(&self) -> OrbitResult<bool> {
+        self.inner.health_check().await
+    }
+
+    async fn get_storage_stats(&self) -> OrbitResult<PersistenceMetrics> {
+        self.inner.get_storage_stats().await
+    }
+}
+
 /// Actor state manager that handles persistence operations
 pub struct ActorStateManager {
     backend: Arc<dyn PersistenceBackend>,
@@ -685,5 +893,125 @@ mod tests {
 
         // Wait and check expiry (in real test, we'd manipulate the timestamp)
         // For now, just verify the logic works
+    }
+
+    #[tokio::test]
+    async fn test_encrypted_persistence_backend() {
+        // Create inner memory backend
+        let inner = Arc::new(MemoryPersistenceBackend::new());
+
+        // Create encrypted backend with auto key management
+        let encrypted_backend = EncryptedPersistenceBackend::with_auto_key_management(inner)
+            .await
+            .unwrap();
+
+        let actor_ref = AddressableReference {
+            addressable_type: "EncryptedActor".to_string(),
+            key: Key::StringKey {
+                key: "encrypted-test-1".to_string(),
+            },
+        };
+
+        // Create a snapshot with sensitive data
+        let state_data = serde_json::json!({
+            "secret_value": 12345,
+            "password_hash": "hashed_password_here",
+            "api_key": "secret_api_key"
+        });
+        let snapshot = ActorSnapshot::new(actor_ref.clone(), state_data.clone(), 1);
+
+        // Save encrypted snapshot
+        encrypted_backend.save_snapshot(&snapshot).await.unwrap();
+
+        // Load and decrypt snapshot
+        let loaded = encrypted_backend.load_snapshot(&actor_ref).await.unwrap();
+        assert!(loaded.is_some());
+        let loaded_snapshot = loaded.unwrap();
+
+        // Verify data integrity after encryption/decryption roundtrip
+        assert_eq!(loaded_snapshot.version, 1);
+        assert_eq!(loaded_snapshot.state_data, state_data);
+        assert!(loaded_snapshot.verify_integrity());
+    }
+
+    #[tokio::test]
+    async fn test_encrypted_persistence_multiple_versions() {
+        let inner = Arc::new(MemoryPersistenceBackend::new());
+        let encrypted_backend = EncryptedPersistenceBackend::with_auto_key_management(inner)
+            .await
+            .unwrap();
+
+        let actor_ref = AddressableReference {
+            addressable_type: "VersionedActor".to_string(),
+            key: Key::StringKey {
+                key: "versioned-1".to_string(),
+            },
+        };
+
+        // Save multiple versions
+        for version in 1..=5 {
+            let state_data = serde_json::json!({
+                "counter": version,
+                "data": format!("version_{}", version)
+            });
+            let snapshot = ActorSnapshot::new(actor_ref.clone(), state_data, version);
+            encrypted_backend.save_snapshot(&snapshot).await.unwrap();
+        }
+
+        // List all snapshots
+        let snapshots = encrypted_backend.list_snapshots(&actor_ref).await.unwrap();
+        assert!(snapshots.len() >= 1); // At least the latest version
+
+        // Load specific version
+        let version_3 = encrypted_backend.load_snapshot_version(&actor_ref, 3).await.unwrap();
+        assert!(version_3.is_some());
+        let v3 = version_3.unwrap();
+        assert_eq!(v3.version, 3);
+        assert_eq!(v3.state_data["counter"], 3);
+    }
+
+    #[tokio::test]
+    async fn test_encrypted_state_manager() {
+        let inner = Arc::new(MemoryPersistenceBackend::new());
+        let encrypted_backend = Arc::new(
+            EncryptedPersistenceBackend::with_auto_key_management(inner)
+                .await
+                .unwrap()
+        );
+
+        let config = PersistenceConfig {
+            encryption_enabled: true,
+            ..Default::default()
+        };
+
+        let manager = ActorStateManager::new(encrypted_backend, config);
+
+        let actor_ref = AddressableReference {
+            addressable_type: "SecureActor".to_string(),
+            key: Key::StringKey {
+                key: "secure-1".to_string(),
+            },
+        };
+
+        #[derive(Serialize, Deserialize, Debug, PartialEq)]
+        struct SecretState {
+            api_key: String,
+            balance: i64,
+        }
+
+        let secret_state = SecretState {
+            api_key: "sk_live_super_secret_key".to_string(),
+            balance: 1000000,
+        };
+
+        // Save encrypted state
+        manager.save_state(&actor_ref, &secret_state, 1).await.unwrap();
+
+        // Load and verify
+        let loaded: Option<(SecretState, u64)> = manager.load_state(&actor_ref).await.unwrap();
+        assert!(loaded.is_some());
+        let (loaded_state, version) = loaded.unwrap();
+        assert_eq!(loaded_state, secret_state);
+        assert_eq!(version, 1);
     }
 }

@@ -261,7 +261,7 @@ GRAPHRAG.EXPAND_QUERY <kg_name> <query_text> [MAX_EXPANSIONS <n>]
 GRAPHRAG.RECOMMEND <kg_name> <entity_id> [ALGORITHM <pagerank|centrality|similarity>]
 ```
 
-## 🔄 Data Flow Architecture
+## Data Flow Architecture
 
 ### 1. Knowledge Graph Construction Flow
 
@@ -320,7 +320,7 @@ Path Scoring & Pruning
 Ranked Connection Paths
 ```
 
-## 🧮 Integration Strategies
+## Integration Strategies
 
 ### 1. Vector-Enhanced Graph Nodes
 

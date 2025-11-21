@@ -35,6 +35,7 @@ pub struct CqlAdapter {
 }
 
 /// Prepared statement
+#[allow(dead_code)] // Fields reserved for future prepared statement implementation
 struct PreparedStatement {
     /// Statement ID
     id: Vec<u8>,

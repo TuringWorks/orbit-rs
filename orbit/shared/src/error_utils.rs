@@ -26,7 +26,6 @@ mod tests {
     use super::*;
     use crate::{config_error, io_error, parse_error};
 
-    #[deprecated(since = "0.1.0", note = "Use error module instead")]
     #[test]
     fn test_error_macros() {
         let config_err = config_error!("Missing configuration");
@@ -41,8 +40,6 @@ mod tests {
         let parse_err = parse_error!("Invalid syntax", "SELECT * FROM", 10);
         assert!(matches!(parse_err, OrbitError::ParseError { .. }));
     }
-
-    #[deprecated(since = "0.1.0", note = "Use error module instead")]
 
     #[test]
     fn test_error_context() {

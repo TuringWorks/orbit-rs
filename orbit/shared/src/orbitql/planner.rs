@@ -6,9 +6,9 @@
 #[cfg(test)]
 use crate::orbitql::ast::BinaryOperator;
 use crate::orbitql::ast::{
-    AggregateFunction, DeleteStatement, Expression, FromClause, GraphPattern, InsertStatement,
-    JoinType, SelectField, SelectStatement, SortDirection, Statement, TimeRange,
-    TimeSeriesAggregation, TimeWindow, UpdateStatement,
+    AggregateFunction, DeleteStatement, EdgeDirection, Expression, FromClause, GraphPath,
+    GraphPattern, GraphStep, InsertStatement, JoinType, SelectField, SelectStatement, SortDirection,
+    Statement, TimeRange, TimeSeriesAggregation, TimeWindow, TraverseStatement, UpdateStatement,
 };
 use crate::orbitql::optimizer::OptimizationError;
 use serde::{Deserialize, Serialize};
@@ -170,6 +170,32 @@ impl QueryPlanner {
             Statement::Insert(insert) => self.plan_insert(insert),
             Statement::Update(update) => self.plan_update(update),
             Statement::Delete(delete) => self.plan_delete(delete),
+            Statement::Traverse(traverse) => self.plan_traverse(traverse),
+            Statement::Transaction(_) => {
+                // Transaction statements don't need complex planning
+                Ok(ExecutionPlan {
+                    root: PlanNode::TableScan {
+                        table: "_transaction".to_string(),
+                        columns: vec![],
+                        filter: None,
+                    },
+                    estimated_cost: 0.1,
+                    estimated_rows: 0,
+                })
+            }
+            Statement::Relate(_) => {
+                // RELATE creates graph edges
+                Ok(ExecutionPlan {
+                    root: PlanNode::TableScan {
+                        table: "_relate".to_string(),
+                        columns: vec![],
+                        filter: None,
+                    },
+                    estimated_cost: 1.0,
+                    estimated_rows: 1,
+                })
+            }
+            Statement::Live(live) => self.plan_select(*live.query),
             _ => Err(PlanningError::UnsupportedOperation(
                 "Statement type not yet supported in planner".to_string(),
             )),
@@ -224,9 +250,9 @@ impl QueryPlanner {
             };
         }
 
-        // Add GROUP BY aggregation
-        if !stmt.group_by.is_empty() {
-            let aggregates = self.extract_aggregates_from_fields(&stmt.fields)?;
+        // Add GROUP BY aggregation, or aggregation without GROUP BY (e.g., SELECT COUNT(*))
+        let aggregates = self.extract_aggregates_from_fields(&stmt.fields)?;
+        if !stmt.group_by.is_empty() || !aggregates.is_empty() {
             root = PlanNode::Aggregation {
                 input: Box::new(root),
                 group_by: stmt.group_by,
@@ -378,6 +404,48 @@ impl QueryPlanner {
                 input: Box::new(root),
             };
         }
+
+        let (estimated_cost, estimated_rows) = self.estimate_plan_cost(&root)?;
+
+        Ok(ExecutionPlan {
+            root,
+            estimated_cost,
+            estimated_rows,
+        })
+    }
+
+    /// Plan TRAVERSE statement for graph traversal
+    fn plan_traverse(&self, stmt: TraverseStatement) -> Result<ExecutionPlan, PlanningError> {
+        // Create a GraphPattern from the TRAVERSE statement
+        let graph_pattern = GraphPattern {
+            path: GraphPath {
+                steps: vec![
+                    // Start node
+                    GraphStep::Node {
+                        label: None,
+                        properties: None,
+                    },
+                    // Edge traversal
+                    GraphStep::Edge {
+                        direction: EdgeDirection::Outgoing,
+                        label: Some(stmt.edge_type),
+                        properties: None,
+                    },
+                    // Target nodes
+                    GraphStep::Node {
+                        label: None,
+                        properties: None,
+                    },
+                ],
+            },
+            where_clause: stmt.where_clause,
+        };
+
+        let root = PlanNode::GraphTraversal {
+            pattern: graph_pattern,
+            start_nodes: vec![stmt.from_node],
+            max_depth: stmt.max_depth,
+        };
 
         let (estimated_cost, estimated_rows) = self.estimate_plan_cost(&root)?;
 

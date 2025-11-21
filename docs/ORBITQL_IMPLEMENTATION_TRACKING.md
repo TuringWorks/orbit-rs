@@ -8,9 +8,9 @@ category: documentation
 
 ## Unified Multi-Model Query Language for Orbit-RS
 
-[![Implementation Status](https://img.shields.io/badge/Status-Production%20Ready-brightgreen.svg)](#implementation-status)
+[![Implementation Status](https://img.shields.io/badge/Status-Production%20Ready-brightgreen.svg)](#-implementation-status-overview)
 [![Documentation](https://img.shields.io/badge/Docs-Complete-blue.svg)](#documentation-status)
-[![Test Coverage](https://img.shields.io/badge/Tests-90%25-brightgreen.svg)](#testing-status)
+[![Test Coverage](https://img.shields.io/badge/Tests-90%25-brightgreen.svg)](#%F0%9F%A7%AA-testing-status)
 
 ---
 

@@ -49,3 +49,49 @@ export const redisCommands = [
   'ping', 'echo', 'info', 'dbsize', 'flushdb', 'flushall', 'select',
   'auth', 'quit', 'shutdown', 'lastsave', 'save', 'bgsave'
 ];
+
+// MySQL keywords (similar to SQL but with MySQL-specific extensions)
+export const mysqlKeywords = [
+  ...orbitqlKeywords,
+  'engine', 'charset', 'collate', 'auto_increment', 'unsigned',
+  'zerofill', 'binary', 'varbinary', 'tinyint', 'smallint', 'mediumint',
+  'bigint', 'decimal', 'float', 'double', 'bit', 'year', 'enum', 'set',
+  'show', 'describe', 'explain', 'use', 'lock', 'unlock', 'grant', 'revoke'
+];
+
+// CQL (Cassandra Query Language) keywords
+export const cqlKeywords = [
+  'select', 'from', 'where', 'insert', 'into', 'values', 'update', 'set',
+  'delete', 'create', 'drop', 'alter', 'table', 'keyspace', 'index',
+  'primary', 'key', 'partition', 'clustering', 'order', 'by', 'asc', 'desc',
+  'allow', 'filtering', 'using', 'ttl', 'timestamp', 'batch', 'apply',
+  'truncate', 'grant', 'revoke', 'use', 'describe', 'copy', 'consistency',
+  'level', 'one', 'quorum', 'all', 'any', 'local_quorum', 'each_quorum',
+  'serial', 'local_serial', 'local_one'
+];
+
+// Cypher (Neo4j) keywords
+export const cypherKeywords = [
+  'match', 'where', 'return', 'create', 'merge', 'delete', 'detach', 'remove',
+  'set', 'with', 'unwind', 'union', 'call', 'yield', 'order', 'by', 'skip',
+  'limit', 'distinct', 'optional', 'as', 'and', 'or', 'not', 'xor',
+  'case', 'when', 'then', 'else', 'end', 'is', 'null', 'exists',
+  'all', 'any', 'none', 'single', 'start', 'end', 'node', 'relationship',
+  'rel', 'path', 'shortestpath', 'allshortestpaths', 'count', 'collect',
+  'sum', 'avg', 'min', 'max', 'head', 'last', 'tail', 'size', 'keys',
+  'labels', 'type', 'id', 'properties', 'toInteger', 'toFloat', 'toString',
+  'toBoolean', 'coalesce', 'timestamp', 'datetime', 'date', 'time'
+];
+
+// AQL (ArangoDB Query Language) keywords
+export const aqlKeywords = [
+  'for', 'in', 'return', 'let', 'filter', 'sort', 'limit', 'collect',
+  'with', 'into', 'keep', 'count', 'aggregate', 'group', 'distinct',
+  'insert', 'update', 'replace', 'upsert', 'remove', 'let', 'with',
+  'into', 'options', 'new', 'old', 'outbound', 'inbound', 'any',
+  'all', 'shortest_path', 'k_shortest_paths', 'k_paths', 'p_paths',
+  'traversal', 'graph', 'shortest_path', 'k_shortest_paths',
+  'document', 'collection', 'edge', 'vertex', 'prune', 'search',
+  'analyzer', 'boost', 'min_match', 'prefix', 'fuzzy', 'wildcard',
+  'phrase', 'near', 'within', 'fulltext', 'geo_distance', 'geo_contains'
+];

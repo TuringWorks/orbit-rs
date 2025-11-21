@@ -27,7 +27,7 @@ The MySQL adapter implements MySQL wire protocol 4.1+, enabling seamless integra
 
 ### Architecture
 
-```
+```text
 ┌─────────────────┐
 │  MySQL Client   │ (mysql CLI, MySQL Workbench, etc.)
 └────────┬────────┘
@@ -176,7 +176,7 @@ let config = MySqlConfig::default();
 | UPDATE | ✅ Full | `UPDATE users SET name = 'Bob' WHERE id = 1` |
 | DELETE | ✅ Full | `DELETE FROM users WHERE id = 1` |
 
-### Transactions
+### Transaction Example
 
 | Operation | Support | Example |
 |-----------|---------|---------|
@@ -285,6 +285,7 @@ CREATE TABLE documents (
 ### Connection String Examples
 
 **Python (mysql-connector-python)**:
+
 ```python
 conn = mysql.connector.connect(
     host='127.0.0.1',
@@ -296,6 +297,7 @@ conn = mysql.connector.connect(
 ```
 
 **Node.js (mysql2)**:
+
 ```javascript
 const connection = await mysql.createConnection({
     host: '127.0.0.1',
@@ -307,11 +309,13 @@ const connection = await mysql.createConnection({
 ```
 
 **Go**:
+
 ```go
 db, err := sql.Open("mysql", "orbit:@tcp(127.0.0.1:3306)/orbit")
 ```
 
 **Java (JDBC)**:
+
 ```java
 Connection conn = DriverManager.getConnection(
     "jdbc:mysql://127.0.0.1:3306/orbit",
@@ -442,6 +446,7 @@ Tested on: Apple M1 Pro, 16GB RAM, macOS
 **Problem**: `Can't connect to MySQL server on '127.0.0.1' (61)`
 
 **Solution**:
+
 ```bash
 # Check if server is running
 netstat -an | grep 3306
@@ -455,6 +460,7 @@ tail -f orbit-mysql.log
 **Problem**: `Access denied for user 'orbit'@'localhost'`
 
 **Solution**:
+
 ```rust
 // Disable authentication for testing
 let config = MySqlConfig {
@@ -468,6 +474,7 @@ let config = MySqlConfig {
 **Problem**: `Invalid value for column type`
 
 **Solution**:
+
 ```sql
 -- Check column types
 DESCRIBE your_table;
@@ -482,6 +489,7 @@ INSERT INTO users (id, name) VALUES (1, 'Alice');  -- Correct
 **Problem**: Slow query performance
 
 **Solutions**:
+
 1. Enable query logging to identify slow queries
 2. Create indexes on frequently queried columns
 3. Use EXPLAIN to analyze query plans

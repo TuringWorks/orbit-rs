@@ -837,8 +837,8 @@ impl VectorizedExecutor {
         query: &crate::query::Query,
         data: &ColumnBatch,
     ) -> EngineResult<ColumnBatch> {
-        use orbit_compute::gpu_metal::{FilterOp, MetalDevice};
-        use crate::storage::SqlValue;
+        
+        use orbit_compute::gpu_metal::MetalDevice;
 
         tracing::info!(
             "Executing query with Metal GPU: table={}, rows={}",
@@ -892,8 +892,8 @@ impl VectorizedExecutor {
         batch: &ColumnBatch,
         predicate: &crate::storage::FilterPredicate,
     ) -> EngineResult<ColumnBatch> {
-        use crate::storage::{Column, FilterPredicate, SqlValue};
-        use orbit_compute::gpu_metal::FilterOp;
+        use crate::storage::FilterPredicate;
+        use orbit_compute::gpu_backend::FilterOp;
 
         match predicate {
             FilterPredicate::Eq(column, value) => {
@@ -956,7 +956,7 @@ impl VectorizedExecutor {
         device: &orbit_compute::gpu_metal::MetalDevice,
         batch: &ColumnBatch,
         column_name: &str,
-        op: orbit_compute::gpu_metal::FilterOp,
+        op: orbit_compute::gpu_backend::FilterOp,
         value: &crate::storage::SqlValue,
     ) -> EngineResult<ColumnBatch> {
         use crate::storage::{Column, SqlValue};

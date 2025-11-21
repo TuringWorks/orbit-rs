@@ -88,6 +88,8 @@ pub enum TokenType {
     Edge,
     Path,
     Connected,
+    Traverse,  // TRAVERSE for graph traversal
+    MaxDepth,  // MAX_DEPTH for traversal depth limit
 
     // Time-series keywords
     Metrics,
@@ -96,6 +98,7 @@ pub enum TokenType {
     Range,
     Now,
     Interval,
+    DurationLiteral, // Duration literals like 3h, 2m, 1d, 30s, 100ms
 
     // ML keywords
     Model,
@@ -251,6 +254,8 @@ impl Token {
                 | Edge
                 | Path
                 | Connected
+                | Traverse
+                | MaxDepth
                 | Metrics
                 | Aggregate
                 | Window
@@ -446,6 +451,8 @@ impl Lexer {
         keywords.insert("EDGE".to_string(), TokenType::Edge);
         keywords.insert("PATH".to_string(), TokenType::Path);
         keywords.insert("CONNECTED".to_string(), TokenType::Connected);
+        keywords.insert("TRAVERSE".to_string(), TokenType::Traverse);
+        keywords.insert("MAX_DEPTH".to_string(), TokenType::MaxDepth);
 
         // Time-series keywords
         keywords.insert("METRICS".to_string(), TokenType::Metrics);
@@ -1174,14 +1181,48 @@ impl Lexer {
             }
         }
 
-        let token_type = if is_float {
-            TokenType::Float
+        // Check for duration suffixes (h, m, s, d, ms, us, ns)
+        let mut duration_suffix = String::new();
+        if let Some(&ch) = chars.peek() {
+            // Check for duration suffixes: ms, us, ns (2-char) or h, m, s, d (1-char)
+            if ch == 'm' || ch == 'u' || ch == 'n' {
+                // Peek ahead to see if this is ms, us, or ns
+                let mut peek_iter = chars.clone();
+                peek_iter.next();
+                if let Some(&next_ch) = peek_iter.peek() {
+                    if next_ch == 's' {
+                        duration_suffix.push(ch);
+                        duration_suffix.push('s');
+                        chars.next();
+                        chars.next();
+                        *position += 2;
+                        *column += 2;
+                    } else if ch == 'm' {
+                        // Just 'm' for minutes
+                        duration_suffix.push(ch);
+                        chars.next();
+                        *position += 1;
+                        *column += 1;
+                    }
+                }
+            } else if ch == 'h' || ch == 's' || ch == 'd' {
+                duration_suffix.push(ch);
+                chars.next();
+                *position += 1;
+                *column += 1;
+            }
+        }
+
+        let (token_type, token_value) = if !duration_suffix.is_empty() {
+            (TokenType::DurationLiteral, format!("{}{}", number, duration_suffix))
+        } else if is_float {
+            (TokenType::Float, number)
         } else {
-            TokenType::Integer
+            (TokenType::Integer, number)
         };
         tokens.push(Token::new(
             token_type,
-            number,
+            token_value,
             line,
             start_column,
             start_pos,

@@ -86,9 +86,14 @@ pub fn parse_create_table(parser: &mut SqlParser) -> ParseResult<Statement> {
     }))
 }
 
-/// Parse CREATE INDEX statement
+/// Parse CREATE INDEX statement (called after UNIQUE is already consumed if present)
 pub fn parse_create_index(parser: &mut SqlParser) -> ParseResult<Statement> {
     parser.expect(Token::Index)?;
+    parse_create_index_internal(parser)
+}
+
+/// Internal function to parse CREATE INDEX (without consuming INDEX token)
+pub(crate) fn parse_create_index_internal(parser: &mut SqlParser) -> ParseResult<Statement> {
 
     // Check for IF NOT EXISTS
     let if_not_exists = if parser.matches(&[Token::If]) {
@@ -188,6 +193,7 @@ pub fn parse_create_index(parser: &mut SqlParser) -> ParseResult<Statement> {
 
     Ok(Statement::CreateIndex(CreateIndexStatement {
         if_not_exists,
+        unique: false, // Set by caller if UNIQUE was present
         name,
         table,
         columns,
@@ -197,8 +203,14 @@ pub fn parse_create_index(parser: &mut SqlParser) -> ParseResult<Statement> {
     }))
 }
 
-/// Parse CREATE VIEW statement
+/// Parse CREATE VIEW statement (called after OR REPLACE is already consumed if present)
 pub fn parse_create_view(parser: &mut SqlParser) -> ParseResult<Statement> {
+    parser.expect(Token::View)?;
+    parse_create_view_internal(parser)
+}
+
+/// Internal function to parse CREATE VIEW
+pub(crate) fn parse_create_view_internal(parser: &mut SqlParser) -> ParseResult<Statement> {
     // Check for materialized view
     let materialized = if parser.matches(&[Token::Materialized]) {
         parser.advance()?;
@@ -206,8 +218,6 @@ pub fn parse_create_view(parser: &mut SqlParser) -> ParseResult<Statement> {
     } else {
         false
     };
-
-    parser.expect(Token::View)?;
 
     // Check for IF NOT EXISTS
     let if_not_exists = if parser.matches(&[Token::If]) {
@@ -264,7 +274,7 @@ pub fn parse_create_view(parser: &mut SqlParser) -> ParseResult<Statement> {
         columns,
         query,
         materialized,
-        replace: false,
+        replace: false, // Set by caller if OR REPLACE was present
     }))
 }
 
@@ -769,11 +779,10 @@ pub fn parse_drop_extension(parser: &mut SqlParser) -> ParseResult<Statement> {
 
 /// Parse column definition
 fn parse_column_definition(parser: &mut SqlParser) -> ParseResult<ColumnDefinition> {
-    // Parse column name
-    let name = if let Some(Token::Identifier(col_name)) = &parser.current_token {
-        let name = col_name.clone();
+    // Parse column name (can be identifier or keyword used as identifier)
+    let name = if let Some(col_name) = parser.current_token.as_ref().and_then(utilities::token_to_identifier_name) {
         parser.advance()?;
-        name
+        col_name
     } else {
         return Err(ParseError {
             message: "Expected column name".to_string(),

@@ -9,8 +9,12 @@ import { MLModelManager } from '@/components/MLModelManager';
 import { DataVisualization } from '@/components/DataVisualization';
 import { SampleQueries } from '@/components/SampleQueries';
 import QueryResultsTable from '@/components/QueryResultsTable';
+import { ConnectionManager } from '@/components/ConnectionManager';
+import { QueryHistoryPanel } from '@/components/QueryHistoryPanel';
+import { KeyboardShortcuts } from '@/components/KeyboardShortcuts';
 import { TauriService, handleTauriError } from '@/services/tauri';
 import { useQueryTabs } from '@/hooks/useQueryTabs';
+import { useHotkeys } from 'react-hotkeys-hook';
 import { 
   Connection, 
   QueryType, 
@@ -322,8 +326,10 @@ const App: React.FC = () => {
   const [connections, setConnections] = useState<Connection[]>([]);
   const [currentConnection, setCurrentConnection] = useState<Connection | null>(null);
   const [resultsView, setResultsView] = useState<'table' | 'chart' | 'models'>('table');
-  const [rightPanelView, setRightPanelView] = useState<'models' | 'samples'>('samples');
+  const [rightPanelView, setRightPanelView] = useState<'models' | 'samples' | 'connections' | 'history'>('samples');
   const [error, setError] = useState<string | null>(null);
+  const [showConnectionManager, setShowConnectionManager] = useState(false);
+  const [showShortcuts, setShowShortcuts] = useState(false);
   
   const {
     queryTabs,
@@ -335,6 +341,11 @@ const App: React.FC = () => {
     updateTabState,
     getCurrentTab
   } = useQueryTabs();
+
+  // Keyboard shortcuts
+  useHotkeys('ctrl+/,cmd+/', () => {
+    setShowShortcuts(true);
+  });
 
   useEffect(() => {
     loadConnections();
@@ -469,6 +480,31 @@ const App: React.FC = () => {
           <Logo>
             <div className="icon">🌌</div>
             Orbit Desktop
+            <button
+              onClick={() => setShowShortcuts(true)}
+              style={{
+                marginLeft: '12px',
+                background: 'none',
+                border: 'none',
+                color: '#999999',
+                cursor: 'pointer',
+                fontSize: '12px',
+                padding: '4px 8px',
+                borderRadius: '4px',
+                transition: 'all 0.2s'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = '#3c3c3c';
+                e.currentTarget.style.color = '#ffffff';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'none';
+                e.currentTarget.style.color = '#999999';
+              }}
+              title="Keyboard Shortcuts (Ctrl+/)"
+            >
+              ⌨️ Shortcuts
+            </button>
           </Logo>
           
           <ConnectionStatus>
@@ -485,8 +521,14 @@ const App: React.FC = () => {
               ))}
             </ConnectionSelect>
             
+            <Button 
+              onClick={() => setShowConnectionManager(true)}
+              title="Manage Connections"
+            >
+              ⚙️ Manage
+            </Button>
+            
             <Button onClick={() => createNewTab()}>+ New Query</Button>
-            <Button onClick={() => createNewTab(QueryType.Redis)}>+ Redis</Button>
           </ConnectionStatus>
         </Header>
 
@@ -596,39 +638,79 @@ const App: React.FC = () => {
 
             {/* Right Panel - Additional Tools */}
             <div style={{ background: '#1e1e1e', borderLeft: '1px solid #3c3c3c', display: 'flex', flexDirection: 'column' }}>
-              <div style={{ display: 'flex', borderBottom: '1px solid #3c3c3c', background: '#2d2d2d' }}>
+              <div style={{ display: 'flex', borderBottom: '1px solid #3c3c3c', background: '#2d2d2d', flexWrap: 'wrap' }}>
                 <button
                   style={{
-                    padding: '8px 16px',
+                    padding: '8px 12px',
                     background: rightPanelView === 'samples' ? '#0078d4' : 'transparent',
                     border: 'none',
                     color: rightPanelView === 'samples' ? 'white' : '#cccccc',
                     cursor: 'pointer',
-                    fontSize: '13px',
+                    fontSize: '12px',
                     borderBottom: rightPanelView === 'samples' ? '2px solid #0078d4' : '2px solid transparent'
                   }}
                   onClick={() => setRightPanelView('samples')}
                 >
-                  📚 Sample Queries
+                  📚 Samples
                 </button>
                 <button
                   style={{
-                    padding: '8px 16px',
+                    padding: '8px 12px',
+                    background: rightPanelView === 'connections' ? '#0078d4' : 'transparent',
+                    border: 'none',
+                    color: rightPanelView === 'connections' ? 'white' : '#cccccc',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    borderBottom: rightPanelView === 'connections' ? '2px solid #0078d4' : '2px solid transparent'
+                  }}
+                  onClick={() => setRightPanelView('connections')}
+                >
+                  🔌 Connections
+                </button>
+                <button
+                  style={{
+                    padding: '8px 12px',
+                    background: rightPanelView === 'history' ? '#0078d4' : 'transparent',
+                    border: 'none',
+                    color: rightPanelView === 'history' ? 'white' : '#cccccc',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    borderBottom: rightPanelView === 'history' ? '2px solid #0078d4' : '2px solid transparent'
+                  }}
+                  onClick={() => setRightPanelView('history')}
+                >
+                  📜 History
+                </button>
+                <button
+                  style={{
+                    padding: '8px 12px',
                     background: rightPanelView === 'models' ? '#0078d4' : 'transparent',
                     border: 'none',
                     color: rightPanelView === 'models' ? 'white' : '#cccccc',
                     cursor: 'pointer',
-                    fontSize: '13px',
+                    fontSize: '12px',
                     borderBottom: rightPanelView === 'models' ? '2px solid #0078d4' : '2px solid transparent'
                   }}
                   onClick={() => setRightPanelView('models')}
                 >
-                  🤖 ML Models
+                  🤖 Models
                 </button>
               </div>
               <div style={{ flex: 1, overflow: 'hidden' }}>
                 {rightPanelView === 'samples' && (
                   <SampleQueries onSelectQuery={handleSampleQuerySelect} />
+                )}
+                {rightPanelView === 'connections' && (
+                  <ConnectionManager 
+                    connections={connections} 
+                    onConnectionsChange={loadConnections}
+                  />
+                )}
+                {rightPanelView === 'history' && (
+                  <QueryHistoryPanel 
+                    connectionId={currentConnection?.id}
+                    onSelectQuery={handleSampleQuerySelect}
+                  />
                 )}
                 {rightPanelView === 'models' && (
                   <MLModelManager connection={currentConnection} />
@@ -638,6 +720,8 @@ const App: React.FC = () => {
           </Split>
         </MainContent>
       </AppContainer>
+      
+      <KeyboardShortcuts isOpen={showShortcuts} onClose={() => setShowShortcuts(false)} />
     </ThemeProvider>
   );
 };

@@ -244,7 +244,7 @@ mod tests {
 
     #[test]
     fn test_auth_state_transitions() {
-        let mut auth = MySqlAuth::new(AuthPlugin::NativePassword);
+        let auth = MySqlAuth::new(AuthPlugin::NativePassword);
         assert_eq!(auth.state(), &AuthState::AwaitingHandshake);
     }
 

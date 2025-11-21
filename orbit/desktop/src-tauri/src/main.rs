@@ -17,17 +17,22 @@ use chrono;
 mod connections;
 mod queries;
 mod models;
+mod storage;
+mod encryption;
 
 use connections::{ConnectionManager, Connection, ConnectionInfo, ConnectionStatus, ConnectionType};
 use queries::{QueryExecutor, QueryResult, QueryRequest};
 use models::{ModelManager, ModelInfo, MLFunctionInfo};
+use storage::{StorageManager, AppStorage};
+use encryption::EncryptionManager;
 
 /// Application state
-#[derive(Default)]
 struct AppState {
     connections: RwLock<ConnectionManager>,
     query_executor: RwLock<QueryExecutor>,
     model_manager: RwLock<ModelManager>,
+    storage: StorageManager,
+    encryption: EncryptionManager,
 }
 
 /// Response wrapper for all API calls
@@ -67,10 +72,25 @@ async fn create_connection(
     state: State<'_, AppState>,
 ) -> Result<ApiResponse<String>, String> {
     let mut manager = state.connections.write().await;
-    match manager.create_connection(connection_info).await {
-        Ok(connection_id) => Ok(ApiResponse::success(connection_id)),
-        Err(e) => Ok(ApiResponse::error(e.to_string())),
+    let connection_id = match manager.create_connection(connection_info.clone()).await {
+        Ok(id) => id,
+        Err(e) => return Ok(ApiResponse::error(e.to_string())),
+    };
+    
+    // Save to storage
+    let mut storage = state.storage.load()
+        .map_err(|e| format!("Failed to load storage: {}", e))?;
+    
+    if let Some(conn) = manager.get_connection(&connection_id).await {
+        let stored_conn = conn.to_stored(&state.encryption)
+            .map_err(|e| format!("Failed to encrypt connection: {}", e))?;
+        storage.connections.push(stored_conn);
+        
+        state.storage.save(&storage)
+            .map_err(|e| format!("Failed to save storage: {}", e))?;
     }
+    
+    Ok(ApiResponse::success(connection_id))
 }
 
 #[tauri::command]
@@ -89,70 +109,27 @@ async fn test_connection(
 async fn get_connections(
     state: tauri::State<'_, AppState>
 ) -> Result<ApiResponse<Vec<Connection>>, String> {
-    let manager = state.connections.read().await;
-    let mut connections = manager.list_connections().await;
+    // Load connections from storage
+    let storage = state.storage.load()
+        .map_err(|e| format!("Failed to load storage: {}", e))?;
     
-    // Add some sample connections for demonstration
-    if connections.is_empty() {
-        connections = vec![
-            Connection {
-                id: "local-postgres".to_string(),
-                info: ConnectionInfo {
-                    name: "Local PostgreSQL".to_string(),
-                    connection_type: ConnectionType::PostgreSQL,
-                    host: "localhost".to_string(),
-                    port: 5432,
-                    database: Some("orbit_demo".to_string()),
-                    username: Some("postgres".to_string()),
-                    password: None,
-                    ssl_mode: None,
-                    connection_timeout: None,
-                    additional_params: HashMap::new(),
-                },
-                status: ConnectionStatus::Disconnected,
-                created_at: chrono::Utc::now(),
-                last_used: None,
-                query_count: 0,
-            },
-            Connection {
-                id: "local-orbitql".to_string(),
-                info: ConnectionInfo {
-                    name: "Local OrbitQL".to_string(),
-                    connection_type: ConnectionType::OrbitQL,
-                    host: "localhost".to_string(),
-                    port: 8080,
-                    database: None,
-                    username: None,
-                    password: None,
-                    ssl_mode: None,
-                    connection_timeout: None,
-                    additional_params: HashMap::new(),
-                },
-                status: ConnectionStatus::Connected,
-                created_at: chrono::Utc::now(),
-                last_used: None,
-                query_count: 0,
-            },
-            Connection {
-                id: "local-redis".to_string(),
-                info: ConnectionInfo {
-                    name: "Local Redis".to_string(),
-                    connection_type: ConnectionType::Redis,
-                    host: "localhost".to_string(),
-                    port: 6379,
-                    database: None,
-                    username: None,
-                    password: None,
-                    ssl_mode: None,
-                    connection_timeout: None,
-                    additional_params: HashMap::new(),
-                },
-                status: ConnectionStatus::Connected,
-                created_at: chrono::Utc::now(),
-                last_used: None,
-                query_count: 0,
-            },
-        ];
+    let mut connections = Vec::new();
+    for stored_conn in &storage.connections {
+        match stored_conn.to_connection(&state.encryption) {
+            Ok(conn) => connections.push(conn),
+            Err(e) => {
+                tracing::warn!("Failed to load connection {}: {}", stored_conn.id, e);
+            }
+        }
+    }
+    
+    // Update connection manager with loaded connections
+    {
+        let mut manager = state.connections.write().await;
+        for conn in &connections {
+            // Store connection metadata (without active connection)
+            // Active connections will be created on demand
+        }
     }
     
     Ok(ApiResponse::success(connections))
@@ -177,9 +154,20 @@ async fn delete_connection(
 ) -> Result<ApiResponse<bool>, String> {
     let mut manager = state.connections.write().await;
     match manager.delete_connection(&connection_id).await {
-        Ok(_) => Ok(ApiResponse::success(true)),
-        Err(e) => Ok(ApiResponse::error(e.to_string())),
+        Ok(_) => {},
+        Err(e) => return Ok(ApiResponse::error(e.to_string())),
     }
+    
+    // Remove from storage
+    let mut storage = state.storage.load()
+        .map_err(|e| format!("Failed to load storage: {}", e))?;
+    
+    storage.connections.retain(|c| c.id != connection_id);
+    
+    state.storage.save(&storage)
+        .map_err(|e| format!("Failed to save storage: {}", e))?;
+    
+    Ok(ApiResponse::success(true))
 }
 
 /// Query Execution Commands
@@ -189,8 +177,9 @@ async fn execute_query(
     request: QueryRequest,
     state: State<'_, AppState>,
 ) -> Result<ApiResponse<QueryResult>, String> {
-    let executor = state.query_executor.read().await;
-    match executor.execute_query(request).await {
+    let connection_manager = state.connections.read().await;
+    let mut executor = state.query_executor.write().await;
+    match executor.execute_query(request, &connection_manager).await {
         Ok(result) => Ok(ApiResponse::success(result)),
         Err(e) => Ok(ApiResponse::error(e.to_string())),
     }
@@ -203,7 +192,8 @@ async fn get_query_history(
     state: State<'_, AppState>,
 ) -> Result<ApiResponse<Vec<QueryRequest>>, String> {
     let executor = state.query_executor.read().await;
-    let history = executor.get_history(&connection_id, limit.unwrap_or(50)).await?;
+    let history = executor.get_history(&connection_id, limit.unwrap_or(50)).await
+        .map_err(|e| e.to_string())?;
     Ok(ApiResponse::success(history))
 }
 
@@ -212,8 +202,9 @@ async fn explain_query(
     request: QueryRequest,
     state: State<'_, AppState>,
 ) -> Result<ApiResponse<QueryResult>, String> {
-    let executor = state.query_executor.read().await;
-    match executor.explain_query(request).await {
+    let connection_manager = state.connections.read().await;
+    let mut executor = state.query_executor.write().await;
+    match executor.explain_query(request, &connection_manager).await {
         Ok(result) => Ok(ApiResponse::success(result)),
         Err(e) => Ok(ApiResponse::error(e.to_string())),
     }
@@ -285,19 +276,55 @@ async fn get_system_info() -> Result<ApiResponse<HashMap<String, serde_json::Val
 #[tauri::command]
 async fn save_settings(
     settings: HashMap<String, serde_json::Value>,
+    state: State<'_, AppState>,
 ) -> Result<ApiResponse<bool>, String> {
-    // In a real implementation, this would save to a config file
-    tracing::info!("Saving settings: {:?}", settings);
+    let mut storage = state.storage.load()
+        .map_err(|e| format!("Failed to load storage: {}", e))?;
+    
+    // Update settings from provided values
+    if let Some(theme) = settings.get("theme").and_then(|v| v.as_str()) {
+        storage.settings.theme = theme.to_string();
+    }
+    if let Some(auto_save) = settings.get("auto_save").and_then(|v| v.as_bool()) {
+        storage.settings.auto_save = auto_save;
+    }
+    if let Some(timeout) = settings.get("query_timeout").and_then(|v| v.as_u64()) {
+        storage.settings.query_timeout = timeout;
+    }
+    if let Some(font_size) = settings.get("editor_font_size").and_then(|v| v.as_u64()) {
+        storage.settings.editor_font_size = font_size as u16;
+    }
+    if let Some(editor_theme) = settings.get("editor_theme").and_then(|v| v.as_str()) {
+        storage.settings.editor_theme = editor_theme.to_string();
+    }
+    if let Some(show_line_numbers) = settings.get("show_line_numbers").and_then(|v| v.as_bool()) {
+        storage.settings.show_line_numbers = show_line_numbers;
+    }
+    if let Some(word_wrap) = settings.get("word_wrap").and_then(|v| v.as_bool()) {
+        storage.settings.word_wrap = word_wrap;
+    }
+    
+    state.storage.save(&storage)
+        .map_err(|e| format!("Failed to save settings: {}", e))?;
+    
     Ok(ApiResponse::success(true))
 }
 
 #[tauri::command]
-async fn load_settings() -> Result<ApiResponse<HashMap<String, serde_json::Value>>, String> {
-    // In a real implementation, this would load from a config file
+async fn load_settings(
+    state: State<'_, AppState>,
+) -> Result<ApiResponse<HashMap<String, serde_json::Value>>, String> {
+    let storage = state.storage.load()
+        .map_err(|e| format!("Failed to load storage: {}", e))?;
+    
     let mut settings = HashMap::new();
-    settings.insert("theme".to_string(), serde_json::Value::String("dark".to_string()));
-    settings.insert("auto_save".to_string(), serde_json::Value::Bool(true));
-    settings.insert("query_timeout".to_string(), serde_json::Value::Number(30.into()));
+    settings.insert("theme".to_string(), serde_json::Value::String(storage.settings.theme));
+    settings.insert("auto_save".to_string(), serde_json::Value::Bool(storage.settings.auto_save));
+    settings.insert("query_timeout".to_string(), serde_json::Value::Number(storage.settings.query_timeout.into()));
+    settings.insert("editor_font_size".to_string(), serde_json::Value::Number(storage.settings.editor_font_size.into()));
+    settings.insert("editor_theme".to_string(), serde_json::Value::String(storage.settings.editor_theme));
+    settings.insert("show_line_numbers".to_string(), serde_json::Value::Bool(storage.settings.show_line_numbers));
+    settings.insert("word_wrap".to_string(), serde_json::Value::Bool(storage.settings.word_wrap));
     
     Ok(ApiResponse::success(settings))
 }
@@ -323,8 +350,36 @@ pub fn run() {
 
     tracing::info!("Starting Orbit Desktop application");
 
+    let config = tauri::generate_context!().config();
+    
+    // Initialize storage and encryption
+    let storage = StorageManager::new(&config)
+        .expect("Failed to initialize storage manager");
+    let encryption = EncryptionManager::new(&config)
+        .expect("Failed to initialize encryption manager");
+    
+    // Load connections from storage
+    let storage_data = storage.load().unwrap_or_default();
+    let mut connection_manager = ConnectionManager::new();
+    
+    // Load connections into manager
+    for stored_conn in &storage_data.connections {
+        if let Ok(conn) = stored_conn.to_connection(&encryption) {
+            // Connection will be created on-demand when needed
+            // For now, just store the metadata
+        }
+    }
+    
+    let app_state = AppState {
+        connections: RwLock::new(connection_manager),
+        query_executor: RwLock::new(QueryExecutor::new()),
+        model_manager: RwLock::new(ModelManager::new()),
+        storage,
+        encryption,
+    };
+    
     tauri::Builder::default()
-        .manage(AppState::default())
+        .manage(app_state)
         .menu(create_menu())
         .on_menu_event(|event| {
             match event.menu_item_id() {

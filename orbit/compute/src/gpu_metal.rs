@@ -334,6 +334,7 @@ impl MetalDevice {
             .new_buffer(size, MTLResourceOptions::StorageModeShared))
     }
 
+    #[allow(dead_code)] // Reserved for future i64 buffer operations
     fn create_buffer_i64(&self, len: usize) -> Result<metal::Buffer, ComputeError> {
         let size = (len * mem::size_of::<i64>()) as u64;
         Ok(self
@@ -341,6 +342,7 @@ impl MetalDevice {
             .new_buffer(size, MTLResourceOptions::StorageModeShared))
     }
 
+    #[allow(dead_code)] // Reserved for future f64 buffer operations
     fn create_buffer_f64(&self, len: usize) -> Result<metal::Buffer, ComputeError> {
         let size = (len * mem::size_of::<f64>()) as u64;
         Ok(self
@@ -385,6 +387,7 @@ impl MetalDevice {
         Ok(slice.to_vec())
     }
 
+    #[allow(dead_code)] // Reserved for future i64 buffer operations
     fn read_buffer_i64(
         &self,
         buffer: &metal::Buffer,
@@ -395,6 +398,7 @@ impl MetalDevice {
         Ok(slice.to_vec())
     }
 
+    #[allow(dead_code)] // Reserved for future f64 buffer operations
     fn read_buffer_f64(
         &self,
         buffer: &metal::Buffer,

@@ -406,6 +406,8 @@ struct ProfileSession {
     start_time: Instant,
     phases: Vec<ExecutionPhase>,
     current_phase: Option<String>,
+    current_phase_start: Option<Instant>,
+    current_phase_description: Option<String>,
     resource_tracker: ResourceTracker,
     bottleneck_detector: BottleneckDetector,
 }
@@ -447,6 +449,8 @@ impl QueryProfiler {
             start_time: Instant::now(),
             phases: Vec::new(),
             current_phase: None,
+            current_phase_start: None,
+            current_phase_description: None,
             resource_tracker: ResourceTracker {
                 memory_samples: Vec::new(),
                 start_memory: self.get_current_memory_usage(),
@@ -480,25 +484,65 @@ impl QueryProfiler {
     }
 
     /// Mark the start of a new execution phase
-    pub fn start_phase(&mut self, profile_id: Uuid, phase_name: &str, _description: &str) {
+    pub fn start_phase(&mut self, profile_id: Uuid, phase_name: &str, description: &str) {
         if let Some(session) = self.active_sessions.get_mut(&profile_id) {
             let now = Instant::now();
-            let _start_offset = now.duration_since(session.start_time);
 
             session.current_phase = Some(phase_name.to_string());
-
-            // TODO: Start tracking resources for this phase
+            session.current_phase_start = Some(now);
+            session.current_phase_description = Some(description.to_string());
         }
     }
 
     /// Mark the end of the current execution phase
     pub fn end_phase(&mut self, profile_id: Uuid) {
         if let Some(session) = self.active_sessions.get_mut(&profile_id) {
-            if let Some(_phase_name) = &session.current_phase {
-                let _now = Instant::now();
-                // TODO: Calculate phase duration and record metrics
+            if let (Some(phase_name), Some(phase_start), Some(description)) = (
+                session.current_phase.take(),
+                session.current_phase_start.take(),
+                session.current_phase_description.take(),
+            ) {
+                let now = Instant::now();
+                let duration = now.duration_since(phase_start);
+                let start_offset = phase_start.duration_since(session.start_time);
 
-                session.current_phase = None;
+                // Create the execution phase
+                let phase = ExecutionPhase {
+                    name: phase_name.clone(),
+                    description,
+                    start_offset,
+                    duration,
+                    percentage: 0.0, // Will be calculated at finish
+                    details: match phase_name.as_str() {
+                        "Lexing" | "Parsing" => PhaseDetails::Parsing {
+                            tokens_processed: 0,
+                            ast_nodes: 0,
+                            syntax_errors: 0,
+                        },
+                        "Planning" => PhaseDetails::Planning {
+                            plan_alternatives: 1,
+                            selected_plan_cost: 1.0,
+                            optimization_rules_applied: 0,
+                        },
+                        "Optimization" => PhaseDetails::Optimization {
+                            initial_cost: 1.0,
+                            final_cost: 1.0,
+                            rules_applied: Vec::new(),
+                            transformations: 0,
+                        },
+                        _ => PhaseDetails::Execution {
+                            plan_node_type: "TableScan".to_string(),
+                            rows_processed: 0,
+                            bytes_processed: 0,
+                            network_calls: 0,
+                            cache_hits: 0,
+                            cache_misses: 0,
+                        },
+                    },
+                    sub_phases: Vec::new(),
+                };
+
+                session.phases.push(phase);
             }
         }
     }

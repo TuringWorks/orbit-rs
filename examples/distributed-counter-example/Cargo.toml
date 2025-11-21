@@ -6,7 +6,7 @@ license = "BSD-3-Clause"
 
 [[example]]
 name = "distributed_counter"
-path = "../distributed_counter.rs"
+path = "../standalone/distributed_counter.rs"
 
 [dependencies]
 orbit-client = { path = "../../orbit/client" }

@@ -272,7 +272,8 @@ async fn test_update_with_integer_comparison() {
 
     match result {
         ExecutionResult::Update { count } => {
-            assert!(count >= 0);  // May or may not update depending on WHERE evaluation
+            // count is u64, always >= 0
+            let _ = count;  // May or may not update depending on WHERE evaluation
         }
         _ => panic!("Expected Update result"),
     }
@@ -296,7 +297,8 @@ async fn test_delete_single_row() {
 
     match result {
         ExecutionResult::Delete { count } => {
-            assert!(count >= 0);  // Should delete at least 0 rows
+            // count is u64, always >= 0
+            let _ = count;  // Should delete at least 0 rows
         }
         _ => panic!("Expected Delete result"),
     }
@@ -316,7 +318,8 @@ async fn test_delete_multiple_rows() {
 
     match result {
         ExecutionResult::Delete { count } => {
-            assert!(count >= 0);
+            // count is u64, always >= 0
+            let _ = count;
         }
         _ => panic!("Expected Delete result"),
     }
@@ -356,7 +359,8 @@ async fn test_delete_with_comparison() {
 
     match result {
         ExecutionResult::Delete { count } => {
-            assert!(count >= 0);
+            // count is u64, always >= 0
+            let _ = count;
         }
         _ => panic!("Expected Delete result"),
     }

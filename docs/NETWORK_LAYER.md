@@ -4,7 +4,7 @@ title: Orbit-RS Network Layer Documentation
 category: documentation
 ---
 
-# Orbit-RS Network Layer Documentation
+## Orbit-RS Network Layer Documentation
 
 ## Overview
 

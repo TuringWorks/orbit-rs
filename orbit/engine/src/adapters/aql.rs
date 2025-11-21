@@ -5,9 +5,8 @@
 //! documents, graphs, and key-value access patterns.
 
 use async_trait::async_trait;
-use std::sync::Arc;
 
-use crate::error::{EngineError, EngineResult};
+use crate::error::EngineResult;
 use super::{AdapterContext, ProtocolAdapter};
 
 /// AQL protocol adapter

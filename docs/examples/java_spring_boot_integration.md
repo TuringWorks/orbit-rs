@@ -19,7 +19,7 @@ The `orbit-client-spring` crate now provides comprehensive Java Spring Boot inte
 ## Architecture
 
 ```text
-┌─────────────────────┐    ┌──────────────────────────── ─────┐
+┌─────────────────────┐    ┌────────────────────────────--────┐
 │   Java Spring Boot  │    │         Orbit-RS Rust            │
 │    Application      │    │                                  │
 │                     │    │  ┌─────────────────────────────┐ │
@@ -41,7 +41,7 @@ The `orbit-client-spring` crate now provides comprehensive Java Spring Boot inte
                            │  │   JNI Bindings              │ │
                            │  │   (Native Interface)        │ │
                            │  └─────────────────────────────┘ │
-                           └────────────────────────────── ───┘
+                           └──────────────────────────────--──┘
 ```
 
 ## Features Implemented

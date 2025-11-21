@@ -4,9 +4,8 @@
 //! It wraps the orbit-protocols CQL adapter and integrates it with engine storage.
 
 use async_trait::async_trait;
-use std::sync::Arc;
 
-use crate::error::{EngineError, EngineResult};
+use crate::error::EngineResult;
 use super::{AdapterContext, ProtocolAdapter};
 
 /// CQL protocol adapter

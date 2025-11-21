@@ -160,6 +160,21 @@ pub struct CudaDevice {
 
 3. **Implement Device Detection**:
 
+   ```rust
+   pub fn new() -> Result<Self, ComputeError> {
+       let device = cudarc::driver::CudaDevice::new(0)?; // First GPU
+       let stream = device.fork_default_stream()?;
+
+       // Compile PTX kernels
+       let ptx = compile_cu!("cuda_kernels/filters.cu");
+       device.load_ptx(ptx, "filters", &["filter_i32_eq", ...])?;
+
+       Ok(Self { device, stream, kernels })
+   }
+   ```
+
+4. **Write CUDA Kernels** (`filters.cu`):
+
 ```rust
 pub fn new() -> Result<Self, ComputeError> {
     let device = cudarc::driver::CudaDevice::new(0)?; // First GPU

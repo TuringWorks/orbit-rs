@@ -18,6 +18,7 @@ use tokio::sync::RwLock;
 
 /// Prepared statement information
 #[derive(Debug, Clone)]
+#[allow(dead_code)] // Fields reserved for future prepared statement implementation
 struct PreparedStatement {
     statement_id: u32,
     query: String,
@@ -108,7 +109,10 @@ impl MySqlAdapter {
             .await
             .map_err(|e| ProtocolError::IoError(e.to_string()))?;
 
-        let mut sequence_id = 1u8;
+        // Initialize sequence_id - will be set from first packet
+        // The initial value is overwritten before use, but needed for variable initialization
+        #[allow(unused_assignments)]
+        let mut sequence_id: u8 = 0;
 
         loop {
             // Read packet
@@ -121,6 +125,8 @@ impl MySqlAdapter {
                 Err(e) => return Err(e),
             };
 
+            // Update sequence_id for response packets (increment from received packet's sequence)
+            // This value is used to create response packets below
             sequence_id = packet.sequence_id.wrapping_add(1);
 
             // Handle authentication first
@@ -136,7 +142,7 @@ impl MySqlAdapter {
                                     .write_all(&response_packet.encode())
                                     .await
                                     .map_err(|e| ProtocolError::IoError(e.to_string()))?;
-                                sequence_id = sequence_id.wrapping_add(1);
+                                // Note: sequence_id will be set from next packet's sequence_id on next loop iteration
                             }
                             Ok(false) => {
                                 // Send error packet
@@ -265,7 +271,7 @@ impl MySqlAdapter {
     }
 
     /// Handle COM_QUERY
-    async fn handle_query(&self, mut payload: Bytes) -> ProtocolResult<Vec<Bytes>> {
+    async fn handle_query(&self, payload: Bytes) -> ProtocolResult<Vec<Bytes>> {
         let query = String::from_utf8(payload.to_vec())
             .map_err(|e| ProtocolError::InvalidUtf8(e.to_string()))?;
 
@@ -423,6 +429,7 @@ impl MySqlAdapter {
     }
 
     /// Convert SQL type to MySQL type
+    #[allow(dead_code)] // Reserved for future type conversion implementation
     fn sql_type_to_mysql_type(&self, sql_type: &SqlType) -> MySqlType {
         match sql_type {
             SqlType::SmallInt => MySqlType::Short,
@@ -443,6 +450,7 @@ impl MySqlAdapter {
     }
 
     /// Convert SQL value to string for text protocol
+    #[allow(dead_code)] // Reserved for future text protocol implementation
     fn sql_value_to_string(&self, value: &SqlValue) -> Option<String> {
         match value {
             SqlValue::Null => None,
@@ -476,7 +484,7 @@ mod tests {
     #[test]
     fn test_type_conversion() {
         let config = MySqlConfig::default();
-        let adapter = MySqlAdapter::new(config);
+        let _adapter = MySqlAdapter::new(config);
         // Type conversion tests would go here
     }
 }

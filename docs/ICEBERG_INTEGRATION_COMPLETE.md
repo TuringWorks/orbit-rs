@@ -30,6 +30,7 @@ All core functionality implemented, tested, and validated with MinIO S3 storage.
 **Key Components**:
 
 #### IcebergColdStore Structure
+
 ```rust
 pub struct IcebergColdStore {
     table: Arc<Table>,              // Iceberg table reference
@@ -40,6 +41,7 @@ pub struct IcebergColdStore {
 ```
 
 #### Implemented Methods
+
 1. **`new()`** - Create cold store from Iceberg catalog
 2. **`scan()`** - Query table with metadata pruning ✅
 3. **`aggregate()`** - SIMD-optimized aggregations combining Iceberg + vectorized execution
@@ -50,17 +52,21 @@ pub struct IcebergColdStore {
 ### 2. Bidirectional Arrow Conversion
 
 #### ColumnBatch → Arrow RecordBatch
+
 **Function**: `column_batch_to_arrow()`
 
 Converts Orbit's columnar format to Arrow for Iceberg writes:
+
 - Preserves null bitmaps
 - Supports 8 data types: Bool, Int16, Int32, Int64, Float32, Float64, String, Binary
 - Maintains SIMD-aligned memory layout
 
 #### Arrow RecordBatch → ColumnBatch ✅ NEW
+
 **Function**: `arrow_to_column_batch()`
 
 Enables reading from Iceberg back to Orbit:
+
 - Full null handling
 - Type-safe downcast operations
 - Preserves column names and schema
@@ -69,6 +75,7 @@ Enables reading from Iceberg back to Orbit:
 ### 3. Integration Tests
 
 #### MinIO Integration Tests (5/5 PASSING)
+
 **File**: `orbit/protocols/tests/iceberg_minio_integration.rs` (370 lines)
 
 | Test | Status | Description |
@@ -80,6 +87,7 @@ Enables reading from Iceberg back to Orbit:
 | `test_large_dataset_performance` | ✅ | 100K rows performance test |
 
 **Performance Results**:
+
 - **Create ColumnBatch** (100K rows): 6.4ms
 - **Convert to Arrow** (100K rows): 17.4ms
 - **Write Parquet with ZSTD** (100K rows): 206.6ms → **5.16 MB/s**
@@ -87,6 +95,7 @@ Enables reading from Iceberg back to Orbit:
 - **Compression ratio**: 2.8MB → 1.1MB → **2.51x**
 
 #### Table Operations Tests (6/6 PASSING)
+
 **File**: `orbit/protocols/tests/iceberg_table_operations.rs` (455 lines)
 
 | Test | Status | Description |
@@ -99,6 +108,7 @@ Enables reading from Iceberg back to Orbit:
 | `test_partition_pruning_simulation` | ✅ | Shows partition-based pruning |
 
 **Test Coverage**:
+
 - Table metadata creation with TableMetadataBuilder
 - Data file writing with Iceberg conventions
 - Snapshot management (0, 1, 2)
@@ -108,6 +118,7 @@ Enables reading from Iceberg back to Orbit:
 ### 4. Configuration
 
 #### Dependencies Added
+
 **File**: `orbit/protocols/Cargo.toml`
 
 ```toml
@@ -126,6 +137,7 @@ iceberg-cold = ["iceberg", "iceberg-catalog-rest", "arrow", "arrow-schema", "par
 **Feature Flag**: `iceberg-cold` enables all Iceberg functionality
 
 #### Module Exports
+
 **File**: `orbit/protocols/src/postgres_wire/sql/execution/mod.rs`
 
 ```rust
@@ -140,6 +152,7 @@ pub use iceberg_cold::{IcebergColdStore, column_batch_to_arrow, arrow_to_column_
 ### 1. Query Planning Performance
 
 **Iceberg Metadata Pruning**:
+
 ```
 Traditional Approach:
 - List all files in S3 bucket
@@ -155,17 +168,20 @@ Iceberg Approach:
 ```
 
 **Measured Benefit**: For 1TB dataset with 10K files:
+
 - Traditional: 30-60 seconds query planning
 - Iceberg: 30-100 milliseconds query planning
 
 ### 2. Storage Efficiency
 
 **Parquet + ZSTD Compression**:
+
 - Uncompressed size: 2.8MB (100K rows × 28 bytes/row avg)
 - Compressed size: 1.1MB
 - **Compression ratio: 2.51x**
 
 **Columnar Benefits**:
+
 - Better compression (similar values grouped)
 - Column pruning (read only needed columns)
 - Predicate pushdown (skip entire row groups)
@@ -194,7 +210,8 @@ let sum = vectorized_executor.execute_aggregation(
 ### 4. Time Travel Foundation
 
 **Snapshot Mechanism** (simulated):
-```
+
+```text
 warehouse/test_events/data/
   ├── snapshot-0-1763498755359.parquet  (IDs 0-99)
   ├── snapshot-1-1763498755459.parquet  (IDs 100-199)
@@ -212,6 +229,7 @@ Query as of timestamp T:
 ```
 
 **Use Cases**:
+
 - Rollback to previous state
 - Audit trails
 - A/B testing with historical data
@@ -220,12 +238,14 @@ Query as of timestamp T:
 ### 5. Schema Evolution
 
 **Traditional Approach**:
+
 ```sql
 ALTER TABLE events ADD COLUMN user_agent STRING;
 -- Requires: Rewrite ALL data files (hours/days for TB datasets)
 ```
 
 **Iceberg Approach**:
+
 ```sql
 ALTER TABLE events ADD COLUMN user_agent STRING;
 -- Updates: Only metadata.json (milliseconds)
@@ -235,6 +255,7 @@ ALTER TABLE events ADD COLUMN user_agent STRING;
 ```
 
 **Test Demonstrates**:
+
 - Original schema: (id, name, value, timestamp)
 - Evolved schema: (id, name, value, timestamp, user_agent)
 - NO data rewrite required
@@ -246,7 +267,7 @@ ALTER TABLE events ADD COLUMN user_agent STRING;
 
 ### Current Hybrid Storage Tiers
 
-```
+```text
 ┌─────────────────────────────────────────────────────────┐
 │                  Query Layer                            │
 │         (PostgreSQL Wire Protocol)                      │
@@ -263,7 +284,7 @@ ALTER TABLE events ADD COLUMN user_agent STRING;
          ▼                ▼                ▼
    ┌─────────┐    ┌──────────┐    ┌─────────────────┐
    │   HOT   │    │   WARM   │    │      COLD       │
-   │         │    │          │    │  (Iceberg) ✅   │
+   │         │    │          │    │  (Iceberg)      │
    │ Row-    │    │ Hybrid   │    │                 │
    │ Based   │    │ Columnar │    │ • Parquet       │
    │         │    │          │    │ • Metadata      │
@@ -275,7 +296,8 @@ ALTER TABLE events ADD COLUMN user_agent STRING;
 ### Data Flow
 
 **Write Path**:
-```
+
+```text
 User INSERT
   → Hot Tier (row-based, immediate writes)
   → [Age > 1 hour] Migrate to Warm Tier (columnar batches)
@@ -283,7 +305,8 @@ User INSERT
 ```
 
 **Read Path** (Cold Tier):
-```
+
+```text
 User SELECT
   → HybridStorageManager
   → IcebergColdStore.scan(filter)
@@ -374,6 +397,7 @@ cargo test --lib -p orbit-protocols --features iceberg-cold test_arrow_to_column
    - Add age-based archival policies
 
 2. **Filter Pushdown**
+
    ```rust
    pub async fn scan(
        &self,

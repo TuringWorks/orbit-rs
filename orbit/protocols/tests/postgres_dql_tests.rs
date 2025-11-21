@@ -45,7 +45,7 @@ async fn test_select_specific_columns() {
     let result = executor.execute(sql).await.unwrap();
 
     match result {
-        ExecutionResult::Select { columns, rows, row_count } => {
+        ExecutionResult::Select { columns, rows: _, row_count } => {
             assert_eq!(columns.len(), 2);
             assert_eq!(columns[0], "id");
             assert_eq!(columns[1], "name");
@@ -68,9 +68,10 @@ async fn test_select_with_where_equals() {
     let result = executor.execute(sql).await.unwrap();
 
     match result {
-        ExecutionResult::Select { columns, rows, row_count } => {
+        ExecutionResult::Select { columns, rows: _, row_count } => {
             assert_eq!(columns.len(), 2);
-            assert!(row_count >= 0); // May or may not filter depending on WHERE implementation
+            // row_count is u64, always >= 0, just verify it exists
+            let _ = row_count;
         }
         _ => panic!("Expected Select result"),
     }
@@ -91,7 +92,8 @@ async fn test_select_with_where_greater_than() {
     match result {
         ExecutionResult::Select { columns, row_count, .. } => {
             assert_eq!(columns.len(), 1);
-            assert!(row_count >= 0);
+            // row_count is u64, always >= 0
+            let _ = row_count;
         }
         _ => panic!("Expected Select result"),
     }
@@ -112,7 +114,8 @@ async fn test_select_with_where_less_than() {
     match result {
         ExecutionResult::Select { columns, row_count, .. } => {
             assert_eq!(columns.len(), 1);
-            assert!(row_count >= 0);
+            // row_count is u64, always >= 0
+            let _ = row_count;
         }
         _ => panic!("Expected Select result"),
     }
@@ -282,7 +285,8 @@ async fn test_where_boolean_true() {
 
     match result {
         ExecutionResult::Select { row_count, .. } => {
-            assert!(row_count >= 0);
+            // row_count is u64, always >= 0
+            let _ = row_count;
         }
         _ => panic!("Expected Select result"),
     }
@@ -302,7 +306,8 @@ async fn test_where_not_equals() {
 
     match result {
         ExecutionResult::Select { row_count, .. } => {
-            assert!(row_count >= 0);
+            // row_count is u64, always >= 0
+            let _ = row_count;
         }
         _ => panic!("Expected Select result"),
     }
@@ -322,7 +327,8 @@ async fn test_where_greater_equals() {
 
     match result {
         ExecutionResult::Select { row_count, .. } => {
-            assert!(row_count >= 0);
+            // row_count is u64, always >= 0
+            let _ = row_count;
         }
         _ => panic!("Expected Select result"),
     }
@@ -342,7 +348,8 @@ async fn test_where_less_equals() {
 
     match result {
         ExecutionResult::Select { row_count, .. } => {
-            assert!(row_count >= 0);
+            // row_count is u64, always >= 0
+            let _ = row_count;
         }
         _ => panic!("Expected Select result"),
     }
@@ -442,7 +449,8 @@ async fn test_select_after_delete() {
     match result {
         ExecutionResult::Select { row_count, .. } => {
             // Should have fewer rows after delete
-            assert!(row_count >= 0);
+            // row_count is u64, always >= 0
+            let _ = row_count;
         }
         _ => panic!("Expected Select result"),
     }

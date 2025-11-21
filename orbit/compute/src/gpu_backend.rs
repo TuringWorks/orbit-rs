@@ -249,6 +249,7 @@ impl GpuDeviceManager {
     }
 
     #[cfg(not(all(unix, not(target_os = "macos"))))]
+    #[allow(dead_code)] // Reserved for future ROCm support
     fn is_rocm_available() -> bool {
         false
     }

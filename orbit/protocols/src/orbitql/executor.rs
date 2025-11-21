@@ -11,8 +11,8 @@ use orbit_shared::orbitql::{
         BinaryOperator, CreateDefinition, CreateObjectType, CreateStatement, DataType,
         DeleteStatement, DropStatement, Expression, FieldDefinition, FromClause, GraphRAGStatement,
         InsertStatement, InsertValues, JoinClause, LiveStatement, OrderByClause, RelateStatement,
-        SelectField, SelectStatement, Statement, TransactionStatement, UpdateAssignment,
-        UpdateOperator, UpdateStatement,
+        SelectField, SelectStatement, Statement, TransactionStatement, TraverseStatement,
+        UpdateAssignment, UpdateOperator, UpdateStatement,
     },
     QueryValue, SpatialIndexConfig, SpatialIndexType, WindowSpec,
 };
@@ -151,6 +151,7 @@ impl<'a> StatementExecutor<'a> {
             Statement::Live(live) => self.execute_live_strategy(live).await,
             Statement::Relate(relate) => self.execute_relate_strategy(relate).await,
             Statement::GraphRAG(graphrag) => self.execute_graphrag_strategy(graphrag).await,
+            Statement::Traverse(traverse) => self.execute_traverse_strategy(traverse).await,
         }
     }
 
@@ -222,6 +223,13 @@ impl<'a> StatementExecutor<'a> {
         graphrag: GraphRAGStatement,
     ) -> Result<ExecutionResult, SpatialError> {
         self.executor.execute_graphrag(graphrag).await
+    }
+
+    async fn execute_traverse_strategy(
+        &self,
+        traverse: TraverseStatement,
+    ) -> Result<ExecutionResult, SpatialError> {
+        self.executor.execute_traverse(traverse).await
     }
 }
 
@@ -660,6 +668,14 @@ impl OrbitQLExecutor {
     async fn execute_graphrag(
         &self,
         _query: GraphRAGStatement,
+    ) -> Result<ExecutionResult, SpatialError> {
+        Ok(ExecutionResult::default())
+    }
+
+    /// Execute TRAVERSE statement for graph traversal
+    async fn execute_traverse(
+        &self,
+        _traverse: TraverseStatement,
     ) -> Result<ExecutionResult, SpatialError> {
         Ok(ExecutionResult::default())
     }

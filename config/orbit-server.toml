@@ -1,32 +1,65 @@
 # Orbit Multi-Protocol Server Configuration
-# All database protocols enabled by default for zero-configuration deployment
+# This configuration enables orbit-rs to natively serve as:
+# - PostgreSQL server (port 5432) with full SQL and pgvector support
+# - MySQL server (port 3306) for MySQL-compatible clients
+# - CQL server (port 9042) for Cassandra-compatible clients
+# - Redis server (port 6379) with vector operations and modules
+# - gRPC server (port 50051) for actor system management
+# - REST API server (port 8080) for web applications
+# - Cypher server (port 7687) for Neo4j-compatible graph queries
+# - OrbitQL server (port 8081) for native OrbitQL queries
+# - AQL server (port 8529) for ArangoDB-compatible queries
 
 [server]
+# Unique node identifier (auto-generated if not provided)
 node_id = "orbit-node-1"
+
+# Bind address for all servers
 bind_address = "0.0.0.0"
+
+# Environment: "Development", "Testing", "Staging", "Production"
 environment = "Production"
+
+# Data and configuration directories
 data_dir = "./data"
 config_dir = "./config"
 
 [actor_system]
+# Maximum number of actors per node
 max_actors = 10000
+
+# Actor mailbox size
 mailbox_size = 1000
+
+# Supervision strategy: "OneForOne", "OneForAll", "RestForOne"
 supervision_strategy = "OneForOne"
 
-# Protocol Servers - All enabled by default
+# Optional cluster configuration
+# [actor_system.cluster]
+# seed_nodes = ["node1.example.com:7946", "node2.example.com:7946"]
+# gossip_port = 7946
+# heartbeat_interval_ms = 5000
+# failure_timeout_ms = 30000
 
+# ================================
+# PROTOCOL SERVER CONFIGURATIONS
+# ================================
+
+# gRPC Actor Management Server
 [protocols.grpc]
 enabled = true
 port = 50051
 max_concurrent_streams = 1000
-max_message_size = 4194304
+max_message_size = 4194304  # 4MB
 
+# PostgreSQL Wire Protocol Server
 [protocols.postgresql]
 enabled = true
 port = 5432
 max_connections = 1000
 connection_timeout_secs = 30
 
+# SQL Engine Configuration
 [protocols.postgresql.sql_engine]
 max_query_complexity = 1000
 query_timeout_secs = 30
@@ -34,17 +67,35 @@ enable_optimization = true
 enable_caching = true
 cache_size_mb = 256
 
+# Vector Operations for PostgreSQL
 [protocols.postgresql.vector_ops]
 default_metric = "cosine"
 max_dimensions = 4096
 batch_size = 1000
 enable_simd = true
 
-[protocols.postgresql.features]
-enable_pgvector = true
-enable_extensions = true
-enable_full_text_search = true
+[protocols.postgresql.vector_ops.indexing]
+default_algorithm = "hnsw"
 
+[protocols.postgresql.vector_ops.indexing.hnsw]
+m = 16
+ef_construction = 200
+ef_search = 50
+
+[protocols.postgresql.vector_ops.indexing.ivf]
+nlist = 100
+nprobe = 10
+
+# PostgreSQL-specific features
+[protocols.postgresql.features]
+enable_pgvector = true        # pgvector extension compatibility
+enable_postgis = false        # PostGIS compatibility (future)
+enable_json = true           # JSON/JSONB operations
+enable_fulltext = true       # Full-text search
+enable_prepared_statements = true
+enable_transactions = true
+
+# MySQL Wire Protocol Server
 [protocols.mysql]
 enabled = true
 port = 3306
@@ -53,6 +104,7 @@ connection_timeout_secs = 30
 server_version = "8.0.0-Orbit"
 authentication_enabled = false
 
+# CQL (Cassandra Query Language) Server
 [protocols.cql]
 enabled = true
 port = 9042
@@ -61,55 +113,216 @@ connection_timeout_secs = 30
 protocol_version = 4
 authentication_enabled = false
 
+# Redis RESP Protocol Server
 [protocols.redis]
 enabled = true
 port = 6379
 max_connections = 1000
 connection_timeout_secs = 30
 
+# Redis Command Configuration
+[protocols.redis.commands]
+enabled_groups = [
+    "generic", "string", "list", "hash", "set", "zset",
+    "vector", "search", "json", "graph", "stream", "pubsub"
+]
+disabled_commands = []
+command_timeout_secs = 30
+max_pipeline_size = 1000
+
+# Vector Operations for Redis
+[protocols.redis.vector_ops]
+default_metric = "cosine"
+max_dimensions = 4096
+batch_size = 1000
+enable_simd = true
+
+[protocols.redis.vector_ops.indexing]
+default_algorithm = "hnsw"
+
+[protocols.redis.vector_ops.indexing.hnsw]
+m = 16
+ef_construction = 200
+ef_search = 50
+
+[protocols.redis.vector_ops.indexing.ivf]
+nlist = 100
+nprobe = 10
+
+# Redis-specific features
+[protocols.redis.features]
+enable_streams = true         # Redis Streams
+enable_pubsub = true         # Pub/Sub messaging
+enable_modules = false       # Redis Modules (experimental)
+enable_redisearch = true     # RedisSearch compatibility
+enable_redisjson = true      # RedisJSON compatibility
+enable_redisgraph = true     # RedisGraph compatibility
+enable_cluster = false       # Redis Cluster mode
+
+# HTTP REST API Server
 [protocols.rest]
 enabled = true
 port = 8080
 max_connections = 1000
 request_timeout_secs = 30
 
+# Optional CORS configuration
+# [protocols.rest.cors]
+# allowed_origins = ["*"]
+# allowed_methods = ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+# allowed_headers = ["*"]
+# max_age_secs = 3600
+
+# Optional rate limiting
+# [protocols.rest.rate_limit]
+# requests_per_minute = 1000
+# burst_capacity = 100
+
+# Cypher (Neo4j-compatible) Server
 [protocols.cypher]
 enabled = true
 port = 7687
 max_connections = 1000
 
+[protocols.cypher.graph_engine]
+max_query_complexity = 1000
+query_timeout_secs = 30
+enable_optimization = true
+storage_backend = "memory"
+
+# OrbitQL Query Language Server
 [protocols.orbitql]
 enabled = true
 port = 8081
 max_connections = 1000
+connection_timeout_secs = 30
+authentication_enabled = false
 
+# AQL (ArangoDB Query Language) Server
 [protocols.aql]
 enabled = true
 port = 8529
 max_connections = 1000
+connection_timeout_secs = 30
+authentication_enabled = false
+
+# MCP (Model Context Protocol) Server
+# [protocols.mcp]
+# enabled = false
+# port = 8765
+# version = "1.0"
+# [protocols.mcp.tools]
+# available_tools = ["query", "vector_search", "graph_query"]
+
+# ================================
+# SECURITY CONFIGURATION
+# ================================
 
 [security.authentication]
 enabled = false
+methods = ["Basic"]
 
-[performance]
-worker_threads = 0
-max_blocking_threads = 512
-thread_stack_size_mb = 2
+# JWT Configuration
+# [security.authentication.jwt]
+# secret_key = "your-secret-key"
+# expiration_secs = 3600
+# algorithm = "HS256"
+
+[security.authorization]
+enabled = false
+model = "rbac"
+default_permissions = ["read", "write"]
+
+# Encryption in Transit
+# [security.encryption.in_transit]
+# enabled = true
+# tls_version = "TLS1.3"
+# cipher_suites = ["TLS_AES_256_GCM_SHA384", "TLS_CHACHA20_POLY1305_SHA256"]
+
+# ================================
+# PERFORMANCE CONFIGURATION
+# ================================
+
+[performance.memory]
+max_memory_mb = 4096
+
+[performance.memory.pool_config]
+initial_size_mb = 256
+max_size_mb = 2048
+growth_factor = 1.5
+
+[performance.memory.gc_settings]
+auto_gc = true
+interval_secs = 300
+memory_threshold_pct = 80.0
+
+[performance.io]
+max_concurrent_ops = 1000
+timeout_secs = 30
+buffer_size_kb = 64
+enable_direct_io = false
+
+[performance.network]
+tcp_nodelay = true
+keep_alive = true
+
+[performance.cpu]
+# worker_threads = 4  # Defaults to number of CPU cores
+enable_affinity = false
+enable_simd = true
+
+# ================================
+# LOGGING CONFIGURATION
+# ================================
 
 [logging]
 level = "info"
 format = "json"
-output = "stdout"
+
+[[logging.outputs]]
+output_type = "stdout"
+
+# File logging with rotation
+# [[logging.outputs]]
+# output_type = "file"
+# file_path = "/var/log/orbit/orbit-server.log"
+# [logging.outputs.rotation]
+# strategy = "size"
+# max_size_mb = 100
+# max_files = 10
+
+# Component-specific log levels
+[logging.component_levels]
+"orbit_protocols" = "info"
+"orbit_server" = "info"
+"orbit_shared" = "warn"
+
+# ================================
+# MONITORING CONFIGURATION
+# ================================
 
 [monitoring.metrics]
 enabled = true
 port = 9090
-path = "/metrics"
+format = "prometheus"
+collection_interval_secs = 30
+retention_days = 7
 
 [monitoring.health_checks]
 enabled = true
 port = 9091
-path = "/health"
+interval_secs = 30
+timeout_secs = 5
+
+[monitoring.tracing]
+enabled = false
+backend = "jaeger"
+sampling_rate = 0.1
+# endpoint = "http://jaeger:14268/api/traces"
+
+# ================================
+# CONNECTION POOLING
+# ================================
 
 [pooling]
 enabled = true
@@ -131,3 +344,31 @@ failure_window_secs = 60
 recovery_timeout_secs = 30
 success_threshold = 2
 half_open_max_calls = 3
+
+# ================================
+# EXAMPLE USAGE INSTRUCTIONS
+# ================================
+
+# Start the server with this configuration:
+#   orbit-server --config ./config/orbit-server.toml
+
+# Connect to PostgreSQL:
+#   psql -h localhost -p 5432 -U postgres
+
+# Connect to MySQL:
+#   mysql -h 127.0.0.1 -P 3306 -u root
+
+# Connect to CQL/Cassandra:
+#   cqlsh 127.0.0.1 9042
+
+# Connect to Redis:
+#   redis-cli -h localhost -p 6379
+
+# Access REST API:
+#   curl http://localhost:8080/api/health
+
+# Connect to Cypher/Neo4j:
+#   cypher-shell -a bolt://localhost:7687
+
+# Connect to AQL/ArangoDB:
+#   arangosh --server.endpoint tcp://localhost:8529

@@ -27,6 +27,18 @@ pub struct ProtocolConfig {
     pub postgres_enabled: bool,
     pub postgres_port: u16,
     pub postgres_bind_address: String,
+    pub mysql_enabled: bool,
+    pub mysql_port: u16,
+    pub mysql_bind_address: String,
+    pub cql_enabled: bool,
+    pub cql_port: u16,
+    pub cql_bind_address: String,
+    pub cypher_enabled: bool,
+    pub cypher_port: u16,
+    pub cypher_bind_address: String,
+    pub aql_enabled: bool,
+    pub aql_port: u16,
+    pub aql_bind_address: String,
 }
 
 impl Default for ProtocolConfig {
@@ -38,6 +50,18 @@ impl Default for ProtocolConfig {
             postgres_enabled: true,
             postgres_port: 5432,
             postgres_bind_address: "127.0.0.1".to_string(),
+            mysql_enabled: true,
+            mysql_port: 3306,
+            mysql_bind_address: "127.0.0.1".to_string(),
+            cql_enabled: true,
+            cql_port: 9042,
+            cql_bind_address: "127.0.0.1".to_string(),
+            cypher_enabled: true,
+            cypher_port: 7687,
+            cypher_bind_address: "127.0.0.1".to_string(),
+            aql_enabled: true,
+            aql_port: 8529,
+            aql_bind_address: "127.0.0.1".to_string(),
         }
     }
 }
@@ -404,6 +428,34 @@ impl OrbitServer {
                 self.config.protocols.postgres_port
             );
         }
+        if self.config.protocols.mysql_enabled {
+            tracing::info!(
+                "  - MySQL: {}:{}",
+                self.config.protocols.mysql_bind_address,
+                self.config.protocols.mysql_port
+            );
+        }
+        if self.config.protocols.cql_enabled {
+            tracing::info!(
+                "  - CQL/Cassandra: {}:{}",
+                self.config.protocols.cql_bind_address,
+                self.config.protocols.cql_port
+            );
+        }
+        if self.config.protocols.cypher_enabled {
+            tracing::info!(
+                "  - Cypher/Neo4j: {}:{}",
+                self.config.protocols.cypher_bind_address,
+                self.config.protocols.cypher_port
+            );
+        }
+        if self.config.protocols.aql_enabled {
+            tracing::info!(
+                "  - AQL/ArangoDB: {}:{}",
+                self.config.protocols.aql_bind_address,
+                self.config.protocols.aql_port
+            );
+        }
 
         // Wait for any server to finish (which likely means an error occurred)
         if !server_tasks.is_empty() {
@@ -468,6 +520,42 @@ impl OrbitServer {
             } else {
                 None
             },
+            mysql_enabled: self.config.protocols.mysql_enabled,
+            mysql_address: if self.config.protocols.mysql_enabled {
+                Some(format!(
+                    "{}:{}",
+                    self.config.protocols.mysql_bind_address, self.config.protocols.mysql_port
+                ))
+            } else {
+                None
+            },
+            cql_enabled: self.config.protocols.cql_enabled,
+            cql_address: if self.config.protocols.cql_enabled {
+                Some(format!(
+                    "{}:{}",
+                    self.config.protocols.cql_bind_address, self.config.protocols.cql_port
+                ))
+            } else {
+                None
+            },
+            cypher_enabled: self.config.protocols.cypher_enabled,
+            cypher_address: if self.config.protocols.cypher_enabled {
+                Some(format!(
+                    "{}:{}",
+                    self.config.protocols.cypher_bind_address, self.config.protocols.cypher_port
+                ))
+            } else {
+                None
+            },
+            aql_enabled: self.config.protocols.aql_enabled,
+            aql_address: if self.config.protocols.aql_enabled {
+                Some(format!(
+                    "{}:{}",
+                    self.config.protocols.aql_bind_address, self.config.protocols.aql_port
+                ))
+            } else {
+                None
+            },
         };
 
         Ok(ServerStats {
@@ -526,6 +614,14 @@ pub struct ProtocolStats {
     pub redis_address: Option<String>,
     pub postgres_enabled: bool,
     pub postgres_address: Option<String>,
+    pub mysql_enabled: bool,
+    pub mysql_address: Option<String>,
+    pub cql_enabled: bool,
+    pub cql_address: Option<String>,
+    pub cypher_enabled: bool,
+    pub cypher_address: Option<String>,
+    pub aql_enabled: bool,
+    pub aql_address: Option<String>,
 }
 
 /// Statistics about the Orbit server

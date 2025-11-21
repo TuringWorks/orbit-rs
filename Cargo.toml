@@ -2,6 +2,7 @@
 resolver = "2"
 
 members = [
+    # Core crates
     "orbit/util",
     "orbit/shared",
     "orbit/proto",
@@ -16,7 +17,11 @@ members = [
     "orbit/operator",
     "orbit/compute",
     "orbit/ml",
+
+    # Tests
     "tests",
+
+    # Examples - standalone crates
     "examples/hello-world",
     "examples/distributed-counter-example",
     "examples/distributed-transactions",
@@ -24,12 +29,22 @@ members = [
     "examples/vector-store",
     "examples/pgvector-store",
     "examples/saga-example",
-    "examples/timeseries-demo",
     "examples/orbitql-example",
     "examples/multi-model-query-example",
-    "examples/benchmarks-demo",
     "examples/multi-protocol-server",
+
+    # Examples - demos
+    "examples/demos/benchmarks-demo",
+    "examples/demos/timeseries-demo",
 ]
+
+# Examples excluded due to API compatibility issues (need updating)
+# - examples/actor-memory-integration
+# - examples/mcp-advanced-server
+# - examples/mcp-basic-client
+# - examples/ml-sql-functions
+# - examples/demos/comprehensive-multimodel-demo
+# - examples/demos/multiprotocol-demo
 
 # Exclude benchmarks from default workspace build due to WAL replay issues
 # orbit-benchmarks contains comprehensive performance tests including:
@@ -38,7 +53,7 @@ members = [
 #   - Storage backend comparison benchmarks (with known WAL issues)
 #   - Heterogeneous compute acceleration benchmarks
 exclude = [
-    "orbit/benchmarks",
+    "benchmarks",
     "orbit/desktop",
 ]
 

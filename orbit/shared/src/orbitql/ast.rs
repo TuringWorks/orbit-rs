@@ -22,8 +22,24 @@ pub enum Statement {
     Drop(DropStatement),
     Transaction(TransactionStatement),
     Live(LiveStatement),
+    // Graph traversal
+    Traverse(TraverseStatement),
     // GraphRAG statements
     GraphRAG(GraphRAGStatement),
+}
+
+/// TRAVERSE statement for graph traversal
+/// Syntax: TRAVERSE <edge_type> FROM <node_id> [MAX_DEPTH <n>] [WHERE <condition>]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TraverseStatement {
+    /// Edge type/relationship to traverse
+    pub edge_type: String,
+    /// Starting node expression (e.g., user:user1)
+    pub from_node: Expression,
+    /// Maximum traversal depth (optional)
+    pub max_depth: Option<u32>,
+    /// Optional filter condition
+    pub where_clause: Option<Expression>,
 }
 
 /// Common Table Expression (CTE) clause
@@ -924,6 +940,7 @@ impl std::fmt::Display for Statement {
             Statement::Drop(_) => write!(f, "DROP"),
             Statement::Transaction(_) => write!(f, "TRANSACTION"),
             Statement::Live(_) => write!(f, "LIVE"),
+            Statement::Traverse(_) => write!(f, "TRAVERSE"),
             Statement::GraphRAG(_) => write!(f, "GRAPH_RAG"),
         }
     }

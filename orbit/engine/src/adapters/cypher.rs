@@ -4,9 +4,8 @@
 //! orbit-engine storage layer. Cypher is Neo4j's graph query language.
 
 use async_trait::async_trait;
-use std::sync::Arc;
 
-use crate::error::{EngineError, EngineResult};
+use crate::error::EngineResult;
 use super::{AdapterContext, ProtocolAdapter};
 
 /// Cypher protocol adapter (Bolt wire protocol)

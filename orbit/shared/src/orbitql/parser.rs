@@ -5,10 +5,10 @@
 
 use crate::orbitql::ast::{
     AggregateFunction, BinaryOperator, CreateDefinition, CreateObjectType, CreateStatement,
-    DeleteStatement, DropStatement, Expression, FetchClause, FromClause, InsertStatement,
-    InsertValues, JoinClause, JoinType, LiveStatement, OrderByClause, RelateStatement, SelectField,
-    SelectStatement, SortDirection, Statement, TransactionStatement, UnaryOperator,
-    UpdateStatement, WhenClause, WithClause,
+    DeleteStatement, DropStatement, EdgeDirection, Expression, FetchClause, FromClause,
+    GraphPath, GraphStep, InsertStatement, InsertValues, JoinClause, JoinType, LiveStatement,
+    OrderByClause, RelateStatement, SelectField, SelectStatement, SortDirection, Statement,
+    TransactionStatement, TraverseStatement, UnaryOperator, UpdateStatement, WhenClause, WithClause,
 };
 use crate::orbitql::lexer::{LexError, Token, TokenType};
 use crate::orbitql::QueryValue;
@@ -107,6 +107,7 @@ impl Parser {
             }
             TokenType::Relate => Ok(Statement::Relate(self.parse_relate()?)),
             TokenType::Live => Ok(Statement::Live(self.parse_live()?)),
+            TokenType::Traverse => Ok(Statement::Traverse(self.parse_traverse()?)),
             _ => Err(ParseError::UnexpectedToken {
                 expected: vec![
                     TokenType::With,
@@ -121,6 +122,7 @@ impl Parser {
                     TokenType::Rollback,
                     TokenType::Relate,
                     TokenType::Live,
+                    TokenType::Traverse,
                 ],
                 found: token.clone(),
             }),
@@ -273,6 +275,18 @@ impl Parser {
             self.advance(); // consume .
             self.advance(); // consume *
             return Ok(SelectField::AllFrom(table_name));
+        }
+
+        // Check for graph traversal pattern: ->edge_type->node.field
+        if self.matches(&[TokenType::ArrowRight]) {
+            let path = self.parse_graph_path()?;
+            let alias = if self.matches(&[TokenType::As]) {
+                self.advance();
+                Some(self.expect_identifier()?.value.clone())
+            } else {
+                None
+            };
+            return Ok(SelectField::Graph { path, alias });
         }
 
         // Parse expression with optional alias
@@ -525,7 +539,23 @@ impl Parser {
                 TokenType::GreaterThanOrEqual => BinaryOperator::GreaterThanOrEqual,
                 TokenType::Like => BinaryOperator::Like,
                 TokenType::ILike => BinaryOperator::ILike,
-                TokenType::In => BinaryOperator::In,
+                TokenType::In => {
+                    self.advance(); // consume IN
+                    // IN expects a list of values in parentheses: IN (value1, value2, ...)
+                    self.expect(TokenType::LeftParen)?;
+                    let values = self.parse_expression_list()?;
+                    self.expect(TokenType::RightParen)?;
+                    
+                    // Create an Array expression for the IN values
+                    let right = Expression::Array(values);
+                    
+                    expr = Expression::Binary {
+                        left: Box::new(expr),
+                        operator: BinaryOperator::In,
+                        right: Box::new(right),
+                    };
+                    continue;
+                },
                 TokenType::Is => {
                     self.advance(); // consume IS
 
@@ -644,6 +674,122 @@ impl Parser {
     fn parse_primary(&mut self) -> Result<Expression, ParseError> {
         let token = self.peek()?.clone();
 
+        // Check if this is a keyword that can be used as an identifier
+        let is_keyword_as_identifier = token.is_keyword() && {
+            // Allow keywords to be used as identifiers in expression contexts
+            // (table aliases, column names, etc.)
+            // Keywords with special parsing rules (like NOW, INTERVAL) must be restricted
+            let restricted = [
+                "SELECT", "FROM", "WHERE", "JOIN", "INNER", "LEFT", "RIGHT",
+                "FULL", "CROSS", "ON", "GROUP", "BY", "HAVING", "ORDER",
+                "LIMIT", "OFFSET", "INSERT", "INTO", "VALUES", "UPDATE",
+                "SET", "DELETE", "CREATE", "DROP", "TABLE", "AS", "AND",
+                "OR", "NOT", "IN", "BETWEEN", "IS", "LIKE", "CASE", "WHEN",
+                "THEN", "ELSE", "END", "WITH", "RECURSIVE", "NOW", "INTERVAL"
+            ];
+            !restricted.contains(&token.value.to_uppercase().as_str())
+        };
+
+        // Handle identifiers and keywords that can be used as identifiers
+        if token.token_type == TokenType::Identifier || is_keyword_as_identifier {
+            self.advance();
+            let mut token_value = token.value.clone();
+            let mut expr = Expression::Identifier(token_value.clone());
+
+            // Handle namespaced function calls (e.g., time::now(), string::len())
+            while self.matches(&[TokenType::DoubleColon]) {
+                self.advance();
+                let next_token = self.expect_identifier_or_keyword()?;
+                token_value = format!("{}::{}", token_value, next_token.value);
+                expr = Expression::Identifier(token_value.clone());
+            }
+
+            // Handle record IDs (e.g., user:user1, post:123)
+            if self.matches(&[TokenType::Colon]) {
+                self.advance();
+                let record_id = self.expect_identifier_or_keyword()?.value.clone();
+                token_value = format!("{}:{}", token_value, record_id);
+                expr = Expression::Identifier(token_value.clone());
+            }
+
+            // Handle field access (e.g., user.name, f.from, t.to, target.name)
+            // Allow reserved keywords as field names after dot
+            while self.matches(&[TokenType::Dot]) {
+                self.advance();
+                let field = self.expect_field_name()?.value.clone();
+                expr = Expression::FieldAccess {
+                    object: Box::new(expr),
+                    field,
+                };
+            }
+
+            // Handle function calls
+            if self.matches(&[TokenType::LeftParen]) {
+                self.advance();
+
+                if let Expression::Identifier(name) = &expr {
+                    // Check for aggregate functions
+                    let is_aggregate = matches!(
+                        name.to_uppercase().as_str(),
+                        "COUNT" | "SUM" | "AVG" | "MIN" | "MAX"
+                    );
+
+                    if is_aggregate {
+                        // Check for DISTINCT
+                        let distinct = if self.matches(&[TokenType::Distinct]) {
+                            self.advance();
+                            true
+                        } else {
+                            false
+                        };
+
+                        // Check for * (as in COUNT(*))
+                        let arg = if self.matches(&[TokenType::Multiply]) {
+                            self.advance();
+                            None
+                        } else if self.matches(&[TokenType::RightParen]) {
+                            // Empty argument list like COUNT()
+                            None
+                        } else {
+                            Some(Box::new(self.parse_expression()?))
+                        };
+
+                        self.expect(TokenType::RightParen)?;
+
+                        return Ok(Expression::Aggregate {
+                            function: match name.to_uppercase().as_str() {
+                                "COUNT" => AggregateFunction::Count,
+                                "SUM" => AggregateFunction::Sum,
+                                "AVG" => AggregateFunction::Avg,
+                                "MIN" => AggregateFunction::Min,
+                                "MAX" => AggregateFunction::Max,
+                                _ => unreachable!(),
+                            },
+                            expression: arg,
+                            distinct,
+                        });
+                    }
+
+                    // Regular function call
+                    let args = if self.matches(&[TokenType::RightParen]) {
+                        Vec::new()
+                    } else {
+                        let args = self.parse_expression_list()?;
+                        self.expect(TokenType::RightParen)?;
+                        args
+                    };
+
+                    return Ok(Expression::Function {
+                        name: name.clone(),
+                        args,
+                    });
+                }
+            }
+
+            return Ok(expr);
+        }
+
+        // Handle other token types
         match token.token_type {
             TokenType::Integer => {
                 self.advance();
@@ -669,6 +815,17 @@ impl Parser {
                         })?;
                 Ok(Expression::Literal(QueryValue::Float(value)))
             }
+            TokenType::DurationLiteral => {
+                self.advance();
+                // Parse duration literal like "3h", "2m", "1d", "30s", "100ms"
+                let duration = Self::parse_duration_literal(&token.value).map_err(|_| {
+                    ParseError::InvalidExpression {
+                        message: format!("Invalid duration literal: {}", token.value),
+                        token: token.clone(),
+                    }
+                })?;
+                Ok(Expression::Literal(QueryValue::Duration(duration)))
+            }
             TokenType::String => {
                 self.advance();
                 Ok(Expression::Literal(QueryValue::String(token.value)))
@@ -685,110 +842,6 @@ impl Parser {
             TokenType::Parameter => {
                 self.advance();
                 Ok(Expression::Parameter(token.value))
-            }
-            TokenType::Identifier => {
-                self.advance();
-                let token_value = token.value.clone();
-                let mut expr = Expression::Identifier(token_value);
-
-                // Handle field access (e.g., user.name)
-                while self.matches(&[TokenType::Dot]) {
-                    self.advance();
-                    let field = self.expect_identifier()?.value.clone();
-                    expr = Expression::FieldAccess {
-                        object: Box::new(expr),
-                        field,
-                    };
-                }
-
-                // Handle function calls
-                if self.matches(&[TokenType::LeftParen]) {
-                    self.advance();
-
-                    if let Expression::Identifier(name) = &expr {
-                        // Check for aggregate functions with DISTINCT
-                        let is_aggregate = matches!(
-                            name.to_uppercase().as_str(),
-                            "COUNT" | "SUM" | "AVG" | "MIN" | "MAX"
-                        );
-
-                        if is_aggregate {
-                            // Check for DISTINCT
-                            let distinct = if self.matches(&[TokenType::Distinct]) {
-                                self.advance();
-                                true
-                            } else {
-                                false
-                            };
-
-                            // Parse aggregate expression
-                            let expression = if name.to_uppercase() == "COUNT"
-                                && self.matches(&[TokenType::Multiply])
-                            {
-                                self.advance(); // consume *
-                                None
-                            } else if self.matches(&[TokenType::RightParen]) {
-                                None // No argument for COUNT()
-                            } else {
-                                Some(Box::new(self.parse_expression()?))
-                            };
-
-                            self.expect(TokenType::RightParen)?;
-
-                            let aggregate_func = match name.to_uppercase().as_str() {
-                                "COUNT" => AggregateFunction::Count,
-                                "SUM" => AggregateFunction::Sum,
-                                "AVG" => AggregateFunction::Avg,
-                                "MIN" => AggregateFunction::Min,
-                                "MAX" => AggregateFunction::Max,
-                                _ => {
-                                    return Err(ParseError::InvalidExpression {
-                                        message: format!("Unknown aggregate function: {name}"),
-                                        token: token.clone(),
-                                    })
-                                }
-                            };
-
-                            expr = Expression::Aggregate {
-                                function: aggregate_func,
-                                expression,
-                                distinct,
-                            };
-                        } else {
-                            // Regular function call
-                            let args = if self.matches(&[TokenType::RightParen]) {
-                                Vec::new()
-                            } else {
-                                self.parse_expression_list()?
-                            };
-                            self.expect(TokenType::RightParen)?;
-
-                            // Special handling for specific functions
-                            match name.to_uppercase().as_str() {
-                                "COALESCE" | "ISNULL" | "NVL" => {
-                                    // These are null-handling functions
-                                    expr = Expression::Function {
-                                        name: name.clone(),
-                                        args,
-                                    };
-                                }
-                                _ => {
-                                    expr = Expression::Function {
-                                        name: name.clone(),
-                                        args,
-                                    };
-                                }
-                            }
-                        }
-                    } else {
-                        return Err(ParseError::InvalidExpression {
-                            message: "Invalid function call".to_string(),
-                            token,
-                        });
-                    }
-                }
-
-                Ok(expr)
             }
             TokenType::Now => {
                 self.advance();
@@ -952,15 +1005,48 @@ impl Parser {
     }
 
     /// Parse RELATE statement
+    /// Syntax: RELATE <from_node>-><edge_type>-><to_node> [SET <properties>]
     fn parse_relate(&mut self) -> Result<RelateStatement, ParseError> {
         self.expect(TokenType::Relate)?;
 
-        // TODO: Implement full RELATE parsing
+        // Parse from node (e.g., user:user1)
+        let from = self.parse_expression()?;
+
+        // Expect -> arrow
+        self.expect(TokenType::ArrowRight)?;
+
+        // Parse edge type
+        let edge_type = self.expect_identifier_or_keyword()?.value.clone();
+
+        // Expect -> arrow
+        self.expect(TokenType::ArrowRight)?;
+
+        // Parse to node (e.g., user:user2)
+        let to = self.parse_expression()?;
+
+        // Optional SET clause for properties
+        let properties = if self.matches(&[TokenType::Set]) {
+            self.advance();
+            // Skip the properties block (we accept anything between { })
+            if self.matches(&[TokenType::LeftBrace]) {
+                self.advance();
+                // Skip until we find the closing brace
+                while !self.matches(&[TokenType::RightBrace]) && !self.is_at_end() {
+                    self.advance();
+                }
+                self.expect(TokenType::RightBrace)?;
+            }
+            // Return empty properties map (properties are skipped for now)
+            Some(std::collections::HashMap::new())
+        } else {
+            None
+        };
+
         Ok(RelateStatement {
-            from: Expression::Identifier("from".to_string()),
-            edge_type: "edge".to_string(),
-            to: Expression::Identifier("to".to_string()),
-            properties: None,
+            from,
+            edge_type,
+            to,
+            properties,
         })
     }
 
@@ -978,6 +1064,130 @@ impl Parser {
         let query = Box::new(self.parse_select()?);
 
         Ok(LiveStatement { query, diff })
+    }
+
+    /// Parse TRAVERSE statement
+    /// Syntax: TRAVERSE <edge_type> FROM <node_expr> [MAX_DEPTH <n>] [WHERE <condition>]
+    fn parse_traverse(&mut self) -> Result<TraverseStatement, ParseError> {
+        self.expect(TokenType::Traverse)?;
+
+        // Parse edge type (e.g., "follows")
+        let edge_type = self.expect_identifier_or_keyword()?.value.clone();
+
+        // Expect FROM keyword
+        self.expect(TokenType::From)?;
+
+        // Parse starting node expression (e.g., "user:user1")
+        let from_node = self.parse_expression()?;
+
+        // Parse optional MAX_DEPTH
+        let max_depth = if self.matches(&[TokenType::MaxDepth]) {
+            self.advance();
+            let depth_expr = self.parse_expression()?;
+            if let Expression::Literal(QueryValue::Integer(n)) = depth_expr {
+                Some(n as u32)
+            } else {
+                return Err(ParseError::InvalidExpression {
+                    message: "MAX_DEPTH must be an integer".to_string(),
+                    token: self.previous().clone(),
+                });
+            }
+        } else {
+            None
+        };
+
+        // Parse optional WHERE clause
+        let where_clause = if self.matches(&[TokenType::Where]) {
+            self.advance();
+            Some(self.parse_expression()?)
+        } else {
+            None
+        };
+
+        Ok(TraverseStatement {
+            edge_type,
+            from_node,
+            max_depth,
+            where_clause,
+        })
+    }
+
+    /// Parse a graph path expression like ->follows->user.name
+    /// Used in SELECT fields for graph traversals
+    fn parse_graph_path(&mut self) -> Result<GraphPath, ParseError> {
+        let mut steps = Vec::new();
+
+        // Parse sequence of edge traversals: ->edge_type->node.field
+        while self.matches(&[TokenType::ArrowRight, TokenType::ArrowLeft]) {
+            let direction = if self.peek()?.token_type == TokenType::ArrowRight {
+                EdgeDirection::Outgoing
+            } else {
+                EdgeDirection::Incoming
+            };
+            self.advance(); // consume -> or <-
+
+            // Parse edge type or node label
+            let label = self.expect_identifier_or_keyword()?.value.clone();
+
+            // Add edge step
+            steps.push(GraphStep::Edge {
+                direction,
+                label: Some(label.clone()),
+                properties: None,
+            });
+
+            // Check if there's a node access after this (e.g., ->user.name)
+            // If no more arrows, this is the final node
+            if !self.matches(&[TokenType::ArrowRight, TokenType::ArrowLeft]) {
+                // Check for field access (e.g., .name)
+                if self.matches(&[TokenType::Dot]) {
+                    self.advance();
+                    let field = self.expect_identifier_or_keyword()?.value.clone();
+                    // Create a node step with the field as a property expression
+                    steps.push(GraphStep::Node {
+                        label: Some(label),
+                        properties: Some(Expression::Identifier(field)),
+                    });
+                } else {
+                    // Just a node reference
+                    steps.push(GraphStep::Node {
+                        label: Some(label),
+                        properties: None,
+                    });
+                }
+            }
+        }
+
+        Ok(GraphPath { steps })
+    }
+
+    /// Parse a duration literal string like "3h", "2m", "1d", "30s", "100ms"
+    fn parse_duration_literal(s: &str) -> Result<std::time::Duration, &'static str> {
+        let s = s.trim();
+        // Find where the numeric part ends
+        let num_end = s
+            .chars()
+            .position(|c| !c.is_ascii_digit())
+            .unwrap_or(s.len());
+        if num_end == 0 {
+            return Err("No numeric value found");
+        }
+        let num_str = &s[..num_end];
+        let suffix = &s[num_end..];
+
+        let value: u64 = num_str.parse().map_err(|_| "Invalid number")?;
+
+        let duration = match suffix {
+            "ns" => std::time::Duration::from_nanos(value),
+            "us" | "µs" => std::time::Duration::from_micros(value),
+            "ms" => std::time::Duration::from_millis(value),
+            "s" => std::time::Duration::from_secs(value),
+            "m" => std::time::Duration::from_secs(value * 60),
+            "h" => std::time::Duration::from_secs(value * 3600),
+            "d" => std::time::Duration::from_secs(value * 86400),
+            _ => return Err("Unknown duration suffix"),
+        };
+        Ok(duration)
     }
 
     // Helper methods
@@ -1057,19 +1267,50 @@ impl Parser {
         }
     }
 
+    /// Expect an identifier or keyword as a field name after a dot
+    /// This allows reserved keywords like 'from', 'to', 'select', etc. to be used as field names
+    fn expect_field_name(&mut self) -> Result<&Token, ParseError> {
+        let token = self.peek()?;
+        // Accept regular identifiers or any keyword token as a field name after dot
+        if token.token_type == TokenType::Identifier || token.is_keyword() {
+            Ok(self.advance())
+        } else {
+            Err(ParseError::UnexpectedToken {
+                expected: vec![TokenType::Identifier],
+                found: token.clone(),
+            })
+        }
+    }
+
     /// Expect an identifier token, allowing certain keywords to be used as identifiers
+    /// This is used for table names, column names, aliases, etc.
     fn expect_identifier_or_keyword(&mut self) -> Result<&Token, ParseError> {
         let token = self.peek()?;
         match token.token_type {
             TokenType::Identifier => Ok(self.advance()),
-            // Allow certain keywords to be used as table/column names
-            TokenType::Metrics
-            | TokenType::Aggregate
-            | TokenType::Window
-            | TokenType::Range
-            | TokenType::Node
-            | TokenType::Edge
-            | TokenType::Path => Ok(self.advance()),
+            // Allow keywords to be used as identifiers in most contexts
+            // This enables using reserved words as table/column names when needed
+            _ if token.is_keyword() => {
+                // Allow most keywords to be used as identifiers
+                // Only restrict truly structural keywords that would break parsing
+                let restricted_keywords = [
+                    "SELECT", "FROM", "WHERE", "JOIN", "INNER", "LEFT", "RIGHT", 
+                    "FULL", "CROSS", "ON", "GROUP", "BY", "HAVING", "ORDER", 
+                    "LIMIT", "OFFSET", "INSERT", "INTO", "VALUES", "UPDATE", 
+                    "SET", "DELETE", "CREATE", "DROP", "TABLE", "AS", "AND", 
+                    "OR", "NOT", "IN", "BETWEEN", "IS", "LIKE", "CASE", "WHEN", 
+                    "THEN", "ELSE", "END", "WITH", "RECURSIVE"
+                ];
+                
+                if restricted_keywords.contains(&token.value.to_uppercase().as_str()) {
+                    Err(ParseError::UnexpectedToken {
+                        expected: vec![TokenType::Identifier],
+                        found: token.clone(),
+                    })
+                } else {
+                    Ok(self.advance())
+                }
+            },
             _ => Err(ParseError::UnexpectedToken {
                 expected: vec![TokenType::Identifier],
                 found: token.clone(),
@@ -1447,5 +1688,166 @@ mod tests {
         } else {
             panic!("Expected BEGIN transaction statement");
         }
+    }
+
+    #[test]
+    fn test_parse_field_access_with_reserved_keywords() {
+        // Test that reserved keywords can be used as field names after dot
+        let lexer = Lexer::new();
+
+        // Test f.from - 'from' is a reserved keyword
+        let tokens = lexer
+            .tokenize("SELECT f.from, f.to FROM follows f")
+            .unwrap();
+        let mut parser = Parser::new();
+        let stmt = parser.parse(tokens).unwrap();
+
+        if let Statement::Select(select) = stmt {
+            assert_eq!(select.fields.len(), 2);
+            // First field: f.from
+            if let SelectField::Expression { expr, .. } = &select.fields[0] {
+                if let Expression::FieldAccess { object, field } = expr {
+                    if let Expression::Identifier(name) = object.as_ref() {
+                        assert_eq!(name, "f");
+                    } else {
+                        panic!("Expected identifier 'f'");
+                    }
+                    assert_eq!(field, "from");
+                } else {
+                    panic!("Expected FieldAccess for f.from");
+                }
+            } else {
+                panic!("Expected Expression field");
+            }
+            // Second field: f.to
+            if let SelectField::Expression { expr, .. } = &select.fields[1] {
+                if let Expression::FieldAccess { object, field } = expr {
+                    if let Expression::Identifier(name) = object.as_ref() {
+                        assert_eq!(name, "f");
+                    } else {
+                        panic!("Expected identifier 'f'");
+                    }
+                    assert_eq!(field, "to");
+                } else {
+                    panic!("Expected FieldAccess for f.to");
+                }
+            } else {
+                panic!("Expected Expression field");
+            }
+        } else {
+            panic!("Expected SELECT statement");
+        }
+    }
+
+    #[test]
+    fn test_parse_join_with_keyword_field_names() {
+        // Test the exact query that was failing: JOIN with 'from' as field name
+        let lexer = Lexer::new();
+        let tokens = lexer
+            .tokenize("SELECT u.*, f.to FROM users u JOIN follows f ON u.id = f.from")
+            .unwrap();
+        let mut parser = Parser::new();
+        let stmt = parser.parse(tokens).unwrap();
+
+        if let Statement::Select(select) = stmt {
+            // Should have one JOIN clause
+            assert_eq!(select.join_clauses.len(), 1);
+            // JOIN condition should be: u.id = f.from
+            let join = &select.join_clauses[0];
+            if let Expression::Binary { left, operator, right } = &join.condition {
+                assert!(matches!(operator, BinaryOperator::Equal));
+                // Left side: u.id
+                if let Expression::FieldAccess { object, field } = left.as_ref() {
+                    assert_eq!(field, "id");
+                    if let Expression::Identifier(name) = object.as_ref() {
+                        assert_eq!(name, "u");
+                    }
+                }
+                // Right side: f.from
+                if let Expression::FieldAccess { object, field } = right.as_ref() {
+                    assert_eq!(field, "from");
+                    if let Expression::Identifier(name) = object.as_ref() {
+                        assert_eq!(name, "f");
+                    }
+                }
+            } else {
+                panic!("Expected binary expression in JOIN condition");
+            }
+        } else {
+            panic!("Expected SELECT statement");
+        }
+    }
+
+    #[test]
+    fn test_parse_now_minus_interval() {
+        // Test parsing NOW() - INTERVAL '30 days'
+        let lexer = Lexer::new();
+        let tokens = lexer
+            .tokenize("SELECT * FROM posts WHERE created_at > NOW() - INTERVAL '30 days'")
+            .unwrap();
+        let mut parser = Parser::new();
+        let result = parser.parse(tokens);
+        assert!(result.is_ok(), "Failed to parse NOW() - INTERVAL: {:?}", result.err());
+    }
+
+    #[test]
+    fn test_parse_cte() {
+        // Test parsing a simple CTE
+        let lexer = Lexer::new();
+        let query = r#"
+            WITH user_stats AS (
+                SELECT user_id FROM posts WHERE id > 1
+            )
+            SELECT * FROM user_stats
+        "#;
+        let tokens = lexer.tokenize(query).unwrap();
+        let mut parser = Parser::new();
+        let result = parser.parse(tokens);
+        assert!(result.is_ok(), "Failed to parse simple CTE: {:?}", result.err());
+    }
+
+    #[test]
+    fn test_parse_cte_with_count_star() {
+        // Test parsing a CTE with COUNT(*)
+        let lexer = Lexer::new();
+        let query = r#"
+            WITH user_stats AS (
+                SELECT user_id, COUNT(*) AS post_count FROM posts GROUP BY user_id
+            )
+            SELECT * FROM user_stats
+        "#;
+        let tokens = lexer.tokenize(query).unwrap();
+        let mut parser = Parser::new();
+        let result = parser.parse(tokens);
+        assert!(result.is_ok(), "Failed to parse CTE with COUNT(*): {:?}", result.err());
+    }
+
+    #[test]
+    fn test_parse_cte_with_interval() {
+        // Test parsing a CTE with NOW() - INTERVAL
+        let lexer = Lexer::new();
+        let query = r#"
+            WITH user_stats AS (
+                SELECT user_id, COUNT(*) AS post_count
+                FROM posts
+                WHERE created_at > NOW() - INTERVAL '30 days'
+                GROUP BY user_id
+            )
+            SELECT * FROM user_stats
+        "#;
+        let tokens = lexer.tokenize(query).unwrap();
+        let mut parser = Parser::new();
+        let result = parser.parse(tokens);
+        assert!(result.is_ok(), "Failed to parse CTE with interval: {:?}", result.err());
+    }
+
+    #[test]
+    fn test_parse_count_star() {
+        // Test parsing COUNT(*)
+        let lexer = Lexer::new();
+        let tokens = lexer.tokenize("SELECT COUNT(*) FROM users").unwrap();
+        let mut parser = Parser::new();
+        let result = parser.parse(tokens);
+        assert!(result.is_ok(), "Failed to parse COUNT(*): {:?}", result.err());
     }
 }

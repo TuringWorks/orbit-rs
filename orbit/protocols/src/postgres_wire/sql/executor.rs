@@ -595,7 +595,7 @@ impl SqlExecutor {
                 IndexType::IvfFlat { .. } => "ivfflat".to_string(),
                 IndexType::Hnsw { .. } => "hnsw".to_string(),
             },
-            unique: false, // TODO: Support UNIQUE indexes
+            unique: stmt.unique,
             condition: stmt
                 .where_clause
                 .map(|_| "TODO: serialize condition".to_string()),
@@ -615,9 +615,9 @@ impl SqlExecutor {
     ) -> ProtocolResult<ExecutionResult> {
         let view_name = stmt.name.full_name();
 
-        // Check if view already exists
+        // Check if view already exists (allow if replace=true or if_not_exists=true)
         let views = self.views.read().await;
-        if views.contains_key(&view_name) && !stmt.if_not_exists {
+        if views.contains_key(&view_name) && !stmt.if_not_exists && !stmt.replace {
             return Err(ProtocolError::already_exists("View", &view_name));
         }
         drop(views);
@@ -1074,6 +1074,11 @@ impl SqlExecutor {
                     }
                 }
                 SelectItem::Expression { expr, alias } => {
+                    // Validate column references in the expression against table schema
+                    if let Some(from) = from_clause {
+                        self.validate_expression_columns(expr, from).await?;
+                    }
+
                     // Try to resolve the column name from the expression
                     let column_name = if let Some(alias) = alias {
                         alias.clone()
@@ -1153,6 +1158,192 @@ impl SqlExecutor {
             },
             _ => None,
         }
+    }
+
+    /// Validate that column references in an expression exist in the table schema
+    fn validate_expression_columns<'a>(
+        &'a self,
+        expr: &'a Expression,
+        from_clause: &'a FromClause,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = ProtocolResult<()>> + Send + 'a>> {
+        Box::pin(async move {
+            match expr {
+                Expression::Column(col_ref) => {
+                    // Skip validation for qualified column references (e.g., o.amount, t.name)
+                    // since proper validation would require tracking table aliases
+                    if col_ref.table.is_some() {
+                        return Ok(());
+                    }
+
+                    // Skip validation for information_schema tables (they have virtual columns)
+                    if self.is_information_schema_query(from_clause) {
+                        return Ok(());
+                    }
+
+                    // Get all valid column names from the FROM clause
+                    let valid_columns = self.get_valid_columns_from_clause(from_clause).await?;
+
+                    // If we got an empty list but there's a FROM clause, skip validation
+                    // (table might not exist yet or be a special table)
+                    if valid_columns.is_empty() {
+                        return Ok(());
+                    }
+
+                    // Check if the column exists (case-insensitive)
+                    let col_name_lower = col_ref.name.to_lowercase();
+                    let exists = valid_columns.iter().any(|c| c.to_lowercase() == col_name_lower);
+
+                    if !exists {
+                        return Err(ProtocolError::PostgresError(format!(
+                            "Column '{}' does not exist",
+                            col_ref.name
+                        )));
+                    }
+                }
+                Expression::Binary { left, right, .. } => {
+                    self.validate_expression_columns(left, from_clause).await?;
+                    self.validate_expression_columns(right, from_clause).await?;
+                }
+                Expression::Unary { operand, .. } => {
+                    self.validate_expression_columns(operand, from_clause).await?;
+                }
+                Expression::Function(func) => {
+                    for arg in &func.args {
+                        self.validate_expression_columns(arg, from_clause).await?;
+                    }
+                }
+                Expression::Case(case_expr) => {
+                    if let Some(op) = &case_expr.operand {
+                        self.validate_expression_columns(op, from_clause).await?;
+                    }
+                    for when_clause in &case_expr.when_clauses {
+                        self.validate_expression_columns(&when_clause.condition, from_clause).await?;
+                        self.validate_expression_columns(&when_clause.result, from_clause).await?;
+                    }
+                    if let Some(else_expr) = &case_expr.else_clause {
+                        self.validate_expression_columns(else_expr, from_clause).await?;
+                    }
+                }
+                Expression::In { expr, list, .. } => {
+                    self.validate_expression_columns(expr, from_clause).await?;
+                    if let crate::postgres_wire::sql::ast::InList::Expressions(items) = list {
+                        for item in items {
+                            self.validate_expression_columns(item, from_clause).await?;
+                        }
+                    }
+                }
+                Expression::Between { expr, low, high, .. } => {
+                    self.validate_expression_columns(expr, from_clause).await?;
+                    self.validate_expression_columns(low, from_clause).await?;
+                    self.validate_expression_columns(high, from_clause).await?;
+                }
+                Expression::Subquery(_) | Expression::Exists(_) => {
+                    // Subqueries have their own scope; skip validation here
+                }
+                Expression::Literal(_) | Expression::Cast { .. } | Expression::Parameter(_) => {
+                    // Literals, casts, and parameters don't need column validation
+                }
+                Expression::WindowFunction { partition_by, order_by, .. } => {
+                    for expr in partition_by {
+                        self.validate_expression_columns(expr, from_clause).await?;
+                    }
+                    for item in order_by {
+                        self.validate_expression_columns(&item.expression, from_clause).await?;
+                    }
+                }
+                Expression::Like { expr, pattern, .. } => {
+                    self.validate_expression_columns(expr, from_clause).await?;
+                    self.validate_expression_columns(pattern, from_clause).await?;
+                }
+                Expression::IsNull { expr, .. } => {
+                    self.validate_expression_columns(expr, from_clause).await?;
+                }
+                Expression::Array(items) => {
+                    for item in items {
+                        self.validate_expression_columns(item, from_clause).await?;
+                    }
+                }
+                Expression::ArraySlice { array, start, end } => {
+                    self.validate_expression_columns(array, from_clause).await?;
+                    if let Some(s) = start {
+                        self.validate_expression_columns(s, from_clause).await?;
+                    }
+                    if let Some(e) = end {
+                        self.validate_expression_columns(e, from_clause).await?;
+                    }
+                }
+                Expression::VectorSimilarity { left, right, .. } => {
+                    self.validate_expression_columns(left, from_clause).await?;
+                    self.validate_expression_columns(right, from_clause).await?;
+                }
+                Expression::Row(items) => {
+                    for item in items {
+                        self.validate_expression_columns(item, from_clause).await?;
+                    }
+                }
+                Expression::ArrayIndex { array, index } => {
+                    self.validate_expression_columns(array, from_clause).await?;
+                    self.validate_expression_columns(index, from_clause).await?;
+                }
+            }
+            Ok(())
+        })
+    }
+
+    /// Check if the FROM clause references information_schema tables
+    fn is_information_schema_query(&self, from_clause: &FromClause) -> bool {
+        match from_clause {
+            FromClause::Table { name, .. } => {
+                if let Some(schema) = &name.schema {
+                    schema.to_lowercase() == "information_schema"
+                } else {
+                    false
+                }
+            }
+            FromClause::Join { left, right, .. } => {
+                self.is_information_schema_query(left) || self.is_information_schema_query(right)
+            }
+            _ => false,
+        }
+    }
+
+    /// Get all valid column names from a FROM clause
+    fn get_valid_columns_from_clause<'a>(
+        &'a self,
+        from_clause: &'a FromClause,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = ProtocolResult<Vec<String>>> + Send + 'a>> {
+        Box::pin(async move {
+            let mut valid_columns = Vec::new();
+
+            match from_clause {
+                FromClause::Table { name, alias: _ } => {
+                    // Handle information_schema tables
+                    if let Some(schema) = &name.schema {
+                        if schema.to_lowercase() == "information_schema" {
+                            // For information_schema, we'll be lenient
+                            return Ok(valid_columns);
+                        }
+                    }
+
+                    let table_name = name.full_name();
+                    let tables = self.tables.read().await;
+                    if let Some(table_schema) = tables.get(&table_name) {
+                        for col in &table_schema.columns {
+                            valid_columns.push(col.name.clone());
+                        }
+                    }
+                }
+                FromClause::Join { left, right, .. } => {
+                    let mut left_cols = self.get_valid_columns_from_clause(left).await?;
+                    let mut right_cols = self.get_valid_columns_from_clause(right).await?;
+                    valid_columns.append(&mut left_cols);
+                    valid_columns.append(&mut right_cols);
+                }
+                _ => {} // Handle other FROM clause types as needed
+            }
+
+            Ok(valid_columns)
+        })
     }
 
     /// Add columns for information_schema tables

@@ -61,6 +61,7 @@ pub struct CreateTableStatement {
 #[derive(Debug, Clone, PartialEq)]
 pub struct CreateIndexStatement {
     pub if_not_exists: bool,
+    pub unique: bool,
     pub name: Option<String>,
     pub table: TableName,
     pub columns: Vec<IndexColumn>,

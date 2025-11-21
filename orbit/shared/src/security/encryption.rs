@@ -7,11 +7,21 @@
 //! - Hardware security module (HSM) support
 
 use crate::exception::{OrbitError, OrbitResult};
+use aes_gcm::{
+    aead::{Aead, KeyInit, OsRng},
+    Aes256Gcm, Nonce,
+};
+use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 use tokio::sync::RwLock;
+
+/// Nonce size for AES-256-GCM (96 bits = 12 bytes)
+const NONCE_SIZE: usize = 12;
+/// Authentication tag size (128 bits = 16 bytes)
+const TAG_SIZE: usize = 16;
 
 /// TLS version
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -195,11 +205,12 @@ impl KeyManagementSystem {
         Ok(new_key)
     }
 
-    /// Generate a new encryption key
+    /// Generate a new encryption key using cryptographically secure random bytes
     fn generate_key(&self, key_id: String) -> OrbitResult<EncryptionKey> {
-        // In production, this would use a proper key generation mechanism
-        // For now, create a stub key
-        let key_data = vec![0u8; 32]; // 256-bit key
+        // Generate cryptographically secure random 256-bit (32 bytes) key
+        let mut key_data = vec![0u8; 32];
+        OsRng.fill_bytes(&mut key_data);
+
         let mut key = EncryptionKey::new(key_id, EncryptionAlgorithm::Aes256Gcm, key_data);
         key.expires_at = Some(SystemTime::now() + self.rotation_policy.max_key_age);
         Ok(key)
@@ -235,41 +246,84 @@ impl EncryptionManager {
         }
     }
 
-    /// Encrypt data
+    /// Encrypt data using AES-256-GCM
+    ///
+    /// Output format: [nonce (12 bytes)][ciphertext + tag]
+    /// The tag is automatically appended by AES-GCM
     pub async fn encrypt(&self, data: &[u8]) -> OrbitResult<Vec<u8>> {
         if !self.at_rest_enabled {
             return Ok(data.to_vec());
         }
 
-        let _key = self.key_management.get_active_key().await?;
+        let key = self.key_management.get_active_key().await?;
 
-        // In production, this would use actual encryption
-        // For now, return a stub encrypted format
-        let mut encrypted = vec![0u8; data.len() + 16]; // Add space for tag
-        encrypted[16..].copy_from_slice(data);
+        // Create cipher from key
+        let cipher = Aes256Gcm::new_from_slice(&key.key_data)
+            .map_err(|e| OrbitError::internal(format!("Invalid key length: {}", e)))?;
+
+        // Generate random nonce (12 bytes for AES-GCM)
+        let mut nonce_bytes = [0u8; NONCE_SIZE];
+        OsRng.fill_bytes(&mut nonce_bytes);
+        let nonce = Nonce::from_slice(&nonce_bytes);
+
+        // Encrypt data (returns ciphertext + authentication tag)
+        let ciphertext = cipher
+            .encrypt(nonce, data)
+            .map_err(|e| OrbitError::internal(format!("Encryption failed: {}", e)))?;
+
+        // Prepend nonce to ciphertext: [nonce][ciphertext+tag]
+        let mut encrypted = Vec::with_capacity(NONCE_SIZE + ciphertext.len());
+        encrypted.extend_from_slice(&nonce_bytes);
+        encrypted.extend_from_slice(&ciphertext);
 
         Ok(encrypted)
     }
 
-    /// Decrypt data
+    /// Encrypt data and return with key ID for later decryption
+    pub async fn encrypt_with_key_id(&self, data: &[u8]) -> OrbitResult<(Vec<u8>, String)> {
+        let key = self.key_management.get_active_key().await?;
+        let key_id = key.id.clone();
+        let encrypted = self.encrypt(data).await?;
+        Ok((encrypted, key_id))
+    }
+
+    /// Decrypt data using AES-256-GCM
+    ///
+    /// Expected input format: [nonce (12 bytes)][ciphertext + tag]
     pub async fn decrypt(&self, encrypted_data: &[u8], key_id: &str) -> OrbitResult<Vec<u8>> {
         if !self.at_rest_enabled {
             return Ok(encrypted_data.to_vec());
         }
 
-        let _key = self
+        // Minimum length: nonce (12) + tag (16) = 28 bytes
+        if encrypted_data.len() < NONCE_SIZE + TAG_SIZE {
+            return Err(OrbitError::internal(format!(
+                "Invalid encrypted data: too short (got {} bytes, need at least {})",
+                encrypted_data.len(),
+                NONCE_SIZE + TAG_SIZE
+            )));
+        }
+
+        let key = self
             .key_management
             .get_key(key_id)
             .await?
-            .ok_or_else(|| OrbitError::internal("Key not found"))?;
+            .ok_or_else(|| OrbitError::internal(format!("Key not found: {}", key_id)))?;
 
-        // In production, this would use actual decryption
-        // For now, return a stub decrypted format
-        if encrypted_data.len() <= 16 {
-            return Err(OrbitError::internal("Invalid encrypted data"));
-        }
+        // Create cipher from key
+        let cipher = Aes256Gcm::new_from_slice(&key.key_data)
+            .map_err(|e| OrbitError::internal(format!("Invalid key length: {}", e)))?;
 
-        Ok(encrypted_data[16..].to_vec())
+        // Extract nonce and ciphertext
+        let nonce = Nonce::from_slice(&encrypted_data[..NONCE_SIZE]);
+        let ciphertext = &encrypted_data[NONCE_SIZE..];
+
+        // Decrypt and verify authentication tag
+        let plaintext = cipher
+            .decrypt(nonce, ciphertext)
+            .map_err(|_| OrbitError::internal("Decryption failed: authentication tag mismatch or corrupted data"))?;
+
+        Ok(plaintext)
     }
 
     /// Get TLS configuration

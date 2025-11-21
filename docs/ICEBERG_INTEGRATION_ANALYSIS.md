@@ -29,12 +29,12 @@ Apache Iceberg could provide **significant efficiency gains** for Orbit's warm a
 
 ### Three-Tier Strategy
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │ HOT TIER (0-48h)                                            │
 │ • Row-based storage (RowBasedStore)                         │
 │ • HashMap<PrimaryKey, usize> index                          │
-│ • Optimized for: Writes, Updates, Deletes, Point Queries   │
+│ • Optimized for: Writes, Updates, Deletes, Point Queries    │
 │ • Target: OLTP workloads, <5ms latency                      │
 └─────────────────────────────────────────────────────────────┘
                            ↓ Migration after 48h
@@ -70,7 +70,7 @@ Apache Iceberg could provide **significant efficiency gains** for Orbit's warm a
 
 ### Table Format Structure
 
-```
+```text
 Iceberg Table
 ├── Metadata Layer
 │   ├── metadata.json (current table state)
@@ -88,6 +88,7 @@ Iceberg Table
 #### 1. **Hidden Partitioning**
 
 **Current Approach**:
+
 ```rust
 // User must specify partition columns
 CREATE TABLE events (
@@ -102,6 +103,7 @@ WHERE date_trunc('day', timestamp) = '2025-01-15';
 ```
 
 **With Iceberg**:
+
 ```rust
 // Iceberg handles partitioning automatically
 CREATE TABLE events (
@@ -116,6 +118,7 @@ SELECT * FROM events WHERE timestamp = '2025-01-15 14:30:00';
 ```
 
 **Efficiency Gain**:
+
 - **10-100x faster query planning** (automatic partition pruning)
 - **Zero user cognitive overhead** (no partition column transforms)
 - **Partition evolution without table rewrites**
@@ -123,6 +126,7 @@ SELECT * FROM events WHERE timestamp = '2025-01-15 14:30:00';
 #### 2. **ACID Transactions with Optimistic Concurrency**
 
 **Current Approach**:
+
 ```rust
 // Single writer lock
 let mut hot = self.hot_store.write().await;
@@ -131,6 +135,7 @@ hot.insert(values)?;
 ```
 
 **With Iceberg**:
+
 ```rust
 // Multi-writer ACID with optimistic concurrency
 let transaction = iceberg_table.new_transaction();
@@ -141,6 +146,7 @@ transaction.new_append()
 ```
 
 **Efficiency Gain**:
+
 - **5-10x write throughput** (concurrent appends)
 - **No write locks** (optimistic concurrency control)
 - **Atomic commits** (all-or-nothing guarantees)
@@ -148,12 +154,14 @@ transaction.new_append()
 #### 3. **Time Travel & Version Rollback**
 
 **Current Approach**:
+
 ```rust
 // Not supported - would need custom versioning
 // To implement: Store full table copies or WAL replay
 ```
 
 **With Iceberg**:
+
 ```rust
 // Query table as it was at specific time
 SELECT * FROM events
@@ -168,6 +176,7 @@ ALTER TABLE events EXECUTE ROLLBACK (12344);
 ```
 
 **Efficiency Gain**:
+
 - **Zero-copy time travel** (metadata-only operation)
 - **Instant rollback** (no data movement)
 - **Reproducible queries** (compliance, debugging, ML training)
@@ -175,6 +184,7 @@ ALTER TABLE events EXECUTE ROLLBACK (12344);
 #### 4. **Metadata-Based Query Planning**
 
 **Current Approach**:
+
 ```rust
 // Must read file headers to determine schema/stats
 pub async fn execute_scan(&self, filter: Option<FilterPredicate>) {
@@ -186,6 +196,7 @@ pub async fn execute_scan(&self, filter: Option<FilterPredicate>) {
 ```
 
 **With Iceberg**:
+
 ```rust
 // All metadata in manifest files (Avro format)
 // Query planner uses metadata WITHOUT opening data files
@@ -204,6 +215,7 @@ Manifest {
 ```
 
 **Efficiency Gain**:
+
 - **100-1000x faster query planning** (no data file I/O)
 - **Advanced pruning**: Partition + file + row group pruning
 - **Accurate cost estimation** (stats in metadata)
@@ -211,6 +223,7 @@ Manifest {
 #### 5. **Schema Evolution**
 
 **Current Approach**:
+
 ```rust
 // Add column requires rewriting all files
 ALTER TABLE events ADD COLUMN session_id TEXT;
@@ -222,6 +235,7 @@ ALTER TABLE events ADD COLUMN session_id TEXT;
 ```
 
 **With Iceberg**:
+
 ```rust
 // Schema evolution is metadata-only
 ALTER TABLE events ADD COLUMN session_id TEXT;
@@ -231,6 +245,7 @@ ALTER TABLE events ADD COLUMN session_id TEXT;
 ```
 
 **Efficiency Gain**:
+
 - **10-100x faster schema changes** (metadata-only for add/drop/rename)
 - **Non-blocking** (queries continue during evolution)
 - **Backward compatible** (old files still readable)
@@ -238,6 +253,7 @@ ALTER TABLE events ADD COLUMN session_id TEXT;
 #### 6. **Compaction & File Management**
 
 **Current Approach**:
+
 ```rust
 // Small files accumulate from incremental inserts
 // Manual compaction needed:
@@ -251,6 +267,7 @@ pub async fn compact(&mut self) -> ProtocolResult<()> {
 ```
 
 **With Iceberg**:
+
 ```rust
 // Background compaction via maintenance procedures
 ALTER TABLE events EXECUTE compact;
@@ -261,6 +278,7 @@ ALTER TABLE events EXECUTE compact;
 ```
 
 **Efficiency Gain**:
+
 - **20-40% storage savings** (better compression on larger files)
 - **2-5x faster scans** (fewer file opens, better I/O patterns)
 - **Zero downtime** (MVCC snapshots)
@@ -273,7 +291,7 @@ ALTER TABLE events EXECUTE compact;
 
 **Use Case**: Mixed workload - occasional updates + increasing analytics
 
-#### Current ColumnBatch Approach
+#### Current ColumnBatch Approach (Warm Tier)
 
 ```rust
 pub struct WarmTier {
@@ -287,6 +305,7 @@ pub struct WarmTier {
 ```
 
 **Challenges**:
+
 - Updates require row reconstruction from columns
 - No efficient merge of updates with base data
 - Growing metadata overhead (which batches have which rows?)
@@ -312,6 +331,7 @@ table.new_overwrite()
 ```
 
 **Efficiency Gains**:
+
 - **5-10x faster updates** (no full rewrite, just delta files)
 - **10-20% storage savings** (deduplication across snapshots)
 - **Automatic compaction** (merges deltas into base files)
@@ -373,6 +393,7 @@ WHERE timestamp BETWEEN '2024-01-01' AND '2024-01-31'
 ```
 
 **Efficiency Gains**:
+
 - **100-1000x faster query planning** for multi-TB tables (metadata pruning)
 - **10-30% storage savings** (better compression + deduplication)
 - **Time travel** for compliance/debugging (new capability)
@@ -409,6 +430,7 @@ arrow = "53.0.0"    # Arrow integration
 ```
 
 **Maturity**:
+
 - ✅ Production-ready for read operations
 - ⚠️ Write operations maturing (0.7.0 RC as of Sept 2025)
 - ✅ Active development (Apache Foundation backing)
@@ -455,7 +477,7 @@ async fn migrate_to_cold_tier(batch: ColumnBatch) -> ProtocolResult<()> {
 
 ### Three-Tier Strategy v2
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │ HOT TIER (0-48h) - UNCHANGED                                │
 │ • Row-based storage (RowBasedStore)                         │
@@ -468,7 +490,7 @@ async fn migrate_to_cold_tier(batch: ColumnBatch) -> ProtocolResult<()> {
 │ WARM TIER (2-30 days) - ICEBERG TABLE                       │
 │ • Format: Parquet files + Iceberg metadata                  │
 │ • Partitioning: Hidden partition by day(timestamp)          │
-│ • Features:                                                  │
+│ • Features:                                                 │
 │   - Multi-writer ACID (concurrent batch inserts)            │
 │   - Merge-on-read updates (delta files)                     │
 │   - Automatic compaction (small file consolidation)         │
@@ -480,14 +502,14 @@ async fn migrate_to_cold_tier(batch: ColumnBatch) -> ProtocolResult<()> {
 │ COLD TIER (>30 days) - ICEBERG TABLE                        │
 │ • Format: Parquet files + Iceberg metadata + Zstd compress  │
 │ • Partitioning: Hidden partition by month(timestamp)        │
-│ • Features:                                                  │
+│ • Features:                                                 │
 │   - Time travel (all historical snapshots)                  │
 │   - Schema evolution (add columns without rewrite)          │
 │   - Partition evolution (change partitioning scheme)        │
-│   - Multi-engine access (Spark, Trino, Flink, etc.)        │
+│   - Multi-engine access (Spark, Trino, Flink, etc.)         │
 │   - Advanced metadata pruning (100-1000x planning speedup)  │
 │ • Target: Pure OLAP (read-only analytics)                   │
-│ • Orbit-specific:                                            │
+│ • Orbit-specific:                                           │
 │   - VectorizedExecutor with SIMD (14.8x aggregation speedup)│
 │   - Direct Parquet → SIMD pipeline (skip Arrow conversion)  │
 └─────────────────────────────────────────────────────────────┘
@@ -549,6 +571,7 @@ impl IcebergColdStore {
 ```
 
 **Benefits**:
+
 - ✅ Time travel for compliance/debugging
 - ✅ Multi-engine access (analytics teams can use Spark)
 - ✅ Partition pruning for large datasets
@@ -556,6 +579,7 @@ impl IcebergColdStore {
 - ✅ Keep our SIMD optimizations (14.8x aggregation speedup)
 
 **Costs**:
+
 - ⚠️ Additional dependency (iceberg crate)
 - ⚠️ REST catalog setup (can use in-memory for testing)
 - ⚠️ Learning curve for Iceberg concepts
@@ -605,6 +629,7 @@ impl IcebergWarmStore {
 ```
 
 **Benefits**:
+
 - ✅ 10x faster updates (delta files instead of full rewrite)
 - ✅ Concurrent writers (ACID transactions)
 - ✅ Automatic compaction (small file consolidation)
@@ -697,6 +722,7 @@ impl HybridStorageManager {
 **Risk**: iceberg-rust 0.7.0 is relatively new, potential bugs in write path
 
 **Mitigation**:
+
 - Start with **read-only cold tier** (proven stable)
 - Use **warm tier writes** in beta (extensive testing)
 - Contribute fixes upstream (Apache Iceberg community)
@@ -707,6 +733,7 @@ impl HybridStorageManager {
 **Risk**: Manifest overhead slows queries on small tables (<1M rows)
 
 **Mitigation**:
+
 - **Hot tier unchanged** (row-based for OLTP)
 - **Warm tier threshold**: Only migrate tables >10M rows to Iceberg
 - **Benchmark-driven**: Only adopt if benchmarks show improvement
@@ -717,6 +744,7 @@ impl HybridStorageManager {
 **Risk**: Iceberg introduces new concepts (snapshots, manifests, catalogs)
 
 **Mitigation**:
+
 - **Documentation**: Comprehensive guides for team
 - **Abstraction layer**: Hide Iceberg details behind HybridStorageManager API
 - **Gradual rollout**: Cold tier → Warm tier → Production
@@ -727,6 +755,7 @@ impl HybridStorageManager {
 **Risk**: Iceberg requires a catalog (REST, Hive, Glue, Nessie)
 
 **Mitigation**:
+
 - **Start with REST catalog** (simple, open-source)
 - **Catalog abstraction**: Support multiple catalog backends
 - **In-memory catalog** for development/testing
@@ -743,11 +772,13 @@ impl HybridStorageManager {
 **Adopt Iceberg for cold tier** (>30 days old, read-only analytics)
 
 **Why**:
+
 - ✅ Lowest risk (read-only, stable library)
 - ✅ Highest value (time travel, multi-engine access, metadata pruning)
 - ✅ No schema migration needed (new feature)
 
 **Implementation**:
+
 ```rust
 // Replace:
 cold_store: Arc<RwLock<Option<ColumnBatch>>>
@@ -757,6 +788,7 @@ cold_store: Arc<IcebergColdStore>
 ```
 
 **Success Metrics**:
+
 - Time travel queries working (compliance use case)
 - Query planning <500ms for 1B row tables (vs 30s baseline)
 - Spark/Trino can query cold tier data
@@ -766,31 +798,36 @@ cold_store: Arc<IcebergColdStore>
 **Adopt Iceberg for warm tier** (2-30 days, mixed workload)
 
 **Why**:
+
 - ✅ 10x faster updates (delta files)
 - ✅ Concurrent writers (batch ingestion pipelines)
 - ⚠️ Write path less mature (0.7.0 RC)
 
 **Implementation**:
+
 ```rust
 warm_store: Arc<IcebergWarmStore>
 ```
 
 **Success Metrics**:
+
 - Update performance 10x faster (50ms vs 500ms for 1% updates)
 - Concurrent write throughput 5x higher
 - Automatic compaction working (background jobs)
 
 #### Phase 3: Production Validation (Weeks 17-20) 🎯 **Critical**
 
-**Production testing with real workloads**
+### Production testing with real workloads
 
 **Validation**:
+
 - Load test with 1B row dataset
 - Simulate 3-month data retention (hot → warm → cold migrations)
 - Test failure scenarios (catalog unavailable, manifest corruption)
 - Benchmark against current ColumnBatch approach
 
 **Go/No-Go Decision**:
+
 - If benchmarks show >50% improvement on large tables: ✅ **Proceed to production**
 - If performance neutral: ⚠️ **Reassess scope** (maybe cold tier only)
 - If performance regression: ❌ **Revert to ColumnBatch** (keep as research)
@@ -819,6 +856,7 @@ impl HybridStorageManager {
 ```
 
 **Benefits**:
+
 - ✅ Best of both worlds
 - ✅ Lower risk (proven ColumnBatch for small tables)
 - ✅ Maximum value (Iceberg for large tables)
@@ -854,19 +892,21 @@ impl HybridStorageManager {
 
 ### Final Recommendation
 
-**✅ Adopt Apache Iceberg for warm/cold tiers with phased rollout**
+### ✅ Adopt Apache Iceberg for warm/cold tiers with phased rollout
 
 The efficiency gains (100-1000x query planning, 10x updates, time travel, multi-engine access) far outweigh the implementation costs for any table with >10M rows. Start with cold tier (lowest risk, high value), then expand to warm tier once proven.
 
 ---
 
 **Next Steps**:
+
 1. **Prototype**: Implement Iceberg cold tier integration (1-2 days)
 2. **Benchmark**: Compare against current ColumnBatch (1B row dataset)
 3. **Review**: Team decision on phased adoption vs. hybrid approach
 4. **Plan**: Update Phase 9 roadmap to include Iceberg integration
 
 **Questions to Consider**:
+
 - What is our expected dataset size? (If <10M rows, Iceberg may be overkill)
 - Do we need multi-engine access? (Spark/Trino/Flink integration)
 - Is time travel a requirement? (Compliance, debugging, ML reproducibility)

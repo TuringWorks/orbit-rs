@@ -9,18 +9,45 @@ use crate::postgres_wire::sql::{
     types::{SqlType, SqlValue},
 };
 
+/// Extract identifier string from token (handles both Identifier and keyword tokens used as names)
+pub fn token_to_identifier_name(token: &Token) -> Option<String> {
+    match token {
+        Token::Identifier(name) => Some(name.clone()),
+        // Data type keywords that can be used as identifiers
+        Token::Text => Some("text".to_string()),
+        Token::Integer => Some("integer".to_string()),
+        Token::Boolean => Some("boolean".to_string()),
+        Token::Date => Some("date".to_string()),
+        Token::Time => Some("time".to_string()),
+        Token::Timestamp => Some("timestamp".to_string()),
+        Token::Interval => Some("interval".to_string()),
+        Token::Decimal => Some("decimal".to_string()),
+        Token::Numeric => Some("numeric".to_string()),
+        Token::Real => Some("real".to_string()),
+        Token::Char => Some("char".to_string()),
+        Token::Varchar => Some("varchar".to_string()),
+        Token::Json => Some("json".to_string()),
+        Token::Jsonb => Some("jsonb".to_string()),
+        Token::Uuid => Some("uuid".to_string()),
+        Token::Bytea => Some("bytea".to_string()),
+        Token::Vector => Some("vector".to_string()),
+        // Other keywords that can be used as identifiers
+        Token::Sequence => Some("sequence".to_string()),
+        Token::Key => Some("key".to_string()),
+        _ => None,
+    }
+}
+
 /// Parse a table name (with optional schema qualification)
 pub fn parse_table_name(parser: &mut SqlParser) -> ParseResult<TableName> {
-    if let Some(Token::Identifier(name)) = &parser.current_token {
-        let first_name = name.clone();
+    if let Some(first_name) = parser.current_token.as_ref().and_then(token_to_identifier_name) {
         parser.advance()?;
 
         // Check for schema qualification
         if parser.matches(&[Token::Dot]) {
             parser.advance()?;
 
-            if let Some(Token::Identifier(table_name)) = &parser.current_token {
-                let table_name = table_name.clone();
+            if let Some(table_name) = parser.current_token.as_ref().and_then(token_to_identifier_name) {
                 parser.advance()?;
                 Ok(TableName::with_schema(first_name, table_name))
             } else {
@@ -658,12 +685,30 @@ fn parse_vector_elements(s: &str) -> Result<Vec<f32>, ()> {
         .collect()
 }
 
-/// Parse a SELECT statement (placeholder implementation)
+/// Parse a SELECT statement (used in CREATE VIEW, etc.)
 pub fn parse_select_statement(parser: &mut SqlParser) -> ParseResult<SelectStatement> {
-    Err(ParseError {
-        message: "SELECT statement parsing not yet implemented in utilities".to_string(),
-        position: parser.position,
-        expected: vec![],
-        found: parser.current_token.clone(),
-    })
+    // Use the DML parser to parse SELECT, then extract the SelectStatement
+    // Note: dml::parse_select expects SELECT to be the current token
+    use crate::postgres_wire::sql::parser::dml;
+    use crate::postgres_wire::sql::ast::Statement;
+    
+    // Ensure we have SELECT token
+    if !parser.matches(&[Token::Select]) {
+        return Err(ParseError {
+            message: "Expected SELECT statement".to_string(),
+            position: parser.position,
+            expected: vec!["SELECT".to_string()],
+            found: parser.current_token.clone(),
+        });
+    }
+    
+    match dml::parse_select(parser)? {
+        Statement::Select(select_stmt) => Ok(*select_stmt),
+        _ => Err(ParseError {
+            message: "Expected SELECT statement".to_string(),
+            position: parser.position,
+            expected: vec!["SELECT".to_string()],
+            found: parser.current_token.clone(),
+        }),
+    }
 }

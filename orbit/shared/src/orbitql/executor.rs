@@ -4,6 +4,7 @@
 //! against the distributed database system.
 
 use crate::orbitql::ast::{Expression, GraphPattern, TimeRange, TimeSeriesAggregation};
+use crate::orbitql::QueryValue;
 use crate::orbitql::lexer::LexError;
 use crate::orbitql::optimizer::OptimizationError;
 use crate::orbitql::parser::ParseError;
@@ -124,19 +125,25 @@ pub struct TimeSeriesPoint {
 }
 
 impl QueryExecutor {
+    /// Create a new empty QueryExecutor
     pub fn new() -> Self {
-        let mut executor = Self {
+        Self {
             document_store: HashMap::new(),
             graph_store: HashMap::new(),
             timeseries_store: HashMap::new(),
-        };
+        }
+    }
 
-        // Initialize with sample data for testing
+    /// Create a QueryExecutor with sample data for testing
+    #[cfg(test)]
+    pub fn with_sample_data() -> Self {
+        let mut executor = Self::new();
         executor.initialize_sample_data();
         executor
     }
 
-    /// Initialize with sample data for demonstration
+    /// Initialize with sample data (for testing only)
+    #[cfg(test)]
     fn initialize_sample_data(&mut self) {
         use chrono::Utc;
         use serde_json::json;
@@ -195,6 +202,42 @@ impl QueryExecutor {
                 .collect(),
         );
 
+        // Sample metrics table (document-based representation of time series)
+        let metrics_docs = vec![
+            json!({
+                "timestamp": Utc::now() - chrono::Duration::hours(2),
+                "value": 45.2,
+                "tags": {"device_id": "device1", "metric": "cpu_usage"}
+            })
+            .as_object()
+            .unwrap()
+            .clone(),
+            json!({
+                "timestamp": Utc::now() - chrono::Duration::hours(1),
+                "value": 52.8,
+                "tags": {"device_id": "device1", "metric": "cpu_usage"}
+            })
+            .as_object()
+            .unwrap()
+            .clone(),
+            json!({
+                "timestamp": Utc::now(),
+                "value": 38.1,
+                "tags": {"device_id": "device1", "metric": "cpu_usage"}
+            })
+            .as_object()
+            .unwrap()
+            .clone(),
+        ];
+
+        self.document_store.insert(
+            "metrics".to_string(),
+            metrics_docs
+                .into_iter()
+                .map(|map| map.into_iter().collect())
+                .collect(),
+        );
+
         // Sample graph relationships
         let follows_data = vec![
             GraphEdge {
@@ -211,7 +254,33 @@ impl QueryExecutor {
             },
         ];
 
-        self.graph_store.insert("follows".to_string(), follows_data);
+        self.graph_store
+            .insert("follows".to_string(), follows_data.clone());
+
+        // Also add follows as a document table for JOIN queries
+        let follows_docs: Vec<HashMap<String, serde_json::Value>> = follows_data
+            .iter()
+            .map(|edge| {
+                let mut doc = HashMap::new();
+                doc.insert("from".to_string(), json!(edge.from.clone()));
+                doc.insert("to".to_string(), json!(edge.to.clone()));
+                doc.insert("relationship".to_string(), json!(edge.relationship.clone()));
+                for (k, v) in &edge.properties {
+                    doc.insert(k.clone(), v.clone());
+                }
+                doc
+            })
+            .collect();
+        self.document_store
+            .insert("follows".to_string(), follows_docs);
+
+        // Add _relate table for RELATE statement execution
+        self.document_store
+            .insert("_relate".to_string(), Vec::new());
+
+        // Add _transaction table for transaction statements
+        self.document_store
+            .insert("_transaction".to_string(), Vec::new());
 
         // Sample time series metrics
         let metrics_data = vec![
@@ -352,6 +421,12 @@ impl QueryExecutor {
         table: &str,
         columns: &[String],
     ) -> Result<Vec<HashMap<String, serde_json::Value>>, ExecutionError> {
+        // Handle virtual _dual table for queries without FROM clause
+        if table == "_dual" {
+            // Return a single empty row for _dual table
+            return Ok(vec![HashMap::new()]);
+        }
+
         if let Some(table_data) = self.document_store.get(table) {
             let mut result = table_data.clone();
 
@@ -403,17 +478,261 @@ impl QueryExecutor {
         Ok(result)
     }
 
-    /// Execute aggregation
+    /// Execute aggregation with full support for COUNT, SUM, AVG, MIN, MAX
     fn execute_aggregation(
         &self,
         input_rows: Vec<HashMap<String, serde_json::Value>>,
-        _group_by: &[Expression],
-        _aggregates: &[crate::orbitql::planner::AggregateExpression],
+        group_by: &[Expression],
+        aggregates: &[crate::orbitql::planner::AggregateExpression],
     ) -> Result<Vec<HashMap<String, serde_json::Value>>, ExecutionError> {
-        // Simplified aggregation - return count
         use serde_json::json;
-        let count = input_rows.len();
-        Ok(vec![HashMap::from([("count".to_string(), json!(count))])])
+
+        // If no GROUP BY, treat all rows as a single group
+        if group_by.is_empty() {
+            let mut result_row = HashMap::new();
+
+            for agg in aggregates {
+                let alias = agg
+                    .alias
+                    .clone()
+                    .unwrap_or_else(|| format!("{:?}", agg.function).to_lowercase());
+
+                let value = self.compute_aggregate(&input_rows, agg)?;
+                result_row.insert(alias, value);
+            }
+
+            // If no aggregates specified, return COUNT(*) as default
+            if aggregates.is_empty() {
+                result_row.insert("count".to_string(), json!(input_rows.len()));
+            }
+
+            return Ok(vec![result_row]);
+        }
+
+        // GROUP BY: partition rows by group key
+        let mut groups: HashMap<String, Vec<&HashMap<String, serde_json::Value>>> = HashMap::new();
+
+        for row in &input_rows {
+            let group_key = self.compute_group_key(row, group_by);
+            groups.entry(group_key).or_default().push(row);
+        }
+
+        // Compute aggregates for each group
+        let mut results = Vec::new();
+        for (_group_key, group_rows) in groups {
+            let mut result_row = HashMap::new();
+
+            // Add group by column values
+            if let Some(first_row) = group_rows.first() {
+                for expr in group_by {
+                    if let Expression::Identifier(name) = expr {
+                        if let Some(value) = first_row.get(name) {
+                            result_row.insert(name.clone(), value.clone());
+                        }
+                    }
+                }
+            }
+
+            // Compute each aggregate
+            let owned_rows: Vec<HashMap<String, serde_json::Value>> =
+                group_rows.into_iter().cloned().collect();
+
+            for agg in aggregates {
+                let alias = agg
+                    .alias
+                    .clone()
+                    .unwrap_or_else(|| format!("{:?}", agg.function).to_lowercase());
+
+                let value = self.compute_aggregate(&owned_rows, agg)?;
+                result_row.insert(alias, value);
+            }
+
+            results.push(result_row);
+        }
+
+        Ok(results)
+    }
+
+    /// Compute group key from row based on GROUP BY expressions
+    fn compute_group_key(
+        &self,
+        row: &HashMap<String, serde_json::Value>,
+        group_by: &[Expression],
+    ) -> String {
+        let mut key_parts = Vec::new();
+        for expr in group_by {
+            if let Expression::Identifier(name) = expr {
+                let value = row.get(name).map(|v| v.to_string()).unwrap_or_default();
+                key_parts.push(value);
+            }
+        }
+        key_parts.join("|")
+    }
+
+    /// Compute a single aggregate over rows
+    fn compute_aggregate(
+        &self,
+        rows: &[HashMap<String, serde_json::Value>],
+        agg: &crate::orbitql::planner::AggregateExpression,
+    ) -> Result<serde_json::Value, ExecutionError> {
+        use crate::orbitql::ast::AggregateFunction;
+        use serde_json::json;
+
+        // Extract values for the aggregate expression
+        let values: Vec<Option<serde_json::Value>> = if let Some(expr) = &agg.expression {
+            rows.iter()
+                .map(|row| self.extract_value_for_expression(row, expr))
+                .collect()
+        } else {
+            // COUNT(*) - all rows count
+            rows.iter().map(|_| Some(json!(1))).collect()
+        };
+
+        // Handle DISTINCT
+        let values = if agg.distinct {
+            let mut seen = std::collections::HashSet::new();
+            values
+                .into_iter()
+                .filter(|v| {
+                    let key = v.as_ref().map(|x| x.to_string()).unwrap_or_default();
+                    seen.insert(key)
+                })
+                .collect()
+        } else {
+            values
+        };
+
+        match agg.function {
+            AggregateFunction::Count => {
+                // COUNT counts non-null values (or all rows for COUNT(*))
+                let count = if agg.expression.is_none() {
+                    rows.len() // COUNT(*)
+                } else {
+                    values.iter().filter(|v| v.is_some()).count()
+                };
+                Ok(json!(count))
+            }
+            AggregateFunction::Sum => {
+                let sum: f64 = values
+                    .iter()
+                    .filter_map(|v| v.as_ref())
+                    .filter_map(|v| v.as_f64().or_else(|| v.as_i64().map(|i| i as f64)))
+                    .sum();
+                Ok(json!(sum))
+            }
+            AggregateFunction::Avg => {
+                let nums: Vec<f64> = values
+                    .iter()
+                    .filter_map(|v| v.as_ref())
+                    .filter_map(|v| v.as_f64().or_else(|| v.as_i64().map(|i| i as f64)))
+                    .collect();
+                if nums.is_empty() {
+                    Ok(json!(null))
+                } else {
+                    let avg = nums.iter().sum::<f64>() / nums.len() as f64;
+                    Ok(json!(avg))
+                }
+            }
+            AggregateFunction::Min => {
+                let min = values
+                    .iter()
+                    .filter_map(|v| v.as_ref())
+                    .filter_map(|v| v.as_f64().or_else(|| v.as_i64().map(|i| i as f64)))
+                    .fold(f64::INFINITY, f64::min);
+                if min == f64::INFINITY {
+                    Ok(json!(null))
+                } else {
+                    Ok(json!(min))
+                }
+            }
+            AggregateFunction::Max => {
+                let max = values
+                    .iter()
+                    .filter_map(|v| v.as_ref())
+                    .filter_map(|v| v.as_f64().or_else(|| v.as_i64().map(|i| i as f64)))
+                    .fold(f64::NEG_INFINITY, f64::max);
+                if max == f64::NEG_INFINITY {
+                    Ok(json!(null))
+                } else {
+                    Ok(json!(max))
+                }
+            }
+            AggregateFunction::First => {
+                Ok(values.into_iter().find_map(|v| v).unwrap_or(json!(null)))
+            }
+            AggregateFunction::Last => {
+                Ok(values.into_iter().rev().find_map(|v| v).unwrap_or(json!(null)))
+            }
+            AggregateFunction::StdDev => {
+                let nums: Vec<f64> = values
+                    .iter()
+                    .filter_map(|v| v.as_ref())
+                    .filter_map(|v| v.as_f64().or_else(|| v.as_i64().map(|i| i as f64)))
+                    .collect();
+                if nums.len() < 2 {
+                    Ok(json!(null))
+                } else {
+                    let mean = nums.iter().sum::<f64>() / nums.len() as f64;
+                    let variance = nums.iter().map(|x| (x - mean).powi(2)).sum::<f64>()
+                        / (nums.len() - 1) as f64;
+                    Ok(json!(variance.sqrt()))
+                }
+            }
+            AggregateFunction::Variance => {
+                let nums: Vec<f64> = values
+                    .iter()
+                    .filter_map(|v| v.as_ref())
+                    .filter_map(|v| v.as_f64().or_else(|| v.as_i64().map(|i| i as f64)))
+                    .collect();
+                if nums.len() < 2 {
+                    Ok(json!(null))
+                } else {
+                    let mean = nums.iter().sum::<f64>() / nums.len() as f64;
+                    let variance = nums.iter().map(|x| (x - mean).powi(2)).sum::<f64>()
+                        / (nums.len() - 1) as f64;
+                    Ok(json!(variance))
+                }
+            }
+        }
+    }
+
+    /// Extract a value from a row based on an expression
+    fn extract_value_for_expression(
+        &self,
+        row: &HashMap<String, serde_json::Value>,
+        expr: &Expression,
+    ) -> Option<serde_json::Value> {
+        match expr {
+            Expression::Identifier(name) => row.get(name).cloned(),
+            Expression::Literal(lit) => Some(self.query_value_to_json(lit)),
+            _ => None, // Complex expressions not yet supported
+        }
+    }
+
+    /// Convert a QueryValue to JSON value
+    fn query_value_to_json(&self, val: &QueryValue) -> serde_json::Value {
+        use serde_json::json;
+        match val {
+            QueryValue::Integer(i) => json!(i),
+            QueryValue::Float(f) => json!(f),
+            QueryValue::String(s) => json!(s),
+            QueryValue::Boolean(b) => json!(b),
+            QueryValue::Null => json!(null),
+            QueryValue::Array(arr) => {
+                let values: Vec<serde_json::Value> = arr.iter().map(|v| self.query_value_to_json(v)).collect();
+                json!(values)
+            }
+            QueryValue::Object(map) => {
+                let obj: serde_json::Map<String, serde_json::Value> = map
+                    .iter()
+                    .map(|(k, v)| (k.clone(), self.query_value_to_json(v)))
+                    .collect();
+                serde_json::Value::Object(obj)
+            }
+            QueryValue::DateTime(dt) => json!(dt.to_rfc3339()),
+            QueryValue::Duration(d) => json!(d.as_secs_f64()),
+            QueryValue::Uuid(u) => json!(u.to_string()),
+        }
     }
 
     /// Execute sort operation
@@ -554,7 +873,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_executor_creation() {
-        let executor = QueryExecutor::new();
+        let executor = QueryExecutor::with_sample_data();
 
         // Test with users table that exists in sample data
         let plan = ExecutionPlan {

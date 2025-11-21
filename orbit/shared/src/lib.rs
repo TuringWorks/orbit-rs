@@ -11,12 +11,9 @@ pub mod election_metrics;
 pub mod election_state;
 // Unified error module - use this for all error handling
 pub mod error;
-// Deprecated: Use error module instead
-#[deprecated(since = "0.1.0", note = "Use error module instead")]
+// Legacy modules - use error module instead for new code
 pub mod error_handling;
-#[deprecated(since = "0.1.0", note = "Use error module instead")]
 pub mod error_utils;
-#[deprecated(since = "0.1.0", note = "Use error module instead")]
 pub mod exception;
 pub mod event_sourcing;
 pub mod execution_utils;

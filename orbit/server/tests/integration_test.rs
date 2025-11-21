@@ -11,14 +11,13 @@ async fn test_orbit_server_with_protocols() {
         .init();
 
     // Configure server with all protocols enabled on non-standard ports
-    let protocol_config = ProtocolConfig {
-        redis_enabled: true,
-        redis_port: 16379, // Non-standard Redis port
-        redis_bind_address: "127.0.0.1".to_string(),
-        postgres_enabled: true,
-        postgres_port: 15432, // Non-standard PostgreSQL port
-        postgres_bind_address: "127.0.0.1".to_string(),
-    };
+    let mut protocol_config = ProtocolConfig::default();
+    protocol_config.redis_enabled = true;
+    protocol_config.redis_port = 16379; // Non-standard Redis port
+    protocol_config.redis_bind_address = "127.0.0.1".to_string();
+    protocol_config.postgres_enabled = true;
+    protocol_config.postgres_port = 15432; // Non-standard PostgreSQL port
+    protocol_config.postgres_bind_address = "127.0.0.1".to_string();
 
     let mut server = OrbitServer::builder()
         .with_namespace("integration-test")
@@ -81,14 +80,9 @@ async fn test_orbit_server_with_protocols() {
 #[tokio::test]
 async fn test_orbit_server_protocols_disabled() {
     // Test server with protocols disabled
-    let protocol_config = ProtocolConfig {
-        redis_enabled: false,
-        redis_port: 6379,
-        redis_bind_address: "127.0.0.1".to_string(),
-        postgres_enabled: false,
-        postgres_port: 5432,
-        postgres_bind_address: "127.0.0.1".to_string(),
-    };
+    let mut protocol_config = ProtocolConfig::default();
+    protocol_config.redis_enabled = false;
+    protocol_config.postgres_enabled = false;
 
     let server = OrbitServer::builder()
         .with_namespace("disabled-protocols-test")

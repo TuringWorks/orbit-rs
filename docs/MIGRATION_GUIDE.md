@@ -110,30 +110,35 @@ The Rust implementation includes several new features and modules not present in
 ### 6. Advanced Features
 
 #### Time Series Database
+
 - Native time series data storage and querying
 - Automatic downsampling and retention policies
 - Compression algorithms (Delta, Gorilla)
 - High-throughput ingestion (millions of points/sec)
 
 #### OrbitQL Query Language
+
 - SQL-like query language for distributed data
 - Query optimization and execution planning
 - Vectorized query execution
 - Support for complex joins and aggregations
 
 #### Connection Pooling
+
 - Advanced connection pool with health monitoring
 - Multiple load balancing strategies (RoundRobin, LeastConnections, etc.)
 - Circuit breaker pattern for fault tolerance
 - Automatic connection recovery and retry logic
 
 #### Graph Database Capabilities
+
 - Native graph data structures
 - Graph query language (Cypher-like)
 - Graph algorithms (shortest path, PageRank, etc.)
 - GraphRAG (Retrieval-Augmented Generation) support
 
 #### Event Sourcing & CQRS
+
 - Built-in event sourcing framework
 - Command Query Responsibility Segregation (CQRS) patterns
 - Event replay and time-travel debugging
@@ -470,6 +475,7 @@ members = [
 ```
 
 **Benefits:**
+
 - Shared dependencies across all crates
 - Single `Cargo.lock` for reproducible builds
 - Parallel compilation of independent crates
@@ -512,6 +518,7 @@ k8s-operator = ["kube", "k8s-openapi"]
 ```
 
 **Usage:**
+
 ```bash
 # Build with all features
 cargo build --all-features
