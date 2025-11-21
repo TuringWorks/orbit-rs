@@ -178,6 +178,16 @@ impl ProtocolError {
         ))
     }
 
+    /// Helper for "not found" errors (alias for does_not_exist)
+    pub fn not_found(resource_type: &str, name: &str) -> Self {
+        Self::does_not_exist(resource_type, name)
+    }
+
+    /// Helper for invalid operation errors
+    pub fn invalid_operation(message: &str) -> Self {
+        ProtocolError::PostgresError(format!("Invalid operation: {message}"))
+    }
+
     /// Helper for "not implemented" errors
     pub fn not_implemented(feature_type: &str, feature_name: &str) -> Self {
         ProtocolError::PostgresError(format!("{feature_type} '{feature_name}' not implemented"))

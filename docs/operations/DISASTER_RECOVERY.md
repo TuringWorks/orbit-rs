@@ -4,7 +4,7 @@
 
 This guide provides comprehensive disaster recovery procedures for Orbit-RS persistence layer failures. It covers all three backends (COW B+ Tree, LSM-Tree, RocksDB) and includes step-by-step recovery procedures for various failure scenarios.
 
-## 🚨 Emergency Response Flowchart
+##  Emergency Response Flowchart
 
 ```mermaid
 flowchart TD
@@ -359,11 +359,11 @@ sleep 10
 
 # 6. Verify service
 if systemctl is-active --quiet orbit-rs; then
-    echo "✅ Service restarted successfully"
+    echo " Service restarted successfully"
     echo "Running health check..."
     curl -f http://localhost:8080/health || echo "Health check failed"
 else
-    echo "❌ Service failed to restart - escalating to data recovery"
+    echo " Service failed to restart - escalating to data recovery"
     echo "Calling data recovery procedure..."
     /usr/local/bin/orbit-data-recovery.sh
 fi
@@ -420,20 +420,20 @@ esac
 # Validate recovery
 echo "Validating recovery..."
 if validate_data_integrity "$DATA_DIR"; then
-    echo "✅ Data recovery successful"
+    echo " Data recovery successful"
     systemctl start orbit-rs
     
     # Final health check
     sleep 10
     if health_check_passes; then
-        echo "✅ Service fully restored"
+        echo " Service fully restored"
         notify_success
     else
-        echo "❌ Service started but health check failed"
+        echo " Service started but health check failed"
         notify_partial_failure
     fi
 else
-    echo "❌ Data validation failed"
+    echo " Data validation failed"
     notify_recovery_failure
     exit 1
 fi
@@ -456,7 +456,7 @@ recover_cow_btree() {
     if [ -f "$LATEST_BACKUP/orbit.wal" ]; then
         echo "WAL found - checking integrity..."
         if validate_wal_integrity "$LATEST_BACKUP/orbit.wal"; then
-            echo "✅ WAL is valid - performing replay"
+            echo " WAL is valid - performing replay"
             
             # Copy WAL and metadata
             cp "$LATEST_BACKUP/orbit.wal" "$DATA_DIR/"
@@ -466,13 +466,13 @@ recover_cow_btree() {
             orbit-cli init --backend=cow --data-dir="$DATA_DIR"
             
             # The service will replay WAL on startup
-            echo "✅ COW B+ Tree prepared for WAL replay"
+            echo " COW B+ Tree prepared for WAL replay"
         else
-            echo "⚠️  WAL corrupted - using snapshot"
+            echo "  WAL corrupted - using snapshot"
             restore_from_snapshot "$LATEST_BACKUP"
         fi
     else
-        echo "⚠️  No WAL found - using snapshot"
+        echo "  No WAL found - using snapshot"
         restore_from_snapshot "$LATEST_BACKUP"
     fi
 }
@@ -488,7 +488,7 @@ restore_from_snapshot() {
         LATEST_SNAPSHOT=$(find "$backup_dir/snapshots" -name "*.json" | sort -r | head -1)
         orbit-cli restore --input="$LATEST_SNAPSHOT" --data-dir="$DATA_DIR"
     else
-        echo "❌ No snapshots available - manual intervention required"
+        echo " No snapshots available - manual intervention required"
         exit 1
     fi
 }
@@ -528,7 +528,7 @@ recover_lsm_tree() {
         echo "Validating SSTables..."
         for sstable in "$DATA_DIR/sstables"/*.sst; do
             if ! validate_sstable "$sstable"; then
-                echo "⚠️  Corrupted SSTable: $sstable - removing"
+                echo "  Corrupted SSTable: $sstable - removing"
                 rm -f "$sstable"
             fi
         done
@@ -538,7 +538,7 @@ recover_lsm_tree() {
     if [ -f "$LATEST_BACKUP/manifest.json" ]; then
         cp "$LATEST_BACKUP/manifest.json" "$DATA_DIR/"
     else
-        echo "⚠️  No manifest - rebuilding from SSTables"
+        echo "  No manifest - rebuilding from SSTables"
         rebuild_lsm_manifest "$DATA_DIR"
     fi
     
@@ -548,14 +548,14 @@ recover_lsm_tree() {
         if validate_wal_integrity "$LATEST_BACKUP/wal.log"; then
             cp "$LATEST_BACKUP/wal.log" "$DATA_DIR/"
         else
-            echo "⚠️  WAL corrupted - starting with clean WAL"
+            echo "  WAL corrupted - starting with clean WAL"
             touch "$DATA_DIR/wal.log"
         fi
     else
         touch "$DATA_DIR/wal.log"
     fi
     
-    echo "✅ LSM-Tree recovery completed"
+    echo " LSM-Tree recovery completed"
 }
 
 validate_sstable() {
@@ -598,11 +598,11 @@ recover_rocksdb() {
     # Repair database if needed
     echo "Checking database integrity..."
     if ! orbit-cli rocksdb-check --data-dir="$DATA_DIR"; then
-        echo "⚠️  Database integrity issues - attempting repair"
+        echo "  Database integrity issues - attempting repair"
         orbit-cli rocksdb-repair --data-dir="$DATA_DIR"
     fi
     
-    echo "✅ RocksDB recovery completed"
+    echo " RocksDB recovery completed"
 }
 ```
 
@@ -671,10 +671,10 @@ esac
 # Check if space freed
 SPACE_AFTER=$(df /var/lib/orbit | awk 'NR==2{print $5}' | sed 's/%//')
 if [ "$SPACE_AFTER" -lt 85 ]; then
-    echo "✅ Sufficient space recovered: ${SPACE_AFTER}%"
+    echo " Sufficient space recovered: ${SPACE_AFTER}%"
     systemctl restart orbit-rs
 else
-    echo "❌ Still low on space: ${SPACE_AFTER}% - manual intervention required"
+    echo " Still low on space: ${SPACE_AFTER}% - manual intervention required"
     exit 1
 fi
 ```
@@ -741,13 +741,13 @@ if [ "$MEMORY_USAGE" -gt 85 ]; then
     
     sleep 10
     if health_check_passes; then
-        echo "✅ Service restarted with reduced memory configuration"
+        echo " Service restarted with reduced memory configuration"
     else
-        echo "❌ Failed to restart - escalating"
+        echo " Failed to restart - escalating"
         exit 1
     fi
 else
-    echo "✅ Memory usage reduced to ${MEMORY_USAGE}%"
+    echo " Memory usage reduced to ${MEMORY_USAGE}%"
 fi
 ```
 
@@ -784,16 +784,16 @@ echo "Checking for specific issues..."
 
 # Memory issues
 if journalctl -u orbit-rs --since "1 hour ago" | grep -q "out of memory\|OOM"; then
-    echo "⚠️  Out of memory crash detected"
+    echo "  Out of memory crash detected"
     CRASH_TYPE="OOM"
 elif journalctl -u orbit-rs --since "1 hour ago" | grep -q "panic\|assertion failed"; then
-    echo "⚠️  Panic crash detected"
+    echo "  Panic crash detected"
     CRASH_TYPE="PANIC"
 elif journalctl -u orbit-rs --since "1 hour ago" | grep -q "SIGSEGV"; then
-    echo "⚠️  Segmentation fault detected"
+    echo "  Segmentation fault detected"
     CRASH_TYPE="SEGFAULT"
 else
-    echo "⚠️  Unknown crash type"
+    echo "  Unknown crash type"
     CRASH_TYPE="UNKNOWN"
 fi
 
@@ -818,9 +818,9 @@ esac
 # Monitor restart
 sleep 15
 if health_check_passes; then
-    echo "✅ Process recovery successful"
+    echo " Process recovery successful"
 else
-    echo "❌ Process recovery failed - escalating"
+    echo " Process recovery failed - escalating"
     exit 1
 fi
 ```
@@ -910,30 +910,30 @@ EOF
 }
 
 notify_success() {
-    echo "✅ RECOVERY SUCCESSFUL at $(date)" | \
+    echo " RECOVERY SUCCESSFUL at $(date)" | \
         mail -s "Orbit-RS Recovery Success" devops@company.com
     
     # Slack notification
     curl -X POST -H 'Content-type: application/json' \
-        --data '{"text":"✅ Orbit-RS recovery completed successfully"}' \
+        --data '{"text":" Orbit-RS recovery completed successfully"}' \
         "$SLACK_WEBHOOK_URL"
 }
 
 notify_partial_failure() {
-    echo "⚠️  PARTIAL RECOVERY at $(date)" | \
+    echo "  PARTIAL RECOVERY at $(date)" | \
         mail -s "Orbit-RS Partial Recovery" devops@company.com
         
     curl -X POST -H 'Content-type: application/json' \
-        --data '{"text":"⚠️ Orbit-RS partially recovered - manual verification needed"}' \
+        --data '{"text":" Orbit-RS partially recovered - manual verification needed"}' \
         "$SLACK_WEBHOOK_URL"
 }
 
 notify_recovery_failure() {
-    echo "❌ RECOVERY FAILED at $(date)" | \
+    echo " RECOVERY FAILED at $(date)" | \
         mail -s "Orbit-RS Recovery Failed - URGENT" devops@company.com
         
     curl -X POST -H 'Content-type: application/json' \
-        --data '{"text":"🚨 Orbit-RS recovery FAILED - immediate attention required"}' \
+        --data '{"text":" Orbit-RS recovery FAILED - immediate attention required"}' \
         "$SLACK_WEBHOOK_URL"
 }
 ```
@@ -1023,7 +1023,7 @@ Load Test: PASSED
 Recovery validated successfully.
 EOF
 
-echo "✅ Recovery validation completed"
+echo " Recovery validation completed"
 cat /tmp/recovery-validation-report.txt
 ```
 

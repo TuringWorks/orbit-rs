@@ -415,4 +415,4 @@ Contributors will be recognized in:
 - README.md contributors section
 - GitHub contributors page
 
-Thank you for contributing to Orbit-RS! 🚀
+Thank you for contributing to Orbit-RS! 

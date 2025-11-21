@@ -256,10 +256,10 @@ async fn load_test_table() -> Result<(), Box<dyn std::error::Error>> {
 ///
 /// | Scenario | Action |
 /// |----------|--------|
-/// | ✅ All APIs present | Plan migration to Icelake |
-/// | ⚠️ Partial APIs | Contribute missing pieces to Icelake |
-/// | ❌ No snapshot APIs | Stick with iceberg-rust, contribute upstream |
-/// | ❓ Documentation unclear | Reach out to Icelake/Databend community |
+/// | [OK] All APIs present | Plan migration to Icelake |
+/// | [WARN] Partial APIs | Contribute missing pieces to Icelake |
+/// | [X] No snapshot APIs | Stick with iceberg-rust, contribute upstream |
+/// | [?] Documentation unclear | Reach out to Icelake/Databend community |
 #[allow(dead_code)]
 fn evaluation_decision_matrix() {
     // This is documentation only

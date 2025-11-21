@@ -9,7 +9,7 @@ permalink: /development/benchmarking/
 
 This guide explains how to run performance benchmarks for Orbit-RS and why they are excluded from regular CI/CD pipelines.
 
-## 🚀 Quick Start
+##  Quick Start
 
 ### Local Benchmarks
 
@@ -32,38 +32,38 @@ cargo bench --bench leader_election_benchmarks
 3. Select benchmark type and duration
 4. View results in workflow artifacts
 
-## 📋 Available Benchmarks
+##  Available Benchmarks
 
 ### Actor Performance Benchmarks
 
 - **File**: `benches/actor_benchmarks.rs`
 - **Focus**: Virtual actor system performance
 - **Metrics**: Message throughput, latency
-- **Status**: ✅ Stable
+- **Status**:  Stable
 
 ### Leader Election Benchmarks  
 
 - **File**: `benches/leader_election_benchmarks.rs`
 - **Focus**: Raft consensus performance
 - **Metrics**: Election timing, state persistence
-- **Status**: ✅ Stable
+- **Status**:  Stable
 
-### Persistence Comparison Benchmarks ⚠️
+### Persistence Comparison Benchmarks 
 
 - **File**: `benches/persistence_comparison.rs`
 - **Focus**: Storage backend performance (COW B+ Trees vs RocksDB)
 - **Metrics**: Read/write performance, memory usage
-- **Status**: ⚠️ **Known WAL replay issues - use with caution**
+- **Status**:  **Known WAL replay issues - use with caution**
 
-### OrbitQL Query Language Benchmarks 🆕
+### OrbitQL Query Language Benchmarks 
 
 - **Files**: `src/orbitql/benchmark.rs`, `src/orbitql/comprehensive_benchmark.rs`
 - **Focus**: Query engine performance with industry-standard workloads
 - **Metrics**: Query execution time, throughput, optimization effectiveness, vectorization performance
 - **Workloads**: TPC-H (22 queries), TPC-C (OLTP), TPC-DS (analytics), custom query patterns
-- **Status**: ✅ **Stable - Recently moved from orbit-shared**
+- **Status**:  **Stable - Recently moved from orbit-shared**
 
-## 🔒 CI/CD Exclusion Strategy
+##  CI/CD Exclusion Strategy
 
 ### Why Benchmarks Are Excluded
 
@@ -98,13 +98,13 @@ exclude = [
 
 Benchmarks can only be executed via:
 
-- ✅ Local development (`cd orbit-benchmarks && cargo bench`)
-- ✅ Manual GitHub Actions workflow
-- ❌ **Not via**: `cargo bench --package orbit-benchmarks` from workspace root
-- ❌ **Not via**: Regular CI/CD pipelines
-- ❌ **Not via**: `cargo build --workspace` (automatically excluded)
+-  Local development (`cd orbit-benchmarks && cargo bench`)
+-  Manual GitHub Actions workflow
+-  **Not via**: `cargo bench --package orbit-benchmarks` from workspace root
+-  **Not via**: Regular CI/CD pipelines
+-  **Not via**: `cargo build --workspace` (automatically excluded)
 
-## 🔧 Consolidated Benchmark Scripts
+##  Consolidated Benchmark Scripts
 
 All benchmark-related scripts are now consolidated under `orbit-benchmarks/scripts/`:
 
@@ -127,7 +127,7 @@ cd orbit-benchmarks
 # Run specific benchmark types
 ./scripts/run_benchmarks.sh -t actor          # Actor benchmarks only
 ./scripts/run_benchmarks.sh -t leader         # Leader election only
-./scripts/run_benchmarks.sh -t persistence    # Persistence (⚠️ may hang)
+./scripts/run_benchmarks.sh -t persistence    # Persistence ( may hang)
 
 # With custom options
 ./scripts/run_benchmarks.sh -t actor -v       # Verbose output
@@ -153,7 +153,7 @@ cd orbit-benchmarks
 ./scripts/analyze_results.py --format text
 ```
 
-## 🛠️ Local Development
+##  Local Development
 
 ### Prerequisites
 
@@ -197,7 +197,7 @@ Results are saved to:
 - **JSON output**: `orbit-benchmarks/*.json` (when using `--output-format json`)
 - **HTML reports**: `orbit-benchmarks/target/criterion/reports/index.html`
 
-## 🤖 GitHub Actions Integration
+##  GitHub Actions Integration
 
 ### Manual Workflow Features
 
@@ -241,7 +241,7 @@ The manual benchmark workflow (`.github/workflows/benchmarks.yml`) provides:
    - Check for timeout issues
    - Download artifacts when complete
 
-## ⚠️ Known Issues
+##  Known Issues
 
 ### WAL Replay Problem
 
@@ -292,7 +292,7 @@ cargo clean
 cargo bench --bench actor_benchmarks
 ```
 
-## 📊 Performance Baselines
+##  Performance Baselines
 
 ### Expected Performance (MacBook Pro M2)
 
@@ -323,7 +323,7 @@ Since benchmarks are manual-only:
 - **Results should be documented in performance issues**
 - **Consider running before major releases**
 
-## 🔍 Troubleshooting
+##  Troubleshooting
 
 ### Common Issues
 
@@ -374,7 +374,7 @@ htop
 cargo bench --bench actor_benchmarks -- --quick
 ```
 
-## 📚 Additional Resources
+##  Additional Resources
 
 ### Related Documentation
 
@@ -390,4 +390,4 @@ cargo bench --bench actor_benchmarks -- --quick
 
 ---
 
-**⚠️ Remember**: Benchmarks are excluded from regular development workflows for good reasons. Only run them when you specifically need performance analysis, and always use appropriate timeouts to prevent system issues.
+** Remember**: Benchmarks are excluded from regular development workflows for good reasons. Only run them when you specifically need performance analysis, and always use appropriate timeouts to prevent system issues.

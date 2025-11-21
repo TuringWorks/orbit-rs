@@ -42,9 +42,17 @@ impl OrbitQLAdapter {
     ///
     /// # Example
     /// ```ignore
-    /// let result = adapter.execute_query(
-    ///     "SELECT * FROM users WHERE age > 18"
-    /// ).await?;
+    /// use orbit_engine::adapters::orbitql::OrbitQLAdapter;
+    /// use orbit_engine::adapters::AdapterContext;
+    ///
+    /// // Assuming you have a storage engine that implements TableStorage:
+    /// // let storage = Arc::new(MyStorageEngine::new());
+    /// // let context = AdapterContext::new(storage);
+    /// // let adapter = OrbitQLAdapter::new(context);
+    /// //
+    /// // let result = adapter.execute_query(
+    /// //     "SELECT * FROM users WHERE age > 18"
+    /// // ).await?;
     /// ```
     pub async fn execute_query(&self, query: &str) -> EngineResult<CommandResult> {
         // Parse the OrbitQL query
@@ -481,13 +489,15 @@ impl ProtocolAdapter for OrbitQLAdapter {
 /// 3. Extract column names
 /// 4. Return as Vec<String>
 ///
-/// # Example (Future)
+/// # Example
 ///
-/// ```ignore
-/// // For: CREATE TABLE users (id INT, name TEXT, PRIMARY KEY (id))
-/// let constraints = vec![Constraint::PrimaryKey { columns: vec!["id"] }];
-/// let pk = extract_primary_key(&constraints);
-/// assert_eq!(pk, vec!["id"]);
+/// ```
+/// // Currently returns empty vector (Phase 3 placeholder)
+/// use orbit_shared::orbitql::ast::Constraint;
+///
+/// let constraints = vec![Constraint::PrimaryKey(vec!["id".to_string()])];
+/// // When implemented, this function will extract: vec!["id"]
+/// // Currently it returns: Vec::<String>::new()
 /// ```
 fn extract_primary_key<T>(_constraints: &[T]) -> Vec<String> {
     // Phase 3 enhancement: Extract actual primary key from constraints

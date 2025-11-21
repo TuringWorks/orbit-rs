@@ -70,7 +70,7 @@ let result = actor_ref.invoke("method_name", vec![args...]).await?;
 
 ## Current Status
 
-✅ **COMPLETED**: RESP Protocol Actor Integration
+ **COMPLETED**: RESP Protocol Actor Integration
 
 - All key Redis commands now invoke corresponding Orbit actor methods
 - Full compilation without errors

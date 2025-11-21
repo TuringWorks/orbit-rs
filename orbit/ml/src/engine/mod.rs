@@ -242,9 +242,9 @@ impl MLEngine {
         #[cfg(not(feature = "gpu"))]
         {
             if self.config.compute.enable_gpu {
-                warn!("⚠️  GPU requested but not compiled in this build - using CPU processing");
+                warn!("[WARN] GPU requested but not compiled in this build - using CPU processing");
             }
-            info!("🖥️  CPU-only build - all ML operations will use CPU processing");
+            info!("[CPU] CPU-only build - all ML operations will use CPU processing");
         }
 
         // Initialize distributed computing if enabled
@@ -274,32 +274,32 @@ impl MLEngine {
     async fn initialize_gpu(&self) -> Result<()> {
         use candle_core::Device;
 
-        info!("🚀 Attempting GPU initialization for ML acceleration...");
+        info!("[*] Attempting GPU initialization for ML acceleration...");
 
         match Device::cuda_if_available(0) {
             Ok(device) => {
-                info!("✅ GPU acceleration enabled: {:?}", device);
-                info!("🔥 CUDA device successfully initialized for high-performance ML operations");
+                info!("[OK] GPU acceleration enabled: {:?}", device);
+                info!("[GPU] CUDA device successfully initialized for high-performance ML operations");
 
                 // Update metrics to reflect successful GPU initialization
                 {
                     let _metrics = self.metrics.write().await;
                     // GPU is available and initialized
-                    info!("📊 GPU metrics tracking enabled");
+                    info!("[METRICS] GPU metrics tracking enabled");
                 }
                 Ok(())
             }
             Err(e) => {
-                warn!("⚠️  GPU initialization failed: {}", e);
-                info!("🔄 Gracefully degrading to CPU-based ML processing");
-                info!("💡 Performance note: CPU mode active. For GPU acceleration:");
+                warn!("[WARN] GPU initialization failed: {}", e);
+                info!("[~] Gracefully degrading to CPU-based ML processing");
+                info!("[NOTE] Performance note: CPU mode active. For GPU acceleration:");
                 info!("   - Ensure CUDA drivers are installed and compatible");
                 info!("   - Verify GPU hardware supports CUDA compute capability");
                 info!("   - Check system PATH includes CUDA binaries");
 
                 // Graceful degradation - continue with CPU processing
                 // This ensures the ML engine remains functional without GPU
-                info!("✅ ML engine ready with CPU-based processing");
+                info!("[OK] ML engine ready with CPU-based processing");
                 Ok(())
             }
         }
@@ -386,9 +386,9 @@ impl MLEngine {
     /// String describing the current processing mode
     pub fn get_processing_mode(&self) -> String {
         if self.is_gpu_available() {
-            "🔥 GPU-Accelerated Processing".to_string()
+            "[GPU] GPU-Accelerated Processing".to_string()
         } else {
-            "🖥️  CPU-Based Processing".to_string()
+            "[CPU] CPU-Based Processing".to_string()
         }
     }
 }

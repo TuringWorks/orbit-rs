@@ -670,16 +670,16 @@ impl ComplianceAuditSystem {
 
 | Feature | PostgreSQL | MongoDB | Oracle | Orbit-RS |
 |---------|------------|---------|--------|----------|
-| **Authentication Methods** | ✅ Multiple | ✅ Multiple | ✅ Extensive | ✅ Pluggable |
-| **Role-Based Access Control** | ✅ Full | ✅ Full | ✅ Advanced | ✅ Actor-Aware |
-| **Row/Document-Level Security** | ✅ RLS | ✅ Field-Level | ✅ VPD | ✅ Multi-Model |
-| **Encryption at Rest** | ⚠️ Extensions | ✅ Native | ✅ TDE | ✅ Multi-Model |
-| **Encryption in Transit** | ✅ SSL/TLS | ✅ SSL/TLS | ✅ SSL/TLS | ✅ mTLS |
-| **Audit Logging** | ⚠️ Extensions | ✅ Native | ✅ Advanced | ✅ Cross-Model |
-| **Data Masking** | ❌ Limited | ⚠️ Basic | ✅ Advanced | ✅ Multi-Model |
-| **Multi-Tenancy** | ⚠️ Schema-Based | ⚠️ Database-Based | ✅ Advanced | ✅ Actor-Based |
-| **Compliance Tools** | ⚠️ Limited | ⚠️ Basic | ✅ Extensive | ✅ Integrated |
-| **Zero Trust Architecture** | ❌ No | ❌ No | ⚠️ Partial | ✅ Native |
+| **Authentication Methods** |  Multiple |  Multiple |  Extensive |  Pluggable |
+| **Role-Based Access Control** |  Full |  Full |  Advanced |  Actor-Aware |
+| **Row/Document-Level Security** |  RLS |  Field-Level |  VPD |  Multi-Model |
+| **Encryption at Rest** |  Extensions |  Native |  TDE |  Multi-Model |
+| **Encryption in Transit** |  SSL/TLS |  SSL/TLS |  SSL/TLS |  mTLS |
+| **Audit Logging** |  Extensions |  Native |  Advanced |  Cross-Model |
+| **Data Masking** |  Limited |  Basic |  Advanced |  Multi-Model |
+| **Multi-Tenancy** |  Schema-Based |  Database-Based |  Advanced |  Actor-Based |
+| **Compliance Tools** |  Limited |  Basic |  Extensive |  Integrated |
+| **Zero Trust Architecture** |  No |  No |  Partial |  Native |
 
 ### Unique Security Advantages
 

@@ -7,14 +7,139 @@ use super::{utilities, ParseError, ParseResult, SqlParser};
 use crate::postgres_wire::sql::{
     ast::{
         AlterColumnAction, AlterTableAction, AlterTableStatement, ColumnConstraint,
-        ColumnDefinition, CreateExtensionStatement, CreateIndexStatement, CreateSchemaStatement,
-        CreateTableStatement, CreateViewStatement, DropExtensionStatement, DropIndexStatement,
-        DropSchemaStatement, DropTableStatement, DropViewStatement, IndexColumn, IndexOption,
-        IndexType, NullsOrder, SortDirection, Statement, TableConstraint, TableOption,
+        ColumnDefinition, CreateDatabaseStatement, CreateExtensionStatement, CreateIndexStatement,
+        CreateSchemaStatement, CreateTableStatement, CreateViewStatement, DropDatabaseStatement,
+        DropExtensionStatement, DropIndexStatement, DropSchemaStatement, DropTableStatement,
+        DropViewStatement, IndexColumn, IndexOption, IndexType, NullsOrder, SortDirection,
+        Statement, TableConstraint, TableOption,
     },
     lexer::Token,
     types::SqlValue,
 };
+
+/// Parse CREATE DATABASE statement
+pub fn parse_create_database(parser: &mut SqlParser) -> ParseResult<Statement> {
+    parser.expect(Token::Database)?;
+
+    // Check for IF NOT EXISTS
+    let if_not_exists = if parser.matches(&[Token::If]) {
+        parser.advance()?;
+        parser.expect(Token::Not)?;
+        parser.expect(Token::Exists)?;
+        true
+    } else {
+        false
+    };
+
+    // Parse database name
+    let name = if let Some(Token::Identifier(db_name)) = &parser.current_token {
+        let name = db_name.clone();
+        parser.advance()?;
+        name
+    } else {
+        return Err(ParseError {
+            message: "Expected database name".to_string(),
+            position: parser.position,
+            expected: vec!["database_name".to_string()],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    // Parse optional database options
+    let mut owner = None;
+    let mut template = None;
+    let mut encoding = None;
+    let locale = None;
+    let connection_limit = None;
+
+    while parser.matches(&[Token::With, Token::Owner, Token::Template, Token::Encoding]) {
+        if parser.matches(&[Token::With]) {
+            parser.advance()?;
+            continue;
+        }
+
+        if parser.matches(&[Token::Owner]) {
+            parser.advance()?;
+            if let Some(Token::Identifier(owner_name)) = &parser.current_token {
+                owner = Some(owner_name.clone());
+                parser.advance()?;
+            }
+        } else if parser.matches(&[Token::Template]) {
+            parser.advance()?;
+            if let Some(Token::Identifier(tmpl)) = &parser.current_token {
+                template = Some(tmpl.clone());
+                parser.advance()?;
+            }
+        } else if parser.matches(&[Token::Encoding]) {
+            parser.advance()?;
+            if let Some(Token::StringLiteral(enc)) = &parser.current_token {
+                encoding = Some(enc.clone());
+                parser.advance()?;
+            } else if let Some(Token::Identifier(enc)) = &parser.current_token {
+                encoding = Some(enc.clone());
+                parser.advance()?;
+            }
+        }
+    }
+
+    Ok(Statement::CreateDatabase(CreateDatabaseStatement {
+        if_not_exists,
+        name,
+        owner,
+        template,
+        encoding,
+        locale,
+        connection_limit,
+    }))
+}
+
+/// Parse DROP DATABASE statement
+pub fn parse_drop_database(parser: &mut SqlParser) -> ParseResult<Statement> {
+    parser.expect(Token::Database)?;
+
+    // Check for IF EXISTS
+    let if_exists = if parser.matches(&[Token::If]) {
+        parser.advance()?;
+        parser.expect(Token::Exists)?;
+        true
+    } else {
+        false
+    };
+
+    // Parse database names
+    let mut names = Vec::new();
+    loop {
+        if let Some(Token::Identifier(db_name)) = &parser.current_token {
+            names.push(db_name.clone());
+            parser.advance()?;
+        } else {
+            return Err(ParseError {
+                message: "Expected database name".to_string(),
+                position: parser.position,
+                expected: vec!["database_name".to_string()],
+                found: parser.current_token.clone(),
+            });
+        }
+
+        if parser.matches(&[Token::Comma]) {
+            parser.advance()?;
+        } else {
+            break;
+        }
+    }
+
+    // Check for FORCE option
+    let force = parser.matches(&[Token::Force]);
+    if force {
+        parser.advance()?;
+    }
+
+    Ok(Statement::DropDatabase(DropDatabaseStatement {
+        if_exists,
+        names,
+        force,
+    }))
+}
 
 /// Parse CREATE TABLE statement
 pub fn parse_create_table(parser: &mut SqlParser) -> ParseResult<Statement> {

@@ -134,9 +134,9 @@ For additional security, set up environment protection:
 2. Click **New environment** (or select existing)
 3. Name: `staging` (matches workflow environment name)
 4. Configure protection rules:
-   - ☑️ **Required reviewers** (optional): Add reviewers who must approve deployments
-   - ☑️ **Wait timer** (optional): Add delay before deployment
-   - ☑️ **Deployment branches**: Limit to `develop` branch only
+   -  **Required reviewers** (optional): Add reviewers who must approve deployments
+   -  **Wait timer** (optional): Add delay before deployment
+   -  **Deployment branches**: Limit to `develop` branch only
 
 5. Repeat for `production` environment:
    - Name: `production`
@@ -289,33 +289,33 @@ After adding secrets, verify they work:
 
 ### 1. Use Service Accounts
 
-✅ Create dedicated service accounts for CI/CD  
-✅ Grant minimal required permissions (principle of least privilege)  
-✅ Rotate tokens regularly (every 90 days recommended)
+ Create dedicated service accounts for CI/CD  
+ Grant minimal required permissions (principle of least privilege)  
+ Rotate tokens regularly (every 90 days recommended)
 
 ### 2. Separate Environments
 
-✅ Use different secrets for staging and production  
-✅ Use different namespaces or clusters  
-✅ Never use production credentials in staging
+ Use different secrets for staging and production  
+ Use different namespaces or clusters  
+ Never use production credentials in staging
 
 ### 3. Audit Access
 
-✅ Enable audit logging in Kubernetes  
-✅ Monitor secret access in GitHub (Settings → Security log)  
-✅ Review who has access to secrets regularly
+ Enable audit logging in Kubernetes  
+ Monitor secret access in GitHub (Settings → Security log)  
+ Review who has access to secrets regularly
 
 ### 4. Environment Protection
 
-✅ Require manual approval for production deployments  
-✅ Limit deployment branches/tags  
-✅ Add wait timers for production changes
+ Require manual approval for production deployments  
+ Limit deployment branches/tags  
+ Add wait timers for production changes
 
 ### 5. Secret Rotation
 
-✅ Set expiration dates for service account tokens  
-✅ Document rotation schedule  
-✅ Automate rotation where possible
+ Set expiration dates for service account tokens  
+ Document rotation schedule  
+ Automate rotation where possible
 
 ---
 

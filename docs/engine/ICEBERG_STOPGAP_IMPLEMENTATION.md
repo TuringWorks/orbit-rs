@@ -1,7 +1,7 @@
 # Iceberg Snapshot API Stopgap Implementation
 
 **Date**: 2025-01-19
-**Status**: ✅ **IMPLEMENTED**
+**Status**:  **IMPLEMENTED**
 **Type**: Temporary Stopgap Solution
 **Migration**: Easy (when upstream adds support)
 
@@ -23,21 +23,21 @@ This limitation prevented us from implementing time travel queries, a critical f
 
 Before implementing the stopgap, we evaluated:
 
-1. **Icelake** (`v0.3.141592654`) - ❌ **FAILED**
+1. **Icelake** (`v0.3.141592654`) -  **FAILED**
    - Doesn't compile with current Rust toolchain
    - 8 compilation errors (pattern trait issues, type mismatches)
    - Appears unmaintained
    - See: `ICELAKE_EVALUATION_RESULTS.md`
 
-2. **Lakekeeper** - ⚠️ **NOT APPLICABLE**
+2. **Lakekeeper** -  **NOT APPLICABLE**
    - REST catalog only (not a replacement for iceberg-rust)
    - Good for metadata management, not for table operations
 
-3. **Query Engines** (Trino/Dremio/StarRocks) - ⚠️ **TOO HEAVYWEIGHT**
+3. **Query Engines** (Trino/Dremio/StarRocks) -  **TOO HEAVYWEIGHT**
    - Not suitable for embedded use cases
    - Adds significant deployment complexity
 
-4. **Stopgap Extension Trait** - ✅ **CHOSEN**
+4. **Stopgap Extension Trait** -  **CHOSEN**
    - Zero-cost abstraction
    - Easy to implement
    - Simple migration path when upstream is ready
@@ -188,10 +188,10 @@ let snapshot = table.metadata().snapshot_by_timestamp(timestamp_ms)?;
 
 ### Unit Tests
 
-- ✅ `test_system_time_to_millis` - Time conversion
-- ✅ `test_millis_to_system_time` - Reverse conversion
-- ✅ `test_negative_timestamp` - Error handling
-- ✅ All 99 existing tests pass
+-  `test_system_time_to_millis` - Time conversion
+-  `test_millis_to_system_time` - Reverse conversion
+-  `test_negative_timestamp` - Error handling
+-  All 99 existing tests pass
 
 ### Integration Tests
 
@@ -227,13 +227,13 @@ If snapshot count becomes large (>1000):
 
 ## Benefits
 
-1. **✅ Time Travel Works NOW**: No waiting for upstream
-2. **✅ Zero-Cost**: Compiles to same code as native methods
-3. **✅ Type-Safe**: Full Rust type safety
-4. **✅ Easy Migration**: Simple path when upstream adds support
-5. **✅ Well-Documented**: Clear comments and migration guide
-6. **✅ Tested**: Unit tests and integration tests
-7. **✅ No Fork Required**: Uses extension traits, not forks
+1. ** Time Travel Works NOW**: No waiting for upstream
+2. ** Zero-Cost**: Compiles to same code as native methods
+3. ** Type-Safe**: Full Rust type safety
+4. ** Easy Migration**: Simple path when upstream adds support
+5. ** Well-Documented**: Clear comments and migration guide
+6. ** Tested**: Unit tests and integration tests
+7. ** No Fork Required**: Uses extension traits, not forks
 
 ## Risks and Limitations
 
@@ -281,10 +281,10 @@ If our implementation proves valuable, we could:
 3. Help entire Rust/Iceberg community
 
 **Benefits of Contributing**:
-- ✅ Helps Rust/Iceberg ecosystem
-- ✅ Aligns with Apache Foundation
-- ✅ Long-term API stability
-- ✅ Professional contribution
+-  Helps Rust/Iceberg ecosystem
+-  Aligns with Apache Foundation
+-  Long-term API stability
+-  Professional contribution
 
 ## Decision Log
 
@@ -299,10 +299,10 @@ If our implementation proves valuable, we could:
 4. Easy migration path when upstream is ready
 
 **Alternatives Considered**:
-- ❌ Wait for iceberg-rust → Blocks time travel indefinitely
-- ❌ Use Icelake → Doesn't compile, risky
-- ❌ Fork iceberg-rust → High maintenance burden
-- ✅ Extension trait → Zero-cost, easy migration
+-  Wait for iceberg-rust → Blocks time travel indefinitely
+-  Use Icelake → Doesn't compile, risky
+-  Fork iceberg-rust → High maintenance burden
+-  Extension trait → Zero-cost, easy migration
 
 ### 2025-01-19: Chose Arc<Snapshot> Over &Snapshot
 
@@ -315,9 +315,9 @@ If our implementation proves valuable, we could:
 4. Provides owned values with correct lifetimes
 
 **Alternatives Considered**:
-- ❌ Return `&Snapshot` → Lifetime issues, can't compile
-- ❌ Collect to Vec then return refs → Same lifetime issues
-- ✅ Return `Arc<Snapshot>` → Works, cheap, clean
+-  Return `&Snapshot` → Lifetime issues, can't compile
+-  Collect to Vec then return refs → Same lifetime issues
+-  Return `Arc<Snapshot>` → Works, cheap, clean
 
 ## Conclusion
 
@@ -333,6 +333,6 @@ This approach unblocks critical time travel features while maintaining flexibili
 ---
 
 **Document Version**: 1.0
-**Status**: Stopgap Implemented ✅
+**Status**: Stopgap Implemented 
 **Next Review**: When iceberg-rust adds snapshot API (check quarterly)
 **Estimated Lifespan**: 3-12 months (until upstream support)

@@ -178,6 +178,8 @@ pub struct VectorizedExecutor {
     simd_aggregate_i64: SimdAggregateI64,
     /// SIMD aggregate for f64 values
     simd_aggregate_f64: SimdAggregateF64,
+    /// Cached GPU device manager (lazy-initialized, checked once)
+    gpu_device_manager: std::sync::OnceLock<orbit_compute::gpu_backend::GpuDeviceManager>,
 }
 
 impl VectorizedExecutor {
@@ -197,7 +199,18 @@ impl VectorizedExecutor {
             simd_aggregate_i32: SimdAggregateI32::new(),
             simd_aggregate_i64: SimdAggregateI64::new(),
             simd_aggregate_f64: SimdAggregateF64::new(),
+            gpu_device_manager: std::sync::OnceLock::new(),
         }
+    }
+
+    /// Get or initialize the GPU device manager (cached, only checked once)
+    /// 
+    /// This method uses OnceLock to ensure GPU detection only happens once
+    /// per executor instance, avoiding repeated checks on every query.
+    fn get_gpu_device_manager(&self) -> &orbit_compute::gpu_backend::GpuDeviceManager {
+        self.gpu_device_manager.get_or_init(|| {
+            orbit_compute::gpu_backend::GpuDeviceManager::new()
+        })
     }
 
     /// Get executor configuration
@@ -689,13 +702,32 @@ impl VectorizedExecutor {
     ///
     /// # Example
     ///
-    /// ```rust,ignore
-    /// use orbit_engine::query::{VectorizedExecutor, Query, ExecutionPlan};
-    /// use orbit_engine::storage::ColumnBatch;
+    /// ```
+    /// use orbit_engine::query::execution::VectorizedExecutor;
+    /// use orbit_engine::query::{ExecutionPlan, Query};
+    /// use orbit_engine::storage::columnar::ColumnBatch;
+    /// use orbit_compute::AccelerationStrategy;
     ///
+    /// # tokio_test::block_on(async {
     /// let executor = VectorizedExecutor::new();
-    /// let plan = optimizer.optimize(&query)?;
-    /// let result = executor.execute_with_acceleration(&plan, &query, &data).await?;
+    /// let query = Query {
+    ///     table: "test".to_string(),
+    ///     projection: Some(vec!["id".to_string()]),
+    ///     filter: None,
+    ///     limit: None,
+    ///     offset: None,
+    /// };
+    /// let plan = ExecutionPlan {
+    ///     nodes: vec![],
+    ///     estimated_cost: 1.0,
+    ///     uses_simd: false,
+    ///     acceleration_strategy: Some(AccelerationStrategy::None),
+    ///     query_analysis: None,
+    /// };
+    /// let data = ColumnBatch::new(0, 0);
+    /// let _result = executor.execute_with_acceleration(&plan, &query, &data).await;
+    /// // Note: Result may be an error if query plan is invalid/incomplete
+    /// # });
     /// ```
     pub async fn execute_with_acceleration(
         &self,
@@ -721,22 +753,34 @@ impl VectorizedExecutor {
                 self.execute_cpu_simd_with_query(plan, query, data).await
             }
             AccelerationStrategy::Gpu => {
-                // GPU execution path with fallback to CPU SIMD
-                #[cfg(target_os = "macos")]
-                {
-                    match self.execute_gpu_metal_with_query(plan, query, data).await {
-                        Ok(result) => Ok(result),
+                // GPU execution path with fallback chain: CUDA -> ROCm -> Vulkan -> CPU
+                // Use cached GpuDeviceManager to try backends in priority order
+                // (GPU detection only happens once, cached for subsequent calls)
+                let device_manager = self.get_gpu_device_manager();
+                let backends = device_manager.available_backends();
+                
+                if backends.is_empty() {
+                    tracing::info!("No GPU backends available, using CPU SIMD");
+                    return self.execute_cpu_simd_with_query(plan, query, data).await;
+                }
+                
+                // Try each backend in order until one succeeds
+                for backend in backends {
+                    match self.execute_gpu_with_backend(plan, query, data, *backend).await {
+                        Ok(result) => {
+                            tracing::info!("GPU execution succeeded with backend: {:?}", backend);
+                            return Ok(result);
+                        }
                         Err(e) => {
-                            tracing::warn!("GPU execution failed: {}, falling back to CPU SIMD", e);
-                            self.execute_cpu_simd_with_query(plan, query, data).await
+                            tracing::warn!("GPU backend {:?} failed: {}, trying next backend", backend, e);
+                            continue;
                         }
                     }
                 }
-                #[cfg(not(target_os = "macos"))]
-                {
-                    tracing::info!("GPU acceleration not available on this platform, using CPU SIMD");
-                    self.execute_cpu_simd_with_query(plan, query, data).await
-                }
+                
+                // All GPU backends failed, fall back to CPU
+                tracing::warn!("All GPU backends failed, falling back to CPU SIMD");
+                self.execute_cpu_simd_with_query(plan, query, data).await
             }
             AccelerationStrategy::NeuralEngine => {
                 // Neural Engine execution path (future implementation)
@@ -857,6 +901,220 @@ impl VectorizedExecutor {
         if let Some(ref filter) = query.filter {
             result = self.execute_filter_predicate_gpu(&device, &result, filter)?;
             tracing::info!("GPU filter complete: {} rows remaining", result.row_count);
+        }
+
+        // Apply offset BEFORE limit (standard SQL order)
+        if let Some(offset) = query.offset {
+            if offset < result.row_count {
+                result = self.execute_offset(&result, offset)?;
+                tracing::debug!("After offset: {} rows", result.row_count);
+            }
+        }
+
+        // Apply limit
+        if let Some(limit) = query.limit {
+            if result.row_count > limit {
+                result = self.execute_limit(&result, limit)?;
+                tracing::debug!("After limit: {} rows", result.row_count);
+            }
+        }
+
+        // Apply projection LAST
+        if let Some(ref projection) = query.projection {
+            result = self.execute_projection_by_names(&result, projection)?;
+            tracing::debug!("After projection: {} columns", projection.len());
+        }
+
+        Ok(result)
+    }
+
+    /// Execute query using GPU CUDA acceleration (Linux/Windows)
+    ///
+    /// This method uses CUDA to accelerate filter operations.
+    /// Falls back to CPU SIMD on error.
+    #[cfg(all(not(target_os = "macos"), feature = "gpu-cuda"))]
+    async fn execute_gpu_cuda_with_query(
+        &self,
+        _plan: &crate::query::ExecutionPlan,
+        query: &crate::query::Query,
+        data: &ColumnBatch,
+    ) -> EngineResult<ColumnBatch> {
+        use orbit_compute::gpu_cuda::CudaDevice;
+
+        tracing::info!(
+            "Executing query with CUDA GPU: table={}, rows={}",
+            query.table,
+            data.row_count
+        );
+
+        // Initialize CUDA device (cached in production)
+        let device = CudaDevice::new().map_err(|e| {
+            EngineError::Internal(format!("Failed to initialize CUDA device: {}", e))
+        })?;
+
+        let mut result = data.clone();
+
+        // Apply filter if present (GPU accelerated)
+        if let Some(ref filter) = query.filter {
+            result = self.execute_filter_predicate_gpu_cuda(&device, &result, filter)?;
+            tracing::info!("CUDA filter complete: {} rows remaining", result.row_count);
+        }
+
+        // Apply offset BEFORE limit (standard SQL order)
+        if let Some(offset) = query.offset {
+            if offset < result.row_count {
+                result = self.execute_offset(&result, offset)?;
+                tracing::debug!("After offset: {} rows", result.row_count);
+            }
+        }
+
+        // Apply limit
+        if let Some(limit) = query.limit {
+            if result.row_count > limit {
+                result = self.execute_limit(&result, limit)?;
+                tracing::debug!("After limit: {} rows", result.row_count);
+            }
+        }
+
+        // Apply projection LAST
+        if let Some(ref projection) = query.projection {
+            result = self.execute_projection_by_names(&result, projection)?;
+            tracing::debug!("After projection: {} columns", projection.len());
+        }
+
+        Ok(result)
+    }
+
+    /// Execute query using GPU with a specific backend
+    /// 
+    /// This method routes to the appropriate GPU backend implementation.
+    /// Falls back to CPU SIMD if the backend fails.
+    async fn execute_gpu_with_backend(
+        &self,
+        plan: &crate::query::ExecutionPlan,
+        query: &crate::query::Query,
+        data: &ColumnBatch,
+        backend: orbit_compute::gpu_backend::GpuBackendType,
+    ) -> EngineResult<ColumnBatch> {
+        use orbit_compute::gpu_backend::GpuBackendType;
+        
+        match backend {
+            #[cfg(target_os = "macos")]
+            GpuBackendType::Metal => {
+                self.execute_gpu_metal_with_query(plan, query, data).await
+            }
+            
+            #[cfg(all(not(target_os = "macos"), feature = "gpu-cuda"))]
+            GpuBackendType::Cuda => {
+                self.execute_gpu_cuda_with_query(plan, query, data).await
+            }
+            
+            #[cfg(all(unix, not(target_os = "macos"), feature = "gpu-rocm"))]
+            GpuBackendType::Rocm => {
+                self.execute_gpu_rocm_with_query(plan, query, data).await
+            }
+            
+            #[cfg(feature = "gpu-vulkan")]
+            GpuBackendType::Vulkan => {
+                self.execute_gpu_vulkan_with_query(plan, query, data).await
+            }
+            
+            _ => {
+                Err(EngineError::Internal(format!(
+                    "GPU backend {:?} not supported or not compiled in",
+                    backend
+                )))
+            }
+        }
+    }
+
+    /// Execute query using GPU ROCm acceleration (Linux only)
+    ///
+    /// This method uses ROCm to accelerate filter operations.
+    /// Falls back to CPU SIMD on error.
+    #[cfg(all(unix, not(target_os = "macos"), feature = "gpu-rocm"))]
+    async fn execute_gpu_rocm_with_query(
+        &self,
+        _plan: &crate::query::ExecutionPlan,
+        query: &crate::query::Query,
+        data: &ColumnBatch,
+    ) -> EngineResult<ColumnBatch> {
+        use orbit_compute::gpu_rocm::RocmDevice;
+
+        tracing::info!(
+            "Executing query with ROCm GPU: table={}, rows={}",
+            query.table,
+            data.row_count
+        );
+
+        // Initialize ROCm device (cached in production)
+        let device = RocmDevice::new().map_err(|e| {
+            EngineError::Internal(format!("Failed to initialize ROCm device: {}", e))
+        })?;
+
+        let mut result = data.clone();
+
+        // Apply filter if present (GPU accelerated)
+        if let Some(ref filter) = query.filter {
+            result = self.execute_filter_predicate_gpu_rocm(&device, &result, filter)?;
+            tracing::info!("ROCm filter complete: {} rows remaining", result.row_count);
+        }
+
+        // Apply offset BEFORE limit (standard SQL order)
+        if let Some(offset) = query.offset {
+            if offset < result.row_count {
+                result = self.execute_offset(&result, offset)?;
+                tracing::debug!("After offset: {} rows", result.row_count);
+            }
+        }
+
+        // Apply limit
+        if let Some(limit) = query.limit {
+            if result.row_count > limit {
+                result = self.execute_limit(&result, limit)?;
+                tracing::debug!("After limit: {} rows", result.row_count);
+            }
+        }
+
+        // Apply projection LAST
+        if let Some(ref projection) = query.projection {
+            result = self.execute_projection_by_names(&result, projection)?;
+            tracing::debug!("After projection: {} columns", projection.len());
+        }
+
+        Ok(result)
+    }
+
+    /// Execute query using GPU Vulkan acceleration (cross-platform)
+    ///
+    /// This method uses Vulkan to accelerate filter operations.
+    /// Falls back to CPU SIMD on error.
+    #[cfg(feature = "gpu-vulkan")]
+    async fn execute_gpu_vulkan_with_query(
+        &self,
+        _plan: &crate::query::ExecutionPlan,
+        query: &crate::query::Query,
+        data: &ColumnBatch,
+    ) -> EngineResult<ColumnBatch> {
+        use orbit_compute::gpu_vulkan::VulkanDevice;
+
+        tracing::info!(
+            "Executing query with Vulkan GPU: table={}, rows={}",
+            query.table,
+            data.row_count
+        );
+
+        // Initialize Vulkan device (cached in production)
+        let device = VulkanDevice::new().map_err(|e| {
+            EngineError::Internal(format!("Failed to initialize Vulkan device: {}", e))
+        })?;
+
+        let mut result = data.clone();
+
+        // Apply filter if present (GPU accelerated)
+        if let Some(ref filter) = query.filter {
+            result = self.execute_filter_predicate_gpu_vulkan(&device, &result, filter)?;
+            tracing::info!("Vulkan filter complete: {} rows remaining", result.row_count);
         }
 
         // Apply offset BEFORE limit (standard SQL order)
@@ -1070,6 +1328,345 @@ impl VectorizedExecutor {
             row_count: selected_count,
             column_names: batch.column_names.clone(),
         })
+    }
+
+    /// Execute filter predicate on GPU using CUDA
+    #[cfg(all(not(target_os = "macos"), feature = "gpu-cuda"))]
+    fn execute_filter_predicate_gpu_cuda(
+        &self,
+        device: &orbit_compute::gpu_cuda::CudaDevice,
+        batch: &ColumnBatch,
+        predicate: &crate::storage::FilterPredicate,
+    ) -> EngineResult<ColumnBatch> {
+        use crate::storage::FilterPredicate;
+        use orbit_compute::gpu_backend::FilterOp;
+
+        match predicate {
+            FilterPredicate::Eq(column, value) => {
+                self.execute_filter_by_column_gpu_cuda(device, batch, column, FilterOp::Equal, value)
+            }
+            FilterPredicate::Ne(column, value) => {
+                self.execute_filter_by_column_gpu_cuda(device, batch, column, FilterOp::NotEqual, value)
+            }
+            FilterPredicate::Lt(column, value) => {
+                self.execute_filter_by_column_gpu_cuda(device, batch, column, FilterOp::LessThan, value)
+            }
+            FilterPredicate::Le(column, value) => {
+                self.execute_filter_by_column_gpu_cuda(device, batch, column, FilterOp::LessOrEqual, value)
+            }
+            FilterPredicate::Gt(column, value) => {
+                self.execute_filter_by_column_gpu_cuda(device, batch, column, FilterOp::GreaterThan, value)
+            }
+            FilterPredicate::Ge(column, value) => {
+                self.execute_filter_by_column_gpu_cuda(device, batch, column, FilterOp::GreaterOrEqual, value)
+            }
+            FilterPredicate::And(predicates) => {
+                if predicates.is_empty() {
+                    return Ok(batch.clone());
+                }
+                let mut result = self.execute_filter_predicate_gpu_cuda(device, batch, &predicates[0])?;
+                for pred in &predicates[1..] {
+                    result = self.execute_filter_predicate_gpu_cuda(device, &result, pred)?;
+                }
+                Ok(result)
+            }
+            FilterPredicate::Or(_predicates) => {
+                tracing::warn!("CUDA OR predicate not fully implemented, using CPU fallback");
+                self.execute_filter_predicate(batch, predicate)
+            }
+            FilterPredicate::Not(_predicate) => {
+                tracing::warn!("CUDA NOT predicate not fully implemented, using CPU fallback");
+                self.execute_filter_predicate(batch, predicate)
+            }
+        }
+    }
+
+    /// Execute filter by column name using CUDA GPU
+    #[cfg(all(not(target_os = "macos"), feature = "gpu-cuda"))]
+    fn execute_filter_by_column_gpu_cuda(
+        &self,
+        device: &orbit_compute::gpu_cuda::CudaDevice,
+        batch: &ColumnBatch,
+        column_name: &str,
+        op: orbit_compute::gpu_backend::FilterOp,
+        value: &crate::storage::SqlValue,
+    ) -> EngineResult<ColumnBatch> {
+        use crate::storage::{Column, SqlValue};
+
+        // Find column index
+        let column_index = if let Some(ref names) = batch.column_names {
+            names
+                .iter()
+                .position(|name| name == column_name)
+                .ok_or_else(|| {
+                    EngineError::storage(format!("Column '{}' not found", column_name))
+                })?
+        } else {
+            return Err(EngineError::storage(
+                "Cannot filter by name: batch has no column names".to_string(),
+            ));
+        };
+
+        // Execute CUDA filter based on column type
+        let mask = match (&batch.columns[column_index], value) {
+            (Column::Int32(data), SqlValue::Int32(v)) => {
+                device.execute_filter_i32(data, *v, op).map_err(|e| {
+                    EngineError::Internal(format!("CUDA filter failed: {}", e))
+                })?
+            }
+            (Column::Int64(data), SqlValue::Int64(v)) => {
+                device.execute_filter_i64(data, *v, op).map_err(|e| {
+                    EngineError::Internal(format!("CUDA filter failed: {}", e))
+                })?
+            }
+            (Column::Float64(data), SqlValue::Float64(v)) => {
+                device.execute_filter_f64(data, *v, op).map_err(|e| {
+                    EngineError::Internal(format!("CUDA filter failed: {}", e))
+                })?
+            }
+            _ => {
+                // Fall back to CPU for unsupported types
+                tracing::warn!("CUDA filter not supported for this column type, using CPU fallback");
+                let comparison_op = match op {
+                    orbit_compute::gpu_backend::FilterOp::Equal => ComparisonOp::Equal,
+                    orbit_compute::gpu_backend::FilterOp::NotEqual => ComparisonOp::NotEqual,
+                    orbit_compute::gpu_backend::FilterOp::LessThan => ComparisonOp::LessThan,
+                    orbit_compute::gpu_backend::FilterOp::LessOrEqual => ComparisonOp::LessThanOrEqual,
+                    orbit_compute::gpu_backend::FilterOp::GreaterThan => ComparisonOp::GreaterThan,
+                    orbit_compute::gpu_backend::FilterOp::GreaterOrEqual => ComparisonOp::GreaterThanOrEqual,
+                };
+                return self.execute_filter_by_column(batch, column_name, comparison_op, value);
+            }
+        };
+
+        // Compact results using mask (similar to Metal implementation)
+        self.compact_batch_with_mask(batch, &mask)
+    }
+
+    /// Execute filter predicate on GPU using ROCm
+    #[cfg(all(unix, not(target_os = "macos"), feature = "gpu-rocm"))]
+    fn execute_filter_predicate_gpu_rocm(
+        &self,
+        device: &orbit_compute::gpu_rocm::RocmDevice,
+        batch: &ColumnBatch,
+        predicate: &crate::storage::FilterPredicate,
+    ) -> EngineResult<ColumnBatch> {
+        use crate::storage::FilterPredicate;
+        use orbit_compute::gpu_backend::FilterOp;
+
+        match predicate {
+            FilterPredicate::Eq(column, value) => {
+                self.execute_filter_by_column_gpu_rocm(device, batch, column, FilterOp::Equal, value)
+            }
+            FilterPredicate::Ne(column, value) => {
+                self.execute_filter_by_column_gpu_rocm(device, batch, column, FilterOp::NotEqual, value)
+            }
+            FilterPredicate::Lt(column, value) => {
+                self.execute_filter_by_column_gpu_rocm(device, batch, column, FilterOp::LessThan, value)
+            }
+            FilterPredicate::Le(column, value) => {
+                self.execute_filter_by_column_gpu_rocm(device, batch, column, FilterOp::LessOrEqual, value)
+            }
+            FilterPredicate::Gt(column, value) => {
+                self.execute_filter_by_column_gpu_rocm(device, batch, column, FilterOp::GreaterThan, value)
+            }
+            FilterPredicate::Ge(column, value) => {
+                self.execute_filter_by_column_gpu_rocm(device, batch, column, FilterOp::GreaterOrEqual, value)
+            }
+            FilterPredicate::And(predicates) => {
+                if predicates.is_empty() {
+                    return Ok(batch.clone());
+                }
+                let mut result = self.execute_filter_predicate_gpu_rocm(device, batch, &predicates[0])?;
+                for pred in &predicates[1..] {
+                    result = self.execute_filter_predicate_gpu_rocm(device, &result, pred)?;
+                }
+                Ok(result)
+            }
+            FilterPredicate::Or(_predicates) => {
+                tracing::warn!("ROCm OR predicate not fully implemented, using CPU fallback");
+                self.execute_filter_predicate(batch, predicate)
+            }
+            FilterPredicate::Not(_predicate) => {
+                tracing::warn!("ROCm NOT predicate not fully implemented, using CPU fallback");
+                self.execute_filter_predicate(batch, predicate)
+            }
+        }
+    }
+
+    /// Execute filter by column name using ROCm GPU
+    #[cfg(all(unix, not(target_os = "macos"), feature = "gpu-rocm"))]
+    fn execute_filter_by_column_gpu_rocm(
+        &self,
+        device: &orbit_compute::gpu_rocm::RocmDevice,
+        batch: &ColumnBatch,
+        column_name: &str,
+        op: orbit_compute::gpu_backend::FilterOp,
+        value: &crate::storage::SqlValue,
+    ) -> EngineResult<ColumnBatch> {
+        use crate::storage::{Column, SqlValue};
+
+        // Find column index
+        let column_index = if let Some(ref names) = batch.column_names {
+            names
+                .iter()
+                .position(|name| name == column_name)
+                .ok_or_else(|| {
+                    EngineError::storage(format!("Column '{}' not found", column_name))
+                })?
+        } else {
+            return Err(EngineError::storage(
+                "Cannot filter by name: batch has no column names".to_string(),
+            ));
+        };
+
+        // Execute ROCm filter based on column type
+        let mask = match (&batch.columns[column_index], value) {
+            (Column::Int32(data), SqlValue::Int32(v)) => {
+                device.execute_filter_i32(data, *v, op).map_err(|e| {
+                    EngineError::Internal(format!("ROCm filter failed: {}", e))
+                })?
+            }
+            (Column::Int64(data), SqlValue::Int64(v)) => {
+                device.execute_filter_i64(data, *v, op).map_err(|e| {
+                    EngineError::Internal(format!("ROCm filter failed: {}", e))
+                })?
+            }
+            (Column::Float64(data), SqlValue::Float64(v)) => {
+                device.execute_filter_f64(data, *v, op).map_err(|e| {
+                    EngineError::Internal(format!("ROCm filter failed: {}", e))
+                })?
+            }
+            _ => {
+                // Fall back to CPU for unsupported types
+                tracing::warn!("ROCm filter not supported for this column type, using CPU fallback");
+                let comparison_op = match op {
+                    orbit_compute::gpu_backend::FilterOp::Equal => ComparisonOp::Equal,
+                    orbit_compute::gpu_backend::FilterOp::NotEqual => ComparisonOp::NotEqual,
+                    orbit_compute::gpu_backend::FilterOp::LessThan => ComparisonOp::LessThan,
+                    orbit_compute::gpu_backend::FilterOp::LessOrEqual => ComparisonOp::LessThanOrEqual,
+                    orbit_compute::gpu_backend::FilterOp::GreaterThan => ComparisonOp::GreaterThan,
+                    orbit_compute::gpu_backend::FilterOp::GreaterOrEqual => ComparisonOp::GreaterThanOrEqual,
+                };
+                return self.execute_filter_by_column(batch, column_name, comparison_op, value);
+            }
+        };
+
+        // Compact results using mask
+        self.compact_batch_with_mask(batch, &mask)
+    }
+
+    /// Execute filter predicate on GPU using Vulkan
+    #[cfg(feature = "gpu-vulkan")]
+    fn execute_filter_predicate_gpu_vulkan(
+        &self,
+        device: &orbit_compute::gpu_vulkan::VulkanDevice,
+        batch: &ColumnBatch,
+        predicate: &crate::storage::FilterPredicate,
+    ) -> EngineResult<ColumnBatch> {
+        use crate::storage::FilterPredicate;
+        use orbit_compute::gpu_backend::FilterOp;
+
+        match predicate {
+            FilterPredicate::Eq(column, value) => {
+                self.execute_filter_by_column_gpu_vulkan(device, batch, column, FilterOp::Equal, value)
+            }
+            FilterPredicate::Ne(column, value) => {
+                self.execute_filter_by_column_gpu_vulkan(device, batch, column, FilterOp::NotEqual, value)
+            }
+            FilterPredicate::Lt(column, value) => {
+                self.execute_filter_by_column_gpu_vulkan(device, batch, column, FilterOp::LessThan, value)
+            }
+            FilterPredicate::Le(column, value) => {
+                self.execute_filter_by_column_gpu_vulkan(device, batch, column, FilterOp::LessOrEqual, value)
+            }
+            FilterPredicate::Gt(column, value) => {
+                self.execute_filter_by_column_gpu_vulkan(device, batch, column, FilterOp::GreaterThan, value)
+            }
+            FilterPredicate::Ge(column, value) => {
+                self.execute_filter_by_column_gpu_vulkan(device, batch, column, FilterOp::GreaterOrEqual, value)
+            }
+            FilterPredicate::And(predicates) => {
+                if predicates.is_empty() {
+                    return Ok(batch.clone());
+                }
+                let mut result = self.execute_filter_predicate_gpu_vulkan(device, batch, &predicates[0])?;
+                for pred in &predicates[1..] {
+                    result = self.execute_filter_predicate_gpu_vulkan(device, &result, pred)?;
+                }
+                Ok(result)
+            }
+            FilterPredicate::Or(_predicates) => {
+                tracing::warn!("Vulkan OR predicate not fully implemented, using CPU fallback");
+                self.execute_filter_predicate(batch, predicate)
+            }
+            FilterPredicate::Not(_predicate) => {
+                tracing::warn!("Vulkan NOT predicate not fully implemented, using CPU fallback");
+                self.execute_filter_predicate(batch, predicate)
+            }
+        }
+    }
+
+    /// Execute filter by column name using Vulkan GPU
+    #[cfg(feature = "gpu-vulkan")]
+    fn execute_filter_by_column_gpu_vulkan(
+        &self,
+        device: &orbit_compute::gpu_vulkan::VulkanDevice,
+        batch: &ColumnBatch,
+        column_name: &str,
+        op: orbit_compute::gpu_backend::FilterOp,
+        value: &crate::storage::SqlValue,
+    ) -> EngineResult<ColumnBatch> {
+        use crate::storage::{Column, SqlValue};
+
+        // Find column index
+        let column_index = if let Some(ref names) = batch.column_names {
+            names
+                .iter()
+                .position(|name| name == column_name)
+                .ok_or_else(|| {
+                    EngineError::storage(format!("Column '{}' not found", column_name))
+                })?
+        } else {
+            return Err(EngineError::storage(
+                "Cannot filter by name: batch has no column names".to_string(),
+            ));
+        };
+
+        // Execute Vulkan filter based on column type
+        let mask = match (&batch.columns[column_index], value) {
+            (Column::Int32(data), SqlValue::Int32(v)) => {
+                device.execute_filter_i32(data, *v, op).map_err(|e| {
+                    EngineError::Internal(format!("Vulkan filter failed: {}", e))
+                })?
+            }
+            (Column::Int64(data), SqlValue::Int64(v)) => {
+                device.execute_filter_i64(data, *v, op).map_err(|e| {
+                    EngineError::Internal(format!("Vulkan filter failed: {}", e))
+                })?
+            }
+            (Column::Float64(data), SqlValue::Float64(v)) => {
+                device.execute_filter_f64(data, *v, op).map_err(|e| {
+                    EngineError::Internal(format!("Vulkan filter failed: {}", e))
+                })?
+            }
+            _ => {
+                // Fall back to CPU for unsupported types
+                tracing::warn!("Vulkan filter not supported for this column type, using CPU fallback");
+                let comparison_op = match op {
+                    orbit_compute::gpu_backend::FilterOp::Equal => ComparisonOp::Equal,
+                    orbit_compute::gpu_backend::FilterOp::NotEqual => ComparisonOp::NotEqual,
+                    orbit_compute::gpu_backend::FilterOp::LessThan => ComparisonOp::LessThan,
+                    orbit_compute::gpu_backend::FilterOp::LessOrEqual => ComparisonOp::LessThanOrEqual,
+                    orbit_compute::gpu_backend::FilterOp::GreaterThan => ComparisonOp::GreaterThan,
+                    orbit_compute::gpu_backend::FilterOp::GreaterOrEqual => ComparisonOp::GreaterThanOrEqual,
+                };
+                return self.execute_filter_by_column(batch, column_name, comparison_op, value);
+            }
+        };
+
+        // Compact results using mask
+        self.compact_batch_with_mask(batch, &mask)
     }
 
     /// Execute a filter predicate recursively

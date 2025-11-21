@@ -480,16 +480,16 @@ impl ActorBackupManager {
 
 | Feature | PostgreSQL | MongoDB | Cassandra | Orbit-RS |
 |---------|------------|---------|-----------|----------|
-| **ACID Compliance** | ✅ Full | ⚠️ Document-level | ❌ Eventual | ✅ Cross-Model |
-| **Write-Ahead Logging** | ✅ WAL | ✅ Journal + Oplog | ✅ Commit Log | ✅ Multi-Model WAL |
-| **Point-in-Time Recovery** | ✅ PITR | ✅ Oplog Replay | ❌ Limited | ✅ Actor-level PITR |
-| **Replication** | ✅ Streaming | ✅ Replica Sets | ✅ Multi-DC | ✅ Actor Replication |
-| **Backup Methods** | ✅ Multiple | ✅ Multiple | ✅ Incremental | ✅ Actor-aware |
-| **Crash Recovery** | ✅ Automatic | ✅ Automatic | ✅ Automatic | ✅ Cross-Model |
-| **Geographic Distribution** | ⚠️ Complex | ✅ Sharding | ✅ Native | ✅ Actor Distribution |
-| **Consistency Levels** | ⚠️ Limited | ✅ Configurable | ✅ Tunable | ✅ Per-Operation |
-| **Zero Data Loss** | ✅ Sync Replication | ✅ Majority Write | ⚠️ Tunable | ✅ Configurable |
-| **Multi-Model Durability** | ❌ Relational Only | ❌ Document Only | ❌ Wide Column | ✅ All Models |
+| **ACID Compliance** |  Full |  Document-level |  Eventual |  Cross-Model |
+| **Write-Ahead Logging** |  WAL |  Journal + Oplog |  Commit Log |  Multi-Model WAL |
+| **Point-in-Time Recovery** |  PITR |  Oplog Replay |  Limited |  Actor-level PITR |
+| **Replication** |  Streaming |  Replica Sets |  Multi-DC |  Actor Replication |
+| **Backup Methods** |  Multiple |  Multiple |  Incremental |  Actor-aware |
+| **Crash Recovery** |  Automatic |  Automatic |  Automatic |  Cross-Model |
+| **Geographic Distribution** |  Complex |  Sharding |  Native |  Actor Distribution |
+| **Consistency Levels** |  Limited |  Configurable |  Tunable |  Per-Operation |
+| **Zero Data Loss** |  Sync Replication |  Majority Write |  Tunable |  Configurable |
+| **Multi-Model Durability** |  Relational Only |  Document Only |  Wide Column |  All Models |
 
 ### Unique Durability Advantages
 

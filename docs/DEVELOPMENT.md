@@ -8,7 +8,7 @@ category: documentation
 
 This document outlines the development workflow and best practices for contributing to Orbit-RS.
 
-## 🔧 Pre-commit Checklist
+##  Pre-commit Checklist
 
 Before committing any code, **always** run the following to ensure code quality and avoid CI failures:
 
@@ -51,7 +51,7 @@ cargo test --workspace --verbose
 cargo build --workspace
 ```
 
-## 📋 Available Make Targets
+##  Available Make Targets
 
 | Target | Description |
 |--------|-------------|
@@ -70,7 +70,7 @@ cargo build --workspace
 | **Complete** | |
 | `make all` | Run all checks and build |
 
-## 🤖 Automated Pre-commit Hooks
+##  Automated Pre-commit Hooks
 
 Orbit-RS provides two pre-commit hook options to automatically enforce code quality:
 
@@ -120,18 +120,18 @@ make commit-ready
 make commit-light
 ```
 
-## 🚨 CI/CD Pipeline
+##  CI/CD Pipeline
 
 The CI/CD pipeline runs the following checks:
 
-- ✅ `cargo fmt --all -- --check` (formatting)
-- ✅ `cargo clippy --all-targets -- -D warnings` (linting)
-- ✅ `cargo test --workspace --verbose` (testing)
-- ✅ `cargo build --workspace` (building)
+-  `cargo fmt --all -- --check` (formatting)
+-  `cargo clippy --all-targets -- -D warnings` (linting)
+-  `cargo test --workspace --verbose` (testing)
+-  `cargo build --workspace` (building)
 
 **Always run `cargo fmt --all` before committing to avoid CI failures!**
 
-## 🎯 Best Practices
+##  Best Practices
 
 1. **Format First**: Always run `cargo fmt --all` before committing
 2. **Test Locally**: Run tests locally before pushing to avoid CI failures  
@@ -139,7 +139,7 @@ The CI/CD pipeline runs the following checks:
 4. **Check CI**: Monitor CI/CD pipeline status after pushing
 5. **Clean Commits**: Make atomic commits with clear messages
 
-## 📁 Project Structure
+##  Project Structure
 
 - `orbit-util/` - Utility functions and test helpers
 - `orbit-shared/` - Shared types and protocols
@@ -150,7 +150,7 @@ The CI/CD pipeline runs the following checks:
 - `scripts/` - Development scripts
 - `docs/` - Documentation
 
-## 🔗 Useful Commands
+##  Useful Commands
 
 ```bash
 
@@ -173,7 +173,7 @@ cargo clippy --all-targets -- -D warnings
 cargo doc --no-deps --workspace --open
 ```
 
-## 🆘 Getting Help
+##  Getting Help
 
 - Check the `Makefile` for common tasks: `make help`
 - Review CI/CD pipeline configuration in `.github/workflows/`

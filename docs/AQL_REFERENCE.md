@@ -97,7 +97,7 @@ FOR doc IN collection
   RETURN {
     simple: "Hello World",
     escaped: "Line 1\nLine 2",
-    unicode: "Unicode: 🚀"
+    unicode: "Unicode: "
   }
 
 // Booleans

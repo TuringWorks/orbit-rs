@@ -6,13 +6,13 @@ category: documentation
 
 ## Kubernetes Storage Guide for Orbit-RS
 
-## 🎯 **TL;DR - What You Need to Know**
+##  **TL;DR - What You Need to Know**
 
-**✅ Current Status**: Basic local storage (PVC) works  
-**✅ Enhanced**: Now supports all backends (Memory, LSM-Tree, RocksDB, S3, Azure, GCP)  
-**✅ Provided**: Enhanced manifests, Helm chart guidance, and updated Operator CRDs  
+** Current Status**: Basic local storage (PVC) works  
+** Enhanced**: Now supports all backends (Memory, LSM-Tree, RocksDB, S3, Azure, GCP)  
+** Provided**: Enhanced manifests, Helm chart guidance, and updated Operator CRDs  
 
-## 📋 **Storage Backend Overview**
+##  **Storage Backend Overview**
 
 ### **Local Storage Backends** (Require PersistentVolumes)
 
@@ -31,18 +31,18 @@ category: documentation
 
 **Kubernetes Requirements**: Deployment + Secrets (no PVC needed)
 
-## 🔧 **Implementation Changes Made**
+##  **Implementation Changes Made**
 
 ### 1. **Enhanced Configuration**
 
-**File**: [`k8s/01-configmap-enhanced.yaml`](file:///Users/ravindraboddipalli/sources/orbit-rs/k8s/01-configmap-enhanced.yaml)
+**File**: [`k8s/01-configmap-enhanced.yaml`](../k8s/01-configmap-enhanced.yaml)
 
 **Key Features**:
 
-- ✅ Environment variable-driven backend selection
-- ✅ Configuration sections for all persistence backends
-- ✅ Intelligent entrypoint script that creates directories based on backend
-- ✅ Health checks that vary by backend type
+-  Environment variable-driven backend selection
+-  Configuration sections for all persistence backends
+-  Intelligent entrypoint script that creates directories based on backend
+-  Health checks that vary by backend type
 
 **Example Environment Variables**:
 
@@ -64,26 +64,26 @@ ORBIT_S3_ACCESS_KEY_ID=<from-secret>
 
 ### 2. **Enhanced StatefulSet**
 
-**File**: [`k8s/03-statefulset-enhanced.yaml`](file:///Users/ravindraboddipalli/sources/orbit-rs/k8s/03-statefulset-enhanced.yaml)
+**File**: [`k8s/03-statefulset-enhanced.yaml`](../k8s/03-statefulset-enhanced.yaml)
 
 **Key Features**:
 
-- ✅ All persistence backend environment variables pre-configured
-- ✅ Secrets integration for cloud backends
-- ✅ Flexible volume mounts
-- ✅ Alternative Deployment for cloud-only backends
+-  All persistence backend environment variables pre-configured
+-  Secrets integration for cloud backends
+-  Flexible volume mounts
+-  Alternative Deployment for cloud-only backends
 
 ### 3. **Enhanced Kubernetes Operator**
 
-**File**: [`orbit-operator/src/crd.rs`](file:///Users/ravindraboddipalli/sources/orbit-rs/orbit-operator/src/crd.rs)
+**File**: [`orbit-operator/src/crd.rs`](../orbit-operator/src/crd.rs)
 
 **Key Features**:
 
-- ✅ PersistenceConfig added to OrbitCluster CRD
-- ✅ Support for memory, local, and cloud storage configurations
-- ✅ Type-safe configuration with defaults
+-  PersistenceConfig added to OrbitCluster CRD
+-  Support for memory, local, and cloud storage configurations
+-  Type-safe configuration with defaults
 
-## 🚀 **Deployment Examples**
+##  **Deployment Examples**
 
 ### **Option 1: Raw Kubernetes Manifests**
 
@@ -288,7 +288,7 @@ spec:
   # No storage section needed for cloud backends
 ```
 
-## 📊 **Storage Requirements by Backend**
+##  **Storage Requirements by Backend**
 
 | Backend | Kubernetes Resource | Volume Type | Size Recommendation | IOPS Requirement |
 |---------|-------------------|-------------|-------------------|------------------|
@@ -300,7 +300,7 @@ spec:
 | **Azure** | Deployment | None | N/A | N/A |
 | **GCP** | Deployment | None | N/A | N/A |
 
-## 🛡️ **Security Considerations**
+##  **Security Considerations**
 
 ### **Secrets Management**
 
@@ -338,7 +338,7 @@ rules:
   verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
 ```
 
-## 🔍 **Troubleshooting**
+##  **Troubleshooting**
 
 ### **Common Issues**
 
@@ -379,7 +379,7 @@ curl http://pod-ip:8080/health
 curl http://pod-ip:8080/health/ready
 ```
 
-## 📈 **Performance Tuning**
+##  **Performance Tuning**
 
 ### **Local Storage Backends**
 
@@ -429,16 +429,16 @@ resources:
     cpu: "4000m"      # Allow burst for compaction
 ```
 
-## 📚 **Files Reference**
+##  **Files Reference**
 
 **Enhanced Kubernetes Manifests**:
 
-- [`k8s/01-configmap-enhanced.yaml`](file:///Users/ravindraboddipalli/sources/orbit-rs/k8s/01-configmap-enhanced.yaml) - Configuration with all backends
-- [`k8s/03-statefulset-enhanced.yaml`](file:///Users/ravindraboddipalli/sources/orbit-rs/k8s/03-statefulset-enhanced.yaml) - StatefulSet + Deployment variants
+- [`k8s/01-configmap-enhanced.yaml`](../k8s/01-configmap-enhanced.yaml) - Configuration with all backends
+- [`k8s/03-statefulset-enhanced.yaml`](../k8s/03-statefulset-enhanced.yaml) - StatefulSet + Deployment variants
 
 **Operator Updates**:
 
-- [`orbit-operator/src/crd.rs`](file:///Users/ravindraboddipalli/sources/orbit-rs/orbit-operator/src/crd.rs) - Enhanced CRD with persistence config
+- [`orbit-operator/src/crd.rs`](../orbit-operator/src/crd.rs) - Enhanced CRD with persistence config
 
 **Documentation**:
 
@@ -446,11 +446,11 @@ resources:
 - [`docs/VIRTUAL_ACTOR_PERSISTENCE.md`](VIRTUAL_ACTOR_PERSISTENCE.md) - Complete persistence architecture
 - [`docs/STORAGE_BACKEND_INDEPENDENCE.md`](STORAGE_BACKEND_INDEPENDENCE.md) - Backend independence explanation
 
-## ✅ **Next Steps**
+##  **Next Steps**
 
 1. **Test the enhanced manifests** with your preferred backend
 2. **Update Helm chart templates** to incorporate the environment variables
 3. **Implement operator logic** to translate CRD persistence config to pod specs
 4. **Add monitoring** for persistence metrics via Prometheus
 
-The foundation is now in place to support all Orbit-RS persistence backends on Kubernetes! 🚀
+The foundation is now in place to support all Orbit-RS persistence backends on Kubernetes! 

@@ -247,15 +247,15 @@ The implementation supports the following LSP features:
 
 | Feature | Status | Description |
 |---------|--------|-------------|
-| `textDocument/didOpen` | ✅ | Document opened notification |
-| `textDocument/didChange` | ✅ | Document change notification |
-| `textDocument/completion` | ✅ | Autocompletion requests |
-| `textDocument/hover` | ✅ | Hover information |
-| `textDocument/formatting` | ✅ | Document formatting |
-| `textDocument/publishDiagnostics` | ✅ | Error/warning reporting |
-| `textDocument/signatureHelp` | 🚧 | Function signature help |
-| `textDocument/definition` | ❌ | Go to definition |
-| `textDocument/references` | ❌ | Find references |
+| `textDocument/didOpen` |  | Document opened notification |
+| `textDocument/didChange` |  | Document change notification |
+| `textDocument/completion` |  | Autocompletion requests |
+| `textDocument/hover` |  | Hover information |
+| `textDocument/formatting` |  | Document formatting |
+| `textDocument/publishDiagnostics` |  | Error/warning reporting |
+| `textDocument/signatureHelp` |  | Function signature help |
+| `textDocument/definition` |  | Go to definition |
+| `textDocument/references` |  | Find references |
 
 ### Performance Optimizations
 

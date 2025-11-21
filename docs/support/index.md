@@ -12,7 +12,7 @@ permalink: /support/
 
 ---
 
-## 🚀 Support Tiers
+##  Support Tiers
 
 ### Community Support (Free)
 
@@ -48,7 +48,7 @@ permalink: /support/
 
 ---
 
-## 🛠️ Professional Services
+##  Professional Services
 
 ### Migration Services
 
@@ -70,7 +70,7 @@ permalink: /support/
 
 ---
 
-## 📞 Contact Information
+##  Contact Information
 
 **General Inquiries**: [contact@turingworks.com](mailto:contact@turingworks.com)  
 **Technical Support**: [support@turingworks.com](mailto:support@turingworks.com)  

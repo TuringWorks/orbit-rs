@@ -12,7 +12,7 @@ Redis Time Series is a Redis module that adds time-series data structure support
 
 ## Planned Features
 
-### 🎯 **Phase 12: Time Series Foundation**
+###  **Phase 12: Time Series Foundation**
 
 #### Core Time Series Actor
 
@@ -29,7 +29,7 @@ Redis Time Series is a Redis module that adds time-series data structure support
 - **TS.RANGE**: Query data within time ranges
 - **TS.REVRANGE**: Query data in reverse chronological order
 
-### 🚀 **Phase 13: Advanced Time Series Operations**
+###  **Phase 13: Advanced Time Series Operations**
 
 #### Aggregation Commands
 
@@ -45,7 +45,7 @@ Redis Time Series is a Redis module that adds time-series data structure support
 - **Time-window aggregations**: Configurable time windows (1s, 1m, 1h, 1d)
 - **Downsampling**: Automatic data reduction for long-term storage
 
-### 📊 **Phase 14: Enterprise Time Series Features**
+###  **Phase 14: Enterprise Time Series Features**
 
 #### Advanced Analytics
 

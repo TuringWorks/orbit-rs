@@ -2,7 +2,7 @@
 
 Orbit-RS provides native support for multiple database protocols in a single server, eliminating the need for separate PostgreSQL and Redis instances while maintaining full compatibility with their respective protocols and ecosystems.
 
-## 🎯 Overview
+##  Overview
 
 The Orbit-RS server natively implements:
 
@@ -13,7 +13,7 @@ The Orbit-RS server natively implements:
 
 All protocols share the same underlying data store and actor system, providing unprecedented consistency and performance across different interfaces.
 
-## 🚀 Quick Start
+##  Quick Start
 
 ### Start the Multi-Protocol Server
 
@@ -44,7 +44,7 @@ curl http://localhost:8080/health
 # (actor system management API)
 ```
 
-## 📋 Configuration
+##  Configuration
 
 Create a configuration file at `./config/orbit-server.toml`:
 
@@ -79,7 +79,7 @@ Generate an example configuration:
 orbit-server --generate-config > orbit-server.toml
 ```
 
-## 🐘 PostgreSQL Compatibility
+##  PostgreSQL Compatibility
 
 ### Full SQL Support
 
@@ -133,7 +133,7 @@ LIMIT 10;
 - **Full-text Search**: Built-in text search capabilities
 - **Connection Pooling**: Efficient connection management
 
-## 🔴 Redis Compatibility
+##  Redis Compatibility
 
 ### Core Redis Commands
 
@@ -199,7 +199,7 @@ FT.SEARCH products-idx "0.1,0.2,0.3" 10 DISTANCE_METRIC COSINE
 - **Pub/Sub**: Real-time messaging
 - **Pipelining**: Batch operations for performance
 
-## 🔗 Enterprise Connection Pooling
+##  Enterprise Connection Pooling
 
 Orbit-RS features advanced connection pooling with enterprise-grade capabilities:
 
@@ -266,7 +266,7 @@ load_balancing_strategy = "WeightedRoundRobin"
 - **Dynamic Scaling**: Adapt pool size to load
 - **Lua Scripting**: Custom operations (planned)
 
-## 🌍 HTTP REST API
+##  HTTP REST API
 
 RESTful interface for web applications:
 
@@ -288,7 +288,7 @@ curl -X POST http://localhost:8080/api/vectors/search \
   -d '{"vector":[0.1,0.2,0.3],"limit":10}'
 ```
 
-## 📡 gRPC Actor API
+##  gRPC Actor API
 
 Direct access to the actor system for advanced use cases:
 
@@ -301,7 +301,7 @@ service ActorSystem {
 }
 ```
 
-## 🔄 Cross-Protocol Consistency
+##  Cross-Protocol Consistency
 
 Data written through one protocol is immediately available through all others:
 
@@ -321,7 +321,7 @@ r = redis.Redis(host='localhost', port=6379)
 result = r.hget("product:1", "name")  # Returns "Laptop"
 ```
 
-## 🎯 Use Cases
+##  Use Cases
 
 ### 1. AI/ML Applications
 
@@ -380,7 +380,7 @@ Different services can use their preferred protocol:
 - **Web Frontend**: HTTP REST API
 - **Internal Services**: gRPC for performance
 
-## ⚡ Performance
+##  Performance
 
 ### Benchmarks
 
@@ -401,7 +401,7 @@ Different services can use their preferred protocol:
 - **SIMD Operations**: Hardware-accelerated vector calculations
 - **Concurrent Processing**: Parallel query execution
 
-## 🔧 Advanced Configuration
+##  Advanced Configuration
 
 ### Memory Management
 
@@ -454,7 +454,7 @@ enabled = true
 backend = "jaeger"
 ```
 
-## 🔍 Troubleshooting
+##  Troubleshooting
 
 ### Connection Issues
 
@@ -492,7 +492,7 @@ orbit-server --config orbit-server.toml --validate
 orbit-server --generate-config
 ```
 
-## 🚀 Migration Guide
+##  Migration Guide
 
 ### From PostgreSQL + Redis
 
@@ -536,7 +536,7 @@ import redis
 r = redis.Redis(host='orbit-server', port=6379)
 ```
 
-## 🎉 Benefits
+##  Benefits
 
 ### Operational
 
@@ -559,16 +559,16 @@ r = redis.Redis(host='orbit-server', port=6379)
 - **Cache Efficiency**: Single cache serves all protocols
 - **Vector Operations**: Native vector support in SQL and Redis
 
-## 📖 Further Reading
+##  Further Reading
 
-- [Vector Operations Guide](./VECTOR_OPERATIONS.md)
-- [SQL Compatibility Reference](./SQL_REFERENCE.md)
-- [Redis Commands Reference](./REDIS_COMMANDS.md)
-- [REST API Documentation](./REST_API.md)
-- [Configuration Reference](./CONFIGURATION.md)
-- [Performance Tuning](./PERFORMANCE_TUNING.md)
+- [Vector Operations Guide](vector_commands.md)
+- [SQL Compatibility Reference](protocols/SQL_PARSER_ARCHITECTURE.md)
+- [Redis Commands Reference](protocols/REDIS_COMMANDS_REFERENCE.md)
+- [REST API Documentation](protocols/protocol_adapters.md#rest-api)
+- [Configuration Reference](deployment/CONFIGURATION.md)
+- [Performance Tuning](PETABYTE_SCALE_PERFORMANCE.md)
 
-## 🤝 Community
+##  Community
 
 - **GitHub**: <https://github.com/orbit-rs/orbit-rs>
 - **Discord**: [Join our community](https://discord.gg/orbit-rs)
@@ -577,4 +577,4 @@ r = redis.Redis(host='orbit-server', port=6379)
 
 ---
 
-**Orbit-RS: One Server, All Protocols** 🌟
+**Orbit-RS: One Server, All Protocols** 

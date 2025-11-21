@@ -81,3 +81,7 @@ transactions = []
 clustering = []
 iceberg-cold = []
 icelake-evaluation = ["icelake"]
+# GPU acceleration features (not yet implemented)
+gpu-cuda = []
+gpu-rocm = []
+gpu-vulkan = []

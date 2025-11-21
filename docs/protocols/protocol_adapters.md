@@ -14,19 +14,19 @@ Protocol adapters act as translation layers between external protocols and the O
 
 ### Supported Protocols
 
-- ✅ **Redis Protocol (RESP)** - **🎆 PRODUCTION-READY** - 50+ commands, all core data types, redis-cli support
-- 🧪 **PostgreSQL Wire Protocol** - **EXPERIMENTAL** - Basic SQL parsing for actor operations (30% complete)
-- 🧪 **Model Context Protocol (MCP)** - **EXPERIMENTAL** - Basic AI agent integration (partial implementation)
-- 📋 **Redis Extensions** - Vector operations (VECTOR.*), Time Series (TS.*), Graph DB (GRAPH.*), Search (FT.*) - *Planned*
-- 📋 **PostgreSQL TimescaleDB** - Advanced time-series analytics and hypertables - *Planned*
-- 📋 **REST API** - HTTP/JSON interface for web applications - *Planned*
-- 📋 **Neo4j Bolt Protocol** - Graph database compatibility - *Planned*
+-  **Redis Protocol (RESP)** - ** PRODUCTION-READY** - 50+ commands, all core data types, redis-cli support
+-  **PostgreSQL Wire Protocol** - **EXPERIMENTAL** - Basic SQL parsing for actor operations (30% complete)
+-  **Model Context Protocol (MCP)** - **EXPERIMENTAL** - Basic AI agent integration (partial implementation)
+-  **Redis Extensions** - Vector operations (VECTOR.*), Time Series (TS.*), Graph DB (GRAPH.*), Search (FT.*) - *Planned*
+-  **PostgreSQL TimescaleDB** - Advanced time-series analytics and hypertables - *Planned*
+-  **REST API** - HTTP/JSON interface for web applications - *Planned*
+-  **Neo4j Bolt Protocol** - Graph database compatibility - *Planned*
 
-## Redis Protocol (RESP) Support ✅
+## Redis Protocol (RESP) Support 
 
 Connect to Orbit actors using any Redis client through the RESP (REdis Serialization Protocol) adapter.
 
-### 🚀 Quick Start
+###  Quick Start
 
 **Get Redis running in 30 seconds:**
 
@@ -48,7 +48,7 @@ cargo build --release
 redis-cli -h 127.0.0.1 -p 6379  # Standard Redis port
 ```
 
-**✅ Everything works perfectly:**
+** Everything works perfectly:**
 
 ```redis
 # String operations
@@ -97,7 +97,7 @@ OK
 
 ### Supported Redis Commands
 
-**📚 [Complete Command Reference](REDIS_COMMANDS_REFERENCE.md)** - Detailed documentation for all 50+ commands
+** [Complete Command Reference](REDIS_COMMANDS_REFERENCE.md)** - Detailed documentation for all 50+ commands
 
 #### Key-Value Operations (15+ commands)
 
@@ -201,11 +201,11 @@ OK
 - **FLUSHALL** - Clear all databases
 - **COMMAND** - Get list of available commands
 
-## Redis Extensions - Advanced Features 📋 PLANNED
+## Redis Extensions - Advanced Features  PLANNED
 
 Orbit-RS will extend Redis with enterprise-grade features for AI/ML, time series, and graph database workloads in future releases.
 
-### Vector Operations (VECTOR.* namespace) 📋 PLANNED
+### Vector Operations (VECTOR.* namespace)  PLANNED
 
 **AI/ML vector search with multiple similarity metrics** - *Coming Soon*
 
@@ -225,7 +225,7 @@ VECTOR.ADD embeddings doc1 "0.1,0.2,0.3,0.4" title "AI Document" category "tech"
 VECTOR.SEARCH embeddings "0.1,0.2,0.3,0.4" 5 METRIC COSINE THRESHOLD 0.8
 ```
 
-### RedisSearch Compatible (FT.* namespace) 📋 PLANNED
+### RedisSearch Compatible (FT.* namespace)  PLANNED
 
 **Full-text and vector search engine compatibility** - *Coming Soon*
 
@@ -235,7 +235,7 @@ VECTOR.SEARCH embeddings "0.1,0.2,0.3,0.4" 5 METRIC COSINE THRESHOLD 0.8
 - **FT.SEARCH** index vector limit [options] - Search documents
 - **FT.INFO** index - Get index information and statistics
 
-### Time Series (TS.* namespace) 📋 PLANNED
+### Time Series (TS.* namespace)  PLANNED
 
 **Complete RedisTimeSeries compatibility for IoT and monitoring** - *Coming Soon*
 
@@ -261,7 +261,7 @@ TS.ADD temperature:sensor1 * 23.5
 TS.RANGE temperature:sensor1 - + AGGREGATION AVG 60000
 ```
 
-### Graph Database (GRAPH.* namespace) 📋 PLANNED
+### Graph Database (GRAPH.* namespace)  PLANNED
 
 **Cypher-like graph queries with execution planning** - *Coming Soon*
 
@@ -315,7 +315,7 @@ list_actor = "ListActor"
 pubsub_actor = "PubSubActor"
 ```
 
-## PostgreSQL Wire Protocol 🧪 EXPERIMENTAL
+## PostgreSQL Wire Protocol  EXPERIMENTAL
 
 Connect to Orbit actors using any PostgreSQL client. **Note**: This is an experimental implementation providing basic SQL parsing for actor operations.
 
@@ -356,12 +356,12 @@ DELETE FROM actors WHERE actor_id = 'user:alice';
 
 #### Currently Supported SQL Features
 
-✅ **Basic SQL statements**: `SELECT`, `INSERT`, `UPDATE`, `DELETE` (actor operations only)
-✅ **Basic SQL clauses**: `FROM`, `WHERE`, `SET`, `INTO`, `VALUES`
-✅ **WHERE operators**: `=`, `!=`, `<>` (limited conditional logic)
-✅ **JSON support**: Basic JSON state storage and retrieval
-✅ **Case insensitive**: Keywords work in any case combination
-♾️ **Note**: This is a basic implementation focused on actor state management, not full PostgreSQL compatibility
+ **Basic SQL statements**: `SELECT`, `INSERT`, `UPDATE`, `DELETE` (actor operations only)
+ **Basic SQL clauses**: `FROM`, `WHERE`, `SET`, `INTO`, `VALUES`
+ **WHERE operators**: `=`, `!=`, `<>` (limited conditional logic)
+ **JSON support**: Basic JSON state storage and retrieval
+ **Case insensitive**: Keywords work in any case combination
+ **Note**: This is a basic implementation focused on actor state management, not full PostgreSQL compatibility
 
 ### Vector Database Capabilities
 
@@ -434,7 +434,7 @@ FROM (
 ) subq;
 ```
 
-### Complete SQL Keyword Reference with Examples ✨
+### Complete SQL Keyword Reference with Examples 
 
 Orbit-RS supports a comprehensive set of SQL keywords for actor operations. All examples below are tested and ready to use.
 
@@ -778,11 +778,11 @@ VALUES ('message:welcome', 'MessageActor', '{
 INSERT INTO actors (actor_id, actor_type, state) 
 VALUES ('greeting:international', 'GreetingActor', '{
     "messages": {
-        "english": "Hello! 👋",
+        "english": "Hello! ",
         "spanish": "¡Hola!",
-        "chinese": "你好",
-        "japanese": "こんにちは",
-        "emoji": "🌍🚀✨"
+        "chinese": "",
+        "japanese": "",
+        "emoji": ""
     }
 }');
 ```
@@ -1174,7 +1174,7 @@ SET state = '{
 WHERE actor_id = 'config:logging';
 ```
 
-### Planned PostgreSQL Features 📋
+### Planned PostgreSQL Features 
 
 Future releases will expand PostgreSQL compatibility with advanced SQL features:
 
@@ -1224,7 +1224,7 @@ Future releases will expand PostgreSQL compatibility with advanced SQL features:
 - **Distance Operators** - `<->` (L2), `<#>` (inner product), `<=>` (cosine)
 - **Vector Functions** - VECTOR_DIMS, VECTOR_NORM, similarity scoring
 
-### Future Enhancement Opportunities 🚧
+### Future Enhancement Opportunities 
 
 Potential areas for further enhancement:
 
@@ -1344,7 +1344,7 @@ let expression = parser.parse_expression(&tokens, &mut pos)?;
 - **Parenthesized Expressions**: Explicit precedence control with nested parsing
 - **Vector Operations**: pgvector compatibility with distance operators
 
-## Model Context Protocol (MCP) 🧪 EXPERIMENTAL
+## Model Context Protocol (MCP)  EXPERIMENTAL
 
 AI agent integration through the standardized Model Context Protocol, enabling AI systems to interact with Orbit-RS. **Note**: This is an experimental implementation with basic functionality.
 
@@ -1464,13 +1464,13 @@ port = 8080
 capabilities = ["tools", "resources", "prompts"]
 ```
 
-## Upcoming Time Series Features 🚀
+## Upcoming Time Series Features 
 
 Orbit-RS will add comprehensive time-series database capabilities in **Phase 12 (Q1 2025)**, providing compatibility with two major time-series ecosystems.
 
 ### Redis Time Series Compatibility
 
-**Full RedisTimeSeries module compatibility** - [📖 Detailed Documentation](REDIS_TIMESERIES.md)
+**Full RedisTimeSeries module compatibility** - [ Detailed Documentation](REDIS_TIMESERIES.md)
 
 #### Redis Time Series Key Features
 
@@ -1508,7 +1508,7 @@ print(f"1-minute averages: {results}")
 
 ### PostgreSQL TimescaleDB Compatibility
 
-**Complete TimescaleDB extension compatibility** - [📖 Detailed Documentation](POSTGRESQL_TIMESCALE.md)
+**Complete TimescaleDB extension compatibility** - [ Detailed Documentation](POSTGRESQL_TIMESCALE.md)
 
 #### Key Features
 
@@ -1558,7 +1558,7 @@ ORDER BY bucket DESC;
 - **High Availability**: Automatic failover and replication for time series
 - **Migration Tools**: Seamless migration from RedisTimeSeries and TimescaleDB
 
-## Future Protocols 🚧
+## Future Protocols 
 
 ### REST API
 

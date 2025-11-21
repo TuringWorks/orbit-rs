@@ -6,7 +6,7 @@ labels: ['bug', 'triage']
 assignees: ''
 ---
 
-## 🐞 Bug Description
+##  Bug Description
 
 **Describe the bug**  
 A clear and concise description of what the bug is.
@@ -24,7 +24,7 @@ A clear and concise description of what you expected to happen.
 **Actual Behavior**  
 A clear and concise description of what actually happened.
 
-## 📋 Environment Information
+##  Environment Information
 
 **Orbit-RS Version**: (e.g., 0.1.0)  
 **Operating System**: (e.g., macOS 14.0, Ubuntu 22.04, Windows 11)  
@@ -43,7 +43,7 @@ A clear and concise description of what actually happened.
 - [ ] Docker
 - [ ] Cloud Provider: 
 
-## 📝 Additional Details
+##  Additional Details
 
 **Screenshots**  
 If applicable, add screenshots to help explain your problem.
@@ -67,7 +67,7 @@ Add any other context about the problem here.
 
 ---
 
-## ✅ Checklist
+##  Checklist
 
 - [ ] I have searched existing issues to ensure this is not a duplicate
 - [ ] I have provided all the requested information above
@@ -76,4 +76,4 @@ Add any other context about the problem here.
 
 ---
 
-**💡 Need help faster?** Join our [Discord community](https://discord.gg/orbit-rs) for real-time support or check our [troubleshooting guide](https://turingworks.github.io/orbit-rs/troubleshooting/).
+** Need help faster?** Join our [Discord community](https://discord.gg/orbit-rs) for real-time support or check our [troubleshooting guide](https://turingworks.github.io/orbit-rs/troubleshooting/).

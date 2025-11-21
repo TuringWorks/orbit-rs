@@ -550,16 +550,16 @@ impl MultiModelQueryOptimizer {
 
 | Feature | SQL | Cypher | Gremlin | AQL | OrbitQL |
 |---------|-----|--------|---------|-----|---------|
-| **Relational Queries** | ✅ Native | ❌ Limited | ❌ No | ✅ Good | ✅ Native |
-| **Graph Traversal** | ❌ Poor | ✅ Excellent | ✅ Excellent | ✅ Good | ✅ Native |
-| **Vector Operations** | ⚠️ Extensions | ❌ No | ❌ No | ❌ No | ✅ Native |
-| **Time Series** | ⚠️ Basic | ❌ No | ❌ No | ❌ No | ✅ Native |
-| **Multi-Model Joins** | ❌ No | ❌ No | ❌ No | ✅ Limited | ✅ Advanced |
-| **ACID Transactions** | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Cross-Model |
-| **Performance** | ✅ Excellent | ✅ Good | ⚠️ Variable | ✅ Good | ✅ Good |
-| **Learning Curve** | ✅ Familiar | ⚠️ Moderate | ❌ Steep | ⚠️ Moderate | ⚠️ Moderate |
-| **Tooling Support** | ✅ Extensive | ✅ Good | ⚠️ Limited | ⚠️ Limited | ⚠️ Growing |
-| **Standardization** | ✅ ANSI SQL | ✅ openCypher | ✅ TinkerPop | ❌ ArangoDB | ❌ Orbit-RS |
+| **Relational Queries** |  Native |  Limited |  No |  Good |  Native |
+| **Graph Traversal** |  Poor |  Excellent |  Excellent |  Good |  Native |
+| **Vector Operations** |  Extensions |  No |  No |  No |  Native |
+| **Time Series** |  Basic |  No |  No |  No |  Native |
+| **Multi-Model Joins** |  No |  No |  No |  Limited |  Advanced |
+| **ACID Transactions** |  Yes |  Yes |  Yes |  Yes |  Cross-Model |
+| **Performance** |  Excellent |  Good |  Variable |  Good |  Good |
+| **Learning Curve** |  Familiar |  Moderate |  Steep |  Moderate |  Moderate |
+| **Tooling Support** |  Extensive |  Good |  Limited |  Limited |  Growing |
+| **Standardization** |  ANSI SQL |  openCypher |  TinkerPop |  ArangoDB |  Orbit-RS |
 
 ### Unique Advantages of OrbitQL
 

@@ -55,14 +55,14 @@ This document summarizes the changes made to remove Docker build requirements fr
 
 #### Core CI/CD Features
 
-- ✅ Multi-platform binary builds (macOS, Windows, Linux - ARM64 & x64)
-- ✅ Rust quality checks (format, clippy, tests)
-- ✅ Security scanning with cargo-audit and cargo-deny
-- ✅ Helm chart validation
-- ✅ GitHub releases with checksums
-- ✅ Debug and release build profiles
-- ✅ Test release workflow
-- ✅ Automated failure notifications
+-  Multi-platform binary builds (macOS, Windows, Linux - ARM64 & x64)
+-  Rust quality checks (format, clippy, tests)
+-  Security scanning with cargo-audit and cargo-deny
+-  Helm chart validation
+-  GitHub releases with checksums
+-  Debug and release build profiles
+-  Test release workflow
+-  Automated failure notifications
 
 #### Build Matrix
 

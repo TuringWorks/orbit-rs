@@ -6,7 +6,7 @@ labels: ['enhancement', 'triage']
 assignees: ''
 ---
 
-## 💡 Feature Request
+##  Feature Request
 
 **Is your feature request related to a problem? Please describe.**  
 A clear and concise description of what the problem is. Ex. I'm always frustrated when [...]
@@ -17,7 +17,7 @@ A clear and concise description of what you want to happen.
 **Describe alternatives you've considered**  
 A clear and concise description of any alternative solutions or features you've considered.
 
-## 🎯 Use Case
+##  Use Case
 
 **What would you use this feature for?**  
 Describe the specific use case or scenario where this feature would be helpful.
@@ -25,7 +25,7 @@ Describe the specific use case or scenario where this feature would be helpful.
 **How would this feature benefit the Orbit-RS community?**  
 Explain how this feature would benefit other users beyond your specific use case.
 
-## 📋 Additional Details
+##  Additional Details
 
 **Priority Level**:
 - [ ] Low - Nice to have
@@ -51,7 +51,7 @@ Explain how this feature would benefit other users beyond your specific use case
 - [ ] Complex - Significant development effort
 - [ ] Unknown
 
-## 🛠️ Implementation Suggestions
+##  Implementation Suggestions
 
 **Do you have any ideas on how this could be implemented?**  
 If you have thoughts on the technical approach, please share them.
@@ -67,7 +67,7 @@ Add any other context, screenshots, code examples, or mockups about the feature 
 
 ---
 
-## ✅ Checklist
+##  Checklist
 
 - [ ] I have searched existing issues to ensure this is not a duplicate
 - [ ] I have provided a clear description of the problem and solution
@@ -76,4 +76,4 @@ Add any other context, screenshots, code examples, or mockups about the feature 
 
 ---
 
-**💭 Want to discuss this idea first?** Join our [Discord community](https://discord.gg/orbit-rs) or start a [GitHub Discussion](https://github.com/TuringWorks/orbit-rs/discussions) to get feedback from the community!
+** Want to discuss this idea first?** Join our [Discord community](https://discord.gg/orbit-rs) or start a [GitHub Discussion](https://github.com/TuringWorks/orbit-rs/discussions) to get feedback from the community!

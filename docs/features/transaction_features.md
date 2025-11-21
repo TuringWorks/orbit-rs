@@ -61,12 +61,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Execute 2-phase commit
     coordinator.commit_transaction(&tx_id).await?;
     
-    println!("🎉 Transaction {} committed successfully!", tx_id);
+    println!(" Transaction {} committed successfully!", tx_id);
     Ok(())
 }
 ```
 
-## 🔒 Distributed Locks with Deadlock Detection
+##  Distributed Locks with Deadlock Detection
 
 Orbit-RS provides sophisticated distributed locking with automatic deadlock detection and prevention:
 
@@ -103,7 +103,7 @@ The system uses several strategies to prevent and resolve deadlocks:
 3. **Lock Ordering**: Encourages consistent lock ordering to reduce deadlock probability
 4. **Timeout-based Recovery**: Automatic rollback of long-running lock waits
 
-## 📊 Prometheus Metrics Integration
+##  Prometheus Metrics Integration
 
 Comprehensive observability and monitoring through Prometheus metrics:
 
@@ -167,7 +167,7 @@ metrics.record_histogram("business.operation.duration",
     &[("operation_type", "payment")]);
 ```
 
-## 🛡️ Security & Audit Logging
+##  Security & Audit Logging
 
 Enterprise-grade security features with comprehensive audit trails:
 
@@ -239,7 +239,7 @@ security_mgr.audit_log_entry(tx_id, "COMMIT", "success").await?;
 }
 ```
 
-## 🔄 Saga Pattern for Long-Running Workflows
+##  Saga Pattern for Long-Running Workflows
 
 Support for complex, long-running distributed workflows with automatic compensation:
 
@@ -296,7 +296,7 @@ let result = saga
     .await?;
 ```
 
-## ⚡ Performance Optimizations
+##  Performance Optimizations
 
 High-performance features for demanding production workloads:
 

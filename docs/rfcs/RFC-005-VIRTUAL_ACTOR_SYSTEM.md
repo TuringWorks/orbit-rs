@@ -481,20 +481,20 @@ impl WasmActor {
 
 | Feature | Orleans | Akka | Ray | Orbit-RS | Priority | Effort |
 |---------|---------|------|-----|----------|----------|---------|
-| **Management UI** | ✅ Dashboard | ✅ Management | ✅ Dashboard | ❌ Missing | **Critical** | **High** |
-| **Code Generation** | ✅ Automatic | ✅ Manual | ✅ Decorators | ❌ Manual | **High** | **Medium** |
-| **Streaming** | ✅ Orleans Streams | ✅ Akka Streams | ✅ Ray Datasets | ❌ Basic | **High** | **High** |
-| **Distributed Tracing** | ✅ Application Insights | ✅ Lightbend Telemetry | ✅ Ray Tracing | ⚠️ Basic | **Medium** | **Medium** |
+| **Management UI** |  Dashboard |  Management |  Dashboard |  Missing | **Critical** | **High** |
+| **Code Generation** |  Automatic |  Manual |  Decorators |  Manual | **High** | **Medium** |
+| **Streaming** |  Orleans Streams |  Akka Streams |  Ray Datasets |  Basic | **High** | **High** |
+| **Distributed Tracing** |  Application Insights |  Lightbend Telemetry |  Ray Tracing |  Basic | **Medium** | **Medium** |
 
 ### Competitive Advantages (Unique to Orbit-RS)
 
 | Feature | Orbit-RS | Competitors | Impact |
 |---------|----------|-------------|--------|
-| **Multi-Protocol Native** | ✅ Redis/SQL/gRPC/MCP | ❌ Single protocol | **Revolutionary** |
-| **Multi-Model Database** | ✅ Graph/Vector/TS/SQL | ❌ External systems | **Revolutionary** |
-| **Memory Safety** | ✅ Compile-time | ❌ Runtime checks | **Fundamental** |
-| **Resource Efficiency** | ✅ 10x better | ❌ GC overhead | **Significant** |
-| **Edge Deployment** | ✅ 10MB-10GB range | ❌ Server-only | **Strategic** |
+| **Multi-Protocol Native** |  Redis/SQL/gRPC/MCP |  Single protocol | **Revolutionary** |
+| **Multi-Model Database** |  Graph/Vector/TS/SQL |  External systems | **Revolutionary** |
+| **Memory Safety** |  Compile-time |  Runtime checks | **Fundamental** |
+| **Resource Efficiency** |  10x better |  GC overhead | **Significant** |
+| **Edge Deployment** |  10MB-10GB range |  Server-only | **Strategic** |
 
 ### Quick Wins (High Impact, Low Effort)
 

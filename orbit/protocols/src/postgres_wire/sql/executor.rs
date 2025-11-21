@@ -7,14 +7,14 @@ use crate::error::{ProtocolError, ProtocolResult};
 use crate::postgres_wire::sql::{
     ast::{
         AccessMode, AlterTableStatement, AssignmentTarget, BeginStatement, ColumnConstraint,
-        CommitStatement, CreateExtensionStatement, CreateIndexStatement, CreateSchemaStatement,
-        CreateTableStatement, CreateViewStatement, DeleteStatement, DescribeStatement,
-        DropExtensionStatement, DropIndexStatement, DropSchemaStatement, DropTableStatement,
-        DropViewStatement, ExplainStatement, Expression, FromClause, GrantStatement, IndexType,
-        InsertSource, InsertStatement, IsolationLevel, JoinCondition, JoinType, Privilege,
-        ReleaseSavepointStatement, RevokeStatement, RollbackStatement, SavepointStatement,
-        SelectItem, SelectStatement, ShowStatement, ShowVariable, Statement, TableConstraint,
-        TableName, UpdateStatement, UseStatement,
+        CommitStatement, CreateDatabaseStatement, CreateExtensionStatement, CreateIndexStatement,
+        CreateSchemaStatement, CreateTableStatement, CreateViewStatement, DeleteStatement,
+        DescribeStatement, DropDatabaseStatement, DropExtensionStatement, DropIndexStatement,
+        DropSchemaStatement, DropTableStatement, DropViewStatement, ExplainStatement, Expression,
+        FromClause, GrantStatement, IndexType, InsertSource, InsertStatement, IsolationLevel,
+        JoinCondition, JoinType, Privilege, ReleaseSavepointStatement, RevokeStatement,
+        RollbackStatement, SavepointStatement, SelectItem, SelectStatement, ShowStatement,
+        ShowVariable, Statement, TableConstraint, TableName, UpdateStatement, UseStatement,
     },
     expression_evaluator::{EvaluationContext, ExpressionEvaluator},
     parser::SqlParser,
@@ -42,6 +42,9 @@ pub enum ExecutionResult {
     Delete {
         count: usize,
     },
+    CreateDatabase {
+        database_name: String,
+    },
     CreateTable {
         table_name: String,
     },
@@ -57,6 +60,9 @@ pub enum ExecutionResult {
     },
     CreateExtension {
         extension_name: String,
+    },
+    DropDatabase {
+        database_names: Vec<String>,
     },
     DropTable {
         table_names: Vec<String>,
@@ -177,6 +183,18 @@ pub struct ExtensionDefinition {
     pub version: Option<String>,
 }
 
+/// Database definition
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct DatabaseDefinition {
+    pub name: String,
+    pub owner: Option<String>,
+    pub template: Option<String>,
+    pub encoding: Option<String>,
+    pub locale: Option<String>,
+    pub connection_limit: Option<i32>,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+}
+
 /// Transaction state
 #[derive(Debug, Clone)]
 pub struct TransactionState {
@@ -258,6 +276,7 @@ pub struct SqlExecutor {
     storage: Arc<dyn TableStorage>,
 
     // Legacy in-memory storage for backward compatibility during transition
+    databases: Arc<RwLock<HashMap<String, DatabaseDefinition>>>,
     tables: Arc<RwLock<HashMap<String, TableSchema>>>,
     views: Arc<RwLock<HashMap<String, ViewSchema>>>,
     schemas: Arc<RwLock<HashMap<String, SchemaDefinition>>>,
@@ -284,6 +303,7 @@ pub struct SqlExecutor {
 
     // Settings and configuration
     settings: Arc<RwLock<HashMap<String, String>>>,
+    current_database: Arc<RwLock<String>>,
     current_schema: Arc<RwLock<String>>,
 
     // Vector support
@@ -367,8 +387,24 @@ impl SqlExecutor {
             },
         );
 
+        // Initialize with default "actors" database for backward compatibility
+        let mut databases = HashMap::new();
+        databases.insert(
+            "actors".to_string(),
+            DatabaseDefinition {
+                name: "actors".to_string(),
+                owner: Some("postgres".to_string()),
+                template: None,
+                encoding: Some("UTF8".to_string()),
+                locale: Some("en_US.UTF-8".to_string()),
+                connection_limit: None,
+                created_at: chrono::Utc::now(),
+            },
+        );
+
         Self {
             storage,
+            databases: Arc::new(RwLock::new(databases)),
             tables: Arc::new(RwLock::new(HashMap::new())),
             views: Arc::new(RwLock::new(HashMap::new())),
             schemas: Arc::new(RwLock::new(HashMap::new())),
@@ -381,6 +417,7 @@ impl SqlExecutor {
             current_user: Arc::new(RwLock::new("postgres".to_string())),
             permissions: Arc::new(RwLock::new(HashMap::new())),
             settings: Arc::new(RwLock::new(settings)),
+            current_database: Arc::new(RwLock::new("actors".to_string())),
             current_schema: Arc::new(RwLock::new("public".to_string())),
             vector_extensions: Arc::new(RwLock::new(HashMap::new())),
             expression_evaluator: Arc::new(RwLock::new(ExpressionEvaluator::new())),
@@ -410,12 +447,14 @@ impl SqlExecutor {
     pub async fn execute_statement(&self, statement: Statement) -> ProtocolResult<ExecutionResult> {
         match statement {
             // DDL Operations
+            Statement::CreateDatabase(stmt) => self.execute_create_database(stmt).await,
             Statement::CreateTable(stmt) => self.execute_create_table(stmt).await,
             Statement::CreateIndex(stmt) => self.execute_create_index(stmt).await,
             Statement::CreateView(stmt) => self.execute_create_view(stmt).await,
             Statement::CreateSchema(stmt) => self.execute_create_schema(stmt).await,
             Statement::CreateExtension(stmt) => self.execute_create_extension(stmt).await,
             Statement::AlterTable(stmt) => self.execute_alter_table(stmt).await,
+            Statement::DropDatabase(stmt) => self.execute_drop_database(stmt).await,
             Statement::DropTable(stmt) => self.execute_drop_table(stmt).await,
             Statement::DropIndex(stmt) => self.execute_drop_index(stmt).await,
             Statement::DropView(stmt) => self.execute_drop_view(stmt).await,
@@ -448,6 +487,75 @@ impl SqlExecutor {
     }
 
     // DDL Implementation methods
+    async fn execute_create_database(
+        &self,
+        stmt: CreateDatabaseStatement,
+    ) -> ProtocolResult<ExecutionResult> {
+        let database_name = &stmt.name;
+
+        // Check if database already exists
+        let databases = self.databases.read().await;
+        if databases.contains_key(database_name) && !stmt.if_not_exists {
+            return Err(ProtocolError::already_exists("Database", database_name));
+        }
+        drop(databases);
+
+        // Create database definition
+        let database_def = DatabaseDefinition {
+            name: database_name.clone(),
+            owner: stmt.owner.or_else(|| Some("postgres".to_string())),
+            template: stmt.template,
+            encoding: stmt.encoding.or_else(|| Some("UTF8".to_string())),
+            locale: stmt.locale.or_else(|| Some("en_US.UTF-8".to_string())),
+            connection_limit: stmt.connection_limit,
+            created_at: chrono::Utc::now(),
+        };
+
+        // Store database
+        let mut databases = self.databases.write().await;
+        databases.insert(database_name.clone(), database_def);
+
+        Ok(ExecutionResult::CreateDatabase {
+            database_name: database_name.clone(),
+        })
+    }
+
+    async fn execute_drop_database(
+        &self,
+        stmt: DropDatabaseStatement,
+    ) -> ProtocolResult<ExecutionResult> {
+        let mut dropped = Vec::new();
+
+        for database_name in &stmt.names {
+            let mut databases = self.databases.write().await;
+
+            // Check if database exists
+            if !databases.contains_key(database_name) {
+                if !stmt.if_exists {
+                    return Err(ProtocolError::not_found("Database", database_name));
+                }
+                continue;
+            }
+
+            // Prevent dropping the current database
+            let current_db = self.current_database.read().await;
+            if *current_db == *database_name && !stmt.force {
+                return Err(ProtocolError::invalid_operation(
+                    "cannot drop the currently open database",
+                ));
+            }
+            drop(current_db);
+
+            // Remove the database
+            databases.remove(database_name);
+            dropped.push(database_name.clone());
+        }
+
+        Ok(ExecutionResult::DropDatabase {
+            database_names: dropped,
+        })
+    }
+
     async fn execute_create_table(
         &self,
         stmt: CreateTableStatement,

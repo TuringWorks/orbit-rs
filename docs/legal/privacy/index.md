@@ -14,13 +14,13 @@ permalink: /legal/privacy/
 
 ---
 
-## 📄 Overview
+##  Overview
 
 This Privacy Policy describes how TuringWorks ("we", "our", or "us") collects, uses, and protects information when you use Orbit-RS software and services.
 
 ---
 
-## 🔓 Open Source Software
+##  Open Source Software
 
 Orbit-RS is open source software. When you download and use the software directly from our repositories:
 
@@ -31,7 +31,7 @@ Orbit-RS is open source software. When you download and use the software directl
 
 ---
 
-## 🌐 Website and Documentation
+##  Website and Documentation
 
 When you visit our documentation website (turingworks.github.io/orbit-rs):
 
@@ -48,7 +48,7 @@ When you visit our documentation website (turingworks.github.io/orbit-rs):
 
 ---
 
-## 📧 Support and Contact
+##  Support and Contact
 
 When you contact us for support:
 
@@ -66,7 +66,7 @@ When you contact us for support:
 
 ---
 
-## 🏢 Enterprise Services
+##  Enterprise Services
 
 For enterprise customers with commercial agreements:
 
@@ -76,7 +76,7 @@ For enterprise customers with commercial agreements:
 
 ---
 
-## 🛡️ Data Protection
+##  Data Protection
 
 ### Security Measures
 
@@ -92,7 +92,7 @@ For enterprise customers with commercial agreements:
 
 ---
 
-## 🌍 International Users
+##  International Users
 
 - **Global Usage**: Orbit-RS is used worldwide
 - **No Data Transfers**: Software operates locally with no data transmission to our servers
@@ -100,13 +100,13 @@ For enterprise customers with commercial agreements:
 
 ---
 
-## 🔄 Changes to This Policy
+##  Changes to This Policy
 
 We may update this privacy policy to reflect changes in our practices. Updates will be posted on this page with a revised "Last Updated" date.
 
 ---
 
-## 📧 Contact Us
+##  Contact Us
 
 For questions about this privacy policy:
 
@@ -115,7 +115,7 @@ For questions about this privacy policy:
 
 ---
 
-## 📋 Summary
+##  Summary
 
 **In short**: Orbit-RS is open source software that operates locally and does not collect personal data. Our website uses standard analytics, and we only collect information when you voluntarily contact us for support.
 

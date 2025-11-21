@@ -314,16 +314,16 @@ pub async fn write(&self, batch: &ColumnBatch) -> EngineResult<()> {
 
 | Feature | Impact | Effort | Priority |
 |---------|--------|--------|----------|
-| Filter Predicate Optimization | High | Low | 🔥 **P0** |
-| Iceberg Row Count | High | Low | 🔥 **P0** |
-| OrbitQL Primary Key | Low | Low | ✅ **P1** |
-| Iceberg Write Path | High | High | 📈 **P1** |
-| Connection Pooling | Medium | Medium | 📊 **P2** |
-| Memory Module Decoupling | Low | Low | 🔄 **P2** |
-| Query Optimizer | High | High | 🎯 **P3** |
-| Auto Tier Migration | Medium | Medium | 🔄 **P3** |
-| Integration Tests | High | Medium | ✅ **P1** |
-| Benchmarks | Medium | Low | 📊 **P2** |
+| Filter Predicate Optimization | High | Low |  **P0** |
+| Iceberg Row Count | High | Low |  **P0** |
+| OrbitQL Primary Key | Low | Low |  **P1** |
+| Iceberg Write Path | High | High |  **P1** |
+| Connection Pooling | Medium | Medium |  **P2** |
+| Memory Module Decoupling | Low | Low |  **P2** |
+| Query Optimizer | High | High |  **P3** |
+| Auto Tier Migration | Medium | Medium |  **P3** |
+| Integration Tests | High | Medium |  **P1** |
+| Benchmarks | Medium | Low |  **P2** |
 
 ## Timeline Estimate
 

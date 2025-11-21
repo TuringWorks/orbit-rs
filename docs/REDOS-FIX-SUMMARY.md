@@ -123,11 +123,11 @@ node redos-demo.js
 ```
 
 **Key Test Cases:**
-- ✅ Normal queries format correctly
-- ✅ Large inputs (16KB+) complete in < 1ms
-- ✅ Potential attack patterns are safely handled
-- ✅ Timeout protection works correctly
-- ✅ Graceful fallback preserves functionality
+-  Normal queries format correctly
+-  Large inputs (16KB+) complete in < 1ms
+-  Potential attack patterns are safely handled
+-  Timeout protection works correctly
+-  Graceful fallback preserves functionality
 
 ## Security Benefits
 

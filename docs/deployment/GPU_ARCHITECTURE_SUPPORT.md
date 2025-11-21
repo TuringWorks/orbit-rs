@@ -18,7 +18,7 @@ Orbit-RS provides comprehensive support for the latest GPU architectures across 
 
 ### NVIDIA GPUs
 
-#### 🚀 Blackwell Architecture (2024+) - Next Generation
+####  Blackwell Architecture (2024+) - Next Generation
 
 **Status**: Early Support / Preview  
 **Use Cases**: Large-scale AI training, foundation models, multi-modal AI
@@ -56,7 +56,7 @@ gpu_config:
   nvlink_topology: "fully_connected_gen5"
 ```
 
-#### ⚡ Hopper Architecture (Current Gen)
+####  Hopper Architecture (Current Gen)
 
 **Status**: Full Production Support  
 **Use Cases**: AI training, large language models, scientific computing
@@ -76,7 +76,7 @@ gpu_config:
 - **Confidential Computing**: TEE support for secure AI
 - **4th Gen NVLink**: 900 GB/s inter-GPU bandwidth
 
-#### 🔥 Ampere Architecture (Mainstream)
+####  Ampere Architecture (Mainstream)
 
 **Status**: Full Production Support  
 **Use Cases**: ML training/inference, HPC, graphics workloads
@@ -88,7 +88,7 @@ gpu_config:
 | **A10G** | 24GB GDDR6 | 31.2 TFLOPS (FP16) | Graphics + AI |
 | **A10** | 24GB GDDR6 | 31.2 TFLOPS (FP16) | Professional workstations |
 
-#### ⚙️ Turing Architecture (Inference Optimized)
+####  Turing Architecture (Inference Optimized)
 
 **Status**: Full Production Support  
 **Use Cases**: Cost-effective inference, edge deployment
@@ -100,7 +100,7 @@ gpu_config:
 
 ### AMD GPUs
 
-#### 🔴 CDNA 3 Architecture (Latest Data Center)
+####  CDNA 3 Architecture (Latest Data Center)
 
 **Status**: Full Production Support  
 **Use Cases**: AI training, HPC, large-scale inference
@@ -136,7 +136,7 @@ gpu_config:
   xgmi_topology: "fully_connected"
 ```
 
-#### 🔴 CDNA 2 Architecture
+####  CDNA 2 Architecture
 
 **Status**: Full Production Support  
 **Use Cases**: AI training, scientific computing
@@ -147,7 +147,7 @@ gpu_config:
 | **MI250** | 128GB HBM2e | 95 TFLOPS (FP16) | Standard variant |
 | **MI210** | 64GB HBM2e | 45 TFLOPS (FP16) | Entry-level CDNA2 |
 
-#### 🎮 RDNA 4 Architecture (2024+)
+####  RDNA 4 Architecture (2024+)
 
 **Status**: Early Support  
 **Use Cases**: Graphics, consumer AI, edge computing
@@ -160,7 +160,7 @@ gpu_config:
 
 ### CPU Architectures
 
-#### 🔥 AMD EPYC Processors
+####  AMD EPYC Processors
 
 **Status**: Full Production Support  
 **Use Cases**: High-performance computing, database workloads, CPU-intensive AI
@@ -191,7 +191,7 @@ epyc_optimizations:
   pcie_optimization: true
 ```
 
-#### 🌿 ARM Graviton Processors
+####  ARM Graviton Processors
 
 **Status**: Full Production Support  
 **Use Cases**: Energy-efficient computing, cost optimization
@@ -203,7 +203,7 @@ epyc_optimizations:
 
 ### Intel GPUs
 
-#### ⚡ Intel Arc & Xe Architecture
+####  Intel Arc & Xe Architecture
 
 **Status**: Early Support  
 **Use Cases**: Development, testing, specialized workloads

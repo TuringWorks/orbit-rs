@@ -12,7 +12,7 @@ TimescaleDB is a PostgreSQL extension that transforms PostgreSQL into a scalable
 
 ## Planned Features
 
-### 🎯 **Phase 12: TimescaleDB Foundation**
+###  **Phase 12: TimescaleDB Foundation**
 
 #### Core Time Series Tables
 
@@ -29,7 +29,7 @@ TimescaleDB is a PostgreSQL extension that transforms PostgreSQL into a scalable
 - **show_chunks()**: Display chunk information
 - **chunk_relation_size()**: Get chunk storage information
 
-### 🚀 **Phase 13: Advanced TimescaleDB Features**
+###  **Phase 13: Advanced TimescaleDB Features**
 
 #### Continuous Aggregates
 
@@ -46,7 +46,7 @@ TimescaleDB is a PostgreSQL extension that transforms PostgreSQL into a scalable
 - **interpolate()**: Linear interpolation for missing values
 - **Hyperfunctions**: Advanced time-series analytical functions
 
-### 📊 **Phase 14: Enterprise TimescaleDB Features**
+###  **Phase 14: Enterprise TimescaleDB Features**
 
 #### Data Retention and Compression
 

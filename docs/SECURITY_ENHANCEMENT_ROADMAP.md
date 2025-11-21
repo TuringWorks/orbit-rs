@@ -13,7 +13,7 @@ This roadmap outlines a comprehensive security enhancement strategy for Orbit-RS
 
 ## Current Security Assessment
 
-### Existing Security Foundation ✅
+### Existing Security Foundation 
 
 - **Transaction Security**: Basic authentication and authorization framework in `orbit/shared/src/transactions/security.rs`
 - **Token-Based Auth**: AuthToken system with scopes and expiration
@@ -21,7 +21,7 @@ This roadmap outlines a comprehensive security enhancement strategy for Orbit-RS
 - **Security Context**: Transaction-level security context management
 - **Memory Safety**: Rust's built-in memory safety guarantees
 
-### Identified Security Gaps 🔴
+### Identified Security Gaps 
 
 - **Missing Encryption**: No encryption at rest or comprehensive encryption in transit
 - **Limited Authentication**: Only basic username/password authentication

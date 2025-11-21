@@ -8,11 +8,11 @@ category: documentation
 
 ### Complete guide to using ML functions and boosting algorithms in OrbitQL
 
-## 🎯 **Overview**
+##  **Overview**
 
 OrbitQL now supports comprehensive machine learning capabilities directly in SQL, including state-of-the-art boosting algorithms like XGBoost, LightGBM, CatBoost, and AdaBoost. This brings ML computation directly to your data without complex ETL pipelines.
 
-## 🏗️ **Quick Start**
+##  **Quick Start**
 
 ### Basic ML Query
 
@@ -48,7 +48,7 @@ FROM new_transactions
 WHERE fraud_probability > 0.8;
 ```
 
-## 📚 **Boosting Algorithms**
+##  **Boosting Algorithms**
 
 ### 1. **XGBoost** - Extreme Gradient Boosting
 
@@ -196,7 +196,7 @@ SELECT ML_TRAIN_MODEL(
 ) FROM housing_market;
 ```
 
-## 🔄 **Model Management Workflow**
+##  **Model Management Workflow**
 
 ### Complete ML Pipeline Example
 
@@ -276,7 +276,7 @@ SELECT ML_MODEL_INFO('fraud_detector_v2');
 -- }
 ```
 
-## 🎯 **Real-World Use Cases**
+##  **Real-World Use Cases**
 
 ### 1. **E-commerce Recommendation Engine**
 
@@ -472,7 +472,7 @@ WHERE ML_PREDICT('equipment_failure_predictor', current_features) > 0.3
 ORDER BY failure_probability DESC;
 ```
 
-## 🎨 **Feature Engineering Functions**
+##  **Feature Engineering Functions**
 
 ### Data Preprocessing
 
@@ -525,7 +525,7 @@ SELECT
 FROM training_data;
 ```
 
-## 📊 **Model Evaluation and Monitoring**
+##  **Model Evaluation and Monitoring**
 
 ### Performance Metrics
 
@@ -575,7 +575,7 @@ FROM daily_metrics
 ORDER BY prediction_date;
 ```
 
-## 🔧 **Advanced Configuration**
+##  **Advanced Configuration**
 
 ### Hyperparameter Tuning
 
@@ -678,7 +678,7 @@ FROM predictions
 GROUP BY assigned_model;
 ```
 
-## 📈 **Integration with Orbit Desktop**
+##  **Integration with Orbit Desktop**
 
 The Orbit Desktop application provides a rich UI for interacting with ML models:
 
@@ -712,7 +712,7 @@ const result = await orbitDesktop.executeQuery(mlQuery);
 // Result includes model performance metrics and visualizations
 ```
 
-## 🚀 **Best Practices**
+##  **Best Practices**
 
 ### 1. **Data Preparation**
 
@@ -798,19 +798,19 @@ FROM daily_predictions
 WHERE prediction_date = CURRENT_DATE;
 ```
 
-## 🎯 **Summary**
+##  **Summary**
 
 OrbitQL's ML capabilities bring enterprise-grade machine learning directly to your SQL environment:
 
-- **🚀 Boosting Algorithms**: XGBoost, LightGBM, CatBoost, AdaBoost, and GBM
-- **🎯 Model Management**: Train, evaluate, deploy, and monitor models
-- **🔧 Feature Engineering**: Built-in preprocessing and feature selection
-- **📊 Production Ready**: A/B testing, monitoring, and drift detection
-- **🖥️ Desktop UI**: Rich graphical interface with Orbit Desktop
-- **⚡ Performance**: Optimized for large-scale data processing
+- ** Boosting Algorithms**: XGBoost, LightGBM, CatBoost, AdaBoost, and GBM
+- ** Model Management**: Train, evaluate, deploy, and monitor models
+- ** Feature Engineering**: Built-in preprocessing and feature selection
+- ** Production Ready**: A/B testing, monitoring, and drift detection
+- ** Desktop UI**: Rich graphical interface with Orbit Desktop
+- ** Performance**: Optimized for large-scale data processing
 
 Start building intelligent applications today with OrbitQL's comprehensive ML toolkit!
 
 ---
 
-*For more examples and advanced use cases, visit the [Orbit Desktop ML Examples](/examples/ml/) directory.*
+*For more examples and advanced use cases, visit the [Orbit Desktop ML Examples](../examples/ml-sql-functions/) directory.*

@@ -557,10 +557,10 @@ Orbit's time series implementation is designed to be a drop-in replacement for R
 
 ### Command Compatibility
 
-- ✅ All core TS.* commands supported
-- ✅ Same parameter syntax and semantics  
-- ✅ Compatible data formats and return values
-- ✅ Same aggregation functions and behavior
+-  All core TS.* commands supported
+-  Same parameter syntax and semantics  
+-  Compatible data formats and return values
+-  Same aggregation functions and behavior
 
 ### Differences
 

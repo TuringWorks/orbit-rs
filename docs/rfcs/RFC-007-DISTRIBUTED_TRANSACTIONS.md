@@ -313,10 +313,10 @@ pub async fn cross_protocol_transaction() -> OrbitResult<()> {
 |---------|---------|-------------|---------|-----------|
 | **Consistency Model** | External Consistency | Serializable | ACID | Serializable + Multi-Model |
 | **Consensus Protocol** | Paxos + TrueTime | Raft | Calvin | Actor 2PC + Vector Clocks |
-| **Multi-Model Transactions** | ❌ SQL Only | ❌ SQL Only | ✅ Multi-Model | ✅ Graph/Vector/TS/SQL |
-| **Cross-Protocol ACID** | ❌ SQL Only | ❌ SQL Only | ❌ FQL Only | ✅ Redis/SQL/gRPC/MCP |
+| **Multi-Model Transactions** |  SQL Only |  SQL Only |  Multi-Model |  Graph/Vector/TS/SQL |
+| **Cross-Protocol ACID** |  SQL Only |  SQL Only |  FQL Only |  Redis/SQL/gRPC/MCP |
 | **Infrastructure Requirements** | Atomic Clocks | Synchronized Clocks | Serverless | Standard Hardware |
-| **Horizontal Scalability** | ✅ Google Scale | ✅ Linear | ✅ Auto-Scale | ✅ Actor Distribution |
+| **Horizontal Scalability** |  Google Scale |  Linear |  Auto-Scale |  Actor Distribution |
 | **Operational Complexity** | Very High | High | Low (Serverless) | Medium |
 | **Vendor Lock-in** | Google Cloud | None | FaunaDB | None |
 

@@ -4,7 +4,7 @@ This document outlines the production-ready improvements made to the Orbit Deskt
 
 ## Completed Improvements
 
-### 1. Persistent Storage ✅
+### 1. Persistent Storage 
 
 - **Storage Module** (`src-tauri/src/storage.rs`): Implemented persistent storage for connections, settings, and query history
 - **Storage Location**: Data is stored in JSON format in the user's application data directory
@@ -14,7 +14,7 @@ This document outlines the production-ready improvements made to the Orbit Deskt
   - Version tracking for future migrations
   - Query history persistence (up to 1000 entries)
 
-### 2. Password Encryption ✅
+### 2. Password Encryption 
 
 - **Encryption Module** (`src-tauri/src/encryption.rs`): AES-256-GCM encryption for passwords
 - **Security Features**:
@@ -23,7 +23,7 @@ This document outlines the production-ready improvements made to the Orbit Deskt
   - Automatic key generation on first run
   - Key persistence across sessions
 
-### 3. Real Query Execution ✅
+### 3. Real Query Execution 
 
 - **Query Executor** (`src-tauri/src/queries.rs`): Implemented actual query execution
 - **Supported Protocols**:
@@ -36,7 +36,7 @@ This document outlines the production-ready improvements made to the Orbit Deskt
   - Result set conversion to JSON
   - EXPLAIN query support for PostgreSQL
 
-### 4. Connection Management ✅
+### 4. Connection Management 
 
 - **Persistent Connections**: Connections are saved to disk and restored on startup
 - **Connection Lifecycle**:
@@ -44,7 +44,7 @@ This document outlines the production-ready improvements made to the Orbit Deskt
   - Automatic password encryption
   - Connection metadata tracking (last used, query count)
 
-### 5. Settings Persistence ✅
+### 5. Settings Persistence 
 
 - **Settings Storage**: Application settings are persisted to disk
 - **Settings Include**:
@@ -53,7 +53,7 @@ This document outlines the production-ready improvements made to the Orbit Deskt
   - Query timeout
   - Auto-save preferences
 
-### 6. Query History ✅
+### 6. Query History 
 
 - **In-Memory History**: Query history is maintained in memory (up to 1000 queries)
 - **Per-Connection History**: History is filtered by connection ID
@@ -119,8 +119,8 @@ This document outlines the production-ready improvements made to the Orbit Deskt
 
 ```
 ~/.orbit-desktop/
-├── storage.json          # Main storage file
-└── .encryption_key       # Encryption key (restricted permissions)
+ storage.json          # Main storage file
+ .encryption_key       # Encryption key (restricted permissions)
 ```
 
 ### Data Flow

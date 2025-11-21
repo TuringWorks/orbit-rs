@@ -76,14 +76,14 @@ cargo run --example azure_iceberg_example --features iceberg-cold
 
 ## What's Included
 
-✅ **Full Iceberg Catalog Support**: Complete REST catalog integration with Azure
-✅ **Connection String Parsing**: Parses Azure connection strings
-✅ **Azurite Support**: Pre-configured defaults for local development
-✅ **Production Azure**: Support for Azure Storage accounts
-✅ **Integration Tests**: Full test suite with 100K row performance tests
-✅ **OpenDAL Integration**: Uses OpenDAL's Azblob service
-✅ **Storage Abstraction**: Unified API for S3 and Azure
-✅ **Documentation**: Complete setup and usage guides
+ **Full Iceberg Catalog Support**: Complete REST catalog integration with Azure
+ **Connection String Parsing**: Parses Azure connection strings
+ **Azurite Support**: Pre-configured defaults for local development
+ **Production Azure**: Support for Azure Storage accounts
+ **Integration Tests**: Full test suite with 100K row performance tests
+ **OpenDAL Integration**: Uses OpenDAL's Azblob service
+ **Storage Abstraction**: Unified API for S3 and Azure
+ **Documentation**: Complete setup and usage guides
 
 ## Key Components
 

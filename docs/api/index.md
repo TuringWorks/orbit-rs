@@ -10,7 +10,7 @@ permalink: /api/
 
 ---
 
-## 🚀 Getting Started with the API
+##  Getting Started with the API
 
 Orbit-RS provides multiple API interfaces for different use cases:
 
@@ -28,9 +28,9 @@ Orbit-RS provides multiple API interfaces for different use cases:
 
 ---
 
-## 📖 API Documentation Sections
+##  API Documentation Sections
 
-### 🎭 Orbit Client API
+###  Orbit Client API
 
 The primary Rust client library for interacting with Orbit-RS clusters.
 
@@ -57,7 +57,7 @@ let actor_ref = client.actor_reference::<MyActor>(
 - Automatic retries and failover
 - Distributed transaction support
 
-### 🎭 Actor System API
+###  Actor System API
 
 Distributed actor framework for building scalable applications.
 
@@ -79,7 +79,7 @@ trait MyActor: Addressable {
 - Cross-cluster message routing
 - Actor proxy generation
 
-### 🔄 Transaction API
+###  Transaction API
 
 ACID distributed transactions with 2-phase commit and Saga patterns.
 
@@ -105,9 +105,9 @@ coordinator.commit_transaction(&tx_id).await?;
 
 ---
 
-## 🔌 Protocol APIs
+##  Protocol APIs
 
-### 📊 PostgreSQL API
+###  PostgreSQL API
 
 Full PostgreSQL wire protocol compatibility for SQL operations.
 
@@ -129,7 +129,7 @@ SELECT content FROM documents ORDER BY embedding <-> '[0.1, 0.2, 0.3]' LIMIT 5;
 - Vector similarity search
 - Complex queries with JOINs, CTEs, window functions
 
-### 🔑 Redis API
+###  Redis API
 
 Redis RESP protocol compatibility for key-value operations.
 
@@ -160,7 +160,7 @@ FT.SEARCH idx "*=>[KNN 5 @embedding $query]" PARAMS 2 query "[0.1, 0.2, 0.3]"
 - Clustering support
 - Pub/sub messaging
 
-### 🤖 MCP API  
+###  MCP API  
 
 Model Context Protocol for AI agent integration.
 
@@ -186,9 +186,9 @@ Model Context Protocol for AI agent integration.
 
 ---
 
-## 📚 Reference Documentation
+##  Reference Documentation
 
-### 🔧 Configuration
+###  Configuration
 
 ```rust
 
@@ -202,7 +202,7 @@ pub struct OrbitClientConfig {
 }
 ```
 
-### 🎯 Error Handling
+###  Error Handling
 
 ```rust
 pub enum OrbitError {
@@ -214,7 +214,7 @@ pub enum OrbitError {
 }
 ```
 
-### 📊 Performance Monitoring
+###  Performance Monitoring
 
 ```rust
 pub struct ClientStats {
@@ -228,9 +228,9 @@ pub struct ClientStats {
 
 ---
 
-## 🛠️ Development Tools
+##  Development Tools
 
-### 📋 Code Generation
+###  Code Generation
 
 Generate actor proxies and protocol bindings:
 
@@ -243,7 +243,7 @@ orbit-codegen actors --input src/actors.rs --output src/generated/
 orbit-codegen protocols --proto schemas/ --output src/protocols/
 ```
 
-### 🧪 Testing
+###  Testing
 
 ```rust
 use orbit_testing::MockOrbitClient;
@@ -258,7 +258,7 @@ async fn test_actor_interaction() {
 }
 ```
 
-### 🔍 Debugging
+###  Debugging
 
 ```bash
 
@@ -274,35 +274,35 @@ export ORBIT_TRACE_TRANSACTIONS=true
 
 ---
 
-## 🌐 Language Bindings
+##  Language Bindings
 
-### 🦀 Rust (Native)
+###  Rust (Native)
 
-- **Status**: ✅ Complete
+- **Status**:  Complete
 - **Crate**: [`orbit-client`](https://crates.io/crates/orbit-client)
 - **Documentation**: [docs.rs](https://docs.rs/orbit-client)
 
-### ☕ Java/Spring Boot
+###  Java/Spring Boot
 
-- **Status**: ✅ Complete  
+- **Status**:  Complete  
 - **Package**: [`orbit-client-spring`](../JAVA_SPRING_INTEGRATION_SUMMARY.md)
 - **Integration**: Native JNI bindings with Spring Boot auto-configuration
 
-### 🐍 Python (Planned)
+###  Python (Planned)
 
-- **Status**: 🔄 In Development
+- **Status**:  In Development
 - **Package**: `orbit-client-py`
 - **Timeline**: Q2 2025
 
-### 🟦 TypeScript/Node.js (Planned)
+###  TypeScript/Node.js (Planned)
 
-- **Status**: 📋 Planned
+- **Status**:  Planned
 - **Package**: `@orbit-rs/client`
 - **Timeline**: Q3 2025
 
 ---
 
-## 📈 Performance Characteristics
+##  Performance Characteristics
 
 ### Throughput
 
@@ -324,21 +324,21 @@ export ORBIT_TRACE_TRANSACTIONS=true
 
 ---
 
-## 🤝 Support & Community
+##  Support & Community
 
-### 📖 Documentation
+###  Documentation
 
 - **[Quick Start Guide](../quick_start.md)** - Get started in 5 minutes
 - **[Architecture Overview](../overview.md)** - System design principles
 - **[Deployment Guide](../kubernetes_deployment.md)** - Production deployment
 
-### 💬 Community  
+###  Community  
 
 - **[Discord](https://discord.gg/orbit-rs)** - Real-time chat and support
 - **[GitHub Discussions](https://github.com/TuringWorks/orbit-rs/discussions)** - Q&A and feature requests
 - **[Stack Overflow](https://stackoverflow.com/questions/tagged/orbit-rs)** - Technical questions
 
-### 🐛 Issue Reporting
+###  Issue Reporting
 
 - **[Bug Reports](https://github.com/TuringWorks/orbit-rs/issues/new?template=bug_report.md)**
 - **[Feature Requests](https://github.com/TuringWorks/orbit-rs/issues/new?template=feature_request.md)**  
@@ -346,12 +346,12 @@ export ORBIT_TRACE_TRANSACTIONS=true
 
 ---
 
-## 📄 License
+##  License
 
 This API documentation is part of the Orbit-RS project and is licensed under the [Apache License 2.0](https://github.com/TuringWorks/orbit-rs/blob/main/LICENSE).
 
 ---
 
-**🔄 Last Updated**: October 2024  
-**📋 Version**: 0.1.0  
-**🌟 Status**: Production Ready
+** Last Updated**: October 2024  
+** Version**: 0.1.0  
+** Status**: Production Ready

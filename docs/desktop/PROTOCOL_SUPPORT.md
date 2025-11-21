@@ -4,7 +4,7 @@
 
 The Orbit Desktop UI currently supports **3 out of 9 protocols** that the Orbit server provides.
 
-### ✅ Supported Protocols (3/9)
+###  Supported Protocols (3/9)
 
 1. **PostgreSQL** (SQL)
    - Connection type: `PostgreSQL`
@@ -35,43 +35,43 @@ The Orbit Desktop UI currently supports **3 out of 9 protocols** that the Orbit 
      - Result display
    - Port: 6379
 
-### ❌ Missing Protocols (6/9)
+###  Missing Protocols (6/9)
 
 1. **MySQL** (Wire Protocol)
    - Port: 3306
    - Status: Not supported in UI
-   - Backend: ✅ Supported
+   - Backend:  Supported
    - Needed: MySQL connection type, MySQL query editor
 
 2. **CQL** (Cassandra Query Language)
    - Port: 9042
    - Status: Not supported in UI
-   - Backend: ✅ Supported
+   - Backend:  Supported
    - Needed: CQL connection type, CQL query editor with CQL syntax
 
 3. **Cypher** (Neo4j Graph Query Language)
    - Port: 7687
    - Status: Not supported in UI
-   - Backend: ✅ Supported
+   - Backend:  Supported
    - Needed: Cypher connection type, Cypher query editor
 
 4. **AQL** (ArangoDB Query Language)
    - Port: 8529
    - Status: Not supported in UI
-   - Backend: ✅ Supported
+   - Backend:  Supported
    - Needed: AQL connection type, AQL query editor
 
 5. **gRPC** (Actor System Management)
    - Port: 50051
    - Status: Not supported in UI
-   - Backend: ✅ Supported
+   - Backend:  Supported
    - Note: This is primarily for actor management, not query execution
    - Needed: gRPC client interface for actor operations
 
 6. **REST API** (HTTP/JSON)
    - Port: 8080
    - Status: Partially supported (OrbitQL uses REST under the hood)
-   - Backend: ✅ Supported
+   - Backend:  Supported
    - Note: Currently used indirectly via OrbitQL connection
    - Needed: Direct REST API query interface
 
@@ -119,10 +119,10 @@ pub enum ConnectionType {
     PostgreSQL,
     OrbitQL,
     Redis,
-    MySQL,      // ❌ Missing
-    CQL,         // ❌ Missing
-    Cypher,      // ❌ Missing
-    AQL,         // ❌ Missing
+    MySQL,      //  Missing
+    CQL,         //  Missing
+    Cypher,      //  Missing
+    AQL,         //  Missing
 }
 ```
 
@@ -135,20 +135,20 @@ export enum ConnectionType {
   PostgreSQL = 'PostgreSQL',
   OrbitQL = 'OrbitQL',
   Redis = 'Redis',
-  MySQL = 'MySQL',      // ❌ Missing
-  CQL = 'CQL',          // ❌ Missing
-  Cypher = 'Cypher',    // ❌ Missing
-  AQL = 'AQL',          // ❌ Missing
+  MySQL = 'MySQL',      //  Missing
+  CQL = 'CQL',          //  Missing
+  Cypher = 'Cypher',    //  Missing
+  AQL = 'AQL',          //  Missing
 }
 
 export enum QueryType {
   SQL = 'SQL',
   OrbitQL = 'OrbitQL',
   Redis = 'Redis',
-  MySQL = 'MySQL',      // ❌ Missing
-  CQL = 'CQL',          // ❌ Missing
-  Cypher = 'Cypher',    // ❌ Missing
-  AQL = 'AQL',          // ❌ Missing
+  MySQL = 'MySQL',      //  Missing
+  CQL = 'CQL',          //  Missing
+  Cypher = 'Cypher',    //  Missing
+  AQL = 'AQL',          //  Missing
 }
 ```
 

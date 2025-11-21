@@ -10,7 +10,7 @@ ArangoDB is a multi-model NoSQL database that combines graph, document, and key-
 
 ## Planned Features
 
-### 🎯 **Phase 18: ArangoDB Foundation**
+###  **Phase 18: ArangoDB Foundation**
 
 #### Multi-Model Core Actors
 
@@ -27,7 +27,7 @@ ArangoDB is a multi-model NoSQL database that combines graph, document, and key-
 - **Result Streaming**: Efficient cursor-based result pagination
 - **Transaction Support**: ACID transactions across multiple data models
 
-### 🚀 **Phase 19: Advanced Multi-Model Operations**
+###  **Phase 19: Advanced Multi-Model Operations**
 
 #### Document Database Features
 
@@ -53,7 +53,7 @@ ArangoDB is a multi-model NoSQL database that combines graph, document, and key-
 - **Phrase Queries**: Proximity search and phrase matching
 - **Faceted Search**: Multi-dimensional search with aggregations
 
-### 📊 **Phase 20: Enterprise Multi-Model Features**
+###  **Phase 20: Enterprise Multi-Model Features**
 
 #### Geospatial Capabilities
 

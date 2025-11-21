@@ -10,15 +10,15 @@ category: documentation
 
 After analyzing orbit-rs's specific requirements for actor lease management, cluster coordination, and catastrophic failure recovery, there are several alternatives to LSM Trees that may be **superior** for this use case:
 
-1. **🥇 Copy-on-Write B+ Trees** - Best overall fit
-2. **🥈 Hybrid WAL + Memory-Mapped Files** - Excellent performance
-3. **🥉 Append-Only Log with Periodic Snapshots** - Simplest implementation
-4. **🔄 Actor-Specific Persistence Layer** - Most specialized
-5. **🏗️ RocksDB/LevelDB Integration** - Proven solution
+1. ** Copy-on-Write B+ Trees** - Best overall fit
+2. ** Hybrid WAL + Memory-Mapped Files** - Excellent performance
+3. ** Append-Only Log with Periodic Snapshots** - Simplest implementation
+4. ** Actor-Specific Persistence Layer** - Most specialized
+5. ** RocksDB/LevelDB Integration** - Proven solution
 
 ## Detailed Analysis
 
-### 1. 🥇 **Copy-on-Write B+ Trees** (BEST FIT)
+### 1.  **Copy-on-Write B+ Trees** (BEST FIT)
 
 ```rust
 pub struct CowBTreePersistence {
@@ -82,7 +82,7 @@ impl CowBTreePersistence {
 
 ---
 
-### 2. 🥈 **Hybrid WAL + Memory-Mapped Files**
+### 2.  **Hybrid WAL + Memory-Mapped Files**
 
 ```rust
 pub struct MMapPersistence {
@@ -151,7 +151,7 @@ impl MMapPersistence {
 
 ---
 
-### 3. 🥉 **Append-Only Log + Periodic Snapshots**
+### 3.  **Append-Only Log + Periodic Snapshots**
 
 ```rust
 pub struct AppendOnlyPersistence {
@@ -233,7 +233,7 @@ impl AppendOnlyPersistence {
 
 ---
 
-### 4. 🔄 **Actor-Specific Persistence Layer**
+### 4.  **Actor-Specific Persistence Layer**
 
 The most specialized approach - build persistence around actor system semantics:
 
@@ -298,7 +298,7 @@ impl LeaseStore {
 
 ---
 
-### 5. 🏗️ **RocksDB/LevelDB Integration**
+### 5.  **RocksDB/LevelDB Integration**
 
 Use battle-tested LSM implementation with orbit-rs optimizations:
 
@@ -366,7 +366,7 @@ impl RocksDBPersistence {
 
 ---
 
-## 📊 **Comparative Analysis**
+##  **Comparative Analysis**
 
 | Implementation | Write Latency | Read Latency | Recovery Time | Complexity | Memory Usage |
 |----------------|---------------|--------------|---------------|------------|--------------|
@@ -377,7 +377,7 @@ impl RocksDBPersistence {
 | **RocksDB** | 10-50μs | 2-10μs | 3-10s | Low | High |
 | **LSM Trees** | 10-50μs | 2-5μs | 5-15s | High | High |
 
-## 🎯 **Recommendation**
+##  **Recommendation**
 
 For orbit-rs, I recommend the **Copy-on-Write B+ Trees** approach because:
 
@@ -403,7 +403,7 @@ For orbit-rs, I recommend the **Copy-on-Write B+ Trees** approach because:
 
 If development resources are limited, **MMap + WAL** provides 80% of the benefits with 40% of the complexity.
 
-## 🚀 **Next Steps**
+##  **Next Steps**
 
 1. **Prototype COW B+ Tree** core operations (1 week)
 2. **Benchmark against current Memory provider** (actor lease workload)

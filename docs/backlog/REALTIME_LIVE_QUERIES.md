@@ -6,20 +6,20 @@ category: backlog
 
 ## Real-Time Live Queries & Subscriptions - Feature Backlog
 
-## 📋 Epic Overview
+##  Epic Overview
 
 **Epic ID**: ORBIT-021  
 **Epic Title**: Real-Time Live Query Engine & WebSocket Subscriptions  
-**Priority**: 🔥 Critical  
+**Priority**:  Critical  
 **Phase**: Q2 2025  
 **Total Effort**: 12-14 weeks  
 **Status**: Planned  
 
-## 🎯 Epic Description
+##  Epic Description
 
 Implement a comprehensive real-time query subscription system that enables live queries, change streams, and collaborative features. Applications can subscribe to query results and receive automatic updates when underlying data changes, enabling real-time dashboards, collaborative applications, and live data synchronization.
 
-## 📈 Business Value
+##  Business Value
 
 ### Primary Benefits
 
@@ -37,7 +37,7 @@ Implement a comprehensive real-time query subscription system that enables live 
 5. **Financial Trading**: Real-time price feeds and portfolio updates
 6. **Chat Applications**: Instant messaging and presence indicators
 
-## 🏗️ Technical Architecture
+##  Technical Architecture
 
 ### Core Components
 
@@ -248,7 +248,7 @@ session.on('presence', (users) => {
   - User session management with timeouts
   - Privacy controls for presence information
 
-#### 🔧 Technical Tasks (Phase 21.2)
+####  Technical Tasks (Phase 21.2)
 
 - [ ] **ORBIT-021-T011**: Implement complex query subscription engine
 - [ ] **ORBIT-021-T012**: Build incremental aggregation updates
@@ -263,7 +263,7 @@ session.on('presence', (users) => {
 
 ### Phase 21.3: Performance & Scalability (3-4 weeks)
 
-#### 📋 User Stories
+####  User Stories
 
 #### ORBIT-021-007: High-Performance Subscriptions
 
@@ -285,7 +285,7 @@ session.on('presence', (users) => {
   - Debouncing and throttling for high-frequency changes
   - Predictive prefetching for likely queries
 
-#### 🔧 Technical Tasks
+####  Technical Tasks
 
 - [ ] **ORBIT-021-T021**: Optimize subscription storage with compressed indexes
 - [ ] **ORBIT-021-T022**: Implement batch change processing
@@ -298,7 +298,7 @@ session.on('presence', (users) => {
 - [ ] **ORBIT-021-T029**: Add memory usage optimization
 - [ ] **ORBIT-021-T030**: Implement predictive query optimization
 
-## 🧪 Testing Strategy
+##  Testing Strategy
 
 ### Unit Testing
 
@@ -324,7 +324,7 @@ session.on('presence', (users) => {
 - WebSocket connection limits
 - Subscription cleanup efficiency
 
-## 📏 Success Metrics
+##  Success Metrics
 
 ### Technical Metrics
 
@@ -341,7 +341,7 @@ session.on('presence', (users) => {
 - **Performance Improvement**: 80% reduction in polling-based requests
 - **Collaboration Usage**: 40% of applications implement collaborative features
 
-## 🚀 Innovation Opportunities
+##  Innovation Opportunities
 
 ### Future Enhancements
 
@@ -360,7 +360,7 @@ session.on('presence', (users) => {
 
 This real-time live query system will enable Orbit-RS to support the next generation of collaborative and reactive applications while maintaining the performance and reliability advantages of our distributed architecture.
 
-## 📅 Implementation Timeline
+##  Implementation Timeline
 
 | Phase | Duration | Deliverables | Dependencies |
 |-------|----------|--------------|--------------|

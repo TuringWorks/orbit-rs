@@ -696,8 +696,8 @@ if failed_auths.len() > threshold {
 
 ## Additional Resources
 
-- [Implementation Summary](../ADVANCED_FEATURES_IMPLEMENTATION.md)
-- [Architecture Documentation](../ORBIT_ARCHITECTURE.md)
+- [Implementation Summary](wip/ADVANCED_FEATURES_IMPLEMENTATION.md)
+- [Architecture Documentation](architecture/ORBIT_ARCHITECTURE.md)
 - [API Documentation](https://turingworks.github.io/orbit-rs/api/)
 - [Examples](../examples/)
 

@@ -516,10 +516,10 @@ Orbit's graph database is designed to be a drop-in replacement for RedisGraph:
 
 ### Command Compatibility
 
-- ✅ All core GRAPH.* commands supported
-- ✅ Same Cypher syntax and semantics
-- ✅ Compatible result formats
-- ✅ Same configuration parameters
+-  All core GRAPH.* commands supported
+-  Same Cypher syntax and semantics
+-  Compatible result formats
+-  Same configuration parameters
 
 ### Key Differences
 

@@ -6,7 +6,7 @@ category: documentation
 
 # Vector Commands Documentation
 
-## 🚀 Features
+##  Features
 
 - **Full Redis Protocol Compatibility**: All commands work with standard Redis clients
 - **Multiple Similarity Metrics**: Cosine, Euclidean, Dot Product, and Manhattan distance
@@ -15,7 +15,7 @@ category: documentation
 - **Efficient Search**: K-nearest neighbors and similarity search with thresholds
 - **RedisSearch Compatibility**: FT.* commands for existing RedisSearch applications
 
-## 📋 VECTOR.* Commands
+##  VECTOR.* Commands
 
 ### Basic Vector Operations
 
@@ -204,7 +204,7 @@ VECTOR.KNN my-index "0.1,0.2,0.3,0.4" 3 EUCLIDEAN
 
 **Returns:** Array of results, each containing `[id, score]`
 
-## 🚀 FT.* Commands (RedisSearch Compatible)
+##  FT.* Commands (RedisSearch Compatible)
 
 ### Index Management
 
@@ -301,7 +301,7 @@ FT.SEARCH my-ft-index "0.1,0.2,0.3" 5 DISTANCE_METRIC COSINE
 
 **Returns:** Array of search results
 
-## 📊 Similarity Metrics
+##  Similarity Metrics
 
 | Metric | Aliases | Description | Use Case |
 |--------|---------|-------------|----------|
@@ -310,7 +310,7 @@ FT.SEARCH my-ft-index "0.1,0.2,0.3" 5 DISTANCE_METRIC COSINE
 | `DOT` | `DOTPRODUCT`, `IP`, `INNER` | Dot product similarity | When magnitude matters |
 | `MANHATTAN` | `L1`, `MAN` | Manhattan distance (L1 norm) | High-dimensional sparse data |
 
-## 🔄 Vector Data Formats
+##  Vector Data Formats
 
 Vectors can be provided in multiple formats:
 
@@ -324,7 +324,7 @@ VECTOR.ADD my-index doc1 "0.1,0.2,0.3,0.4,0.5"
 VECTOR.ADD my-index doc1 ["0.1", "0.2", "0.3", "0.4", "0.5"]
 ```
 
-## 📈 Performance Tips
+##  Performance Tips
 
 1. **Use appropriate dimensions**: Higher dimensions provide more precision but slower search
 2. **Choose the right metric**: 
@@ -334,7 +334,7 @@ VECTOR.ADD my-index doc1 ["0.1", "0.2", "0.3", "0.4", "0.5"]
 3. **Leverage metadata filtering**: Pre-filter by metadata before vector similarity
 4. **Set reasonable thresholds**: Avoid returning too many low-similarity results
 
-## 🛠️ Usage Examples
+##  Usage Examples
 
 ### Complete Workflow Example
 
@@ -385,7 +385,7 @@ FT.SEARCH semantic-search "0.1,0.2,..." 10 DISTANCE_METRIC COSINE
 FT.INFO semantic-search
 ```
 
-## 🔧 Integration with Applications
+##  Integration with Applications
 
 ### Python Example
 ```python
@@ -423,7 +423,7 @@ const results = await client.sendCommand([
 ]);
 ```
 
-## 🚨 Error Handling
+##  Error Handling
 
 Common error responses:
 
@@ -433,7 +433,7 @@ Common error responses:
 - `ERR limit must be positive`: Invalid limit value
 - `ERR actor error`: Internal server error
 
-## 🎯 Advanced Use Cases
+##  Advanced Use Cases
 
 ### Semantic Search
 ```redis

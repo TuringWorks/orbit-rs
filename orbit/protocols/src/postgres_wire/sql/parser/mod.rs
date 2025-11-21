@@ -179,6 +179,7 @@ impl SqlParser {
         };
 
         match &self.current_token {
+            Some(Token::Database) => ddl::parse_create_database(self),
             Some(Token::Table) => ddl::parse_create_table(self),
             Some(Token::Unique) => {
                 // CREATE UNIQUE INDEX
@@ -206,6 +207,7 @@ impl SqlParser {
                 message: format!("Unexpected token after CREATE: {token:?}"),
                 position: self.position,
                 expected: vec![
+                    "DATABASE".to_string(),
                     "TABLE".to_string(),
                     "UNIQUE".to_string(),
                     "INDEX".to_string(),
@@ -220,7 +222,7 @@ impl SqlParser {
             None => Err(ParseError {
                 message: "Expected object type after CREATE".to_string(),
                 position: self.position,
-                expected: vec!["TABLE, UNIQUE INDEX, INDEX, OR REPLACE VIEW, VIEW, SCHEMA, or EXTENSION".to_string()],
+                expected: vec!["DATABASE, TABLE, UNIQUE INDEX, INDEX, OR REPLACE VIEW, VIEW, SCHEMA, or EXTENSION".to_string()],
                 found: None,
             }),
         }
@@ -254,6 +256,7 @@ impl SqlParser {
         self.expect(Token::Drop)?;
 
         match &self.current_token {
+            Some(Token::Database) => ddl::parse_drop_database(self),
             Some(Token::Table) => ddl::parse_drop_table(self),
             Some(Token::Index) => ddl::parse_drop_index(self),
             Some(Token::View) => ddl::parse_drop_view(self),
@@ -264,6 +267,7 @@ impl SqlParser {
                 message: format!("Unexpected token after DROP: {token:?}"),
                 position: self.position,
                 expected: vec![
+                    "DATABASE".to_string(),
                     "TABLE".to_string(),
                     "INDEX".to_string(),
                     "VIEW".to_string(),
@@ -276,7 +280,7 @@ impl SqlParser {
             None => Err(ParseError {
                 message: "Expected object type after DROP".to_string(),
                 position: self.position,
-                expected: vec!["TABLE, INDEX, VIEW, SCHEMA, or EXTENSION".to_string()],
+                expected: vec!["DATABASE, TABLE, INDEX, VIEW, SCHEMA, or EXTENSION".to_string()],
                 found: None,
             }),
         }

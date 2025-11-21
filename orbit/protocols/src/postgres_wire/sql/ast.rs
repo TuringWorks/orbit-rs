@@ -9,11 +9,13 @@ use crate::postgres_wire::sql::types::{SqlType, SqlValue};
 #[derive(Debug, Clone, PartialEq)]
 pub enum Statement {
     // Data Definition Language (DDL)
+    CreateDatabase(CreateDatabaseStatement),
     CreateTable(CreateTableStatement),
     CreateIndex(CreateIndexStatement),
     CreateView(CreateViewStatement),
     CreateSchema(CreateSchemaStatement),
     AlterTable(AlterTableStatement),
+    DropDatabase(DropDatabaseStatement),
     DropTable(DropTableStatement),
     DropIndex(DropIndexStatement),
     DropView(DropViewStatement),
@@ -48,6 +50,24 @@ pub enum Statement {
 }
 
 // ===== DDL Statements =====
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateDatabaseStatement {
+    pub if_not_exists: bool,
+    pub name: String,
+    pub owner: Option<String>,
+    pub template: Option<String>,
+    pub encoding: Option<String>,
+    pub locale: Option<String>,
+    pub connection_limit: Option<i32>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DropDatabaseStatement {
+    pub if_exists: bool,
+    pub names: Vec<String>,
+    pub force: bool,
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct CreateTableStatement {

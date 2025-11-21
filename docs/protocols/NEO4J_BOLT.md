@@ -12,7 +12,7 @@ Neo4j is the world's leading graph database, using the Bolt protocol for client-
 
 ## Planned Features
 
-### 🎯 **Phase 13: Neo4j Foundation**
+###  **Phase 13: Neo4j Foundation**
 
 #### Core Graph Actors
 
@@ -28,7 +28,7 @@ Neo4j is the world's leading graph database, using the Bolt protocol for client-
 - **Message Types**: All Bolt message types (HELLO, RUN, PULL, DISCARD, etc.)
 - **Streaming Results**: Efficient result streaming for large graph traversals
 
-### 🚀 **Phase 14: Advanced Graph Operations**
+###  **Phase 14: Advanced Graph Operations**
 
 #### Cypher Query Language
 
@@ -44,7 +44,7 @@ Neo4j is the world's leading graph database, using the Bolt protocol for client-
 - **Constraint Support**: Uniqueness and existence constraints
 - **Schema Management**: Node labels and relationship types
 
-### 📊 **Phase 15: Enterprise Graph Features**
+###  **Phase 15: Enterprise Graph Features**
 
 #### Advanced Analytics Queries
 

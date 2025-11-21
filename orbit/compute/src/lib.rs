@@ -99,6 +99,14 @@ pub mod gpu_backend;
 #[cfg(target_os = "macos")]
 pub mod gpu_metal;
 
+/// NVIDIA CUDA GPU acceleration (Linux/Windows)
+#[cfg(feature = "gpu-cuda")]
+pub mod gpu_cuda;
+
+/// AMD ROCm GPU acceleration (Linux only)
+#[cfg(feature = "gpu-rocm")]
+pub mod gpu_rocm;
+
 /// Vulkan GPU acceleration (cross-platform)
 #[cfg(feature = "gpu-vulkan")]
 pub mod gpu_vulkan;
