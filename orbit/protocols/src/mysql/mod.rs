@@ -24,6 +24,8 @@
 //!     max_connections: 1000,
 //!     authentication_enabled: false,
 //!     server_version: "8.0.0-Orbit".to_string(),
+//!     username: None,
+//!     password: None,
 //! };
 //!
 //! let adapter = MySqlAdapter::new(config).await?;
@@ -53,6 +55,10 @@ pub struct MySqlConfig {
     pub authentication_enabled: bool,
     /// Server version string
     pub server_version: String,
+    /// Username for authentication (if authentication_enabled is true)
+    pub username: Option<String>,
+    /// Password for authentication (if authentication_enabled is true)
+    pub password: Option<String>,
 }
 
 impl Default for MySqlConfig {
@@ -62,6 +68,8 @@ impl Default for MySqlConfig {
             max_connections: 1000,
             authentication_enabled: false,
             server_version: "8.0.0-Orbit".to_string(),
+            username: None,
+            password: None,
         }
     }
 }

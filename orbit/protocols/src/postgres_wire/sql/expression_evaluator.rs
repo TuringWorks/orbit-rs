@@ -19,6 +19,7 @@ use crate::postgres_wire::sql::{
     },
     types::{SqlType, SqlValue},
 };
+use chrono::Datelike;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 
@@ -351,6 +352,7 @@ impl ExpressionEvaluator {
             "LOWER" => self.evaluate_lower(&args),
             "SUBSTRING" => self.evaluate_substring(&args),
             "REPLACE" => self.evaluate_replace(&args),
+            "CONCAT" => self.evaluate_concat(&args),
 
             // Math functions
             "ABS" => self.evaluate_abs(&args),
@@ -361,9 +363,12 @@ impl ExpressionEvaluator {
 
             // Date functions
             "NOW" => self.evaluate_now(&args),
-            "CURRENT_DATE" => self.evaluate_current_date(&args),
+            "CURRENT_DATE" | "CURDATE" => self.evaluate_current_date(&args),
             "CURRENT_TIME" => self.evaluate_current_time(&args),
             "CURRENT_TIMESTAMP" => self.evaluate_current_timestamp(&args),
+            "YEAR" => self.evaluate_year(&args),
+            "MONTH" => self.evaluate_month(&args),
+            "DAY" | "DAYOFMONTH" => self.evaluate_day(&args),
 
             // Vector functions
             "VECTOR_DIMS" => self.evaluate_vector_dims(&args),
@@ -1096,6 +1101,111 @@ impl ExpressionEvaluator {
             SqlValue::Null => Ok(SqlValue::Null),
             _ => Err(ProtocolError::PostgresError(
                 "VECTOR_NORM requires vector argument".to_string(),
+            )),
+        }
+    }
+
+    fn evaluate_concat(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.is_empty() {
+            return Ok(SqlValue::Text(String::new()));
+        }
+
+        let mut result = String::new();
+        for arg in args {
+            if !arg.is_null() {
+                result.push_str(&arg.to_postgres_string());
+            }
+        }
+
+        Ok(SqlValue::Text(result))
+    }
+
+    fn evaluate_year(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "YEAR requires exactly one argument".to_string(),
+            ));
+        }
+
+        match &args[0] {
+            SqlValue::Date(date) => Ok(SqlValue::Integer(date.year() as i32)),
+            SqlValue::TimestampWithTimezone(ts) => {
+                let date = ts.date_naive();
+                Ok(SqlValue::Integer(date.year() as i32))
+            }
+            SqlValue::Text(s) => {
+                // Try to parse as date
+                if let Ok(date) = chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d") {
+                    Ok(SqlValue::Integer(date.year() as i32))
+                } else {
+                    Err(ProtocolError::PostgresError(
+                        format!("YEAR requires date argument, got: {}", s),
+                    ))
+                }
+            }
+            SqlValue::Null => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "YEAR requires date argument".to_string(),
+            )),
+        }
+    }
+
+    fn evaluate_month(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "MONTH requires exactly one argument".to_string(),
+            ));
+        }
+
+        match &args[0] {
+            SqlValue::Date(date) => Ok(SqlValue::Integer(date.month() as i32)),
+            SqlValue::TimestampWithTimezone(ts) => {
+                let date = ts.date_naive();
+                Ok(SqlValue::Integer(date.month() as i32))
+            }
+            SqlValue::Text(s) => {
+                // Try to parse as date
+                if let Ok(date) = chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d") {
+                    Ok(SqlValue::Integer(date.month() as i32))
+                } else {
+                    Err(ProtocolError::PostgresError(
+                        format!("MONTH requires date argument, got: {}", s),
+                    ))
+                }
+            }
+            SqlValue::Null => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "MONTH requires date argument".to_string(),
+            )),
+        }
+    }
+
+    fn evaluate_day(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 1 {
+            return Err(ProtocolError::PostgresError(
+                "DAY requires exactly one argument".to_string(),
+            ));
+        }
+
+        match &args[0] {
+            SqlValue::Date(date) => Ok(SqlValue::Integer(date.day() as i32)),
+            SqlValue::TimestampWithTimezone(ts) => {
+                let date = ts.date_naive();
+                Ok(SqlValue::Integer(date.day() as i32))
+            }
+            SqlValue::Text(s) => {
+                // Try to parse as date
+                if let Ok(date) = chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d") {
+                    Ok(SqlValue::Integer(date.day() as i32))
+                } else {
+                    Err(ProtocolError::PostgresError(
+                        format!("DAY requires date argument, got: {}", s),
+                    ))
+                }
+            }
+            SqlValue::Null => Ok(SqlValue::Null),
+            _ => Err(ProtocolError::PostgresError(
+                "DAY requires date argument".to_string(),
             )),
         }
     }

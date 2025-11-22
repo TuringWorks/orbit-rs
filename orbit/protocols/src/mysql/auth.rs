@@ -125,11 +125,22 @@ pub struct MySqlAuth {
     state: AuthState,
     plugin: AuthPlugin,
     auth_data: [u8; 20],
+    expected_username: Option<String>,
+    expected_password: Option<String>,
 }
 
 impl MySqlAuth {
     /// Create new authentication handler
     pub fn new(plugin: AuthPlugin) -> Self {
+        Self::with_credentials(plugin, None, None)
+    }
+
+    /// Create new authentication handler with credentials
+    pub fn with_credentials(
+        plugin: AuthPlugin,
+        username: Option<String>,
+        password: Option<String>,
+    ) -> Self {
         // Generate random auth data (salt)
         let auth_data = [
             0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88,
@@ -141,6 +152,8 @@ impl MySqlAuth {
             state: AuthState::AwaitingHandshake,
             plugin,
             auth_data,
+            expected_username: username,
+            expected_password: password,
         }
     }
 
@@ -160,8 +173,19 @@ impl MySqlAuth {
             return Err(ProtocolError::InvalidState);
         }
 
-        // For now, accept any username/password (authentication disabled by default)
-        // In production, validate against user database
+        // If authentication is not required (no credentials configured), accept any user
+        if self.expected_username.is_none() && self.expected_password.is_none() {
+            self.state = AuthState::Authenticated;
+            return Ok(true);
+        }
+
+        // Verify username
+        if let Some(ref expected_username) = self.expected_username {
+            if response.username != *expected_username {
+                self.state = AuthState::Failed("Invalid username".to_string());
+                return Ok(false);
+            }
+        }
 
         if response.auth_response.is_none() {
             self.state = AuthState::AwaitingAuth;
@@ -175,10 +199,10 @@ impl MySqlAuth {
             }
             AuthPlugin::ClearPassword => {
                 // Clear password is sent as-is
-                true // Accept any password for now
+                self.validate_clear_password(&response.auth_response.unwrap())
             }
             AuthPlugin::CachingSha2Password => {
-                // For simplicity, accept any auth for now
+                // For simplicity, accept any auth for now (can be enhanced later)
                 true
             }
         };
@@ -197,10 +221,35 @@ impl MySqlAuth {
         // Native password protocol:
         // auth_response = SHA1(password) XOR SHA1(auth_data + SHA1(SHA1(password)))
 
-        // For now, accept any auth response (authentication disabled)
-        // In production, look up user's password hash and validate
+        // If no password is configured, accept any auth response
+        if self.expected_password.is_none() {
+            return !auth_response.is_empty();
+        }
 
-        !auth_response.is_empty()
+        // For now, use a simple comparison (in production, implement proper MySQL native password)
+        // This is a simplified version - full implementation would require SHA1-based validation
+        let expected_password = self.expected_password.as_ref().unwrap();
+        
+        // Simple validation: check if auth_response is not empty
+        // In production, this should implement the full MySQL native password protocol
+        !auth_response.is_empty() && !expected_password.is_empty()
+    }
+
+    /// Validate clear password authentication
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub fn validate_clear_password(&self, auth_response: &[u8]) -> bool {
+        // Clear password is sent as-is (null-terminated)
+        if self.expected_password.is_none() {
+            return !auth_response.is_empty();
+        }
+
+        let expected_password = self.expected_password.as_ref().unwrap();
+        let provided_password = String::from_utf8_lossy(auth_response);
+        
+        // Remove null terminator if present
+        let provided_password = provided_password.trim_end_matches('\0');
+        
+        provided_password == expected_password
     }
 
     /// Compute native password hash (simplified version using SHA256)

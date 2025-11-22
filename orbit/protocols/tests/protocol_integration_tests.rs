@@ -82,6 +82,8 @@ mod mysql_tests {
             max_connections: 100,
             authentication_enabled: false,
             server_version: "8.0.0-Orbit-Test".to_string(),
+            username: None,
+            password: None,
         };
 
         let adapter = MySqlAdapter::new(config).await;
@@ -163,6 +165,8 @@ mod integration_tests {
             max_connections: 100,
             authentication_enabled: false,
             server_version: "8.0.0-Orbit-Test".to_string(),
+            username: None,
+            password: None,
         };
 
         let cql_adapter = CqlAdapter::new(cql_config).await;

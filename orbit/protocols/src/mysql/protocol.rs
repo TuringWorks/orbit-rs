@@ -60,6 +60,104 @@ impl MySqlCommand {
     }
 }
 
+/// MySQL error codes (from MySQL 8.0 error reference)
+pub mod error_codes {
+        /// Access denied for user
+        pub const ER_ACCESS_DENIED: u16 = 1045;
+        /// No database selected
+        pub const ER_NO_DB: u16 = 1046;
+        /// Unknown command
+        pub const ER_UNKNOWN_COM_ERROR: u16 = 1047;
+        /// Bad database error
+        pub const ER_BAD_DB_ERROR: u16 = 1049;
+        /// Table already exists
+        pub const ER_TABLE_EXISTS: u16 = 1050;
+        /// Unknown table
+        pub const ER_BAD_TABLE: u16 = 1051;
+        /// Unknown column
+        pub const ER_BAD_FIELD: u16 = 1054;
+        /// Wrong value count
+        pub const ER_WRONG_VALUE_COUNT: u16 = 1058;
+        /// Duplicate entry
+        pub const ER_DUP_ENTRY: u16 = 1062;
+        /// Syntax error
+        pub const ER_PARSE_ERROR: u16 = 1064;
+        /// Syntax error (alias)
+        pub const ER_SYNTAX_ERROR: u16 = 1064;
+        /// Database access denied
+        pub const ER_DBACCESS_DENIED_ERROR: u16 = 1044;
+        /// Table access denied
+        pub const ER_TABLEACCESS_DENIED_ERROR: u16 = 1142;
+        /// Column access denied
+        pub const ER_COLUMNACCESS_DENIED_ERROR: u16 = 1143;
+        /// Illegal grant for table
+        pub const ER_ILLEGAL_GRANT_FOR_TABLE: u16 = 1144;
+        /// Non-existing grant
+        pub const ER_NONEXISTING_GRANT: u16 = 1145;
+        /// Table doesn't exist
+        pub const ER_NO_SUCH_TABLE: u16 = 1146;
+        /// Cannot user
+        pub const ER_CANNOT_USER: u16 = 1396;
+        /// Too many user connections
+        pub const ER_TOO_MANY_USER_CONNECTIONS: u16 = 1203;
+        /// Unknown MySQL error
+        pub const ER_UNKNOWN_ERROR: u16 = 2000;
+}
+
+/// Map ProtocolError to MySQL error code
+pub fn map_error_to_mysql_code(error: &crate::error::ProtocolError) -> u16 {
+    use crate::error::ProtocolError;
+    use error_codes::*;
+        
+        match error {
+            ProtocolError::ParseError(_) => ER_PARSE_ERROR,
+            ProtocolError::PostgresError(msg) => {
+                // Check for specific SQL errors
+                let msg_lower = msg.to_lowercase();
+                if msg_lower.contains("does not exist") || msg_lower.contains("not found") {
+                    if msg_lower.contains("table") {
+                        ER_NO_SUCH_TABLE
+                    } else if msg_lower.contains("column") || msg_lower.contains("field") {
+                        ER_BAD_FIELD
+                    } else if msg_lower.contains("database") || msg_lower.contains("schema") {
+                        ER_BAD_DB_ERROR
+                    } else {
+                        ER_BAD_TABLE
+                    }
+                } else if msg_lower.contains("already exists") || msg_lower.contains("duplicate") {
+                    ER_DUP_ENTRY
+                } else if msg_lower.contains("syntax") || msg_lower.contains("parse") {
+                    ER_SYNTAX_ERROR
+                } else if msg_lower.contains("table exists") {
+                    ER_TABLE_EXISTS
+                } else if msg_lower.contains("wrong value count") || msg_lower.contains("column count") {
+                    ER_WRONG_VALUE_COUNT
+                } else if msg_lower.contains("access denied") || msg_lower.contains("permission") {
+                    if msg_lower.contains("database") {
+                        ER_DBACCESS_DENIED_ERROR
+                    } else if msg_lower.contains("table") {
+                        ER_TABLEACCESS_DENIED_ERROR
+                    } else if msg_lower.contains("column") {
+                        ER_COLUMNACCESS_DENIED_ERROR
+                    } else {
+                        ER_ACCESS_DENIED
+                    }
+                } else {
+                    ER_UNKNOWN_ERROR
+                }
+            }
+            ProtocolError::AuthenticationError(_) => ER_ACCESS_DENIED,
+            ProtocolError::AuthorizationError(_) => ER_ACCESS_DENIED,
+            ProtocolError::InvalidOpcode(_) => ER_UNKNOWN_COM_ERROR,
+            ProtocolError::IncompleteFrame => ER_UNKNOWN_ERROR,
+            ProtocolError::InvalidUtf8(_) => ER_PARSE_ERROR,
+            ProtocolError::InvalidStatement(_) => ER_PARSE_ERROR,
+            ProtocolError::ConnectionError(_) => ER_UNKNOWN_ERROR,
+            ProtocolError::ConnectionClosed => ER_UNKNOWN_ERROR,
+            _ => ER_UNKNOWN_ERROR,
+        }
+}
+
 /// MySQL packet types
 pub struct MySqlPacket;
 
@@ -84,6 +182,13 @@ impl MySqlPacket {
         buf.put(&b"HY000"[..]); // Generic SQL state
         buf.put(message.as_bytes());
         buf.freeze()
+    }
+
+    /// Build ERROR packet from a ProtocolError
+    pub fn error_from_protocol_error(error: &crate::error::ProtocolError) -> Bytes {
+        let error_code = map_error_to_mysql_code(error);
+        let message = error.to_string();
+        Self::error(error_code, &message)
     }
 
     /// Build EOF packet

@@ -48,6 +48,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         max_connections: 1000,
         authentication_enabled: false,
         server_version: "8.0.0-Orbit".to_string(),
+        username: None,
+        password: None,
     };
 
     println!("📋 Configuration:");

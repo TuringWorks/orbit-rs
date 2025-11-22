@@ -1050,9 +1050,71 @@ impl SqlExecutor {
             }
 
             Ok(ExecutionResult::Insert { count })
+        } else if let InsertSource::Query(select_stmt) = stmt.source {
+            // INSERT ... SELECT
+            // Execute the SELECT statement first
+            let select_result = self.execute_select(*select_stmt.clone()).await?;
+            
+            // Extract rows from SELECT result
+            let rows_to_insert = match select_result {
+                ExecutionResult::Select { rows, columns, .. } => {
+                    let insert_columns = stmt.columns.unwrap_or_else(|| {
+                        // If no columns specified, use all columns from SELECT
+                        columns.clone()
+                    });
+                    
+                    // Map SELECT rows to INSERT rows
+                    rows.into_iter().map(|row| {
+                        let mut insert_row = HashMap::new();
+                        for (i, col_name) in insert_columns.iter().enumerate() {
+                            if i < row.len() {
+                                if let Some(value_str) = &row[i] {
+                                    // Convert string value to appropriate SqlValue
+                                    // Try to infer type from the value string
+                                    let sql_value = match value_str.parse::<i64>() {
+                                        Ok(i) => {
+                                            // Check if it fits in i32
+                                            if i >= i32::MIN as i64 && i <= i32::MAX as i64 {
+                                                SqlValue::Integer(i as i32)
+                                            } else {
+                                                SqlValue::BigInt(i)
+                                            }
+                                        }
+                                        Err(_) => match value_str.parse::<f64>() {
+                                            Ok(f) => SqlValue::DoublePrecision(f),
+                                            Err(_) => SqlValue::Text(value_str.clone()),
+                                        },
+                                    };
+                                    insert_row.insert(col_name.clone(), sql_value);
+                                }
+                            }
+                        }
+                        insert_row
+                    }).collect::<Vec<_>>()
+                }
+                _ => {
+                    return Err(ProtocolError::PostgresError(
+                        "SELECT statement in INSERT ... SELECT must return rows".to_string(),
+                    ));
+                }
+            };
+            
+            // Insert the rows
+            let mut table_data = self.table_data.write().await;
+            let data = table_data
+                .entry(table_name.clone())
+                .or_insert_with(Vec::new);
+            
+            let count = rows_to_insert.len();
+            for row in rows_to_insert {
+                data.push(row);
+            }
+            
+            Ok(ExecutionResult::Insert { count })
         } else {
+            // DefaultValues
             Err(ProtocolError::PostgresError(
-                "Only VALUES clause supported currently".to_string(),
+                "DEFAULT VALUES not yet supported".to_string(),
             ))
         }
     }
