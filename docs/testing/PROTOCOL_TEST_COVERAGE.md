@@ -193,24 +193,35 @@ cargo test --package orbit-protocols --features integration
 
 ## CQL (Cassandra Query Language) Protocol
 
-**Overall Status:** ⏭  PLANNED (0% coverage)
+**Overall Status:** 🚧 **PARTIAL** (7% coverage - 8/114 tests implemented)
 
 ### CQL Features
 
 | Feature | Status | Test File | Notes |
 |---------|--------|-----------|-------|
-| CREATE KEYSPACE | ⏭  | - | Needs implementation |
-| CREATE TABLE | ⏭  | - | Needs implementation |
-| INSERT | ⏭  | - | Needs implementation |
-| SELECT | ⏭  | - | Needs implementation |
-| UPDATE | ⏭  | - | Needs implementation |
-| DELETE | ⏭  | - | Needs implementation |
-| WHERE (partition key) | ⏭  | - | Needs implementation |
-| WHERE (clustering key) | ⏭  | - | Needs implementation |
-| ALLOW FILTERING | ⏭  | - | Needs implementation |
-| Batch operations | ⏭  | - | Needs implementation |
+| Adapter Creation | ✅ | protocol_integration_tests.rs:11 | Basic adapter instantiation |
+| Configuration | ✅ | protocol_integration_tests.rs:24 | Config defaults |
+| Parser - SELECT | ✅ | protocol_integration_tests.rs:34 | Basic SELECT parsing |
+| Parser - INSERT | ✅ | protocol_integration_tests.rs:34 | Basic INSERT parsing |
+| Type Conversions | ✅ | protocol_integration_tests.rs:53 | CQL to SQL value conversion |
+| Parser - USE | ✅ | parser.rs:486 | Keyspace switching |
+| Parser - CREATE KEYSPACE | ✅ | parser.rs:499 | Keyspace creation parsing |
+| Execution - USE | ✅ | adapter.rs:417 | USE statement execution |
+| CREATE KEYSPACE | 🚧 | - | Parsed, execution pending |
+| CREATE TABLE | 🚧 | - | Parsed, execution pending |
+| INSERT | 🚧 | - | Parsed and executed, needs tests |
+| SELECT | 🚧 | - | Parsed and executed, needs tests |
+| UPDATE | 🚧 | - | Parsed and executed, needs tests |
+| DELETE | 🚧 | - | Parsed and executed, needs tests |
+| WHERE clause | 🚧 | - | Implemented, needs tests |
+| WHERE operators | 🚧 | - | All operators implemented, needs tests |
+| Prepared Statements | 🚧 | - | Framework ready, needs tests |
+| Batch operations | 🚧 | - | Framework ready, needs tests |
+| Result Set Encoding | 🚧 | - | Implemented, needs tests |
+| Protocol Wire Format | ⏭  | - | Needs implementation |
+| Integration Tests | ⏭  | - | Needs cqlsh compatibility tests |
 
-**CQL Total:** 0/40 tests planned (0% coverage)
+**CQL Total:** 8/114 tests (7% coverage) - See [CQL Test Coverage Assessment](./CQL_TEST_COVERAGE_ASSESSMENT.md) for details
 
 ---
 
@@ -364,7 +375,7 @@ cargo test --package orbit-protocols --features integration
 |----------|-------------------|---------------|----------|--------|
 | PostgreSQL | 3 | 79 | 3.8% |  PARTIAL |
 | MySQL | 0 | 50 | 0% | ⏭  PLANNED |
-| CQL | 0 | 40 | 0% | ⏭  PLANNED |
+| CQL | 8 | 114 | 7% | 🚧 PARTIAL |
 | Redis | 2 | 35 | 5.7% |  PARTIAL |
 | OrbitQL | 2 | 8 | 25% |  PARTIAL |
 | AQL | 0 | 30 | 0% | ⏭  PLANNED |
@@ -386,8 +397,13 @@ cargo test --package orbit-protocols --features integration
 2. **MySQL** - Needs full test suite (50 tests)
    -  All operations untested
 
-3. **CQL** - Needs full test suite (40 tests)
-   -  All operations untested
+3. **CQL** - Needs comprehensive test suite (106 more tests needed)
+   -  ✅ Basic parser and adapter tests (8 tests)
+   -  ❌ Query execution tests (20 tests needed)
+   -  ❌ Result set encoding tests (10 tests needed)
+   -  ❌ Protocol wire format tests (15 tests needed)
+   -  ❌ Integration tests (10 tests needed)
+   -  See [CQL Test Coverage Assessment](./CQL_TEST_COVERAGE_ASSESSMENT.md)
 
 4. **Redis** - Needs 33 more tests
    -  Hash, List, Set, Sorted Set operations

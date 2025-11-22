@@ -388,9 +388,14 @@ impl SqlExecutionStrategy for MvccExecutionStrategy {
                     updates.insert(column, value);
                 }
 
+                // Convert WHERE clause to predicate
+                let predicate = update_stmt.where_clause.as_ref()
+                    .map(|where_expr| self.create_row_predicate(where_expr.clone()))
+                    .flatten();
+
                 let count = self
                     .executor
-                    .mvcc_update(&table_name, transaction_id, updates, None)
+                    .mvcc_update(&table_name, transaction_id, updates, predicate)
                     .await?;
 
                 Ok(UnifiedExecutionResult::Update {
@@ -400,9 +405,15 @@ impl SqlExecutionStrategy for MvccExecutionStrategy {
             }
             Statement::Delete(delete_stmt) => {
                 let table_name = delete_stmt.table.full_name();
+                
+                // Convert WHERE clause to predicate
+                let predicate = delete_stmt.where_clause.as_ref()
+                    .map(|where_expr| self.create_row_predicate(where_expr.clone()))
+                    .flatten();
+
                 let count = self
                     .executor
-                    .mvcc_delete(&table_name, transaction_id, None)
+                    .mvcc_delete(&table_name, transaction_id, predicate)
                     .await?;
 
                 Ok(UnifiedExecutionResult::Delete {
@@ -536,6 +547,24 @@ impl MvccExecutionStrategy {
                 "Cannot extract table name".to_string(),
             )),
         }
+    }
+
+    /// Create a row predicate from a WHERE clause expression
+    fn create_row_predicate(&self, where_expr: Expression) -> crate::postgres_wire::sql::mvcc_executor::RowPredicate {
+        use crate::postgres_wire::sql::expression_evaluator::ExpressionEvaluator;
+        
+        let expr = where_expr.clone();
+        Some(Box::new(move |row: &HashMap<String, SqlValue>| -> bool {
+            let context = crate::postgres_wire::sql::expression_evaluator::EvaluationContext::with_row(row.clone());
+            let mut evaluator = ExpressionEvaluator::new();
+            
+            match evaluator.evaluate(&expr, &context) {
+                Ok(SqlValue::Boolean(b)) => b,
+                Ok(SqlValue::Null) => false,
+                Ok(_) => false, // Non-boolean result is false
+                Err(_) => false, // Error in evaluation is false
+            }
+        }))
     }
 
     fn evaluate_expression(&self, expr: &Expression) -> ProtocolResult<SqlValue> {

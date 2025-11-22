@@ -109,7 +109,7 @@ pub struct DeadlockDetector {
 /// Type alias for transaction log storage
 type TransactionLog = Arc<RwLock<Vec<(TransactionId, String, DateTime<Utc>)>>>;
 /// Type alias for row predicate function
-type RowPredicate = Option<Box<dyn Fn(&HashMap<String, SqlValue>) -> bool + Send + Sync>>;
+pub type RowPredicate = Option<Box<dyn Fn(&HashMap<String, SqlValue>) -> bool + Send + Sync>>;
 
 /// MVCC-aware SQL executor
 pub struct MvccSqlExecutor {
@@ -491,7 +491,7 @@ impl MvccSqlExecutor {
 
     /// Determine if a row version is visible to a snapshot
     fn is_version_visible(&self, version: &RowVersion, snapshot: &TransactionSnapshot) -> bool {
-        // Version created by the same transaction is always visible
+        // Version created by the same transaction is always visible (unless deleted by same transaction)
         if version.xmin == snapshot.xid {
             return version
                 .xmax
@@ -515,10 +515,15 @@ impl MvccSqlExecutor {
                 return false; // Deleted by same transaction
             }
 
-            // If deleting transaction was active, version is still visible
+            // If deleting transaction was active when snapshot was taken, deletion is not yet visible
+            // (the row is still visible because the deleting transaction hasn't committed)
             if snapshot.active_xids.contains(&xmax) {
-                return true;
+                return true; // Row still visible, deletion not yet committed
             }
+            
+            // Deleting transaction is not in active_xids, so it must be committed
+            // Therefore, the deletion is visible and the row should not be shown
+            return false; // Deleted by a committed transaction
         }
 
         true

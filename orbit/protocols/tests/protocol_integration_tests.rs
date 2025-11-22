@@ -14,6 +14,8 @@ mod cql_tests {
             max_connections: 100,
             authentication_enabled: false,
             protocol_version: 4,
+            username: None,
+            password: None,
         };
 
         let adapter = CqlAdapter::new(config).await;
@@ -152,6 +154,8 @@ mod integration_tests {
             max_connections: 100,
             authentication_enabled: false,
             protocol_version: 4,
+            username: None,
+            password: None,
         };
 
         let mysql_config = MySqlConfig {

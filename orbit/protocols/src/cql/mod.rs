@@ -24,6 +24,8 @@
 //!     max_connections: 1000,
 //!     authentication_enabled: false,
 //!     protocol_version: 4,
+//!     username: None,
+//!     password: None,
 //! };
 //!
 //! let adapter = CqlAdapter::new(config).await?;
@@ -38,7 +40,7 @@ pub mod protocol;
 pub mod types;
 
 pub use adapter::CqlAdapter;
-pub use parser::{CqlParser, CqlStatement};
+pub use parser::{CqlParser, CqlStatement, ComparisonOperator};
 pub use protocol::{CqlFrame, CqlOpcode, ConsistencyLevel};
 pub use types::{CqlType, CqlValue};
 
@@ -53,6 +55,10 @@ pub struct CqlConfig {
     pub authentication_enabled: bool,
     /// CQL protocol version (default: 4)
     pub protocol_version: u8,
+    /// Username for authentication (if authentication_enabled is true)
+    pub username: Option<String>,
+    /// Password for authentication (if authentication_enabled is true)
+    pub password: Option<String>,
 }
 
 impl Default for CqlConfig {
@@ -62,6 +68,8 @@ impl Default for CqlConfig {
             max_connections: 1000,
             authentication_enabled: false,
             protocol_version: 4,
+            username: None,
+            password: None,
         }
     }
 }

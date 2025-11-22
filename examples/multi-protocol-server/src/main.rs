@@ -38,6 +38,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         max_connections: 1000,
         authentication_enabled: false,
         protocol_version: 4,
+        username: None,
+        password: None,
     };
 
     // Configure MySQL adapter

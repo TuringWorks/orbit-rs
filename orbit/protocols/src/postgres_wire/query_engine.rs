@@ -322,6 +322,12 @@ impl QueryEngine {
         }
     }
 
+    /// Execute SQL using the comprehensive engine directly (bypasses persistent storage checks)
+    /// This is useful for testing and operations that don't require persistent storage
+    pub async fn execute_sql_direct(&self, sql: &str) -> ProtocolResult<QueryResult> {
+        self.execute_with_comprehensive_engine(sql).await
+    }
+
     /// Convert SQL execution result to QueryResult
     fn convert_sql_result_to_query_result(&self, result: UnifiedExecutionResult) -> QueryResult {
         match result {

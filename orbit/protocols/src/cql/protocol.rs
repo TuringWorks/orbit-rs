@@ -375,12 +375,95 @@ pub fn build_void_result(stream: i16) -> CqlFrame {
     CqlFrame::response(stream, CqlOpcode::Result, body.freeze())
 }
 
+/// CQL error codes (from Cassandra native protocol v4)
+pub mod error_codes {
+    /// Server error (generic)
+    pub const SERVER_ERROR: i32 = 0x0000;
+    /// Protocol error
+    pub const PROTOCOL_ERROR: i32 = 0x000A;
+    /// Bad credentials
+    pub const BAD_CREDENTIALS: i32 = 0x0100;
+    /// Unavailable exception
+    pub const UNAVAILABLE: i32 = 0x1000;
+    /// Overloaded
+    pub const OVERLOADED: i32 = 0x1100;
+    /// Is bootstrapping
+    pub const IS_BOOTSTRAPPING: i32 = 0x1200;
+    /// Truncate error
+    pub const TRUNCATE_ERROR: i32 = 0x1300;
+    /// Write timeout
+    pub const WRITE_TIMEOUT: i32 = 0x2000;
+    /// Read timeout
+    pub const READ_TIMEOUT: i32 = 0x2100;
+    /// Syntax error
+    pub const SYNTAX_ERROR: i32 = 0x2200;
+    /// Unauthorized
+    pub const UNAUTHORIZED: i32 = 0x2300;
+    /// Invalid (invalid query, invalid request, etc.)
+    pub const INVALID: i32 = 0x2400;
+    /// Config error
+    pub const CONFIG_ERROR: i32 = 0x2500;
+    /// Already exists (keyspace, table, etc.)
+    pub const ALREADY_EXISTS: i32 = 0x2600;
+    /// Unprepared (prepared statement not found)
+    pub const UNPREPARED: i32 = 0x2700;
+}
+
+/// Map ProtocolError to CQL error code
+pub fn map_error_to_cql_code(error: &crate::error::ProtocolError) -> i32 {
+    use crate::error::ProtocolError;
+    use error_codes::*;
+    
+    match error {
+        ProtocolError::ParseError(_) => SYNTAX_ERROR,
+        ProtocolError::CqlError(_) => PROTOCOL_ERROR,
+        ProtocolError::PostgresError(msg) => {
+            // Check for specific SQL errors
+            let msg_lower = msg.to_lowercase();
+            if msg_lower.contains("does not exist") || msg_lower.contains("not found") {
+                INVALID
+            } else if msg_lower.contains("already exists") || msg_lower.contains("duplicate") {
+                ALREADY_EXISTS
+            } else if msg_lower.contains("syntax") || msg_lower.contains("parse") {
+                SYNTAX_ERROR
+            } else if msg_lower.contains("unauthorized") || msg_lower.contains("permission") {
+                UNAUTHORIZED
+            } else if msg_lower.contains("timeout") {
+                if msg_lower.contains("write") {
+                    WRITE_TIMEOUT
+                } else {
+                    READ_TIMEOUT
+                }
+            } else {
+                INVALID
+            }
+        }
+        ProtocolError::AuthenticationError(_) => BAD_CREDENTIALS,
+        ProtocolError::AuthorizationError(_) => UNAUTHORIZED,
+        ProtocolError::InvalidOpcode(_) => PROTOCOL_ERROR,
+        ProtocolError::InvalidConsistencyLevel(_) => PROTOCOL_ERROR,
+        ProtocolError::IncompleteFrame => PROTOCOL_ERROR,
+        ProtocolError::InvalidUtf8(_) => PROTOCOL_ERROR,
+        ProtocolError::InvalidStatement(_) => SYNTAX_ERROR,
+        ProtocolError::ConnectionError(_) => UNAVAILABLE,
+        ProtocolError::ConnectionClosed => UNAVAILABLE,
+        _ => SERVER_ERROR,
+    }
+}
+
 /// Build an ERROR response
 pub fn build_error_response(stream: i16, error_code: i32, message: &str) -> CqlFrame {
     let mut body = BytesMut::new();
     body.put_i32(error_code);
     write_string(&mut body, message);
     CqlFrame::response(stream, CqlOpcode::Error, body.freeze())
+}
+
+/// Build an ERROR response from a ProtocolError
+pub fn build_error_from_protocol_error(stream: i16, error: &crate::error::ProtocolError) -> CqlFrame {
+    let error_code = map_error_to_cql_code(error);
+    let message = error.to_string();
+    build_error_response(stream, error_code, &message)
 }
 
 /// Write a CQL string (2-byte length + UTF-8 bytes)
