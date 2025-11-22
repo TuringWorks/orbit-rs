@@ -23,6 +23,9 @@ use tracing::{info, warn};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use orbit_server::{OrbitServerBuilder, OrbitServerConfig};
+use orbit_protocols::cql::{CqlAdapter, CqlConfig};
+use orbit_protocols::mysql::{MySqlAdapter, MySqlConfig};
+use tokio::task::JoinHandle;
 
 /// Orbit Server - Distributed Actor System Runtime
 #[derive(Parser)]
@@ -115,6 +118,38 @@ struct Args {
         default_value = "info"
     )]
     log_level: String,
+
+    /// Enable MySQL protocol adapter
+    #[arg(
+        long,
+        help = "Enable MySQL wire protocol adapter"
+    )]
+    enable_mysql: bool,
+
+    /// MySQL port
+    #[arg(
+        long,
+        value_name = "PORT",
+        help = "MySQL server port",
+        default_value = "3306"
+    )]
+    mysql_port: u16,
+
+    /// Enable CQL protocol adapter
+    #[arg(
+        long,
+        help = "Enable CQL (Cassandra) protocol adapter"
+    )]
+    enable_cql: bool,
+
+    /// CQL port
+    #[arg(
+        long,
+        value_name = "PORT",
+        help = "CQL server port",
+        default_value = "9042"
+    )]
+    cql_port: u16,
 }
 
 #[tokio::main]
@@ -142,10 +177,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .init();
 
     // Print startup banner
-    info!("🚀 Orbit Server Starting...");
+    info!("[Orbit Server] Orbit Server Starting...");
     info!("Version: {}", env!("CARGO_PKG_VERSION"));
     if args.dev_mode {
-        warn!("🔧 Development mode enabled");
+        warn!("[Dev Mode] Development mode enabled");
     }
 
     // Load configuration
@@ -154,26 +189,40 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // Override with command line arguments
     apply_cli_overrides(&mut config, &args);
 
-    info!("🎯 Configuration loaded and CLI overrides applied");
+    info!("[Configuration] Configuration loaded and CLI overrides applied");
 
     info!(
-        "📡 gRPC server will listen on {}:{}",
+        "[gRPC] gRPC server will listen on {}:{}",
         args.bind, args.grpc_port
     );
     info!(
-        "🌍 HTTP API will listen on {}:{}",
+        "[HTTP API] HTTP API will listen on {}:{}",
         args.bind, args.http_port
     );
     info!(
-        "📊 Metrics will be exposed on {}:{}",
+        "[Metrics] Metrics will be exposed on {}:{}",
         args.bind, args.metrics_port
     );
 
+    // Log protocol adapters
+    if args.enable_mysql {
+        info!(
+            "[MySQL] MySQL protocol will listen on {}:{}",
+            args.bind, args.mysql_port
+        );
+    }
+    if args.enable_cql {
+        info!(
+            "[CQL] CQL protocol will listen on {}:{}",
+            args.bind, args.cql_port
+        );
+    }
+
     // Log seed nodes
     if !args.seed_nodes.is_empty() {
-        info!("🌱 Seed nodes: {:?}", args.seed_nodes);
+        info!("[Seed Nodes] Seed nodes: {:?}", args.seed_nodes);
     } else {
-        info!("🏝️  Starting as seed node (no seed nodes configured)");
+        info!("[Seed Nodes] Starting as seed node (no seed nodes configured)");
     }
 
     // Build and start server
@@ -183,13 +232,80 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .build()
         .await?;
 
-    info!("✅ Orbit Server initialized successfully");
-    info!("🎯 Ready to serve actor workloads");
+    info!("[Orbit Server] Orbit Server initialized successfully");
 
-    // Start the server (this blocks until shutdown)
-    server.start().await?;
+    // Start protocol adapters if enabled
+    let mut protocol_handles: Vec<JoinHandle<Result<(), Box<dyn Error + Send + Sync>>>> = Vec::new();
 
-    info!("👋 Orbit Server shutdown complete");
+    if args.enable_mysql {
+        let mysql_config = MySqlConfig {
+            listen_addr: format!("{}:{}", args.bind, args.mysql_port).parse()?,
+            max_connections: 1000,
+            authentication_enabled: false,
+            server_version: format!("Orbit-DB {} (MySQL-compatible)", env!("CARGO_PKG_VERSION")),
+            username: None,
+            password: None,
+        };
+
+        let mysql_adapter = MySqlAdapter::new(mysql_config).await?;
+        let mysql_handle = tokio::spawn(async move {
+            info!("[MySQL] MySQL protocol adapter started on port 3306");
+            mysql_adapter.start().await.map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)
+        });
+        protocol_handles.push(mysql_handle);
+    }
+
+    if args.enable_cql {
+        let cql_config = CqlConfig {
+            listen_addr: format!("{}:{}", args.bind, args.cql_port).parse()?,
+            max_connections: 1000,
+            authentication_enabled: false,
+            protocol_version: 4,
+            username: None,
+            password: None,
+        };
+
+        let cql_adapter = CqlAdapter::new(cql_config).await?;
+        let cql_handle = tokio::spawn(async move {
+            info!("[CQL] CQL protocol adapter started on port 9042");
+            cql_adapter.start().await.map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)
+        });
+        protocol_handles.push(cql_handle);
+    }
+
+    info!("[Orbit Server] Ready to serve actor workloads");
+
+    // Start the gRPC server in a separate task
+    let grpc_handle = tokio::spawn(async move {
+        server.start().await.map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)
+    });
+
+    // Wait for any server to exit (all run indefinitely until interrupted)
+    tokio::select! {
+        result = grpc_handle => {
+            match result {
+                Ok(Ok(())) => info!("gRPC server exited successfully"),
+                Ok(Err(e)) => warn!("gRPC server error: {}", e),
+                Err(e) => warn!("gRPC server panic: {}", e),
+            }
+        }
+        result = async {
+            if protocol_handles.is_empty() {
+                std::future::pending::<()>().await;
+                Ok(Ok(()))
+            } else {
+                futures::future::select_all(protocol_handles).await.0
+            }
+        } => {
+            match result {
+                Ok(Ok(())) => info!("Protocol adapter exited successfully"),
+                Ok(Err(e)) => warn!("Protocol adapter error: {}", e),
+                Err(e) => warn!("Protocol adapter panic: {}", e),
+            }
+        }
+    }
+
+    info!("[Orbit Server] Orbit Server shutdown complete");
     Ok(())
 }
 
@@ -199,12 +315,12 @@ async fn load_config(args: &Args) -> Result<OrbitServerConfig, Box<dyn Error>> {
     // TODO: Implement TOML config file loading
     if args.config.exists() {
         info!(
-            "📖 Config file found: {:?} (using defaults for now)",
+            "[Config] Config file found: {:?} (using defaults for now)",
             args.config
         );
     } else {
         info!(
-            "📄 Config file not found: {:?}. Using defaults.",
+            "[Config] Config file not found: {:?}. Using defaults.",
             args.config
         );
     }
@@ -221,7 +337,7 @@ fn apply_cli_overrides(config: &mut OrbitServerConfig, args: &Args) {
     apply_network_overrides(config, args);
     apply_mode_overrides(config, args);
 
-    info!("⚙️  Configuration applied with CLI overrides");
+    info!("[CLI Overrides] Configuration applied with CLI overrides");
 }
 
 /// Apply network-related CLI overrides
@@ -233,7 +349,7 @@ fn apply_network_overrides(config: &mut OrbitServerConfig, args: &Args) {
 /// Apply mode-specific CLI overrides
 fn apply_mode_overrides(_config: &mut OrbitServerConfig, args: &Args) {
     if args.dev_mode {
-        info!("🔧 Applying development mode configuration overrides");
+        info!("[Dev Mode] Applying development mode configuration overrides");
         // Set development-friendly defaults here
     }
 }
