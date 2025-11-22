@@ -2,11 +2,10 @@
 //!
 //! Unit tests for MySQL protocol components
 
-use orbit_protocols::mysql::auth::{AuthPlugin, AuthState, HandshakeResponse, MySqlAuth};
+use orbit_protocols::mysql::auth::{AuthPlugin, AuthState, MySqlAuth};
 use orbit_protocols::mysql::protocol::{map_error_to_mysql_code, error_codes};
 use orbit_protocols::mysql::types::MySqlType;
 use orbit_protocols::error::ProtocolError;
-use bytes::Bytes;
 
 // ============================================================================
 // Authentication Tests

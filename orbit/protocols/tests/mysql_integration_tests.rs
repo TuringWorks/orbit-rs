@@ -99,15 +99,15 @@ async fn test_authentication_wrong_username() {
 #[tokio::test]
 async fn test_prepared_statement_lifecycle() {
     let config = MySqlConfig::default();
-    let adapter = MySqlAdapter::new(config).await.unwrap();
-    
+    let _adapter = MySqlAdapter::new(config).await.unwrap();
+
     // Test parameter counting
     let query1 = "SELECT * FROM users WHERE id = ?";
     assert_eq!(MySqlAdapter::count_parameters(query1), 1);
-    
+
     let query2 = "INSERT INTO users (id, name, age) VALUES (?, ?, ?)";
     assert_eq!(MySqlAdapter::count_parameters(query2), 3);
-    
+
     let query3 = "SELECT * FROM users";
     assert_eq!(MySqlAdapter::count_parameters(query3), 0);
 }
@@ -116,7 +116,7 @@ async fn test_prepared_statement_lifecycle() {
 async fn test_prepared_statement_parameter_types() {
     // Test that parameter types are correctly stored
     let config = MySqlConfig::default();
-    let adapter = MySqlAdapter::new(config).await.unwrap();
+    let _adapter = MySqlAdapter::new(config).await.unwrap();
     
     // This would be tested through the actual prepare/execute flow
     // For now, we verify the counting function works correctly
@@ -242,8 +242,8 @@ async fn test_statistics_integration() {
 #[tokio::test]
 async fn test_create_drop_db_integration() {
     let config = MySqlConfig::default();
-    let adapter = MySqlAdapter::new(config).await.unwrap();
-    
+    let _adapter = MySqlAdapter::new(config).await.unwrap();
+
     // Test that COM_CREATE_DB and COM_DROP_DB are handled
     // These are no-ops in Orbit but should return OK
     // This verifies the command handlers exist

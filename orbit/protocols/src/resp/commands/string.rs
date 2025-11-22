@@ -125,33 +125,25 @@ impl StringCommands {
         for arg in args {
             let key = self.get_string_arg(&[arg.clone()], 0, "DEL")?;
 
-            // Check if key exists first
+            // Use delete_value method which returns whether the key existed
             match self
                 .base
                 .local_registry
-                .execute_keyvalue(&key, "get_value", &[])
+                .execute_keyvalue(&key, "delete_value", &[])
                 .await
             {
                 Ok(result) => {
-                    let exists: Option<String> = serde_json::from_value(result).unwrap_or(None);
-                    if exists.is_some() {
-                        // Try to delete
-                        let _result = self
-                            .base
-                            .local_registry
-                            .execute_keyvalue(&key, "set_value", &[serde_json::Value::Null])
-                            .await
-                            .map_err(|e| {
-                                crate::error::ProtocolError::RespError(format!(
-                                    "ERR actor invocation failed: {}",
-                                    e
-                                ))
-                            })?;
+                    let existed: bool = serde_json::from_value(result).unwrap_or(false);
+                    if existed {
                         deleted_count += 1;
+                        debug!("DEL {} -> deleted", key);
+                    } else {
+                        debug!("DEL {} -> key didn't exist", key);
                     }
                 }
                 Err(_) => {
-                    // Key doesn't exist, continue
+                    // Key doesn't exist or error, continue
+                    debug!("DEL {} -> key not found or inaccessible", key);
                 }
             }
         }
@@ -482,7 +474,7 @@ impl CommandHandler for StringCommands {
     fn supported_commands(&self) -> &[&'static str] {
         &[
             "GET", "SET", "DEL", "EXISTS", "STRLEN", "MGET", "MSET", "INCR", "DECR", "INCRBY",
-            "DECRBY", "APPEND", "GETSET", "SETEX", "SETNX",
+            "DECRBY", "APPEND", "GETSET", "SETEX", "SETNX", "EXPIRE", "TTL",
         ]
     }
 
@@ -503,6 +495,8 @@ impl CommandHandler for StringCommands {
             "GETSET" => self.cmd_getset(args).await,
             "SETEX" => self.cmd_setex(args).await,
             "SETNX" => self.cmd_setnx(args).await,
+            "EXPIRE" => self.cmd_expire(args).await,
+            "TTL" => self.cmd_ttl(args).await,
             _ => Err(ProtocolError::RespError(format!(
                 "ERR unknown string command '{}'",
                 command_name
@@ -593,5 +587,72 @@ impl StringCommands {
             debug!("SETNX {} {}", key, value);
             Ok(RespValue::Integer(1))
         }
+    }
+
+    async fn cmd_expire(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        if args.len() != 2 {
+            return Err(ProtocolError::RespError(
+                "ERR wrong number of arguments for 'expire' command".to_string(),
+            ));
+        }
+
+        let key = self.get_string_arg(args, 0, "EXPIRE")?;
+        let seconds = self.get_int_arg(args, 1, "EXPIRE")?;
+
+        // Check if key exists
+        let exists_result = self
+            .base
+            .local_registry
+            .execute_keyvalue(&key, "exists", &[])
+            .await
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+
+        let exists: bool = serde_json::from_value(exists_result)
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))?;
+
+        if !exists {
+            return Ok(RespValue::Integer(0));
+        }
+
+        // Set expiration
+        if seconds <= 0 {
+            return Err(ProtocolError::RespError(
+                "ERR invalid expire time in expire".to_string(),
+            ));
+        }
+
+        let _result = self
+            .base
+            .local_registry
+            .execute_keyvalue(
+                &key,
+                "set_expiration",
+                &[serde_json::Value::Number(serde_json::Number::from(seconds as u64))],
+            )
+            .await
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+
+        debug!("EXPIRE {} {} -> OK", key, seconds);
+        Ok(RespValue::Integer(1))
+    }
+
+    async fn cmd_ttl(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
+        self.validate_arg_count("TTL", args, 1)?;
+
+        let key = self.get_string_arg(args, 0, "TTL")?;
+
+        let result = self
+            .base
+            .local_registry
+            .execute_keyvalue(&key, "get_ttl", &[])
+            .await
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+
+        let ttl: Option<i64> = serde_json::from_value(result)
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))?;
+
+        let ttl_seconds = ttl.unwrap_or(-2); // -2 means key doesn't exist, -1 means no expiration
+        debug!("TTL {} -> {}", key, ttl_seconds);
+        Ok(RespValue::Integer(ttl_seconds))
     }
 }

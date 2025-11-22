@@ -63,18 +63,28 @@ pub trait CommandHandler: Send + Sync {
     }
 
     /// Extract integer argument at index with error handling
+    /// Supports both RespValue::Integer and RespValue::BulkString (parsed as integer)
     fn get_int_arg(
         &self,
         args: &[RespValue],
         index: usize,
         command_name: &str,
     ) -> ProtocolResult<i64> {
-        args.get(index).and_then(|v| v.as_integer()).ok_or_else(|| {
-            crate::error::ProtocolError::RespError(format!(
-                "ERR invalid integer argument for '{}' command",
-                command_name.to_lowercase()
-            ))
-        })
+        args.get(index)
+            .and_then(|v| {
+                // Try integer first
+                v.as_integer().or_else(|| {
+                    // Try parsing as string
+                    v.as_string()
+                        .and_then(|s| s.parse::<i64>().ok())
+                })
+            })
+            .ok_or_else(|| {
+                crate::error::ProtocolError::RespError(format!(
+                    "ERR invalid integer argument for '{}' command",
+                    command_name.to_lowercase()
+                ))
+            })
     }
 
     /// Extract float argument at index with error handling  

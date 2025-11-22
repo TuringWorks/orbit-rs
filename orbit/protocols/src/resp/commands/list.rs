@@ -27,6 +27,59 @@ impl ListCommands {
         }
     }
 
+    // Helper methods for argument parsing
+    fn get_string_arg(
+        &self,
+        args: &[RespValue],
+        index: usize,
+        command_name: &str,
+    ) -> ProtocolResult<String> {
+        args.get(index).and_then(|v| v.as_string()).ok_or_else(|| {
+            ProtocolError::RespError(format!(
+                "ERR invalid argument for '{}' command",
+                command_name.to_lowercase()
+            ))
+        })
+    }
+
+    fn get_int_arg(
+        &self,
+        args: &[RespValue],
+        index: usize,
+        command_name: &str,
+    ) -> ProtocolResult<i64> {
+        args.get(index)
+            .and_then(|v| {
+                // Try integer first
+                v.as_integer().or_else(|| {
+                    // Try parsing as string
+                    v.as_string()
+                        .and_then(|s| s.parse::<i64>().ok())
+                })
+            })
+            .ok_or_else(|| {
+                ProtocolError::RespError(format!(
+                    "ERR invalid integer argument for '{}' command",
+                    command_name.to_lowercase()
+                ))
+            })
+    }
+
+    fn validate_arg_count(
+        &self,
+        command_name: &str,
+        args: &[RespValue],
+        expected: usize,
+    ) -> ProtocolResult<()> {
+        if args.len() != expected {
+            return Err(ProtocolError::RespError(format!(
+                "ERR wrong number of arguments for '{}' command",
+                command_name.to_lowercase()
+            )));
+        }
+        Ok(())
+    }
+
     /// LPUSH key element [element ...] - Insert elements at the head of the list
     async fn cmd_lpush(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
         if args.len() < 2 {
@@ -69,27 +122,19 @@ impl ListCommands {
             values.push(self.get_string_arg(args, i, "RPUSH")?);
         }
 
-        // Get ListActor reference
-        let actor_ref = self
+        // Use local registry for consistency
+        let result = self
             .base
-            .orbit_client
-            .actor_reference::<ListActor>(Key::StringKey { key: key.clone() })
+            .local_registry
+            .execute_list(&key, "rpush", &[serde_json::to_value(&values).unwrap()])
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
 
-        let new_length: Result<usize, _> =
-            actor_ref.invoke("rpush", vec![values.clone().into()]).await;
+        let new_length: i64 = serde_json::from_value(result)
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))?;
 
-        match new_length {
-            Ok(length) => {
-                debug!("RPUSH {} {:?} -> length: {}", key, values, length);
-                Ok(RespValue::Integer(length as i64))
-            }
-            Err(e) => Err(ProtocolError::RespError(format!(
-                "ERR actor invocation failed: {}",
-                e
-            ))),
-        }
+        debug!("RPUSH {} {:?} -> length: {}", key, values, new_length);
+        Ok(RespValue::Integer(new_length))
     }
 
     /// LPOP key [count] - Remove and return elements from the head of the list
@@ -107,19 +152,21 @@ impl ListCommands {
             1
         };
 
-        // Get ListActor reference
-        let actor_ref = self
+        // Use local registry for consistency
+        let result = self
             .base
-            .orbit_client
-            .actor_reference::<ListActor>(Key::StringKey { key: key.clone() })
-            .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .local_registry
+            .execute_list(&key, "lpop", &[serde_json::to_value(count).unwrap()])
+            .await;
 
-        let popped_items: Result<Vec<String>, _> =
-            actor_ref.invoke("lpop", vec![count.into()]).await;
+        let popped_items: Result<Vec<String>, _> = result
+            .map_err(|e| format!("ERR actor invocation failed: {}", e))
+            .and_then(|v| {
+                serde_json::from_value(v).map_err(|e| format!("Serialization error: {}", e))
+            });
 
         match popped_items {
-            Ok(items) => {
+            Ok(items) if !items.is_empty() => {
                 debug!("LPOP {} {} -> {:?}", key, count, items);
                 if count == 1 {
                     Ok(items
@@ -134,7 +181,10 @@ impl ListCommands {
                     Ok(RespValue::Array(result))
                 }
             }
-            Err(_) => Ok(RespValue::null()),
+            _ => {
+                debug!("LPOP {} -> null (list empty or doesn't exist)", key);
+                Ok(RespValue::null())
+            }
         }
     }
 
@@ -190,6 +240,7 @@ impl ListCommands {
         self.validate_arg_count("LRANGE", args, 3)?;
 
         let key = self.get_string_arg(args, 0, "LRANGE")?;
+        // Use get_int_arg which now handles both integer and bulk string formats
         let start = self.get_int_arg(args, 1, "LRANGE")?;
         let stop = self.get_int_arg(args, 2, "LRANGE")?;
 
@@ -237,23 +288,20 @@ impl ListCommands {
 
         let key = self.get_string_arg(args, 0, "LLEN")?;
 
-        // Get ListActor reference
-        let actor_ref = self
+        // Use local registry for consistency
+        let result = self
             .base
-            .orbit_client
-            .actor_reference::<ListActor>(Key::StringKey { key: key.clone() })
+            .local_registry
+            .execute_list(&key, "llen", &[])
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
 
-        let length: Result<usize, _> = actor_ref.invoke("llen", vec![]).await;
+        let length: i64 = serde_json::from_value(result)
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))
+            .unwrap_or(0);
 
-        match length {
-            Ok(len) => {
-                debug!("LLEN {} -> {}", key, len);
-                Ok(RespValue::Integer(len as i64))
-            }
-            Err(_) => Ok(RespValue::Integer(0)),
-        }
+        debug!("LLEN {} -> {}", key, length);
+        Ok(RespValue::Integer(length))
     }
 
     /// LINDEX key index - Get an element by its index
