@@ -28,7 +28,7 @@ use tokio::task::JoinHandle;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("╔════════════════════════════════════════════════════════════╗");
-    println!("║      Orbit Multi-Protocol Server                          ║");
+    println!("║      Orbit Multi-Protocol Server                           ║");
     println!("╚════════════════════════════════════════════════════════════╝");
     println!();
 
@@ -47,7 +47,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         listen_addr: "127.0.0.1:3306".parse()?,
         max_connections: 1000,
         authentication_enabled: false,
-        server_version: "8.0.0-Orbit".to_string(),
+        server_version: "Orbit-DB 1.0.0 (MySQL-compatible)".to_string(),
         username: None,
         password: None,
     };

@@ -67,7 +67,7 @@ impl Default for MySqlConfig {
             listen_addr: "127.0.0.1:3306".parse().unwrap(),
             max_connections: 1000,
             authentication_enabled: false,
-            server_version: "8.0.0-Orbit".to_string(),
+            server_version: "Orbit-DB 1.0.0 (MySQL-compatible)".to_string(),
             username: None,
             password: None,
         }

@@ -622,8 +622,26 @@ impl MvccSqlExecutor {
         false
     }
 
+    /// Get table schema
+    pub async fn get_table_schema(
+        &self,
+        table_name: &str,
+    ) -> ProtocolResult<Option<crate::postgres_wire::sql::executor::TableSchema>> {
+        let tables = self.tables.read().await;
+        Ok(tables.get(table_name).map(|table| table.schema.clone()))
+    }
+
     /// Create a new table
     pub async fn create_table(&self, name: &str) -> ProtocolResult<()> {
+        self.create_table_with_schema(name, None).await
+    }
+
+    /// Create a new table with schema
+    pub async fn create_table_with_schema(
+        &self,
+        name: &str,
+        schema: Option<crate::postgres_wire::sql::executor::TableSchema>,
+    ) -> ProtocolResult<()> {
         let mut tables = self.tables.write().await;
 
         if tables.contains_key(name) {
@@ -632,15 +650,17 @@ impl MvccSqlExecutor {
             )));
         }
 
+        let table_schema = schema.unwrap_or_else(|| crate::postgres_wire::sql::executor::TableSchema {
+            name: name.to_string(),
+            columns: Vec::new(),
+            constraints: Vec::new(),
+            indexes: Vec::new(),
+        });
+
         let table = MvccTable {
             name: name.to_string(),
             row_versions: BTreeMap::new(),
-            schema: crate::postgres_wire::sql::executor::TableSchema {
-                name: name.to_string(), // Use string directly
-                columns: Vec::new(),
-                constraints: Vec::new(),
-                indexes: Vec::new(),
-            },
+            schema: table_schema,
         };
 
         tables.insert(name.to_string(), table);

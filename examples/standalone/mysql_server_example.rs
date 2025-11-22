@@ -26,7 +26,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         listen_addr: "127.0.0.1:3306".parse()?,
         max_connections: 1000,
         authentication_enabled: false, // Disable auth for demo
-        server_version: "8.0.0-Orbit".to_string(),
+        server_version: "Orbit-DB 1.0.0 (MySQL-compatible)".to_string(),
     };
 
     println!("Configuration:");

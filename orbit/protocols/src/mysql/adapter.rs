@@ -322,6 +322,169 @@ impl MySqlAdapter {
         }
     }
 
+    /// Handle MySQL-specific queries (SHOW commands, INFORMATION_SCHEMA queries)
+    async fn handle_mysql_specific_query(&self, query: &str) -> Option<ProtocolResult<Vec<Bytes>>> {
+        let query_upper = query.trim().to_uppercase();
+
+        // Handle SHOW DATABASES
+        if query_upper.starts_with("SHOW DATABASES") {
+            println!("[MySQL] Handling SHOW DATABASES");
+            return Some(self.build_show_databases_result());
+        }
+
+        // Handle SHOW TABLES (with optional FROM database)
+        if query_upper.starts_with("SHOW TABLES") {
+            println!("[MySQL] Handling SHOW TABLES");
+            return Some(self.build_show_tables_result().await);
+        }
+
+        // Handle INFORMATION_SCHEMA.TABLES queries
+        if query_upper.contains("INFORMATION_SCHEMA.TABLES") {
+            println!("[MySQL] Handling INFORMATION_SCHEMA.TABLES query");
+            return Some(self.build_information_schema_tables_result().await);
+        }
+
+        // Handle INFORMATION_SCHEMA.SCHEMATA queries
+        if query_upper.contains("INFORMATION_SCHEMA.SCHEMATA") {
+            println!("[MySQL] Handling INFORMATION_SCHEMA.SCHEMATA query");
+            return Some(self.build_information_schema_schemata_result());
+        }
+
+        None // Not a MySQL-specific query, let SQL engine handle it
+    }
+
+    /// Build result for SHOW DATABASES command
+    fn build_show_databases_result(&self) -> ProtocolResult<Vec<Bytes>> {
+        use crate::postgres_wire::sql::UnifiedExecutionResult;
+
+        let result = UnifiedExecutionResult::Select {
+            columns: vec!["Database".to_string()],
+            rows: vec![vec![Some("orbit".to_string())]],
+            row_count: 1,
+            transaction_id: None,
+        };
+
+        self.build_result_set(result)
+    }
+
+    /// Build result for SHOW TABLES command
+    async fn build_show_tables_result(&self) -> ProtocolResult<Vec<Bytes>> {
+        use crate::postgres_wire::sql::UnifiedExecutionResult;
+
+        // Get table schemas directly from storage
+        let table_schemas = self.storage.list_table_schemas().await.unwrap_or_default();
+
+        // Convert to rows format
+        let table_rows: Vec<Vec<Option<String>>> = table_schemas
+            .iter()
+            .map(|schema| vec![Some(schema.name.clone())])
+            .collect();
+
+        let result = UnifiedExecutionResult::Select {
+            columns: vec!["Tables_in_orbit".to_string()],
+            rows: table_rows.clone(),
+            row_count: table_rows.len(),
+            transaction_id: None,
+        };
+
+        self.build_result_set(result)
+    }
+
+    /// Build result for INFORMATION_SCHEMA.TABLES queries
+    async fn build_information_schema_tables_result(&self) -> ProtocolResult<Vec<Bytes>> {
+        use crate::postgres_wire::sql::UnifiedExecutionResult;
+
+        // Get table schemas directly from storage
+        let table_schemas = self.storage.list_table_schemas().await.unwrap_or_default();
+
+        // Build result with common INFORMATION_SCHEMA.TABLES columns
+        let table_rows: Vec<Vec<Option<String>>> = table_schemas
+            .iter()
+            .map(|schema| {
+                vec![
+                    Some("def".to_string()),           // TABLE_CATALOG
+                    Some("orbit".to_string()),          // TABLE_SCHEMA
+                    Some(schema.name.clone()),          // TABLE_NAME
+                    Some("BASE TABLE".to_string()),     // TABLE_TYPE
+                    Some("Orbit".to_string()),          // ENGINE
+                    Some("10".to_string()),             // VERSION
+                    Some("Dynamic".to_string()),        // ROW_FORMAT
+                    Some("0".to_string()),              // TABLE_ROWS
+                    Some("0".to_string()),              // AVG_ROW_LENGTH
+                    Some("0".to_string()),              // DATA_LENGTH
+                    Some("0".to_string()),              // MAX_DATA_LENGTH
+                    Some("0".to_string()),              // INDEX_LENGTH
+                    Some("0".to_string()),              // DATA_FREE
+                    None,                               // AUTO_INCREMENT
+                    None,                               // CREATE_TIME
+                    None,                               // UPDATE_TIME
+                    None,                               // CHECK_TIME
+                    Some("utf8mb4_0900_ai_ci".to_string()), // TABLE_COLLATION
+                    None,                               // CHECKSUM
+                    Some("".to_string()),               // CREATE_OPTIONS
+                    Some("".to_string()),               // TABLE_COMMENT
+                ]
+            })
+            .collect();
+
+        let result = UnifiedExecutionResult::Select {
+            columns: vec![
+                "TABLE_CATALOG".to_string(),
+                "TABLE_SCHEMA".to_string(),
+                "TABLE_NAME".to_string(),
+                "TABLE_TYPE".to_string(),
+                "ENGINE".to_string(),
+                "VERSION".to_string(),
+                "ROW_FORMAT".to_string(),
+                "TABLE_ROWS".to_string(),
+                "AVG_ROW_LENGTH".to_string(),
+                "DATA_LENGTH".to_string(),
+                "MAX_DATA_LENGTH".to_string(),
+                "INDEX_LENGTH".to_string(),
+                "DATA_FREE".to_string(),
+                "AUTO_INCREMENT".to_string(),
+                "CREATE_TIME".to_string(),
+                "UPDATE_TIME".to_string(),
+                "CHECK_TIME".to_string(),
+                "TABLE_COLLATION".to_string(),
+                "CHECKSUM".to_string(),
+                "CREATE_OPTIONS".to_string(),
+                "TABLE_COMMENT".to_string(),
+            ],
+            rows: table_rows.clone(),
+            row_count: table_rows.len(),
+            transaction_id: None,
+        };
+
+        self.build_result_set(result)
+    }
+
+    /// Build result for INFORMATION_SCHEMA.SCHEMATA queries
+    fn build_information_schema_schemata_result(&self) -> ProtocolResult<Vec<Bytes>> {
+        use crate::postgres_wire::sql::UnifiedExecutionResult;
+
+        let result = UnifiedExecutionResult::Select {
+            columns: vec![
+                "CATALOG_NAME".to_string(),
+                "SCHEMA_NAME".to_string(),
+                "DEFAULT_CHARACTER_SET_NAME".to_string(),
+                "DEFAULT_COLLATION_NAME".to_string(),
+                "SQL_PATH".to_string(),
+            ],
+            rows: vec![vec![
+                Some("def".to_string()),
+                Some("orbit".to_string()),
+                Some("utf8mb4".to_string()),
+                Some("utf8mb4_0900_ai_ci".to_string()),
+                None,
+            ]],
+            row_count: 1,
+            transaction_id: None,
+        };
+
+        self.build_result_set(result)
+    }
+
     /// Handle COM_QUERY
     async fn handle_query(&self, payload: Bytes) -> ProtocolResult<Vec<Bytes>> {
         // Validate payload is not empty
@@ -345,9 +508,24 @@ impl MySqlAdapter {
 
         println!("[MySQL] Query: {}", query);
 
+        // Check for MySQL-specific queries first
+        if let Some(result) = self.handle_mysql_specific_query(&query).await {
+            return result;
+        }
+
         // Parse and execute using SQL engine
         match self.sql_engine.write().await.execute(&query).await {
-            Ok(result) => self.build_result_set(result),
+            Ok(result) => {
+                // Debug: Log result structure
+                if let crate::postgres_wire::sql::UnifiedExecutionResult::Select { columns, rows, .. } = &result {
+                    println!("[MySQL] Result: {} columns, {} rows", columns.len(), rows.len());
+                    println!("[MySQL] Columns: {:?}", columns);
+                    if let Some(first_row) = rows.first() {
+                        println!("[MySQL] First row: {:?}", first_row);
+                    }
+                }
+                self.build_result_set(result)
+            }
             Err(e) => {
                 // Update error metrics
                 {
@@ -935,5 +1113,81 @@ mod tests {
         let config = MySqlConfig::default();
         let _adapter = MySqlAdapter::new(config);
         // Type conversion tests would go here
+    }
+
+    #[tokio::test]
+    async fn test_mysql_specific_show_databases() {
+        let config = MySqlConfig::default();
+        let adapter = MySqlAdapter::new(config).await.unwrap();
+
+        // Test SHOW DATABASES
+        let result = adapter.handle_mysql_specific_query("SHOW DATABASES").await;
+        assert!(result.is_some());
+
+        let packets = result.unwrap().unwrap();
+        assert!(!packets.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_mysql_specific_show_tables() {
+        let config = MySqlConfig::default();
+        let adapter = MySqlAdapter::new(config).await.unwrap();
+
+        // Create a test table first
+        let _ = adapter
+            .sql_engine
+            .write()
+            .await
+            .execute("CREATE TABLE test_table (id INTEGER, name TEXT)")
+            .await;
+
+        // Test SHOW TABLES
+        let result = adapter.handle_mysql_specific_query("SHOW TABLES").await;
+        assert!(result.is_some());
+
+        let packets = result.unwrap().unwrap();
+        assert!(!packets.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_mysql_specific_information_schema_tables() {
+        let config = MySqlConfig::default();
+        let adapter = MySqlAdapter::new(config).await.unwrap();
+
+        // Test INFORMATION_SCHEMA.TABLES query
+        let result = adapter
+            .handle_mysql_specific_query("SELECT * FROM information_schema.tables")
+            .await;
+        assert!(result.is_some());
+
+        let packets = result.unwrap().unwrap();
+        assert!(!packets.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_mysql_specific_information_schema_schemata() {
+        let config = MySqlConfig::default();
+        let adapter = MySqlAdapter::new(config).await.unwrap();
+
+        // Test INFORMATION_SCHEMA.SCHEMATA query
+        let result = adapter
+            .handle_mysql_specific_query("SELECT * FROM information_schema.schemata")
+            .await;
+        assert!(result.is_some());
+
+        let packets = result.unwrap().unwrap();
+        assert!(!packets.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_mysql_specific_query_passthrough() {
+        let config = MySqlConfig::default();
+        let adapter = MySqlAdapter::new(config).await.unwrap();
+
+        // Test that non-MySQL-specific queries return None
+        let result = adapter
+            .handle_mysql_specific_query("SELECT * FROM users")
+            .await;
+        assert!(result.is_none());
     }
 }

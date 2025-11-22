@@ -187,7 +187,13 @@ impl MySqlPacket {
     /// Build ERROR packet from a ProtocolError
     pub fn error_from_protocol_error(error: &crate::error::ProtocolError) -> Bytes {
         let error_code = map_error_to_mysql_code(error);
-        let message = error.to_string();
+        let mut message = error.to_string();
+        
+        // Sanitize error messages: Remove "PostgreSQL protocol error" and replace with MySQL-appropriate text
+        message = message.replace("PostgreSQL protocol error: ", "");
+        message = message.replace("PostgreSQL protocol error", "MySQL error");
+        message = message.replace("PostgresError", "MySQL error");
+        
         Self::error(error_code, &message)
     }
 

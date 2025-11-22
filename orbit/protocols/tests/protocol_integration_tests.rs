@@ -97,7 +97,7 @@ mod mysql_tests {
         assert_eq!(config.listen_addr.port(), 3306);
         assert_eq!(config.max_connections, 1000);
         assert_eq!(config.authentication_enabled, false);
-        assert_eq!(config.server_version, "8.0.0-Orbit");
+        assert_eq!(config.server_version, "Orbit-DB 1.0.0 (MySQL-compatible)");
     }
 
     #[test]
