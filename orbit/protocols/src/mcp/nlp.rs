@@ -4,7 +4,6 @@
 //! user queries into structured SQL operations.
 
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 /// Natural Language Query Processor
 pub struct NlpQueryProcessor {
@@ -32,7 +31,7 @@ impl NlpQueryProcessor {
         let operation = self.intent_classifier.classify(query)?;
 
         // Step 2: Extract entities (tables, columns, values)
-        let entities = self.entity_extractor.extract(query)?;
+        let mut entities = self.entity_extractor.extract(query)?;
 
         // Step 3: Extract conditions
         let conditions = self.entity_extractor.extract_conditions(query)?;
@@ -40,7 +39,48 @@ impl NlpQueryProcessor {
         // Step 4: Extract projections (columns to select)
         let projections = self.entity_extractor.extract_projections(query)?;
 
-        // Step 5: Calculate confidence based on entity recognition
+        // Step 5: If no table was found, try to infer from context
+        if entities.iter().all(|e| !matches!(e.entity_type, EntityType::Table)) {
+            // Try to find table name from common patterns
+            let query_lower = query.to_lowercase();
+            // Look for plural nouns that might be table names
+            let common_table_patterns = vec![
+                r"\b(users?)\b",
+                r"\b(products?)\b",
+                r"\b(orders?)\b",
+                r"\b(customers?)\b",
+                r"\b(employees?)\b",
+                r"\b(accounts?)\b",
+                r"\b(items?)\b",
+                r"\b(categories?)\b",
+            ];
+
+            for pattern in common_table_patterns {
+                if let Some(captures) = regex::Regex::new(pattern)
+                    .ok()
+                    .and_then(|re| re.captures(&query_lower))
+                {
+                    if let Some(matched) = captures.get(1) {
+                        let table_name = matched.as_str().to_string();
+                        // Make it plural if singular
+                        let table_name = if table_name.ends_with('s') {
+                            table_name
+                        } else {
+                            format!("{}s", table_name)
+                        };
+                        entities.push(RecognizedEntity {
+                            entity_type: EntityType::Table,
+                            value: table_name,
+                            position: matched.start(),
+                            confidence: 0.6, // Lower confidence for inferred tables
+                        });
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Step 6: Calculate confidence based on entity recognition
         let confidence = self.calculate_confidence(&entities, &conditions);
 
         Ok(QueryIntent {
@@ -449,12 +489,20 @@ impl EntityExtractor {
     pub fn extract(&self, query: &str) -> Result<Vec<RecognizedEntity>, NlpError> {
         let mut entities = Vec::new();
 
-        // Extract table names (after "from", "in", "table")
+        // Extract table names (after "from", "in", "table", or common patterns)
         let table_patterns = vec![
-            r"from\s+(\w+)",
-            r"in\s+the\s+(\w+)\s+table",
-            r"table\s+(\w+)",
-            r"(\w+)\s+table",
+            r"from\s+(\w+)",                    // "from users"
+            r"in\s+the\s+(\w+)\s+table",        // "in the users table"
+            r"table\s+(\w+)",                    // "table users"
+            r"(\w+)\s+table",                    // "users table"
+            r"all\s+(\w+)",                      // "all users"
+            r"show\s+(?:me\s+)?(?:all\s+)?(\w+)", // "show me all users" or "show users"
+            r"get\s+(?:all\s+)?(\w+)",          // "get all users" or "get users"
+            r"list\s+(?:all\s+)?(\w+)",         // "list all users" or "list users"
+            r"find\s+(?:all\s+)?(\w+)",         // "find all users" or "find users"
+            r"what\s+are\s+(?:the\s+)?(?:top\s+\d+\s+)?(\w+)", // "what are the top 10 products"
+            r"(\w+)\s+from",                     // "users from California"
+            r"(\w+)\s+where",                    // "users where age > 25"
         ];
 
         let query_lower = query.to_lowercase();
@@ -464,12 +512,18 @@ impl EntityExtractor {
                 .and_then(|re| re.captures(&query_lower))
             {
                 if let Some(matched) = captures.get(1) {
-                    entities.push(RecognizedEntity {
-                        entity_type: EntityType::Table,
-                        value: matched.as_str().to_string(),
-                        position: matched.start(),
-                        confidence: 0.8,
-                    });
+                    let table_name = matched.as_str().to_string();
+                    // Skip common words that aren't table names
+                    if !matches!(table_name.as_str(), "me" | "all" | "the" | "a" | "an") {
+                        entities.push(RecognizedEntity {
+                            entity_type: EntityType::Table,
+                            value: table_name,
+                            position: matched.start(),
+                            confidence: 0.8,
+                        });
+                        // Only extract first table name found
+                        break;
+                    }
                 }
             }
         }
@@ -526,6 +580,28 @@ impl EntityExtractor {
                     let column = column_match.as_str().to_string();
                     let value_str = value_match.as_str().trim();
 
+                    // Skip if column is a common word that's not actually a column
+                    if matches!(column.as_str(), "from" | "where" | "all" | "me" | "the") {
+                        // Check if this is actually a condition like "users from California"
+                        // In that case, "users" is the table, "from" is the keyword, "California" is the value
+                        // We need to handle this differently - extract as a condition on a common column
+                        if column == "from" && !value_str.is_empty() {
+                            // This is a location-based condition, use a common column name
+                            conditions.push(QueryCondition {
+                                column: "state".to_string(), // Default to "state" for location queries
+                                operator: operator.clone(),
+                                value: ConditionValue::String(value_str.to_string()),
+                            });
+                        }
+                        continue;
+                    }
+
+                    // Skip if column name looks like a table name (plural nouns)
+                    if column.ends_with('s') && column.len() > 3 {
+                        // Might be a table name, skip
+                        continue;
+                    }
+
                     let value = if let Ok(num) = value_str.parse::<f64>() {
                         ConditionValue::Number(num)
                     } else if let Ok(int) = value_str.parse::<i64>() {
@@ -551,12 +627,12 @@ impl EntityExtractor {
         let mut projections = Vec::new();
         let query_lower = query.to_lowercase();
 
-        // Look for "select X", "show X", "display X"
+        // Look for explicit column mentions like "show name, email" or "get id and name"
         let patterns = vec![
-            r"select\s+(\w+)",
-            r"show\s+(\w+)",
-            r"display\s+(\w+)",
-            r"get\s+(\w+)",
+            r"select\s+([\w\s,]+?)(?:\s+from|\s+where|$)",  // "select name, email from"
+            r"show\s+(?:me\s+)?(?:all\s+)?(?:the\s+)?([\w\s,]+?)(?:\s+from|\s+where|$)", // "show name, email"
+            r"get\s+([\w\s,]+?)(?:\s+from|\s+where|$)",     // "get id, name"
+            r"display\s+([\w\s,]+?)(?:\s+from|\s+where|$)",  // "display columns"
         ];
 
         for pattern in patterns {
@@ -565,11 +641,29 @@ impl EntityExtractor {
                 .and_then(|re| re.captures(&query_lower))
             {
                 if let Some(matched) = captures.get(1) {
-                    projections.push(ProjectionColumn {
-                        name: matched.as_str().to_string(),
-                        alias: None,
-                        aggregation: None,
-                    });
+                    let cols_str = matched.as_str().trim();
+                    // Check if it's a list of columns or a single word that might be a table
+                    if cols_str.contains(',') || cols_str.split_whitespace().count() > 1 {
+                        // Multiple columns
+                        for col in cols_str.split(',') {
+                            let col_trimmed = col.trim();
+                            if !col_trimmed.is_empty() && !matches!(col_trimmed, "all" | "me" | "the") {
+                                projections.push(ProjectionColumn {
+                                    name: col_trimmed.to_string(),
+                                    alias: None,
+                                    aggregation: None,
+                                });
+                            }
+                        }
+                    } else if !matches!(cols_str, "all" | "me" | "the") {
+                        // Single column (but might be a table name, so be careful)
+                        // Only add if it looks like a column (e.g., "name", "email", "id")
+                        projections.push(ProjectionColumn {
+                            name: cols_str.to_string(),
+                            alias: None,
+                            aggregation: None,
+                        });
+                    }
                 }
             }
         }
@@ -593,34 +687,8 @@ impl Default for EntityExtractor {
     }
 }
 
-/// Schema Analyzer (placeholder - will be implemented with actual schema discovery)
-pub struct SchemaAnalyzer {
-    /// Cached schema information
-    schema_cache: HashMap<String, crate::mcp::sql_generator::TableSchema>,
-}
-
-impl SchemaAnalyzer {
-    /// Create a new schema analyzer
-    pub fn new() -> Self {
-        Self {
-            schema_cache: HashMap::new(),
-        }
-    }
-
-    /// Get schema for a table
-    pub async fn get_table_schema(
-        &self,
-        table_name: &str,
-    ) -> Option<&crate::mcp::sql_generator::TableSchema> {
-        self.schema_cache.get(table_name)
-    }
-}
-
-impl Default for SchemaAnalyzer {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+/// Schema Analyzer (re-exported from schema module)
+pub use crate::mcp::schema::SchemaAnalyzer;
 
 /// NLP processing errors
 #[derive(Debug, Clone, Serialize, Deserialize)]

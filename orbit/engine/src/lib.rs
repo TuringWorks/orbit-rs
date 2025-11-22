@@ -54,7 +54,7 @@
 //!
 //! ## Usage Example
 //!
-//! ```rust,ignore
+//! ```rust,no_run
 //! use orbit_engine::{
 //!     storage::{HybridStorageManager, HybridStorageConfig, ColumnSchema},
 //!     transaction::TransactionManager,

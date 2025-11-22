@@ -105,6 +105,8 @@ pub struct QueryEngine {
     graphrag_engine: Option<GraphRAGQueryEngine>,
     // Comprehensive SQL engine for DDL and other advanced operations
     sql_engine: Arc<Mutex<ConfigurableSqlEngine>>,
+    // Current database context
+    current_database: Arc<RwLock<String>>,
 }
 
 impl QueryEngine {
@@ -116,6 +118,7 @@ impl QueryEngine {
             vector_engine: None,
             graphrag_engine: None,
             sql_engine: Arc::new(Mutex::new(ConfigurableSqlEngine::new())),
+            current_database: Arc::new(RwLock::new("actors".to_string())),
         }
     }
 
@@ -127,6 +130,7 @@ impl QueryEngine {
             vector_engine: None,
             graphrag_engine: None,
             sql_engine: Arc::new(Mutex::new(ConfigurableSqlEngine::new())),
+            current_database: Arc::new(RwLock::new("actors".to_string())),
         }
     }
 
@@ -141,6 +145,7 @@ impl QueryEngine {
             vector_engine: Some(VectorQueryEngine::new(orbit_client)),
             graphrag_engine: Some(GraphRAGQueryEngine::new_placeholder()),
             sql_engine: Arc::new(Mutex::new(ConfigurableSqlEngine::new())),
+            current_database: Arc::new(RwLock::new("actors".to_string())),
         }
     }
 
@@ -155,7 +160,24 @@ impl QueryEngine {
             vector_engine: Some(VectorQueryEngine::new(orbit_client)),
             graphrag_engine: Some(GraphRAGQueryEngine::new_placeholder()),
             sql_engine: Arc::new(Mutex::new(ConfigurableSqlEngine::new())),
+            current_database: Arc::new(RwLock::new("actors".to_string())),
         }
+    }
+
+    /// Set the current database context
+    pub async fn set_current_database(&self, database: &str) {
+        let mut current_db = self.current_database.write().await;
+        *current_db = database.to_string();
+
+        // Also update the SQL executor's current database
+        let mut sql_engine = self.sql_engine.lock().await;
+        sql_engine.set_current_database(database).await;
+    }
+
+    /// Get the current database name
+    pub async fn get_current_database(&self) -> String {
+        let db = self.current_database.read().await;
+        db.clone()
     }
 
     /// Execute a SQL query

@@ -230,6 +230,111 @@ pub struct SubscribeRequest {
     pub filters: Option<serde_json::Value>,
 }
 
+/// Natural language query request
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct NaturalLanguageQueryRequest {
+    /// Natural language query
+    #[schema(example = "Show me all users from California")]
+    pub query: String,
+
+    /// Maximum number of results to return
+    #[schema(example = 100)]
+    pub limit: Option<usize>,
+
+    /// Maximum number of preview rows
+    #[schema(example = 10)]
+    pub max_preview_rows: Option<usize>,
+
+    /// Whether to execute the query or just generate SQL
+    #[schema(example = true)]
+    pub execute: Option<bool>,
+}
+
+/// Natural language query response
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct NaturalLanguageQueryResponse {
+    /// Generated SQL query
+    pub sql: String,
+
+    /// Query parameters (for parameterized queries)
+    pub parameters: Vec<serde_json::Value>,
+
+    /// Query type (read, write, analysis)
+    pub query_type: String,
+
+    /// Estimated complexity
+    pub complexity: String,
+
+    /// Optimization hints
+    pub optimization_hints: Vec<String>,
+
+    /// Query results (if executed)
+    pub results: Option<QueryResults>,
+
+    /// Processing metadata
+    pub metadata: QueryMetadata,
+}
+
+/// Query results
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct QueryResults {
+    /// Human-readable summary
+    pub summary: String,
+
+    /// Data preview (first N rows)
+    pub data_preview: Vec<serde_json::Value>,
+
+    /// Total row count
+    pub total_rows: usize,
+
+    /// Whether full result is available in preview
+    pub full_result_available: bool,
+
+    /// Continuation token for pagination
+    pub continuation_token: Option<String>,
+
+    /// Statistical summary
+    pub statistics: Option<serde_json::Value>,
+
+    /// Visualization hints
+    pub visualization_hints: Vec<VisualizationHint>,
+}
+
+/// Visualization hint
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct VisualizationHint {
+    /// Visualization type
+    pub viz_type: String,
+
+    /// Recommended columns
+    pub columns: Vec<String>,
+
+    /// Description
+    pub description: String,
+}
+
+/// Query metadata
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct QueryMetadata {
+    /// Processing time in milliseconds
+    pub processing_time_ms: u64,
+
+    /// NLP processing time in milliseconds
+    pub nlp_time_ms: Option<u64>,
+
+    /// SQL generation time in milliseconds
+    pub sql_generation_time_ms: Option<u64>,
+
+    /// Query execution time in milliseconds (if executed)
+    pub execution_time_ms: Option<u64>,
+
+    /// Result processing time in milliseconds (if executed)
+    pub result_processing_time_ms: Option<u64>,
+
+    /// Confidence score (0.0 to 1.0)
+    pub confidence: f64,
+}
+
 impl<T: Serialize> SuccessResponse<T> {
     pub fn new(data: T) -> Self {
         Self {

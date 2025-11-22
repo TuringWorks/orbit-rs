@@ -233,9 +233,13 @@ impl IcebergColdStore {
     ///
     /// # Example
     ///
-    /// ```rust,ignore
+    /// ```rust,no_run
+    /// # use orbit_engine::storage::iceberg::IcebergColdStore;
+    /// # async fn example(store: &IcebergColdStore) -> Result<(), Box<dyn std::error::Error>> {
     /// // Query table at snapshot ID 2583872980615177898
     /// let batches = store.query_by_snapshot_id(2583872980615177898, None).await?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn query_by_snapshot_id(
         &self,
@@ -284,13 +288,17 @@ impl IcebergColdStore {
     ///
     /// # Example
     ///
-    /// ```rust,ignore
+    /// ```rust,no_run
+    /// # use orbit_engine::storage::iceberg::IcebergColdStore;
+    /// # fn example(store: &IcebergColdStore) -> Result<(), Box<dyn std::error::Error>> {
     /// let snapshots = store.list_snapshots()?;
     /// for snapshot in snapshots {
     ///     println!("Snapshot {}: timestamp {}",
-    ///         snapshot.snapshot_id(),
-    ///         snapshot.timestamp_ms());
+    ///         snapshot.0,
+    ///         snapshot.1);
     /// }
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn list_snapshots(&self) -> EngineResult<Vec<(i64, i64)>> {
         let snapshots = self.table
@@ -352,35 +360,39 @@ impl IcebergColdStore {
     /// 8. Commit transaction to table
     ///
     /// **API Pattern** (based on iceberg-rust 0.7):
-    /// ```ignore
+    /// ```rust,no_run
+    /// # use orbit_engine::storage::iceberg::IcebergColdStore;
+    /// # async fn example(store: &IcebergColdStore, batch: orbit_engine::storage::ColumnBatch) -> Result<(), Box<dyn std::error::Error>> {
     /// // 1. Convert to Arrow
-    /// let arrow_batch = column_batch_to_arrow(batch)?;
-    ///
+    /// // let arrow_batch = column_batch_to_arrow(batch)?;
+    /// //
     /// // 2. Build Parquet writer
-    /// let parquet_writer = ParquetWriterBuilder::new(
-    ///     WriterProperties::default(),
-    ///     schema.clone(),
-    ///     None, // partition_key
-    ///     file_io.clone(),
-    ///     location_generator,
-    ///     file_name_generator,
-    /// );
-    ///
+    /// // let parquet_writer = ParquetWriterBuilder::new(
+    /// //     WriterProperties::default(),
+    /// //     schema.clone(),
+    /// //     None, // partition_key
+    /// //     file_io.clone(),
+    /// //     location_generator,
+    /// //     file_name_generator,
+    /// // );
+    /// //
     /// // 3. Build data file writer
-    /// let mut data_file_writer = DataFileWriterBuilder::new(
-    ///     parquet_writer,
-    ///     None, // partition_value
-    ///     0,    // partition_spec_id
-    /// ).build().await?;
-    ///
+    /// // let mut data_file_writer = DataFileWriterBuilder::new(
+    /// //     parquet_writer,
+    /// //     None, // partition_value
+    /// //     0,    // partition_spec_id
+    /// // ).build().await?;
+    /// //
     /// // 4. Write data
-    /// data_file_writer.write(arrow_batch).await?;
-    /// let data_files = data_file_writer.close().await?;
-    ///
+    /// // data_file_writer.write(arrow_batch).await?;
+    /// // let data_files = data_file_writer.close().await?;
+    /// //
     /// // 5. Commit via transaction
-    /// table.new_transaction()
-    ///     .fast_append(data_files)
-    ///     .commit().await?;
+    /// // table.new_transaction()
+    /// //     .fast_append(data_files)
+    /// //     .commit().await?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn write(&self, _batch: &ColumnBatch) -> EngineResult<()> {
         // TODO Phase 3: Implement full write path
@@ -945,19 +957,24 @@ pub fn arrow_to_column_batch(batch: &RecordBatch) -> EngineResult<ColumnBatch> {
 ///
 /// # Example
 ///
-/// ```ignore
-/// use orbit_protocols::postgres_wire::sql::execution::{AzureConfig, StorageBackend};
-/// use iceberg_catalog_rest::RestCatalog;
-///
-/// let azure_config = AzureConfig::from_connection_string(
-///     "AccountName=devstoreaccount1;AccountKey=...;BlobEndpoint=http://127.0.0.1:10000/devstoreaccount1;",
-///     "orbitstore".to_string()
-/// )?;
-///
-/// let backend = StorageBackend::Azure(azure_config);
-/// let (file_io, warehouse_path) = create_file_io_for_storage(backend)?;
-///
+/// ```rust,no_run
+/// # use orbit_engine::storage::iceberg::create_file_io_for_storage;
+/// # fn example() -> Result<(), Box<dyn std::error::Error>> {
+/// // Note: This example requires actual Azure configuration
+/// // use orbit_protocols::postgres_wire::sql::execution::{AzureConfig, StorageBackend};
+/// // use iceberg_catalog_rest::RestCatalog;
+/// //
+/// // let azure_config = AzureConfig::from_connection_string(
+/// //     "AccountName=devstoreaccount1;AccountKey=...;BlobEndpoint=http://127.0.0.1:10000/devstoreaccount1;",
+/// //     "orbitstore".to_string()
+/// // )?;
+/// //
+/// // let backend = StorageBackend::Azure(azure_config);
+/// // let (file_io, warehouse_path) = create_file_io_for_storage(backend)?;
+/// //
 /// // Then use with your RestCatalog creation method
+/// # Ok(())
+/// # }
 /// ```
 pub fn create_file_io_for_storage(
     storage_backend: StorageBackend,
@@ -979,19 +996,24 @@ pub fn create_file_io_for_storage(
 ///
 /// # Example
 ///
-/// ```ignore
-/// use orbit_protocols::postgres_wire::sql::execution::{AzureConfig, StorageBackend, create_rest_catalog_with_storage};
-///
-/// let azure_config = AzureConfig::from_connection_string(
-///     "AccountName=devstoreaccount1;AccountKey=...;BlobEndpoint=http://127.0.0.1:10000/devstoreaccount1;",
-///     "orbitstore".to_string()
-/// )?;
-///
-/// let backend = StorageBackend::Azure(azure_config);
-/// let catalog = create_rest_catalog_with_storage(
-///     "http://localhost:8181",
-///     backend
-/// ).await?;
+/// ```rust,no_run
+/// # use orbit_engine::storage::iceberg::create_rest_catalog_with_storage;
+/// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+/// // Note: This example requires actual Azure configuration
+/// // use orbit_protocols::postgres_wire::sql::execution::{AzureConfig, StorageBackend};
+/// //
+/// // let azure_config = AzureConfig::from_connection_string(
+/// //     "AccountName=devstoreaccount1;AccountKey=...;BlobEndpoint=http://127.0.0.1:10000/devstoreaccount1;",
+/// //     "orbitstore".to_string()
+/// // )?;
+/// //
+/// // let backend = StorageBackend::Azure(azure_config);
+/// // let catalog = create_rest_catalog_with_storage(
+/// //     "http://localhost:8181",
+/// //     backend
+/// // ).await?;
+/// # Ok(())
+/// # }
 /// ```
 pub async fn create_rest_catalog_with_storage(
     catalog_uri: &str,

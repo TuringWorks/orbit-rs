@@ -327,7 +327,7 @@ impl PostgresWireProtocol {
 
     /// Handle simple query
     async fn handle_query(&mut self, query: &str, buf: &mut BytesMut) -> ProtocolResult<()> {
-        info!("Query: {}", query);
+        info!("Query: {} (database: {:?})", query, self.database);
 
         if query.trim().is_empty() {
             BackendMessage::EmptyQueryResponse.encode(buf);
@@ -336,6 +336,11 @@ impl PostgresWireProtocol {
             }
             .encode(buf);
             return Ok(());
+        }
+
+        // Set the current database context before executing the query
+        if let Some(ref db) = self.database {
+            self.query_engine.set_current_database(db).await;
         }
 
         match self.query_engine.execute_query(query).await {

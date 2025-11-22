@@ -434,6 +434,18 @@ impl SqlExecutor {
         self.storage.metrics().await
     }
 
+    /// Set the current database context
+    pub async fn set_current_database(&self, database: &str) {
+        let mut current_db = self.current_database.write().await;
+        *current_db = database.to_string();
+    }
+
+    /// Get the current database name
+    pub async fn get_current_database(&self) -> String {
+        let db = self.current_database.read().await;
+        db.clone()
+    }
+
     /// Execute a SQL statement from string
     pub async fn execute(&self, sql: &str) -> ProtocolResult<ExecutionResult> {
         // Parse the SQL statement using the comprehensive parser

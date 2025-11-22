@@ -13,54 +13,54 @@ The Model Context Protocol (MCP) server for Orbit-RS will provide Large Language
 ## Architecture
 
 ```text
-LLM Client (Claude, GPT, etc.)
-       ↓
-   MCP Protocol
-       ↓ 
+    LLM Client (Claude, GPT, etc.)
+                ↓
+           MCP Protocol
+                ↓ 
 ┌─────────────────────────────────────┐
 │           MCP Server                │
-│  ┌─────────────────────────────────┐│
-│  │     Natural Language            ││
-│  │     Query Processor             ││  
-│  │  ┌─────────────────────────┐    ││
-│  │  │   Intent Classification │    ││
-│  │  │   Entity Recognition    │    ││
-│  │  │   Query Understanding   │    ││
-│  │  └─────────────────────────┘    ││
-│  └─────────────────────────────────┘│
-│  ┌─────────────────────────────────┐│
-│  │      SQL Generation             ││
-│  │  ┌─────────────────────────┐    ││
-│  │  │   Schema Analysis       │    ││
-│  │  │   Query Construction    │    ││
-│  │  │   Optimization          │    ││
-│  │  └─────────────────────────┘    ││
-│  └─────────────────────────────────┘│
-│  ┌─────────────────────────────────┐│
-│  │      Result Processing          ││
-│  │  ┌─────────────────────────┐    ││
-│  │  │   Data Formatting       │    ││
-│  │  │   Summarization         │    ││
-│  │  │   Visualization Hints   │    ││
-│  │  └─────────────────────────┘    ││
-│  └─────────────────────────────────┘│
+│  ┌───────────────────────────────┐  │
+│  │     Natural Language          │  │
+│  │     Query Processor           │  │  
+│  │  ┌─────────────────────────┐  │  │
+│  │  │   Intent Classification │  │  │
+│  │  │   Entity Recognition    │  │  │
+│  │  │   Query Understanding   │  │  │
+│  │  └─────────────────────────┘  │  │  
+│  └───────────────────────────────┘  │
+│  ┌───────────────────────────────┐  │
+│  │      SQL Generation           │  │
+│  │  ┌─────────────────────────┐  │  │
+│  │  │   Schema Analysis       │  │  │
+│  │  │   Query Construction    │  │  │
+│  │  │   Optimization          │  │  │
+│  │  └─────────────────────────┘  │  │
+│  └───────────────────────────────┘  │
+│  ┌───────────────────────────────┐  │
+│  │      Result Processing        │  │
+│  │  ┌─────────────────────────┐  │  │
+│  │  │   Data Formatting       │  │  │
+│  │  │   Summarization         │  │  │
+│  │  │   Visualization Hints   │  │  │
+│  │  └─────────────────────────┘  │  │
+│  └───────────────────────────────┘  │
 └─────────────────────────────────────┘
-       ↓
-  Orbit PostgreSQL 
-  Wire Protocol
-       ↓
+               ↓
+        Orbit PostgreSQL 
+         Wire Protocol
+               ↓
 ┌─────────────────────────────────────┐
 │         Orbit-RS Cluster            │
-│  ┌─────────────────────────────────┐│
-│  │      SQL Query Engine           ││
-│  │   (Phase 8 Implementation)      ││
-│  └─────────────────────────────────┘│
-│  ┌─────────────────────────────────┐│
-│  │      Actor System               ││
-│  │   - Table Actors                ││
-│  │   - Collection Actors           ││
-│  │   - Transaction Coordinators    ││
-│  └─────────────────────────────────┘│
+│  ┌───────────────────────────────┐  │
+│  │      SQL Query Engine         │  │
+│  │   (Phase 8 Implementation)    │  │
+│  └───────────────────────────────┘  │
+│  ┌───────────────────────────────┐  │
+│  │      Actor System             │  │
+│  │   - Table Actors              │  │
+│  │   - Collection Actors         │  │
+│  │   - Transaction Coordinators  │  │
+│  └───────────────────────────────┘  │
 └─────────────────────────────────────┘
 ```
 

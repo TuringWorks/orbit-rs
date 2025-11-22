@@ -24,13 +24,13 @@
 //!
 //! When iceberg-rust adds snapshot APIs:
 //!
-//! ```rust,ignore
+//! ```rust,no_run
 //! // Before (using our extension):
-//! use crate::storage::iceberg_ext::TableMetadataExt;
-//! let snapshot = table.metadata().snapshot_by_timestamp_ext(timestamp_ms)?;
-//!
+//! // use orbit_engine::storage::iceberg_ext::TableMetadataExt;
+//! // let snapshot = table.metadata().snapshot_by_timestamp_ext(timestamp_ms)?;
+//! //
 //! // After (using upstream):
-//! let snapshot = table.metadata().snapshot_by_timestamp(timestamp_ms)?;
+//! // let snapshot = table.metadata().snapshot_by_timestamp(timestamp_ms)?;
 //! ```
 //!
 //! Simply remove `_ext` suffix and delete this module.
@@ -48,21 +48,23 @@ use crate::error::{EngineError, EngineResult};
 ///
 /// ## Usage
 ///
-/// ```rust,ignore
-/// use orbit_engine::storage::iceberg_ext::TableMetadataExt;
-///
-/// let table = catalog.load_table(&table_ident).await?;
-/// let metadata = table.metadata();
-///
-/// // Access snapshots
-/// let snapshots = metadata.snapshots_ext();
-/// println!("Found {} snapshots", snapshots.len());
-///
-/// // Get snapshot by timestamp
-/// let snapshot = metadata.snapshot_by_timestamp_ext(timestamp_ms)?;
-///
-/// // Get snapshot by ID
-/// let snapshot = metadata.snapshot_by_id_ext(snapshot_id)?;
+/// ```rust,no_run
+/// # use orbit_engine::storage::iceberg_ext::TableMetadataExt;
+/// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+/// // let table = catalog.load_table(&table_ident).await?;
+/// // let metadata = table.metadata();
+/// //
+/// // // Access snapshots
+/// // let snapshots = metadata.snapshots_ext();
+/// // println!("Found {} snapshots", snapshots.len());
+/// //
+/// // // Get snapshot by timestamp
+/// // let snapshot = metadata.snapshot_by_timestamp_ext(timestamp_ms)?;
+/// //
+/// // // Get snapshot by ID
+/// // let snapshot = metadata.snapshot_by_id_ext(snapshot_id)?;
+/// # Ok(())
+/// # }
 /// ```
 ///
 /// ## Method Naming Convention
@@ -78,13 +80,17 @@ pub trait TableMetadataExt {
     ///
     /// ## Example
     ///
-    /// ```rust,ignore
+    /// ```rust,no_run
+    /// # use orbit_engine::storage::iceberg_ext::TableMetadataExt;
+    /// # fn example(metadata: &dyn TableMetadataExt) -> Result<(), Box<dyn std::error::Error>> {
     /// let snapshots = metadata.snapshots_ext();
     /// for snapshot in snapshots {
     ///     println!("Snapshot ID: {}, Timestamp: {}",
     ///         snapshot.snapshot_id(),
     ///         snapshot.timestamp_ms());
     /// }
+    /// # Ok(())
+    /// # }
     /// ```
     fn snapshots_ext(&self) -> Vec<Arc<Snapshot>>;
 
@@ -105,15 +111,18 @@ pub trait TableMetadataExt {
     ///
     /// ## Example
     ///
-    /// ```rust,ignore
-    /// use std::time::SystemTime;
-    ///
+    /// ```rust,no_run
+    /// # use orbit_engine::storage::iceberg_ext::TableMetadataExt;
+    /// # use std::time::SystemTime;
+    /// # fn example(metadata: &dyn TableMetadataExt) -> Result<(), Box<dyn std::error::Error>> {
     /// let now = SystemTime::now();
     /// let timestamp_ms = now.duration_since(SystemTime::UNIX_EPOCH)?.as_millis() as i64;
     ///
     /// if let Some(snapshot) = metadata.snapshot_by_timestamp_ext(timestamp_ms)? {
     ///     println!("Found snapshot at {}", snapshot.timestamp_ms());
     /// }
+    /// # Ok(())
+    /// # }
     /// ```
     fn snapshot_by_timestamp_ext(&self, timestamp_ms: i64) -> EngineResult<Option<Arc<Snapshot>>>;
 
@@ -131,11 +140,15 @@ pub trait TableMetadataExt {
     ///
     /// ## Example
     ///
-    /// ```rust,ignore
+    /// ```rust,no_run
+    /// # use orbit_engine::storage::iceberg_ext::TableMetadataExt;
+    /// # fn example(metadata: &dyn TableMetadataExt) -> Result<(), Box<dyn std::error::Error>> {
     /// let snapshot_id = 2583872980615177898i64;
     /// if let Some(snapshot) = metadata.snapshot_by_id_ext(snapshot_id)? {
     ///     println!("Found snapshot: {}", snapshot.snapshot_id());
     /// }
+    /// # Ok(())
+    /// # }
     /// ```
     fn snapshot_by_id_ext(&self, snapshot_id: i64) -> EngineResult<Option<Arc<Snapshot>>>;
 
@@ -197,11 +210,14 @@ impl TableMetadataExt for TableMetadata {
 ///
 /// ## Example
 ///
-/// ```rust,ignore
-/// use std::time::SystemTime;
-///
+/// ```rust,no_run
+/// # use orbit_engine::storage::iceberg_ext::system_time_to_millis;
+/// # use std::time::SystemTime;
+/// # fn example() -> Result<(), Box<dyn std::error::Error>> {
 /// let timestamp_ms = system_time_to_millis(SystemTime::now())?;
-/// let snapshot = metadata.snapshot_by_timestamp_ext(timestamp_ms)?;
+/// // let snapshot = metadata.snapshot_by_timestamp_ext(timestamp_ms)?;
+/// # Ok(())
+/// # }
 /// ```
 pub fn system_time_to_millis(time: SystemTime) -> EngineResult<i64> {
     let duration = time
@@ -215,8 +231,12 @@ pub fn system_time_to_millis(time: SystemTime) -> EngineResult<i64> {
 ///
 /// ## Example
 ///
-/// ```rust,ignore
+/// ```rust,no_run
+/// # use orbit_engine::storage::iceberg_ext::millis_to_system_time;
+/// # fn example() -> Result<(), Box<dyn std::error::Error>> {
 /// let time = millis_to_system_time(1681236397000)?;
+/// # Ok(())
+/// # }
 /// ```
 pub fn millis_to_system_time(millis: i64) -> EngineResult<SystemTime> {
     if millis < 0 {

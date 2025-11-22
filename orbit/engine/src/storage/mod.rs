@@ -24,7 +24,7 @@ pub mod iceberg_ext;
 // Re-exports
 pub use config::{AzureConfig, S3Config, StorageBackend};
 pub use columnar::{Column, ColumnBatch, ColumnBatchBuilder, NullBitmap, DEFAULT_BATCH_SIZE};
-pub use hybrid::{HybridStorageManager, HybridStorageConfig};
+pub use hybrid::{HybridStorageManager, HybridStorageConfig, ColumnSchema};
 pub use iceberg::IcebergColdStore;
 // pub use memory::MemoryTableStorage;
 

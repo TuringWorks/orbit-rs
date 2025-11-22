@@ -41,18 +41,26 @@ impl OrbitQLAdapter {
     /// Execute an OrbitQL query string
     ///
     /// # Example
-    /// ```ignore
-    /// use orbit_engine::adapters::orbitql::OrbitQLAdapter;
-    /// use orbit_engine::adapters::AdapterContext;
-    ///
-    /// // Assuming you have a storage engine that implements TableStorage:
-    /// // let storage = Arc::new(MyStorageEngine::new());
+    /// ```no_run
+    /// # use orbit_engine::adapters::orbitql::OrbitQLAdapter;
+    /// # use orbit_engine::adapters::AdapterContext;
+    /// # use orbit_engine::storage::{HybridStorageManager, HybridStorageConfig};
+    /// # use std::sync::Arc;
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// // Create storage and adapter
+    /// // let table_name = "test_table".to_string();
+    /// // let schema = vec![];
+    /// // let config = HybridStorageConfig::default();
+    /// // let storage = Arc::new(HybridStorageManager::new(table_name, schema, config));
     /// // let context = AdapterContext::new(storage);
     /// // let adapter = OrbitQLAdapter::new(context);
     /// //
+    /// // Execute query
     /// // let result = adapter.execute_query(
     /// //     "SELECT * FROM users WHERE age > 18"
     /// // ).await?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn execute_query(&self, query: &str) -> EngineResult<CommandResult> {
         // Parse the OrbitQL query

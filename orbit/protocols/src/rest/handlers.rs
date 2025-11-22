@@ -12,11 +12,20 @@ use std::sync::Arc;
 use utoipa::IntoParams;
 
 use super::models::*;
+use crate::mcp::{
+    integration::OrbitMcpIntegration,
+    server::McpServer,
+    McpCapabilities, McpConfig,
+};
+use crate::postgres_wire::query_engine::QueryEngine;
+use std::sync::Arc;
 
 /// Shared API state
 #[derive(Clone)]
 pub struct ApiState {
     pub orbit_client: Arc<OrbitClient>,
+    /// MCP server for natural language queries (optional)
+    pub mcp_server: Option<Arc<McpServer>>,
 }
 
 /// Pagination query parameters
@@ -412,14 +421,22 @@ pub async fn openapi_spec() -> impl IntoResponse {
             commit_transaction,
             abort_transaction,
             health_check,
+            natural_language_query,
+            generate_sql_from_natural_language,
         ),
         components(schemas(
             CreateActorRequest,
             InvokeActorRequest,
             UpdateActorStateRequest,
+            NaturalLanguageQueryRequest,
+            NaturalLanguageQueryResponse,
+            QueryResults,
+            VisualizationHint,
+            QueryMetadata,
             SuccessResponse<ActorInfo>,
             SuccessResponse<TransactionInfo>,
             SuccessResponse<String>,
+            SuccessResponse<NaturalLanguageQueryResponse>,
             ErrorResponse,
             ActorInfo,
             TransactionInfo,

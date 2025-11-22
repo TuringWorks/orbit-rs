@@ -23,28 +23,27 @@
 //!
 //! ## Usage Example
 //!
-//! ```rust,ignore
-//! use orbit_engine::adapters::{AdapterContext, RedisAdapter, ProtocolAdapter};
-//! use orbit_engine::storage::{HybridStorageManager, HybridStorageConfig, ColumnSchema};
-//! use std::sync::Arc;
-//!
+//! ```rust,no_run
+//! # use orbit_engine::adapters::{AdapterContext, RedisAdapter, ProtocolAdapter};
+//! # use orbit_engine::storage::{HybridStorageManager, HybridStorageConfig, ColumnSchema};
+//! # use std::sync::Arc;
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 //! // Create storage engine with proper configuration
-//! let table_name = "redis_data".to_string();
-//! let schema = vec![]; // Define your schema
-//! let config = HybridStorageConfig::default();
-//! let storage = Arc::new(HybridStorageManager::new(table_name, schema, config));
-//!
+//! // let table_name = "redis_data".to_string();
+//! // let schema = vec![]; // Define your schema
+//! // let config = HybridStorageConfig::default();
+//! // let storage = Arc::new(HybridStorageManager::new(table_name, schema, config));
+//! //
 //! // Create adapter context
-//! let context = AdapterContext::new(storage);
-//!
+//! // let context = AdapterContext::new(storage);
+//! //
 //! // Create Redis adapter
-//! let mut adapter = RedisAdapter::new(context);
-//! adapter.initialize().await?;
-//!
+//! // let mut adapter = RedisAdapter::new(context);
+//! // adapter.initialize().await?;
+//! //
 //! // Execute Redis commands
-//! adapter.set("mykey", "myvalue", None).await?;
-//! let value = adapter.get("mykey").await?;
+//! // adapter.set("mykey", "myvalue", None).await?;
+//! // let value = adapter.get("mykey").await?;
 //! # Ok(())
 //! # }
 //! ```

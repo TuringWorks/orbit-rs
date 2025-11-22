@@ -39,8 +39,8 @@ Orbit-RS supports deployment to Digital Ocean using:
 ┌─────────────────┐    ┌─────────────────┐
 │   Load Balancer │────│   Firewall      │
 └─────────────────┘    └─────────────────┘
-          │                       │
-          ▼                       ▼
+          │                     │
+          ▼                     ▼
 ┌─────────────────┐    ┌─────────────────┐
 │ Standard        │    │ GPU Droplets    │
 │ Droplets        │    │ (H100/A100)     │
@@ -48,8 +48,8 @@ Orbit-RS supports deployment to Digital Ocean using:
 │ - orbit-client  │    │ - ML workloads  │
 │ - orbit-operator│    │                 │
 └─────────────────┘    └─────────────────┘
-          │                       │
-          └───────────────────────┘
+          │                     │
+          └─────────────────────┘
                       │
                       ▼
             ┌─────────────────┐

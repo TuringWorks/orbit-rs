@@ -249,6 +249,9 @@ pub trait SqlExecutionStrategy: Send + Sync {
 
     /// Get strategy name
     fn strategy_name(&self) -> &'static str;
+
+    /// Set the current database context
+    async fn set_current_database(&mut self, database: &str);
 }
 
 /// MVCC execution strategy
@@ -510,6 +513,11 @@ impl SqlExecutionStrategy for MvccExecutionStrategy {
     fn strategy_name(&self) -> &'static str {
         "MVCC"
     }
+
+    async fn set_current_database(&mut self, _database: &str) {
+        // MVCC execution doesn't currently support database switching
+        // This is a no-op for now, but can be implemented when MVCC supports multiple databases
+    }
 }
 
 impl MvccExecutionStrategy {
@@ -617,6 +625,11 @@ impl SqlExecutionStrategy for TraditionalExecutionStrategy {
 
     fn strategy_name(&self) -> &'static str {
         "Traditional"
+    }
+
+    async fn set_current_database(&mut self, database: &str) {
+        // Set the current database in the underlying SqlExecutor
+        self.executor.set_current_database(database).await;
     }
 }
 
@@ -818,6 +831,11 @@ impl ConfigurableSqlEngine {
     /// Get current strategy name
     pub fn strategy_name(&self) -> &'static str {
         self.strategy.strategy_name()
+    }
+
+    /// Set the current database context
+    pub async fn set_current_database(&mut self, database: &str) {
+        self.strategy.set_current_database(database).await;
     }
 
     /// Cleanup old data/transactions
