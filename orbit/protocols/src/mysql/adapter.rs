@@ -2,7 +2,9 @@
 
 use super::auth::{AuthPlugin, AuthState, HandshakeResponse, MySqlAuth};
 use super::packet::MySqlPacket;
-use super::protocol::{build_handshake, MySqlCommand, MySqlPacket as MySqlPacketBuilder};
+use super::protocol::{
+    build_handshake, MySqlCommand, MySqlPacket as MySqlPacketBuilder,
+};
 use super::types::MySqlType;
 use super::MySqlConfig;
 use crate::error::{ProtocolError, ProtocolResult};
@@ -18,21 +20,37 @@ use tokio::sync::RwLock;
 
 /// Prepared statement information
 #[derive(Debug, Clone)]
-#[allow(dead_code)] // Fields reserved for future prepared statement implementation
 struct PreparedStatement {
+    #[allow(dead_code)]
     statement_id: u32,
     query: String,
     num_params: u16,
+    #[allow(dead_code)]
     num_columns: u16,
+    param_types: Vec<super::types::MySqlType>, // Parameter types
+}
+
+/// MySQL metrics
+#[derive(Debug, Clone, Default)]
+pub struct MySqlMetrics {
+    /// Total queries executed
+    pub total_queries: u64,
+    /// Total errors encountered
+    pub total_errors: u64,
+    /// Active connections
+    pub active_connections: usize,
+    /// Prepared statements count
+    pub prepared_statements_count: usize,
 }
 
 /// MySQL protocol adapter
 pub struct MySqlAdapter {
     config: MySqlConfig,
-    sql_engine: Arc<RwLock<SqlEngine>>,
+    pub(crate) sql_engine: Arc<RwLock<SqlEngine>>,
     storage: Arc<dyn crate::postgres_wire::storage::TableStorage>,
     prepared_statements: Arc<RwLock<HashMap<u32, PreparedStatement>>>,
     next_statement_id: Arc<RwLock<u32>>,
+    metrics: Arc<RwLock<MySqlMetrics>>,
 }
 
 impl MySqlAdapter {
@@ -47,6 +65,7 @@ impl MySqlAdapter {
             storage,
             prepared_statements: Arc::new(RwLock::new(HashMap::new())),
             next_statement_id: Arc::new(RwLock::new(1)),
+            metrics: Arc::new(RwLock::new(MySqlMetrics::default())),
         })
     }
 
@@ -81,25 +100,42 @@ impl MySqlAdapter {
 
     /// Clone adapter for a new connection
     fn clone_for_connection(&self) -> Self {
+        // Note: Metrics will be updated in handle_connection
+
         Self {
             config: self.config.clone(),
             sql_engine: Arc::clone(&self.sql_engine),
             storage: Arc::clone(&self.storage),
             prepared_statements: Arc::clone(&self.prepared_statements),
             next_statement_id: Arc::clone(&self.next_statement_id),
+            metrics: Arc::clone(&self.metrics),
         }
     }
 
     /// Handle a client connection
     async fn handle_connection(&self, mut socket: TcpStream) -> ProtocolResult<()> {
+        // Update metrics for new connection
+        {
+            let mut metrics = self.metrics.write().await;
+            metrics.active_connections += 1;
+        }
+
         // Generate connection ID using timestamp
         let connection_id = (std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_micros() as u32) % u32::MAX;
 
-        // Create authentication handler
-        let mut auth = MySqlAuth::new(AuthPlugin::NativePassword);
+        // Create authentication handler with credentials if enabled
+        let mut auth = if self.config.authentication_enabled {
+            MySqlAuth::with_credentials(
+                AuthPlugin::NativePassword,
+                self.config.username.clone(),
+                self.config.password.clone(),
+            )
+        } else {
+            MySqlAuth::new(AuthPlugin::NativePassword)
+        };
 
         // Send handshake
         let handshake = build_handshake(connection_id, &self.config.server_version);
@@ -187,7 +223,17 @@ impl MySqlAdapter {
             }
 
             // Handle commands
-            let response = self.handle_command(&packet).await?;
+            let response = match self.handle_command(&packet).await {
+                Ok(resp) => resp,
+                Err(e) => {
+                    // Update error metrics
+                    {
+                        let mut metrics = self.metrics.write().await;
+                        metrics.total_errors += 1;
+                    }
+                    return Err(e);
+                }
+            };
 
             for response_payload in response {
                 let response_packet = MySqlPacket::new(sequence_id, response_payload);
@@ -260,10 +306,16 @@ impl MySqlAdapter {
             MySqlCommand::StmtPrepare => self.handle_prepare(payload).await,
             MySqlCommand::StmtExecute => self.handle_execute(payload).await,
             MySqlCommand::StmtClose => self.handle_stmt_close(payload).await,
+            MySqlCommand::StmtReset => self.handle_stmt_reset(payload).await,
+            MySqlCommand::FieldList => self.handle_field_list(payload).await,
+            MySqlCommand::Statistics => self.handle_statistics().await,
+            MySqlCommand::CreateDb => self.handle_create_db(payload).await,
+            MySqlCommand::DropDb => self.handle_drop_db(payload).await,
+            MySqlCommand::Refresh => self.handle_refresh(payload).await,
             _ => {
                 // Unsupported command
                 Ok(vec![MySqlPacketBuilder::error(
-                    1047,
+                    super::protocol::error_codes::ER_UNKNOWN_COM_ERROR,
                     &format!("Unknown command: {:?}", command),
                 )])
             }
@@ -272,19 +324,45 @@ impl MySqlAdapter {
 
     /// Handle COM_QUERY
     async fn handle_query(&self, payload: Bytes) -> ProtocolResult<Vec<Bytes>> {
+        // Validate payload is not empty
+        if payload.is_empty() {
+            return Err(ProtocolError::IncompleteFrame);
+        }
+
+        // Update metrics
+        {
+            let mut metrics = self.metrics.write().await;
+            metrics.total_queries += 1;
+        }
+
         let query = String::from_utf8(payload.to_vec())
             .map_err(|e| ProtocolError::InvalidUtf8(e.to_string()))?;
+
+        // Validate query is not empty
+        if query.trim().is_empty() {
+            return Err(ProtocolError::ParseError("Empty query".to_string()));
+        }
 
         println!("[MySQL] Query: {}", query);
 
         // Parse and execute using SQL engine
         match self.sql_engine.write().await.execute(&query).await {
             Ok(result) => self.build_result_set(result),
-            Err(e) => Ok(vec![MySqlPacketBuilder::error(
-                1064,
-                &format!("Query error: {}", e),
-            )]),
+            Err(e) => {
+                // Update error metrics
+                {
+                    let mut metrics = self.metrics.write().await;
+                    metrics.total_errors += 1;
+                }
+                Ok(vec![MySqlPacketBuilder::error_from_protocol_error(&e)])
+            }
         }
+    }
+
+    /// Count parameters in a query (count `?` placeholders)
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub fn count_parameters(query: &str) -> u16 {
+        query.matches('?').count() as u16
     }
 
     /// Handle COM_STMT_PREPARE
@@ -294,18 +372,25 @@ impl MySqlAdapter {
 
         println!("[MySQL] Prepare: {}", query);
 
+        // Count parameters
+        let num_params = Self::count_parameters(&query);
+
         // Generate statement ID
         let mut next_id = self.next_statement_id.write().await;
         let statement_id = *next_id;
         *next_id += 1;
         drop(next_id);
 
+        // Store param_types before creating statement (to avoid borrow issues)
+        let param_types = vec![super::types::MySqlType::VarString; num_params as usize]; // Default to string type
+
         // Store prepared statement
         let stmt = PreparedStatement {
             statement_id,
             query: query.clone(),
-            num_params: 0, // Would need to parse query to determine
-            num_columns: 0,
+            num_params,
+            num_columns: 0, // Will be determined when we know the result set
+            param_types: param_types.clone(),
         };
 
         self.prepared_statements
@@ -313,44 +398,217 @@ impl MySqlAdapter {
             .await
             .insert(statement_id, stmt);
 
+        // Update metrics
+        {
+            let mut metrics = self.metrics.write().await;
+            metrics.prepared_statements_count = self.prepared_statements.read().await.len();
+        }
+
         // Build COM_STMT_PREPARE_OK response
         let mut response = BytesMut::new();
         response.put_u8(0x00); // OK status
         response.put_u32_le(statement_id);
-        response.put_u16_le(0); // num_columns
-        response.put_u16_le(0); // num_params
+        response.put_u16_le(0); // num_columns (will be sent in separate packets if needed)
+        response.put_u16_le(num_params);
         response.put_u8(0); // filler
         response.put_u16_le(0); // warning_count
 
-        Ok(vec![response.freeze()])
+        // If there are parameters, send parameter metadata packets
+        let mut packets = vec![response.freeze()];
+
+        if num_params > 0 {
+            // Send parameter metadata packets
+            // Each parameter gets a column definition packet
+            for i in 0..num_params {
+                let param_name = format!("?{}", i + 1);
+                let param_type = param_types.get(i as usize)
+                    .copied()
+                    .unwrap_or(super::types::MySqlType::VarString);
+                
+                let param_def = MySqlPacketBuilder::column_definition(
+                    "def",           // catalog
+                    "",              // schema (empty for parameters)
+                    "",              // table (empty for parameters)
+                    "",              // org_table (empty for parameters)
+                    &param_name,     // name
+                    &param_name,     // org_name
+                    param_type,       // column_type
+                );
+                packets.push(param_def);
+            }
+        }
+
+        Ok(packets)
+    }
+
+    /// Decode parameter value from COM_STMT_EXECUTE packet
+    fn decode_parameter_value(
+        &self,
+        payload: &mut Bytes,
+        param_type: super::types::MySqlType,
+        is_null: bool,
+    ) -> ProtocolResult<String> {
+        if is_null {
+            return Ok("NULL".to_string());
+        }
+
+        use super::types::MySqlType;
+        use super::packet::read_lenenc_string;
+
+        match param_type {
+            MySqlType::Tiny => {
+                if payload.len() < 1 {
+                    return Err(ProtocolError::IncompleteFrame);
+                }
+                Ok(payload.get_i8().to_string())
+            }
+            MySqlType::Short => {
+                if payload.len() < 2 {
+                    return Err(ProtocolError::IncompleteFrame);
+                }
+                Ok(payload.get_i16_le().to_string())
+            }
+            MySqlType::Long | MySqlType::Int24 => {
+                if payload.len() < 4 {
+                    return Err(ProtocolError::IncompleteFrame);
+                }
+                Ok(payload.get_i32_le().to_string())
+            }
+            MySqlType::LongLong => {
+                if payload.len() < 8 {
+                    return Err(ProtocolError::IncompleteFrame);
+                }
+                Ok(payload.get_i64_le().to_string())
+            }
+            MySqlType::Float => {
+                if payload.len() < 4 {
+                    return Err(ProtocolError::IncompleteFrame);
+                }
+                Ok(payload.get_f32_le().to_string())
+            }
+            MySqlType::Double => {
+                if payload.len() < 8 {
+                    return Err(ProtocolError::IncompleteFrame);
+                }
+                Ok(payload.get_f64_le().to_string())
+            }
+            MySqlType::VarString | MySqlType::VarChar | MySqlType::String => {
+                read_lenenc_string(payload).map(|s| format!("'{}'", s.replace('\'', "''")))
+            }
+            _ => {
+                // Default: try to read as string
+                read_lenenc_string(payload).map(|s| format!("'{}'", s.replace('\'', "''")))
+            }
+        }
     }
 
     /// Handle COM_STMT_EXECUTE
     async fn handle_execute(&self, mut payload: Bytes) -> ProtocolResult<Vec<Bytes>> {
-        if payload.len() < 4 {
+        if payload.len() < 5 {
             return Err(ProtocolError::IncompleteFrame);
         }
 
         let statement_id = payload.get_u32_le();
+        let flags = payload.get_u8(); // Flags
+        let _iteration_count = payload.get_u32_le(); // Usually 1
 
-        println!("[MySQL] Execute statement: {}", statement_id);
+        println!("[MySQL] Execute statement: {} (flags: {})", statement_id, flags);
 
         // Look up prepared statement
         let statements = self.prepared_statements.read().await;
         let stmt = statements
             .get(&statement_id)
-            .ok_or_else(|| ProtocolError::InvalidStatement("Statement not found".to_string()))?;
+            .ok_or_else(|| {
+                // Note: Error metrics will be updated in error response handler
+                ProtocolError::InvalidStatement(format!("Statement {} not found", statement_id))
+            })?;
 
-        let query = stmt.query.clone();
+        let num_params = stmt.num_params;
+        let query_template = stmt.query.clone();
+        let param_types = stmt.param_types.clone();
         drop(statements);
 
-        // Execute query
-        match self.sql_engine.write().await.execute(&query).await {
+        // If no parameters, execute directly
+        if num_params == 0 {
+            match self.sql_engine.write().await.execute(&query_template).await {
+                Ok(result) => return self.build_result_set(result),
+                Err(e) => {
+                    // Update error metrics
+                    {
+                        let mut metrics = self.metrics.write().await;
+                        metrics.total_errors += 1;
+                    }
+                    return Ok(vec![MySqlPacketBuilder::error_from_protocol_error(&e)]);
+                }
+            }
+        }
+
+        // Read NULL bitmap
+        let null_bitmap_len = ((num_params + 7) / 8) as usize;
+        if payload.len() < null_bitmap_len {
+            return Err(ProtocolError::IncompleteFrame);
+        }
+        let null_bitmap = payload.copy_to_bytes(null_bitmap_len);
+
+        // Check if new parameters flag is set (bit 0 of flags)
+        let new_params = (flags & 0x01) != 0;
+
+        // If new_params is set, read parameter types
+        // For now, we'll use stored types or default to string
+        let mut param_types_to_use = param_types;
+        if new_params && num_params > 0 {
+            // Read parameter types (2 bytes per parameter: type, flags)
+            let types_len = (num_params * 2) as usize;
+            if payload.len() < types_len {
+                return Err(ProtocolError::IncompleteFrame);
+            }
+            param_types_to_use = Vec::new();
+            for _ in 0..num_params {
+                let type_byte = payload.get_u8();
+                let _flags = payload.get_u8(); // Parameter flags (unused for now)
+                param_types_to_use.push(
+                    super::types::MySqlType::from_u8(type_byte)
+                        .unwrap_or(super::types::MySqlType::VarString),
+                );
+            }
+        }
+
+        // Decode parameter values
+        let mut param_values = Vec::new();
+        for i in 0..num_params {
+            let param_idx = i as usize;
+            let byte_idx = param_idx / 8;
+            let bit_idx = param_idx % 8;
+            let is_null = (null_bitmap[byte_idx] & (1 << bit_idx)) != 0;
+
+            let param_type = param_types_to_use
+                .get(param_idx)
+                .copied()
+                .unwrap_or(super::types::MySqlType::VarString);
+
+            let value = self.decode_parameter_value(&mut payload, param_type, is_null)?;
+            param_values.push(value);
+        }
+
+        // Bind parameters to query (replace `?` with values)
+        let mut bound_query = query_template.clone();
+        for value in param_values {
+            bound_query = bound_query.replacen("?", &value, 1);
+        }
+
+        println!("[MySQL] Bound query: {}", bound_query);
+
+        // Execute bound query
+        match self.sql_engine.write().await.execute(&bound_query).await {
             Ok(result) => self.build_result_set(result),
-            Err(e) => Ok(vec![MySqlPacketBuilder::error(
-                1064,
-                &format!("Execute error: {}", e),
-            )]),
+            Err(e) => {
+                // Update error metrics
+                {
+                    let mut metrics = self.metrics.write().await;
+                    metrics.total_errors += 1;
+                }
+                Ok(vec![MySqlPacketBuilder::error_from_protocol_error(&e)])
+            }
         }
     }
 
@@ -366,8 +624,163 @@ impl MySqlAdapter {
 
         self.prepared_statements.write().await.remove(&statement_id);
 
+        // Update metrics
+        {
+            let mut metrics = self.metrics.write().await;
+            metrics.prepared_statements_count = self.prepared_statements.read().await.len();
+        }
+
         // No response for COM_STMT_CLOSE
         Ok(vec![])
+    }
+
+    /// Handle COM_STMT_RESET
+    async fn handle_stmt_reset(&self, mut payload: Bytes) -> ProtocolResult<Vec<Bytes>> {
+        if payload.len() < 4 {
+            return Err(ProtocolError::IncompleteFrame);
+        }
+
+        let statement_id = payload.get_u32_le();
+
+        println!("[MySQL] Reset statement: {}", statement_id);
+
+        // Reset doesn't clear the statement, just resets parameter bindings
+        // For our implementation, we just return OK since we don't maintain
+        // separate parameter state between executions
+        Ok(vec![MySqlPacketBuilder::ok(0, 0)])
+    }
+
+    /// Handle COM_FIELD_LIST
+    async fn handle_field_list(&self, mut payload: Bytes) -> ProtocolResult<Vec<Bytes>> {
+        // COM_FIELD_LIST format: table name (null-terminated) + optional pattern
+        let table_name = if payload.is_empty() {
+            return Err(ProtocolError::IncompleteFrame);
+        } else {
+            let mut name_bytes = Vec::new();
+            while !payload.is_empty() {
+                let byte = payload.get_u8();
+                if byte == 0 {
+                    break;
+                }
+                name_bytes.push(byte);
+            }
+            String::from_utf8(name_bytes)
+                .map_err(|e| ProtocolError::InvalidUtf8(e.to_string()))?
+        };
+
+        println!("[MySQL] Field list for table: {}", table_name);
+
+        // Query table schema to get columns
+        let query = format!("SELECT * FROM {} LIMIT 0", table_name);
+        match self.sql_engine.write().await.execute(&query).await {
+            Ok(result) => {
+                // Extract column information from result
+                if let crate::postgres_wire::sql::UnifiedExecutionResult::Select { columns, .. } = result {
+                    let mut packets = Vec::new();
+
+                    // Send column definition packets
+                    for column in columns {
+                        let col_def = MySqlPacketBuilder::column_definition(
+                            "def",
+                            "orbit",
+                            &table_name,
+                            &table_name,
+                            &column,
+                            &column,
+                            MySqlType::VarString, // Default type, could be improved
+                        );
+                        packets.push(col_def);
+                    }
+
+                    // EOF packet
+                    packets.push(MySqlPacketBuilder::eof());
+
+                    Ok(packets)
+                } else {
+                    Ok(vec![MySqlPacketBuilder::error(
+                        super::protocol::error_codes::ER_NO_SUCH_TABLE,
+                        &format!("Table '{}' doesn't exist", table_name),
+                    )])
+                }
+            }
+            Err(e) => {
+                // Update error metrics
+                {
+                    let mut metrics = self.metrics.write().await;
+                    metrics.total_errors += 1;
+                }
+                Ok(vec![MySqlPacketBuilder::error_from_protocol_error(&e)])
+            }
+        }
+    }
+
+    /// Handle COM_STATISTICS
+    async fn handle_statistics(&self) -> ProtocolResult<Vec<Bytes>> {
+        let metrics = self.metrics.read().await;
+        let stats = format!(
+            "Uptime: {} seconds\nQueries: {}\nErrors: {}\nConnections: {}\nPrepared Statements: {}",
+            0, // Uptime would need to be tracked separately
+            metrics.total_queries,
+            metrics.total_errors,
+            metrics.active_connections,
+            metrics.prepared_statements_count
+        );
+        drop(metrics);
+
+        // Statistics is returned as a string
+        let mut buf = BytesMut::new();
+        buf.put(stats.as_bytes());
+        Ok(vec![buf.freeze()])
+    }
+
+    /// Handle COM_CREATE_DB
+    async fn handle_create_db(&self, payload: Bytes) -> ProtocolResult<Vec<Bytes>> {
+        let db_name = String::from_utf8(payload.to_vec())
+            .map_err(|e| ProtocolError::InvalidUtf8(e.to_string()))?;
+
+        println!("[MySQL] Create database: {}", db_name);
+
+        // In Orbit, we don't have separate databases/schemas in the same way MySQL does
+        // For compatibility, we'll just return OK
+        // In the future, this could map to CREATE SCHEMA
+        Ok(vec![MySqlPacketBuilder::ok(0, 0)])
+    }
+
+    /// Handle COM_DROP_DB
+    async fn handle_drop_db(&self, payload: Bytes) -> ProtocolResult<Vec<Bytes>> {
+        let db_name = String::from_utf8(payload.to_vec())
+            .map_err(|e| ProtocolError::InvalidUtf8(e.to_string()))?;
+
+        println!("[MySQL] Drop database: {}", db_name);
+
+        // In Orbit, we don't have separate databases/schemas in the same way MySQL does
+        // For compatibility, we'll just return OK
+        // In the future, this could map to DROP SCHEMA
+        Ok(vec![MySqlPacketBuilder::ok(0, 0)])
+    }
+
+    /// Handle COM_REFRESH
+    async fn handle_refresh(&self, mut payload: Bytes) -> ProtocolResult<Vec<Bytes>> {
+        if payload.is_empty() {
+            return Err(ProtocolError::IncompleteFrame);
+        }
+
+        let refresh_flags = payload.get_u8();
+        println!("[MySQL] Refresh with flags: 0x{:02x}", refresh_flags);
+
+        // Refresh commands:
+        // 0x01 = REFRESH_GRANT (reload privileges)
+        // 0x02 = REFRESH_LOG (flush logs)
+        // 0x04 = REFRESH_TABLES (close all tables)
+        // 0x08 = REFRESH_HOSTS (flush host cache)
+        // 0x10 = REFRESH_STATUS (reset status variables)
+        // 0x20 = REFRESH_THREADS (flush thread cache)
+        // 0x40 = REFRESH_SLAVE (reset slave)
+        // 0x80 = REFRESH_MASTER (reset master)
+
+        // For now, we'll just return OK as a no-op
+        // In the future, this could flush caches, reset metrics, etc.
+        Ok(vec![MySqlPacketBuilder::ok(0, 0)])
     }
 
     /// Build result set from SQL execution result
@@ -387,15 +800,39 @@ impl MySqlAdapter {
                 packets.push(col_count.freeze());
 
                 // Column definition packets
-                for column in &columns {
-                    let mysql_type = MySqlType::VarString; // Default type
+                // Try to infer types from first row if available
+                let mut column_types = vec![MySqlType::VarString; columns.len()];
+                if let Some(first_row) = rows.first() {
+                    for (i, value) in first_row.iter().enumerate() {
+                        if let Some(val_str) = value {
+                            // Try to infer type from value
+                            column_types[i] = if val_str.parse::<i64>().is_ok() {
+                                // Check if it fits in i32
+                                if val_str.parse::<i32>().is_ok() {
+                                    MySqlType::Long
+                                } else {
+                                    MySqlType::LongLong
+                                }
+                            } else if val_str.parse::<f64>().is_ok() {
+                                MySqlType::Double
+                            } else {
+                                MySqlType::VarString
+                            };
+                        }
+                    }
+                }
+
+                for (i, column) in columns.iter().enumerate() {
+                    let mysql_type = column_types.get(i).copied().unwrap_or(MySqlType::VarString);
+                    // Try to get table name from query context if available
+                    // For now, use generic values
                     let col_def = MySqlPacketBuilder::column_definition(
-                        "def",
-                        "orbit",
-                        "table",
-                        "table",
-                        column,
-                        column,
+                        "def",      // catalog
+                        "orbit",    // schema
+                        "",         // table (empty if unknown)
+                        "",         // org_table (empty if unknown)
+                        column,     // name
+                        column,     // org_name
                         mysql_type,
                     );
                     packets.push(col_def);
@@ -429,7 +866,7 @@ impl MySqlAdapter {
     }
 
     /// Convert SQL type to MySQL type
-    #[allow(dead_code)] // Reserved for future type conversion implementation
+    #[allow(dead_code)]
     fn sql_type_to_mysql_type(&self, sql_type: &SqlType) -> MySqlType {
         match sql_type {
             SqlType::SmallInt => MySqlType::Short,
@@ -467,6 +904,18 @@ impl MySqlAdapter {
             SqlValue::Timestamp(ts) => Some(ts.to_string()),
             _ => Some(format!("{:?}", value)),
         }
+    }
+
+    /// Get access to the SQL engine (for testing)
+    #[cfg_attr(test, allow(dead_code))]
+    pub fn sql_engine(&self) -> &Arc<RwLock<SqlEngine>> {
+        &self.sql_engine
+    }
+
+    /// Get access to metrics (for monitoring)
+    #[cfg_attr(test, allow(dead_code))]
+    pub fn metrics(&self) -> &Arc<RwLock<MySqlMetrics>> {
+        &self.metrics
     }
 }
 
