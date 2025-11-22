@@ -119,13 +119,6 @@ struct Args {
     )]
     log_level: String,
 
-    /// Enable MySQL protocol adapter
-    #[arg(
-        long,
-        help = "Enable MySQL wire protocol adapter"
-    )]
-    enable_mysql: bool,
-
     /// MySQL port
     #[arg(
         long,
@@ -134,13 +127,6 @@ struct Args {
         default_value = "3306"
     )]
     mysql_port: u16,
-
-    /// Enable CQL protocol adapter
-    #[arg(
-        long,
-        help = "Enable CQL (Cassandra) protocol adapter"
-    )]
-    enable_cql: bool,
 
     /// CQL port
     #[arg(
@@ -205,18 +191,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
     );
 
     // Log protocol adapters
-    if args.enable_mysql {
-        info!(
-            "[MySQL] MySQL protocol will listen on {}:{}",
-            args.bind, args.mysql_port
-        );
-    }
-    if args.enable_cql {
-        info!(
-            "[CQL] CQL protocol will listen on {}:{}",
-            args.bind, args.cql_port
-        );
-    }
+    info!(
+        "[MySQL] MySQL protocol will listen on {}:{}",
+        args.bind, args.mysql_port
+    );
+    info!(
+        "[CQL] CQL protocol will listen on {}:{}",
+        args.bind, args.cql_port
+    );
 
     // Log seed nodes
     if !args.seed_nodes.is_empty() {
@@ -234,44 +216,42 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     info!("[Orbit Server] Orbit Server initialized successfully");
 
-    // Start protocol adapters if enabled
+    // Start protocol adapters
     let mut protocol_handles: Vec<JoinHandle<Result<(), Box<dyn Error + Send + Sync>>>> = Vec::new();
 
-    if args.enable_mysql {
-        let mysql_config = MySqlConfig {
-            listen_addr: format!("{}:{}", args.bind, args.mysql_port).parse()?,
-            max_connections: 1000,
-            authentication_enabled: false,
-            server_version: format!("Orbit-DB {} (MySQL-compatible)", env!("CARGO_PKG_VERSION")),
-            username: None,
-            password: None,
-        };
+    // Start MySQL protocol adapter
+    let mysql_config = MySqlConfig {
+        listen_addr: format!("{}:{}", args.bind, args.mysql_port).parse()?,
+        max_connections: 1000,
+        authentication_enabled: false,
+        server_version: format!("Orbit-DB {} (MySQL-compatible)", env!("CARGO_PKG_VERSION")),
+        username: None,
+        password: None,
+    };
 
-        let mysql_adapter = MySqlAdapter::new(mysql_config).await?;
-        let mysql_handle = tokio::spawn(async move {
-            info!("[MySQL] MySQL protocol adapter started on port 3306");
-            mysql_adapter.start().await.map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)
-        });
-        protocol_handles.push(mysql_handle);
-    }
+    let mysql_adapter = MySqlAdapter::new(mysql_config).await?;
+    let mysql_handle = tokio::spawn(async move {
+        info!("[MySQL] MySQL protocol adapter started on port 3306");
+        mysql_adapter.start().await.map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)
+    });
+    protocol_handles.push(mysql_handle);
 
-    if args.enable_cql {
-        let cql_config = CqlConfig {
-            listen_addr: format!("{}:{}", args.bind, args.cql_port).parse()?,
-            max_connections: 1000,
-            authentication_enabled: false,
-            protocol_version: 4,
-            username: None,
-            password: None,
-        };
+    // Start CQL protocol adapter
+    let cql_config = CqlConfig {
+        listen_addr: format!("{}:{}", args.bind, args.cql_port).parse()?,
+        max_connections: 1000,
+        authentication_enabled: false,
+        protocol_version: 4,
+        username: None,
+        password: None,
+    };
 
-        let cql_adapter = CqlAdapter::new(cql_config).await?;
-        let cql_handle = tokio::spawn(async move {
-            info!("[CQL] CQL protocol adapter started on port 9042");
-            cql_adapter.start().await.map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)
-        });
-        protocol_handles.push(cql_handle);
-    }
+    let cql_adapter = CqlAdapter::new(cql_config).await?;
+    let cql_handle = tokio::spawn(async move {
+        info!("[CQL] CQL protocol adapter started on port 9042");
+        cql_adapter.start().await.map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)
+    });
+    protocol_handles.push(cql_handle);
 
     info!("[Orbit Server] Ready to serve actor workloads");
 
