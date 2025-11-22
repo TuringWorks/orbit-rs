@@ -309,27 +309,28 @@ impl ListCommands {
         self.validate_arg_count("LINDEX", args, 2)?;
 
         let key = self.get_string_arg(args, 0, "LINDEX")?;
+        // Use get_int_arg which now handles both integer and bulk string formats
         let index = self.get_int_arg(args, 1, "LINDEX")?;
 
-        // Get ListActor reference
-        let actor_ref = self
+        // Use local registry for consistency
+        let result = self
             .base
-            .orbit_client
-            .actor_reference::<ListActor>(Key::StringKey { key: key.clone() })
+            .local_registry
+            .execute_list(&key, "lindex", &[serde_json::to_value(index).unwrap()])
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
 
-        let element: Result<Option<String>, _> =
-            actor_ref.invoke("lindex", vec![index.into()]).await;
+        let element: Option<String> = serde_json::from_value(result)
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))?;
 
         match element {
-            Ok(Some(value)) => {
+            Some(value) => {
                 debug!("LINDEX {} {} -> {}", key, index, value);
                 Ok(RespValue::BulkString(Bytes::from(
                     value.as_bytes().to_vec(),
                 )))
             }
-            Ok(None) | Err(_) => {
+            None => {
                 debug!("LINDEX {} {} -> null", key, index);
                 Ok(RespValue::null())
             }

@@ -14,11 +14,11 @@ struct RespTestContext {
 
 impl RespTestContext {
     async fn new() -> Self {
-        // Create a mock OrbitClient for testing
-        // In a real scenario, this would connect to an orbit-server
+        // Create an offline OrbitClient for testing
+        // This doesn't require a running server since we use SimpleLocalRegistry internally
         let orbit_client = OrbitClient::builder()
             .with_namespace("resp-test")
-            .with_server_urls(vec!["http://localhost:50051".to_string()])
+            .with_offline_mode(true)
             .build()
             .await
             .expect("Failed to create OrbitClient");
@@ -128,13 +128,9 @@ async fn test_expire_nonexistent_key_returns_zero() {
 async fn test_ttl_command() {
     let ctx = RespTestContext::new().await;
 
-    // Setup: Create a key with expiration
-    ctx.execute_command(ctx.make_command("SET", vec!["ttl_key", "value"]))
-        .await
-        .unwrap();
-    ctx.execute_command(ctx.make_command("EXPIRE", vec!["ttl_key", "60"]))
-        .await
-        .unwrap();
+    // Setup: Create a key with expiration using SET EX
+    let set_cmd = ctx.make_command("SET", vec!["ttl_key", "value", "EX", "60"]);
+    ctx.execute_command(set_cmd).await.unwrap();
 
     // Test: TTL should return remaining seconds
     let ttl_cmd = ctx.make_command("TTL", vec!["ttl_key"]);
@@ -142,9 +138,33 @@ async fn test_ttl_command() {
 
     // Should return a positive integer (remaining seconds)
     if let RespValue::Integer(ttl) = result {
-        assert!(ttl > 0 && ttl <= 60);
+        assert!(ttl > 0 && ttl <= 60, "TTL should be positive and <= 60, got: {}", ttl);
     } else {
-        panic!("TTL should return an integer");
+        panic!("TTL should return an integer, got: {:?}", result);
+    }
+}
+
+#[tokio::test]
+async fn test_ttl_command_with_expire() {
+    let ctx = RespTestContext::new().await;
+
+    // Setup: Create a key with expiration using EXPIRE
+    ctx.execute_command(ctx.make_command("SET", vec!["ttl_key2", "value"]))
+        .await
+        .unwrap();
+    ctx.execute_command(ctx.make_command("EXPIRE", vec!["ttl_key2", "60"]))
+        .await
+        .unwrap();
+
+    // Test: TTL should return remaining seconds
+    let ttl_cmd = ctx.make_command("TTL", vec!["ttl_key2"]);
+    let result = ctx.execute_command(ttl_cmd).await.unwrap();
+
+    // Should return a positive integer (remaining seconds)
+    if let RespValue::Integer(ttl) = result {
+        assert!(ttl > 0 && ttl <= 60, "TTL should be positive and <= 60, got: {}", ttl);
+    } else {
+        panic!("TTL should return an integer, got: {:?}", result);
     }
 }
 
@@ -741,6 +761,109 @@ async fn test_set_and_get() {
         assert_eq!(String::from_utf8_lossy(&bytes), "test_value");
     } else {
         panic!("GET should return a bulk string");
+    }
+}
+
+#[tokio::test]
+async fn test_set_with_ex_option() {
+    let ctx = RespTestContext::new().await;
+
+    // Test: SET with EX option should set expiration
+    let set_cmd = ctx.make_command("SET", vec!["setex_key", "value", "EX", "60"]);
+    let result = ctx.execute_command(set_cmd).await.unwrap();
+    assert!(matches!(result, RespValue::SimpleString(_) | RespValue::BulkString(_)));
+
+    // Verify TTL is set
+    let ttl_cmd = ctx.make_command("TTL", vec!["setex_key"]);
+    let ttl_result = ctx.execute_command(ttl_cmd).await.unwrap();
+    if let RespValue::Integer(ttl) = ttl_result {
+        assert!(ttl > 0 && ttl <= 60, "TTL should be positive and <= 60, got: {}", ttl);
+    } else {
+        panic!("TTL should return an integer");
+    }
+}
+
+#[tokio::test]
+async fn test_set_with_px_option() {
+    let ctx = RespTestContext::new().await;
+
+    // Test: SET with PX option (milliseconds) should set expiration
+    let set_cmd = ctx.make_command("SET", vec!["setpx_key", "value", "PX", "60000"]);
+    let result = ctx.execute_command(set_cmd).await.unwrap();
+    assert!(matches!(result, RespValue::SimpleString(_) | RespValue::BulkString(_)));
+
+    // Verify TTL is set (should be approximately 60 seconds)
+    let ttl_cmd = ctx.make_command("TTL", vec!["setpx_key"]);
+    let ttl_result = ctx.execute_command(ttl_cmd).await.unwrap();
+    if let RespValue::Integer(ttl) = ttl_result {
+        assert!(ttl > 50 && ttl <= 60, "TTL should be around 60 seconds, got: {}", ttl);
+    } else {
+        panic!("TTL should return an integer");
+    }
+}
+
+#[tokio::test]
+async fn test_set_with_nx_option() {
+    let ctx = RespTestContext::new().await;
+
+    // Test: SET with NX option should only set if key doesn't exist
+    let set_cmd1 = ctx.make_command("SET", vec!["setnx_key", "value1", "NX"]);
+    let result1 = ctx.execute_command(set_cmd1).await.unwrap();
+    assert!(matches!(result1, RespValue::SimpleString(_) | RespValue::BulkString(_)));
+
+    // Try to set again with NX - should return null
+    let set_cmd2 = ctx.make_command("SET", vec!["setnx_key", "value2", "NX"]);
+    let result2 = ctx.execute_command(set_cmd2).await.unwrap();
+    assert!(result2.is_null(), "SET NX on existing key should return null");
+
+    // Verify original value is still there
+    let get_cmd = ctx.make_command("GET", vec!["setnx_key"]);
+    let get_result = ctx.execute_command(get_cmd).await.unwrap();
+    if let RespValue::BulkString(bytes) = get_result {
+        assert_eq!(String::from_utf8_lossy(&bytes), "value1");
+    }
+}
+
+#[tokio::test]
+async fn test_set_with_xx_option() {
+    let ctx = RespTestContext::new().await;
+
+    // Test: SET with XX option should only set if key exists
+    let set_cmd1 = ctx.make_command("SET", vec!["setxx_key", "value1"]);
+    ctx.execute_command(set_cmd1).await.unwrap();
+
+    // Set with XX on existing key - should succeed
+    let set_cmd2 = ctx.make_command("SET", vec!["setxx_key", "value2", "XX"]);
+    let result2 = ctx.execute_command(set_cmd2).await.unwrap();
+    assert!(matches!(result2, RespValue::SimpleString(_) | RespValue::BulkString(_)));
+
+    // Try to set with XX on non-existent key - should return null
+    let set_cmd3 = ctx.make_command("SET", vec!["nonexistent_xx", "value", "XX"]);
+    let result3 = ctx.execute_command(set_cmd3).await.unwrap();
+    assert!(result3.is_null(), "SET XX on non-existent key should return null");
+
+    // Verify value was updated
+    let get_cmd = ctx.make_command("GET", vec!["setxx_key"]);
+    let get_result = ctx.execute_command(get_cmd).await.unwrap();
+    if let RespValue::BulkString(bytes) = get_result {
+        assert_eq!(String::from_utf8_lossy(&bytes), "value2");
+    }
+}
+
+#[tokio::test]
+async fn test_set_with_ex_and_nx() {
+    let ctx = RespTestContext::new().await;
+
+    // Test: SET with both EX and NX options
+    let set_cmd = ctx.make_command("SET", vec!["setexnx_key", "value", "EX", "60", "NX"]);
+    let result = ctx.execute_command(set_cmd).await.unwrap();
+    assert!(matches!(result, RespValue::SimpleString(_) | RespValue::BulkString(_)));
+
+    // Verify TTL is set
+    let ttl_cmd = ctx.make_command("TTL", vec!["setexnx_key"]);
+    let ttl_result = ctx.execute_command(ttl_cmd).await.unwrap();
+    if let RespValue::Integer(ttl) = ttl_result {
+        assert!(ttl > 0 && ttl <= 60);
     }
 }
 
