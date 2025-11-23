@@ -14,10 +14,33 @@ path = "src/main.rs"
 orbit-util = { path = "../util" }
 orbit-shared = { path = "../shared" }
 orbit-proto = { path = "../proto" }
-orbit-protocols = { path = "../protocols" }
 orbit-client = { path = "../client" }
 tokio.workspace = true
 tokio-stream.workspace = true
+tokio-util = { version = "0.7", features = ["codec"] }
+# Protocol dependencies (merged from orbit-protocols)
+bytes = "1.7"
+serde_cbor = "0.11"
+nom = "7.1"
+postgres-protocol = "0.6"
+postgres-types = "0.2"
+regex = "1.11"
+md5 = "0.7"
+sha2 = "0.10"
+hex = "0.4"
+# base64 already defined below
+hmac = "0.12"
+pbkdf2 = "0.12"
+axum = { version = "0.8", features = ["ws", "macros"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["cors", "trace"] }
+utoipa = { version = "4.2", features = ["axum_extras"] }
+utoipa-swagger-ui = { version = "7.1", features = ["axum"] }
+async-stream = "0.3"
+rust_decimal = { version = "1.36", features = ["serde"] }
+ordered-float = { version = "4.2", features = ["serde"] }
+comfy-table = "7.1"
+owo-colors = "4.1"
 tonic.workspace = true
 tonic-reflection = "0.12"
 futures.workspace = true
@@ -45,7 +68,24 @@ uuid = { version = "1.0", features = ["v4", "serde"] }
 env_logger = "0.11"
 fastbloom-rs = "0.5" # For bloom filters in LSM-Tree
 base64 = "0.22" # For WAL encoding
+metrics-exporter-prometheus = "0.15" # For Prometheus metrics export
+hyper = { version = "1.0", features = ["full"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
+http-body-util = "0.1"
+# Apache Iceberg integration for warm/cold tiers (optional feature)
+iceberg = { version = "0.7", optional = true, features = ["storage-s3", "storage-memory"] }
+iceberg-catalog-rest = { version = "0.7", optional = true }
+arrow = { version = "55.2", optional = true }
+arrow-schema = { version = "55.2", optional = true }
+parquet = { version = "55.2", optional = true }
+opendal = { version = "0.51", optional = true, features = ["services-s3", "services-azblob", "services-memory"] }
+
+[features]
+default = []
+# Enable Apache Iceberg cold tier storage
+iceberg-cold = ["iceberg", "iceberg-catalog-rest", "arrow", "arrow-schema", "parquet", "opendal"]
 
 [dev-dependencies]
 mockall.workspace = true
 tokio-test = "0.4"
+tempfile = "3.10"

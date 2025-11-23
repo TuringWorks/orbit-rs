@@ -612,13 +612,13 @@ Now that you have Orbit-RS multi-protocol server running, explore these guides:
 
 -  **[Transaction Features](features/transaction_features.md)** - Distributed ACID transactions
 -  **[Real-time Streaming](PHASE_11_CDC_STREAMING.md)** - CDC and event sourcing
--  **[Kubernetes Deployment](kubernetes_deployment.md)** - Production deployment
+-  **[Kubernetes Complete Documentation](KUBERNETES_COMPLETE_DOCUMENTATION.md)** - Production deployment
 -  **[Actor System Guide](virtual_actor_persistence.md)** - Virtual actors and distribution
 
 ### **Development & Operations**
 
 -  **[Development Guide](DEVELOPMENT.md)** - Contributing to Orbit-RS
--  **[Security Guide](SECURITY.md)** - Authentication and authorization
+-  **[Security Guide](SECURITY_COMPLETE_DOCUMENTATION.md)** - Authentication and authorization
 -  **[Monitoring Guide](advanced_transaction_features.md)** - Metrics and observability
 -  **[Troubleshooting](operations/OPERATIONS_RUNBOOK.md)** - Common issues and solutions
 

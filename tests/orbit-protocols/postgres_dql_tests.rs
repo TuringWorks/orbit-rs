@@ -2,7 +2,7 @@
 //!
 //! Comprehensive tests for SELECT operations
 
-use orbit_protocols::postgres_wire::sql::executor::{ExecutionResult, SqlExecutor};
+use orbit_server::protocols::postgres_wire::sql::executor::{ExecutionResult, SqlExecutor};
 
 // ============================================================================
 // Basic SELECT Tests

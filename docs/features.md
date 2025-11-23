@@ -41,9 +41,22 @@ This document provides a comprehensive overview of all implemented features in O
 
 ## Protocol Support
 
+### All Protocols with RocksDB Persistence
+
+All 7 protocols now have full RocksDB persistence, ensuring data durability across server restarts:
+
+- **Redis (RESP)** - Port 6379 - `data/redis/rocksdb/`
+- **PostgreSQL** - Port 5432 - `data/postgresql/rocksdb/`
+- **MySQL** - Port 3306 - `data/mysql/rocksdb/`
+- **CQL/Cassandra** - Port 9042 - `data/cql/rocksdb/`
+- **Cypher/Neo4j (Bolt)** - Port 7687 - `data/cypher/rocksdb/`
+- **AQL/ArangoDB** - Port 8529 - `data/aql/rocksdb/`
+- **GraphRAG** - Via RESP/PostgreSQL/Cypher/AQL - `data/graphrag/rocksdb/` (3 persistence options)
+
 ### Redis Protocol (RESP)
 
 - **Status**: **Complete** - 124+ commands implemented
+- **Persistence**: ✅ RocksDB at `data/redis/rocksdb/`
 - **Coverage**:
   - Core data types (String, Hash, List, Set, Sorted Set)
   - Pub/Sub messaging
@@ -57,8 +70,56 @@ This document provides a comprehensive overview of all implemented features in O
 ### PostgreSQL Wire Protocol
 
 - **Status**: **Complete**
-- **Features**: Complete wire protocol, complex SQL parsing, pgvector support
+- **Persistence**: ✅ RocksDB at `data/postgresql/rocksdb/`
+- **Features**: Complete wire protocol, complex SQL parsing, pgvector support, ACID transactions
 - **Documentation**: [PostgreSQL Implementation](protocols/POSTGRES_WIRE_IMPLEMENTATION.md)
+
+### MySQL Wire Protocol
+
+- **Status**: **Complete**
+- **Persistence**: ✅ RocksDB at `data/mysql/rocksdb/`
+- **Features**: MySQL-compatible wire protocol, SQL DDL/DML operations
+- **Documentation**: [MySQL Complete Documentation](MYSQL_COMPLETE_DOCUMENTATION.md)
+
+### CQL/Cassandra Protocol
+
+- **Status**: **Complete**
+- **Persistence**: ✅ RocksDB at `data/cql/rocksdb/`
+- **Features**: Wide-column operations, CQL query language support
+- **Port**: 9042
+
+### Cypher/Neo4j (Bolt Protocol)
+
+- **Status**: **Implemented**
+- **Persistence**: ✅ RocksDB at `data/cypher/rocksdb/`
+- **Features**: Graph database operations, Cypher query language, node and relationship storage
+- **Port**: 7687
+- **Documentation**: [Graph Database](GRAPH_DATABASE.md)
+
+### AQL/ArangoDB Protocol
+
+- **Status**: **Implemented**
+- **Persistence**: ✅ RocksDB at `data/aql/rocksdb/`
+- **Features**: Multi-model database operations, document and graph storage, AQL query language
+- **Port**: 8529
+- **Documentation**: [AQL Reference](AQL_REFERENCE.md)
+
+### GraphRAG Protocol
+
+- **Status**: **Production Ready**
+- **Persistence**: ✅ RocksDB at `data/graphrag/rocksdb/` (3 implementation options)
+- **Features**: 
+  - Knowledge graph construction from documents
+  - Entity extraction with LLM support
+  - Relationship identification
+  - Multi-hop reasoning
+  - RAG query processing
+  - Three persistence options:
+    1. PersistentGraphStorage adapter (wraps CypherGraphStorage)
+    2. GraphRAGStorage (dedicated storage optimized for GraphRAG)
+    3. Enhanced GraphActor (configurable persistent storage)
+- **Access**: Via RESP (GRAPHRAG.* commands), PostgreSQL, Cypher, AQL
+- **Documentation**: [GraphRAG Complete Documentation](GRAPHRAG_COMPLETE_DOCUMENTATION.md), [GraphRAG Persistence Implementation](GRAPHRAG_PERSISTENCE_IMPLEMENTATION.md)
 
 ### Model Context Protocol (MCP)
 
@@ -117,9 +178,13 @@ This document provides a comprehensive overview of all implemented features in O
   - In-Memory storage
   - COW B+ Trees (recommended)
   - LSM Trees
-  - RocksDB integration
+  - RocksDB integration (used by all protocols)
 - **Features**: Backend independence, cloud vs local storage, seamless switching
-- **Documentation**: [Storage Backend Independence](STORAGE_BACKEND_INDEPENDENCE.md), [Persistence Architecture](PERSISTENCE_ARCHITECTURE.md)
+- **Protocol Persistence**: All 6 protocols use RocksDB for durable storage
+  - Each protocol has isolated storage at `data/{protocol}/rocksdb/`
+  - Automatic data loading on startup
+  - ACID guarantees with crash recovery
+- **Documentation**: [Storage Backend Independence](STORAGE_BACKEND_INDEPENDENCE.md), [Persistence Complete Documentation](PERSISTENCE_COMPLETE_DOCUMENTATION.md)
 
 ### Kubernetes Integration
 
@@ -129,7 +194,7 @@ This document provides a comprehensive overview of all implemented features in O
   - Helm charts for deployment
   - StatefulSets and PVC management
   - Production-ready configuration
-- **Documentation**: [Kubernetes Deployment](kubernetes_deployment.md), [Kubernetes Storage Guide](KUBERNETES_STORAGE_GUIDE.md)
+- **Documentation**: [Kubernetes Complete Documentation](KUBERNETES_COMPLETE_DOCUMENTATION.md)
 
 ### Observability
 
@@ -162,7 +227,7 @@ This document provides a comprehensive overview of all implemented features in O
 
 - **Status**:  **Implemented**
 - **Features**: Enterprise-grade security, audit logging, compliance features
-- **Documentation**: [Security Guide](SECURITY.md), [Advanced Transaction Features](advanced_transaction_features.md)
+- **Documentation**: [Security Complete Documentation](SECURITY_COMPLETE_DOCUMENTATION.md), [Advanced Transaction Features](advanced_transaction_features.md)
 
 ### Secrets Management
 
@@ -239,15 +304,15 @@ This document provides a comprehensive overview of all implemented features in O
 
 ### Deployment & Operations
 
-- [Kubernetes Deployment](kubernetes_deployment.md)
+- [Kubernetes Complete Documentation](KUBERNETES_COMPLETE_DOCUMENTATION.md)
 - [CI/CD Pipeline](CICD.md)
-- [Security Guide](SECURITY.md)
+- [Security Complete Documentation](SECURITY_COMPLETE_DOCUMENTATION.md)
 
 ### Advanced Topics
 
 - [Advanced Transaction Features](advanced_transaction_features.md)
-- [OrbitQL Reference](ORBITQL_REFERENCE.md)
-- [GraphRAG Architecture](GraphRAG_ARCHITECTURE.md)
+- [OrbitQL Complete Documentation](ORBITQL_COMPLETE_DOCUMENTATION.md)
+- [GraphRAG Complete Documentation](GRAPHRAG_COMPLETE_DOCUMENTATION.md)
 
 ---
 

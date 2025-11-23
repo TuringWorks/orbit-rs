@@ -5,7 +5,7 @@
 
 #[cfg(test)]
 mod cql_tests {
-    use orbit_protocols::cql::{CqlAdapter, CqlConfig};
+    use orbit_server::protocols::cql::{CqlAdapter, CqlConfig};
 
     #[tokio::test]
     async fn test_cql_adapter_creation() {
@@ -32,7 +32,7 @@ mod cql_tests {
 
     #[test]
     fn test_cql_parser_basic() {
-        use orbit_protocols::cql::{CqlParser, CqlStatement};
+        use orbit_server::protocols::cql::{CqlParser, CqlStatement};
 
         let parser = CqlParser::new();
 
@@ -51,8 +51,8 @@ mod cql_tests {
 
     #[test]
     fn test_cql_type_conversions() {
-        use orbit_protocols::cql::CqlValue;
-        use orbit_protocols::postgres_wire::sql::types::SqlValue;
+        use orbit_server::protocols::cql::CqlValue;
+        use orbit_server::protocols::postgres_wire::sql::types::SqlValue;
 
         // Test basic type conversions
         let cql_int = CqlValue::Int(42);
@@ -71,7 +71,7 @@ mod cql_tests {
 
 #[cfg(test)]
 mod mysql_tests {
-    use orbit_protocols::mysql::{MySqlAdapter, MySqlConfig};
+    use orbit_server::protocols::mysql::{MySqlAdapter, MySqlConfig};
 
     #[tokio::test]
     async fn test_mysql_adapter_creation() {
@@ -98,8 +98,8 @@ mod mysql_tests {
 
     #[test]
     fn test_mysql_type_conversions() {
-        use orbit_protocols::mysql::MySqlValue;
-        use orbit_protocols::postgres_wire::sql::types::SqlValue;
+        use orbit_server::protocols::mysql::MySqlValue;
+        use orbit_server::protocols::postgres_wire::sql::types::SqlValue;
 
         // Test basic type conversions
         let mysql_int = MySqlValue::Int(42);
@@ -117,7 +117,7 @@ mod mysql_tests {
 
     #[test]
     fn test_mysql_packet_encoding() {
-        use orbit_protocols::mysql::packet::MySqlPacket;
+        use orbit_server::protocols::mysql::packet::MySqlPacket;
         use bytes::Bytes;
 
         let packet = MySqlPacket::new(1, Bytes::from("test payload"));
@@ -130,7 +130,7 @@ mod mysql_tests {
 
     #[test]
     fn test_mysql_command_conversion() {
-        use orbit_protocols::mysql::protocol::MySqlCommand;
+        use orbit_server::protocols::mysql::protocol::MySqlCommand;
 
         assert_eq!(MySqlCommand::from_u8(0x03).unwrap(), MySqlCommand::Query);
         assert_eq!(MySqlCommand::from_u8(0x01).unwrap(), MySqlCommand::Quit);
@@ -141,8 +141,8 @@ mod mysql_tests {
 
 #[cfg(test)]
 mod integration_tests {
-    use orbit_protocols::cql::{CqlAdapter, CqlConfig};
-    use orbit_protocols::mysql::{MySqlAdapter, MySqlConfig};
+    use orbit_server::protocols::cql::{CqlAdapter, CqlConfig};
+    use orbit_server::protocols::mysql::{MySqlAdapter, MySqlConfig};
 
     #[tokio::test]
     async fn test_both_adapters_can_coexist() {
@@ -170,7 +170,7 @@ mod integration_tests {
 
     #[test]
     fn test_error_types_are_compatible() {
-        use orbit_protocols::error::ProtocolError;
+        use orbit_server::protocols::error::ProtocolError;
 
         // Test that error types work correctly
         let err1 = ProtocolError::CqlError("test error".to_string());

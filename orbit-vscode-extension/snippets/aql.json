@@ -1,0 +1,23 @@
+{
+  "FOR": {
+    "prefix": "for",
+    "body": "FOR ${1:doc} IN ${2:collection} FILTER ${3:condition} RETURN ${1:doc};",
+    "description": "FOR loop"
+  },
+  "INSERT": {
+    "prefix": "insert",
+    "body": "INSERT {${1:property}: ${2:value}} INTO ${3:collection};",
+    "description": "INSERT document"
+  },
+  "UPDATE": {
+    "prefix": "update",
+    "body": "UPDATE ${1:doc} IN ${2:collection} SET ${3:property} = ${4:value};",
+    "description": "UPDATE document"
+  },
+  "REMOVE": {
+    "prefix": "remove",
+    "body": "REMOVE ${1:doc} IN ${2:collection};",
+    "description": "REMOVE document"
+  }
+}
+

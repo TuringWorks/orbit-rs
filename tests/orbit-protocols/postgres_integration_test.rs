@@ -2,7 +2,7 @@
 //!
 //! End-to-end tests for the PostgreSQL wire protocol functionality
 
-use orbit_protocols::postgres_wire::sql::executor::{ExecutionResult, SqlExecutor};
+use orbit_server::protocols::postgres_wire::sql::executor::{ExecutionResult, SqlExecutor};
 
 #[tokio::test]
 async fn test_sql_executor_create_table() {

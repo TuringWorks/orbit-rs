@@ -17,7 +17,7 @@ use std::sync::Arc;
 use iceberg::io::{FileIO, FileIOBuilder};
 use iceberg::spec::{Schema, NestedField, PrimitiveType, Type, TableMetadataBuilder, FormatVersion, UnboundPartitionSpec, SortOrder};
 
-use orbit_protocols::postgres_wire::sql::execution::{
+use orbit_server::protocols::postgres_wire::sql::execution::{
     Column, ColumnBatch, NullBitmap, column_batch_to_arrow,
 };
 

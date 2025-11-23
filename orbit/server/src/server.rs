@@ -4,13 +4,12 @@ use crate::mesh::{AddressableDirectory, ClusterManager, ClusterStats, DirectoryS
 use crate::persistence::config::PersistenceProviderConfig;
 use crate::persistence::PersistenceProviderRegistry;
 use crate::LoadBalancer;
-use orbit_client::OrbitClient;
 use orbit_proto::{
     connection_service_server, health_check_response, health_service_server,
     OrbitConnectionService, OrbitHealthService,
 };
-use orbit_protocols::postgres_wire::{PostgresServer, QueryEngine, RocksDbTableStorage};
-use orbit_protocols::resp::RespServer;
+use crate::protocols::{PostgresServer, RespServer};
+use crate::protocols::postgres_wire::{QueryEngine, RocksDbTableStorage};
 use orbit_shared::{NodeCapabilities, NodeId, NodeInfo, NodeStatus, OrbitError, OrbitResult};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -371,25 +370,39 @@ impl OrbitServer {
             );
             tracing::info!("Starting RESP (Redis) server on {}", redis_addr);
 
-            // Create OrbitClient that connects to this server
-            let server_url = format!("http://{}:{}", self.config.bind_address, self.config.port);
-            match OrbitClient::builder()
-                .with_namespace(self.config.namespace.clone())
-                .with_server_urls(vec![server_url])
-                .build()
-                .await
+            // Create RESP server without OrbitClient
             {
-                Ok(client) => {
-                    let resp_server = RespServer::new(redis_addr, client);
-                    server_tasks.push(tokio::spawn(async move {
-                        if let Err(e) = resp_server.run().await {
-                            tracing::error!("RESP server failed: {}", e);
-                        }
-                    }));
-                }
-                Err(e) => {
-                    tracing::error!("Failed to create OrbitClient for RESP server: {}", e);
-                }
+                    // Create RocksDB storage for Redis persistence
+                    // Use consistent path structure: data/redis/rocksdb/ (matching other protocols)
+                    let redis_data_path = "./data/redis/rocksdb";
+                    let redis_provider: Option<Arc<dyn crate::protocols::persistence::redis_data::RedisDataProvider>> = 
+                        match crate::protocols::persistence::rocksdb_redis_provider::RocksDbRedisDataProvider::new(
+                            redis_data_path,
+                            crate::protocols::persistence::redis_data::RedisDataConfig::default(),
+                        ) {
+                            Ok(provider) => {
+                                tracing::info!("Redis using persistent RocksDB storage at: {}", redis_data_path);
+                                let provider_arc: Arc<dyn crate::protocols::persistence::redis_data::RedisDataProvider> = Arc::new(provider);
+                                // Initialize the provider
+                                if let Err(e) = crate::protocols::persistence::redis_data::RedisDataProvider::initialize(&*provider_arc).await {
+                                    tracing::warn!("Failed to initialize Redis persistent storage: {}", e);
+                                    None
+                                } else {
+                                    Some(provider_arc)
+                                }
+                            }
+                            Err(e) => {
+                                tracing::warn!("Failed to create Redis persistent storage, using in-memory: {}", e);
+                                None
+                            }
+                        };
+
+                let resp_server = RespServer::new_with_persistence(redis_addr, redis_provider);
+                server_tasks.push(tokio::spawn(async move {
+                    if let Err(e) = resp_server.run().await {
+                        tracing::error!("RESP server failed: {}", e);
+                    }
+                }));
             }
         }
 

@@ -64,6 +64,10 @@ rand = "0.8"
 rust_decimal = { version = "1.36", features = ["serde"] }
 ordered-float = { version = "4.2", features = ["serde"] }
 
+# Table formatting and terminal colors
+comfy-table = "7.1"
+owo-colors = "4.1"
+
 # Persistence
 rocksdb = "0.22"
 
@@ -81,6 +85,7 @@ tokio-postgres = "0.7"
 neo4rs = "0.7"
 reqwest = { version = "0.12", features = ["json"] }
 orbit-util = { path = "../util" }
+orbit-server = { path = "../server" }
 
 [features]
 default = ["resp", "postgres-wire", "cypher", "rest"]

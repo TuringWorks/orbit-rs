@@ -3,7 +3,7 @@
 //! These tests verify that our RESP protocol implementation compiles and works
 //! with basic functionality like parsing and encoding.
 
-use orbit_protocols::resp::RespValue;
+use orbit_server::protocols::resp::RespValue;
 
 #[tokio::test]
 async fn test_resp_value_creation() {

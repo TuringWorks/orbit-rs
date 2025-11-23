@@ -31,7 +31,7 @@
 
 use opendal::Operator;
 
-use orbit_protocols::postgres_wire::sql::execution::{
+use orbit_server::protocols::postgres_wire::sql::execution::{
     Column, ColumnBatch, NullBitmap, column_batch_to_arrow,
 };
 
@@ -501,7 +501,7 @@ async fn test_large_dataset_performance_azure() {
 #[tokio::test]
 #[ignore] // Requires running Azurite instance
 async fn test_azure_storage_config() {
-    use orbit_protocols::postgres_wire::sql::execution::storage_config::{AzureConfig, StorageBackend};
+    use orbit_server::protocols::postgres_wire::sql::execution::storage_config::{AzureConfig, StorageBackend};
 
     // Test 1: Create AzureConfig using the azurite helper
     let azure_config = AzureConfig::azurite(AZURITE_CONTAINER.to_string());

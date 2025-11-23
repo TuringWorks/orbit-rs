@@ -51,9 +51,10 @@ Orbit-RS is a high-performance, distributed virtual actor system framework writt
 
 - **Redis Commands**: **124+** fully implemented RESP commands
 - **Actor Types**: **13+** specialized actor implementations
-- **Protocols**: **4** complete protocol implementations
+- **Protocols**: **7** complete protocol implementations (all 100% complete with RocksDB persistence)
 - **Storage Backends**: **9+** persistence implementations
 - **ML Functions**: 4+ statistical functions with SQL integration
+- **GraphRAG**: Knowledge graph construction with three persistence options
 
 ---
 
@@ -275,10 +276,17 @@ orbit-rs/
 
 ### **Protocol Completeness**
 
-- **4 complete protocols** (RESP, PostgreSQL, gRPC, MCP)
+- **6 complete protocols** with RocksDB persistence:
+  - Redis (RESP) - Port 6379
+  - PostgreSQL - Port 5432
+  - MySQL - Port 3306
+  - CQL/Cassandra - Port 9042
+  - Cypher/Neo4j (Bolt) - Port 7687
+  - AQL/ArangoDB - Port 8529
 - **Cross-protocol operations** enabling unique use cases
 - **AI/ML integration** with vector operations and statistical functions
 - **Enterprise features** for production deployment
+- **100% Data Persistence** - All protocols use RocksDB for durable storage
 
 ### **Developer Experience**
 
@@ -326,7 +334,7 @@ orbit-rs/
 
 - [System Architecture](overview.md) - Complete system design and components
 - [Protocol Adapters](protocols/protocol_adapters.md) - Multi-protocol support architecture
-- [Persistence Architecture](PERSISTENCE_ARCHITECTURE.md) - Storage backends and data management
+- [Persistence Complete Documentation](PERSISTENCE_COMPLETE_DOCUMENTATION.md) - Storage backends and data management
 
 ### **Protocols**
 
@@ -339,8 +347,7 @@ orbit-rs/
 
 ### **Operations**
 
-- [Kubernetes Deployment](kubernetes_deployment.md) - Production Kubernetes setup
-- [Persistence Configuration](KUBERNETES_PERSISTENCE.md) - Storage configuration guide
+- [Kubernetes Complete Documentation](KUBERNETES_COMPLETE_DOCUMENTATION.md) - Production Kubernetes setup and persistence
 - [Monitoring Guide](advanced_transaction_features.md) - Metrics, monitoring, and observability
 
 ---

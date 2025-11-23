@@ -1,0 +1,50 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "OrbitQL",
+  "patterns": [
+    {
+      "include": "#keywords"
+    },
+    {
+      "include": "#strings"
+    },
+    {
+      "include": "#numbers"
+    },
+    {
+      "include": "#comments"
+    }
+  ],
+  "repository": {
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.orbitql",
+          "match": "\\b(SELECT|FROM|WHERE|INSERT|UPDATE|DELETE|CREATE|DROP|ALTER|GRANT|REVOKE|MATCH|RETURN|WITH|UNWIND|SET|REMOVE|MERGE|CREATE|DELETE|DETACH|FIND|FOR|FILTER|SORT|LIMIT|SKIP|DISTINCT|COLLECT|AGGREGATE|LET|FOR|RETURN|LET|FOR|FILTER|RETURN|SORT|LIMIT|DISTINCT)\\b",
+          "caseInsensitive": true
+        }
+      ]
+    },
+    "strings": {
+      "name": "string.quoted.double.orbitql",
+      "begin": "\"",
+      "end": "\"",
+      "patterns": [
+        {
+          "name": "constant.character.escape.orbitql",
+          "match": "\\\\."
+        }
+      ]
+    },
+    "numbers": {
+      "name": "constant.numeric.orbitql",
+      "match": "\\b\\d+(\\.\\d+)?\\b"
+    },
+    "comments": {
+      "name": "comment.line.orbitql",
+      "match": "--.*$"
+    }
+  },
+  "scopeName": "source.orbitql"
+}
+

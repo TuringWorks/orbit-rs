@@ -865,5 +865,5 @@ For organizations handling petabyte-scale data, orbit-rs with memory-mapped file
 
 - [Virtual Actor Persistence Documentation](virtual_actor_persistence.md)
 - [LSM Tree Implementation Details](LSM_TREE_IMPLEMENTATION.md)
-- [Kubernetes Deployment Guide](kubernetes_deployment.md)
+- [Kubernetes Complete Documentation](KUBERNETES_COMPLETE_DOCUMENTATION.md)
 - [Orbit-RS Benchmarks](../benchmarks/README.md)

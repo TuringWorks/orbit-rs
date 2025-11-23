@@ -31,7 +31,7 @@ mod handler {
         hash::HashCommands,
         list::ListCommands,
         // pubsub::PubSubCommands, // TODO: fix
-        // server::ServerCommands, // TODO: fix
+        server::ServerCommands,
         set::SetCommands,
         sorted_set::SortedSetCommands,
         // time_series::TimeSeriesCommands, // TODO: fix
@@ -82,14 +82,26 @@ mod handler {
         // time_series: TimeSeriesCommands, // TODO: fix
         // graph: GraphCommands, // TODO: fix
         // graphrag: GraphRAGCommands, // TODO: fix
-        // server: ServerCommands, // TODO: fix
+        server: ServerCommands,
     }
 
     impl CommandHandler {
         /// Create a new command handler with all specialized modules
         pub fn new(orbit_client: OrbitClient) -> Self {
+            Self::new_with_persistence(orbit_client, None)
+        }
+
+        /// Create a new command handler with optional persistent storage
+        pub fn new_with_persistence(
+            orbit_client: OrbitClient,
+            persistent_storage: Option<Arc<dyn crate::persistence::redis_data::RedisDataProvider>>,
+        ) -> Self {
             let orbit_client = Arc::new(orbit_client);
-            let local_registry = Arc::new(SimpleLocalRegistry::new());
+            let local_registry = if let Some(provider) = persistent_storage {
+                Arc::new(SimpleLocalRegistry::with_persistence(provider))
+            } else {
+                Arc::new(SimpleLocalRegistry::new())
+            };
 
             Self {
                 connection: ConnectionCommands::new(orbit_client.clone()),
@@ -103,10 +115,17 @@ mod handler {
                 // time_series: TimeSeriesCommands::new(orbit_client.clone(), local_registry.clone()), // TODO: fix
                 // graph: GraphCommands::new(orbit_client.clone(), local_registry.clone()), // TODO: fix
                 // graphrag: GraphRAGCommands::new(orbit_client.clone(), local_registry.clone()), // TODO: fix
-                // server: ServerCommands::new(orbit_client.clone(), local_registry.clone()), // TODO: fix
+                server: ServerCommands::new(orbit_client.clone()),
                 orbit_client,
                 local_registry,
             }
+        }
+
+        /// Load data from persistent storage on startup
+        pub async fn load_from_persistence(&self) {
+            self.local_registry.load_from_persistence().await.unwrap_or_else(|e| {
+                tracing::error!("Failed to load data from persistent storage: {}", e);
+            });
         }
 
         /// Handle a RESP command by delegating to the appropriate module
@@ -155,9 +174,9 @@ mod handler {
                 CommandCategory::GraphRAG => Err(ProtocolError::RespError(
                     "ERR GraphRAG commands not available".to_string(),
                 )),
-                CommandCategory::Server => Err(ProtocolError::RespError(
-                    "ERR Server commands not available".to_string(),
-                )),
+                CommandCategory::Server => {
+                    CommandHandlerTrait::handle(&self.server, &command_name, &args).await
+                }
                 CommandCategory::Unknown => {
                     warn!("Unknown command: {}", command_name);
                     Err(ProtocolError::RespError(format!(

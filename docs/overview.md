@@ -64,10 +64,14 @@ Orbit-RS has successfully completed its Phase 8 milestone, delivering a **compre
 - **Embeddings Support**: Seamless integration with AI embedding models
 - **Model Context Protocol**: AI agent integration and tool ecosystem
 
-### 🔌 **Protocol Support**
+### 🔌 **Protocol Support** (All with RocksDB Persistence)
 
-- **Redis RESP Protocol**: 124+ commands with clustering support
-- **PostgreSQL Wire Protocol**: Full DDL/DML/DCL/TCL operations
+- **Redis RESP Protocol**: 124+ commands with clustering support, RocksDB persistence
+- **PostgreSQL Wire Protocol**: Full DDL/DML/DCL/TCL operations, RocksDB persistence
+- **MySQL Wire Protocol**: MySQL-compatible queries, RocksDB persistence
+- **CQL/Cassandra**: Wide-column operations, RocksDB persistence
+- **Cypher/Neo4j (Bolt)**: Graph database operations, RocksDB persistence
+- **AQL/ArangoDB**: Multi-model operations, RocksDB persistence
 - **gRPC Services**: High-performance service-to-service communication
 - **Model Context Protocol (MCP)**: AI agent and tool integration
 - **REST APIs**: RESTful interface for web applications
@@ -219,10 +223,9 @@ Orbit-RS is ideal for building:
 
 ### 🚀 **Operations & Deployment**
 
-- [☸️ **Kubernetes Deployment**](kubernetes_deployment.md) - Production Kubernetes setup
-- [💾 **Kubernetes Storage Guide**](KUBERNETES_STORAGE_GUIDE.md) - Persistent storage configuration
+- [☸️ **Kubernetes Complete Documentation**](KUBERNETES_COMPLETE_DOCUMENTATION.md) - Production Kubernetes setup and persistence
 - [🔧 **Development Roadmap**](roadmap.md) - Strategic vision and timeline
-- [🔒 **Security Guide**](SECURITY.md) - Security policies and best practices
+- [🔒 **Security Guide**](SECURITY_COMPLETE_DOCUMENTATION.md) - Security policies and best practices
 
 ### 🔌 **Integration & Examples**
 

@@ -11,7 +11,6 @@
 use orbit_shared::pooling::{LoadBalancingStrategy, PoolTier};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -41,6 +40,12 @@ pub struct OrbitServerConfig {
     
     /// Connection pooling configuration
     pub pooling: PoolingConfig,
+
+    /// Persistence configuration
+    pub persistence: Option<PersistenceConfig>,
+
+    /// Storage configuration (tiered and cold storage)
+    pub storage: Option<StorageConfig>,
 }
 
 /// Server identification and basic settings
@@ -1004,6 +1009,171 @@ pub struct TracingConfig {
     pub endpoint: Option<String>,
 }
 
+/// Persistence configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PersistenceConfig {
+    /// Persistence provider (rocksdb, memory)
+    pub provider: String,
+
+    /// Data directory for persistence
+    pub data_dir: PathBuf,
+
+    /// Write-Ahead Log configuration
+    pub wal: WalConfig,
+
+    /// RocksDB-specific configuration
+    pub rocksdb: Option<RocksDbConfig>,
+}
+
+/// Write-Ahead Log configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WalConfig {
+    /// Enable WAL
+    pub enabled: bool,
+
+    /// WAL directory
+    pub wal_dir: PathBuf,
+
+    /// Sync interval in milliseconds
+    pub sync_interval_ms: u64,
+
+    /// Maximum WAL size in MB
+    pub max_size_mb: usize,
+
+    /// Enable fsync on every write
+    pub fsync_on_write: bool,
+}
+
+/// RocksDB configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RocksDbConfig {
+    /// Enable WAL in RocksDB
+    pub enable_wal: bool,
+
+    /// Max open files
+    pub max_open_files: i32,
+
+    /// Write buffer size in MB
+    pub write_buffer_size_mb: usize,
+
+    /// Max write buffer number
+    pub max_write_buffer_number: u32,
+
+    /// Block cache size in MB
+    pub block_cache_size_mb: usize,
+
+    /// Enable compression
+    pub enable_compression: bool,
+
+    /// Compression type
+    pub compression_type: String,
+}
+
+/// Storage configuration for tiered and cold storage
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StorageConfig {
+    /// Tiered storage configuration
+    pub tiered: TieredStorageConfig,
+
+    /// Cold tier configuration
+    pub cold_tier: Option<ColdTierConfig>,
+}
+
+/// Tiered storage configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TieredStorageConfig {
+    /// Enable tiered storage
+    pub enabled: bool,
+
+    /// Hot to warm threshold in hours
+    pub hot_to_warm_threshold_hours: u64,
+
+    /// Warm to cold threshold in days
+    pub warm_to_cold_threshold_days: u64,
+
+    /// Enable automatic tiering
+    pub auto_tiering: bool,
+
+    /// Enable background migration
+    pub background_migration: bool,
+}
+
+/// Cold tier configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ColdTierConfig {
+    /// Enable cold tier
+    pub enabled: bool,
+
+    /// Backend type (s3, azure, minio)
+    pub backend: String,
+
+    /// S3 configuration
+    pub s3: Option<S3Config>,
+
+    /// Azure configuration
+    pub azure: Option<AzureStorageConfig>,
+
+    /// MinIO configuration
+    pub minio: Option<MinioConfig>,
+}
+
+/// S3 configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct S3Config {
+    /// S3 bucket name
+    pub bucket: String,
+
+    /// AWS region
+    pub region: String,
+
+    /// Access key ID
+    pub access_key_id: Option<String>,
+
+    /// Secret access key
+    pub secret_access_key: Option<String>,
+
+    /// Endpoint URL (for S3-compatible services)
+    pub endpoint: Option<String>,
+}
+
+/// Azure Storage configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AzureStorageConfig {
+    /// Account name
+    pub account_name: String,
+
+    /// Container name
+    pub container_name: String,
+
+    /// Access key
+    pub access_key: Option<String>,
+
+    /// Connection string
+    pub connection_string: Option<String>,
+}
+
+/// MinIO configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MinioConfig {
+    /// MinIO endpoint
+    pub endpoint: String,
+
+    /// Bucket name
+    pub bucket: String,
+
+    /// Access key
+    pub access_key: String,
+
+    /// Secret key
+    pub secret_key: String,
+
+    /// Use SSL
+    pub use_ssl: bool,
+
+    /// Region (optional)
+    pub region: Option<String>,
+}
+
 impl Default for OrbitServerConfig {
     fn default() -> Self {
         Self {
@@ -1015,7 +1185,79 @@ impl Default for OrbitServerConfig {
             logging: LoggingConfig::default(),
             monitoring: MonitoringConfig::default(),
             pooling: PoolingConfig::default(),
+            persistence: Some(PersistenceConfig::default()),
+            storage: Some(StorageConfig::default()),
         }
+    }
+}
+
+impl Default for PersistenceConfig {
+    fn default() -> Self {
+        Self {
+            provider: "rocksdb".to_string(),
+            data_dir: PathBuf::from("./data"),
+            wal: WalConfig::default(),
+            rocksdb: Some(RocksDbConfig::default()),
+        }
+    }
+}
+
+impl Default for WalConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            wal_dir: PathBuf::from("./data/wal"),
+            sync_interval_ms: 1000,
+            max_size_mb: 1024,
+            fsync_on_write: false,
+        }
+    }
+}
+
+impl Default for RocksDbConfig {
+    fn default() -> Self {
+        Self {
+            enable_wal: true,
+            max_open_files: 1000,
+            write_buffer_size_mb: 64,
+            max_write_buffer_number: 2,
+            block_cache_size_mb: 256,
+            enable_compression: true,
+            compression_type: "lz4".to_string(),
+        }
+    }
+}
+
+impl Default for StorageConfig {
+    fn default() -> Self {
+        Self {
+            tiered: TieredStorageConfig::default(),
+            cold_tier: None,
+        }
+    }
+}
+
+impl Default for TieredStorageConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            hot_to_warm_threshold_hours: 48,
+            warm_to_cold_threshold_days: 30,
+            auto_tiering: true,
+            background_migration: true,
+        }
+    }
+}
+
+impl TieredStorageConfig {
+    /// Get hot to warm threshold as Duration
+    pub fn hot_to_warm_threshold(&self) -> Duration {
+        Duration::from_secs(self.hot_to_warm_threshold_hours * 60 * 60)
+    }
+
+    /// Get warm to cold threshold as Duration
+    pub fn warm_to_cold_threshold(&self) -> Duration {
+        Duration::from_secs(self.warm_to_cold_threshold_days * 24 * 60 * 60)
     }
 }
 

@@ -225,7 +225,7 @@ orbit-protocols/src/
 
 ### Created Documentation
 
-1. **GraphRAG PostgreSQL Integration Guide** (`docs/graphrag_postgresql.md`) - Complete user guide with examples
+1. **GraphRAG Complete Documentation** (`docs/GRAPHRAG_COMPLETE_DOCUMENTATION.md`) - Complete user guide with examples including PostgreSQL integration
 2. **RESP Command Reference** - Comprehensive command documentation with usage examples
 3. **Implementation Summary** (this document) - Technical overview and architecture details
 

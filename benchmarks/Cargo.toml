@@ -70,18 +70,19 @@ harness = false
 name = "phase9_performance"
 harness = false
 
-[[example]]
-name = "cow_btree_demo"
-path = "examples/cow_btree_demo.rs"
-
-[[example]]
-name = "cow_btree_persistence_demo"
-path = "examples/cow_btree_persistence_demo.rs"
-
-[[example]]
-name = "rocksdb_demo"
-path = "examples/rocksdb_demo.rs"
-
-[[example]]
-name = "configurable_backends_demo"
-path = "examples/configurable_backends_demo.rs"
+# Examples excluded from build
+# [[example]]
+# name = "cow_btree_demo"
+# path = "examples/cow_btree_demo.rs"
+#
+# [[example]]
+# name = "cow_btree_persistence_demo"
+# path = "examples/cow_btree_persistence_demo.rs"
+#
+# [[example]]
+# name = "rocksdb_demo"
+# path = "examples/rocksdb_demo.rs"
+#
+# [[example]]
+# name = "configurable_backends_demo"
+# path = "examples/configurable_backends_demo.rs"

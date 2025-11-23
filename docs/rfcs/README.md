@@ -15,7 +15,17 @@ This directory contains RFC documents for Orbit-RS. RFCs are design documents th
 | RFC | Title | Status | Author |
 |-----|-------|--------|---------|
 | [RFC_PERSISTENCE_ALTERNATIVES](./RFC_PERSISTENCE_ALTERNATIVES.md) | Persistence Alternatives Analysis | Implemented | Team |
-| [RFC_HETEROGENEOUS_COMPUTE](./RFC_HETEROGENEOUS_COMPUTE.md) | Heterogeneous Compute Engine | Implemented | AI Agent, Ravindra Boddipalli |
+| [RFC_HETEROGENEOUS_COMPUTE](./rfc_heterogeneous_compute.md) | Heterogeneous Compute Engine | Implemented | AI Agent, Ravindra Boddipalli |
+
+## Completed RFCs
+
+Completed RFCs have been moved to the [completed](./completed/) directory:
+
+| RFC | Title | Completion Date | Notes |
+|-----|-------|----------------|-------|
+| [RFC-006](./completed/RFC-006-MULTI_PROTOCOL_ADAPTERS.md) | Multi-Protocol Adapters | November 2025 | All 7 protocols 100% complete |
+| [RFC-008](./completed/RFC-008-GRAPH_DATABASE_CAPABILITIES.md) | Graph Database Capabilities | November 2025 | Cypher/Bolt protocol 100% complete |
+| [RFC-013](./completed/RFC-013-PERSISTENCE_DURABILITY.md) | Persistence & Durability | November 2025 | All protocols have RocksDB persistence |
 
 ## RFC Template
 

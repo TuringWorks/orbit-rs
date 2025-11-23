@@ -21,7 +21,7 @@ Full implementation of Redis protocol (RESP2) allowing Redis clients to interact
 #### Usage
 
 ```rust
-use orbit_protocols::resp::RespServer;
+use orbit_server::protocols::RespServer;
 use orbit_client::OrbitClient;
 
 let orbit_client = OrbitClient::builder()
@@ -70,10 +70,12 @@ OK
 #### Usage
 
 ```rust
-use orbit_protocols::postgres_wire::PostgresServer;
+use orbit_server::protocols::PostgresServer;
+use orbit_protocols::postgres_wire::QueryEngine;
 
-// Create server (OrbitClient integration pending)
-let server = PostgresServer::new("127.0.0.1:5433");
+// Create server with query engine
+let query_engine = QueryEngine::new();
+let server = PostgresServer::new_with_query_engine("127.0.0.1:5433", query_engine);
 server.run().await?;
 ```
 

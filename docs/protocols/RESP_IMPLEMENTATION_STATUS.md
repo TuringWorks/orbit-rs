@@ -219,7 +219,7 @@ cargo test --package orbit-protocols --test resp_integration_tests
 
 ```rust
 // examples/resp-server.rs
-use orbit_protocols::resp::RespServer;
+use orbit_server::protocols::RespServer;
 use orbit_client::OrbitClient;
 
 #[tokio::main]
