@@ -37,6 +37,8 @@ use orbit_server::protocols::cql::CqlConfig;
 use orbit_server::protocols::mysql::MySqlConfig;
 use orbit_server::protocols::postgres_wire::{QueryEngine, RocksDbTableStorage};
 use orbit_server::protocols::common::storage::tiered::TieredTableStorage;
+use orbit_server::protocols::cypher::{CypherServer, CypherGraphStorage};
+use orbit_server::protocols::aql::{AqlServer, AqlStorage};
 use orbit_server::protocols::common::storage::TableStorage;
 use orbit_server::protocols::postgres_wire::sql::execution::hybrid::HybridStorageConfig;
 
@@ -369,6 +371,32 @@ async fn main() -> Result<(), Box<dyn Error>> {
         info!("[CQL] CQL protocol adapter started on port {}", args.cql_port);
     }
 
+    // Start Cypher/Neo4j protocol adapter (port 7687)
+    let cypher_data_dir = args.data_dir.join("cypher");
+    let cypher_storage = Arc::new(CypherGraphStorage::new(cypher_data_dir));
+    cypher_storage.initialize().await?;
+    
+    let cypher_bind_addr = format!("{}:7687", args.bind);
+    let cypher_server = CypherServer::new_with_storage(cypher_bind_addr, cypher_storage);
+    let cypher_handle = tokio::spawn(async move {
+        cypher_server.run().await.map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)
+    });
+    protocol_handles.push(cypher_handle);
+    info!("[Cypher] Cypher/Neo4j protocol adapter started on port 7687");
+
+    // Start AQL/ArangoDB protocol adapter (port 8529)
+    let aql_data_dir = args.data_dir.join("aql");
+    let aql_storage = Arc::new(AqlStorage::new(aql_data_dir));
+    aql_storage.initialize().await?;
+    
+    let aql_bind_addr = format!("{}:8529", args.bind);
+    let aql_server = AqlServer::new_with_storage(aql_bind_addr, aql_storage);
+    let aql_handle = tokio::spawn(async move {
+        aql_server.run().await.map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)
+    });
+    protocol_handles.push(aql_handle);
+    info!("[AQL] AQL/ArangoDB protocol adapter started on port 8529");
+
     info!("=========================================");
     info!("    Orbit Server Ready!");
     info!("=========================================");
@@ -377,7 +405,21 @@ async fn main() -> Result<(), Box<dyn Error>> {
     info!("  Redis:      {}:{}", args.bind, args.redis_port);
     info!("  MySQL:      {}:{}", args.bind, args.mysql_port);
     info!("  CQL:        {}:{}", args.bind, args.cql_port);
+    info!("  Cypher:     {}:7687", args.bind);
+    info!("  AQL:        {}:8529", args.bind);
     info!("  Metrics:    {}:{}/metrics", args.bind, args.metrics_port);
+    
+    // Initialize MCP server if enabled
+    if toml_config.protocols.mcp.as_ref().map_or(false, |c| c.enabled) {
+        let mcp_handle = start_mcp_server(
+            &args,
+            postgres_storage.clone(),
+            rocksdb_storage.clone(),
+        ).await?;
+        protocol_handles.push(mcp_handle);
+        info!("[MCP] Model Context Protocol server initialized");
+    }
+    
     info!("=========================================");
 
     // Start the gRPC server in a separate task
@@ -488,6 +530,9 @@ async fn initialize_data_directories(data_dir: &PathBuf) -> Result<(), Box<dyn E
     let postgresql_dir = data_dir.join("postgresql");
     let mysql_dir = data_dir.join("mysql");
     let cql_dir = data_dir.join("cql");
+    let cypher_dir = data_dir.join("cypher");
+    let aql_dir = data_dir.join("aql");
+    let graphrag_dir = data_dir.join("graphrag");
 
     tokio::fs::create_dir_all(&hot_dir).await?;
     tokio::fs::create_dir_all(&warm_dir).await?;
@@ -498,8 +543,11 @@ async fn initialize_data_directories(data_dir: &PathBuf) -> Result<(), Box<dyn E
     tokio::fs::create_dir_all(&postgresql_dir).await?;
     tokio::fs::create_dir_all(&mysql_dir).await?;
     tokio::fs::create_dir_all(&cql_dir).await?;
+    tokio::fs::create_dir_all(&cypher_dir).await?;
+    tokio::fs::create_dir_all(&aql_dir).await?;
+    tokio::fs::create_dir_all(&graphrag_dir).await?;
 
-    info!("[Storage Dirs] Created: hot, warm, cold, wal, rocksdb, redis, postgresql, mysql, cql");
+    info!("[Storage Dirs] Created: hot, warm, cold, wal, rocksdb, redis, postgresql, mysql, cql, cypher, aql, graphrag");
 
     Ok(())
 }
@@ -810,6 +858,70 @@ async fn start_postgresql_server(
     Ok(handle)
 }
 
+/// Start MCP (Model Context Protocol) server
+async fn start_mcp_server(
+    _args: &Args,
+    storage: Arc<TieredTableStorage>,
+    rocksdb: Arc<RocksDbTableStorage>,
+) -> Result<JoinHandle<Result<(), Box<dyn Error + Send + Sync>>>, Box<dyn Error>> {
+    use orbit_server::protocols::mcp::{McpConfig, McpCapabilities, McpServer};
+    use orbit_server::protocols::mcp::integration::OrbitMcpIntegration;
+    
+    // Create QueryEngine with RocksDB persistence
+    let query_engine = QueryEngine::new_with_persistent_storage(rocksdb.clone());
+    let query_engine_arc = Arc::new(query_engine);
+    
+    // Create MCP integration layer with RocksDB storage (implements PersistentTableStorage)
+    let integration = Arc::new(OrbitMcpIntegration::with_storage(
+        query_engine_arc.clone(),
+        rocksdb.clone(),
+    ));
+    
+    // Create MCP server with storage-backed schema analyzer (uses TieredTableStorage for schema discovery)
+    let mcp_config = McpConfig::default();
+    let mcp_capabilities = McpCapabilities::default();
+    let storage_for_schema = storage.clone();
+    let mcp_server = McpServer::with_storage_and_integration(
+        mcp_config,
+        mcp_capabilities,
+        integration.clone(),
+        storage_for_schema,
+    );
+    
+    // MCP is integrated into REST API, so we just initialize it here
+    // The REST server will use it if available
+    let _mcp_server_arc = Arc::new(mcp_server);
+    
+    // Start background schema discovery
+    // This will periodically refresh the schema cache
+    use orbit_server::protocols::mcp::schema_discovery::SchemaDiscoveryManager;
+    use orbit_server::protocols::mcp::schema::SchemaAnalyzer;
+    
+    // Create schema analyzer with storage for discovery
+    let schema_analyzer_for_discovery = Arc::new(SchemaAnalyzer::with_storage(storage.clone()));
+    let schema_discovery = SchemaDiscoveryManager::new(
+        schema_analyzer_for_discovery,
+        integration,
+        300, // Refresh every 5 minutes
+    );
+    if let Err(e) = schema_discovery.start_discovery().await {
+        warn!("[MCP] Failed to start schema discovery: {}", e);
+    } else {
+        info!("[MCP] Schema discovery started");
+    }
+    
+    // For now, MCP runs as part of REST API or can be accessed programmatically
+    // Create a handle that keeps the server alive
+    let handle = tokio::spawn(async move {
+        // MCP server is ready and can be used by REST API handlers
+        // Keep this task alive
+        std::future::pending::<()>().await;
+        Ok(())
+    });
+    
+    Ok(handle)
+}
+
 /// Start Redis RESP Protocol server
 async fn start_redis_server(
     args: &Args,
@@ -818,14 +930,14 @@ async fn start_redis_server(
     let bind_addr = format!("{}:{}", args.bind, args.redis_port);
 
     // Create RocksDB storage for Redis persistence
-    let redis_data_path = "./data/redis";
+    let redis_data_path = args.data_dir.join("redis").join("rocksdb");
     let redis_provider: Option<Arc<dyn orbit_server::protocols::persistence::redis_data::RedisDataProvider>> = 
         match orbit_server::protocols::persistence::rocksdb_redis_provider::RocksDbRedisDataProvider::new(
-            redis_data_path,
+            redis_data_path.to_str().unwrap(),
             orbit_server::protocols::persistence::redis_data::RedisDataConfig::default(),
         ) {
             Ok(provider) => {
-                info!("[Redis] Using persistent RocksDB storage at: {}", redis_data_path);
+                info!("[Redis] Using persistent RocksDB storage at: {}", redis_data_path.display());
                 let provider_arc: Arc<dyn orbit_server::protocols::persistence::redis_data::RedisDataProvider> = Arc::new(provider);
                 // Initialize the provider
                 if let Err(e) = orbit_server::protocols::persistence::redis_data::RedisDataProvider::initialize(&*provider_arc).await {

@@ -322,10 +322,14 @@ impl EntityExtractionActor {
             ExtractorConfig::RuleBasedRelations { rules, .. } => {
                 self.apply_relationship_rules(rules, request).await
             }
-            ExtractorConfig::LLMBased { .. } => {
-                // TODO: Implement LLM-based extraction
-                warn!("LLM-based extraction not yet implemented");
-                Ok((Vec::new(), Vec::new()))
+            ExtractorConfig::LLMBased {
+                name: _,
+                provider,
+                prompt_template,
+                entity_types,
+            } => {
+                self.apply_llm_extraction(provider, prompt_template, entity_types, request)
+                    .await
             }
             ExtractorConfig::Custom { .. } => {
                 // TODO: Implement custom extraction functions
@@ -393,23 +397,22 @@ impl EntityExtractionActor {
                 let keyword_lower = keyword.to_lowercase();
 
                 if fuzzy_matching {
-                    // Simple fuzzy matching - find keywords with small edit distances
-                    // TODO: Implement more sophisticated fuzzy matching
-                    if text_lower.contains(&keyword_lower) {
-                        if let Some(pos) = text_lower.find(&keyword_lower) {
-                            let entity = ExtractedEntity {
-                                text: keyword.clone(),
-                                entity_type: entity_type.clone(),
-                                confidence: 0.7,
-                                start_pos: pos,
-                                end_pos: pos + keyword.len(),
-                                properties: HashMap::new(),
-                                aliases: Vec::new(),
-                                source_document: request.document_id.clone(),
-                            };
+                    // Fuzzy matching using Levenshtein distance
+                    let matches = self.find_fuzzy_matches(&text_lower, &keyword_lower, 0.8);
+                    for (pos, matched_text, similarity) in matches {
+                        let text_len = matched_text.len();
+                        let entity = ExtractedEntity {
+                            text: matched_text,
+                            entity_type: entity_type.clone(),
+                            confidence: similarity,
+                            start_pos: pos,
+                            end_pos: pos + text_len,
+                            properties: HashMap::new(),
+                            aliases: Vec::new(),
+                            source_document: request.document_id.clone(),
+                        };
 
-                            entities.push(entity);
-                        }
+                        entities.push(entity);
                     }
                 } else {
                     // Exact matching
@@ -493,42 +496,17 @@ impl EntityExtractionActor {
 
                 Ok(deduped)
             }
-            DeduplicationStrategy::FuzzyMatch { threshold: _ } => {
-                // TODO: Implement fuzzy deduplication
-                warn!("Fuzzy deduplication not yet implemented, using exact match");
-                // Fallback to exact match logic without recursive call
-                let mut deduped = Vec::new();
-                let mut seen_texts = std::collections::HashSet::new();
-
-                for entity in entities {
-                    let key = (entity.text.clone(), entity.entity_type.clone());
-                    if !seen_texts.contains(&key) {
-                        seen_texts.insert(key);
-                        deduped.push(entity);
-                    }
-                }
-
-                Ok(deduped)
+            DeduplicationStrategy::FuzzyMatch { threshold } => {
+                self.fuzzy_deduplicate(entities, *threshold).await
             }
             DeduplicationStrategy::SemanticSimilarity {
-                threshold: _,
+                threshold,
                 model: _,
             } => {
-                // TODO: Implement semantic similarity deduplication
-                warn!("Semantic similarity deduplication not yet implemented, using exact match");
-                // Fallback to exact match logic without recursive call
-                let mut deduped = Vec::new();
-                let mut seen_texts = std::collections::HashSet::new();
-
-                for entity in entities {
-                    let key = (entity.text.clone(), entity.entity_type.clone());
-                    if !seen_texts.contains(&key) {
-                        seen_texts.insert(key);
-                        deduped.push(entity);
-                    }
-                }
-
-                Ok(deduped)
+                // Semantic similarity deduplication using embeddings
+                // For now, fallback to fuzzy matching (embeddings would require vector store)
+                warn!("Semantic similarity deduplication using fuzzy matching fallback");
+                self.fuzzy_deduplicate(entities, *threshold).await
             }
         }
     }
@@ -634,6 +612,265 @@ impl EntityExtractionActor {
     pub fn set_deduplication_strategy(&mut self, strategy: DeduplicationStrategy) {
         self.deduplication_strategy = strategy;
         self.updated_at = chrono::Utc::now().timestamp_millis();
+    }
+
+    /// Apply LLM-based entity extraction
+    async fn apply_llm_extraction(
+        &self,
+        provider_name: &str,
+        prompt_template: &str,
+        entity_types: &[EntityType],
+        request: &DocumentProcessingRequest,
+    ) -> OrbitResult<(Vec<ExtractedEntity>, Vec<ExtractedRelationship>)> {
+        use crate::protocols::graphrag::llm_client::{create_llm_client, LLMGenerationRequest};
+        use orbit_shared::graphrag::LLMProvider;
+        use std::str::FromStr;
+
+        // Get LLM provider from environment or configuration
+        let llm_provider = if provider_name == "openai" {
+            if let Ok(api_key) = std::env::var("OPENAI_API_KEY") {
+                LLMProvider::OpenAI {
+                    api_key,
+                    model: "gpt-4".to_string(),
+                    temperature: Some(0.3),
+                    max_tokens: Some(2048),
+                }
+            } else {
+                warn!("OpenAI API key not found, skipping LLM extraction");
+                return Ok((Vec::new(), Vec::new()));
+            }
+        } else if provider_name == "ollama" {
+            let model = std::env::var("OLLAMA_MODEL").unwrap_or_else(|_| "llama2".to_string());
+            LLMProvider::Ollama {
+                model,
+                temperature: Some(0.3),
+            }
+        } else {
+            warn!("Unknown LLM provider: {}, skipping LLM extraction", provider_name);
+            return Ok((Vec::new(), Vec::new()));
+        };
+
+        // Build prompt with entity types
+        let entity_types_str = entity_types
+            .iter()
+            .map(|et| format!("{:?}", et))
+            .collect::<Vec<_>>()
+            .join(", ");
+        
+        let prompt = prompt_template
+            .replace("{text}", &request.text)
+            .replace("{entity_types}", &entity_types_str);
+
+        let llm_client = create_llm_client(&llm_provider)
+            .map_err(|e| OrbitError::internal(format!("Failed to create LLM client: {}", e)))?;
+
+        let generation_request = LLMGenerationRequest {
+            prompt,
+            max_tokens: Some(2048),
+            temperature: Some(0.3),
+            system_message: Some(
+                "You are an entity extraction system. Extract entities and relationships from the text. "
+                .to_string() +
+                "Return JSON in format: {\"entities\": [{\"text\": \"...\", \"type\": \"...\", \"confidence\": 0.9}], " +
+                "\"relationships\": [{\"from\": \"...\", \"to\": \"...\", \"type\": \"...\"}]}"
+            ),
+        };
+
+        let response = llm_client.generate(generation_request).await
+            .map_err(|e| OrbitError::internal(format!("LLM extraction failed: {}", e)))?;
+
+        // Parse JSON response
+        let json: serde_json::Value = serde_json::from_str(&response.text)
+            .map_err(|e| OrbitError::internal(format!("Failed to parse LLM response: {}", e)))?;
+
+        let mut entities = Vec::new();
+        let mut relationships = Vec::new();
+
+        // Parse entities
+        if let Some(entities_array) = json.get("entities").and_then(|v| v.as_array()) {
+            for entity_json in entities_array {
+                if let (Some(text), Some(type_str)) = (
+                    entity_json.get("text").and_then(|v| v.as_str()),
+                    entity_json.get("type").and_then(|v| v.as_str()),
+                ) {
+                    let entity_type = EntityType::from_str(type_str)
+                        .unwrap_or(EntityType::Custom(type_str.to_string()));
+                    
+                    let confidence = entity_json
+                        .get("confidence")
+                        .and_then(|v| v.as_f64())
+                        .unwrap_or(0.8) as f32;
+
+                    let start_pos = request.text.find(text).unwrap_or(0);
+                    let end_pos = start_pos + text.len();
+
+                    entities.push(ExtractedEntity {
+                        text: text.to_string(),
+                        entity_type,
+                        confidence,
+                        start_pos,
+                        end_pos,
+                        properties: HashMap::new(),
+                        aliases: Vec::new(),
+                        source_document: request.document_id.clone(),
+                    });
+                }
+            }
+        }
+
+        // Parse relationships
+        if let Some(rels_array) = json.get("relationships").and_then(|v| v.as_array()) {
+            for rel_json in rels_array {
+                if let (Some(from), Some(to), Some(rel_type)) = (
+                    rel_json.get("from").and_then(|v| v.as_str()),
+                    rel_json.get("to").and_then(|v| v.as_str()),
+                    rel_json.get("type").and_then(|v| v.as_str()),
+                ) {
+                    let confidence = rel_json
+                        .get("confidence")
+                        .and_then(|v| v.as_f64())
+                        .unwrap_or(0.7) as f32;
+
+                    relationships.push(ExtractedRelationship {
+                        from_entity: from.to_string(),
+                        to_entity: to.to_string(),
+                        relationship_type: rel_type.to_string(),
+                        confidence,
+                        source_text: format!("{} {} {}", from, rel_type, to),
+                        properties: HashMap::new(),
+                        source_document: request.document_id.clone(),
+                    });
+                }
+            }
+        }
+
+        Ok((entities, relationships))
+    }
+
+    /// Find fuzzy matches in text using sliding window
+    fn find_fuzzy_matches(
+        &self,
+        text: &str,
+        keyword: &str,
+        min_similarity: f32,
+    ) -> Vec<(usize, String, f32)> {
+        let mut matches = Vec::new();
+        let keyword_len = keyword.len();
+        let window_size = keyword_len.max(3);
+
+        for i in 0..=text.len().saturating_sub(window_size) {
+            let end = (i + window_size).min(text.len());
+            let window = &text[i..end];
+
+            let similarity = self.calculate_string_similarity(keyword, window);
+            if similarity >= min_similarity {
+                matches.push((i, window.to_string(), similarity));
+            }
+        }
+
+        matches.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap_or(std::cmp::Ordering::Equal));
+        let mut filtered: Vec<(usize, String, f32)> = Vec::new();
+        for (pos, matched_text, sim) in matches {
+            let text_len = matched_text.len();
+            let matched_text_for_push = matched_text.clone();
+            if !filtered.iter().any(|(p, t, _)| {
+                let t_len = t.len();
+                (pos >= *p && pos < *p + t_len) || (*p >= pos && *p < pos + text_len)
+            }) {
+                filtered.push((pos, matched_text_for_push, sim));
+            }
+        }
+
+        filtered
+    }
+
+    /// Calculate string similarity using Levenshtein distance
+    fn calculate_string_similarity(&self, s1: &str, s2: &str) -> f32 {
+        let distance = self.levenshtein_distance(s1, s2);
+        let max_len = s1.len().max(s2.len());
+        if max_len == 0 {
+            return 1.0;
+        }
+        1.0 - (distance as f32 / max_len as f32)
+    }
+
+    /// Calculate Levenshtein distance between two strings
+    fn levenshtein_distance(&self, s1: &str, s2: &str) -> usize {
+        let s1_chars: Vec<char> = s1.chars().collect();
+        let s2_chars: Vec<char> = s2.chars().collect();
+        let s1_len = s1_chars.len();
+        let s2_len = s2_chars.len();
+
+        if s1_len == 0 {
+            return s2_len;
+        }
+        if s2_len == 0 {
+            return s1_len;
+        }
+
+        let mut matrix = vec![vec![0; s2_len + 1]; s1_len + 1];
+
+        for i in 0..=s1_len {
+            matrix[i][0] = i;
+        }
+        for j in 0..=s2_len {
+            matrix[0][j] = j;
+        }
+
+        for i in 1..=s1_len {
+            for j in 1..=s2_len {
+                let cost = if s1_chars[i - 1] == s2_chars[j - 1] { 0 } else { 1 };
+                matrix[i][j] = (matrix[i - 1][j] + 1)
+                    .min(matrix[i][j - 1] + 1)
+                    .min(matrix[i - 1][j - 1] + cost);
+            }
+        }
+
+        matrix[s1_len][s2_len]
+    }
+
+    /// Fuzzy deduplicate entities based on similarity threshold
+    async fn fuzzy_deduplicate(
+        &self,
+        entities: Vec<ExtractedEntity>,
+        threshold: f32,
+    ) -> OrbitResult<Vec<ExtractedEntity>> {
+        let mut deduped: Vec<ExtractedEntity> = Vec::new();
+        let mut processed: Vec<ExtractedEntity> = Vec::new();
+
+        for entity in entities {
+            let mut is_duplicate = false;
+
+            for processed_entity in &processed {
+                if entity.entity_type == processed_entity.entity_type {
+                    let similarity = self.calculate_string_similarity(
+                        &entity.text.to_lowercase(),
+                        &processed_entity.text.to_lowercase(),
+                    );
+
+                    if similarity >= threshold {
+                        is_duplicate = true;
+                        if entity.confidence > processed_entity.confidence {
+                            if let Some(pos) = deduped.iter().position(|e: &ExtractedEntity| {
+                                e.text == processed_entity.text
+                                    && e.entity_type == processed_entity.entity_type
+                            }) {
+                                deduped[pos] = entity.clone();
+                                processed.push(entity.clone());
+                            }
+                        }
+                        break;
+                    }
+                }
+            }
+
+            if !is_duplicate {
+                deduped.push(entity.clone());
+                processed.push(entity);
+            }
+        }
+
+        Ok(deduped)
     }
 }
 

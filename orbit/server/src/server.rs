@@ -373,7 +373,8 @@ impl OrbitServer {
             // Create RESP server without OrbitClient
             {
                     // Create RocksDB storage for Redis persistence
-                    let redis_data_path = "./data/redis";
+                    // Use consistent path structure: data/redis/rocksdb/ (matching other protocols)
+                    let redis_data_path = "./data/redis/rocksdb";
                     let redis_provider: Option<Arc<dyn crate::protocols::persistence::redis_data::RedisDataProvider>> = 
                         match crate::protocols::persistence::rocksdb_redis_provider::RocksDbRedisDataProvider::new(
                             redis_data_path,

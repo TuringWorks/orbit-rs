@@ -25,6 +25,7 @@ use syntect::easy::HighlightLines;
 use syntect::highlighting::{Style as SyntectStyle, ThemeSet};
 use syntect::parsing::SyntaxSet;
 use syntect::util::{as_24_bit_terminal_escaped, LinesWithEndings};
+use tokio_postgres::{Client, NoTls};
 use tracing::{error, info};
 
 /// Orbit CLI - Interactive database client
@@ -75,7 +76,7 @@ struct Cli {
 }
 
 /// Supported connection protocols
-#[derive(Debug, Clone, Copy, ValueEnum)]
+#[derive(Debug, Clone, Copy, ValueEnum, PartialEq)]
 enum Protocol {
     /// PostgreSQL Wire Protocol
     Postgres,
@@ -134,11 +135,13 @@ struct ReplState {
     port: u16,
     database: String,
     username: String,
+    password: Option<String>,
     format: OutputFormat,
     syntax_set: SyntaxSet,
     theme_set: ThemeSet,
-    // Connection will be added when we integrate with orbit-client
-    // connection: Option<Connection>,
+    // PostgreSQL connection
+    pg_client: Option<Client>,
+    pg_connection_handle: Option<tokio::task::JoinHandle<()>>,
 }
 
 impl ReplState {
@@ -151,10 +154,175 @@ impl ReplState {
             port,
             database: cli.database.clone(),
             username: cli.username.clone(),
+            password: cli.password.clone(),
             format: cli.format.into(),
             syntax_set: SyntaxSet::load_defaults_newlines(),
             theme_set: ThemeSet::load_defaults(),
+            pg_client: None,
+            pg_connection_handle: None,
         }
+    }
+
+    /// Connect to PostgreSQL database
+    async fn connect_postgres(&mut self) -> Result<()> {
+        if self.protocol != Protocol::Postgres {
+            return Ok(()); // Only connect for PostgreSQL
+        }
+
+        let connection_string = format!(
+            "host={} port={} user={} password={} dbname={}",
+            self.host,
+            self.port,
+            self.username,
+            self.password.as_deref().unwrap_or(""),
+            self.database
+        );
+
+        match tokio_postgres::connect(&connection_string, NoTls).await {
+            Ok((client, connection)) => {
+                // Spawn connection handler
+                let handle = tokio::spawn(async move {
+                    if let Err(e) = connection.await {
+                        error!("PostgreSQL connection error: {}", e);
+                    }
+                });
+
+                self.pg_client = Some(client);
+                self.pg_connection_handle = Some(handle);
+                Ok(())
+            }
+            Err(e) => {
+                Err(anyhow::anyhow!("Failed to connect to PostgreSQL: {}", e))
+            }
+        }
+    }
+
+    /// Execute a PostgreSQL query
+    async fn execute_query(&self, query: &str) -> Result<()> {
+        if self.protocol != Protocol::Postgres {
+            return Err(anyhow::anyhow!("Only PostgreSQL protocol is currently supported"));
+        }
+
+        let client = self.pg_client.as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Not connected to database"))?;
+
+        // Try to execute as a simple query first (for SELECT, etc.)
+        match client.simple_query(query).await {
+            Ok(results) => {
+                self.format_query_results(results)?;
+                Ok(())
+            }
+            Err(_) => {
+                // If simple_query fails, try as a parameterized query
+                match client.query(query, &[]).await {
+                    Ok(rows) => {
+                        self.format_rows(rows)?;
+                        Ok(())
+                    }
+                    Err(e) => {
+                        Err(anyhow::anyhow!("Query execution failed: {}", e))
+                    }
+                }
+            }
+        }
+    }
+
+    /// Format query results from simple_query
+    fn format_query_results(&self, results: Vec<tokio_postgres::SimpleQueryMessage>) -> Result<()> {
+        for result in results {
+            match result {
+                tokio_postgres::SimpleQueryMessage::Row(row) => {
+                    // Collect column names
+                    let columns: Vec<String> = row.columns()
+                        .iter()
+                        .map(|col| col.name().to_string())
+                        .collect();
+
+                    // Collect row values
+                    let mut values = Vec::new();
+                    for i in 0..row.len() {
+                        let value = match row.get(i) {
+                            Some(v) => v.to_string(),
+                            None => "NULL".to_string(),
+                        };
+                        values.push(value);
+                    }
+
+                    // Print as table
+                    if !columns.is_empty() {
+                        let mut table = Table::new();
+                        table.load_preset(UTF8_FULL).apply_modifier(UTF8_ROUND_CORNERS);
+                        table.set_header(columns.iter().map(|c| Cell::new(c).fg(Color::Cyan)));
+                        table.add_row(values.iter().map(|v| Cell::new(v)));
+                        println!("\n{}", table);
+                    }
+                }
+                tokio_postgres::SimpleQueryMessage::CommandComplete(count) => {
+                    println!("{}", format_success(&format!("Query executed successfully ({} rows affected)", count)));
+                }
+                _ => {}
+            }
+        }
+        Ok(())
+    }
+
+    /// Format rows from parameterized query
+    fn format_rows(&self, rows: Vec<tokio_postgres::Row>) -> Result<()> {
+        if rows.is_empty() {
+            println!("{}", format_success("Query executed successfully (0 rows)"));
+            return Ok(());
+        }
+
+        // Get column names from first row
+        let columns: Vec<String> = rows[0]
+            .columns()
+            .iter()
+            .map(|col| col.name().to_string())
+            .collect();
+
+        let mut table = Table::new();
+        table.load_preset(UTF8_FULL).apply_modifier(UTF8_ROUND_CORNERS);
+        table.set_header(columns.iter().map(|c| Cell::new(c).fg(Color::Cyan)));
+
+        // Add rows
+        for row in &rows {
+            let mut values = Vec::new();
+            for i in 0..row.len() {
+                let value = {
+                    // Try to get value as text (most generic)
+                    let col_type = row.columns()[i].type_();
+                    let type_name = col_type.name();
+                    
+                    // Try different types based on PostgreSQL type name
+                    if type_name == "text" || type_name == "varchar" || type_name == "char" {
+                        row.get::<_, Option<String>>(i)
+                            .unwrap_or_else(|| "NULL".to_string())
+                    } else if type_name == "int4" || type_name == "integer" {
+                        row.get::<_, Option<i32>>(i)
+                            .map(|v| v.to_string())
+                            .unwrap_or_else(|| "NULL".to_string())
+                    } else if type_name == "int8" || type_name == "bigint" {
+                        row.get::<_, Option<i64>>(i)
+                            .map(|v| v.to_string())
+                            .unwrap_or_else(|| "NULL".to_string())
+                    } else if type_name == "bool" || type_name == "boolean" {
+                        row.get::<_, Option<bool>>(i)
+                            .map(|v| v.to_string())
+                            .unwrap_or_else(|| "NULL".to_string())
+                    } else {
+                        // Fallback: try to get as text
+                        row.get::<_, Option<String>>(i)
+                            .unwrap_or_else(|| format!("<{}>", type_name))
+                    }
+                };
+                values.push(value);
+            }
+            table.add_row(values.iter().map(|v| Cell::new(v)));
+        }
+
+        println!("\n{}", table);
+        println!("{}", format_success(&format!("({} rows)", rows.len())));
+        Ok(())
     }
 
     /// Highlight SQL query using syntect
@@ -222,7 +390,7 @@ async fn main() -> Result<()> {
 
 /// Execute a single command and exit
 async fn execute_single_command(cli: &Cli, query: &str) -> Result<()> {
-    let state = ReplState::new(cli);
+    let mut state = ReplState::new(cli);
 
     println!(
         "{}",
@@ -230,26 +398,54 @@ async fn execute_single_command(cli: &Cli, query: &str) -> Result<()> {
             .dimmed()
     );
 
-    // TODO: Establish actual connection
-    // For now, just show what we would execute
+    // Establish connection
+    if state.protocol == Protocol::Postgres {
+        match state.connect_postgres().await {
+            Ok(()) => {
+                println!("{}", format_success("Connected successfully!"));
+            }
+            Err(e) => {
+                return Err(anyhow::anyhow!("Connection failed: {}", e));
+            }
+        }
+    }
+
     println!("\n{}", state.highlight_query(query));
-    println!(
-        "\n{}",
-        format_error("Not yet connected to database - connection logic pending")
-    );
+
+    // Execute query
+    if state.protocol == Protocol::Postgres {
+        state.execute_query(query).await?;
+    } else {
+        println!(
+            "\n{}",
+            format_error("Only PostgreSQL protocol is currently supported")
+        );
+    }
 
     Ok(())
 }
 
 /// Execute commands from a file
 async fn execute_file(cli: &Cli, file_path: &PathBuf) -> Result<()> {
-    let state = ReplState::new(cli);
+    let mut state = ReplState::new(cli);
 
     println!(
         "{}",
         format!("Connecting to {} at {}...", cli.protocol.name(), state.connection_string())
             .dimmed()
     );
+
+    // Establish connection
+    if state.protocol == Protocol::Postgres {
+        match state.connect_postgres().await {
+            Ok(()) => {
+                println!("{}", format_success("Connected successfully!"));
+            }
+            Err(e) => {
+                return Err(anyhow::anyhow!("Connection failed: {}", e));
+            }
+        }
+    }
 
     let content = std::fs::read_to_string(file_path)
         .with_context(|| format!("Failed to read file: {}", file_path.display()))?;
@@ -263,11 +459,22 @@ async fn execute_file(cli: &Cli, file_path: &PathBuf) -> Result<()> {
         println!("\n{}", format!("Statement {}:", i + 1).cyan());
         println!("{}", state.highlight_query(statement.trim()));
 
-        // TODO: Execute statement
-        println!(
-            "{}",
-            format_error("Not yet connected to database - connection logic pending")
-        );
+        // Execute statement
+        if state.protocol == Protocol::Postgres {
+            match state.execute_query(statement.trim()).await {
+                Ok(()) => {
+                    // Success - results already printed
+                }
+                Err(e) => {
+                    println!("{}", format_error(&format!("Error: {}", e)));
+                }
+            }
+        } else {
+            println!(
+                "{}",
+                format_error("Only PostgreSQL protocol is currently supported")
+            );
+        }
     }
 
     Ok(())
@@ -275,20 +482,39 @@ async fn execute_file(cli: &Cli, file_path: &PathBuf) -> Result<()> {
 
 /// Run interactive REPL
 async fn run_repl(cli: &Cli) -> Result<()> {
-    let state = ReplState::new(cli);
+    let mut state = ReplState::new(cli);
 
     // Print welcome banner
     print_banner(&state);
 
-    // TODO: Establish connection
-    println!(
-        "\n{}",
-        format_error("Connection logic pending - currently in offline mode")
-    );
-    println!(
-        "{}",
-        "You can try typing SQL queries to see syntax highlighting.".dimmed()
-    );
+    // Establish connection
+    if state.protocol == Protocol::Postgres {
+        println!(
+            "{}",
+            format!("Connecting to {}...", state.connection_string()).dimmed()
+        );
+        match state.connect_postgres().await {
+            Ok(()) => {
+                println!("{}", format_success("Connected successfully!"));
+            }
+            Err(e) => {
+                println!("{}", format_error(&format!("Connection failed: {}", e)));
+                println!(
+                    "{}",
+                    "Continuing in offline mode - queries will not execute.".dimmed()
+                );
+            }
+        }
+    } else {
+        println!(
+            "\n{}",
+            format_error("Only PostgreSQL protocol is currently supported for query execution")
+        );
+        println!(
+            "{}",
+            "You can try typing SQL queries to see syntax highlighting.".dimmed()
+        );
+    }
 
     // Initialize rustyline editor
     let mut editor = DefaultEditor::new()?;
@@ -336,6 +562,15 @@ async fn run_repl(cli: &Cli) -> Result<()> {
                 query_buffer.push_str(&line);
                 query_buffer.push('\n');
 
+                // Show highlighted preview of current query (for multi-line queries)
+                // Note: Real-time highlighting in the input line itself is not supported by rustyline
+                // This preview gives visual feedback as the query is being built
+                if !query_buffer.trim().is_empty() && !trimmed.ends_with(';') {
+                    // Show a preview of the highlighted query (optional, can be disabled if too noisy)
+                    // println!("{}", format!("Preview:").dimmed());
+                    // println!("{}", state.highlight_query(&query_buffer));
+                }
+
                 // Check if query is complete (ends with semicolon)
                 if trimmed.ends_with(';') {
                     // Add to history
@@ -344,12 +579,15 @@ async fn run_repl(cli: &Cli) -> Result<()> {
                     // Show highlighted query
                     println!("\n{}", state.highlight_query(&query_buffer));
 
-                    // TODO: Execute query
-                    println!(
-                        "\n{}",
-                        format_error("Query execution pending - connection logic not yet implemented")
-                    );
-                    println!("{}", "Query would be executed here.".dimmed());
+                    // Execute query
+                    match state.execute_query(&query_buffer).await {
+                        Ok(()) => {
+                            // Success - results already printed
+                        }
+                        Err(e) => {
+                            println!("\n{}", format_error(&format!("Error: {}", e)));
+                        }
+                    }
 
                     // Clear buffer
                     query_buffer.clear();

@@ -62,6 +62,28 @@ impl McpServer {
         }
     }
 
+    /// Create a new MCP server with Orbit-RS integration and storage-backed schema analyzer
+    pub fn with_storage_and_integration(
+        config: McpConfig,
+        capabilities: McpCapabilities,
+        integration: Arc<OrbitMcpIntegration>,
+        storage: Arc<dyn crate::protocols::common::storage::TableStorage>,
+    ) -> Self {
+        let schema_analyzer = SchemaAnalyzer::with_storage(storage);
+        let nlp_processor = NlpQueryProcessor::new(schema_analyzer);
+        let sql_generator = SqlGenerator::new();
+        let result_processor = ResultProcessor::new();
+
+        Self {
+            config,
+            capabilities,
+            nlp_processor,
+            sql_generator,
+            result_processor,
+            orbit_integration: Some(integration),
+        }
+    }
+
     /// Process a natural language query and generate SQL
     pub async fn process_natural_language_query(
         &self,

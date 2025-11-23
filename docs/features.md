@@ -41,9 +41,21 @@ This document provides a comprehensive overview of all implemented features in O
 
 ## Protocol Support
 
+### All Protocols with RocksDB Persistence
+
+All protocols now have full RocksDB persistence, ensuring data durability across server restarts:
+
+- **Redis (RESP)** - Port 6379 - `data/redis/rocksdb/`
+- **PostgreSQL** - Port 5432 - `data/postgresql/rocksdb/`
+- **MySQL** - Port 3306 - `data/mysql/rocksdb/`
+- **CQL/Cassandra** - Port 9042 - `data/cql/rocksdb/`
+- **Cypher/Neo4j (Bolt)** - Port 7687 - `data/cypher/rocksdb/`
+- **AQL/ArangoDB** - Port 8529 - `data/aql/rocksdb/`
+
 ### Redis Protocol (RESP)
 
 - **Status**: **Complete** - 124+ commands implemented
+- **Persistence**: ✅ RocksDB at `data/redis/rocksdb/`
 - **Coverage**:
   - Core data types (String, Hash, List, Set, Sorted Set)
   - Pub/Sub messaging
@@ -57,8 +69,39 @@ This document provides a comprehensive overview of all implemented features in O
 ### PostgreSQL Wire Protocol
 
 - **Status**: **Complete**
-- **Features**: Complete wire protocol, complex SQL parsing, pgvector support
+- **Persistence**: ✅ RocksDB at `data/postgresql/rocksdb/`
+- **Features**: Complete wire protocol, complex SQL parsing, pgvector support, ACID transactions
 - **Documentation**: [PostgreSQL Implementation](protocols/POSTGRES_WIRE_IMPLEMENTATION.md)
+
+### MySQL Wire Protocol
+
+- **Status**: **Complete**
+- **Persistence**: ✅ RocksDB at `data/mysql/rocksdb/`
+- **Features**: MySQL-compatible wire protocol, SQL DDL/DML operations
+- **Documentation**: [MySQL Complete Documentation](MYSQL_COMPLETE_DOCUMENTATION.md)
+
+### CQL/Cassandra Protocol
+
+- **Status**: **Complete**
+- **Persistence**: ✅ RocksDB at `data/cql/rocksdb/`
+- **Features**: Wide-column operations, CQL query language support
+- **Port**: 9042
+
+### Cypher/Neo4j (Bolt Protocol)
+
+- **Status**: **Implemented**
+- **Persistence**: ✅ RocksDB at `data/cypher/rocksdb/`
+- **Features**: Graph database operations, Cypher query language, node and relationship storage
+- **Port**: 7687
+- **Documentation**: [Graph Database](GRAPH_DATABASE.md)
+
+### AQL/ArangoDB Protocol
+
+- **Status**: **Implemented**
+- **Persistence**: ✅ RocksDB at `data/aql/rocksdb/`
+- **Features**: Multi-model database operations, document and graph storage, AQL query language
+- **Port**: 8529
+- **Documentation**: [AQL Reference](AQL_REFERENCE.md)
 
 ### Model Context Protocol (MCP)
 
@@ -117,8 +160,12 @@ This document provides a comprehensive overview of all implemented features in O
   - In-Memory storage
   - COW B+ Trees (recommended)
   - LSM Trees
-  - RocksDB integration
+  - RocksDB integration (used by all protocols)
 - **Features**: Backend independence, cloud vs local storage, seamless switching
+- **Protocol Persistence**: All 6 protocols use RocksDB for durable storage
+  - Each protocol has isolated storage at `data/{protocol}/rocksdb/`
+  - Automatic data loading on startup
+  - ACID guarantees with crash recovery
 - **Documentation**: [Storage Backend Independence](STORAGE_BACKEND_INDEPENDENCE.md), [Persistence Complete Documentation](PERSISTENCE_COMPLETE_DOCUMENTATION.md)
 
 ### Kubernetes Integration

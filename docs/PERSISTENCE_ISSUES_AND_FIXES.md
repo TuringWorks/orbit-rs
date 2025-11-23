@@ -75,11 +75,24 @@ This document identifies the root causes for RocksDB persistence creation failur
   - `data/postgresql/` - PostgreSQL protocol persistence
   - `data/mysql/` - MySQL protocol persistence
   - `data/cql/` - CQL protocol persistence
-  - `data/redis/` - Redis protocol persistence (already existed)
+  - `data/redis/` - Redis protocol persistence
+  - `data/cypher/` - Cypher/Neo4j protocol persistence
+  - `data/aql/` - AQL/ArangoDB protocol persistence
 
 **Location**: `orbit/server/src/main.rs`
 
-### 3. **Updated Protocol Initialization to Use Data Directories**
+### 3. **Fixed Redis Persistence Path Inconsistency**
+
+**Problem**: Redis was creating RocksDB files at both `data/redis/` (root) and `data/redis/rocksdb/` (subdirectory), inconsistent with other protocols.
+
+**Fix**:
+- Updated `main.rs` to use `data/redis/rocksdb/` consistently
+- Updated `server.rs` to use `data/redis/rocksdb/` consistently
+- All protocols now follow the same pattern: `data/{protocol}/rocksdb/`
+
+**Location**: `orbit/server/src/main.rs`, `orbit/server/src/server.rs`
+
+### 4. **Updated Protocol Initialization to Use Data Directories**
 
 **Changes**:
 - Modified `main.rs` to pass protocol-specific data directories to each `TieredTableStorage`:
@@ -107,6 +120,22 @@ This document identifies the root causes for RocksDB persistence creation failur
 - Updated `insert_row()` to persist row data to RocksDB in addition to in-memory storage
 
 **Location**: `orbit/server/src/protocols/common/storage/tiered.rs`
+
+### 5. **Implemented Cypher and AQL Persistence**
+
+**Changes**:
+- Created `CypherGraphStorage` with RocksDB persistence at `data/cypher/rocksdb/`
+- Created `AqlStorage` with RocksDB persistence at `data/aql/rocksdb/`
+- Updated `CypherServer` to use storage backend
+- Created `AqlServer` with storage backend
+- Both servers initialized in `main.rs` with persistence
+
+**Location**: 
+- `orbit/server/src/protocols/cypher/storage.rs`
+- `orbit/server/src/protocols/aql/storage.rs`
+- `orbit/server/src/protocols/cypher/server.rs`
+- `orbit/server/src/protocols/aql/server.rs`
+- `orbit/server/src/main.rs`
 
 ## Remaining Issues
 

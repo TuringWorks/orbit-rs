@@ -31,11 +31,15 @@ pub mod aql_parser;
 pub mod data_model;
 pub mod graphrag_engine;
 pub mod query_engine;
+pub mod server;
+pub mod storage;
 
 pub use aql_parser::{AqlParser, AqlQuery};
 pub use data_model::{AqlCollection, AqlDocument, AqlValue};
 pub use graphrag_engine::AqlGraphRAGEngine;
 pub use query_engine::{AqlQueryEngine, AqlQueryResult};
+pub use server::AqlServer;
+pub use storage::AqlStorage;
 
 // TODO: Add more AQL features
 // - Advanced aggregation functions

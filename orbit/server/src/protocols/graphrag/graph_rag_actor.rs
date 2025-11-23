@@ -432,7 +432,7 @@ impl GraphRAGActor {
 
         // Step 3: Collect context from various sources
         let context_start_time = std::time::Instant::now();
-        let context_items = self.collect_context(&query, &reasoning_paths).await?;
+        let context_items = self.collect_context(orbit_client.clone(), &query, &reasoning_paths).await?;
         processing_times.vector_search_ms = context_start_time.elapsed().as_millis() as u64;
 
         // Step 4: Generate response using LLM
@@ -476,6 +476,22 @@ impl GraphRAGActor {
         );
 
         Ok(result)
+    }
+
+    /// Find similar entities using vector search
+    async fn find_similar_entities_via_vector_search(
+        &self,
+        _orbit_client: Arc<OrbitClient>,
+        _query_text: &str,
+        _limit: usize,
+    ) -> OrbitResult<Vec<String>> {
+        // TODO: Implement actual vector search using vector store actors
+        // This would:
+        // 1. Generate embedding for query text
+        // 2. Search vector store for similar entities
+        // 3. Return top N similar entity IDs
+        // For now, return empty vector (placeholder)
+        Ok(Vec::new())
     }
 
     /// Extract entities from query text
@@ -550,6 +566,7 @@ impl GraphRAGActor {
     /// Collect context from various sources (graph, vector, text)
     async fn collect_context(
         &self,
+        orbit_client: Arc<OrbitClient>,
         query: &GraphRAGQuery,
         reasoning_paths: &[orbit_shared::graphrag::ReasoningPath],
     ) -> OrbitResult<Vec<ContextItem>> {
@@ -572,7 +589,24 @@ impl GraphRAGActor {
             context_items.push(context_item);
         }
 
-        // TODO: Add vector similarity search context
+        // Add vector similarity search context
+        if let Ok(similar_entities) = self.find_similar_entities_via_vector_search(
+            orbit_client,
+            &query.query_text,
+            5, // Top 5 similar entities
+        ).await {
+            for entity in similar_entities {
+                let context_item = ContextItem {
+                    content: format!("Similar entity found: {}", entity),
+                    source_type: ContextSourceType::Vector,
+                    relevance_score: 0.7, // Default relevance for vector matches
+                    source_id: format!("vector_match_{}", entity),
+                    metadata: HashMap::new(),
+                };
+                context_items.push(context_item);
+            }
+        }
+        
         // TODO: Add full-text search context
 
         // Sort by relevance and limit context size
@@ -592,48 +626,100 @@ impl GraphRAGActor {
         query: &GraphRAGQuery,
         context_items: &[ContextItem],
     ) -> OrbitResult<RAGResponse> {
+        use crate::protocols::graphrag::llm_client::{create_llm_client, LLMGenerationRequest};
+        
         let llm_provider_name = query
             .llm_provider
             .as_ref()
             .or(self.default_llm_provider.as_ref())
             .ok_or_else(|| OrbitError::internal("No LLM provider configured"))?;
 
-        let _llm_provider = self.llm_providers.get(llm_provider_name).ok_or_else(|| {
+        let llm_provider = self.llm_providers.get(llm_provider_name).ok_or_else(|| {
             OrbitError::internal(format!("LLM provider '{llm_provider_name}' not found"))
         })?;
 
-        // Build context text
-        let context_text = context_items
-            .iter()
-            .map(|item| format!("- {}", item.content))
-            .collect::<Vec<_>>()
-            .join("\n");
-
-        // Create simplified RAG response (would integrate with actual LLM in practice)
-        let response_text = if context_items.is_empty() {
-            format!(
-                "I don't have specific information about '{}' in the knowledge graph.",
-                query.query_text
-            )
+        // Build context text from context items
+        let context_text = if context_items.is_empty() {
+            "No relevant context found in the knowledge graph.".to_string()
         } else {
-            format!(
-                "Based on the knowledge graph, here's what I found about '{}':\n\n{}",
-                query.query_text, context_text
-            )
+            context_items
+                .iter()
+                .map(|item| format!("- {}", item.content))
+                .collect::<Vec<_>>()
+                .join("\n")
         };
+
+        // Build RAG prompt
+        let system_message = Some(
+            "You are a helpful assistant that answers questions based on knowledge graph context. "
+            .to_string() +
+            "Use the provided context to answer the user's question accurately. " +
+            "If the context doesn't contain enough information, say so clearly."
+        );
+        
+        let prompt = format!(
+            "Context from knowledge graph:\n{}\n\nQuestion: {}\n\nAnswer:",
+            context_text, query.query_text
+        );
+
+        // Create LLM client and generate response
+        let llm_client = create_llm_client(llm_provider)?;
+        
+        let generation_request = LLMGenerationRequest {
+            prompt,
+            max_tokens: match llm_provider {
+                LLMProvider::OpenAI { max_tokens, .. } => *max_tokens,
+                LLMProvider::Anthropic { max_tokens, .. } => *max_tokens,
+                LLMProvider::Local { max_tokens, .. } => *max_tokens,
+                LLMProvider::Ollama { .. } => Some(2048),
+            },
+            temperature: match llm_provider {
+                LLMProvider::OpenAI { temperature, .. } => *temperature,
+                LLMProvider::Anthropic { temperature, .. } => *temperature,
+                LLMProvider::Local { temperature, .. } => *temperature,
+                LLMProvider::Ollama { temperature, .. } => *temperature,
+            },
+            system_message,
+        };
+
+        let start_time = std::time::Instant::now();
+        let llm_response = llm_client.generate(generation_request).await
+            .map_err(|e| OrbitError::internal(format!("LLM generation failed: {}", e)))?;
+        let processing_time_ms = start_time.elapsed().as_millis() as u64;
 
         let citations = context_items
             .iter()
             .map(|item| item.source_id.clone())
             .collect();
 
+        // Calculate confidence based on context quality and LLM response
+        let confidence = if context_items.is_empty() {
+            0.1
+        } else {
+            // Base confidence on number of context items and their relevance scores
+            let avg_relevance: f32 = context_items
+                .iter()
+                .map(|item| item.relevance_score)
+                .sum::<f32>() / context_items.len() as f32;
+            (0.5 + avg_relevance * 0.5).min(1.0)
+        };
+
+        let mut metadata = HashMap::new();
+        metadata.insert("model".to_string(), serde_json::json!(llm_response.model));
+        if let Some(tokens) = llm_response.tokens_used {
+            metadata.insert("tokens_used".to_string(), serde_json::json!(tokens));
+        }
+        if let Some(reason) = llm_response.finish_reason {
+            metadata.insert("finish_reason".to_string(), serde_json::json!(reason));
+        }
+
         Ok(RAGResponse {
-            response: response_text,
+            response: llm_response.text,
             context: context_items.to_vec(),
-            confidence: if context_items.is_empty() { 0.1 } else { 0.8 },
+            confidence,
             citations,
-            processing_time_ms: 100, // Mock processing time
-            metadata: HashMap::new(),
+            processing_time_ms,
+            metadata,
         })
     }
 

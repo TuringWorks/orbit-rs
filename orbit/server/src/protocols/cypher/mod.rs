@@ -23,12 +23,14 @@ pub mod cypher_parser;
 pub mod graph_engine;
 pub mod graphrag_procedures;
 pub mod server;
+pub mod storage;
 
 pub use bolt::BoltProtocol;
 pub use cypher_parser::CypherParser;
 pub use graph_engine::GraphEngine;
 pub use graphrag_procedures::BoltGraphRAGProcedures;
 pub use server::CypherServer;
+pub use storage::CypherGraphStorage;
 
 // TODO: Implement full Bolt protocol
 // - Bolt v4/v5 handshake

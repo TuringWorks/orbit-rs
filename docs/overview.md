@@ -64,10 +64,14 @@ Orbit-RS has successfully completed its Phase 8 milestone, delivering a **compre
 - **Embeddings Support**: Seamless integration with AI embedding models
 - **Model Context Protocol**: AI agent integration and tool ecosystem
 
-### 🔌 **Protocol Support**
+### 🔌 **Protocol Support** (All with RocksDB Persistence)
 
-- **Redis RESP Protocol**: 124+ commands with clustering support
-- **PostgreSQL Wire Protocol**: Full DDL/DML/DCL/TCL operations
+- **Redis RESP Protocol**: 124+ commands with clustering support, RocksDB persistence
+- **PostgreSQL Wire Protocol**: Full DDL/DML/DCL/TCL operations, RocksDB persistence
+- **MySQL Wire Protocol**: MySQL-compatible queries, RocksDB persistence
+- **CQL/Cassandra**: Wide-column operations, RocksDB persistence
+- **Cypher/Neo4j (Bolt)**: Graph database operations, RocksDB persistence
+- **AQL/ArangoDB**: Multi-model operations, RocksDB persistence
 - **gRPC Services**: High-performance service-to-service communication
 - **Model Context Protocol (MCP)**: AI agent and tool integration
 - **REST APIs**: RESTful interface for web applications

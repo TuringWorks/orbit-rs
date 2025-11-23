@@ -28,6 +28,7 @@ mod handler {
 
     use super::{
         connection::ConnectionCommands,
+        graphrag::GraphRAGCommands,
         hash::HashCommands,
         list::ListCommands,
         // pubsub::PubSubCommands, // TODO: fix
@@ -37,7 +38,6 @@ mod handler {
         // time_series::TimeSeriesCommands, // TODO: fix
         // vector::VectorCommands, // TODO: fix
         // graph::GraphCommands, // TODO: fix
-        // graphrag::GraphRAGCommands, // TODO: fix
         string::StringCommands,
     };
     use crate::protocols::error::ProtocolResult;
@@ -77,7 +77,7 @@ mod handler {
         // vector: VectorCommands, // TODO: fix
         // time_series: TimeSeriesCommands, // TODO: fix
         // graph: GraphCommands, // TODO: fix
-        // graphrag: GraphRAGCommands, // TODO: fix
+        graphrag: GraphRAGCommands,
         server: ServerCommands,
     }
 
@@ -108,7 +108,7 @@ mod handler {
                 // vector: VectorCommands::new(local_registry.clone()), // TODO: fix
                 // time_series: TimeSeriesCommands::new(local_registry.clone()), // TODO: fix
                 // graph: GraphCommands::new(local_registry.clone()), // TODO: fix
-                // graphrag: GraphRAGCommands::new(local_registry.clone()), // TODO: fix
+                graphrag: GraphRAGCommands::new(local_registry.clone()),
                 server: ServerCommands::new(local_registry.clone()),
                 local_registry,
             }
@@ -164,9 +164,9 @@ mod handler {
                 CommandCategory::Graph => Err(ProtocolError::RespError(
                     "ERR Graph commands not available".to_string(),
                 )),
-                CommandCategory::GraphRAG => Err(ProtocolError::RespError(
-                    "ERR GraphRAG commands not available".to_string(),
-                )),
+                CommandCategory::GraphRAG => {
+                    CommandHandlerTrait::handle(&self.graphrag, &command_name, &args).await
+                }
                 CommandCategory::Server => {
                     CommandHandlerTrait::handle(&self.server, &command_name, &args).await
                 }

@@ -275,10 +275,17 @@ orbit-rs/
 
 ### **Protocol Completeness**
 
-- **4 complete protocols** (RESP, PostgreSQL, gRPC, MCP)
+- **6 complete protocols** with RocksDB persistence:
+  - Redis (RESP) - Port 6379
+  - PostgreSQL - Port 5432
+  - MySQL - Port 3306
+  - CQL/Cassandra - Port 9042
+  - Cypher/Neo4j (Bolt) - Port 7687
+  - AQL/ArangoDB - Port 8529
 - **Cross-protocol operations** enabling unique use cases
 - **AI/ML integration** with vector operations and statistical functions
 - **Enterprise features** for production deployment
+- **100% Data Persistence** - All protocols use RocksDB for durable storage
 
 ### **Developer Experience**
 

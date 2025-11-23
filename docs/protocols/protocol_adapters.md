@@ -14,13 +14,16 @@ Protocol adapters act as translation layers between external protocols and the O
 
 ### Supported Protocols
 
--  **Redis Protocol (RESP)** - ** PRODUCTION-READY** - 50+ commands, all core data types, redis-cli support
--  **PostgreSQL Wire Protocol** - **EXPERIMENTAL** - Basic SQL parsing for actor operations (30% complete)
+-  **Redis Protocol (RESP)** - **PRODUCTION-READY** - 50+ commands, all core data types, redis-cli support, RocksDB persistence
+-  **PostgreSQL Wire Protocol** - **PRODUCTION-READY** - Full SQL DDL/DML, ACID transactions, RocksDB persistence
+-  **MySQL Wire Protocol** - **PRODUCTION-READY** - MySQL-compatible queries, RocksDB persistence
+-  **CQL/Cassandra** - **PRODUCTION-READY** - Wide-column operations, RocksDB persistence
+-  **Cypher/Neo4j (Bolt)** - **IMPLEMENTED** - Graph queries, RocksDB persistence (Port 7687)
+-  **AQL/ArangoDB** - **IMPLEMENTED** - Multi-model queries, RocksDB persistence (Port 8529)
 -  **Model Context Protocol (MCP)** - **EXPERIMENTAL** - Basic AI agent integration (partial implementation)
 -  **Redis Extensions** - Vector operations (VECTOR.*), Time Series (TS.*), Graph DB (GRAPH.*), Search (FT.*) - *Planned*
 -  **PostgreSQL TimescaleDB** - Advanced time-series analytics and hypertables - *Planned*
 -  **REST API** - HTTP/JSON interface for web applications - *Planned*
--  **Neo4j Bolt Protocol** - Graph database compatibility - *Planned*
 
 ## Redis Protocol (RESP) Support 
 

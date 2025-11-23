@@ -74,28 +74,173 @@ async fn handle_tool_call(request: &McpRequest) -> McpResponse {
 
 /// Handle resources list request
 fn handle_resources_list(request: &McpRequest) -> McpResponse {
-    let result = json!({ "resources": [] });
+    let resources = vec![
+        json!({
+            "uri": "memory://actors",
+            "name": "Active Actors",
+            "description": "List of active actors in the Orbit-RS system",
+            "mimeType": "application/json"
+        }),
+        json!({
+            "uri": "memory://schemas",
+            "name": "Database Schemas",
+            "description": "Database table schemas and metadata",
+            "mimeType": "application/json"
+        }),
+        json!({
+            "uri": "memory://metrics",
+            "name": "System Metrics",
+            "description": "System performance metrics and statistics",
+            "mimeType": "application/json"
+        }),
+    ];
+    let result = json!({ "resources": resources });
     McpResponse::success(request.id.clone(), result)
 }
 
 /// Handle resource read request
 async fn handle_resource_read(request: &McpRequest) -> McpResponse {
-    McpResponse::error(
-        request.id.clone(),
-        McpError::MethodNotFound("resources/read not implemented".to_string()),
-    )
+    if let Some(uri) = request.params.get("uri").and_then(|v| v.as_str()) {
+        // Parse resource URI
+        if uri.starts_with("memory://") {
+            // Memory resource - return system information
+            let resource_type = uri.strip_prefix("memory://").unwrap_or("");
+            match resource_type {
+                "actors" => {
+                    // Return actor information
+                    let result = json!({
+                        "contents": [{
+                            "uri": uri,
+                            "mimeType": "application/json",
+                            "text": json!({
+                                "type": "actor_list",
+                                "description": "List of active actors in the system",
+                                "note": "Use tools/actor_list to get actual actor data"
+                            }).to_string()
+                        }]
+                    });
+                    McpResponse::success(request.id.clone(), result)
+                }
+                "schemas" => {
+                    // Return schema information
+                    let result = json!({
+                        "contents": [{
+                            "uri": uri,
+                            "mimeType": "application/json",
+                            "text": json!({
+                                "type": "schema_list",
+                                "description": "Database schemas",
+                                "note": "Use tools/describe_schema to get actual schema data"
+                            }).to_string()
+                        }]
+                    });
+                    McpResponse::success(request.id.clone(), result)
+                }
+                _ => {
+                    let result = json!({
+                        "contents": [{
+                            "uri": uri,
+                            "mimeType": "text/plain",
+                            "text": format!("Resource '{}' not found", resource_type)
+                        }]
+                    });
+                    McpResponse::success(request.id.clone(), result)
+                }
+            }
+        } else {
+            McpResponse::error(
+                request.id.clone(),
+                McpError::InvalidRequest(format!("Unsupported resource URI: {}", uri)),
+            )
+        }
+    } else {
+        McpResponse::error(
+            request.id.clone(),
+            McpError::InvalidRequest("Missing 'uri' parameter".to_string()),
+        )
+    }
 }
 
 /// Handle prompts list request
 fn handle_prompts_list(request: &McpRequest) -> McpResponse {
-    let result = json!({ "prompts": [] });
+    let prompts = vec![
+        json!({
+            "name": "system_analysis",
+            "description": "Analyze the Orbit-RS system and provide insights",
+            "arguments": []
+        }),
+        json!({
+            "name": "query_help",
+            "description": "Get help writing natural language queries",
+            "arguments": []
+        }),
+        json!({
+            "name": "schema_exploration",
+            "description": "Explore database schemas and structure",
+            "arguments": []
+        }),
+    ];
+    let result = json!({ "prompts": prompts });
     McpResponse::success(request.id.clone(), result)
 }
 
 /// Handle prompt get request
 async fn handle_prompt_get(request: &McpRequest) -> McpResponse {
-    McpResponse::error(
-        request.id.clone(),
-        McpError::MethodNotFound("prompts/get not implemented".to_string()),
-    )
+    if let Some(name) = request.params.get("name").and_then(|v| v.as_str()) {
+        match name {
+            "system_analysis" => {
+                let result = json!({
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": {
+                                "type": "text",
+                                "text": "Analyze the Orbit-RS system and provide insights about:\n1. System health and performance\n2. Active actors and their states\n3. Database schemas and data distribution\n4. Recommendations for optimization"
+                            }
+                        }
+                    ]
+                });
+                McpResponse::success(request.id.clone(), result)
+            }
+            "query_help" => {
+                let result = json!({
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": {
+                                "type": "text",
+                                "text": "Help me write a natural language query to:\n- Retrieve data from tables\n- Analyze data patterns\n- Get system information\n\nExamples:\n- 'Show me all users from California'\n- 'What are the top 10 products by revenue?'\n- 'Analyze the distribution of customer ages'"
+                            }
+                        }
+                    ]
+                });
+                McpResponse::success(request.id.clone(), result)
+            }
+            "schema_exploration" => {
+                let result = json!({
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": {
+                                "type": "text",
+                                "text": "Explore the database schema by asking questions like:\n- 'What tables are available?'\n- 'Show me the schema for the users table'\n- 'What columns does the products table have?'\n- 'List all indexes'"
+                            }
+                        }
+                    ]
+                });
+                McpResponse::success(request.id.clone(), result)
+            }
+            _ => {
+                McpResponse::error(
+                    request.id.clone(),
+                    McpError::InvalidRequest(format!("Unknown prompt: {}", name)),
+                )
+            }
+        }
+    } else {
+        McpResponse::error(
+            request.id.clone(),
+            McpError::InvalidRequest("Missing 'name' parameter".to_string()),
+        )
+    }
 }

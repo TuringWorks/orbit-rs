@@ -36,6 +36,7 @@ The Orbit server persistence system provides a comprehensive provider-based arch
 - **Kubernetes Integration**: Native support for Kubernetes deployments
 - **Performance Optimized**: Tuned for different workload characteristics
 - **Comprehensive Monitoring**: Built-in metrics and health checks
+- **Protocol-Specific Persistence**: All 6 protocols (PostgreSQL, MySQL, CQL, Redis, Cypher, AQL) use RocksDB for durable storage
 
 ---
 
@@ -227,6 +228,56 @@ max_background_jobs = 4
 - Read latency: 2-10μs
 - Memory usage: High
 - Recovery time: 3-10 seconds
+
+### Protocol-Specific Persistence
+
+All Orbit-RS protocols use RocksDB for durable storage, with each protocol having its own isolated storage directory:
+
+#### Protocol Storage Locations
+
+- **PostgreSQL** (Port 5432): `data/postgresql/rocksdb/`
+- **MySQL** (Port 3306): `data/mysql/rocksdb/`
+- **CQL/Cassandra** (Port 9042): `data/cql/rocksdb/`
+- **Redis** (Port 6379): `data/redis/rocksdb/`
+- **Cypher/Neo4j** (Port 7687): `data/cypher/rocksdb/`
+- **AQL/ArangoDB** (Port 8529): `data/aql/rocksdb/`
+
+#### Features
+
+- **Isolated Storage**: Each protocol maintains its own RocksDB instance
+- **Automatic Persistence**: All writes are automatically persisted to disk
+- **Crash Recovery**: Data is automatically loaded on server restart
+- **ACID Guarantees**: Full transactional guarantees with RocksDB
+- **Column Families**: Optimized storage with protocol-specific column families
+
+#### Storage Structure
+
+```
+data/
+├── postgresql/rocksdb/    # PostgreSQL tables, schemas, indexes
+├── mysql/rocksdb/          # MySQL tables and data
+├── cql/rocksdb/            # CQL wide-column data
+├── redis/rocksdb/          # Redis key-value data with TTL
+├── cypher/rocksdb/         # Graph nodes and relationships
+└── aql/rocksdb/            # Documents, collections, edges, graphs
+```
+
+#### Configuration
+
+Protocol persistence is automatically configured when starting the server. The data directory can be specified via:
+
+```bash
+orbit-server --data-dir /var/lib/orbit
+```
+
+Or in the configuration file:
+
+```toml
+[server]
+data_dir = "/var/lib/orbit"
+```
+
+For more details, see [Protocol Persistence Status](../PROTOCOL_PERSISTENCE_STATUS.md).
 
 ### Cloud Storage Backends
 

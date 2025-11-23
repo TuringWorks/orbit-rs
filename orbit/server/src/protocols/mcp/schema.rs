@@ -15,6 +15,8 @@ pub struct SchemaAnalyzer {
     /// Statistics collector
     #[allow(dead_code)]
     statistics_collector: StatisticsCollector,
+    /// Optional storage backend for schema discovery
+    storage: Option<Arc<dyn crate::protocols::common::storage::TableStorage>>,
 }
 
 impl SchemaAnalyzer {
@@ -23,6 +25,16 @@ impl SchemaAnalyzer {
         Self {
             schema_cache: Arc::new(RwLock::new(SchemaCache::new())),
             statistics_collector: StatisticsCollector::new(),
+            storage: None,
+        }
+    }
+
+    /// Create a new schema analyzer with storage backend
+    pub fn with_storage(storage: Arc<dyn crate::protocols::common::storage::TableStorage>) -> Self {
+        Self {
+            schema_cache: Arc::new(RwLock::new(SchemaCache::new())),
+            statistics_collector: StatisticsCollector::new(),
+            storage: Some(storage),
         }
     }
 
@@ -76,19 +88,106 @@ impl SchemaAnalyzer {
         cache.statistics.get(&format!("{}.{}", table_name, column_name)).cloned()
     }
 
-    /// Discover schema for a table (placeholder - would query Orbit-RS)
-    pub async fn discover_schema(&self, _table_name: &str) -> Result<TableSchema, SchemaError> {
-        // TODO: This would query Orbit-RS metadata system
-        // For now, return an error indicating discovery is not yet implemented
-        Err(SchemaError::DiscoveryNotImplemented)
+    /// Discover schema for a table from Orbit-RS storage
+    pub async fn discover_schema(&self, table_name: &str) -> Result<TableSchema, SchemaError> {
+        if let Some(ref storage) = self.storage {
+            // Query Orbit-RS storage for table schema
+            let pg_schema = storage
+                .get_table_schema(table_name)
+                .await
+                .map_err(|e| SchemaError::DiscoveryError(e.to_string()))?;
+
+            if let Some(pg_schema) = pg_schema {
+                // Convert PostgreSQL TableSchema to MCP TableSchema
+                let mcp_schema = self.convert_pg_schema_to_mcp(pg_schema);
+                
+                // Update cache
+                self.update_schema(mcp_schema.clone());
+                
+                Ok(mcp_schema)
+            } else {
+                Err(SchemaError::TableNotFound(table_name.to_string()))
+            }
+        } else {
+            Err(SchemaError::DiscoveryNotImplemented)
+        }
     }
 
-    /// Refresh schema cache
+    /// Refresh schema cache from Orbit-RS storage
     pub async fn refresh_cache(&self) -> Result<(), SchemaError> {
-        // TODO: Query Orbit-RS for all tables and update cache
-        let mut cache = self.schema_cache.write().unwrap();
-        cache.last_updated = SystemTime::now();
-        Ok(())
+        if let Some(ref storage) = self.storage {
+            // Query Orbit-RS for all table schemas
+            let schemas = storage
+                .list_table_schemas()
+                .await
+                .map_err(|e| SchemaError::DiscoveryError(e.to_string()))?;
+
+            let mut cache = self.schema_cache.write().unwrap();
+            for pg_schema in schemas {
+                let mcp_schema = self.convert_pg_schema_to_mcp(pg_schema);
+                cache.tables.insert(mcp_schema.name.clone(), mcp_schema);
+            }
+            cache.last_updated = SystemTime::now();
+            Ok(())
+        } else {
+            let mut cache = self.schema_cache.write().unwrap();
+            cache.last_updated = SystemTime::now();
+            Ok(())
+        }
+    }
+
+    /// Convert PostgreSQL TableSchema to MCP TableSchema
+    fn convert_pg_schema_to_mcp(
+        &self,
+        pg_schema: crate::protocols::postgres_wire::sql::executor::TableSchema,
+    ) -> TableSchema {
+        let columns: Vec<ColumnInfo> = pg_schema
+            .columns
+            .iter()
+            .map(|col| {
+                // Convert SqlType to string representation
+                let data_type_str = match &col.data_type {
+                    crate::protocols::postgres_wire::sql::types::SqlType::Integer => "INTEGER".to_string(),
+                    crate::protocols::postgres_wire::sql::types::SqlType::BigInt => "BIGINT".to_string(),
+                    crate::protocols::postgres_wire::sql::types::SqlType::Text => "TEXT".to_string(),
+                    crate::protocols::postgres_wire::sql::types::SqlType::Varchar(Some(n)) => format!("VARCHAR({})", n),
+                    crate::protocols::postgres_wire::sql::types::SqlType::Varchar(None) => "VARCHAR".to_string(),
+                    crate::protocols::postgres_wire::sql::types::SqlType::Boolean => "BOOLEAN".to_string(),
+                    crate::protocols::postgres_wire::sql::types::SqlType::Json => "JSON".to_string(),
+                    crate::protocols::postgres_wire::sql::types::SqlType::Jsonb => "JSONB".to_string(),
+                    crate::protocols::postgres_wire::sql::types::SqlType::Timestamp { with_timezone } => {
+                        if *with_timezone {
+                            "TIMESTAMPTZ".to_string()
+                        } else {
+                            "TIMESTAMP".to_string()
+                        }
+                    },
+                    _ => format!("{:?}", col.data_type), // Default: use debug format
+                };
+                
+                // Check if column has NOT NULL constraint
+                let has_not_null = col.constraints.iter().any(|c| c == "NOT NULL");
+                let is_primary_key = col.constraints.iter().any(|c| c == "PRIMARY KEY");
+                
+                ColumnInfo {
+                    name: col.name.clone(),
+                    data_type: data_type_str,
+                    nullable: !has_not_null,
+                    default_value: col.default.as_ref().map(|v| format!("{:?}", v)),
+                    is_primary_key,
+                    is_indexed: false, // TODO: Check indexes
+                }
+            })
+            .collect();
+
+        TableSchema {
+            name: pg_schema.name.clone(),
+            columns,
+            constraints: vec![], // TODO: Convert table constraints
+            indexes: vec![], // TODO: Convert indexes
+            row_estimate: None,
+            data_size_estimate: None,
+        }
     }
 }
 
@@ -313,6 +412,8 @@ pub enum SchemaError {
     ColumnNotFound(String),
     /// Schema discovery not yet implemented
     DiscoveryNotImplemented,
+    /// Schema discovery error
+    DiscoveryError(String),
     /// Statistics collection not yet implemented
     StatisticsNotImplemented,
     /// Cache error
@@ -326,6 +427,9 @@ impl std::fmt::Display for SchemaError {
             SchemaError::ColumnNotFound(name) => write!(f, "Column not found: {}", name),
             SchemaError::DiscoveryNotImplemented => {
                 write!(f, "Schema discovery not yet implemented")
+            }
+            SchemaError::DiscoveryError(msg) => {
+                write!(f, "Schema discovery error: {}", msg)
             }
             SchemaError::StatisticsNotImplemented => {
                 write!(f, "Statistics collection not yet implemented")

@@ -2,9 +2,15 @@
 //!
 //! This module provides a distributed graph database compatible with RedisGraph commands,
 //! built on top of Orbit's actor system and leveraging the existing Cypher implementation.
+//!
+//! Supports both in-memory and persistent storage backends.
+
+mod persistent_storage;
+pub use persistent_storage::PersistentGraphStorage;
 
 use crate::protocols::cypher::graph_engine::QueryResult;
 use crate::protocols::cypher::{CypherParser, GraphEngine};
+use crate::protocols::cypher::storage::CypherGraphStorage;
 use crate::protocols::error::{ProtocolError, ProtocolResult};
 use orbit_shared::graph::InMemoryGraphStorage;
 use orbit_shared::Addressable;
@@ -29,6 +35,9 @@ pub struct GraphActor {
     pub created_at: i64,
     /// Last update timestamp
     pub updated_at: i64,
+    /// Optional persistent storage (None = in-memory only)
+    #[serde(skip)]
+    pub persistent_storage: Option<Arc<CypherGraphStorage>>,
 }
 
 /// Configuration for a graph database
@@ -159,7 +168,7 @@ pub struct ProfileMetrics {
 }
 
 impl GraphActor {
-    /// Create a new graph actor with the given name
+    /// Create a new graph actor with the given name (in-memory only)
     pub fn new(graph_name: String) -> Self {
         let now = chrono::Utc::now().timestamp_millis();
         Self {
@@ -169,6 +178,7 @@ impl GraphActor {
             slow_queries: Vec::new(),
             created_at: now,
             updated_at: now,
+            persistent_storage: None,
         }
     }
 
@@ -182,6 +192,42 @@ impl GraphActor {
             slow_queries: Vec::new(),
             created_at: now,
             updated_at: now,
+            persistent_storage: None,
+        }
+    }
+
+    /// Create a new graph actor with persistent storage
+    pub fn with_persistent_storage(
+        graph_name: String,
+        persistent_storage: Arc<CypherGraphStorage>,
+    ) -> Self {
+        let now = chrono::Utc::now().timestamp_millis();
+        Self {
+            graph_name,
+            config: GraphConfig::default(),
+            stats: GraphStats::default(),
+            slow_queries: Vec::new(),
+            created_at: now,
+            updated_at: now,
+            persistent_storage: Some(persistent_storage),
+        }
+    }
+
+    /// Create with persistent storage and custom configuration
+    pub fn with_persistent_storage_and_config(
+        graph_name: String,
+        config: GraphConfig,
+        persistent_storage: Arc<CypherGraphStorage>,
+    ) -> Self {
+        let now = chrono::Utc::now().timestamp_millis();
+        Self {
+            graph_name,
+            config,
+            stats: GraphStats::default(),
+            slow_queries: Vec::new(),
+            created_at: now,
+            updated_at: now,
+            persistent_storage: Some(persistent_storage),
         }
     }
 
@@ -210,9 +256,14 @@ impl GraphActor {
             "Executing Cypher query"
         );
 
-        // Create storage and engine (in production this would be persistent)
+        // Create storage and engine - use persistent storage if available
+        // Note: GraphEngine requires a concrete type, so we need to handle this differently
+        // For now, we'll use in-memory storage and sync to persistent storage separately
         let storage = Arc::new(InMemoryGraphStorage::new());
         let engine = GraphEngine::new(storage);
+        
+        // TODO: Integrate persistent storage sync after query execution
+        // This would require modifying GraphEngine to support persistent backends
 
         // Validate read-only constraint
         if read_only && self.is_write_query(query) {
