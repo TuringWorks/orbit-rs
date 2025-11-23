@@ -33,6 +33,9 @@ pub mod sql_generator;
 pub mod tools;
 pub mod types;
 
+#[cfg(test)]
+mod tests;
+
 pub use server::McpServer;
 pub use types::{McpError, McpRequest, McpResponse, McpResult, McpTool};
 

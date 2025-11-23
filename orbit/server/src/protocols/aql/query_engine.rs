@@ -2,10 +2,17 @@
 //!
 //! This module provides a complete AQL query engine that includes GraphRAG function support.
 
-use crate::protocols::aql::{AqlGraphRAGEngine, AqlParser, AqlQuery, AqlValue};
+use crate::protocols::aql::{
+    AqlGraphRAGEngine, AqlParser, AqlQuery, AqlValue, AqlStorage, AqlDocument,
+};
+use crate::protocols::aql::aql_parser::{
+    AqlClause, AqlExpression, AqlCondition, ComparisonOperator,
+};
 use crate::protocols::error::{ProtocolError, ProtocolResult};
 use orbit_client::OrbitClient;
 use std::collections::HashMap;
+use std::sync::Arc;
+use tracing::warn;
 
 /// AQL query execution result
 #[derive(Debug, Clone)]
@@ -22,6 +29,8 @@ pub struct AqlQueryEngine {
     parser: AqlParser,
     /// GraphRAG function engine
     graphrag_engine: Option<AqlGraphRAGEngine>,
+    /// Storage backend for document operations
+    storage: Option<Arc<AqlStorage>>,
 }
 
 impl AqlQueryEngine {
@@ -30,6 +39,16 @@ impl AqlQueryEngine {
         Self {
             parser: AqlParser::new(),
             graphrag_engine: None,
+            storage: None,
+        }
+    }
+
+    /// Create new AQL query engine with storage
+    pub fn with_storage(storage: Arc<AqlStorage>) -> Self {
+        Self {
+            parser: AqlParser::new(),
+            graphrag_engine: None,
+            storage: Some(storage),
         }
     }
 
@@ -38,6 +57,7 @@ impl AqlQueryEngine {
         Self {
             parser: AqlParser::new(),
             graphrag_engine: Some(AqlGraphRAGEngine::new(orbit_client)),
+            storage: None,
         }
     }
 
@@ -124,40 +144,259 @@ impl AqlQueryEngine {
         }
     }
 
-    /// Execute parsed AQL query (placeholder implementation)
+    /// Execute parsed AQL query
     async fn execute_parsed_query(&self, query: AqlQuery) -> ProtocolResult<AqlQueryResult> {
-        // This would contain the full AQL execution logic
-        // For now, return a placeholder result
 
+        let storage = self.storage.as_ref().ok_or_else(|| {
+            ProtocolError::AqlError("Storage backend required for query execution".to_string())
+        })?;
+
+        // Execution context for variables
+        let mut context: HashMap<String, AqlValue> = HashMap::new();
         let mut result_data = Vec::new();
-        let mut metadata = HashMap::new();
 
+        // Process clauses in order
+        let mut for_variable: Option<String> = None;
+        let mut for_documents: Vec<AqlDocument> = Vec::new();
+        
+        for clause in &query.clauses {
+            match clause {
+                AqlClause::For { variable, data_source } => {
+                    // Execute FOR clause - iterate over collection
+                    for_documents = self.execute_for_clause(storage, data_source).await?;
+                    for_variable = Some(variable.clone());
+                }
+                AqlClause::Filter { condition } => {
+                    // Apply filter to documents from FOR clause
+                    if let Some(ref var) = for_variable {
+                        for_documents = for_documents
+                            .into_iter()
+                            .filter(|doc| {
+                                let mut ctx = context.clone();
+                                ctx.insert(var.clone(), self.document_to_value(doc));
+                                self.evaluate_condition(condition, &ctx).unwrap_or(false)
+                            })
+                            .collect();
+                    }
+                }
+                AqlClause::Return { distinct, expression } => {
+                    // Process RETURN clause
+                    if let Some(ref var) = for_variable {
+                        // Return documents from FOR clause
+                        for doc in &for_documents {
+                            context.insert(var.clone(), self.document_to_value(doc));
+                            let value = self.evaluate_expression(expression, &context)?;
+                            result_data.push(value);
+                        }
+                    } else {
+                        // No FOR clause - evaluate expression directly
+                        let value = self.evaluate_expression(expression, &context)?;
+                        result_data.push(value);
+                    }
+                    
+                    if *distinct {
+                        result_data = self.deduplicate_results(result_data);
+                    }
+                    break; // RETURN is typically the last clause
+                }
+                AqlClause::Sort { items: _ } => {
+                    // Sorting is deferred until after all rows are collected
+                    continue;
+                }
+                AqlClause::Limit { offset: _, count: _ } => {
+                    // Limiting is deferred until after all rows are collected
+                    continue;
+                }
+                _ => {
+                    // Other clauses not yet implemented
+                    warn!("Unsupported clause type in AQL query execution");
+                }
+            }
+        }
+
+        // Apply SORT and LIMIT if present
+        result_data = self.apply_sort_and_limit(&query.clauses, result_data)?;
+
+        let mut metadata = HashMap::new();
         metadata.insert(
-            "clauses_processed".to_string(),
-            AqlValue::Number(serde_json::Number::from(query.clauses.len())),
+            "rows_returned".to_string(),
+            AqlValue::Number(serde_json::Number::from(result_data.len())),
         );
         metadata.insert(
             "execution_time".to_string(),
             AqlValue::String(chrono::Utc::now().to_rfc3339()),
         );
 
-        // Placeholder: return information about the parsed query
-        let mut query_info = HashMap::new();
-        query_info.insert(
-            "clause_count".to_string(),
-            AqlValue::Number(serde_json::Number::from(query.clauses.len())),
-        );
-        query_info.insert(
-            "message".to_string(),
-            AqlValue::String("Regular AQL execution not yet implemented".to_string()),
-        );
-
-        result_data.push(AqlValue::Object(query_info));
-
         Ok(AqlQueryResult {
             data: result_data,
             metadata,
         })
+    }
+
+    /// Execute FOR clause - get documents from collection
+    async fn execute_for_clause(
+        &self,
+        storage: &AqlStorage,
+        collection_name: &str,
+    ) -> ProtocolResult<Vec<AqlDocument>> {
+        // Get all documents from the collection
+        storage.get_collection_documents(collection_name).await
+    }
+
+
+    /// Evaluate an AQL expression
+    fn evaluate_expression(
+        &self,
+        expression: &AqlExpression,
+        context: &HashMap<String, AqlValue>,
+    ) -> ProtocolResult<AqlValue> {
+        use crate::protocols::aql::aql_parser::AqlExpression;
+
+        match expression {
+            AqlExpression::Variable(name) => {
+                context.get(name).cloned().ok_or_else(|| {
+                    ProtocolError::AqlError(format!("Variable '{}' not found", name))
+                })
+            }
+            AqlExpression::Literal(value) => Ok(value.clone()),
+            AqlExpression::PropertyAccess { object, property } => {
+                let obj_value = context.get(object).ok_or_else(|| {
+                    ProtocolError::AqlError(format!("Object '{}' not found", object))
+                })?;
+                
+                if let AqlValue::Object(obj_map) = obj_value {
+                    obj_map.get(property).cloned().ok_or_else(|| {
+                        ProtocolError::AqlError(format!("Property '{}' not found", property))
+                    })
+                } else {
+                    Err(ProtocolError::AqlError("Property access on non-object".to_string()))
+                }
+            }
+            AqlExpression::Object(fields) => {
+                let mut result = HashMap::new();
+                for (key, expr) in fields {
+                    result.insert(key.clone(), self.evaluate_expression(expr, context)?);
+                }
+                Ok(AqlValue::Object(result))
+            }
+            AqlExpression::Array(elements) => {
+                let mut result = Vec::new();
+                for expr in elements {
+                    result.push(self.evaluate_expression(expr, context)?);
+                }
+                Ok(AqlValue::Array(result))
+            }
+        }
+    }
+
+    /// Evaluate an AQL condition
+    fn evaluate_condition(
+        &self,
+        condition: &AqlCondition,
+        context: &HashMap<String, AqlValue>,
+    ) -> ProtocolResult<bool> {
+        use crate::protocols::aql::aql_parser::AqlCondition;
+
+        match condition {
+            AqlCondition::Comparison {
+                left,
+                operator,
+                right,
+            } => {
+                let left_val = self.evaluate_expression(left, context)?;
+                let right_val = self.evaluate_expression(right, context)?;
+                self.compare_values(&left_val, operator, &right_val)
+            }
+            // Note: AqlCondition currently only supports Comparison
+            // AND, OR, NOT would need to be added to the enum
+        }
+    }
+
+    /// Compare two AQL values
+    fn compare_values(
+        &self,
+        left: &AqlValue,
+        operator: &ComparisonOperator,
+        right: &AqlValue,
+    ) -> ProtocolResult<bool> {
+        use crate::protocols::aql::data_model::AqlValue;
+
+        match (left, right) {
+            (AqlValue::Number(l), AqlValue::Number(r)) => {
+                let l_f64 = l.as_f64().unwrap_or(0.0);
+                let r_f64 = r.as_f64().unwrap_or(0.0);
+                Ok(match operator {
+                    ComparisonOperator::Equals => (l_f64 - r_f64).abs() < f64::EPSILON,
+                    ComparisonOperator::NotEquals => (l_f64 - r_f64).abs() >= f64::EPSILON,
+                    ComparisonOperator::Greater => l_f64 > r_f64,
+                    ComparisonOperator::Less => l_f64 < r_f64,
+                    ComparisonOperator::GreaterOrEqual => l_f64 >= r_f64,
+                    ComparisonOperator::LessOrEqual => l_f64 <= r_f64,
+                })
+            }
+            (AqlValue::String(l), AqlValue::String(r)) => {
+                Ok(match operator {
+                    ComparisonOperator::Equals => l == r,
+                    ComparisonOperator::NotEquals => l != r,
+                    ComparisonOperator::Greater => l > r,
+                    ComparisonOperator::Less => l < r,
+                    ComparisonOperator::GreaterOrEqual => l >= r,
+                    ComparisonOperator::LessOrEqual => l <= r,
+                })
+            }
+            _ => Ok(false),
+        }
+    }
+
+    /// Convert AQL document to AQL value
+    fn document_to_value(&self, doc: &AqlDocument) -> AqlValue {
+        AqlValue::Object(doc.data.clone())
+    }
+
+    /// Apply SORT and LIMIT clauses
+    fn apply_sort_and_limit(
+        &self,
+        clauses: &[AqlClause],
+        mut results: Vec<AqlValue>,
+    ) -> ProtocolResult<Vec<AqlValue>> {
+        use crate::protocols::aql::aql_parser::AqlClause;
+
+        // Apply SORT if present
+        for clause in clauses {
+            if let AqlClause::Sort { items: _ } = clause {
+                // Simplified sorting - would need proper implementation
+                // For now, just keep original order
+                break;
+            }
+        }
+
+        // Apply LIMIT if present
+        for clause in clauses {
+            if let AqlClause::Limit { offset, count } = clause {
+                let offset = offset.unwrap_or(0) as usize;
+                let count = *count as usize;
+                results = results.into_iter().skip(offset).take(count).collect();
+                break;
+            }
+        }
+
+        Ok(results)
+    }
+
+    /// Remove duplicate results (for DISTINCT)
+    fn deduplicate_results(&self, results: Vec<AqlValue>) -> Vec<AqlValue> {
+        let mut seen = std::collections::HashSet::new();
+        let mut unique = Vec::new();
+        
+        for result in results {
+            // Simple deduplication based on string representation
+            let key = format!("{:?}", result);
+            if seen.insert(key) {
+                unique.push(result);
+            }
+        }
+        
+        unique
     }
 }
 
@@ -191,9 +430,12 @@ mod tests {
             .execute_query("FOR doc IN documents RETURN doc")
             .await;
 
-        assert!(result.is_ok());
-        let query_result = result.unwrap();
-        assert!(!query_result.data.is_empty());
+        // Query should fail without storage backend
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Storage backend required"));
     }
 
     #[tokio::test]

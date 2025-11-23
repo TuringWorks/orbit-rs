@@ -95,7 +95,7 @@ pub enum BoltMessage {
 /// Bolt protocol handler
 pub struct BoltProtocolHandler {
     version: Option<BoltVersion>,
-    storage: Arc<CypherGraphStorage>,
+    _storage: Arc<CypherGraphStorage>,
     authenticated: bool,
     current_query: Option<String>,
     current_parameters: Option<HashMap<String, Value>>,
@@ -106,7 +106,7 @@ impl BoltProtocolHandler {
     pub fn new(storage: Arc<CypherGraphStorage>) -> Self {
         Self {
             version: None,
-            storage,
+            _storage: storage,
             authenticated: false,
             current_query: None,
             current_parameters: None,
@@ -315,7 +315,7 @@ impl BoltProtocolHandler {
     }
 
     /// Decode HELLO message
-    fn decode_hello(&self, bytes: &Bytes) -> ProtocolResult<HashMap<String, Value>> {
+    fn decode_hello(&self, _bytes: &Bytes) -> ProtocolResult<HashMap<String, Value>> {
         // Simplified: assume PackStream map format
         // In production, would need full PackStream decoder
         let map = HashMap::new();
@@ -385,7 +385,7 @@ impl BoltProtocolHandler {
     }
 
     /// Decode PULL message
-    fn decode_pull(&self, bytes: &Bytes) -> ProtocolResult<(Option<i64>, Option<i64>)> {
+    fn decode_pull(&self, _bytes: &Bytes) -> ProtocolResult<(Option<i64>, Option<i64>)> {
         // Simplified: return None for both
         Ok((None, None))
     }
@@ -406,7 +406,7 @@ impl BoltProtocolHandler {
     }
 
     /// Decode DISCARD message
-    fn decode_discard(&self, bytes: &Bytes) -> ProtocolResult<(Option<i64>, Option<i64>)> {
+    fn decode_discard(&self, _bytes: &Bytes) -> ProtocolResult<(Option<i64>, Option<i64>)> {
         Ok((None, None))
     }
 
@@ -466,7 +466,7 @@ impl BoltProtocolHandler {
     /// Send SUCCESS message
     async fn send_success(
         &self,
-        metadata: HashMap<String, Value>,
+        _metadata: HashMap<String, Value>,
         stream: &mut TcpStream,
     ) -> ProtocolResult<()> {
         let mut buf = BytesMut::new();
@@ -480,8 +480,8 @@ impl BoltProtocolHandler {
     async fn send_failure(
         &self,
         stream: &mut TcpStream,
-        code: &str,
-        message: &str,
+        _code: &str,
+        _message: &str,
     ) -> ProtocolResult<()> {
         let mut buf = BytesMut::new();
         buf.put_u8(0x7F); // FAILURE marker
@@ -497,9 +497,10 @@ impl BoltProtocolHandler {
     }
 
     /// Send RECORD message
+    #[allow(dead_code)]
     async fn send_record(
         &self,
-        values: Vec<Value>,
+        _values: Vec<Value>,
         stream: &mut TcpStream,
     ) -> ProtocolResult<()> {
         let mut buf = BytesMut::new();

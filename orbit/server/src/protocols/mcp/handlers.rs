@@ -20,7 +20,7 @@ pub async fn handle_request(request: McpRequest, server: Option<Arc<McpServer>>)
 }
 
 /// Handle initialize request
-fn handle_initialize(request: &McpRequest) -> McpResponse {
+pub fn handle_initialize(request: &McpRequest) -> McpResponse {
     let result = json!({
         "protocolVersion": "2024-11-05",
         "capabilities": {
@@ -46,14 +46,14 @@ fn handle_initialize(request: &McpRequest) -> McpResponse {
 }
 
 /// Handle tools list request
-fn handle_tools_list(request: &McpRequest) -> McpResponse {
+pub fn handle_tools_list(request: &McpRequest) -> McpResponse {
     let tools = super::tools::get_available_tools();
     let result = json!({ "tools": tools });
     McpResponse::success(request.id.clone(), result)
 }
 
 /// Handle tool call request
-async fn handle_tool_call(request: &McpRequest, _server: Option<&Arc<McpServer>>) -> McpResponse {
+pub async fn handle_tool_call(request: &McpRequest, _server: Option<&Arc<McpServer>>) -> McpResponse {
     if let (Some(name), Some(arguments)) = (
         request.params.get("name").and_then(|v| v.as_str()),
         request.params.get("arguments").and_then(|v| v.as_object()),
@@ -75,7 +75,7 @@ async fn handle_tool_call(request: &McpRequest, _server: Option<&Arc<McpServer>>
 }
 
 /// Handle resources list request
-fn handle_resources_list(request: &McpRequest) -> McpResponse {
+pub fn handle_resources_list(request: &McpRequest) -> McpResponse {
     let resources = vec![
         json!({
             "uri": "memory://actors",
@@ -101,7 +101,7 @@ fn handle_resources_list(request: &McpRequest) -> McpResponse {
 }
 
 /// Handle resource read request
-async fn handle_resource_read(request: &McpRequest, server: Option<&Arc<McpServer>>) -> McpResponse {
+pub async fn handle_resource_read(request: &McpRequest, server: Option<&Arc<McpServer>>) -> McpResponse {
     if let Some(uri) = request.params.get("uri").and_then(|v| v.as_str()) {
         // Parse resource URI
         if uri.starts_with("memory://") {
@@ -111,7 +111,7 @@ async fn handle_resource_read(request: &McpRequest, server: Option<&Arc<McpServe
                 "actors" => {
                     // Return actor information - try to get real data if server is available
                     let content = if let Some(server) = server {
-                        if let Some(ref integration) = server.orbit_integration {
+                        if let Some(ref _integration) = server.orbit_integration {
                             // Try to get actual actor data
                             json!({
                                 "type": "actor_list",
@@ -147,7 +147,7 @@ async fn handle_resource_read(request: &McpRequest, server: Option<&Arc<McpServe
                 "schemas" => {
                     // Return schema information - try to get real schema data if server is available
                     let content = if let Some(server) = server {
-                        if let Some(ref integration) = server.orbit_integration {
+                        if let Some(ref _integration) = server.orbit_integration {
                             // Try to get actual schema data
                             json!({
                                 "type": "schema_list",
@@ -230,7 +230,7 @@ async fn handle_resource_read(request: &McpRequest, server: Option<&Arc<McpServe
 }
 
 /// Handle prompts list request
-fn handle_prompts_list(request: &McpRequest) -> McpResponse {
+pub fn handle_prompts_list(request: &McpRequest) -> McpResponse {
     let prompts = vec![
         json!({
             "name": "system_analysis",
@@ -253,7 +253,7 @@ fn handle_prompts_list(request: &McpRequest) -> McpResponse {
 }
 
 /// Handle prompt get request
-async fn handle_prompt_get(request: &McpRequest, server: Option<&Arc<McpServer>>) -> McpResponse {
+pub async fn handle_prompt_get(request: &McpRequest, server: Option<&Arc<McpServer>>) -> McpResponse {
     if let Some(name) = request.params.get("name").and_then(|v| v.as_str()) {
         // Check if server integration is available for dynamic prompts
         let has_integration = server

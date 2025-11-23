@@ -35,6 +35,9 @@ pub mod query_engine;
 pub mod server;
 pub mod storage;
 
+#[cfg(test)]
+mod tests;
+
 pub use aql_parser::{AqlParser, AqlQuery};
 pub use data_model::{AqlCollection, AqlDocument, AqlValue};
 pub use graphrag_engine::AqlGraphRAGEngine;

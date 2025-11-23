@@ -847,9 +847,53 @@ orbit-cli validate --backend=lsm --data-dir=/var/lib/orbit-new
 
 ---
 
+## Historical Issues and Fixes
+
+### RocksDB Persistence Creation Issues (Resolved)
+
+#### Root Causes Identified
+
+1. **TieredTableStorage was Completely In-Memory**
+   - Problem: The `TieredTableStorage` implementation used `HybridStorageManager` which stored all data in-memory using `RowBasedStore` (a `Vec<Row>`). There was no disk persistence mechanism.
+   - Fix: Integrated RocksDB into `TieredTableStorage` to provide durable storage.
+
+2. **No Protocol-Specific Persistence Folders**
+   - Problem: Only generic directories were created. Each protocol should have its own persistence folder.
+   - Fix: Created protocol-specific subdirectories (`data/postgresql/rocksdb/`, `data/mysql/rocksdb/`, etc.).
+
+3. **Hot/Warm/Cold Directories Were Not Used**
+   - Problem: The `data/hot`, `data/warm`, and `data/cold` directories were created but never written to.
+   - Fix: RocksDB now handles persistence directly, and tiered storage uses RocksDB as the backing store.
+
+4. **RocksDB Was Initialized But Not Used by TieredTableStorage**
+   - Problem: A global `RocksDbTableStorage` was initialized but `TieredTableStorage` didn't use it.
+   - Fix: Modified `TieredTableStorage` to use RocksDB for schema and data persistence.
+
+5. **Redis Path Inconsistency**
+   - Problem: Redis data files were being created at both root level and rocksdb level.
+   - Fix: Standardized Redis to use `data/redis/rocksdb/` consistently.
+
+### Persistence Verification
+
+All persistence implementations have been verified to:
+- ✅ Create data directories safely using `create_dir_all` (doesn't delete existing files)
+- ✅ Use RocksDB `create_if_missing(true)` and `create_missing_column_families(true)`
+- ✅ Load existing data from RocksDB on server restart
+- ✅ Preserve data across server restarts
+- ✅ Use protocol-specific data directories for isolation
+
+**Verification Tests**: See `orbit/server/tests/persistence_verification.rs` for comprehensive tests.
+
+---
+
 ## Conclusion
 
 The provider-based persistence architecture transforms Orbit server from a simple in-memory system to a production-ready platform that can adapt to any deployment scenario. Whether you're running a single development instance or a global distributed system, there's a provider configuration that meets your needs.
 
 The system's flexibility, combined with comprehensive monitoring, security features, and migration capabilities, ensures that your Orbit deployment can evolve with your requirements without architectural changes.
+
+---
+
+**Last Updated**: November 2025  
+**Status**: Production Ready
 

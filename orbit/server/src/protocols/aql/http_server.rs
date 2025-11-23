@@ -22,8 +22,8 @@ use tracing::{error, info, warn};
 /// AQL cursor for streaming query results
 #[derive(Debug, Clone)]
 struct AqlCursor {
-    id: String,
-    query: String,
+    _id: String,
+    _query: String,
     result: AqlQueryResult,
     position: usize,
     has_more: bool,
@@ -34,13 +34,13 @@ struct AqlCursor {
 struct AqlQueryRequest {
     query: String,
     #[serde(default)]
-    bind_vars: HashMap<String, serde_json::Value>,
+    _bind_vars: HashMap<String, serde_json::Value>,
     #[serde(default)]
     batch_size: Option<usize>,
     #[serde(default)]
     count: bool,
     #[serde(default)]
-    ttl: Option<u64>,
+    _ttl: Option<u64>,
 }
 
 /// AQL cursor response
@@ -180,8 +180,8 @@ async fn handle_cursor_request(
                         Ok(result) => {
                             let cursor_id = format!("cursor_{}", uuid::Uuid::new_v4());
                             let cursor = AqlCursor {
-                                id: cursor_id.clone(),
-                                query: query_req.query.clone(),
+                                _id: cursor_id.clone(),
+                                _query: query_req.query.clone(),
                                 result: result.clone(),
                                 position: 0,
                                 has_more: result.data.len() > query_req.batch_size.unwrap_or(100),
@@ -287,9 +287,9 @@ async fn handle_cursor_request(
 /// Handle collection requests
 async fn handle_collection_request(
     method: &Method,
-    path: &str,
+    _path: &str,
     _body: Bytes,
-    storage: Arc<AqlStorage>,
+    _storage: Arc<AqlStorage>,
 ) -> Response<Full<Bytes>> {
     match method {
         &Method::GET => {
@@ -319,7 +319,7 @@ async fn handle_document_request(
     method: &Method,
     path: &str,
     body: Bytes,
-    storage: Arc<AqlStorage>,
+    _storage: Arc<AqlStorage>,
 ) -> Response<Full<Bytes>> {
     // Parse collection and key from path: /_api/document/{collection}/{key}
     let parts: Vec<&str> = path.strip_prefix("/_api/document/").unwrap_or("").split('/').collect();
@@ -341,7 +341,7 @@ async fn handle_document_request(
             if parts.len() >= 1 {
                 let collection = parts[0];
                 match serde_json::from_slice::<serde_json::Value>(&body) {
-                    Ok(doc) => {
+                    Ok(_doc) => {
                         json_response(
                             StatusCode::CREATED,
                             &serde_json::json!({

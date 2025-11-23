@@ -1,0 +1,50 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "AQL",
+  "patterns": [
+    {
+      "include": "#keywords"
+    },
+    {
+      "include": "#strings"
+    },
+    {
+      "include": "#numbers"
+    },
+    {
+      "include": "#comments"
+    }
+  ],
+  "repository": {
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.aql",
+          "match": "\\b(FOR|FILTER|SEARCH|SORT|LIMIT|RETURN|COLLECT|AGGREGATE|LET|INSERT|UPDATE|REPLACE|UPSERT|REMOVE|WITH|LET|FOR|FILTER|RETURN|SORT|LIMIT|DISTINCT|COLLECT|AGGREGATE|LET|INSERT|UPDATE|REPLACE|UPSERT|REMOVE|WITH|IN|OUT|INBOUND|OUTBOUND|ANY|ALL|NONE|INTO|INTO|KEEP|PRUNE|OPTIONS|GRAPH|SHORTEST_PATH|K_SHORTEST_PATHS|TRAVERSAL|TRAVERSAL_TREE|MIN|MAX|AVG|SUM|COUNT|LENGTH|UNIQUE|SORTED|UNIQUE|SORTED|REVERSE|FLATTEN|ZIP|UNION|UNION_DISTINCT|INTERSECTION|MINUS|OUTERSECT|PREGEL|WITH|LET|FOR|FILTER|RETURN|SORT|LIMIT|DISTINCT|COLLECT|AGGREGATE|LET|INSERT|UPDATE|REPLACE|UPSERT|REMOVE|WITH|IN|OUT|INBOUND|OUTBOUND|ANY|ALL|NONE|INTO|INTO|KEEP|PRUNE|OPTIONS|GRAPH|SHORTEST_PATH|K_SHORTEST_PATHS|TRAVERSAL|TRAVERSAL_TREE|MIN|MAX|AVG|SUM|COUNT|LENGTH|UNIQUE|SORTED|UNIQUE|SORTED|REVERSE|FLATTEN|ZIP|UNION|UNION_DISTINCT|INTERSECTION|MINUS|OUTERSECT|PREGEL)\\b",
+          "caseInsensitive": true
+        }
+      ]
+    },
+    "strings": {
+      "name": "string.quoted.double.aql",
+      "begin": "\"",
+      "end": "\"",
+      "patterns": [
+        {
+          "name": "constant.character.escape.aql",
+          "match": "\\\\."
+        }
+      ]
+    },
+    "numbers": {
+      "name": "constant.numeric.aql",
+      "match": "\\b\\d+(\\.\\d+)?\\b"
+    },
+    "comments": {
+      "name": "comment.line.aql",
+      "match": "//.*$"
+    }
+  },
+  "scopeName": "source.aql"
+}
+

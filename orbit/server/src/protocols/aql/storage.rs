@@ -215,5 +215,18 @@ impl AqlStorage {
         }
         Ok(Vec::new())
     }
+
+    /// Shutdown and close RocksDB database
+    /// This explicitly releases the RocksDB lock
+    pub async fn shutdown(&self) -> ProtocolResult<()> {
+        let mut db_guard = self.db.write().await;
+        if let Some(db) = db_guard.take() {
+            // Drop the Arc to close the database
+            // RocksDB will release the lock when DB is dropped
+            drop(db);
+            info!("AqlStorage: RocksDB closed and lock released");
+        }
+        Ok(())
+    }
 }
 

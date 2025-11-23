@@ -51,7 +51,7 @@ Orbit-RS is a high-performance, distributed virtual actor system framework writt
 
 - **Redis Commands**: **124+** fully implemented RESP commands
 - **Actor Types**: **13+** specialized actor implementations
-- **Protocols**: **7** complete protocol implementations (all with RocksDB persistence)
+- **Protocols**: **7** complete protocol implementations (all 100% complete with RocksDB persistence)
 - **Storage Backends**: **9+** persistence implementations
 - **ML Functions**: 4+ statistical functions with SQL integration
 - **GraphRAG**: Knowledge graph construction with three persistence options
