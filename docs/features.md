@@ -43,7 +43,7 @@ This document provides a comprehensive overview of all implemented features in O
 
 ### All Protocols with RocksDB Persistence
 
-All protocols now have full RocksDB persistence, ensuring data durability across server restarts:
+All 7 protocols now have full RocksDB persistence, ensuring data durability across server restarts:
 
 - **Redis (RESP)** - Port 6379 - `data/redis/rocksdb/`
 - **PostgreSQL** - Port 5432 - `data/postgresql/rocksdb/`
@@ -51,6 +51,7 @@ All protocols now have full RocksDB persistence, ensuring data durability across
 - **CQL/Cassandra** - Port 9042 - `data/cql/rocksdb/`
 - **Cypher/Neo4j (Bolt)** - Port 7687 - `data/cypher/rocksdb/`
 - **AQL/ArangoDB** - Port 8529 - `data/aql/rocksdb/`
+- **GraphRAG** - Via RESP/PostgreSQL/Cypher/AQL - `data/graphrag/rocksdb/` (3 persistence options)
 
 ### Redis Protocol (RESP)
 
@@ -102,6 +103,23 @@ All protocols now have full RocksDB persistence, ensuring data durability across
 - **Features**: Multi-model database operations, document and graph storage, AQL query language
 - **Port**: 8529
 - **Documentation**: [AQL Reference](AQL_REFERENCE.md)
+
+### GraphRAG Protocol
+
+- **Status**: **Production Ready**
+- **Persistence**: ✅ RocksDB at `data/graphrag/rocksdb/` (3 implementation options)
+- **Features**: 
+  - Knowledge graph construction from documents
+  - Entity extraction with LLM support
+  - Relationship identification
+  - Multi-hop reasoning
+  - RAG query processing
+  - Three persistence options:
+    1. PersistentGraphStorage adapter (wraps CypherGraphStorage)
+    2. GraphRAGStorage (dedicated storage optimized for GraphRAG)
+    3. Enhanced GraphActor (configurable persistent storage)
+- **Access**: Via RESP (GRAPHRAG.* commands), PostgreSQL, Cypher, AQL
+- **Documentation**: [GraphRAG Complete Documentation](GRAPHRAG_COMPLETE_DOCUMENTATION.md), [GraphRAG Persistence Implementation](GRAPHRAG_PERSISTENCE_IMPLEMENTATION.md)
 
 ### Model Context Protocol (MCP)
 

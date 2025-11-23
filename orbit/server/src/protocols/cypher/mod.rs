@@ -19,13 +19,18 @@
 //! ```
 
 pub mod bolt;
+pub mod bolt_protocol;
 pub mod cypher_parser;
 pub mod graph_engine;
 pub mod graphrag_procedures;
 pub mod server;
 pub mod storage;
 
+// #[cfg(test)]
+// mod tests;
+
 pub use bolt::BoltProtocol;
+pub use bolt_protocol::BoltProtocolHandler;
 pub use cypher_parser::CypherParser;
 pub use graph_engine::GraphEngine;
 pub use graphrag_procedures::BoltGraphRAGProcedures;

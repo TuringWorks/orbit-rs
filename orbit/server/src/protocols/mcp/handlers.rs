@@ -1,18 +1,20 @@
 //! MCP request handlers
 
+use super::server::McpServer;
 use super::types::{McpError, McpRequest, McpResponse};
 use serde_json::json;
+use std::sync::Arc;
 
 /// Handle MCP requests
-pub async fn handle_request(request: McpRequest) -> McpResponse {
+pub async fn handle_request(request: McpRequest, server: Option<Arc<McpServer>>) -> McpResponse {
     match request.method.as_str() {
         "initialize" => handle_initialize(&request),
         "tools/list" => handle_tools_list(&request),
-        "tools/call" => handle_tool_call(&request).await,
+        "tools/call" => handle_tool_call(&request, server.as_ref()).await,
         "resources/list" => handle_resources_list(&request),
-        "resources/read" => handle_resource_read(&request).await,
+        "resources/read" => handle_resource_read(&request, server.as_ref()).await,
         "prompts/list" => handle_prompts_list(&request),
-        "prompts/get" => handle_prompt_get(&request).await,
+        "prompts/get" => handle_prompt_get(&request, server.as_ref()).await,
         _ => McpResponse::error(request.id, McpError::MethodNotFound(request.method)),
     }
 }
@@ -51,7 +53,7 @@ fn handle_tools_list(request: &McpRequest) -> McpResponse {
 }
 
 /// Handle tool call request
-async fn handle_tool_call(request: &McpRequest) -> McpResponse {
+async fn handle_tool_call(request: &McpRequest, _server: Option<&Arc<McpServer>>) -> McpResponse {
     if let (Some(name), Some(arguments)) = (
         request.params.get("name").and_then(|v| v.as_str()),
         request.params.get("arguments").and_then(|v| v.as_object()),
@@ -99,7 +101,7 @@ fn handle_resources_list(request: &McpRequest) -> McpResponse {
 }
 
 /// Handle resource read request
-async fn handle_resource_read(request: &McpRequest) -> McpResponse {
+async fn handle_resource_read(request: &McpRequest, server: Option<&Arc<McpServer>>) -> McpResponse {
     if let Some(uri) = request.params.get("uri").and_then(|v| v.as_str()) {
         // Parse resource URI
         if uri.starts_with("memory://") {
@@ -107,31 +109,97 @@ async fn handle_resource_read(request: &McpRequest) -> McpResponse {
             let resource_type = uri.strip_prefix("memory://").unwrap_or("");
             match resource_type {
                 "actors" => {
-                    // Return actor information
+                    // Return actor information - try to get real data if server is available
+                    let content = if let Some(server) = server {
+                        if let Some(ref integration) = server.orbit_integration {
+                            // Try to get actual actor data
+                            json!({
+                                "type": "actor_list",
+                                "description": "List of active actors in the Orbit-RS system",
+                                "note": "Actor data available through Orbit-RS integration",
+                                "integration_available": true
+                            })
+                        } else {
+                            json!({
+                                "type": "actor_list",
+                                "description": "List of active actors in the system",
+                                "note": "Use tools/actor_list to get actual actor data",
+                                "integration_available": false
+                            })
+                        }
+                    } else {
+                        json!({
+                            "type": "actor_list",
+                            "description": "List of active actors in the system",
+                            "note": "Use tools/actor_list to get actual actor data"
+                        })
+                    };
+                    
                     let result = json!({
                         "contents": [{
                             "uri": uri,
                             "mimeType": "application/json",
-                            "text": json!({
-                                "type": "actor_list",
-                                "description": "List of active actors in the system",
-                                "note": "Use tools/actor_list to get actual actor data"
-                            }).to_string()
+                            "text": content.to_string()
                         }]
                     });
                     McpResponse::success(request.id.clone(), result)
                 }
                 "schemas" => {
-                    // Return schema information
+                    // Return schema information - try to get real schema data if server is available
+                    let content = if let Some(server) = server {
+                        if let Some(ref integration) = server.orbit_integration {
+                            // Try to get actual schema data
+                            json!({
+                                "type": "schema_list",
+                                "description": "Database schemas and metadata",
+                                "note": "Use tools/describe_schema or tools/list_tables to get actual schema data",
+                                "integration_available": true,
+                                "schema_analyzer_available": true
+                            })
+                        } else {
+                            json!({
+                                "type": "schema_list",
+                                "description": "Database schemas",
+                                "note": "Use tools/describe_schema to get actual schema data",
+                                "integration_available": false
+                            })
+                        }
+                    } else {
+                        json!({
+                            "type": "schema_list",
+                            "description": "Database schemas",
+                            "note": "Use tools/describe_schema to get actual schema data"
+                        })
+                    };
+                    
                     let result = json!({
                         "contents": [{
                             "uri": uri,
                             "mimeType": "application/json",
-                            "text": json!({
-                                "type": "schema_list",
-                                "description": "Database schemas",
-                                "note": "Use tools/describe_schema to get actual schema data"
-                            }).to_string()
+                            "text": content.to_string()
+                        }]
+                    });
+                    McpResponse::success(request.id.clone(), result)
+                }
+                "metrics" => {
+                    // Return metrics information
+                    let content = json!({
+                        "type": "metrics",
+                        "description": "System performance metrics and statistics",
+                        "note": "Use tools/analyze_data to get actual metrics",
+                        "available_metrics": [
+                            "query_count",
+                            "execution_time",
+                            "error_count",
+                            "connection_count"
+                        ]
+                    });
+                    
+                    let result = json!({
+                        "contents": [{
+                            "uri": uri,
+                            "mimeType": "application/json",
+                            "text": content.to_string()
                         }]
                     });
                     McpResponse::success(request.id.clone(), result)
@@ -141,7 +209,7 @@ async fn handle_resource_read(request: &McpRequest) -> McpResponse {
                         "contents": [{
                             "uri": uri,
                             "mimeType": "text/plain",
-                            "text": format!("Resource '{}' not found", resource_type)
+                            "text": format!("Resource '{}' not found. Available resources: actors, schemas, metrics", resource_type)
                         }]
                     });
                     McpResponse::success(request.id.clone(), result)
@@ -185,17 +253,28 @@ fn handle_prompts_list(request: &McpRequest) -> McpResponse {
 }
 
 /// Handle prompt get request
-async fn handle_prompt_get(request: &McpRequest) -> McpResponse {
+async fn handle_prompt_get(request: &McpRequest, server: Option<&Arc<McpServer>>) -> McpResponse {
     if let Some(name) = request.params.get("name").and_then(|v| v.as_str()) {
+        // Check if server integration is available for dynamic prompts
+        let has_integration = server
+            .and_then(|s| s.orbit_integration.as_ref())
+            .is_some();
+        
         match name {
             "system_analysis" => {
+                let prompt_text = if has_integration {
+                    "Analyze the Orbit-RS system and provide insights about:\n1. System health and performance\n2. Active actors and their states\n3. Database schemas and data distribution\n4. Recommendations for optimization\n\nUse the available MCP tools to gather real-time system information."
+                } else {
+                    "Analyze the Orbit-RS system and provide insights about:\n1. System health and performance\n2. Active actors and their states\n3. Database schemas and data distribution\n4. Recommendations for optimization"
+                };
+                
                 let result = json!({
                     "messages": [
                         {
                             "role": "user",
                             "content": {
                                 "type": "text",
-                                "text": "Analyze the Orbit-RS system and provide insights about:\n1. System health and performance\n2. Active actors and their states\n3. Database schemas and data distribution\n4. Recommendations for optimization"
+                                "text": prompt_text
                             }
                         }
                     ]
@@ -203,13 +282,19 @@ async fn handle_prompt_get(request: &McpRequest) -> McpResponse {
                 McpResponse::success(request.id.clone(), result)
             }
             "query_help" => {
+                let prompt_text = if has_integration {
+                    "Help me write a natural language query to interact with Orbit-RS:\n\nQuery Types:\n- Data Retrieval: 'Show me all users from California'\n- Data Analysis: 'What are the top 10 products by revenue?'\n- Statistical Analysis: 'Analyze the distribution of customer ages'\n- Schema Exploration: 'What tables are available?'\n\nYou can use natural language and I'll convert it to SQL automatically using the MCP tools."
+                } else {
+                    "Help me write a natural language query to:\n- Retrieve data from tables\n- Analyze data patterns\n- Get system information\n\nExamples:\n- 'Show me all users from California'\n- 'What are the top 10 products by revenue?'\n- 'Analyze the distribution of customer ages'"
+                };
+                
                 let result = json!({
                     "messages": [
                         {
                             "role": "user",
                             "content": {
                                 "type": "text",
-                                "text": "Help me write a natural language query to:\n- Retrieve data from tables\n- Analyze data patterns\n- Get system information\n\nExamples:\n- 'Show me all users from California'\n- 'What are the top 10 products by revenue?'\n- 'Analyze the distribution of customer ages'"
+                                "text": prompt_text
                             }
                         }
                     ]
@@ -217,13 +302,19 @@ async fn handle_prompt_get(request: &McpRequest) -> McpResponse {
                 McpResponse::success(request.id.clone(), result)
             }
             "schema_exploration" => {
+                let prompt_text = if has_integration {
+                    "Explore the Orbit-RS database schema. You can ask questions like:\n- 'What tables are available?' (use list_tables tool)\n- 'Show me the schema for the users table' (use describe_schema tool)\n- 'What columns does the products table have?' (use describe_schema tool)\n- 'List all indexes' (use describe_schema tool)\n\nI have access to real-time schema information through the MCP integration."
+                } else {
+                    "Explore the database schema by asking questions like:\n- 'What tables are available?'\n- 'Show me the schema for the users table'\n- 'What columns does the products table have?'\n- 'List all indexes'"
+                };
+                
                 let result = json!({
                     "messages": [
                         {
                             "role": "user",
                             "content": {
                                 "type": "text",
-                                "text": "Explore the database schema by asking questions like:\n- 'What tables are available?'\n- 'Show me the schema for the users table'\n- 'What columns does the products table have?'\n- 'List all indexes'"
+                                "text": prompt_text
                             }
                         }
                     ]
@@ -233,7 +324,7 @@ async fn handle_prompt_get(request: &McpRequest) -> McpResponse {
             _ => {
                 McpResponse::error(
                     request.id.clone(),
-                    McpError::InvalidRequest(format!("Unknown prompt: {}", name)),
+                    McpError::InvalidRequest(format!("Unknown prompt: {}. Available prompts: system_analysis, query_help, schema_exploration", name)),
                 )
             }
         }

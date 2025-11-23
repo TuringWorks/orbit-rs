@@ -66,11 +66,14 @@ impl<S: GraphStorage> GraphEngine<S> {
                         .execute_return_clause(items, &context, result_nodes, result_relationships)
                         .await;
                 }
-                CypherClause::Where {
-                    condition: _condition,
-                } => {
-                    warn!("WHERE clause not yet fully implemented");
-                    // TODO: Implement WHERE clause filtering
+                CypherClause::Where { condition } => {
+                    // Apply WHERE clause filtering to current results
+                    result_nodes = self
+                        .apply_where_filter_nodes(&condition, &result_nodes, &context)
+                        .await?;
+                    result_relationships = self
+                        .apply_where_filter_relationships(&condition, &result_relationships, &context)
+                        .await?;
                 }
             }
         }
@@ -319,6 +322,188 @@ impl<S: GraphStorage> GraphEngine<S> {
         );
 
         Ok(Some(relationship))
+    }
+
+    /// Apply WHERE clause filtering to nodes
+    async fn apply_where_filter_nodes(
+        &self,
+        condition: &crate::protocols::cypher::cypher_parser::Condition,
+        nodes: &[GraphNode],
+        context: &ExecutionContext,
+    ) -> ProtocolResult<Vec<GraphNode>> {
+        let mut filtered = Vec::new();
+
+        for node in nodes {
+            if self.evaluate_condition_for_node(condition, node, context).await? {
+                filtered.push(node.clone());
+            }
+        }
+
+        Ok(filtered)
+    }
+
+    /// Apply WHERE clause filtering to relationships
+    async fn apply_where_filter_relationships(
+        &self,
+        condition: &crate::protocols::cypher::cypher_parser::Condition,
+        relationships: &[GraphRelationship],
+        context: &ExecutionContext,
+    ) -> ProtocolResult<Vec<GraphRelationship>> {
+        let mut filtered = Vec::new();
+
+        for rel in relationships {
+            if self
+                .evaluate_condition_for_relationship(condition, rel, context)
+                .await?
+            {
+                filtered.push(rel.clone());
+            }
+        }
+
+        Ok(filtered)
+    }
+
+    /// Evaluate a condition for a node
+    async fn evaluate_condition_for_node(
+        &self,
+        condition: &crate::protocols::cypher::cypher_parser::Condition,
+        node: &GraphNode,
+        _context: &ExecutionContext,
+    ) -> ProtocolResult<bool> {
+        use crate::protocols::cypher::cypher_parser::{ComparisonOperator, Condition};
+
+        match condition {
+            Condition::PropertyEquals { property, value } => {
+                Ok(node.properties.get(property) == Some(value))
+            }
+            Condition::PropertyComparison {
+                property,
+                operator,
+                value,
+            } => {
+                if let Some(prop_value) = node.properties.get(property) {
+                    Ok(match operator {
+                        ComparisonOperator::Equals => prop_value == value,
+                        ComparisonOperator::NotEquals => prop_value != value,
+                        ComparisonOperator::GreaterThan => {
+                            self.compare_values(prop_value, value) > 0
+                        }
+                        ComparisonOperator::LessThan => {
+                            self.compare_values(prop_value, value) < 0
+                        }
+                        ComparisonOperator::GreaterThanOrEqual => {
+                            self.compare_values(prop_value, value) >= 0
+                        }
+                        ComparisonOperator::LessThanOrEqual => {
+                            self.compare_values(prop_value, value) <= 0
+                        }
+                    })
+                } else {
+                    Ok(false)
+                }
+            }
+            Condition::PropertyExists { property } => Ok(node.properties.contains_key(property)),
+            Condition::And { left, right } => {
+                let left_result = Box::pin(self.evaluate_condition_for_node(left, node, _context)).await?;
+                let right_result = Box::pin(self.evaluate_condition_for_node(right, node, _context)).await?;
+                Ok(left_result && right_result)
+            }
+            Condition::Or { left, right } => {
+                let left_result = Box::pin(self.evaluate_condition_for_node(left, node, _context)).await?;
+                let right_result = Box::pin(self.evaluate_condition_for_node(right, node, _context)).await?;
+                Ok(left_result || right_result)
+            }
+            Condition::Not { condition } => {
+                let result = Box::pin(self.evaluate_condition_for_node(condition, node, _context)).await?;
+                Ok(!result)
+            }
+            Condition::HasLabel { variable: _, label } => Ok(node.labels.contains(label)),
+            Condition::HasRelationshipType { .. } => {
+                // Not applicable to nodes
+                Ok(false)
+            }
+        }
+    }
+
+    /// Evaluate a condition for a relationship
+    async fn evaluate_condition_for_relationship(
+        &self,
+        condition: &crate::protocols::cypher::cypher_parser::Condition,
+        rel: &GraphRelationship,
+        _context: &ExecutionContext,
+    ) -> ProtocolResult<bool> {
+        use crate::protocols::cypher::cypher_parser::{ComparisonOperator, Condition};
+
+        match condition {
+            Condition::PropertyEquals { property, value } => {
+                Ok(rel.properties.get(property) == Some(value))
+            }
+            Condition::PropertyComparison {
+                property,
+                operator,
+                value,
+            } => {
+                if let Some(prop_value) = rel.properties.get(property) {
+                    Ok(match operator {
+                        ComparisonOperator::Equals => prop_value == value,
+                        ComparisonOperator::NotEquals => prop_value != value,
+                        ComparisonOperator::GreaterThan => {
+                            self.compare_values(prop_value, value) > 0
+                        }
+                        ComparisonOperator::LessThan => {
+                            self.compare_values(prop_value, value) < 0
+                        }
+                        ComparisonOperator::GreaterThanOrEqual => {
+                            self.compare_values(prop_value, value) >= 0
+                        }
+                        ComparisonOperator::LessThanOrEqual => {
+                            self.compare_values(prop_value, value) <= 0
+                        }
+                    })
+                } else {
+                    Ok(false)
+                }
+            }
+            Condition::PropertyExists { property } => Ok(rel.properties.contains_key(property)),
+            Condition::And { left, right } => {
+                let left_result = Box::pin(self.evaluate_condition_for_relationship(left, rel, _context)).await?;
+                let right_result = Box::pin(self.evaluate_condition_for_relationship(right, rel, _context)).await?;
+                Ok(left_result && right_result)
+            }
+            Condition::Or { left, right } => {
+                let left_result = Box::pin(self.evaluate_condition_for_relationship(left, rel, _context)).await?;
+                let right_result = Box::pin(self.evaluate_condition_for_relationship(right, rel, _context)).await?;
+                Ok(left_result || right_result)
+            }
+            Condition::Not { condition } => {
+                let result = Box::pin(self.evaluate_condition_for_relationship(condition, rel, _context)).await?;
+                Ok(!result)
+            }
+            Condition::HasLabel { .. } => {
+                // Not applicable to relationships
+                Ok(false)
+            }
+            Condition::HasRelationshipType { variable: _, rel_type } => {
+                Ok(rel.rel_type == *rel_type)
+            }
+        }
+    }
+
+    /// Compare two JSON values for ordering
+    fn compare_values(&self, a: &serde_json::Value, b: &serde_json::Value) -> i32 {
+        match (a, b) {
+            (serde_json::Value::Number(na), serde_json::Value::Number(nb)) => {
+                if let (Some(fa), Some(fb)) = (na.as_f64(), nb.as_f64()) {
+                    (fa - fb).signum() as i32
+                } else {
+                    0
+                }
+            }
+            (serde_json::Value::String(sa), serde_json::Value::String(sb)) => {
+                sa.cmp(sb) as i32
+            }
+            _ => 0,
+        }
     }
 }
 

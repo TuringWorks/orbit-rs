@@ -127,6 +127,11 @@ enum Token {
     Comma,
     Colon,
     Equals,
+    NotEquals,      // !=
+    GreaterThan,     // >
+    LessThan,        // <
+    GreaterThanOrEqual, // >=
+    LessThanOrEqual,   // <=
 }
 
 /// Specialized tokenizer for Cypher queries with reduced complexity
@@ -197,8 +202,63 @@ impl CypherTokenizer {
         match ch {
             '"' | '\'' => self.start_string_literal(ch),
             ' ' | '\t' | '\n' | '\r' => self.handle_whitespace(),
-            '(' | ')' | '{' | '}' | ',' | ':' | '=' => self.handle_single_char_token(ch),
+            '(' | ')' | '{' | '}' | ',' | ':' => self.handle_single_char_token(ch),
+            '=' | '!' | '>' | '<' => self.handle_comparison_operator(ch),
             _ => self.current_token.push(ch),
+        }
+    }
+
+    fn handle_comparison_operator(&mut self, ch: char) {
+        self.flush_current_token();
+        let token = match ch {
+            '=' => {
+                if self.peek_char() == Some('=') {
+                    self.advance_char();
+                    Token::Equals
+                } else {
+                    Token::Equals
+                }
+            }
+            '!' => {
+                if self.peek_char() == Some('=') {
+                    self.advance_char();
+                    Token::NotEquals
+                } else {
+                    Token::Not
+                }
+            }
+            '>' => {
+                if self.peek_char() == Some('=') {
+                    self.advance_char();
+                    Token::GreaterThanOrEqual
+                } else {
+                    Token::GreaterThan
+                }
+            }
+            '<' => {
+                if self.peek_char() == Some('=') {
+                    self.advance_char();
+                    Token::LessThanOrEqual
+                } else {
+                    Token::LessThan
+                }
+            }
+            _ => unreachable!(),
+        };
+        self.tokens.push(token);
+    }
+
+    fn peek_char(&self) -> Option<char> {
+        if self.position + 1 < self.chars.len() {
+            Some(self.chars[self.position + 1])
+        } else {
+            None
+        }
+    }
+
+    fn advance_char(&mut self) {
+        if self.position + 1 < self.chars.len() {
+            self.position += 1;
         }
     }
 
@@ -221,7 +281,38 @@ impl CypherTokenizer {
             '}' => Token::RightBrace,
             ',' => Token::Comma,
             ':' => Token::Colon,
-            '=' => Token::Equals,
+            '=' => {
+                if self.peek_char() == Some('=') {
+                    self.advance_char();
+                    Token::Equals
+                } else {
+                    Token::Equals
+                }
+            }
+            '!' => {
+                if self.peek_char() == Some('=') {
+                    self.advance_char();
+                    Token::NotEquals
+                } else {
+                    Token::Not
+                }
+            }
+            '>' => {
+                if self.peek_char() == Some('=') {
+                    self.advance_char();
+                    Token::GreaterThanOrEqual
+                } else {
+                    Token::GreaterThan
+                }
+            }
+            '<' => {
+                if self.peek_char() == Some('=') {
+                    self.advance_char();
+                    Token::LessThanOrEqual
+                } else {
+                    Token::LessThan
+                }
+            }
             _ => unreachable!("Invalid single char token: {}", ch),
         };
         self.tokens.push(token);
@@ -503,37 +594,154 @@ impl TokenParser {
     }
 
     fn parse_condition(&mut self) -> ProtocolResult<Condition> {
-        // Simple condition parsing - just property equality for now
-        if let Some(Token::Identifier(prop)) = self.current_token() {
-            let prop = prop.clone();
+        // Parse logical operators with precedence: NOT > AND > OR
+        self.parse_or_condition()
+    }
+
+    fn parse_or_condition(&mut self) -> ProtocolResult<Condition> {
+        let mut left = self.parse_and_condition()?;
+
+        while let Some(Token::Or) = self.current_token() {
             self.advance();
-            self.expect_token(Token::Equals)?;
-
-            let value = match self.current_token() {
-                Some(Token::String(s)) => {
-                    let s = s.clone();
-                    self.advance();
-                    serde_json::Value::String(s)
-                }
-                Some(Token::Number(n)) => {
-                    let n = n.clone();
-                    self.advance();
-                    serde_json::Value::String(n)
-                }
-                _ => {
-                    return Err(ProtocolError::CypherError(
-                        "Expected condition value".to_string(),
-                    ))
-                }
+            let right = self.parse_and_condition()?;
+            left = Condition::Or {
+                left: Box::new(left),
+                right: Box::new(right),
             };
+        }
 
-            Ok(Condition::PropertyEquals {
-                property: prop,
-                value,
+        Ok(left)
+    }
+
+    fn parse_and_condition(&mut self) -> ProtocolResult<Condition> {
+        let mut left = self.parse_not_condition()?;
+
+        while let Some(Token::And) = self.current_token() {
+            self.advance();
+            let right = self.parse_not_condition()?;
+            left = Condition::And {
+                left: Box::new(left),
+                right: Box::new(right),
+            };
+        }
+
+        Ok(left)
+    }
+
+    fn parse_not_condition(&mut self) -> ProtocolResult<Condition> {
+        if let Some(Token::Not) = self.current_token() {
+            self.advance();
+            let condition = self.parse_primary_condition()?;
+            Ok(Condition::Not {
+                condition: Box::new(condition),
             })
+        } else {
+            self.parse_primary_condition()
+        }
+    }
+
+    fn parse_primary_condition(&mut self) -> ProtocolResult<Condition> {
+        if let Some(Token::LeftParen) = self.current_token() {
+            self.advance();
+            let condition = self.parse_condition()?;
+            self.expect_token(Token::RightParen)?;
+            Ok(condition)
+        } else if let Some(Token::Identifier(var)) = self.current_token() {
+            let var = var.clone();
+            self.advance();
+
+            // Check for property access (var.property)
+            if let Some(Token::Colon) = self.current_token() {
+                self.advance();
+                if let Some(Token::Identifier(prop)) = self.current_token() {
+                    let prop = prop.clone();
+                    self.advance();
+                    return self.parse_property_condition(&format!("{}.{}", var, prop));
+                }
+            }
+
+            // Check for label check (var:Label)
+            if let Some(Token::Colon) = self.current_token() {
+                self.advance();
+                if let Some(Token::Identifier(label)) = self.current_token() {
+                    let label = label.clone();
+                    self.advance();
+                    return Ok(Condition::HasLabel { variable: var, label });
+                }
+            }
+
+            // Property condition on variable itself
+            self.parse_property_condition(&var)
         } else {
             Err(ProtocolError::CypherError("Expected condition".to_string()))
         }
+    }
+
+    fn parse_property_condition(&mut self, property: &str) -> ProtocolResult<Condition> {
+        let prop = property.to_string();
+        
+        // Check for comparison operator
+        let operator = match self.current_token() {
+            Some(Token::Equals) => {
+                self.advance();
+                ComparisonOperator::Equals
+            }
+            Some(Token::NotEquals) => {
+                self.advance();
+                ComparisonOperator::NotEquals
+            }
+            Some(Token::GreaterThan) => {
+                self.advance();
+                ComparisonOperator::GreaterThan
+            }
+            Some(Token::LessThan) => {
+                self.advance();
+                ComparisonOperator::LessThan
+            }
+            Some(Token::GreaterThanOrEqual) => {
+                self.advance();
+                ComparisonOperator::GreaterThanOrEqual
+            }
+            Some(Token::LessThanOrEqual) => {
+                self.advance();
+                ComparisonOperator::LessThanOrEqual
+            }
+            _ => {
+                // No operator means property exists check
+                return Ok(Condition::PropertyExists { property: prop });
+            }
+        };
+
+        let value = match self.current_token() {
+            Some(Token::String(s)) => {
+                let s = s.clone();
+                self.advance();
+                serde_json::Value::String(s)
+            }
+            Some(Token::Number(n)) => {
+                let n = n.clone();
+                self.advance();
+                // Try to parse as number
+                if let Ok(num) = n.parse::<i64>() {
+                    serde_json::Value::Number(num.into())
+                } else if let Ok(num) = n.parse::<f64>() {
+                    serde_json::Value::Number(serde_json::Number::from_f64(num).unwrap_or(serde_json::Number::from(0)))
+                } else {
+                    serde_json::Value::String(n)
+                }
+            }
+            _ => {
+                return Err(ProtocolError::CypherError(
+                    "Expected condition value".to_string(),
+                ))
+            }
+        };
+
+        Ok(Condition::PropertyComparison {
+            property: prop,
+            operator,
+            value,
+        })
     }
 }
 
@@ -625,7 +833,57 @@ pub enum Condition {
         property: String,
         value: serde_json::Value,
     },
-    // TODO: Add more condition types (AND, OR, comparisons, etc.)
+    /// Property comparison (>, <, >=, <=, !=)
+    PropertyComparison {
+        property: String,
+        operator: ComparisonOperator,
+        value: serde_json::Value,
+    },
+    /// Property exists check
+    PropertyExists {
+        property: String,
+    },
+    /// Logical AND
+    And {
+        left: Box<Condition>,
+        right: Box<Condition>,
+    },
+    /// Logical OR
+    Or {
+        left: Box<Condition>,
+        right: Box<Condition>,
+    },
+    /// Logical NOT
+    Not {
+        condition: Box<Condition>,
+    },
+    /// Node label check
+    HasLabel {
+        variable: String,
+        label: String,
+    },
+    /// Relationship type check
+    HasRelationshipType {
+        variable: String,
+        rel_type: String,
+    },
+}
+
+/// Comparison operators for WHERE clauses
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ComparisonOperator {
+    /// ==
+    Equals,
+    /// !=
+    NotEquals,
+    /// >
+    GreaterThan,
+    /// <
+    LessThan,
+    /// >=
+    GreaterThanOrEqual,
+    /// <=
+    LessThanOrEqual,
 }
 
 #[cfg(test)]

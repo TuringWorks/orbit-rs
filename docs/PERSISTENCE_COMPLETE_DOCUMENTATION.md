@@ -36,7 +36,7 @@ The Orbit server persistence system provides a comprehensive provider-based arch
 - **Kubernetes Integration**: Native support for Kubernetes deployments
 - **Performance Optimized**: Tuned for different workload characteristics
 - **Comprehensive Monitoring**: Built-in metrics and health checks
-- **Protocol-Specific Persistence**: All 6 protocols (PostgreSQL, MySQL, CQL, Redis, Cypher, AQL) use RocksDB for durable storage
+- **Protocol-Specific Persistence**: All 7 protocols (PostgreSQL, MySQL, CQL, Redis, Cypher, AQL, GraphRAG) use RocksDB for durable storage
 
 ---
 
@@ -241,6 +241,7 @@ All Orbit-RS protocols use RocksDB for durable storage, with each protocol havin
 - **Redis** (Port 6379): `data/redis/rocksdb/`
 - **Cypher/Neo4j** (Port 7687): `data/cypher/rocksdb/`
 - **AQL/ArangoDB** (Port 8529): `data/aql/rocksdb/`
+- **GraphRAG** (via RESP/PostgreSQL/Cypher/AQL): `data/graphrag/rocksdb/`
 
 #### Features
 
@@ -259,7 +260,8 @@ data/
 ├── cql/rocksdb/            # CQL wide-column data
 ├── redis/rocksdb/          # Redis key-value data with TTL
 ├── cypher/rocksdb/         # Graph nodes and relationships
-└── aql/rocksdb/            # Documents, collections, edges, graphs
+├── aql/rocksdb/            # Documents, collections, edges, graphs
+└── graphrag/rocksdb/       # GraphRAG entities, relationships, embeddings
 ```
 
 #### Configuration

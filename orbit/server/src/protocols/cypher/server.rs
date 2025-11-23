@@ -1,5 +1,6 @@
 //! Cypher/Bolt server with RocksDB persistence
 
+use crate::protocols::cypher::bolt_protocol::BoltProtocolHandler;
 use crate::protocols::cypher::storage::CypherGraphStorage;
 use crate::protocols::error::ProtocolResult;
 use std::sync::Arc;
@@ -9,7 +10,6 @@ use tracing::{error, info};
 /// Cypher/Bolt protocol server
 pub struct CypherServer {
     bind_addr: String,
-    #[allow(dead_code)]
     storage: Arc<CypherGraphStorage>,
 }
 
@@ -37,10 +37,17 @@ impl CypherServer {
         loop {
             match listener.accept().await {
                 Ok((stream, addr)) => {
-                    info!("New Cypher connection from {}", addr);
-                    // TODO: Handle Bolt protocol connection
-                    // For now, just accept and close
-                    drop(stream);
+                    info!("New Cypher/Bolt connection from {}", addr);
+                    
+                    let storage = self.storage.clone();
+                    
+                    // Spawn a task to handle the connection
+                    tokio::spawn(async move {
+                        let mut handler = BoltProtocolHandler::new(storage);
+                        if let Err(e) = handler.handle_connection(stream).await {
+                            error!("Error handling Bolt connection: {}", e);
+                        }
+                    });
                 }
                 Err(e) => {
                     error!("Error accepting Cypher connection: {}", e);

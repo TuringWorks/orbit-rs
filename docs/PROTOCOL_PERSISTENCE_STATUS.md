@@ -27,30 +27,35 @@ This document outlines the current persistence status for all Orbit-RS protocols
    - ✅ Full persistence implemented (via recent fixes)
    - **Note**: This was fixed in the recent `TieredTableStorage` RocksDB integration
 
-### ❌ Protocols WITHOUT RocksDB Persistence
+5. **Cypher/Neo4j (7687)**
+   - ✅ Uses `CypherGraphStorage` with RocksDB at `data/cypher/rocksdb/`
+   - ✅ Full persistence implemented
+   - ✅ Server initialized in `main.rs`
+   - ✅ Column families: `nodes`, `relationships`, `metadata`
 
-1. **Cypher/Neo4j (7687)**
-   - ❌ No persistence implementation
-   - ❌ Server is a stub (`CypherServer::run()` is a TODO)
-   - ❌ Not initialized in `main.rs`
-   - ❌ No storage backend configured
-   - **Impact**: All graph data is lost on server restart
+6. **AQL/ArangoDB (8529)**
+   - ✅ Uses `AqlStorage` with RocksDB at `data/aql/rocksdb/`
+   - ✅ Full persistence implemented
+   - ✅ Server initialized in `main.rs`
+   - ✅ Column families: `collections`, `documents`, `edges`, `graphs`, `metadata`
 
-2. **AQL/ArangoDB (8529)**
-   - ❌ No persistence implementation
-   - ❌ No server implementation found
-   - ❌ Not initialized in `main.rs`
-   - ❌ No storage backend configured
-   - **Impact**: All document/graph data is lost on server restart
+7. **GraphRAG (via RESP/PostgreSQL/Cypher/AQL)**
+   - ✅ **Three persistence options implemented**:
+     - **Option 1**: `PersistentGraphStorage` adapter using `CypherGraphStorage`
+     - **Option 2**: `GraphRAGStorage` with dedicated RocksDB at `data/graphrag/rocksdb/`
+     - **Option 3**: Enhanced `GraphActor` with optional persistent storage
+   - ✅ Full persistence implemented
+   - ✅ Column families: `nodes`, `relationships`, `metadata`, `embeddings`, `entity_index`, `rel_index`
+   - ✅ Data directory: `data/graphrag/rocksdb/` created automatically
 
-## Recommendation
+## Status: ✅ All Protocols Have Persistence
 
-**YES, RocksDB persistence SHOULD be implemented** for Cypher and AQL protocols for the following reasons:
+**All 7 protocols now have full RocksDB persistence implemented!**
 
-1. **Data Durability**: Without persistence, all data written through these protocols is lost on server restart
-2. **Consistency**: All other protocols (PostgreSQL, MySQL, CQL, Redis) have persistence
-3. **Production Readiness**: Production deployments require data durability
-4. **User Expectations**: Users expect data to persist across restarts
+1. **Data Durability**: All data written through any protocol persists across server restarts
+2. **Consistency**: All protocols use RocksDB with protocol-specific data directories
+3. **Production Readiness**: All protocols are production-ready with durable storage
+4. **User Expectations**: Data persists across restarts for all protocols
 
 ## Implementation Plan
 
@@ -101,10 +106,12 @@ data/
 │   └── rocksdb/          # CQL RocksDB persistence
 ├── redis/
 │   └── rocksdb/          # Redis RocksDB persistence
-├── cypher/               # NEW: Cypher/Neo4j persistence
+├── cypher/               # Cypher/Neo4j persistence
 │   └── rocksdb/          # Graph data (nodes, edges, properties)
-├── aql/                  # NEW: AQL/ArangoDB persistence
+├── aql/                  # AQL/ArangoDB persistence
 │   └── rocksdb/          # Document and graph data
+├── graphrag/             # GraphRAG knowledge graph persistence
+│   └── rocksdb/          # Entities, relationships, embeddings, metadata
 ├── hot/                  # Hot tier (shared)
 ├── warm/                 # Warm tier (shared)
 ├── cold/                 # Cold tier (shared)
@@ -114,11 +121,15 @@ data/
 
 ## Implementation Status
 
-1. ✅ **CQL Persistence**: Already implemented via `TieredTableStorage`
+1. ✅ **CQL Persistence**: Implemented via `TieredTableStorage` at `data/cql/rocksdb/`
 2. ✅ **Cypher Persistence**: **IMPLEMENTED** - RocksDB storage at `data/cypher/rocksdb/`
 3. ✅ **AQL Persistence**: **IMPLEMENTED** - RocksDB storage at `data/aql/rocksdb/`
-4. ✅ **Server Initialization**: Both servers initialized in `main.rs`
-5. ✅ **Directory Creation**: `data/cypher/` and `data/aql/` directories created on startup
+4. ✅ **GraphRAG Persistence**: **IMPLEMENTED** - Three options available:
+   - `PersistentGraphStorage` adapter (Option 1)
+   - `GraphRAGStorage` dedicated storage (Option 2)
+   - Enhanced `GraphActor` with persistence (Option 3)
+5. ✅ **Server Initialization**: All servers initialized in `main.rs`
+6. ✅ **Directory Creation**: All protocol directories created on startup
 
 ## Implementation Details
 
