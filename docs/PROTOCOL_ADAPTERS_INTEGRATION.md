@@ -341,7 +341,7 @@ TLS support is planned for both adapters:
 ## Related Documentation
 
 - [CQL Protocol Adapter](./CQL_PROTOCOL_ADAPTER.md)
-- [MySQL Protocol Adapter](./MYSQL_PROTOCOL_ADAPTER.md)
+- [MySQL Protocol Adapter](./MYSQL_COMPLETE_DOCUMENTATION.md)
 - [PostgreSQL Wire Protocol](../orbit/protocols/src/postgres_wire/README.md)
 - [Orbit SQL Engine](../orbit/protocols/src/postgres_wire/sql/README.md)
 

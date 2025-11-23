@@ -4,7 +4,6 @@ use crate::mesh::{AddressableDirectory, ClusterManager, ClusterStats, DirectoryS
 use crate::persistence::config::PersistenceProviderConfig;
 use crate::persistence::PersistenceProviderRegistry;
 use crate::LoadBalancer;
-use orbit_client::OrbitClient;
 use orbit_proto::{
     connection_service_server, health_check_response, health_service_server,
     OrbitConnectionService, OrbitHealthService,
@@ -371,15 +370,8 @@ impl OrbitServer {
             );
             tracing::info!("Starting RESP (Redis) server on {}", redis_addr);
 
-            // Create OrbitClient that connects to this server
-            let server_url = format!("http://{}:{}", self.config.bind_address, self.config.port);
-            match OrbitClient::builder()
-                .with_namespace(self.config.namespace.clone())
-                .with_server_urls(vec![server_url])
-                .build()
-                .await
+            // Create RESP server without OrbitClient
             {
-                Ok(client) => {
                     // Create RocksDB storage for Redis persistence
                     let redis_data_path = "./data/redis";
                     let redis_provider: Option<Arc<dyn crate::protocols::persistence::redis_data::RedisDataProvider>> = 
@@ -404,16 +396,12 @@ impl OrbitServer {
                             }
                         };
 
-                    let resp_server = RespServer::new_with_persistence(redis_addr, client, redis_provider);
-                    server_tasks.push(tokio::spawn(async move {
-                        if let Err(e) = resp_server.run().await {
-                            tracing::error!("RESP server failed: {}", e);
-                        }
-                    }));
-                }
-                Err(e) => {
-                    tracing::error!("Failed to create OrbitClient for RESP server: {}", e);
-                }
+                let resp_server = RespServer::new_with_persistence(redis_addr, redis_provider);
+                server_tasks.push(tokio::spawn(async move {
+                    if let Err(e) = resp_server.run().await {
+                        tracing::error!("RESP server failed: {}", e);
+                    }
+                }));
             }
         }
 

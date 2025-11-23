@@ -6,12 +6,9 @@
 use super::traits::{BaseCommandHandler, CommandHandler};
 use crate::protocols::error::ProtocolError;
 use crate::protocols::error::ProtocolResult;
-use crate::protocols::resp::actors::ListActor;
 use crate::protocols::resp::RespValue;
 use async_trait::async_trait;
 use bytes::Bytes;
-use orbit_client::OrbitClient;
-use orbit_shared::Key;
 use std::sync::Arc;
 use tracing::debug;
 
@@ -20,10 +17,10 @@ pub struct ListCommands {
 }
 
 impl ListCommands {
-    pub fn new(orbit_client: Arc<OrbitClient>) -> Self {
-        let local_registry = Arc::new(crate::protocols::resp::simple_local::SimpleLocalRegistry::new());
+    pub fn new(local_registry: Arc<crate::protocols::resp::simple_local::SimpleLocalRegistry>) -> Self {
+        // Use provided local_registry
         Self {
-            base: BaseCommandHandler::new(orbit_client, local_registry),
+            base: BaseCommandHandler::new(local_registry),
         }
     }
 
@@ -345,26 +342,20 @@ impl ListCommands {
         let index = self.get_int_arg(args, 1, "LSET")?;
         let value = self.get_string_arg(args, 2, "LSET")?;
 
-        // Get ListActor reference
-        let actor_ref = self
-            .base
-            .orbit_client
-            .actor_reference::<ListActor>(Key::StringKey { key: key.clone() })
+        // Use local registry
+        let result = self.base.local_registry
+            .execute_list(&key, "lset", &[serde_json::to_value(index)?, serde_json::to_value(value.clone())?])
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR {}", e)))?;
 
-        let result: Result<bool, _> = actor_ref
-            .invoke("lset", vec![index.into(), value.clone().into()])
-            .await;
+        let success: bool = serde_json::from_value(result)
+            .map_err(|_| ProtocolError::RespError("ERR invalid response".to_string()))?;
 
-        match result {
-            Ok(true) => {
-                debug!("LSET {} {} {} -> OK", key, index, value);
-                Ok(RespValue::SimpleString("OK".to_string()))
-            }
-            Ok(false) | Err(_) => Err(ProtocolError::RespError(
-                "ERR index out of range".to_string(),
-            )),
+        if success {
+            debug!("LSET {} {} {} -> OK", key, index, value);
+            Ok(RespValue::SimpleString("OK".to_string()))
+        } else {
+            Err(ProtocolError::RespError("ERR index out of range".to_string()))
         }
     }
 
@@ -376,25 +367,17 @@ impl ListCommands {
         let count = self.get_int_arg(args, 1, "LREM")?;
         let element = self.get_string_arg(args, 2, "LREM")?;
 
-        // Get ListActor reference
-        let actor_ref = self
-            .base
-            .orbit_client
-            .actor_reference::<ListActor>(Key::StringKey { key: key.clone() })
+        // Use local registry
+        let result = self.base.local_registry
+            .execute_list(&key, "lrem", &[serde_json::to_value(count)?, serde_json::to_value(element.clone())?])
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR {}", e)))?;
 
-        let removed: Result<usize, _> = actor_ref
-            .invoke("lrem", vec![count.into(), element.clone().into()])
-            .await;
+        let num_removed: usize = serde_json::from_value(result)
+            .unwrap_or(0);
 
-        match removed {
-            Ok(num_removed) => {
-                debug!("LREM {} {} {} -> {}", key, count, element, num_removed);
-                Ok(RespValue::Integer(num_removed as i64))
-            }
-            Err(_) => Ok(RespValue::Integer(0)),
-        }
+        debug!("LREM {} {} {} -> {}", key, count, element, num_removed);
+        Ok(RespValue::Integer(num_removed as i64))
     }
 
     /// LTRIM key start stop - Trim the list to the specified range
@@ -405,27 +388,14 @@ impl ListCommands {
         let start = self.get_int_arg(args, 1, "LTRIM")?;
         let stop = self.get_int_arg(args, 2, "LTRIM")?;
 
-        // Get ListActor reference
-        let actor_ref = self
-            .base
-            .orbit_client
-            .actor_reference::<ListActor>(Key::StringKey { key: key.clone() })
+        // Use local registry
+        let _result = self.base.local_registry
+            .execute_list(&key, "ltrim", &[serde_json::to_value(start)?, serde_json::to_value(stop)?])
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR {}", e)))?;
 
-        let result: Result<(), _> = actor_ref
-            .invoke("ltrim", vec![start.into(), stop.into()])
-            .await;
-
-        match result {
-            Ok(()) => {
-                debug!("LTRIM {} {} {} -> OK", key, start, stop);
-                Ok(RespValue::SimpleString("OK".to_string()))
-            }
-            Err(_) => Err(ProtocolError::RespError(
-                "ERR trim operation failed".to_string(),
-            )),
-        }
+        debug!("LTRIM {} {} {} -> OK", key, start, stop);
+        Ok(RespValue::SimpleString("OK".to_string()))
     }
 
     // Simplified stubs for remaining commands

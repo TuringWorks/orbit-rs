@@ -5,11 +5,9 @@
 
 use super::traits::{BaseCommandHandler, CommandHandler};
 use crate::protocols::error::{ProtocolError, ProtocolResult};
-use crate::protocols::resp::{actors::SetActor, RespValue};
+use crate::protocols::resp::RespValue;
 use async_trait::async_trait;
 use bytes::Bytes;
-use orbit_client::OrbitClient;
-use orbit_shared::Key;
 use std::collections::HashSet;
 use std::sync::Arc;
 use tracing::debug;
@@ -19,10 +17,10 @@ pub struct SetCommands {
 }
 
 impl SetCommands {
-    pub fn new(orbit_client: Arc<OrbitClient>) -> Self {
-        let local_registry = Arc::new(crate::protocols::resp::simple_local::SimpleLocalRegistry::new());
+    pub fn new(local_registry: Arc<crate::protocols::resp::simple_local::SimpleLocalRegistry>) -> Self {
+        // Use provided local_registry
         Self {
-            base: BaseCommandHandler::new(orbit_client, local_registry),
+            base: BaseCommandHandler::new(local_registry),
         }
     }
 
@@ -215,21 +213,18 @@ impl SetCommands {
         for i in 0..args.len() {
             let key = self.get_string_arg(args, i, "SUNION")?;
 
-            // Get SetActor reference
-            let actor_ref = self
-                .base
-                .orbit_client
-                .actor_reference::<SetActor>(Key::StringKey { key: key.clone() })
-                .await
-                .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            // Use local registry
+            let members_result = self.base.local_registry
+                .execute_set(&key, "smembers", &[])
+                .await;
 
-            let members_result: Result<Vec<String>, _> = actor_ref.invoke("smembers", vec![]).await;
-
-            if let Ok(members) = members_result {
-                for member in members {
-                    result_set.insert(member);
+            if let Ok(members_value) = members_result {
+                if let Ok(members) = serde_json::from_value::<Vec<String>>(members_value) {
+                    for member in members {
+                        result_set.insert(member);
+                    }
+                    debug!("SUNION: Added members from key {}", key);
                 }
-                debug!("SUNION: Added members from key {}", key);
             }
         }
 
@@ -255,30 +250,31 @@ impl SetCommands {
         for i in 0..args.len() {
             let key = self.get_string_arg(args, i, "SINTER")?;
 
-            // Get SetActor reference
-            let actor_ref = self
-                .base
-                .orbit_client
-                .actor_reference::<SetActor>(Key::StringKey { key: key.clone() })
-                .await
-                .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
+            // Use local registry
+            let members_result = self.base.local_registry
+                .execute_set(&key, "smembers", &[])
+                .await;
 
-            let members_result: Result<Vec<String>, _> = actor_ref.invoke("smembers", vec![]).await;
+            if let Ok(members_value) = members_result {
+                if let Ok(members) = serde_json::from_value::<Vec<String>>(members_value) {
+                    let current_set: HashSet<String> = members.into_iter().collect();
 
-            if let Ok(members) = members_result {
-                let current_set: HashSet<String> = members.into_iter().collect();
-
-                match result_set {
-                    None => {
-                        result_set = Some(current_set);
-                        debug!("SINTER: Initialized with members from key {}", key);
+                    match result_set {
+                        None => {
+                            result_set = Some(current_set);
+                            debug!("SINTER: Initialized with members from key {}", key);
+                        }
+                        Some(ref mut existing_set) => {
+                            let intersection: HashSet<String> =
+                                existing_set.intersection(&current_set).cloned().collect();
+                            *existing_set = intersection;
+                            debug!("SINTER: After intersection with key {}", key);
+                        }
                     }
-                    Some(ref mut existing_set) => {
-                        let intersection: HashSet<String> =
-                            existing_set.intersection(&current_set).cloned().collect();
-                        *existing_set = intersection;
-                        debug!("SINTER: After intersection with key {}", key);
-                    }
+                } else {
+                    // If parsing failed, intersection is empty
+                    result_set = Some(HashSet::new());
+                    break;
                 }
             } else {
                 // If any set is empty or missing, intersection is empty
@@ -325,26 +321,25 @@ impl SetCommands {
 
     /// Get the initial set for SDIFF operation
     async fn get_initial_set(&self, first_key: &str) -> ProtocolResult<HashSet<String>> {
-        let actor_ref = self
-            .base
-            .orbit_client
-            .actor_reference::<SetActor>(Key::StringKey {
-                key: first_key.to_string(),
-            })
-            .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor error: {}", e)))?;
-
-        let members_result: Result<Vec<String>, _> = actor_ref.invoke("smembers", vec![]).await;
+        // Use local registry - get members from first set
+        let members_result = self.base.local_registry
+            .execute_set(first_key, "smembers", &[])
+            .await;
 
         match members_result {
-            Ok(members) => {
-                let result_set: HashSet<String> = members.into_iter().collect();
-                debug!(
-                    "SDIFF: Started with {} members from key {}",
-                    result_set.len(),
-                    first_key
-                );
-                Ok(result_set)
+            Ok(members_value) => {
+                if let Ok(members) = serde_json::from_value::<Vec<String>>(members_value) {
+                    let result_set: HashSet<String> = members.into_iter().collect();
+                    debug!(
+                        "SDIFF: Started with {} members from key {}",
+                        result_set.len(),
+                        first_key
+                    );
+                    Ok(result_set)
+                } else {
+                    debug!("SDIFF: Failed to parse members from first key {}", first_key);
+                    Ok(HashSet::new())
+                }
             }
             Err(_) => {
                 debug!("SDIFF: Failed to get members from first key {}", first_key);
@@ -355,18 +350,12 @@ impl SetCommands {
 
     /// Remove members from a specific key
     async fn remove_members_from_key(&self, result_set: &mut HashSet<String>, key: &str) {
-        let actor_ref = self
-            .base
-            .orbit_client
-            .actor_reference::<SetActor>(Key::StringKey {
-                key: key.to_string(),
-            })
+        let members_result = self.base.local_registry
+            .execute_set(key, "smembers", &[])
             .await;
 
-        if let Ok(actor_ref) = actor_ref {
-            let members_result: Result<Vec<String>, _> = actor_ref.invoke("smembers", vec![]).await;
-
-            if let Ok(members) = members_result {
+        if let Ok(members_value) = members_result {
+            if let Ok(members) = serde_json::from_value::<Vec<String>>(members_value) {
                 for member in members {
                     result_set.remove(&member);
                 }

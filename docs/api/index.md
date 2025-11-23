@@ -330,7 +330,7 @@ export ORBIT_TRACE_TRANSACTIONS=true
 
 - **[Quick Start Guide](../quick_start.md)** - Get started in 5 minutes
 - **[Architecture Overview](../overview.md)** - System design principles
-- **[Deployment Guide](../kubernetes_deployment.md)** - Production deployment
+- **[Deployment Guide](../KUBERNETES_COMPLETE_DOCUMENTATION.md)** - Production deployment
 
 ###  Community  
 

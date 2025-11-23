@@ -356,7 +356,7 @@ orbitCompute:
 
 - [Kubernetes Deployment Sizing Guide](k8s-deployment-sizing-guide.md)
 - [Container Images Page](https://turingworks.github.io/orbit-rs/container-images/)
-- [GPU Support Documentation](GPU_ACCELERATION.md)
+- [GPU Support Documentation](GPU_COMPLETE_DOCUMENTATION.md)
 - [Performance Tuning Guide](PETABYTE_SCALE_PERFORMANCE.md)
 
 ##  Contributing

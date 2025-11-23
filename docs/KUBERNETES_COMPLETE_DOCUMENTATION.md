@@ -1,30 +1,91 @@
 ---
 layout: default
-title: Orbit-RS Kubernetes Deployment Guide
+title: Kubernetes Complete Documentation
 category: documentation
 ---
 
-## Orbit-RS Kubernetes Deployment Guide
+# Kubernetes Complete Documentation
 
-This guide provides comprehensive instructions for deploying Orbit-RS on Kubernetes in production environments.
+**Comprehensive Kubernetes Deployment Guide for Orbit-RS**
 
 ## Table of Contents
 
-- [Prerequisites](#prerequisites)
-- [Quick Start](#quick-start)
-- [Architecture Overview](#architecture-overview)
-- [Manual Deployment](#manual-deployment)
-- [Helm Deployment](#helm-deployment)
-- [Configuration](#configuration)
-- [Monitoring](#monitoring)
-- [High Availability](#high-availability)
-- [Security](#security)
-- [Troubleshooting](#troubleshooting)
-- [Maintenance](#maintenance)
+1. [Overview](#overview)
+2. [Storage Guide](#storage-guide)
+3. [Deployment Guide](#deployment-guide)
+4. [Persistence Configuration](#persistence-configuration)
+5. [Configuration](#configuration)
+6. [Monitoring](#monitoring)
+7. [High Availability](#high-availability)
+8. [Security](#security)
+9. [Troubleshooting](#troubleshooting)
+10. [Maintenance](#maintenance)
 
-## Prerequisites
+---
 
-### Kubernetes Cluster Requirements
+## Overview
+
+This guide provides comprehensive instructions for deploying Orbit-RS on Kubernetes in production environments, including storage backend configuration, persistence setup, and operational best practices.
+
+### Key Features
+
+- **Multiple Storage Backends**: Support for Memory, LSM-Tree, RocksDB, S3, Azure, GCP, and more
+- **Flexible Deployment**: StatefulSet for local storage, Deployment for cloud storage
+- **Production Ready**: Complete monitoring, security, and high availability configurations
+- **Cloud Native**: Full Kubernetes integration with Helm charts and operators
+
+---
+
+## Storage Guide
+
+### Storage Backend Overview
+
+#### Local Storage Backends (Require PersistentVolumes)
+
+- **Memory** (with disk backup)
+- **Copy-on-Write B+ Tree**
+- **LSM-Tree**
+- **RocksDB**
+
+**Kubernetes Requirements**: StatefulSet + PVC + SSD StorageClass
+
+#### Cloud Storage Backends (No PersistentVolumes)
+
+- **S3** (AWS, MinIO)
+- **Azure Blob Storage**
+- **Google Cloud Storage**
+
+**Kubernetes Requirements**: Deployment + Secrets (no PVC needed)
+
+### Storage Requirements by Backend
+
+| Backend | Kubernetes Resource | Volume Type | Size Recommendation | IOPS Requirement |
+|---------|-------------------|-------------|-------------------|------------------|
+| **Memory** | StatefulSet | Small PVC (backup) | 1-10Gi | Low |
+| **COW B+Tree** | StatefulSet | SSD PVC | 10-100Gi | Medium |
+| **LSM-Tree** | StatefulSet | High-IOPS SSD | 50-500Gi | High |
+| **RocksDB** | StatefulSet | Premium SSD | 100-1000Gi | Very High |
+| **S3** | Deployment | None | N/A | N/A |
+| **Azure** | Deployment | None | N/A | N/A |
+| **GCP** | Deployment | None | N/A | N/A |
+
+### Backend Selection
+
+Set the persistence backend using one of these methods:
+
+- Environment variable: `ORBIT_PERSISTENCE_BACKEND`
+- In TOML config: `[server] persistence_backend = "lsm_tree"`
+
+Supported values:
+- `memory`, `cow_btree`, `lsm_tree`, `rocksdb`, `s3`, `azure`, `gcp`
+
+---
+
+## Deployment Guide
+
+### Prerequisites
+
+#### Kubernetes Cluster Requirements
 
 - **Kubernetes version**: 1.24+
 - **Minimum nodes**: 3 (for high availability)
@@ -32,10 +93,9 @@ This guide provides comprehensive instructions for deploying Orbit-RS on Kuberne
 - **Storage**: Persistent storage with ReadWriteOnce support
 - **Network**: Pod-to-pod communication, LoadBalancer support (optional)
 
-### Required Tools
+#### Required Tools
 
 ```bash
-
 # Install kubectl
 curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
 chmod +x kubectl && sudo mv kubectl /usr/local/bin/
@@ -47,27 +107,11 @@ curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 curl -fsSL https://get.docker.com -o get-docker.sh && sh get-docker.sh
 ```
 
-### Optional Tools
+### Quick Start
+
+#### Using Helm (Recommended)
 
 ```bash
-
-# Prometheus Operator (for monitoring)
-helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
-helm repo update
-
-# Grafana (for visualization)
-helm repo add grafana https://grafana.github.io/helm-charts
-
-# cert-manager (for TLS certificates)
-kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.13.0/cert-manager.yaml
-```
-
-## Quick Start
-
-### Using Helm (Recommended)
-
-```bash
-
 # Add Helm repository (once available)
 helm repo add orbit-rs https://turingworks.github.io/orbit-rs
 helm repo update
@@ -80,10 +124,9 @@ helm install orbit-rs orbit-rs/orbit-rs \
   --set autoscaling.enabled=true
 ```
 
-### Using Local Helm Chart
+#### Using Local Helm Chart
 
 ```bash
-
 # Clone the repository
 git clone https://github.com/TuringWorks/orbit-rs.git
 cd orbit-rs
@@ -98,7 +141,7 @@ helm install orbit-rs helm/orbit-rs \
   --values helm/orbit-rs/values.yaml
 ```
 
-## Architecture Overview
+### Architecture Overview
 
 ```text
 ┌─────────────────────────────────────────────────────────────┐
@@ -125,8 +168,8 @@ helm install orbit-rs helm/orbit-rs \
 │ │   App    │ │ │   App    │ │ │   App    │ │
 │ └──────────┘ │ └──────────┘ │ └──────────┘ │
 │ ┌──────────┐ │ ┌──────────┐ │ ┌──────────┐ │
-│ │ SQLite   │ │ │ SQLite   │ │ │ SQLite   │ │
-│ │    DB    │ │ │    DB    │ │ │    DB    │ │
+│ │ Storage  │ │ │ Storage  │ │ │ Storage  │ │
+│ │ Backend  │ │ │ Backend  │ │ │ Backend  │ │
 │ └──────────┘ │ └──────────┘ │ └──────────┘ │
 └──────┬───────┴──────┬───────┴──────┬───────┘
        │              │              │
@@ -143,30 +186,19 @@ helm install orbit-rs helm/orbit-rs \
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### Component Description
+### Manual Deployment
 
-- **StatefulSet**: Manages orbit-server pods with stable network identities
-- **Headless Service**: Enables pod-to-pod communication for cluster formation
-- **Load Balancer Service**: External access point for clients
-- **Persistent Volumes**: Durable storage for transaction logs
-- **ConfigMaps**: Configuration management
-- **ServiceMonitor**: Prometheus metrics collection
-- **PrometheusRule**: Alerting rules
-
-## Manual Deployment
-
-### Step 1: Create Namespace and RBAC
+#### Step 1: Create Namespace and RBAC
 
 ```bash
 kubectl apply -f k8s/00-namespace.yaml
 ```
 
-### Step 2: Configure Storage
+#### Step 2: Configure Storage
 
 Update the storage class in `k8s/02-storage.yaml` based on your cloud provider:
 
 ```yaml
-
 # For AWS EKS
 provisioner: ebs.csi.aws.com
 parameters:
@@ -187,23 +219,22 @@ parameters:
 kubectl apply -f k8s/02-storage.yaml
 ```
 
-### Step 3: Deploy Configuration
+#### Step 3: Deploy Configuration
 
 ```bash
-kubectl apply -f k8s/01-configmap.yaml
+kubectl apply -f k8s/01-configmap-enhanced.yaml
 ```
 
-### Step 4: Deploy StatefulSet and Services
+#### Step 4: Deploy StatefulSet and Services
 
 ```bash
-kubectl apply -f k8s/03-statefulset.yaml
+kubectl apply -f k8s/03-statefulset-enhanced.yaml
 kubectl apply -f k8s/04-services.yaml
 ```
 
-### Step 5: Verify Deployment
+#### Step 5: Verify Deployment
 
 ```bash
-
 # Check pods
 kubectl get pods -n orbit-rs
 
@@ -217,18 +248,91 @@ kubectl get pvc -n orbit-rs
 kubectl logs -n orbit-rs orbit-server-0
 ```
 
-## Helm Deployment
+---
 
-### Configuration Values
+## Persistence Configuration
 
-Create a custom values file `my-values.yaml`:
+### LSM-Tree Backend (High-performance local storage)
+
+```bash
+# 1. Apply base manifests
+kubectl apply -f k8s/00-namespace.yaml
+kubectl apply -f k8s/02-storage.yaml  # Creates SSD StorageClass
+
+# 2. Apply enhanced configuration
+kubectl apply -f k8s/01-configmap-enhanced.yaml
+
+# 3. Modify StatefulSet for LSM-Tree
+kubectl apply -f - <<EOF
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: orbit-server
+  namespace: orbit-rs
+spec:
+  template:
+    spec:
+      containers:
+      - name: orbit-server
+        env:
+        - name: ORBIT_PERSISTENCE_BACKEND
+          value: "lsm_tree"
+        - name: ORBIT_LSM_MEMTABLE_SIZE
+          value: "134217728"  # 128MB for high throughput
+        - name: ORBIT_LSM_MAX_MEMTABLES
+          value: "16"
+EOF
+```
+
+### S3 Backend (Cloud storage)
+
+```bash
+# 1. Create S3 credentials secret
+kubectl create secret generic orbit-server-secrets -n orbit-rs \
+  --from-literal=s3-access-key-id="AKIA..." \
+  --from-literal=s3-secret-access-key="xyz..."
+
+# 2. Use Deployment instead of StatefulSet (no PVC needed)
+kubectl apply -f - <<EOF
+apiVersion: apps/v1
+kind: Deployment  # Note: Deployment, not StatefulSet
+metadata:
+  name: orbit-server-s3
+  namespace: orbit-rs
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: orbit-server
+        env:
+        - name: ORBIT_PERSISTENCE_BACKEND
+          value: "s3"
+        - name: ORBIT_S3_ENDPOINT
+          value: "https://s3.amazonaws.com"
+        - name: ORBIT_S3_REGION
+          value: "us-west-2"
+        - name: ORBIT_S3_BUCKET
+          value: "orbit-production-state"
+EOF
+```
+
+### RocksDB Backend (Production database)
 
 ```yaml
+# values-rocksdb.yaml
 orbitServer:
-  replicaCount: 3
-  image:
-    repository: ghcr.io/turingworks/orbit-rs/orbit-server
-    tag: "v0.1.0"
+  replicaCount: 5  # Scale up for production
+  env:
+    - name: ORBIT_PERSISTENCE_BACKEND
+      value: "rocksdb"
+    - name: ORBIT_ROCKSDB_WRITE_BUFFER_SIZE
+      value: "268435456"  # 256MB
+    - name: ORBIT_ROCKSDB_BLOCK_CACHE_SIZE
+      value: "536870912"  # 512MB
+    - name: ORBIT_ROCKSDB_MAX_BACKGROUND_JOBS
+      value: "8"
+  
   resources:
     requests:
       memory: "1Gi"
@@ -239,68 +343,107 @@ orbitServer:
 
 persistence:
   enabled: true
-  size: 20Gi
-  storageClass: "fast-ssd"
-
-monitoring:
-  serviceMonitor:
-    enabled: true
-  prometheusRule:
-    enabled: true
-  grafanaDashboard:
-    enabled: true
-
-autoscaling:
-  enabled: true
-  minReplicas: 3
-  maxReplicas: 10
-  targetCPUUtilizationPercentage: 70
-
-ingress:
-  enabled: true
-  className: "nginx"
-  annotations:
-    cert-manager.io/cluster-issuer: "letsencrypt-prod"
-  hosts:
-    - host: orbit-rs.yourdomain.com
-      paths:
-        - path: /
-          pathType: Prefix
-  tls:
-    - secretName: orbit-rs-tls
-      hosts:
-        - orbit-rs.yourdomain.com
-
-config:
-  logging:
-    level: "info"
-  transactions:
-    maxConnections: 20
-  saga:
-    maxExecutionTimeSeconds: 7200
-```
-
-### Deploy with Helm
-
-```bash
+  storageClass: "gp3"
+  size: 100Gi
 
 # Deploy
-helm install orbit-rs helm/orbit-rs \
-  --namespace orbit-rs \
-  --create-namespace \
-  --values my-values.yaml
-
-# Upgrade
-helm upgrade orbit-rs helm/orbit-rs \
-  --namespace orbit-rs \
-  --values my-values.yaml
-
-# Rollback
-helm rollback orbit-rs 1 --namespace orbit-rs
-
-# Uninstall
-helm uninstall orbit-rs --namespace orbit-rs
+helm install orbit-rs ./helm/orbit-rs -f values-rocksdb.yaml
 ```
+
+### Azure Backend (Cloud storage)
+
+```yaml
+# values-azure.yaml
+orbitServer:
+  env:
+    - name: ORBIT_PERSISTENCE_BACKEND
+      value: "azure"
+    - name: ORBIT_AZURE_ACCOUNT_NAME
+      value: "myorbitaccount"
+    - name: ORBIT_AZURE_CONTAINER_NAME
+      value: "orbit-data"
+
+persistence:
+  enabled: false  # No PVC needed for cloud
+
+# Create Azure secret first
+kubectl create secret generic orbit-server-secrets -n orbit-rs \
+  --from-literal=azure-account-key="abcd1234..."
+
+helm install orbit-rs ./helm/orbit-rs -f values-azure.yaml
+```
+
+### Kubernetes Operator Configuration
+
+#### LSM-Tree with High Performance
+
+```yaml
+apiVersion: orbit.turingworks.com/v1
+kind: OrbitCluster
+metadata:
+  name: production-cluster
+  namespace: orbit-rs
+spec:
+  replicas: 5
+  image:
+    repository: orbit-rs/orbit-server
+    tag: "v1.0.0"
+  
+  # Persistence configuration
+  persistence:
+    backend: "lsm_tree"
+    local:
+      backend_type: "lsm_tree"
+      data_dir: "/app/data/lsm_tree"
+      enable_compression: true
+      write_buffer_size: 268435456   # 256MB
+      cache_size: 536870912          # 512MB
+      config:
+        memtable_size_limit: "134217728"    # 128MB
+        max_memtables: "16"
+        compaction_threshold: "8"
+        bloom_filter_fp_rate: "0.001"
+  
+  resources:
+    cpuRequest: "1000m"
+    memoryRequest: "2Gi"
+    cpuLimit: "4000m"
+    memoryLimit: "8Gi"
+  
+  storage:
+    storageClass: "premium-ssd"
+    size: "200Gi"
+    accessMode: "ReadWriteOnce"
+```
+
+#### S3 with Multi-Region
+
+```yaml
+apiVersion: orbit.turingworks.com/v1
+kind: OrbitCluster
+metadata:
+  name: s3-cluster
+  namespace: orbit-rs
+spec:
+  replicas: 3
+  
+  persistence:
+    backend: "s3"
+    cloud:
+      provider: "s3"
+      endpoint: "https://s3.amazonaws.com"
+      region: "us-west-2"
+      bucket: "orbit-global-state"
+      prefix: "production"
+      connection_timeout: 30
+      retry_count: 5
+      enable_ssl: true
+      credentials_secret: "orbit-s3-credentials"
+  
+  # No storage section needed for cloud backends
+```
+
+---
 
 ## Configuration
 
@@ -309,10 +452,12 @@ helm uninstall orbit-rs --namespace orbit-rs
 #### Development
 
 ```yaml
-
 # dev-values.yaml
 orbitServer:
   replicaCount: 1
+  env:
+    - name: ORBIT_PERSISTENCE_BACKEND
+      value: "memory"
   resources:
     requests:
       memory: "256Mi"
@@ -332,10 +477,12 @@ config:
 #### Staging
 
 ```yaml
-
 # staging-values.yaml
 orbitServer:
   replicaCount: 2
+  env:
+    - name: ORBIT_PERSISTENCE_BACKEND
+      value: "lsm_tree"
   resources:
     requests:
       memory: "512Mi"
@@ -355,10 +502,12 @@ config:
 #### Production
 
 ```yaml
-
 # prod-values.yaml
 orbitServer:
   replicaCount: 5
+  env:
+    - name: ORBIT_PERSISTENCE_BACKEND
+      value: "rocksdb"
   resources:
     requests:
       memory: "1Gi"
@@ -388,33 +537,26 @@ config:
     maxConnections: 50
 ```
 
-### Configuration Management
+### Secrets Management
+
+**For Cloud Backends**, create secrets:
 
 ```bash
+# S3
+kubectl create secret generic orbit-server-secrets \
+  --from-literal=s3-access-key-id="AKIA..." \
+  --from-literal=s3-secret-access-key="xyz..."
 
-# Create environment-specific configurations
-kubectl create configmap orbit-rs-prod-config \
-  --from-file=config/production.toml \
-  --namespace orbit-rs
+# Azure
+kubectl create secret generic orbit-server-secrets \
+  --from-literal=azure-account-key="abcd..."
 
-# Use external secrets (recommended for production)
-kubectl apply -f - <<EOF
-apiVersion: external-secrets.io/v1beta1
-kind: SecretStore
-metadata:
-  name: vault-backend
-  namespace: orbit-rs
-spec:
-  provider:
-    vault:
-      server: "https://vault.example.com"
-      path: "secret"
-      auth:
-        kubernetes:
-          mountPath: "kubernetes"
-          role: "orbit-rs"
-EOF
+# GCP
+kubectl create secret generic orbit-server-secrets \
+  --from-file=gcp-service-account-key=./service-account.json
 ```
+
+---
 
 ## Monitoring
 
@@ -444,28 +586,14 @@ monitoring:
       release: prometheus
 ```
 
-### Grafana Dashboards
-
-```bash
-
-# Deploy Grafana dashboard
-kubectl apply -f k8s/05-monitoring.yaml
-
-# Access Grafana
-kubectl port-forward svc/prometheus-grafana 3000:80 -n monitoring
-
-# Default login: admin/prom-operator
-```
-
 ### Key Metrics to Monitor
 
 - **Transaction Rate**: `rate(orbit_transactions_total[5m])`
 - **Success Rate**: `rate(orbit_transactions_completed_total[5m]) / rate(orbit_transactions_total[5m])`
 - **Active Transactions**: `orbit_transactions_active`
-- **Saga Statistics**: `rate(orbit_sagas_*_total[5m])`
-- **Recovery Operations**: `rate(orbit_recovery_*_total[5m])`
 - **Memory Usage**: `container_memory_usage_bytes`
 - **CPU Usage**: `rate(container_cpu_usage_seconds_total[5m])`
+- **Storage Usage**: `kubelet_volume_stats_used_bytes`
 
 ### Alerting Rules
 
@@ -475,15 +603,15 @@ Key alerts configured in PrometheusRule:
 - **OrbitServerHighMemoryUsage**: Memory usage > 90%
 - **OrbitServerHighCPUUsage**: CPU usage > 80%
 - **OrbitTransactionFailureRate**: Failure rate > 10%
-- **OrbitSagaCompensationRate**: Compensation rate > 20%
-- **OrbitRecoveryFailure**: Multiple recovery failures
+- **StorageFull**: Persistent volume usage > 85%
+
+---
 
 ## High Availability
 
 ### Multi-Zone Deployment
 
 ```yaml
-
 # Enable pod anti-affinity
 affinity:
   podAntiAffinity:
@@ -512,7 +640,6 @@ podDisruptionBudget:
 ### Automated Recovery
 
 ```yaml
-
 # Configure probe timeouts
 livenessProbe:
   enabled: true
@@ -533,6 +660,8 @@ strategy:
     maxUnavailable: 1
     maxSurge: 1
 ```
+
+---
 
 ## Security
 
@@ -572,7 +701,6 @@ spec:
 ### Pod Security Standards
 
 ```yaml
-
 # Enable restricted pod security
 apiVersion: v1
 kind: Namespace
@@ -587,7 +715,6 @@ metadata:
 ### TLS Configuration
 
 ```yaml
-
 # Enable TLS
 config:
   tls:
@@ -607,22 +734,53 @@ extraVolumeMounts:
   readOnly: true
 ```
 
-### RBAC Configuration
+### RBAC Requirements
 
-The deployment includes minimal RBAC permissions:
+The Orbit-RS pods need these permissions:
 
-- Read access to nodes, pods, services, endpoints
-- Create/update access to events
-- Full access to coordination.k8s.io/leases (for leader election)
+```yaml
+rules:
+- apiGroups: [""]
+  resources: ["pods", "endpoints"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["coordination.k8s.io"]
+  resources: ["leases"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+```
+
+---
 
 ## Troubleshooting
 
 ### Common Issues
 
-#### 1. Pods Not Starting
+#### 1. PVC not binding
 
 ```bash
+kubectl get pv,pvc -n orbit-rs
+# Check StorageClass availability
+kubectl get storageclass
+```
 
+#### 2. Backend not starting
+
+```bash
+# Check logs
+kubectl logs -n orbit-rs orbit-server-0
+# Look for: "Starting Orbit-RS server with persistence backend: xxx"
+```
+
+#### 3. Cloud authentication failures
+
+```bash
+# Verify secrets exist
+kubectl get secrets -n orbit-rs orbit-server-secrets -o yaml
+# Check secret keys match expected names
+```
+
+#### 4. Pods Not Starting
+
+```bash
 # Check pod status
 kubectl describe pod orbit-server-0 -n orbit-rs
 
@@ -636,87 +794,36 @@ kubectl logs orbit-server-0 -n orbit-rs --previous
 # - Storage issues
 ```
 
-#### 2. Persistent Volume Issues
+### Health Check Endpoints
+
+The enhanced health checks provide backend-specific information:
 
 ```bash
+# Basic health
+curl http://pod-ip:8080/health
 
-# Check PVCs
-kubectl get pvc -n orbit-rs
-
-# Check storage class
-kubectl get storageclass
-
-# Check events
-kubectl get events -n orbit-rs --sort-by=.metadata.creationTimestamp
+# Detailed health (includes persistence backend status)
+curl http://pod-ip:8080/health/ready
 ```
 
-#### 3. Network Connectivity
-
-```bash
-
-# Test internal connectivity
-kubectl exec -it orbit-server-0 -n orbit-rs -- curl http://orbit-server-1.orbit-server-headless:8080/health
-
-# Test external connectivity
-kubectl port-forward svc/orbit-server 8080:8080 -n orbit-rs
-curl http://localhost:8080/health
-```
-
-#### 4. Configuration Issues
-
-```bash
-
-# Check configuration
-kubectl exec -it orbit-server-0 -n orbit-rs -- cat /tmp/orbit-server.toml
-
-# Validate configuration
-kubectl exec -it orbit-server-0 -n orbit-rs -- /app/orbit-server --config /tmp/orbit-server.toml --validate
-```
-
-### Debugging Commands
-
-```bash
-
-# Get all resources
-kubectl get all -n orbit-rs
-
-# Describe problematic pod
-kubectl describe pod <pod-name> -n orbit-rs
-
-# Get logs with timestamps
-kubectl logs <pod-name> -n orbit-rs --timestamps
-
-# Execute commands in pod
-kubectl exec -it <pod-name> -n orbit-rs -- bash
-
-# Check resource usage
-kubectl top pods -n orbit-rs
-
-# Get events
-kubectl get events -n orbit-rs --sort-by='.lastTimestamp'
-```
+---
 
 ## Maintenance
 
 ### Backup Procedures
 
 ```bash
-
 # Backup persistent volumes
 kubectl get pvc -n orbit-rs -o yaml > orbit-rs-pvc-backup.yaml
 
 # Backup configuration
 kubectl get configmap -n orbit-rs -o yaml > orbit-rs-config-backup.yaml
 kubectl get secret -n orbit-rs -o yaml > orbit-rs-secrets-backup.yaml
-
-# Application-level backup (if supported)
-kubectl exec -it orbit-server-0 -n orbit-rs -- /app/orbit-server --backup /app/data/backup.sql
 ```
 
 ### Updates and Upgrades
 
 ```bash
-
 # Update image version
 helm upgrade orbit-rs helm/orbit-rs \
   --set orbitServer.image.tag=v0.2.0 \
@@ -732,7 +839,6 @@ kubectl patch statefulset orbit-server -n orbit-rs -p '{"spec":{"updateStrategy"
 ### Scaling Operations
 
 ```bash
-
 # Manual scaling
 kubectl scale statefulset orbit-server --replicas=5 -n orbit-rs
 
@@ -751,56 +857,73 @@ helm upgrade orbit-rs helm/orbit-rs \
 
 ### Performance Tuning
 
-```yaml
+#### Local Storage Backends
 
-# Resource optimization
+**LSM-Tree**: High write throughput
+
+```yaml
+env:
+- name: ORBIT_LSM_MEMTABLE_SIZE
+  value: "134217728"  # Larger memtables = fewer flushes
+- name: ORBIT_LSM_MAX_MEMTABLES  
+  value: "16"         # More memtables = better write buffering
+- name: ORBIT_LSM_COMPACTION_THRESHOLD
+  value: "8"          # More aggressive compaction
+```
+
+**RocksDB**: Balanced read/write performance
+
+```yaml
+env:
+- name: ORBIT_ROCKSDB_WRITE_BUFFER_SIZE
+  value: "268435456"  # 256MB write buffers
+- name: ORBIT_ROCKSDB_BLOCK_CACHE_SIZE  
+  value: "1073741824" # 1GB block cache for reads
+- name: ORBIT_ROCKSDB_MAX_BACKGROUND_JOBS
+  value: "8"          # More compaction threads
+```
+
+#### Cloud Storage Backends
+
+```yaml
+env:
+- name: ORBIT_S3_CONNECTION_TIMEOUT
+  value: "60"         # Longer timeout for large objects
+- name: ORBIT_S3_RETRY_COUNT
+  value: "5"          # More retries for reliability
+```
+
+#### Resource Allocation
+
+```yaml
 resources:
   requests:
-    memory: "2Gi"
-    cpu: "1000m"
+    memory: "2Gi"     # Minimum for RocksDB/LSM-Tree
+    cpu: "1000m"      # Minimum for compaction
   limits:
-    memory: "8Gi" 
-    cpu: "4000m"
-
-# Configuration tuning
-config:
-  performance:
-    workerThreads: 8
-    maxBlockingThreads: 1024
-  transactions:
-    maxConnections: 50
+    memory: "8Gi"     # Allow burst for large operations
+    cpu: "4000m"      # Allow burst for compaction
 ```
 
-### Log Management
+---
 
-```bash
+## Summary
 
-# Centralized logging with Fluentd/Filebeat
-# Configure log rotation
-kubectl patch statefulset orbit-server -n orbit-rs --type='merge' -p='{
-  "spec": {
-    "template": {
-      "spec": {
-        "containers": [{
-          "name": "orbit-server",
-          "env": [{
-            "name": "RUST_LOG_MAX_SIZE",
-            "value": "100MB"
-          }]
-        }]
-      }
-    }
-  }
-}'
-```
+This comprehensive Kubernetes documentation covers all aspects of deploying Orbit-RS on Kubernetes, including:
+
+- **Storage Backend Configuration**: Support for all persistence backends
+- **Deployment Options**: Helm charts, manual deployment, and Kubernetes operators
+- **Production Best Practices**: Monitoring, security, high availability
+- **Troubleshooting**: Common issues and solutions
+- **Maintenance**: Backup, updates, and scaling operations
+
+The foundation is now in place to support all Orbit-RS persistence backends on Kubernetes!
+
+---
 
 ## Support and Documentation
 
 - **GitHub Issues**: <https://github.com/TuringWorks/orbit-rs/issues>
 - **Documentation**: <https://github.com/TuringWorks/orbit-rs/docs>
 - **Discussions**: <https://github.com/TuringWorks/orbit-rs/discussions>
-- **Wiki**: <https://github.com/TuringWorks/orbit-rs/wiki>
 
----
-
-This deployment guide provides comprehensive coverage of Orbit-RS Kubernetes deployment scenarios. For additional help or specific use cases, please refer to the project documentation or create an issue on GitHub.

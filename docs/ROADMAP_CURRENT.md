@@ -280,7 +280,7 @@ Storage Scaling:
 - **[Architecture Overview](architecture/ORBIT_ARCHITECTURE.md)**: System design and scalability
 - **[Production Deployment](deployment/)**: Kubernetes and cloud deployment
 - **[Migration Guides](MIGRATION_GUIDE.md)**: Move from existing databases
-- **[Enterprise Features](SECURITY.md)**: Security, compliance, support
+- **[Enterprise Features](SECURITY_COMPLETE_DOCUMENTATION.md)**: Security, compliance, support
 
 ### **For Contributors**
 

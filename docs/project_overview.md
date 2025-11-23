@@ -326,7 +326,7 @@ orbit-rs/
 
 - [System Architecture](overview.md) - Complete system design and components
 - [Protocol Adapters](protocols/protocol_adapters.md) - Multi-protocol support architecture
-- [Persistence Architecture](PERSISTENCE_ARCHITECTURE.md) - Storage backends and data management
+- [Persistence Complete Documentation](PERSISTENCE_COMPLETE_DOCUMENTATION.md) - Storage backends and data management
 
 ### **Protocols**
 
@@ -339,8 +339,7 @@ orbit-rs/
 
 ### **Operations**
 
-- [Kubernetes Deployment](kubernetes_deployment.md) - Production Kubernetes setup
-- [Persistence Configuration](KUBERNETES_PERSISTENCE.md) - Storage configuration guide
+- [Kubernetes Complete Documentation](KUBERNETES_COMPLETE_DOCUMENTATION.md) - Production Kubernetes setup and persistence
 - [Monitoring Guide](advanced_transaction_features.md) - Metrics, monitoring, and observability
 
 ---

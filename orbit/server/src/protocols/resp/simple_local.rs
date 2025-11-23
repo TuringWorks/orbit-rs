@@ -388,6 +388,45 @@ impl SimpleLocalRegistry {
                 let result = actor.rpop(count);
                 Ok(serde_json::to_value(result)?)
             }
+            "lset" => {
+                if args.len() != 2 {
+                    return Err(OrbitError::InvocationFailed {
+                        addressable_type: "ListActor".to_string(),
+                        method: method.to_string(),
+                        reason: "Expected 2 arguments".to_string(),
+                    });
+                }
+                let index: i64 = serde_json::from_value(args[0].clone())?;
+                let value: String = serde_json::from_value(args[1].clone())?;
+                let result = actor.lset(index, value);
+                Ok(serde_json::to_value(result)?)
+            }
+            "lrem" => {
+                if args.len() != 2 {
+                    return Err(OrbitError::InvocationFailed {
+                        addressable_type: "ListActor".to_string(),
+                        method: method.to_string(),
+                        reason: "Expected 2 arguments".to_string(),
+                    });
+                }
+                let count: i64 = serde_json::from_value(args[0].clone())?;
+                let value: String = serde_json::from_value(args[1].clone())?;
+                let result = actor.lrem(count, &value);
+                Ok(serde_json::to_value(result)?)
+            }
+            "ltrim" => {
+                if args.len() != 2 {
+                    return Err(OrbitError::InvocationFailed {
+                        addressable_type: "ListActor".to_string(),
+                        method: method.to_string(),
+                        reason: "Expected 2 arguments".to_string(),
+                    });
+                }
+                let start: i64 = serde_json::from_value(args[0].clone())?;
+                let stop: i64 = serde_json::from_value(args[1].clone())?;
+                actor.ltrim(start, stop);
+                Ok(serde_json::to_value(())?)
+            }
             _ => Err(OrbitError::InvocationFailed {
                 addressable_type: "ListActor".to_string(),
                 method: method.to_string(),

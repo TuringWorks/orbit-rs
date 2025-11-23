@@ -5,7 +5,6 @@
 use super::traits::{BaseCommandHandler, CommandHandler};
 use crate::protocols::{error::ProtocolResult, resp::RespValue};
 use async_trait::async_trait;
-use orbit_client::OrbitClient;
 use std::sync::Arc;
 
 /// Handler for connection commands
@@ -15,11 +14,11 @@ pub struct ConnectionCommands {
 }
 
 impl ConnectionCommands {
-    pub fn new(orbit_client: Arc<OrbitClient>) -> Self {
+    pub fn new(local_registry: Arc<crate::protocols::resp::simple_local::SimpleLocalRegistry>) -> Self {
         // Connection commands don't need local registry
-        let local_registry = Arc::new(crate::protocols::resp::simple_local::SimpleLocalRegistry::new());
+        // Use provided local_registry
         Self {
-            base: BaseCommandHandler::new(orbit_client, local_registry),
+            base: BaseCommandHandler::new(local_registry),
         }
     }
 

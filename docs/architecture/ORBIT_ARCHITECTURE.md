@@ -580,7 +580,7 @@ Saga States: NotStarted → Running → Completed | Compensating → Compensated
      - Syntax Tests: 36/36 passing (100% pass rate)
      - **Total**: 68+ tests passing
    - **Production Readiness**: 100% ✅ - Fully production ready, all commands implemented
-   - **Documentation**: See [MySQL Production Readiness Plan](../MYSQL_PRODUCTION_READINESS.md) and [Production Deployment Guide](../MYSQL_PRODUCTION_DEPLOYMENT.md)
+   - **Documentation**: See [MySQL Complete Documentation](../MYSQL_COMPLETE_DOCUMENTATION.md)
 
 7. **CQL (Cassandra Query Language)** - Port 9042
    - **Status**: ✅ **Production Ready** (100% Complete)
@@ -655,8 +655,8 @@ Saga States: NotStarted → Running → Completed | Compensating → Compensated
 | OrbitQL | High | ✅ Production-Ready | 20+ tests, 90% core features complete |
 | REST API | High | ✅ Production-Ready | OpenAPI documentation, WebSocket support |
 | gRPC | High | ✅ Production-Ready | Core protocol, fully integrated |
-| MySQL | High | ✅ Production-Ready | 100% complete, 68+ tests passing (100%), all MySQL commands implemented, comprehensive test coverage. See [MySQL Production Readiness Plan](../MYSQL_PRODUCTION_READINESS.md) |
-| CQL | High | ✅ Production-Ready | 100% complete, 38/38 tests passing (100%), collection types, authentication, metrics, and deployment guide. See [CQL Complete Documentation](../CQL_COMPLETE_DOCUMENTATION.md) and [Production Deployment Guide](../CQL_PRODUCTION_DEPLOYMENT.md) |
+| MySQL | High | ✅ Production-Ready | 100% complete, 68+ tests passing (100%), all MySQL commands implemented, comprehensive test coverage. See [MySQL Complete Documentation](../MYSQL_COMPLETE_DOCUMENTATION.md) |
+| CQL | High | ✅ Production-Ready | 100% complete, 38/38 tests passing (100%), collection types, authentication, metrics, and deployment guide. See [CQL Complete Documentation](../CQL_COMPLETE_DOCUMENTATION.md) |
 | Cypher/Bolt | Low | 🔶 Supported | 10% test coverage, basic parser |
 | AQL | None | 🔶 Supported | Framework ready, needs implementation |
 | MCP | Low | 🔶 Experimental | Basic implementation, expanding |

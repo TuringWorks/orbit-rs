@@ -219,10 +219,9 @@ Orbit-RS is ideal for building:
 
 ### 🚀 **Operations & Deployment**
 
-- [☸️ **Kubernetes Deployment**](kubernetes_deployment.md) - Production Kubernetes setup
-- [💾 **Kubernetes Storage Guide**](KUBERNETES_STORAGE_GUIDE.md) - Persistent storage configuration
+- [☸️ **Kubernetes Complete Documentation**](KUBERNETES_COMPLETE_DOCUMENTATION.md) - Production Kubernetes setup and persistence
 - [🔧 **Development Roadmap**](roadmap.md) - Strategic vision and timeline
-- [🔒 **Security Guide**](SECURITY.md) - Security policies and best practices
+- [🔒 **Security Guide**](SECURITY_COMPLETE_DOCUMENTATION.md) - Security policies and best practices
 
 ### 🔌 **Integration & Examples**
 

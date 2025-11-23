@@ -39,7 +39,6 @@ use orbit_server::protocols::postgres_wire::{QueryEngine, RocksDbTableStorage};
 use orbit_server::protocols::common::storage::tiered::TieredTableStorage;
 use orbit_server::protocols::common::storage::TableStorage;
 use orbit_server::protocols::postgres_wire::sql::execution::hybrid::HybridStorageConfig;
-use orbit_client::OrbitClient;
 
 /// Orbit Server - Distributed Actor System Runtime
 #[derive(Parser)]
@@ -275,11 +274,28 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     info!("[gRPC] gRPC server initialized on {}:{}", args.bind, args.grpc_port);
 
-    // Create independent tiered storage for each protocol
-    let postgres_storage = Arc::new(TieredTableStorage::with_config(tiered_config.clone()));
-    let redis_storage = Arc::new(TieredTableStorage::with_config(tiered_config.clone()));
-    let mysql_storage = Arc::new(TieredTableStorage::with_config(tiered_config.clone()));
-    let cql_storage = Arc::new(TieredTableStorage::with_config(tiered_config));
+    // Create independent tiered storage for each protocol with protocol-specific data directories
+    let postgres_data_dir = args.data_dir.join("postgresql");
+    let redis_data_dir = args.data_dir.join("redis");
+    let mysql_data_dir = args.data_dir.join("mysql");
+    let cql_data_dir = args.data_dir.join("cql");
+
+    let postgres_storage = Arc::new(TieredTableStorage::with_data_dir(
+        postgres_data_dir,
+        tiered_config.clone(),
+    ));
+    let redis_storage = Arc::new(TieredTableStorage::with_data_dir(
+        redis_data_dir,
+        tiered_config.clone(),
+    ));
+    let mysql_storage = Arc::new(TieredTableStorage::with_data_dir(
+        mysql_data_dir,
+        tiered_config.clone(),
+    ));
+    let cql_storage = Arc::new(TieredTableStorage::with_data_dir(
+        cql_data_dir,
+        tiered_config,
+    ));
 
     info!("[Protocol Storage] Independent tiered storage created for all protocols");
 
@@ -468,14 +484,22 @@ async fn initialize_data_directories(data_dir: &PathBuf) -> Result<(), Box<dyn E
     let rocksdb_dir = data_dir.join("rocksdb");
     let redis_dir = data_dir.join("redis");
 
+    // Create protocol-specific persistence directories
+    let postgresql_dir = data_dir.join("postgresql");
+    let mysql_dir = data_dir.join("mysql");
+    let cql_dir = data_dir.join("cql");
+
     tokio::fs::create_dir_all(&hot_dir).await?;
     tokio::fs::create_dir_all(&warm_dir).await?;
     tokio::fs::create_dir_all(&cold_dir).await?;
     tokio::fs::create_dir_all(&wal_dir).await?;
     tokio::fs::create_dir_all(&rocksdb_dir).await?;
     tokio::fs::create_dir_all(&redis_dir).await?;
+    tokio::fs::create_dir_all(&postgresql_dir).await?;
+    tokio::fs::create_dir_all(&mysql_dir).await?;
+    tokio::fs::create_dir_all(&cql_dir).await?;
 
-    info!("[Storage Dirs] Created: hot, warm, cold, wal, rocksdb, redis");
+    info!("[Storage Dirs] Created: hot, warm, cold, wal, rocksdb, redis, postgresql, mysql, cql");
 
     Ok(())
 }
@@ -793,28 +817,6 @@ async fn start_redis_server(
 ) -> Result<JoinHandle<Result<(), Box<dyn Error + Send + Sync>>>, Box<dyn Error>> {
     let bind_addr = format!("{}:{}", args.bind, args.redis_port);
 
-    // Create an OrbitClient for the Redis server to use
-    let orbit_endpoint = format!("http://{}:{}", args.bind, args.grpc_port);
-    
-    // Create client using builder pattern
-    let client = match OrbitClient::builder()
-        .with_server_urls(vec![orbit_endpoint.clone()])
-        .with_namespace("default".to_string())
-        .build()
-        .await
-    {
-        Ok(c) => c,
-        Err(e) => {
-            warn!("[Redis] Could not connect to gRPC endpoint yet: {}. Using localhost:50051", e);
-            OrbitClient::builder()
-                .with_server_urls(vec!["http://127.0.0.1:50051".to_string()])
-                .with_namespace("default".to_string())
-                .build()
-                .await
-                .map_err(|e| format!("Failed to create OrbitClient: {}", e))?
-        }
-    };
-
     // Create RocksDB storage for Redis persistence
     let redis_data_path = "./data/redis";
     let redis_provider: Option<Arc<dyn orbit_server::protocols::persistence::redis_data::RedisDataProvider>> = 
@@ -839,7 +841,7 @@ async fn start_redis_server(
             }
         };
 
-    let redis_server = RespServer::new_with_persistence(bind_addr, client, redis_provider);
+    let redis_server = RespServer::new_with_persistence(bind_addr, redis_provider);
 
     let handle = tokio::spawn(async move {
         redis_server.run()

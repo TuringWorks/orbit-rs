@@ -8,7 +8,6 @@ use crate::protocols::error::ProtocolResult;
 use crate::protocols::resp::RespValue;
 use async_trait::async_trait;
 use bytes::Bytes;
-use orbit_client::OrbitClient;
 use std::sync::Arc;
 use tracing::debug;
 
@@ -17,10 +16,10 @@ pub struct HashCommands {
 }
 
 impl HashCommands {
-    pub fn new(orbit_client: Arc<OrbitClient>) -> Self {
-        let local_registry = Arc::new(crate::protocols::resp::simple_local::SimpleLocalRegistry::new());
+    pub fn new(local_registry: Arc<crate::protocols::resp::simple_local::SimpleLocalRegistry>) -> Self {
+        // Use provided local_registry
         Self {
-            base: BaseCommandHandler::new(orbit_client, local_registry),
+            base: BaseCommandHandler::new(local_registry),
         }
     }
 
