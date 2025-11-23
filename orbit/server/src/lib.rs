@@ -1,7 +1,9 @@
+pub mod config;
 pub mod directory;
 pub mod load_balancer;
 pub mod mesh;
 pub mod persistence;
+pub mod protocols;
 pub mod server;
 #[cfg(test)]
 mod test_pooling_integration;

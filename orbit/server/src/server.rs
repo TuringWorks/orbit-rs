@@ -9,8 +9,8 @@ use orbit_proto::{
     connection_service_server, health_check_response, health_service_server,
     OrbitConnectionService, OrbitHealthService,
 };
-use orbit_protocols::postgres_wire::{PostgresServer, QueryEngine, RocksDbTableStorage};
-use orbit_protocols::resp::RespServer;
+use crate::protocols::{PostgresServer, RespServer};
+use crate::protocols::postgres_wire::{QueryEngine, RocksDbTableStorage};
 use orbit_shared::{NodeCapabilities, NodeId, NodeInfo, NodeStatus, OrbitError, OrbitResult};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -380,7 +380,31 @@ impl OrbitServer {
                 .await
             {
                 Ok(client) => {
-                    let resp_server = RespServer::new(redis_addr, client);
+                    // Create RocksDB storage for Redis persistence
+                    let redis_data_path = "./data/redis";
+                    let redis_provider: Option<Arc<dyn crate::protocols::persistence::redis_data::RedisDataProvider>> = 
+                        match crate::protocols::persistence::rocksdb_redis_provider::RocksDbRedisDataProvider::new(
+                            redis_data_path,
+                            crate::protocols::persistence::redis_data::RedisDataConfig::default(),
+                        ) {
+                            Ok(provider) => {
+                                tracing::info!("Redis using persistent RocksDB storage at: {}", redis_data_path);
+                                let provider_arc: Arc<dyn crate::protocols::persistence::redis_data::RedisDataProvider> = Arc::new(provider);
+                                // Initialize the provider
+                                if let Err(e) = crate::protocols::persistence::redis_data::RedisDataProvider::initialize(&*provider_arc).await {
+                                    tracing::warn!("Failed to initialize Redis persistent storage: {}", e);
+                                    None
+                                } else {
+                                    Some(provider_arc)
+                                }
+                            }
+                            Err(e) => {
+                                tracing::warn!("Failed to create Redis persistent storage, using in-memory: {}", e);
+                                None
+                            }
+                        };
+
+                    let resp_server = RespServer::new_with_persistence(redis_addr, client, redis_provider);
                     server_tasks.push(tokio::spawn(async move {
                         if let Err(e) = resp_server.run().await {
                             tracing::error!("RESP server failed: {}", e);

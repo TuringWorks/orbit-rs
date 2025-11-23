@@ -9,7 +9,7 @@ use super::types::MySqlType;
 use super::MySqlConfig;
 use crate::error::{ProtocolError, ProtocolResult};
 use crate::postgres_wire::sql::types::{SqlType, SqlValue};
-use crate::postgres_wire::storage::memory::MemoryTableStorage;
+use crate::common::storage::memory::MemoryTableStorage;
 use crate::postgres_wire::SqlEngine;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::collections::HashMap;
@@ -47,16 +47,18 @@ pub struct MySqlMetrics {
 pub struct MySqlAdapter {
     config: MySqlConfig,
     pub(crate) sql_engine: Arc<RwLock<SqlEngine>>,
-    storage: Arc<dyn crate::postgres_wire::storage::TableStorage>,
+    storage: Arc<dyn crate::common::storage::TableStorage>,
     prepared_statements: Arc<RwLock<HashMap<u32, PreparedStatement>>>,
     next_statement_id: Arc<RwLock<u32>>,
     metrics: Arc<RwLock<MySqlMetrics>>,
 }
 
 impl MySqlAdapter {
-    /// Create a new MySQL adapter
-    pub async fn new(config: MySqlConfig) -> ProtocolResult<Self> {
-        let storage = Arc::new(MemoryTableStorage::new());
+    /// Create a new MySQL adapter with shared storage
+    pub async fn new_with_storage(
+        config: MySqlConfig,
+        storage: Arc<dyn crate::common::storage::TableStorage>,
+    ) -> ProtocolResult<Self> {
         let sql_engine = SqlEngine::new();
 
         Ok(Self {
@@ -67,6 +69,13 @@ impl MySqlAdapter {
             next_statement_id: Arc::new(RwLock::new(1)),
             metrics: Arc::new(RwLock::new(MySqlMetrics::default())),
         })
+    }
+
+    /// Create a new MySQL adapter (creates its own isolated storage)
+    /// For backward compatibility. Use new_with_storage() to share storage with other protocols.
+    pub async fn new(config: MySqlConfig) -> ProtocolResult<Self> {
+        let storage = Arc::new(MemoryTableStorage::new());
+        Self::new_with_storage(config, storage).await
     }
 
     /// Start the MySQL server

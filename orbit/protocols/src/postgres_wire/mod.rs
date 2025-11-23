@@ -39,10 +39,12 @@ pub mod messages;
 pub mod persistent_storage;
 pub mod protocol;
 pub mod query_engine;
-pub mod server;
+// pub mod server;  // Moved to orbit_server::protocols
 pub mod sql;
-pub mod storage;
 pub mod vector_engine;
+
+// Re-export storage from common for backward compatibility
+pub use crate::common::storage;
 
 pub use auth::{AuthManager, AuthMethod, ScramAuth, UserCredentials, UserStore, compute_md5_hash};
 pub use graphrag_engine::GraphRAGQueryEngine;
@@ -53,6 +55,6 @@ pub use persistent_storage::{
 };
 pub use protocol::PostgresWireProtocol;
 pub use query_engine::{QueryEngine, QueryResult};
-pub use server::PostgresServer;
+// pub use server::PostgresServer;  // Moved to orbit_server::protocols
 pub use sql::{SqlEngine, SqlExecutor, SqlParser};
 pub use vector_engine::VectorQueryEngine;

@@ -17,7 +17,8 @@ The PostgreSQL wire protocol in Orbit-RS includes support for GraphRAG operation
 To enable GraphRAG support in your PostgreSQL server:
 
 ```rust
-use orbit_protocols::postgres_wire::{PostgresServer, QueryEngine};
+use orbit_server::protocols::PostgresServer;
+use orbit_protocols::postgres_wire::QueryEngine;
 use orbit_client::OrbitClient;
 
 // Create query engine with GraphRAG support

@@ -572,6 +572,13 @@ impl HybridStorageManager {
         hot.insert(values)
     }
 
+    /// Scan all data from hot tier (simple scan for TableStorage compatibility)
+    pub async fn scan_all(&self) -> ProtocolResult<Vec<Vec<SqlValue>>> {
+        let hot = self.hot_store.read().await;
+        let rows = hot.scan(None)?;
+        Ok(rows.into_iter().map(|row| row.values.clone()).collect())
+    }
+
     /// Migrate hot data to warm/cold tiers
     pub async fn migrate_tiers(&self) -> ProtocolResult<MigrationStats> {
         let mut stats = MigrationStats::default();

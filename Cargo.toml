@@ -12,33 +12,29 @@ members = [
     "orbit/server-etcd",
     "orbit/server-prometheus",
     "orbit/engine",
-    "orbit/protocols",
     "orbit/application",
     "orbit/operator",
     "orbit/compute",
     "orbit/ml",
+    "orbit/cli",
 
     # Tests
     "tests",
-
-    # Examples - standalone crates
-    "examples/hello-world",
-    "examples/distributed-counter-example",
-    "examples/distributed-transactions",
-    "examples/resp-server",
-    "examples/vector-store",
-    "examples/pgvector-store",
-    "examples/saga-example",
-    "examples/orbitql-example",
-    "examples/multi-model-query-example",
-    "examples/multi-protocol-server",
-
-    # Examples - demos
-    "examples/demos/benchmarks-demo",
-    "examples/demos/timeseries-demo",
 ]
 
-# Examples excluded due to API compatibility issues (need updating)
+# Examples excluded from workspace build
+# - examples/hello-world
+# - examples/distributed-counter-example
+# - examples/distributed-transactions
+# - examples/resp-server
+# - examples/vector-store
+# - examples/pgvector-store
+# - examples/saga-example
+# - examples/orbitql-example
+# - examples/multi-model-query-example
+# - examples/multi-protocol-server
+# - examples/demos/benchmarks-demo
+# - examples/demos/timeseries-demo
 # - examples/actor-memory-integration
 # - examples/mcp-advanced-server
 # - examples/mcp-basic-client

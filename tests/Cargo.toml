@@ -10,7 +10,6 @@ orbit-server = { path = "../orbit/server" }
 orbit-shared = { path = "../orbit/shared" }
 orbit-proto = { path = "../orbit/proto" }
 orbit-util = { path = "../orbit/util" }
-orbit-protocols = { path = "../orbit/protocols" }
 tokio = { version = "1.48", features = ["full"] }
 tokio-test = "0.4"
 tracing = "0.1"

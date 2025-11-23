@@ -20,7 +20,7 @@ use crate::postgres_wire::sql::{
     parser::SqlParser,
     types::{SqlType, SqlValue},
 };
-use crate::postgres_wire::storage::{StorageBackendConfig, StorageBackendFactory, TableStorage};
+use crate::common::storage::{StorageBackendConfig, StorageBackendFactory, TableStorage};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -362,7 +362,7 @@ impl SqlExecutor {
 
     /// Simple constructor for testing that creates basic in-memory storage without tokio runtime
     pub fn new_simple_memory() -> Self {
-        use crate::postgres_wire::storage::memory::MemoryTableStorage;
+        use crate::common::storage::memory::MemoryTableStorage;
         let storage = Arc::new(MemoryTableStorage::default());
         Self::with_storage(storage as Arc<dyn TableStorage>)
     }
@@ -430,7 +430,7 @@ impl SqlExecutor {
     }
 
     /// Get storage metrics
-    pub async fn storage_metrics(&self) -> crate::postgres_wire::storage::StorageMetrics {
+    pub async fn storage_metrics(&self) -> crate::common::storage::StorageMetrics {
         self.storage.metrics().await
     }
 

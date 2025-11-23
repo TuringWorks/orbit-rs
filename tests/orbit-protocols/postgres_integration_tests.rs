@@ -14,7 +14,7 @@ use std::time::Duration;
 use tokio_postgres::{Error, NoTls};
 
 /// Helper to start test server on a random port
-async fn start_test_server() -> (orbit_protocols::postgres_wire::PostgresServer, u16) {
+async fn start_test_server() -> (orbit_server::protocols::PostgresServer, u16) {
     use tokio::net::TcpListener;
 
     // Find available port
@@ -22,7 +22,7 @@ async fn start_test_server() -> (orbit_protocols::postgres_wire::PostgresServer,
     let port = listener.local_addr().unwrap().port();
     drop(listener);
 
-    let server = orbit_protocols::postgres_wire::PostgresServer::new(format!("127.0.0.1:{}", port));
+    let server = orbit_server::protocols::PostgresServer::new(format!("127.0.0.1:{}", port));
     (server, port)
 }
 

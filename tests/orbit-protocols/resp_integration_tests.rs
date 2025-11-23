@@ -12,7 +12,7 @@
 #![cfg(feature = "integration")]
 
 use orbit_client::OrbitClient;
-use orbit_protocols::resp::RespServer;
+use orbit_server::protocols::RespServer;
 use redis::{Commands, Connection, RedisResult};
 use tokio::time::{sleep, Duration};
 

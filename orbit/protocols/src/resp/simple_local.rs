@@ -7,11 +7,12 @@ use tokio::sync::RwLock;
 use tracing::debug;
 
 use crate::resp::actors::{HashActor, KeyValueActor, ListActor, SetActor, SortedSetActor};
+use crate::persistence::redis_data::{RedisDataProvider, RedisValue};
 use orbit_shared::{AddressableInvocation, Key, OrbitError, OrbitResult};
 
 /// Simplified local actor registry for core RESP commands
 pub struct SimpleLocalRegistry {
-    /// KeyValue actors
+    /// KeyValue actors (in-memory cache)
     keyvalue_actors: Arc<RwLock<HashMap<String, KeyValueActor>>>,
     /// Hash actors
     hash_actors: Arc<RwLock<HashMap<String, HashActor>>>,
@@ -21,6 +22,8 @@ pub struct SimpleLocalRegistry {
     set_actors: Arc<RwLock<HashMap<String, SetActor>>>,
     /// Sorted set actors
     sorted_set_actors: Arc<RwLock<HashMap<String, SortedSetActor>>>,
+    /// Optional persistent storage provider
+    persistent_storage: Option<Arc<dyn RedisDataProvider>>,
 }
 
 impl SimpleLocalRegistry {
@@ -31,7 +34,49 @@ impl SimpleLocalRegistry {
             list_actors: Arc::new(RwLock::new(HashMap::new())),
             set_actors: Arc::new(RwLock::new(HashMap::new())),
             sorted_set_actors: Arc::new(RwLock::new(HashMap::new())),
+            persistent_storage: None,
         }
+    }
+
+    /// Create a new registry with persistent storage
+    pub fn with_persistence(provider: Arc<dyn RedisDataProvider>) -> Self {
+        Self {
+            keyvalue_actors: Arc::new(RwLock::new(HashMap::new())),
+            hash_actors: Arc::new(RwLock::new(HashMap::new())),
+            list_actors: Arc::new(RwLock::new(HashMap::new())),
+            set_actors: Arc::new(RwLock::new(HashMap::new())),
+            sorted_set_actors: Arc::new(RwLock::new(HashMap::new())),
+            persistent_storage: Some(provider),
+        }
+    }
+
+    /// Load all keys from persistent storage on startup
+    pub async fn load_from_persistence(&self) -> OrbitResult<()> {
+        if let Some(provider) = &self.persistent_storage {
+            debug!("Loading keys from persistent storage");
+            let keys = provider.keys("*").await?;
+            let mut actors = self.keyvalue_actors.write().await;
+            
+            for key in keys {
+                if let Some(value) = provider.get(&key).await? {
+                    let mut actor = KeyValueActor::new();
+                    actor.set_value(value.data);
+                    if let Some(expiration) = value.expiration {
+                        // Convert expiration timestamp to TTL seconds
+                        let now = std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap()
+                            .as_secs();
+                        if expiration > now {
+                            actor.set_expiration(expiration - now);
+                        }
+                    }
+                    actors.insert(key, actor);
+                }
+            }
+            debug!("Loaded {} keys from persistent storage", actors.len());
+        }
+        Ok(())
     }
 
     /// Execute keyvalue actor methods
@@ -41,6 +86,28 @@ impl SimpleLocalRegistry {
         method: &str,
         args: &[Value],
     ) -> OrbitResult<Value> {
+        // For get_value, check persistent storage first before creating actor
+        if method == "get_value" {
+            if let Some(provider) = &self.persistent_storage {
+                if let Ok(Some(redis_value)) = provider.get(key).await {
+                    // Update in-memory cache
+                    let mut actors = self.keyvalue_actors.write().await;
+                    let actor = actors.entry(key.to_string()).or_insert_with(KeyValueActor::new);
+                    actor.set_value(redis_value.data.clone());
+                    if let Some(expiration) = redis_value.expiration {
+                        let now = std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap()
+                            .as_secs();
+                        if expiration > now {
+                            actor.set_expiration(expiration - now);
+                        }
+                    }
+                    return Ok(serde_json::to_value(Some(redis_value.data))?);
+                }
+            }
+        }
+
         let mut actors = self.keyvalue_actors.write().await;
         let actor = actors
             .entry(key.to_string())
@@ -50,6 +117,7 @@ impl SimpleLocalRegistry {
 
         match method {
             "get_value" => {
+                // Fall back to in-memory value (persistent storage already checked above)
                 let result = actor.get_value().cloned();
                 Ok(serde_json::to_value(result)?)
             }
@@ -62,13 +130,28 @@ impl SimpleLocalRegistry {
                     });
                 }
                 let value: String = serde_json::from_value(args[0].clone())?;
-                actor.set_value(value);
+                actor.set_value(value.clone());
+                
+                // Persist to storage if available
+                if let Some(provider) = &self.persistent_storage {
+                    let redis_value = RedisValue::new(value);
+                    if let Err(e) = provider.set(key, redis_value).await {
+                        debug!("Failed to persist key {}: {}", key, e);
+                    }
+                }
+                
                 Ok(serde_json::to_value(())?)
             }
             "delete_value" => {
                 let existed = actor.value.is_some();
                 actor.value = None;
                 actor.expiration = None;
+                
+                // Delete from persistent storage if available
+                if let Some(provider) = &self.persistent_storage {
+                    let _ = provider.delete(key).await;
+                }
+                
                 Ok(serde_json::to_value(existed)?)
             }
             "exists" => {
@@ -89,6 +172,23 @@ impl SimpleLocalRegistry {
                 }
                 let seconds: u64 = serde_json::from_value(args[0].clone())?;
                 actor.set_expiration(seconds);
+                
+                // Update expiration in persistent storage if available
+                if let Some(provider) = &self.persistent_storage {
+                    if let Some(value_str) = actor.get_value() {
+                        let now = std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap()
+                            .as_secs();
+                        let expiration = now + seconds;
+                        let mut redis_value = RedisValue::new(value_str.clone());
+                        redis_value.expiration = Some(expiration);
+                        if let Err(e) = provider.set(key, redis_value).await {
+                            debug!("Failed to persist expiration for key {}: {}", key, e);
+                        }
+                    }
+                }
+                
                 Ok(serde_json::to_value(())?)
             }
             _ => Err(OrbitError::InvocationFailed {

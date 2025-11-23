@@ -14,7 +14,7 @@ use super::CqlConfig;
 use crate::error::{ProtocolError, ProtocolResult};
 use crate::postgres_wire::QueryEngine;
 use crate::postgres_wire::sql::types::SqlValue;
-use crate::postgres_wire::storage::memory::MemoryTableStorage;
+use crate::common::storage::memory::MemoryTableStorage;
 use bytes::{Buf, BufMut, BytesMut};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -27,7 +27,7 @@ pub struct CqlAdapter {
     /// Configuration
     config: CqlConfig,
     /// Storage backend
-    storage: Arc<dyn crate::postgres_wire::storage::TableStorage>,
+    storage: Arc<dyn crate::common::storage::TableStorage>,
     /// Parser
     parser: Arc<RwLock<CqlParser>>,
     /// Query engine for executing SQL
@@ -64,9 +64,11 @@ struct PreparedStatement {
 }
 
 impl CqlAdapter {
-    /// Create a new CQL adapter
-    pub async fn new(config: CqlConfig) -> ProtocolResult<Self> {
-        let storage = Arc::new(MemoryTableStorage::new());
+    /// Create a new CQL adapter with shared storage
+    pub async fn new_with_storage(
+        config: CqlConfig,
+        storage: Arc<dyn crate::common::storage::TableStorage>,
+    ) -> ProtocolResult<Self> {
         let query_engine = Arc::new(QueryEngine::new());
 
         Ok(Self {
@@ -77,6 +79,13 @@ impl CqlAdapter {
             prepared_statements: Arc::new(RwLock::new(HashMap::new())),
             metrics: Arc::new(RwLock::new(CqlMetrics::default())),
         })
+    }
+
+    /// Create a new CQL adapter (creates its own isolated storage)
+    /// For backward compatibility. Use new_with_storage() to share storage with other protocols.
+    pub async fn new(config: CqlConfig) -> ProtocolResult<Self> {
+        let storage = Arc::new(MemoryTableStorage::new());
+        Self::new_with_storage(config, storage).await
     }
 
     /// Create a new CQL adapter with a specific query engine
