@@ -3,7 +3,7 @@
 //! End-to-end tests for the Redis Protocol (RESP) server functionality
 
 use bytes::BytesMut;
-use orbit_protocols::resp::{RespCodec, RespValue};
+use orbit_server::protocols::resp::{RespCodec, RespValue};
 use tokio_util::codec::{Decoder, Encoder};
 
 #[tokio::test]

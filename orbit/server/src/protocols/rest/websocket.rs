@@ -76,7 +76,7 @@ impl WebSocketHandler {
         };
 
         if let Ok(json) = serde_json::to_string(&ack) {
-            let _ = sender.send(Message::Text(json)).await;
+            let _ = sender.send(Message::Text(json.into())).await;
         }
 
         // TODO: Subscribe to actor state changes via OrbitClient
@@ -123,7 +123,7 @@ impl WebSocketHandler {
         };
 
         if let Ok(json) = serde_json::to_string(&ack) {
-            let _ = sender.send(Message::Text(json)).await;
+            let _ = sender.send(Message::Text(json.into())).await;
         }
 
         // Spawn task to forward events

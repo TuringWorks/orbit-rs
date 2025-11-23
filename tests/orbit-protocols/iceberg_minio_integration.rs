@@ -16,7 +16,7 @@ use iceberg::io::{FileIO, FileIOBuilder};
 use iceberg::spec::{Schema, NestedField, PrimitiveType, Type};
 use opendal::Operator;
 
-use orbit_protocols::postgres_wire::sql::execution::{
+use orbit_server::protocols::postgres_wire::sql::execution::{
     Column, ColumnBatch, NullBitmap, column_batch_to_arrow,
 };
 

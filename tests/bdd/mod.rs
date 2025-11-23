@@ -12,9 +12,9 @@ use tokio::sync::RwLock;
 #[derive(Debug, Default, World)]
 pub struct OrbitWorld {
     /// SQL executor for database operations
-    pub sql_executor: Option<orbit_protocols::postgres_wire::sql::SqlExecutor>,
+    pub sql_executor: Option<orbit_server::protocols::postgres_wire::sql::SqlExecutor>,
     /// Vector store for similarity search operations
-    pub vector_store: Option<Arc<RwLock<orbit_protocols::vector_store::VectorIndex>>>,
+    pub vector_store: Option<Arc<RwLock<orbit_server::protocols::vector_store::VectorIndex>>>,
     /// Last execution result for assertions
     pub last_result: Option<serde_json::Value>,
     /// Error from last operation (if any)
@@ -26,8 +26,8 @@ pub struct OrbitWorld {
 impl OrbitWorld {
     /// Create a new SQL executor for testing
     pub async fn create_sql_executor(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        let storage = Arc::new(orbit_protocols::postgres_wire::storage::memory::MemoryStorage::new());
-        self.sql_executor = Some(orbit_protocols::postgres_wire::sql::SqlExecutor::new(storage).await?);
+        let storage = Arc::new(orbit_server::protocols::postgres_wire::storage::memory::MemoryStorage::new());
+        self.sql_executor = Some(orbit_server::protocols::postgres_wire::sql::SqlExecutor::new(storage).await?);
         Ok(())
     }
 
@@ -208,12 +208,12 @@ async fn given_vector_store(
     world: &mut OrbitWorld,
     dimension: usize,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let config = orbit_protocols::vector_store::VectorIndexConfig::new(
+    let config = orbit_server::protocols::vector_store::VectorIndexConfig::new(
         "test_index".to_string(),
         dimension,
-        orbit_protocols::vector_store::SimilarityMetric::Cosine,
+        orbit_server::protocols::vector_store::SimilarityMetric::Cosine,
     );
-    let index = orbit_protocols::vector_store::VectorIndex::new(config);
+    let index = orbit_server::protocols::vector_store::VectorIndex::new(config);
     world.vector_store = Some(Arc::new(RwLock::new(index)));
     Ok(())
 }
@@ -233,7 +233,7 @@ async fn when_add_vector(
             .collect();
         
         let data = values?;
-        let vector = orbit_protocols::vector_store::Vector::new(vector_id, data);
+        let vector = orbit_server::protocols::vector_store::Vector::new(vector_id, data);
         
         let mut index = store.write().await;
         match index.add_vector(vector) {

@@ -2,7 +2,7 @@
 //!
 //! Comprehensive tests for CREATE, ALTER, and DROP operations
 
-use orbit_protocols::postgres_wire::sql::executor::{ExecutionResult, SqlExecutor};
+use orbit_server::protocols::postgres_wire::sql::executor::{ExecutionResult, SqlExecutor};
 
 // ============================================================================
 // CREATE TABLE Tests

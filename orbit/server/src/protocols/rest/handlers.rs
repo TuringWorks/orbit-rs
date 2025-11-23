@@ -12,12 +12,7 @@ use std::sync::Arc;
 use utoipa::IntoParams;
 
 use super::models::*;
-use crate::protocols::mcp::{
-    integration::OrbitMcpIntegration,
-    server::McpServer,
-    McpCapabilities, McpConfig,
-};
-use crate::protocols::postgres_wire::query_engine::QueryEngine;
+use crate::protocols::mcp::server::McpServer;
 
 /// Shared API state
 #[derive(Clone)]

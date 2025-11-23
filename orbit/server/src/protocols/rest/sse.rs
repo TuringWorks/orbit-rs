@@ -13,7 +13,7 @@ use orbit_shared::cdc::{CdcFilter, CdcSubscription};
 use serde::{Deserialize, Serialize};
 use std::convert::Infallible;
 use std::time::Duration;
-use tracing::{error, info};
+use tracing::info;
 
 use super::handlers::ApiState;
 
@@ -183,7 +183,7 @@ pub async fn handle_query_stream(
         };
 
         if let Ok(json) = serde_json::to_string(&status) {
-            yield Ok(Event::default().data(json).event("status"));
+            yield Ok::<Event, Infallible>(Event::default().data(json).event("status"));
         }
 
         // TODO: Execute streaming query and send results

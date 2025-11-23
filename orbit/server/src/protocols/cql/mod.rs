@@ -16,7 +16,7 @@
 //! ## Example
 //!
 //! ```rust,no_run
-//! use super::cql::{CqlAdapter, CqlConfig};
+//! use orbit_server::protocols::cql::{CqlAdapter, CqlConfig};
 //!
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 //! let config = CqlConfig {

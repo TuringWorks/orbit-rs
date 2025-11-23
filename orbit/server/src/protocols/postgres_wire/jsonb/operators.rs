@@ -22,7 +22,7 @@ impl JsonbValue {
     ///
     /// # Examples
     /// ```
-    /// use crate::protocols::postgres_wire::jsonb::JsonbValue;
+    /// use orbit_server::protocols::postgres_wire::jsonb::JsonbValue;
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let json = JsonbValue::from_json_str(r#"{"name": "Alice", "tags": ["dev", "rust"]}"#)?;
     /// assert_eq!(json.arrow_json(&["name"])?, Some(JsonbValue::String("Alice".into())));
@@ -64,7 +64,7 @@ impl JsonbValue {
     ///
     /// # Examples
     /// ```
-    /// use crate::protocols::postgres_wire::jsonb::JsonbValue;
+    /// use orbit_server::protocols::postgres_wire::jsonb::JsonbValue;
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let json = JsonbValue::from_json_str(r#"{"name": "Alice", "age": 30}"#)?;
     /// assert_eq!(json.arrow_text(&["name"])?, Some("Alice".to_string()));
@@ -83,7 +83,7 @@ impl JsonbValue {
     ///
     /// # Examples
     /// ```
-    /// use crate::protocols::postgres_wire::jsonb::{JsonbValue, JsonbPath};
+    /// use orbit_server::protocols::postgres_wire::jsonb::{JsonbValue, JsonbPath};
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let json = JsonbValue::from_json_str(r#"{"user": {"profile": {"name": "Alice"}}}"#)?;
     /// let path = JsonbPath::from_str("user.profile.name")?;
@@ -102,7 +102,7 @@ impl JsonbValue {
     ///
     /// # Examples
     /// ```
-    /// use crate::protocols::postgres_wire::jsonb::{JsonbValue, JsonbPath};
+    /// use orbit_server::protocols::postgres_wire::jsonb::{JsonbValue, JsonbPath};
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let json = JsonbValue::from_json_str(r#"{"user": {"age": 30}}"#)?;
     /// let path = JsonbPath::from_str("user.age")?;
@@ -121,7 +121,7 @@ impl JsonbValue {
     ///
     /// # Examples
     /// ```
-    /// use crate::protocols::postgres_wire::jsonb::JsonbValue;
+    /// use orbit_server::protocols::postgres_wire::jsonb::JsonbValue;
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let json1 = JsonbValue::from_json_str(r#"{"name": "Alice", "tags": ["dev", "rust"]}"#)?;
     /// let json2 = JsonbValue::from_json_str(r#"{"name": "Alice"}"#)?;
@@ -220,7 +220,7 @@ impl JsonbValue {
     ///
     /// # Examples
     /// ```
-    /// use crate::protocols::postgres_wire::jsonb::JsonbValue;
+    /// use orbit_server::protocols::postgres_wire::jsonb::JsonbValue;
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let json = JsonbValue::from_json_str(r#"{"name": "Alice", "age": 30}"#)?;
     /// assert!(json.has_key("name")?);
@@ -239,7 +239,7 @@ impl JsonbValue {
     ///
     /// # Examples
     /// ```
-    /// use crate::protocols::postgres_wire::jsonb::JsonbValue;
+    /// use orbit_server::protocols::postgres_wire::jsonb::JsonbValue;
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let json = JsonbValue::from_json_str(r#"{"name": "Alice", "age": 30}"#)?;
     /// assert!(json.has_any_key(&["name", "email"])?);
@@ -260,7 +260,7 @@ impl JsonbValue {
     ///
     /// # Examples
     /// ```
-    /// use crate::protocols::postgres_wire::jsonb::JsonbValue;
+    /// use orbit_server::protocols::postgres_wire::jsonb::JsonbValue;
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let json = JsonbValue::from_json_str(r#"{"name": "Alice", "age": 30}"#)?;
     /// assert!(json.has_all_keys(&["name", "age"])?);
@@ -281,7 +281,7 @@ impl JsonbValue {
     ///
     /// # Examples
     /// ```
-    /// use crate::protocols::postgres_wire::jsonb::JsonbValue;
+    /// use orbit_server::protocols::postgres_wire::jsonb::JsonbValue;
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let json1 = JsonbValue::from_json_str(r#"{"name": "Alice"}"#)?;
     /// let json2 = JsonbValue::from_json_str(r#"{"age": 30}"#)?;
@@ -326,7 +326,7 @@ impl JsonbValue {
     ///
     /// # Examples
     /// ```
-    /// use crate::protocols::postgres_wire::jsonb::JsonbValue;
+    /// use orbit_server::protocols::postgres_wire::jsonb::JsonbValue;
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let json = JsonbValue::from_json_str(r#"{"name": "Alice", "age": 30}"#)?;
     /// let result = json.delete_key("age")?;
@@ -361,7 +361,7 @@ impl JsonbValue {
     ///
     /// # Examples
     /// ```
-    /// use crate::protocols::postgres_wire::jsonb::{JsonbValue, JsonbPath};
+    /// use orbit_server::protocols::postgres_wire::jsonb::{JsonbValue, JsonbPath};
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let json = JsonbValue::from_json_str(r#"{"user": {"name": "Alice", "age": 30}}"#)?;
     /// let path = JsonbPath::from_str("user.age")?;

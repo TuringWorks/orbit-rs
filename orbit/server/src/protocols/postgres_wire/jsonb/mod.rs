@@ -70,7 +70,7 @@
 //! ## 📝 Usage Examples
 //!
 //! ```rust
-//! use crate::protocols::postgres_wire::jsonb::{JsonbValue, JsonbPath};
+//! use orbit_server::protocols::postgres_wire::jsonb::{JsonbValue, JsonbPath};
 //! use orbit_shared::serialization::SerializableData;
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //!

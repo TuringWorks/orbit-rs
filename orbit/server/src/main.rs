@@ -817,16 +817,16 @@ async fn start_redis_server(
 
     // Create RocksDB storage for Redis persistence
     let redis_data_path = "./data/redis";
-    let redis_provider: Option<Arc<dyn crate::protocols::persistence::redis_data::RedisDataProvider>> = 
-        match crate::protocols::persistence::rocksdb_redis_provider::RocksDbRedisDataProvider::new(
+    let redis_provider: Option<Arc<dyn orbit_server::protocols::persistence::redis_data::RedisDataProvider>> = 
+        match orbit_server::protocols::persistence::rocksdb_redis_provider::RocksDbRedisDataProvider::new(
             redis_data_path,
-            crate::protocols::persistence::redis_data::RedisDataConfig::default(),
+            orbit_server::protocols::persistence::redis_data::RedisDataConfig::default(),
         ) {
             Ok(provider) => {
                 info!("[Redis] Using persistent RocksDB storage at: {}", redis_data_path);
-                let provider_arc: Arc<dyn crate::protocols::persistence::redis_data::RedisDataProvider> = Arc::new(provider);
+                let provider_arc: Arc<dyn orbit_server::protocols::persistence::redis_data::RedisDataProvider> = Arc::new(provider);
                 // Initialize the provider
-                if let Err(e) = crate::protocols::persistence::redis_data::RedisDataProvider::initialize(&*provider_arc).await {
+                if let Err(e) = orbit_server::protocols::persistence::redis_data::RedisDataProvider::initialize(&*provider_arc).await {
                     warn!("[Redis] Failed to initialize Redis persistent storage: {}. Using in-memory storage.", e);
                     None
                 } else {

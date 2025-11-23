@@ -24,7 +24,7 @@
 //! ## 📖 Quick Start
 //!
 //! ```rust
-//! use crate::protocols::postgres_wire::sql::SqlEngine;
+//! use orbit_server::protocols::postgres_wire::sql::SqlEngine;
 //!
 //! # #[tokio::main]
 //! # async fn main() -> Result<(), Box<dyn std::error::Error>> {

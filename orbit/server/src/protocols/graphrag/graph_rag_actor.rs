@@ -738,11 +738,12 @@ mod tests {
     #[test]
     fn test_graphrag_config() {
         let config = GraphRAGConfig::default();
+        use crate::protocols::graphrag::defaults;
         assert_eq!(
             config.max_entities_per_document,
-            super::graphrag::defaults::DEFAULT_MAX_ENTITIES_PER_DOCUMENT
+            defaults::DEFAULT_MAX_ENTITIES_PER_DOCUMENT
         );
-        assert_eq!(config.max_hops, super::graphrag::defaults::DEFAULT_MAX_HOPS);
+        assert_eq!(config.max_hops, defaults::DEFAULT_MAX_HOPS);
         assert!(config.enable_entity_deduplication);
     }
 

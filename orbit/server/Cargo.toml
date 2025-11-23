@@ -72,6 +72,18 @@ metrics-exporter-prometheus = "0.15" # For Prometheus metrics export
 hyper = { version = "1.0", features = ["full"] }
 hyper-util = { version = "0.1", features = ["tokio"] }
 http-body-util = "0.1"
+# Apache Iceberg integration for warm/cold tiers (optional feature)
+iceberg = { version = "0.7", optional = true, features = ["storage-s3", "storage-memory"] }
+iceberg-catalog-rest = { version = "0.7", optional = true }
+arrow = { version = "55.2", optional = true }
+arrow-schema = { version = "55.2", optional = true }
+parquet = { version = "55.2", optional = true }
+opendal = { version = "0.51", optional = true, features = ["services-s3", "services-azblob", "services-memory"] }
+
+[features]
+default = []
+# Enable Apache Iceberg cold tier storage
+iceberg-cold = ["iceberg", "iceberg-catalog-rest", "arrow", "arrow-schema", "parquet", "opendal"]
 
 [dev-dependencies]
 mockall.workspace = true

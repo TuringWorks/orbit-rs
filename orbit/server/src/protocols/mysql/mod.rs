@@ -16,7 +16,7 @@
 //! ## Example
 //!
 //! ```rust,no_run
-//! use super::mysql::{MySqlAdapter, MySqlConfig};
+//! use orbit_server::protocols::mysql::{MySqlAdapter, MySqlConfig};
 //!
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 //! let config = MySqlConfig {
