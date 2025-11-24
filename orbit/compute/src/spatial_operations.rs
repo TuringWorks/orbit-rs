@@ -313,9 +313,9 @@ impl GPUSpatialOperations {
         #[cfg(feature = "gpu-vulkan")]
         {
             use crate::gpu_vulkan::VulkanDevice;
-            if let Ok(vulkan_device) = VulkanDevice::new() {
+            if let Ok(mut vulkan_device) = VulkanDevice::new() {
                 return self
-                    .batch_distance_vulkan(&vulkan_device, query_point, candidate_points)
+                    .batch_distance_vulkan(&mut vulkan_device, query_point, candidate_points)
                     .await;
             }
         }

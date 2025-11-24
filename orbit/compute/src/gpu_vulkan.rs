@@ -13,7 +13,7 @@ use vulkano::{
         CopyBufferInfo,
     },
     descriptor_set::{
-        allocator::StandardDescriptorSetAllocator, PersistentDescriptorSet, WriteDescriptorSet,
+        allocator::StandardDescriptorSetAllocator, layout::DescriptorSetLayout, PersistentDescriptorSet, WriteDescriptorSet,
     },
     device::{
         physical::PhysicalDeviceType, Device, DeviceCreateInfo, DeviceExtensions, Queue,
@@ -22,11 +22,11 @@ use vulkano::{
     instance::{Instance, InstanceCreateInfo},
     memory::allocator::{AllocationCreateInfo, MemoryTypeFilter, StandardMemoryAllocator},
     pipeline::{
-        compute::ComputePipelineCreateInfo, layout::PipelineDescriptorSetLayoutCreateInfo,
+        compute::ComputePipelineCreateInfo, layout::{PipelineDescriptorSetLayoutCreateInfo, PipelineLayoutCreateInfo},
         ComputePipeline, Pipeline, PipelineBindPoint, PipelineLayout,
         PipelineShaderStageCreateInfo,
     },
-    shader::{spirv::bytes_to_words, ShaderModule},
+    shader::{spirv::bytes_to_words, ShaderModule, ShaderModuleCreateInfo},
     sync::{self, GpuFuture},
     VulkanLibrary,
 };
@@ -149,6 +149,7 @@ impl VulkanDevice {
         // For now, we'll create pipelines lazily when needed
         let bfs_pipeline = None; // Will be created on first use
         let vector_similarity_pipeline = None; // Will be created on first use
+        let spatial_distance_pipeline = None; // Will be created on first use
 
         Ok(Self {
             device,
@@ -159,6 +160,7 @@ impl VulkanDevice {
             device_name,
             bfs_pipeline,
             vector_similarity_pipeline,
+            spatial_distance_pipeline,
         })
     }
 
@@ -173,7 +175,7 @@ impl VulkanDevice {
         })?;
         
         unsafe {
-            ShaderModule::new(self.device.clone(), words)
+            ShaderModule::new(self.device.clone(), ShaderModuleCreateInfo::new(&words))
                 .map_err(|e| {
                     ComputeError::gpu(GPUError::APIInitializationFailed {
                         api: "Vulkan".to_string(),
@@ -206,10 +208,28 @@ impl VulkanDevice {
         let stage = PipelineShaderStageCreateInfo::new(entry_point);
         
         // Create pipeline layout from shader reflection
-        let descriptor_set_layouts = PipelineDescriptorSetLayoutCreateInfo::from_stages([&stage]);
+        let descriptor_set_layouts_info = PipelineDescriptorSetLayoutCreateInfo::from_stages([&stage]);
+        // Create descriptor set layouts from the set_layouts field
+        let descriptor_set_layouts: Vec<_> = descriptor_set_layouts_info
+            .set_layouts
+            .iter()
+            .map(|info| {
+                DescriptorSetLayout::new(self.device.clone(), info.clone())
+                    .map_err(|e| {
+                        ComputeError::gpu(GPUError::APIInitializationFailed {
+                            api: "Vulkan".to_string(),
+                            error: format!("Failed to create descriptor set layout: {}", e),
+                        })
+                    })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        
         let layout = PipelineLayout::new(
             self.device.clone(),
-            descriptor_set_layouts,
+            PipelineLayoutCreateInfo {
+                set_layouts: descriptor_set_layouts,
+                ..Default::default()
+            },
         )
         .map_err(|e| {
             ComputeError::gpu(GPUError::APIInitializationFailed {
@@ -221,6 +241,7 @@ impl VulkanDevice {
         // Create compute pipeline using stage_layout
         let pipeline = ComputePipeline::new(
             self.device.clone(),
+            None, // pipeline cache
             ComputePipelineCreateInfo::stage_layout(stage, layout),
         )
         .map_err(|e| {
@@ -257,10 +278,28 @@ impl VulkanDevice {
         let stage = PipelineShaderStageCreateInfo::new(entry_point);
         
         // Create pipeline layout from shader reflection
-        let descriptor_set_layouts = PipelineDescriptorSetLayoutCreateInfo::from_stages([&stage]);
+        let descriptor_set_layouts_info = PipelineDescriptorSetLayoutCreateInfo::from_stages([&stage]);
+        // Create descriptor set layouts from the set_layouts field
+        let descriptor_set_layouts: Vec<_> = descriptor_set_layouts_info
+            .set_layouts
+            .iter()
+            .map(|info| {
+                DescriptorSetLayout::new(self.device.clone(), info.clone())
+                    .map_err(|e| {
+                        ComputeError::gpu(GPUError::APIInitializationFailed {
+                            api: "Vulkan".to_string(),
+                            error: format!("Failed to create descriptor set layout: {}", e),
+                        })
+                    })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        
         let layout = PipelineLayout::new(
             self.device.clone(),
-            descriptor_set_layouts,
+            PipelineLayoutCreateInfo {
+                set_layouts: descriptor_set_layouts,
+                ..Default::default()
+            },
         )
         .map_err(|e| {
             ComputeError::gpu(GPUError::APIInitializationFailed {
@@ -272,6 +311,7 @@ impl VulkanDevice {
         // Create compute pipeline using stage_layout
         let pipeline = ComputePipeline::new(
             self.device.clone(),
+            None, // pipeline cache
             ComputePipelineCreateInfo::stage_layout(stage, layout),
         )
         .map_err(|e| {
@@ -566,9 +606,246 @@ impl VulkanDevice {
                 compute_unit: Some("Vulkan".to_string()),
             }
         })?;
-        *next_level_size = size_content;
+        *next_level_size = *size_content;
 
         Ok(())
+    }
+
+    /// Execute Vulkan vector similarity calculation
+    pub fn execute_vector_similarity(
+        &mut self,
+        query_vector: &[f32],
+        candidate_vectors: &[f32],
+        vector_count: usize,
+        dimension: usize,
+        metric: u32, // 0=cosine, 1=euclidean, 2=dot_product, 3=manhattan
+    ) -> Result<Vec<f32>, ComputeError> {
+        use crate::errors::ExecutionError;
+
+        // Validate inputs
+        if query_vector.len() != dimension {
+            return Err(ComputeError::Execution {
+                source: ExecutionError::InvalidKernelParameters {
+                    parameter: "query_vector_dimension".to_string(),
+                    value: format!("expected {}, got {}", dimension, query_vector.len()),
+                },
+                compute_unit: Some("Vulkan".to_string()),
+            });
+        }
+
+        if candidate_vectors.len() != vector_count * dimension {
+            return Err(ComputeError::Execution {
+                source: ExecutionError::InvalidKernelParameters {
+                    parameter: "candidate_vectors_length".to_string(),
+                    value: format!("expected {}, got {}", vector_count * dimension, candidate_vectors.len()),
+                },
+                compute_unit: Some("Vulkan".to_string()),
+            });
+        }
+
+        // Get or create vector similarity pipeline
+        let pipeline = self.get_vector_similarity_pipeline()?;
+
+        // Create buffers
+        let query_buffer = Buffer::from_iter(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            query_vector.iter().copied(),
+        )
+        .map_err(|e| {
+            ComputeError::gpu(GPUError::MemoryAllocationFailed {
+                requested_bytes: query_vector.len() * std::mem::size_of::<f32>(),
+                available_bytes: 0,
+            })
+        })?;
+
+        let candidates_buffer = Buffer::from_iter(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            candidate_vectors.iter().copied(),
+        )
+        .map_err(|e| {
+            ComputeError::gpu(GPUError::MemoryAllocationFailed {
+                requested_bytes: candidate_vectors.len() * std::mem::size_of::<f32>(),
+                available_bytes: 0,
+            })
+        })?;
+
+        let scores_buffer = Buffer::from_iter(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER | BufferUsage::TRANSFER_SRC,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_RANDOM_ACCESS,
+                ..Default::default()
+            },
+            (0..vector_count).map(|_| 0.0f32),
+        )
+        .map_err(|e| {
+            ComputeError::gpu(GPUError::MemoryAllocationFailed {
+                requested_bytes: vector_count * std::mem::size_of::<f32>(),
+                available_bytes: 0,
+            })
+        })?;
+
+        let params = [vector_count as u32, dimension as u32];
+        let params_buffer = Buffer::from_data(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            params,
+        )
+        .map_err(|e| {
+            ComputeError::gpu(GPUError::MemoryAllocationFailed {
+                requested_bytes: std::mem::size_of::<[u32; 2]>(),
+                available_bytes: 0,
+            })
+        })?;
+
+        let metric_buffer = Buffer::from_data(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            metric,
+        )
+        .map_err(|e| {
+            ComputeError::gpu(GPUError::MemoryAllocationFailed {
+                requested_bytes: std::mem::size_of::<u32>(),
+                available_bytes: 0,
+            })
+        })?;
+
+        // Create descriptor set
+        let layout = &pipeline.layout().set_layouts()[0];
+        let descriptor_set = PersistentDescriptorSet::new(
+            &self.descriptor_set_allocator,
+            layout.clone(),
+            [
+                WriteDescriptorSet::buffer(0, query_buffer.clone()),
+                WriteDescriptorSet::buffer(1, candidates_buffer.clone()),
+                WriteDescriptorSet::buffer(2, scores_buffer.clone()),
+                WriteDescriptorSet::buffer(3, params_buffer.clone()),
+                WriteDescriptorSet::buffer(4, metric_buffer.clone()),
+            ],
+            [],
+        )
+        .map_err(|e| {
+            ComputeError::gpu(GPUError::KernelLaunchFailed {
+                kernel_name: "vector_similarity".to_string(),
+                error: format!("Failed to create descriptor set: {}", e),
+            })
+        })?;
+
+        // Build command buffer
+        let workgroup_count = ((vector_count as u32) + 255) / 256;
+        let mut builder = AutoCommandBufferBuilder::primary(
+            &self.command_buffer_allocator,
+            self.queue.queue_family_index(),
+            CommandBufferUsage::OneTimeSubmit,
+        )
+        .map_err(|e| {
+            ComputeError::gpu(GPUError::CommandBufferFailed {
+                error: format!("Failed to create command buffer: {}", e),
+            })
+        })?;
+
+        builder
+            .bind_pipeline_compute(pipeline.clone())
+            .map_err(|e| {
+                ComputeError::gpu(GPUError::CommandBufferFailed {
+                    error: format!("Failed to bind pipeline: {}", e),
+                })
+            })?
+            .bind_descriptor_sets(
+                PipelineBindPoint::Compute,
+                pipeline.layout().clone(),
+                0,
+                descriptor_set,
+            )
+            .map_err(|e| {
+                ComputeError::gpu(GPUError::CommandBufferFailed {
+                    error: format!("Failed to bind descriptor sets: {}", e),
+                })
+            })?
+            .dispatch([workgroup_count, 1, 1])
+            .map_err(|e| {
+                ComputeError::gpu(GPUError::CommandBufferFailed {
+                    error: format!("Failed to dispatch: {}", e),
+                })
+            })?;
+
+        let command_buffer = builder.build().map_err(|e| {
+            ComputeError::gpu(GPUError::CommandBufferFailed {
+                error: format!("Failed to build command buffer: {}", e),
+            })
+        })?;
+
+        // Execute and wait
+        let future = sync::now(self.device.clone())
+            .then_execute(self.queue.clone(), command_buffer)
+            .map_err(|e| {
+                ComputeError::gpu(GPUError::CommandBufferFailed {
+                    error: format!("Failed to execute: {}", e),
+                })
+            })?
+            .then_signal_fence_and_flush()
+            .map_err(|e| {
+                ComputeError::gpu(GPUError::CommandBufferFailed {
+                    error: format!("Failed to flush: {}", e),
+                })
+            })?;
+
+        future.wait(None).map_err(|e| {
+            ComputeError::gpu(GPUError::CommandBufferFailed {
+                error: format!("Failed to wait: {}", e),
+            })
+        })?;
+
+        // Read results back
+        let scores_content = scores_buffer.read().map_err(|_e| {
+            ComputeError::Execution {
+                source: ExecutionError::DataTransferError {
+                    source: "GPU".to_string(),
+                    destination: "CPU".to_string(),
+                },
+                compute_unit: Some("Vulkan".to_string()),
+            }
+        })?;
+
+        Ok(scores_content.to_vec())
     }
 
     /// Execute a compute shader with input/output buffers

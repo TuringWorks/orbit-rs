@@ -189,7 +189,13 @@ impl GPUMLOperations {
         operation: MatrixOp,
     ) -> Result<MatrixOperationResult, ComputeError> {
         if matrix_a.is_empty() {
-            return Err(ComputeError::configuration("Matrix A is empty"));
+            return Err(ComputeError::Execution {
+                source: crate::errors::ExecutionError::InvalidKernelParameters {
+                    parameter: "matrix_a".to_string(),
+                    value: "empty".to_string(),
+                },
+                compute_unit: None,
+            });
         }
 
         let rows_a = matrix_a.len();
@@ -255,7 +261,7 @@ impl GPUMLOperations {
                     }
                 }
                 for std in &mut stds {
-                    *std = (std / features.len() as f64).sqrt();
+                    *std = (*std / features.len() as f64).sqrt();
                 }
 
                 // Normalize
@@ -369,7 +375,13 @@ impl GPUMLOperations {
         match operation {
             MatrixOp::Transpose => {
                 if matrix_a.is_empty() {
-                    return Err(ComputeError::configuration("Matrix is empty"));
+                    return Err(ComputeError::Execution {
+                        source: crate::errors::ExecutionError::InvalidKernelParameters {
+                            parameter: "matrix".to_string(),
+                            value: "empty".to_string(),
+                        },
+                        compute_unit: None,
+                    });
                 }
                 let rows = matrix_a.len();
                 let cols = matrix_a[0].len();
@@ -389,13 +401,23 @@ impl GPUMLOperations {
             }
             MatrixOp::MatMul => {
                 let matrix_b = matrix_b.ok_or_else(|| {
-                    ComputeError::configuration("Matrix B required for multiplication")
+                    ComputeError::Execution {
+                        source: crate::errors::ExecutionError::InvalidKernelParameters {
+                            parameter: "matrix_b".to_string(),
+                            value: "required for multiplication".to_string(),
+                        },
+                        compute_unit: None,
+                    }
                 })?;
 
                 if matrix_a[0].len() != matrix_b.len() {
-                    return Err(ComputeError::configuration(
-                        "Matrix dimensions incompatible for multiplication",
-                    ));
+                    return Err(ComputeError::Execution {
+                        source: crate::errors::ExecutionError::InvalidKernelParameters {
+                            parameter: "matrix_dimensions".to_string(),
+                            value: "incompatible for multiplication".to_string(),
+                        },
+                        compute_unit: None,
+                    });
                 }
 
                 let rows_a = matrix_a.len();
@@ -405,7 +427,7 @@ impl GPUMLOperations {
                 let result: Vec<f64> = (0..rows_a)
                     .into_par_iter()
                     .flat_map(|i| {
-                        (0..cols_b).map(move |j| {
+                        (0..cols_b).into_par_iter().map(move |j| {
                             (0..cols_a)
                                 .map(|k| matrix_a[i][k] * matrix_b[k][j])
                                 .sum()
@@ -421,13 +443,23 @@ impl GPUMLOperations {
             }
             MatrixOp::Add | MatrixOp::Multiply | MatrixOp::Divide => {
                 let matrix_b = matrix_b.ok_or_else(|| {
-                    ComputeError::configuration("Matrix B required for element-wise operations")
+                    ComputeError::Execution {
+                        source: crate::errors::ExecutionError::InvalidKernelParameters {
+                            parameter: "matrix_b".to_string(),
+                            value: "required for element-wise operations".to_string(),
+                        },
+                        compute_unit: None,
+                    }
                 })?;
 
                 if matrix_a.len() != matrix_b.len() || matrix_a[0].len() != matrix_b[0].len() {
-                    return Err(ComputeError::configuration(
-                        "Matrices must have same dimensions for element-wise operations",
-                    ));
+                    return Err(ComputeError::Execution {
+                        source: crate::errors::ExecutionError::InvalidKernelParameters {
+                            parameter: "matrix_dimensions".to_string(),
+                            value: "must have same dimensions for element-wise operations".to_string(),
+                        },
+                        compute_unit: None,
+                    });
                 }
 
                 let result: Vec<f64> = matrix_a

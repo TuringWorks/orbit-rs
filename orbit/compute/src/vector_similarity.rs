@@ -218,10 +218,10 @@ impl GPUVectorSimilarity {
         #[cfg(all(feature = "gpu-acceleration", feature = "gpu-vulkan"))]
         {
             use crate::gpu_vulkan::VulkanDevice;
-            if let Ok(vulkan_device) = VulkanDevice::new() {
+            if let Ok(mut vulkan_device) = VulkanDevice::new() {
                 return self
                     .batch_similarity_vulkan(
-                        &vulkan_device,
+                        &mut vulkan_device,
                         query_vector,
                         candidate_vectors,
                         metric,
@@ -293,19 +293,54 @@ impl GPUVectorSimilarity {
     #[cfg(all(feature = "gpu-acceleration", feature = "gpu-vulkan"))]
     async fn batch_similarity_vulkan(
         &self,
-        _device: &crate::gpu_vulkan::VulkanDevice,
-        _query_vector: &[f32],
-        _candidate_vectors: &[Vec<f32>],
-        _metric: VectorSimilarityMetric,
+        device: &mut crate::gpu_vulkan::VulkanDevice,
+        query_vector: &[f32],
+        candidate_vectors: &[Vec<f32>],
+        metric: VectorSimilarityMetric,
     ) -> Result<Vec<VectorSimilarityResult>, ComputeError> {
-        // TODO: Implement Vulkan vector similarity
-        // For now, fall back to CPU
-        tracing::warn!("Vulkan vector similarity not yet implemented, falling back to CPU");
-        Ok(self.batch_similarity_cpu_parallel(
-            _query_vector,
-            _candidate_vectors,
-            _metric,
-        ))
+        // Convert metric to shader constant
+        let metric_value = match metric {
+            VectorSimilarityMetric::Cosine => 0u32,
+            VectorSimilarityMetric::Euclidean => 1u32,
+            VectorSimilarityMetric::DotProduct => 2u32,
+            VectorSimilarityMetric::Manhattan => 3u32,
+        };
+
+        // Flatten candidate vectors into a single array
+        let vector_count = candidate_vectors.len();
+        let dimension = query_vector.len();
+        let mut flat_vectors = Vec::with_capacity(vector_count * dimension);
+        for vector in candidate_vectors {
+            flat_vectors.extend_from_slice(vector);
+        }
+
+        // Execute GPU kernel
+        let scores = device
+            .execute_vector_similarity(
+                query_vector,
+                &flat_vectors,
+                vector_count,
+                dimension,
+                metric_value,
+            )
+            .map_err(|e| {
+                ComputeError::gpu(crate::errors::GPUError::KernelLaunchFailed {
+                    kernel_name: "vector_similarity".to_string(),
+                    error: format!("Vulkan execution failed: {}", e),
+                })
+            })?;
+
+        // Convert scores to results
+        let mut results = Vec::with_capacity(vector_count);
+        for (idx, &score) in scores.iter().enumerate() {
+            results.push(VectorSimilarityResult {
+                index: idx,
+                score,
+                metric,
+            });
+        }
+
+        Ok(results)
     }
 
     /// CPU-parallel batch similarity calculation using Rayon

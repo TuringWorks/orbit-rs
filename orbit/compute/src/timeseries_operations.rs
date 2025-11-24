@@ -22,7 +22,7 @@ pub struct TimeSeriesPoint {
 }
 
 /// Time-series aggregation function types
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum TimeSeriesAggregation {
     /// Average of values in window
     Avg,
@@ -45,7 +45,7 @@ pub enum TimeSeriesAggregation {
 }
 
 /// Window function types
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum WindowFunction {
     /// Simple moving average
     MovingAverage {

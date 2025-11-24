@@ -180,14 +180,26 @@ impl GPUColumnarJoins {
             .iter()
             .find(|c| c.name == left_join_key)
             .ok_or_else(|| {
-                ComputeError::configuration(format!("Left join key column '{}' not found", left_join_key))
+                ComputeError::Execution {
+                    source: crate::errors::ExecutionError::InvalidKernelParameters {
+                        parameter: "left_join_key".to_string(),
+                        value: left_join_key.to_string(),
+                    },
+                    compute_unit: None,
+                }
             })?;
 
         let right_key_col = right_columns
             .iter()
             .find(|c| c.name == right_join_key)
             .ok_or_else(|| {
-                ComputeError::configuration(format!("Right join key column '{}' not found", right_join_key))
+                ComputeError::Execution {
+                    source: crate::errors::ExecutionError::InvalidKernelParameters {
+                        parameter: "right_join_key".to_string(),
+                        value: right_join_key.to_string(),
+                    },
+                    compute_unit: None,
+                }
             })?;
 
         let left_row_count = left_key_col.row_count();
@@ -441,7 +453,13 @@ impl GPUColumnarJoins {
 
     fn extract_join_key(&self, column: &ColumnarColumn, index: usize) -> Result<JoinKey, ComputeError> {
         if column.is_null(index) {
-            return Err(ComputeError::configuration("Cannot use NULL as join key"));
+            return Err(ComputeError::Execution {
+                source: crate::errors::ExecutionError::InvalidKernelParameters {
+                    parameter: "join_key".to_string(),
+                    value: "Cannot use NULL as join key".to_string(),
+                },
+                compute_unit: None,
+            });
         }
 
         if let Some(ref values) = column.i32_values {
@@ -469,7 +487,13 @@ impl GPUColumnarJoins {
             }
         }
 
-        Err(ComputeError::configuration("Join key column has no values"))
+        Err(ComputeError::Execution {
+            source: crate::errors::ExecutionError::InvalidKernelParameters {
+                parameter: "join_key".to_string(),
+                value: "Join key column has no values".to_string(),
+            },
+            compute_unit: None,
+        })
     }
 
     fn create_result_row(
