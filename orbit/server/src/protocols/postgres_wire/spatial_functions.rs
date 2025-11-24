@@ -5,7 +5,7 @@
 
 use orbit_shared::spatial::{
     Point, SpatialGeometry, SpatialOperations, SpatialError, CoordinateTransformer,
-    BoundingBox, LineString, Polygon, LinearRing,
+    BoundingBox, LineString, Polygon, LinearRing, SpatialFunctions,
     WGS84_SRID, WEB_MERCATOR_SRID
 };
 use serde_json::Value as JsonValue;
@@ -14,6 +14,7 @@ use std::collections::HashMap;
 /// PostgreSQL spatial function registry and executor.
 pub struct PostgresSpatialFunctions {
     coordinate_transformer: CoordinateTransformer,
+    spatial_functions: SpatialFunctions,
 }
 
 impl PostgresSpatialFunctions {
@@ -21,6 +22,7 @@ impl PostgresSpatialFunctions {
     pub fn new() -> Self {
         Self {
             coordinate_transformer: CoordinateTransformer::new(),
+            spatial_functions: SpatialFunctions::new(),
         }
     }
     
@@ -157,8 +159,8 @@ impl PostgresSpatialFunctions {
         let wkt = args[0].as_string()?;
         let srid = if args.len() == 2 { Some(args[1].as_int()? as i32) } else { None };
         
-        // Parse WKT (simplified implementation)
-        let geometry = self.parse_wkt(&wkt, srid)?;
+        // Use shared SpatialFunctions WKT parser
+        let geometry = self.spatial_functions.st_geomfromtext(&wkt, srid)?;
         Ok(SqlValue::Geometry(geometry))
     }
     
@@ -368,36 +370,112 @@ impl PostgresSpatialFunctions {
     // Placeholder implementations for remaining functions
     // (In production, these would have full implementations)
     
-    fn st_pointfromtext(&self, _args: Vec<SqlValue>) -> Result<SqlValue, SpatialError> {
-        Err(SpatialError::OperationError("ST_PointFromText not yet implemented".to_string()))
+    /// ST_PointFromText(wkt, [srid]) - Create point from WKT.
+    fn st_pointfromtext(&self, args: Vec<SqlValue>) -> Result<SqlValue, SpatialError> {
+        if args.is_empty() || args.len() > 2 {
+            return Err(SpatialError::OperationError("ST_PointFromText requires 1-2 arguments".to_string()));
+        }
+        
+        let wkt = args[0].as_string()?;
+        let srid = if args.len() == 2 { Some(args[1].as_int()? as i32) } else { None };
+        
+        let geometry = self.spatial_functions.st_geomfromtext(&wkt, srid)?;
+        match geometry {
+            SpatialGeometry::Point(_) => Ok(SqlValue::Geometry(geometry)),
+            _ => Err(SpatialError::OperationError("WKT does not represent a POINT".to_string())),
+        }
     }
     
-    fn st_linefromtext(&self, _args: Vec<SqlValue>) -> Result<SqlValue, SpatialError> {
-        Err(SpatialError::OperationError("ST_LineFromText not yet implemented".to_string()))
+    /// ST_LineFromText(wkt, [srid]) - Create linestring from WKT.
+    fn st_linefromtext(&self, args: Vec<SqlValue>) -> Result<SqlValue, SpatialError> {
+        if args.is_empty() || args.len() > 2 {
+            return Err(SpatialError::OperationError("ST_LineFromText requires 1-2 arguments".to_string()));
+        }
+        
+        let wkt = args[0].as_string()?;
+        let srid = if args.len() == 2 { Some(args[1].as_int()? as i32) } else { None };
+        
+        let geometry = self.spatial_functions.st_geomfromtext(&wkt, srid)?;
+        match geometry {
+            SpatialGeometry::LineString(_) => Ok(SqlValue::Geometry(geometry)),
+            _ => Err(SpatialError::OperationError("WKT does not represent a LINESTRING".to_string())),
+        }
     }
     
-    fn st_polygonfromtext(&self, _args: Vec<SqlValue>) -> Result<SqlValue, SpatialError> {
-        Err(SpatialError::OperationError("ST_PolygonFromText not yet implemented".to_string()))
+    /// ST_PolygonFromText(wkt, [srid]) - Create polygon from WKT.
+    fn st_polygonfromtext(&self, args: Vec<SqlValue>) -> Result<SqlValue, SpatialError> {
+        if args.is_empty() || args.len() > 2 {
+            return Err(SpatialError::OperationError("ST_PolygonFromText requires 1-2 arguments".to_string()));
+        }
+        
+        let wkt = args[0].as_string()?;
+        let srid = if args.len() == 2 { Some(args[1].as_int()? as i32) } else { None };
+        
+        let geometry = self.spatial_functions.st_geomfromtext(&wkt, srid)?;
+        match geometry {
+            SpatialGeometry::Polygon(_) => Ok(SqlValue::Geometry(geometry)),
+            _ => Err(SpatialError::OperationError("WKT does not represent a POLYGON".to_string())),
+        }
     }
     
-    fn st_overlaps(&self, _args: Vec<SqlValue>) -> Result<SqlValue, SpatialError> {
-        Ok(SqlValue::Boolean(false)) // Placeholder
+    fn st_overlaps(&self, args: Vec<SqlValue>) -> Result<SqlValue, SpatialError> {
+        if args.len() != 2 {
+            return Err(SpatialError::OperationError("ST_Overlaps requires exactly 2 arguments".to_string()));
+        }
+        
+        let geom1 = args[0].as_geometry()?;
+        let geom2 = args[1].as_geometry()?;
+        
+        let overlaps = SpatialOperations::overlaps(geom1, geom2)?;
+        Ok(SqlValue::Boolean(overlaps))
     }
     
-    fn st_touches(&self, _args: Vec<SqlValue>) -> Result<SqlValue, SpatialError> {
-        Ok(SqlValue::Boolean(false)) // Placeholder
+    fn st_touches(&self, args: Vec<SqlValue>) -> Result<SqlValue, SpatialError> {
+        if args.len() != 2 {
+            return Err(SpatialError::OperationError("ST_Touches requires exactly 2 arguments".to_string()));
+        }
+        
+        let geom1 = args[0].as_geometry()?;
+        let geom2 = args[1].as_geometry()?;
+        
+        let touches = SpatialOperations::touches(geom1, geom2)?;
+        Ok(SqlValue::Boolean(touches))
     }
     
-    fn st_crosses(&self, _args: Vec<SqlValue>) -> Result<SqlValue, SpatialError> {
-        Ok(SqlValue::Boolean(false)) // Placeholder
+    fn st_crosses(&self, args: Vec<SqlValue>) -> Result<SqlValue, SpatialError> {
+        if args.len() != 2 {
+            return Err(SpatialError::OperationError("ST_Crosses requires exactly 2 arguments".to_string()));
+        }
+        
+        let geom1 = args[0].as_geometry()?;
+        let geom2 = args[1].as_geometry()?;
+        
+        let crosses = SpatialOperations::crosses(geom1, geom2)?;
+        Ok(SqlValue::Boolean(crosses))
     }
     
-    fn st_disjoint(&self, _args: Vec<SqlValue>) -> Result<SqlValue, SpatialError> {
-        Ok(SqlValue::Boolean(true)) // Placeholder
+    fn st_disjoint(&self, args: Vec<SqlValue>) -> Result<SqlValue, SpatialError> {
+        if args.len() != 2 {
+            return Err(SpatialError::OperationError("ST_Disjoint requires exactly 2 arguments".to_string()));
+        }
+        
+        let geom1 = args[0].as_geometry()?;
+        let geom2 = args[1].as_geometry()?;
+        
+        let disjoint = SpatialOperations::disjoint(geom1, geom2)?;
+        Ok(SqlValue::Boolean(disjoint))
     }
     
-    fn st_equals(&self, _args: Vec<SqlValue>) -> Result<SqlValue, SpatialError> {
-        Ok(SqlValue::Boolean(false)) // Placeholder
+    fn st_equals(&self, args: Vec<SqlValue>) -> Result<SqlValue, SpatialError> {
+        if args.len() != 2 {
+            return Err(SpatialError::OperationError("ST_Equals requires exactly 2 arguments".to_string()));
+        }
+        
+        let geom1 = args[0].as_geometry()?;
+        let geom2 = args[1].as_geometry()?;
+        
+        let equals = SpatialOperations::equals(geom1, geom2)?;
+        Ok(SqlValue::Boolean(equals))
     }
     
     fn st_buffer(&self, _args: Vec<SqlValue>) -> Result<SqlValue, SpatialError> {
@@ -424,8 +502,31 @@ impl PostgresSpatialFunctions {
         Err(SpatialError::OperationError("ST_ConvexHull not yet implemented".to_string()))
     }
     
-    fn st_envelope(&self, _args: Vec<SqlValue>) -> Result<SqlValue, SpatialError> {
-        Err(SpatialError::OperationError("ST_Envelope not yet implemented".to_string()))
+    fn st_envelope(&self, args: Vec<SqlValue>) -> Result<SqlValue, SpatialError> {
+        if args.len() != 1 {
+            return Err(SpatialError::OperationError("ST_Envelope requires exactly 1 argument".to_string()));
+        }
+        
+        let geometry = args[0].as_geometry()?;
+        let bbox = SpatialOperations::bounding_box(geometry)?;
+        
+        // Convert bounding box to polygon geometry
+        let envelope_polygon = self.bbox_to_polygon(&bbox)?;
+        Ok(SqlValue::Geometry(SpatialGeometry::Polygon(envelope_polygon)))
+    }
+    
+    /// Convert bounding box to polygon.
+    fn bbox_to_polygon(&self, bbox: &BoundingBox) -> Result<Polygon, SpatialError> {
+        let points = vec![
+            Point::new(bbox.min_x, bbox.min_y, bbox.srid),
+            Point::new(bbox.max_x, bbox.min_y, bbox.srid),
+            Point::new(bbox.max_x, bbox.max_y, bbox.srid),
+            Point::new(bbox.min_x, bbox.max_y, bbox.srid),
+            Point::new(bbox.min_x, bbox.min_y, bbox.srid), // Close the ring
+        ];
+        
+        let exterior_ring = LinearRing::new(points)?;
+        Polygon::new(exterior_ring, vec![], bbox.srid)
     }
     
     fn st_boundary(&self, _args: Vec<SqlValue>) -> Result<SqlValue, SpatialError> {
@@ -603,26 +704,8 @@ impl PostgresSpatialFunctions {
     // Helper functions for parsing and formatting
     
     fn parse_wkt(&self, wkt: &str, srid: Option<i32>) -> Result<SpatialGeometry, SpatialError> {
-        // Simplified WKT parser - in production, use a proper parser
-        let trimmed = wkt.trim().to_uppercase();
-        
-        if trimmed.starts_with("POINT") {
-            let coords_str = trimmed.strip_prefix("POINT").unwrap()
-                .trim().trim_start_matches('(').trim_end_matches(')')
-                .trim();
-            
-            let coords: Vec<f64> = coords_str.split_whitespace()
-                .map(|s| s.parse::<f64>())
-                .collect::<Result<Vec<_>, _>>()
-                .map_err(|_| SpatialError::OperationError("Invalid coordinates in WKT".to_string()))?;
-            
-            if coords.len() >= 2 {
-                let point = Point::new(coords[0], coords[1], srid);
-                return Ok(SpatialGeometry::Point(point));
-            }
-        }
-        
-        Err(SpatialError::OperationError("WKT parsing not fully implemented".to_string()))
+        // Use shared SpatialFunctions WKT parser
+        self.spatial_functions.st_geomfromtext(wkt, srid)
     }
     
     fn parse_geojson(&self, geojson: &str) -> Result<SpatialGeometry, SpatialError> {
@@ -660,6 +743,32 @@ impl PostgresSpatialFunctions {
                     Ok(format!("POINT ({} {})", point.x, point.y))
                 }
             },
+            SpatialGeometry::LineString(ls) => {
+                let coords: String = ls.points.iter()
+                    .map(|p| format!("{} {}", p.x, p.y))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                Ok(format!("LINESTRING ({})", coords))
+            },
+            SpatialGeometry::Polygon(poly) => {
+                let exterior_coords: String = poly.exterior_ring.points.iter()
+                    .map(|p| format!("{} {}", p.x, p.y))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let mut wkt = format!("POLYGON (({}))", exterior_coords);
+                
+                // Add interior rings (holes) if any
+                if !poly.interior_rings.is_empty() {
+                    for interior_ring in &poly.interior_rings {
+                        let interior_coords: String = interior_ring.points.iter()
+                            .map(|p| format!("{} {}", p.x, p.y))
+                            .collect::<Vec<_>>()
+                            .join(", ");
+                        wkt.push_str(&format!(", ({})", interior_coords));
+                    }
+                }
+                Ok(wkt)
+            },
             _ => Err(SpatialError::OperationError("WKT output not implemented for this geometry type".to_string()))
         }
     }
@@ -667,12 +776,62 @@ impl PostgresSpatialFunctions {
     fn geometry_to_geojson(&self, geometry: &SpatialGeometry) -> Result<String, SpatialError> {
         match geometry {
             SpatialGeometry::Point(point) => {
+                let mut coords = vec![
+                    JsonValue::Number(serde_json::Number::from_f64(point.x).unwrap()),
+                    JsonValue::Number(serde_json::Number::from_f64(point.y).unwrap())
+                ];
+                if let Some(z) = point.z {
+                    coords.push(JsonValue::Number(serde_json::Number::from_f64(z).unwrap()));
+                }
+                
                 let geojson = JsonValue::Object([
                     ("type".to_string(), JsonValue::String("Point".to_string())),
-                    ("coordinates".to_string(), JsonValue::Array(vec![
-                        JsonValue::Number(serde_json::Number::from_f64(point.x).unwrap()),
-                        JsonValue::Number(serde_json::Number::from_f64(point.y).unwrap())
+                    ("coordinates".to_string(), JsonValue::Array(coords))
+                ].into_iter().collect());
+                
+                Ok(serde_json::to_string(&geojson).unwrap())
+            },
+            SpatialGeometry::LineString(ls) => {
+                let coords: Vec<JsonValue> = ls.points.iter()
+                    .map(|p| JsonValue::Array(vec![
+                        JsonValue::Number(serde_json::Number::from_f64(p.x).unwrap()),
+                        JsonValue::Number(serde_json::Number::from_f64(p.y).unwrap())
                     ]))
+                    .collect();
+                
+                let geojson = JsonValue::Object([
+                    ("type".to_string(), JsonValue::String("LineString".to_string())),
+                    ("coordinates".to_string(), JsonValue::Array(coords))
+                ].into_iter().collect());
+                
+                Ok(serde_json::to_string(&geojson).unwrap())
+            },
+            SpatialGeometry::Polygon(poly) => {
+                let mut rings = Vec::new();
+                
+                // Exterior ring
+                let exterior_coords: Vec<JsonValue> = poly.exterior_ring.points.iter()
+                    .map(|p| JsonValue::Array(vec![
+                        JsonValue::Number(serde_json::Number::from_f64(p.x).unwrap()),
+                        JsonValue::Number(serde_json::Number::from_f64(p.y).unwrap())
+                    ]))
+                    .collect();
+                rings.push(JsonValue::Array(exterior_coords));
+                
+                // Interior rings
+                for interior_ring in &poly.interior_rings {
+                    let interior_coords: Vec<JsonValue> = interior_ring.points.iter()
+                        .map(|p| JsonValue::Array(vec![
+                            JsonValue::Number(serde_json::Number::from_f64(p.x).unwrap()),
+                            JsonValue::Number(serde_json::Number::from_f64(p.y).unwrap())
+                        ]))
+                        .collect();
+                    rings.push(JsonValue::Array(interior_coords));
+                }
+                
+                let geojson = JsonValue::Object([
+                    ("type".to_string(), JsonValue::String("Polygon".to_string())),
+                    ("coordinates".to_string(), JsonValue::Array(rings))
                 ].into_iter().collect());
                 
                 Ok(serde_json::to_string(&geojson).unwrap())

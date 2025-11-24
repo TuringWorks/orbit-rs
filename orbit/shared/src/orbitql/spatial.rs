@@ -261,6 +261,180 @@ impl SpatialFunctionRegistry {
             examples: vec!["ST_Intersects(geom1, geom2)".to_string()],
         });
 
+        self.register(SpatialFunctionInfo {
+            name: "ST_Within".to_string(),
+            category: SpatialFunctionCategory::Relationship,
+            description: "Test if geometry A is within geometry B".to_string(),
+            parameters: vec![
+                SpatialParameter {
+                    name: "geomA".to_string(),
+                    param_type: SpatialParameterType::Geometry,
+                    required: true,
+                    description: "Geometry to test".to_string(),
+                },
+                SpatialParameter {
+                    name: "geomB".to_string(),
+                    param_type: SpatialParameterType::Geometry,
+                    required: true,
+                    description: "Container geometry".to_string(),
+                },
+            ],
+            return_type: SpatialReturnType::Boolean,
+            examples: vec!["ST_Within(point, polygon)".to_string()],
+        });
+
+        self.register(SpatialFunctionInfo {
+            name: "ST_Overlaps".to_string(),
+            category: SpatialFunctionCategory::Relationship,
+            description: "Test if two geometries overlap".to_string(),
+            parameters: vec![
+                SpatialParameter {
+                    name: "geomA".to_string(),
+                    param_type: SpatialParameterType::Geometry,
+                    required: true,
+                    description: "First geometry".to_string(),
+                },
+                SpatialParameter {
+                    name: "geomB".to_string(),
+                    param_type: SpatialParameterType::Geometry,
+                    required: true,
+                    description: "Second geometry".to_string(),
+                },
+            ],
+            return_type: SpatialReturnType::Boolean,
+            examples: vec!["ST_Overlaps(geom1, geom2)".to_string()],
+        });
+
+        self.register(SpatialFunctionInfo {
+            name: "ST_Touches".to_string(),
+            category: SpatialFunctionCategory::Relationship,
+            description: "Test if two geometries touch".to_string(),
+            parameters: vec![
+                SpatialParameter {
+                    name: "geomA".to_string(),
+                    param_type: SpatialParameterType::Geometry,
+                    required: true,
+                    description: "First geometry".to_string(),
+                },
+                SpatialParameter {
+                    name: "geomB".to_string(),
+                    param_type: SpatialParameterType::Geometry,
+                    required: true,
+                    description: "Second geometry".to_string(),
+                },
+            ],
+            return_type: SpatialReturnType::Boolean,
+            examples: vec!["ST_Touches(geom1, geom2)".to_string()],
+        });
+
+        self.register(SpatialFunctionInfo {
+            name: "ST_Crosses".to_string(),
+            category: SpatialFunctionCategory::Relationship,
+            description: "Test if two geometries cross".to_string(),
+            parameters: vec![
+                SpatialParameter {
+                    name: "geomA".to_string(),
+                    param_type: SpatialParameterType::Geometry,
+                    required: true,
+                    description: "First geometry".to_string(),
+                },
+                SpatialParameter {
+                    name: "geomB".to_string(),
+                    param_type: SpatialParameterType::Geometry,
+                    required: true,
+                    description: "Second geometry".to_string(),
+                },
+            ],
+            return_type: SpatialReturnType::Boolean,
+            examples: vec!["ST_Crosses(geom1, geom2)".to_string()],
+        });
+
+        self.register(SpatialFunctionInfo {
+            name: "ST_Disjoint".to_string(),
+            category: SpatialFunctionCategory::Relationship,
+            description: "Test if two geometries are disjoint (do not intersect)".to_string(),
+            parameters: vec![
+                SpatialParameter {
+                    name: "geomA".to_string(),
+                    param_type: SpatialParameterType::Geometry,
+                    required: true,
+                    description: "First geometry".to_string(),
+                },
+                SpatialParameter {
+                    name: "geomB".to_string(),
+                    param_type: SpatialParameterType::Geometry,
+                    required: true,
+                    description: "Second geometry".to_string(),
+                },
+            ],
+            return_type: SpatialReturnType::Boolean,
+            examples: vec!["ST_Disjoint(geom1, geom2)".to_string()],
+        });
+
+        self.register(SpatialFunctionInfo {
+            name: "ST_Equals".to_string(),
+            category: SpatialFunctionCategory::Relationship,
+            description: "Test if two geometries are equal".to_string(),
+            parameters: vec![
+                SpatialParameter {
+                    name: "geomA".to_string(),
+                    param_type: SpatialParameterType::Geometry,
+                    required: true,
+                    description: "First geometry".to_string(),
+                },
+                SpatialParameter {
+                    name: "geomB".to_string(),
+                    param_type: SpatialParameterType::Geometry,
+                    required: true,
+                    description: "Second geometry".to_string(),
+                },
+            ],
+            return_type: SpatialReturnType::Boolean,
+            examples: vec!["ST_Equals(geom1, geom2)".to_string()],
+        });
+
+        self.register(SpatialFunctionInfo {
+            name: "ST_Envelope".to_string(),
+            category: SpatialFunctionCategory::Processing,
+            description: "Get the bounding box of a geometry as a polygon".to_string(),
+            parameters: vec![SpatialParameter {
+                name: "geom".to_string(),
+                param_type: SpatialParameterType::Geometry,
+                required: true,
+                description: "Input geometry".to_string(),
+            }],
+            return_type: SpatialReturnType::Polygon,
+            examples: vec!["ST_Envelope(geom)".to_string()],
+        });
+
+        self.register(SpatialFunctionInfo {
+            name: "ST_DWithin".to_string(),
+            category: SpatialFunctionCategory::Relationship,
+            description: "Test if two geometries are within a given distance".to_string(),
+            parameters: vec![
+                SpatialParameter {
+                    name: "geomA".to_string(),
+                    param_type: SpatialParameterType::Geometry,
+                    required: true,
+                    description: "First geometry".to_string(),
+                },
+                SpatialParameter {
+                    name: "geomB".to_string(),
+                    param_type: SpatialParameterType::Geometry,
+                    required: true,
+                    description: "Second geometry".to_string(),
+                },
+                SpatialParameter {
+                    name: "distance".to_string(),
+                    param_type: SpatialParameterType::Number,
+                    required: true,
+                    description: "Distance threshold".to_string(),
+                },
+            ],
+            return_type: SpatialReturnType::Boolean,
+            examples: vec!["ST_DWithin(geom1, geom2, 100.0)".to_string()],
+        });
+
         // Processing functions
         self.register(SpatialFunctionInfo {
             name: "ST_Buffer".to_string(),

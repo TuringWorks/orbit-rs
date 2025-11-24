@@ -13,7 +13,9 @@
 //! - `parallel`: Parallel execution framework
 
 pub mod columnar;
+pub mod compression;
 pub mod simd;
+pub mod statistics;
 pub mod vectorized;
 pub mod hybrid;
 
@@ -27,6 +29,8 @@ pub mod storage_config;
 // pub mod parallel;
 
 pub use columnar::{Column, ColumnBatch, ColumnBatchBuilder, NullBitmap, DEFAULT_BATCH_SIZE};
+pub use compression::{CompressionCodec, ColumnCompression};
+pub use statistics::{ColumnStatistics, ColumnStatisticsBuilder, StatisticValue, Histogram};
 pub use simd::{SimdCapability, SimdFilter, SimdAggregate, simd_capability};
 pub use vectorized::{
     VectorizedExecutor, VectorizedExecutorConfig, VectorizedExecutorConfigBuilder,

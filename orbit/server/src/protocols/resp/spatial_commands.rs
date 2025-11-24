@@ -5,7 +5,8 @@
 
 use orbit_shared::spatial::{
     crs::utils::haversine_distance, BoundingBox, ClusteringAlgorithm, GPUSpatialEngine, Point,
-    SpatialError, SpatialGeometry, SpatialOperations, SpatialStreamProcessor, WGS84_SRID,
+    SpatialError, SpatialGeometry, SpatialOperations, SpatialStreamProcessor, SpatialFunctions,
+    WGS84_SRID,
 };
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -22,6 +23,8 @@ pub struct RedisSpatialCommands {
     /// Streaming processor for real-time updates
     #[allow(dead_code)]
     stream_processor: SpatialStreamProcessor,
+    /// Shared spatial functions for WKT parsing
+    spatial_functions: SpatialFunctions,
 }
 
 /// Spatial data set with indexed geometries
@@ -76,6 +79,7 @@ impl RedisSpatialCommands {
                 tokio::time::Duration::from_millis(100),
                 10,
             ),
+            spatial_functions: SpatialFunctions::new(),
         }
     }
 
@@ -480,8 +484,8 @@ impl RedisSpatialCommands {
         let geometry_wkt = args[1].as_string()?;
         let alert_types = args[2].as_string()?;
 
-        // Parse geometry (simplified WKT parsing)
-        let geometry = self.parse_simple_wkt(&geometry_wkt)?;
+        // Parse geometry using shared WKT parser
+        let geometry = self.spatial_functions.st_geomfromtext(&geometry_wkt, Some(WGS84_SRID))?;
 
         let alert_on_enter = alert_types.to_uppercase().contains("ENTER");
         let alert_on_exit = alert_types.to_uppercase().contains("EXIT");
@@ -598,36 +602,244 @@ impl RedisSpatialCommands {
         Ok(RedisValue::Array(vec![]))
     }
 
-    async fn geo_polygon_add(&self, _args: Vec<RedisValue>) -> Result<RedisValue, SpatialError> {
-        Ok(RedisValue::String("OK".to_string()))
+    /// GEO.POLYGON.ADD key member "POLYGON((x1 y1, x2 y2, ...))"
+    async fn geo_polygon_add(&self, args: Vec<RedisValue>) -> Result<RedisValue, SpatialError> {
+        if args.len() < 3 {
+            return Err(SpatialError::OperationError(
+                "GEO.POLYGON.ADD requires key, member, and WKT polygon".to_string(),
+            ));
+        }
+
+        let key = args[0].as_string()?;
+        let member = args[1].as_string()?;
+        let wkt = args[2].as_string()?;
+
+        // Parse polygon WKT
+        let geometry = self.spatial_functions.st_geomfromtext(&wkt, Some(WGS84_SRID))?;
+        
+        match geometry {
+            SpatialGeometry::Polygon(_) => {
+                let mut indexes = self.indexes.write().await;
+                let dataset = indexes
+                    .entry(key.clone())
+                    .or_insert_with(|| SpatialDataSet::new(key.clone()));
+                
+                dataset.geometries.insert(member, geometry);
+                dataset.update_bounds();
+                
+                Ok(RedisValue::String("OK".to_string()))
+            }
+            _ => Err(SpatialError::OperationError(
+                "WKT does not represent a POLYGON".to_string(),
+            )),
+        }
     }
 
-    async fn geo_linestring_add(&self, _args: Vec<RedisValue>) -> Result<RedisValue, SpatialError> {
-        Ok(RedisValue::String("OK".to_string()))
+    /// GEO.LINESTRING.ADD key member "LINESTRING(x1 y1, x2 y2, ...)"
+    async fn geo_linestring_add(&self, args: Vec<RedisValue>) -> Result<RedisValue, SpatialError> {
+        if args.len() < 3 {
+            return Err(SpatialError::OperationError(
+                "GEO.LINESTRING.ADD requires key, member, and WKT linestring".to_string(),
+            ));
+        }
+
+        let key = args[0].as_string()?;
+        let member = args[1].as_string()?;
+        let wkt = args[2].as_string()?;
+
+        // Parse linestring WKT
+        let geometry = self.spatial_functions.st_geomfromtext(&wkt, Some(WGS84_SRID))?;
+        
+        match geometry {
+            SpatialGeometry::LineString(_) => {
+                let mut indexes = self.indexes.write().await;
+                let dataset = indexes
+                    .entry(key.clone())
+                    .or_insert_with(|| SpatialDataSet::new(key.clone()));
+                
+                dataset.geometries.insert(member, geometry);
+                dataset.update_bounds();
+                
+                Ok(RedisValue::String("OK".to_string()))
+            }
+            _ => Err(SpatialError::OperationError(
+                "WKT does not represent a LINESTRING".to_string(),
+            )),
+        }
     }
 
-    async fn geo_geometry_get(&self, _args: Vec<RedisValue>) -> Result<RedisValue, SpatialError> {
-        Ok(RedisValue::Null)
+    /// GEO.GEOMETRY.GET key member
+    async fn geo_geometry_get(&self, args: Vec<RedisValue>) -> Result<RedisValue, SpatialError> {
+        if args.len() < 2 {
+            return Err(SpatialError::OperationError(
+                "GEO.GEOMETRY.GET requires key and member".to_string(),
+            ));
+        }
+
+        let key = args[0].as_string()?;
+        let member = args[1].as_string()?;
+
+        let indexes = self.indexes.read().await;
+        if let Some(dataset) = indexes.get(&key) {
+            if let Some(geometry) = dataset.geometries.get(&member) {
+                // Convert geometry to WKT
+                let wkt = self.geometry_to_wkt(geometry)?;
+                Ok(RedisValue::String(wkt))
+            } else {
+                Ok(RedisValue::Null)
+            }
+        } else {
+            Ok(RedisValue::Null)
+        }
     }
 
-    async fn geo_geometry_del(&self, _args: Vec<RedisValue>) -> Result<RedisValue, SpatialError> {
-        Ok(RedisValue::Integer(0))
+    /// GEO.GEOMETRY.DEL key member [member ...]
+    async fn geo_geometry_del(&self, args: Vec<RedisValue>) -> Result<RedisValue, SpatialError> {
+        if args.len() < 2 {
+            return Err(SpatialError::OperationError(
+                "GEO.GEOMETRY.DEL requires key and at least one member".to_string(),
+            ));
+        }
+
+        let key = args[0].as_string()?;
+        let mut deleted_count = 0;
+
+        let mut indexes = self.indexes.write().await;
+        if let Some(dataset) = indexes.get_mut(&key) {
+            for member_val in &args[1..] {
+                let member = member_val.as_string()?;
+                if dataset.geometries.remove(&member).is_some() {
+                    deleted_count += 1;
+                }
+            }
+            dataset.update_bounds();
+        }
+
+        Ok(RedisValue::Integer(deleted_count))
     }
 
-    async fn geo_within(&self, _args: Vec<RedisValue>) -> Result<RedisValue, SpatialError> {
-        Ok(RedisValue::Array(vec![]))
+    /// GEO.WITHIN key "POLYGON((x1 y1, x2 y2, ...))"
+    async fn geo_within(&self, args: Vec<RedisValue>) -> Result<RedisValue, SpatialError> {
+        if args.len() < 2 {
+            return Err(SpatialError::OperationError(
+                "GEO.WITHIN requires key and polygon WKT".to_string(),
+            ));
+        }
+
+        let key = args[0].as_string()?;
+        let wkt = args[1].as_string()?;
+
+        // Parse query polygon
+        let query_geometry = self.spatial_functions.st_geomfromtext(&wkt, Some(WGS84_SRID))?;
+
+        let indexes = self.indexes.read().await;
+        let mut results = Vec::new();
+
+        if let Some(dataset) = indexes.get(&key) {
+            for (member, geometry) in &dataset.geometries {
+                match SpatialOperations::within(geometry, &query_geometry) {
+                    Ok(true) => {
+                        results.push(RedisValue::String(member.clone()));
+                    }
+                    Ok(false) | Err(_) => {}
+                }
+            }
+        }
+
+        Ok(RedisValue::Array(results))
     }
 
-    async fn geo_intersects(&self, _args: Vec<RedisValue>) -> Result<RedisValue, SpatialError> {
-        Ok(RedisValue::Array(vec![]))
+    /// GEO.INTERSECTS key geometry_wkt
+    async fn geo_intersects(&self, args: Vec<RedisValue>) -> Result<RedisValue, SpatialError> {
+        if args.len() < 2 {
+            return Err(SpatialError::OperationError(
+                "GEO.INTERSECTS requires key and geometry WKT".to_string(),
+            ));
+        }
+
+        let key = args[0].as_string()?;
+        let wkt = args[1].as_string()?;
+
+        // Parse query geometry
+        let query_geometry = self.spatial_functions.st_geomfromtext(&wkt, Some(WGS84_SRID))?;
+
+        let indexes = self.indexes.read().await;
+        let mut results = Vec::new();
+
+        if let Some(dataset) = indexes.get(&key) {
+            for (member, geometry) in &dataset.geometries {
+                match SpatialOperations::intersects(geometry, &query_geometry) {
+                    Ok(true) => {
+                        results.push(RedisValue::String(member.clone()));
+                    }
+                    Ok(false) | Err(_) => {}
+                }
+            }
+        }
+
+        Ok(RedisValue::Array(results))
     }
 
-    async fn geo_contains(&self, _args: Vec<RedisValue>) -> Result<RedisValue, SpatialError> {
-        Ok(RedisValue::Array(vec![]))
+    /// GEO.CONTAINS key geometry_wkt
+    async fn geo_contains(&self, args: Vec<RedisValue>) -> Result<RedisValue, SpatialError> {
+        if args.len() < 2 {
+            return Err(SpatialError::OperationError(
+                "GEO.CONTAINS requires key and geometry WKT".to_string(),
+            ));
+        }
+
+        let key = args[0].as_string()?;
+        let wkt = args[1].as_string()?;
+
+        // Parse query geometry
+        let query_geometry = self.spatial_functions.st_geomfromtext(&wkt, Some(WGS84_SRID))?;
+
+        let indexes = self.indexes.read().await;
+        let mut results = Vec::new();
+
+        if let Some(dataset) = indexes.get(&key) {
+            for (member, geometry) in &dataset.geometries {
+                match SpatialOperations::contains(geometry, &query_geometry) {
+                    Ok(true) => {
+                        results.push(RedisValue::String(member.clone()));
+                    }
+                    Ok(false) | Err(_) => {}
+                }
+            }
+        }
+
+        Ok(RedisValue::Array(results))
     }
 
-    async fn geo_overlaps(&self, _args: Vec<RedisValue>) -> Result<RedisValue, SpatialError> {
-        Ok(RedisValue::Array(vec![]))
+    /// GEO.OVERLAPS key geometry_wkt
+    async fn geo_overlaps(&self, args: Vec<RedisValue>) -> Result<RedisValue, SpatialError> {
+        if args.len() < 2 {
+            return Err(SpatialError::OperationError(
+                "GEO.OVERLAPS requires key and geometry WKT".to_string(),
+            ));
+        }
+
+        let key = args[0].as_string()?;
+        let wkt = args[1].as_string()?;
+
+        // Parse query geometry
+        let query_geometry = self.spatial_functions.st_geomfromtext(&wkt, Some(WGS84_SRID))?;
+
+        let indexes = self.indexes.read().await;
+        let mut results = Vec::new();
+
+        if let Some(dataset) = indexes.get(&key) {
+            for (member, geometry) in &dataset.geometries {
+                match SpatialOperations::overlaps(geometry, &query_geometry) {
+                    Ok(true) => {
+                        results.push(RedisValue::String(member.clone()));
+                    }
+                    Ok(false) | Err(_) => {}
+                }
+            }
+        }
+
+        Ok(RedisValue::Array(results))
     }
 
     async fn geo_fence_del(&self, _args: Vec<RedisValue>) -> Result<RedisValue, SpatialError> {
@@ -739,36 +951,50 @@ impl RedisSpatialCommands {
         geohash
     }
 
-    fn parse_simple_wkt(&self, wkt: &str) -> Result<SpatialGeometry, SpatialError> {
-        let trimmed = wkt.trim().to_uppercase();
-
-        if trimmed.starts_with("POINT") {
-            // Extract coordinates from POINT(x y)
-            let coords_str = trimmed
-                .strip_prefix("POINT")
-                .unwrap()
-                .trim()
-                .trim_start_matches('(')
-                .trim_end_matches(')')
-                .trim();
-
-            let coords: Vec<f64> = coords_str
-                .split_whitespace()
-                .map(|s| s.parse::<f64>())
-                .collect::<Result<Vec<_>, _>>()
-                .map_err(|_| {
-                    SpatialError::OperationError("Invalid coordinates in WKT".to_string())
-                })?;
-
-            if coords.len() >= 2 {
-                let point = Point::new(coords[0], coords[1], Some(WGS84_SRID));
-                return Ok(SpatialGeometry::Point(point));
-            }
+    /// Convert geometry to WKT string.
+    fn geometry_to_wkt(&self, geometry: &SpatialGeometry) -> Result<String, SpatialError> {
+        match geometry {
+            SpatialGeometry::Point(point) => {
+                if point.z.is_some() && point.m.is_some() {
+                    Ok(format!("POINT ZM ({} {} {} {})", point.x, point.y, point.z.unwrap(), point.m.unwrap()))
+                } else if point.z.is_some() {
+                    Ok(format!("POINT Z ({} {} {})", point.x, point.y, point.z.unwrap()))
+                } else if point.m.is_some() {
+                    Ok(format!("POINT M ({} {} {})", point.x, point.y, point.m.unwrap()))
+                } else {
+                    Ok(format!("POINT ({} {})", point.x, point.y))
+                }
+            },
+            SpatialGeometry::LineString(ls) => {
+                let coords: String = ls.points.iter()
+                    .map(|p| format!("{} {}", p.x, p.y))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                Ok(format!("LINESTRING ({})", coords))
+            },
+            SpatialGeometry::Polygon(poly) => {
+                let exterior_coords: String = poly.exterior_ring.points.iter()
+                    .map(|p| format!("{} {}", p.x, p.y))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let mut wkt = format!("POLYGON (({}))", exterior_coords);
+                
+                // Add interior rings (holes) if any
+                if !poly.interior_rings.is_empty() {
+                    for interior_ring in &poly.interior_rings {
+                        let interior_coords: String = interior_ring.points.iter()
+                            .map(|p| format!("{} {}", p.x, p.y))
+                            .collect::<Vec<_>>()
+                            .join(", ");
+                        wkt.push_str(&format!(", ({})", interior_coords));
+                    }
+                }
+                Ok(wkt)
+            },
+            _ => Err(SpatialError::OperationError(
+                "WKT output not implemented for this geometry type".to_string(),
+            ))
         }
-
-        Err(SpatialError::OperationError(
-            "WKT parsing not fully implemented".to_string(),
-        ))
     }
 }
 
