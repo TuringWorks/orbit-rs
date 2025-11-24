@@ -35,8 +35,8 @@ pbkdf2 = "0.12"
 axum = { version = "0.8", features = ["ws", "macros"] }
 tower = "0.5"
 tower-http = { version = "0.6", features = ["cors", "trace"] }
-utoipa = { version = "4.2", features = ["axum_extras"] }
-utoipa-swagger-ui = { version = "7.1", features = ["axum"] }
+utoipa = { version = "5.4", features = ["axum_extras"] }
+utoipa-swagger-ui = { version = "8.0", features = ["axum"] }
 async-stream = "0.3"
 rust_decimal = { version = "1.36", features = ["serde"] }
 ordered-float = { version = "4.2", features = ["serde"] }

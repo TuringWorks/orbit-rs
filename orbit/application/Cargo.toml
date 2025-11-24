@@ -23,7 +23,7 @@ serde_json.workspace = true
 serde_yaml.workspace = true
 
 # Configuration and environment
-config = "0.14"
+config = "0.15"
 envmnt = "0.10"
 
 # Logging and tracing
