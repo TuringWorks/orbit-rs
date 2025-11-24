@@ -1,6 +1,6 @@
 ---
 layout: default
-title: Orbit-RS: Complete Project Overview (Accurate Metrics)
+title: "Orbit-RS: Complete Project Overview (Accurate Metrics)"
 category: documentation
 ---
 
