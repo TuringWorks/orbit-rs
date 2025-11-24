@@ -27,6 +27,9 @@ gpu-rocm = [] # AMD ROCm (placeholder - needs implementation)
 gpu-opencl = [] # Cross-platform OpenCL (placeholder - needs implementation)
 gpu-vulkan = ["vulkano"] # Cross-platform Vulkan compute
 
+# Graph traversal feature
+graph-traversal = []
+
 # Neural engine features (placeholder - real dependencies commented out)
 neural-acceleration = ["neural-apple", "neural-qualcomm", "neural-intel"]
 neural-apple = [] # Apple Neural Engine (dependencies commented out)
@@ -66,6 +69,9 @@ nalgebra = "0.32"
 ndarray = "0.15"
 num-traits = "0.2"
 num-complex = "0.4"
+
+# Parallel processing
+rayon = "1.8"
 
 # SIMD intrinsics
 # CPU feature detection
@@ -148,25 +154,46 @@ wmi = "0.18"
 sysinfo = "0.30"
 
 [dev-dependencies]
-criterion = { version = "0.7", features = ["html_reports"] }
+criterion = { version = "0.7", features = ["html_reports", "async_tokio"] }
 proptest = "1.0"
 tempfile = "3.0"
 env_logger = "0.11"
+tokio = { version = "1.0", features = ["full"] }
 
-# [[bench]]
-# name = "simd_operations"
-# harness = false
-# required-features = ["cpu-simd"]
+[[bench]]
+name = "graph_traversal_bench"
+harness = false
+required-features = ["graph-traversal"]
 
-# [[bench]]
-# name = "gpu_acceleration" 
-# harness = false
-# required-features = ["gpu-acceleration"]
+[[bench]]
+name = "vector_similarity_bench"
+harness = false
+required-features = ["gpu-acceleration"]
 
-# [[bench]]
-# name = "heterogeneous_query"
-# harness = false
-# required-features = ["gpu-acceleration", "cpu-simd"]
+[[bench]]
+name = "spatial_operations_bench"
+harness = false
+required-features = ["gpu-acceleration"]
+
+[[bench]]
+name = "columnar_analytics_bench"
+harness = false
+required-features = ["gpu-acceleration"]
+
+[[bench]]
+name = "timeseries_operations_bench"
+harness = false
+required-features = ["gpu-acceleration"]
+
+[[bench]]
+name = "columnar_joins_bench"
+harness = false
+required-features = ["gpu-acceleration"]
+
+[[bench]]
+name = "ml_operations_bench"
+harness = false
+required-features = ["gpu-acceleration"]
 
 [package.metadata.docs.rs]
 features = ["cpu-simd", "gpu-metal", "neural-apple"]

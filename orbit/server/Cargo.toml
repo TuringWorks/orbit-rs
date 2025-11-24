@@ -15,6 +15,7 @@ orbit-util = { path = "../util" }
 orbit-shared = { path = "../shared" }
 orbit-proto = { path = "../proto" }
 orbit-client = { path = "../client" }
+orbit-compute = { path = "../compute", optional = true }
 tokio.workspace = true
 tokio-stream.workspace = true
 tokio-util = { version = "0.7", features = ["codec"] }
@@ -81,9 +82,140 @@ parquet = { version = "55.2", optional = true }
 opendal = { version = "0.51", optional = true, features = ["services-s3", "services-azblob", "services-memory"] }
 
 [features]
-default = []
-# Enable Apache Iceberg cold tier storage
-iceberg-cold = ["iceberg", "iceberg-catalog-rest", "arrow", "arrow-schema", "parquet", "opendal"]
+# Default features - all production-ready features enabled
+default = [
+    "actor-system",
+    "clustering",
+    "persistence",
+    "networking",
+    "metrics",
+    "protocol-redis",
+    "protocol-postgres",
+    "protocol-grpc",
+    "protocol-rest",
+    "protocol-mcp",
+    "storage-memory",
+    "storage-rocksdb",
+    "ai-native",
+    "model-relational",
+    "model-document",
+    "model-kv",
+    "model-graph",
+    "model-timeseries",
+    "model-vector",
+    "model-spatial",
+    "model-columnar",
+    "gpu-acceleration",
+    "transactions",
+    "distributed-tx",
+    "sagas",
+    "cdc",
+    "streaming",
+    "replication",
+    "compression",
+    "query-sql",
+    "query-cypher",
+    "query-aql",
+    "query-orbitql",
+    "query-redis",
+    "query-natural",
+    "kubernetes",
+    "prometheus",
+    "etcd",
+    "graphrag",
+    "gpu-graph-traversal",
+    "heterogeneous-compute",
+    "tracing",
+]
+
+# Core System Features
+actor-system = []
+clustering = ["actor-system"]
+persistence = ["actor-system"]
+networking = []
+metrics = []
+
+# Protocol Support
+protocol-redis = ["actor-system"]
+protocol-postgres = ["actor-system"]
+protocol-mysql = ["actor-system"]
+protocol-cassandra = ["actor-system"]
+protocol-neo4j = ["actor-system", "model-graph"]
+protocol-arangodb = ["actor-system", "model-graph"]
+protocol-grpc = ["networking"]
+protocol-rest = ["networking"]
+protocol-mcp = ["networking"]
+
+# Storage Engines
+storage-memory = []
+storage-rocksdb = []
+storage-lsm = []
+storage-btree = []
+storage-iceberg = ["iceberg", "iceberg-catalog-rest", "arrow", "arrow-schema", "parquet", "opendal"]
+storage-cloud = []
+
+# AI-Native Database Features
+ai-native = [
+    "ai-query-optimizer",
+    "ai-resource-manager",
+    "ai-storage-manager",
+    "ai-transaction-manager",
+    "ai-learning-engine",
+    "ai-decision-engine",
+    "ai-knowledge-base",
+]
+ai-query-optimizer = ["actor-system"]
+ai-resource-manager = ["metrics"]
+ai-storage-manager = ["persistence"]
+ai-transaction-manager = ["actor-system"]
+ai-learning-engine = []
+ai-decision-engine = []
+ai-knowledge-base = ["persistence"]
+
+# Data Model Support
+model-relational = []
+model-document = []
+model-kv = []
+model-graph = []
+model-timeseries = []
+model-vector = []
+model-spatial = []
+model-columnar = []
+
+# Advanced Features
+transactions = ["actor-system"]
+distributed-tx = ["transactions", "clustering"]
+sagas = ["transactions"]
+cdc = ["actor-system"]
+streaming = ["actor-system"]
+replication = ["clustering"]
+sharding = ["clustering"]
+compression = []
+encryption = []
+
+# Integration Features
+kubernetes = ["clustering"]
+prometheus = ["metrics"]
+etcd = ["clustering"]
+graphrag = ["model-graph"]
+neural-engine = []
+heterogeneous-compute = ["neural-engine"]
+gpu-acceleration = ["heterogeneous-compute", "orbit-compute"]
+gpu-graph-traversal = ["gpu-acceleration", "model-graph"]
+
+# Query Languages
+query-sql = ["model-relational"]
+query-cypher = ["model-graph"]
+query-aql = ["model-graph"]
+query-orbitql = []
+query-redis = ["protocol-redis"]
+query-natural = ["protocol-mcp"]
+
+# Development & Testing
+benchmarks = []
+testing = []
+tracing = ["metrics"]
+debug-tools = []
 
 [dev-dependencies]
 mockall.workspace = true

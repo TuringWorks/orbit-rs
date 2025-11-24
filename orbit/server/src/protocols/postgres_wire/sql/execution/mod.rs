@@ -19,10 +19,10 @@ pub mod statistics;
 pub mod vectorized;
 pub mod hybrid;
 
-#[cfg(feature = "iceberg-cold")]
+#[cfg(feature = "storage-iceberg")]
 pub mod iceberg_cold;
 
-#[cfg(feature = "iceberg-cold")]
+#[cfg(feature = "storage-iceberg")]
 pub mod storage_config;
 
 // Parallel execution will be added last
@@ -42,8 +42,8 @@ pub use hybrid::{
     RowBasedStore, ColumnSchema, Row,
 };
 
-#[cfg(feature = "iceberg-cold")]
+#[cfg(feature = "storage-iceberg")]
 pub use iceberg_cold::{IcebergColdStore, column_batch_to_arrow, arrow_to_column_batch, create_file_io_for_storage, create_rest_catalog_with_storage};
 
-#[cfg(feature = "iceberg-cold")]
+#[cfg(feature = "storage-iceberg")]
 pub use storage_config::{StorageBackend, S3Config, AzureConfig};

@@ -9,12 +9,14 @@ use crate::protocols::graphrag::{
     entity_extraction::DocumentProcessingResult,
     graph_rag_actor::{GraphRAGDocumentRequest, GraphRAGQuery, GraphRAGQueryResult, GraphRAGStats},
     multi_hop_reasoning::ReasoningQuery,
+    storage::GraphRAGStorage,
     GraphRAGActor,
 };
 use orbit_client::OrbitClient;
 use orbit_shared::{graphrag::ReasoningPath, Key};
 use serde_json::Value as JsonValue;
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 /// GraphRAG query engine for AQL function calls
@@ -531,18 +533,163 @@ impl AqlGraphRAGEngine {
         }
 
         let kg_name = self.extract_string_arg(&args[0], "knowledge_graph")?;
-        let entity = self.extract_string_arg(&args[1], "entity")?;
-        let _options = self.parse_options_arg(&args[2])?;
+        let entity_text = self.extract_string_arg(&args[1], "entity")?;
+        let options = self.parse_options_arg(&args[2])?;
 
-        // For now, return a placeholder result since we don't have similarity search implemented
+        let limit = options
+            .get("limit")
+            .and_then(|v| v.as_u64())
+            .map(|n| n as usize)
+            .unwrap_or(10);
+
+        let similarity_threshold = options
+            .get("similarity_threshold")
+            .and_then(|v| v.as_f64())
+            .map(|f| f as f32)
+            .unwrap_or(0.7);
+
+        // Get storage and find similar entities
+        let storage = self.get_storage(&kg_name).await?;
+        let nodes = storage.list_nodes().await?;
+
+        // Find the target entity
+        let target_node = nodes
+            .iter()
+            .find(|n| n.text == entity_text || n.id == entity_text);
+
+        if target_node.is_none() {
+            return Err(ProtocolError::AqlError(format!(
+                "Entity '{}' not found in knowledge graph",
+                entity_text
+            )));
+        }
+
+        let target = target_node.unwrap();
+        let target_embedding = target
+            .embeddings
+            .values()
+            .next()
+            .cloned()
+            .unwrap_or_default();
+
+        if target_embedding.is_empty() {
+            // No embedding available, use text similarity as fallback
+            let target_lowercase = target.text.to_lowercase();
+            let target_words: std::collections::HashSet<&str> =
+                target_lowercase.split_whitespace().collect();
+
+            let similar: Vec<AqlValue> = nodes
+                .iter()
+                .filter(|n| n.id != target.id)
+                .filter(|n| {
+                    // Simple text similarity using Jaccard similarity
+                    let node_lowercase = n.text.to_lowercase();
+                    let node_words: std::collections::HashSet<&str> =
+                        node_lowercase.split_whitespace().collect();
+                    let intersection = target_words.intersection(&node_words).count();
+                    let union = target_words.union(&node_words).count();
+                    if union == 0 {
+                        false
+                    } else {
+                        (intersection as f32 / union as f32) >= similarity_threshold
+                    }
+                })
+                .take(limit)
+                .map(|n| {
+                    let mut node_obj = HashMap::new();
+                    node_obj.insert("id".to_string(), AqlValue::String(n.id.clone()));
+                    node_obj.insert("text".to_string(), AqlValue::String(n.text.clone()));
+                    node_obj.insert(
+                        "entity_type".to_string(),
+                        AqlValue::String(format!("{:?}", n.entity_type)),
+                    );
+                    node_obj.insert(
+                        "confidence".to_string(),
+                        AqlValue::Number(serde_json::Number::from_f64(n.confidence as f64).unwrap()),
+                    );
+                    AqlValue::Object(node_obj)
+                })
+                .collect();
+
+            let mut result_obj = HashMap::new();
+            result_obj.insert("success".to_string(), AqlValue::Bool(true));
+            result_obj.insert("knowledge_graph".to_string(), AqlValue::String(kg_name));
+            result_obj.insert("entity".to_string(), AqlValue::String(entity_text));
+            result_obj.insert("similar_entities".to_string(), AqlValue::Array(similar));
+            result_obj.insert(
+                "method".to_string(),
+                AqlValue::String("text_similarity".to_string()),
+            );
+
+            return Ok(AqlValue::Object(result_obj));
+        }
+
+        // Calculate cosine similarity for entities with embeddings
+        let mut similarities: Vec<(f32, &crate::protocols::graphrag::storage::GraphRAGNode)> = nodes
+            .iter()
+            .filter(|n| n.id != target.id)
+            .filter_map(|n| {
+                let node_embedding = n.embeddings.values().next()?;
+                if node_embedding.len() != target_embedding.len() {
+                    return None;
+                }
+
+                // Cosine similarity
+                let dot_product: f32 = target_embedding
+                    .iter()
+                    .zip(node_embedding.iter())
+                    .map(|(a, b)| a * b)
+                    .sum();
+                let target_norm: f32 = target_embedding.iter().map(|x| x * x).sum::<f32>().sqrt();
+                let node_norm: f32 = node_embedding.iter().map(|x| x * x).sum::<f32>().sqrt();
+
+                if target_norm == 0.0 || node_norm == 0.0 {
+                    return None;
+                }
+
+                let similarity = dot_product / (target_norm * node_norm);
+                if similarity >= similarity_threshold {
+                    Some((similarity, n))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        // Sort by similarity (descending)
+        similarities.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+
+        let similar: Vec<AqlValue> = similarities
+            .into_iter()
+            .take(limit)
+            .map(|(similarity, n)| {
+                let mut node_obj = HashMap::new();
+                node_obj.insert("id".to_string(), AqlValue::String(n.id.clone()));
+                node_obj.insert("text".to_string(), AqlValue::String(n.text.clone()));
+                node_obj.insert(
+                    "entity_type".to_string(),
+                    AqlValue::String(format!("{:?}", n.entity_type)),
+                );
+                node_obj.insert(
+                    "similarity".to_string(),
+                    AqlValue::Number(serde_json::Number::from_f64(similarity as f64).unwrap()),
+                );
+                node_obj.insert(
+                    "confidence".to_string(),
+                    AqlValue::Number(serde_json::Number::from_f64(n.confidence as f64).unwrap()),
+                );
+                AqlValue::Object(node_obj)
+            })
+            .collect();
+
         let mut result_obj = HashMap::new();
         result_obj.insert("success".to_string(), AqlValue::Bool(true));
         result_obj.insert("knowledge_graph".to_string(), AqlValue::String(kg_name));
-        result_obj.insert("entity".to_string(), AqlValue::String(entity));
-        result_obj.insert("similar_entities".to_string(), AqlValue::Array(Vec::new()));
+        result_obj.insert("entity".to_string(), AqlValue::String(entity_text));
+        result_obj.insert("similar_entities".to_string(), AqlValue::Array(similar));
         result_obj.insert(
-            "message".to_string(),
-            AqlValue::String("Similarity search not yet implemented".to_string()),
+            "method".to_string(),
+            AqlValue::String("embedding_similarity".to_string()),
         );
 
         Ok(AqlValue::Object(result_obj))
@@ -557,19 +704,109 @@ impl AqlGraphRAGEngine {
             ));
         }
 
+        let orbit_client = self.orbit_client.as_ref().unwrap();
         let kg_name = self.extract_string_arg(&args[0], "knowledge_graph")?;
         let query_text = self.extract_string_arg(&args[1], "query_text")?;
-        let _options = self.parse_options_arg(&args[2])?;
+        let options = self.parse_options_arg(&args[2])?;
 
-        // For now, return a placeholder result
-        let mut additional_fields = HashMap::new();
-        additional_fields.insert("query_text".to_string(), AqlValue::String(query_text));
-        additional_fields.insert("results".to_string(), AqlValue::Array(Vec::new()));
+        let max_results = options
+            .get("max_results")
+            .and_then(|v| v.as_u64())
+            .map(|n| n as usize)
+            .unwrap_or(20);
 
-        let result_obj = self.create_placeholder_result(
-            kg_name,
-            "Semantic search not yet implemented",
-            additional_fields,
+        // Use RAG query to find relevant entities and context
+        let rag_query = GraphRAGQuery {
+            query_text: query_text.clone(),
+            max_hops: Some(options
+                .get("max_hops")
+                .and_then(|v| v.as_u64())
+                .map(|n| n as u32)
+                .unwrap_or(2)),
+            context_size: Some(options
+                .get("context_size")
+                .and_then(|v| v.as_u64())
+                .map(|n| n as usize)
+                .unwrap_or(1024)),
+            llm_provider: options
+                .get("llm_provider")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string()),
+            search_strategy: None,
+            include_explanation: false,
+            max_results: Some(max_results),
+        };
+
+        // Get GraphRAG actor reference
+        let actor_ref = orbit_client
+            .actor_reference::<GraphRAGActor>(Key::StringKey {
+                key: kg_name.clone(),
+            })
+            .await
+            .map_err(|e| ProtocolError::AqlError(format!("Actor error: {e}")))?;
+
+        // Execute RAG query to get relevant context
+        let rag_result: GraphRAGQueryResult = actor_ref
+            .invoke("query_rag", vec![serde_json::to_value(rag_query).unwrap()])
+            .await
+            .map_err(|e| ProtocolError::AqlError(format!("Semantic search failed: {e}")))?;
+
+        // Format results as search results using entities and reasoning paths
+        let mut results = Vec::new();
+
+        // Add entities involved
+        for entity_id in rag_result.entities_involved.iter().take(max_results) {
+            let mut result_obj = HashMap::new();
+            result_obj.insert("type".to_string(), AqlValue::String("entity".to_string()));
+            result_obj.insert("entity_id".to_string(), AqlValue::String(entity_id.clone()));
+            result_obj.insert("content".to_string(), AqlValue::String(entity_id.clone()));
+            results.push(AqlValue::Object(result_obj));
+        }
+
+        // Add reasoning paths if available
+        if let Some(ref paths) = rag_result.reasoning_paths {
+            for path in paths.iter().take(max_results.saturating_sub(results.len())) {
+                let mut result_obj = HashMap::new();
+                result_obj.insert("type".to_string(), AqlValue::String("path".to_string()));
+                result_obj.insert(
+                    "path".to_string(),
+                    AqlValue::String(path.nodes.join(" -> ")),
+                );
+                result_obj.insert(
+                    "score".to_string(),
+                    AqlValue::Number(serde_json::Number::from_f64(path.score as f64).unwrap()),
+                );
+                result_obj.insert(
+                    "explanation".to_string(),
+                    AqlValue::String(path.explanation.clone()),
+                );
+                results.push(AqlValue::Object(result_obj));
+            }
+        }
+
+        // Add response text
+        let mut response_obj = HashMap::new();
+        response_obj.insert("type".to_string(), AqlValue::String("response".to_string()));
+        response_obj.insert(
+            "content".to_string(),
+            AqlValue::String(rag_result.response.response.clone()),
+        );
+        response_obj.insert(
+            "confidence".to_string(),
+            AqlValue::Number(
+                serde_json::Number::from_f64(rag_result.response.confidence as f64).unwrap(),
+            ),
+        );
+        results.push(AqlValue::Object(response_obj));
+
+        let mut result_obj = HashMap::new();
+        result_obj.insert("success".to_string(), AqlValue::Bool(true));
+        result_obj.insert("knowledge_graph".to_string(), AqlValue::String(kg_name));
+        result_obj.insert("query_text".to_string(), AqlValue::String(query_text));
+        result_obj.insert("results".to_string(), AqlValue::Array(results.clone()));
+        result_obj.insert(
+            "total_results".to_string(),
+            AqlValue::Number(serde_json::Number::from(results.len())),
         );
 
         Ok(AqlValue::Object(result_obj))
@@ -654,16 +891,76 @@ impl AqlGraphRAGEngine {
         }
 
         let kg_name = self.extract_string_arg(&args[0], "knowledge_graph")?;
-        let _options = self.parse_options_arg(&args[1])?;
+        let options = self.parse_options_arg(&args[1])?;
 
-        // For now, return a placeholder result
-        let mut additional_fields = HashMap::new();
-        additional_fields.insert("entities".to_string(), AqlValue::Array(Vec::new()));
+        let limit = options
+            .get("limit")
+            .and_then(|v| v.as_u64())
+            .map(|n| n as usize);
 
-        let result_obj = self.create_placeholder_result(
-            kg_name,
-            "Entity listing not yet implemented",
-            additional_fields,
+        let entity_type_filter = options
+            .get("entity_type")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+
+        // Get storage and list entities
+        let storage = self.get_storage(&kg_name).await?;
+        let mut nodes = storage.list_nodes().await?;
+
+        // Apply filters
+        if let Some(ref filter_type) = entity_type_filter {
+            nodes.retain(|n| format!("{:?}", n.entity_type) == *filter_type);
+        }
+
+        // Apply limit
+        if let Some(limit_val) = limit {
+            nodes.truncate(limit_val);
+        }
+
+        // Format entities
+        let entities: Vec<AqlValue> = nodes
+            .into_iter()
+            .map(|n| {
+                let mut entity_obj = HashMap::new();
+                entity_obj.insert("id".to_string(), AqlValue::String(n.id.clone()));
+                entity_obj.insert("text".to_string(), AqlValue::String(n.text.clone()));
+                entity_obj.insert(
+                    "entity_type".to_string(),
+                    AqlValue::String(format!("{:?}", n.entity_type)),
+                );
+                entity_obj.insert(
+                    "confidence".to_string(),
+                    AqlValue::Number(serde_json::Number::from_f64(n.confidence as f64).unwrap()),
+                );
+                entity_obj.insert(
+                    "labels".to_string(),
+                    AqlValue::Array(
+                        n.labels
+                            .into_iter()
+                            .map(|l| AqlValue::String(l))
+                            .collect(),
+                    ),
+                );
+                entity_obj.insert(
+                    "source_documents".to_string(),
+                    AqlValue::Array(
+                        n.source_documents
+                            .into_iter()
+                            .map(|d| AqlValue::String(d))
+                            .collect(),
+                    ),
+                );
+                AqlValue::Object(entity_obj)
+            })
+            .collect();
+
+        let mut result_obj = HashMap::new();
+        result_obj.insert("success".to_string(), AqlValue::Bool(true));
+        result_obj.insert("knowledge_graph".to_string(), AqlValue::String(kg_name));
+        result_obj.insert("entities".to_string(), AqlValue::Array(entities));
+        result_obj.insert(
+            "total_count".to_string(),
+            AqlValue::Number(serde_json::Number::from(storage.node_count().await?)),
         );
 
         Ok(AqlValue::Object(result_obj))
@@ -681,17 +978,71 @@ impl AqlGraphRAGEngine {
 
         let kg_name = self.extract_string_arg(&args[0], "knowledge_graph")?;
         let concept = self.extract_string_arg(&args[1], "concept")?;
-        let _options = self.parse_options_arg(&args[2])?;
+        let options = self.parse_options_arg(&args[2])?;
 
-        // For now, return a placeholder result
-        let mut additional_fields = HashMap::new();
-        additional_fields.insert("concept".to_string(), AqlValue::String(concept));
-        additional_fields.insert("trends".to_string(), AqlValue::Array(Vec::new()));
+        let time_window_days = options
+            .get("time_window_days")
+            .and_then(|v| v.as_u64())
+            .map(|n| n as i64)
+            .unwrap_or(30);
 
-        let result_obj = self.create_placeholder_result(
-            kg_name,
-            "Trend analysis not yet implemented",
-            additional_fields,
+        // Get storage and analyze trends
+        let storage = self.get_storage(&kg_name).await?;
+        let nodes = storage.list_nodes().await?;
+        let relationships = storage.list_relationships().await?;
+
+        let now = chrono::Utc::now().timestamp_millis();
+        let window_start = now - (time_window_days * 24 * 60 * 60 * 1000);
+
+        // Find entities related to the concept
+        let concept_entities: Vec<_> = nodes
+            .iter()
+            .filter(|n| {
+                n.text.to_lowercase().contains(&concept.to_lowercase())
+                    || n.labels.iter().any(|l| l.to_lowercase().contains(&concept.to_lowercase()))
+            })
+            .collect();
+
+        // Analyze relationship trends over time
+        let mut time_buckets: std::collections::BTreeMap<i64, usize> = std::collections::BTreeMap::new();
+        let bucket_size_ms = 24 * 60 * 60 * 1000; // 1 day buckets
+
+        for rel in &relationships {
+            if rel.created_at >= window_start {
+                let bucket = (rel.created_at / bucket_size_ms) * bucket_size_ms;
+                *time_buckets.entry(bucket).or_insert(0) += 1;
+            }
+        }
+
+        // Format trend data
+        let trends: Vec<AqlValue> = time_buckets
+            .into_iter()
+            .map(|(timestamp, count)| {
+                let mut trend_obj = HashMap::new();
+                trend_obj.insert(
+                    "timestamp".to_string(),
+                    AqlValue::Number(serde_json::Number::from(timestamp)),
+                );
+                trend_obj.insert(
+                    "relationship_count".to_string(),
+                    AqlValue::Number(serde_json::Number::from(count)),
+                );
+                AqlValue::Object(trend_obj)
+            })
+            .collect();
+
+        let mut result_obj = HashMap::new();
+        result_obj.insert("success".to_string(), AqlValue::Bool(true));
+        result_obj.insert("knowledge_graph".to_string(), AqlValue::String(kg_name));
+        result_obj.insert("concept".to_string(), AqlValue::String(concept));
+        result_obj.insert("trends".to_string(), AqlValue::Array(trends));
+        result_obj.insert(
+            "concept_entities_found".to_string(),
+            AqlValue::Number(serde_json::Number::from(concept_entities.len())),
+        );
+        result_obj.insert(
+            "time_window_days".to_string(),
+            AqlValue::Number(serde_json::Number::from(time_window_days)),
         );
 
         Ok(AqlValue::Object(result_obj))
@@ -708,16 +1059,100 @@ impl AqlGraphRAGEngine {
         }
 
         let kg_name = self.extract_string_arg(&args[0], "knowledge_graph")?;
-        let _options = self.parse_options_arg(&args[1])?;
+        let options = self.parse_options_arg(&args[1])?;
 
-        // For now, return a placeholder result
-        let mut additional_fields = HashMap::new();
-        additional_fields.insert("communities".to_string(), AqlValue::Array(Vec::new()));
+        let min_community_size = options
+            .get("min_community_size")
+            .and_then(|v| v.as_u64())
+            .map(|n| n as usize)
+            .unwrap_or(3);
 
-        let result_obj = self.create_placeholder_result(
-            kg_name,
-            "Community detection not yet implemented",
-            additional_fields,
+        // Get storage
+        let storage = self.get_storage(&kg_name).await?;
+        let nodes = storage.list_nodes().await?;
+        let relationships = storage.list_relationships().await?;
+
+        // Build adjacency list for graph traversal
+        let mut adjacency: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
+        for rel in &relationships {
+            adjacency
+                .entry(rel.from_entity_id.clone())
+                .or_insert_with(Vec::new)
+                .push(rel.to_entity_id.clone());
+            adjacency
+                .entry(rel.to_entity_id.clone())
+                .or_insert_with(Vec::new)
+                .push(rel.from_entity_id.clone());
+        }
+
+        // Simple community detection using connected components
+        let mut visited = std::collections::HashSet::new();
+        let mut communities = Vec::new();
+
+        for node in &nodes {
+            if visited.contains(&node.id) {
+                continue;
+            }
+
+            // BFS to find connected component
+            let mut community = Vec::new();
+            let mut queue = std::collections::VecDeque::new();
+            queue.push_back(node.id.clone());
+            visited.insert(node.id.clone());
+
+            while let Some(current_id) = queue.pop_front() {
+                community.push(current_id.clone());
+
+                if let Some(neighbors) = adjacency.get(&current_id) {
+                    for neighbor in neighbors {
+                        if !visited.contains(neighbor) {
+                            visited.insert(neighbor.clone());
+                            queue.push_back(neighbor.clone());
+                        }
+                    }
+                }
+            }
+
+            if community.len() >= min_community_size {
+                communities.push(community);
+            }
+        }
+
+        // Format communities
+        let total_communities = communities.len();
+        let communities_result: Vec<AqlValue> = communities
+            .into_iter()
+            .enumerate()
+            .map(|(idx, community)| {
+                let mut comm_obj = HashMap::new();
+                comm_obj.insert(
+                    "community_id".to_string(),
+                    AqlValue::Number(serde_json::Number::from(idx)),
+                );
+                comm_obj.insert(
+                    "size".to_string(),
+                    AqlValue::Number(serde_json::Number::from(community.len())),
+                );
+                comm_obj.insert(
+                    "entity_ids".to_string(),
+                    AqlValue::Array(
+                        community
+                            .into_iter()
+                            .map(|id| AqlValue::String(id))
+                            .collect(),
+                    ),
+                );
+                AqlValue::Object(comm_obj)
+            })
+            .collect();
+
+        let mut result_obj = HashMap::new();
+        result_obj.insert("success".to_string(), AqlValue::Bool(true));
+        result_obj.insert("knowledge_graph".to_string(), AqlValue::String(kg_name));
+        result_obj.insert("communities".to_string(), AqlValue::Array(communities_result));
+        result_obj.insert(
+            "total_communities".to_string(),
+            AqlValue::Number(serde_json::Number::from(total_communities)),
         );
 
         Ok(AqlValue::Object(result_obj))
@@ -777,8 +1212,17 @@ impl AqlGraphRAGEngine {
         }
     }
 
+    /// Helper to get GraphRAG storage instance
+    async fn get_storage(&self, kg_name: &str) -> ProtocolResult<GraphRAGStorage> {
+        // Create storage instance using standard data directory
+        let data_dir = PathBuf::from("data/graphrag");
+        let storage = GraphRAGStorage::new(data_dir, kg_name.to_string());
+        storage.initialize().await?;
+        Ok(storage)
+    }
+
     /// Helper to create a success result object with common fields
-    fn create_success_result(
+    fn _create_success_result(
         &self,
         kg_name: String,
         additional_fields: HashMap<String, AqlValue>,
@@ -791,13 +1235,13 @@ impl AqlGraphRAGEngine {
     }
 
     /// Helper to create a placeholder result for unimplemented features
-    fn create_placeholder_result(
+    fn _create_placeholder_result(
         &self,
         kg_name: String,
         message: &str,
         additional_fields: HashMap<String, AqlValue>,
     ) -> HashMap<String, AqlValue> {
-        let mut result = self.create_success_result(kg_name, additional_fields);
+        let mut result = self._create_success_result(kg_name, additional_fields);
         result.insert("message".to_string(), AqlValue::String(message.to_string()));
         result
     }

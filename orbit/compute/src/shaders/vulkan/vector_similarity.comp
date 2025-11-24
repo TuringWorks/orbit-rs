@@ -1,0 +1,94 @@
+#version 450
+
+// Vector similarity operations for GPU acceleration
+// Supports cosine similarity, euclidean distance, dot product, and manhattan distance
+
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+// Input buffers
+layout(set = 0, binding = 0) readonly buffer QueryBuffer {
+    float query[];
+};
+
+layout(set = 0, binding = 1) readonly buffer CandidatesBuffer {
+    float candidates[];
+};
+
+layout(set = 0, binding = 2) writeonly buffer ScoresBuffer {
+    float scores[];
+};
+
+layout(set = 0, binding = 3) readonly buffer ParamsBuffer {
+    uint params[2]; // [vector_count, dimension]
+};
+
+// Metric type: 0=cosine, 1=euclidean, 2=dot_product, 3=manhattan
+layout(set = 0, binding = 4) readonly buffer MetricBuffer {
+    uint metric;
+};
+
+void main() {
+    uint vector_count = params[0];
+    uint dimension = params[1];
+    uint vector_id = gl_GlobalInvocationID.x;
+    
+    if (vector_id >= vector_count) {
+        return;
+    }
+    
+    uint candidate_offset = vector_id * dimension;
+    
+    if (metric == 0) {
+        // Cosine similarity
+        float dot_product = 0.0;
+        float query_magnitude_sq = 0.0;
+        float candidate_magnitude_sq = 0.0;
+        
+        for (uint i = 0; i < dimension; i++) {
+            float q = query[i];
+            float c = candidates[candidate_offset + i];
+            
+            dot_product += q * c;
+            query_magnitude_sq += q * q;
+            candidate_magnitude_sq += c * c;
+        }
+        
+        float query_magnitude = sqrt(query_magnitude_sq);
+        float candidate_magnitude = sqrt(candidate_magnitude_sq);
+        
+        if (query_magnitude > 0.0 && candidate_magnitude > 0.0) {
+            scores[vector_id] = dot_product / (query_magnitude * candidate_magnitude);
+        } else {
+            scores[vector_id] = 0.0;
+        }
+    } else if (metric == 1) {
+        // Euclidean distance
+        float distance_sq = 0.0;
+        
+        for (uint i = 0; i < dimension; i++) {
+            float diff = query[i] - candidates[candidate_offset + i];
+            distance_sq += diff * diff;
+        }
+        
+        scores[vector_id] = sqrt(distance_sq);
+    } else if (metric == 2) {
+        // Dot product
+        float dot_product = 0.0;
+        
+        for (uint i = 0; i < dimension; i++) {
+            dot_product += query[i] * candidates[candidate_offset + i];
+        }
+        
+        scores[vector_id] = dot_product;
+    } else if (metric == 3) {
+        // Manhattan distance
+        float distance = 0.0;
+        
+        for (uint i = 0; i < dimension; i++) {
+            distance += abs(query[i] - candidates[candidate_offset + i]);
+        }
+        
+        scores[vector_id] = distance;
+    }
+}
+

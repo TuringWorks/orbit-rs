@@ -474,11 +474,11 @@ pub struct HybridStorageManager {
     warm_store: Arc<RwLock<Option<ColumnBatch>>>,
 
     /// Cold tier storage (Iceberg-based for long-term archival)
-    #[cfg(feature = "iceberg-cold")]
+    #[cfg(feature = "storage-iceberg")]
     cold_store: Option<Arc<crate::protocols::postgres_wire::sql::execution::iceberg_cold::IcebergColdStore>>,
 
     /// Cold tier storage (simple columnar fallback when Iceberg disabled)
-    #[cfg(not(feature = "iceberg-cold"))]
+    #[cfg(not(feature = "storage-iceberg"))]
     cold_store: Arc<RwLock<Option<ColumnBatch>>>,
 
     /// Vectorized executor for columnar operations
@@ -520,9 +520,9 @@ impl HybridStorageManager {
             table_name: table_name.clone(),
             hot_store: Arc::new(RwLock::new(RowBasedStore::new(table_name, schema))),
             warm_store: Arc::new(RwLock::new(None)),
-            #[cfg(feature = "iceberg-cold")]
+            #[cfg(feature = "storage-iceberg")]
             cold_store: None,
-            #[cfg(not(feature = "iceberg-cold"))]
+            #[cfg(not(feature = "storage-iceberg"))]
             cold_store: Arc::new(RwLock::new(None)),
             vectorized_executor: VectorizedExecutor::with_config(VectorizedExecutorConfig::default()),
             config,
@@ -530,7 +530,7 @@ impl HybridStorageManager {
     }
 
     /// Set the Iceberg cold store (optional - for archival tier)
-    #[cfg(feature = "iceberg-cold")]
+    #[cfg(feature = "storage-iceberg")]
     pub fn with_cold_store(mut self, cold_store: Arc<crate::protocols::postgres_wire::sql::execution::iceberg_cold::IcebergColdStore>) -> Self {
         self.cold_store = Some(cold_store);
         self
@@ -599,7 +599,7 @@ impl HybridStorageManager {
             stats.rows_migrated = hot_data.row_count;
 
             // When Iceberg is enabled, write to Iceberg table
-            #[cfg(feature = "iceberg-cold")]
+            #[cfg(feature = "storage-iceberg")]
             if let Some(ref cold_store) = self.cold_store {
                 // Write to Iceberg (Phase 3: full implementation pending)
                 // For now, this will return an error indicating write path not ready
@@ -609,7 +609,7 @@ impl HybridStorageManager {
             }
 
             // Fallback: store in simple columnar format
-            #[cfg(not(feature = "iceberg-cold"))]
+            #[cfg(not(feature = "storage-iceberg"))]
             {
                 let mut cold = self.cold_store.write().await;
                 *cold = Some(hot_data);
@@ -661,7 +661,7 @@ impl HybridStorageManager {
         // TODO: Scan warm tier
 
         // Scan cold tier using Iceberg (if available)
-        #[cfg(feature = "iceberg-cold")]
+        #[cfg(feature = "storage-iceberg")]
         if time_range.as_ref().map(|r| r.overlaps_cold()).unwrap_or(true) {
             if let Some(ref cold_store) = self.cold_store {
                 // Query Iceberg cold tier
@@ -719,7 +719,7 @@ impl HybridStorageManager {
         _filter: Option<FilterPredicate>,
     ) -> ProtocolResult<QueryResult> {
         // For aggregations, prefer cold tier (columnar + SIMD + Iceberg metadata pruning)
-        #[cfg(feature = "iceberg-cold")]
+        #[cfg(feature = "storage-iceberg")]
         if let Some(ref cold_store) = self.cold_store {
             // Use IcebergColdStore's aggregate method (combines metadata pruning + SIMD)
             let result = cold_store.aggregate(&column, function, _filter.as_ref()).await?;
@@ -727,7 +727,7 @@ impl HybridStorageManager {
         }
 
         // Fallback to simple columnar cold tier (when Iceberg disabled)
-        #[cfg(not(feature = "iceberg-cold"))]
+        #[cfg(not(feature = "storage-iceberg"))]
         {
             let cold = self.cold_store.read().await;
 

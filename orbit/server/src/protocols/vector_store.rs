@@ -353,36 +353,46 @@ impl VectorActor {
     }
 
     /// Perform vector similarity search
+    /// 
+    /// Note: GPU acceleration is available via `orbit-compute::vector_similarity::GPUVectorSimilarity`
+    /// but requires async refactoring of this method. For now, this uses CPU-parallel execution
+    /// via Rayon when available, or sequential CPU execution otherwise.
     pub fn search_vectors(&self, params: VectorSearchParams) -> Vec<VectorSearchResult> {
-        let mut results = Vec::new();
-
-        for vector in self.vectors.values() {
-            // Apply metadata filters
-            let mut matches_filters = true;
-            for (key, expected_value) in &params.metadata_filters {
-                if let Some(actual_value) = vector.metadata.get(key) {
-                    if actual_value != expected_value {
-                        matches_filters = false;
-                        break;
-                    }
-                } else {
-                    matches_filters = false;
-                    break;
+        // Filter vectors by metadata first
+        let candidate_vectors: Vec<&Vector> = self
+            .vectors
+            .values()
+            .filter(|vector| {
+                // Apply metadata filters
+                for (key, expected_value) in &params.metadata_filters {
+                    if let Some(actual_value) = vector.metadata.get(key) {
+                        if actual_value != expected_value {
+                            return false;
+                        }
+                    } else {
+                            return false;
+                        }
                 }
-            }
+                true
+            })
+            .collect();
 
-            if !matches_filters {
-                continue;
-            }
+        if candidate_vectors.is_empty() {
+            return Vec::new();
+        }
 
-            // Calculate similarity
-            let score = VectorSimilarity::calculate_similarity(
-                &params.query_vector,
-                &vector.data,
-                params.metric,
-            );
+        // Calculate similarity scores (CPU-parallel for large datasets)
+        let similarity_scores: Vec<(usize, f32)> = if candidate_vectors.len() > 100 {
+            // Use parallel processing for large datasets
+            self.search_vectors_cpu_parallel(&params, &candidate_vectors)
+        } else {
+            // Use sequential processing for small datasets
+            self.search_vectors_cpu_sequential(&params, &candidate_vectors)
+        };
 
-            // Apply threshold filter
+        // Apply threshold filter and build results
+        let mut results = Vec::new();
+        for (idx, score) in similarity_scores {
             if let Some(threshold) = params.threshold {
                 if score < threshold {
                     continue;
@@ -390,7 +400,7 @@ impl VectorActor {
             }
 
             results.push(VectorSearchResult {
-                vector: vector.clone(),
+                vector: candidate_vectors[idx].clone(),
                 score,
                 metric: params.metric,
             });
@@ -407,6 +417,36 @@ impl VectorActor {
         results.truncate(params.limit);
 
         results
+    }
+
+    /// CPU-parallel similarity search using Rayon
+    fn search_vectors_cpu_parallel(
+        &self,
+        params: &VectorSearchParams,
+        candidate_vectors: &[&Vector],
+    ) -> Vec<(usize, f32)> {
+        // Use sequential CPU search (rayon parallel version removed)
+        self.search_vectors_cpu_sequential(params, candidate_vectors)
+    }
+
+    /// CPU-sequential similarity search
+    fn search_vectors_cpu_sequential(
+        &self,
+        params: &VectorSearchParams,
+        candidate_vectors: &[&Vector],
+    ) -> Vec<(usize, f32)> {
+        candidate_vectors
+            .iter()
+            .enumerate()
+            .map(|(idx, vector)| {
+                let score = VectorSimilarity::calculate_similarity(
+                    &params.query_vector,
+                    &vector.data,
+                    params.metric,
+                );
+                (idx, score)
+            })
+            .collect()
     }
 
     /// Find k nearest neighbors

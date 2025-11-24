@@ -1,0 +1,87 @@
+#version 450
+
+// GPU-Accelerated Connected Components Detection
+// Uses Union-Find algorithm with path compression
+
+layout(local_size_x = 256) in;
+
+// Graph structure
+layout(set = 0, binding = 0) readonly buffer EdgeArray {
+    uint edges[];
+};
+
+layout(set = 0, binding = 1) readonly buffer EdgeOffset {
+    uint offsets[];
+};
+
+// Union-Find parent array
+layout(set = 0, binding = 2) buffer Parent {
+    uint parent[];
+};
+
+// Visited nodes mask
+layout(set = 0, binding = 3) buffer Visited {
+    uint visited[];
+};
+
+// Parameters
+layout(set = 0, binding = 4) uniform Params {
+    uint node_count;
+};
+
+// Find root with path compression
+uint find_root(uint x) {
+    uint root = x;
+    while (parent[root] != root) {
+        root = parent[root];
+    }
+    
+    // Path compression
+    uint current = x;
+    while (parent[current] != root) {
+        uint next = parent[current];
+        parent[current] = root;
+        current = next;
+    }
+    
+    return root;
+}
+
+void main() {
+    uint id = gl_GlobalInvocationID.x;
+    
+    if (id >= node_count) {
+        return;
+    }
+    
+    // Initialize parent to self
+    if (parent[id] == 0xFFFFFFFF) {
+        parent[id] = id;
+    }
+    
+    // Union-Find with path compression
+    uint root = find_root(id);
+    
+    // Mark as visited and process neighbors
+    if (visited[id] == 0) {
+        visited[id] = 1;
+        
+        uint start_idx = offsets[id];
+        uint end_idx = offsets[id + 1];
+        
+        for (uint i = start_idx; i < end_idx; i++) {
+            uint neighbor = edges[i];
+            
+            // Union: merge components
+            uint neighbor_root = find_root(neighbor);
+            
+            if (root < neighbor_root) {
+                parent[neighbor_root] = root;
+            } else if (neighbor_root < root) {
+                parent[root] = neighbor_root;
+                root = neighbor_root;
+            }
+        }
+    }
+}
+

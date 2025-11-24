@@ -59,13 +59,13 @@ Orbit-RS is a next-generation distributed actor system framework built in Rust, 
                                     │
                                     ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                         ✨ AI-Native Layer (NEW)                            │
+│                         AI-Native Layer (NEW)                               │
 │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────────────────┐  │
-│  │  AI Master      │  │  Intelligent    │  │  Predictive Resource       │  │
+│  │  AI Master      │  │  Intelligent    │  │  Predictive Resource        │  │
 │  │  Controller     │  │  Query Optimizer│  │  Manager                    │  │
 │  └─────────────────┘  └─────────────────┘  └─────────────────────────────┘  │
 │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────────────────┐  │
-│  │  Smart Storage  │  │  Adaptive TX    │  │  Learning & Decision       │  │
+│  │  Smart Storage  │  │  Adaptive TX    │  │  Learning & Decision        │  │
 │  │  Manager        │  │  Manager        │  │  Engines + Knowledge Base   │  │
 │  └─────────────────┘  └─────────────────┘  └─────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────────────────────┘

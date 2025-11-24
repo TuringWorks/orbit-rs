@@ -83,6 +83,7 @@ impl<S: GraphStorage> GraphEngine<S> {
             nodes: result_nodes,
             relationships: result_relationships,
             columns: vec!["nodes".to_string(), "relationships".to_string()],
+            rows: Vec::new(),
         })
     }
 
@@ -202,6 +203,7 @@ impl<S: GraphStorage> GraphEngine<S> {
             nodes: result_nodes,
             relationships: result_relationships,
             columns,
+            rows: Vec::new(),
         })
     }
 
@@ -547,6 +549,8 @@ pub struct QueryResult {
     pub relationships: Vec<GraphRelationship>,
     /// Column names for the result
     pub columns: Vec<String>,
+    /// Tabular rows (for procedure results)
+    pub rows: Vec<Vec<Option<String>>>,
 }
 
 #[cfg(test)]
