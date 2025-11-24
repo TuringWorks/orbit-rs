@@ -335,6 +335,7 @@ impl VulkanDevice {
         visited: &mut [u32],
         next_level: &mut [u32],
         next_level_size: &mut u32,
+        parent: &mut [u32],
         current_level_size: u32,
         max_nodes: u32,
     ) -> Result<(), ComputeError> {
@@ -464,6 +465,27 @@ impl VulkanDevice {
             })
         })?;
 
+        let parent_buffer = Buffer::from_iter(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE
+                    | MemoryTypeFilter::HOST_RANDOM_ACCESS,
+                ..Default::default()
+            },
+            parent.iter().copied(),
+        )
+        .map_err(|e| {
+            ComputeError::gpu(GPUError::MemoryAllocationFailed {
+                requested_bytes: parent.len() * std::mem::size_of::<u32>(),
+                available_bytes: 0,
+            })
+        })?;
+
         let params = [current_level_size, max_nodes];
         let params_buffer = Buffer::from_data(
             self.memory_allocator.clone(),
@@ -497,7 +519,8 @@ impl VulkanDevice {
                 WriteDescriptorSet::buffer(3, visited_buffer.clone()),
                 WriteDescriptorSet::buffer(4, next_level_buffer.clone()),
                 WriteDescriptorSet::buffer(5, next_level_size_buffer.clone()),
-                WriteDescriptorSet::buffer(6, params_buffer.clone()),
+                WriteDescriptorSet::buffer(6, parent_buffer.clone()),
+                WriteDescriptorSet::buffer(7, params_buffer.clone()),
             ],
             [],
         )
@@ -607,6 +630,18 @@ impl VulkanDevice {
             }
         })?;
         *next_level_size = *size_content;
+
+        // Read parent buffer back
+        let parent_content = parent_buffer.read().map_err(|_e| {
+            ComputeError::Execution {
+                source: crate::errors::ExecutionError::DataTransferError {
+                    source: "GPU".to_string(),
+                    destination: "CPU".to_string(),
+                },
+                compute_unit: Some("Vulkan".to_string()),
+            }
+        })?;
+        parent.copy_from_slice(&parent_content);
 
         Ok(())
     }

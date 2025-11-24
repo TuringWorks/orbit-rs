@@ -252,13 +252,13 @@ impl GPUGraphTraversal {
             source,
             target,
             use_u32_indices,
-            |edge_array, edge_offset, current_level, visited, next_level, next_level_size, current_level_size, max_nodes| {
+            |edge_array, edge_offset, current_level, visited, next_level, next_level_size, parent, current_level_size, max_nodes| {
                 if use_u32_indices {
                     // Use optimized u32 version for smaller graphs
                     let current_level_u32: Vec<u32> = current_level.iter().map(|&x| x as u32).collect();
                     let mut next_level_u32 = vec![0u32; next_level.len()];
                     let mut next_level_size_u32 = *next_level_size;
-                    
+
                     metal_device.execute_bfs_level_expansion_u32(
                         edge_array,
                         edge_offset,
@@ -266,10 +266,11 @@ impl GPUGraphTraversal {
                         visited,
                         &mut next_level_u32,
                         &mut next_level_size_u32,
+                        parent,
                         current_level_size,
                         max_nodes,
                     )?;
-                    
+
                     // Convert back to u64
                     *next_level_size = next_level_size_u32;
                     for (i, &val) in next_level_u32.iter().enumerate().take(*next_level_size as usize) {
@@ -285,6 +286,7 @@ impl GPUGraphTraversal {
                         visited,
                         next_level,
                         next_level_size,
+                        parent,
                         current_level_size,
                         max_nodes,
                     )
@@ -310,13 +312,13 @@ impl GPUGraphTraversal {
             source,
             target,
             use_u32_indices,
-            |edge_array, edge_offset, current_level, visited, next_level, next_level_size, current_level_size, max_nodes| {
+            |edge_array, edge_offset, current_level, visited, next_level, next_level_size, parent, current_level_size, max_nodes| {
                 if use_u32_indices {
                     // Use optimized u32 version for smaller graphs
                     let current_level_u32: Vec<u32> = current_level.iter().map(|&x| x as u32).collect();
                     let mut next_level_u32 = vec![0u32; next_level.len()];
                     let mut next_level_size_u32 = *next_level_size;
-                    
+
                     vulkan_device.execute_bfs_level_expansion(
                         edge_array,
                         edge_offset,
@@ -324,10 +326,11 @@ impl GPUGraphTraversal {
                         visited,
                         &mut next_level_u32,
                         &mut next_level_size_u32,
+                        parent,
                         current_level_size,
                         max_nodes,
                     )?;
-                    
+
                     // Convert back to u64
                     *next_level_size = next_level_size_u32;
                     for (i, &val) in next_level_u32.iter().enumerate().take(*next_level_size as usize) {
@@ -339,7 +342,7 @@ impl GPUGraphTraversal {
                     let current_level_u32: Vec<u32> = current_level.iter().map(|&x| x as u32).collect();
                     let mut next_level_u32 = vec![0u32; next_level.len()];
                     let mut next_level_size_u32 = *next_level_size;
-                    
+
                     vulkan_device.execute_bfs_level_expansion(
                         edge_array,
                         edge_offset,
@@ -347,10 +350,11 @@ impl GPUGraphTraversal {
                         visited,
                         &mut next_level_u32,
                         &mut next_level_size_u32,
+                        parent,
                         current_level_size,
                         max_nodes,
                     )?;
-                    
+
                     // Convert back to u64
                     *next_level_size = next_level_size_u32;
                     for (i, &val) in next_level_u32.iter().enumerate().take(*next_level_size as usize) {
@@ -375,14 +379,15 @@ impl GPUGraphTraversal {
     ) -> Result<TraversalResult, ComputeError>
     where
         F: FnMut(
-            &[u32],
-            &[u32],
-            &[u64],
-            &mut [u32],
-            &mut [u64],
-            &mut u32,
-            u32,
-            u32,
+            &[u32],          // edge_array
+            &[u32],          // edge_offset
+            &[u64],          // current_level
+            &mut [u32],      // visited
+            &mut [u64],      // next_level
+            &mut u32,        // next_level_size
+            &mut [u32],      // parent (NEW)
+            u32,             // current_level_size
+            u32,             // max_nodes
         ) -> Result<(), ComputeError>,
     {
         // Initialize BFS state
@@ -404,28 +409,26 @@ impl GPUGraphTraversal {
         });
         
         // Parent tracking for path reconstruction: parent[node_idx] = parent_idx
-        let mut parent: Vec<Option<usize>> = vec![None; graph.node_count];
-        parent[source_idx] = None; // Source has no parent
-        
+        // GPU kernel will populate this array
+        let mut parent_u32 = vec![u32::MAX; graph.node_count]; // u32::MAX = no parent
+        parent_u32[source_idx] = source_idx as u32; // Source points to itself
+
         // Start with source index
         let mut current_level_indices = vec![source_idx as u64];
         let mut paths = Vec::new();
         let mut nodes_explored = 0;
         let mut edges_traversed = 0;
-        
+
         // Iterative BFS using GPU level expansion
         for depth in 0..self.config.max_depth as usize {
             if current_level_indices.is_empty() {
                 break;
             }
-            
+
             let mut next_level = vec![0u64; graph.node_count];
             let mut next_level_size = 0u32;
-            
-            // Track which nodes were discovered in this level (for parent tracking)
-            let mut discovered_nodes: Vec<usize> = Vec::new();
-            
-            // Execute GPU kernel for level expansion
+
+            // Execute GPU kernel for level expansion (with GPU parent tracking!)
             if let Err(e) = execute_kernel(
                 &gpu_graph.edge_array,
                 &gpu_graph.edge_offset,
@@ -433,68 +436,54 @@ impl GPUGraphTraversal {
                 &mut visited,
                 &mut next_level,
                 &mut next_level_size,
+                &mut parent_u32,
                 current_level_indices.len() as u32,
                 graph.node_count as u32,
             ) {
                 warn!("GPU BFS level expansion failed: {}, falling back to CPU", e);
                 return self.bfs_cpu_parallel(graph, source, target).await;
             }
-            
-            // Update parent tracking for newly discovered nodes
-            let next_level_slice = &next_level[..next_level_size as usize];
-            for &neighbor_idx_u64 in next_level_slice {
-                let neighbor_idx = neighbor_idx_u64 as usize;
-                if neighbor_idx < graph.node_count && parent[neighbor_idx].is_none() {
-                    // Find which parent node discovered this neighbor
-                    // We need to check which node in current_level has this neighbor
-                    for &parent_idx_u64 in &current_level_indices {
-                        let parent_idx = parent_idx_u64 as usize;
-                        if let Some(neighbors) = graph.adjacency_list.get(parent_idx) {
-                            if neighbors.contains(&(neighbor_idx as u32)) {
-                                parent[neighbor_idx] = Some(parent_idx);
-                                discovered_nodes.push(neighbor_idx);
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
-            
+
+            // No CPU post-processing needed! GPU kernel has updated parent array
+
             nodes_explored += current_level_indices.len();
-            
+
             // Count edges traversed
             for &node_idx in &current_level_indices {
                 if let Some(neighbors) = graph.adjacency_list.get(node_idx as usize) {
                     edges_traversed += neighbors.len();
                 }
             }
-            
+
+            let next_level_slice = &next_level[..next_level_size as usize];
+
             // Check if target found and reconstruct full path
             if let Some(target_idx_val) = target_idx {
                 let target_idx_u64 = target_idx_val as u64;
                 if next_level_slice.contains(&target_idx_u64) {
-                    // Reconstruct full path using parent tracking
+                    // Reconstruct full path using GPU-generated parent tracking
                     let mut path_nodes = Vec::new();
                     let mut current_idx = target_idx_val;
-                    
+
                     // Build path backwards from target to source
-                    while let Some(node_id) = graph.node_ids.get(current_idx) {
-                        path_nodes.push(*node_id);
-                        if let Some(parent_idx) = parent[current_idx] {
-                            current_idx = parent_idx;
+                    loop {
+                        if let Some(&node_id) = graph.node_ids.get(current_idx) {
+                            path_nodes.push(node_id);
                         } else {
                             break;
                         }
+
+                        let parent_idx = parent_u32[current_idx];
+                        if parent_idx == u32::MAX || parent_idx as usize == current_idx {
+                            // Reached source (source points to itself)
+                            break;
+                        }
+                        current_idx = parent_idx as usize;
                     }
-                    
+
                     // Reverse to get source -> target path
                     path_nodes.reverse();
-                    
-                    // Ensure source is first (safety check)
-                    if path_nodes.first() != Some(&source) {
-                        path_nodes.insert(0, source);
-                    }
-                    
+
                     paths.push(Path {
                         nodes: path_nodes,
                         edges: vec![], // TODO: Reconstruct edges if needed
@@ -502,7 +491,7 @@ impl GPUGraphTraversal {
                         score: 1.0,
                         length: depth + 1,
                     });
-                    
+
                     if paths.len() >= self.config.max_paths {
                         break;
                     }
@@ -583,22 +572,38 @@ impl GPUGraphTraversal {
                 continue;
             }
             
-            // Get neighbors (parallel processing for large adjacency lists)
+            // Get neighbors (parallel processing only for large adjacency lists to avoid Rayon overhead)
             if let Some(neighbors) = graph.adjacency_list.get(current as usize) {
-                let neighbor_batch: Vec<_> = neighbors
-                    .par_iter()
-                    .filter_map(|&neighbor_idx| {
-                        let neighbor_id = graph.node_ids.get(neighbor_idx as usize)?;
-                        if !visited.contains(neighbor_id) {
-                            Some(*neighbor_id)
-                        } else {
-                            None
-                        }
-                    })
-                    .collect();
-                
+                let neighbor_batch: Vec<_> = if neighbors.len() > 1000 {
+                    // Parallel processing for large neighbor lists
+                    neighbors
+                        .par_iter()
+                        .filter_map(|&neighbor_idx| {
+                            let neighbor_id = graph.node_ids.get(neighbor_idx as usize)?;
+                            if !visited.contains(neighbor_id) {
+                                Some(*neighbor_id)
+                            } else {
+                                None
+                            }
+                        })
+                        .collect()
+                } else {
+                    // Sequential for small lists (avoid Rayon overhead)
+                    neighbors
+                        .iter()
+                        .filter_map(|&neighbor_idx| {
+                            let neighbor_id = graph.node_ids.get(neighbor_idx as usize)?;
+                            if !visited.contains(neighbor_id) {
+                                Some(*neighbor_id)
+                            } else {
+                                None
+                            }
+                        })
+                        .collect()
+                };
+
                 edges_traversed += neighbor_batch.len();
-                
+
                 for neighbor_id in neighbor_batch {
                     visited.insert(neighbor_id);
                     let mut new_path = path.clone();
@@ -695,18 +700,34 @@ impl GPUGraphTraversal {
                 community.push(current);
                 
                 if let Some(neighbors) = graph.adjacency_list.get(current as usize) {
-                    let unvisited_neighbors: Vec<_> = neighbors
-                        .par_iter()
-                        .filter_map(|&neighbor_idx| {
-                            let neighbor_id = graph.node_ids.get(neighbor_idx as usize)?;
-                            if !visited.contains(neighbor_id) {
-                                Some(*neighbor_id)
-                            } else {
-                                None
-                            }
-                        })
-                        .collect();
-                    
+                    let unvisited_neighbors: Vec<_> = if neighbors.len() > 1000 {
+                        // Parallel for large neighbor lists
+                        neighbors
+                            .par_iter()
+                            .filter_map(|&neighbor_idx| {
+                                let neighbor_id = graph.node_ids.get(neighbor_idx as usize)?;
+                                if !visited.contains(neighbor_id) {
+                                    Some(*neighbor_id)
+                                } else {
+                                    None
+                                }
+                            })
+                            .collect()
+                    } else {
+                        // Sequential for small lists
+                        neighbors
+                            .iter()
+                            .filter_map(|&neighbor_idx| {
+                                let neighbor_id = graph.node_ids.get(neighbor_idx as usize)?;
+                                if !visited.contains(neighbor_id) {
+                                    Some(*neighbor_id)
+                                } else {
+                                    None
+                                }
+                            })
+                            .collect()
+                    };
+
                     for neighbor_id in unvisited_neighbors {
                         visited.insert(neighbor_id);
                         queue.push_back(neighbor_id);

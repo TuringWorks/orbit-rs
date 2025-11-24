@@ -609,6 +609,7 @@ impl MetalDevice {
         visited: &mut [u32],
         next_level: &mut [u32],
         next_level_size: &mut u32,
+        parent: &mut [u32],
         current_level_size: u32,
         max_nodes: u32,
     ) -> Result<(), ComputeError> {
@@ -618,10 +619,13 @@ impl MetalDevice {
         let current_level_buffer = self.create_buffer_with_data_u32(current_level)?;
         let visited_buffer = self.create_buffer_with_data_u32(visited)?;
         let next_level_buffer = self.create_buffer_u32(max_nodes as usize)?;
-        
+
         // Create atomic counter buffer for next_level_size
         let next_level_size_buffer = self.create_buffer_with_data_u32(&[*next_level_size])?;
-        
+
+        // Create parent buffer for path reconstruction
+        let parent_buffer = self.create_buffer_with_data_u32(parent)?;
+
         // Create parameter buffer
         let params = [current_level_size, max_nodes];
         let params_buffer = self.create_buffer_with_data_u32(&params)?;
@@ -636,6 +640,7 @@ impl MetalDevice {
                 &visited_buffer,
                 &next_level_buffer,
                 &next_level_size_buffer,
+                &parent_buffer,
                 &params_buffer,
             ],
             current_level_size as u64,
@@ -666,6 +671,15 @@ impl MetalDevice {
         };
         *next_level_size = size_slice[0];
 
+        // Read parent buffer back
+        let parent_slice = unsafe {
+            std::slice::from_raw_parts(
+                parent_buffer.contents() as *const u32,
+                parent.len(),
+            )
+        };
+        parent.copy_from_slice(parent_slice);
+
         Ok(())
     }
     
@@ -679,6 +693,7 @@ impl MetalDevice {
         visited: &mut [u32],
         next_level: &mut [u64],
         next_level_size: &mut u32,
+        parent: &mut [u32],
         current_level_size: u32,
         max_nodes: u32,
     ) -> Result<(), ComputeError> {
@@ -689,7 +704,7 @@ impl MetalDevice {
             .collect();
         let mut next_level_u32 = vec![0u32; max_nodes as usize];
         let mut next_level_size_u32 = *next_level_size;
-        
+
         // Execute with u32 version
         self.execute_bfs_level_expansion_u32(
             edge_array,
@@ -698,10 +713,11 @@ impl MetalDevice {
             visited,
             &mut next_level_u32,
             &mut next_level_size_u32,
+            parent,
             current_level_size,
             max_nodes,
         )?;
-        
+
         // Convert results back to u64
         *next_level_size = next_level_size_u32;
         for (i, &val) in next_level_u32.iter().enumerate().take(*next_level_size as usize) {

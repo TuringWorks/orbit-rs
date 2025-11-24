@@ -458,29 +458,33 @@ kernel void bfs_level_expansion(
     device atomic_uint* visited [[buffer(3)]],
     device uint* next_level [[buffer(4)]],
     device atomic_uint* next_level_size [[buffer(5)]],
-    device const uint& current_level_size [[buffer(6)]],
-    device const uint& max_nodes [[buffer(7)]],
+    device uint* parent [[buffer(6)]],
+    device const uint& current_level_size [[buffer(7)]],
+    device const uint& max_nodes [[buffer(8)]],
     uint id [[thread_position_in_grid]]
 ) {
     if (id >= current_level_size) {
         return;
     }
-    
+
     uint node_id = current_level[id];
     uint start_idx = edge_offset[node_id];
     uint end_idx = edge_offset[node_id + 1];
-    
+
     // Process all neighbors of this node
     for (uint i = start_idx; i < end_idx; i++) {
         uint neighbor = edge_array[i];
-        
+
         // Check if neighbor is already visited (atomic exchange)
         uint original = atomic_exchange_explicit(&visited[neighbor], 1, memory_order_relaxed);
-        
+
         if (original == 0) {
+            // Set parent for path reconstruction (first visit wins)
+            parent[neighbor] = node_id;
+
             // Add neighbor to next level
             uint next_idx = atomic_fetch_add_explicit(next_level_size, 1, memory_order_relaxed);
-            
+
             if (next_idx < max_nodes) {
                 next_level[next_idx] = neighbor;
             }
