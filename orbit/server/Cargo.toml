@@ -21,7 +21,7 @@ tokio-stream.workspace = true
 tokio-util = { version = "0.7", features = ["codec"] }
 # Protocol dependencies (merged from orbit-protocols)
 bytes = "1.7"
-serde_cbor = "0.11"
+ciborium = "0.2"
 nom = "7.1"
 postgres-protocol = "0.6"
 postgres-types = "0.2"
