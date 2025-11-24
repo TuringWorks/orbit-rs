@@ -26,6 +26,7 @@ use vulkano::{
         ComputePipeline, Pipeline, PipelineBindPoint, PipelineLayout,
         PipelineShaderStageCreateInfo,
     },
+    shader::{spirv::bytes_to_words, ShaderModule},
     sync::{self, GpuFuture},
     VulkanLibrary,
 };
@@ -38,6 +39,11 @@ pub struct VulkanDevice {
     command_buffer_allocator: Arc<StandardCommandBufferAllocator>,
     descriptor_set_allocator: Arc<StandardDescriptorSetAllocator>,
     device_name: String,
+    // Cached compute pipelines for performance
+    #[allow(dead_code)] // Will be used when implementing execution methods
+    bfs_pipeline: Option<Arc<ComputePipeline>>,
+    #[allow(dead_code)] // Will be used when implementing execution methods
+    vector_similarity_pipeline: Option<Arc<ComputePipeline>>,
 }
 
 impl VulkanDevice {
@@ -138,6 +144,12 @@ impl VulkanDevice {
 
         tracing::info!("Initialized Vulkan device: {}", device_name);
 
+        // Load and compile shaders (defer pipeline creation until first use)
+        // Note: SPIR-V shaders need to be compiled from GLSL using glslc
+        // For now, we'll create pipelines lazily when needed
+        let bfs_pipeline = None; // Will be created on first use
+        let vector_similarity_pipeline = None; // Will be created on first use
+
         Ok(Self {
             device,
             queue,
@@ -145,7 +157,418 @@ impl VulkanDevice {
             command_buffer_allocator,
             descriptor_set_allocator,
             device_name,
+            bfs_pipeline,
+            vector_similarity_pipeline,
         })
+    }
+
+    /// Load a SPIR-V shader module from bytes
+    /// Note: Shader must be pre-compiled to SPIR-V using glslc
+    fn load_shader_module(&self, shader_code: &[u8]) -> Result<Arc<ShaderModule>, ComputeError> {
+        let words = bytes_to_words(shader_code).map_err(|e| {
+            ComputeError::gpu(GPUError::APIInitializationFailed {
+                api: "Vulkan".to_string(),
+                error: format!("Failed to convert shader bytes to words: {}", e),
+            })
+        })?;
+        
+        unsafe {
+            ShaderModule::new(self.device.clone(), words)
+                .map_err(|e| {
+                    ComputeError::gpu(GPUError::APIInitializationFailed {
+                        api: "Vulkan".to_string(),
+                        error: format!("Failed to load shader: {}", e),
+                    })
+                })
+        }
+    }
+
+    /// Create or get cached BFS compute pipeline
+    fn get_bfs_pipeline(&mut self) -> Result<Arc<ComputePipeline>, ComputeError> {
+        if let Some(ref pipeline) = self.bfs_pipeline {
+            return Ok(pipeline.clone());
+        }
+
+        // Try to load pre-compiled SPIR-V shader
+        // Note: Shader must be compiled with: glslc graph_bfs.comp -o graph_bfs.spv
+        let shader_code = include_bytes!("shaders/vulkan/graph_bfs.spv");
+        let shader_module = self.load_shader_module(shader_code)?;
+        
+        // Get entry point
+        let entry_point = shader_module.entry_point("main").ok_or_else(|| {
+            ComputeError::gpu(GPUError::APIInitializationFailed {
+                api: "Vulkan".to_string(),
+                error: "BFS shader entry point 'main' not found".to_string(),
+            })
+        })?;
+        
+        // Create shader stage
+        let stage = PipelineShaderStageCreateInfo::new(entry_point);
+        
+        // Create pipeline layout from shader reflection
+        let descriptor_set_layouts = PipelineDescriptorSetLayoutCreateInfo::from_stages([&stage]);
+        let layout = PipelineLayout::new(
+            self.device.clone(),
+            descriptor_set_layouts,
+        )
+        .map_err(|e| {
+            ComputeError::gpu(GPUError::APIInitializationFailed {
+                api: "Vulkan".to_string(),
+                error: format!("Failed to create pipeline layout: {}", e),
+            })
+        })?;
+        
+        // Create compute pipeline using stage_layout
+        let pipeline = ComputePipeline::new(
+            self.device.clone(),
+            ComputePipelineCreateInfo::stage_layout(stage, layout),
+        )
+        .map_err(|e| {
+            ComputeError::gpu(GPUError::APIInitializationFailed {
+                api: "Vulkan".to_string(),
+                error: format!("Failed to create BFS pipeline: {}", e),
+            })
+        })?;
+        
+        // Cache the pipeline
+        self.bfs_pipeline = Some(pipeline.clone());
+        Ok(pipeline)
+    }
+
+    /// Create or get cached vector similarity compute pipeline
+    fn get_vector_similarity_pipeline(&mut self) -> Result<Arc<ComputePipeline>, ComputeError> {
+        if let Some(ref pipeline) = self.vector_similarity_pipeline {
+            return Ok(pipeline.clone());
+        }
+
+        // Try to load pre-compiled SPIR-V shader
+        let shader_code = include_bytes!("shaders/vulkan/vector_similarity.spv");
+        let shader_module = self.load_shader_module(shader_code)?;
+        
+        // Get entry point
+        let entry_point = shader_module.entry_point("main").ok_or_else(|| {
+            ComputeError::gpu(GPUError::APIInitializationFailed {
+                api: "Vulkan".to_string(),
+                error: "Vector similarity shader entry point 'main' not found".to_string(),
+            })
+        })?;
+        
+        // Create shader stage
+        let stage = PipelineShaderStageCreateInfo::new(entry_point);
+        
+        // Create pipeline layout from shader reflection
+        let descriptor_set_layouts = PipelineDescriptorSetLayoutCreateInfo::from_stages([&stage]);
+        let layout = PipelineLayout::new(
+            self.device.clone(),
+            descriptor_set_layouts,
+        )
+        .map_err(|e| {
+            ComputeError::gpu(GPUError::APIInitializationFailed {
+                api: "Vulkan".to_string(),
+                error: format!("Failed to create pipeline layout: {}", e),
+            })
+        })?;
+        
+        // Create compute pipeline using stage_layout
+        let pipeline = ComputePipeline::new(
+            self.device.clone(),
+            ComputePipelineCreateInfo::stage_layout(stage, layout),
+        )
+        .map_err(|e| {
+            ComputeError::gpu(GPUError::APIInitializationFailed {
+                api: "Vulkan".to_string(),
+                error: format!("Failed to create vector similarity pipeline: {}", e),
+            })
+        })?;
+        
+        // Cache the pipeline
+        self.vector_similarity_pipeline = Some(pipeline.clone());
+        Ok(pipeline)
+    }
+
+    /// Execute Vulkan BFS level expansion
+    pub fn execute_bfs_level_expansion(
+        &mut self,
+        edge_array: &[u32],
+        edge_offset: &[u32],
+        current_level: &[u32],
+        visited: &mut [u32],
+        next_level: &mut [u32],
+        next_level_size: &mut u32,
+        current_level_size: u32,
+        max_nodes: u32,
+    ) -> Result<(), ComputeError> {
+        // Get or create BFS pipeline
+        let pipeline = self.get_bfs_pipeline()?;
+
+        // Create buffers
+        let edge_array_buffer = Buffer::from_iter(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            edge_array.iter().copied(),
+        )
+        .map_err(|e| {
+            ComputeError::gpu(GPUError::MemoryAllocationFailed {
+                requested_bytes: edge_array.len() * std::mem::size_of::<u32>(),
+                available_bytes: 0,
+            })
+        })?;
+
+        let edge_offset_buffer = Buffer::from_iter(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            edge_offset.iter().copied(),
+        )
+        .map_err(|e| {
+            ComputeError::gpu(GPUError::MemoryAllocationFailed {
+                requested_bytes: edge_offset.len() * std::mem::size_of::<u32>(),
+                available_bytes: 0,
+            })
+        })?;
+
+        let current_level_buffer = Buffer::from_iter(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            current_level.iter().copied(),
+        )
+        .map_err(|e| {
+            ComputeError::gpu(GPUError::MemoryAllocationFailed {
+                requested_bytes: current_level.len() * std::mem::size_of::<u32>(),
+                available_bytes: 0,
+            })
+        })?;
+
+        let visited_buffer = Buffer::from_iter(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE
+                    | MemoryTypeFilter::HOST_RANDOM_ACCESS,
+                ..Default::default()
+            },
+            visited.iter().copied(),
+        )
+        .map_err(|e| {
+            ComputeError::gpu(GPUError::MemoryAllocationFailed {
+                requested_bytes: visited.len() * std::mem::size_of::<u32>(),
+                available_bytes: 0,
+            })
+        })?;
+
+        let next_level_buffer = Buffer::from_iter(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_RANDOM_ACCESS,
+                ..Default::default()
+            },
+            (0..max_nodes as usize).map(|_| 0u32),
+        )
+        .map_err(|e| {
+            ComputeError::gpu(GPUError::MemoryAllocationFailed {
+                requested_bytes: max_nodes as usize * std::mem::size_of::<u32>(),
+                available_bytes: 0,
+            })
+        })?;
+
+        let next_level_size_buffer = Buffer::from_data(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE
+                    | MemoryTypeFilter::HOST_RANDOM_ACCESS,
+                ..Default::default()
+            },
+            *next_level_size,
+        )
+        .map_err(|e| {
+            ComputeError::gpu(GPUError::MemoryAllocationFailed {
+                requested_bytes: std::mem::size_of::<u32>(),
+                available_bytes: 0,
+            })
+        })?;
+
+        let params = [current_level_size, max_nodes];
+        let params_buffer = Buffer::from_data(
+            self.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::UNIFORM_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            params,
+        )
+        .map_err(|e| {
+            ComputeError::gpu(GPUError::MemoryAllocationFailed {
+                requested_bytes: std::mem::size_of::<[u32; 2]>(),
+                available_bytes: 0,
+            })
+        })?;
+
+        // Create descriptor set
+        let layout = &pipeline.layout().set_layouts()[0];
+        let descriptor_set = PersistentDescriptorSet::new(
+            &self.descriptor_set_allocator,
+            layout.clone(),
+            [
+                WriteDescriptorSet::buffer(0, edge_array_buffer.clone()),
+                WriteDescriptorSet::buffer(1, edge_offset_buffer.clone()),
+                WriteDescriptorSet::buffer(2, current_level_buffer.clone()),
+                WriteDescriptorSet::buffer(3, visited_buffer.clone()),
+                WriteDescriptorSet::buffer(4, next_level_buffer.clone()),
+                WriteDescriptorSet::buffer(5, next_level_size_buffer.clone()),
+                WriteDescriptorSet::buffer(6, params_buffer.clone()),
+            ],
+            [],
+        )
+        .map_err(|e| {
+            ComputeError::gpu(GPUError::KernelLaunchFailed {
+                kernel_name: "bfs_level_expansion".to_string(),
+                error: format!("Failed to create descriptor set: {}", e),
+            })
+        })?;
+
+        // Build command buffer
+        let workgroup_count = ((current_level_size as u32) + 255) / 256;
+        let mut builder = AutoCommandBufferBuilder::primary(
+            &self.command_buffer_allocator,
+            self.queue.queue_family_index(),
+            CommandBufferUsage::OneTimeSubmit,
+        )
+        .map_err(|e| {
+            ComputeError::gpu(GPUError::CommandBufferFailed {
+                error: format!("Failed to create command buffer: {}", e),
+            })
+        })?;
+
+        builder
+            .bind_pipeline_compute(pipeline.clone())
+            .map_err(|e| {
+                ComputeError::gpu(GPUError::CommandBufferFailed {
+                    error: format!("Failed to bind pipeline: {}", e),
+                })
+            })?
+            .bind_descriptor_sets(
+                PipelineBindPoint::Compute,
+                pipeline.layout().clone(),
+                0,
+                descriptor_set,
+            )
+            .map_err(|e| {
+                ComputeError::gpu(GPUError::CommandBufferFailed {
+                    error: format!("Failed to bind descriptor sets: {}", e),
+                })
+            })?
+            .dispatch([workgroup_count, 1, 1])
+            .map_err(|e| {
+                ComputeError::gpu(GPUError::CommandBufferFailed {
+                    error: format!("Failed to dispatch: {}", e),
+                })
+            })?;
+
+        let command_buffer = builder.build().map_err(|e| {
+            ComputeError::gpu(GPUError::CommandBufferFailed {
+                error: format!("Failed to build command buffer: {}", e),
+            })
+        })?;
+
+        // Execute and wait
+        let future = sync::now(self.device.clone())
+            .then_execute(self.queue.clone(), command_buffer)
+            .map_err(|e| {
+                ComputeError::gpu(GPUError::CommandBufferFailed {
+                    error: format!("Failed to execute: {}", e),
+                })
+            })?
+            .then_signal_fence_and_flush()
+            .map_err(|e| {
+                ComputeError::gpu(GPUError::CommandBufferFailed {
+                    error: format!("Failed to flush: {}", e),
+                })
+            })?;
+
+        future.wait(None).map_err(|e| {
+            ComputeError::gpu(GPUError::CommandBufferFailed {
+                error: format!("Failed to wait: {}", e),
+            })
+        })?;
+
+        // Read results back
+        let visited_content = visited_buffer.read().map_err(|_e| {
+            ComputeError::Execution {
+                source: crate::errors::ExecutionError::DataTransferError {
+                    source: "GPU".to_string(),
+                    destination: "CPU".to_string(),
+                },
+                compute_unit: Some("Vulkan".to_string()),
+            }
+        })?;
+        visited.copy_from_slice(&visited_content);
+
+        let next_level_content = next_level_buffer.read().map_err(|_e| {
+            ComputeError::Execution {
+                source: crate::errors::ExecutionError::DataTransferError {
+                    source: "GPU".to_string(),
+                    destination: "CPU".to_string(),
+                },
+                compute_unit: Some("Vulkan".to_string()),
+            }
+        })?;
+        let next_level_slice = &next_level_content[..next_level.len().min(max_nodes as usize)];
+        next_level[..next_level_slice.len()].copy_from_slice(next_level_slice);
+
+        let size_content = next_level_size_buffer.read().map_err(|_e| {
+            ComputeError::Execution {
+                source: crate::errors::ExecutionError::DataTransferError {
+                    source: "GPU".to_string(),
+                    destination: "CPU".to_string(),
+                },
+                compute_unit: Some("Vulkan".to_string()),
+            }
+        })?;
+        *next_level_size = size_content;
+
+        Ok(())
     }
 
     /// Execute a compute shader with input/output buffers

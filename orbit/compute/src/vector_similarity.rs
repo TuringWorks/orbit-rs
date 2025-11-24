@@ -10,6 +10,8 @@ use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "gpu-acceleration")]
 use crate::gpu::GPUAccelerationManager;
+#[cfg(feature = "gpu-acceleration")]
+use std::sync::Arc;
 
 /// Vector similarity metric types
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

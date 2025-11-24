@@ -422,8 +422,11 @@ For each GPU-accelerated operation, we need benchmarks:
 
 ## References
 
-- [GPU Graph Traversal](./GPU_GRAPH_TRAVERSAL.md)
-- [GPU Complete Documentation](./GPU_COMPLETE_DOCUMENTATION.md)
+- [GPU Acceleration Complete Documentation](./GPU_ACCELERATION_COMPLETE.md) - Complete implementation overview
+- [GPU Acceleration Plan](./GPU_ACCELERATION_PLAN.md) - Detailed implementation roadmap
+- [GPU Graph Traversal](./GPU_GRAPH_TRAVERSAL.md) - Graph traversal guide
+- [GPU Vector Similarity](./GPU_VECTOR_SIMILARITY.md) - Vector similarity guide
+- [GPU Spatial Operations](./GPU_SPATIAL_OPERATIONS.md) - Spatial operations guide
 - [Heterogeneous Compute RFC](./rfcs/rfc_heterogeneous_compute.md)
 - [Columnar Analytics RFC](./rfcs/rfc_001_columnar_analytics.md)
 
